@@ -1,6 +1,7 @@
 #ifndef NATURE_SRC_VALUE_H_
 #define NATURE_SRC_VALUE_H_
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define string char *
 
