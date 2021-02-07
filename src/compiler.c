@@ -100,18 +100,130 @@ insts *compiler_binary(ast_binary_expr *expr, string target, string linkage) {
   return inst_append(ins, result);
 }
 
+/**
+ * 将变量赋值给其他变量, 如 a = b
+ * a 就是 target
+ * b 就是 compiler_ident_target
+ */
 insts *compiler_ident(ast_ident *ident, string target, string linkage) {
-  insts *insts = inst_new();
-  compiler_var var = resolve_ident(ident, current);
+  insts *result = inst_new();
+  local_var var = resolve_ident(ident);
+  // 引用不存在的变量
+  if (var.size == 0) {
+    exit(1);
+  }
 
   inst_mov *mov = NEW_INST(inst_mov);
-  mov->src = register_var(var);
+  mov->src = compiler_ident_target(ident);
   mov->dst = target;
   mov->type = var.type;
   mov->byte = var.size;
-  inst_insert(insts, mov, INST_MOV);
+  inst_insert(result, mov, INST_MOV);
 
-  return insts;
+  return result;
+}
+
+string compiler_assign_target(ast_expr expr) {
+  switch (expr.type) {
+    case AST_EXPR_TYPE_IDENTIFIER: return compiler_ident_target((ast_ident *) expr.expr);
+//    case AST_EXPR_TYPE_OBJ_PROPERTY: {
+//    }
+  }
+  exit(1);
+}
+
+/**
+ * 给定变量标识符，返回标识符的寄存器标识
+ * 适用于局部变量和自由变量
+ * TODO 如何判定 current_type....或者如何判定 current_type 的周期,是表达式唯一个周期吗
+ */
+string compiler_ident_target(ast_ident *ident) {
+  // 1. 查找 current->locals/如果找到则使用 register_local_var 解析
+  for (int i = 0; i < current->local_count; ++i) {
+    local_var local = current->locals[i];
+    if (strcmp(*ident, local.ident) == 0) {
+      return register_local_var(local);
+    }
+  }
+
+  // 2. 向上查找(current->parent)/如果找到则保存到 current->frees,并使用 register_free_var
+  int8_t free_var_index = resolve_free(current, ident);
+  if (free_var_index == -1) {
+    // TODO 错误处理
+    exit(1);
+  }
+
+  // 3. 不同于 local, frees[index] 中的 index  才是自由变量引用的关键
+  return register_free_var(free_var_index);
+}
+
+/**
+ * 递归查找过程中即使不是真正的数据引用方也会归档一份 free 数据
+ * 因为 current compiler 无法读取 parent->parent... 的 env,会让问题变的更复杂
+ */
+int8_t resolve_free(compiler *c, ast_ident *ident) {
+  // 找到就说明是本地呀
+  for (int i = 0; i < c->parent->local_count; ++i) {
+    local_var local = c->parent->locals[i];
+    if (strcmp(*ident, local.ident) == 0) {
+      current->parent->locals[i].is_capture = true;
+
+      return push_free(c, i, true);
+    }
+  }
+
+  // 递归向上查找
+  int8_t parent_free_index = resolve_free(c->parent, ident);
+  if (parent_free_index != -1) {
+    return push_free(c, parent_free_index, false);
+  }
+
+  return -1;
+}
+
+
+/**
+ * 普通块级作用域不会像函数 block 一样引用外部变量导致指针空悬问题
+ * 普通块级作用域总是从内向外出栈
+ */
+//local_var resolve_ident(ast_ident *ident) {
+//  // 本地 locals 中找
+//  for (int i = 0; i < current->local_count; ++i) {
+//    local_var local = current->locals[i];
+//    if (strcmp(*ident, local.ident) == 0) {
+//      return local;
+//    }
+//  }
+//
+//  // 本地 frees 中查找，如果在本地
+//  for (int i = 0; i < current->free_count; ++i) {
+//    local_var free = current->frees[i];
+//    if (strcmp(*ident, free.ident) == 0) {
+//      return free;
+//    }
+//  }
+//
+//  if (current->parent == NULL) {
+//    // 没找到准备报错吧
+//    local_var empty = {.size = 0};
+//    return empty;
+//  }
+//
+//  // 非本地变量自由变量捕捉
+//  local_var free = resolve_free(ident, current->parent);
+//  if (free.size == 0) {
+//    return free; // 还是没找到
+//  }
+//
+//  // 加入到 free 数组
+//  free.is_free = true;
+//  current->frees[current->free_count++] = free;
+//  return free;
+//}
+
+
+local_var resolve_obj_property(ast_obj_property *ident) {
+  // 递归编译
 }
 
 // 立即数
@@ -151,7 +263,7 @@ insts *compiler_literal(ast_literal_expr *literal, string target, string linkage
 void compiler_var_decl(ast_var_decl_stmt *decl, string target, string linkage) {
   // 1.判断是否已经定义过变量
   for (int i = 0; i < current->local_count; ++i) {
-    compiler_var local = current->locals[i];
+    local_var local = current->locals[i];
     if (strcmp(decl->ident, local.ident) == 0) {
       // TODO 想办法抛出错误和错误的行号
       exit(1);
@@ -159,16 +271,18 @@ void compiler_var_decl(ast_var_decl_stmt *decl, string target, string linkage) {
   }
 
   // 2. 写入 local
-  compiler_var local;
+  local_var local;
   local.ident = decl->ident;
   local.type = decl->type;
   local.size = calc_var_size(decl->type);
+  local.scope_depth = current->scope_depth; // 块作用域结束时需要用到该变量
   local.stack_offset = current->stack_offset;
+  // 当且仅当 local.type 非内置变量时该值才有意义
   local.custom_type = lookup_custom_type(local.type);
 
   // 3. 写入 current compiler
   current->locals[current->local_count++] = local;
-  current->stack_offset += local.size;
+  change_stack_offset(current, local.size);
 }
 
 insts *compiler_block(ast_block_stmt *block, string target, string linkage) {
@@ -203,65 +317,14 @@ insts *compiler_block(ast_block_stmt *block, string target, string linkage) {
 insts *compiler_assign(ast_assign_stmt *assign, string target, string linkage) {
   insts *result = inst_new();
   // 1. 编译出左值(TODO 如果左值是一个临时寄存器，则需要考虑被覆盖的风险)
-  target = compiler_target(assign->left);
+  target = compiler_assign_target(assign->left);
+  // 2. 如何解析出表达式的类型?? 这个 target 是否具有类型的性质？？,如果
   // 3. 编译右值表达式
   insts *append = compiler_expr(assign->right, target, linkage);
 
   inst_append(result, append);
 
   return result;
-}
-
-string compiler_target(ast_expr expr) {
-  compiler_var variable;
-  switch (expr.type) {
-    case AST_EXPR_TYPE_IDENTIFIER: {
-      variable = resolve_ident((ast_ident *) expr.expr, current);
-      break;
-    }
-    case AST_EXPR_TYPE_OBJ_PROPERTY: {
-      variable = resolve_obj_property((ast_obj_property *) expr.expr);
-      break;
-    }
-  }
-
-  current_type = variable.type;
-  return register_var(variable);
-}
-
-/**
- * 普通块级作用域不会像函数 block 一样引用外部变量导致指针空悬问题
- * 普通块级作用域总是从内向外出栈
- */
-compiler_var resolve_ident(ast_ident *ident, compiler *c) {
-  for (int i = 0; i < c->local_count; ++i) {
-    compiler_var local = c->locals[i];
-    if (strcmp(*ident, local.ident) == 0) {
-      c->locals[i].is_local = true;
-      return local;
-    }
-  }
-
-  if (c->parent == NULL) {
-    // 没找到准备报错吧
-    compiler_var empty = {.size = 0};
-    return empty;
-  }
-
-  // 递归搜索父级
-  compiler_var free = resolve_ident(ident, c->parent);
-  if (free.size == 0) { // 搜索成功
-    return free;
-  }
-
-  // 加入到 free 数组
-  free.is_local = false;
-  c->frees[c->free_count++] = free;
-  return free;
-}
-
-compiler_var resolve_obj_property(ast_obj_property *ident) {
-  // 递归编译
 }
 
 /**
@@ -313,6 +376,23 @@ insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage) {
   inst_insert(result, inst_endif_label, INST_LABEL);
 
   return result;
+}
+void begin_scope() {
+  current->scope_depth++;
+}
+
+void end_scope() {
+  current->scope_depth--;
+
+  // 块内的局部变量需要被丢弃
+  while (current->local_count > 0 &&
+      current->locals[current->local_count].scope_depth > current->scope_depth) {
+    local_var local = current->locals[current->local_count];
+
+    // 引用检查，如果被引用，则对应的 free 需要 close
+    change_stack_offset(current, -local.size);
+    current->local_count--;
+  }
 }
 
 
