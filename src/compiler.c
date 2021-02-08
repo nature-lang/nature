@@ -50,8 +50,8 @@ void compiler_call(ast_call_function call, string target, string linkage) {
 insts *compiler_expr(ast_expr expr, string target, string linkage) {
   switch (expr.type) {
     case AST_EXPR_TYPE_BINARY: return compiler_binary((ast_binary_expr *) expr.expr, target, linkage);
-    case AST_EXPR_TYPE_LITERAL: return compiler_literal((ast_literal_expr *) expr.expr, target, linkage);
-    case AST_EXPR_TYPE_IDENTIFIER: return compiler_ident((ast_ident *) expr.expr, target, linkage);
+    case AST_EXPR_TYPE_LITERAL: return compiler_literal((ast_literal *) expr.expr, target, linkage);
+    case AST_EXPR_TYPE_IDENT: return compiler_ident((ast_ident *) expr.expr, target, linkage);
 //    case AST_EXPR_TYPE_ACCESS_STRUCT: return compiler_a
   }
 }
@@ -125,7 +125,7 @@ insts *compiler_ident(ast_ident *ident, string target, string linkage) {
 
 string compiler_assign_target(ast_expr expr) {
   switch (expr.type) {
-    case AST_EXPR_TYPE_IDENTIFIER: return compiler_ident_target((ast_ident *) expr.expr);
+    case AST_EXPR_TYPE_IDENT: return compiler_ident_target((ast_ident *) expr.expr);
 //    case AST_EXPR_TYPE_OBJ_PROPERTY: {
 //    }
   }
@@ -227,7 +227,7 @@ local_var resolve_obj_property(ast_obj_property *ident) {
 }
 
 // 立即数
-insts *compiler_literal(ast_literal_expr *literal, string target, string linkage) {
+insts *compiler_literal(ast_literal *literal, string target, string linkage) {
   insts *result = inst_new();
   switch (literal->type) {
     case AST_BASE_TYPE_FLOAT:

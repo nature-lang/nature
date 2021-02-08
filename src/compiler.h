@@ -77,7 +77,7 @@ void compiler_call(ast_call_function call, string target, string linkage);
 
 insts *compiler_binary(ast_binary_expr *expr, string target, string linkage);
 
-insts *compiler_literal(ast_literal_expr *literal, string target, string linkage);
+insts *compiler_literal(ast_literal *literal, string target, string linkage);
 insts *compiler_ident(ast_ident *literal, string target, string linkage);
 
 insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage);

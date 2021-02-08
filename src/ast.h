@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include "value.h"
 
-#define AS_EXPR(object, type) ((ast_expr){type, (void *)object})
-
 typedef enum {
   AST_BASE_TYPE_INT,
   AST_BASE_TYPE_FLOAT,
@@ -16,7 +14,7 @@ typedef enum {
 typedef enum {
   AST_EXPR_TYPE_LITERAL,
   AST_EXPR_TYPE_BINARY,
-  AST_EXPR_TYPE_IDENTIFIER,
+  AST_EXPR_TYPE_IDENT,
   AST_EXPR_TYPE_OBJ_PROPERTY
 } ast_expr_type;
 
@@ -29,8 +27,10 @@ typedef enum {
 
 typedef enum {
   AST_STMT_VAR_DECL,
+  AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
   AST_STMT_IF,
+  AST_STMT_FUNCTION_DECL,
 } ast_stmt_type;
 
 typedef struct {
@@ -55,7 +55,7 @@ void ast_insert_block_stmt(ast_block_stmt *block, ast_stmt stmt);
 typedef struct {
   int8_t type;
   string value;
-} ast_literal_expr;
+} ast_literal;
 
 typedef string ast_ident;
 
@@ -84,7 +84,8 @@ typedef struct {
 // 调用函数
 typedef struct {
   string ident;
-  ast_expr actual_parameters[UINT8_MAX];
+  ast_expr actual_params[UINT8_MAX];
+  uint8_t actual_param_count;
 } ast_call_function;
 
 typedef struct {
@@ -135,9 +136,15 @@ typedef struct {
 //} ast_struct_stmt;
 
 typedef struct {
+  string type;
+  string ident;
+} formal_params;
+
+typedef struct {
   string name;
   int return_type; // 动态类型？数组？
-  ast_literal_expr formal_parameters[UINT8_MAX]; // 形参列表
+  formal_params formal_params[UINT8_MAX]; // 形参列表
+  uint8_t formal_param_count;
   ast_block_stmt body; // 函数体
 } ast_function_decl; // 既可以是 expression,也可以是 stmt
 

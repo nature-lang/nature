@@ -1,4 +1,0 @@
-#ifndef NATURE_SRC_LIB_MAP_H_
-#define NATURE_SRC_LIB_MAP_H_
-
-#endif //NATURE_SRC_LIB_MAP_H_

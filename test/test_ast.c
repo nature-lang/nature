@@ -14,8 +14,8 @@ static void test_ast() {
   ast_init_block_stmt(&body);
 
   // int a = 1 + 3
-  ast_literal_expr *operandLeft = malloc(sizeof(ast_literal_expr));
-  ast_literal_expr *operandRight = malloc(sizeof(ast_literal_expr));
+  ast_literal *operandLeft = malloc(sizeof(ast_literal));
+  ast_literal *operandRight = malloc(sizeof(ast_literal));
   operandLeft->type = AST_BASE_TYPE_INT;
   operandLeft->value = "1";
   operandRight->type = AST_BASE_TYPE_INT;
@@ -48,14 +48,14 @@ static void test_ast() {
   // print "php 是世界上最好的语言"
   //  CallFunctionExpression
   ast_call_function *call = malloc(sizeof(ast_call_function));
-  ast_literal_expr *operandA = malloc(sizeof(ast_literal_expr));
+  ast_literal *operandA = malloc(sizeof(ast_literal));
   operandA->type = AST_BASE_TYPE_STRING;
   operandA->value = "php 是世界上最好的语言";
   ast_expr expr;
   expr.type = "literal";
   expr.expr = operandA;
   call->ident = "print";
-  call->actual_parameters[0] = expr;
+  call->actual_params[0] = expr;
   ast_stmt tempCall;
   tempCall.type = "call_function";
   tempCall.stmt = call;
@@ -63,7 +63,7 @@ static void test_ast() {
 
   // return stmt
   ast_return_stmt *ret = malloc(sizeof(ast_return_stmt));
-  ast_literal_expr *literalA = malloc(sizeof(ast_literal_expr));
+  ast_literal *literalA = malloc(sizeof(ast_literal));
   literalA->type = AST_EXPR_TYPE_LITERAL;
   literalA->value = "a";
   ast_expr tempLiteralA;
