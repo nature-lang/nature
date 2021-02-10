@@ -1,5 +1,7 @@
+#include <tkDecls.h>
+#include <tclDecls.h>
 #include "compiler.h"
-#include "instruction.h"
+#include "inst.h"
 #include "string.h"
 
 // closure a = {
@@ -47,7 +49,7 @@ void compiler_call(ast_call_function call, string target, string linkage) {
 // movl %rax, -4(%esp)
 // 返回 operand -> 立即数、寄存器、指针偏移
 // target 表达式计算结果存放地, caller 会根据数据类型规划传入的值的类型
-insts *compiler_expr(ast_expr expr, string target, string linkage) {
+insts *compiler_expr(ast_expr expr, inst_operand_reg target, string linkage) {
   switch (expr.type) {
     case AST_EXPR_TYPE_BINARY: return compiler_binary((ast_binary_expr *) expr.expr, target, linkage);
     case AST_EXPR_TYPE_LITERAL: return compiler_literal((ast_literal *) expr.expr, target, linkage);
@@ -57,42 +59,24 @@ insts *compiler_expr(ast_expr expr, string target, string linkage) {
 }
 
 // target 是上层经过精心规划的
-insts *compiler_binary(ast_binary_expr *expr, string target, string linkage) {
-  // 左值 %rdx， 右值 %rax.
-  string src = register_binary_src(target);
+insts *compiler_binary(ast_binary_expr *expr, inst_operand_reg target, string linkage) {
+  // 左值 temp， 右值 target.
+  inst_operand_reg src = reg_temp();
   insts *left = compiler_expr(expr->left, src, linkage);
-  // TODO 计算右值期间如果 %rdx 被覆盖了怎么办？ 可以使用 push/pop 解决？还是哪个阶段可以保护 %rdx
   insts *right = compiler_expr(expr->right, target, linkage);
-  insts *ins = inst_append(left, right);
+
+  inst_operand_reg saves[REG_MAX] = {reg_temp()};
+  insts *ins = inst_preserving(left, right, saves);
 
   insts *result = inst_new();
+
   switch (expr->operator) {
     case AST_EXPR_ADD: {
       // ... + ...
       inst_add *add = NEW_INST(inst_add);
-      add->src = src; // 需要考虑浮点型和整形的区别
-      add->dst = target;
-      add->byte = 64; // TODO bool 型 怎么办？
-      add->type = current_type;
-      inst_insert(result, &add, INST_MOV);
-      break;
-    }
-    case AST_EXPR_SUBTRACT: {
-      inst_sub *sub = NEW_INST(inst_add);
-      sub->src = src;
-      sub->dst = target;
-      sub->byte = 64;
-      sub->type = current_type;
-      inst_insert(result, sub, INST_SUB);
-      break;
-    }
-    case AST_EXPR_MULTIPLY: {
-      inst_mul *mul = NEW_INST(inst_mul);
-      mul->src = src;
-      mul->dst = target;
-      mul->byte = 64;
-      mul->type = current_type;
-      inst_insert(result, mul, INST_MUL);
+      add->src = AS_INST_OPERAND(src, INST_OPERAND_TYPE_REG); // 需要考虑浮点型和整形的区别
+      add->dst = AS_INST_OPERAND(target, INST_OPERAND_TYPE_REG);
+      inst_insert(result, &add, INST_LOAD);
       break;
     }
   }
@@ -105,31 +89,24 @@ insts *compiler_binary(ast_binary_expr *expr, string target, string linkage) {
  * a 就是 target
  * b 就是 compiler_ident_target
  */
-insts *compiler_ident(ast_ident *ident, string target, string linkage) {
+insts *compiler_ident(ast_ident *ident, inst_operand_reg target, string linkage) {
   insts *result = inst_new();
-  local_var var = resolve_ident(ident);
-  // 引用不存在的变量
-  if (var.size == 0) {
-    exit(1);
-  }
-
-  inst_mov *mov = NEW_INST(inst_mov);
-  mov->src = compiler_ident_target(ident);
-  mov->dst = target;
-  mov->type = var.type;
-  mov->byte = var.size;
-  inst_insert(result, mov, INST_MOV);
+  inst_load *load = NEW_INST(inst_load);
+  load->src = AS_INST_OPERAND(ident, INST_OPERAND_TYPE_VAR);
+  load->dst = AS_INST_OPERAND(target, INST_OPERAND_TYPE_REG);
+  inst_insert(result, load, INST_LOAD);
 
   return result;
 }
 
-string compiler_assign_target(ast_expr expr) {
+inst_operand compiler_assign_target(ast_expr expr) {
   switch (expr.type) {
-    case AST_EXPR_TYPE_IDENT: return compiler_ident_target((ast_ident *) expr.expr);
+    case AST_EXPR_TYPE_IDENT: {
+      return AS_INST_OPERAND((ast_ident *) expr.expr, INST_OPERAND_TYPE_VAR);
+    }
 //    case AST_EXPR_TYPE_OBJ_PROPERTY: {
 //    }
   }
-  exit(1);
 }
 
 /**
@@ -227,7 +204,7 @@ local_var resolve_obj_property(ast_obj_property *ident) {
 }
 
 // 立即数
-insts *compiler_literal(ast_literal *literal, string target, string linkage) {
+insts *compiler_literal(ast_literal *literal, inst_operand_reg target, string linkage) {
   insts *result = inst_new();
   switch (literal->type) {
     case AST_BASE_TYPE_FLOAT:
@@ -235,22 +212,18 @@ insts *compiler_literal(ast_literal *literal, string target, string linkage) {
       // 解析出立即数
       string src = register_imm(literal->value);
 
-      inst_mov *mov = NEW_INST(inst_mov);
-      mov->src = src;
-      mov->dst = target;
-      mov->byte = 64;
-      mov->type = current_type;
-      inst_insert(result, mov, INST_MOV);
+      inst_load *load = NEW_INST(inst_load);
+      load->src = AS_INST_OPERAND(literal, INST_OPERAND_TYPE_LITERAL);
+      load->dst = AS_INST_OPERAND(target, INST_OPERAND_TYPE_REG);
+      inst_insert(result, load, INST_LOAD);
       break;
     }
     case AST_BASE_TYPE_STRING: {
-      string src = compiler_string(literal->value); // 字符串地址寄存器
-      inst_mov *mov = NEW_INST(inst_mov);
-      mov->src = src;
-      mov->dst = target;
-      mov->byte = 64; // 指针类型
-      mov->type = current_type;
-      inst_insert(result, mov, INST_MOV);
+      inst_operand_point str_point = compiler_string(literal->value); // 字符串地址寄存器
+      inst_load *load = NEW_INST(inst_load);
+      load->src = AS_INST_OPERAND(str_point, INST_OPERAND_TYPE_POINT);
+      load->dst = AS_INST_OPERAND(target, INST_OPERAND_TYPE_REG);
+      inst_insert(result, load, INST_LOAD);
       break;
     }
   }
@@ -260,34 +233,35 @@ insts *compiler_literal(ast_literal *literal, string target, string linkage) {
 
 // int a;
 // 定义变量，读取长度，并根据需要开辟栈插槽和栈偏移
-void compiler_var_decl(ast_var_decl_stmt *decl, string target, string linkage) {
+// 不用在这做了，在 optimize 就做好了
+void compiler_var_decl(ast_var_decl_stmt *decl, inst_operand_reg target, string linkage) {
   // 1.判断是否已经定义过变量
-  for (int i = 0; i < current->local_count; ++i) {
-    local_var local = current->locals[i];
-    if (strcmp(decl->ident, local.ident) == 0) {
-      // TODO 想办法抛出错误和错误的行号
-      exit(1);
-    }
-  }
-
-  // 2. 写入 local
-  local_var local;
-  local.ident = decl->ident;
-  local.type = decl->type;
-  local.size = calc_var_size(decl->type);
-  local.scope_depth = current->scope_depth; // 块作用域结束时需要用到该变量
-  local.stack_offset = current->stack_offset;
-  // 当且仅当 local.type 非内置变量时该值才有意义
-  local.custom_type = lookup_custom_type(local.type);
-
-  // 3. 写入 current compiler
-  current->locals[current->local_count++] = local;
-  change_stack_offset(current, local.size);
+//  for (int i = 0; i < current->local_count; ++i) {
+//    local_var local = current->locals[i];
+//    if (strcmp(decl->ident, local.ident) == 0) {
+//      // TODO 想办法抛出错误和错误的行号
+//      exit(1);
+//    }
+//  }
+//
+//  // 2. 写入 local
+//  local_var local;
+//  local.ident = decl->ident;
+//  local.type = decl->type;
+//  local.size = calc_var_size(decl->type);
+//  local.scope_depth = current->scope_depth; // 块作用域结束时需要用到该变量
+//  local.stack_offset = current->stack_offset;
+//  // 当且仅当 local.type 非内置变量时该值才有意义
+//  local.custom_type = lookup_custom_type(local.type);
+//
+//  // 3. 写入 current compiler
+//  current->locals[current->local_count++] = local;
+//  change_stack_offset(current, local.size);
 }
 
-insts *compiler_block(ast_block_stmt *block, string target, string linkage) {
+insts *compiler_block(ast_block_stmt *block, inst_operand_reg target, string linkage) {
   insts *result = inst_new();
-  begin_scope(); // 词法作用域增加
+  begin_scope(); // 词法作用域增加(TODO 参数问题,所以不能在这搞)
   // 循环，遍历，
   for (int i = 0; i < block->count; ++i) {
     insts *append = NULL;
@@ -314,13 +288,25 @@ insts *compiler_block(ast_block_stmt *block, string target, string linkage) {
 }
 
 // stmt 的 target 基本没啥用
-insts *compiler_assign(ast_assign_stmt *assign, string target, string linkage) {
+insts *compiler_assign(ast_assign_stmt *assign, inst_operand_reg target, string linkage) {
+  // 1. 编译出左值
+  inst_operand *dst = malloc(sizeof(inst_operand));
+  switch (assign->left.type) {
+    case AST_EXPR_TYPE_IDENT: {
+      *dst = AS_INST_OPERAND((ast_ident *) assign->left.expr, INST_OPERAND_TYPE_VAR);
+    }
+  }
+
+  // 2. 编译右值表达式
+  inst_operand_reg src = reg_val();
+  insts *append = compiler_expr(assign->right, src, linkage);
+
+  // 3.
   insts *result = inst_new();
-  // 1. 编译出左值(TODO 如果左值是一个临时寄存器，则需要考虑被覆盖的风险)
-  target = compiler_assign_target(assign->left);
-  // 2. 如何解析出表达式的类型?? 这个 target 是否具有类型的性质？？,如果
-  // 3. 编译右值表达式
-  insts *append = compiler_expr(assign->right, target, linkage);
+  inst_load *load = NEW_INST(inst_load);
+  load->src = AS_INST_OPERAND(src, INST_OPERAND_TYPE_REG);
+  load->dst = AS_INST_OPERAND(dst, INST_OPERAND_TYPE_VAR);
+  inst_insert(result, load, INST_LOAD);
 
   inst_append(result, append);
 
@@ -329,34 +315,33 @@ insts *compiler_assign(ast_assign_stmt *assign, string target, string linkage) {
 
 /**
  * 汇编指令推测
- *
  */
-insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage) {
+insts *compiler_if(ast_if_stmt *if_stmt, inst_operand_reg target, string linkage) {
   insts *result = inst_new();
-  target = register_if_condition();
-  // 编译 condition
+
+  // 编译 condition 结果存储在 val 寄存器
+  target = reg_val();
   insts *conditions = compiler_expr(if_stmt->condition, target, linkage);
   inst_append(result, conditions);
 
-  // test conditions
-  inst_cmp *cmp = NEW_INST(inst_cmp);
-  cmp->left = register_false();
-  cmp->right = target;
-  cmp->byte = 64;
-  inst_insert(result, cmp, INST_CMP);
+  // compare goto
+  inst_operator_compare_goto *compare_goto = NEW_INST(inst_operator_compare_goto);
+  ast_literal *falsely = malloc(sizeof(ast_literal));
+  falsely->type = AST_BASE_TYPE_BOOL;
+  falsely->value = AST_BASE_TYPE_FALSE;
+  compare_goto->expect = AS_INST_OPERAND(falsely, INST_OPERAND_TYPE_LITERAL);
+  compare_goto->actual = AS_INST_OPERAND(target, INST_OPERAND_TYPE_REG);
 
   string end_label = make_label("end_if");
   string alternate_label = make_label("alternate_if");
 
-  // jmp 等于 false 则跳转，等于 true 则顺序执行
-  inst_jmp *jmp = NEW_INST(inst_jmp);
-  jmp->type = INST_JMP_TYPE_EQUAL;
   if (if_stmt->alternate.count == 0) { // 不存在 else
-    jmp->dst = end_label;
+//    inst_op end
+    compare_goto->label = AS_INST_OPERAND(end_label, INST_OPERAND_TYPE_LABEL);
   } else {
-    jmp->dst = alternate_label;
+    compare_goto->label = AS_INST_OPERAND(alternate_label, INST_OPERAND_TYPE_LABEL);
   }
-  inst_insert(result, jmp, INST_JMP);
+  inst_insert(result, compare_goto, INST_COMPARE_GOTO);
 
   // 编译 consequent block
   insts *consequent = compiler_block(&if_stmt->consequent, NULL, end_label);
@@ -377,6 +362,7 @@ insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage) {
 
   return result;
 }
+
 void begin_scope() {
   current->scope_depth++;
 }

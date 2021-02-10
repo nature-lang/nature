@@ -4,10 +4,13 @@
 #include <stdlib.h>
 #include "value.h"
 
+#define AST_BASE_TYPE_FALSE "false"
+#define AST_BASE_TYPE_TRUE "true"
+
 typedef enum {
   AST_BASE_TYPE_INT,
   AST_BASE_TYPE_FLOAT,
-  AST_IN_TYPE_BOOL,
+  AST_BASE_TYPE_BOOL,
   AST_BASE_TYPE_STRING
 } ast_base_type;
 

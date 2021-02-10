@@ -3,7 +3,7 @@
 
 #include "stdlib.h"
 #include "ast.h"
-#include "instruction.h"
+#include "inst.h"
 
 int label_count = 0;
 
@@ -78,7 +78,7 @@ void compiler_call(ast_call_function call, string target, string linkage);
 insts *compiler_binary(ast_binary_expr *expr, string target, string linkage);
 
 insts *compiler_literal(ast_literal *literal, string target, string linkage);
-insts *compiler_ident(ast_ident *literal, string target, string linkage);
+insts *compiler_ident(ast_ident *literal, inst_operand_reg target, string linkage);
 
 insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage);
 
@@ -86,13 +86,13 @@ insts *compiler_if(ast_if_stmt *if_stmt, string target, string linkage);
 void change_stack_offset(compiler *c, int size);
 int calc_var_size(string type); // 单位字节
 ast_struct_decl *lookup_custom_type();
-string compiler_assign_target(ast_expr expr);
+inst_operand compiler_assign_target(ast_expr expr);
 string compiler_ident_target(ast_ident *ident);
 local_var resolve_ident(ast_ident *ident);
 int8_t resolve_free(compiler *c, ast_ident *ident);
 int8_t push_free(compiler *c, int8_t index, bool is_local);
 local_var resolve_obj_property(ast_obj_property *ident);
-string compiler_string(string value);
+inst_operand_point compiler_string(string value);
 void begin_scope();
 void end_scope();
 string make_label(string label);
