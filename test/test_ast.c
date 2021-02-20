@@ -28,7 +28,7 @@ static void test_ast() {
   tempRight.expr = operandRight;
   // right
   ast_binary_expr *termExpr = malloc(sizeof(ast_binary_expr));
-  termExpr->operator = AST_EXPR_ADD;
+  termExpr->operator = AST_EXPR_OPERATOR_ADD;
   termExpr->left = tempLeft;
   termExpr->right = tempRight;
   ast_expr tempAdd;

@@ -18,14 +18,15 @@ typedef enum {
   AST_EXPR_TYPE_LITERAL,
   AST_EXPR_TYPE_BINARY,
   AST_EXPR_TYPE_IDENT,
-  AST_EXPR_TYPE_OBJ_PROPERTY
+  AST_EXPR_TYPE_OBJ_PROPERTY,
+  AST_EXPR_TYPE_ENV_INDEX,
 } ast_expr_type;
 
 typedef enum {
-  AST_EXPR_ADD,
-  AST_EXPR_SUBTRACT,
-  AST_EXPR_MULTIPLY,
-  AST_EXPR_DIVIDE
+  AST_EXPR_OPERATOR_ADD,
+  AST_EXPR_OPERATOR_SUB,
+  AST_EXPR_OPERATOR_MUL,
+  AST_EXPR_OPERATOR_DIV
 } ast_expr_operator;
 
 typedef enum {
@@ -34,6 +35,7 @@ typedef enum {
   AST_STMT_ASSIGN,
   AST_STMT_IF,
   AST_STMT_FUNCTION_DECL,
+  AST_STMT_CLOSURE_DECL,
 } ast_stmt_type;
 
 typedef struct {
@@ -133,6 +135,11 @@ typedef struct {
   ast_ident property; // identity 的含义是啥
 } ast_obj_property;
 
+typedef struct {
+  ast_ident env;
+  uint8_t index;
+} ast_env_index;
+
 //typedef struct {
 //  string name;
 //  // struct items
@@ -141,14 +148,19 @@ typedef struct {
 typedef struct {
   string type;
   string ident;
-} formal_params;
+} formal_param;
 
 typedef struct {
   string name;
   int return_type; // 动态类型？数组？
-  formal_params formal_params[UINT8_MAX]; // 形参列表
+  formal_param formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
   uint8_t formal_param_count;
   ast_block_stmt body; // 函数体
 } ast_function_decl; // 既可以是 expression,也可以是 stmt
+
+typedef struct {
+  ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
+  ast_function_decl *function;
+} ast_closure_decl;
 
 #endif //NATURE_SRC_AST_H_

@@ -11,6 +11,7 @@
 enum {
   INST_OPERAND_TYPE_REG,
   INST_OPERAND_TYPE_VAR,
+  INST_OPERAND_TYPE_OBJ_PROPERTY,
   INST_OPERAND_TYPE_LITERAL,
   INST_OPERAND_TYPE_LABEL,
   INST_OPERAND_TYPE_POINT,
@@ -52,13 +53,19 @@ typedef struct {
 
 typedef struct {
   inst_operand label;
-} inst_goto, inst_operator_call;
+} inst_goto;
+
+typedef struct {
+  inst_operand actual_params[UINT8_MAX];
+  uint8_t actual_param_count;
+  inst_operand label;
+} inst_call;
 
 typedef struct {
   inst_operand expect;
   inst_operand actual;
   inst_operand label; // 相等时跳转
-} inst_operator_compare_goto;
+} inst_compare_goto;
 
 typedef struct {
   string name;

@@ -71,7 +71,7 @@ insts *compiler_binary(ast_binary_expr *expr, inst_operand_reg target, string li
   insts *result = inst_new();
 
   switch (expr->operator) {
-    case AST_EXPR_ADD: {
+    case AST_EXPR_OPERATOR_ADD: {
       // ... + ...
       inst_add *add = NEW_INST(inst_add);
       add->src = AS_INST_OPERAND(src, INST_OPERAND_TYPE_REG); // 需要考虑浮点型和整形的区别
@@ -325,7 +325,7 @@ insts *compiler_if(ast_if_stmt *if_stmt, inst_operand_reg target, string linkage
   inst_append(result, conditions);
 
   // compare goto
-  inst_operator_compare_goto *compare_goto = NEW_INST(inst_operator_compare_goto);
+  inst_compare_goto *compare_goto = NEW_INST(inst_compare_goto);
   ast_literal *falsely = malloc(sizeof(ast_literal));
   falsely->type = AST_BASE_TYPE_BOOL;
   falsely->value = AST_BASE_TYPE_FALSE;
