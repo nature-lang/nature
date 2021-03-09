@@ -199,7 +199,7 @@ int8_t resolve_free(compiler *c, ast_ident *ident) {
 //}
 
 
-local_var resolve_obj_property(ast_obj_property *ident) {
+local_var resolve_obj_property(ast_access_property *ident) {
   // 递归编译
 }
 

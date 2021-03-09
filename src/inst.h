@@ -33,7 +33,7 @@ enum {
   INST_JMP_TYPE_NOT_EQUAL
 } inst_jmp_type;
 
-typedef ast_obj_property inst_operand_obj_property;
+typedef ast_access_property inst_operand_access_property;
 typedef ast_ident inst_operand_var;
 typedef uint64_t inst_operand_point;
 typedef string inst_operand_reg;

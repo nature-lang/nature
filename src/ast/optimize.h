@@ -4,7 +4,8 @@
 #include "src/ast.h"
 #include "src/lib/table.h"
 
-#define ENV "env"
+#define BASE_TYPE_ENV "env"
+#define BASE_TYPE_CLOSURE "closure"
 
 /**
  * 类型列表，包括基础类型和自定义类型
@@ -17,6 +18,10 @@ typedef struct {
 
 table var_table; // 添加内容为 optimize_local_var
 table type_table;
+table function_table;
+
+// 包含上面四种类型？
+table symbol_table;
 
 typedef struct {
   string type_name;
@@ -46,6 +51,8 @@ typedef struct optimize_function {
 optimize_function *current_function = NULL;
 
 // 变量 hash_string 表
+void optimize_function_begin();
+void optimize_function_end();
 void optimize(ast_function_decl *main);
 void optimize_block(ast_block_stmt *block);
 void optimize_var_decl(ast_var_decl_stmt *var_decal);
@@ -57,6 +64,7 @@ void optimize_literal(ast_literal *expr);
 void optimize_ident(ast_expr *expr);
 int8_t optimize_resolve_free(optimize_function *f, ast_ident *ident);
 int8_t optimize_push_free(optimize_function *f, bool is_local, int8_t index);
+void optimize_call_function(ast_call_function *call);
 
 optimize_local_var *optimize_new_local(string type, string ident);
 

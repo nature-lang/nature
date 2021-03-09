@@ -49,7 +49,6 @@ typedef struct compiler {
 
 // 当前编译时, 计算 local 和 upvalue 时会使用
 compiler *current = NULL;
-string current_type;
 
 // return label name
 // linkage 分为特殊值 next 对应继续执行 /return 对应 ret/其余字符串 jmp linkage
@@ -91,7 +90,7 @@ string compiler_ident_target(ast_ident *ident);
 local_var resolve_ident(ast_ident *ident);
 int8_t resolve_free(compiler *c, ast_ident *ident);
 int8_t push_free(compiler *c, int8_t index, bool is_local);
-local_var resolve_obj_property(ast_obj_property *ident);
+local_var resolve_obj_property(ast_access_property *ident);
 inst_operand_point compiler_string(string value);
 void begin_scope();
 void end_scope();

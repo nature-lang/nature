@@ -11,8 +11,11 @@ typedef enum {
   AST_BASE_TYPE_INT,
   AST_BASE_TYPE_FLOAT,
   AST_BASE_TYPE_BOOL,
-  AST_BASE_TYPE_STRING
-} ast_base_type;
+  AST_BASE_TYPE_STRING,
+  AST_BASE_TYPE_MAP,
+  AST_BASE_TYPE_ARRAY,
+  AST_BASE_TYPE_CLOSURE,
+} ast_base_type; // TODO 添加 closure 类型/function 类型
 
 typedef enum {
   AST_EXPR_TYPE_LITERAL,
@@ -34,8 +37,9 @@ typedef enum {
   AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
   AST_STMT_IF,
-  AST_STMT_FUNCTION_DECL,
-  AST_STMT_CLOSURE_DECL,
+  AST_FUNCTION_DECL,
+  AST_CALL_FUNCTION,
+  AST_CLOSURE_DECL,
 } ast_stmt_type;
 
 typedef struct {
@@ -88,7 +92,7 @@ typedef struct {
 
 // 调用函数
 typedef struct {
-  string ident;
+  ast_expr target_expr;
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
 } ast_call_function;
@@ -98,6 +102,11 @@ typedef struct {
   ast_block_stmt consequent;
   ast_block_stmt alternate;
 } ast_if_stmt;
+
+typedef struct {
+  ast_expr condition;
+  ast_block_stmt body;
+} ast_while_stmt;
 
 // int a;
 typedef struct {
@@ -130,10 +139,19 @@ typedef struct {
   ast_struct_property list[INT8_MAX];
 } ast_struct_decl; // 多个 property 组成一个
 
+// 1. a.b
+// 2. a.c.b
+// 3. a[1].b
+// 4. a().b
+// ...
+// 中间代码如何表示？a_2233.b = 12
+// a_233().b 左值可以编译成
+// call a_233;
+// type.b = 12; ??
 typedef struct {
-  ast_expr obj; // 可以是 identity 也可以是 struct property
-  ast_ident property; // identity 的含义是啥
-} ast_obj_property;
+  ast_expr left; // TODO 关键是确定左值的类型
+  string property;
+} ast_access_property;
 
 typedef struct {
   ast_ident env;
