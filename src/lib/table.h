@@ -17,8 +17,10 @@ typedef struct {
   table_entry *entries;
 } table;
 
+table *table_new();
 void table_init(table *t);
 void table_free(table *t);
+bool table_exist(table *t, string key);
 void *table_get(table *t, string key);
 bool table_set(table *t, string key, void *value);
 bool table_delete(table *t, string key);

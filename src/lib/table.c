@@ -1,4 +1,3 @@
-
 #include "table.h"
 
 void table_init(table *t) {
@@ -12,7 +11,7 @@ void table_free(table *t) {
   table_init(t);
 }
 
-void *table_get(table *t, char *key) {
+void *table_get(table *t, string key) {
   if (t->count == 0) {
     return NULL;
   }
