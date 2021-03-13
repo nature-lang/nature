@@ -8,21 +8,21 @@
 void ssa_add_phi(closure *c) {
   for (int label = 0; label < c->block_labels; ++label) {
     // 定义的每个变量
-    linear_var_kill var_kill = c->var_kill_list[label];
-    linear_df df = c->df_list[label];
+    linear_vars def = c->blocks[label]->def;
+    linear_df df = c->blocks[label]->df;
 
-    for (int i = 0; i < var_kill.count; ++i) {
-      linear_operand_var *var = var_kill.vars[i]; // var_kill 了两次咋办？
+    for (int i = 0; i < def.count; ++i) {
+      linear_operand_var *var = def.vars[i];
+
       for (int k = 0; k < df.count; ++k) {
-        linear_basic_block *block = df.blocks[k];
-        // 判断该变量是否已经创建了 phi(另一个分支可能会先创建), 创建则跳过
-        if (ssa_phi_defined(var, block)) {
+        linear_basic_block *df_block = df.blocks[k];
+        // 判断该变量是否已经添加过 phi(另一个分支可能会先创建), 创建则跳过
+        if (ssa_phi_defined(var, df_block)) {
           continue;
         }
 
-        // 判断是否存在于该 block 的 live_out 中，不存在则跳过
-        linear_live_out live_out = c->live_out_list[block->label];
-        if (!ssa_var_belong(var, live_out.vars, live_out.count)) {
+        // 如果变量不在当前 n ∈ df 入口活跃,则不需要定义
+        if (!ssa_var_belong(var, df_block->live_in)) {
           continue;
         }
 
@@ -33,10 +33,10 @@ void ssa_add_phi(closure *c) {
 
         // param to first
         phi_op->first.type = LINEAR_OPERAND_TYPE_PHI_BODY;
-        phi_op->first.value = linear_new_phi_body(var, block->preds_count);
+        phi_op->first.value = linear_new_phi_body(var, df_block->preds_count);
 
         // insert to linked list
-        linear_op *label_op = block->op;
+        linear_op *label_op = df_block->op;
         label_op->succ->pred = phi_op;
         phi_op->succ = label_op->succ;
 
@@ -47,76 +47,93 @@ void ssa_add_phi(closure *c) {
   }
 }
 
-void ssa_live_out(closure *c) {
+void ssa_live(closure *c) {
   // 初始化 live out 每个基本块为 ∅
   for (int label = 0; label < c->block_labels; ++label) {
-    linear_live_out live_out = {.count=0};
-    c->live_out_list[label] = live_out;
+    linear_vars out = {.count=0};
+    linear_vars in = {.count=0};
+    c->blocks[label]->live_out = out;
+    c->blocks[label]->live_in = in;
   }
 
   bool changed = true;
   while (changed) {
     changed = false;
-    // 结尾 label 没有后继，所以始终为 ∅ 就没有必要参与不动点的计算
-    for (int label = c->block_labels - 1; label >= 0; --label) {
-      linear_basic_block *blocks = c->blocks[label];
-
-      linear_live_out new_live_out = ssa_calc_live_out_vars(c, c->blocks[label]);
-      if (ssa_live_out_changed(&c->live_out_list[label], &new_live_out)) {
+    for (int label = c->block_labels; label >= 0; --label) {
+      linear_basic_block *block = c->blocks[label];
+      linear_vars new_live_out = ssa_calc_live_out(c, c->blocks[label]);
+      if (ssa_live_changed(&block->live_out, &new_live_out)) {
         changed = true;
-        c->live_out_list[label] = new_live_out;
+        block->live_out = new_live_out;
+      }
+
+      linear_vars new_live_in = ssa_calc_live_in(c, c->blocks[label]);
+      if (ssa_live_changed(&block->live_in, &new_live_in)) {
+        changed = true;
+        block->live_out = new_live_out;
       }
     }
   }
 }
 
-linear_live_out ssa_calc_live_out_vars(closure *c, linear_basic_block *block) {
-  linear_live_out live_out = {.count = 0};
+// live out 为 n 的所有后继的 live_in 的并集
+linear_vars ssa_calc_live_out(closure *c, linear_basic_block *block) {
+  linear_vars live_out = {.count = 0};
   table *exist_var = table_new(); // basic var ident
 
   for (int i = 0; i < block->succs_count; ++i) {
     linear_basic_block *succ = block->succs[i];
-    // ue_var[succ] ∪ (live_out[succ] ∩ ^va_kill[succ])
-    linear_ue_var succ_ue_var = c->ue_var_list[succ->label];
-    linear_var_kill succ_var_kill = c->var_kill_list[succ->label];
-    linear_live_out succ_live_out = c->live_out_list[succ->label];
 
-    // 未在 succ 中被重新定义(var_kill)，且离开 succ 后继续活跃的变量
-    for (int k = 0; k < succ_live_out.count; ++k) {
-      linear_operand_var *var = succ_live_out.vars[k];
-      if (!ssa_var_belong(var, succ_var_kill.vars, succ_var_kill.count)) {
-        // 如果没有被添加到 exist_var 中就继续加加加
-        void *has = table_get(exist_var, var->ident);
-
-        // 如果变量已经添加到 live_out 中了就别重复添加
-        if (has != NULL) {
-          continue;
-        }
-
-        live_out.vars[live_out.count++] = var;
-        table_set(exist_var, var->ident, var);
-      }
-    }
-
-    // 对于 ue_var 中的所有变量,直接加到 live_out 中就行啦
-    for (int k = 0; k < succ_ue_var.count; ++k) {
-      linear_operand_var *var = succ_ue_var.vars[k];
-      void *has = table_get(exist_var, var->ident);
-      if (has != NULL) {
+    // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
+    for (int k = 0; k < succ->live_in.count; ++k) {
+      linear_operand_var *var = succ->live_in.vars[k];
+      if (table_exist(exist_var, var->ident)) {
         continue;
       }
-
       live_out.vars[live_out.count++] = var;
       table_set(exist_var, var->ident, var);
     }
   }
 
   table_free(exist_var);
-
   return live_out;
 }
 
-bool ssa_live_out_changed(linear_live_out *old, linear_live_out *new) {
+// 在当前块使用的变量 + 离开当前块依旧活跃的变量（这些变量未在当前块重新定义）
+linear_vars ssa_calc_live_in(closure *c, linear_basic_block *block) {
+  linear_vars live_in = {.count = 0};
+  table *exist_var = table_new(); // basic var ident
+
+  for (int i = 0; i < block->use.count; ++i) {
+    linear_operand_var *var = block->use.vars[i];
+    if (table_exist(exist_var, var->ident)) {
+      continue;
+    }
+
+    live_in.vars[live_in.count++] = var;
+    table_set(exist_var, var->ident, var);
+  }
+
+  for (int i = 0; i < block->live_out.count; ++i) {
+    linear_operand_var *var = block->live_out.vars[i];
+    if (table_exist(exist_var, var->ident)) {
+      continue;
+    }
+
+    // 是否是当前块中定义的变量。
+    if (ssa_var_belong(var, block->def)) {
+      continue;
+    }
+
+    live_in.vars[live_in.count++] = var;
+    table_set(exist_var, var->ident, var);
+  }
+
+  table_free(exist_var);
+  return live_in;
+}
+
+bool ssa_live_changed(linear_vars *old, linear_vars *new) {
   if (old->count != new->count) {
     return true;
   }
@@ -152,13 +169,13 @@ bool ssa_live_out_changed(linear_live_out *old, linear_live_out *new) {
  * UEVar(m) 在 m 中重新定义之前就开始使用的变量
  * VarKill(m) 在 m 中定义的所有变量的集合
  */
-void ssa_pre_live_out(closure *c) {
+void ssa_use_def(closure *c) {
   for (int label = 0; label < c->block_labels; ++label) {
-    linear_ue_var ue_var = {.count=0};
-    linear_var_kill var_kill = {.count=0};
+    linear_vars use = {.count=0};
+    linear_vars def = {.count=0};
 
-    table *exist_ue_var = table_new();
-    table *exist_var_kill = table_new();
+    table *exist_use = table_new();
+    table *exist_def = table_new();
 
     linear_basic_block *block = c->blocks[label];
 
@@ -167,39 +184,39 @@ void ssa_pre_live_out(closure *c) {
       // first param
       if (op->first.type == LINEAR_OPERAND_TYPE_VAR) {
         linear_operand_var *var = (linear_operand_var *) op->first.value;
-        bool is_var_kill = ssa_var_belong(var, var_kill.vars, var_kill.count);
-        if (!is_var_kill && !table_exist(exist_ue_var, var->ident)) {
-          ue_var.vars[ue_var.count++] = var;
-          table_set(exist_ue_var, var->ident, var);
+        bool is_def = ssa_var_belong(var, def);
+        if (!is_def && !table_exist(exist_use, var->ident)) {
+          use.vars[use.count++] = var;
+          table_set(exist_use, var->ident, var);
         }
       }
 
       // second param
       if (op->second.type == LINEAR_OPERAND_TYPE_VAR) {
         linear_operand_var *var = (linear_operand_var *) op->second.value;
-        bool is_var_kill = ssa_var_belong(var, var_kill.vars, var_kill.count);
-        if (!is_var_kill && !table_exist(exist_ue_var, var->ident)) {
-          ue_var.vars[ue_var.count++] = var;
-          table_set(exist_ue_var, var->ident, var);
+        bool is_def = ssa_var_belong(var, def);
+        if (!is_def && !table_exist(exist_use, var->ident)) {
+          use.vars[use.count++] = var;
+          table_set(exist_use, var->ident, var);
         }
       }
 
       if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
         linear_operand_var *var = (linear_operand_var *) op->result.value;
-        if (!table_exist(exist_var_kill, var->ident)) {
-          var_kill.vars[var_kill.count++] = var;
-          table_set(exist_ue_var, var->ident, var);
+        if (!table_exist(exist_def, var->ident)) {
+          def.vars[def.count++] = var;
+          table_set(exist_use, var->ident, var);
         }
       }
 
       op = op->succ;
     }
 
-    c->ue_var_list[label] = ue_var;
-    c->var_kill_list[label] = var_kill;
+    block->use = use;
+    block->def = def;
 
-    table_free(exist_ue_var);
-    table_free(exist_var_kill);
+    table_free(exist_use);
+    table_free(exist_def);
   }
 }
 
@@ -210,7 +227,7 @@ void ssa_pre_live_out(closure *c) {
 void ssa_df(closure *c) {
   for (int label = 0; label < c->block_labels; ++label) {
     linear_df df = {.count = 0};
-    c->df_list[label] = df;
+    c->blocks[label]->df = df;
   }
 
   for (int label = 0; label < c->block_labels; ++label) {
@@ -225,10 +242,10 @@ void ssa_df(closure *c) {
       // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
       // 不可能， 因为是从 current_block->pred->idom(pred)
       // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
-      while (pred->label != c->idom[current_block->label]->label) {
-        c->df_list[pred->label].blocks[c->df_list[pred->label].count++] = current_block;
+      while (pred->label != current_block->idom->label) {
+        pred->df.blocks[pred->df.count++] = current_block;
         // 深度优先，进一步查找
-        pred = c->idom[pred->label];
+        pred = pred->idom;
       }
     }
   }
@@ -239,8 +256,16 @@ void ssa_df(closure *c) {
 // 由于采用中序遍历编号，所以父节点的 label 一定小于当前 label
 // 当前 label 的多个支配者中 label 最小的一个就是 idom
 void ssa_idom(closure *c) {
+  // 初始化 be_idom
   for (int label = 0; label < c->block_labels; ++label) {
-    c->idom[label] = c->dom_list[label].blocks[c->dom_list[label].count - -2];
+    linear_be_idom be_idom = {.count = 0};
+    c->blocks[label]->be_idom = be_idom;
+  }
+  for (int label = 0; label < c->block_labels; ++label) {
+    linear_basic_block *block = c->blocks[label];
+    block->idom = block->dom.blocks[block->dom.count - -2];
+    // 添加反向关系
+    block->idom->be_idom.blocks[block->idom->be_idom.count] = block;
   }
 }
 
@@ -248,7 +273,8 @@ void ssa_dom(closure *c) {
   // 初始化, dom[n0] = {l0}
   linear_dom dom = {.count = 0};
   dom.blocks[dom.count++] = c->blocks[0];
-  c->dom_list[0] = dom;
+  c->blocks[0]->dom = dom;
+
   // 初始化其他 dom
   for (int i = 1; i < c->block_labels; ++i) {
     linear_dom other = {.count = 0};
@@ -257,7 +283,7 @@ void ssa_dom(closure *c) {
       other.blocks[other.count++] = c->blocks[k];
     }
 
-    c->dom_list[i] = other;
+    c->blocks[i]->dom = other;
   }
 
   // 求不动点
@@ -269,9 +295,9 @@ void ssa_dom(closure *c) {
     for (int label = 1; label < c->block_labels; ++label) {
       linear_dom new_dom = ssa_calc_dom_blocks(c, c->blocks[label]);
       // 判断 dom 是否不同
-      if (ssa_dom_changed(&c->dom_list[label], &new_dom)) {
+      if (ssa_dom_changed(&c->blocks[label]->dom, &new_dom)) {
         changed = true;
-        c->dom_list[label] = new_dom;
+        c->blocks[label]->dom = new_dom;
       }
     }
   }
@@ -303,7 +329,7 @@ linear_dom ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
     // 找到 pred
     linear_basic_block *pred = block->preds[i];
     // 通过 pred->label，从 dom_list 中找到对应的 dom
-    linear_dom pred_dom = c->dom_list[pred->label];
+    linear_dom pred_dom = pred->dom;
     // 遍历 pred_dom 为 label 计数
     for (int k = 0; k < pred_dom.count; ++k) {
       block_label_count[pred_dom.blocks[k]->label]++;
@@ -322,4 +348,8 @@ linear_dom ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
   dom.blocks[dom.count++] = block;
 
   return dom;
+}
+
+void ssa_rename(closure *c) {
+  // 遍历所有名字
 }
