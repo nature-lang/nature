@@ -1,5 +1,3 @@
-#include <tkDecls.h>
-#include <tclDecls.h>
 #include "compiler.h"
 #include "inst.h"
 #include "string.h"

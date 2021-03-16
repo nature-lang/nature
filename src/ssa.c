@@ -1,4 +1,7 @@
-#include <c++/v1/functional>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
 #include "ssa.h"
 
 //  1. phi 如何编号？和 label 编号一致
@@ -9,7 +12,7 @@ void ssa_add_phi(closure *c) {
   for (int label = 0; label < c->block_labels; ++label) {
     // 定义的每个变量
     linear_vars def = c->blocks[label]->def;
-    linear_df df = c->blocks[label]->df;
+    linear_blocks df = c->blocks[label]->df;
 
     for (int i = 0; i < def.count; ++i) {
       linear_operand_var *var = def.vars[i];
@@ -33,7 +36,7 @@ void ssa_add_phi(closure *c) {
 
         // param to first
         phi_op->first.type = LINEAR_OPERAND_TYPE_PHI_BODY;
-        phi_op->first.value = linear_new_phi_body(var, df_block->preds_count);
+        phi_op->first.value = linear_new_phi_body(var, df_block->preds.count);
 
         // insert to linked list
         linear_op *label_op = df_block->op;
@@ -81,8 +84,8 @@ linear_vars ssa_calc_live_out(closure *c, linear_basic_block *block) {
   linear_vars live_out = {.count = 0};
   table *exist_var = table_new(); // basic var ident
 
-  for (int i = 0; i < block->succs_count; ++i) {
-    linear_basic_block *succ = block->succs[i];
+  for (int i = 0; i < block->succs.count; ++i) {
+    linear_basic_block *succ = block->succs.blocks[i];
 
     // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
     for (int k = 0; k < succ->live_in.count; ++k) {
@@ -226,18 +229,18 @@ void ssa_use_def(closure *c) {
 // 同理对于 pred_j 的支配者 pred_j', 只要 pred_j' 不是 n的 idom, n 同样也是是 pred_j' 的支配边界
 void ssa_df(closure *c) {
   for (int label = 0; label < c->block_labels; ++label) {
-    linear_df df = {.count = 0};
+    linear_blocks df = {.count = 0};
     c->blocks[label]->df = df;
   }
 
   for (int label = 0; label < c->block_labels; ++label) {
     linear_basic_block *current_block = c->blocks[label];
-    if (current_block->preds_count < 2) {
+    if (current_block->preds.count < 2) {
       continue;
     }
 
-    for (int i = 0; i < current_block->preds_count; ++i) {
-      linear_basic_block *pred = current_block->preds[i];
+    for (int i = 0; i < current_block->preds.count; ++i) {
+      linear_basic_block *pred = current_block->preds.blocks[i];
       // 只要 pred 不是 当前块的最近支配者, pred 的支配边界就一定包含着 current_block
       // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
       // 不可能， 因为是从 current_block->pred->idom(pred)
@@ -258,7 +261,7 @@ void ssa_df(closure *c) {
 void ssa_idom(closure *c) {
   // 初始化 be_idom
   for (int label = 0; label < c->block_labels; ++label) {
-    linear_be_idom be_idom = {.count = 0};
+    linear_blocks be_idom = {.count = 0};
     c->blocks[label]->be_idom = be_idom;
   }
   for (int label = 0; label < c->block_labels; ++label) {
@@ -271,13 +274,13 @@ void ssa_idom(closure *c) {
 
 void ssa_dom(closure *c) {
   // 初始化, dom[n0] = {l0}
-  linear_dom dom = {.count = 0};
+  linear_blocks dom = {.count = 0};
   dom.blocks[dom.count++] = c->blocks[0];
   c->blocks[0]->dom = dom;
 
   // 初始化其他 dom
   for (int i = 1; i < c->block_labels; ++i) {
-    linear_dom other = {.count = 0};
+    linear_blocks other = {.count = 0};
 
     for (int k = 0; k < c->block_labels; ++k) {
       other.blocks[other.count++] = c->blocks[k];
@@ -293,7 +296,7 @@ void ssa_dom(closure *c) {
 
     // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
     for (int label = 1; label < c->block_labels; ++label) {
-      linear_dom new_dom = ssa_calc_dom_blocks(c, c->blocks[label]);
+      linear_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks[label]);
       // 判断 dom 是否不同
       if (ssa_dom_changed(&c->blocks[label]->dom, &new_dom)) {
         changed = true;
@@ -303,7 +306,7 @@ void ssa_dom(closure *c) {
   }
 }
 
-bool ssa_dom_changed(linear_dom *old, linear_dom *new) {
+bool ssa_dom_changed(linear_blocks *old, linear_blocks *new) {
   if (old->count != new->count) {
     true;
   }
@@ -318,18 +321,18 @@ bool ssa_dom_changed(linear_dom *old, linear_dom *new) {
   return false;
 }
 
-linear_dom ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
-  linear_dom dom = {.count = 0};
+linear_blocks ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
+  linear_blocks dom = {.count = 0};
 
   // 遍历当前 block 的 preds 的 dom_list, 然后求交集
   // key => label
   // value => a number of
   uint8_t block_label_count[UINT8_MAX];
-  for (int i = 0; i < block->preds_count; ++i) {
+  for (int i = 0; i < block->preds.count; ++i) {
     // 找到 pred
-    linear_basic_block *pred = block->preds[i];
+    linear_basic_block *pred = block->preds.blocks[i];
     // 通过 pred->label，从 dom_list 中找到对应的 dom
-    linear_dom pred_dom = pred->dom;
+    linear_blocks pred_dom = pred->dom;
     // 遍历 pred_dom 为 label 计数
     for (int k = 0; k < pred_dom.count; ++k) {
       block_label_count[pred_dom.blocks[k]->label]++;
@@ -338,7 +341,7 @@ linear_dom ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
 
   // 如果 block 的count 和 preds_count 的数量一致则表示全部相交，即
   for (int i = 0; i < c->block_labels; ++i) {
-    if (block_label_count[i] == block->preds_count) {
+    if (block_label_count[i] == block->preds.count) {
       dom.blocks[dom.count++] = c->blocks[i];
     }
   }
@@ -350,6 +353,125 @@ linear_dom ssa_calc_dom_blocks(closure *c, linear_basic_block *block) {
   return dom;
 }
 
+// 前序遍历各个基本块
 void ssa_rename(closure *c) {
+  table *var_number_table = table_new();
+  table *stack_table = table_new();
   // 遍历所有名字
+  for (int i = 0; i < c->globals.count; ++i) {
+    linear_operand_var *var = c->globals.vars[i];
+    uint8_t *number = malloc(sizeof(uint8_t));
+    *number = 0;
+
+    var_number_stack *stack = malloc(sizeof(var_number_stack));
+    stack->count = 0;
+
+    table_set(var_number_table, var->ident, number);
+    table_set(stack_table, var->ident, stack);
+  }
+
+  // 从根开始更名
+  ssa_rename_basic(c->entry, var_number_table, stack_table);
+
+  // TODO 遍历释放其中的每个值,否则就是空悬指针啦
+  table_free(var_number_table);
+  table_free(stack_table);
 }
+
+void ssa_rename_basic(linear_basic_block *block, table *var_number_table, table *stack_table) {
+  // skip label op
+  linear_op *op = block->op->succ;
+
+  // 当前块内的先命名
+  while (op != NULL) {
+    if (op->type == LINEAR_OP_TYPE_PHI) {
+      uint8_t number = ssa_new_var_number((linear_operand_var *) op->result.value, var_number_table, stack_table);
+      ssa_rename_var((linear_operand_var *) op->result.value, number);
+
+      op = op->succ;
+      continue;
+    }
+
+    if (op->first.type == LINEAR_OPERAND_TYPE_VAR) {
+      linear_operand_var *var = (linear_operand_var *) op->first.value;
+      var_number_stack *stack = table_get(stack_table, var->ident);
+      uint8_t number = stack->numbers[stack->count - 1];
+      ssa_rename_var(var, number);
+    }
+
+    if (op->second.type == LINEAR_OPERAND_TYPE_VAR) {
+      linear_operand_var *var = (linear_operand_var *) op->second.value;
+      var_number_stack *stack = table_get(stack_table, var->ident);
+      uint8_t number = stack->numbers[stack->count - 1];
+      ssa_rename_var(var, number);
+    }
+
+    if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
+      linear_operand_var *var = (linear_operand_var *) op->result.value;
+      uint8_t number = ssa_new_var_number(var, var_number_table, stack_table);
+      ssa_rename_var(var, number);
+    }
+
+    op = op->succ;
+  }
+
+  // 遍历当前块的 cfg 后继为 phi 参数编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
+  for (int i = 0; i < block->succs.count; ++i) {
+    struct linear_basic_block *succ = block->succs.blocks[i];
+    // 为 每个 phi 函数的 phi param 命名
+    linear_op *succ_op = succ->op->succ;
+    while (succ_op->type == LINEAR_OP_TYPE_PHI) {
+      linear_operand_phi_body *phi_body = succ_op->first.value;
+      linear_operand_var *var = phi_body->vars.vars[phi_body->rename_count++];
+      var_number_stack *stack = table_get(stack_table, var->ident);
+      uint8_t number = stack->numbers[stack->count - 1];
+      ssa_rename_var(var, number);
+
+      succ_op = succ_op->succ;
+    }
+  }
+
+  // 深度遍历-前序遍历,支配树可达所有节点
+  for (int i = 0; i < block->be_idom.count; ++i) {
+    ssa_rename_basic(block->be_idom.blocks[i], var_number_table, stack_table);
+  }
+
+  // 子节点递归完毕需要回到父节点，然后去下一个兄弟节点
+  // 此时如果父节点定义了 x (1), 在左子节点重新定义 了 x (2), 如果在右子节点有 b = x + 1, 然后又有 x = c + 2
+  // 此时 stack[x].top = 2;  但实际上右子节点使用的是 x1, 所以此时需要探出在左子节点定义的所有变量的 stack 空间。
+  // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
+  op = block->op->succ;
+  while (op != NULL) {
+    if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
+      linear_operand_var *var = (linear_operand_var *) op->result.value;
+
+      // pop stack
+      var_number_stack *stack = table_get(stack_table, var->ident);
+      stack->count--;
+    }
+    op = op->succ;
+  }
+}
+
+uint8_t ssa_new_var_number(linear_operand_var *var, table *var_number_table, table *stack_table) {
+  uint8_t *value = table_get(var_number_table, var->ident);
+  var_number_stack *stack = table_get(stack_table, var->ident);
+
+  uint8_t result = *value;
+  *value += 1;
+
+  table_set(var_number_table, var->ident, value);
+  stack->numbers[stack->count++] = result;
+
+  return result;
+}
+void ssa_rename_var(linear_operand_var *var, uint8_t number) {
+  var->old = var->ident;
+  // 1 '\0'
+  // 2 '_12'
+  char *buf = (char *) malloc(strlen(var->ident) + 1 + 2);
+  sprintf(buf, "%s_%d", var->ident, number);
+  var->ident = buf; // 已经分配在了堆中，需要手动释放了
+}
+
+

@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_COMPILER_H_
 #define NATURE_SRC_COMPILER_H_
 
-#include "stdlib.h"
+#include <stdlib.h>
 #include "ast.h"
 #include "inst.h"
 

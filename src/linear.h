@@ -11,11 +11,17 @@ typedef struct {
 
 typedef struct {
   string ident;
+  string old;
 } linear_operand_var;
 
-typedef struct {
+typedef struct linear_vars {
   uint8_t count;
-  linear_operand_var *var[UINT8_MAX];
+  linear_operand_var *vars[UINT8_MAX];
+} linear_vars;
+
+typedef struct {
+  uint8_t rename_count;
+  linear_vars vars;
 } linear_operand_phi_body;
 
 typedef enum {
@@ -46,31 +52,24 @@ typedef struct linear_op {
 
 typedef struct {
   uint8_t count;
-  linear_operand_var *vars[UINT8_MAX];
-} linear_vars;
-
-typedef struct {
-  uint8_t count;
   struct linear_basic_block *blocks[UINT8_MAX];
-} linear_dom, linear_df, linear_be_idom;
+} linear_blocks;
 
 typedef struct linear_basic_block {
   uint8_t label; // label 标号, 基本块编号， 和 label 区分一些
   linear_op *op; // 开始处的指令
   uint8_t operators_count;
 
-  uint8_t preds_count;
-  uint8_t succs_count;
-  struct linear_basic_block *preds[UINT8_MAX];
-  struct linear_basic_block *succs[UINT8_MAX];
+  linear_blocks preds;
+  linear_blocks succs;
 
   linear_vars use;
   linear_vars def;
   linear_vars live_out;
   linear_vars live_in;
-  linear_dom dom; // 当前块被哪些基本块支配
-  linear_df df;
-  linear_be_idom be_idom; // 哪些块已当前块作为最近支配块
+  linear_blocks dom; // 当前块被哪些基本块支配
+  linear_blocks df;
+  linear_blocks be_idom; // 哪些块已当前块作为最近支配块
   struct linear_basic_block *idom; // 当前块的最近支配者
 } linear_basic_block;
 
@@ -78,16 +77,17 @@ typedef struct linear_basic_block {
 typedef struct {
   // parent
   // children
+  linear_vars globals; // closure 中定义的变量列表
   uint8_t block_labels; // 基本块数量
-  linear_basic_block *blocks[UINT8_MAX]; // 这里的 index 就是 block.label !!
+  linear_basic_block *blocks[UINT8_MAX]; // post order, 这里的 index 就是 block.label !!
   linear_basic_block *entry; // 基本块入口
 } closure;
 
 closure *current;
 
 linear_op *linear_new_op();
-linear_operand_var *linear_clone_operand_var(linear_operand_var *var_operand);
-linear_operand_phi_body *linear_new_phi_body(linear_operand_var *var_operand, uint8_t count);
+linear_operand_var *linear_clone_operand_var(linear_operand_var *var);
+linear_operand_phi_body *linear_new_phi_body(linear_operand_var *var, uint8_t count);
 void linear_closure(ast_closure_decl *closure);
 void linear_call(ast_call_function *call);
 void linear_block(ast_block_stmt *block);
