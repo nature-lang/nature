@@ -9,16 +9,16 @@
 // n 中定义的每个变量 x 都需要在，df(n) 中的块声明对应的 x = phi(x_pred1,x_pred2), 即使在 df(n) 中没有使用该变量,
 // 毕竟谁能保证后续用不到呢(live_out 可以保证哈哈）
 void ssa_add_phi(closure *c) {
-  for (int label = 0; label < c->block_labels; ++label) {
+  for (int label = 0; label < c->blocks.count; ++label) {
     // 定义的每个变量
-    lir_vars def = c->blocks[label]->def;
-    lir_blocks df = c->blocks[label]->df;
+    lir_vars def = c->blocks.list[label]->def;
+    lir_blocks df = c->blocks.list[label]->df;
 
     for (int i = 0; i < def.count; ++i) {
       lir_operand_var *var = def.vars[i];
 
       for (int k = 0; k < df.count; ++k) {
-        lir_basic_block *df_block = df.blocks[k];
+        lir_basic_block *df_block = df.list[k];
         // 判断该变量是否已经添加过 phi(另一个分支可能会先创建), 创建则跳过
         if (ssa_phi_defined(var, df_block)) {
           continue;
@@ -52,25 +52,25 @@ void ssa_add_phi(closure *c) {
 
 void ssa_live(closure *c) {
   // 初始化 live out 每个基本块为 ∅
-  for (int label = 0; label < c->block_labels; ++label) {
+  for (int label = 0; label < c->blocks.count; ++label) {
     lir_vars out = {.count=0};
     lir_vars in = {.count=0};
-    c->blocks[label]->live_out = out;
-    c->blocks[label]->live_in = in;
+    c->blocks.list[label]->live_out = out;
+    c->blocks.list[label]->live_in = in;
   }
 
   bool changed = true;
   while (changed) {
     changed = false;
-    for (int label = c->block_labels; label >= 0; --label) {
-      lir_basic_block *block = c->blocks[label];
-      lir_vars new_live_out = ssa_calc_live_out(c, c->blocks[label]);
+    for (int label = c->blocks.count; label >= 0; --label) {
+      lir_basic_block *block = c->blocks.list[label];
+      lir_vars new_live_out = ssa_calc_live_out(c, c->blocks.list[label]);
       if (ssa_live_changed(&block->live_out, &new_live_out)) {
         changed = true;
         block->live_out = new_live_out;
       }
 
-      lir_vars new_live_in = ssa_calc_live_in(c, c->blocks[label]);
+      lir_vars new_live_in = ssa_calc_live_in(c, c->blocks.list[label]);
       if (ssa_live_changed(&block->live_in, &new_live_in)) {
         changed = true;
         block->live_out = new_live_out;
@@ -85,7 +85,7 @@ lir_vars ssa_calc_live_out(closure *c, lir_basic_block *block) {
   table *exist_var = table_new(); // basic var ident
 
   for (int i = 0; i < block->succs.count; ++i) {
-    lir_basic_block *succ = block->succs.blocks[i];
+    lir_basic_block *succ = block->succs.list[i];
 
     // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
     for (int k = 0; k < succ->live_in.count; ++k) {
@@ -173,14 +173,14 @@ bool ssa_live_changed(lir_vars *old, lir_vars *new) {
  * VarKill(m) 在 m 中定义的所有变量的集合
  */
 void ssa_use_def(closure *c) {
-  for (int label = 0; label < c->block_labels; ++label) {
+  for (int label = 0; label < c->blocks.count; ++label) {
     lir_vars use = {.count=0};
     lir_vars def = {.count=0};
 
     table *exist_use = table_new();
     table *exist_def = table_new();
 
-    lir_basic_block *block = c->blocks[label];
+    lir_basic_block *block = c->blocks.list[label];
 
     lir_op *op = block->op;
     while (op != NULL) {
@@ -228,25 +228,25 @@ void ssa_use_def(closure *c) {
 // 对于 汇聚点 n 的每个前驱 pred_j, 只要其不是 n 的 idom, n 就是 pred_j' 的支配边界
 // 同理对于 pred_j 的支配者 pred_j', 只要 pred_j' 不是 n的 idom, n 同样也是是 pred_j' 的支配边界
 void ssa_df(closure *c) {
-  for (int label = 0; label < c->block_labels; ++label) {
+  for (int label = 0; label < c->blocks.count; ++label) {
     lir_blocks df = {.count = 0};
-    c->blocks[label]->df = df;
+    c->blocks.list[label]->df = df;
   }
 
-  for (int label = 0; label < c->block_labels; ++label) {
-    lir_basic_block *current_block = c->blocks[label];
+  for (int label = 0; label < c->blocks.count; ++label) {
+    lir_basic_block *current_block = c->blocks.list[label];
     if (current_block->preds.count < 2) {
       continue;
     }
 
     for (int i = 0; i < current_block->preds.count; ++i) {
-      lir_basic_block *pred = current_block->preds.blocks[i];
+      lir_basic_block *pred = current_block->preds.list[i];
       // 只要 pred 不是 当前块的最近支配者, pred 的支配边界就一定包含着 current_block
       // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
       // 不可能， 因为是从 current_block->pred->idom(pred)
       // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
       while (pred->label != current_block->idom->label) {
-        pred->df.blocks[pred->df.count++] = current_block;
+        pred->df.list[pred->df.count++] = current_block;
         // 深度优先，进一步查找
         pred = pred->idom;
       }
@@ -260,33 +260,33 @@ void ssa_df(closure *c) {
 // 当前 label 的多个支配者中 label 最小的一个就是 idom
 void ssa_idom(closure *c) {
   // 初始化 be_idom
-  for (int label = 0; label < c->block_labels; ++label) {
+  for (int label = 0; label < c->blocks.count; ++label) {
     lir_blocks be_idom = {.count = 0};
-    c->blocks[label]->be_idom = be_idom;
+    c->blocks.list[label]->be_idom = be_idom;
   }
-  for (int label = 0; label < c->block_labels; ++label) {
-    lir_basic_block *block = c->blocks[label];
-    block->idom = block->dom.blocks[block->dom.count - -2];
+  for (int label = 0; label < c->blocks.count; ++label) {
+    lir_basic_block *block = c->blocks.list[label];
+    block->idom = block->dom.list[block->dom.count - -2];
     // 添加反向关系
-    block->idom->be_idom.blocks[block->idom->be_idom.count] = block;
+    block->idom->be_idom.list[block->idom->be_idom.count] = block;
   }
 }
 
 void ssa_dom(closure *c) {
   // 初始化, dom[n0] = {l0}
   lir_blocks dom = {.count = 0};
-  dom.blocks[dom.count++] = c->blocks[0];
-  c->blocks[0]->dom = dom;
+  dom.list[dom.count++] = c->blocks.list[0];
+  c->blocks.list[0]->dom = dom;
 
   // 初始化其他 dom
-  for (int i = 1; i < c->block_labels; ++i) {
+  for (int i = 1; i < c->blocks.count; ++i) {
     lir_blocks other = {.count = 0};
 
-    for (int k = 0; k < c->block_labels; ++k) {
-      other.blocks[other.count++] = c->blocks[k];
+    for (int k = 0; k < c->blocks.count; ++k) {
+      other.list[other.count++] = c->blocks.list[k];
     }
 
-    c->blocks[i]->dom = other;
+    c->blocks.list[i]->dom = other;
   }
 
   // 求不动点
@@ -295,12 +295,12 @@ void ssa_dom(closure *c) {
     changed = false;
 
     // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
-    for (int label = 1; label < c->block_labels; ++label) {
-      lir_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks[label]);
+    for (int label = 1; label < c->blocks.count; ++label) {
+      lir_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks.list[label]);
       // 判断 dom 是否不同
-      if (ssa_dom_changed(&c->blocks[label]->dom, &new_dom)) {
+      if (ssa_dom_changed(&c->blocks.list[label]->dom, &new_dom)) {
         changed = true;
-        c->blocks[label]->dom = new_dom;
+        c->blocks.list[label]->dom = new_dom;
       }
     }
   }
@@ -313,7 +313,7 @@ bool ssa_dom_changed(lir_blocks *old, lir_blocks *new) {
 
   // 因此是根据 block label 从小到大排序的，所以可以这么遍历
   for (int i = 0; i < old->count; ++i) {
-    if (old->blocks[i]->label != new->blocks[i]->label) {
+    if (old->list[i]->label != new->list[i]->label) {
       return true;
     }
   }
@@ -330,25 +330,25 @@ lir_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
   uint8_t block_label_count[UINT8_MAX];
   for (int i = 0; i < block->preds.count; ++i) {
     // 找到 pred
-    lir_basic_block *pred = block->preds.blocks[i];
+    lir_basic_block *pred = block->preds.list[i];
     // 通过 pred->label，从 dom_list 中找到对应的 dom
     lir_blocks pred_dom = pred->dom;
     // 遍历 pred_dom 为 label 计数
     for (int k = 0; k < pred_dom.count; ++k) {
-      block_label_count[pred_dom.blocks[k]->label]++;
+      block_label_count[pred_dom.list[k]->label]++;
     }
   }
 
   // 如果 block 的count 和 preds_count 的数量一致则表示全部相交，即
-  for (int i = 0; i < c->block_labels; ++i) {
-    if (block_label_count[i] == block->preds.count) {
-      dom.blocks[dom.count++] = c->blocks[i];
+  for (int label = 0; label < c->blocks.count; ++label) {
+    if (block_label_count[label] == block->preds.count) {
+      dom.list[dom.count++] = c->blocks.list[label];
     }
   }
 
   // 由于 n 的支配者的 label 肯定小于 n, 所以最后添加 n,这样支配者就是按从小往大编号了
   // 从而便于比较，和找出 idom
-  dom.blocks[dom.count++] = block;
+  dom.list[dom.count++] = block;
 
   return dom;
 }
@@ -417,7 +417,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
 
   // 遍历当前块的 cfg 后继为 phi 参数编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
   for (int i = 0; i < block->succs.count; ++i) {
-    struct lir_basic_block *succ = block->succs.blocks[i];
+    struct lir_basic_block *succ = block->succs.list[i];
     // 为 每个 phi 函数的 phi param 命名
     lir_op *succ_op = succ->op->succ;
     while (succ_op->type == LINEAR_OP_TYPE_PHI) {
@@ -433,7 +433,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
 
   // 深度遍历-前序遍历,支配树可达所有节点
   for (int i = 0; i < block->be_idom.count; ++i) {
-    ssa_rename_basic(block->be_idom.blocks[i], var_number_table, stack_table);
+    ssa_rename_basic(block->be_idom.list[i], var_number_table, stack_table);
   }
 
   // 子节点递归完毕需要回到父节点，然后去下一个兄弟节点

@@ -4,6 +4,7 @@
 #include "value.h"
 #include "ast.h"
 #include "lib/table.h"
+#include "register/intervals.h"
 
 typedef struct {
 
@@ -52,8 +53,16 @@ typedef struct lir_op {
 
 typedef struct {
   uint8_t count;
-  struct lir_basic_block *blocks[UINT8_MAX];
+  struct lir_basic_block *list[UINT8_MAX];
 } lir_blocks;
+
+typedef struct {
+  uint8_t flag;
+  uint8_t tree_high;
+  uint8_t index_list[UINT8_MAX];
+  uint8_t index;
+  uint8_t depth;
+} loop_detection;
 
 typedef struct lir_basic_block {
   uint8_t label; // label 标号, 基本块编号， 和 label 区分一些
@@ -69,8 +78,11 @@ typedef struct lir_basic_block {
   lir_vars live_in;
   lir_blocks dom; // 当前块被哪些基本块支配
   lir_blocks df;
-  lir_blocks be_idom; // 哪些块已当前块作为最近支配块
+  lir_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
   struct lir_basic_block *idom; // 当前块的最近支配者
+
+  // loop detection
+  loop_detection loop;
 } lir_basic_block;
 
 // cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
@@ -79,7 +91,8 @@ typedef struct {
   // children
   lir_vars globals; // closure 中定义的变量列表
   uint8_t block_labels; // 基本块数量
-  lir_basic_block *blocks[UINT8_MAX]; // post order, 这里的 index 就是 block.label !!
+//  lir_basic_block *blocks[UINT8_MAX]; // post order, 这里的 index 就是 block.label !!
+  lir_blocks blocks; // 啥顺序呢？
   lir_basic_block *entry; // 基本块入口
 
   // 特定排序 block list
@@ -98,5 +111,6 @@ void lir_literal(ast_literal *literal);
 void lir_ident(ast_ident *ident);
 void lir_if(ast_if_stmt *if_stmt);
 void lir_while(ast_while_stmt *while_stmt);
+string lir_label_to_string(uint8_t label);
 
 #endif //NATURE_SRC_LIR_H_
