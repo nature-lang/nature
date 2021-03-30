@@ -4,7 +4,6 @@
 #include "value.h"
 #include "ast.h"
 #include "lib/table.h"
-#include "register/intervals.h"
 
 typedef struct {
 
@@ -71,6 +70,8 @@ typedef struct lir_basic_block {
 
   lir_blocks preds;
   lir_blocks succs;
+  lir_blocks forward_succs;
+  uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
   lir_vars use;
   lir_vars def;
@@ -90,12 +91,10 @@ typedef struct {
   // parent
   // children
   lir_vars globals; // closure 中定义的变量列表
-  uint8_t block_labels; // 基本块数量
-//  lir_basic_block *blocks[UINT8_MAX]; // post order, 这里的 index 就是 block.label !!
   lir_blocks blocks; // 啥顺序呢？
-  lir_basic_block *entry; // 基本块入口
 
-  // 特定排序 block list
+  lir_basic_block *entry; // 基本块入口
+  lir_blocks order_blocks;
 } closure;
 
 closure *current;

@@ -1,7 +1,7 @@
+#include <tkDecls.h>
 #include "intervals.h"
 #include "src/lib/list.h"
-#include <string.h>
-#include <stdlib.h>
+#include "src/lib/stack.h"
 
 // 每个块需要存储什么数据？
 // loop flag
@@ -28,6 +28,7 @@ void intervals_loop_detection(closure *c) {
     // 是否会出现 succ 的 flag 是 visited?
     // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
     // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
+    lir_blocks forward_succs = {.count = 0};
     for (int i = 0; i < block->succs.count; ++i) {
       lir_basic_block *succ = block->succs.list[i];
       succ->loop.tree_high = block->loop.tree_high + 1;
@@ -46,9 +47,13 @@ void intervals_loop_detection(closure *c) {
         continue;
       }
 
+      forward_succs.list[forward_succs.count++] = succ; // 后继的数量
+      succ->incoming_forward_count++; // 前驱中正向进我的数量
       succ->loop.flag = LOOP_DETECTION_FLAG_VISITED;
     }
 
+    // 添加正向数据流
+    block->forward_succs = forward_succs;
     // 变更 flag
     block->loop.flag = LOOP_DETECTION_FLAG_ACTIVE;
   }
@@ -103,4 +108,49 @@ void intervals_loop_detection(closure *c) {
     block->loop.index = index;
   }
 }
+
+// 大值在栈顶被优先处理
+static void intervals_insert_to_stack_by_depth(stack *work_list, lir_basic_block *block) {
+  // next->next->next
+  stack_node *p = work_list->top;
+  while (p->next != NULL && ((lir_basic_block *) p->next->value)->loop.depth > block->loop.depth) {
+    p = p->next;
+  }
+
+  // p->next == NULL 或者 p->next 小于等于 当前 block
+  // p = 3 block = 2  p_next = 2
+  stack_node *last_node = p->next;
+  // 初始化一个 node
+  stack_node *await_node = stack_new_node();
+  await_node->value = block;
+  p->next = await_node;
+
+  if (last_node != NULL) {
+    await_node->next = last_node;
+  }
+}
+
+// 优秀的排序从而构造更短更好的 lifetime interval
+// 权重越大排序越靠前
+// 权重的本质是？或者说权重越大一个基本块？
+void intervals_block_order(closure *c) {
+  stack *work_list = stack_new();
+  stack_push(work_list, c->entry);
+
+  while (!stack_empty(work_list)) {
+    lir_basic_block *block = stack_pop(work_list);
+    c->order_blocks.list[c->order_blocks.count++] = block;
+
+    // 需要计算每一个块的正向前驱的数量
+    for (int i = 0; i < block->forward_succs.count; ++i) {
+      lir_basic_block *succ = block->forward_succs.list[i];
+      succ->incoming_forward_count--;
+      if (succ->incoming_forward_count == 0) {
+        // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
+        intervals_insert_to_stack_by_depth(work_list, succ);
+      }
+    }
+  }
+}
+
 

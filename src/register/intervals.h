@@ -9,12 +9,7 @@ typedef enum {
   LOOP_DETECTION_FLAG_NULL,
 } loop_detection_flag;
 
-// 队列形式,尾进头出
-typedef struct work_node {
-  lir_basic_block *block;
-  struct work_node *next;
-} list_block_node; // 单向链表结构
-
 void intervals_loop_detection(closure *c);
+void intervals_block_order(closure *c);
 
 #endif
