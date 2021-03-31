@@ -25,8 +25,8 @@ typedef struct {
 } lir_operand_phi_body;
 
 typedef enum {
-  LINEAR_OPERAND_TYPE_VAR,
-  LINEAR_OPERAND_TYPE_PHI_BODY,
+  LIR_OPERAND_TYPE_VAR,
+  LIR_OPERAND_TYPE_PHI_BODY,
 } lir_operand_type;
 
 typedef struct {
@@ -35,8 +35,8 @@ typedef struct {
 } lir_operand;
 
 typedef enum {
-  LINEAR_OP_TYPE_ADD,
-  LINEAR_OP_TYPE_PHI,
+  LIR_OP_TYPE_ADD,
+  LIR_OP_TYPE_PHI,
 } lir_op_type;
 
 // 四元组
@@ -45,7 +45,7 @@ typedef struct lir_op {
   lir_operand first; // 参数1
   lir_operand second; // 参数2
   lir_operand result; // 参数3
-  uint32_t number; // 编号
+  int id; // 编号
   struct lir_op *succ;
   struct lir_op *pred;
 } lir_op;
@@ -65,7 +65,8 @@ typedef struct {
 
 typedef struct lir_basic_block {
   uint8_t label; // label 标号, 基本块编号， 和 label 区分一些
-  lir_op *op; // 开始处的指令
+  lir_op *first_op; // 开始处的指令
+  lir_op *last_op;
   uint8_t operators_count;
 
   lir_blocks preds;
@@ -95,6 +96,7 @@ typedef struct {
 
   lir_basic_block *entry; // 基本块入口
   lir_blocks order_blocks;
+  table intervals;
 } closure;
 
 closure *current;

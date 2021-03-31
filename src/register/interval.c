@@ -1,5 +1,5 @@
 #include <tkDecls.h>
-#include "intervals.h"
+#include "interval.h"
 #include "src/lib/list.h"
 #include "src/lib/stack.h"
 
@@ -12,7 +12,7 @@
 // 假如使用广度优先遍历，编号按照广度优先的层级来编号,则可以方便的计算出树的高度,顶层 为 0，然后依次递增
 // 使用树的高度来标记 loop_index，如果一个块被标记了两个 index ,则 index 大的为内嵌循环
 // 当前层 index 等于父节点 + 1
-void intervals_loop_detection(closure *c) {
+void interval_loop_detection(closure *c) {
   c->entry->loop.flag = LOOP_DETECTION_FLAG_VISITED;
   c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
   list *work_list = list_new();
@@ -110,7 +110,7 @@ void intervals_loop_detection(closure *c) {
 }
 
 // 大值在栈顶被优先处理
-static void intervals_insert_to_stack_by_depth(stack *work_list, lir_basic_block *block) {
+static void interval_insert_to_stack_by_depth(stack *work_list, lir_basic_block *block) {
   // next->next->next
   stack_node *p = work_list->top;
   while (p->next != NULL && ((lir_basic_block *) p->next->value)->loop.depth > block->loop.depth) {
@@ -133,7 +133,7 @@ static void intervals_insert_to_stack_by_depth(stack *work_list, lir_basic_block
 // 优秀的排序从而构造更短更好的 lifetime interval
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
-void intervals_block_order(closure *c) {
+void interval_block_order(closure *c) {
   stack *work_list = stack_new();
   stack_push(work_list, c->entry);
 
@@ -147,8 +147,40 @@ void intervals_block_order(closure *c) {
       succ->incoming_forward_count--;
       if (succ->incoming_forward_count == 0) {
         // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
-        intervals_insert_to_stack_by_depth(work_list, succ);
+        interval_insert_to_stack_by_depth(work_list, succ);
       }
+    }
+  }
+}
+
+void interval_mark_number(closure *c) {
+  int next_id = 0;
+  for (int i = 0; i < c->order_blocks.count; ++i) {
+    lir_op *op = c->order_blocks.list[i]->first_op;
+    while (op != NULL) {
+      if (op->type == LIR_OP_TYPE_PHI) {
+        op = op->succ;
+        continue;
+      }
+
+      op->id = next_id;
+      next_id += 2;
+
+      op = op->succ;
+    }
+  }
+}
+
+void interval_build_intervals(closure *c) {
+  // 倒序遍历块列表
+  for (int i = c->order_blocks.count - 1; i >= 0; --i) {
+    lir_basic_block *block = c->order_blocks.list[i];
+    int block_from_id = block->first_op->id;
+    int block_to_id = block->first_op->id + 2; // 为什么加 2 我也没想好
+
+    // 遍历所有的 live_out,直接添加最长间隔
+    for (int k = 0; k < block->live_out.count; ++k) {
+
     }
   }
 }

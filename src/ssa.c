@@ -30,16 +30,16 @@ void ssa_add_phi(closure *c) {
         }
 
         // add phi
-        lir_op *phi_op = lir_new_op(LINEAR_OP_TYPE_PHI);
-        phi_op->result.type = LINEAR_OPERAND_TYPE_VAR;
+        lir_op *phi_op = lir_new_op(LIR_OP_TYPE_PHI);
+        phi_op->result.type = LIR_OPERAND_TYPE_VAR;
         phi_op->result.value = lir_clone_operand_var(var);
 
         // param to first
-        phi_op->first.type = LINEAR_OPERAND_TYPE_PHI_BODY;
+        phi_op->first.type = LIR_OPERAND_TYPE_PHI_BODY;
         phi_op->first.value = lir_new_phi_body(var, df_block->preds.count);
 
         // insert to linked list
-        lir_op *label_op = df_block->op;
+        lir_op *label_op = df_block->first_op;
         label_op->succ->pred = phi_op;
         phi_op->succ = label_op->succ;
 
@@ -62,7 +62,7 @@ void ssa_live(closure *c) {
   bool changed = true;
   while (changed) {
     changed = false;
-    for (int label = c->blocks.count; label >= 0; --label) {
+    for (int label = c->blocks.count - 1; label >= 0; --label) {
       lir_basic_block *block = c->blocks.list[label];
       lir_vars new_live_out = ssa_calc_live_out(c, c->blocks.list[label]);
       if (ssa_live_changed(&block->live_out, &new_live_out)) {
@@ -182,10 +182,10 @@ void ssa_use_def(closure *c) {
 
     lir_basic_block *block = c->blocks.list[label];
 
-    lir_op *op = block->op;
+    lir_op *op = block->first_op;
     while (op != NULL) {
       // first param
-      if (op->first.type == LINEAR_OPERAND_TYPE_VAR) {
+      if (op->first.type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = (lir_operand_var *) op->first.value;
         bool is_def = ssa_var_belong(var, def);
         if (!is_def && !table_exist(exist_use, var->ident)) {
@@ -195,7 +195,7 @@ void ssa_use_def(closure *c) {
       }
 
       // second param
-      if (op->second.type == LINEAR_OPERAND_TYPE_VAR) {
+      if (op->second.type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = (lir_operand_var *) op->second.value;
         bool is_def = ssa_var_belong(var, def);
         if (!is_def && !table_exist(exist_use, var->ident)) {
@@ -204,7 +204,7 @@ void ssa_use_def(closure *c) {
         }
       }
 
-      if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
+      if (op->result.type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = (lir_operand_var *) op->result.value;
         if (!table_exist(exist_def, var->ident)) {
           def.vars[def.count++] = var;
@@ -380,11 +380,11 @@ void ssa_rename(closure *c) {
 
 void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *stack_table) {
   // skip label op
-  lir_op *op = block->op->succ;
+  lir_op *op = block->first_op->succ;
 
   // 当前块内的先命名
   while (op != NULL) {
-    if (op->type == LINEAR_OP_TYPE_PHI) {
+    if (op->type == LIR_OP_TYPE_PHI) {
       uint8_t number = ssa_new_var_number((lir_operand_var *) op->result.value, var_number_table, stack_table);
       ssa_rename_var((lir_operand_var *) op->result.value, number);
 
@@ -392,21 +392,21 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
       continue;
     }
 
-    if (op->first.type == LINEAR_OPERAND_TYPE_VAR) {
+    if (op->first.type == LIR_OPERAND_TYPE_VAR) {
       lir_operand_var *var = (lir_operand_var *) op->first.value;
       var_number_stack *stack = table_get(stack_table, var->ident);
       uint8_t number = stack->numbers[stack->count - 1];
       ssa_rename_var(var, number);
     }
 
-    if (op->second.type == LINEAR_OPERAND_TYPE_VAR) {
+    if (op->second.type == LIR_OPERAND_TYPE_VAR) {
       lir_operand_var *var = (lir_operand_var *) op->second.value;
       var_number_stack *stack = table_get(stack_table, var->ident);
       uint8_t number = stack->numbers[stack->count - 1];
       ssa_rename_var(var, number);
     }
 
-    if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
+    if (op->result.type == LIR_OPERAND_TYPE_VAR) {
       lir_operand_var *var = (lir_operand_var *) op->result.value;
       uint8_t number = ssa_new_var_number(var, var_number_table, stack_table);
       ssa_rename_var(var, number);
@@ -419,8 +419,8 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
   for (int i = 0; i < block->succs.count; ++i) {
     struct lir_basic_block *succ = block->succs.list[i];
     // 为 每个 phi 函数的 phi param 命名
-    lir_op *succ_op = succ->op->succ;
-    while (succ_op->type == LINEAR_OP_TYPE_PHI) {
+    lir_op *succ_op = succ->first_op->succ;
+    while (succ_op->type == LIR_OP_TYPE_PHI) {
       lir_operand_phi_body *phi_body = succ_op->first.value;
       lir_operand_var *var = phi_body->vars.vars[phi_body->rename_count++];
       var_number_stack *stack = table_get(stack_table, var->ident);
@@ -440,9 +440,9 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
   // 此时如果父节点定义了 x (1), 在左子节点重新定义 了 x (2), 如果在右子节点有 b = x + 1, 然后又有 x = c + 2
   // 此时 stack[x].top = 2;  但实际上右子节点使用的是 x1, 所以此时需要探出在左子节点定义的所有变量的 stack 空间。
   // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
-  op = block->op->succ;
+  op = block->first_op->succ;
   while (op != NULL) {
-    if (op->result.type == LINEAR_OPERAND_TYPE_VAR) {
+    if (op->result.type == LIR_OPERAND_TYPE_VAR) {
       lir_operand_var *var = (lir_operand_var *) op->result.value;
 
       // pop stack
