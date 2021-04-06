@@ -16,7 +16,7 @@ typedef struct {
 } interval_range;
 
 typedef struct interval {
-  lir_operand_var var;
+  lir_operand_var *var;
   slice *ranges;
   slice *use_positions;
   struct interval *split_parent;
@@ -27,5 +27,9 @@ void interval_loop_detection(closure *c);
 void interval_block_order(closure *c);
 void interval_mark_number(closure *c);
 void interval_build_intervals(closure *c);
+interval *interval_new(lir_operand_var *var);
+void interval_add_range(closure *c, lir_operand_var *var, int from, int to);
+void interval_add_first_range_from(closure *c, lir_operand_var *var, int from);
+void interval_add_use_position(closure *c, lir_operand_var *var, int position);
 
 #endif

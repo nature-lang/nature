@@ -15,7 +15,7 @@ void ssa_add_phi(closure *c) {
     lir_blocks df = c->blocks.list[label]->df;
 
     for (int i = 0; i < def.count; ++i) {
-      lir_operand_var *var = def.vars[i];
+      lir_operand_var *var = def.list[i];
 
       for (int k = 0; k < df.count; ++k) {
         lir_basic_block *df_block = df.list[k];
@@ -89,11 +89,11 @@ lir_vars ssa_calc_live_out(closure *c, lir_basic_block *block) {
 
     // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
     for (int k = 0; k < succ->live_in.count; ++k) {
-      lir_operand_var *var = succ->live_in.vars[k];
+      lir_operand_var *var = succ->live_in.list[k];
       if (table_exist(exist_var, var->ident)) {
         continue;
       }
-      live_out.vars[live_out.count++] = var;
+      live_out.list[live_out.count++] = var;
       table_set(exist_var, var->ident, var);
     }
   }
@@ -108,17 +108,17 @@ lir_vars ssa_calc_live_in(closure *c, lir_basic_block *block) {
   table *exist_var = table_new(); // basic var ident
 
   for (int i = 0; i < block->use.count; ++i) {
-    lir_operand_var *var = block->use.vars[i];
+    lir_operand_var *var = block->use.list[i];
     if (table_exist(exist_var, var->ident)) {
       continue;
     }
 
-    live_in.vars[live_in.count++] = var;
+    live_in.list[live_in.count++] = var;
     table_set(exist_var, var->ident, var);
   }
 
   for (int i = 0; i < block->live_out.count; ++i) {
-    lir_operand_var *var = block->live_out.vars[i];
+    lir_operand_var *var = block->live_out.list[i];
     if (table_exist(exist_var, var->ident)) {
       continue;
     }
@@ -128,7 +128,7 @@ lir_vars ssa_calc_live_in(closure *c, lir_basic_block *block) {
       continue;
     }
 
-    live_in.vars[live_in.count++] = var;
+    live_in.list[live_in.count++] = var;
     table_set(exist_var, var->ident, var);
   }
 
@@ -142,14 +142,14 @@ bool ssa_live_changed(lir_vars *old, lir_vars *new) {
   }
   table *var_count = table_new();
   for (int i = 0; i < old->count; ++i) {
-    string ident = old->vars[i]->ident;
-    table_set(var_count, ident, old->vars[i]);
+    string ident = old->list[i]->ident;
+    table_set(var_count, ident, old->list[i]);
   }
 
   // double count
   uint8_t double_count = 0;
   for (int i = 0; i < new->count; ++i) {
-    string ident = new->vars[i]->ident;
+    string ident = new->list[i]->ident;
     void *has = table_get(var_count, ident);
     if (has == NULL) {
       table_free(var_count);
@@ -189,7 +189,7 @@ void ssa_use_def(closure *c) {
         lir_operand_var *var = (lir_operand_var *) op->first.value;
         bool is_def = ssa_var_belong(var, def);
         if (!is_def && !table_exist(exist_use, var->ident)) {
-          use.vars[use.count++] = var;
+          use.list[use.count++] = var;
           table_set(exist_use, var->ident, var);
         }
       }
@@ -199,7 +199,7 @@ void ssa_use_def(closure *c) {
         lir_operand_var *var = (lir_operand_var *) op->second.value;
         bool is_def = ssa_var_belong(var, def);
         if (!is_def && !table_exist(exist_use, var->ident)) {
-          use.vars[use.count++] = var;
+          use.list[use.count++] = var;
           table_set(exist_use, var->ident, var);
         }
       }
@@ -207,7 +207,7 @@ void ssa_use_def(closure *c) {
       if (op->result.type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = (lir_operand_var *) op->result.value;
         if (!table_exist(exist_def, var->ident)) {
-          def.vars[def.count++] = var;
+          def.list[def.count++] = var;
           table_set(exist_use, var->ident, var);
         }
       }
@@ -359,7 +359,7 @@ void ssa_rename(closure *c) {
   table *stack_table = table_new();
   // 遍历所有名字
   for (int i = 0; i < c->globals.count; ++i) {
-    lir_operand_var *var = c->globals.vars[i];
+    lir_operand_var *var = c->globals.list[i];
     uint8_t *number = malloc(sizeof(uint8_t));
     *number = 0;
 
@@ -422,7 +422,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     lir_op *succ_op = succ->first_op->succ;
     while (succ_op->type == LIR_OP_TYPE_PHI) {
       lir_operand_phi_body *phi_body = succ_op->first.value;
-      lir_operand_var *var = phi_body->vars.vars[phi_body->rename_count++];
+      lir_operand_var *var = phi_body->vars.list[phi_body->rename_count++];
       var_number_stack *stack = table_get(stack_table, var->ident);
       uint8_t number = stack->numbers[stack->count - 1];
       ssa_rename_var(var, number);

@@ -1,4 +1,5 @@
 #include <tkDecls.h>
+#include <c++/v1/functional>
 #include "interval.h"
 #include "src/lib/list.h"
 #include "src/lib/stack.h"
@@ -172,17 +173,67 @@ void interval_mark_number(closure *c) {
 }
 
 void interval_build_intervals(closure *c) {
-  // 倒序遍历块列表
+  // init interval
+  c->interval_table = table_new();
+  for (int i = 0; i < c->globals.count; ++i) {
+    lir_operand_var *var = c->globals.list[i];
+    table_set(c->interval_table, var->ident, interval_new(var));
+  }
+
+  // 倒序遍历基本块
   for (int i = c->order_blocks.count - 1; i >= 0; --i) {
     lir_basic_block *block = c->order_blocks.list[i];
-    int block_from_id = block->first_op->id;
-    int block_to_id = block->first_op->id + 2; // 为什么加 2 我也没想好
+    int block_from = block->first_op->id;
+    int block_to = block->first_op->id + 2; // 为什么加 2 我也没想好
 
-    // 遍历所有的 live_out,直接添加最长间隔
+    // 遍历所有的 live_out,直接添加最长间隔,后面会逐渐缩减该间隔
     for (int k = 0; k < block->live_out.count; ++k) {
+      interval_add_range(c, block->live_out.list[k], block_from, block_to);
+    }
 
+    // 倒序遍历所有块指令
+    lir_op *op = block->last_op;
+    while (op != NULL) {
+      // 判断是否是 call op,是的话就截断所有物理寄存器
+
+      // result param
+      if (op->result.type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = (lir_operand_var *) op->result.value;
+        interval_add_first_range_from(c, var, op->id); // 截断操作
+        interval_add_use_position(c, var, op->id);
+      }
+
+      // first param
+      if (op->first.type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = (lir_operand_var *) op->first.value;
+        interval_add_range(c, var, block_from, op->id);
+        interval_add_use_position(c, var, op->id);
+      }
+
+      // second param
+      if (op->second.type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = (lir_operand_var *) op->second.value;
+        interval_add_range(c, var, block_from, op->id);
+        interval_add_use_position(c, var, op->id);
+      }
+
+      op = op->pred;
     }
   }
+}
+
+interval *interval_new(lir_operand_var *var) {
+  interval *entity = malloc(sizeof(interval));
+  entity->var = var;
+  entity->ranges = slice_new();
+  entity->use_positions = slice_new();
+  entity->split_children = slice_new();
+  entity->split_parent = NULL;
+  return entity;
+}
+
+void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
+  // 排序，合并
 }
 
 

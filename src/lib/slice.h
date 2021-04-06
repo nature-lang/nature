@@ -8,7 +8,7 @@ typedef struct {
   void *take;
 } slice;
 
-slice *slice_new(size_t size);
+slice *slice_new();
 void slice_insert(slice *s, void *value);
 void slice_free(slice *s);
 

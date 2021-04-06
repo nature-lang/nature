@@ -16,7 +16,7 @@ typedef struct {
 
 typedef struct lir_vars {
   uint8_t count;
-  lir_operand_var *vars[UINT8_MAX];
+  lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
 typedef struct {
@@ -96,7 +96,7 @@ typedef struct {
 
   lir_basic_block *entry; // 基本块入口
   lir_blocks order_blocks;
-  table intervals;
+  table *interval_table;
 } closure;
 
 closure *current;
