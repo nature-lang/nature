@@ -6,8 +6,8 @@
 #include "lib/table.h"
 
 typedef struct {
-
-} lir_operand_register;
+  string ident;
+} lir_operand_reg;
 
 typedef struct {
   string ident;
@@ -19,6 +19,11 @@ typedef struct lir_vars {
   lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
+typedef struct lir_regs {
+  uint8_t count;
+  lir_operand_reg *list[UINT8_MAX];
+} lir_regs;
+
 typedef struct {
   uint8_t rename_count;
   lir_vars vars;
@@ -26,6 +31,7 @@ typedef struct {
 
 typedef enum {
   LIR_OPERAND_TYPE_VAR,
+  LIR_OPERAND_TYPE_REG,
   LIR_OPERAND_TYPE_PHI_BODY,
 } lir_operand_type;
 
@@ -43,7 +49,7 @@ typedef enum {
 typedef struct lir_op {
   uint8_t type;
   lir_operand first; // 参数1
-  lir_operand second; // 参数2
+  lir_operand second; // 参数2 (参数可能是固定寄存器)
   lir_operand result; // 参数3
   int id; // 编号
   struct lir_op *succ;
@@ -92,11 +98,12 @@ typedef struct {
   // parent
   // children
   lir_vars globals; // closure 中定义的变量列表
+  lir_regs fixed_regs;
   lir_blocks blocks; // 啥顺序呢？
 
   lir_basic_block *entry; // 基本块入口
   lir_blocks order_blocks;
-  table *interval_table;
+  table *interval_table; // key包括 fixed register name 和 variable.ident
 } closure;
 
 closure *current;

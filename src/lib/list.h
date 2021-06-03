@@ -9,6 +9,9 @@ typedef struct list_node {
   struct list_node *next;
 } list_node;
 
+/**
+ * 队列或者说链表结构
+ */
 typedef struct {
   list_node *front; // 头部
   list_node *rear; // 尾部

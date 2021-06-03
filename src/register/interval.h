@@ -11,25 +11,36 @@ typedef enum {
 } loop_detection_flag;
 
 typedef struct {
+  int index; // 根据平台不同而不同，比如intel 0~40
+  string name;
+  string type; // int/float
+} reg;
+
+typedef struct {
   int from;
   int to;
 } interval_range;
 
+// interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
-  lir_operand_var *var;
+  lir_operand_var *var; // 变量名称
   slice *ranges;
   slice *use_positions;
   struct interval *split_parent;
-  slice *split_children;
+  slice *split_children; // 动态数组
+
+  reg *reg;
+  bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
 } interval;
 
 void interval_loop_detection(closure *c);
 void interval_block_order(closure *c);
 void interval_mark_number(closure *c);
-void interval_build_intervals(closure *c);
+void interval_build(closure *c);
 interval *interval_new(lir_operand_var *var);
 void interval_add_range(closure *c, lir_operand_var *var, int from, int to);
 void interval_add_first_range_from(closure *c, lir_operand_var *var, int from);
 void interval_add_use_position(closure *c, lir_operand_var *var, int position);
+void interval_split_interval();
 
 #endif

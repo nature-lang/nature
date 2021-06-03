@@ -272,6 +272,10 @@ void ssa_idom(closure *c) {
   }
 }
 
+// A -> B -> C
+// A -> E -> F -> C
+// 到达 C 必须要经过前驱 B,F 中的一个，如果一个节点即支配 B 也支配着 F，（此处是 A）
+// 则 A 一定支配着 C, 即如果 A 支配着 C 的所有前驱，则 A 一定支配 C
 void ssa_dom(closure *c) {
   // 初始化, dom[n0] = {l0}
   lir_blocks dom = {.count = 0};

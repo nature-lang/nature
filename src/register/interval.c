@@ -1,5 +1,3 @@
-#include <tkDecls.h>
-#include <c++/v1/functional>
 #include "interval.h"
 #include "src/lib/list.h"
 #include "src/lib/stack.h"
@@ -172,7 +170,7 @@ void interval_mark_number(closure *c) {
   }
 }
 
-void interval_build_intervals(closure *c) {
+void interval_build(closure *c) {
   // init interval
   c->interval_table = table_new();
   for (int i = 0; i < c->globals.count; ++i) {

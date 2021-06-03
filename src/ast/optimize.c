@@ -2,7 +2,7 @@
 #include "string.h"
 
 void optimize_assign(ast_assign_stmt *assign);
-void optimize_if(ast_if_stmt *;
+void optimize_if(ast_if_stmt *);
 /**
  * 1. unique var
  * 2. type check
