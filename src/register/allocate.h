@@ -4,12 +4,21 @@
 #include "src/lib/slice.h"
 #include "src/lib/list.h"
 #include "interval.h"
+
+typedef struct {
+  list *unhandled;
+  list *handled;
+  list *active;
+  list *inactive;
+  interval *current; // 正在分配的东西
+} allocate;
+
 /**
  * 主分配方法
  */
-void allocate(closure *c);
-void allocate_free_reg();
-void allocate_block_reg();
+void allocate_walk(closure *c);
+bool allocate_free_reg(allocate *a);
+bool allocate_block_reg(allocate *a);
 
 /**
  * 将 interval 按照 first_range.from 有序插入到 unhandled 中

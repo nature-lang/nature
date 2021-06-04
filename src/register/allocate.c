@@ -1,39 +1,85 @@
 #include "allocate.h"
 
-void allocate(closure *c) {
-  list *unhandled = init_unhandled(c);
-  list *handled = list_new();
-  list *active = list_new();
-  list *inactive = list_new();
+static void handle_active(allocate *a) {
+  int position = a->current->first_from;
+  list_node *active_curr = a->active->front;
+  list_node *active_prev = NULL;
+  while (active_curr->value != NULL) {
+    interval *select = (interval *) active_curr->value;
+    bool is_expired = select->last_to < position;
+    bool is_covers = interval_is_covers(select, position);
 
-  while (unhandled->count != 0) {
-    interval *current_interval = (interval *) list_pop(unhandled);
-    int position = current_interval->first_from; // 不等于 first use position
-
-    // handle active
-    list_node *active_curr = active->front;
-    list_node *active_prev = NULL;
-    while (active_curr->value != NULL) {
-      interval *select = (interval *) active_curr->value;
-      bool is_expired = select->last_to < position;
-      bool is_covers = interval_is_covers(select, position);
-
-      if (is_covers || is_expired) {
-        if (active_prev == NULL) {
-          active->front = active_curr->next;
-        } else {
-          active_prev->next = active_curr->next;
-        }
-        active->count--;
-        if (is_expired) {
-          list_push(handled, select);
-        } else {
-          list_push(inactive, select);
-        }
+    if (!is_covers || is_expired) {
+      if (active_prev == NULL) {
+        a->active->front = active_curr->next;
+      } else {
+        active_prev->next = active_curr->next;
       }
+      a->active->count--;
+      if (is_expired) {
+        list_push(a->handled, select);
+      } else {
+        list_push(a->inactive, select);
+      }
+    }
 
-      active_prev = active_curr;
-      active_curr = active_curr->next;
+    active_prev = active_curr;
+    active_curr = active_curr->next;
+  }
+}
+
+static void handle_inactive(allocate *a) {
+  int position = a->current->first_from;
+  list_node *inactive_curr = a->inactive->front;
+  list_node *inactive_prev = NULL;
+  while (inactive_curr->value != NULL) {
+    interval *select = (interval *) inactive_curr->value;
+    bool is_expired = select->last_to < position;
+    bool is_covers = interval_is_covers(select, position);
+
+    if (is_covers || is_expired) {
+      if (inactive_prev == NULL) {
+        a->inactive->front = inactive_curr->next;
+      } else {
+        inactive_prev->next = inactive_curr->next;
+      }
+      a->inactive->count--;
+      if (is_expired) {
+        list_push(a->handled, select);
+      } else {
+        list_push(a->active, select);
+      }
+    }
+
+    inactive_prev = inactive_curr;
+    inactive_curr = inactive_curr->next;
+  }
+}
+
+void allocate_walk(closure *c) {
+  allocate *a = malloc(sizeof(allocate));
+  a->unhandled = init_unhandled(c);
+  a->handled = list_new();
+  a->active = list_new();
+  a->inactive = list_new();
+
+  while (a->unhandled->count != 0) {
+    a->current = (interval *) list_pop(a->unhandled);
+    // handle active
+    handle_active(a);
+    // handle inactive
+    handle_inactive(a);
+
+    // 尝试为 current 分配寄存器
+    bool allocated = allocate_free_reg(a);
+    if (allocated) {
+      list_push(a->active, a->current);
+      continue;
+    }
+
+    allocated = allocate_block_reg(a);
+    if (allocated) {
+      list_push(a->active, a->current);
     }
   }
 }

@@ -98,7 +98,7 @@ typedef struct {
   // parent
   // children
   lir_vars globals; // closure 中定义的变量列表
-  lir_regs fixed_regs;
+  lir_regs fixed_regs; // 使用到的固定寄存器
   lir_blocks blocks; // 啥顺序呢？
 
   lir_basic_block *entry; // 基本块入口
