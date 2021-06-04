@@ -24,6 +24,8 @@ typedef struct {
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
   lir_operand_var *var; // 变量名称
+  int first_from;
+  int last_to;
   slice *ranges;
   slice *use_positions;
   struct interval *split_parent;
@@ -42,5 +44,6 @@ void interval_add_range(closure *c, lir_operand_var *var, int from, int to);
 void interval_add_first_range_from(closure *c, lir_operand_var *var, int from);
 void interval_add_use_position(closure *c, lir_operand_var *var, int position);
 void interval_split_interval();
+bool interval_is_covers(interval *i, int position);
 
 #endif

@@ -13,10 +13,10 @@ void allocate_block_reg();
 
 /**
  * 将 interval 按照 first_range.from 有序插入到 unhandled 中
- * @param i
+ * @param to
  * @param unhandled
  */
-void to_unhandled(list *unhandled, interval *i);
+void to_unhandled(list *unhandled, interval *to);
 
 /**
  * 根据 interval 列表 初始化 unhandled 列表
