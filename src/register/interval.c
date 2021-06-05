@@ -197,7 +197,7 @@ void interval_build(closure *c) {
       // result param
       if (op->result.type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = (lir_operand_var *) op->result.value;
-        interval_add_first_range_from(c, var, op->id); // 截断操作
+        interval_cut_first_range_from(c, var, op->id); // 截断操作
         interval_add_use_position(c, var, op->id);
       }
 
@@ -223,9 +223,9 @@ void interval_build(closure *c) {
 interval *interval_new(lir_operand_var *var) {
   interval *entity = malloc(sizeof(interval));
   entity->var = var;
-  entity->ranges = slice_new();
-  entity->use_positions = slice_new();
-  entity->split_children = slice_new();
+  entity->ranges = list_new();
+  entity->use_positions = list_new();
+  entity->split_children = list_new();
   entity->split_parent = NULL;
   return entity;
 }
