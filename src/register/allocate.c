@@ -137,3 +137,49 @@ void to_unhandled(list *unhandled, interval *to) {
   }
 }
 
+static uint8_t max_free_pos_index(int free_pos[UINT8_MAX]) {
+  uint8_t max_index = 0;
+  for (int i = 1; i < UINT8_MAX; ++i) {
+    if (free_pos[i] > free_pos[max_index]) {
+      max_index = i;
+    }
+  }
+
+  return max_index;
+}
+
+bool allocate_free_reg(allocate *a) {
+  int free_pos[UINT8_MAX];
+  for (int i = 0; i < physical_regs.count; ++i) {
+    free_pos[physical_regs.list[i]->id] = INTMAX_MAX;
+  }
+
+  // 求下一个点的交集,0表示没有交集
+  list_node *curr = a->inactive->front;
+  while (curr->value != NULL) {
+    interval *select = (interval *) curr->value;
+    int intersection = interval_next_intersection(a->current, select);
+    if (intersection > 0) {
+      free_pos[select->assigned->id] = intersection;
+    }
+
+    curr = curr->next;
+  }
+
+  // 找到最大的值
+  uint8_t max_reg_id = max_free_pos_index(free_pos);
+  // 没有可用的寄存器用于分配
+  if (free_pos[max_reg_id] == 0) {
+    return false;
+  }
+
+  if (free_pos[max_reg_id] > a->current->last_to) {
+    a->current->assigned = physical_regs.list[max_reg_id];
+    return true;
+  }
+
+  // await split
+
+  return true;
+}
+

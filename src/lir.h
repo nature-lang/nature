@@ -4,10 +4,11 @@
 #include "value.h"
 #include "ast.h"
 #include "lib/table.h"
+#include "register/register.h"
 
-typedef struct {
-  string ident;
-} lir_operand_reg;
+//typedef struct {
+//  string ident;
+//} lir_operand_reg;
 
 typedef struct {
   string ident;
@@ -19,10 +20,10 @@ typedef struct lir_vars {
   lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
-typedef struct lir_regs {
-  uint8_t count;
-  lir_operand_reg *list[UINT8_MAX];
-} lir_regs;
+//typedef struct lir_regs {
+//  uint8_t count;
+//  lir_operand_reg *list[UINT8_MAX];
+//} lir_regs;
 
 typedef struct {
   uint8_t rename_count;
@@ -98,7 +99,7 @@ typedef struct {
   // parent
   // children
   lir_vars globals; // closure 中定义的变量列表
-  lir_regs fixed_regs; // 使用到的固定寄存器
+  regs fixed_regs; // 作为临时寄存器使用到的寄存器
   lir_blocks blocks; // 啥顺序呢？
 
   lir_basic_block *entry; // 基本块入口
