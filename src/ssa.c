@@ -4,15 +4,20 @@
 
 #include "ssa.h"
 
-//  1. phi 如何编号？和 label 编号一致
-// 2. 支配边界其实就是两条线路的汇聚点,如果其中一条线路
-// n 中定义的每个变量 x 都需要在，df(n) 中的块声明对应的 x = phi(x_pred1,x_pred2), 即使在 df(n) 中没有使用该变量,
-// 毕竟谁能保证后续用不到呢(live_out 可以保证哈哈）
+/**
+ * 剪枝静态单赋值
+ *
+ * 添加了 phi 函数，还未进行重新编号
+ * 支配边界其实就是两条线路的汇聚点,如果其中一条线路 n 中定义的每个变量 x 都需要在，
+ * df(n) 支配边界中的块声明对应的 x = phi(x_pred1,x_pred2), 即使在 df(n) 中没有使用该变量
+ * 毕竟谁能保证后续用不到呢(live_out 可以保证哈哈）
+ * @param c
+ */
 void ssa_add_phi(closure *c) {
   for (int label = 0; label < c->blocks.count; ++label) {
     // 定义的每个变量
     lir_vars def = c->blocks.list[label]->def;
-    lir_blocks df = c->blocks.list[label]->df;
+    lir_basic_blocks df = c->blocks.list[label]->df;
 
     for (int i = 0; i < def.count; ++i) {
       lir_operand_var *var = def.list[i];
@@ -35,10 +40,11 @@ void ssa_add_phi(closure *c) {
         phi_op->result.value = lir_clone_operand_var(var);
 
         // param to first
+        // 根据支配边界的前驱来决定生成的 phi body 的数量
         phi_op->first.type = LIR_OPERAND_TYPE_PHI_BODY;
         phi_op->first.value = lir_new_phi_body(var, df_block->preds.count);
 
-        // insert to linked list
+        // insert to list
         lir_op *label_op = df_block->first_op;
         label_op->succ->pred = phi_op;
         phi_op->succ = label_op->succ;
@@ -229,7 +235,7 @@ void ssa_use_def(closure *c) {
 // 同理对于 pred_j 的支配者 pred_j', 只要 pred_j' 不是 n的 idom, n 同样也是是 pred_j' 的支配边界
 void ssa_df(closure *c) {
   for (int label = 0; label < c->blocks.count; ++label) {
-    lir_blocks df = {.count = 0};
+    lir_basic_blocks df = {.count = 0};
     c->blocks.list[label]->df = df;
   }
 
@@ -261,7 +267,7 @@ void ssa_df(closure *c) {
 void ssa_idom(closure *c) {
   // 初始化 be_idom
   for (int label = 0; label < c->blocks.count; ++label) {
-    lir_blocks be_idom = {.count = 0};
+    lir_basic_blocks be_idom = {.count = 0};
     c->blocks.list[label]->be_idom = be_idom;
   }
   for (int label = 0; label < c->blocks.count; ++label) {
@@ -278,13 +284,13 @@ void ssa_idom(closure *c) {
 // 则 A 一定支配着 C, 即如果 A 支配着 C 的所有前驱，则 A 一定支配 C
 void ssa_dom(closure *c) {
   // 初始化, dom[n0] = {l0}
-  lir_blocks dom = {.count = 0};
+  lir_basic_blocks dom = {.count = 0};
   dom.list[dom.count++] = c->blocks.list[0];
   c->blocks.list[0]->dom = dom;
 
   // 初始化其他 dom
   for (int i = 1; i < c->blocks.count; ++i) {
-    lir_blocks other = {.count = 0};
+    lir_basic_blocks other = {.count = 0};
 
     for (int k = 0; k < c->blocks.count; ++k) {
       other.list[other.count++] = c->blocks.list[k];
@@ -300,7 +306,7 @@ void ssa_dom(closure *c) {
 
     // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
     for (int label = 1; label < c->blocks.count; ++label) {
-      lir_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks.list[label]);
+      lir_basic_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks.list[label]);
       // 判断 dom 是否不同
       if (ssa_dom_changed(&c->blocks.list[label]->dom, &new_dom)) {
         changed = true;
@@ -310,7 +316,7 @@ void ssa_dom(closure *c) {
   }
 }
 
-bool ssa_dom_changed(lir_blocks *old, lir_blocks *new) {
+bool ssa_dom_changed(lir_basic_blocks *old, lir_basic_blocks *new) {
   if (old->count != new->count) {
     true;
   }
@@ -325,8 +331,8 @@ bool ssa_dom_changed(lir_blocks *old, lir_blocks *new) {
   return false;
 }
 
-lir_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
-  lir_blocks dom = {.count = 0};
+lir_basic_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
+  lir_basic_blocks dom = {.count = 0};
 
   // 遍历当前 block 的 preds 的 dom_list, 然后求交集
   // key => label
@@ -336,7 +342,7 @@ lir_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
     // 找到 pred
     lir_basic_block *pred = block->preds.list[i];
     // 通过 pred->label，从 dom_list 中找到对应的 dom
-    lir_blocks pred_dom = pred->dom;
+    lir_basic_blocks pred_dom = pred->dom;
     // 遍历 pred_dom 为 label 计数
     for (int k = 0; k < pred_dom.count; ++k) {
       block_label_count[pred_dom.list[k]->label]++;
@@ -388,6 +394,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
 
   // 当前块内的先命名
   while (op != NULL) {
+    // phi body 由当前块的前驱进行编号
     if (op->type == LIR_OP_TYPE_PHI) {
       uint8_t number = ssa_new_var_number((lir_operand_var *) op->result.value, var_number_table, stack_table);
       ssa_rename_var((lir_operand_var *) op->result.value, number);
@@ -419,7 +426,13 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     op = op->succ;
   }
 
-  // 遍历当前块的 cfg 后继为 phi 参数编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
+  // 遍历当前块的 cfg 后继为 phi body 编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
+  // 最后是否所有的 phi_body 中的每一个值都会被命名引用，是否有遗漏？
+  // 不会，如果 A->B->D / A->C->D / A -> F -> E -> D
+  // 假设在 D 是 A 和 E 的支配边界，
+  // 当且仅当 x = live_in(D) 时
+  // D 中变量 x = phi(x of pred-B, x of pred-C，x of pred-E)
+  // 当计算到 B 时，即使变量，没有在 b 中定义，只要函数的作用域还在，在 stack 中也一定能找到的变量重命名，无非是同名而已！！！
   for (int i = 0; i < block->succs.count; ++i) {
     struct lir_basic_block *succ = block->succs.list[i];
     // 为 每个 phi 函数的 phi param 命名

@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_AST_OPTIMIZE_H_
 #define NATURE_SRC_AST_OPTIMIZE_H_
 
-#include "src/ast.h"
+#include "ast.h"
 #include "src/lib/table.h"
 
 #define BASE_TYPE_ENV "env"

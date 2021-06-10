@@ -1,6 +1,6 @@
 #ifndef NATURE_SRC_INSTRUCTION_H_
 #define NATURE_SRC_INSTRUCTION_H_
-#include "value.h"
+#include "src/value.h"
 
 #define AS_INST(object, type) ((inst){type, (void *)object})
 #define NEW_INST(inst_type) ((inst_type *) malloc(sizeof(inst_type)))

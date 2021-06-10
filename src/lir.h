@@ -1,8 +1,9 @@
 #ifndef NATURE_SRC_LIR_H_
 #define NATURE_SRC_LIR_H_
 
+#include <src/lib/list.h>
 #include "value.h"
-#include "ast.h"
+#include "src/ast/ast.h"
 #include "lib/table.h"
 #include "register/register.h"
 
@@ -34,6 +35,7 @@ typedef enum {
   LIR_OPERAND_TYPE_VAR,
   LIR_OPERAND_TYPE_REG,
   LIR_OPERAND_TYPE_PHI_BODY,
+  LIR_OPERAND_TYPE_LABEL,
 } lir_operand_type;
 
 typedef struct {
@@ -60,7 +62,7 @@ typedef struct lir_op {
 typedef struct {
   uint8_t count;
   struct lir_basic_block *list[UINT8_MAX];
-} lir_blocks;
+} lir_basic_blocks;
 
 typedef struct {
   uint8_t flag;
@@ -71,23 +73,23 @@ typedef struct {
 } loop_detection;
 
 typedef struct lir_basic_block {
-  uint8_t label; // label 标号, 基本块编号， 和 label 区分一些
+  uint8_t label; // label 标号, 基本块编号， 和 op_label 还是要稍微区分一下
   lir_op *first_op; // 开始处的指令
   lir_op *last_op;
   uint8_t operators_count;
 
-  lir_blocks preds;
-  lir_blocks succs;
-  lir_blocks forward_succs;
+  lir_basic_blocks preds;
+  lir_basic_blocks succs;
+  lir_basic_blocks forward_succs;
   uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
   lir_vars use;
   lir_vars def;
   lir_vars live_out;
   lir_vars live_in;
-  lir_blocks dom; // 当前块被哪些基本块支配
-  lir_blocks df;
-  lir_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
+  lir_basic_blocks dom; // 当前块被哪些基本块支配
+  lir_basic_blocks df;
+  lir_basic_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
   struct lir_basic_block *idom; // 当前块的最近支配者
 
   // loop detection
@@ -100,26 +102,28 @@ typedef struct {
   // children
   lir_vars globals; // closure 中定义的变量列表
   regs fixed_regs; // 作为临时寄存器使用到的寄存器
-  lir_blocks blocks; // 啥顺序呢？
+  lir_basic_blocks blocks; // 根据解析顺序得到
+
+  list *operates; // 指令列表
 
   lir_basic_block *entry; // 基本块入口
-  lir_blocks order_blocks;
+  lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
   table *interval_table; // key包括 fixed register name 和 variable.ident
 } closure;
-
-closure *current;
 
 lir_op *lir_new_op();
 lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
 lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
+lir_basic_block *lir_new_basic_block();
+string lir_label_to_string(uint8_t label);
 void lir_closure(ast_closure_decl *closure);
 void lir_call(ast_call_function *call);
-void lir_block(ast_block_stmt *block);
+list *lir_ast_block(ast_block_stmt *block);
+list *lir_var_decl(ast_var_decl_stmt *stmt);
 void lir_binary(ast_binary_expr *binary);
 void lir_literal(ast_literal *literal);
 void lir_ident(ast_ident *ident);
 void lir_if(ast_if_stmt *if_stmt);
 void lir_while(ast_while_stmt *while_stmt);
-string lir_label_to_string(uint8_t label);
 
 #endif //NATURE_SRC_LIR_H_

@@ -2,7 +2,7 @@
 #define NATURE_SRC_AST_H_
 
 #include <stdlib.h>
-#include "value.h"
+#include "src/value.h"
 
 #define AST_BASE_TYPE_FALSE "false"
 #define AST_BASE_TYPE_TRUE "true"

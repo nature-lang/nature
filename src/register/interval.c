@@ -17,8 +17,8 @@ void interval_loop_detection(closure *c) {
   list *work_list = list_new();
   list_push(work_list, c->entry);
 
-  lir_blocks loop_headers = {.count = 0};
-  lir_blocks loop_ends = {.count = 0};
+  lir_basic_blocks loop_headers = {.count = 0};
+  lir_basic_blocks loop_ends = {.count = 0};
 
   // 1. 探测出循环头与循环尾部
   while (!list_empty(work_list)) {
@@ -27,7 +27,7 @@ void interval_loop_detection(closure *c) {
     // 是否会出现 succ 的 flag 是 visited?
     // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
     // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
-    lir_blocks forward_succs = {.count = 0};
+    lir_basic_blocks forward_succs = {.count = 0};
     for (int i = 0; i < block->succs.count; ++i) {
       lir_basic_block *succ = block->succs.list[i];
       succ->loop.tree_high = block->loop.tree_high + 1;

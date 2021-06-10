@@ -25,7 +25,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
 uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table *stack_table);
 void ssa_rename_var(lir_operand_var *var, uint8_t number);
 
-lir_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block);
-bool ssa_dom_changed(lir_blocks *old, lir_blocks *new);
+lir_basic_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block);
+bool ssa_dom_changed(lir_basic_blocks *old, lir_basic_blocks *new);
 bool ssa_var_belong(lir_operand_var *var, lir_vars vars);
 #endif //NATURE_SRC_SSA_H_
