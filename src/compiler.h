@@ -12,9 +12,12 @@ list_op *compiler_block(ast_block_stmt *block);
 
 list_op *compiler_var_decl(ast_var_decl_stmt *var_decl);
 
-list_op *compiler_var_decl_assign(ast_var_decl_assign_stmt *stmt);
+list_op *compiler_if(ast_if_stmt *if_stmt);
 
-list_op *compiler_expr(ast_expr expr, lir_operand target);
+list_op *compiler_var_decl_assign(ast_var_decl_assign_stmt *stmt);
+list_op *compiler_assign(ast_assign_stmt *stmt);
+
+list_op *compiler_expr(ast_expr expr, lir_operand *target);
 
 /**
  * 二元表达式
@@ -22,6 +25,6 @@ list_op *compiler_expr(ast_expr expr, lir_operand target);
  * @param target
  * @return
  */
-list_op *compiler_binary(ast_binary_expr *expr, lir_operand target);
+list_op *compiler_binary(ast_binary_expr *expr, lir_operand *target);
 
 #endif //NATURE_SRC_COMPILER_H_

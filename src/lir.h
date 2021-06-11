@@ -27,6 +27,11 @@ typedef struct lir_vars {
 //} lir_regs;
 
 typedef struct {
+  string value;
+  uint8_t type;
+} lir_operand_immediate;
+
+typedef struct {
   uint8_t rename_count;
   lir_vars vars;
 } lir_operand_phi_body;
@@ -36,7 +41,10 @@ typedef enum {
   LIR_OPERAND_TYPE_REG,
   LIR_OPERAND_TYPE_PHI_BODY,
   LIR_OPERAND_TYPE_LABEL,
+  LIR_OPERAND_TYPE_IMMEDIATE,
 } lir_operand_type;
+
+typedef string lir_operand_label;
 
 typedef struct {
   uint8_t type;
@@ -47,6 +55,7 @@ typedef enum {
   LIR_OP_TYPE_ADD,
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
+  LIR_OP_TYPE_CMP_GOTO,
 } lir_op_type;
 
 // 四元组
@@ -131,12 +140,15 @@ list *lir_var_decl(ast_var_decl_stmt *stmt);
 void lir_binary(ast_binary_expr *binary);
 void lir_literal(ast_literal *literal);
 void lir_ident(ast_ident *ident);
-void lir_if(ast_if_stmt *if_stmt);
 void lir_while(ast_while_stmt *while_stmt);
 
-lir_operand lir_new_var_operand(string ident);
+lir_op *lir_new_label(string name);
 
-lir_operand lir_new_temp_var_operand();
+lir_operand *lir_new_var_operand(string ident);
+
+lir_operand *lir_new_temp_var_operand();
+
+lir_op *lir_new_goto(lir_operand *label);
 
 lir_op *lir_new_op();
 list_op *list_op_new();
