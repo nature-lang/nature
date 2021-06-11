@@ -13,9 +13,9 @@ typedef enum {
   AST_BASE_TYPE_BOOL,
   AST_BASE_TYPE_STRING,
   AST_BASE_TYPE_MAP,
-  AST_BASE_TYPE_ARRAY,
+  AST_BASE_TYPE_LIST,
   AST_BASE_TYPE_CLOSURE,
-} ast_base_type; // TODO 添加 closure 类型/function 类型
+} ast_base_type;
 
 typedef enum {
   AST_EXPR_TYPE_LITERAL,

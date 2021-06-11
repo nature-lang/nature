@@ -46,6 +46,7 @@ typedef struct {
 typedef enum {
   LIR_OP_TYPE_ADD,
   LIR_OP_TYPE_PHI,
+  LIR_OP_TYPE_MOVE,
 } lir_op_type;
 
 // 四元组
@@ -54,10 +55,18 @@ typedef struct lir_op {
   lir_operand first; // 参数1
   lir_operand second; // 参数2 (参数可能是固定寄存器)
   lir_operand result; // 参数3
+
   int id; // 编号
   struct lir_op *succ;
   struct lir_op *pred;
 } lir_op;
+
+// op 列表
+typedef struct {
+  lir_op *front;
+  lir_op *rear;
+  uint16_t count;
+} list_op;
 
 typedef struct {
   uint8_t count;
@@ -111,7 +120,6 @@ typedef struct {
   table *interval_table; // key包括 fixed register name 和 variable.ident
 } closure;
 
-lir_op *lir_new_op();
 lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
 lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
@@ -125,5 +133,15 @@ void lir_literal(ast_literal *literal);
 void lir_ident(ast_ident *ident);
 void lir_if(ast_if_stmt *if_stmt);
 void lir_while(ast_while_stmt *while_stmt);
+
+lir_operand lir_new_var_operand(string ident);
+
+lir_operand lir_new_temp_var_operand();
+
+lir_op *lir_new_op();
+list_op *list_op_new();
+list_op *list_op_pop(list_op *l);
+void list_op_push(list_op *l, lir_op *op);
+list_op *list_op_append(list_op *dst, list_op *src);
 
 #endif //NATURE_SRC_LIR_H_
