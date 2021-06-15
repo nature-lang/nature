@@ -56,6 +56,8 @@ typedef enum {
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
   LIR_OP_TYPE_CMP_GOTO,
+  LIR_OP_TYPE_PUSH,
+  LIR_OP_TYPE_POP,
 } lir_op_type;
 
 // 四元组
@@ -115,18 +117,22 @@ typedef struct lir_basic_block {
 } lir_basic_block;
 
 // cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
-typedef struct {
+typedef struct closure {
   // parent
   // children
   lir_vars globals; // closure 中定义的变量列表
   regs fixed_regs; // 作为临时寄存器使用到的寄存器
   lir_basic_blocks blocks; // 根据解析顺序得到
 
-  list *operates; // 指令列表
 
   lir_basic_block *entry; // 基本块入口
   lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
   table *interval_table; // key包括 fixed register name 和 variable.ident
+
+  // 定义环境
+  // TODO 环境中的变量,一个闭包应该是由指令集和环境组成 (环境已经在改写阶段完成)
+  struct closure *parent;
+  list_op *operates; // 指令列表
 } closure;
 
 lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
@@ -142,13 +148,17 @@ void lir_literal(ast_literal *literal);
 void lir_ident(ast_ident *ident);
 void lir_while(ast_while_stmt *while_stmt);
 
+closure *lir_new_closure();
+
 lir_op *lir_new_label(string name);
 
 lir_operand *lir_new_var_operand(string ident);
 
 lir_operand *lir_new_temp_var_operand();
+lir_operand *lir_new_param_var_operand();
 
 lir_op *lir_new_goto(lir_operand *label);
+lir_op *lir_new_push(lir_operand *operand);
 
 lir_op *lir_new_op();
 list_op *list_op_new();

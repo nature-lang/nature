@@ -13,6 +13,7 @@ typedef struct {
   reg *list[UINT8_MAX];
 } regs; // 指定架构的物理寄存器列表
 
+// TODO 根据指定系统填充 physical_regs
 regs physical_regs;
 
 #endif //NATURE_SRC_REGISTER_REGISTER_H_
