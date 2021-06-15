@@ -160,30 +160,44 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 }
 
 /**
- * 函数参数的生命周期始终是最早的？那直接按照约定来就好了？
- * 考虑到物理寄存器也不足，所幸直接使用虚拟寄存器 param1/param2/param3...来作为约定寄存器处理
+ * 1.0 函数参数使用 param var 存储,按约定从左到右(op.result 为 param, op.first 为实参)
+ * 1.0.1 op.operand 模仿 phi body 弄成列表的形式！
+ * 1.1 参数1 存储 env 环境
+ * 2. 目前编译依旧使用 var，所以不需要考虑寄存器溢出
+ * 3. 函数返回结果存储在 target 中
  * @param c
  * @param expr
  * @return
  */
-list_op *compiler_call(closure *c, ast_expr expr) {
+list_op *compiler_call(closure *c, ast_call_function call_function, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
-  for (int i = 0; i < physical_regs.count; ++i) {
-    lir_operand *push_operand = malloc(sizeof(lir_operand));
+  lir_op *call_op = lir_new_op();
 
-    push_operand->type = LIR_OPERAND_TYPE_REG;
-    push_operand->value = physical_regs.list[i];
-    list_op_push(list, lir_new_push(push_operand));
+  call_op->first = lir_new_label(call_function.name)->first;
+
+  lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
+  params_operand->count = 0;
+
+  for (int i = 0; i < call_function.actual_param_count; ++i) {
+    ast_expr ast_param_expr = call_function.actual_params[i];
+
+    lir_operand *param_target = lir_new_temp_var_operand();
+
+    list_op *param_list_op = compiler_expr(c, ast_param_expr, param_target);
+    list_op_append(list, param_list_op);
+
+    // 写入到 call 指令中
+    params_operand->list[params_operand->count++] = param_target;
   }
-  // param[0] = env
-  // param[1] = 51
-  // param[2] = t1
-  // call label
 
-  // 调用完则需要所有物理寄存器出栈
+  lir_operand call_params_operand = {.type= LIR_OPERAND_TYPE_ACTUAL_PARAM, .value = params_operand};
+  call_op->second = call_params_operand;
+  call_op->result = *target; // TODO 返回参数放在 result 中？ 有用吗？
 
-  return NULL;
+  list_op_push(list, call_op);
+
+  return list;
 }
 
 

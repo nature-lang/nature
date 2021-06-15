@@ -439,7 +439,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     lir_op *succ_op = succ->first_op->succ;
     while (succ_op->type == LIR_OP_TYPE_PHI) {
       lir_operand_phi_body *phi_body = succ_op->first.value;
-      lir_operand_var *var = phi_body->vars.list[phi_body->rename_count++];
+      lir_operand_var *var = phi_body->vars.list[phi_body->count++];
       var_number_stack *stack = table_get(stack_table, var->ident);
       uint8_t number = stack->numbers[stack->count - 1];
       ssa_rename_var(var, number);

@@ -92,7 +92,7 @@ typedef struct {
 
 // 调用函数
 typedef struct {
-  ast_expr target_expr;
+  string name;
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
 } ast_call_function;

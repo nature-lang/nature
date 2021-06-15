@@ -7,6 +7,21 @@
 #include "lib/table.h"
 #include "register/register.h"
 
+typedef struct lir_operand {
+  uint8_t type;
+  void *value;
+} lir_operand;
+
+typedef enum {
+  LIR_OPERAND_TYPE_VAR,
+  LIR_OPERAND_TYPE_REG,
+  LIR_OPERAND_TYPE_PHI_BODY,
+  LIR_OPERAND_TYPE_FORMAL_PARAM,
+  LIR_OPERAND_TYPE_ACTUAL_PARAM,
+  LIR_OPERAND_TYPE_LABEL,
+  LIR_OPERAND_TYPE_IMMEDIATE,
+} lir_operand_type;
+
 //typedef struct {
 //  string ident;
 //} lir_operand_reg;
@@ -32,24 +47,21 @@ typedef struct {
 } lir_operand_immediate;
 
 typedef struct {
-  uint8_t rename_count;
+  uint8_t count;
   lir_vars vars;
 } lir_operand_phi_body;
 
-typedef enum {
-  LIR_OPERAND_TYPE_VAR,
-  LIR_OPERAND_TYPE_REG,
-  LIR_OPERAND_TYPE_PHI_BODY,
-  LIR_OPERAND_TYPE_LABEL,
-  LIR_OPERAND_TYPE_IMMEDIATE,
-} lir_operand_type;
-
-typedef string lir_operand_label;
+typedef struct {
+  lir_vars vars;
+  uint8_t count;
+} lir_operand_formal_param;
 
 typedef struct {
-  uint8_t type;
-  void *value;
-} lir_operand;
+  lir_operand *list[UINT8_MAX];
+  uint8_t count;
+} lir_operand_actual_param;
+
+typedef string lir_operand_label;
 
 typedef enum {
   LIR_OP_TYPE_ADD,
@@ -58,9 +70,21 @@ typedef enum {
   LIR_OP_TYPE_CMP_GOTO,
   LIR_OP_TYPE_PUSH,
   LIR_OP_TYPE_POP,
+  LIR_OP_TYPE_CALL,
 } lir_op_type;
 
-// 四元组
+/**
+ * 四元组
+ * add first second -> result
+ * move first -> result // a = 12
+ * 例如
+ * call sum 12, 14 // 指令是 call
+ * first param 是函数名称（label）
+ * second param 是函数参数，函数调用并不产生新的变量，因此没必要放在 result 中
+ * 原则上会新增变量的放在 result,使用变量放在 first/second
+ *
+ * label: 同样也是使用 first_param
+ */
 typedef struct lir_op {
   uint8_t type;
   lir_operand first; // 参数1

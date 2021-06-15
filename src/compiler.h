@@ -20,7 +20,7 @@ list_op *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
 list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_call(closure *c, ast_expr expr);
+list_op *compiler_call(closure *c, ast_call_function call_function, lir_operand *target);
 
 /**
  * 二元表达式
