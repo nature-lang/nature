@@ -149,7 +149,7 @@ typedef struct {
 // call a_233;
 // type.b = 12; ??
 typedef struct {
-  ast_expr left; // TODO 关键是确定左值的类型
+  ast_expr left;
   string property;
 } ast_access_property;
 

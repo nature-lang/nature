@@ -26,6 +26,12 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
       }
       case AST_STMT_IF: {
         await_append = compiler_if(c, (ast_if_stmt *) stmt.stmt);
+        break;
+      }
+      case AST_CALL_FUNCTION: {
+        lir_operand *temp_target = lir_new_temp_var_operand();
+        await_append = compiler_call(c, (ast_call_function *) stmt.stmt, temp_target);
+        break;
       }
     }
 
@@ -90,6 +96,11 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     case AST_EXPR_TYPE_IDENT: {
       target->type = LIR_OPERAND_TYPE_VAR;
       target->value = lir_new_var_operand((ast_ident) expr.expr);
+      break;
+    }
+    case AST_CALL_FUNCTION: {
+      // 返回值存储在 target 中
+      return compiler_call(c, (ast_call_function *) expr.expr, target);
       break;
     }
   }
@@ -169,18 +180,18 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
  * @param expr
  * @return
  */
-list_op *compiler_call(closure *c, ast_call_function call_function, lir_operand *target) {
+list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
   lir_op *call_op = lir_new_op();
 
-  call_op->first = lir_new_label(call_function.name)->first;
+  call_op->first = lir_new_label(call_function->name)->first;
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
 
-  for (int i = 0; i < call_function.actual_param_count; ++i) {
-    ast_expr ast_param_expr = call_function.actual_params[i];
+  for (int i = 0; i < call_function->actual_param_count; ++i) {
+    ast_expr ast_param_expr = call_function->actual_params[i];
 
     lir_operand *param_target = lir_new_temp_var_operand();
 
@@ -193,7 +204,9 @@ list_op *compiler_call(closure *c, ast_call_function call_function, lir_operand 
 
   lir_operand call_params_operand = {.type= LIR_OPERAND_TYPE_ACTUAL_PARAM, .value = params_operand};
   call_op->second = call_params_operand;
-  call_op->result = *target; // TODO 返回参数放在 result 中？ 有用吗？
+
+  // return target
+  call_op->result = *target;
 
   list_op_push(list, call_op);
 
