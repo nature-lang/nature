@@ -153,6 +153,16 @@ typedef struct {
   string property;
 } ast_access_property;
 
+/**
+ * 如何确定 left_type?
+ * optimize 表达式阶段生成该值，不行也要行！
+ */
+typedef struct {
+  string left_type;
+  ast_expr left;
+  uint64_t index;
+} ast_access_index;
+
 typedef struct {
   ast_ident env;
   uint8_t index;

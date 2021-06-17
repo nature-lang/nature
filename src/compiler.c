@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "src/ast/symbol.h"
 
 list_op *compiler_block(closure *c, ast_block_stmt *block) {
   list_op *operates = list_op_new();
@@ -209,6 +210,37 @@ list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand
   call_op->result = *target;
 
   list_op_push(list, call_op);
+
+  return list;
+}
+
+/**
+ * 如何区分 a[1] = 2  和 c = a[1]
+ *
+ * a()[0]
+ * a.b[0]
+ * a[0]
+ */
+list_op *compiler_access_index(closure *c, ast_access_index *ast, lir_operand *target) {
+  // left_target 是一个临时变量
+  lir_operand *left_target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, ast->left, left_target);
+
+  lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
+  memory_operand->temp = (lir_operand_var *) left_target->value;
+  // 根据 index + 类型计算偏移量
+  memory_operand->offset = access_index_offset(ast->left_type, ast->index);
+
+  lir_operand *first_operand = malloc(sizeof(lir_operand));
+  first_operand->type = LIR_OPERAND_TYPE_MEMORY;
+  first_operand->value = memory_operand;
+
+  lir_op *move_op = lir_new_op();
+  move_op->type = LIR_OP_TYPE_MOVE;
+  move_op->first = *first_operand;
+  move_op->result = *target;
+
+  list_op_push(list, move_op);
 
   return list;
 }

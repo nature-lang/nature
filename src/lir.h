@@ -20,6 +20,7 @@ typedef enum {
   LIR_OPERAND_TYPE_ACTUAL_PARAM,
   LIR_OPERAND_TYPE_LABEL,
   LIR_OPERAND_TYPE_IMMEDIATE,
+  LIR_OPERAND_TYPE_MEMORY,
 } lir_operand_type;
 
 //typedef struct {
@@ -36,10 +37,11 @@ typedef struct lir_vars {
   lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
-//typedef struct lir_regs {
-//  uint8_t count;
-//  lir_operand_reg *list[UINT8_MAX];
-//} lir_regs;
+typedef struct {
+//  void *base; // 内存基址
+  lir_operand_var *temp;
+  int64_t offset; // 偏移量
+} lir_operand_memory;
 
 typedef struct {
   string value;
