@@ -23,7 +23,7 @@ void compiler_closure(ast_function_decl function, string target, string linkage)
 }
 
 // closure.call(closure.env, param1, param2...)
-void compiler_call(ast_call_function call, string target, string linkage) {
+void compiler_call(ast_call call, string target, string linkage) {
   // ① 根据 ident 确定 closure 基值，并放入临时寄存器   -n(%esp), temp
   // ② 参数 1 永远为自由变量 env,  movq temp.env, %rdi
   // ③ 其余真实调用参数依次添加 movq param_1, %rsi .....

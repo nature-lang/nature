@@ -39,8 +39,8 @@ void optimize_block(ast_block_stmt *block) {
         block->list[i] = closure_stmt; // 值复制传递，不用担心指针空悬问题
         break;
       }
-      case AST_CALL_FUNCTION: {
-        optimize_call_function((ast_call_function *) stmt.stmt);
+      case AST_CALL: {
+        optimize_call_function((ast_call *) stmt.stmt);
         break;
       }
       case AST_STMT_ASSIGN: {
@@ -71,7 +71,7 @@ void optimize_assign(ast_assign_stmt *assign) {
   optimize_expr(&assign->right);
 }
 
-void optimize_call_function(ast_call_function *call) {
+void optimize_call_function(ast_call *call) {
   // 函数地址改写
   optimize_expr(&call->target_expr);
 
@@ -195,8 +195,8 @@ void optimize_expr(ast_expr *expr) {
       optimize_ident(expr);
       break;
     };
-    case AST_CALL_FUNCTION: {
-      optimize_call_function((ast_call_function *) expr->expr);
+    case AST_CALL: {
+      optimize_call_function((ast_call *) expr->expr);
       break;
     }
     case AST_FUNCTION_DECL: {

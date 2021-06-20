@@ -29,9 +29,9 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
         await_append = compiler_if(c, (ast_if_stmt *) stmt.stmt);
         break;
       }
-      case AST_CALL_FUNCTION: {
+      case AST_CALL: {
         lir_operand *temp_target = lir_new_temp_var_operand();
-        await_append = compiler_call(c, (ast_call_function *) stmt.stmt, temp_target);
+        await_append = compiler_call(c, (ast_call *) stmt.stmt, temp_target);
         break;
       }
     }
@@ -99,9 +99,17 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
       target->value = lir_new_var_operand((ast_ident) expr.expr);
       break;
     }
-    case AST_CALL_FUNCTION: {
+    case AST_CALL: {
       // 返回值存储在 target 中
-      return compiler_call(c, (ast_call_function *) expr.expr, target);
+      return compiler_call(c, (ast_call *) expr.expr, target);
+      break;
+    }
+    case AST_EXPR_TYPE_ACCESS_LIST: {
+      return compiler_access_list(c, (ast_access_list *) expr.expr, target);
+      break;
+    }
+    case AST_EXPR_TYPE_NEW_LIST: {
+      return compiler_new_list(c, (ast_new_list *) expr.expr, target);
       break;
     }
   }
@@ -181,18 +189,19 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
  * @param expr
  * @return
  */
-list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand *target) {
+list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
   lir_op *call_op = lir_new_op();
 
-  call_op->first = lir_new_label(call_function->name)->first;
+  call_op->type = LIR_OP_TYPE_CALL;
+  call_op->first = lir_new_label(call->name)->first; // 函数名称
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
 
-  for (int i = 0; i < call_function->actual_param_count; ++i) {
-    ast_expr ast_param_expr = call_function->actual_params[i];
+  for (int i = 0; i < call->actual_param_count; ++i) {
+    ast_expr ast_param_expr = call->actual_params[i];
 
     lir_operand *param_target = lir_new_temp_var_operand();
 
@@ -204,10 +213,10 @@ list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand
   }
 
   lir_operand call_params_operand = {.type= LIR_OPERAND_TYPE_ACTUAL_PARAM, .value = params_operand};
-  call_op->second = call_params_operand;
+  call_op->second = call_params_operand; // 函数参数
 
   // return target
-  call_op->result = *target;
+  call_op->result = *target; // 返回结果
 
   list_op_push(list, call_op);
 
@@ -220,20 +229,32 @@ list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand
  * a()[0]
  * a.b[0]
  * a[0]
+ * list[int] l = make(list[int]);
+ * 简单类型与复杂类型
+ *
+ * list 的边界是可以使用 push 动态扩容的，因此需要在某个地方存储 list 的最大 index,从而判断是否越界
+ * for item by database
+ *    list.push(item)
+ *
+ * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
-list_op *compiler_access_index(closure *c, ast_access_index *ast, lir_operand *target) {
-  // left_target 是一个临时变量
+list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *target) {
+  // new tmp 是无类型的。
   lir_operand *left_target = lir_new_temp_var_operand();
+  // left_target.type is list[int]
+  // left_target.var = runtime.make_list(size)
+  // left_target.var to symbol
+  // 假设是内存机器，则有 left_target.val = sp[n]
+  // 但是无论如何，此时 left_target 的type 是 var, val 对应 lir_operand_var.
+  // 且 lir_operand_var.ident 可以在 symbol 查出相关类型
+  // var 实际上会在真实物理计算机中的内存或者其他空间拥有一份空间，并写入了一个值。
+  // 即当成 var 是有值的即可！！具体的值是多少咱也不知道
   list_op *list = compiler_expr(c, ast->left, left_target);
+  // todo 添加越界判断 exception 指令到 lir 中
 
-  lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
-  memory_operand->temp = (lir_operand_var *) left_target->value;
-  // 根据 index + 类型计算偏移量
-  memory_operand->offset = access_index_offset(ast->left_type, ast->index);
-
-  lir_operand *first_operand = malloc(sizeof(lir_operand));
-  first_operand->type = LIR_OPERAND_TYPE_MEMORY;
-  first_operand->value = memory_operand;
+  lir_operand *first_operand = lir_new_memory_operand(
+      (lir_operand_var *) left_target->value,
+      list_offset(ast->type, ast->index));
 
   lir_op *move_op = lir_new_op();
   move_op->type = LIR_OP_TYPE_MOVE;
@@ -241,6 +262,52 @@ list_op *compiler_access_index(closure *c, ast_access_index *ast, lir_operand *t
   move_op->result = *target;
 
   list_op_push(list, move_op);
+
+  return list;
+}
+
+/**
+ * origin [1, foo, bar(), car.done]
+ * call runtime.make_list => t1
+ * move 1 => t1[0]
+ * move foo => t1[1]
+ * move bar() => t1[2]
+ * move car.done => t1[3]
+ * move t1 => target
+ * @param c
+ * @param new_list
+ * @param target
+ * @return
+ */
+list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *target) {
+  list_op *list = list_op_new();
+  lir_op *call_op = lir_new_op();
+  call_op->type = LIR_OP_TYPE_RUNTIME_CALL;
+  call_op->first = lir_new_label(RUNTIME_CALL_MAKE_LIST)->first; // 函数名称
+  // 类型，容量 runtime.make_list(capacity, size)
+  lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
+  params_operand->count = 0;
+  lir_operand *capacity_operand = lir_new_immediate_int_operand((int) ast->capacity);
+  lir_operand *size_operand = lir_new_immediate_int_operand((int) type_sizeof(ast->type));
+  params_operand->list[params_operand->count++] = capacity_operand;
+  params_operand->list[params_operand->count++] = size_operand;
+  lir_operand call_params_operand = {
+      .type= LIR_OPERAND_TYPE_ACTUAL_PARAM,
+      .value = params_operand};
+  call_op->second = call_params_operand;
+  call_op->result = *target; // list[int] 类型，本质是一个内存地址才对
+  list_op_push(list, call_op);
+
+  // compiler_expr to access_list
+  // target 是数组，不带偏移的,所以要手哦那个计算偏移量
+  // TODO if target not var throw exception
+  for (int i = 0; i < ast->count; ++i) {
+    lir_operand *memory_operand_target = lir_new_memory_operand(
+        (lir_operand_var *) target->value,
+        list_offset(ast->type, i));
+    ast_expr expr = ast->values[i];
+    list_op_append(list, compiler_expr(c, expr, memory_operand_target));
+  }
 
   return list;
 }

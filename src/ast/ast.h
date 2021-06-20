@@ -13,7 +13,7 @@ typedef enum {
   AST_BASE_TYPE_BOOL,
   AST_BASE_TYPE_STRING,
   AST_BASE_TYPE_MAP,
-  AST_BASE_TYPE_LIST,
+  AST_BASE_TYPE_LIST, // list 本质存储的也是 memory_address 吧？
   AST_BASE_TYPE_CLOSURE,
 } ast_base_type;
 
@@ -21,9 +21,20 @@ typedef enum {
   AST_EXPR_TYPE_LITERAL,
   AST_EXPR_TYPE_BINARY,
   AST_EXPR_TYPE_IDENT,
-  AST_EXPR_TYPE_OBJ_PROPERTY,
+  AST_EXPR_TYPE_ACCESS_STRUCT,
   AST_EXPR_TYPE_ENV_INDEX,
-} ast_expr_type;
+
+  AST_EXPR_TYPE_ACCESS_LIST,
+  AST_EXPR_TYPE_NEW_LIST,
+  AST_EXPR_TYPE_LIST_DECL,
+  AST_STMT_VAR_DECL,
+  AST_STMT_VAR_DECL_ASSIGN,
+  AST_STMT_ASSIGN,
+  AST_STMT_IF,
+  AST_FUNCTION_DECL,
+  AST_CALL,
+  AST_CLOSURE_DECL,
+} ast_stmt_expr_type;
 
 typedef enum {
   AST_EXPR_OPERATOR_ADD,
@@ -31,16 +42,6 @@ typedef enum {
   AST_EXPR_OPERATOR_MUL,
   AST_EXPR_OPERATOR_DIV
 } ast_expr_operator;
-
-typedef enum {
-  AST_STMT_VAR_DECL,
-  AST_STMT_VAR_DECL_ASSIGN,
-  AST_STMT_ASSIGN,
-  AST_STMT_IF,
-  AST_FUNCTION_DECL,
-  AST_CALL_FUNCTION,
-  AST_CLOSURE_DECL,
-} ast_stmt_type;
 
 typedef struct {
   int8_t type; // 声明语句类型
@@ -64,7 +65,9 @@ void ast_insert_block_stmt(ast_block_stmt *block, ast_stmt stmt);
 typedef struct {
   int8_t type;
   string value;
-} ast_literal;
+} ast_literal; // 标量值
+
+// 符合类型值呢？？比如另一个 list
 
 typedef string ast_ident;
 
@@ -95,7 +98,7 @@ typedef struct {
   string name;
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
-} ast_call_function;
+} ast_call;
 
 typedef struct {
   ast_expr condition;
@@ -115,7 +118,7 @@ typedef struct {
 } ast_var_decl_stmt;
 
 typedef struct {
-  ast_expr left; // a  或 foo.bar.car
+  ast_expr left; // a  或 foo.bar.car 或者 d[0]
   ast_expr right;
 } ast_assign_stmt;
 
@@ -158,10 +161,23 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-  string left_type;
+  string type; // list的类型
   ast_expr left;
   uint64_t index;
-} ast_access_index;
+} ast_access_list;
+
+// [1,a.b, call()]
+typedef struct {
+  ast_expr values[UINT8_MAX];
+  uint64_t count; // count
+  uint64_t capacity; // 初始容量
+  string type; // list的类型
+} ast_new_list;
+
+// list[int]
+typedef struct {
+  string type;
+} ast_list_decl;
 
 typedef struct {
   ast_ident env;

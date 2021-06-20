@@ -18,11 +18,13 @@ list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
-list_op *compiler_access_index(closure *c, ast_access_index *ast, lir_operand *target);
+list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *target);
 
 list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_call(closure *c, ast_call_function *call_function, lir_operand *target);
+list_op *compiler_call(closure *c, ast_call *call, lir_operand *target);
+
+list_op *compiler_new_list(closure *c, ast_new_list *new_list, lir_operand *target);
 
 /**
  * 二元表达式

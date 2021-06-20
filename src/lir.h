@@ -7,6 +7,9 @@
 #include "lib/table.h"
 #include "register/register.h"
 
+#define RUNTIME_CALL_MAKE_LIST "make_list"
+#define RUNTIME_CALL_MAKE_MAP "make_map"
+
 typedef struct lir_operand {
   uint8_t type;
   void *value;
@@ -23,10 +26,19 @@ typedef enum {
   LIR_OPERAND_TYPE_MEMORY,
 } lir_operand_type;
 
+typedef enum {
+  LIR_IMMEDIATE_TYPE_INT,
+  LIR_IMMEDIATE_TYPE_FLOAT,
+} lir_immediate_type;
+
 //typedef struct {
 //  string ident;
 //} lir_operand_reg;
 
+/**
+ * 未进行 ssa 之前的唯一标识,可以在符号表找到？找到啥？值在哪里？
+ * 存放在寄存器或者内存中, var a = 1
+ */
 typedef struct {
   string ident;
   string old;
@@ -37,10 +49,12 @@ typedef struct lir_vars {
   lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
+typedef uint64_t memory_address;
+
 typedef struct {
-//  void *base; // 内存基址
-  lir_operand_var *temp;
-  int64_t offset; // 偏移量
+  lir_operand_var *base;
+//  memory_address base; // 但是内存地址的值是绝对不可知的！！！
+  int64_t offset; // 偏移量是可以计算出来的
 } lir_operand_memory;
 
 typedef struct {
@@ -73,6 +87,7 @@ typedef enum {
   LIR_OP_TYPE_PUSH,
   LIR_OP_TYPE_POP,
   LIR_OP_TYPE_CALL,
+  LIR_OP_TYPE_RUNTIME_CALL,
 } lir_op_type;
 
 /**
@@ -165,14 +180,6 @@ lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
 lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 string lir_label_to_string(uint8_t label);
-void lir_closure(ast_closure_decl *closure);
-void lir_call(ast_call_function *call);
-list *lir_ast_block(ast_block_stmt *block);
-list *lir_var_decl(ast_var_decl_stmt *stmt);
-void lir_binary(ast_binary_expr *binary);
-void lir_literal(ast_literal *literal);
-void lir_ident(ast_ident *ident);
-void lir_while(ast_while_stmt *while_stmt);
 
 closure *lir_new_closure();
 
@@ -182,6 +189,8 @@ lir_operand *lir_new_var_operand(string ident);
 
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
+lir_operand *lir_new_immediate_int_operand(int value);
+lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 
 lir_op *lir_new_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);

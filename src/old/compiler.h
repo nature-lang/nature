@@ -72,7 +72,7 @@ insts *compiler_expr(ast_expr expr, string target, string linkage);
 // 比较特殊，自身会生成一个局部变量，且可以再次赋值
 void compiler_closure(ast_function_decl function, string target, string linkage);
 
-void compiler_call(ast_call_function call, string target, string linkage);
+void compiler_call(ast_call call, string target, string linkage);
 
 insts *compiler_binary(ast_binary_expr *expr, string target, string linkage);
 

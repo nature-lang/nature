@@ -64,7 +64,7 @@ void optimize_literal(ast_literal *expr);
 void optimize_ident(ast_expr *expr);
 int8_t optimize_resolve_free(optimize_function *f, ast_ident *ident);
 int8_t optimize_push_free(optimize_function *f, bool is_local, int8_t index);
-void optimize_call_function(ast_call_function *call);
+void optimize_call_function(ast_call *call);
 
 optimize_local_var *optimize_new_local(string type, string ident);
 
