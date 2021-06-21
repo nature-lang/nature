@@ -100,17 +100,6 @@ typedef struct {
   uint8_t actual_param_count;
 } ast_call;
 
-typedef struct {
-  ast_expr condition;
-  ast_block_stmt consequent;
-  ast_block_stmt alternate;
-} ast_if_stmt;
-
-typedef struct {
-  ast_expr condition;
-  ast_block_stmt body;
-} ast_while_stmt;
-
 // int a;
 typedef struct {
   string ident;
@@ -127,6 +116,25 @@ typedef struct {
   string ident;
   ast_expr expr;
 } ast_var_decl_assign_stmt;
+
+typedef struct {
+  ast_expr condition;
+  ast_block_stmt consequent;
+  ast_block_stmt alternate;
+} ast_if_stmt;
+
+typedef struct {
+  ast_expr condition;
+  ast_block_stmt body;
+} ast_while_stmt;
+
+// TODO 是否需要 for in 表达式，能否再优化阶段优化掉？
+typedef struct {
+  ast_expr iterate; // list, foo.list, bar[0]
+  ast_var_decl_stmt item_key; // 类型推导
+  ast_var_decl_stmt item_value; // 类型推导
+  ast_block_stmt body;
+} ast_for_in_stmt;
 
 typedef struct {
   ast_expr expr;
@@ -163,7 +171,7 @@ typedef struct {
 typedef struct {
   string type; // list的类型
   ast_expr left;
-  uint64_t index;
+  ast_expr index;
 } ast_access_list;
 
 // [1,a.b, call()]
@@ -178,6 +186,27 @@ typedef struct {
 typedef struct {
   string type;
 } ast_list_decl;
+
+typedef struct {
+  string key_type;
+  string value_type;
+  ast_expr left;
+  ast_expr key;
+} ast_access_map;
+
+typedef struct {
+  ast_expr key;
+  ast_expr value;
+} ast_map_item;
+
+// {key: value}
+typedef struct {
+  ast_map_item values[UINT8_MAX];
+  uint64_t count; // 默认初始化的数量
+  uint64_t capacity; // 初始容量
+  string key_type;
+  string value_type;
+} ast_new_map;
 
 typedef struct {
   ast_ident env;

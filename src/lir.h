@@ -8,7 +8,9 @@
 #include "register/register.h"
 
 #define RUNTIME_CALL_MAKE_LIST "make_list"
+#define RUNTIME_CALL_LIST_VALUE "list_value"
 #define RUNTIME_CALL_MAKE_MAP "make_map"
+#define RUNTIME_CALL_MAP_VALUE "map_value"
 
 typedef struct lir_operand {
   uint8_t type;
@@ -195,10 +197,12 @@ lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 lir_op *lir_new_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 
-lir_op *lir_new_op();
+lir_op *lir_new_op(uint8_t type);
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);
 void list_op_push(list_op *l, lir_op *op);
 list_op *list_op_append(list_op *dst, list_op *src);
+
+lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second);
 
 #endif //NATURE_SRC_LIR_H_

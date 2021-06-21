@@ -47,3 +47,12 @@ if (a > 1) {
 }
 
 
+for (var key,value in list) {
+
+}
+
+while (true) {
+
+}
+
+

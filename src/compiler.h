@@ -14,17 +14,23 @@ list_op *compiler_var_decl(closure *c, ast_var_decl_stmt *var_decl);
 
 list_op *compiler_if(closure *c, ast_if_stmt *if_stmt);
 
+list_op *compiler_for_in(closure *c, ast_for_in_stmt *for_in_stmt);
+
 list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
-list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *target);
+list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *refer_target);
 
 list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
 list_op *compiler_call(closure *c, ast_call *call, lir_operand *target);
 
 list_op *compiler_new_list(closure *c, ast_new_list *new_list, lir_operand *target);
+
+list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *target);
+
+list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target);
 
 /**
  * 二元表达式

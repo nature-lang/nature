@@ -58,8 +58,7 @@ list_op *compiler_assign(closure *c, ast_assign_stmt *stmt) {
   list_op *list = compiler_expr(c, stmt->left, left_target);
   list_op_append(list, compiler_expr(c, stmt->right, right_target));
 
-  lir_op *move_op = lir_new_op();
-  move_op->type = LIR_OP_TYPE_MOVE;
+  lir_op *move_op = lir_new_op(LIR_OP_TYPE_MOVE);
   move_op->result = *left_target;
   move_op->first = *right_target;
   list_op_push(list, move_op);
@@ -129,8 +128,7 @@ list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *result_
   lir_operand *right_target = lir_new_temp_var_operand();
   list_op *operates = compiler_expr(c, expr->left, left_target);
   list_op_append(operates, compiler_expr(c, expr->right, right_target));
-  lir_op *binary_op = lir_new_op();
-  binary_op->type = type;
+  lir_op *binary_op = lir_new_op(type);
   binary_op->result = *result_target;
   binary_op->first = *left_target;
   binary_op->second = *right_target;
@@ -144,8 +142,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   lir_operand *condition_target = lir_new_temp_var_operand();
   list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
   // 判断结果是否为 false, false 对应 else
-  lir_op *cmp_goto = lir_new_op();
-  cmp_goto->type = LIR_OP_TYPE_CMP_GOTO;
+  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
 
   lir_operand_immediate *falsely = malloc(sizeof(lir_operand_immediate));
   falsely->type = AST_BASE_TYPE_BOOL;
@@ -192,9 +189,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
-  lir_op *call_op = lir_new_op();
-
-  call_op->type = LIR_OP_TYPE_CALL;
+  lir_op *call_op = lir_new_op(LIR_OP_TYPE_CALL);
   call_op->first = lir_new_label(call->name)->first; // 函数名称
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
@@ -238,9 +233,8 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
  *
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
-list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *target) {
+list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *refer_target) {
   // new tmp 是无类型的。
-  lir_operand *left_target = lir_new_temp_var_operand();
   // left_target.type is list[int]
   // left_target.var = runtime.make_list(size)
   // left_target.var to symbol
@@ -249,19 +243,20 @@ list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *tar
   // 且 lir_operand_var.ident 可以在 symbol 查出相关类型
   // var 实际上会在真实物理计算机中的内存或者其他空间拥有一份空间，并写入了一个值。
   // 即当成 var 是有值的即可！！具体的值是多少咱也不知道
-  list_op *list = compiler_expr(c, ast->left, left_target);
-  // todo 添加越界判断 exception 指令到 lir 中
+  lir_operand *base_target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, ast->left, base_target);
 
-  lir_operand *first_operand = lir_new_memory_operand(
-      (lir_operand_var *) left_target->value,
-      list_offset(ast->type, ast->index));
+  lir_operand *index_target = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, ast->index, index_target));
 
-  lir_op *move_op = lir_new_op();
-  move_op->type = LIR_OP_TYPE_MOVE;
-  move_op->first = *first_operand;
-  move_op->result = *target;
+  lir_op *call_op = lir_runtime_two_param_call(
+      RUNTIME_CALL_LIST_VALUE,
+      *refer_target,
+      base_target,
+      index_target
+  );
 
-  list_op_push(list, move_op);
+  list_op_push(list, call_op);
 
   return list;
 }
@@ -279,38 +274,112 @@ list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *tar
  * @param target
  * @return
  */
-list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *target) {
+list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_target) {
   list_op *list = list_op_new();
-  lir_op *call_op = lir_new_op();
-  call_op->type = LIR_OP_TYPE_RUNTIME_CALL;
-  call_op->first = lir_new_label(RUNTIME_CALL_MAKE_LIST)->first; // 函数名称
+
   // 类型，容量 runtime.make_list(capacity, size)
-  lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
-  params_operand->count = 0;
   lir_operand *capacity_operand = lir_new_immediate_int_operand((int) ast->capacity);
-  lir_operand *size_operand = lir_new_immediate_int_operand((int) type_sizeof(ast->type));
-  params_operand->list[params_operand->count++] = capacity_operand;
-  params_operand->list[params_operand->count++] = size_operand;
-  lir_operand call_params_operand = {
-      .type= LIR_OPERAND_TYPE_ACTUAL_PARAM,
-      .value = params_operand};
-  call_op->second = call_params_operand;
-  call_op->result = *target; // list[int] 类型，本质是一个内存地址才对
+  lir_operand *item_size_operand = lir_new_immediate_int_operand((int) type_sizeof(ast->type));
+  lir_op *call_op = lir_runtime_two_param_call(
+      RUNTIME_CALL_MAKE_LIST,
+      *base_target,
+      capacity_operand,
+      item_size_operand
+  );
+
   list_op_push(list, call_op);
 
   // compiler_expr to access_list
-  // target 是数组，不带偏移的,所以要手哦那个计算偏移量
-  // TODO if target not var throw exception
   for (int i = 0; i < ast->count; ++i) {
-    lir_operand *memory_operand_target = lir_new_memory_operand(
-        (lir_operand_var *) target->value,
-        list_offset(ast->type, i));
     ast_expr expr = ast->values[i];
-    list_op_append(list, compiler_expr(c, expr, memory_operand_target));
+    lir_operand *value_target = lir_new_temp_var_operand();
+    list_op_append(list, compiler_expr(c, expr, value_target));
+
+    lir_operand *refer_target = lir_new_temp_var_operand();
+    lir_operand *index_target = lir_new_immediate_int_operand(i);
+    call_op = lir_runtime_two_param_call(
+        RUNTIME_CALL_LIST_VALUE,
+        *refer_target,
+        base_target,
+        index_target
+    );
+    list_op_push(list, call_op);
+
+    // TODO move value_target to temp_target
   }
 
   return list;
 }
+
+/**
+ * foo.bar
+ * foo[0].bar
+ * foo.bar.car
+ *
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *target) {
+  // compiler base address left_target
+  lir_operand *base_target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, ast->left, base_target);
+
+  // compiler key to temp var
+  lir_operand *key_target = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, ast->key, key_target));
+
+  // runtime get offset by temp var runtime.map_offset(base, "key")
+  lir_op *call_op = lir_runtime_two_param_call(
+      RUNTIME_CALL_MAP_VALUE,
+      *target,
+      base_target,
+      key_target
+  );
+  list_op_push(list, call_op);
+
+  return NULL;
+}
+
+/**
+ * call runtime.make_map => t1 // 基础地址
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target) {
+  list_op *list = list_op_new();
+  lir_operand *capacity_operand = lir_new_immediate_int_operand((int) ast->capacity);
+  lir_operand *item_size_operand = lir_new_immediate_int_operand(
+      (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
+
+  lir_op *call_op = lir_runtime_two_param_call(
+      RUNTIME_CALL_MAKE_MAP,
+      *target,
+      capacity_operand,
+      item_size_operand
+  );
+  list_op_push(list, call_op);
+
+  // 默认值初始化
+  for (int i = 0; i < ast->count; ++i) {
+
+  }
+
+  return list;
+}
+
+/**
+ * @param c
+ * @param for_in_stmt
+ * @return
+ */
+//list_op *compiler_for_in(closure *c, ast_for_in_stmt *for_in_stmt) {
+//  // runtime.
+//  return NULL;
+//}
 
 
 
