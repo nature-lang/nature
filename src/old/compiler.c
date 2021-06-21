@@ -232,7 +232,7 @@ insts *compiler_literal(ast_literal *literal, inst_operand_reg target, string li
 // int a;
 // 定义变量，读取长度，并根据需要开辟栈插槽和栈偏移
 // 不用在这做了，在 optimize 就做好了
-void compiler_var_decl(ast_var_decl_stmt *decl, inst_operand_reg target, string linkage) {
+void compiler_var_decl(ast_var_decl *decl, inst_operand_reg target, string linkage) {
   // 1.判断是否已经定义过变量
 //  for (int i = 0; i < current->local_count; ++i) {
 //    local_var local = current->locals[i];
@@ -266,7 +266,7 @@ insts *compiler_block(ast_block_stmt *block, inst_operand_reg target, string lin
     ast_stmt stmt = block->list[i];
     // 表达式数据导向
     switch (stmt.type) {
-      case AST_STMT_VAR_DECL: compiler_var_decl((ast_var_decl_stmt *) stmt.stmt, target, linkage);
+      case AST_STMT_VAR_DECL: compiler_var_decl((ast_var_decl *) stmt.stmt, target, linkage);
         break;
       case AST_STMT_ASSIGN: {
         append = compiler_assign((ast_assign_stmt *) stmt.stmt, target, linkage);

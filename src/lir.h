@@ -185,24 +185,22 @@ string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure();
 
-lir_op *lir_new_label(string name);
-
 lir_operand *lir_new_var_operand(string ident);
-
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
 lir_operand *lir_new_immediate_int_operand(int value);
 lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 
-lir_op *lir_new_goto(lir_operand *label);
+lir_op *lir_label(string name);
+lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
-
+lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 lir_op *lir_new_op(uint8_t type);
+lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second);
+
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);
 void list_op_push(list_op *l, lir_op *op);
 list_op *list_op_append(list_op *dst, list_op *src);
-
-lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second);
 
 #endif //NATURE_SRC_LIR_H_

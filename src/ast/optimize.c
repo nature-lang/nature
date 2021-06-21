@@ -23,7 +23,7 @@ void optimize_block(ast_block_stmt *block) {
     // switch 结构导向优化
     switch (stmt.type) {
       case AST_STMT_VAR_DECL: {
-        optimize_var_decl((ast_var_decl_stmt *) stmt.stmt);
+        optimize_var_decl((ast_var_decl *) stmt.stmt);
         break;
       }
       case AST_STMT_VAR_DECL_ASSIGN: {
@@ -82,7 +82,7 @@ void optimize_call_function(ast_call *call) {
   }
 }
 
-void optimize_var_decl(ast_var_decl_stmt *var_decl) {
+void optimize_var_decl(ast_var_decl *var_decl) {
   // TODO 判断同当前块作用域内是否重复定义
 
   optimize_local_var *local = optimize_new_local(var_decl->type, var_decl->ident);

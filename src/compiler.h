@@ -10,7 +10,7 @@ list_op *compiler(closure *c, ast_closure_decl *decl);
 
 list_op *compiler_block(closure *c, ast_block_stmt *block);
 
-list_op *compiler_var_decl(closure *c, ast_var_decl_stmt *var_decl);
+list_op *compiler_var_decl(closure *c, ast_var_decl *var_decl);
 
 list_op *compiler_if(closure *c, ast_if_stmt *if_stmt);
 
@@ -30,7 +30,7 @@ list_op *compiler_new_list(closure *c, ast_new_list *new_list, lir_operand *targ
 
 list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *target);
 
-list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target);
+list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target);
 
 /**
  * 二元表达式

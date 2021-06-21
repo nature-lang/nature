@@ -104,7 +104,7 @@ typedef struct {
 typedef struct {
   string ident;
   string type; // 系统 type 或者自定义 struct
-} ast_var_decl_stmt;
+} ast_var_decl;
 
 typedef struct {
   ast_expr left; // a  或 foo.bar.car 或者 d[0]
@@ -128,11 +128,10 @@ typedef struct {
   ast_block_stmt body;
 } ast_while_stmt;
 
-// TODO 是否需要 for in 表达式，能否再优化阶段优化掉？
 typedef struct {
   ast_expr iterate; // list, foo.list, bar[0]
-  ast_var_decl_stmt item_key; // 类型推导
-  ast_var_decl_stmt item_value; // 类型推导
+  ast_var_decl gen_key; // 类型推导
+  ast_var_decl gen_value; // 类型推导
   ast_block_stmt body;
 } ast_for_in_stmt;
 

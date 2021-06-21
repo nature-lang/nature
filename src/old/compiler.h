@@ -54,7 +54,7 @@ compiler *current = NULL;
 // linkage 分为特殊值 next 对应继续执行 /return 对应 ret/其余字符串 jmp linkage
 insts *compiler_block(ast_block_stmt *block, string target, string linkage);
 
-void compiler_var_decl(ast_var_decl_stmt *decl, string target, string linkage);
+void compiler_var_decl(ast_var_decl *decl, string target, string linkage);
 
 // int b = 123; // result to %rax
 // int b = 123 + a * 2; // result to %rax

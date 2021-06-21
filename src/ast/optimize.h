@@ -55,7 +55,7 @@ void optimize_function_begin();
 void optimize_function_end();
 void optimize(ast_function_decl *main);
 void optimize_block(ast_block_stmt *block);
-void optimize_var_decl(ast_var_decl_stmt *var_decal);
+void optimize_var_decl(ast_var_decl *var_decal);
 void optimize_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign);
 ast_closure_decl *optimize_function_decl(ast_function_decl *function);
 void optimize_expr(ast_expr *expr);

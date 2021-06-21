@@ -14,7 +14,7 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
         child->operates = compiler(child, (ast_closure_decl *) stmt.stmt);
       }
       case AST_STMT_VAR_DECL: {
-        await_append = compiler_var_decl(c, (ast_var_decl_stmt *) stmt.stmt);
+        await_append = compiler_var_decl(c, (ast_var_decl *) stmt.stmt);
         break;
       }
       case AST_STMT_VAR_DECL_ASSIGN: {
@@ -66,7 +66,7 @@ list_op *compiler_assign(closure *c, ast_assign_stmt *stmt) {
   return list;
 }
 
-list_op *compiler_var_decl(closure *c, ast_var_decl_stmt *var_decl) {
+list_op *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
   return NULL;
 }
 
@@ -151,8 +151,8 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   cmp_goto->first = immediate_operand;
   cmp_goto->second = *condition_target;
 
-  lir_op *end_label = lir_new_label("end_if");
-  lir_op *alternate_label = lir_new_label("alternate_if");
+  lir_op *end_label = lir_label("end_if");
+  lir_op *alternate_label = lir_label("alternate_if");
   if (if_stmt->alternate.count == 0) {
     cmp_goto->result = end_label->result;
   } else {
@@ -161,7 +161,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 
   // 编译 consequent block
   list_op *consequent_list = compiler_block(c, &if_stmt->consequent);
-  list_op_push(consequent_list, lir_new_goto(&end_label->result));
+  list_op_push(consequent_list, lir_op_goto(&end_label->result));
   list_op_append(list, consequent_list);
 
   // 编译 alternate block
@@ -190,7 +190,7 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
   lir_op *call_op = lir_new_op(LIR_OP_TYPE_CALL);
-  call_op->first = lir_new_label(call->name)->first; // 函数名称
+  call_op->first = lir_label(call->name)->first; // 函数名称
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
@@ -233,7 +233,7 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
  *
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
-list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *refer_target) {
+list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *target) {
   // new tmp 是无类型的。
   // left_target.type is list[int]
   // left_target.var = runtime.make_list(size)
@@ -251,7 +251,7 @@ list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *ref
 
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_LIST_VALUE,
-      *refer_target,
+      *target,
       base_target,
       index_target
   );
@@ -304,8 +304,7 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
         index_target
     );
     list_op_push(list, call_op);
-
-    // TODO move value_target to temp_target
+    list_op_push(list, lir_op_move(refer_target, value_target));
   }
 
   return list;
@@ -346,10 +345,10 @@ list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *targe
  * call runtime.make_map => t1 // 基础地址
  * @param c
  * @param ast
- * @param target
+ * @param base_target
  * @return
  */
-list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target) {
+list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target) {
   list_op *list = list_op_new();
   lir_operand *capacity_operand = lir_new_immediate_int_operand((int) ast->capacity);
   lir_operand *item_size_operand = lir_new_immediate_int_operand(
@@ -357,7 +356,7 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target) {
 
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_MAKE_MAP,
-      *target,
+      *base_target,
       capacity_operand,
       item_size_operand
   );
@@ -365,6 +364,23 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *target) {
 
   // 默认值初始化
   for (int i = 0; i < ast->count; ++i) {
+    ast_expr key_expr = ast->values[i].key;
+    lir_operand *key_target = lir_new_temp_var_operand();
+    ast_expr value_expr = ast->values[i].value;
+    lir_operand *value_target = lir_new_temp_var_operand();
+
+    list_op_append(list, compiler_expr(c, key_expr, key_target));
+    list_op_append(list, compiler_expr(c, value_expr, value_target));
+
+    lir_operand *refer_target = lir_new_temp_var_operand();
+    call_op = lir_runtime_two_param_call(
+        RUNTIME_CALL_MAP_VALUE,
+        *refer_target,
+        base_target,
+        key_target
+    );
+    list_op_push(list, call_op);
+    list_op_push(list, lir_op_move(refer_target, value_target));
 
   }
 

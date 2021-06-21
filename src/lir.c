@@ -14,7 +14,7 @@ lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset) {
 
 lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second) {
   lir_op *call_op = lir_new_op(LIR_OP_TYPE_RUNTIME_CALL);
-  call_op->first = lir_new_label(name)->first; // 函数名称
+  call_op->first = lir_label(name)->first; // 函数名称
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
   params_operand->list[params_operand->count++] = first;
