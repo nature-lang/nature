@@ -11,6 +11,9 @@
 #define RUNTIME_CALL_LIST_VALUE "list_value"
 #define RUNTIME_CALL_MAKE_MAP "make_map"
 #define RUNTIME_CALL_MAP_VALUE "map_value"
+#define RUNTIME_CALL_ITERATE_COUNT "iterate_count"
+#define RUNTIME_CALL_ITERATE_GEN_KEY "iterate_gen_key"
+#define RUNTIME_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
 typedef struct lir_operand {
   uint8_t type;
@@ -30,6 +33,7 @@ typedef enum {
 
 typedef enum {
   LIR_IMMEDIATE_TYPE_INT,
+  LIR_IMMEDIATE_TYPE_BOOL,
   LIR_IMMEDIATE_TYPE_FLOAT,
 } lir_immediate_type;
 
@@ -60,7 +64,7 @@ typedef struct {
 } lir_operand_memory;
 
 typedef struct {
-  string value;
+  void *value;
   uint8_t type;
 } lir_operand_immediate;
 
@@ -83,6 +87,7 @@ typedef string lir_operand_label;
 
 typedef enum {
   LIR_OP_TYPE_ADD,
+  LIR_OP_TYPE_SUB,
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
   LIR_OP_TYPE_CMP_GOTO,
@@ -189,13 +194,15 @@ lir_operand *lir_new_var_operand(string ident);
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
 lir_operand *lir_new_immediate_int_operand(int value);
+lir_operand *lir_new_immediate_bool_operand(bool value);
 lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 
-lir_op *lir_label(string name);
+lir_op *lir_op_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 lir_op *lir_new_op(uint8_t type);
+lir_op *lir_runtime_one_param_call(string name, lir_operand result, lir_operand *first);
 lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second);
 
 list_op *list_op_new();

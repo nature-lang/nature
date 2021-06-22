@@ -13,7 +13,7 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
         child->parent = c;
         child->operates = compiler(child, (ast_closure_decl *) stmt.stmt);
       }
-      case AST_STMT_VAR_DECL: {
+      case AST_VAR_DECL: {
         await_append = compiler_var_decl(c, (ast_var_decl *) stmt.stmt);
         break;
       }
@@ -27,6 +27,10 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
       }
       case AST_STMT_IF: {
         await_append = compiler_if(c, (ast_if_stmt *) stmt.stmt);
+        break;
+      }
+      case AST_STMT_FOR_IN: {
+        await_append = compiler_for_in(c, (ast_for_in_stmt *) stmt.stmt);
         break;
       }
       case AST_CALL: {
@@ -111,6 +115,14 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
       return compiler_new_list(c, (ast_new_list *) expr.expr, target);
       break;
     }
+    case AST_EXPR_TYPE_ACCESS_MAP: {
+      return compiler_access_map(c, (ast_access_map *) expr.expr, target);
+      break;
+    }
+    case AST_EXPR_TYPE_NEW_MAP: {
+      return compiler_new_map(c, (ast_new_map *) expr.expr, target);
+      break;
+    }
   }
   return NULL;
 }
@@ -143,21 +155,17 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
   // 判断结果是否为 false, false 对应 else
   lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
-
-  lir_operand_immediate *falsely = malloc(sizeof(lir_operand_immediate));
-  falsely->type = AST_BASE_TYPE_BOOL;
-  falsely->value = 0;
-  lir_operand immediate_operand = {.value = falsely, .type = LIR_OPERAND_TYPE_IMMEDIATE};
-  cmp_goto->first = immediate_operand;
+  cmp_goto->first = *lir_new_immediate_bool_operand(false);
   cmp_goto->second = *condition_target;
 
-  lir_op *end_label = lir_label("end_if");
-  lir_op *alternate_label = lir_label("alternate_if");
+  lir_op *end_label = lir_op_label("end_if");
+  lir_op *alternate_label = lir_op_label("alternate_if");
   if (if_stmt->alternate.count == 0) {
     cmp_goto->result = end_label->result;
   } else {
     cmp_goto->result = alternate_label->result;
   }
+  list_op_push(list, cmp_goto);
 
   // 编译 consequent block
   list_op *consequent_list = compiler_block(c, &if_stmt->consequent);
@@ -190,7 +198,7 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
   lir_op *call_op = lir_new_op(LIR_OP_TYPE_CALL);
-  call_op->first = lir_label(call->name)->first; // 函数名称
+  call_op->first = lir_op_label(call->name)->first; // 函数名称
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
@@ -388,14 +396,64 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
 }
 
 /**
+ * call get count => count
+ * for:
+ *  cmp_goto count == 0 to end for
+ *  call get key => key
+ *  call get value => value
+ *  ....
+ *  sub count, 1 => count
+ *  goto for:
+ * end_for:
  * @param c
  * @param for_in_stmt
  * @return
  */
-//list_op *compiler_for_in(closure *c, ast_for_in_stmt *for_in_stmt) {
-//  // runtime.
-//  return NULL;
-//}
+list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
+  lir_operand *base_target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, ast->iterate, base_target);
+
+  lir_operand *count_target = lir_new_temp_var_operand(); // ?? 这个值特么存在哪里，我现在不可知呀？
+  // 换句话说，我又怎么知道需要 for 循环几次？？
+  // 根据 base_target get length, bug length how to trans to int
+  list_op_push(list, lir_runtime_one_param_call(
+      RUNTIME_CALL_ITERATE_COUNT,
+      *count_target,
+      base_target));
+  // make label
+  lir_op *for_label = lir_op_label("for");
+  lir_op *end_for_label = lir_op_label("end_for");
+  list_op_push(list, lir_op_label("for"));
+  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
+  cmp_goto->first = *lir_new_immediate_int_operand(0);
+  cmp_goto->second = *count_target;
+  cmp_goto->result = end_for_label->result;
+
+  // gen key
+  // gen value
+  lir_operand *key_target = lir_new_var_operand(ast->gen_key->ident);
+  lir_operand *value_target = lir_new_var_operand(ast->gen_value->ident);
+  list_op_push(list, lir_runtime_one_param_call(
+      RUNTIME_CALL_ITERATE_GEN_KEY,
+      *key_target,
+      base_target));
+  list_op_push(list, lir_runtime_one_param_call(
+      RUNTIME_CALL_ITERATE_GEN_VALUE,
+      *value_target,
+      base_target));
+
+  // block
+  list_op_append(list, compiler_block(c, &ast->body));
+
+  lir_op *sub_op = lir_new_op(LIR_OP_TYPE_SUB);
+  sub_op->first = *count_target;
+  sub_op->second = *lir_new_immediate_int_operand(1);
+  sub_op->result = *count_target;
+  list_op_push(list, sub_op);
+  list_op_push(list, lir_op_label("end_for"));
+
+  return list;
+}
 
 
 

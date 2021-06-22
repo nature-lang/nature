@@ -23,14 +23,16 @@ typedef enum {
   AST_EXPR_TYPE_IDENT,
   AST_EXPR_TYPE_ACCESS_STRUCT,
   AST_EXPR_TYPE_ENV_INDEX,
-
+  AST_EXPR_TYPE_ACCESS_MAP,
+  AST_EXPR_TYPE_NEW_MAP,
   AST_EXPR_TYPE_ACCESS_LIST,
   AST_EXPR_TYPE_NEW_LIST,
   AST_EXPR_TYPE_LIST_DECL,
-  AST_STMT_VAR_DECL,
+  AST_VAR_DECL,
   AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
   AST_STMT_IF,
+  AST_STMT_FOR_IN,
   AST_FUNCTION_DECL,
   AST_CALL,
   AST_CLOSURE_DECL,
@@ -130,8 +132,8 @@ typedef struct {
 
 typedef struct {
   ast_expr iterate; // list, foo.list, bar[0]
-  ast_var_decl gen_key; // 类型推导
-  ast_var_decl gen_value; // 类型推导
+  ast_var_decl *gen_key; // 类型推导, type 可能是 int 或者 string
+  ast_var_decl *gen_value; // 类型推导
   ast_block_stmt body;
 } ast_for_in_stmt;
 

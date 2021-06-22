@@ -266,7 +266,7 @@ insts *compiler_block(ast_block_stmt *block, inst_operand_reg target, string lin
     ast_stmt stmt = block->list[i];
     // 表达式数据导向
     switch (stmt.type) {
-      case AST_STMT_VAR_DECL: compiler_var_decl((ast_var_decl *) stmt.stmt, target, linkage);
+      case AST_VAR_DECL: compiler_var_decl((ast_var_decl *) stmt.stmt, target, linkage);
         break;
       case AST_STMT_ASSIGN: {
         append = compiler_assign((ast_assign_stmt *) stmt.stmt, target, linkage);

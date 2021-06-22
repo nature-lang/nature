@@ -22,7 +22,7 @@ void optimize_block(ast_block_stmt *block) {
     ast_stmt stmt = block->list[i];
     // switch 结构导向优化
     switch (stmt.type) {
-      case AST_STMT_VAR_DECL: {
+      case AST_VAR_DECL: {
         optimize_var_decl((ast_var_decl *) stmt.stmt);
         break;
       }
