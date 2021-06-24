@@ -33,6 +33,7 @@ typedef enum {
   AST_STMT_ASSIGN,
   AST_STMT_IF,
   AST_STMT_FOR_IN,
+  AST_STMT_WHILE,
   AST_FUNCTION_DECL,
   AST_CALL,
   AST_CLOSURE_DECL,
@@ -209,6 +210,7 @@ typedef struct {
   string value_type;
 } ast_new_map;
 
+// env 可能是各种类型的？
 typedef struct {
   ast_ident env;
   uint8_t index;

@@ -100,6 +100,11 @@ void optimize_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign) {
   optimize_expr(&var_decl_assign->expr);
 }
 
+/**
+ * env 中仅包含自由变量，不包含 function 原有的形参,且其还是形参的一部分
+ * @param function
+ * @return
+ */
 ast_closure_decl *optimize_function_decl(ast_function_decl *function) {
   // 函数名称改写
   optimize_local_var *function_local = optimize_new_local(BASE_TYPE_CLOSURE, function->name);
@@ -110,15 +115,15 @@ ast_closure_decl *optimize_function_decl(ast_function_decl *function) {
 
   // 函数参数改写, 参数 0 预留给 env
   formal_param *env = &function->formal_params[0];
-  env->type = BASE_TYPE_ENV; // env 类型
-  env->ident = BASE_TYPE_ENV;
+  env->type = BASE_TYPE_ENV; // env 类型 是哪个啥类型？
+  env->ident = unique_var_ident("env"); // TODO new env ident
   optimize_local_var *env_local = optimize_new_local(env->type, env->ident);
   env->ident = env_local->unique_ident;
   current_function->env_unique_name = env->ident;
 
   for (int i = 1; i < function->formal_param_count; ++i) {
     formal_param *param = &function->formal_params[i];
-    // 注册并改写
+    // 注册并改写成唯一标识
     optimize_local_var *param_local = optimize_new_local(param->type, param->ident);
     param->ident = param_local->unique_ident;
   }
@@ -128,10 +133,11 @@ ast_closure_decl *optimize_function_decl(ast_function_decl *function) {
 
   ast_closure_decl *closure = malloc(sizeof(ast_closure_decl));
 
-  // 注意，自由变量捕捉是基于 current_function->parent 进行的
+  // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
   for (int i = 0; i < current_function->free_count; ++i) {
     optimize_free_var free_var = current_function->frees[i];
     ast_expr expr = closure->env[i];
+    // 逃逸变量就在当前环境中
     if (free_var.is_local) {
       // ast_ident 表达式
       expr.type = AST_EXPR_TYPE_IDENT;
@@ -140,6 +146,7 @@ ast_closure_decl *optimize_function_decl(ast_function_decl *function) {
     } else {
       // ast_env_index 表达式
       expr.type = AST_EXPR_TYPE_ENV_INDEX;
+
       ast_env_index *env_index = malloc(sizeof(ast_env_index));
       env_index->env = current_function->parent->env_unique_name;
       env_index->index = free_var.index;

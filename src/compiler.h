@@ -14,7 +14,9 @@ list_op *compiler_var_decl(closure *c, ast_var_decl *var_decl);
 
 list_op *compiler_if(closure *c, ast_if_stmt *if_stmt);
 
-list_op *compiler_for_in(closure *c, ast_for_in_stmt *for_in_stmt);
+list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast);
+
+list_op *compiler_while(closure *c, ast_while_stmt *ast);
 
 list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 

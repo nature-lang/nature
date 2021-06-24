@@ -33,6 +33,10 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
         await_append = compiler_for_in(c, (ast_for_in_stmt *) stmt.stmt);
         break;
       }
+      case AST_STMT_WHILE: {
+        await_append = compiler_while(c, (ast_while_stmt *) stmt.stmt);
+        break;
+      }
       case AST_CALL: {
         lir_operand *temp_target = lir_new_temp_var_operand();
         await_append = compiler_call(c, (ast_call *) stmt.stmt, temp_target);
@@ -105,23 +109,18 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     case AST_CALL: {
       // 返回值存储在 target 中
       return compiler_call(c, (ast_call *) expr.expr, target);
-      break;
     }
     case AST_EXPR_TYPE_ACCESS_LIST: {
       return compiler_access_list(c, (ast_access_list *) expr.expr, target);
-      break;
     }
     case AST_EXPR_TYPE_NEW_LIST: {
       return compiler_new_list(c, (ast_new_list *) expr.expr, target);
-      break;
     }
     case AST_EXPR_TYPE_ACCESS_MAP: {
       return compiler_access_map(c, (ast_access_map *) expr.expr, target);
-      break;
     }
     case AST_EXPR_TYPE_NEW_MAP: {
       return compiler_new_map(c, (ast_new_map *) expr.expr, target);
-      break;
     }
   }
   return NULL;
@@ -423,7 +422,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   // make label
   lir_op *for_label = lir_op_label("for");
   lir_op *end_for_label = lir_op_label("end_for");
-  list_op_push(list, lir_op_label("for"));
+  list_op_push(list, for_label);
   lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
   cmp_goto->first = *lir_new_immediate_int_operand(0);
   cmp_goto->second = *count_target;
@@ -445,13 +444,57 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   // block
   list_op_append(list, compiler_block(c, &ast->body));
 
+  // sub count, 1 => count
   lir_op *sub_op = lir_new_op(LIR_OP_TYPE_SUB);
   sub_op->first = *count_target;
   sub_op->second = *lir_new_immediate_int_operand(1);
   sub_op->result = *count_target;
   list_op_push(list, sub_op);
+
+  // goto for
+  list_op_push(list, lir_op_goto(&for_label->result));
+
   list_op_push(list, lir_op_label("end_for"));
 
+  return list;
+}
+
+list_op *compiler_while(closure *c, ast_while_stmt *ast) {
+  list_op *list = list_op_new();
+  lir_op *while_label = lir_op_label("while");
+  lir_op *end_while_label = lir_op_label("end_while");
+  list_op_push(list, while_label);
+
+  lir_operand *condition_target = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, ast->condition, condition_target));
+  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
+  cmp_goto->first = *lir_new_immediate_bool_operand(false);
+  cmp_goto->second = *condition_target;
+  cmp_goto->result = end_while_label->result;
+
+  list_op_append(list, compiler_block(c, &ast->body));
+
+  list_op_push(list, end_while_label);
+
+  return list;
+}
+
+/**
+ * 从何处读取实参为形参赋值？
+ * 如何编译 env? env 的本质是运行时对栈的引用
+ * call make_env
+ * call set_env => a target
+ * call get_env => t1 target
+ * @param c
+ * @param ast
+ * @return
+ */
+list_op *compiler(closure *c, ast_closure_decl *ast) {
+  // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
+  list_op *list = list_op_new();
+  // 形参处理,怎么处理？实参怎么合形参对应？
+  //  ast->env
+  // block 处理
   return list;
 }
 
