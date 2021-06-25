@@ -10,7 +10,7 @@ typedef struct {
   list *handled;
   list *active;
   list *inactive;
-  interval *current; // 正在分配的东西
+  interval *current; // 正在分配的寄存器
 } allocate;
 
 /**
@@ -18,6 +18,12 @@ typedef struct {
  */
 void allocate_walk(closure *c);
 bool allocate_free_reg(allocate *a);
+
+/**
+ * 当没有物理寄存器用于分配时，则需要使用该方法，选择最长时间空闲的 interval 进行溢出
+ * @param a
+ * @return
+ */
 bool allocate_block_reg(allocate *a);
 
 /**
