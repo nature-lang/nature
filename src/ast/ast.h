@@ -210,11 +210,12 @@ typedef struct {
   string value_type;
 } ast_new_map;
 
-// env 可能是各种类型的？
+// 改写后是否需要添加类型系统支持？
 typedef struct {
+  string type;
   ast_ident env;
   uint8_t index;
-} ast_env_index;
+} ast_access_env;
 
 //typedef struct {
 //  string name;
@@ -222,20 +223,16 @@ typedef struct {
 //} ast_struct_stmt;
 
 typedef struct {
-  string type;
-  string ident;
-} formal_param;
-
-typedef struct {
   string name;
   int return_type; // 动态类型？数组？
-  formal_param formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
+  ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
   uint8_t formal_param_count;
   ast_block_stmt body; // 函数体
 } ast_function_decl; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
   ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
+  uint8_t env_count;
   ast_function_decl *function;
 } ast_closure_decl;
 

@@ -9,9 +9,11 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
 
     switch (stmt.type) {
       case AST_CLOSURE_DECL: {
-        closure *child = lir_new_closure();
-        child->parent = c;
-        child->operates = compiler(child, (ast_closure_decl *) stmt.stmt);
+//        closure *child = lir_new_closure();
+//        child->parent = c;
+//        child->operates =
+        // 编译 closure 不应该由什么指令集返回回来？ closure 自己存储自己的 operates
+        compiler(c, (ast_closure_decl *) stmt.stmt);
       }
       case AST_VAR_DECL: {
         await_append = compiler_var_decl(c, (ast_var_decl *) stmt.stmt);
@@ -258,7 +260,7 @@ list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *tar
 
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_LIST_VALUE,
-      *target,
+      target,
       base_target,
       index_target
   );
@@ -289,7 +291,7 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
   lir_operand *item_size_operand = lir_new_immediate_int_operand((int) type_sizeof(ast->type));
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_MAKE_LIST,
-      *base_target,
+      base_target,
       capacity_operand,
       item_size_operand
   );
@@ -306,7 +308,7 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
     lir_operand *index_target = lir_new_immediate_int_operand(i);
     call_op = lir_runtime_two_param_call(
         RUNTIME_CALL_LIST_VALUE,
-        *refer_target,
+        refer_target,
         base_target,
         index_target
     );
@@ -339,7 +341,7 @@ list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *targe
   // runtime get offset by temp var runtime.map_offset(base, "key")
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_MAP_VALUE,
-      *target,
+      target,
       base_target,
       key_target
   );
@@ -363,7 +365,7 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
 
   lir_op *call_op = lir_runtime_two_param_call(
       RUNTIME_CALL_MAKE_MAP,
-      *base_target,
+      base_target,
       capacity_operand,
       item_size_operand
   );
@@ -382,7 +384,7 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
     lir_operand *refer_target = lir_new_temp_var_operand();
     call_op = lir_runtime_two_param_call(
         RUNTIME_CALL_MAP_VALUE,
-        *refer_target,
+        refer_target,
         base_target,
         key_target
     );
@@ -417,7 +419,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   // 根据 base_target get length, bug length how to trans to int
   list_op_push(list, lir_runtime_one_param_call(
       RUNTIME_CALL_ITERATE_COUNT,
-      *count_target,
+      count_target,
       base_target));
   // make label
   lir_op *for_label = lir_op_label("for");
@@ -434,11 +436,11 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   lir_operand *value_target = lir_new_var_operand(ast->gen_value->ident);
   list_op_push(list, lir_runtime_one_param_call(
       RUNTIME_CALL_ITERATE_GEN_KEY,
-      *key_target,
+      key_target,
       base_target));
   list_op_push(list, lir_runtime_one_param_call(
       RUNTIME_CALL_ITERATE_GEN_VALUE,
-      *value_target,
+      value_target,
       base_target));
 
   // block
@@ -492,9 +494,49 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
 list_op *compiler(closure *c, ast_closure_decl *ast) {
   // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
   list_op *list = list_op_new();
-  // 形参处理,怎么处理？实参怎么合形参对应？
-  //  ast->env
-  // block 处理
+
+  // 处理 env
+  // 1. make env_n by count
+  lir_operand *env_target = lir_new_var_operand(make_label("env"));
+  lir_operand *first_param = lir_new_immediate_int_operand(ast->env_count);
+  list_op_push(list, lir_runtime_one_param_call(RUNTIME_CALL_MAKE_ENV, env_target, first_param));
+
+  // 2. for set ast_ident/ast_access_env to env n
+  for (int i = 0; i < ast->env_count; ++i) {
+    ast_expr item_expr = ast->env[i];
+    lir_operand *item_target = lir_new_temp_var_operand();
+    list_op_append(list, compiler_expr(c, item_expr, item_target));
+
+    // first param is env, second param is append value
+    lir_operand_actual_param *params_operand = lir_new_actual_param();
+    params_operand->list[params_operand->count++] = env_target;
+    params_operand->list[params_operand->count++] = lir_new_immediate_int_operand(i);
+    params_operand->list[params_operand->count++] = item_target;
+    list_op_push(list, lir_runtime_call(
+        RUNTIME_CALL_SET_ENV,
+        params_operand,
+        NULL));
+  }
+
+  // new 一个新的 closure
+  closure *child = lir_new_closure();
+  child->name = ast->function->name;
+  child->parent = c;
+  list_op *child_list = list_op_new();
+
+  // 添加 label
+  list_op_push(child_list, lir_op_label(ast->function->name));
+
+  // compiler formal param
+  for (int i = 0; i < ast->function->formal_param_count; ++i) {
+    ast_var_decl *param = ast->function->formal_params[i];
+    list_op_append(child_list, compiler_var_decl(child, param));
+  }
+
+  // 编译 body
+  list_op_append(child_list, compiler_block(child, &ast->function->body));
+  child->operates = child_list;
+
   return list;
 }
 

@@ -15,6 +15,10 @@
 #define RUNTIME_CALL_ITERATE_GEN_KEY "iterate_gen_key"
 #define RUNTIME_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
+#define RUNTIME_CALL_MAKE_ENV "make_env"
+#define RUNTIME_CALL_SET_ENV "set_env"
+#define RUNTIME_CALL_GET_ENV "get_env"
+
 typedef struct lir_operand {
   uint8_t type;
   void *value;
@@ -178,7 +182,7 @@ typedef struct closure {
   table *interval_table; // key包括 fixed register name 和 variable.ident
 
   // 定义环境
-  // TODO 环境中的变量,一个闭包应该是由指令集和环境组成 (环境已经在改写阶段完成)
+  string name;
   struct closure *parent;
   list_op *operates; // 指令列表
 } closure;
@@ -197,13 +201,16 @@ lir_operand *lir_new_immediate_int_operand(int value);
 lir_operand *lir_new_immediate_bool_operand(bool value);
 lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 
+string make_label(string name);
+lir_operand_actual_param *lir_new_actual_param();
 lir_op *lir_op_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 lir_op *lir_new_op(uint8_t type);
-lir_op *lir_runtime_one_param_call(string name, lir_operand result, lir_operand *first);
-lir_op *lir_runtime_two_param_call(string name, lir_operand result, lir_operand *first, lir_operand *second);
+lir_op *lir_runtime_call(string name, lir_operand_actual_param *actual_param, lir_operand *result);
+lir_op *lir_runtime_one_param_call(string name, lir_operand *result, lir_operand *first);
+lir_op *lir_runtime_two_param_call(string name, lir_operand *result, lir_operand *first, lir_operand *second);
 
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);

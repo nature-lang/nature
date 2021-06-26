@@ -147,10 +147,11 @@ ast_closure_decl *optimize_function_decl(ast_function_decl *function) {
       // ast_env_index 表达式
       expr.type = AST_EXPR_TYPE_ENV_INDEX;
 
-      ast_env_index *env_index = malloc(sizeof(ast_env_index));
-      env_index->env = current_function->parent->env_unique_name;
-      env_index->index = free_var.index;
-      expr.expr = env_index;
+      ast_access_env *access_env = malloc(sizeof(ast_access_env));
+      access_env->env = current_function->parent->env_unique_name;
+      access_env->index = free_var.index;
+      // TODO type 该有吧？
+      expr.expr = access_env;
     }
   }
   closure->function = function;
@@ -239,7 +240,7 @@ void optimize_ident(ast_expr *expr) {
   }
   // 改写
   expr->type = AST_EXPR_TYPE_ENV_INDEX;
-  ast_env_index *env_index = malloc(sizeof(ast_env_index));
+  ast_access_env *env_index = malloc(sizeof(ast_access_env));
   env_index->env = current_function->env_unique_name;
   env_index->index = free_var_index;
   expr->expr = env_index;
