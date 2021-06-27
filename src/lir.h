@@ -99,6 +99,7 @@ typedef enum {
   LIR_OP_TYPE_POP,
   LIR_OP_TYPE_CALL,
   LIR_OP_TYPE_RUNTIME_CALL,
+  LIR_OP_TYPE_RETURN,
 } lir_op_type;
 
 /**
@@ -207,7 +208,7 @@ lir_op *lir_op_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
-lir_op *lir_new_op(uint8_t type);
+lir_op *lir_op_new(uint8_t type);
 lir_op *lir_runtime_call(string name, lir_operand_actual_param *actual_param, lir_operand *result);
 lir_op *lir_runtime_one_param_call(string name, lir_operand *result, lir_operand *first);
 lir_op *lir_runtime_two_param_call(string name, lir_operand *result, lir_operand *first, lir_operand *second);

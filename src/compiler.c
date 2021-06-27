@@ -68,7 +68,7 @@ list_op *compiler_assign(closure *c, ast_assign_stmt *stmt) {
   list_op *list = compiler_expr(c, stmt->left, left_target);
   list_op_append(list, compiler_expr(c, stmt->right, right_target));
 
-  lir_op *move_op = lir_new_op(LIR_OP_TYPE_MOVE);
+  lir_op *move_op = lir_op_new(LIR_OP_TYPE_MOVE);
   move_op->result = *left_target;
   move_op->first = *right_target;
   list_op_push(list, move_op);
@@ -141,7 +141,7 @@ list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *result_
   lir_operand *right_target = lir_new_temp_var_operand();
   list_op *operates = compiler_expr(c, expr->left, left_target);
   list_op_append(operates, compiler_expr(c, expr->right, right_target));
-  lir_op *binary_op = lir_new_op(type);
+  lir_op *binary_op = lir_op_new(type);
   binary_op->result = *result_target;
   binary_op->first = *left_target;
   binary_op->second = *right_target;
@@ -155,7 +155,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   lir_operand *condition_target = lir_new_temp_var_operand();
   list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
   // 判断结果是否为 false, false 对应 else
-  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
+  lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
   cmp_goto->first = *lir_new_immediate_bool_operand(false);
   cmp_goto->second = *condition_target;
 
@@ -198,7 +198,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
   list_op *list = list_op_new();
-  lir_op *call_op = lir_new_op(LIR_OP_TYPE_CALL);
+  lir_op *call_op = lir_op_new(LIR_OP_TYPE_CALL);
   call_op->first = lir_op_label(call->name)->first; // 函数名称
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
@@ -425,7 +425,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   lir_op *for_label = lir_op_label("for");
   lir_op *end_for_label = lir_op_label("end_for");
   list_op_push(list, for_label);
-  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
+  lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
   cmp_goto->first = *lir_new_immediate_int_operand(0);
   cmp_goto->second = *count_target;
   cmp_goto->result = end_for_label->result;
@@ -447,7 +447,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   list_op_append(list, compiler_block(c, &ast->body));
 
   // sub count, 1 => count
-  lir_op *sub_op = lir_new_op(LIR_OP_TYPE_SUB);
+  lir_op *sub_op = lir_op_new(LIR_OP_TYPE_SUB);
   sub_op->first = *count_target;
   sub_op->second = *lir_new_immediate_int_operand(1);
   sub_op->result = *count_target;
@@ -469,7 +469,7 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
 
   lir_operand *condition_target = lir_new_temp_var_operand();
   list_op_append(list, compiler_expr(c, ast->condition, condition_target));
-  lir_op *cmp_goto = lir_new_op(LIR_OP_TYPE_CMP_GOTO);
+  lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
   cmp_goto->first = *lir_new_immediate_bool_operand(false);
   cmp_goto->second = *condition_target;
   cmp_goto->result = end_while_label->result;
@@ -536,6 +536,18 @@ list_op *compiler(closure *c, ast_closure_decl *ast) {
   // 编译 body
   list_op_append(child_list, compiler_block(child, &ast->function->body));
   child->operates = child_list;
+
+  return list;
+}
+
+list_op *compiler_return(closure *c, ast_return_stmt *ast) {
+  list_op *list = list_op_new();
+  lir_operand *target = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, ast->expr, target));
+
+  lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN);
+  return_op->result = *target;
+  list_op_push(list, return_op);
 
   return list;
 }

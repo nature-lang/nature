@@ -28,6 +28,8 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
 list_op *compiler_call(closure *c, ast_call *call, lir_operand *target);
 
+list_op *compiler_return(closure *c, ast_return_stmt *ast);
+
 list_op *compiler_new_list(closure *c, ast_new_list *new_list, lir_operand *target);
 
 list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *target);

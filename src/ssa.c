@@ -35,7 +35,7 @@ void ssa_add_phi(closure *c) {
         }
 
         // add phi
-        lir_op *phi_op = lir_new_op(LIR_OP_TYPE_PHI);
+        lir_op *phi_op = lir_op_new(LIR_OP_TYPE_PHI);
         phi_op->result.type = LIR_OPERAND_TYPE_VAR;
         phi_op->result.value = lir_clone_operand_var(var);
 
