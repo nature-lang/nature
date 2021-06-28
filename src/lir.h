@@ -147,9 +147,9 @@ typedef struct {
 
 typedef struct lir_basic_block {
   uint8_t label; // label 标号, 基本块编号， 和 op_label 还是要稍微区分一下
-  lir_op *first_op; // 开始处的指令
+  lir_op *first_op; // 链表结构， 开始处的指令
   lir_op *last_op;
-  uint8_t operators_count;
+  uint8_t op_count;
 
   lir_basic_blocks preds;
   lir_basic_blocks succs;
