@@ -13,4 +13,5 @@
  */
 lir_basic_blocks cfg(closure *c);
 
+
 #endif //NATURE_SRC_CFG_H_

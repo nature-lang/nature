@@ -167,6 +167,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
     cmp_goto->result = alternate_label->result;
   }
   list_op_push(list, cmp_goto);
+  list_op_push(list, lir_op_label("continue"));
 
   // 编译 consequent block
   list_op *consequent_list = compiler_block(c, &if_stmt->consequent);
@@ -429,6 +430,10 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   cmp_goto->first = *lir_new_immediate_int_operand(0);
   cmp_goto->second = *count_target;
   cmp_goto->result = end_for_label->result;
+  list_op_push(list, cmp_goto);
+
+  // 添加 label
+  list_op_push(list, lir_op_label("continue"));
 
   // gen key
   // gen value
@@ -473,6 +478,8 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
   cmp_goto->first = *lir_new_immediate_bool_operand(false);
   cmp_goto->second = *condition_target;
   cmp_goto->result = end_while_label->result;
+  list_op_push(list, cmp_goto);
+  list_op_push(list, lir_op_label("continue"));
 
   list_op_append(list, compiler_block(c, &ast->body));
 
