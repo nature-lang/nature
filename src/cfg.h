@@ -13,5 +13,6 @@
  */
 lir_basic_blocks cfg(closure *c);
 
+void *lir_basic_blocks_push(lir_basic_blocks *list, lir_basic_block *item);
 
 #endif //NATURE_SRC_CFG_H_

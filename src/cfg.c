@@ -1,5 +1,4 @@
 #include "cfg.h"
-#include "lib/helper.h"
 
 /**
  * l1:
@@ -31,53 +30,53 @@
  * @return
  */
 lir_basic_blocks cfg(closure *c) {
-  // 1.创建 table, 记录每一个 label 的 succs/preds
-  table *label_succs_table = table_new();
-  table *label_preds_table = table_new();
+  table *basic_block_table = table_new();
 
-  // 2.根据 label 分块
-  lir_basic_block *current_block = NULL;
-  lir_op *current_op = c->operates->front;
+  // 1.根据 label 分块,仅考虑顺序块挂链关系
+  lir_basic_block *curr_block = NULL;
+  lir_op *curr_op = c->operates->front;
+  while (curr_op != NULL) {
+    if (curr_op->type == LIR_OP_TYPE_LABEL) {
+      // 1. last block 添加 last_op,并截断  last_op->succ
+      if (curr_block != NULL) {
+        curr_block->last_op = curr_op->pred;
+        curr_block->last_op->succ = NULL;
+      }
 
-  while (current_op != NULL) {
-//    if (current_op->type == LIR_OP_TYPE_LABEL) {
-//      // 新的块的开始
-//      lir_basic_block *new_block = lir_new_basic_block();
-//      new_block->first_op = current_op;
-//      lir_operand_label *new_block_label = (lir_operand_label *) new_block->first_op->result.value;
-//
-//      if (!table_exist(label_succs_table, *new_block_label)) {
-//        string*succs = malloc(UINT8_MAX * sizeof(string));
-//        table_set(label_succs_table, *new_block_label, succs);
-//      }
-//      if (!table_exist(label_preds_table, *new_block_label)) {
-//        string*preds = malloc(UINT8_MAX * sizeof(string));
-//        table_set(label_preds_table, *new_block_label, preds);
-//      }
-//
-//
-//
-//      // 添加后继
-//      if (current_block != NULL) {
-//        lir_operand_label *current_block_label = (lir_operand_label *) current_block->first_op->result.value;
-//        string*succs = (string*) table_get(label_succs_table, *current_block_label);
-//        string_to_unique_list(succs, *new_block_label);
-//        table_set(label_succs_table, *current_block_label, succs);
-//      }
-//
-//      // 添加前驱
-//
-//      current_block = new_block;
+      // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
+      lir_basic_block *new_block = lir_new_basic_block();
+      new_block->first_op = curr_op;
+      new_block->name = *((lir_operand_label *) curr_op->result.value);
+      table_set(basic_block_table, new_block->name, new_block);
+      c->blocks.list[c->blocks.count++] = new_block;
+
+
+      // 3. 建立顺序关联关系
+      if (curr_block != NULL && curr_block->last_op->type != LIR_OP_TYPE_GOTO) {
+        lir_basic_blocks_push(&curr_block->succs, new_block);
+        lir_basic_blocks_push(&new_block->preds, curr_block);
+      }
+
+      // 4. curr = new
+      curr_block = new_block;
     }
 
-    // goto 的 label 块,是不是遇到 label 就要停
-    if (current_op->type == LIR_OP_TYPE_CMP_GOTO) {
-    }
-
-    current_op = current_op->succ;
+    curr_op = curr_op->succ;
   }
 
-  // 3.写入 succs/preds
+  // 2. 根据 last_op is goto,cmp_goto 进一步构造关联关系
+  for (int i = 0; i < c->blocks.count; ++i) {
+    curr_block = c->blocks.list[i];
+    if (curr_block->last_op->type != LIR_OP_TYPE_GOTO
+        && curr_block->last_op->type != LIR_OP_TYPE_CMP_GOTO) {
+      continue;
+    }
 
-  // 4.遍历合并单 succs/preds
+    // 处理 goto 模式的关联关系
+    string name = *((lir_operand_label *) curr_block->last_op->result.value);
+    lir_basic_block *target_block = (lir_basic_block *) table_get(basic_block_table, name);
+
+    lir_basic_blocks_push(&curr_block->succs, target_block);
+    lir_basic_blocks_push(&target_block->preds, curr_block);
+  }
 }

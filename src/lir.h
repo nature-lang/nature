@@ -95,6 +95,7 @@ typedef enum {
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
   LIR_OP_TYPE_CMP_GOTO,
+  LIR_OP_TYPE_GOTO,
   LIR_OP_TYPE_PUSH,
   LIR_OP_TYPE_POP,
   LIR_OP_TYPE_CALL,
@@ -147,7 +148,8 @@ typedef struct {
 } loop_detection;
 
 typedef struct lir_basic_block {
-  uint8_t label; // label 标号, 基本块编号， 和 op_label 还是要稍微区分一下
+  string name;
+  uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
   lir_op *first_op; // 链表结构， 开始处的指令
   lir_op *last_op;
   uint8_t op_count;
