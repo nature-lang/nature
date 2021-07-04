@@ -27,22 +27,16 @@ typedef enum {
   // KEYWORDS.
   TOKEN_AND, TOKEN_OR, TOKEN_TRUE, TOKEN_FALSE,
   TOKEN_FOR, TOKEN_IN, TOKEN_WHILE, TOKEN_IF, TOKEN_ELSE,
-  TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT
-
-  // COMPLEX TYPE
+  TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
   TOKEN_LIST, TOKEN_MAP, TOKEN_FUNCTION,
-
-  // IMPORT
   TOKEN_IMPORT, TOKEN_AS
 } token_type;
 
-typedef struct token {
-  struct token *pred;
-  struct token *succ;
+typedef struct {
   uint8_t type; // 通配类型，如 var
   string literal;
 } token;
 
-token* token_new();
+token *token_new();
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_
