@@ -43,7 +43,7 @@ list *scanner(string source) {
     if (is_alpha(*cursor.current)) {
       char *word = ident_advance();
       t->literal = word;
-      // 判断是否为关键字
+      // 判断是否为关键字, 标识符是不允许太长，超过 128 个字符的
       t->type = ident_type(word, cursor.length);
 
       list_push(list, t);
@@ -67,6 +67,8 @@ list *scanner(string source) {
       char *str = string_advance(*cursor.current);
       t->literal = str;
       t->type = TOKEN_LITERAL_STRING;
+      list_push(list, t);
+      continue;
     }
 
     // if current is 特殊字符
@@ -74,7 +76,6 @@ list *scanner(string source) {
     if (special_type == -1) {
       error.message = "special_char_type() not match";
     }
-
     list_push(list, t);
 
     // if is end or error
@@ -170,6 +171,16 @@ void skip_space() {
         cursor.line++;
         break;
       }
+      case '/':
+        if (cursor.guard[1] == '/' && !is_at_end()) {
+          // 注释处理
+          while (*cursor.guard != '\n' && !is_at_end()) {
+            guard_advance();
+          }
+          break;
+        } else {
+          return;
+        }
       default: return;
     }
   }
@@ -240,7 +251,7 @@ char *number_advance() {
   return scanner_gen_word();
 }
 
-int8_t ident_type(char *word, int8_t length) {
+int8_t ident_type(char *word, int length) {
   switch (word[0]) {
     case 'a': return rest_ident_type(word, length, 1, 1, "s", TOKEN_AS);
     case 'b': return rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
@@ -305,7 +316,7 @@ char *scanner_gen_word() {
   return word;
 }
 
-int8_t rest_ident_type(char *word, int8_t word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
+int8_t rest_ident_type(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
   if (rest_start + rest_length == word_length &&
       memcmp(word + rest_start, rest, rest_length) == 0) {
     return type;

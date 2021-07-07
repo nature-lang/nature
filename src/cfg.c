@@ -29,7 +29,7 @@
  * @param c
  * @return
  */
-lir_basic_blocks cfg(closure *c) {
+void cfg(closure *c) {
   table *basic_block_table = table_new();
 
   // 1.根据 label 分块,仅考虑顺序块挂链关系

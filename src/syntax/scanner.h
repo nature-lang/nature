@@ -17,8 +17,8 @@ bool is_float(char *word);
 char *ident_advance();
 char *number_advance();
 char *string_advance(char c);
-int8_t ident_type(char *word, int8_t length);
-int8_t rest_ident_type(char *word, int8_t word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type);
+int8_t ident_type(char *word, int length);
+int8_t rest_ident_type(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type);
 int8_t special_char_type();
 char guard_advance(); // guard 前进一个字符
 char *scanner_gen_word();
