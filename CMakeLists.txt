@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD 99)
 add_executable(nature main.c
         src/syntax/scanner.h src/syntax/scanner.c src/syntax/token.h
         src/lib/error.c src/lib/error.h
-        src/value.h src/lib/list.h src/lib/list.c src/syntax/token.c)
+        src/value.h src/lib/list.h src/lib/list.c src/syntax/token.c
+        src/syntax/parser.c src/syntax/parser.h)
 
 include_directories(.)

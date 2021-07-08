@@ -61,8 +61,9 @@ typedef struct {
   size_t capacity; // 容量
   ast_stmt *list;
 } ast_block_stmt;
-void ast_init_block_stmt(ast_block_stmt *block);
-void ast_insert_block_stmt(ast_block_stmt *block, ast_stmt stmt);
+
+ast_block_stmt ast_new_block_stmt();
+void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 // 值类型
 typedef struct {

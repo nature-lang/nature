@@ -1,6 +1,9 @@
 import "src/redis" as local_redis // redis.set
 import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
+int foo
+foo = 1 + bar
+bar = 100
 int foo = 12
 bool foo = true
 string foo = "为什么最常用的字符串要是双引号？，是有什么规定吗？"
@@ -9,13 +12,20 @@ var foo = 12 // 类型推导
 
 // 特殊格式语法糖，兼容  list<int>
 list[int] foo = [12, 14, 16]
-array[int] foo = [12, 14, 16] // 备选
 
 // 特殊格式语法糖，兼容 map<string,int>
 map{string:int} foo = {
   'a-a':1,
   'b-b':2,
   'c-c':3
+}
+
+// 自定义类型
+type custom = int
+type custom_struct = struct {
+	int i,
+	bool b,
+	list[int] c
 }
 
 // <> 是类型声明中的万能符号

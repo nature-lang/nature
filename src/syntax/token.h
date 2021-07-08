@@ -14,6 +14,7 @@ typedef enum {
 
   TOKEN_COMMA, TOKEN_DOT, TOKEN_MINUS, TOKEN_PLUS,
   TOKEN_SEMICOLON, TOKEN_SLASH, TOKEN_STAR, // * STAR
+  TOKEN_EOF, TOKEN_STMT_EOF,
 
   // ONE OR TWO CHARACTER TOKENS.
   TOKEN_NOT, TOKEN_NOT_EQUAL,
@@ -38,6 +39,6 @@ typedef struct {
   string literal;
 } token;
 
-token *token_new(uint8_t type, char* literal);
+token *token_new(uint8_t type, char *literal);
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_
