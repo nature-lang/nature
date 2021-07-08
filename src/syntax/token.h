@@ -30,7 +30,7 @@ typedef enum {
   TOKEN_FOR, TOKEN_IN, TOKEN_WHILE, TOKEN_IF, TOKEN_ELSE,
   TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
   TOKEN_LIST, TOKEN_MAP, TOKEN_FUNCTION,
-  TOKEN_IMPORT, TOKEN_AS
+  TOKEN_IMPORT, TOKEN_AS, TOKEN_RETURN
 } token_type;
 
 typedef struct {
@@ -38,6 +38,6 @@ typedef struct {
   string literal;
 } token;
 
-token *token_new();
+token *token_new(uint8_t type, char* literal);
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_

@@ -8,7 +8,7 @@ bool sort(f<bool (int, int)> callback) {
 	return callback(a, b)
 }
 
-var res = sort(bool f(int a, int b) {
+var res = sort(bool _(int a, int b) {
 	return a > b
 })
 

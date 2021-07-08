@@ -44,5 +44,12 @@ list_node *list_new_node() {
   return node;
 }
 
+bool list_empty(list *l) {
+  if (l->count == 0) {
+    return true;
+  }
+  return false;
+}
+
 
 

@@ -39,47 +39,47 @@ list *scanner(string source) {
     cursor.current = cursor.guard;
     cursor.length = 0;
 
-    token *t = token_new();
     if (is_alpha(*cursor.current)) {
       char *word = ident_advance();
-      t->literal = word;
-      // 判断是否为关键字, 标识符是不允许太长，超过 128 个字符的
-      t->type = ident_type(word, cursor.length);
 
+      token *t = token_new(ident_type(word, cursor.length), word);
       list_push(list, t);
       continue;
     }
 
     if (is_number(*cursor.current)) {
       char *word = number_advance(); // 1, 1.12, 0.233
-      t->literal = word;
+      uint8_t type;
       if (is_float(word)) {
-        t->type = TOKEN_LITERAL_FLOAT;
+        type = TOKEN_LITERAL_FLOAT;
       } else {
-        t->type = TOKEN_LITERAL_INT;
+        type = TOKEN_LITERAL_INT;
       }
 
-      list_push(list, t);
+      list_push(list, token_new(type, word));
       continue;
     }
 
     if (is_string(*cursor.current)) {
       char *str = string_advance(*cursor.current);
-      t->literal = str;
-      t->type = TOKEN_LITERAL_STRING;
-      list_push(list, t);
+      list_push(list, token_new(TOKEN_LITERAL_STRING, str));
       continue;
     }
 
     // if current is 特殊字符
-    int8_t special_type = special_char_type();
-    if (special_type == -1) {
-      error.message = "special_char_type() not match";
+    if (!is_at_end()) {
+      int8_t special_type = special_char_type();
+      if (special_type == -1) { // 未识别的特殊符号
+        error.message = "special_char_type() not match";
+      } else {
+        list_push(list, token_new(special_type, scanner_gen_word()));
+        continue;
+      }
     }
-    list_push(list, t);
+
 
     // if is end or error
-    if (is_error()) {
+    if (has_error()) {
       error_exit(0, error.message);
     }
 
@@ -109,7 +109,7 @@ int8_t special_char_type() {
     case '[': return TOKEN_LEFT_SQUARE;
     case ']': return TOKEN_RIGHT_SQUARE;
     case '{': return TOKEN_LEFT_CURLY;
-    case '}': return TOKEN_RIGHT_PAREN;
+    case '}': return TOKEN_RIGHT_CURLY;
     case ';': return TOKEN_SEMICOLON;
     case ',': return TOKEN_COMMA;
     case '.': return TOKEN_DOT;
@@ -139,7 +139,7 @@ bool match(char expected) {
   return true;
 }
 
-bool is_error() {
+bool has_error() {
   return error.has;
 }
 
@@ -216,7 +216,6 @@ bool is_float(char *word) {
   }
 
   while (*word != '\0') {
-    printf("%c", *word);
     if (*word == '.') {
       dot_count++;
     }
@@ -292,6 +291,7 @@ int8_t ident_type(char *word, int length) {
     case 't': return rest_ident_type(word, length, 1, 3, "ure", TOKEN_TRUE);
     case 'v': return rest_ident_type(word, length, 1, 2, "ar", TOKEN_VAR);
     case 'w': return rest_ident_type(word, length, 1, 4, "hile", TOKEN_WHILE);
+    case 'r': return rest_ident_type(word, length, 1, 5, "eturn", TOKEN_RETURN);
   }
 
   return TOKEN_LITERAL_IDENT;

@@ -24,7 +24,7 @@ char guard_advance(); // guard 前进一个字符
 char *scanner_gen_word();
 
 bool is_at_end(); // guard 是否遇见了 '\0'
-bool is_error();
+bool has_error();
 bool match(char expected);
 
 #endif //NATURE_SRC_SCANNER_H_

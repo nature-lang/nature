@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "src/syntax/scanner.h"
+#include "src/syntax/token.h"
 
 static char *open(char *path) {
   FILE *file = fopen(path, "rb");
@@ -34,8 +35,13 @@ static char *open(char *path) {
 
 int main() {
   // 读取文件
-  char *source = open("/Users/weiwenhao/Code/nature/example/hello.n");
+  char *source = open("/Users/weiwenhao/Code/nature/example/test.n");
   list *token_list = scanner(source);
+
+  while (!list_empty(token_list)) {
+    token *t = list_pop(token_list);
+    printf("type: %d, literal:%s\n", t->type, t->literal);
+  }
 
   printf("Hello, World!\n");
   return 0;
