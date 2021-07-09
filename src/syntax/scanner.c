@@ -89,7 +89,7 @@ char *scanner_ident_advance() {
   return scanner_gen_word();
 }
 
-int8_t scanner_special_char_type() {
+token_type scanner_special_char_type() {
   char c = scanner_guard_advance();
 
   switch (c) {
@@ -239,7 +239,7 @@ char *scanner_number_advance() {
   return scanner_gen_word();
 }
 
-int8_t scanner_ident_type(char *word, int length) {
+token_type scanner_ident_type(char *word, int length) {
   switch (word[0]) {
     case 'a': return scanner_rest_ident_type(word, length, 1, 1, "s", TOKEN_AS);
     case 'b': return scanner_rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
@@ -305,12 +305,12 @@ char *scanner_gen_word() {
   return word;
 }
 
-int8_t scanner_rest_ident_type(char *word,
-                               int word_length,
-                               int8_t rest_start,
-                               int8_t rest_length,
-                               char *rest,
-                               int8_t type) {
+token_type scanner_rest_ident_type(char *word,
+                                   int word_length,
+                                   int8_t rest_start,
+                                   int8_t rest_length,
+                                   char *rest,
+                                   int8_t type) {
   if (rest_start + rest_length == word_length &&
       memcmp(word + rest_start, rest, rest_length) == 0) {
     return type;

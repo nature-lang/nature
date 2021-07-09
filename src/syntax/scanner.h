@@ -30,9 +30,14 @@ bool scanner_is_float(char *word);
 char *scanner_ident_advance();
 char *scanner_number_advance();
 char *scanner_string_advance(char c);
-int8_t scanner_ident_type(char *word, int length);
-int8_t scanner_rest_ident_type(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type);
-int8_t scanner_special_char_type();
+token_type scanner_ident_type(char *word, int length);
+token_type scanner_rest_ident_type(char *word,
+                                   int word_length,
+                                   int8_t rest_start,
+                                   int8_t rest_length,
+                                   char *rest,
+                                   int8_t type);
+token_type scanner_special_char_type();
 char scanner_guard_advance(); // guard 前进一个字符
 char *scanner_gen_word();
 

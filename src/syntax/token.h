@@ -41,4 +41,5 @@ typedef struct {
 
 token *token_new(uint8_t type, char *literal);
 
+
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_

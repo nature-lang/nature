@@ -23,6 +23,8 @@ typedef enum {
   AST_EXPR_TYPE_IDENT,
   AST_EXPR_TYPE_ACCESS_STRUCT,
   AST_EXPR_TYPE_ENV_INDEX,
+  AST_EXPR_TYPE_ACCESS,
+  AST_EXPR_TYPE_SELECT,
   AST_EXPR_TYPE_ACCESS_MAP,
   AST_EXPR_TYPE_NEW_MAP,
   AST_EXPR_TYPE_ACCESS_LIST,
@@ -43,7 +45,14 @@ typedef enum {
   AST_EXPR_OPERATOR_ADD,
   AST_EXPR_OPERATOR_SUB,
   AST_EXPR_OPERATOR_MUL,
-  AST_EXPR_OPERATOR_DIV
+  AST_EXPR_OPERATOR_DIV,
+  AST_EXPR_OPERATOR_LT,
+  AST_EXPR_OPERATOR_LTE,
+  AST_EXPR_OPERATOR_GT,
+  AST_EXPR_OPERATOR_GTE,
+  AST_EXPR_OPERATOR_EQ_EQ,
+  AST_EXPR_OPERATOR_NOT_EQ,
+  AST_EXPR_OPERATOR_NOT,
 } ast_expr_operator;
 
 typedef struct {
@@ -67,7 +76,7 @@ void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 // 值类型
 typedef struct {
-  int8_t type;
+  ast_base_type type;
   string value;
 } ast_literal; // 标量值
 
@@ -75,7 +84,7 @@ typedef struct {
 
 typedef string ast_ident;
 
-// TODO 没必要
+// TODO 没必要,都去符号表取找吧
 //typedef struct {
 //  void *type; // 类型引用，主要是结构体引用
 //  int size; // 数据结构字长 至少1个字
@@ -86,20 +95,20 @@ typedef string ast_ident;
 
 // 一元表达式
 typedef struct {
-  string operator; // 取反，取绝对值
+  ast_expr_operator operator; // 取反，取绝对值
   ast_expr operand; // 操作对象
 } ast_unary_expr;
 
 // 二元表达式
 typedef struct {
-  int8_t operator; // +/-/*// 等 二元表达式
+  ast_expr_operator operator; // +/-/*// 等 二元表达式
   ast_expr right;
   ast_expr left;
 } ast_binary_expr;
 
 // 调用函数
 typedef struct {
-  string name;
+  ast_expr name;
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
 } ast_call;
@@ -165,7 +174,7 @@ typedef struct {
 typedef struct {
   ast_expr left;
   string property;
-} ast_access_property;
+} ast_select_property;
 
 /**
  * 如何确定 left_type?
@@ -176,6 +185,23 @@ typedef struct {
   ast_expr left;
   ast_expr index;
 } ast_access_list;
+
+typedef struct {
+  string key_type;
+  string value_type;
+
+  ast_expr left;
+  ast_expr key;
+} ast_access_map;
+
+typedef struct {
+  string access_type; // map or list
+//  string key_type;
+//  string value_type;
+
+  ast_expr left;
+  ast_expr key;
+} ast_access; // foo[], bar[]
 
 // [1,a.b, call()]
 typedef struct {
@@ -189,13 +215,6 @@ typedef struct {
 typedef struct {
   string type;
 } ast_list_decl;
-
-typedef struct {
-  string key_type;
-  string value_type;
-  ast_expr left;
-  ast_expr key;
-} ast_access_map;
 
 typedef struct {
   ast_expr key;
