@@ -6,6 +6,7 @@
 
 #define AST_BASE_TYPE_FALSE "false"
 #define AST_BASE_TYPE_TRUE "true"
+#define AST_BASE_TYPE_NULL "null"
 
 typedef enum {
   AST_BASE_TYPE_INT,
@@ -244,7 +245,7 @@ typedef struct {
 
 typedef struct {
   string name;
-  int return_type; // 动态类型？数组？
+  string return_type; // 基础类型 + 动态类型
   ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
   uint8_t formal_param_count;
   ast_block_stmt body; // 函数体

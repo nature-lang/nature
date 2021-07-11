@@ -17,7 +17,7 @@ int8_t token_to_ast_base_type[] = {
 };
 
 parser_rule rules[] = {
-    [TOKEN_LEFT_PAREN] = {parser_grouping, parser_call, PRECEDENCE_CALL},
+    [TOKEN_LEFT_PAREN] = {parser_grouping, parser_call_expr, PRECEDENCE_CALL},
     // map["foo"] list[0]
     [TOKEN_LEFT_SQUARE] = {NULL, parser_access, PRECEDENCE_CALL},
     // struct.property
@@ -64,20 +64,47 @@ ast_block_stmt parser_block() {
 
 ast_stmt parser_stmt() {
   if (parser_is(TOKEN_VAR)) { // var 必须定义的同时存在右值。
-    return parser_auto_var_decl();
-  } else if (parser_is(TOKEN_IN)
-      || parser_is(TOKEN_BOOL)
-      || parser_is(TOKEN_FLOAT)
-      || parser_is(TOKEN_STRING)) {
-    return parser_type_var_decal();
+    return parser_auto_infer_decl();
+  } else if (parser_is_base_type() || parser_is_custom_type()) {
+    return parser_var_or_function_decl();
   } else if (parser_is(TOKEN_LIST) || parser_is(TOKEN_MAP) || parser_is(TOKEN_FUNCTION)) {
+
+  } else if (parser_is(TOKEN_LITERAL_IDENT)) {
+    // foo() {}
+    if (parser_next_is(1, TOKEN_LEFT_PAREN)
+        && !parser_is_call()) {
+      return parser_null_function_decl();
+    }
+
+    // judge is call ?
+    // foo();
+    // foo.bar();
+    // foo[1]();
+    if (parser_is_call()) {
+      return parser_call_stmt();
+    }
+
+
+    // foo = 1
+    // foo.bar = 1
+    // foo[1] = 1
+    // ast_call
+    return parser_assign();
+
+  } else if (parser_is(TOKEN_IF)) {
+
+  } else if (parser_is(TOKEN_FOR)) {
 
   }
 
   parser_must(TOKEN_STMT_EOF);
 }
 
-ast_stmt parser_auto_var_decl() {
+/**
+ * var foo = expr
+ * @return
+ */
+ast_stmt parser_auto_infer_decl() {
   ast_stmt result;
   ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
 
@@ -118,27 +145,46 @@ ast_expr parser_expr(parser_precedence precedence) {
   return prefix_ast_expr;
 }
 
-ast_stmt parser_type_var_decal() {
+/**
+ * int foo = 12;
+ * int foo;
+ * int foo() {};
+ * @return
+ */
+ast_stmt parser_var_or_function_decl() {
   ast_stmt result;
 
-  //ast_var_decl
-  //ast_var_decl_assign_stmt
-  // 各种类型如何处理, 直接读取可控类型
-  token *var_type = parser_guard_advance();
-  token *var_ident = parser_must(TOKEN_LITERAL_IDENT);
+  //var_decl
+  ast_var_decl *var_decl = parser_var_decl();
+
+  // int foo = 12;
   if (parser_is(TOKEN_EQUAL)) {
     ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
-    stmt->type = var_type->literal;
-    stmt->ident = var_ident->literal;
+    stmt->type = var_decl->type;
+    stmt->ident = var_decl->ident;
     stmt->expr = parser_expr(PRECEDENCE_NULL);
     result.type = AST_STMT_VAR_DECL_ASSIGN;
     result.stmt = stmt;
     return result;
   }
 
+  // int foo() {}
+  if (parser_is(TOKEN_LEFT_PAREN)) {
+    ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
+    function_decl->return_type = var_decl->type;
+    function_decl->name = var_decl->ident;
+
+    parser_formal_param(function_decl);
+    function_decl->body = parser_block();
+    result.type = AST_FUNCTION_DECL;
+    result.stmt = function_decl;
+    return result;
+  }
+
+  // int foo
   ast_var_decl *stmt = malloc(sizeof(ast_var_decl));
-  stmt->type = var_type->literal;
-  stmt->ident = var_ident->literal;
+  stmt->type = var_decl->type;
+  stmt->ident = var_decl->ident;
   result.type = AST_VAR_DECL;
   result.stmt = stmt;
 
@@ -244,4 +290,88 @@ ast_expr parser_select(ast_expr left) {
   select_property_expr->property = property_token->literal;
 
   return result;
+}
+
+ast_expr parser_call_expr(ast_expr name) {
+  ast_expr result;
+
+  ast_call *call_expr = malloc(sizeof(ast_call));
+  call_expr->name = name;
+
+  parser_actual_param(call_expr);
+
+  result.type = AST_CALL;
+  result.expr = call_expr;
+
+  return result;
+}
+
+ast_stmt parser_null_function_decl() {
+  ast_stmt result;
+  ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
+  token *name_token = parser_must(TOKEN_LITERAL_IDENT);
+  function_decl->name = name_token->literal;
+  function_decl->return_type = AST_BASE_TYPE_NULL;
+
+  parser_formal_param(function_decl);
+
+  function_decl->body = parser_block();
+  result.type = AST_FUNCTION_DECL;
+  result.stmt = function_decl;
+
+  return result;
+}
+
+ast_stmt parser_call_stmt() {
+  ast_stmt result;
+  // left_expr
+  ast_expr name_expr = parser_expr(PRECEDENCE_NULL);
+
+  ast_call *call_stmt = malloc(sizeof(ast_call));
+  call_stmt->name = name_expr;
+
+  // param handle
+  parser_actual_param(call_stmt);
+
+  return result;
+}
+
+void parser_actual_param(ast_call *call) {
+  parser_must(TOKEN_LEFT_PAREN);
+  // 参数解析 call(1 + 1, param_a)
+  ast_expr first_param = parser_expr(PRECEDENCE_NULL);
+  call->actual_params[0] = first_param;
+  call->actual_param_count = 1;
+
+  while (parser_is(TOKEN_COMMA)) {
+    parser_guard_advance();
+    ast_expr rest_param = parser_expr(PRECEDENCE_NULL);
+    call->actual_params[call->actual_param_count++] = rest_param;
+  }
+
+  parser_must(TOKEN_RIGHT_PAREN);
+}
+
+ast_var_decl *parser_var_decl() {
+  token *var_type = parser_guard_advance();
+  token *var_ident = parser_guard_advance();
+  ast_var_decl *var_decl = malloc(sizeof(var_decl));
+  var_decl->type = var_type->literal;
+  var_decl->ident = var_ident->literal;
+  return var_decl;
+}
+
+void parser_formal_param(ast_function_decl *function_decl) {
+  parser_must(TOKEN_LEFT_PAREN);
+
+  // formal parameter handle type + ident
+  function_decl->formal_params[0] = parser_var_decl();
+  function_decl->formal_param_count = 1;
+
+  while (parser_is(TOKEN_COMMA)) {
+    parser_guard_advance();
+    uint8_t count = function_decl->formal_param_count++;
+    function_decl->formal_params[count] = parser_var_decl();
+  }
+  parser_must(TOKEN_RIGHT_PAREN);
 }
