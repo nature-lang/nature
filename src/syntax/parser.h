@@ -30,7 +30,6 @@ typedef struct {
 
 typedef struct {
   list_node *current;
-  list_node *guard;
 } parser_cursor;
 
 /**
@@ -51,6 +50,8 @@ ast_expr parser_select(ast_expr left);
 ast_expr parser_access(ast_expr left);
 ast_expr parser_binary(ast_expr left);
 ast_expr parser_function_decl_expr();
+ast_expr parser_new_list();
+ast_expr parser_new_map();
 
 ast_stmt parser_stmt();
 ast_block_stmt parser_block();
@@ -81,8 +82,8 @@ ast_type parser_type();
  */
 ast_stmt parser_assign(ast_expr left);
 
-token *parser_guard_advance();
-token *parser_guard_peek();
+token *parser_advance();
+token *parser_peek();
 
 bool parser_is(token_type t);
 bool parser_next_is(token_type t);

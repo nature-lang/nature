@@ -12,7 +12,7 @@ typedef struct {
   int line; // 当前所在代码行，用于代码报错提示
 
   bool has_entry;
-  char space_last;
+  char space_prev;
   char space_next;
 } scanner_cursor;
 

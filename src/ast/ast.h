@@ -29,6 +29,7 @@ typedef enum {
 typedef enum {
   AST_EXPR_TYPE_LITERAL,
   AST_EXPR_TYPE_BINARY,
+  AST_EXPR_TYPE_UNARY,
   AST_EXPR_TYPE_IDENT,
   AST_EXPR_TYPE_ACCESS_STRUCT,
   AST_EXPR_TYPE_ENV_INDEX,
@@ -90,7 +91,6 @@ typedef struct {
   string value;
 } ast_literal; // 标量值
 
-// 符合类型值呢？？比如另一个 list
 
 typedef string ast_ident;
 
@@ -225,7 +225,7 @@ typedef struct {
 
 // [1,a.b, call()]
 typedef struct {
-  ast_expr values[UINT8_MAX];
+  ast_expr values[UINT8_MAX]; // TODO dynamic
   uint64_t count; // count
   uint64_t capacity; // 初始容量
   ast_type type; // list的类型
@@ -288,6 +288,5 @@ typedef struct {
   ast_function_decl *function;
 } ast_closure_decl;
 
-ast_type ast_make_type(ast_type_category, void *value);
 
 #endif //NATURE_SRC_AST_H_

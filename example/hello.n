@@ -1,5 +1,5 @@
-import "src/redis" as local_redis // redis.set
-import "github.com/weiwenhao/redis" as remote_redis // redis.set
+//import "src/redis" as local_redis // redis.set
+//import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
 int foo
 foo = 1 + bar
@@ -18,8 +18,8 @@ foo.bar()
 list[int] foo = [1, 2]
 //list[int] foo = list_gen(int, 100) // 待定
 //list[int] foo = make(list[int], 100) // 待定
-list<int> bar = []
-list<int> bar = my_gen()
+//list<int> bar = []
+// list<int> bar = my_gen()
 
 
 // 特殊格式语法糖，兼容 map<string,int>
@@ -46,8 +46,7 @@ if (a > 1) {
 	++a
 }
 
-
-for (var key,value in list) {
+for (key,value in list) {
 
 }
 

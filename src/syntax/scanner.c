@@ -146,7 +146,7 @@ void scanner_cursor_init(char *source) {
   s_cursor.length = 0;
   s_cursor.line = 0;
   s_cursor.has_entry = false;
-  s_cursor.space_last = EOF;
+  s_cursor.space_prev = EOF;
   s_cursor.space_next = EOF;
 }
 
@@ -160,7 +160,8 @@ void scanner_error_init() {
  */
 void scanner_skip_space() {
   s_cursor.has_entry = false;
-  s_cursor.space_last = *s_cursor.guard;
+  s_cursor.space_prev = s_cursor.guard[-1];
+
   while (true) {
     char c = *s_cursor.guard;
     switch (c) {
@@ -193,6 +194,7 @@ void scanner_skip_space() {
       }
     }
   }
+
 }
 
 bool scanner_is_alpha(char c) {
@@ -346,11 +348,17 @@ token_type scanner_rest_ident_type(char *word,
  * @return
  */
 bool scanner_is_at_stmt_end() {
+  if (scanner_is_space(s_cursor.space_prev)
+      || s_cursor.space_prev == '\\'
+      || s_cursor.space_prev == EOF) {
+    return false;
+  }
+
   // 前置非空白字符
-  if (s_cursor.space_last != ','
-      && s_cursor.space_last == '['
-      && s_cursor.space_last != '='
-      && s_cursor.space_last != '{'
+  if (s_cursor.space_prev != ','
+      && s_cursor.space_prev != '['
+      && s_cursor.space_prev != '='
+      && s_cursor.space_prev != '{'
       && s_cursor.space_next != '{') {
     return true;
   }
@@ -359,5 +367,8 @@ bool scanner_is_at_stmt_end() {
 }
 
 bool scanner_is_space(char c) {
+  if (c == '\n' || c == '\t' || c == '\r' || c == ' ') {
+    return true;
+  }
   return false;
 }
