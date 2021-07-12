@@ -10,6 +10,10 @@ typedef struct {
   char *guard;
   int length;
   int line; // 当前所在代码行，用于代码报错提示
+
+  bool has_entry;
+  char space_last;
+  char space_next;
 } scanner_cursor;
 
 typedef struct {
@@ -44,5 +48,7 @@ char *scanner_gen_word();
 bool scanner_is_at_end(); // guard 是否遇见了 '\0'
 bool scanner_has_error();
 bool scanner_match(char expected);
+bool scanner_is_space(char c);
+bool scanner_is_at_stmt_end();
 
 #endif //NATURE_SRC_SCANNER_H_

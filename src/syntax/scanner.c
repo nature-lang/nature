@@ -22,6 +22,11 @@ list *scanner(string source) {
   while (true) {
     scanner_skip_space();
 
+    if (s_cursor.has_entry && scanner_is_at_stmt_end()) {
+      // push token TOKEN_STMT_EOF
+      list_push(list, token_new(TOKEN_STMT_EOF, ";"));
+    }
+
     // reset by guard
     s_cursor.current = s_cursor.guard;
     s_cursor.length = 0;
@@ -99,6 +104,7 @@ token_type scanner_special_char_type() {
     case ']': return TOKEN_RIGHT_SQUARE;
     case '{': return TOKEN_LEFT_CURLY;
     case '}': return TOKEN_RIGHT_CURLY;
+    case ':': return TOKEN_COLON;
     case ';': return TOKEN_SEMICOLON;
     case ',': return TOKEN_COMMA;
     case '.': return TOKEN_DOT;
@@ -115,6 +121,7 @@ token_type scanner_special_char_type() {
     default: return -1;
   }
 }
+
 bool scanner_match(char expected) {
   if (scanner_is_at_end()) {
     return false;
@@ -138,6 +145,9 @@ void scanner_cursor_init(char *source) {
   s_cursor.guard = source;
   s_cursor.length = 0;
   s_cursor.line = 0;
+  s_cursor.has_entry = false;
+  s_cursor.space_last = EOF;
+  s_cursor.space_next = EOF;
 }
 
 void scanner_error_init() {
@@ -145,7 +155,12 @@ void scanner_error_init() {
   s_error.has = false;
 }
 
+/**
+ * 在没有 ; 号的情况下，换行符在大多数时候承担着判断是否需要添加 TOKEN_EOF
+ */
 void scanner_skip_space() {
+  s_cursor.has_entry = false;
+  s_cursor.space_last = *s_cursor.guard;
   while (true) {
     char c = *s_cursor.guard;
     switch (c) {
@@ -158,6 +173,7 @@ void scanner_skip_space() {
       case '\n': {
         scanner_guard_advance();
         s_cursor.line++;
+        s_cursor.has_entry = true;
         break;
       }
       case '/':
@@ -168,9 +184,13 @@ void scanner_skip_space() {
           }
           break;
         } else {
+          s_cursor.space_next = *s_cursor.guard;
           return;
         }
-      default: return;
+      default: {
+        s_cursor.space_next = *s_cursor.guard;
+        return;
+      }
     }
   }
 }
@@ -245,12 +265,9 @@ token_type scanner_ident_type(char *word, int length) {
     case 'b': return scanner_rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
     case 'e': return scanner_rest_ident_type(word, length, 1, 3, "lse", TOKEN_ELSE);
     case 'f': {
-      if (length == 1) {
-        return TOKEN_FUNCTION;
-      }
-
-      if (length > 2) {
+      if (length > 1) {
         switch (word[1]) {
+          case 'n': return scanner_rest_ident_type(word, length, 2, 0, "n", TOKEN_FUNCTION);
           case 'a': return scanner_rest_ident_type(word, length, 2, 3, "lse", TOKEN_FALSE);
           case 'l': return scanner_rest_ident_type(word, length, 2, 3, "oat", TOKEN_FLOAT);
           case 'o': return scanner_rest_ident_type(word, length, 2, 1, "r", TOKEN_FOR);
@@ -278,7 +295,12 @@ token_type scanner_ident_type(char *word, int length) {
     case 'm': return scanner_rest_ident_type(word, length, 1, 2, "ap", TOKEN_MAP);
     case 's': return scanner_rest_ident_type(word, length, 1, 5, "tring", TOKEN_STRING);
     case 't': return scanner_rest_ident_type(word, length, 1, 3, "ure", TOKEN_TRUE);
-    case 'v': return scanner_rest_ident_type(word, length, 1, 2, "ar", TOKEN_VAR);
+    case 'v': {
+      switch (word[1]) {
+        case 'a': return scanner_rest_ident_type(word, length, 2, 1, "r", TOKEN_VAR);
+        case 'o': return scanner_rest_ident_type(word, length, 2, 2, "id", TOKEN_VOID);
+      }
+    }
     case 'w': return scanner_rest_ident_type(word, length, 1, 4, "hile", TOKEN_WHILE);
     case 'r': return scanner_rest_ident_type(word, length, 1, 5, "eturn", TOKEN_RETURN);
   }
@@ -316,4 +338,26 @@ token_type scanner_rest_ident_type(char *word,
     return type;
   }
   return TOKEN_LITERAL_IDENT;
+}
+
+/**
+ * last not ,、[、=、{
+ * next not {
+ * @return
+ */
+bool scanner_is_at_stmt_end() {
+  // 前置非空白字符
+  if (s_cursor.space_last != ','
+      && s_cursor.space_last == '['
+      && s_cursor.space_last != '='
+      && s_cursor.space_last != '{'
+      && s_cursor.space_next != '{') {
+    return true;
+  }
+
+  return false;
+}
+
+bool scanner_is_space(char c) {
+  return false;
 }

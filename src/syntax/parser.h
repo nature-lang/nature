@@ -28,20 +28,20 @@ typedef struct {
   parser_precedence infix_precedence;
 } parser_rule;
 
+typedef struct {
+  list_node *current;
+  list_node *guard;
+} parser_cursor;
+
 /**
  * @param type
  * @return
  */
 parser_rule *parser_get_rule(token_type type);
 
-typedef struct {
-  list_node *current;
-  list_node *guard;
-} parser_cursor;
-
 ast_block_stmt parser(list *token_list);
 
-ast_expr parser_expr();
+ast_expr parser_expr(parser_precedence);
 ast_expr parser_literal();
 ast_expr parser_unary();
 ast_expr parser_grouping();
@@ -50,26 +50,27 @@ ast_expr parser_call_expr(ast_expr name);
 ast_expr parser_select(ast_expr left);
 ast_expr parser_access(ast_expr left);
 ast_expr parser_binary(ast_expr left);
+ast_expr parser_function_decl_expr();
 
 ast_stmt parser_stmt();
 ast_block_stmt parser_block();
-ast_stmt parser_call_stmt();
+ast_stmt parser_ident_stmt();
+//ast_stmt parser_call_stmt();
+ast_stmt parser_return_stmt();
 ast_stmt parser_auto_infer_decl();
 ast_stmt parser_var_or_function_decl();
+ast_stmt parser_if_stmt();
+ast_stmt parser_for_stmt();
+ast_stmt parser_while_stmt();
+ast_block_stmt parser_else_if();
 
+ast_function_decl *parser_function_decl(ast_type type);
 ast_var_decl *parser_var_decl();
 void parser_actual_param(ast_call *call);
 void parser_formal_param(ast_function_decl *function_decl);
+void parser_type_function_formal_param(ast_type_function *type_function);
 
-/**
- * foo.bar();
- * foo();
- * foo() {
- *
- * };
- * @return
- */
-ast_stmt parser_null_function_decl();
+ast_type parser_type();
 
 /**
  * foo = 12
@@ -78,18 +79,22 @@ ast_stmt parser_null_function_decl();
  * @param ident
  * @return
  */
-ast_stmt parser_assign();
+ast_stmt parser_assign(ast_expr left);
 
-void parser_current_reset();
 token *parser_guard_advance();
 token *parser_guard_peek();
 
 bool parser_is(token_type t);
-bool parser_next_is(uint8_t step, token_type t);
-bool parser_is_call();
-bool parser_is_custom_type();
+bool parser_next_is(token_type t);
+
+/**
+ * 兼容 void
+ * @return
+ */
+bool parser_is_type();
 bool parser_is_base_type();
-bool parser_is_custom_type();
 token *parser_must(token_type t);
+
+void parser_cursor_init(list *token_list);
 
 #endif //NATURE_SRC_SYNTAX_PARSER_H_

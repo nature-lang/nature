@@ -1,0 +1,39 @@
+// 由于自定义类型的存在，如果函数类型和函数名称可以同时省略的话
+// 当函数名称和返回参数同时省略时，就没有人知道这胜率的是函数的名称还是函数的返回参数了
+
+type [name](int a, int b) {
+	return a + b
+}
+
+void test(int a, int b) {
+}
+
+var fn = void () {
+}
+
+// 没有返回类型，就当作 null 来处理
+foo(bool (int a) {
+	if (a > 1) {
+		return true
+	}
+	return false
+})
+
+// <> 是类型声明中的万能符号
+fn<void (int, int)> foo = void (int a, int b) {
+}
+
+// 为了兼容闭包必须显示声明返回值
+void foo() {}
+fn<void (int, int)> make() {
+	return int c(int a, int b) { // 我特么怎么知道他还是名字还是 type
+
+	}
+}
+
+f<bool (int a, int b)> make() {
+	return bool (int a, int b) {
+		return a + b > 0
+	}
+}
+

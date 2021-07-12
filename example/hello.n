@@ -15,7 +15,12 @@ foo[bar] = 12
 foo.bar()
 
 // 特殊格式语法糖，兼容  list<int>
-list[int] foo = [12, 14, 16]
+list[int] foo = [1, 2]
+//list[int] foo = list_gen(int, 100) // 待定
+//list[int] foo = make(list[int], 100) // 待定
+list<int> bar = []
+list<int> bar = my_gen()
+
 
 // 特殊格式语法糖，兼容 map<string,int>
 map{string:int} foo = {
@@ -23,6 +28,7 @@ map{string:int} foo = {
   'b-b':2,
   'c-c':3
 }
+map<int,string> car = {}
 
 // 自定义类型
 type custom = int
@@ -32,33 +38,8 @@ type custom_struct = struct {
 	list[int] c
 }
 
-// <> 是类型声明中的万能符号
-f<bool (int, int)> foo = bool (int a, int b) {}
-list<int> bar = []
-map<int,string> car = {}
-
-int foo() {}
-
-// 为了兼容闭包必须显示声明返回值,  null foo() {}
-foo() {}
-
-f<bool (int a, int b)> make() {
-	return bool (int a, int b) {
-		return a + b > 0
-	}
-}
-
-f<bool (int a, int b)> make() {}
 
 var foo = make()
-
-// 没有返回类型，就当作 null 来处理
-foo(bool (int a) {
-	if (a > 1) {
-		return true
-	}
-	return false
-})
 
 
 if (a > 1) {

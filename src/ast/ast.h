@@ -7,16 +7,24 @@
 #define AST_BASE_TYPE_FALSE "false"
 #define AST_BASE_TYPE_TRUE "true"
 #define AST_BASE_TYPE_NULL "null"
+#define AST_VAR "var"
 
 typedef enum {
   AST_BASE_TYPE_INT,
   AST_BASE_TYPE_FLOAT,
   AST_BASE_TYPE_BOOL,
   AST_BASE_TYPE_STRING,
-  AST_BASE_TYPE_MAP,
-  AST_BASE_TYPE_LIST, // list 本质存储的也是 memory_address 吧？
-  AST_BASE_TYPE_CLOSURE,
 } ast_base_type;
+
+typedef enum {
+  AST_TYPE_CATEGORY_BASE,
+  ASt_TYPE_CATEGORY_VOID,
+  AST_TYPE_CATEGORY_VAR,
+  AST_TYPE_CATEGORY_CUSTOM,
+  AST_TYPE_CATEGORY_LIST,
+  AST_TYPE_CATEGORY_MAP,
+  AST_TYPE_CATEGORY_FUNCTION,
+} ast_type_category;
 
 typedef enum {
   AST_EXPR_TYPE_LITERAL,
@@ -34,6 +42,7 @@ typedef enum {
   AST_VAR_DECL,
   AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
+  ASt_STMT_RETURN,
   AST_STMT_IF,
   AST_STMT_FOR_IN,
   AST_STMT_WHILE,
@@ -109,15 +118,20 @@ typedef struct {
 
 // 调用函数
 typedef struct {
-  ast_expr name;
+  ast_expr left;
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
 } ast_call;
 
+typedef struct {
+  void *value; // char**,ast_map_decl*....
+  ast_type_category category; // base_type, custom_type, function, list, map
+} ast_type;
+
 // int a;
 typedef struct {
   string ident;
-  string type; // 系统 type 或者自定义 struct
+  ast_type type;
 } ast_var_decl;
 
 typedef struct {
@@ -126,7 +140,7 @@ typedef struct {
 } ast_assign_stmt;
 
 typedef struct {
-  string type; // 系统 type 字符或者自定义 struct 字符
+  ast_type type; // 系统 type 字符或者自定义 struct 字符
   string ident;
   ast_expr expr;
 } ast_var_decl_assign_stmt;
@@ -142,6 +156,11 @@ typedef struct {
   ast_block_stmt body;
 } ast_while_stmt;
 
+/**
+ * for (int key[, bool value] in list) {
+ *
+ * }
+ */
 typedef struct {
   ast_expr iterate; // list, foo.list, bar[0]
   ast_var_decl *gen_key; // 类型推导, type 可能是 int 或者 string
@@ -154,7 +173,7 @@ typedef struct {
 } ast_return_stmt;
 
 typedef struct {
-  int8_t type;
+  ast_type type;
   string name; // property name
 } ast_struct_property;
 
@@ -209,13 +228,18 @@ typedef struct {
   ast_expr values[UINT8_MAX];
   uint64_t count; // count
   uint64_t capacity; // 初始容量
-  string type; // list的类型
+  ast_type type; // list的类型
 } ast_new_list;
 
 // list[int]
 typedef struct {
-  string type;
-} ast_list_decl;
+  ast_type type;
+} ast_type_list;
+
+typedef struct {
+  ast_type key_type;
+  ast_type value_type;
+} ast_type_map;
 
 typedef struct {
   ast_expr key;
@@ -227,8 +251,8 @@ typedef struct {
   ast_map_item values[UINT8_MAX];
   uint64_t count; // 默认初始化的数量
   uint64_t capacity; // 初始容量
-  string key_type;
-  string value_type;
+  ast_type key_type;
+  ast_type value_type;
 } ast_new_map;
 
 // 改写后是否需要添加类型系统支持？
@@ -245,7 +269,14 @@ typedef struct {
 
 typedef struct {
   string name;
-  string return_type; // 基础类型 + 动态类型
+  ast_type return_type; // 基础类型 + 动态类型
+  ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
+  uint8_t formal_param_count;
+} ast_type_function;
+
+typedef struct {
+  string name;
+  ast_type return_type; // 基础类型 + 动态类型
   ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
   uint8_t formal_param_count;
   ast_block_stmt body; // 函数体
@@ -256,5 +287,7 @@ typedef struct {
   uint8_t env_count;
   ast_function_decl *function;
 } ast_closure_decl;
+
+ast_type ast_make_type(ast_type_category, void *value);
 
 #endif //NATURE_SRC_AST_H_
