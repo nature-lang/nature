@@ -8,6 +8,6 @@ add_executable(nature main.c
         src/syntax/scanner.h src/syntax/scanner.c src/syntax/token.h src/ast/ast.h src/ast/ast.c
         src/lib/error.c src/lib/error.h
         src/value.h src/lib/list.h src/lib/list.c src/syntax/token.c
-        src/syntax/parser.c src/syntax/parser.h)
+        src/syntax/parser.c src/syntax/parser.h src/debug/debug.c src/debug/debug.h)
 
 include_directories(.)

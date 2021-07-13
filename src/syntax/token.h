@@ -37,8 +37,9 @@ typedef enum {
 typedef struct {
   uint8_t type; // 通配类型，如 var
   string literal;
+  int line;
 } token;
 
-token *token_new(uint8_t type, char *literal);
+token *token_new(uint8_t type, char *literal, int line);
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_

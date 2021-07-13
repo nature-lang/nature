@@ -43,7 +43,7 @@ typedef enum {
   AST_VAR_DECL,
   AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
-  ASt_STMT_RETURN,
+  AST_STMT_RETURN,
   AST_STMT_IF,
   AST_STMT_FOR_IN,
   AST_STMT_WHILE,
@@ -67,12 +67,12 @@ typedef enum {
 } ast_expr_operator;
 
 typedef struct {
-  int8_t type; // 声明语句类型
+  ast_stmt_expr_type type; // 声明语句类型
   void *stmt;
 } ast_stmt;
 
 typedef struct {
-  int8_t type; // 表达式类型
+  ast_stmt_expr_type type; // 表达式类型
   void *expr;
 } ast_expr;
 
@@ -287,6 +287,5 @@ typedef struct {
   uint8_t env_count;
   ast_function_decl *function;
 } ast_closure_decl;
-
 
 #endif //NATURE_SRC_AST_H_

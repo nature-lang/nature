@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "src/lib/error.h"
 #include <stdio.h>
+#include "src/debug/debug.h"
 
 parser_cursor p_cursor;
 
@@ -58,10 +59,20 @@ ast_block_stmt parser(list *token_list) {
   parser_cursor_init(token_list);
 
   ast_block_stmt block_stmt = ast_new_block_stmt();
-
+  ast_stmt_expr_type stmt_type = -1;
   while (!parser_is(TOKEN_EOF)) {
-    ast_block_stmt_push(&block_stmt, parser_stmt());
-    parser_must_stmt_end();
+#ifdef DEBUG_PARSER
+    if (stmt_type != -1) {
+      debug_ast_stmt(stmt_type);
+    }
+#endif
+
+    ast_stmt stmt = parser_stmt();
+    stmt_type = stmt.type;
+    ast_block_stmt_push(&block_stmt, stmt);
+    if (!parser_must_stmt_end()) {
+      error_exit(0, "except stmt end");
+    }
   }
 
   return block_stmt;
@@ -72,8 +83,12 @@ ast_block_stmt parser_block() {
 
   parser_must(TOKEN_LEFT_CURLY); // 必须是
   while (!parser_is(TOKEN_RIGHT_CURLY)) {
-    ast_block_stmt_push(&block_stmt, parser_stmt());
-    parser_must_stmt_end();
+    ast_stmt stmt = parser_stmt();
+    if (!parser_must_stmt_end()) {
+      error_exit(0, "except stmt end");
+    }
+
+    ast_block_stmt_push(&block_stmt, stmt);
   }
   parser_must(TOKEN_RIGHT_CURLY);
 
@@ -169,7 +184,7 @@ ast_stmt parser_var_or_function_decl() {
   ast_type type = parser_type();
 
   // 函数名称仅占用一个 token
-  if (parser_is(TOKEN_LEFT_PAREN) || parser_next_is(TOKEN_LEFT_PAREN)) {
+  if (parser_is(TOKEN_LEFT_PAREN) || parser_next_is(1, TOKEN_LEFT_PAREN)) {
     result.type = AST_FUNCTION_DECL;
     result.stmt = parser_function_decl(type);
     return result;
@@ -280,7 +295,7 @@ ast_expr parser_access(ast_expr left) {
 
   parser_must(TOKEN_LEFT_SQUARE);
   ast_expr key = parser_precedence_expr(PRECEDENCE_CALL);
-  parser_must(TOKEN_RIGHT_PAREN);
+  parser_must(TOKEN_RIGHT_SQUARE);
   ast_access *access_expr = malloc(sizeof(ast_access));
   access_expr->left = left;
   access_expr->key = key;
@@ -343,14 +358,17 @@ ast_expr parser_call_expr(ast_expr name_expr) {
 
 void parser_actual_param(ast_call *call) {
   parser_must(TOKEN_LEFT_PAREN);
-  // 参数解析 call(1 + 1, param_a)
-  ast_expr first_param = parser_expr();
-  call->actual_params[0] = first_param;
-  call->actual_param_count = 1;
 
-  while (parser_consume(TOKEN_COMMA)) {
-    ast_expr rest_param = parser_expr();
-    call->actual_params[call->actual_param_count++] = rest_param;
+  if (!parser_is(TOKEN_RIGHT_PAREN)) {
+    // 参数解析 call(1 + 1, param_a)
+    ast_expr first_param = parser_expr();
+    call->actual_params[0] = first_param;
+    call->actual_param_count = 1;
+
+    while (parser_consume(TOKEN_COMMA)) {
+      ast_expr rest_param = parser_expr();
+      call->actual_params[call->actual_param_count++] = rest_param;
+    }
   }
 
   parser_must(TOKEN_RIGHT_PAREN);
@@ -384,15 +402,18 @@ void parser_type_function_formal_param(ast_type_function *type_function) {
 void parser_formal_param(ast_function_decl *function_decl) {
   parser_must(TOKEN_LEFT_PAREN);
 
-  // formal parameter handle type + ident
-  function_decl->formal_params[0] = parser_var_decl();
-  function_decl->formal_param_count = 1;
+  if (!parser_is(TOKEN_RIGHT_PAREN)) {
+    // formal parameter handle type + ident
+    function_decl->formal_params[0] = parser_var_decl();
+    function_decl->formal_param_count = 1;
 
-  while (parser_is(TOKEN_COMMA)) {
-    parser_advance();
-    uint8_t count = function_decl->formal_param_count++;
-    function_decl->formal_params[count] = parser_var_decl();
+    while (parser_is(TOKEN_COMMA)) {
+      parser_advance();
+      uint8_t count = function_decl->formal_param_count++;
+      function_decl->formal_params[count] = parser_var_decl();
+    }
   }
+
   parser_must(TOKEN_RIGHT_PAREN);
 }
 
@@ -404,7 +425,7 @@ ast_type parser_type() {
   ast_type result;
 
   // int/float/bool/string
-  if (parser_is_base_type()) {
+  if (parser_is_base_type(0)) {
     token *type_token = parser_advance();
     result.category = AST_TYPE_CATEGORY_BASE;
     result.value = &type_token->literal;
@@ -634,7 +655,9 @@ token *parser_advance() {
   }
   token *t = p_cursor.current->value;
   p_cursor.current = p_cursor.current->next;
-//  printf("token: %s\n", t->literal);
+#ifdef DEBUG_PARSER
+  debug_parser(t->line, t->literal);
+#endif
   return t;
 }
 
@@ -685,26 +708,32 @@ ast_expr parser_function_decl_expr() {
  * @return
  */
 bool parser_is_type() {
-  if (parser_is(TOKEN_LITERAL_IDENT)) {
+  int step = 0;
+  if (parser_next_is(step, TOKEN_LITERAL_IDENT)) {
     // my_type foo = 1; my_type foo();
-    if (parser_next_is(TOKEN_LITERAL_IDENT)) {
+    if (parser_next_is(1, TOKEN_LITERAL_IDENT)) {
       return true;
     }
 
     // my_type (int a, int b) {}
-    if (parser_next_is(TOKEN_LEFT_PAREN)) {
-      return true;
+    if (parser_next_is(1, TOKEN_LEFT_PAREN)) {
+      // 如果是定义函数， 则表示 第一个 ident 为类型
+      if (parser_is_function_decl()) {
+        return true;
+      }
+
+      return false;
     }
   }
 
-  if (parser_is_base_type()) {
+  if (parser_is_base_type(step)) {
     return true;
   }
 
-  if (parser_is(TOKEN_VOID)
-      || parser_is(TOKEN_FUNCTION)
-      || parser_is(TOKEN_MAP)
-      || parser_is(TOKEN_LIST)) {
+  if (parser_next_is(step, TOKEN_VOID)
+      || parser_next_is(step, TOKEN_FUNCTION)
+      || parser_next_is(step, TOKEN_MAP)
+      || parser_next_is(step, TOKEN_LIST)) {
     return true;
   }
 
@@ -715,17 +744,17 @@ ast_stmt parser_return_stmt() {
   parser_advance();
   ast_return_stmt *stmt = malloc(sizeof(ast_return_stmt));
   stmt->expr = parser_expr();
-  result.type = ASt_STMT_RETURN;
+  result.type = AST_STMT_RETURN;
   result.stmt = stmt;
 
   return result;
 }
 
-bool parser_is_base_type() {
-  if (parser_is(TOKEN_INT)
-      || parser_is(TOKEN_FLOAT)
-      || parser_is(TOKEN_BOOL)
-      || parser_is(TOKEN_STRING)) {
+bool parser_is_base_type(int step) {
+  if (parser_next_is(step, TOKEN_INT)
+      || parser_next_is(step, TOKEN_FLOAT)
+      || parser_next_is(step, TOKEN_BOOL)
+      || parser_next_is(step, TOKEN_STRING)) {
     return true;
   }
   return false;
@@ -741,11 +770,18 @@ token *parser_must(token_type expect) {
   return t;
 }
 
-bool parser_next_is(token_type expect) {
-  if (p_cursor.current->next == NULL) {
-    return false;
+bool parser_next_is(int step, token_type expect) {
+  list_node *current = p_cursor.current;
+
+  while (step > 0) {
+    if (current->next == NULL) {
+      return false;
+    }
+    current = current->next;
+    step--;
   }
-  token *t = p_cursor.current->next->value;
+
+  token *t = current->value;
   return t->type == expect;
 }
 
@@ -795,9 +831,12 @@ ast_expr parser_new_map() {
   expr->count = 0;
   expr->capacity = 0;
 
-  expr->values[expr->count++] = parser_map_item();
-  while (parser_consume(TOKEN_COMMA)) {
+  parser_must(TOKEN_LEFT_CURLY);
+  if (!parser_is(TOKEN_RIGHT_CURLY)) {
     expr->values[expr->count++] = parser_map_item();
+    while (parser_consume(TOKEN_COMMA)) {
+      expr->values[expr->count++] = parser_map_item();
+    }
   }
 
   parser_must(TOKEN_RIGHT_CURLY);
@@ -811,12 +850,57 @@ ast_expr parser_new_map() {
 
 bool parser_must_stmt_end() {
   if (parser_is(TOKEN_EOF)
-      || parser_is(TOKEN_RIGHT_CURLY)
-      || parser_is(TOKEN_RIGHT_SQUARE)
       || parser_is(TOKEN_STMT_EOF)) {
     parser_advance();
     return true;
   }
+
+  if (parser_is(TOKEN_RIGHT_CURLY)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * xx (int a, custom b, map[a], list[c], fn<d>){
+ * @return
+ */
+bool parser_is_function_decl() {
+  bool has_left_param = false;
+  list_node *current = p_cursor.current;
+  token *t = current->value;
+
+  // 闭合检测
+  int close = 0;
+  while (t->type != TOKEN_STMT_EOF && t->type != TOKEN_EOF) {
+    if (t->type == TOKEN_LEFT_PAREN) {
+      close++;
+      has_left_param = true;
+    }
+
+    if (t->type == TOKEN_RIGHT_PAREN) {
+      close--;
+      if (close == 0) {
+        break;
+      }
+    }
+
+    current = current->next;
+    t = current->value;
+  }
+
+  if (!has_left_param) {
+    return false;
+  }
+
+  if (t->type == TOKEN_STMT_EOF || t->type == TOKEN_EOF) {
+    return false;
+  }
+  t = current->next->value;
+  if (t->type == TOKEN_LEFT_CURLY) {
+    return true;
+  }
+
   return false;
 }
 

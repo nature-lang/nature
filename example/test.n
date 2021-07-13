@@ -1,7 +1,65 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
-//int foo
+custom_call()
+custom_call(test, call(), custom_type () {
+                          	return 1
+                          })
+custom_call(custom_type test() {
+	return 1
+})
+custom_call(custom_type () {
+	return 1
+})
+custom_call(call())
+
+var a = custom () {
+
+}
+
+var a = custom test() {
+
+}
+
+custom () {
+
+}
+custom test() {
+
+}
+
+
+custom_type () {
+	return 1
+}
+custom_type (my_type a) {
+	return 1
+}
+
+
+
+
+var foo = make()
+
+list[int] foo = [
+			1,
+			2
+]
+
+void test() {
+	test a = 24
+	return 12
+}
+
+map{string:int} foo = {
+  'a-a':1,
+  'b-b':2,
+  'c-c':3
+}
+
+foo.bar()
+foo[bar] = 12
+int foo
 var foo = 12 // 类型推导
 foo = 1 + bar
 foo = 1 + 1 * 1
@@ -34,19 +92,19 @@ map{string:int} foo = {
   'c-c':3
 }
 
-void test() {
+void test(int a) {
 	test a = 24
 	return 12
 }
-map<int,string> car = {}
+//map<int,string> car = {}
 
 // 自定义类型
-type custom = int
-type custom_struct = struct {
-	int i,
-	bool b,
-	list[int] c
-}
+//type custom = int
+//type custom_struct = struct {
+//	int i,
+//	bool b,
+//	list[int] c
+//}
 
 
 var foo = make()

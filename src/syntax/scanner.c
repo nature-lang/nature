@@ -24,7 +24,7 @@ list *scanner(string source) {
 
     if (s_cursor.has_entry && scanner_is_at_stmt_end()) {
       // push token TOKEN_STMT_EOF
-      list_push(list, token_new(TOKEN_STMT_EOF, ";"));
+      list_push(list, token_new(TOKEN_STMT_EOF, ";", s_cursor.line - 1));
     }
 
     // reset by guard
@@ -34,7 +34,7 @@ list *scanner(string source) {
     if (scanner_is_alpha(*s_cursor.current)) {
       char *word = scanner_ident_advance();
 
-      token *t = token_new(scanner_ident_type(word, s_cursor.length), word);
+      token *t = token_new(scanner_ident_type(word, s_cursor.length), word, s_cursor.line);
       list_push(list, t);
       continue;
     }
@@ -48,13 +48,13 @@ list *scanner(string source) {
         type = TOKEN_LITERAL_INT;
       }
 
-      list_push(list, token_new(type, word));
+      list_push(list, token_new(type, word, s_cursor.line));
       continue;
     }
 
     if (scanner_is_string(*s_cursor.current)) {
       char *str = scanner_string_advance(*s_cursor.current);
-      list_push(list, token_new(TOKEN_LITERAL_STRING, str));
+      list_push(list, token_new(TOKEN_LITERAL_STRING, str, s_cursor.line));
       continue;
     }
 
@@ -64,7 +64,7 @@ list *scanner(string source) {
       if (special_type == -1) { // 未识别的特殊符号
         s_error.message = "scanner_special_char_type() not scanner_match";
       } else {
-        list_push(list, token_new(special_type, scanner_gen_word()));
+        list_push(list, token_new(special_type, scanner_gen_word(), s_cursor.line));
         continue;
       }
     }
@@ -80,7 +80,7 @@ list *scanner(string source) {
     }
   }
 
-  list_push(list, token_new(TOKEN_EOF, "EOF"));
+  list_push(list, token_new(TOKEN_EOF, "EOF", s_cursor.line));
 
   return list;
 }
@@ -144,7 +144,7 @@ void scanner_cursor_init(char *source) {
   s_cursor.current = source;
   s_cursor.guard = source;
   s_cursor.length = 0;
-  s_cursor.line = 0;
+  s_cursor.line = 1;
   s_cursor.has_entry = false;
   s_cursor.space_prev = STRING_EOF;
   s_cursor.space_next = STRING_EOF;
