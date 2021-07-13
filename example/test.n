@@ -1,9 +1,11 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
-int foo
+//int foo
 var foo = 12 // 类型推导
 foo = 1 + bar
+foo = 1 + 1 * 1
+foo = 1 + 4 * (2 - 3 / 3)
 bar = 100
 int foo = 12
 bool foo = true
@@ -29,10 +31,11 @@ list[int] foo = [
 map{string:int} foo = {
   'a-a':1,
   'b-b':2,
-  'c-c':3,
+  'c-c':3
 }
 
 void test() {
+	test a = 24
 	return 12
 }
 map<int,string> car = {}

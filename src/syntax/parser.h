@@ -8,6 +8,7 @@
 
 typedef enum {
   PRECEDENCE_NULL, // 最低优先级
+  PRECEDENCE_ASSIGN, // 最低优先级
   PRECEDENCE_OR,
   PRECEDENCE_AND,
   PRECEDENCE_EQUALITY,
@@ -40,7 +41,8 @@ parser_rule *parser_get_rule(token_type type);
 
 ast_block_stmt parser(list *token_list);
 
-ast_expr parser_expr(parser_precedence);
+ast_expr parser_expr();
+ast_expr parser_precedence_expr(parser_precedence precedence);
 ast_expr parser_literal();
 ast_expr parser_unary();
 ast_expr parser_grouping();
@@ -85,6 +87,7 @@ ast_stmt parser_assign(ast_expr left);
 token *parser_advance();
 token *parser_peek();
 
+bool parser_consume(token_type t);
 bool parser_is(token_type t);
 bool parser_next_is(token_type t);
 
@@ -95,6 +98,7 @@ bool parser_next_is(token_type t);
 bool parser_is_type();
 bool parser_is_base_type();
 token *parser_must(token_type t);
+bool parser_must_stmt_end();
 
 void parser_cursor_init(list *token_list);
 

@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "src/lib/error.h"
+#include <stdio.h>
 
 parser_cursor p_cursor;
 
@@ -31,7 +32,7 @@ parser_rule rules[] = {
     [TOKEN_LEFT_CURLY] = {parser_new_map, NULL, PRECEDENCE_NULL},
     [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
     [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
-    [TOKEN_PLUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
+    [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
     [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
     [TOKEN_STAR] = {NULL, parser_binary, PRECEDENCE_FACTOR},
     [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR},
@@ -60,7 +61,7 @@ ast_block_stmt parser(list *token_list) {
 
   while (!parser_is(TOKEN_EOF)) {
     ast_block_stmt_push(&block_stmt, parser_stmt());
-    parser_must(TOKEN_STMT_EOF);
+    parser_must_stmt_end();
   }
 
   return block_stmt;
@@ -72,6 +73,7 @@ ast_block_stmt parser_block() {
   parser_must(TOKEN_LEFT_CURLY); // 必须是
   while (!parser_is(TOKEN_RIGHT_CURLY)) {
     ast_block_stmt_push(&block_stmt, parser_stmt());
+    parser_must_stmt_end();
   }
   parser_must(TOKEN_RIGHT_CURLY);
 
@@ -79,9 +81,7 @@ ast_block_stmt parser_block() {
 }
 
 ast_stmt parser_stmt() {
-  if (parser_is(TOKEN_VAR)) { // var 必须定义的同时存在右值。
-    return parser_auto_infer_decl();
-  } else if (parser_is_type() || parser_is(TOKEN_VAR)) {
+  if (parser_is_type() || parser_is(TOKEN_VAR)) {
     return parser_var_or_function_decl();
   } else if (parser_is(TOKEN_LITERAL_IDENT)) {
     return parser_ident_stmt();
@@ -113,7 +113,7 @@ ast_stmt parser_auto_infer_decl() {
   token *t = parser_must(TOKEN_LITERAL_IDENT);
   stmt->type = parser_type();
   stmt->ident = t->literal;
-  stmt->expr = parser_expr(PRECEDENCE_NULL);
+  stmt->expr = parser_expr();
 
   result.type = AST_STMT_VAR_DECL_ASSIGN;
   result.stmt = stmt;
@@ -121,33 +121,38 @@ ast_stmt parser_auto_infer_decl() {
   return result;
 }
 
-/**
- * 表达式优先级处理方式
- * @return
- */
-ast_expr parser_expr(parser_precedence precedence) {
-  // 特殊逻辑， type 类型开头，则说明是函数，进行函数定义特殊处理
-  if (parser_is_type()) {
-    return parser_function_decl_expr();
-  }
-
-  // 读取表达式前缀
+ast_expr parser_precedence_expr(parser_precedence precedence) {
+// 读取表达式前缀
   parser_prefix_fn prefix_fn = parser_get_rule(parser_peek()->type)->prefix;
   if (prefix_fn == NULL) {
     error_exit(0, "prefix_fn is NULL");
   }
 
-  ast_expr prefix_ast_expr = prefix_fn(); // advance
+  ast_expr expr = prefix_fn(); // advance
 
   // 前缀表达式已经处理完成，判断是否有中缀表达式，有则处理
   parser_rule *infix_rule = parser_get_rule(parser_peek()->type);
-  // 大于表示优先级较高，需要先处理其余表达式 (怎么处理)
-  if (infix_rule != NULL && infix_rule->infix_precedence >= precedence) {
+  while (infix_rule->infix_precedence >= precedence) {
     parser_infix_fn infix_fn = infix_rule->infix;
-    return infix_fn(prefix_ast_expr);
+    expr = infix_fn(expr);
+
+    infix_rule = parser_get_rule(parser_peek()->type);
   }
 
-  return prefix_ast_expr;
+  return expr;
+}
+
+/**
+ * 表达式优先级处理方式
+ * @return
+ */
+ast_expr parser_expr() {
+  // 特殊逻辑， type 类型开头，则说明是函数，进行函数定义特殊处理
+  if (parser_is_type()) {
+    return parser_function_decl_expr();
+  }
+
+  return parser_precedence_expr(PRECEDENCE_ASSIGN);
 }
 
 /**
@@ -172,11 +177,11 @@ ast_stmt parser_var_or_function_decl() {
 
   token *ident_token = parser_advance();
   // int foo = 12;
-  if (parser_is(TOKEN_EQUAL)) {
+  if (parser_consume(TOKEN_EQUAL)) {
     ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
     stmt->type = type;
     stmt->ident = ident_token->literal;
-    stmt->expr = parser_expr(PRECEDENCE_NULL);
+    stmt->expr = parser_expr();
     result.type = AST_STMT_VAR_DECL_ASSIGN;
     result.stmt = stmt;
     return result;
@@ -199,7 +204,7 @@ ast_expr parser_binary(ast_expr left) {
 
   // right expr
   parser_precedence precedence = parser_get_rule(operator_token->type)->infix_precedence;
-  ast_expr right = parser_expr(precedence + 1);
+  ast_expr right = parser_precedence_expr(precedence + 1);
 
   ast_binary_expr *binary_expr = malloc(sizeof(ast_binary_expr));
 
@@ -210,13 +215,15 @@ ast_expr parser_binary(ast_expr left) {
   result.type = AST_EXPR_TYPE_BINARY;
   result.expr = binary_expr;
 
+//  printf("op: %s\n", operator_token->literal);
+
   return result;
 }
 
 ast_expr parser_unary() {
   ast_expr result;
   token *operator_token = parser_advance();
-  ast_expr operand = parser_expr(PRECEDENCE_UNARY);
+  ast_expr operand = parser_precedence_expr(PRECEDENCE_UNARY);
 
   ast_unary_expr *unary_expr = malloc(sizeof(ast_unary_expr));
   unary_expr->operator = token_to_ast_expr_operator[operator_token->type];
@@ -234,7 +241,7 @@ ast_expr parser_unary() {
  */
 ast_expr parser_grouping() {
   parser_must(TOKEN_LEFT_PAREN);
-  ast_expr expr = parser_expr(PRECEDENCE_NULL);
+  ast_expr expr = parser_expr();
   parser_must(TOKEN_RIGHT_PAREN);
   return expr;
 }
@@ -272,7 +279,7 @@ ast_expr parser_access(ast_expr left) {
   ast_expr result;
 
   parser_must(TOKEN_LEFT_SQUARE);
-  ast_expr key = parser_expr(PRECEDENCE_CALL); // ??
+  ast_expr key = parser_precedence_expr(PRECEDENCE_CALL);
   parser_must(TOKEN_RIGHT_PAREN);
   ast_access *access_expr = malloc(sizeof(ast_access));
   access_expr->left = left;
@@ -337,13 +344,12 @@ ast_expr parser_call_expr(ast_expr name_expr) {
 void parser_actual_param(ast_call *call) {
   parser_must(TOKEN_LEFT_PAREN);
   // 参数解析 call(1 + 1, param_a)
-  ast_expr first_param = parser_expr(PRECEDENCE_NULL);
+  ast_expr first_param = parser_expr();
   call->actual_params[0] = first_param;
   call->actual_param_count = 1;
 
-  while (parser_is(TOKEN_COMMA)) {
-    parser_advance();
-    ast_expr rest_param = parser_expr(PRECEDENCE_NULL);
+  while (parser_consume(TOKEN_COMMA)) {
+    ast_expr rest_param = parser_expr();
     call->actual_params[call->actual_param_count++] = rest_param;
   }
 
@@ -367,8 +373,7 @@ void parser_type_function_formal_param(ast_type_function *type_function) {
   type_function->formal_params[0]->type = parser_type();
   type_function->formal_param_count = 1;
 
-  while (parser_is(TOKEN_COMMA)) {
-    parser_advance();
+  while (parser_consume(TOKEN_COMMA)) {
     uint8_t count = type_function->formal_param_count++;
     type_function->formal_params[count]->ident = "";
     type_function->formal_params[count]->type = parser_type();
@@ -419,8 +424,7 @@ ast_type parser_type() {
     return result;
   }
 
-  if (parser_is(TOKEN_LIST)) {
-    parser_advance();
+  if (parser_consume(TOKEN_LIST)) {
     ast_type_list *type_list = malloc(sizeof(ast_type_list));
     parser_must(TOKEN_LEFT_SQUARE);
 
@@ -433,8 +437,7 @@ ast_type parser_type() {
     return result;
   }
 
-  if (parser_is(TOKEN_MAP)) {
-    parser_advance();
+  if (parser_consume(TOKEN_MAP)) {
     ast_type_map *type_decl = malloc(sizeof(ast_type_map));
     parser_must(TOKEN_LEFT_CURLY);
     type_decl->key_type = parser_type();
@@ -447,8 +450,7 @@ ast_type parser_type() {
     return result;
   }
 
-  if (parser_is(TOKEN_FUNCTION)) {
-    parser_advance();
+  if (parser_consume(TOKEN_FUNCTION)) {
     parser_must(TOKEN_LEFT_CURLY);
     ast_type_function *type_function = malloc(sizeof(ast_type_function));
     type_function->name = "";
@@ -520,12 +522,11 @@ ast_stmt parser_if_stmt() {
   ast_if_stmt *if_stmt = malloc(sizeof(ast_if_stmt));
   parser_must(TOKEN_IF);
   parser_must(TOKEN_LEFT_PAREN);
-  if_stmt->condition = parser_expr(PRECEDENCE_NULL);
+  if_stmt->condition = parser_expr();
   parser_must(TOKEN_RIGHT_PAREN);
   if_stmt->consequent = parser_block();
 
-  if (parser_is(TOKEN_ELSE)) {
-    parser_advance();
+  if (parser_consume(TOKEN_ELSE)) {
     if (parser_is(TOKEN_IF)) {
       if_stmt->alternate = parser_else_if();
     } else {
@@ -570,15 +571,14 @@ ast_stmt parser_for_stmt() {
 
   parser_must(TOKEN_LEFT_PAREN);
   for_in_stmt->gen_key->ident = parser_advance()->literal;
-  if (parser_is(TOKEN_COMMA)) {
-    parser_advance();
+  if (parser_consume(TOKEN_COMMA)) {
 
     for_in_stmt->gen_value = malloc(sizeof(ast_var_decl));
     token *var_ident = parser_advance();
     for_in_stmt->gen_value->ident = var_ident->literal;
   }
 
-  for_in_stmt->iterate = parser_expr(PRECEDENCE_NULL);
+  for_in_stmt->iterate = parser_expr();
   parser_must(TOKEN_RIGHT_PAREN);
 
   result.type = AST_STMT_FOR_IN;
@@ -591,7 +591,7 @@ ast_stmt parser_while_stmt() {
   ast_stmt result;
   ast_while_stmt *while_stmt = malloc(sizeof(ast_while_stmt));
   parser_advance();
-  while_stmt->condition = parser_expr(PRECEDENCE_NULL);
+  while_stmt->condition = parser_expr();
   while_stmt->body = parser_block();
 
   result.type = AST_STMT_WHILE;
@@ -614,7 +614,7 @@ ast_stmt parser_assign(ast_expr left) {
   assign_stmt->left = left;
   // invalid: foo;
   parser_must(TOKEN_EQUAL);
-  assign_stmt->right = parser_expr(PRECEDENCE_NULL);
+  assign_stmt->right = parser_expr();
 
   result.type = AST_STMT_ASSIGN;
   result.stmt = assign_stmt;
@@ -634,6 +634,7 @@ token *parser_advance() {
   }
   token *t = p_cursor.current->value;
   p_cursor.current = p_cursor.current->next;
+//  printf("token: %s\n", t->literal);
   return t;
 }
 
@@ -646,9 +647,18 @@ bool parser_is(token_type expect) {
   return t->type == expect;
 }
 
+bool parser_consume(token_type expect) {
+  token *t = p_cursor.current->value;
+  if (t->type == expect) {
+    parser_advance();
+    return true;
+  }
+  return false;
+}
+
 ast_stmt parser_ident_stmt() {
   // 消费左边的 ident, invalid:  foo() = 1
-  ast_expr left = parser_expr(PRECEDENCE_NULL);
+  ast_expr left = parser_expr();
   if (left.type == AST_CALL) {
     ast_stmt stmt = {
         .type = AST_CALL,
@@ -704,7 +714,7 @@ ast_stmt parser_return_stmt() {
   ast_stmt result;
   parser_advance();
   ast_return_stmt *stmt = malloc(sizeof(ast_return_stmt));
-  stmt->expr = parser_expr(PRECEDENCE_NULL);
+  stmt->expr = parser_expr();
   result.type = ASt_STMT_RETURN;
   result.stmt = stmt;
 
@@ -727,6 +737,7 @@ token *parser_must(token_type expect) {
     error_exit(0, "not expect token");
   }
 
+  parser_advance();
   return t;
 }
 
@@ -749,10 +760,9 @@ ast_expr parser_new_list() {
   expr->capacity = 0;
   parser_must(TOKEN_LEFT_SQUARE);
 
-  expr->values[expr->count++] = parser_expr(PRECEDENCE_NULL);
-  while (parser_is(TOKEN_COMMA)) {
-    parser_advance();
-    expr->values[expr->count++] = parser_expr(PRECEDENCE_NULL);
+  expr->values[expr->count++] = parser_expr();
+  while (parser_consume(TOKEN_COMMA)) {
+    expr->values[expr->count++] = parser_expr();
   }
   parser_must(TOKEN_RIGHT_SQUARE);
   expr->capacity = expr->count;
@@ -765,10 +775,10 @@ ast_expr parser_new_list() {
 
 static ast_map_item parser_map_item() {
   ast_map_item map_item = {
-      .key = parser_expr(PRECEDENCE_NULL)
+      .key = parser_expr()
   };
   parser_must(TOKEN_COLON);
-  map_item.value = parser_expr(PRECEDENCE_NULL);
+  map_item.value = parser_expr();
   return map_item;
 }
 
@@ -786,8 +796,7 @@ ast_expr parser_new_map() {
   expr->capacity = 0;
 
   expr->values[expr->count++] = parser_map_item();
-  while (parser_is(TOKEN_COMMA)) {
-    parser_advance();
+  while (parser_consume(TOKEN_COMMA)) {
     expr->values[expr->count++] = parser_map_item();
   }
 
@@ -799,3 +808,15 @@ ast_expr parser_new_map() {
 
   return result;
 }
+
+bool parser_must_stmt_end() {
+  if (parser_is(TOKEN_EOF)
+      || parser_is(TOKEN_RIGHT_CURLY)
+      || parser_is(TOKEN_RIGHT_SQUARE)
+      || parser_is(TOKEN_STMT_EOF)) {
+    parser_advance();
+    return true;
+  }
+  return false;
+}
+

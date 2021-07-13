@@ -146,8 +146,8 @@ void scanner_cursor_init(char *source) {
   s_cursor.length = 0;
   s_cursor.line = 0;
   s_cursor.has_entry = false;
-  s_cursor.space_prev = EOF;
-  s_cursor.space_next = EOF;
+  s_cursor.space_prev = STRING_EOF;
+  s_cursor.space_next = STRING_EOF;
 }
 
 void scanner_error_init() {
@@ -194,7 +194,6 @@ void scanner_skip_space() {
       }
     }
   }
-
 }
 
 bool scanner_is_alpha(char c) {
@@ -350,7 +349,15 @@ token_type scanner_rest_ident_type(char *word,
 bool scanner_is_at_stmt_end() {
   if (scanner_is_space(s_cursor.space_prev)
       || s_cursor.space_prev == '\\'
-      || s_cursor.space_prev == EOF) {
+      || s_cursor.space_prev == STRING_EOF) {
+    return false;
+  }
+
+  if (s_cursor.space_next == '}') {
+    return false;
+  }
+
+  if (s_cursor.space_next == ']') {
     return false;
   }
 
