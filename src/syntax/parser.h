@@ -90,17 +90,18 @@ token *parser_peek();
 bool parser_consume(token_type t);
 bool parser_is(token_type t);
 bool parser_next_is(int step, token_type t);
+list_node *parser_next(int step);
 
 /**
  * 兼容 void
  * @return
  */
 bool parser_is_type();
-bool parser_is_base_type(int step);
+bool parser_is_base_type();
 token *parser_must(token_type t);
 bool parser_must_stmt_end();
 
-bool parser_is_function_decl();
+bool parser_is_function_decl(list_node *current);
 
 void parser_cursor_init(list *token_list);
 

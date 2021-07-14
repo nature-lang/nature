@@ -13,9 +13,9 @@ ast_expr_operator token_to_ast_expr_operator[] = {
     [TOKEN_EQUAL_EQUAL] = AST_EXPR_OPERATOR_EQ_EQ,
     [TOKEN_NOT_EQUAL] = AST_EXPR_OPERATOR_NOT_EQ,
     [TOKEN_GREATER_EQUAL] = AST_EXPR_OPERATOR_GTE,
-    [TOKEN_GREATER] = AST_EXPR_OPERATOR_GT,
+    [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_GT,
     [TOKEN_LESS_EQUAL] = AST_EXPR_OPERATOR_LTE,
-    [TOKEN_LESS] = AST_EXPR_OPERATOR_LT,
+    [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_LT,
 };
 
 ast_base_type token_to_ast_base_type[] = {
@@ -40,9 +40,9 @@ parser_rule rules[] = {
     [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND},
     [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_EQUALITY},
     [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_EQUALITY},
-    [TOKEN_GREATER] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
     [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-    [TOKEN_LESS] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_LEFT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
     [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
     [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
     [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
@@ -59,8 +59,11 @@ ast_block_stmt parser(list *token_list) {
   parser_cursor_init(token_list);
 
   ast_block_stmt block_stmt = ast_new_block_stmt();
+
   ast_stmt_expr_type stmt_type = -1;
+
   while (!parser_is(TOKEN_EOF)) {
+
 #ifdef DEBUG_PARSER
     if (stmt_type != -1) {
       debug_ast_stmt(stmt_type);
@@ -68,7 +71,9 @@ ast_block_stmt parser(list *token_list) {
 #endif
 
     ast_stmt stmt = parser_stmt();
+
     stmt_type = stmt.type;
+
     ast_block_stmt_push(&block_stmt, stmt);
     if (!parser_must_stmt_end()) {
       error_exit(0, "except stmt end");
@@ -591,16 +596,22 @@ ast_stmt parser_for_stmt() {
   for_in_stmt->gen_key = malloc(sizeof(ast_var_decl));
 
   parser_must(TOKEN_LEFT_PAREN);
+  ast_type type_var = parser_type();
+  for_in_stmt->gen_key->type = type_var;
   for_in_stmt->gen_key->ident = parser_advance()->literal;
-  if (parser_consume(TOKEN_COMMA)) {
 
+  // 可选参数 val
+  if (parser_consume(TOKEN_COMMA)) {
     for_in_stmt->gen_value = malloc(sizeof(ast_var_decl));
-    token *var_ident = parser_advance();
-    for_in_stmt->gen_value->ident = var_ident->literal;
+    for_in_stmt->gen_value->type = type_var;
+    for_in_stmt->gen_value->ident = parser_advance()->literal;
   }
 
+  parser_must(TOKEN_IN);
   for_in_stmt->iterate = parser_expr();
   parser_must(TOKEN_RIGHT_PAREN);
+
+  for_in_stmt->body = parser_block();
 
   result.type = AST_STMT_FOR_IN;
   result.stmt = for_in_stmt;
@@ -708,17 +719,16 @@ ast_expr parser_function_decl_expr() {
  * @return
  */
 bool parser_is_type() {
-  int step = 0;
-  if (parser_next_is(step, TOKEN_LITERAL_IDENT)) {
-    // my_type foo = 1; my_type foo();
+  if (parser_is(TOKEN_LITERAL_IDENT)) {
+    // my_type foo = 1;
+    // my_type foo();
     if (parser_next_is(1, TOKEN_LITERAL_IDENT)) {
       return true;
     }
 
     // my_type (int a, int b) {}
     if (parser_next_is(1, TOKEN_LEFT_PAREN)) {
-      // 如果是定义函数， 则表示 第一个 ident 为类型
-      if (parser_is_function_decl()) {
+      if (parser_is_function_decl(parser_next(1))) {
         return true;
       }
 
@@ -726,14 +736,14 @@ bool parser_is_type() {
     }
   }
 
-  if (parser_is_base_type(step)) {
+  if (parser_is_base_type(0)) {
     return true;
   }
 
-  if (parser_next_is(step, TOKEN_VOID)
-      || parser_next_is(step, TOKEN_FUNCTION)
-      || parser_next_is(step, TOKEN_MAP)
-      || parser_next_is(step, TOKEN_LIST)) {
+  if (parser_is(TOKEN_VOID)
+      || parser_is(TOKEN_FUNCTION)
+      || parser_is(TOKEN_MAP)
+      || parser_is(TOKEN_LIST)) {
     return true;
   }
 
@@ -750,11 +760,11 @@ ast_stmt parser_return_stmt() {
   return result;
 }
 
-bool parser_is_base_type(int step) {
-  if (parser_next_is(step, TOKEN_INT)
-      || parser_next_is(step, TOKEN_FLOAT)
-      || parser_next_is(step, TOKEN_BOOL)
-      || parser_next_is(step, TOKEN_STRING)) {
+bool parser_is_base_type() {
+  if (parser_is(TOKEN_INT)
+      || parser_is(TOKEN_FLOAT)
+      || parser_is(TOKEN_BOOL)
+      || parser_is(TOKEN_STRING)) {
     return true;
   }
   return false;
@@ -783,6 +793,21 @@ bool parser_next_is(int step, token_type expect) {
 
   token *t = current->value;
   return t->type == expect;
+}
+
+list_node *parser_next(int step) {
+  list_node *current = p_cursor.current;
+
+  while (step > 0) {
+    if (current->next == NULL) {
+      return NULL;
+    }
+
+    current = current->next;
+    step--;
+  }
+
+  return current;
 }
 
 /**
@@ -862,20 +887,26 @@ bool parser_must_stmt_end() {
 }
 
 /**
- * xx (int a, custom b, map[a], list[c], fn<d>){
+ * 左边 left 需要已经被消费到才行
+ * (int a, custom b, map[a], list[c], fn<d>){
  * @return
  */
-bool parser_is_function_decl() {
-  bool has_left_param = false;
-  list_node *current = p_cursor.current;
+bool parser_is_function_decl(list_node *current) {
   token *t = current->value;
+  if (t->type != TOKEN_LEFT_PAREN) {
+    error_exit(0, "parser_is_function_decl param must be TOKEN_LEFT_PAREN");
+    return false;
+  }
 
-  // 闭合检测
-  int close = 0;
+  // param is left paren, so close + 1 = 1,
+  int close = 1;
+
   while (t->type != TOKEN_STMT_EOF && t->type != TOKEN_EOF) {
+    current = current->next;
+    t = current->value;
+
     if (t->type == TOKEN_LEFT_PAREN) {
       close++;
-      has_left_param = true;
     }
 
     if (t->type == TOKEN_RIGHT_PAREN) {
@@ -884,23 +915,17 @@ bool parser_is_function_decl() {
         break;
       }
     }
-
-    current = current->next;
-    t = current->value;
   }
 
-  if (!has_left_param) {
+  if (close > 0) {
     return false;
   }
 
-  if (t->type == TOKEN_STMT_EOF || t->type == TOKEN_EOF) {
-    return false;
-  }
+  // next is '{' ?
   t = current->next->value;
-  if (t->type == TOKEN_LEFT_CURLY) {
-    return true;
+  if (t->type != TOKEN_LEFT_CURLY) {
+    return false;
   }
 
-  return false;
+  return true;
 }
-
