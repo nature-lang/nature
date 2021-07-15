@@ -17,6 +17,11 @@ typedef enum {
 } ast_base_type;
 
 typedef enum {
+  AST_COMPLEX_TYPE_CLOSURE,
+  AST_COMPLEX_TYPE_ENV,
+} ast_complex_type;
+
+typedef enum {
   AST_TYPE_CATEGORY_BASE,
   ASt_TYPE_CATEGORY_VOID,
   AST_TYPE_CATEGORY_VAR,
@@ -83,9 +88,6 @@ typedef struct {
   size_t capacity; // 容量
   ast_stmt *list;
 } ast_block_stmt;
-
-ast_block_stmt ast_new_block_stmt();
-void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 // 值类型
 typedef struct {
@@ -236,12 +238,12 @@ typedef struct {
 // list[int]
 typedef struct {
   ast_type type;
-} ast_type_list;
+} ast_list_decl;
 
 typedef struct {
   ast_type key_type;
   ast_type value_type;
-} ast_type_map;
+} ast_map_decl;
 
 typedef struct {
   ast_expr key;
@@ -274,7 +276,26 @@ typedef struct {
   ast_type return_type; // 基础类型 + 动态类型
   ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
   uint8_t formal_param_count;
-} ast_type_function;
+} ast_function_type_decl;
+
+/**
+ * type my_int int
+ * type my_string string
+ * type my_my_string my_string
+ */
+typedef struct {
+  string name;
+  ast_type_category value_category;
+  int size;
+  union {
+    ast_struct_decl *struct_decl;
+    ast_map_decl *map_decl;
+    ast_list_decl *list_decl;
+    ast_function_type_decl *function_type_decl;
+    ast_base_type *base_type;
+    string custom_type_name;
+  } value;
+} ast_custom_type_decl;
 
 typedef struct {
   string name;
@@ -289,5 +310,10 @@ typedef struct {
   uint8_t env_count;
   ast_function_decl *function;
 } ast_closure_decl;
+
+ast_block_stmt ast_new_block_stmt();
+void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
+
+ast_type ast_new_var_type();
 
 #endif //NATURE_SRC_AST_H_

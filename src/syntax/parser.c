@@ -388,7 +388,7 @@ ast_var_decl *parser_var_decl() {
   return var_decl;
 }
 
-void parser_type_function_formal_param(ast_type_function *type_function) {
+void parser_type_function_formal_param(ast_function_type_decl *type_function) {
   parser_must(TOKEN_LEFT_PAREN);
 
   // formal parameter handle type + ident
@@ -451,7 +451,7 @@ ast_type parser_type() {
   }
 
   if (parser_consume(TOKEN_LIST)) {
-    ast_type_list *type_list = malloc(sizeof(ast_type_list));
+    ast_list_decl *type_list = malloc(sizeof(ast_list_decl));
     parser_must(TOKEN_LEFT_SQUARE);
 
     type_list->type = parser_type();
@@ -464,7 +464,7 @@ ast_type parser_type() {
   }
 
   if (parser_consume(TOKEN_MAP)) {
-    ast_type_map *type_decl = malloc(sizeof(ast_type_map));
+    ast_map_decl *type_decl = malloc(sizeof(ast_map_decl));
     parser_must(TOKEN_LEFT_CURLY);
     type_decl->key_type = parser_type();
     parser_must(TOKEN_COLON);
@@ -478,7 +478,7 @@ ast_type parser_type() {
 
   if (parser_consume(TOKEN_FUNCTION)) {
     parser_must(TOKEN_LEFT_CURLY);
-    ast_type_function *type_function = malloc(sizeof(ast_type_function));
+    ast_function_type_decl *type_function = malloc(sizeof(ast_function_type_decl));
     type_function->name = "";
     type_function->return_type = parser_type();
     parser_type_function_formal_param(type_function);
