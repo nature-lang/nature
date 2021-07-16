@@ -27,7 +27,7 @@ typedef enum {
   TOKEN_LITERAL_IDENT, TOKEN_LITERAL_STRING, TOKEN_LITERAL_FLOAT, TOKEN_LITERAL_INT,
 
   // KEYWORDS.
-  TOKEN_TRUE, TOKEN_FALSE,
+  TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
   TOKEN_FOR, TOKEN_IN, TOKEN_WHILE, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
   TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
   TOKEN_LIST, TOKEN_MAP, TOKEN_FUNCTION, TOKEN_VOID,
@@ -35,7 +35,7 @@ typedef enum {
 } token_type;
 
 typedef struct {
-  uint8_t type; // 通配类型，如 var
+  token_type type; // 通配类型，如 var
   string literal;
   int line;
 } token;

@@ -1,30 +1,37 @@
 // 方案 1
-type foo = bar
+//type foo = bar
+//type person = struct {
+//	int a,
+//	float b,
+//	bool c,
+//	struct {
+//		int d1
+//		int d2
+//	} d
+//}
+
+//person max = person {
+//	a: 12,
+//	b: 13
+//	d: d_struct {
+//		d1: 12,
+//		d2: 14
+//	}
+//}
+
+
+// 方案 2, 暂时不实现赋默认值,但是最终肯定是要实现的
 type person = struct {
-	int a,
-	float b,
-	bool c,
-	struct {
-		int d1
-		int d2
-	} d
-}
-
-person wei = person {
-	a: 12,
-	b: 13
-	d: d_struct {
-		d1: 12,
-		d2: 14
-	}
-}
-
-
-// 方案 2
-type person = struct {
-	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法。
+	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法，但是这里的初始化就和奇怪，甚至不知道应该发生在什么时候?
 	int b
 	int c
+	animal d = animal {
+
+	},
+	list[string] e = ["a", "b", "c", "d"],
+	struct {
+		int foo
+	} f
 }
 
 var max = person {
@@ -34,6 +41,19 @@ var max = person {
 }
 
 
+map{string:any} = {
+	"list": ["1", "2", "3"],
+	"bool": true,
+	"int": 1,
+	"null": null
+}
+
+list[any] = [
+	{
+		"a": 1
+	}
+	[]
+]
 
 
 

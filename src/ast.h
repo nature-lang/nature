@@ -22,10 +22,16 @@ typedef enum {
 } ast_complex_type;
 
 typedef enum {
-  AST_TYPE_CATEGORY_BASE,
-  ASt_TYPE_CATEGORY_VOID,
+  AST_TYPE_CATEGORY_STRING,
+  AST_TYPE_CATEGORY_BOOL,
+  AST_TYPE_CATEGORY_FLOAT,
+  AST_TYPE_CATEGORY_INT,
+  AST_TYPE_CATEGORY_VOID,
   AST_TYPE_CATEGORY_VAR,
-  AST_TYPE_CATEGORY_CUSTOM,
+  AST_TYPE_CATEGORY_ANY,
+  AST_TYPE_CATEGORY_NULL,
+  AST_TYPE_CATEGORY_STRUCT,
+  AST_TYPE_CATEGORY_TYPE_DECL_IDENT,
   AST_TYPE_CATEGORY_LIST,
   AST_TYPE_CATEGORY_MAP,
   AST_TYPE_CATEGORY_FUNCTION,
@@ -43,12 +49,13 @@ typedef enum {
 
   AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
   AST_EXPR_NEW_LIST, // [1, 2, 3]
+  AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
+  AST_EXPR_NEW_STRUCT, // person {a = 1; b = 2}
 
   // 抽象复合类型
   AST_EXPR_ACCESS,
   AST_EXPR_SELECT,
   AST_VAR_DECL,
-
 
   // stmt
   AST_STMT_VAR_DECL_ASSIGN,
@@ -57,7 +64,8 @@ typedef enum {
   AST_STMT_IF,
   AST_STMT_FOR_IN,
   AST_STMT_WHILE,
-  AST_STRUCT_DECL,
+  AST_STMT_TYPE_DECL,
+//  AST_STRUCT_DECL,
   AST_CALL,
   AST_FUNCTION_DECL,
   AST_CLOSURE_DECL,
@@ -95,7 +103,7 @@ typedef struct {
 
 // 值类型
 typedef struct {
-  ast_base_type type;
+  ast_type_category type;
   string value;
 } ast_literal; // 标量值
 
@@ -183,11 +191,12 @@ typedef struct {
 typedef struct {
   ast_type type;
   string name; // property name
+  // TODO default value
 } ast_struct_property;
 
 typedef struct {
-  string ident; // struct 名称
   ast_struct_property list[INT8_MAX];
+  int8_t count;
 } ast_struct_decl; // 多个 property 组成一个
 
 // 1. a.b
@@ -283,23 +292,15 @@ typedef struct {
 } ast_function_type_decl;
 
 /**
- * type my_int int
- * type my_string string
- * type my_my_string my_string
+ * type my_int = int
+ * type my_string =  string
+ * type my_my_string =  my_string
+ * type my = struct {}
  */
 typedef struct {
-  string name;
-  ast_type_category value_category;
-  int size;
-  union {
-    ast_struct_decl *struct_decl;
-    ast_map_decl *map_decl;
-    ast_list_decl *list_decl;
-    ast_function_type_decl *function_type_decl;
-    ast_base_type *base_type;
-    string custom_type_name;
-  } value;
-} ast_custom_type_decl;
+  string ident;
+  ast_type type;
+} ast_type_decl_stmt;
 
 typedef struct {
   string name;

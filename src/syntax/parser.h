@@ -65,6 +65,7 @@ ast_stmt parser_var_or_function_decl();
 ast_stmt parser_if_stmt();
 ast_stmt parser_for_stmt();
 ast_stmt parser_while_stmt();
+ast_stmt parser_type_decl_stmt();
 ast_block_stmt parser_else_if();
 
 ast_function_decl *parser_function_decl(ast_type type);
@@ -97,7 +98,7 @@ list_node *parser_next(int step);
  * @return
  */
 bool parser_is_type();
-bool parser_is_base_type();
+bool parser_is_simple_type();
 token *parser_must(token_type t);
 bool parser_must_stmt_end();
 

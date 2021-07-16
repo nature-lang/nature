@@ -262,7 +262,12 @@ char *scanner_number_advance() {
 
 token_type scanner_ident_type(char *word, int length) {
   switch (word[0]) {
-    case 'a': return scanner_rest_ident_type(word, length, 1, 1, "s", TOKEN_AS);
+    case 'a': {
+      if (length == 2 && word[1] == 's') {
+        return TOKEN_AS;
+      }
+      return scanner_rest_ident_type(word, length, 1, 2, "ny", TOKEN_ANY);
+    }
     case 'b': return scanner_rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
     case 'e': return scanner_rest_ident_type(word, length, 1, 3, "lse", TOKEN_ELSE);
     case 'f': {
@@ -294,8 +299,23 @@ token_type scanner_ident_type(char *word, int length) {
     }
     case 'l': return scanner_rest_ident_type(word, length, 1, 3, "ist", TOKEN_LIST);
     case 'm': return scanner_rest_ident_type(word, length, 1, 2, "ap", TOKEN_MAP);
-    case 's': return scanner_rest_ident_type(word, length, 1, 5, "tring", TOKEN_STRING);
-    case 't': return scanner_rest_ident_type(word, length, 1, 3, "ure", TOKEN_TRUE);
+    case 'n': return scanner_rest_ident_type(word, length, 1, 3, "ull", TOKEN_NULL);
+    case 's': {
+      if (length == 6 && word[1] == 't' && word[2] == 'r') {
+        switch (word[3]) {
+          case 'i': return scanner_rest_ident_type(word, length, 3, 2, "ng", TOKEN_STRING);
+          case 'u': return scanner_rest_ident_type(word, length, 3, 2, "ct", TOKEN_STRUCT);
+        }
+      }
+    }
+    case 't': {
+      if (length > 3) {
+        switch (word[1]) {
+          case 'y' : return scanner_rest_ident_type(word, length, 2, 2, "pe", TOKEN_TYPE);
+          case 'u' : return scanner_rest_ident_type(word, length, 2, 2, "re", TOKEN_TRUE);
+        }
+      }
+    }
     case 'v': {
       switch (word[1]) {
         case 'a': return scanner_rest_ident_type(word, length, 2, 1, "r", TOKEN_VAR);
@@ -306,7 +326,8 @@ token_type scanner_ident_type(char *word, int length) {
     case 'r': return scanner_rest_ident_type(word, length, 1, 5, "eturn", TOKEN_RETURN);
   }
 
-  return TOKEN_LITERAL_IDENT;
+  return
+      TOKEN_LITERAL_IDENT;
 }
 
 char *scanner_string_advance(char c) {

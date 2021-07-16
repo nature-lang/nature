@@ -15,14 +15,19 @@ ast_expr_operator token_to_ast_expr_operator[] = {
     [TOKEN_GREATER_EQUAL] = AST_EXPR_OPERATOR_GTE,
     [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_GT,
     [TOKEN_LESS_EQUAL] = AST_EXPR_OPERATOR_LTE,
-    [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_LT,
+    [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
+    [TOKEN_NOT] =  AST_EXPR_OPERATOR_NOT,
 };
 
-ast_base_type token_to_ast_base_type[] = {
-    [TOKEN_BOOL] = AST_BASE_TYPE_BOOL,
-    [TOKEN_FLOAT] = AST_BASE_TYPE_FLOAT,
-    [TOKEN_INT] = AST_BASE_TYPE_INT,
-    [TOKEN_STRING] = AST_BASE_TYPE_STRING
+ast_type_category token_to_ast_simple_type[] = {
+    [TOKEN_BOOL] = AST_TYPE_CATEGORY_BOOL,
+    [TOKEN_FLOAT] = AST_TYPE_CATEGORY_FLOAT,
+    [TOKEN_INT] = AST_TYPE_CATEGORY_INT,
+    [TOKEN_STRING] = AST_TYPE_CATEGORY_STRING,
+    [TOKEN_VOID] = AST_TYPE_CATEGORY_VOID,
+    [TOKEN_NULL] = AST_TYPE_CATEGORY_NULL,
+    [TOKEN_VAR] = AST_TYPE_CATEGORY_VAR,
+    [TOKEN_ANY] = AST_TYPE_CATEGORY_ANY
 };
 
 parser_rule rules[] = {
@@ -113,11 +118,28 @@ ast_stmt parser_stmt() {
     return parser_while_stmt();
   } else if (parser_is(TOKEN_RETURN)) {
     return parser_return_stmt();
+  } else if (parser_is(TOKEN_TYPE)) {
+    return parser_type_decl_stmt();
   }
 
   error_exit(0, "not expect stmt");
   ast_stmt stmt = {};
   return stmt;
+}
+
+ast_stmt parser_type_decl_stmt() {
+  ast_stmt result;
+  ast_type_decl_stmt *type_decl_stmt = malloc(sizeof(ast_type_decl_stmt));
+  parser_must(TOKEN_TYPE);
+  type_decl_stmt->ident = parser_advance()->literal;
+  parser_must(TOKEN_EQUAL);
+  // 类型解析
+  type_decl_stmt->type = parser_type();
+
+  result.type = AST_STMT_TYPE_DECL;
+  result.stmt = type_decl_stmt;
+
+  return result;
 }
 
 /**
@@ -270,7 +292,7 @@ ast_expr parser_literal() {
   ast_expr result;
   token *literal_token = parser_advance();
   ast_literal *literal_expr = malloc(sizeof(ast_literal));
-  literal_expr->type = token_to_ast_base_type[literal_token->type];
+  literal_expr->type = token_to_ast_simple_type[literal_token->type];
   literal_expr->value = literal_token->literal;
 
   result.type = AST_EXPR_LITERAL;
@@ -430,50 +452,57 @@ void parser_formal_param(ast_function_decl *function_decl) {
 ast_type parser_type() {
   ast_type result;
 
-  // int/float/bool/string
-  if (parser_is_base_type(0)) {
+  // int/float/bool/string/void/var/any
+  if (parser_is_simple_type()) {
     token *type_token = parser_advance();
-    result.category = AST_TYPE_CATEGORY_BASE;
-    result.value = &type_token->literal;
-    return result;
-  }
-
-  if (parser_is(TOKEN_VOID)) {
-    token *type_token = parser_advance();
-    result.category = ASt_TYPE_CATEGORY_VOID;
-    result.value = &type_token->literal;
-    return result;
-  }
-  if (parser_is(TOKEN_VAR)) {
-    token *type_token = parser_advance();
-    result.category = AST_TYPE_CATEGORY_VAR;
-    result.value = &type_token->literal;
+    result.category = token_to_ast_simple_type[type_token->type];
+    result.value = type_token->literal;
     return result;
   }
 
   if (parser_consume(TOKEN_LIST)) {
-    ast_list_decl *type_list = malloc(sizeof(ast_list_decl));
+    ast_list_decl *type_list_decl = malloc(sizeof(ast_list_decl));
     parser_must(TOKEN_LEFT_SQUARE);
 
-    type_list->type = parser_type();
+    type_list_decl->type = parser_type();
 
     parser_must(TOKEN_RIGHT_SQUARE);
 
     result.category = AST_TYPE_CATEGORY_LIST;
-    result.value = type_list;
+    result.value = type_list_decl;
     return result;
   }
 
   if (parser_consume(TOKEN_MAP)) {
-    ast_map_decl *type_decl = malloc(sizeof(ast_map_decl));
+    ast_map_decl *type_map_decl = malloc(sizeof(ast_map_decl));
     parser_must(TOKEN_LEFT_CURLY);
-    type_decl->key_type = parser_type();
+    type_map_decl->key_type = parser_type();
     parser_must(TOKEN_COLON);
-    type_decl->value_type = parser_type();
+    type_map_decl->value_type = parser_type();
     parser_must(TOKEN_RIGHT_CURLY);
 
     result.category = AST_TYPE_CATEGORY_MAP;
-    result.value = type_decl;
+    result.value = type_map_decl;
+    return result;
+  }
+
+  if (parser_consume(TOKEN_STRUCT)) {
+    ast_struct_decl *type_struct_decl = malloc(sizeof(ast_struct_decl));
+    type_struct_decl->count = 0;
+    parser_must(TOKEN_LEFT_CURLY);
+    while (!parser_is(TOKEN_RIGHT_CURLY)) {
+      // default value
+      ast_type type = parser_type();
+      ast_struct_property item;
+      item.type = parser_type();
+      item.name = parser_advance()->literal;
+
+      type_struct_decl->list[type_struct_decl->count++] = item;
+      parser_must_stmt_end();
+    }
+
+    result.category = AST_TYPE_CATEGORY_STRUCT;
+    result.value = type_struct_decl;
     return result;
   }
 
@@ -490,8 +519,9 @@ ast_type parser_type() {
     return result;
   }
 
+  // 神器的 ident
   token *type_token = parser_advance();
-  result.category = AST_TYPE_CATEGORY_CUSTOM;
+  result.category = AST_TYPE_CATEGORY_TYPE_DECL_IDENT;
   result.value = &type_token->literal;
   return result;
 }
@@ -737,12 +767,11 @@ bool parser_is_type() {
     }
   }
 
-  if (parser_is_base_type(0)) {
+  if (parser_is_simple_type()) {
     return true;
   }
 
-  if (parser_is(TOKEN_VOID)
-      || parser_is(TOKEN_FUNCTION)
+  if (parser_is(TOKEN_FUNCTION)
       || parser_is(TOKEN_MAP)
       || parser_is(TOKEN_LIST)) {
     return true;
@@ -761,8 +790,12 @@ ast_stmt parser_return_stmt() {
   return result;
 }
 
-bool parser_is_base_type() {
-  if (parser_is(TOKEN_INT)
+bool parser_is_simple_type() {
+  if (parser_is(TOKEN_VOID)
+      || parser_is(TOKEN_NULL)
+      || parser_is(TOKEN_VAR)
+      || parser_is(TOKEN_ANY)
+      || parser_is(TOKEN_INT)
       || parser_is(TOKEN_FLOAT)
       || parser_is(TOKEN_BOOL)
       || parser_is(TOKEN_STRING)) {
