@@ -1,6 +1,6 @@
 #ifndef NATURE_SRC_AST_ANALYSIS_H_
 #define NATURE_SRC_AST_ANALYSIS_H_
-#include "ast.h"
+#include "src/ast.h"
 
 typedef struct {
   ast_type type;
@@ -56,6 +56,7 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign);
 ast_closure_decl *analysis_function_decl(ast_function_decl *function);
 void analysis_expr(ast_expr *expr);
 void analysis_binary(ast_binary_expr *expr);
+void analysis_unary(ast_unary_expr *expr);
 void analysis_literal(ast_literal *expr);
 void analysis_ident(ast_expr *expr);
 int8_t analysis_resolve_free(analysis_function *current, ast_ident *ident);

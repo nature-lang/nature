@@ -2,7 +2,7 @@
 #define NATURE_SRC_COMPILER_H_
 
 #include <stdlib.h>
-#include "src/ast/ast.h"
+#include "src/ast.h"
 #include "inst.h"
 
 int label_count = 0;

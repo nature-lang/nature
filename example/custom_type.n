@@ -1,0 +1,40 @@
+// 方案 1
+type foo = bar
+type person = struct {
+	int a,
+	float b,
+	bool c,
+	struct {
+		int d1
+		int d2
+	} d
+}
+
+person wei = person {
+	a: 12,
+	b: 13
+	d: d_struct {
+		d1: 12,
+		d2: 14
+	}
+}
+
+
+// 方案 2
+type person = struct {
+	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法。
+	int b
+	int c
+}
+
+var max = person {
+	a = 12
+	b = 1 + 1
+	c = call()
+}
+
+
+
+
+
+

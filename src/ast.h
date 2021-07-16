@@ -32,30 +32,34 @@ typedef enum {
 } ast_type_category;
 
 typedef enum {
-  AST_EXPR_TYPE_LITERAL,
-  AST_EXPR_TYPE_BINARY,
-  AST_EXPR_TYPE_UNARY,
-  AST_EXPR_TYPE_IDENT,
-  AST_EXPR_TYPE_ACCESS_STRUCT,
-  AST_EXPR_TYPE_ENV_INDEX,
-  AST_EXPR_TYPE_ACCESS,
-  AST_EXPR_TYPE_SELECT,
-  AST_EXPR_TYPE_ACCESS_MAP,
-  AST_EXPR_TYPE_NEW_MAP,
-  AST_EXPR_TYPE_ACCESS_LIST,
-  AST_EXPR_TYPE_NEW_LIST,
-  AST_EXPR_TYPE_LIST_DECL,
+  AST_EXPR_LITERAL,
+  AST_EXPR_BINARY,
+  AST_EXPR_UNARY,
+  AST_EXPR_IDENT,
+  AST_EXPR_SELECT_PROPERTY,
+  AST_EXPR_ACCESS_ENV,
+  AST_EXPR_ACCESS_MAP,
+  AST_EXPR_ACCESS_LIST,
+
+  AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
+  AST_EXPR_NEW_LIST, // [1, 2, 3]
+
+  // 抽象复合类型
+  AST_EXPR_ACCESS,
+  AST_EXPR_SELECT,
   AST_VAR_DECL,
+
+
+  // stmt
   AST_STMT_VAR_DECL_ASSIGN,
   AST_STMT_ASSIGN,
   AST_STMT_RETURN,
   AST_STMT_IF,
   AST_STMT_FOR_IN,
   AST_STMT_WHILE,
-  AST_TYPE_DECL,
   AST_STRUCT_DECL,
-  AST_FUNCTION_DECL,
   AST_CALL,
+  AST_FUNCTION_DECL,
   AST_CLOSURE_DECL,
 } ast_stmt_expr_type;
 
@@ -308,6 +312,7 @@ typedef struct {
 typedef struct {
   ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
   uint8_t env_count;
+  string env_name;
   ast_function_decl *function;
 } ast_closure_decl;
 

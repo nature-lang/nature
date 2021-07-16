@@ -232,7 +232,7 @@ ast_expr parser_binary(ast_expr left) {
   binary_expr->left = left;
   binary_expr->right = right;
 
-  result.type = AST_EXPR_TYPE_BINARY;
+  result.type = AST_EXPR_BINARY;
   result.expr = binary_expr;
 
 //  printf("op: %s\n", operator_token->literal);
@@ -249,7 +249,7 @@ ast_expr parser_unary() {
   unary_expr->operator = token_to_ast_expr_operator[operator_token->type];
   unary_expr->operand = operand;
 
-  result.type = AST_EXPR_TYPE_UNARY;
+  result.type = AST_EXPR_UNARY;
   result.expr = unary_expr;
 
   return result;
@@ -273,7 +273,7 @@ ast_expr parser_literal() {
   literal_expr->type = token_to_ast_base_type[literal_token->type];
   literal_expr->value = literal_token->literal;
 
-  result.type = AST_EXPR_TYPE_LITERAL;
+  result.type = AST_EXPR_LITERAL;
   result.expr = literal_expr;
 
   return result;
@@ -284,13 +284,14 @@ ast_expr parser_var() {
   token *ident_token = parser_advance();
   ast_ident ident = ident_token->literal;
 
-  result.type = AST_EXPR_TYPE_IDENT;
+  result.type = AST_EXPR_IDENT;
   result.expr = &ident;
 
   return result;
 }
 
 /**
+ * 暂时无法确定 foo 的类型是 list 还是 map
  * foo[expr]
  * @param left
  * @return
@@ -304,7 +305,7 @@ ast_expr parser_access(ast_expr left) {
   ast_access *access_expr = malloc(sizeof(ast_access));
   access_expr->left = left;
   access_expr->key = key;
-  result.type = AST_EXPR_TYPE_ACCESS;
+  result.type = AST_EXPR_ACCESS;
 
   return result;
 }
@@ -324,7 +325,7 @@ ast_expr parser_select(ast_expr left) {
   select_property_expr->left = left;
   select_property_expr->property = property_token->literal;
 
-  result.type = AST_EXPR_TYPE_SELECT;
+  result.type = AST_EXPR_SELECT;
   result.expr = select_property_expr;
 
   return result;
@@ -828,7 +829,7 @@ ast_expr parser_new_list() {
   parser_must(TOKEN_RIGHT_SQUARE);
   expr->capacity = expr->count;
 
-  result.type = AST_EXPR_TYPE_NEW_LIST;
+  result.type = AST_EXPR_NEW_LIST;
   result.expr = expr;
 
   return result;
@@ -867,7 +868,7 @@ ast_expr parser_new_map() {
   parser_must(TOKEN_RIGHT_CURLY);
   expr->capacity = expr->count;
 
-  result.type = AST_EXPR_TYPE_NEW_MAP;
+  result.type = AST_EXPR_NEW_MAP;
   result.expr = expr;
 
   return result;

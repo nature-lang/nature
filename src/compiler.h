@@ -2,7 +2,7 @@
 #define NATURE_SRC_COMPILER_H_
 
 #include "src/lib/list.h"
-#include "src/ast/ast.h"
+#include "ast.h"
 #include "src/lir.h"
 
 // 入口

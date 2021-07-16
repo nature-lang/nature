@@ -4,7 +4,7 @@
 #include "src/value.h"
 #include "src/lib/table.h"
 #include <stdlib.h>
-#include "src/ast/ast.h"
+#include "ast.h"
 
 table *symbol_var_table; // analysis_local_var
 table *symbol_custom_type_table; // ast_custom_type_decl

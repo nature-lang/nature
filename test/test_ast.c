@@ -1,4 +1,4 @@
-#include "src/ast/ast.h"
+#include "src/ast.h"
 #include <stdlib.h>
 
 /**

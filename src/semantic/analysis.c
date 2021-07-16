@@ -2,7 +2,7 @@
 #include "string.h"
 #include "src/lib/error.h"
 #include "src/lib/table.h"
-#include "src/ast/symbol.h"
+#include "src/symbol.h"
 
 ast_closure_decl analysis(ast_block_stmt block_stmt) {
 
@@ -50,6 +50,7 @@ void analysis_block(ast_block_stmt *block) {
 
 void analysis_if(ast_if_stmt *if_stmt) {
   analysis_expr(&if_stmt->condition);
+
   analysis_begin_scope();
   analysis_block(&if_stmt->consequent);
   analysis_end_scope();
@@ -66,7 +67,7 @@ void analysis_assign(ast_assign_stmt *assign) {
 
 void analysis_call_function(ast_call *call) {
   // 函数地址改写
-  analysis_expr(&call->target_expr);
+  analysis_expr(&call->left);
 
   // 实参改写
   for (int i = 0; i < call->actual_param_count; ++i) {
@@ -97,6 +98,7 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign) {
 }
 
 /**
+ * w
  * env 中仅包含自由变量，不包含 function 原有的形参,且其还是形参的一部分
  * @param function
  * @return
@@ -114,47 +116,43 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function) {
   // 开启一个新的 function 作用域(忘记干嘛用的了)
   analysis_function_begin();
 
-  // 函数参数改写, 参数 0 预留给 env
-  ast_var_decl *env = &function->formal_params[0];
-  env->type = AST_COMPLEX_TYPE_ENV; // env 类型 是哪个啥类型？
-  env->ident = unique_var_ident("env"); // TODO new env ident
-  analysis_local_var *env_local = analysis_new_local(env->type, env->ident);
-  env->ident = env_local->unique_ident;
-  current_function->env_unique_name = env->ident;
-
+  // 函数参数处理
   for (int i = 0; i < function->formal_param_count; ++i) {
-    formal_param *param = &function->formal_params[i];
-    // 注册并改写成唯一标识
+    ast_var_decl *param = &function->formal_params[i];
+    // 注册
     analysis_local_var *param_local = analysis_new_local(param->type, param->ident);
+    // 改写
     param->ident = param_local->unique_ident;
   }
 
-  // 编译 block, 其中进行了自由变量的捕获/改写和局部变量改写
+  // 分析请求体 block, 其中进行了自由变量的捕获/改写和局部变量改写
   analysis_block(&function->body);
-
 
   // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
   // free 是在外部环境构建 env 的。
+  current_function->env_unique_name = unique_var_ident("env");
+  closure->env_name = current_function->env_unique_name;
+
   for (int i = 0; i < current_function->free_count; ++i) {
     analysis_free_var free_var = current_function->frees[i];
     ast_expr expr = closure->env[i];
+
     // 逃逸变量就在当前环境中
     if (free_var.is_local_in_parent) {
       // ast_ident 表达式
-      expr.type = AST_EXPR_TYPE_IDENT;
+      expr.type = AST_EXPR_IDENT;
       ast_ident ident = current_function->parent->locals[free_var.index]->unique_ident;
       expr.expr = ident;
     } else {
       // ast_env_index 表达式
-      expr.type = AST_EXPR_TYPE_ENV_INDEX;
-
+      expr.type = AST_EXPR_ACCESS_ENV;
       ast_access_env *access_env = malloc(sizeof(ast_access_env));
       access_env->env = current_function->parent->env_unique_name;
       access_env->index = free_var.index;
-      // TODO type 该有吧？
       expr.expr = access_env;
     }
   }
+  closure->env_count = current_function->free_count;
   closure->function = function;
 
   analysis_function_end();
@@ -173,6 +171,7 @@ void analysis_end_scope() {
 }
 
 /**
+ * w
  * type 可能还是 var 等待推导,但是基础信息已经填充完毕了
  * @param type
  * @param ident
@@ -199,15 +198,28 @@ analysis_local_var *analysis_new_local(ast_type type, string ident) {
 
 void analysis_expr(ast_expr *expr) {
   switch (expr->type) {
-    case AST_EXPR_TYPE_BINARY: {
+    case AST_EXPR_BINARY: {
       analysis_binary((ast_binary_expr *) expr->expr);
       break;
     };
-    case AST_EXPR_TYPE_LITERAL: {
+    case AST_EXPR_UNARY: {
+      analysis_unary((ast_unary_expr *) expr->expr);
+      break;
+    };
+    case AST_EXPR_ACCESS_MAP: {
+      break;
+    };
+    case AST_EXPR_ACCESS_LIST: {
+      break;
+    };
+    case AST_EXPR_SELECT_PROPERTY: {
+      break;
+    };
+    case AST_EXPR_LITERAL: {
       analysis_literal((ast_literal *) expr->expr);
       break;
     }
-    case AST_EXPR_TYPE_IDENT: {
+    case AST_EXPR_IDENT: {
       analysis_ident(expr);
       break;
     };
@@ -220,10 +232,13 @@ void analysis_expr(ast_expr *expr) {
 
       ast_expr closure_expr;
       closure_expr.type = AST_CLOSURE_DECL;
-      closure_expr.expr = (void *) closure;
+      closure_expr.expr = closure;
       // 重写 expr
       *expr = closure_expr;
       break;
+    }
+    default: {
+      error_exit(0, "unknown expr type");
     }
   }
 }
@@ -252,7 +267,7 @@ void analysis_ident(ast_expr *expr) {
   }
 
   // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
-  expr->type = AST_EXPR_TYPE_ENV_INDEX;
+  expr->type = AST_EXPR_ACCESS_ENV;
   ast_access_env *env_index = malloc(sizeof(ast_access_env));
   env_index->env = current_function->env_unique_name;
   env_index->index = free_var_index;

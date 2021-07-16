@@ -1,5 +1,5 @@
 #include "compiler.h"
-#include "src/ast/symbol.h"
+#include "symbol.h"
 
 list_op *compiler_block(closure *c, ast_block_stmt *block) {
   list_op *operates = list_op_new();

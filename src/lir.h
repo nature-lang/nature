@@ -3,7 +3,7 @@
 
 #include <src/lib/list.h>
 #include "value.h"
-#include "src/ast/ast.h"
+#include "ast.h"
 #include "lib/table.h"
 #include "register/register.h"
 
