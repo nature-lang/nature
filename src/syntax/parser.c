@@ -19,15 +19,15 @@ ast_expr_operator token_to_ast_expr_operator[] = {
     [TOKEN_NOT] =  AST_EXPR_OPERATOR_NOT,
 };
 
-ast_type_category token_to_ast_simple_type[] = {
-    [TOKEN_BOOL] = AST_TYPE_CATEGORY_BOOL,
-    [TOKEN_FLOAT] = AST_TYPE_CATEGORY_FLOAT,
-    [TOKEN_INT] = AST_TYPE_CATEGORY_INT,
-    [TOKEN_STRING] = AST_TYPE_CATEGORY_STRING,
-    [TOKEN_VOID] = AST_TYPE_CATEGORY_VOID,
-    [TOKEN_NULL] = AST_TYPE_CATEGORY_NULL,
-    [TOKEN_VAR] = AST_TYPE_CATEGORY_VAR,
-    [TOKEN_ANY] = AST_TYPE_CATEGORY_ANY
+type_category token_to_ast_simple_type[] = {
+    [TOKEN_BOOL] = TYPE_BOOL,
+    [TOKEN_FLOAT] = TYPE_FLOAT,
+    [TOKEN_INT] = TYPE_INT,
+    [TOKEN_STRING] = TYPE_STRING,
+    [TOKEN_VOID] = TYPE_VOID,
+    [TOKEN_NULL] = TYPE_NULL,
+    [TOKEN_VAR] = TYPE_VAR,
+    [TOKEN_ANY] = TYPE_ANY
 };
 
 parser_rule rules[] = {
@@ -36,7 +36,7 @@ parser_rule rules[] = {
     // map["foo"] list[0]
     [TOKEN_LEFT_SQUARE] = {parser_new_list, parser_access, PRECEDENCE_CALL},
     [TOKEN_LEFT_CURLY] = {parser_new_map, NULL, PRECEDENCE_NULL},
-    [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
+    [TOKEN_DOT] = {NULL, parser_select_property, PRECEDENCE_CALL},
     [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
     [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
     [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
@@ -55,8 +55,7 @@ parser_rule rules[] = {
     [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
     [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
 
-    // 可能包含 custom_type
-    [TOKEN_LITERAL_IDENT] = {parser_var, NULL, PRECEDENCE_NULL},
+    [TOKEN_LITERAL_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_RETURN] = {NULL, NULL, PRECEDENCE_NULL}
 };
 
@@ -80,9 +79,7 @@ ast_block_stmt parser(list *token_list) {
     stmt_type = stmt.type;
 
     ast_block_stmt_push(&block_stmt, stmt);
-    if (!parser_must_stmt_end()) {
-      error_exit(0, "except stmt end");
-    }
+    parser_must_stmt_end();
   }
 
   return block_stmt;
@@ -94,9 +91,7 @@ ast_block_stmt parser_block() {
   parser_must(TOKEN_LEFT_CURLY); // 必须是
   while (!parser_is(TOKEN_RIGHT_CURLY)) {
     ast_stmt stmt = parser_stmt();
-    if (!parser_must_stmt_end()) {
-      error_exit(0, "except stmt end");
-    }
+    parser_must_stmt_end();
 
     ast_block_stmt_push(&block_stmt, stmt);
   }
@@ -301,11 +296,30 @@ ast_expr parser_literal() {
   return result;
 }
 
-ast_expr parser_var() {
+/**
+ * @return
+ */
+ast_expr parser_ident_expr() {
   ast_expr result;
   token *ident_token = parser_advance();
-  ast_ident ident = ident_token->literal;
+  if (parser_consume(TOKEN_LEFT_CURLY)) {
+    ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
+    new_struct->count = 0;
 
+    while (!parser_is(TOKEN_RIGHT_CURLY)) {
+      ast_struct_property item;
+      item.key = parser_advance()->literal;
+      item.value = parser_expr();
+      new_struct->list[new_struct->count++] = item;
+      parser_must_stmt_end();
+    }
+
+    result.type = AST_EXPR_NEW_STRUCT;
+    result.expr = new_struct;
+    return result;
+  }
+
+  ast_ident ident = ident_token->literal;
   result.type = AST_EXPR_IDENT;
   result.expr = &ident;
 
@@ -338,7 +352,7 @@ ast_expr parser_access(ast_expr left) {
  * @param left
  * @return
  */
-ast_expr parser_select(ast_expr left) {
+ast_expr parser_select_property(ast_expr left) {
   ast_expr result;
   parser_must(TOKEN_DOT);
 
@@ -347,7 +361,7 @@ ast_expr parser_select(ast_expr left) {
   select_property_expr->left = left;
   select_property_expr->property = property_token->literal;
 
-  result.type = AST_EXPR_SELECT;
+  result.type = AST_EXPR_SELECT_PROPERTY;
   result.expr = select_property_expr;
 
   return result;
@@ -468,7 +482,7 @@ ast_type parser_type() {
 
     parser_must(TOKEN_RIGHT_SQUARE);
 
-    result.category = AST_TYPE_CATEGORY_LIST;
+    result.category = TYPE_LIST;
     result.value = type_list_decl;
     return result;
   }
@@ -481,7 +495,7 @@ ast_type parser_type() {
     type_map_decl->value_type = parser_type();
     parser_must(TOKEN_RIGHT_CURLY);
 
-    result.category = AST_TYPE_CATEGORY_MAP;
+    result.category = TYPE_MAP;
     result.value = type_map_decl;
     return result;
   }
@@ -492,16 +506,15 @@ ast_type parser_type() {
     parser_must(TOKEN_LEFT_CURLY);
     while (!parser_is(TOKEN_RIGHT_CURLY)) {
       // default value
-      ast_type type = parser_type();
       ast_struct_property item;
       item.type = parser_type();
-      item.name = parser_advance()->literal;
+      item.key = parser_advance()->literal;
 
       type_struct_decl->list[type_struct_decl->count++] = item;
       parser_must_stmt_end();
     }
 
-    result.category = AST_TYPE_CATEGORY_STRUCT;
+    result.category = TYPE_STRUCT;
     result.value = type_struct_decl;
     return result;
   }
@@ -509,20 +522,20 @@ ast_type parser_type() {
   if (parser_consume(TOKEN_FUNCTION)) {
     parser_must(TOKEN_LEFT_CURLY);
     ast_function_type_decl *type_function = malloc(sizeof(ast_function_type_decl));
-    type_function->name = "";
+//    type_function->name = "";
     type_function->return_type = parser_type();
     parser_type_function_formal_param(type_function);
     parser_must(TOKEN_RIGHT_CURLY);
 
-    result.category = AST_TYPE_CATEGORY_FUNCTION;
+    result.category = TYPE_FUNCTION;
     result.value = type_function;
     return result;
   }
 
-  // 神器的 ident
+  // 神奇的 ident
   token *type_token = parser_advance();
-  result.category = AST_TYPE_CATEGORY_TYPE_DECL_IDENT;
-  result.value = &type_token->literal;
+  result.category = TYPE_DECL_IDENT;
+  result.value = type_token->literal;
   return result;
 }
 
@@ -772,6 +785,7 @@ bool parser_is_type() {
   }
 
   if (parser_is(TOKEN_FUNCTION)
+      || parser_is(TOKEN_STRUCT)
       || parser_is(TOKEN_MAP)
       || parser_is(TOKEN_LIST)) {
     return true;
@@ -779,6 +793,7 @@ bool parser_is_type() {
 
   return false;
 }
+
 ast_stmt parser_return_stmt() {
   ast_stmt result;
   parser_advance();
@@ -917,6 +932,8 @@ bool parser_must_stmt_end() {
   if (parser_is(TOKEN_RIGHT_CURLY)) {
     return true;
   }
+
+  error_exit(0, "except ; or } stmt end token");
   return false;
 }
 

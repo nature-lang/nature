@@ -6,23 +6,21 @@
 #include <stdlib.h>
 #include "ast.h"
 
-table *symbol_var_table; // analysis_local_var
+table *symbol_ident_table; // analysis_local_ident
 table *symbol_custom_type_table; // ast_custom_type_decl
 table *symbol_function_table; // ast_function_decl
 
-//typedef enum {
-//  SYMBOL_TYPE_VAR,
-//  SYMBOL_TYPE_CUSTOM_TYPE,
-//  SYMBOL_TYPE_FUNCTION,
-//} symbol_type;
+typedef enum {
+  SYMBOL_TYPE_VAR,
+  SYMBOL_TYPE_CUSTOM_TYPE,
+  SYMBOL_TYPE_FUNCTION,
+} symbol_type;
 //
 //// 但是进行唯一处理之后，就不需要考虑作用域的问题了？
 //typedef struct {
 //  symbol_type type;
 //  string name;
 //} symbol;
-
-//table symbol_table;
 
 int64_t list_offset(string type, uint64_t index);
 

@@ -9,6 +9,6 @@ add_executable(nature main.c
         src/symbol.h src/symbol.c
         src/lib/error.c src/lib/error.h
         src/value.h src/lib/list.h src/lib/list.c src/syntax/token.c
-        src/syntax/parser.c src/syntax/parser.h src/debug/debug.c src/debug/debug.h src/semantic/analysis.c src/semantic/analysis.h src/semantic/infer.h src/semantic/check.h)
+        src/syntax/parser.c src/syntax/parser.h src/debug/debug.c src/debug/debug.h src/semantic/analysis.c src/semantic/analysis.h src/semantic/infer.h src/semantic/check.h src/type.h)
 
 include_directories(.)
