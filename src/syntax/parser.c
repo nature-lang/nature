@@ -16,7 +16,6 @@ ast_expr_operator token_to_ast_expr_operator[] = {
     [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_GT,
     [TOKEN_LESS_EQUAL] = AST_EXPR_OPERATOR_LTE,
     [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
-    [TOKEN_NOT] =  AST_EXPR_OPERATOR_NOT,
 };
 
 type_category token_to_ast_simple_type[] = {
@@ -257,13 +256,26 @@ ast_expr parser_binary(ast_expr left) {
   return result;
 }
 
+/**
+ * ! 取反
+ * - 取负数
+ * @return
+ */
 ast_expr parser_unary() {
   ast_expr result;
   token *operator_token = parser_advance();
   ast_expr operand = parser_precedence_expr(PRECEDENCE_UNARY);
 
   ast_unary_expr *unary_expr = malloc(sizeof(ast_unary_expr));
-  unary_expr->operator = token_to_ast_expr_operator[operator_token->type];
+
+  if (operator_token->type == TOKEN_NOT) {
+    unary_expr->operator = AST_EXPR_OPERATOR_NOT;
+  } else if (operator_token->type == TOKEN_MINUS) {
+    unary_expr->operator = AST_EXPR_OPERATOR_MINUS;
+  } else {
+    error_exit(0, "unexpect operator type");
+  }
+
   unary_expr->operand = operand;
 
   result.type = AST_EXPR_UNARY;
@@ -305,6 +317,7 @@ ast_expr parser_ident_expr() {
   if (parser_consume(TOKEN_LEFT_CURLY)) {
     ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
     new_struct->count = 0;
+    new_struct->ident = ident_token->literal;
 
     while (!parser_is(TOKEN_RIGHT_CURLY)) {
       ast_struct_property item;

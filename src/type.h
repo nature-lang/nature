@@ -10,10 +10,10 @@ typedef enum {
   TYPE_VAR,
   TYPE_ANY,
   TYPE_NULL,
-  TYPE_STRUCT,
-  TYPE_DECL_IDENT,
+  TYPE_STRUCT, // ast_struct_decl
+  TYPE_DECL_IDENT, // char*
   TYPE_LIST,
-  TYPE_MAP, // ast_
+  TYPE_MAP, // ast_map_decl
   TYPE_FUNCTION,
 } type_category;
 

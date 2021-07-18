@@ -54,13 +54,16 @@ typedef enum {
   AST_EXPR_OPERATOR_SUB,
   AST_EXPR_OPERATOR_MUL,
   AST_EXPR_OPERATOR_DIV,
+
   AST_EXPR_OPERATOR_LT,
   AST_EXPR_OPERATOR_LTE,
-  AST_EXPR_OPERATOR_GT,
-  AST_EXPR_OPERATOR_GTE,
-  AST_EXPR_OPERATOR_EQ_EQ,
-  AST_EXPR_OPERATOR_NOT_EQ,
-  AST_EXPR_OPERATOR_NOT,
+  AST_EXPR_OPERATOR_GT, // >
+  AST_EXPR_OPERATOR_GTE,  // >=
+  AST_EXPR_OPERATOR_EQ_EQ, // ==
+  AST_EXPR_OPERATOR_NOT_EQ, // !=
+
+  AST_EXPR_OPERATOR_NOT, // unary !expr
+  AST_EXPR_OPERATOR_MINUS, // unary -expr
 } ast_expr_operator;
 
 typedef struct {
@@ -178,6 +181,7 @@ typedef struct {
 } ast_struct_decl; // 多个 property 组成一个
 
 typedef struct {
+  ast_type type;
   ast_struct_property list[INT8_MAX];
   int8_t count;
 } ast_new_struct;
@@ -201,14 +205,14 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-  string type; // list的类型
+  ast_type type; // list的类型
   ast_expr left;
   ast_expr index;
 } ast_access_list;
 
 typedef struct {
-  string key_type;
-  string value_type;
+  ast_type key_type;
+  ast_type value_type;
 
   ast_expr left;
   ast_expr key;
@@ -303,6 +307,6 @@ typedef struct {
 ast_block_stmt ast_new_block_stmt();
 void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
-ast_type ast_new_type(type_category type);
+ast_type ast_new_simple_type(type_category type);
 
 #endif //NATURE_SRC_AST_H_

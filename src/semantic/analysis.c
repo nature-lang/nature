@@ -15,7 +15,7 @@ ast_closure_decl analysis(ast_block_stmt block_stmt) {
   ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
   function_decl->name = MAIN_FUNCTION_NAME;
   function_decl->body = block_stmt;
-  function_decl->return_type = ast_new_type(TYPE_VOID);
+  function_decl->return_type = ast_new_simple_type(TYPE_VOID);
   function_decl->formal_param_count = 0;
 
   ast_closure_decl *closure_decl = analysis_function_decl(function_decl);
@@ -51,7 +51,7 @@ void analysis_block(ast_block_stmt *block) {
         break;
       }
       case AST_CALL: {
-        analysis_call_function((ast_call *) stmt.stmt);
+        analysis_call((ast_call *) stmt.stmt);
         break;
       }
       case AST_STMT_IF: {
@@ -96,7 +96,7 @@ void analysis_assign(ast_assign_stmt *assign) {
   analysis_expr(&assign->right);
 }
 
-void analysis_call_function(ast_call *call) {
+void analysis_call(ast_call *call) {
   // 函数地址改写
   analysis_expr(&call->left);
 
@@ -128,7 +128,6 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign) {
   analysis_type(&var_decl_assign->type);
 
   analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_VAR, var_decl_assign->type, var_decl_assign->ident);
-
   var_decl_assign->ident = local->unique_ident;
 
   analysis_expr(&var_decl_assign->expr);
@@ -144,19 +143,33 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function) {
   analysis_function_init();
 
   ast_closure_decl *closure = malloc(sizeof(ast_closure_decl));
-
-  analysis_redeclared_check(function->name);
   analysis_type(&function->return_type);
 
-  // 函数名称改写
-  analysis_local_ident *local = analysis_new_local(
-      SYMBOL_TYPE_FUNCTION,
-      ast_new_type(TYPE_FUNCTION),
-      function->name);
-  function->name = local->unique_ident;
+  if (strlen(function->name) > 0) {
+    analysis_redeclared_check(function->name);
 
-  // add to function table
-  table_set(symbol_function_table, function->name, function);
+    ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
+    function_type_decl->return_type = function->return_type;
+    for (int i = 0; i < function->formal_param_count; ++i) {
+      function_type_decl->formal_params[i] = function->formal_params[i];
+    }
+    function_type_decl->formal_param_count = function->formal_param_count;
+    ast_type type = {
+        .category = TYPE_FUNCTION,
+        .value = function_type_decl
+    };
+
+    // 函数名称改写
+    analysis_local_ident *local = analysis_new_local(
+        SYMBOL_TYPE_FUNCTION,
+        type,
+        function->name);
+
+    function->name = local->unique_ident;
+   
+    // add to function table
+    table_set(symbol_function_table, function->name, function);
+  }
 
   // 开启一个新的 function 作用域(忘记干嘛用的了)
   analysis_function_begin();
@@ -279,7 +292,7 @@ void analysis_expr(ast_expr *expr) {
       break;
     };
     case AST_CALL: {
-      analysis_call_function((ast_call *) expr->expr);
+      analysis_call((ast_call *) expr->expr);
       break;
     }
     case AST_FUNCTION_DECL: {
@@ -472,7 +485,8 @@ void analysis_type_decl(ast_type_decl_stmt *stmt) {
   analysis_redeclared_check(stmt->ident);
   analysis_type(&stmt->type);
 
-  analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, ast_new_type(TYPE_NULL), stmt->ident);
+  analysis_local_ident
+      *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, ast_new_simple_type(TYPE_NULL), stmt->ident);
   stmt->ident = local->unique_ident;
 
   table_set(symbol_custom_type_table, stmt->ident, stmt);

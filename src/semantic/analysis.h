@@ -74,7 +74,7 @@ void analysis_type(ast_type *type);
 
 int8_t analysis_resolve_free(analysis_function *current, string ident);
 uint8_t analysis_push_free(analysis_function *f, bool is_local, int8_t index);
-void analysis_call_function(ast_call *call);
+void analysis_call(ast_call *call);
 void analysis_assign(ast_assign_stmt *assign);
 
 string analysis_resolve_type(analysis_function *current, string ident);

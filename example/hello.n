@@ -14,12 +14,23 @@ foo.bar = 12
 foo[bar] = 12
 foo.bar()
 
+// 如何区分其类型？还是压根不需要区分？
+// 从左往右解析，每一层级都应该获取一个 ast_type,从而最终可以确定表达式的类型
+map_foo()[bar][1]
+list_bar().car[1]
+
 // 特殊格式语法糖，兼容  list<int>
 list[int] foo = [1, 2]
 //list[int] foo = list_gen(int, 100) // 待定
 //list[int] foo = make(list[int], 100) // 待定
 //list<int> bar = []
 // list<int> bar = my_gen()
+
+var bar = [] // 不正确，类型不明确
+var bar = [1, 2] // 勉强正确
+list[int] bar = [] // 正确
+var bar = make_list(int, 100) // 正确
+var car = make_map(int, int) // 正确
 
 
 // 特殊格式语法糖，兼容 map<string,int>
