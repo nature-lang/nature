@@ -7,27 +7,30 @@
 
 #include "src/ast.h"
 
-void infer(ast_closure_decl closure_decl);
+typedef struct infer_closure {
+  struct infer_closure *parent;
+  ast_closure_decl *closure_decl;
+} infer_closure;
 
-ast_type infer_closure_decl(ast_closure_decl *closure_decl);
+infer_closure *infer_current;
+
+infer_closure *infer_current_init(ast_closure_decl *closure_decl);
+void infer(ast_closure_decl closure_decl);
 
 void infer_block(ast_block_stmt *block_stmt);
 
-/**
- * var a = 1
- * var b = 2.0
- * var c = true
- * var d = void (int a, int b) {}
- * var e = [1, 2, 3] // ?
- * var f = {"a": 1, "b": 2} // ?
- * var h = call();
- */
-void infer_var_decl_assign(ast_var_decl_assign_stmt);
+ast_type infer_closure_decl(ast_closure_decl *closure_decl);
 void infer_var_decl(ast_var_decl *var_decl);
-void infer_type(ast_type *type);
+void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt);
+void infer_assign(ast_assign_stmt *stmt);
+void infer_if(ast_if_stmt *stmt);
+void infer_while(ast_while_stmt *stmt);
+void infer_for_in(ast_for_in_stmt *stmt);
+void infer_return(ast_return_stmt *stmt);
+//void infer_type_decl(ast_type_decl_stmt *stmt);
+
 
 ast_type infer_expr(ast_expr *expr);
-
 ast_type infer_binary(ast_binary_expr *expr);
 ast_type infer_unary(ast_unary_expr *expr);
 ast_type infer_ident(ast_ident *expr);
@@ -37,6 +40,24 @@ ast_type infer_new_struct(ast_new_struct *new_struct);
 ast_type infer_access(ast_expr *expr);
 ast_type infer_select_property(ast_select_property *select_property);
 ast_type infer_call(ast_call *call);
-ast_type infer_struct_property_type(string ident);
+
+
+void infer_type(ast_type *type);
+
+/**
+ * @param ident
+ * @return
+ */
+ast_type infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
+
+/**
+ * if (expr_type.category == TYPE_VAR && stmt->var_decl->type.category == TYPE_VAR) {
+ *  error_exit(0, "var type ambiguity");
+ * }
+ * @param left
+ * @param right
+ * @return
+ */
+bool infer_compare_type(ast_type left, ast_type right);
 
 #endif //NATURE_SRC_AST_INFER_H_

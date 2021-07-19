@@ -109,76 +109,92 @@ void analysis_call(ast_call *call) {
 
 /**
  * 当子作用域中重新定义了变量，产生了同名变量时，则对变量进行重命名
- * @param var_decl
+ * @param stmt
  */
-void analysis_var_decl(ast_var_decl *var_decl) {
-  analysis_redeclared_check(var_decl->ident);
+void analysis_var_decl(ast_var_decl *stmt) {
+  analysis_redeclare_check(stmt->ident);
 
-  analysis_type(&var_decl->type);
+  analysis_type(&stmt->type);
 
-  analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_VAR, var_decl->type, var_decl->ident);
+  analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_VAR, stmt, stmt->ident);
 
   // 改写
-  var_decl->ident = local->unique_ident;
+  stmt->ident = local->unique_ident;
 }
 
-void analysis_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign) {
-  analysis_redeclared_check(var_decl_assign->ident);
+void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
+  analysis_redeclare_check(stmt->var_decl->ident);
 
-  analysis_type(&var_decl_assign->type);
+  analysis_type(&stmt->var_decl->type);
 
-  analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_VAR, var_decl_assign->type, var_decl_assign->ident);
-  var_decl_assign->ident = local->unique_ident;
+  analysis_local_ident *local = analysis_new_local(SYMBOL_TYPE_VAR, stmt->var_decl, stmt->var_decl->ident);
+  stmt->var_decl->ident = local->unique_ident;
 
-  analysis_expr(&var_decl_assign->expr);
+  analysis_expr(&stmt->expr);
+}
+
+ast_type analysis_function_to_type(ast_function_decl *function_decl) {
+  ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
+  function_type_decl->return_type = function_decl->return_type;
+  for (int i = 0; i < function_decl->formal_param_count; ++i) {
+    function_type_decl->formal_params[i] = function_decl->formal_params[i];
+  }
+  function_type_decl->formal_param_count = function_decl->formal_param_count;
+  ast_type type = {
+      .category = TYPE_FUNCTION,
+      .value = function_type_decl
+  };
+  return type;
+}
+
+ast_var_decl *analysis_function_to_var_decl(ast_function_decl *function_decl) {
+  ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
+  var_decl->ident = function_decl->name;
+
+  var_decl->type = analysis_function_to_type(function_decl);
+  return var_decl;
 }
 
 /**
  * w
  * env 中仅包含自由变量，不包含 function 原有的形参,且其还是形参的一部分
- * @param function
+ *
+ * fn<void(int, int)> foo = void (int a, int b) {
+ *
+ * }
+ *
+ * 函数此时有两个名称,所以需要添加两次符号表
+ * fn<void(int, int)> foo = void bar(int a, int b) {
+ *
+ * }
+ * @param function_decl
  * @return
  */
-ast_closure_decl *analysis_function_decl(ast_function_decl *function) {
-  analysis_function_init();
-
+ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl) {
   ast_closure_decl *closure = malloc(sizeof(ast_closure_decl));
-  analysis_type(&function->return_type);
+  analysis_type(&function_decl->return_type);
 
-  if (strlen(function->name) > 0) {
-    analysis_redeclared_check(function->name);
-
-    ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
-    function_type_decl->return_type = function->return_type;
-    for (int i = 0; i < function->formal_param_count; ++i) {
-      function_type_decl->formal_params[i] = function->formal_params[i];
-    }
-    function_type_decl->formal_param_count = function->formal_param_count;
-    ast_type type = {
-        .category = TYPE_FUNCTION,
-        .value = function_type_decl
-    };
+  // 仅 fun 再次定义 name 才需要再次添加到符号表
+  if (strlen(function_decl->name) > 0) {
+    analysis_redeclare_check(function_decl->name);
 
     // 函数名称改写
     analysis_local_ident *local = analysis_new_local(
-        SYMBOL_TYPE_FUNCTION,
-        type,
-        function->name);
+        SYMBOL_TYPE_VAR,
+        analysis_function_to_var_decl(function_decl),
+        function_decl->name);
 
-    function->name = local->unique_ident;
-   
-    // add to function table
-    table_set(symbol_function_table, function->name, function);
+    function_decl->name = local->unique_ident;
   }
 
   // 开启一个新的 function 作用域(忘记干嘛用的了)
   analysis_function_begin();
 
   // 函数形参处理
-  for (int i = 0; i < function->formal_param_count; ++i) {
-    ast_var_decl *param = function->formal_params[i];
+  for (int i = 0; i < function_decl->formal_param_count; ++i) {
+    ast_var_decl *param = function_decl->formal_params[i];
     // 注册
-    analysis_local_ident *param_local = analysis_new_local(SYMBOL_TYPE_VAR, param->type, param->ident);
+    analysis_local_ident *param_local = analysis_new_local(SYMBOL_TYPE_VAR, param, param->ident);
     // 改写
     param->ident = param_local->unique_ident;
 
@@ -186,37 +202,37 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function) {
   }
 
   // 分析请求体 block, 其中进行了自由变量的捕获/改写和局部变量改写
-  analysis_block(&function->body);
+  analysis_block(&function_decl->body);
 
   // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
   // free 是在外部环境构建 env 的。
 //  current_function->env_unique_name = unique_var_ident(ENV_IDENT);
-  closure->env_name = current_function->env_unique_name;
+  closure->env_name = analysis_current->env_unique_name;
 
   // 构造 env
-  for (int i = 0; i < current_function->free_count; ++i) {
-    analysis_free_ident free_var = current_function->frees[i];
+  for (int i = 0; i < analysis_current->free_count; ++i) {
+    analysis_free_ident free_var = analysis_current->frees[i];
     ast_expr expr = closure->env[i];
 
     // 逃逸变量就在当前环境中
     if (free_var.is_local) {
       // ast_ident 表达式
       expr.type = AST_EXPR_IDENT;
-      ast_ident ident = current_function->parent->locals[free_var.index]->unique_ident;
+      ast_ident ident = analysis_current->parent->locals[free_var.index]->unique_ident;
       expr.expr = ident;
     } else {
       // ast_env_index 表达式
       expr.type = AST_EXPR_ACCESS_ENV;
       ast_access_env *access_env = malloc(sizeof(ast_access_env));
-      access_env->env = current_function->parent->env_unique_name;
+      access_env->env = analysis_current->parent->env_unique_name;
       access_env->index = free_var.index;
       expr.expr = access_env;
     }
   }
-  closure->env_count = current_function->free_count;
-  closure->function = function;
+  closure->env_count = analysis_current->free_count;
+  closure->function = function_decl;
 
-  analysis_function_end();
+  analysis_function_end(); // 退出当前 current
   return closure;
 }
 
@@ -224,11 +240,11 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function) {
  * 只要遇到块级作用域，就增加 scope
  */
 void analysis_begin_scope() {
-  current_function->scope_depth++;
+  analysis_current->scope_depth++;
 }
 
 void analysis_end_scope() {
-  current_function->scope_depth--;
+  analysis_current->scope_depth--;
 }
 
 /**
@@ -237,19 +253,19 @@ void analysis_end_scope() {
  * @param ident
  * @return
  */
-analysis_local_ident *analysis_new_local(symbol_type belong, ast_type type, string ident) {
+analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident) {
   // unique ident
   string unique_ident = unique_var_ident(ident);
 
   analysis_local_ident *local = malloc(sizeof(analysis_local_ident));
   local->ident = ident;
   local->unique_ident = unique_ident;
-  local->scope_depth = current_function->scope_depth;
-  local->type = type;
+  local->scope_depth = analysis_current->scope_depth;
+  local->decl = decl;
   local->belong = belong;
 
   // 添加 locals
-  current_function->locals[current_function->local_count++] = local;
+  analysis_current->locals[analysis_current->local_count++] = local;
 
   table_set(symbol_ident_table, unique_ident, local);
 
@@ -318,8 +334,8 @@ void analysis_ident(ast_expr *expr) {
   ast_ident *ident = (ast_ident *) expr->expr;
 
   // 在当前函数作用域中查找变量定义
-  for (int i = 0; i < current_function->local_count; ++i) {
-    analysis_local_ident *local = current_function->locals[i];
+  for (int i = 0; i < analysis_current->local_count; ++i) {
+    analysis_local_ident *local = analysis_current->locals[i];
     if (strcmp(*ident, local->ident) == 0) {
       // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
       *ident = local->unique_ident;
@@ -328,7 +344,7 @@ void analysis_ident(ast_expr *expr) {
   }
 
   // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-  int8_t free_var_index = analysis_resolve_free(current_function, *ident);
+  int8_t free_var_index = analysis_resolve_free(analysis_current, *ident);
   if (free_var_index == -1) {
     error_exit(0, "not found ident");
   }
@@ -336,7 +352,7 @@ void analysis_ident(ast_expr *expr) {
   // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
   expr->type = AST_EXPR_ACCESS_ENV;
   ast_access_env *env_index = malloc(sizeof(ast_access_env));
-  env_index->env = current_function->env_unique_name;
+  env_index->env = analysis_current->env_unique_name;
   env_index->index = free_var_index;
   expr->expr = env_index;
 }
@@ -378,7 +394,7 @@ void analysis_type(ast_type *type) {
   // 如果只是简单的 ident,又应该如何改写呢？
   if (type->category == TYPE_DECL_IDENT) {
     // 向上查查查
-    string unique_name = analysis_resolve_type(current_function, (string) type->value);
+    string unique_name = analysis_resolve_type(analysis_current, (string) type->value);
     type->value = unique_name;
     return;
   }
@@ -482,18 +498,16 @@ void analysis_return(ast_return_stmt *stmt) {
 
 // unique name
 void analysis_type_decl(ast_type_decl_stmt *stmt) {
-  analysis_redeclared_check(stmt->ident);
+  analysis_redeclare_check(stmt->ident);
   analysis_type(&stmt->type);
 
   analysis_local_ident
-      *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, ast_new_simple_type(TYPE_NULL), stmt->ident);
+      *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, stmt, stmt->ident);
   stmt->ident = local->unique_ident;
-
-  table_set(symbol_custom_type_table, stmt->ident, stmt);
 }
 char *analysis_resolve_type(analysis_function *current, string ident) {
   for (int i = 0; i < current->local_count; ++i) {
-    analysis_local_ident *local = current_function->locals[i];
+    analysis_local_ident *local = analysis_current->locals[i];
     if (strcmp(ident, local->ident) == 0) {
       return local->unique_ident;
     }
@@ -517,9 +531,9 @@ uint8_t analysis_push_free(analysis_function *current, bool is_local, int8_t ind
   return free_index;
 }
 
-bool analysis_redeclared_check(char *ident) {
-  for (int i = 0; i < current_function->local_count; ++i) {
-    analysis_local_ident *local = current_function->locals[i];
+bool analysis_redeclare_check(char *ident) {
+  for (int i = 0; i < analysis_current->local_count; ++i) {
+    analysis_local_ident *local = analysis_current->locals[i];
     if (strcmp(ident, local->ident) == 0) {
       error_exit(0, "redeclared ident");
       return false;
@@ -539,14 +553,17 @@ char *unique_var_ident(char *name) {
 }
 
 void analysis_function_begin() {
+  analysis_current_init();
   analysis_begin_scope();
 }
 
 void analysis_function_end() {
   analysis_end_scope();
+
+  analysis_current = analysis_current->parent;
 }
 
-analysis_function *analysis_function_init() {
+analysis_function *analysis_current_init() {
   analysis_function *new = malloc(sizeof(analysis_function));
   new->local_count = 0;
   new->free_count = 0;
@@ -554,10 +571,10 @@ analysis_function *analysis_function_init() {
   new->env_unique_name = unique_var_ident(ENV_IDENT);
 
   // 继承关系
-  new->parent = current_function;
-  current_function = new;
+  new->parent = analysis_current;
+  analysis_current = new;
 
-  return current_function;
+  return analysis_current;
 }
 
 

@@ -1,13 +1,23 @@
 #include "infer.h"
 #include "src/lib/error.h"
 #include "src/symbol.h"
+#include "analysis.h"
 
 void infer(ast_closure_decl closure_decl) {
 
 }
 
 ast_type infer_closure_decl(ast_closure_decl *closure_decl) {
+  infer_current_init(closure_decl);
 
+  ast_function_decl *function_decl = closure_decl->function;
+  ast_type result = analysis_function_to_type(function_decl);
+
+  infer_block(&function_decl->body);
+
+  infer_current = infer_current->parent;
+
+  return result;
 }
 
 void infer_block(ast_block_stmt *block) {
@@ -27,9 +37,8 @@ void infer_block(ast_block_stmt *block) {
         infer_assign((ast_assign_stmt *) stmt.stmt);
         break;
       }
-      case AST_FUNCTION_DECL: {
-        // function + env => closure
-        infer_function_decl((ast_function_decl *) stmt.stmt);
+      case AST_CLOSURE_DECL: {
+        infer_closure_decl((ast_closure_decl *) stmt.stmt);
         break;
       }
       case AST_CALL: {
@@ -52,10 +61,10 @@ void infer_block(ast_block_stmt *block) {
         infer_return((ast_return_stmt *) stmt.stmt);
         break;
       }
-      case AST_STMT_TYPE_DECL: {
-        infer_type_decl((ast_type_decl_stmt *) stmt.stmt);
-        break;
-      }
+//      case AST_STMT_TYPE_DECL: {
+//        infer_type_decl((ast_type_decl_stmt *) stmt.stmt);
+//        break;
+//      }
       default:return;
     }
   }
@@ -100,7 +109,7 @@ ast_type infer_expr(ast_expr *expr) {
       return infer_closure_decl((ast_closure_decl *) expr->expr);
     }
     default: {
-      error_exit(0, "unexpect expr");
+      error_exit(0, "unknown expr");
     }
   }
 }
@@ -160,15 +169,18 @@ ast_type infer_unary(ast_unary_expr *expr) {
 }
 
 /**
- * TODO 去符号表查询这个变量的类型吧？
  * @param expr
  * @return
  */
 ast_type infer_ident(ast_ident *expr) {
-  ast_type result;
-  string ident = *expr;
+  string unique_ident = *expr;
+  analysis_local_ident *local_ident = symbol_get_type(unique_ident);
+  if (local_ident->belong != TYPE_VAR) {
+    error_exit(0, "type error in infer ident");
+  }
 
-  return result;
+  ast_var_decl *var_decl = local_ident->decl;
+  return var_decl->type;
 }
 
 /**
@@ -270,11 +282,11 @@ ast_type infer_new_struct(ast_new_struct *new_struct) {
   for (int i = 0; i < new_struct->count; ++i) {
     ast_struct_property struct_property = new_struct->list[i];
 
-    ast_type expect_type = infer_struct_property_type(struct_property.key);
+    ast_type expect_type = infer_struct_property_type(struct_decl, struct_property.key);
     ast_type actual_type = infer_expr(&struct_property.value);
 
     // expect type type 并不允许为 var
-    if (actual_type.category != expect_type.category) {
+    if (!infer_compare_type(actual_type, expect_type)) {
       error_exit(0, "struct property type exception");
     }
   }
@@ -348,13 +360,12 @@ ast_type infer_select_property(ast_select_property *select_property) {
 }
 
 /**
- * to_string() // 如果只是这样简单的函数调用呢？符号表会注册该函数的所有信息
- *
  * @param call
  * @return
  */
 ast_type infer_call(ast_call *call) {
   ast_type result;
+
   ast_type left_type = infer_expr(&call->left);
 
   if (left_type.category != TYPE_FUNCTION) {
@@ -362,8 +373,142 @@ ast_type infer_call(ast_call *call) {
   }
 
   ast_function_type_decl *function_type_decl = left_type.value;
+  // call param check
+  for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
+    ast_var_decl *formal_param = function_type_decl->formal_params[i];
+    ast_type actual_param_type = infer_expr(&call->actual_params[i]);
+    if (!infer_compare_type(formal_param->type, actual_param_type)) {
+      error_exit(0, "function param type not match");
+    }
+  }
+
   result = function_type_decl->return_type;
   return result;
+}
+
+/**
+ * int a;
+ * float b;
+ * @param var_decl
+ */
+void infer_var_decl(ast_var_decl *var_decl) {
+  ast_type type = var_decl->type;
+  if (type.category == TYPE_VAR) {
+    error_exit(0, "var decl must statement type");
+  }
+}
+
+/**
+ * 仅使用了 var 关键字的地方才需要进行类型推断，好像就这里需要！
+ * var a = 1
+ * var b = 2.0
+ * var c = true
+ * var d = void (int a, int b) {}
+ * var e = [1, 2, 3] // ?
+ * var f = {"a": 1, "b": 2} // ?
+ * var h = call();
+ */
+void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
+  ast_type expr_type = infer_expr(&stmt->expr);
+
+  // 类型推断
+  if (stmt->var_decl->type.category == TYPE_VAR && expr_type.category != TYPE_VAR) {
+    stmt->var_decl->type = expr_type;
+
+    analysis_local_ident *local_ident = table_get(symbol_ident_table, stmt->var_decl->ident);
+    if (local_ident->belong != SYMBOL_TYPE_VAR) {
+      error_exit(0, "ident should var type");
+    }
+    // 类型改写
+    ast_var_decl *var_decl = local_ident->decl;
+    var_decl->type = expr_type;
+  }
+
+  // 判断类型是否一致 compare
+  if (infer_compare_type(stmt->var_decl->type, expr_type)) {
+    error_exit(0, "type not match");
+  }
+}
+
+/**
+ * @param stmt
+ */
+void infer_assign(ast_assign_stmt *stmt) {
+  ast_type left_type = infer_expr(&stmt->left);
+  ast_type right_type = infer_expr(&stmt->left);
+
+  if (!infer_compare_type(left_type, right_type)) {
+    error_exit(0, "type not match");
+  }
+}
+
+void infer_if(ast_if_stmt *stmt) {
+  ast_type condition_type = infer_expr(&stmt->condition);
+  if (condition_type.category != TYPE_BOOL) {
+    error_exit(0, "if stmt condition must bool");
+  }
+
+  infer_block(&stmt->consequent);
+  infer_block(&stmt->alternate);
+}
+
+void infer_while(ast_while_stmt *stmt) {
+  ast_type condition_type = infer_expr(&stmt->condition);
+  if (condition_type.category != TYPE_BOOL) {
+    error_exit(0, "while stmt condition must bool");
+  }
+  infer_block(&stmt->body);
+}
+
+/**
+ * 仅 list 和 map 类型支持 iterate
+ * @param stmt
+ */
+void infer_for_in(ast_for_in_stmt *stmt) {
+  ast_type iterate_type = infer_expr(&stmt->iterate);
+  if (iterate_type.category != TYPE_MAP && iterate_type.category != TYPE_LIST) {
+    error_exit(0, "for in iterate type must be map or list");
+  }
+
+  // 类型推断
+  analysis_local_ident *key_ident = table_get(symbol_ident_table, stmt->gen_key->ident);
+  analysis_local_ident *value_ident = table_get(symbol_ident_table, stmt->gen_value->ident);
+  ast_var_decl *key_decl = key_ident->decl;
+  ast_var_decl *value_decl = key_ident->decl;
+  if (iterate_type.category == TYPE_MAP) {
+    ast_map_decl *map_decl = iterate_type.value;
+    key_decl->type = map_decl->key_type;
+    value_decl->type = map_decl->value_type;
+  } else {
+    ast_list_decl *list_decl = iterate_type.value;
+    key_decl->type = ast_new_simple_type(TYPE_INT);
+    value_decl->type = list_decl->type;
+
+  }
+
+  infer_block(&stmt->body);
+}
+
+/**
+ * 但是我又怎么知道自己当前在哪个 closure 里面？
+ * @param stmt
+ */
+void infer_return(ast_return_stmt *stmt) {
+  ast_type return_type = infer_expr(&stmt->expr);
+
+  ast_type expect_type = infer_current->closure_decl->function->return_type;
+  if (infer_compare_type(expect_type, return_type)) {
+    error_exit(0, "type not match");
+  }
+}
+
+infer_closure *infer_current_init(ast_closure_decl *closure_decl) {
+  infer_closure *new = malloc(sizeof(infer_closure));
+  new->closure_decl = closure_decl;
+  new->parent = infer_current;
+
+  infer_current = new;
+  return infer_current;
 }
 
 

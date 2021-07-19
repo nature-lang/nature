@@ -57,7 +57,7 @@ if (a > 1) {
 	++a
 }
 
-for (key,value in list) {
+for (var key,value in list) {
 
 }
 

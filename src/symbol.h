@@ -8,21 +8,11 @@
 
 table *symbol_ident_table; // analysis_local_ident
 
-table *symbol_var_table; // ast_var_decl
-table *symbol_custom_type_table; // ast_custom_type_decl
-table *symbol_function_table; // ast_function_decl
-
 typedef enum {
   SYMBOL_TYPE_VAR,
   SYMBOL_TYPE_CUSTOM_TYPE,
-  SYMBOL_TYPE_FUNCTION,
+//  SYMBOL_TYPE_FUNCTION,
 } symbol_type;
-//
-//// 但是进行唯一处理之后，就不需要考虑作用域的问题了？
-//typedef struct {
-//  symbol_type type;
-//  string name;
-//} symbol;
 
 int64_t list_offset(string type, uint64_t index);
 
@@ -30,10 +20,8 @@ uint64_t type_sizeof(string type);
 
 void symbol_table_init();
 
-ast_struct_decl *symbol_struct(string struct_ident);
+void *symbol_get_type(string unique_ident);
 
-/**
- * 符号表存储了变量的作用域，类型，但是绝对是没有值的！
- */
+ast_struct_decl *symbol_struct(string struct_ident);
 
 #endif //NATURE_SRC_AST_SYMBOL_H_

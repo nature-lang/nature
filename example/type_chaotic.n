@@ -1,6 +1,7 @@
 test(): bool {
 
 }
+
 test() bool {
 
 }
@@ -8,9 +9,11 @@ test() bool {
 sum(int a, int b): int {
 
 }
+
 sum(int a, int b) int {
 
 }
+
 
 fn(int,int):bool closure = (int a, int b): bool {
 
@@ -38,3 +41,4 @@ return int (map{int:int} a, list[int] b) {
 return (string a, string b): list[int] {
 
 }
+

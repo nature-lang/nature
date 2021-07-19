@@ -147,9 +147,11 @@ ast_stmt parser_auto_infer_decl() {
   parser_must(TOKEN_VAR);
   // 变量名称
   token *t = parser_must(TOKEN_LITERAL_IDENT);
-  stmt->type = parser_type();
-  stmt->ident = t->literal;
+  ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
+  var_decl->type = parser_type();
+  var_decl->ident = t->literal;
   stmt->expr = parser_expr();
+  stmt->var_decl = var_decl;
 
   result.type = AST_STMT_VAR_DECL_ASSIGN;
   result.stmt = stmt;
@@ -215,9 +217,11 @@ ast_stmt parser_var_or_function_decl() {
   // int foo = 12;
   if (parser_consume(TOKEN_EQUAL)) {
     ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
-    stmt->type = type;
-    stmt->ident = ident_token->literal;
+    ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
+    var_decl->type = type;
+    var_decl->ident = ident_token->literal;
     stmt->expr = parser_expr();
+    stmt->var_decl = var_decl;
     result.type = AST_STMT_VAR_DECL_ASSIGN;
     result.stmt = stmt;
     return result;

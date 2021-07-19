@@ -137,8 +137,7 @@ typedef struct {
 } ast_assign_stmt;
 
 typedef struct {
-  ast_type type; // 系统 type 字符或者自定义 struct 字符
-  string ident;
+  ast_var_decl *var_decl;
   ast_expr expr;
 } ast_var_decl_assign_stmt;
 

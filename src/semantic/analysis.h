@@ -11,7 +11,7 @@ int unique_name_count;
 typedef struct {
 //  ast_type type;
   symbol_type belong; // function/var/
-  ast_type type;
+  void *decl; // ast_var_decl,ast_custom_type_decl,ast_function_decl
   string ident; // 原始名称
   string unique_ident; // 唯一名称
   int scope_depth;
@@ -49,22 +49,22 @@ typedef struct analysis_function {
   string env_unique_name;
 } analysis_function;
 
-analysis_function *current_function = NULL;
+analysis_function *analysis_current;
 
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换
 ast_closure_decl analysis(ast_block_stmt stmt_list);
 
-analysis_function *analysis_function_init();
+analysis_function *analysis_current_init();
 
 // 变量 hash_string 表
 void analysis_function_begin();
 void analysis_function_end();
 void analysis_block(ast_block_stmt *block);
 
-void analysis_var_decl(ast_var_decl *var_decal);
+void analysis_var_decl(ast_var_decl *stmt);
 
-void analysis_var_decl_assign(ast_var_decl_assign_stmt *var_decl_assign);
-ast_closure_decl *analysis_function_decl(ast_function_decl *function);
+void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt);
+ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl);
 void analysis_expr(ast_expr *expr);
 void analysis_binary(ast_binary_expr *expr);
 void analysis_unary(ast_unary_expr *expr);
@@ -92,12 +92,15 @@ void analysis_new_struct(ast_new_struct *expr);
 void analysis_new_map(ast_new_map *expr);
 void analysis_new_list(ast_new_list *expr);
 
-bool analysis_redeclared_check(string ident);
+bool analysis_redeclare_check(string ident);
 
-analysis_local_ident *analysis_new_local(symbol_type belong, ast_type type, string ident);
+analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident);
 
 string unique_var_ident(string name);
 void analysis_begin_scope();
 void analysis_end_scope();
+
+ast_type analysis_function_to_type(ast_function_decl *function_decl);
+ast_var_decl *analysis_function_to_var_decl(ast_function_decl *function_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_
