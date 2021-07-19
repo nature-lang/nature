@@ -41,8 +41,12 @@ ast_type infer_access(ast_expr *expr);
 ast_type infer_select_property(ast_select_property *select_property);
 ast_type infer_call(ast_call *call);
 
-
-void infer_type(ast_type *type);
+/**
+ * struct 允许顺序不通，但是 key 和 type 需要相同，在还原时需要根据 key 进行排序
+ * @param type
+ * @return
+ */
+ast_type infer_type(ast_type type);
 
 /**
  * @param ident
@@ -52,7 +56,7 @@ ast_type infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
 
 /**
  * if (expr_type.category == TYPE_VAR && stmt->var_decl->type.category == TYPE_VAR) {
- *  error_exit(0, "var type ambiguity");
+ *  exit_error(0, "var type ambiguity");
  * }
  * @param left
  * @param right

@@ -141,6 +141,7 @@ ast_type analysis_function_to_type(ast_function_decl *function_decl) {
   }
   function_type_decl->formal_param_count = function_decl->formal_param_count;
   ast_type type = {
+      .is_origin = false,
       .category = TYPE_FUNCTION,
       .value = function_type_decl
   };
@@ -322,7 +323,7 @@ void analysis_expr(ast_expr *expr) {
       break;
     }
     default: {
-      error_exit(0, "unknown expr type");
+      exit_error(0, "unknown expr type");
     }
   }
 }
@@ -346,7 +347,7 @@ void analysis_ident(ast_expr *expr) {
   // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
   int8_t free_var_index = analysis_resolve_free(analysis_current, *ident);
   if (free_var_index == -1) {
-    error_exit(0, "not found ident");
+    exit_error(0, "not found ident");
   }
 
   // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
@@ -514,7 +515,7 @@ char *analysis_resolve_type(analysis_function *current, string ident) {
   }
 
   if (current->parent == NULL) {
-    error_exit(0, "type not found");
+    exit_error(0, "type not found");
   }
 
   return analysis_resolve_type(current->parent, ident);
@@ -535,7 +536,7 @@ bool analysis_redeclare_check(char *ident) {
   for (int i = 0; i < analysis_current->local_count; ++i) {
     analysis_local_ident *local = analysis_current->locals[i];
     if (strcmp(ident, local->ident) == 0) {
-      error_exit(0, "redeclared ident");
+      exit_error(0, "redeclared ident");
       return false;
     }
   }

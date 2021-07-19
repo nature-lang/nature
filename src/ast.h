@@ -123,6 +123,7 @@ typedef struct {
 typedef struct {
   void *value; // char**,ast_map_decl*....
   type_category category; // base_type, custom_type, function, list, map
+  bool is_origin;
 } ast_type;
 
 // int a;

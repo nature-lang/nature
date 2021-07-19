@@ -2,15 +2,22 @@
 #include "src/lib/error.h"
 #include "src/symbol.h"
 #include "analysis.h"
+#include "string.h"
 
 void infer(ast_closure_decl closure_decl) {
 
 }
 
 ast_type infer_closure_decl(ast_closure_decl *closure_decl) {
-  infer_current_init(closure_decl);
-
   ast_function_decl *function_decl = closure_decl->function;
+
+  // 类型还原
+  function_decl->return_type = infer_type(function_decl->return_type);
+  for (int i = 0; i < function_decl->formal_param_count; ++i) {
+    function_decl->formal_params[i]->type = infer_type(function_decl->formal_params[i]->type);
+  }
+
+  infer_current_init(closure_decl);
   ast_type result = analysis_function_to_type(function_decl);
 
   infer_block(&function_decl->body);
@@ -109,7 +116,7 @@ ast_type infer_expr(ast_expr *expr) {
       return infer_closure_decl((ast_closure_decl *) expr->expr);
     }
     default: {
-      error_exit(0, "unknown expr");
+      exit_error(0, "unknown expr");
     }
   }
 }
@@ -125,7 +132,7 @@ ast_type infer_binary(ast_binary_expr *expr) {
   ast_type right_type = infer_expr(&expr->right);
 
   if (left_type.category != right_type.category) {
-    error_exit(0, "type exception");
+    exit_error(0, "type exception");
   }
 
   switch (expr->operator) {
@@ -144,7 +151,7 @@ ast_type infer_binary(ast_binary_expr *expr) {
       return ast_new_simple_type(TYPE_BOOL);
     }
     default: {
-      error_exit(0, "unexpect operator type");
+      exit_error(0, "unexpect operator type");
     }
   }
 }
@@ -157,18 +164,25 @@ ast_type infer_binary(ast_binary_expr *expr) {
 ast_type infer_unary(ast_unary_expr *expr) {
   ast_type operand_type = infer_expr(&expr->operand);
   if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.category != TYPE_BOOL) {
-    error_exit(0, "!expr, expr must be bool type");
+    exit_error(0, "!expr, expr must be bool type");
   }
 
   if ((expr->operator == AST_EXPR_OPERATOR_MINUS) && operand_type.category != TYPE_INT
       && operand_type.category != TYPE_FLOAT) {
-    error_exit(0, "!expr, expr must be int or float");
+    exit_error(0, "!expr, expr must be int or float");
   }
 
   return operand_type;
 }
 
 /**
+ * func main() {
+ *  a = 1
+ *  fmt.Println(a)
+ *}
+ * var a int
+ *
+ * 参考 golang，声明是可能在使用之后的
  * @param expr
  * @return
  */
@@ -176,10 +190,13 @@ ast_type infer_ident(ast_ident *expr) {
   string unique_ident = *expr;
   analysis_local_ident *local_ident = symbol_get_type(unique_ident);
   if (local_ident->belong != TYPE_VAR) {
-    error_exit(0, "type error in infer ident");
+    exit_error(0, "type error in infer ident");
   }
 
+  // 类型还原，并回写到 local_ident
   ast_var_decl *var_decl = local_ident->decl;
+  var_decl->type = infer_type(var_decl->type);
+
   return var_decl->type;
 }
 
@@ -190,6 +207,7 @@ ast_type infer_ident(ast_ident *expr) {
  */
 ast_type infer_new_list(ast_new_list *new_list) {
   ast_type result = {
+      .is_origin = false,
       .category = TYPE_LIST,
   };
   ast_list_decl *list_decl = malloc(sizeof(ast_list_decl));
@@ -197,11 +215,11 @@ ast_type infer_new_list(ast_new_list *new_list) {
 
   for (int i = 0; i < new_list->count; ++i) {
     ast_type item_type = infer_expr(&new_list->values[i]);
-    // 初始化赋值
     if (list_decl->type.category == TYPE_VAR) {
+      // 初始化赋值
       list_decl->type = item_type;
     } else {
-      if (item_type.category != list_decl->type.category) {
+      if (!infer_compare_type(item_type, list_decl->type)) {
         list_decl->type = ast_new_simple_type(TYPE_ANY);
         break;
       }
@@ -220,6 +238,7 @@ ast_type infer_new_list(ast_new_list *new_list) {
  */
 ast_type infer_new_map(ast_new_map *new_map) {
   ast_type result = {
+      .is_origin = false,
       .category = TYPE_MAP,
   };
   ast_map_decl *map_decl = malloc(sizeof(ast_map_decl));
@@ -233,7 +252,7 @@ ast_type infer_new_map(ast_new_map *new_map) {
     if (map_decl->key_type.category == TYPE_VAR) {
       map_decl->key_type = key_type;
     } else {
-      if (key_type.category != map_decl->key_type.category) {
+      if (!infer_compare_type(key_type, map_decl->key_type)) {
         map_decl->key_type = ast_new_simple_type(TYPE_ANY);
         break;
       }
@@ -243,7 +262,7 @@ ast_type infer_new_map(ast_new_map *new_map) {
     if (map_decl->value_type.category == TYPE_VAR) {
       map_decl->value_type = value_type;
     } else {
-      if (value_type.category != map_decl->value_type.category) {
+      if (!infer_compare_type(value_type, map_decl->value_type)) {
         map_decl->value_type = ast_new_simple_type(TYPE_ANY);
         break;
       }
@@ -267,31 +286,28 @@ ast_type infer_new_map(ast_new_map *new_map) {
  * @return
  */
 ast_type infer_new_struct(ast_new_struct *new_struct) {
-  ast_type result = new_struct->type;
+  // 类型还原, struct ident 一定会被还原回 struct 原始结构
+  // 如果本身已经是 struct 结构，那么期中的 struct property type 也会被还原成原始类型
+  new_struct->type = infer_type(new_struct->type);
 
-  ast_struct_decl *struct_decl;
-  if (result.category == TYPE_STRUCT) {
-    struct_decl = (ast_struct_decl *) result.value;
-  } else if (result.category == TYPE_DECL_IDENT) {
-    string ident = result.value;
-    struct_decl = symbol_struct(ident);
-  } else {
-    error_exit(0, "new struct type exception");
+  if (new_struct->type.category != TYPE_STRUCT) {
+    exit_error(0, "new struct type exception");
   }
 
+  ast_struct_decl *struct_decl = (ast_struct_decl *) new_struct->type.value;
   for (int i = 0; i < new_struct->count; ++i) {
     ast_struct_property struct_property = new_struct->list[i];
-
+    // struct_decl 已经是被还原过的类型了
     ast_type expect_type = infer_struct_property_type(struct_decl, struct_property.key);
     ast_type actual_type = infer_expr(&struct_property.value);
 
     // expect type type 并不允许为 var
     if (!infer_compare_type(actual_type, expect_type)) {
-      error_exit(0, "struct property type exception");
+      exit_error(0, "struct property type exception");
     }
   }
 
-  return result;
+  return new_struct->type;
 }
 
 /**
@@ -323,7 +339,7 @@ ast_type infer_access(ast_expr *expr) {
     result = map_decl->value_type;
   } else if (left_type.category == TYPE_LIST) {
     if (key_type.category != TYPE_INT) {
-      error_exit(0, "access list, index type must by int");
+      exit_error(0, "access list, index type must by int");
     }
 
     ast_access_list *access_list = malloc(sizeof(ast_access_map));
@@ -338,7 +354,8 @@ ast_type infer_access(ast_expr *expr) {
 
     result = list_decl->type;
   } else {
-    error_exit(0, "type must map or list");
+    exit_error(0, "type must map or list");
+    return result;
   };
 
   return result;
@@ -352,11 +369,19 @@ ast_type infer_access(ast_expr *expr) {
  * @return
  */
 ast_type infer_select_property(ast_select_property *select_property) {
-  ast_type result;
   ast_type left_type = infer_expr(&select_property->left);
-  // left_type must be
 
-  return result;
+  if (left_type.category != TYPE_STRUCT) {
+    exit_error(0, "struct type exception");
+  }
+  ast_struct_decl *struct_decl = left_type.value;
+  for (int i = 0; i < struct_decl->count; ++i) {
+    if (strcmp(struct_decl->list[i].key, select_property->property) == 0) {
+      return struct_decl->list[i].type;
+    }
+  }
+
+  exit_error(0, "cannot get property");
 }
 
 /**
@@ -369,16 +394,18 @@ ast_type infer_call(ast_call *call) {
   ast_type left_type = infer_expr(&call->left);
 
   if (left_type.category != TYPE_FUNCTION) {
-    error_exit(0, "call.left type must be function");
+    exit_error(0, "call.left type must be function");
   }
 
   ast_function_type_decl *function_type_decl = left_type.value;
+
   // call param check
   for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
     ast_var_decl *formal_param = function_type_decl->formal_params[i];
+
     ast_type actual_param_type = infer_expr(&call->actual_params[i]);
     if (!infer_compare_type(formal_param->type, actual_param_type)) {
-      error_exit(0, "function param type not match");
+      exit_error(0, "function param type not match");
     }
   }
 
@@ -394,7 +421,7 @@ ast_type infer_call(ast_call *call) {
 void infer_var_decl(ast_var_decl *var_decl) {
   ast_type type = var_decl->type;
   if (type.category == TYPE_VAR) {
-    error_exit(0, "var decl must statement type");
+    exit_error(0, "var decl must statement type");
   }
 }
 
@@ -414,19 +441,14 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
   // 类型推断
   if (stmt->var_decl->type.category == TYPE_VAR && expr_type.category != TYPE_VAR) {
     stmt->var_decl->type = expr_type;
-
-    analysis_local_ident *local_ident = table_get(symbol_ident_table, stmt->var_decl->ident);
-    if (local_ident->belong != SYMBOL_TYPE_VAR) {
-      error_exit(0, "ident should var type");
-    }
-    // 类型改写
-    ast_var_decl *var_decl = local_ident->decl;
-    var_decl->type = expr_type;
   }
+
+  // 类型还原
+  stmt->var_decl->type = infer_type(stmt->var_decl->type);
 
   // 判断类型是否一致 compare
   if (infer_compare_type(stmt->var_decl->type, expr_type)) {
-    error_exit(0, "type not match");
+    exit_error(0, "type not match");
   }
 }
 
@@ -438,14 +460,14 @@ void infer_assign(ast_assign_stmt *stmt) {
   ast_type right_type = infer_expr(&stmt->left);
 
   if (!infer_compare_type(left_type, right_type)) {
-    error_exit(0, "type not match");
+    exit_error(0, "type not match");
   }
 }
 
 void infer_if(ast_if_stmt *stmt) {
   ast_type condition_type = infer_expr(&stmt->condition);
   if (condition_type.category != TYPE_BOOL) {
-    error_exit(0, "if stmt condition must bool");
+    exit_error(0, "if stmt condition must bool");
   }
 
   infer_block(&stmt->consequent);
@@ -455,7 +477,7 @@ void infer_if(ast_if_stmt *stmt) {
 void infer_while(ast_while_stmt *stmt) {
   ast_type condition_type = infer_expr(&stmt->condition);
   if (condition_type.category != TYPE_BOOL) {
-    error_exit(0, "while stmt condition must bool");
+    exit_error(0, "while stmt condition must bool");
   }
   infer_block(&stmt->body);
 }
@@ -465,16 +487,15 @@ void infer_while(ast_while_stmt *stmt) {
  * @param stmt
  */
 void infer_for_in(ast_for_in_stmt *stmt) {
+  // 经过 infer_expr 的类型一定是已经被还原过的
   ast_type iterate_type = infer_expr(&stmt->iterate);
   if (iterate_type.category != TYPE_MAP && iterate_type.category != TYPE_LIST) {
-    error_exit(0, "for in iterate type must be map or list");
+    exit_error(0, "for in iterate type must be map or list");
   }
 
   // 类型推断
-  analysis_local_ident *key_ident = table_get(symbol_ident_table, stmt->gen_key->ident);
-  analysis_local_ident *value_ident = table_get(symbol_ident_table, stmt->gen_value->ident);
-  ast_var_decl *key_decl = key_ident->decl;
-  ast_var_decl *value_decl = key_ident->decl;
+  ast_var_decl *key_decl = stmt->gen_key;
+  ast_var_decl *value_decl = stmt->gen_value;
   if (iterate_type.category == TYPE_MAP) {
     ast_map_decl *map_decl = iterate_type.value;
     key_decl->type = map_decl->key_type;
@@ -498,7 +519,7 @@ void infer_return(ast_return_stmt *stmt) {
 
   ast_type expect_type = infer_current->closure_decl->function->return_type;
   if (infer_compare_type(expect_type, return_type)) {
-    error_exit(0, "type not match");
+    exit_error(0, "type not match");
   }
 }
 
@@ -511,5 +532,94 @@ infer_closure *infer_current_init(ast_closure_decl *closure_decl) {
   return infer_current;
 }
 
+/**
+ * 比较前都已经还原为原始类型了
+ * @param left
+ * @param right
+ * @return
+ */
+bool infer_compare_type(ast_type left, ast_type right) {
+  if (!left.is_origin || !right.is_origin) {
+    exit_error(0, "type not origin");
+    return false;
+  }
 
+  if (left.category == TYPE_VAR && right.category == TYPE_VAR) {
+    exit_error(0, "type cannot infer");
+    return false;
+  }
+
+  if (left.category != right.category) {
+    return false;
+  }
+
+  if (left.category == TYPE_MAP) {
+    ast_map_decl *left_map_decl = left.value;
+    ast_map_decl *right_map_decl = right.value;
+
+    if (!infer_compare_type(left_map_decl->key_type, right_map_decl->value_type)) {
+      return false;
+    }
+
+    if (!infer_compare_type(left_map_decl->value_type, right_map_decl->value_type)) {
+      return false;
+    }
+  }
+
+  if (left.category == TYPE_LIST) {
+    ast_list_decl *left_list_decl = left.value;
+    ast_list_decl *right_list_decl = right.value;
+    if (!infer_compare_type(left_list_decl->type, right_list_decl->type)) {
+      return false;
+    }
+  }
+
+  if (left.category == TYPE_FUNCTION) {
+    ast_function_type_decl *left_function = left.value;
+    ast_function_type_decl *right_function = right.value;
+    if (!infer_compare_type(left_function->return_type, right_function->return_type)) {
+      return false;
+    }
+
+    if (left_function->formal_param_count != right_function->formal_param_count) {
+      return false;
+    }
+
+    for (int i = 0; i < left_function->formal_param_count; ++i) {
+      if (!infer_compare_type(
+          left_function->formal_params[i]->type,
+          right_function->formal_params[i]->type
+      )) {
+        return false;
+      }
+    }
+  }
+
+  if (left.category == TYPE_STRUCT) {
+    ast_struct_decl *left_struct_decl = left.value;
+    ast_struct_decl *right_struct_decl = right.value;
+    if (left_struct_decl->count != right_struct_decl->count) {
+      return false;
+    }
+
+    for (int i = 0; i < left_struct_decl->count; ++i) {
+      // key 比较
+      if (strcmp(
+          left_struct_decl->list[i].key,
+          right_struct_decl->list[i].key) != 0) {
+        return false;
+      }
+
+      // type 比较
+      if (!infer_compare_type(
+          left_struct_decl->list[i].type,
+          right_struct_decl->list[i].type
+      )) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
