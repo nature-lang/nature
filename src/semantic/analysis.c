@@ -6,10 +6,13 @@
 #include "src/lib/error.h"
 #include "src/lib/table.h"
 #include "src/symbol.h"
+#include "src/debug/debug.h"
 
 ast_closure_decl analysis(ast_block_stmt block_stmt) {
   // init
+  symbol_ident_table_init();
   unique_name_count = 0;
+  analysis_line = 0;
 
   // block 封装进 function,再封装到 closure 中
   ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
@@ -24,58 +27,63 @@ ast_closure_decl analysis(ast_block_stmt block_stmt) {
 
 void analysis_block(ast_block_stmt *block) {
   for (int i = 0; i < block->count; ++i) {
-    ast_stmt stmt = block->list[i];
+    analysis_line = block->list[i].line;
     // switch 结构导向优化
-    switch (stmt.type) {
-      case AST_VAR_DECL: {
-        analysis_var_decl((ast_var_decl *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_VAR_DECL_ASSIGN: {
-        analysis_var_decl_assign((ast_var_decl_assign_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_ASSIGN: {
-        analysis_assign((ast_assign_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_FUNCTION_DECL: {
-        // function + env => closure
-        ast_closure_decl *closure = analysis_function_decl((ast_function_decl *) stmt.stmt);
+#ifdef DEBUG_ANALYSIS
+    debug_analysis_stmt(block->list[i]);
+#endif
+    analysis_stmt(&block->list[i]);
+  }
+}
 
-        // 改写
-        ast_stmt closure_stmt;
-        closure_stmt.type = AST_CLOSURE_DECL;
-        closure_stmt.stmt = closure;
-        block->list[i] = closure_stmt; // 值复制传递，不用担心指针空悬问题
-        break;
-      }
-      case AST_CALL: {
-        analysis_call((ast_call *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_IF: {
-        analysis_if((ast_if_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_WHILE: {
-        analysis_while((ast_while_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_FOR_IN: {
-        analysis_for_in((ast_for_in_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_RETURN: {
-        analysis_return((ast_return_stmt *) stmt.stmt);
-        break;
-      }
-      case AST_STMT_TYPE_DECL: {
-        analysis_type_decl((ast_type_decl_stmt *) stmt.stmt);
-        break;
-      }
-      default:return;
+void analysis_stmt(ast_stmt *stmt) {
+  switch (stmt->type) {
+    case AST_VAR_DECL: {
+      analysis_var_decl((ast_var_decl *) stmt->stmt);
+      break;
     }
+    case AST_STMT_VAR_DECL_ASSIGN: {
+      analysis_var_decl_assign((ast_var_decl_assign_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_ASSIGN: {
+      analysis_assign((ast_assign_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_FUNCTION_DECL: {
+      // function + env => closure
+      ast_closure_decl *closure = analysis_function_decl((ast_function_decl *) stmt->stmt);
+
+      // 改写
+      stmt->type = AST_CLOSURE_DECL;
+      stmt->stmt = closure;
+      break;
+    }
+    case AST_CALL: {
+      analysis_call((ast_call *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_IF: {
+      analysis_if((ast_if_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_WHILE: {
+      analysis_while((ast_while_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_FOR_IN: {
+      analysis_for_in((ast_for_in_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_RETURN: {
+      analysis_return((ast_return_stmt *) stmt->stmt);
+      break;
+    }
+    case AST_STMT_TYPE_DECL: {
+      analysis_type_decl((ast_type_decl_stmt *) stmt->stmt);
+      break;
+    }
+    default:return;
   }
 }
 
@@ -176,7 +184,7 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl) {
   analysis_type(&function_decl->return_type);
 
   // 仅 fun 再次定义 name 才需要再次添加到符号表
-  if (strlen(function_decl->name) > 0) {
+  if (strcmp(function_decl->name, MAIN_FUNCTION_NAME) != 0 && strlen(function_decl->name) > 0) {
     analysis_redeclare_check(function_decl->name);
 
     // 函数名称改写
@@ -322,9 +330,7 @@ void analysis_expr(ast_expr *expr) {
       *expr = closure_expr;
       break;
     }
-    default: {
-      exit_error(0, "unknown expr type");
-    }
+    default: return;
   }
 }
 
@@ -332,22 +338,23 @@ void analysis_expr(ast_expr *expr) {
  * @param expr
  */
 void analysis_ident(ast_expr *expr) {
-  ast_ident *ident = (ast_ident *) expr->expr;
+  char *ident = expr->expr;
 
   // 在当前函数作用域中查找变量定义
   for (int i = 0; i < analysis_current->local_count; ++i) {
     analysis_local_ident *local = analysis_current->locals[i];
-    if (strcmp(*ident, local->ident) == 0) {
+    if (strcmp(ident, local->ident) == 0) {
       // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
-      *ident = local->unique_ident;
+      expr->expr = local->unique_ident;
       return;
     }
   }
 
   // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-  int8_t free_var_index = analysis_resolve_free(analysis_current, *ident);
+  int8_t free_var_index = analysis_resolve_free(analysis_current, ident);
   if (free_var_index == -1) {
-    exit_error(0, "not found ident");
+    error_ident_not_found(expr->line, ident);
+    exit(0);
   }
 
   // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
@@ -506,6 +513,7 @@ void analysis_type_decl(ast_type_decl_stmt *stmt) {
       *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, stmt, stmt->ident);
   stmt->ident = local->unique_ident;
 }
+
 char *analysis_resolve_type(analysis_function *current, string ident) {
   for (int i = 0; i < current->local_count; ++i) {
     analysis_local_ident *local = analysis_current->locals[i];
@@ -515,7 +523,7 @@ char *analysis_resolve_type(analysis_function *current, string ident) {
   }
 
   if (current->parent == NULL) {
-    exit_error(0, "type not found");
+    error_type_not_found(analysis_line, ident);
   }
 
   return analysis_resolve_type(current->parent, ident);
@@ -536,7 +544,7 @@ bool analysis_redeclare_check(char *ident) {
   for (int i = 0; i < analysis_current->local_count; ++i) {
     analysis_local_ident *local = analysis_current->locals[i];
     if (strcmp(ident, local->ident) == 0) {
-      exit_error(0, "redeclared ident");
+      error_exit(0, "redeclare ident");
       return false;
     }
   }
@@ -577,6 +585,7 @@ analysis_function *analysis_current_init() {
 
   return analysis_current;
 }
+
 
 
 

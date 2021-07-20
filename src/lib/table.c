@@ -112,5 +112,11 @@ uint32_t hash_string(const string key) {
   return hash;
 }
 
+table *table_new() {
+  table *t = malloc(sizeof(table));
+  table_init(t);
+  return t;
+}
+
 
 

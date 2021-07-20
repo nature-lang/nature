@@ -1,6 +1,27 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
+custom_call(
+test,
+test2
+)
+
+var test2 = 12
+
+var test = 12
+
+int custom_call() {
+
+}
+custom_call(
+test,
+test2,
+custom_type () {
+	return 1
+})
+
+var a = []
+var iteration
 for (var key,value in iteration) {
 
 }
@@ -9,9 +30,14 @@ if (a > 1) {
 	a = a + 1
 }
 
+
+var test = 1
+var call
+
 custom_call()
-custom_call(test, call(), custom_type () {
-                          	return 1})
+custom_call(test,call(),custom_type () {
+return 1
+})
 custom_call(custom_type test() {
 	return 1
 })
@@ -91,6 +117,8 @@ list[int] foo = [
 //list<int> bar = []
 // list<int> bar = my_gen()
 //list[int]
+
+var a = []
 
 
 // 特殊格式语法糖，兼容 map<string,int>

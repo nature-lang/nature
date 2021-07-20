@@ -18,10 +18,6 @@ int64_t list_offset(string type, uint64_t index);
 
 uint64_t type_sizeof(string type);
 
-void symbol_table_init();
-
-void *symbol_get_type(string unique_ident);
-
-ast_struct_decl *symbol_struct(string struct_ident);
+void symbol_ident_table_init();
 
 #endif //NATURE_SRC_AST_SYMBOL_H_

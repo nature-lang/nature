@@ -16,4 +16,12 @@ void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt) {
 
   block->list[block->count++] = stmt;
 }
+ast_type ast_new_simple_type(type_category type) {
+  ast_type result = {
+      .is_origin = true,
+      .value = NULL,
+      .category = type
+  };
+  return result;
+}
 

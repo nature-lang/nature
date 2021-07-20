@@ -116,13 +116,12 @@ ast_stmt parser_stmt() {
     return parser_type_decl_stmt();
   }
 
-  exit_error(0, "not expect stmt");
-  ast_stmt stmt = {};
-  return stmt;
+  error_exit(0, "not expect stmt");
+  return parser_new_stmt();
 }
 
 ast_stmt parser_type_decl_stmt() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   ast_type_decl_stmt *type_decl_stmt = malloc(sizeof(ast_type_decl_stmt));
   parser_must(TOKEN_TYPE);
   type_decl_stmt->ident = parser_advance()->literal;
@@ -141,7 +140,7 @@ ast_stmt parser_type_decl_stmt() {
  * @return
  */
 ast_stmt parser_auto_infer_decl() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
 
   parser_must(TOKEN_VAR);
@@ -163,7 +162,7 @@ ast_expr parser_precedence_expr(parser_precedence precedence) {
 // 读取表达式前缀
   parser_prefix_fn prefix_fn = parser_get_rule(parser_peek()->type)->prefix;
   if (prefix_fn == NULL) {
-    exit_error(0, "prefix_fn is NULL");
+    error_exit(0, "prefix_fn is NULL");
   }
 
   ast_expr expr = prefix_fn(); // advance
@@ -202,7 +201,7 @@ ast_expr parser_expr() {
  * @return
  */
 ast_stmt parser_var_or_function_decl() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
 
   ast_type type = parser_type();
 
@@ -238,7 +237,7 @@ ast_stmt parser_var_or_function_decl() {
 }
 
 ast_expr parser_binary(ast_expr left) {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
 
   token *operator_token = parser_advance();
 
@@ -266,7 +265,7 @@ ast_expr parser_binary(ast_expr left) {
  * @return
  */
 ast_expr parser_unary() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   token *operator_token = parser_advance();
   ast_expr operand = parser_precedence_expr(PRECEDENCE_UNARY);
 
@@ -277,7 +276,7 @@ ast_expr parser_unary() {
   } else if (operator_token->type == TOKEN_MINUS) {
     unary_expr->operator = AST_EXPR_OPERATOR_MINUS;
   } else {
-    exit_error(0, "unexpect operator type");
+    error_exit(0, "unknown operator type");
   }
 
   unary_expr->operand = operand;
@@ -300,7 +299,7 @@ ast_expr parser_grouping() {
 }
 
 ast_expr parser_literal() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   token *literal_token = parser_advance();
   ast_literal *literal_expr = malloc(sizeof(ast_literal));
   literal_expr->type = token_to_ast_simple_type[literal_token->type];
@@ -316,12 +315,22 @@ ast_expr parser_literal() {
  * @return
  */
 ast_expr parser_ident_expr() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   token *ident_token = parser_advance();
+
+  // person {
+  //  a = 1
+  //  b = 2
+  // }
   if (parser_consume(TOKEN_LEFT_CURLY)) {
     ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
     new_struct->count = 0;
-    new_struct->ident = ident_token->literal;
+    ast_type type_decl_ident = {
+        .is_origin = false,
+        .category = TYPE_DECL_IDENT,
+        .value = ident_token->literal
+    };
+    new_struct->type = type_decl_ident;
 
     while (!parser_is(TOKEN_RIGHT_CURLY)) {
       ast_struct_property item;
@@ -336,9 +345,8 @@ ast_expr parser_ident_expr() {
     return result;
   }
 
-  ast_ident ident = ident_token->literal;
   result.type = AST_EXPR_IDENT;
-  result.expr = &ident;
+  result.expr = ident_token->literal;
 
   return result;
 }
@@ -350,7 +358,7 @@ ast_expr parser_ident_expr() {
  * @return
  */
 ast_expr parser_access(ast_expr left) {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
 
   parser_must(TOKEN_LEFT_SQUARE);
   ast_expr key = parser_precedence_expr(PRECEDENCE_CALL);
@@ -370,7 +378,7 @@ ast_expr parser_access(ast_expr left) {
  * @return
  */
 ast_expr parser_select_property(ast_expr left) {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   parser_must(TOKEN_DOT);
 
   token *property_token = parser_must(TOKEN_LITERAL_IDENT);
@@ -385,7 +393,7 @@ ast_expr parser_select_property(ast_expr left) {
 }
 
 ast_expr parser_call_expr(ast_expr name_expr) {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
 
   ast_call *call_stmt = malloc(sizeof(ast_call));
   call_stmt->left = name_expr;
@@ -607,7 +615,7 @@ ast_function_decl *parser_function_decl(ast_type type) {
  * @return
  */
 ast_stmt parser_if_stmt() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   ast_if_stmt *if_stmt = malloc(sizeof(ast_if_stmt));
   parser_must(TOKEN_IF);
   parser_must(TOKEN_LEFT_PAREN);
@@ -653,8 +661,8 @@ ast_block_stmt parser_else_if() {
  */
 ast_stmt parser_for_stmt() {
   parser_advance();
+  ast_stmt result = parser_new_stmt();
 
-  ast_stmt result;
   ast_for_in_stmt *for_in_stmt = malloc(sizeof(ast_for_in_stmt));
   for_in_stmt->gen_key = malloc(sizeof(ast_var_decl));
 
@@ -683,7 +691,7 @@ ast_stmt parser_for_stmt() {
 }
 
 ast_stmt parser_while_stmt() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   ast_while_stmt *while_stmt = malloc(sizeof(ast_while_stmt));
   parser_advance();
   while_stmt->condition = parser_expr();
@@ -704,7 +712,7 @@ parser_rule *parser_get_rule(token_type type) {
 }
 
 ast_stmt parser_assign(ast_expr left) {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   ast_assign_stmt *assign_stmt = malloc(sizeof(ast_assign_stmt));
   assign_stmt->left = left;
   // invalid: foo;
@@ -725,7 +733,7 @@ void parser_cursor_init(list *token_list) {
 
 token *parser_advance() {
   if (p_cursor.current->next == NULL) {
-    exit_error(0, "next token is null");
+    error_exit(0, "next token is null");
   }
   token *t = p_cursor.current->value;
   p_cursor.current = p_cursor.current->next;
@@ -757,10 +765,9 @@ ast_stmt parser_ident_stmt() {
   // 消费左边的 ident, invalid:  foo() = 1
   ast_expr left = parser_expr();
   if (left.type == AST_CALL) {
-    ast_stmt stmt = {
-        .type = AST_CALL,
-        .stmt = left.expr
-    };
+    ast_stmt stmt = parser_new_stmt();
+    stmt.type = AST_CALL;
+    stmt.stmt = left.expr;
     return stmt;
   }
 
@@ -770,7 +777,7 @@ ast_stmt parser_ident_stmt() {
 }
 
 ast_expr parser_function_decl_expr() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   result.type = AST_FUNCTION_DECL;
   result.expr = parser_function_decl(parser_type());
 
@@ -814,7 +821,7 @@ bool parser_is_type() {
 }
 
 ast_stmt parser_return_stmt() {
-  ast_stmt result;
+  ast_stmt result = parser_new_stmt();
   parser_advance();
   ast_return_stmt *stmt = malloc(sizeof(ast_return_stmt));
   stmt->expr = parser_expr();
@@ -841,7 +848,7 @@ bool parser_is_simple_type() {
 token *parser_must(token_type expect) {
   token *t = p_cursor.current->value;
   if (t->type != expect) {
-    exit_error(0, "not expect token");
+    error_exit(0, "not expect token");
   }
 
   parser_advance();
@@ -883,15 +890,17 @@ list_node *parser_next(int step) {
  * @return
  */
 ast_expr parser_new_list() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   ast_new_list *expr = malloc(sizeof(ast_new_list));
   expr->count = 0;
   expr->capacity = 0;
   parser_must(TOKEN_LEFT_SQUARE);
 
-  expr->values[expr->count++] = parser_expr();
-  while (parser_consume(TOKEN_COMMA)) {
+  if (!parser_is(TOKEN_RIGHT_SQUARE)) {
     expr->values[expr->count++] = parser_expr();
+    while (parser_consume(TOKEN_COMMA)) {
+      expr->values[expr->count++] = parser_expr();
+    }
   }
   parser_must(TOKEN_RIGHT_SQUARE);
   expr->capacity = expr->count;
@@ -919,7 +928,7 @@ static ast_map_item parser_map_item() {
  * @return
  */
 ast_expr parser_new_map() {
-  ast_expr result;
+  ast_expr result = parser_new_expr();
   ast_new_map *expr = malloc(sizeof(ast_new_map));
   expr->count = 0;
   expr->capacity = 0;
@@ -952,7 +961,7 @@ bool parser_must_stmt_end() {
     return true;
   }
 
-  exit_error(0, "except ; or } stmt end token");
+  error_exit(0, "except ; or } stmt end token");
   return false;
 }
 
@@ -964,7 +973,7 @@ bool parser_must_stmt_end() {
 bool parser_is_function_decl(list_node *current) {
   token *t = current->value;
   if (t->type != TOKEN_LEFT_PAREN) {
-    exit_error(0, "parser_is_function_decl param must be TOKEN_LEFT_PAREN");
+    error_exit(0, "parser_is_function_decl param must be TOKEN_LEFT_PAREN");
     return false;
   }
 
@@ -998,4 +1007,18 @@ bool parser_is_function_decl(list_node *current) {
   }
 
   return true;
+}
+
+ast_stmt parser_new_stmt() {
+  ast_stmt result = {
+      .line = parser_peek()->line
+  };
+  return result;
+}
+
+ast_expr parser_new_expr() {
+  ast_expr result = {
+      .line = parser_peek()->line
+  };
+  return result;
 }

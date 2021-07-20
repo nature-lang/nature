@@ -7,6 +7,7 @@
 #define ENV_IDENT "env"
 
 int unique_name_count;
+int analysis_line;
 
 typedef struct {
 //  ast_type type;
@@ -65,6 +66,7 @@ void analysis_var_decl(ast_var_decl *stmt);
 
 void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt);
 ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl);
+void analysis_stmt(ast_stmt *stmt);
 void analysis_expr(ast_expr *expr);
 void analysis_binary(ast_binary_expr *expr);
 void analysis_unary(ast_unary_expr *expr);

@@ -67,11 +67,13 @@ typedef enum {
 } ast_expr_operator;
 
 typedef struct {
+  int line; // 行号
   ast_stmt_expr_type type; // 声明语句类型
   void *stmt;
 } ast_stmt;
 
 typedef struct {
+  int line;
   ast_stmt_expr_type type; // 表达式类型
   void *expr;
 } ast_expr;

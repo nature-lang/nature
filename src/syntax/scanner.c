@@ -72,7 +72,7 @@ list *scanner(string source) {
 
     // if is end or error
     if (scanner_has_error()) {
-      exit_error(0, s_error.message);
+      error_exit(0, s_error.message);
     }
 
     if (scanner_is_at_end()) {
@@ -87,7 +87,8 @@ list *scanner(string source) {
 
 char *scanner_ident_advance() {
   // guard = current, 向前推进 guard,并累加 length
-  while (scanner_is_alpha(*s_cursor.guard) && !scanner_is_at_end()) {
+  while ((scanner_is_alpha(*s_cursor.guard) || scanner_is_number(*s_cursor.guard))
+      && !scanner_is_at_end()) {
     scanner_guard_advance();
   }
 
@@ -382,8 +383,13 @@ bool scanner_is_at_stmt_end() {
     return false;
   }
 
+  if (s_cursor.space_next == ')') {
+    return false;
+  }
+
   // 前置非空白字符
   if (s_cursor.space_prev != ','
+      && s_cursor.space_prev != '('
       && s_cursor.space_prev != '['
       && s_cursor.space_prev != '='
       && s_cursor.space_prev != '{'

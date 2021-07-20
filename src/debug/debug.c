@@ -40,5 +40,9 @@ string ast_stmt_expr_type_to_string[] = {
 };
 
 void debug_ast_stmt(ast_stmt_expr_type t) {
-  printf("\nstmt: %s\n", ast_stmt_expr_type_to_string[t]);
+  printf("\n[DEBUG]stmt: %s\n", ast_stmt_expr_type_to_string[t]);
+}
+
+void debug_analysis_stmt(ast_stmt stmt) {
+  printf("[DEBUG] analysis line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_string[stmt.type]);
 }

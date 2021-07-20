@@ -1,7 +1,6 @@
 /**
- * 类型推导
+ * 类型推导与判断
  */
-
 #ifndef NATURE_SRC_AST_INFER_H_
 #define NATURE_SRC_AST_INFER_H_
 
@@ -15,10 +14,10 @@ typedef struct infer_closure {
 infer_closure *infer_current;
 
 infer_closure *infer_current_init(ast_closure_decl *closure_decl);
-void infer(ast_closure_decl closure_decl);
+void infer(ast_closure_decl *closure_decl);
 
 void infer_block(ast_block_stmt *block_stmt);
-
+void infer_stmt(ast_stmt *stmt);
 ast_type infer_closure_decl(ast_closure_decl *closure_decl);
 void infer_var_decl(ast_var_decl *var_decl);
 void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt);
@@ -48,6 +47,8 @@ ast_type infer_call(ast_call *call);
  */
 ast_type infer_type(ast_type type);
 
+ast_type infer_type_decl_ident(string ident);
+
 /**
  * @param ident
  * @return
@@ -56,12 +57,14 @@ ast_type infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
 
 /**
  * if (expr_type.category == TYPE_VAR && stmt->var_decl->type.category == TYPE_VAR) {
- *  exit_error(0, "var type ambiguity");
+ *  error_exit(0, "var type ambiguity");
  * }
  * @param left
  * @param right
  * @return
  */
 bool infer_compare_type(ast_type left, ast_type right);
+
+void infer_sort_struct_decl(ast_struct_decl *struct_decl);
 
 #endif //NATURE_SRC_AST_INFER_H_

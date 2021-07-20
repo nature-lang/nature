@@ -106,4 +106,7 @@ bool parser_is_function_decl(list_node *current);
 
 void parser_cursor_init(list *token_list);
 
+ast_stmt parser_new_stmt();
+ast_expr parser_new_expr();
+
 #endif //NATURE_SRC_SYNTAX_PARSER_H_
