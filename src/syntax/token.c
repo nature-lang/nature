@@ -9,7 +9,7 @@ token *token_new(uint8_t type, char *literal, int line) {
   t->line = line;
 
 #ifdef DEBUG_SCANNER
-  printf("%d:%s\n", line, literal);
+  debug_scanner(t);
 #endif
   return t;
 }

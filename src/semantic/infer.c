@@ -3,8 +3,10 @@
 #include "src/lib/error.h"
 #include "src/symbol.h"
 #include "analysis.h"
+#include "src/debug/debug.h"
 
 void infer(ast_closure_decl *closure_decl) {
+  infer_line = 0;
   infer_closure_decl(closure_decl);
 }
 
@@ -29,6 +31,12 @@ ast_type infer_closure_decl(ast_closure_decl *closure_decl) {
 
 void infer_block(ast_block_stmt *block) {
   for (int i = 0; i < block->count; ++i) {
+    infer_line = block->list[i].line;
+
+#ifdef DEBUG_INFER
+    debug_infer_stmt(block->list[i]);
+#endif
+
     // switch 结构导向优化
     infer_stmt(&block->list[i]);
   }
@@ -117,6 +125,9 @@ ast_type infer_expr(ast_expr *expr) {
     }
     case AST_CLOSURE_DECL: {
       return infer_closure_decl((ast_closure_decl *) expr->expr);
+    }
+    case AST_EXPR_LITERAL: {
+      return infer_literal((ast_literal *) expr->expr);
     }
     default: {
       error_exit(0, "unknown expr");
@@ -445,17 +456,18 @@ void infer_var_decl(ast_var_decl *var_decl) {
 void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
   ast_type expr_type = infer_expr(&stmt->expr);
 
-  // 类型推断
+  // 类型推断(不需要再比较类型是否一致)
   if (stmt->var_decl->type.category == TYPE_VAR && expr_type.category != TYPE_VAR) {
     stmt->var_decl->type = expr_type;
+//    return;
   }
 
   // 类型还原
   stmt->var_decl->type = infer_type(stmt->var_decl->type);
 
   // 判断类型是否一致 compare
-  if (infer_compare_type(stmt->var_decl->type, expr_type)) {
-    error_exit(0, "type not match");
+  if (!infer_compare_type(stmt->var_decl->type, expr_type)) {
+    error_message(infer_line, "type error");
   }
 }
 
@@ -737,6 +749,10 @@ void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
       }
     }
   }
+}
+
+ast_type infer_literal(ast_literal *literal) {
+  return ast_new_simple_type(literal->type);
 }
 
 

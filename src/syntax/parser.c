@@ -18,7 +18,15 @@ ast_expr_operator token_to_ast_expr_operator[] = {
     [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
 };
 
-type_category token_to_ast_simple_type[] = {
+type_category token_to_type_category[] = {
+    // literal
+    [TOKEN_TRUE] = TYPE_BOOL,
+    [TOKEN_FALSE] = TYPE_BOOL,
+    [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
+    [TOKEN_LITERAL_INT] = TYPE_INT,
+    [TOKEN_LITERAL_STRING] = TYPE_STRING,
+
+    // type
     [TOKEN_BOOL] = TYPE_BOOL,
     [TOKEN_FLOAT] = TYPE_FLOAT,
     [TOKEN_INT] = TYPE_INT,
@@ -302,7 +310,7 @@ ast_expr parser_literal() {
   ast_expr result = parser_new_expr();
   token *literal_token = parser_advance();
   ast_literal *literal_expr = malloc(sizeof(ast_literal));
-  literal_expr->type = token_to_ast_simple_type[literal_token->type];
+  literal_expr->type = token_to_type_category[literal_token->type];
   literal_expr->value = literal_token->literal;
 
   result.type = AST_EXPR_LITERAL;
@@ -497,7 +505,7 @@ ast_type parser_type() {
   // int/float/bool/string/void/var/any
   if (parser_is_simple_type()) {
     token *type_token = parser_advance();
-    result.category = token_to_ast_simple_type[type_token->type];
+    result.category = token_to_type_category[type_token->type];
     result.value = type_token->literal;
     return result;
   }
@@ -618,6 +626,9 @@ ast_function_decl *parser_function_decl(ast_type type) {
 ast_stmt parser_if_stmt() {
   ast_stmt result = parser_new_stmt();
   ast_if_stmt *if_stmt = malloc(sizeof(ast_if_stmt));
+  if_stmt->consequent.count = 0;
+  if_stmt->alternate.count = 0;
+
   parser_must(TOKEN_IF);
   parser_must(TOKEN_LEFT_PAREN);
   if_stmt->condition = parser_expr();

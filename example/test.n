@@ -1,7 +1,9 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
-//var a = 13
+var b11 = 3
+var a12 = 12
+
 while (true) {
 	var b = 3
 	var a = 12

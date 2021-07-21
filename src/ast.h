@@ -84,12 +84,6 @@ typedef struct {
   ast_stmt *list;
 } ast_block_stmt;
 
-// 值类型
-typedef struct {
-  type_category type;
-  string value;
-} ast_literal; // 标量值
-
 
 typedef string ast_ident;
 
@@ -133,6 +127,12 @@ typedef struct {
   string ident;
   ast_type type;
 } ast_var_decl;
+
+// 值类型
+typedef struct {
+  type_category type;
+  string value;
+} ast_literal; // 标量值
 
 typedef struct {
   ast_expr left; // a  或 foo.bar.car 或者 d[0]
