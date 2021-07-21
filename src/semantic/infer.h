@@ -69,4 +69,6 @@ bool infer_compare_type(ast_type left, ast_type right);
 
 void infer_sort_struct_decl(ast_struct_decl *struct_decl);
 
+bool infer_var_type_can_confirm(ast_type right);
+
 #endif //NATURE_SRC_AST_INFER_H_

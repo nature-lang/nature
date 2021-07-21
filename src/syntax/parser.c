@@ -354,7 +354,7 @@ ast_expr parser_ident_expr() {
   }
 
   result.type = AST_EXPR_IDENT;
-  result.expr = ident_token->literal;
+  result.expr = ast_new_ident(ident_token->literal);
 
   return result;
 }

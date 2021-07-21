@@ -4,6 +4,7 @@
 #include "src/symbol.h"
 #include "analysis.h"
 #include "src/debug/debug.h"
+#include "stdio.h"
 
 void infer(ast_closure_decl *closure_decl) {
   infer_line = 0;
@@ -203,10 +204,10 @@ ast_type infer_unary(ast_unary_expr *expr) {
  * @return
  */
 ast_type infer_ident(ast_ident *expr) {
-  string unique_ident = *expr;
+  string unique_ident = expr->literal;
   analysis_local_ident *local_ident = table_get(symbol_ident_table, unique_ident);
-  if (local_ident->belong != TYPE_VAR) {
-    error_exit(0, "type error in infer ident");
+  if (local_ident->belong != SYMBOL_TYPE_VAR) {
+    error_message(infer_line, "ident type exception");
   }
 
   // 类型还原，并回写到 local_ident
@@ -412,7 +413,7 @@ ast_type infer_call(ast_call *call) {
   ast_type left_type = infer_expr(&call->left);
 
   if (left_type.category != TYPE_FUNCTION) {
-    error_exit(0, "call.left type must be function");
+    error_printf(infer_line, "expression not function type(%s), cannot call", type_to_string[left_type.category]);
   }
 
   ast_function_type_decl *function_type_decl = left_type.value;
@@ -439,7 +440,7 @@ ast_type infer_call(ast_call *call) {
 void infer_var_decl(ast_var_decl *var_decl) {
   ast_type type = var_decl->type;
   if (type.category == TYPE_VAR || type.category == TYPE_VOID || type.category == TYPE_NULL) {
-    error_exit(0, "var decl must statement type");
+    error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.category]);
   }
 }
 
@@ -457,9 +458,13 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
   ast_type expr_type = infer_expr(&stmt->expr);
 
   // 类型推断(不需要再比较类型是否一致)
-  if (stmt->var_decl->type.category == TYPE_VAR && expr_type.category != TYPE_VAR) {
+  if (stmt->var_decl->type.category == TYPE_VAR) {
+    if (!infer_var_type_can_confirm(expr_type)) {
+      error_printf(infer_line, "type inference error, right expr type is not clear");
+      return;
+    }
     stmt->var_decl->type = expr_type;
-//    return;
+    return;
   }
 
   // 类型还原
@@ -467,7 +472,7 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
 
   // 判断类型是否一致 compare
   if (!infer_compare_type(stmt->var_decl->type, expr_type)) {
-    error_message(infer_line, "type error");
+    error_type_not_match(infer_line);
   }
 }
 
@@ -479,7 +484,7 @@ void infer_assign(ast_assign_stmt *stmt) {
   ast_type right_type = infer_expr(&stmt->left);
 
   if (!infer_compare_type(left_type, right_type)) {
-    error_exit(0, "type not match");
+    error_type_not_match(infer_line);
   }
 }
 
@@ -509,7 +514,9 @@ void infer_for_in(ast_for_in_stmt *stmt) {
   // 经过 infer_expr 的类型一定是已经被还原过的
   ast_type iterate_type = infer_expr(&stmt->iterate);
   if (iterate_type.category != TYPE_MAP && iterate_type.category != TYPE_LIST) {
-    error_exit(0, "for in iterate type must be map or list");
+    error_printf(infer_line,
+                 "for in iterate type must be map/list, actual:(%s)",
+                 type_to_string[iterate_type.category]);
   }
 
   // 类型推断
@@ -654,6 +661,7 @@ ast_type infer_type(ast_type type) {
 
   type.is_origin = true;
   if (type.category == TYPE_INT || type.category == TYPE_BOOL || type.category == TYPE_FLOAT
+      || type.category == TYPE_STRING
       || type.category == TYPE_ANY) {
     return type;
   }
@@ -753,6 +761,36 @@ void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
 
 ast_type infer_literal(ast_literal *literal) {
   return ast_new_simple_type(literal->type);
+}
+
+/**
+ * 判断该类型是否能够帮助 var 进行推导
+ * @param right
+ * @return
+ */
+bool infer_var_type_can_confirm(ast_type right) {
+  if (right.category == TYPE_VAR) {
+    return false;
+  }
+
+  if (right.category == TYPE_LIST) {
+    ast_list_decl *list_decl = right.value;
+    if (list_decl->type.category == TYPE_VAR) {
+      return false;
+    }
+  }
+
+  if (right.category == TYPE_MAP) {
+    ast_map_decl *map_decl = right.value;
+    if (map_decl->key_type.category == TYPE_VAR) {
+      return false;
+    }
+    if (map_decl->value_type.category == TYPE_VAR) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 

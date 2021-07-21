@@ -84,8 +84,9 @@ typedef struct {
   ast_stmt *list;
 } ast_block_stmt;
 
-
-typedef string ast_ident;
+typedef struct {
+  string literal;
+} ast_ident;
 
 // TODO 没必要,都去符号表取找吧
 //typedef struct {
@@ -264,7 +265,7 @@ typedef struct {
 // 改写后是否需要添加类型系统支持？
 typedef struct {
   string type;
-  ast_ident env;
+  ast_ident *env;
   uint8_t index;
 } ast_access_env;
 
@@ -310,5 +311,7 @@ ast_block_stmt ast_new_block_stmt();
 void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 ast_type ast_new_simple_type(type_category type);
+
+ast_ident *ast_new_ident(string literal);
 
 #endif //NATURE_SRC_AST_H_

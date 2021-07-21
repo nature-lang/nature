@@ -1,6 +1,14 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
+var iteration55 = ["str"]
+
+string car = "str"
+
+int call4() {
+
+}
+
 var b11 = 3
 var a12 = 12
 
@@ -9,7 +17,7 @@ while (true) {
 	var a = 12
 }
 
-string car = 1
+
 
 var test2 = 12
 
@@ -27,8 +35,8 @@ custom_type () {
 	return 1
 })
 
-var a = []
-var iteration
+var a = ["123"]
+var iteration = [1,2,3]
 for (var key,value in iteration) {
 
 }

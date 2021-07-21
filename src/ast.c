@@ -25,3 +25,9 @@ ast_type ast_new_simple_type(type_category type) {
   return result;
 }
 
+ast_ident *ast_new_ident(char *literal) {
+  ast_ident *ident = malloc(sizeof(ast_ident));
+  ident->literal = literal;
+  return ident;
+}
+

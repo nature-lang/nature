@@ -1,6 +1,8 @@
 #ifndef NATURE_SRC_TYPE_H_
 #define NATURE_SRC_TYPE_H_
 
+#include "value.h"
+
 typedef enum {
   TYPE_STRING,
   TYPE_BOOL,
@@ -16,5 +18,7 @@ typedef enum {
   TYPE_MAP, // ast_map_decl
   TYPE_FUNCTION,
 } type_category;
+
+string type_to_string[TYPE_FUNCTION+1];
 
 #endif //NATURE_SRC_TYPE_H_

@@ -227,13 +227,12 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl) {
     if (free_var.is_local) {
       // ast_ident 表达式
       expr.type = AST_EXPR_IDENT;
-      ast_ident ident = analysis_current->parent->locals[free_var.index]->unique_ident;
-      expr.expr = ident;
+      expr.expr = ast_new_ident(analysis_current->parent->locals[free_var.index]->unique_ident);
     } else {
       // ast_env_index 表达式
       expr.type = AST_EXPR_ACCESS_ENV;
       ast_access_env *access_env = malloc(sizeof(ast_access_env));
-      access_env->env = analysis_current->parent->env_unique_name;
+      access_env->env = ast_new_ident(analysis_current->parent->env_unique_name);
       access_env->index = free_var.index;
       expr.expr = access_env;
     }
@@ -347,29 +346,29 @@ void analysis_expr(ast_expr *expr) {
  * @param expr
  */
 void analysis_ident(ast_expr *expr) {
-  char *ident = expr->expr;
+  ast_ident *ident = expr->expr;
 
   // 在当前函数作用域中查找变量定义
   for (int i = 0; i < analysis_current->local_count; ++i) {
     analysis_local_ident *local = analysis_current->locals[i];
-    if (strcmp(ident, local->ident) == 0) {
+    if (strcmp(ident->literal, local->ident) == 0) {
       // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
-      expr->expr = local->unique_ident;
+      expr->expr = ast_new_ident(local->unique_ident);
       return;
     }
   }
 
   // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-  int8_t free_var_index = analysis_resolve_free(analysis_current, ident);
+  int8_t free_var_index = analysis_resolve_free(analysis_current, ident->literal);
   if (free_var_index == -1) {
-    error_ident_not_found(expr->line, ident);
+    error_ident_not_found(expr->line, ident->literal);
     exit(0);
   }
 
   // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
   expr->type = AST_EXPR_ACCESS_ENV;
   ast_access_env *env_index = malloc(sizeof(ast_access_env));
-  env_index->env = analysis_current->env_unique_name;
+  env_index->env = ast_new_ident(analysis_current->env_unique_name);
   env_index->index = free_var_index;
   expr->expr = env_index;
 }
