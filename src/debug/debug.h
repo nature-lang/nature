@@ -4,11 +4,11 @@
 #include "src/value.h"
 #include "src/ast.h"
 
-#define DEBUG_SCANNER
+//#define DEBUG_SCANNER
 
-#define DEBUG_PARSER
+//#define DEBUG_PARSER
 
-//#define DEBUG_ANALYSIS
+#define DEBUG_ANALYSIS
 
 void debug_parser(int line, string token);
 

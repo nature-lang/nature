@@ -304,8 +304,8 @@ token_type scanner_ident_type(char *word, int length) {
     case 's': {
       if (length == 6 && word[1] == 't' && word[2] == 'r') {
         switch (word[3]) {
-          case 'i': return scanner_rest_ident_type(word, length, 3, 2, "ng", TOKEN_STRING);
-          case 'u': return scanner_rest_ident_type(word, length, 3, 2, "ct", TOKEN_STRUCT);
+          case 'i': return scanner_rest_ident_type(word, length, 4, 2, "ng", TOKEN_STRING);
+          case 'u': return scanner_rest_ident_type(word, length, 4, 2, "ct", TOKEN_STRUCT);
         }
       }
     }
@@ -313,7 +313,7 @@ token_type scanner_ident_type(char *word, int length) {
       if (length > 3) {
         switch (word[1]) {
           case 'y' : return scanner_rest_ident_type(word, length, 2, 2, "pe", TOKEN_TYPE);
-          case 'u' : return scanner_rest_ident_type(word, length, 2, 2, "re", TOKEN_TRUE);
+          case 'r' : return scanner_rest_ident_type(word, length, 2, 2, "ue", TOKEN_TRUE);
         }
       }
     }

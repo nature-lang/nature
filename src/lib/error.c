@@ -21,3 +21,8 @@ void error_type_not_found(int line, char *ident) {
   printf("line: %d, type '%s' undeclared \n", line, ident);
   exit(0);
 }
+
+void error_redeclare_ident(int line, char *ident) {
+  printf("line: %d,  redeclare ident '%s'\n", line, ident);
+  exit(0);
+}

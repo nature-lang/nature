@@ -1,10 +1,13 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
-custom_call(
-test,
-test2
-)
+//var a = 13
+while (true) {
+	var b = 3
+	var a = 12
+}
+
+string car = 1
 
 var test2 = 12
 
@@ -13,6 +16,8 @@ var test = 12
 int custom_call() {
 
 }
+
+var custom_type = 1
 custom_call(
 test,
 test2,
@@ -31,14 +36,14 @@ if (a > 1) {
 }
 
 
-var test = 1
+var test3 = 1
 var call
 
 custom_call()
 custom_call(test,call(),custom_type () {
 return 1
 })
-custom_call(custom_type test() {
+custom_call(custom_type test4() {
 	return 1
 })
 custom_call(custom_type () {
@@ -46,61 +51,59 @@ custom_call(custom_type () {
 })
 custom_call(call())
 
-var a = custom () {
+type custom = int
+
+var a1 = custom () {
 
 }
 
-var a = custom test() {
+var a2 = custom foo3() {
 
 }
 
 custom () {
 
 }
-custom test() {
+
+custom test5() {
 
 }
-
 
 custom_type () {
 	return 1
 }
-custom_type (my_type a) {
-	return 1
-}
 
 
-
-
-var foo = make()
+var foo1 = test5()
 
 list[int] foo = [
 			1,
 			2
 ]
 
-void test() {
+void test6() {
 	test a = 24
 	return 12
 }
 
-map{string:int} foo = {
+map{string:int} foo_4 = {
   'a-a':1,
   'b-b':2,
   'c-c':3
 }
 
+var bar = "test"
 foo.bar()
 foo[bar] = 12
-int foo
-var foo = 12 // 类型推导
+int foo_5
+var foo_6 = 12 // 类型推导
 foo = 1 + bar
 foo = 1 + 1 * 1
 foo = 1 + 4 * (2 - 3 / 3)
 bar = 100
-int foo = 12
-bool foo = true
-string foo = "为什么最常用的字符串要是双引号？，是有什么规定吗？"
+int foo_7 = 12
+bool foo_8 = true
+string foo_9 = "为什么最常用的字符串要是双引号？，是有什么规定吗？"
 
 
 foo.bar = 12
@@ -108,7 +111,7 @@ foo[bar] = 12
 foo.bar()
 
 // 特殊格式语法糖，兼容  list<int>
-list[int] foo = [
+list[int] foo_10 = [
 			1,
 			2
 ]
@@ -118,18 +121,18 @@ list[int] foo = [
 // list<int> bar = my_gen()
 //list[int]
 
-var a = []
+var a_3 = []
 
 
 // 特殊格式语法糖，兼容 map<string,int>
-map{string:int} foo = {
+map{string:int} foo_11 = {
   'a-a':1,
   'b-b':2,
   'c-c':3
 }
 
-void test(int a) {
-	test a = 24
+void test9(int a) {
+	test foo = 24
 	return 12
 }
 //map<int,string> car = {}
@@ -143,12 +146,14 @@ void test(int a) {
 //}
 
 
-var foo = make()
+var apple = custom_call()
 
 
 if (a > 1) {
 	a = a + 1
 }
+
+var l = []
 
 for (var key,value in l) {
 

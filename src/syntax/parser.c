@@ -367,6 +367,7 @@ ast_expr parser_access(ast_expr left) {
   access_expr->left = left;
   access_expr->key = key;
   result.type = AST_EXPR_ACCESS;
+  result.expr = access_expr;
 
   return result;
 }

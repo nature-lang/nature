@@ -37,6 +37,7 @@ string ast_stmt_expr_type_to_string[] = {
     [AST_FUNCTION_DECL]="AST_FUNCTION_DECL",
     [AST_CALL]="AST_CALL",
     [AST_CLOSURE_DECL]="AST_CLOSURE_DECL",
+    [AST_STMT_TYPE_DECL]="AST_STMT_TYPE_DECL",
 };
 
 void debug_ast_stmt(ast_stmt_expr_type t) {

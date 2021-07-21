@@ -253,6 +253,15 @@ void analysis_begin_scope() {
 }
 
 void analysis_end_scope() {
+  // 驱逐当前 scope_depth 变量
+  for (int i = analysis_current->local_count - 1; i >= 0; --i) {
+    analysis_local_ident *local = analysis_current->locals[i];
+    if (local->scope_depth < analysis_current->scope_depth) {
+      break;
+    }
+
+    analysis_current->local_count--;
+  }
   analysis_current->scope_depth--;
 }
 
@@ -516,7 +525,7 @@ void analysis_type_decl(ast_type_decl_stmt *stmt) {
 
 char *analysis_resolve_type(analysis_function *current, string ident) {
   for (int i = 0; i < current->local_count; ++i) {
-    analysis_local_ident *local = analysis_current->locals[i];
+    analysis_local_ident *local = current->locals[i];
     if (strcmp(ident, local->ident) == 0) {
       return local->unique_ident;
     }
@@ -540,11 +549,22 @@ uint8_t analysis_push_free(analysis_function *current, bool is_local, int8_t ind
   return free_index;
 }
 
+/**
+ * 检查当前作用域及当前 scope
+ * @param ident
+ * @return
+ */
 bool analysis_redeclare_check(char *ident) {
-  for (int i = 0; i < analysis_current->local_count; ++i) {
+  int current_scope = analysis_current->scope_depth;
+
+  for (int i = analysis_current->local_count - 1; i >= 0; --i) {
     analysis_local_ident *local = analysis_current->locals[i];
+    if (local->scope_depth < current_scope) {
+      break;
+    }
+
     if (strcmp(ident, local->ident) == 0) {
-      error_exit(0, "redeclare ident");
+      error_redeclare_ident(analysis_line, ident);
       return false;
     }
   }
