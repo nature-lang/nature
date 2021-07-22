@@ -47,7 +47,7 @@ int main() {
   // analysis
   ast_closure_decl closure_decl = analysis(stmt_list);
   // infer 类型检查和推导
-  infer(&closure_decl);
+//  infer(&closure_decl);
 
   printf("Hello, World!\n");
   return 0;

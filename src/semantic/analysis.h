@@ -30,14 +30,23 @@ typedef struct {
   uint8_t index;
 } analysis_free_ident;
 
+typedef struct analysis_local_scope {
+  struct analysis_local_scope *parent;
+  analysis_local_ident *idents[UINT8_MAX];
+  uint8_t count;
+  uint8_t scope_depth;
+} analysis_local_scope;
+
 /**
  * 词法作用域
  */
 typedef struct analysis_function {
   struct analysis_function *parent;
 
-  analysis_local_ident *locals[UINT8_MAX];
-  uint8_t local_count;
+  analysis_local_scope *current_scope;
+
+//  analysis_local_ident *locals[UINT8_MAX];
+//  uint8_t local_count;
 
   // wwh: 使用了当前作用域之外的变量
   analysis_free_ident frees[UINT8_MAX];
@@ -48,6 +57,19 @@ typedef struct analysis_function {
 
   // 便于值改写, 放心 env unique name 会注册到字符表的要用
   string env_unique_name;
+
+  // 函数定义在当前作用域仅加载 function name
+  // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
+  struct {
+    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
+    analysis_local_scope *scope;
+    union {
+      ast_stmt *stmt;
+      ast_expr *expr;
+    };
+    bool is_stmt;
+  } contains_fn_decl[UINT8_MAX];
+  uint8_t contains_fn_count;
 } analysis_function;
 
 analysis_function *analysis_current;
@@ -55,7 +77,8 @@ analysis_function *analysis_current;
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换
 ast_closure_decl analysis(ast_block_stmt stmt_list);
 
-analysis_function *analysis_current_init();
+analysis_function *analysis_current_init(analysis_local_scope *scope);
+analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope *parent);
 
 // 变量 hash_string 表
 void analysis_function_begin();
@@ -65,7 +88,8 @@ void analysis_block(ast_block_stmt *block);
 void analysis_var_decl(ast_var_decl *stmt);
 
 void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt);
-ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl);
+ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analysis_local_scope *scope);
+void analysis_function_decl_ident(ast_function_decl *function_decl);
 void analysis_stmt(ast_stmt *stmt);
 void analysis_expr(ast_expr *expr);
 void analysis_binary(ast_binary_expr *expr);

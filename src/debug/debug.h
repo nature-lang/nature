@@ -9,7 +9,7 @@
 
 //#define DEBUG_PARSER
 
-//#define DEBUG_ANALYSIS
+#define DEBUG_ANALYSIS
 
 #define DEBUG_INFER
 void debug_scanner(token* t);
