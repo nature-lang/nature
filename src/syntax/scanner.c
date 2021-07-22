@@ -161,7 +161,9 @@ void scanner_error_init() {
  */
 void scanner_skip_space() {
   s_cursor.has_entry = false;
-  s_cursor.space_prev = s_cursor.guard[-1];
+  if (s_cursor.guard != s_cursor.current) {
+    s_cursor.space_prev = s_cursor.guard[-1];
+  }
 
   while (true) {
     char c = *s_cursor.guard;

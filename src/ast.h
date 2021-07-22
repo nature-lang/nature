@@ -66,6 +66,8 @@ typedef enum {
   AST_EXPR_OPERATOR_MINUS, // unary -expr
 } ast_expr_operator;
 
+string ast_expr_operator_to_string[100];
+
 typedef struct {
   int line; // 行号
   ast_stmt_expr_type type; // 声明语句类型

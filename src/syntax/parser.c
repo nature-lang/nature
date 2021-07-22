@@ -568,6 +568,9 @@ ast_type parser_type() {
     return result;
   }
 
+  if (!parser_is(TOKEN_LITERAL_IDENT)) {
+    error_printf(parser_line(), "parser error,type must be literal ident");
+  }
   // 神奇的 ident
   token *type_token = parser_advance();
   result.category = TYPE_DECL_IDENT;
@@ -963,8 +966,10 @@ ast_expr parser_new_map() {
 }
 
 bool parser_must_stmt_end() {
-  if (parser_is(TOKEN_EOF)
-      || parser_is(TOKEN_STMT_EOF)) {
+  if (parser_is(TOKEN_EOF)) {
+    return true;
+  }
+  if (parser_is(TOKEN_STMT_EOF)) {
     parser_advance();
     return true;
   }
@@ -1023,14 +1028,18 @@ bool parser_is_function_decl(list_node *current) {
 
 ast_stmt parser_new_stmt() {
   ast_stmt result = {
-      .line = parser_peek()->line
+      .line =parser_line()
   };
   return result;
 }
 
 ast_expr parser_new_expr() {
   ast_expr result = {
-      .line = parser_peek()->line
+      .line = parser_line()
   };
   return result;
+}
+
+int parser_line() {
+  return parser_peek()->line;
 }

@@ -1,5 +1,22 @@
 #include "ast.h"
 
+string ast_expr_operator_to_string[100] = {
+    [AST_EXPR_OPERATOR_ADD] = "+",
+    [AST_EXPR_OPERATOR_SUB] = "-",
+    [AST_EXPR_OPERATOR_MUL] = "*",
+    [AST_EXPR_OPERATOR_DIV] = "/",
+
+    [AST_EXPR_OPERATOR_LT] = "<",
+    [AST_EXPR_OPERATOR_LTE] = "<=",
+    [AST_EXPR_OPERATOR_GT] = ">", // >
+    [AST_EXPR_OPERATOR_GTE] = ">=",  // >=
+    [AST_EXPR_OPERATOR_EQ_EQ] = "==", // ==
+    [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
+
+    [AST_EXPR_OPERATOR_NOT] = "!", // unary !expr
+    [AST_EXPR_OPERATOR_MINUS] = "-", // unary -expr
+};
+
 ast_block_stmt ast_new_block_stmt() {
   ast_block_stmt result;
   result.count = 0;

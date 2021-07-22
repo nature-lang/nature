@@ -112,7 +112,7 @@ void debug_ast_stmt(ast_stmt_expr_type t) {
 }
 
 void debug_scanner(token *t) {
-  printf("[DEBUG] SCANNER line:%d, literal:%s, type:%s \n", t->line, t->literal, token_type_to_string[t->type]);
+  printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_string[t->type], t->literal);
 }
 
 void debug_analysis_stmt(ast_stmt stmt) {

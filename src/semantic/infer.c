@@ -81,10 +81,10 @@ void infer_stmt(ast_stmt *stmt) {
       infer_return((ast_return_stmt *) stmt->stmt);
       break;
     }
-//      case AST_STMT_TYPE_DECL: {
-//        infer_type_decl((ast_type_decl_stmt *) stmt->stmt);
-//        break;
-//      }
+//    case AST_STMT_TYPE_DECL: {
+//      infer_type_decl((ast_type_decl_stmt *) stmt->stmt);
+//      break;
+//    }
     default:return;
   }
 }
@@ -148,7 +148,10 @@ ast_type infer_binary(ast_binary_expr *expr) {
   ast_type right_type = infer_expr(&expr->right);
 
   if (left_type.category != right_type.category) {
-    error_exit(0, "type exception");
+    error_printf(infer_line, "invalid operation: %s (mismatched types %s and untyped %s)",
+                 ast_expr_operator_to_string[expr->operator],
+                 type_to_string[left_type.category],
+                 type_to_string[right_type.category]);
   }
 
   switch (expr->operator) {
@@ -713,7 +716,7 @@ ast_type infer_type_decl_ident(string ident) {
   // 符号表找到相关类型
   analysis_local_ident *local_ident = table_get(symbol_ident_table, ident);
   if (local_ident->belong != SYMBOL_TYPE_CUSTOM_TYPE) {
-    error_exit(0, "infer type error, type must be custom type");
+    error_printf(infer_line, "'%s' is not a type", local_ident->ident);
   }
 
   ast_type_decl_stmt *type_decl_stmt = local_ident->decl;
@@ -792,5 +795,4 @@ bool infer_var_type_can_confirm(ast_type right) {
 
   return true;
 }
-
 

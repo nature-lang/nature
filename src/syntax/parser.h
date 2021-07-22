@@ -88,6 +88,7 @@ ast_stmt parser_assign(ast_expr left);
 token *parser_advance();
 token *parser_peek();
 
+int parser_line();
 bool parser_consume(token_type t);
 bool parser_is(token_type t);
 bool parser_next_is(int step, token_type t);

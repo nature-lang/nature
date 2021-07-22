@@ -2,6 +2,9 @@
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
 var iteration55 = ["str"]
+type person = 1
+person () {
+}
 
 string car = "str"
 
@@ -41,13 +44,14 @@ for (var key,value in iteration) {
 
 }
 
-if (a > 1) {
+int b
+if (b > 1) {
 	a = a + 1
 }
 
 
 var test3 = 1
-var call
+int call
 
 custom_call()
 custom_call(test,call(),custom_type () {
