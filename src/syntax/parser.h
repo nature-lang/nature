@@ -51,9 +51,10 @@ ast_expr parser_call_expr(ast_expr name);
 ast_expr parser_select_property(ast_expr left);
 ast_expr parser_access(ast_expr left);
 ast_expr parser_binary(ast_expr left);
-ast_expr parser_function_decl_expr();
+ast_expr parser_function_decl_expr(ast_type type);
 ast_expr parser_new_list();
 ast_expr parser_new_map();
+ast_expr parser_direct_type_expr();
 
 ast_stmt parser_stmt();
 ast_block_stmt parser_block();

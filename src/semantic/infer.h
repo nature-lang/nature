@@ -49,7 +49,7 @@ ast_type infer_call(ast_call *call);
  */
 ast_type infer_type(ast_type type);
 
-ast_type infer_type_decl_ident(string ident);
+ast_type infer_type_decl_ident(ast_ident *ident);
 
 /**
  * @param ident

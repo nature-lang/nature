@@ -435,8 +435,9 @@ void analysis_type(ast_type *type) {
   // 如果只是简单的 ident,又应该如何改写呢？
   if (type->category == TYPE_DECL_IDENT) {
     // 向上查查查
-    string unique_name = analysis_resolve_type(analysis_current, (string) type->value);
-    type->value = unique_name;
+    ast_ident *ident = type->value;
+    string unique_name = analysis_resolve_type(analysis_current, ident->literal);
+    ident->literal = unique_name;
     return;
   }
 

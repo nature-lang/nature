@@ -1,10 +1,38 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
-var iteration55 = ["str"]
-type person = 1
-person () {
+var baz = struct_test {
+	car = 12
 }
+
+var etc = struct {
+	int a
+	bool b
+} {
+	int a = 1
+}
+
+
+
+type struct_test = struct {
+	fn<int()> car
+}
+
+var foo = struct_test {
+	car = 12
+}
+
+map{string:int} foo_44 = {
+  'a-a':1,
+  'b-b':2,
+  'c-c':3
+}
+
+type custom1 = int
+custom1 testy() {
+
+}
+var foo19 = testy()
 
 string car = "str"
 
@@ -26,15 +54,16 @@ var test2 = 12
 
 var test = 12
 
-int custom_call() {
+int custom_call(int foo, int bar, fn<int()> c) {
 
 }
 
+type person = int
 var custom_type = 1
 custom_call(
 test,
 test2,
-custom_type () {
+person () {
 	return 1
 })
 
@@ -51,19 +80,12 @@ if (b > 1) {
 
 
 var test3 = 1
-int call
+int call() {
+}
 
-custom_call()
-custom_call(test,call(),custom_type () {
-return 1
-})
-custom_call(custom_type test4() {
-	return 1
-})
-custom_call(custom_type () {
-	return 1
-})
-custom_call(call())
+int test_f1(int a) {}
+
+test_f1(call())
 
 type custom = int
 
@@ -79,15 +101,15 @@ custom () {
 
 }
 
+
+
+bool () {
+	return true
+}
+
 custom test5() {
 
 }
-
-custom_type () {
-	return 1
-}
-
-
 var foo1 = test5()
 
 list[int] foo = [
@@ -95,8 +117,8 @@ list[int] foo = [
 			2
 ]
 
-void test6() {
-	test a = 24
+int test6() {
+	int a = 24
 	return 12
 }
 
@@ -107,6 +129,8 @@ map{string:int} foo_4 = {
 }
 
 var bar = "test"
+
+
 foo.bar()
 foo[bar] = 12
 int foo_5
