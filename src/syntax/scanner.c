@@ -346,8 +346,9 @@ char *scanner_string_advance(char c) {
 }
 
 char *scanner_gen_word() {
-  char *word = (char *) malloc(sizeof(char) * s_cursor.length);
+  char *word = malloc(sizeof(char) * s_cursor.length + 1);
   strncpy(word, s_cursor.current, s_cursor.length);
+  word[s_cursor.length] = '\0';
 
   return word;
 }

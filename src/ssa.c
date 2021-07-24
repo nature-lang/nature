@@ -484,8 +484,8 @@ uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table 
 }
 void ssa_rename_var(lir_operand_var *var, uint8_t number) {
   var->old = var->ident;
-  // 1 '\0'
-  // 2 '_12'
+  // 1: '\0'
+  // 2: '_12'
   char *buf = (char *) malloc(strlen(var->ident) + 1 + sizeof(uint8_t));
   sprintf(buf, "%s_%d", var->ident, number);
   var->ident = buf; // 已经分配在了堆中，需要手动释放了

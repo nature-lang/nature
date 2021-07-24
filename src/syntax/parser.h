@@ -47,14 +47,16 @@ ast_expr parser_literal();
 ast_expr parser_unary();
 ast_expr parser_grouping();
 ast_expr parser_ident_expr();
-ast_expr parser_call_expr(ast_expr name);
+ast_expr parser_call_expr(ast_expr left_expr);
 ast_expr parser_select_property(ast_expr left);
 ast_expr parser_access(ast_expr left);
 ast_expr parser_binary(ast_expr left);
 ast_expr parser_function_decl_expr(ast_type type);
+ast_expr parser_new_struct(ast_type type);
 ast_expr parser_new_list();
 ast_expr parser_new_map();
 ast_expr parser_direct_type_expr();
+ast_expr parser_struct_type_expr();
 
 ast_stmt parser_stmt();
 ast_block_stmt parser_block();
@@ -99,7 +101,8 @@ list_node *parser_next(int step);
  * 兼容 void
  * @return
  */
-bool parser_is_type();
+bool parser_is_direct_type();
+bool parser_is_custom_type_var();
 bool parser_is_simple_type();
 token *parser_must(token_type t);
 bool parser_must_stmt_end();

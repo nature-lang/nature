@@ -138,7 +138,6 @@ ast_type infer_expr(ast_expr *expr) {
 }
 
 /**
- *
  * @param expr
  * @return
  */
@@ -147,10 +146,15 @@ ast_type infer_binary(ast_binary_expr *expr) {
   ast_type left_type = infer_expr(&expr->left);
   ast_type right_type = infer_expr(&expr->right);
 
-  if (left_type.category != right_type.category) {
-    error_printf(infer_line, "invalid operation: %s (mismatched types %s and untyped %s)",
+  if (left_type.category != TYPE_INT && left_type.category != TYPE_FLOAT) {
+    error_printf(infer_line, "invalid operation: %s, expr type must be int or float, cannot '%s' type",
                  ast_expr_operator_to_string[expr->operator],
-                 type_to_string[left_type.category],
+                 type_to_string[left_type.category]);
+  }
+
+  if (right_type.category != TYPE_INT && right_type.category != TYPE_FLOAT) {
+    error_printf(infer_line, "invalid operation: %s,  expr type must be int or float, cannot '%s' type",
+                 ast_expr_operator_to_string[expr->operator],
                  type_to_string[right_type.category]);
   }
 
@@ -313,19 +317,23 @@ ast_type infer_new_struct(ast_new_struct *new_struct) {
   new_struct->type = infer_type(new_struct->type);
 
   if (new_struct->type.category != TYPE_STRUCT) {
-    error_exit(0, "new struct type exception");
+    error_printf(infer_line, "ident not struct");
   }
 
   ast_struct_decl *struct_decl = (ast_struct_decl *) new_struct->type.value;
   for (int i = 0; i < new_struct->count; ++i) {
     ast_struct_property struct_property = new_struct->list[i];
+
     // struct_decl 已经是被还原过的类型了
     ast_type expect_type = infer_struct_property_type(struct_decl, struct_property.key);
     ast_type actual_type = infer_expr(&struct_property.value);
 
     // expect type type 并不允许为 var
     if (!infer_compare_type(actual_type, expect_type)) {
-      error_exit(0, "struct property type exception");
+      error_printf(infer_line, "property '%s' expect '%s' type, cannot assign '%s' type",
+                   struct_property.key,
+                   type_to_string[expect_type.category],
+                   type_to_string[actual_type.category]);
     }
   }
 
@@ -361,7 +369,9 @@ ast_type infer_access(ast_expr *expr) {
     result = map_decl->value_type;
   } else if (left_type.category == TYPE_LIST) {
     if (key_type.category != TYPE_INT) {
-      error_exit(0, "access list, index type must by int");
+      error_printf(infer_line,
+                   "access list error, index expr type must by int, cannot '%s'",
+                   type_to_string[key_type.category]);
     }
 
     ast_access_list *access_list = malloc(sizeof(ast_access_map));
@@ -376,8 +386,8 @@ ast_type infer_access(ast_expr *expr) {
 
     result = list_decl->type;
   } else {
-    error_exit(0, "type must map or list");
-    return result;
+    error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.category]);
+    exit(0);
   };
 
   return result;
@@ -404,7 +414,7 @@ ast_type infer_select_property(ast_select_property *select_property) {
     }
   }
 
-  error_exit(0, "cannot get property");
+  error_printf(infer_line, "cannot get struct property '%s'", select_property->property);
   exit(0);
 }
 
@@ -494,7 +504,7 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
  */
 void infer_assign(ast_assign_stmt *stmt) {
   ast_type left_type = infer_expr(&stmt->left);
-  ast_type right_type = infer_expr(&stmt->left);
+  ast_type right_type = infer_expr(&stmt->right);
 
   if (!infer_compare_type(left_type, right_type)) {
     error_type_not_match(infer_line);
@@ -756,7 +766,7 @@ ast_type infer_struct_property_type(ast_struct_decl *struct_decl, char *ident) {
     }
   }
 
-  error_exit(0, "not found struct property");
+  error_printf(infer_line, "not found struct property '%s'", ident);
   exit(0);
 }
 

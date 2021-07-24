@@ -1,26 +1,28 @@
 //import "src/redis" as local_redis // redis.set
 //import "github.com/weiwenhao/redis" as remote_redis // redis.set
 
+type struct_test = struct {
+	fn<int()> car
+}
+
 var baz = struct_test {
-	car = 12
+	car = int () {
+		int a =12
+		return a
+	}
+}
+
+baz.car = int () {
+
 }
 
 var etc = struct {
 	int a
 	bool b
 } {
-	int a = 1
+	a = 1
 }
 
-
-
-type struct_test = struct {
-	fn<int()> car
-}
-
-var foo = struct_test {
-	car = 12
-}
 
 map{string:int} foo_44 = {
   'a-a':1,
@@ -75,7 +77,7 @@ for (var key,value in iteration) {
 
 int b
 if (b > 1) {
-	a = a + 1
+	b = b + 1
 }
 
 
@@ -129,24 +131,23 @@ map{string:int} foo_4 = {
 }
 
 var bar = "test"
+var bbq =24
 
-
-foo.bar()
-foo[bar] = 12
+foo[bbq] = 12
 int foo_5
 var foo_6 = 12 // 类型推导
-foo = 1 + bar
-foo = 1 + 1 * 1
-foo = 1 + 4 * (2 - 3 / 3)
-bar = 100
+
+
+foo_6 = 1 + 3
+foo_6 = 1 + 1 * 1
+foo_6 = 1 + 4 * (2 - 3 / 3)
 int foo_7 = 12
 bool foo_8 = true
 string foo_9 = "为什么最常用的字符串要是双引号？，是有什么规定吗？"
 
 
-foo.bar = 12
-foo[bar] = 12
-foo.bar()
+foo[2] = 12
+baz.car()
 
 // 特殊格式语法糖，兼容  list<int>
 list[int] foo_10 = [
@@ -159,7 +160,7 @@ list[int] foo_10 = [
 // list<int> bar = my_gen()
 //list[int]
 
-var a_3 = []
+var a_3 = [true,false]
 
 
 // 特殊格式语法糖，兼容 map<string,int>
@@ -169,29 +170,20 @@ map{string:int} foo_11 = {
   'c-c':3
 }
 
-void test9(int a) {
-	test foo = 24
-	return 12
-}
-//map<int,string> car = {}
+type my_int_a = int
 
-// 自定义类型
-//type custom = int
-//type custom_struct = struct {
-//	int i,
-//	bool b,
-//	list[int] c
-//}
-
-
-var apple = custom_call()
-
-
-if (a > 1) {
-	a = a + 1
+float test25(int a) {
+	my_int_a foo = 24
+	return 12.2
 }
 
-var l = []
+var apple = test25(1)
+
+if (apple > 1) {
+	apple = apple + 1
+}
+
+var l = ["str","str21"]
 
 for (var key,value in l) {
 

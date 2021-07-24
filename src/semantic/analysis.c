@@ -498,6 +498,8 @@ void analysis_unary(ast_unary_expr *expr) {
  * @param expr
  */
 void analysis_new_struct(ast_new_struct *expr) {
+  analysis_type(&expr->type);
+
   for (int i = 0; i < expr->count; ++i) {
     analysis_expr(&expr->list[i].value);
   }
@@ -602,7 +604,8 @@ bool analysis_redeclare_check(char *ident) {
  * @return
  */
 char *unique_var_ident(char *name) {
-  char *unique_name = (char *) malloc(strlen(name) + 1 + sizeof(int));
+  // +2: _ and '\0'
+  char *unique_name = malloc(strlen(name) + sizeof(int) + 2);
   sprintf(unique_name, "%s_%d", name, unique_name_count++);
   return unique_name;
 }

@@ -61,9 +61,7 @@ parser_rule rules[] = {
     [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
     [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
     [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
-
     [TOKEN_LITERAL_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
-    [TOKEN_RETURN] = {NULL, NULL, PRECEDENCE_NULL},
 
     // 表达式的前缀是一个类型
     [TOKEN_VOID] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
@@ -73,9 +71,12 @@ parser_rule rules[] = {
     [TOKEN_BOOL] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_STRING] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_FUNCTION] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
-    [TOKEN_STRUCT] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_MAP] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_LIST] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
+    // type decl 不会出现在表达式这里
+    [TOKEN_STRUCT] = {parser_struct_type_expr, NULL, PRECEDENCE_NULL},
+
+    [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
 ast_block_stmt parser(list *token_list) {
@@ -89,7 +90,7 @@ ast_block_stmt parser(list *token_list) {
 
 #ifdef DEBUG_PARSER
     if (stmt_type != -1) {
-      debug_ast_stmt(stmt_type);
+      debug_parser_stmt(stmt_type);
     }
 #endif
 
@@ -120,7 +121,7 @@ ast_block_stmt parser_block() {
 }
 
 ast_stmt parser_stmt() {
-  if (parser_is_type() || parser_is(TOKEN_VAR)) {
+  if (parser_is_direct_type() || parser_is_custom_type_var()) {
     return parser_var_or_function_decl();
   } else if (parser_is(TOKEN_LITERAL_IDENT)) {
     return parser_ident_stmt();
@@ -182,13 +183,14 @@ ast_expr parser_precedence_expr(parser_precedence precedence) {
 // 读取表达式前缀
   parser_prefix_fn prefix_fn = parser_get_rule(parser_peek()->type)->prefix;
   if (prefix_fn == NULL) {
-    error_exit(0, "prefix_fn is NULL");
+    error_printf(parser_line(), "cannot parser ident: %s", parser_peek()->literal);
   }
 
   ast_expr expr = prefix_fn(); // advance
 
   // 前缀表达式已经处理完成，判断是否有中缀表达式，有则处理
-  parser_rule *infix_rule = parser_get_rule(parser_peek()->type);
+  token_type type = parser_peek()->type;
+  parser_rule *infix_rule = parser_get_rule(type);
   while (infix_rule->infix_precedence >= precedence) {
     parser_infix_fn infix_fn = infix_rule->infix;
     expr = infix_fn(expr);
@@ -204,12 +206,6 @@ ast_expr parser_precedence_expr(parser_precedence precedence) {
  * @return
  */
 ast_expr parser_expr() {
-  // 特殊逻辑， type 类型开头，则说明是函数，进行函数定义特殊处理
-  if (parser_is_type()) {
-//    ast_type type = parser_type();
-//    parser_function_decl_expr(type);
-  }
-
   return parser_precedence_expr(PRECEDENCE_ASSIGN);
 }
 
@@ -226,7 +222,7 @@ ast_stmt parser_var_or_function_decl() {
 
   ast_type type = parser_type();
 
-  // 函数名称仅占用一个 token
+  // 声明时函数名称仅占用一个 token
   if (parser_is(TOKEN_LEFT_PAREN) || parser_next_is(1, TOKEN_LEFT_PAREN)) {
     result.type = AST_FUNCTION_DECL;
     result.stmt = parser_function_decl(type);
@@ -234,6 +230,7 @@ ast_stmt parser_var_or_function_decl() {
   }
 
   token *ident_token = parser_advance();
+
   // int foo = 12;
   if (parser_consume(TOKEN_EQUAL)) {
     ast_var_decl_assign_stmt *stmt = malloc(sizeof(ast_var_decl_assign_stmt));
@@ -334,6 +331,7 @@ ast_expr parser_literal() {
 
 /**
  * ident is custom type or variable
+ * ident 如果是 type 则需要特殊处理
  * @return
  */
 ast_expr parser_ident_expr() {
@@ -345,38 +343,25 @@ ast_expr parser_ident_expr() {
       .category = TYPE_DECL_IDENT,
       .value = ast_new_ident(ident_token->literal)
   };
+
   // person {
   //  a = 1
   //  b = 2
   // }
   if (parser_consume(TOKEN_LEFT_CURLY)) {
-    ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
-    new_struct->count = 0;
-    new_struct->type = type_decl_ident;
-
-    while (!parser_is(TOKEN_RIGHT_CURLY)) {
-      ast_struct_property item;
-      item.key = parser_advance()->literal;
-      item.value = parser_expr();
-      new_struct->list[new_struct->count++] = item;
-      parser_must_stmt_end();
-    }
-
-    result.type = AST_EXPR_NEW_STRUCT;
-    result.expr = new_struct;
-    return result;
+    return parser_new_struct(type_decl_ident);
   }
 
   // foo_type a() {}
-  if (parser_is(TOKEN_LITERAL_IDENT) && parser_next_is(TOKEN_LEFT_PAREN)) {
+  if (parser_is(TOKEN_LITERAL_IDENT) && parser_next_is(1, TOKEN_LEFT_PAREN)) {
     return parser_function_decl_expr(type_decl_ident);
   };
+  // type() {}
+  if (parser_is(TOKEN_LEFT_PAREN) && parser_is_function_decl(parser_next(0))) {
+    return parser_function_decl_expr(type_decl_ident);
+  }
 
-  // call vs not name function
-//  if () {
-//
-//  }
-
+  // call() or other ident prefix expr
   result.type = AST_EXPR_IDENT;
   result.expr = ast_new_ident(ident_token->literal);
 
@@ -425,11 +410,11 @@ ast_expr parser_select_property(ast_expr left) {
   return result;
 }
 
-ast_expr parser_call_expr(ast_expr name_expr) {
+ast_expr parser_call_expr(ast_expr left_expr) {
   ast_expr result = parser_new_expr();
 
   ast_call *call_stmt = malloc(sizeof(ast_call));
-  call_stmt->left = name_expr;
+  call_stmt->left = left_expr;
 
   // param handle
   parser_actual_param(call_stmt);
@@ -813,15 +798,41 @@ bool parser_consume(token_type expect) {
 }
 
 /**
- * is type
+ * custom_type baz = 1;
+ * custom_type baz;
+ *
+ * call();
+ * type() {
+ * }
+ *
+ * foo = 1
+ * foo.bar = 1
+ * call().name = 2
  * @return
  */
 ast_stmt parser_ident_stmt() {
-  // 消费左边的 ident, invalid:  foo() = 1
+
+  // 消费左边的 ident
   ast_expr left = parser_expr();
   if (left.type == AST_CALL) {
+    if (parser_is(TOKEN_EQUAL)) {
+      error_printf(parser_line(), "function call cannot assign value");
+      exit(0);
+    }
     ast_stmt stmt = parser_new_stmt();
     stmt.type = AST_CALL;
+    stmt.stmt = left.expr;
+    return stmt;
+  }
+
+  if (left.type == AST_FUNCTION_DECL) {
+    if (parser_is(TOKEN_EQUAL)) {
+      error_printf(parser_line(), "function decl cannot assign value");
+      exit(0);
+    }
+
+    ast_stmt stmt = parser_new_stmt();
+    stmt.type = AST_FUNCTION_DECL;
     stmt.stmt = left.expr;
     return stmt;
   }
@@ -843,29 +854,7 @@ ast_expr parser_function_decl_expr(ast_type type) {
  * not contains var
  * @return
  */
-bool parser_is_type() {
-  if (parser_is(TOKEN_LITERAL_IDENT)) {
-    // car {}
-    if (parser_next_is(1, TOKEN_LEFT_CURLY)) {
-      return true;
-    }
-
-    // my_type foo = 1;
-    // my_type foo();
-    if (parser_next_is(1, TOKEN_LITERAL_IDENT)) {
-      return true;
-    }
-
-    // my_type (int a, int b) {}
-    if (parser_next_is(1, TOKEN_LEFT_PAREN)) {
-      if (parser_is_function_decl(parser_next(1))) {
-        return true;
-      }
-
-      return false;
-    }
-  }
-
+bool parser_is_direct_type() {
   if (parser_is_simple_type()) {
     return true;
   }
@@ -874,6 +863,10 @@ bool parser_is_type() {
       || parser_is(TOKEN_STRUCT)
       || parser_is(TOKEN_MAP)
       || parser_is(TOKEN_LIST)) {
+    return true;
+  }
+
+  if (parser_is(TOKEN_VAR)) {
     return true;
   }
 
@@ -908,7 +901,9 @@ bool parser_is_simple_type() {
 token *parser_must(token_type expect) {
   token *t = p_cursor.current->value;
   if (t->type != expect) {
-    error_printf(parser_line(), "not expect token");
+    error_printf(parser_line(), "parser error: expect '%s' token actual '%s' token",
+                 token_type_to_string[expect],
+                 token_type_to_string[t->type]);
   }
 
   parser_advance();
@@ -1085,6 +1080,29 @@ int parser_line() {
   return parser_peek()->line;
 }
 
+ast_expr parser_new_struct(ast_type type) {
+  ast_expr result;
+  ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
+  new_struct->count = 0;
+  new_struct->type = type;
+
+  while (!parser_is(TOKEN_RIGHT_CURLY)) {
+    // ident 类型
+    ast_struct_property item;
+    item.key = parser_must(TOKEN_LITERAL_IDENT)->literal;
+    parser_must(TOKEN_EQUAL);
+    item.value = parser_expr();
+    new_struct->list[new_struct->count++] = item;
+    parser_must_stmt_end();
+  }
+
+  parser_must(TOKEN_RIGHT_CURLY);
+
+  result.type = AST_EXPR_NEW_STRUCT;
+  result.expr = new_struct;
+  return result;
+}
+
 /**
  * 直接已类型开头，一定是函数声明!
  * @return
@@ -1092,4 +1110,30 @@ int parser_line() {
 ast_expr parser_direct_type_expr() {
   ast_type type = parser_type();
   return parser_function_decl_expr(type);
+}
+
+ast_expr parser_struct_type_expr() {
+  ast_type struct_type = parser_type();
+  if (parser_consume(TOKEN_LEFT_CURLY)) {
+    return parser_new_struct(struct_type);
+  }
+  return parser_function_decl_expr(struct_type);
+}
+
+bool parser_is_custom_type_var() {
+  if (!parser_is(TOKEN_LITERAL_IDENT)) {
+    return false;
+  }
+
+  if (!parser_next_is(1, TOKEN_LITERAL_IDENT)) {
+    return false;
+  }
+
+  if (parser_next_is(2, TOKEN_EQUAL) ||
+      parser_next_is(2, TOKEN_STMT_EOF) ||
+      parser_next_is(2, TOKEN_EOF)) {
+    return true;
+  }
+
+  return false;
 }

@@ -11,12 +11,13 @@
 
 //#define DEBUG_ANALYSIS
 
-#define DEBUG_INFER
+//#define DEBUG_INFER
+
 void debug_scanner(token* t);
 
 void debug_parser(int line, string token);
 
-void debug_ast_stmt(ast_stmt_expr_type t);
+void debug_parser_stmt(ast_stmt_expr_type t);
 
 void debug_analysis_stmt(ast_stmt stmt);
 

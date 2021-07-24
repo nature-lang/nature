@@ -3,7 +3,7 @@
 
 int current_parser_line = 0;
 
-string ast_stmt_expr_type_to_string[] = {
+string ast_stmt_expr_type_to_debug[] = {
     [AST_EXPR_LITERAL]="AST_EXPR_TYPE_LITERAL",
     [AST_EXPR_BINARY]="AST_EXPR_TYPE_BINARY",
     [AST_EXPR_UNARY]="AST_EXPR_TYPE_UNARY",
@@ -30,7 +30,7 @@ string ast_stmt_expr_type_to_string[] = {
     [AST_STMT_TYPE_DECL]="AST_STMT_TYPE_DECL",
 };
 
-string token_type_to_string[] = {
+string token_type_to_debug[] = {
     [TOKEN_LEFT_PAREN]="TOKEN_LEFT_PAREN",
     [TOKEN_RIGHT_PAREN]="TOKEN_RIGHT_PAREN", // ()
     [TOKEN_LEFT_SQUARE]="TOKEN_LEFT_SQUARE",
@@ -107,18 +107,18 @@ void debug_parser(int line, char *token) {
   fflush(stdout);
 }
 
-void debug_ast_stmt(ast_stmt_expr_type t) {
-  printf("\n[DEBUG] AST stmt: %s\n", ast_stmt_expr_type_to_string[t]);
+void debug_parser_stmt(ast_stmt_expr_type t) {
+  printf("\n[DEBUG] PARSER stmt: %s\n", ast_stmt_expr_type_to_debug[t]);
 }
 
 void debug_scanner(token *t) {
-  printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_string[t->type], t->literal);
+  printf("[DEBUG] SCANNER line:%d, %s: %s |", t->line, token_type_to_debug[t->type], t->literal);
 }
 
 void debug_analysis_stmt(ast_stmt stmt) {
-  printf("[DEBUG] ANALYSIS line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_string[stmt.type]);
+  printf("[DEBUG] ANALYSIS line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
 }
 
 void debug_infer_stmt(ast_stmt stmt) {
-  printf("[DEBUG] INFER line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_string[stmt.type]);
+  printf("[DEBUG] INFER line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
 }
