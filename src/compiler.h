@@ -6,7 +6,11 @@
 #include "src/lir.h"
 
 // 入口
-list_op *compiler(closure *c, ast_closure_decl *decl);
+list_op *compiler(ast_closure_decl *ast);
+
+list_op *compiler_closure(closure *parent, ast_closure_decl *ast);
+
+list_op *compiler_literal(closure *c, ast_literal *ast, lir_operand *target);
 
 list_op *compiler_block(closure *c, ast_block_stmt *block);
 
@@ -43,5 +47,7 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
  * @return
  */
 list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *target);
+
+list_op *compiler_unary(closure *c, ast_unary_expr *expr, lir_operand *target);
 
 #endif //NATURE_SRC_COMPILER_H_

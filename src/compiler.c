@@ -1,19 +1,102 @@
 #include "compiler.h"
 #include "symbol.h"
+#include "src/lib/error.h"
+#include "src/debug/debug.c"
+
+lir_op_type ast_expr_operator_to_lir_op[] = {
+    [AST_EXPR_OPERATOR_ADD] = LIR_OP_TYPE_ADD,
+    [AST_EXPR_OPERATOR_SUB] = LIR_OP_TYPE_SUB,
+    [AST_EXPR_OPERATOR_MUL] = LIR_OP_TYPE_MUL,
+    [AST_EXPR_OPERATOR_DIV] = LIR_OP_TYPE_DIV,
+
+    [AST_EXPR_OPERATOR_LT] = LIR_OP_TYPE_LT,
+    [AST_EXPR_OPERATOR_LTE] = LIR_OP_TYPE_LTE,
+    [AST_EXPR_OPERATOR_GT] = LIR_OP_TYPE_GT,
+    [AST_EXPR_OPERATOR_GTE] = LIR_OP_TYPE_GTE,
+    [AST_EXPR_OPERATOR_EQ_EQ] = LIR_OP_TYPE_EQ_EQ,
+    [AST_EXPR_OPERATOR_NOT_EQ] = LIR_OP_TYPE_NOT_EQ,
+
+    [AST_EXPR_OPERATOR_NOT] = LIR_OP_TYPE_NOT,
+    [AST_EXPR_OPERATOR_MINUS] = LIR_OP_TYPE_MINUS,
+};
+
+/**
+ * @param c
+ * @param ast
+ * @return
+ */
+list_op *compiler(ast_closure_decl *ast) {
+  return compiler_closure(NULL, ast);
+}
+
+/**
+ * 顶层 closure 不需要再次捕获外部变量
+ * call make_env
+ * call set_env => a target
+ * call get_env => t1 target
+ * @param parent
+ * @param ast
+ * @return
+ */
+list_op *compiler_closure(closure *parent, ast_closure_decl *ast) {
+// 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
+  list_op *parent_list = list_op_new();
+
+  // 处理 env ---------------
+  // 1. make env_n by count
+  lir_operand *env_target = lir_new_var_operand(make_label("env"));
+  lir_operand *first_param = lir_new_immediate_int_operand(ast->env_count);
+  list_op_push(parent_list, lir_runtime_one_param_call(RUNTIME_CALL_MAKE_ENV, env_target, first_param));
+
+  // 2. for set ast_ident/ast_access_env to env n
+  for (int i = 0; i < ast->env_count; ++i) {
+    ast_expr item_expr = ast->env[i];
+    lir_operand *item_target = lir_new_temp_var_operand();
+    list_op_append(parent_list, compiler_expr(parent, item_expr, item_target));
+
+    // first param is env, second param is append value
+    lir_operand_actual_param *params_operand = lir_new_actual_param();
+    params_operand->list[params_operand->count++] = env_target;
+    params_operand->list[params_operand->count++] = lir_new_immediate_int_operand(i);
+    params_operand->list[params_operand->count++] = item_target;
+    list_op_push(parent_list, lir_runtime_call(
+        RUNTIME_CALL_SET_ENV,
+        params_operand,
+        NULL));
+  }
+
+  // new 一个新的 closure ---------------
+  closure *c = lir_new_closure();
+  c->name = ast->function->name;
+  c->parent = parent;
+  list_op *child_list = list_op_new();
+
+  // 添加 label 入口
+  list_op_push(child_list, lir_op_label(ast->function->name));
+
+  // compiler formal param
+  for (int i = 0; i < ast->function->formal_param_count; ++i) {
+    ast_var_decl *param = ast->function->formal_params[i];
+    list_op_append(child_list, compiler_var_decl(c, param));
+  }
+
+  // 编译 body
+  list_op_append(child_list, compiler_block(c, &ast->function->body));
+  c->operates = child_list;
+
+  return parent_list;
+}
 
 list_op *compiler_block(closure *c, ast_block_stmt *block) {
-  list_op *operates = list_op_new();
+  list_op *list = list_op_new();
   for (int i = 0; i < block->count; ++i) {
     ast_stmt stmt = block->list[i];
     list_op *await_append;
 
     switch (stmt.type) {
       case AST_CLOSURE_DECL: {
-//        closure *child = lir_new_closure();
-//        child->parent = c;
-//        child->operates =
-        // 编译 closure 不应该由什么指令集返回回来？ closure 自己存储自己的 operates
-        compiler(c, (ast_closure_decl *) stmt.stmt);
+        await_append = compiler_closure(c, (ast_closure_decl *) stmt.stmt);
+        break;
       }
       case AST_VAR_DECL: {
         await_append = compiler_var_decl(c, (ast_var_decl *) stmt.stmt);
@@ -44,12 +127,16 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
         await_append = compiler_call(c, (ast_call *) stmt.stmt, temp_target);
         break;
       }
+      default: {
+        error_printf(stmt.line, "unknown stmt: %s", ast_stmt_expr_type_to_debug[stmt.type]);
+        exit(0);
+      }
     }
 
-    list_op_append(operates, await_append);
+    list_op_append(list, await_append);
   }
 
-  return operates;
+  return list;
 }
 
 /**
@@ -58,9 +145,10 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
  * @return
  */
 list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
-  lir_operand *target = lir_new_var_operand(stmt->ident);
+  lir_operand *target = lir_new_var_operand(stmt->var_decl->ident);
   return compiler_expr(c, stmt->expr, target);
 }
+
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt) {
   // left 可能是一个数组调用，可能是一个对象访问，也有可能是一个标量赋值
   lir_operand *left_target = lir_new_temp_var_operand();
@@ -80,18 +168,23 @@ list_op *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
   return NULL;
 }
 
+/**
+ * 表达式的返回值都存储在 target
+ * @param c
+ * @param expr
+ * @param target
+ * @return
+ */
 list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
   switch (expr.type) {
-    case AST_EXPR_TYPE_BINARY: {
+    case AST_EXPR_BINARY: {
       return compiler_binary(c, (ast_binary_expr *) expr.expr, target);
     }
-    case AST_EXPR_TYPE_LITERAL: {
+    case AST_EXPR_LITERAL: {
+      // 直接重写 result target，不生成操作
       ast_literal *literal = (ast_literal *) expr.expr;
-
-      // 自引用，避免冗余的
-      // a = 5
-      // t1 = a
-      if (literal->type == AST_BASE_TYPE_INT || literal->type == AST_BASE_TYPE_FLOAT) {
+      if (literal->type == TYPE_INT || literal->type == TYPE_FLOAT
+          || literal->type == TYPE_BOOL || literal->type == TYPE_STRING) {
         lir_operand_immediate *immediate = malloc(sizeof(lir_operand_immediate));
         immediate->type = literal->type;
         immediate->value = literal->value;
@@ -99,55 +192,83 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
         target->value = immediate;
       }
 
-      // TODO 其他类型处理
-
-      break;
+      return list_op_new();
     }
-    case AST_EXPR_TYPE_IDENT: {
+    case AST_EXPR_IDENT: {
+      ast_ident *ident = expr.expr;
       target->type = LIR_OPERAND_TYPE_VAR;
-      target->value = lir_new_var_operand((ast_ident) expr.expr);
-      break;
+      target->value = lir_new_var_operand(ident->literal);
+
+      return list_op_new();
     }
     case AST_CALL: {
-      // 返回值存储在 target 中
       return compiler_call(c, (ast_call *) expr.expr, target);
     }
-    case AST_EXPR_TYPE_ACCESS_LIST: {
+    case AST_EXPR_ACCESS_LIST: {
       return compiler_access_list(c, (ast_access_list *) expr.expr, target);
     }
-    case AST_EXPR_TYPE_NEW_LIST: {
+    case AST_EXPR_NEW_LIST: {
       return compiler_new_list(c, (ast_new_list *) expr.expr, target);
     }
-    case AST_EXPR_TYPE_ACCESS_MAP: {
+    case AST_EXPR_ACCESS_MAP: {
       return compiler_access_map(c, (ast_access_map *) expr.expr, target);
     }
-    case AST_EXPR_TYPE_NEW_MAP: {
+    case AST_EXPR_NEW_MAP: {
       return compiler_new_map(c, (ast_new_map *) expr.expr, target);
     }
   }
   return NULL;
 }
 
-list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *result_target) {
-  uint8_t type;
-  switch (expr->operator) {
-    case AST_EXPR_OPERATOR_ADD: {
-      type = LIR_OP_TYPE_ADD;
-      break;
-    }
+list_op *compiler_literal(closure *c, ast_literal *ast, lir_operand *target) {
+  if (ast->type == TYPE_INT || ast->type == TYPE_FLOAT
+      || ast->type == TYPE_BOOL || ast->type == TYPE_STRING) {
+    lir_operand_immediate *immediate = malloc(sizeof(lir_operand_immediate));
+    immediate->type = ast->type;
+    immediate->value = ast->value;
+    target->type = LIR_OPERAND_TYPE_IMMEDIATE;
+    target->value = immediate;
   }
+
+  return NULL;
+}
+
+list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *result_target) {
+  lir_op_type type = ast_expr_operator_to_lir_op[expr->operator];
 
   lir_operand *left_target = lir_new_temp_var_operand();
   lir_operand *right_target = lir_new_temp_var_operand();
-  list_op *operates = compiler_expr(c, expr->left, left_target);
-  list_op_append(operates, compiler_expr(c, expr->right, right_target));
+  list_op *list = compiler_expr(c, expr->left, left_target);
+  list_op_append(list, compiler_expr(c, expr->right, right_target));
   lir_op *binary_op = lir_op_new(type);
   binary_op->result = *result_target;
   binary_op->first = *left_target;
   binary_op->second = *right_target;
-  list_op_push(operates, binary_op);
+  list_op_push(list, binary_op);
 
-  return operates;
+  return list;
+}
+
+/**
+ * + (-1)
+ * NOT first_param => result_target
+ * @param c
+ * @param expr
+ * @param result_target
+ * @return
+ */
+list_op *compiler_unary(closure *c, ast_unary_expr *expr, lir_operand *result_target) {
+  lir_op_type type = ast_expr_operator_to_lir_op[expr->operator];
+  list_op *list = list_op_new();
+  lir_op *not = lir_op_new(type);
+
+  lir_operand *first = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, expr->operand, first));
+  not->first = *first;
+  not->result = *result_target;
+  list_op_push(list, not);
+
+  return list;
 }
 
 list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
@@ -488,65 +609,6 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
   return list;
 }
 
-/**
- * 从何处读取实参为形参赋值？
- * 如何编译 env? env 的本质是运行时对栈的引用
- * call make_env
- * call set_env => a target
- * call get_env => t1 target
- * @param c
- * @param ast
- * @return
- */
-list_op *compiler(closure *c, ast_closure_decl *ast) {
-  // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
-  list_op *list = list_op_new();
-
-  // 处理 env
-  // 1. make env_n by count
-  lir_operand *env_target = lir_new_var_operand(make_label("env"));
-  lir_operand *first_param = lir_new_immediate_int_operand(ast->env_count);
-  list_op_push(list, lir_runtime_one_param_call(RUNTIME_CALL_MAKE_ENV, env_target, first_param));
-
-  // 2. for set ast_ident/ast_access_env to env n
-  for (int i = 0; i < ast->env_count; ++i) {
-    ast_expr item_expr = ast->env[i];
-    lir_operand *item_target = lir_new_temp_var_operand();
-    list_op_append(list, compiler_expr(c, item_expr, item_target));
-
-    // first param is env, second param is append value
-    lir_operand_actual_param *params_operand = lir_new_actual_param();
-    params_operand->list[params_operand->count++] = env_target;
-    params_operand->list[params_operand->count++] = lir_new_immediate_int_operand(i);
-    params_operand->list[params_operand->count++] = item_target;
-    list_op_push(list, lir_runtime_call(
-        RUNTIME_CALL_SET_ENV,
-        params_operand,
-        NULL));
-  }
-
-  // new 一个新的 closure
-  closure *child = lir_new_closure();
-  child->name = ast->function->name;
-  child->parent = c;
-  list_op *child_list = list_op_new();
-
-  // 添加 label
-  list_op_push(child_list, lir_op_label(ast->function->name));
-
-  // compiler formal param
-  for (int i = 0; i < ast->function->formal_param_count; ++i) {
-    ast_var_decl *param = ast->function->formal_params[i];
-    list_op_append(child_list, compiler_var_decl(child, param));
-  }
-
-  // 编译 body
-  list_op_append(child_list, compiler_block(child, &ast->function->body));
-  child->operates = child_list;
-
-  return list;
-}
-
 list_op *compiler_return(closure *c, ast_return_stmt *ast) {
   list_op *list = list_op_new();
   lir_operand *target = lir_new_temp_var_operand();
@@ -558,6 +620,7 @@ list_op *compiler_return(closure *c, ast_return_stmt *ast) {
 
   return list;
 }
+
 
 
 

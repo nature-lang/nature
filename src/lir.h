@@ -69,7 +69,7 @@ typedef struct {
 
 typedef struct {
   void *value;
-  uint8_t type;
+  type_category type;
 } lir_operand_immediate;
 
 typedef struct {
@@ -92,6 +92,17 @@ typedef string lir_operand_label;
 typedef enum {
   LIR_OP_TYPE_ADD,
   LIR_OP_TYPE_SUB,
+  LIR_OP_TYPE_MUL,
+  LIR_OP_TYPE_DIV,
+  LIR_OP_TYPE_LT,
+  LIR_OP_TYPE_LTE,
+  LIR_OP_TYPE_GT,
+  LIR_OP_TYPE_GTE,
+  LIR_OP_TYPE_EQ_EQ,
+  LIR_OP_TYPE_NOT_EQ,
+  LIR_OP_TYPE_NOT,
+  LIR_OP_TYPE_MINUS,
+
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
   LIR_OP_TYPE_CMP_GOTO,
@@ -211,7 +222,7 @@ lir_op *lir_op_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
-lir_op *lir_op_new(uint8_t type);
+lir_op *lir_op_new(lir_op_type type);
 lir_op *lir_runtime_call(string name, lir_operand_actual_param *actual_param, lir_operand *result);
 lir_op *lir_runtime_one_param_call(string name, lir_operand *result, lir_operand *first);
 lir_op *lir_runtime_two_param_call(string name, lir_operand *result, lir_operand *first, lir_operand *second);
