@@ -14,9 +14,14 @@ typedef enum {
 //  SYMBOL_TYPE_FUNCTION,
 } symbol_type;
 
-int64_t list_offset(string type, uint64_t index);
+int64_t list_offset(ast_type type, uint64_t index);
 
-uint64_t type_sizeof(string type);
+/**
+ * 字符串类型，list 类型， map 类型,都按照指针来计算大小
+ * @param type
+ * @return
+ */
+uint64_t type_sizeof(ast_type type);
 
 void symbol_ident_table_init();
 

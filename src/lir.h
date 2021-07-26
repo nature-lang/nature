@@ -19,6 +19,19 @@
 #define RUNTIME_CALL_SET_ENV "set_env"
 #define RUNTIME_CALL_GET_ENV "get_env"
 
+#define LIR_NEW_IMMEDIATE_OPERAND(operand_type, value_type, capacity) \
+({                                               \
+  int *heap_value = malloc(sizeof(value_type));\
+  *heap_value = capacity; \
+   lir_operand_immediate *type_operand = malloc(sizeof(lir_operand_immediate)); \
+   type_operand->type = operand_type; \
+   type_operand->value = heap_value; \
+   lir_operand *operand = malloc(sizeof(lir_operand)); \
+   operand->type = LIR_OPERAND_TYPE_IMMEDIATE; \
+   operand->value = type_operand;              \
+   operand; \
+})
+
 typedef struct lir_operand {
   uint8_t type;
   void *value;
@@ -212,8 +225,6 @@ closure *lir_new_closure();
 lir_operand *lir_new_var_operand(string ident);
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
-lir_operand *lir_new_immediate_int_operand(int value);
-lir_operand *lir_new_immediate_bool_operand(bool value);
 lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
 
 string make_label(string name);

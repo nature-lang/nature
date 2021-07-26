@@ -5,12 +5,12 @@
 #include "ast.h"
 #include "src/lir.h"
 
+int compiler_line;
+
 // 入口
 list_op *compiler(ast_closure_decl *ast);
 
 list_op *compiler_closure(closure *parent, ast_closure_decl *ast);
-
-list_op *compiler_literal(closure *c, ast_literal *ast, lir_operand *target);
 
 list_op *compiler_block(closure *c, ast_block_stmt *block);
 
@@ -27,6 +27,8 @@ list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
 list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *refer_target);
+
+list_op *compiler_stmt(closure *c, ast_stmt stmt);
 
 list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
