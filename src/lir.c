@@ -1,6 +1,7 @@
+#include <stdarg.h>
 #include "lir.h"
 
-lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset) {
+lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
   lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
   memory_operand->base = base;
   // 根据 index + 类型计算偏移量
@@ -12,33 +13,26 @@ lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset) {
   return operand;
 }
 
-lir_op *lir_runtime_one_param_call(string name, lir_operand *result, lir_operand *first) {
+lir_op *lir_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
   lir_op *call_op = lir_op_new(LIR_OP_TYPE_RUNTIME_CALL);
   call_op->first = lir_op_label(name)->first; // 函数名称
+  call_op->result = *result;
+
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
-  params_operand->list[params_operand->count++] = first;
+
+  va_list args;
+  va_start(args, arg_count); // 初始化参数
+  for (int i = 0; i < arg_count; ++i) {
+    lir_operand *param = va_arg(args, lir_operand*);
+    params_operand->list[params_operand->count++] = param;
+  }
+  va_end(args);
   lir_operand call_params_operand = {
       .type= LIR_OPERAND_TYPE_ACTUAL_PARAM,
       .value = params_operand};
-  call_op->second = call_params_operand;
-  call_op->result = *result;
-  return call_op;
 
-}
-
-// TODO 可变参数宏实现
-lir_op *lir_runtime_two_param_call(string name, lir_operand *result, lir_operand *first, lir_operand *second) {
-  lir_op *call_op = lir_op_new(LIR_OP_TYPE_RUNTIME_CALL);
-  call_op->first = lir_op_label(name)->first; // 函数名称
-  lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
-  params_operand->count = 0;
-  params_operand->list[params_operand->count++] = first;
-  params_operand->list[params_operand->count++] = second;
-  lir_operand call_params_operand = {
-      .type= LIR_OPERAND_TYPE_ACTUAL_PARAM,
-      .value = params_operand};
   call_op->second = call_params_operand;
-  call_op->result = *result;
+
   return call_op;
 }

@@ -1,9 +1,9 @@
 #ifndef NATURE_SRC_AST_SYMBOL_H_
 #define NATURE_SRC_AST_SYMBOL_H_
 
+#include <stdlib.h>
 #include "src/value.h"
 #include "src/lib/table.h"
-#include <stdlib.h>
 #include "ast.h"
 
 table *symbol_ident_table; // analysis_local_ident
@@ -15,6 +15,8 @@ typedef enum {
 } symbol_type;
 
 int64_t list_offset(ast_type type, uint64_t index);
+
+size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
 /**
  * 字符串类型，list 类型， map 类型,都按照指针来计算大小

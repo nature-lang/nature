@@ -178,6 +178,7 @@ typedef struct {
   ast_type type;
   string key;
   ast_expr value;
+  size_t length; // byte
 } ast_struct_property;
 
 typedef struct {
@@ -203,6 +204,9 @@ typedef struct {
 typedef struct {
   ast_expr left;
   string property;
+
+  ast_struct_decl *struct_decl;
+  ast_struct_property *struct_property;
 } ast_select_property;
 
 /**

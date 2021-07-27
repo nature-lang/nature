@@ -43,31 +43,35 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast) {
 // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
   list_op *parent_list = list_op_new();
 
-  // 处理 env ---------------
-  // 1. make env_n by count
-  lir_operand *env_target = lir_new_var_operand(make_label("env"));
-  lir_operand *first_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, ast->env_count);
-  list_op_push(parent_list, lir_runtime_one_param_call(RUNTIME_CALL_MAKE_ENV, env_target, first_param));
+  if (parent != NULL) {
+    // 处理 env ---------------
+    // 1. make env_n by count
+    // TODO get env name by closure
+    lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string, parent->env_name);
+    lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, ast->env_count);
+    list_op_push(parent_list, lir_runtime_call(RUNTIME_CALL_MAKE_ENV, NULL, 2, env_name_param, capacity_param));
 
-  // 2. for set ast_ident/ast_access_env to env n
-  for (int i = 0; i < ast->env_count; ++i) {
-    ast_expr item_expr = ast->env[i];
-    lir_operand *item_target = lir_new_temp_var_operand();
-    list_op_append(parent_list, compiler_expr(parent, item_expr, item_target));
+    // 2. for set ast_ident/ast_access_env to env n
+    for (int i = 0; i < ast->env_count; ++i) {
+      ast_expr item_expr = ast->env[i];
+      lir_operand *expr_target = lir_new_temp_var_operand();
+      list_op_append(parent_list, compiler_expr(parent, item_expr, expr_target));
+      lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, i);
+      lir_op *call_op = lir_runtime_call(
+          RUNTIME_CALL_SET_ENV,
+          NULL,
+          3,
+          env_name_param,
+          env_index_param,
+          expr_target
+      );
+      list_op_push(parent_list, call_op);
+    }
 
-    // first param is env, second param is append value
-    lir_operand_actual_param *params_operand = lir_new_actual_param();
-    params_operand->list[params_operand->count++] = env_target;
-    params_operand->list[params_operand->count++] = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, i);
-    params_operand->list[params_operand->count++] = item_target;
-    list_op_push(parent_list, lir_runtime_call(
-        RUNTIME_CALL_SET_ENV,
-        params_operand,
-        NULL));
   }
 
   // new 一个新的 closure ---------------
-  closure *c = lir_new_closure();
+  closure *c = lir_new_closure(ast);
   c->name = ast->function->name;
   c->parent = parent;
   list_op *child_list = list_op_new();
@@ -212,6 +216,15 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     case AST_EXPR_NEW_MAP: {
       return compiler_new_map(c, (ast_new_map *) expr.expr, target);
     }
+    case AST_EXPR_SELECT_PROPERTY: {
+      return compiler_select_property(c, (ast_select_property *) expr.expr, target);
+    }
+    case AST_EXPR_NEW_STRUCT: {
+
+    }
+    case AST_EXPR_ACCESS_ENV: {
+      return compiler_access_env(c, (ast_access_env *) expr.expr, target);
+    }
     default: {
       error_printf(compiler_line, "unknown expr: %s", ast_stmt_expr_type_to_debug[expr.type]);
       exit(0);
@@ -296,18 +309,21 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 /**
  * 1.0 函数参数使用 param var 存储,按约定从左到右(op.result 为 param, op.first 为实参)
  * 1.0.1 op.operand 模仿 phi body 弄成列表的形式！
- * 1.1 参数1 存储 env 环境
  * 2. 目前编译依旧使用 var，所以不需要考虑寄存器溢出
  * 3. 函数返回结果存储在 target 中
+ *
+ * call name, param => result
  * @param c
  * @param expr
  * @return
  */
 list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
   // push 指令所有的物理寄存器入栈
-  list_op *list = list_op_new();
+  lir_operand *base_target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, call->left, base_target);
+
   lir_op *call_op = lir_op_new(LIR_OP_TYPE_CALL);
-  call_op->first = lir_op_label(call->name)->first; // 函数名称
+  call_op->first = *base_target;
 
   lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
   params_operand->count = 0;
@@ -324,7 +340,10 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
     params_operand->list[params_operand->count++] = param_target;
   }
 
-  lir_operand call_params_operand = {.type= LIR_OPERAND_TYPE_ACTUAL_PARAM, .value = params_operand};
+  lir_operand call_params_operand = {
+      .type= LIR_OPERAND_TYPE_ACTUAL_PARAM,
+      .value = params_operand
+  };
   call_op->second = call_params_operand; // 函数参数
 
   // return target
@@ -370,9 +389,10 @@ list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *tar
   lir_operand *index_target = lir_new_temp_var_operand();
   list_op_append(list, compiler_expr(c, ast->index, index_target));
 
-  lir_op *call_op = lir_runtime_two_param_call(
+  lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_LIST_VALUE,
       target,
+      2,
       base_target,
       index_target
   );
@@ -401,9 +421,10 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
   // 类型，容量 runtime.make_list(capacity, size)
   lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, (int) ast->capacity);
   lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, (int) type_sizeof(ast->type));
-  lir_op *call_op = lir_runtime_two_param_call(
+  lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_MAKE_LIST,
       base_target,
+      2,
       capacity_operand,
       item_size_operand
   );
@@ -418,15 +439,42 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
 
     lir_operand *refer_target = lir_new_temp_var_operand();
     lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, i);
-    call_op = lir_runtime_two_param_call(
+    call_op = lir_runtime_call(
         RUNTIME_CALL_LIST_VALUE,
         refer_target,
+        2,
         base_target,
         index_target
     );
     list_op_push(list, call_op);
     list_op_push(list, lir_op_move(refer_target, value_target));
   }
+
+  return list;
+}
+
+/**
+ * 访问环境变量
+ * 1. 根据 c->env_name 得到 base_target   call GET_ENV
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+list_op *compiler_access_env(closure *c, ast_access_env *ast, lir_operand *target) {
+  list_op *list = list_op_new();
+  lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string, c->env_name);
+  lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, ast->index);
+
+  lir_op *call_op = lir_runtime_call(
+      RUNTIME_CALL_GET_ENV,
+      target,
+      2,
+      env_name_param,
+      env_index_param
+  );
+
+  list_op_push(list, call_op);
 
   return list;
 }
@@ -451,9 +499,10 @@ list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *targe
   list_op_append(list, compiler_expr(c, ast->key, key_target));
 
   // runtime get offset by temp var runtime.map_offset(base, "key")
-  lir_op *call_op = lir_runtime_two_param_call(
+  lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_MAP_VALUE,
       target,
+      2,
       base_target,
       key_target
   );
@@ -478,9 +527,10 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
       int,
       (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
 
-  lir_op *call_op = lir_runtime_two_param_call(
+  lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_MAKE_MAP,
       base_target,
+      2,
       capacity_operand,
       item_size_operand
   );
@@ -497,9 +547,10 @@ list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target
     list_op_append(list, compiler_expr(c, value_expr, value_target));
 
     lir_operand *refer_target = lir_new_temp_var_operand();
-    call_op = lir_runtime_two_param_call(
+    call_op = lir_runtime_call(
         RUNTIME_CALL_MAP_VALUE,
         refer_target,
+        2,
         base_target,
         key_target
     );
@@ -530,11 +581,10 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   list_op *list = compiler_expr(c, ast->iterate, base_target);
 
   lir_operand *count_target = lir_new_temp_var_operand(); // ?? 这个值特么存在哪里，我现在不可知呀？
-  // 换句话说，我又怎么知道需要 for 循环几次？？
-  // 根据 base_target get length, bug length how to trans to int
-  list_op_push(list, lir_runtime_one_param_call(
+  list_op_push(list, lir_runtime_call(
       RUNTIME_CALL_ITERATE_COUNT,
       count_target,
+      1,
       base_target));
   // make label
   lir_op *for_label = lir_op_label("for");
@@ -553,13 +603,15 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   // gen value
   lir_operand *key_target = lir_new_var_operand(ast->gen_key->ident);
   lir_operand *value_target = lir_new_var_operand(ast->gen_value->ident);
-  list_op_push(list, lir_runtime_one_param_call(
+  list_op_push(list, lir_runtime_call(
       RUNTIME_CALL_ITERATE_GEN_KEY,
       key_target,
+      1,
       base_target));
-  list_op_push(list, lir_runtime_one_param_call(
+  list_op_push(list, lir_runtime_call(
       RUNTIME_CALL_ITERATE_GEN_VALUE,
       value_target,
+      1,
       base_target));
 
   // block
@@ -613,6 +665,44 @@ list_op *compiler_return(closure *c, ast_return_stmt *ast) {
 
   return list;
 }
+
+/**
+ * mov [base+offset,n] => target
+ * bar().baz
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+list_op *compiler_select_property(closure *c, ast_select_property *ast, lir_operand *target) {
+  list_op *list = list_op_new();
+  // 计算基值
+  lir_operand *base_target = lir_new_temp_var_operand();
+  list_op_append(list, compiler_expr(c, ast->left, base_target));
+  size_t offset = struct_offset(ast->struct_decl, ast->property);
+
+  lir_operand *src = lir_new_memory_operand(base_target, offset, ast->struct_property->length);
+
+  lir_op *move_op = lir_op_move(target, src);
+  list_op_push(list, move_op);
+
+  return list;
+}
+
+/**
+ * struct 的空间是什么时候申请的？ var a = struct{} // 此时申请的
+ * a.test = 1
+ * 此时赋值如何知道基址是多少？赋值又是赋到哪里？
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+list_op *compiler_new_struct(closure *c, ast_new_struct *ast, lir_operand *target) {
+
+  return NULL;
+}
+
 
 
 

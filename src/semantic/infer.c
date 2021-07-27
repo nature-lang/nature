@@ -407,9 +407,16 @@ ast_type infer_select_property(ast_select_property *select_property) {
     error_printf(infer_line, "expr not struct, cannot select property");
     exit(0);
   }
+
   ast_struct_decl *struct_decl = left_type.value;
+
+  // 冗余结构到 select 表达式，便于计算 size
+  select_property->struct_decl = struct_decl;
+
   for (int i = 0; i < struct_decl->count; ++i) {
     if (strcmp(struct_decl->list[i].key, select_property->property) == 0) {
+      select_property->struct_property = &struct_decl->list[i];
+
       return struct_decl->list[i].type;
     }
   }

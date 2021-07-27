@@ -19,6 +19,6 @@ typedef enum {
   TYPE_FUNCTION,
 } type_category;
 
-string type_to_string[TYPE_FUNCTION+1];
+string type_to_string[TYPE_FUNCTION + 1];
 
 #endif //NATURE_SRC_TYPE_H_

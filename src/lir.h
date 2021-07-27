@@ -72,12 +72,12 @@ typedef struct lir_vars {
   lir_operand_var *list[UINT8_MAX];
 } lir_vars;
 
-typedef uint64_t memory_address;
+typedef size_t memory_address;
 
 typedef struct {
-  lir_operand_var *base;
-//  memory_address base; // 但是内存地址的值是绝对不可知的！！！
-  int64_t offset; // 偏移量是可以计算出来的
+  lir_operand *base;
+  size_t offset; // 偏移量是可以计算出来的
+  size_t length; // 数据长度
 } lir_operand_memory;
 
 typedef struct {
@@ -143,7 +143,7 @@ typedef enum {
 typedef struct lir_op {
   uint8_t type;
   lir_operand first; // 参数1
-  lir_operand second; // 参数2 (参数可能是固定寄存器)
+  lir_operand second; // 参数2
   lir_operand result; // 参数3
 
   int id; // 编号
@@ -211,6 +211,7 @@ typedef struct closure {
 
   // 定义环境
   string name;
+  string env_name;
   struct closure *parent;
   list_op *operates; // 指令列表
 } closure;
@@ -220,12 +221,12 @@ lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 string lir_label_to_string(uint8_t label);
 
-closure *lir_new_closure();
+closure *lir_new_closure(ast_closure_decl *ast);
 
 lir_operand *lir_new_var_operand(string ident);
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
-lir_operand *lir_new_memory_operand(lir_operand_var *base, int64_t offset);
+lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
 
 string make_label(string name);
 lir_operand_actual_param *lir_new_actual_param();
@@ -234,9 +235,8 @@ lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 lir_op *lir_op_new(lir_op_type type);
-lir_op *lir_runtime_call(string name, lir_operand_actual_param *actual_param, lir_operand *result);
-lir_op *lir_runtime_one_param_call(string name, lir_operand *result, lir_operand *first);
-lir_op *lir_runtime_two_param_call(string name, lir_operand *result, lir_operand *first, lir_operand *second);
+
+lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);

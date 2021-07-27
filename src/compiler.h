@@ -42,6 +42,12 @@ list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *targe
 
 list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target);
 
+list_op *compiler_access_env(closure *c, ast_access_env *ast, lir_operand *target);
+
+list_op *compiler_new_struct(closure *c, ast_new_struct *ast, lir_operand *target);
+
+list_op *compiler_select_property(closure *c, ast_select_property *ast, lir_operand *target);
+
 /**
  * 二元表达式
  * @param expr
