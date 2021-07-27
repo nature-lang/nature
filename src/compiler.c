@@ -46,9 +46,8 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast) {
   if (parent != NULL) {
     // 处理 env ---------------
     // 1. make env_n by count
-    // TODO get env name by closure
-    lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string, parent->env_name);
-    lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, ast->env_count);
+    lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, parent->env_name);
+    lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->env_count);
     list_op_push(parent_list, lir_runtime_call(RUNTIME_CALL_MAKE_ENV, NULL, 2, env_name_param, capacity_param));
 
     // 2. for set ast_ident/ast_access_env to env n
@@ -56,7 +55,7 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast) {
       ast_expr item_expr = ast->env[i];
       lir_operand *expr_target = lir_new_temp_var_operand();
       list_op_append(parent_list, compiler_expr(parent, item_expr, expr_target));
-      lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, i);
+      lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
       lir_op *call_op = lir_runtime_call(
           RUNTIME_CALL_SET_ENV,
           NULL,
@@ -146,21 +145,27 @@ list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
   return compiler_expr(c, stmt->expr, target);
 }
 
+/**
+ * a = 1 // left_target is lir_var_operand
+ * a.b = 1 // left_target is lir_memory(base_address)
+ * @param c
+ * @param stmt
+ * @return
+ */
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt) {
-  // left 可能是一个数组调用，可能是一个对象访问，也有可能是一个标量赋值
-  lir_operand *left_target = lir_new_temp_var_operand();
-  lir_operand *right_target = lir_new_temp_var_operand();
-  list_op *list = compiler_expr(c, stmt->left, left_target);
-  list_op_append(list, compiler_expr(c, stmt->right, right_target));
+  lir_operand *target = lir_new_temp_var_operand();
+  list_op *list = compiler_expr(c, stmt->left, target);
 
-  lir_op *move_op = lir_op_new(LIR_OP_TYPE_MOVE);
-  move_op->result = *left_target;
-  move_op->first = *right_target;
-  list_op_push(list, move_op);
+  list_op_append(list, compiler_expr(c, stmt->right, target));
 
   return list;
 }
 
+/**
+ * @param c
+ * @param var_decl
+ * @return
+ */
 list_op *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
   return NULL;
 }
@@ -183,11 +188,13 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     case AST_EXPR_LITERAL: {
       // 直接重写 result target，不生成操作
       ast_literal *literal = (ast_literal *) expr.expr;
+
       if (literal->type == TYPE_INT || literal->type == TYPE_FLOAT
           || literal->type == TYPE_BOOL || literal->type == TYPE_STRING) {
         lir_operand_immediate *immediate = malloc(sizeof(lir_operand_immediate));
         immediate->type = literal->type;
-        immediate->value = literal->value;
+        // TODO 值处理， literal 都是 string 类型，需要进行类型转换
+//        immediate->int_value = literal->value;
         target->type = LIR_OPERAND_TYPE_IMMEDIATE;
         target->value = immediate;
       }
@@ -220,7 +227,7 @@ list_op *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
       return compiler_select_property(c, (ast_select_property *) expr.expr, target);
     }
     case AST_EXPR_NEW_STRUCT: {
-
+      return compiler_new_struct(c, (ast_new_struct *) expr.expr, target);
     }
     case AST_EXPR_ACCESS_ENV: {
       return compiler_access_env(c, (ast_access_env *) expr.expr, target);
@@ -276,7 +283,7 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
   // 判断结果是否为 false, false 对应 else
   lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
-  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool, false);
+  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false);
   cmp_goto->second = *condition_target;
 
   lir_op *end_label = lir_op_label("end_if");
@@ -419,8 +426,8 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
   list_op *list = list_op_new();
 
   // 类型，容量 runtime.make_list(capacity, size)
-  lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, (int) ast->capacity);
-  lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, (int) type_sizeof(ast->type));
+  lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
+  lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) type_sizeof(ast->type));
   lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_MAKE_LIST,
       base_target,
@@ -438,7 +445,7 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
     list_op_append(list, compiler_expr(c, expr, value_target));
 
     lir_operand *refer_target = lir_new_temp_var_operand();
-    lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, i);
+    lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
     call_op = lir_runtime_call(
         RUNTIME_CALL_LIST_VALUE,
         refer_target,
@@ -463,8 +470,8 @@ list_op *compiler_new_list(closure *c, ast_new_list *ast, lir_operand *base_targ
  */
 list_op *compiler_access_env(closure *c, ast_access_env *ast, lir_operand *target) {
   list_op *list = list_op_new();
-  lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string, c->env_name);
-  lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, ast->index);
+  lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, c->env_name);
+  lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
 
   lir_op *call_op = lir_runtime_call(
       RUNTIME_CALL_GET_ENV,
@@ -520,11 +527,11 @@ list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *targe
  */
 list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target) {
   list_op *list = list_op_new();
-  lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, (int) ast->capacity);
+  lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
 
   lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(
       TYPE_INT,
-      int,
+      int_value,
       (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
 
   lir_op *call_op = lir_runtime_call(
@@ -591,7 +598,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   lir_op *end_for_label = lir_op_label("end_for");
   list_op_push(list, for_label);
   lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
-  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, 0);
+  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0);
   cmp_goto->second = *count_target;
   cmp_goto->result = end_for_label->result;
   list_op_push(list, cmp_goto);
@@ -620,7 +627,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
   // sub count, 1 => count
   lir_op *sub_op = lir_op_new(LIR_OP_TYPE_SUB);
   sub_op->first = *count_target;
-  sub_op->second = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int, 1);
+  sub_op->second = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1);
   sub_op->result = *count_target;
   list_op_push(list, sub_op);
 
@@ -641,7 +648,7 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
   lir_operand *condition_target = lir_new_temp_var_operand();
   list_op_append(list, compiler_expr(c, ast->condition, condition_target));
   lir_op *cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO);
-  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool, false);
+  cmp_goto->first = *LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false);
   cmp_goto->second = *condition_target;
   cmp_goto->result = end_while_label->result;
   list_op_push(list, cmp_goto);
@@ -690,17 +697,36 @@ list_op *compiler_select_property(closure *c, ast_select_property *ast, lir_oper
 }
 
 /**
- * struct 的空间是什么时候申请的？ var a = struct{} // 此时申请的
- * a.test = 1
- * 此时赋值如何知道基址是多少？赋值又是赋到哪里？
+ * foo.bar = 1
+ *
+ * person baz = person {
+ *  age = 100
+ *  sex = true
+ * }
+ *
+ * 无论是 baz 还是 foo.bar （经过 compiler_expr(expr.left)） 最终都会转换成结构体基址用于赋值
+ *
  * @param c
  * @param ast
  * @param target
  * @return
  */
-list_op *compiler_new_struct(closure *c, ast_new_struct *ast, lir_operand *target) {
+list_op *compiler_new_struct(closure *c, ast_new_struct *ast, lir_operand *base_target) {
+  list_op *list = list_op_new();
+  ast_struct_decl *struct_decl = ast->type.value;
+  for (int i = 0; i < ast->count; ++i) {
+    ast_struct_property struct_property = ast->list[i];
 
-  return NULL;
+    lir_operand *src = lir_new_temp_var_operand();
+    list_op_append(list, compiler_expr(c, struct_property.value, src));
+
+    size_t offset = struct_offset(struct_decl, struct_property.key);
+    lir_operand *dst = lir_new_memory_operand(base_target, offset, struct_property.length);
+    lir_op *move_op = lir_op_move(dst, src);
+    list_op_push(list, move_op);
+  }
+
+  return list;
 }
 
 

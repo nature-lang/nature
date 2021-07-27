@@ -19,16 +19,14 @@
 #define RUNTIME_CALL_SET_ENV "set_env"
 #define RUNTIME_CALL_GET_ENV "get_env"
 
-#define LIR_NEW_IMMEDIATE_OPERAND(operand_type, value_type, capacity) \
+#define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
-  int *heap_value = malloc(sizeof(value_type));\
-  *heap_value = capacity; \
-   lir_operand_immediate *type_operand = malloc(sizeof(lir_operand_immediate)); \
-   type_operand->type = operand_type; \
-   type_operand->value = heap_value; \
+   lir_operand_immediate *imm_operand = malloc(sizeof(lir_operand_immediate)); \
+   imm_operand->type = operand_type; \
+   imm_operand->key = val; \
    lir_operand *operand = malloc(sizeof(lir_operand)); \
    operand->type = LIR_OPERAND_TYPE_IMMEDIATE; \
-   operand->value = type_operand;              \
+   operand->value = imm_operand;              \
    operand; \
 })
 
@@ -81,7 +79,12 @@ typedef struct {
 } lir_operand_memory;
 
 typedef struct {
-  void *value;
+  union {
+    int int_value;
+    float float_value;
+    bool bool_value;
+    string string_value;
+  };
   type_category type;
 } lir_operand_immediate;
 
