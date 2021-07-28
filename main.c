@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "src/syntax/token.h"
 #include "src/syntax/scanner.h"
 #include "src/syntax/parser.h"
 #include "src/semantic/analysis.h"
 #include "src/semantic/infer.h"
+#include "src/compiler.h"
 
 static char *open(char *path) {
   FILE *file = fopen(path, "rb");
@@ -48,6 +48,9 @@ int main() {
   ast_closure_decl closure_decl = analysis(stmt_list);
   // infer 类型检查和推导
   infer(&closure_decl);
+
+  // compiler to lir
+  compiler_closures closures = compiler(&closure_decl);
 
   printf("Hello, World!\n");
   return 0;

@@ -3,6 +3,7 @@
 
 #include "src/lib/list.h"
 #include "src/value.h"
+#include "src/syntax/token.h"
 
 typedef struct {
   char *source;

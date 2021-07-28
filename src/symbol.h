@@ -19,11 +19,12 @@ int64_t list_offset(ast_type type, uint64_t index);
 size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
 /**
+ * 单位 byte
  * 字符串类型，list 类型， map 类型,都按照指针来计算大小
  * @param type
  * @return
  */
-uint64_t type_sizeof(ast_type type);
+size_t type_sizeof(ast_type type);
 
 void symbol_ident_table_init();
 

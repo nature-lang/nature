@@ -27,6 +27,14 @@
 #define RUNTIME_CALL_SET_ENV "set_env"
 #define RUNTIME_CALL_GET_ENV "get_env"
 
+#define LIST_OP_COPY(dst, src) \
+({                             \
+    dst->type = src->type; \
+    dst->first = src->first; \
+    dst->second = src->second; \
+    dst->result = src->result; \
+})
+
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
    lir_operand_immediate *imm_operand = malloc(sizeof(lir_operand_immediate)); \
@@ -241,8 +249,6 @@ typedef struct lir_basic_block {
 
 // cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
 typedef struct closure {
-  // parent
-  // children
   lir_vars globals; // closure 中定义的变量列表
   regs fixed_regs; // 作为临时寄存器使用到的寄存器
   lir_basic_blocks blocks; // 根据解析顺序得到
@@ -262,7 +268,7 @@ typedef struct closure {
 lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
 lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
-string lir_label_to_string(uint8_t label);
+//string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure(ast_closure_decl *ast);
 
@@ -278,7 +284,7 @@ lir_op *lir_op_unique_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
 //lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
-lir_op *lir_new_op(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
+lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
 lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 

@@ -27,7 +27,7 @@ lir_op *lir_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
   }
   va_end(args);
   lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-  return lir_new_op(LIR_OP_TYPE_RUNTIME_CALL, lir_new_label_operand(name), call_params_operand, result);
+  return lir_op_new(LIR_OP_TYPE_RUNTIME_CALL, lir_new_label_operand(name), call_params_operand, result);
 }
 
 lir_operand *lir_new_var_operand(char *ident) {
@@ -79,11 +79,66 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
   return op;
 }
 
-lir_op *lir_new_op(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
+lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
   lir_op *op = NEW(lir_op);
   op->type = type;
   op->first = first;
   op->second = second;
   op->result = result;
   return op;
+}
+
+list_op *list_op_new() {
+  list_op *list = NEW(list_op);
+  list->count = 0;
+  lir_op *empty = NEW(lir_op);
+  empty->pred = NULL;
+  empty->succ = NULL;
+
+  list->front = empty;
+  list->rear = empty;
+
+  return list;
+}
+
+void list_op_push(list_op *l, lir_op *op) {
+  LIST_OP_COPY(l->rear, op);
+
+  lir_op *empty = NEW(lir_op);
+  empty->pred = l->rear;
+  empty->succ = NULL;
+
+  l->rear->succ = empty;
+  l->rear = empty;
+  l->count++;
+}
+
+list_op *list_op_append(list_op *dst, list_op *src) {
+  // empty 替换成 src->front
+  dst->rear->pred->succ = src->front;
+  src->front->pred = dst->rear->pred;
+  // free empty
+  free(dst->rear);
+
+  dst->rear = src->rear;
+  dst->count += src->count;
+  free(src);
+  return dst;
+}
+
+closure *lir_new_closure(ast_closure_decl *ast) {
+  closure *new = NEW(closure);
+  new->name = ast->function->name;
+  new->env_name = ast->env_name;
+  new->parent = NULL;
+  new->operates = NULL;
+  new->entry = NULL;
+  new->globals.count = 0;
+  new->fixed_regs.count = 0;
+  new->blocks.count = 0;
+  new->order_blocks.count = 0;
+
+  new->interval_table = table_new();
+
+  return new;
 }

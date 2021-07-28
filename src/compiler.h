@@ -5,8 +5,12 @@
 #include "ast.h"
 #include "src/lir.h"
 
-// 入口
-list_op *compiler(ast_closure_decl *ast);
+typedef struct {
+  size_t count;
+  closure *list[INT32_MAX];
+} compiler_closures;
+
+compiler_closures compiler(ast_closure_decl *ast);
 
 list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *target);
 
