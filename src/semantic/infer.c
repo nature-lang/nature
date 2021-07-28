@@ -81,10 +81,6 @@ void infer_stmt(ast_stmt *stmt) {
       infer_return((ast_return_stmt *) stmt->stmt);
       break;
     }
-//    case AST_STMT_TYPE_DECL: {
-//      infer_type_decl((ast_type_decl_stmt *) stmt->stmt);
-//      break;
-//    }
     default:return;
   }
 }

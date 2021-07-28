@@ -5,6 +5,7 @@
 
 #define MAIN_FUNCTION_NAME "main"
 #define ENV_IDENT "env"
+#define ANONYMOUS_FUNCTION_NAME "anonymous"
 
 int unique_name_count;
 int analysis_line;
@@ -122,7 +123,7 @@ bool analysis_redeclare_check(string ident);
 
 analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident);
 
-string unique_var_ident(string name);
+string analysis_unique_ident(string name);
 void analysis_begin_scope();
 void analysis_end_scope();
 

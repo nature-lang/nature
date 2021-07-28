@@ -204,6 +204,10 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analy
   // 开启一个新的 function 作用域
   analysis_function_begin();
 
+  if (strlen(function_decl->name) == 0) {
+    function_decl->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
+  }
+
   // 函数形参处理
   for (int i = 0; i < function_decl->formal_param_count; ++i) {
     ast_var_decl *param = function_decl->formal_params[i];
@@ -288,7 +292,7 @@ void analysis_end_scope() {
  */
 analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident) {
   // unique ident
-  string unique_ident = unique_var_ident(ident);
+  string unique_ident = analysis_unique_ident(ident);
 
   analysis_local_ident *local = malloc(sizeof(analysis_local_ident));
   local->ident = ident;
@@ -603,10 +607,10 @@ bool analysis_redeclare_check(char *ident) {
  * @param name
  * @return
  */
-char *unique_var_ident(char *name) {
+char *analysis_unique_ident(char *name) {
   // +2: _ and '\0'
   char *unique_name = malloc(strlen(name) + sizeof(int) + 2);
-  sprintf(unique_name, "%s_%d", name, unique_name_count++);
+  sprintf(unique_name, "%d_%s", unique_name_count++, name);
   return unique_name;
 }
 
@@ -625,7 +629,7 @@ analysis_function *analysis_current_init(analysis_local_scope *scope) {
 //  new->local_count = 0;
   new->free_count = 0;
   new->scope_depth = 0;
-  new->env_unique_name = unique_var_ident(ENV_IDENT);
+  new->env_unique_name = analysis_unique_ident(ENV_IDENT);
   new->contains_fn_count = 0;
   new->current_scope = scope;
 

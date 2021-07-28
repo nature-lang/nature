@@ -1,11 +1,20 @@
 #ifndef NATURE_SRC_LIR_H_
 #define NATURE_SRC_LIR_H_
 
-#include <src/lib/list.h>
+#include "src/lib/list.h"
 #include "value.h"
 #include "ast.h"
 #include "lib/table.h"
 #include "register/register.h"
+
+#define TEMP_IDENT "temp"
+#define CONTINUE_IDENT "continue"
+#define WHILE_IDENT "while"
+#define END_WHILE_IDENT "end_while"
+#define FOR_IDENT "for"
+#define END_FOR_IDENT "end_for"
+#define END_IF_IDENT "end_if"
+#define ALTERNATE_IF_IDENT "alternate_if"
 
 #define RUNTIME_CALL_MAKE_LIST "make_list"
 #define RUNTIME_CALL_LIST_VALUE "list_value"
@@ -14,7 +23,6 @@
 #define RUNTIME_CALL_ITERATE_COUNT "iterate_count"
 #define RUNTIME_CALL_ITERATE_GEN_KEY "iterate_gen_key"
 #define RUNTIME_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
-
 #define RUNTIME_CALL_MAKE_ENV "make_env"
 #define RUNTIME_CALL_SET_ENV "set_env"
 #define RUNTIME_CALL_GET_ENV "get_env"
@@ -29,6 +37,37 @@
    operand->value = imm_operand;              \
    operand; \
 })
+
+#define LIR_NEW_OPERAND(_type, _value) \
+({                                 \
+  lir_operand *operand = NEW(lir_operand); \
+  operand->type = _type;           \
+  operand->value = _value;    \
+  operand;                                   \
+})
+
+#define LIR_NEW_VAR_OPERAND(_ident) \
+({                                 \
+  lir_operand_var *var = NEW(lir_operand_var); \
+  var->ident = _ident;              \
+  var;                                   \
+})
+
+#define LIR_NEW_LABEL_OPERAND(_ident) \
+({                                 \
+  lir_operand_label *label = NEW(lir_operand_label); \
+  label->ident = _ident;              \
+  label;                                   \
+})
+
+#define LIR_UNIQUE_NAME(_ident) \
+({                                 \
+   char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
+   sprintf(temp_name, "%d_%s", lir_unique_count++, _ident); \
+   temp_name;                                   \
+})
+
+int lir_unique_count;
 
 typedef struct lir_operand {
   uint8_t type;
@@ -57,7 +96,6 @@ typedef enum {
 //} lir_operand_reg;
 
 /**
- * 未进行 ssa 之前的唯一标识,可以在符号表找到？找到啥？值在哪里？
  * 存放在寄存器或者内存中, var a = 1
  */
 typedef struct {
@@ -103,7 +141,9 @@ typedef struct {
   uint8_t count;
 } lir_operand_actual_param;
 
-typedef string lir_operand_label;
+typedef struct {
+  char *ident;
+} lir_operand_label;
 
 typedef enum {
   LIR_OP_TYPE_ADD,
@@ -145,9 +185,9 @@ typedef enum {
  */
 typedef struct lir_op {
   uint8_t type;
-  lir_operand first; // 参数1
-  lir_operand second; // 参数2
-  lir_operand result; // 参数3
+  lir_operand *first; // 参数1
+  lir_operand *second; // 参数2
+  lir_operand *result; // 参数3
 
   int id; // 编号
   struct lir_op *succ;
@@ -230,14 +270,15 @@ lir_operand *lir_new_var_operand(string ident);
 lir_operand *lir_new_temp_var_operand();
 lir_operand *lir_new_param_var_operand();
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
+lir_operand *lir_new_label_operand(string ident);
 
-string make_label(string name);
 lir_operand_actual_param *lir_new_actual_param();
 lir_op *lir_op_label(string name);
+lir_op *lir_op_unique_label(string name);
 lir_op *lir_op_goto(lir_operand *label);
-lir_op *lir_new_push(lir_operand *operand);
+//lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
-lir_op *lir_op_new(lir_op_type type);
+lir_op *lir_new_op(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
 lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 

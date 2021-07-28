@@ -9,4 +9,6 @@
 #define GROW_CAPACITY(capacity) \
   ((capacity) < 8 ? 8 : (capacity)*2)
 
+#define NEW(type) malloc(sizeof(type))
+
 #endif //NATURE_SRC_VALUE_H_
