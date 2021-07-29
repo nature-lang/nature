@@ -5,7 +5,7 @@
 
 #define MAIN_FUNCTION_NAME "main"
 #define ENV_IDENT "env"
-#define ANONYMOUS_FUNCTION_NAME "anonymous"
+#define ANONYMOUS_FUNCTION_NAME "fn"
 
 int unique_name_count;
 int analysis_line;

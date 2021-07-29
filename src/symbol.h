@@ -6,6 +6,11 @@
 #include "src/lib/table.h"
 #include "ast.h"
 
+#define SYMBOL_GET_VAR_DECL(ident) \
+({                                   \
+    analysis_local_ident *local_ident = table_get(symbol_ident_table, ident); \
+    (ast_var_decl*) local_ident->decl; \
+})
 table *symbol_ident_table; // analysis_local_ident
 
 typedef enum {

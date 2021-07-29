@@ -1,5 +1,6 @@
-#include "debug.h"
 #include <stdio.h>
+#include "debug.h"
+#include "debug_lir.h"
 
 int current_parser_line = 0;
 
@@ -97,6 +98,31 @@ string token_type_to_debug[] = {
     [TOKEN_RETURN]="TOKEN_RETURN"
 };
 
+string lir_op_type_to_debug[] = {
+    [LIR_OP_TYPE_ADD]="ADD",
+    [LIR_OP_TYPE_SUB]="SUB",
+    [LIR_OP_TYPE_MUL]="MUL",
+    [LIR_OP_TYPE_DIV]="DIV",
+    [LIR_OP_TYPE_LT]="LT",
+    [LIR_OP_TYPE_LTE]="LTE",
+    [LIR_OP_TYPE_GT]="GT",
+    [LIR_OP_TYPE_GTE]="GTE",
+    [LIR_OP_TYPE_EQ_EQ]="EQ_EQ",
+    [LIR_OP_TYPE_NOT_EQ]="NOT_EQ",
+    [LIR_OP_TYPE_NOT]="NOT",
+    [LIR_OP_TYPE_MINUS]="MINUS",
+    [LIR_OP_TYPE_PHI]="PHI",
+    [LIR_OP_TYPE_MOVE]="MOVE",
+    [LIR_OP_TYPE_CMP_GOTO]="CMP_GOTO",
+    [LIR_OP_TYPE_GOTO]="GOTO",
+    [LIR_OP_TYPE_PUSH]="PUSH",
+    [LIR_OP_TYPE_POP]="POP",
+    [LIR_OP_TYPE_CALL]="CALL",
+    [LIR_OP_TYPE_RUNTIME_CALL]="RUNTIME_CALL",
+    [LIR_OP_TYPE_RETURN]="RETURN",
+    [LIR_OP_TYPE_LABEL]="LABEL",
+};
+
 void debug_parser(int line, char *token) {
   if (current_parser_line != line) {
     current_parser_line = line;
@@ -115,10 +141,18 @@ void debug_scanner(token *t) {
   printf("[DEBUG] SCANNER line:%d, %s: %s |", t->line, token_type_to_debug[t->type], t->literal);
 }
 
-void debug_analysis_stmt(ast_stmt stmt) {
-  printf("[DEBUG] ANALYSIS line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
+void debug_stmt(string type, ast_stmt stmt) {
+  printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
 }
 
-void debug_infer_stmt(ast_stmt stmt) {
-  printf("[DEBUG] INFER line: %d, stmt: %s\n", stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
+void debug_lir(int line, lir_op *op) {
+  printf("[DEBUG] LIR %d:  ", line);
+  printf(
+      "%s %s,%s => %s",
+      lir_op_type_to_debug[op->type],
+      lir_operand_to_string(op->first),
+      lir_operand_to_string(op->second),
+      lir_operand_to_string(op->result)
+  );
+  printf("\n");
 }

@@ -69,6 +69,12 @@ typedef enum {
 string ast_expr_operator_to_string[100];
 
 typedef struct {
+  void *value; // char**,ast_map_decl*....
+  type_category category; // base_type, custom_type, function, list, map
+  bool is_origin;
+} ast_type;
+
+typedef struct {
   int line; // 行号
   ast_stmt_expr_type type; // 声明语句类型
   void *stmt;
@@ -77,6 +83,7 @@ typedef struct {
 typedef struct {
   int line;
   ast_stmt_expr_type type; // 表达式类型
+  ast_type data_type; // 数据类型
   void *expr;
 } ast_expr;
 
@@ -118,12 +125,6 @@ typedef struct {
   ast_expr actual_params[UINT8_MAX];
   uint8_t actual_param_count;
 } ast_call;
-
-typedef struct {
-  void *value; // char**,ast_map_decl*....
-  type_category category; // base_type, custom_type, function, list, map
-  bool is_origin;
-} ast_type;
 
 // int a;
 typedef struct {

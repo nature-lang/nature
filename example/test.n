@@ -31,9 +31,14 @@ map{string:int} foo_44 = {
 }
 
 type custom1 = int
-custom1 testy() {
+//custom1 testy() {
+//
+//}
+
+fn<custom1()> testy = custom1 () {
 
 }
+
 var foo19 = testy()
 
 string car = "str"

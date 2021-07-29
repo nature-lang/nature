@@ -7,7 +7,7 @@
 #include "lib/table.h"
 #include "register/register.h"
 
-#define TEMP_IDENT "temp"
+#define TEMP_IDENT "t"
 #define CONTINUE_IDENT "continue"
 #define WHILE_IDENT "while"
 #define END_WHILE_IDENT "end_while"
@@ -57,6 +57,7 @@
 #define LIR_NEW_VAR_OPERAND(_ident) \
 ({                                 \
   lir_operand_var *var = NEW(lir_operand_var); \
+  var->old = NULL;    \
   var->ident = _ident;              \
   var;                                   \
 })
@@ -71,11 +72,12 @@
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
-   sprintf(temp_name, "%d_%s", lir_unique_count++, _ident); \
+   sprintf(temp_name, "%s-%d", _ident, lir_unique_count++); \
    temp_name;                                   \
 })
 
 int lir_unique_count;
+int lir_line;
 
 typedef struct lir_operand {
   uint8_t type;
@@ -83,6 +85,7 @@ typedef struct lir_operand {
 } lir_operand;
 
 typedef enum {
+  LIR_OPERAND_TYPE_NULL,
   LIR_OPERAND_TYPE_VAR,
   LIR_OPERAND_TYPE_REG,
   LIR_OPERAND_TYPE_PHI_BODY,
@@ -154,6 +157,7 @@ typedef struct {
 } lir_operand_label;
 
 typedef enum {
+  LIR_OP_TYPE_NULL,
   LIR_OP_TYPE_ADD,
   LIR_OP_TYPE_SUB,
   LIR_OP_TYPE_MUL,
@@ -192,7 +196,7 @@ typedef enum {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-  uint8_t type;
+  lir_op_type type;
   lir_operand *first; // 参数1
   lir_operand *second; // 参数2
   lir_operand *result; // 参数3
@@ -273,7 +277,7 @@ lir_basic_block *lir_new_basic_block();
 closure *lir_new_closure(ast_closure_decl *ast);
 
 lir_operand *lir_new_var_operand(string ident);
-lir_operand *lir_new_temp_var_operand();
+lir_operand *lir_new_temp_var_operand(ast_type type);
 lir_operand *lir_new_param_var_operand();
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
 lir_operand *lir_new_label_operand(string ident);

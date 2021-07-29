@@ -28,7 +28,7 @@ list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 
 list_op *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
-list_op *compiler_access_list(closure *c, ast_access_list *ast, lir_operand *refer_target);
+list_op *compiler_access_list(closure *c, ast_expr expr, lir_operand *refer_target);
 
 list_op *compiler_stmt(closure *c, ast_stmt stmt);
 
@@ -38,17 +38,17 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target);
 
 list_op *compiler_return(closure *c, ast_return_stmt *ast);
 
-list_op *compiler_new_list(closure *c, ast_new_list *new_list, lir_operand *target);
+list_op *compiler_new_list(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_access_map(closure *c, ast_access_map *ast, lir_operand *target);
+list_op *compiler_access_map(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_new_map(closure *c, ast_new_map *ast, lir_operand *base_target);
+list_op *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target);
 
-list_op *compiler_access_env(closure *c, ast_access_env *ast, lir_operand *target);
+list_op *compiler_access_env(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_new_struct(closure *c, ast_new_struct *ast, lir_operand *base_target);
+list_op *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target);
 
-list_op *compiler_select_property(closure *c, ast_select_property *ast, lir_operand *target);
+list_op *compiler_select_property(closure *c, ast_expr expr, lir_operand *target);
 
 list_op *compiler_literal(closure *c, ast_literal *ast, lir_operand *target);
 
@@ -58,8 +58,8 @@ list_op *compiler_literal(closure *c, ast_literal *ast, lir_operand *target);
  * @param target
  * @return
  */
-list_op *compiler_binary(closure *c, ast_binary_expr *expr, lir_operand *target);
+list_op *compiler_binary(closure *c, ast_expr expr, lir_operand *target);
 
-list_op *compiler_unary(closure *c, ast_unary_expr *expr, lir_operand *target);
+list_op *compiler_unary(closure *c, ast_expr expr, lir_operand *target);
 
 #endif //NATURE_SRC_COMPILER_H_

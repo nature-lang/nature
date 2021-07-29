@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "lir.h"
+#include "src/debug/debug.h"
 
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
   lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
@@ -37,10 +38,10 @@ lir_operand *lir_new_var_operand(char *ident) {
   return operand;
 }
 
-lir_operand *lir_new_temp_var_operand() {
-  char *temp_name = malloc(strlen(TEMP_IDENT) + sizeof(int) + 2);
-  sprintf(temp_name, "%d_%s", lir_unique_count++, TEMP_IDENT);
-  return lir_new_var_operand(temp_name);
+lir_operand *lir_new_temp_var_operand(ast_type type) {
+  // 添加到符号表
+  string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
+  return lir_new_var_operand(unique_ident);
 }
 
 lir_operand *lir_new_label_operand(char *ident) {
@@ -51,32 +52,19 @@ lir_operand *lir_new_label_operand(char *ident) {
 }
 
 lir_op *lir_op_label(char *ident) {
-  lir_op *op = NEW(lir_op);
-  op->type = LIR_OP_TYPE_LABEL;
-  op->result = lir_new_label_operand(ident);
-  return op;
+  return lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, lir_new_label_operand(ident));
 }
 
 lir_op *lir_op_unique_label(char *ident) {
-  lir_op *op = NEW(lir_op);
-  op->type = LIR_OP_TYPE_LABEL;
-  op->result = lir_new_label_operand(LIR_UNIQUE_NAME(ident));
-  return op;
+  return lir_op_label(LIR_UNIQUE_NAME(ident));
 }
 
 lir_op *lir_op_goto(lir_operand *label) {
-  lir_op *op = NEW(lir_op);
-  op->type = LIR_OP_TYPE_LABEL;
-  op->result = label;
-  return op;
+  return lir_op_new(LIR_OP_TYPE_GOTO, NULL, NULL, label);
 }
 
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
-  lir_op *op = NEW(lir_op);
-  op->type = LIR_OP_TYPE_MOVE;
-  op->first = src;
-  op->result = dst;
-  return op;
+  return lir_op_new(LIR_OP_TYPE_MOVE, src, NULL, dst);
 }
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
@@ -85,6 +73,11 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
   op->first = first;
   op->second = second;
   op->result = result;
+
+#ifdef DEBUG_COMPILER
+  debug_lir(lir_line, op);
+#endif
+
   return op;
 }
 
@@ -114,6 +107,13 @@ void list_op_push(list_op *l, lir_op *op) {
 }
 
 list_op *list_op_append(list_op *dst, list_op *src) {
+  if (dst->count == 0) {
+    return src;
+  }
+  if (src->count == 0) {
+    return dst;
+  }
+
   // empty 替换成 src->front
   dst->rear->pred->succ = src->front;
   src->front->pred = dst->rear->pred;

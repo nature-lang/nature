@@ -35,7 +35,7 @@ void infer_block(ast_block_stmt *block) {
     infer_line = block->list[i].line;
 
 #ifdef DEBUG_INFER
-    debug_infer_stmt(block->list[i]);
+    debug_stmt("INFER", block->list[i]);
 #endif
 
     // switch 结构导向优化
@@ -91,46 +91,62 @@ void infer_stmt(ast_stmt *stmt) {
  * @return
  */
 ast_type infer_expr(ast_expr *expr) {
+  ast_type type;
   switch (expr->type) {
     case AST_EXPR_BINARY: {
-      return infer_binary((ast_binary_expr *) expr->expr);
+      type = infer_binary((ast_binary_expr *) expr->expr);
+      break;
     }
     case AST_EXPR_UNARY: {
-      return infer_unary((ast_unary_expr *) expr->expr);
+      type = infer_unary((ast_unary_expr *) expr->expr);
+      break;
     }
     case AST_EXPR_IDENT: {
-      return infer_ident((ast_ident *) expr->expr);
+      type = infer_ident((ast_ident *) expr->expr);
+      break;
     }
     case AST_EXPR_NEW_LIST: {
-      return infer_new_list((ast_new_list *) expr->expr);
+      type = infer_new_list((ast_new_list *) expr->expr);
+      break;
     }
     case AST_EXPR_NEW_MAP: {
-      return infer_new_map((ast_new_map *) expr->expr);
+      type = infer_new_map((ast_new_map *) expr->expr);
+      break;
     }
     case AST_EXPR_NEW_STRUCT: {
-      return infer_new_struct((ast_new_struct *) expr->expr);
+      type = infer_new_struct((ast_new_struct *) expr->expr);
+      break;
     }
     case AST_EXPR_ACCESS: {
       // 需要做类型改写，所以传递整个表达式
-      return infer_access(expr);
+      type = infer_access(expr);
+      break;
     }
     case AST_EXPR_SELECT_PROPERTY: {
-      return infer_select_property((ast_select_property *) expr->expr);
+      type = infer_select_property((ast_select_property *) expr->expr);
+      break;
     }
     case AST_CALL: {
-      return infer_call((ast_call *) expr->expr);
+      type = infer_call((ast_call *) expr->expr);
+      break;
     }
     case AST_CLOSURE_DECL: {
-      return infer_closure_decl((ast_closure_decl *) expr->expr);
+      type = infer_closure_decl((ast_closure_decl *) expr->expr);
+      break;
     }
     case AST_EXPR_LITERAL: {
-      return infer_literal((ast_literal *) expr->expr);
+      type = infer_literal((ast_literal *) expr->expr);
+      break;
     }
     default: {
       error_exit(0, "unknown expr");
       exit(0);
     }
   }
+
+  expr->data_type = type;
+
+  return type;
 }
 
 /**

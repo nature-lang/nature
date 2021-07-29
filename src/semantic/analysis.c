@@ -30,7 +30,7 @@ void analysis_block(ast_block_stmt *block) {
     analysis_line = block->list[i].line;
     // switch 结构导向优化
 #ifdef DEBUG_ANALYSIS
-    debug_analysis_stmt(block->list[i]);
+    debug_stmt("ANALYSIS", block->list[i]);
 #endif
     analysis_stmt(&block->list[i]);
   }
@@ -167,7 +167,12 @@ ast_var_decl *analysis_function_to_var_decl(ast_function_decl *function_decl) {
 
 void analysis_function_decl_ident(ast_function_decl *function_decl) {
   // 仅 fun 再次定义 name 才需要再次添加到符号表
-  if (strcmp(function_decl->name, MAIN_FUNCTION_NAME) != 0 && strlen(function_decl->name) > 0) {
+  if (strcmp(function_decl->name, MAIN_FUNCTION_NAME) != 0) {
+    if (strlen(function_decl->name) == 0) {
+      // 如果没有函数名称，则添加匿名函数名称
+      function_decl->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
+    }
+
     analysis_redeclare_check(function_decl->name);
 
     // 函数名称改写
@@ -203,10 +208,6 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analy
   analysis_current_init(scope);
   // 开启一个新的 function 作用域
   analysis_function_begin();
-
-  if (strlen(function_decl->name) == 0) {
-    function_decl->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
-  }
 
   // 函数形参处理
   for (int i = 0; i < function_decl->formal_param_count; ++i) {
@@ -610,7 +611,7 @@ bool analysis_redeclare_check(char *ident) {
 char *analysis_unique_ident(char *name) {
   // +2: _ and '\0'
   char *unique_name = malloc(strlen(name) + sizeof(int) + 2);
-  sprintf(unique_name, "%d_%s", unique_name_count++, name);
+  sprintf(unique_name, "%s-%d", name, unique_name_count++);
   return unique_name;
 }
 

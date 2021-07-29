@@ -3,6 +3,9 @@
 
 #include "value.h"
 
+#define TYPE_NEW_POINT() ast_new_simple_type(TYPE_POINT)
+#define TYPE_NEW_INT() ast_new_simple_type(TYPE_INT)
+
 typedef enum {
   TYPE_STRING,
   TYPE_BOOL,
@@ -17,6 +20,7 @@ typedef enum {
   TYPE_LIST,
   TYPE_MAP, // ast_map_decl
   TYPE_FUNCTION,
+  TYPE_POINT,
 } type_category;
 
 string type_to_string[TYPE_FUNCTION + 1];
