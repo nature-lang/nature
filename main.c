@@ -38,7 +38,7 @@ static char *open(char *path) {
 
 int main() {
   // 读取文件
-  char *source = open("/Users/weiwenhao/Code/nature/example/test.n");
+  char *source = open("/Users/weiwenhao/Code/nature/example/lir.n");
 
   // scanner
   list *token_list = scanner(source);
@@ -50,7 +50,7 @@ int main() {
   infer(&closure_decl);
 
   // compiler to lir
-  compiler_closures closures = compiler(&closure_decl);
+  compiler(&closure_decl);
 
   printf("Hello, World!\n");
   return 0;

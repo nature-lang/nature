@@ -14,9 +14,11 @@
 
 //#define DEBUG_ANALYSIS
 
-//#define DEBUG_INFER
+// #define DEBUG_INFER
 
-#define DEBUG_COMPILER
+//#define DEBUG_COMPILER
+
+#define DEBUG_COMPILER_LIR
 
 void debug_scanner(token *t);
 

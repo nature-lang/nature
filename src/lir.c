@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "lir.h"
 #include "src/debug/debug.h"
+#include "src/semantic/analysis.h"
 
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
   lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
@@ -38,9 +39,16 @@ lir_operand *lir_new_var_operand(char *ident) {
   return operand;
 }
 
+/**
+ * 临时变量是否影响变量入栈？
+ * @param type
+ * @return
+ */
 lir_operand *lir_new_temp_var_operand(ast_type type) {
-  // 添加到符号表
   string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
+
+  symbol_set_temp_ident(unique_ident, type);
+
   return lir_new_var_operand(unique_ident);
 }
 
@@ -74,7 +82,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
   op->second = second;
   op->result = result;
 
-#ifdef DEBUG_COMPILER
+#ifdef DEBUG_COMPILER_LIR
   debug_lir(lir_line, op);
 #endif
 

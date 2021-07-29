@@ -7,7 +7,7 @@
 
 string lir_operand_to_string(lir_operand *operand) {
   if (operand == NULL) {
-    return "NULL";
+    return "_";
   }
 
   switch (operand->type) {
@@ -47,7 +47,7 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
   string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
   ast_var_decl *var_decl = SYMBOL_GET_VAR_DECL(var->ident);
 
-  sprintf(buf, "VAR[%s|%s]", type_to_string[var_decl->type.category], var->ident);
+  sprintf(buf, "VAR[%s:%s]", type_to_string[var_decl->type.category], var->ident);
   return buf;
 }
 
@@ -59,19 +59,19 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
       if (immediate->bool_value == false) {
         bool_str = "false";
       }
-      sprintf(buf, "BOOL[%s]", bool_str);
+      sprintf(buf, "IMM[BOOL:%s]", bool_str);
       break;
     }
     case TYPE_INT: {
-      sprintf(buf, "INT[%d]", immediate->int_value);
+      sprintf(buf, "IMM[INT:%d]", immediate->int_value);
       break;
     }
     case TYPE_FLOAT: {
-      sprintf(buf, "FLOAT[%f]", immediate->float_value);
+      sprintf(buf, "IMM[FLOAT:%f]", immediate->float_value);
       break;
     }
     case TYPE_STRING: {
-      sprintf(buf, "STRING[%s]", immediate->string_value);
+      sprintf(buf, "IMM[STRING:%s]", immediate->string_value);
       break;
     }
     default: return "UNKNOWN IMM";
@@ -82,7 +82,7 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
 
 char *lir_operand_memory_to_string(lir_operand_memory *operand_memory) {
   string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-  sprintf(buf, "%s[%zu,%zu]",
+  sprintf(buf, "MEM[%s:%zu,%zu]",
           lir_operand_to_string(operand_memory->base),
           operand_memory->offset,
           operand_memory->length);

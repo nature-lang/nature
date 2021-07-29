@@ -14,15 +14,15 @@ typedef enum {
   TYPE_VOID,
   TYPE_VAR,
   TYPE_ANY,
-  TYPE_NULL,
   TYPE_STRUCT, // ast_struct_decl
   TYPE_DECL_IDENT, // char*
   TYPE_LIST,
   TYPE_MAP, // ast_map_decl
   TYPE_FUNCTION,
   TYPE_POINT,
+  TYPE_NULL,
 } type_category;
 
-string type_to_string[TYPE_FUNCTION + 1];
+string type_to_string[TYPE_NULL + 1];
 
 #endif //NATURE_SRC_TYPE_H_

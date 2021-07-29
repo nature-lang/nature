@@ -1,4 +1,5 @@
 #include "symbol.h"
+#include "src/semantic/analysis.h"
 
 #define BOOL_SIZE_BYTE 1
 #define INT_SIZE_BYTE 8
@@ -30,4 +31,18 @@ size_t struct_offset(ast_struct_decl *struct_decl, char *property) {
     offset += type_sizeof(struct_decl->list[i].type);
   }
   return offset;
+}
+
+void symbol_set_temp_ident(char *unique_ident, ast_type type) {
+  ast_var_decl *var_decl = NEW(ast_var_decl);
+  var_decl->type = type;
+  var_decl->ident = unique_ident;
+
+  analysis_local_ident *local = NEW(analysis_local_ident);
+  local->unique_ident = unique_ident;
+  local->decl = var_decl;
+  local->belong = SYMBOL_TYPE_VAR;
+
+  // 添加到符号表中
+  table_set(symbol_ident_table, unique_ident, local);
 }

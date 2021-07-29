@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#define FIXED_ARRAY_COUNT 1000
 #define string char *
 #define STRING_EOF '\0'
 

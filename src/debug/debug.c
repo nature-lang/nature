@@ -107,19 +107,19 @@ string lir_op_type_to_debug[] = {
     [LIR_OP_TYPE_LTE]="LTE",
     [LIR_OP_TYPE_GT]="GT",
     [LIR_OP_TYPE_GTE]="GTE",
-    [LIR_OP_TYPE_EQ_EQ]="EQ_EQ",
-    [LIR_OP_TYPE_NOT_EQ]="NOT_EQ",
+    [LIR_OP_TYPE_EQ_EQ]="E_EQ",
+    [LIR_OP_TYPE_NOT_EQ]="N_EQ",
     [LIR_OP_TYPE_NOT]="NOT",
     [LIR_OP_TYPE_MINUS]="MINUS",
     [LIR_OP_TYPE_PHI]="PHI",
     [LIR_OP_TYPE_MOVE]="MOVE",
-    [LIR_OP_TYPE_CMP_GOTO]="CMP_GOTO",
+    [LIR_OP_TYPE_CMP_GOTO]="C_GOTO",
     [LIR_OP_TYPE_GOTO]="GOTO",
     [LIR_OP_TYPE_PUSH]="PUSH",
     [LIR_OP_TYPE_POP]="POP",
     [LIR_OP_TYPE_CALL]="CALL",
-    [LIR_OP_TYPE_RUNTIME_CALL]="RUNTIME_CALL",
-    [LIR_OP_TYPE_RETURN]="RETURN",
+    [LIR_OP_TYPE_RUNTIME_CALL]="R_CALL",
+    [LIR_OP_TYPE_RETURN]="RET",
     [LIR_OP_TYPE_LABEL]="LABEL",
 };
 
@@ -146,9 +146,9 @@ void debug_stmt(string type, ast_stmt stmt) {
 }
 
 void debug_lir(int line, lir_op *op) {
-  printf("[DEBUG] LIR %d:  ", line);
+  printf("[DEBUG] LIR %d:\t", line);
   printf(
-      "%s %s,%s => %s",
+      "%s\t\t\t%s , %s => %s",
       lir_op_type_to_debug[op->type],
       lir_operand_to_string(op->first),
       lir_operand_to_string(op->second),

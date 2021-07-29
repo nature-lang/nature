@@ -277,7 +277,7 @@ ast_type infer_new_map(ast_new_map *new_map) {
       .is_origin = true,
       .category = TYPE_MAP,
   };
-  ast_map_decl *map_decl = malloc(sizeof(ast_map_decl));
+  ast_map_decl *map_decl = NEW(ast_map_decl);
   map_decl->key_type = ast_new_simple_type(TYPE_VAR);
   map_decl->value_type = ast_new_simple_type(TYPE_VAR);
   for (int i = 0; i < new_map->count; ++i) {
@@ -304,6 +304,10 @@ ast_type infer_new_map(ast_new_map *new_map) {
       }
     }
   }
+
+  // 冗余
+  new_map->key_type = map_decl->key_type;
+  new_map->value_type = map_decl->value_type;
 
   result.value = map_decl;
 
@@ -619,6 +623,10 @@ bool infer_compare_type(ast_type left, ast_type right) {
   if (left.category == TYPE_VAR && right.category == TYPE_VAR) {
     error_printf(infer_line, "type cannot infer");
     return false;
+  }
+
+  if (left.category == TYPE_ANY) {
+    return true;
   }
 
   if (left.category != right.category) {

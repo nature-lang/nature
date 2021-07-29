@@ -11,6 +11,7 @@
     analysis_local_ident *local_ident = table_get(symbol_ident_table, ident); \
     (ast_var_decl*) local_ident->decl; \
 })
+
 table *symbol_ident_table; // analysis_local_ident
 
 typedef enum {
@@ -18,6 +19,8 @@ typedef enum {
   SYMBOL_TYPE_CUSTOM_TYPE,
 //  SYMBOL_TYPE_FUNCTION,
 } symbol_type;
+
+void symbol_set_temp_ident(string unique_ident, ast_type type);
 
 int64_t list_offset(ast_type type, uint64_t index);
 
