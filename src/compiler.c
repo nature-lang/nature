@@ -3,7 +3,7 @@
 #include "symbol.h"
 #include "src/lib/error.h"
 #include "src/debug/debug.h"
-//#include "stdio.h"
+#include "stdio.h"
 
 lir_op_type ast_expr_operator_to_lir_op[] = {
     [AST_EXPR_OPERATOR_ADD] = LIR_OP_TYPE_ADD,
@@ -317,32 +317,33 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
   lir_operand *condition_target = lir_new_temp_var_operand(if_stmt->condition.data_type);
   list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
   // 判断结果是否为 false, false 对应 else
-  lir_operand *first_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false);
-  lir_op *end_label = lir_op_unique_label(END_IF_IDENT);
-  lir_op *alternate_label = lir_op_unique_label(ALTERNATE_IF_IDENT);
+  lir_operand *false_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false);
+  lir_operand *end_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_IF_IDENT));
+  lir_operand *alternate_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(ALTERNATE_IF_IDENT));
 
   lir_op *cmp_goto;
   if (if_stmt->alternate.count == 0) {
-    cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, first_param, condition_target, end_label->result);
+    cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, false_target, condition_target, end_label_operand);
   } else {
-    cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, first_param, condition_target, alternate_label->result);
+    cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, false_target, condition_target, alternate_label_operand);
   }
   list_op_push(list, cmp_goto);
   list_op_push(list, lir_op_unique_label(CONTINUE_IDENT));
 
   // 编译 consequent block
   list_op *consequent_list = compiler_block(c, &if_stmt->consequent);
-  list_op_push(consequent_list, lir_op_goto(end_label->result));
+  list_op_push(consequent_list, lir_op_goto(end_label_operand));
   list_op_append(list, consequent_list);
 
   // 编译 alternate block
   if (if_stmt->alternate.count != 0) {
-    list_op_push(list, alternate_label);
+    list_op_push(list, lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, alternate_label_operand));
     list_op *alternate_list = compiler_block(c, &if_stmt->alternate);
     list_op_append(list, alternate_list);
   }
+
   // 追加 end_if 标签
-  list_op_push(list, end_label);
+  list_op_push(list, lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, end_label_operand));
 
   return list;
 }
@@ -412,6 +413,9 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
 list_op *compiler_access_list(closure *c, ast_expr expr, lir_operand *target) {
+  lir_operand_var *operand_var = target->value;
+  symbol_set_temp_ident(operand_var->ident, TYPE_NEW_POINT());
+
   ast_access_list *ast = expr.expr;
   // new tmp 是无类型的。
   // left_target.type is list[int]
@@ -688,8 +692,8 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
 list_op *compiler_while(closure *c, ast_while_stmt *ast) {
   list_op *list = list_op_new();
   lir_op *while_label = lir_op_unique_label(WHILE_IDENT);
-  lir_op *end_while_label = lir_op_unique_label(END_WHILE_IDENT);
   list_op_push(list, while_label);
+  lir_operand *end_while_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_WHILE_IDENT));
 
   lir_operand *condition_target = lir_new_temp_var_operand(ast->condition.data_type);
   list_op_append(list, compiler_expr(c, ast->condition, condition_target));
@@ -697,13 +701,13 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
       LIR_OP_TYPE_CMP_GOTO,
       LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
       condition_target,
-      end_while_label->result);
+      end_while_operand);
   list_op_push(list, cmp_goto);
   list_op_push(list, lir_op_unique_label(CONTINUE_IDENT));
 
   list_op_append(list, compiler_block(c, &ast->body));
 
-  list_op_push(list, end_while_label);
+  list_op_push(list, lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, end_while_operand));
 
   return list;
 }

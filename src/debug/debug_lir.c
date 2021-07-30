@@ -102,7 +102,7 @@ char *lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param)
     }
   }
 
-  sprintf(buf, "ACTUAL_PARAM(%s)", params);
+  sprintf(buf, "PARAMS(%s)", params);
   free(params);
 
   return buf;
