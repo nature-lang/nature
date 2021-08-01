@@ -81,6 +81,8 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
   op->first = first;
   op->second = second;
   op->result = result;
+  op->pred = NULL;
+  op->succ = NULL;
 
 #ifdef DEBUG_COMPILER_LIR
   debug_lir(lir_line, op);
@@ -92,45 +94,46 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
 list_op *list_op_new() {
   list_op *list = NEW(list_op);
   list->count = 0;
-  lir_op *empty = NEW(lir_op);
-  empty->pred = NULL;
-  empty->succ = NULL;
 
-  list->front = empty;
-  list->rear = empty;
+  list->front = NULL;
+  list->rear = NULL;
 
   return list;
 }
 
 void list_op_push(list_op *l, lir_op *op) {
-  LIST_OP_COPY(l->rear, op);
+  if (l->count == 0) {
+    l->front = op;
+    l->rear = op;
+    l->count = 1;
+    return;
+  }
 
-  lir_op *empty = NEW(lir_op);
-  empty->pred = l->rear;
-  empty->succ = NULL;
+  l->rear->succ = op;
+  op->pred = l->rear;
+  l->rear = op;
 
-  l->rear->succ = empty;
-  l->rear = empty;
   l->count++;
 }
 
 list_op *list_op_append(list_op *dst, list_op *src) {
-  if (dst->count == 0) {
-    return src;
-  }
   if (src->count == 0) {
     return dst;
   }
 
-  // empty 替换成 src->front
-  dst->rear->pred->succ = src->front;
-  src->front->pred = dst->rear->pred;
-  // free empty
-  free(dst->rear);
+  // src.count 肯定 > 0
+  if (dst->count == 0) {
+    dst->front = src->front;
+    dst->rear = src->rear;
+    dst->count = src->count;
+    return dst;
+  }
 
-  dst->rear = src->rear;
   dst->count += src->count;
-  free(src);
+  // 链接
+  dst->rear->succ = src->front;
+  // 关联关系
+  dst->rear = src->rear;
   return dst;
 }
 
@@ -149,4 +152,35 @@ closure *lir_new_closure(ast_closure_decl *ast) {
   new->interval_table = table_new();
 
   return new;
+}
+
+lir_basic_block *lir_new_basic_block() {
+  lir_basic_block *basic_block = NEW(lir_basic_block);
+  basic_block->operates = list_op_new();
+  basic_block->last_op = 0;
+  basic_block->first_op = NULL;
+  basic_block->last_op = NULL;
+  basic_block->op_count = 0;
+  basic_block->preds.count = 0;
+  basic_block->succs.count = 0;
+
+  basic_block->forward_succs.count = 0;
+  basic_block->incoming_forward_count = 0;
+  basic_block->use.count = 0;
+  basic_block->def.count = 0;
+  basic_block->live_in.count = 0;
+  basic_block->live_out.count = 0;
+  basic_block->dom.count = 0;
+  basic_block->df.count = 0;
+  basic_block->be_idom.count = 0;
+  basic_block->loop.tree_high = 0;
+  basic_block->loop.index = 0;
+  basic_block->loop.depth = 0;
+  basic_block->loop.flag = 0;
+
+  return basic_block;
+}
+
+bool list_op_is_null(lir_op *op) {
+  return op == NULL;
 }

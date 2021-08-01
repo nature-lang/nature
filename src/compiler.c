@@ -106,7 +106,8 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *t
   }
 
   // 编译 body
-  list_op_append(list, compiler_block(c, &ast->function->body));
+  list_op *await = compiler_block(c, &ast->function->body);
+  list_op_append(list, await);
   c->operates = list;
 
   return parent_list;
@@ -121,8 +122,8 @@ list_op *compiler_block(closure *c, ast_block_stmt *block) {
 #ifdef DEBUG_COMPILER
     debug_stmt("COMPILER", stmt);
 #endif
-
-    list_op_append(list, compiler_stmt(c, stmt));
+    list_op *await = compiler_stmt(c, stmt);
+    list_op_append(list, await);
   }
 
   return list;

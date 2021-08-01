@@ -5,6 +5,8 @@
 #include "src/semantic/analysis.h"
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
+#include "src/cfg.h"
+#include "src/debug/debug.h"
 
 static char *open(char *path) {
   FILE *file = fopen(path, "rb");
@@ -50,7 +52,15 @@ int main() {
   infer(&closure_decl);
 
   // compiler to lir
-  compiler(&closure_decl);
+  compiler_closures closures = compiler(&closure_decl);
+
+  // construct cfg
+  for (int i = 0; i < closures.count; ++i) {
+    cfg(closures.list[i]);
+#ifdef DEBUG_CFG
+    debug_cfg(closures.list[i]);
+#endif
+  }
 
   printf("Hello, World!\n");
   return 0;

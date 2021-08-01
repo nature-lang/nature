@@ -229,9 +229,12 @@ typedef struct {
 typedef struct lir_basic_block {
   string name;
   uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
+
   lir_op *first_op; // 链表结构， 开始处的指令
   lir_op *last_op;
   uint8_t op_count;
+
+  list_op *operates;
 
   lir_basic_blocks preds;
   lir_basic_blocks succs;
@@ -294,6 +297,7 @@ lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);
+bool list_op_is_null(lir_op *op);
 void list_op_push(list_op *l, lir_op *op);
 list_op *list_op_append(list_op *dst, list_op *src);
 

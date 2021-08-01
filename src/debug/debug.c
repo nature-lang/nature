@@ -99,28 +99,28 @@ string token_type_to_debug[] = {
 };
 
 string lir_op_type_to_debug[] = {
-    [LIR_OP_TYPE_ADD]="ADD",
-    [LIR_OP_TYPE_SUB]="SUB",
-    [LIR_OP_TYPE_MUL]="MUL",
-    [LIR_OP_TYPE_DIV]="DIV",
-    [LIR_OP_TYPE_LT]="LT",
-    [LIR_OP_TYPE_LTE]="LTE",
-    [LIR_OP_TYPE_GT]="GT",
-    [LIR_OP_TYPE_GTE]="GTE",
-    [LIR_OP_TYPE_EQ_EQ]="E_EQ",
-    [LIR_OP_TYPE_NOT_EQ]="N_EQ",
-    [LIR_OP_TYPE_NOT]="NOT",
+    [LIR_OP_TYPE_ADD]="ADD  ",
+    [LIR_OP_TYPE_SUB]="SUB  ",
+    [LIR_OP_TYPE_MUL]="MUL  ",
+    [LIR_OP_TYPE_DIV]="DIV  ",
+    [LIR_OP_TYPE_LT]="LT   ",
+    [LIR_OP_TYPE_LTE]="LTE  ",
+    [LIR_OP_TYPE_GT]="GT   ",
+    [LIR_OP_TYPE_GTE]="GTE  ",
+    [LIR_OP_TYPE_EQ_EQ]="E_EQ ",
+    [LIR_OP_TYPE_NOT_EQ]="N_EQ ",
+    [LIR_OP_TYPE_NOT]="NOT  ",
     [LIR_OP_TYPE_MINUS]="MINUS",
-    [LIR_OP_TYPE_PHI]="PHI",
-    [LIR_OP_TYPE_MOVE]="MOVE",
-    [LIR_OP_TYPE_CMP_GOTO]="C_GOTO",
-    [LIR_OP_TYPE_GOTO]="GOTO",
-    [LIR_OP_TYPE_PUSH]="PUSH",
-    [LIR_OP_TYPE_POP]="POP",
-    [LIR_OP_TYPE_CALL]="CALL",
+    [LIR_OP_TYPE_PHI]="PHI  ",
+    [LIR_OP_TYPE_MOVE]="MOVE ",
+    [LIR_OP_TYPE_CMP_GOTO]="CMP_GO",
+    [LIR_OP_TYPE_GOTO]="GOTO ",
+    [LIR_OP_TYPE_PUSH]="PUSH  ",
+    [LIR_OP_TYPE_POP]="POP   ",
+    [LIR_OP_TYPE_CALL]="CALL  ",
     [LIR_OP_TYPE_RUNTIME_CALL]="R_CALL",
-    [LIR_OP_TYPE_RETURN]="RET",
-    [LIR_OP_TYPE_LABEL]="LABEL",
+    [LIR_OP_TYPE_RETURN]="RET   ",
+    [LIR_OP_TYPE_LABEL]="LABEL ",
 };
 
 void debug_parser(int line, char *token) {
@@ -147,12 +147,70 @@ void debug_stmt(string type, ast_stmt stmt) {
 
 void debug_lir(int line, lir_op *op) {
   printf("[DEBUG] LIR %d:\t", line);
+  if (op->type == LIR_OP_TYPE_LABEL) {
+    printf(
+        "%s:\n",
+        lir_operand_to_string(op->result)
+    );
+    return;
+  }
   printf(
-      "%s\t\t\t%s , %s => %s",
+      "\t\t%s\t\t%s , %s => %s",
       lir_op_type_to_debug[op->type],
       lir_operand_to_string(op->first),
       lir_operand_to_string(op->second),
       lir_operand_to_string(op->result)
   );
   printf("\n");
+}
+
+/**
+ * 遍历展示 blocks
+ * @param c
+ */
+void debug_cfg(closure *c) {
+  printf("closure: %s------------------------------------------------------------------------\n", c->name);
+  for (int i = 0; i < c->blocks.count; ++i) {
+    lir_basic_block *basic_block = c->blocks.list[i];
+    debug_basic_block(basic_block);
+  }
+}
+
+/**
+ * block: name
+ *     move....
+ *     xxx...
+ *     xxx..
+ * succ: name1, name2
+ * pred: name1, name2
+ *
+ *
+ * @param block
+ */
+void debug_basic_block(lir_basic_block *block) {
+  // block name, ops, succ, pred
+  printf("block: %s\n", block->name);
+
+  lir_op *current = block->operates->front;
+  while (current != NULL) {
+    printf(
+        "\t\t%s\t%s , %s => %s\n",
+        lir_op_type_to_debug[current->type],
+        lir_operand_to_string(current->first),
+        lir_operand_to_string(current->second),
+        lir_operand_to_string(current->result)
+    );
+    current = current->succ;
+  }
+
+  printf("\n\t\tpred:");
+  for (int i = 0; i < block->preds.count; ++i) {
+    printf("%s\t", block->preds.list[i]->name);
+  }
+  printf("\n\t\tsucc:");
+  for (int i = 0; i < block->succs.count; ++i) {
+    printf("%s\t", block->succs.list[i]->name);
+  }
+
+  printf("\n\n\n");
 }
