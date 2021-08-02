@@ -273,7 +273,7 @@ typedef struct closure {
 } closure;
 
 lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
-lir_operand_phi_body *lir_new_phi_body(lir_operand_var *var, uint8_t count);
+lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 

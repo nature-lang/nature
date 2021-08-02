@@ -87,4 +87,7 @@ void cfg(closure *c) {
     LIR_BLOCKS_PUSH(&current_block->succs, target_block);
     LIR_BLOCKS_PUSH(&target_block->preds, current_block);
   }
+
+  // 添加入口块
+  c->entry = c->blocks.list[0];
 }

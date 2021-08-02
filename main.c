@@ -60,7 +60,7 @@ int main() {
     closure *c = closures.list[i];
     // 构造 cfg
     cfg(c);
-    
+
     // 构造 ssa
     ssa(c);
 
