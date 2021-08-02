@@ -6,6 +6,7 @@
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
 #include "src/cfg.h"
+#include "src/ssa.h"
 #include "src/debug/debug.h"
 
 static char *open(char *path) {
@@ -56,7 +57,13 @@ int main() {
 
   // construct cfg
   for (int i = 0; i < closures.count; ++i) {
-    cfg(closures.list[i]);
+    closure *c = closures.list[i];
+    // 构造 cfg
+    cfg(c);
+    
+    // 构造 ssa
+    ssa(c);
+
 #ifdef DEBUG_CFG
     debug_cfg(closures.list[i]);
 #endif

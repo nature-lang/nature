@@ -4,6 +4,141 @@
 
 #include "ssa.h"
 
+void ssa(closure *c) {
+  // 计算每个 basic_block 支配者，一个基本块可以被多个父级基本块支配
+  ssa_dom(c);
+  // 计算最近支配者
+  ssa_idom(c);
+  // 计算支配边界
+  ssa_df(c);
+  // 放置 phi 函数
+  ssa_add_phi(c);
+  // use def
+  // 活跃分析, 计算基本块入口活跃 live_in 和 出口活跃 live_out
+//  ssa_live(c);
+}
+
+/**
+ * 计算每个块的支配者块
+ * 对于 Bi 和 Bj, 如果从入口节点 B0 到 Bj 的每条路径都包含 Bi, 那么Bi支配Bj
+ *
+ * A -> B -> C
+ * A -> E -> F -> C
+ * 到达 C 必须要经过其前驱 B,F 中的一个，如果一个节点即支配 B 也支配着 F，（此处是 A）
+ * 则 A 一定支配着 C, 即如果 A 支配着 C 的所有前驱，则 A 一定支配 C
+ * @param c
+ */
+void ssa_dom(closure *c) {
+  // 初始化, dom[n0] = {l0}
+  lir_basic_blocks dom = {.count = 1};
+  c->blocks.list[0]->dom.count = 1;
+  c->blocks.list[0]->dom.list[0] = c->blocks.list[0];
+
+  // 初始化其他 dom 为所有节点的集合 {B0,B1,B2,B3..}
+  for (int i = 1; i < c->blocks.count; ++i) {
+    lir_basic_blocks other = {.count = 0};
+
+    // Dom[i] = N
+    for (int k = 0; k < c->blocks.count; ++k) {
+      other.list[other.count++] = c->blocks.list[k];
+    }
+
+    c->blocks.list[i]->dom = other;
+  }
+
+  // 求不动点
+  bool changed = true;
+  while (changed) {
+    changed = false;
+
+    // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
+    for (int label = 1; label < c->blocks.count; ++label) {
+      lir_basic_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks.list[label]);
+      // 判断 dom 是否不同
+      if (ssa_dom_changed(&c->blocks.list[label]->dom, &new_dom)) {
+        changed = true;
+        c->blocks.list[label]->dom = new_dom;
+      }
+    }
+  }
+}
+
+/**
+ * 计算最近支配点
+ * 在支配 p 的点中，若一个支配点 i≠p，满足 i 被 p 剩下的所有的支配点支配，则称 i 为 p 的最近支配点
+ * B0 没有 idom
+ * idom 一定是父节点中的某一个
+ * 由于采用中序遍历编号，所以父节点的 label 一定小于当前 label
+ * 当前 label 的多个支配者中 label 最小的一个就是 idom
+ * @param c
+ */
+void ssa_idom(closure *c) {
+  // 初始化 be_idom(支配者树)
+  for (int label = 0; label < c->blocks.count; ++label) {
+    lir_basic_blocks be_idom = {.count = 0};
+    c->blocks.list[label]->be_idom = be_idom; // 一个基本块可以是节点的 idom, be_idom 用来构造支配者树
+  }
+
+  // 计算最近支配者 B0 没有支配者
+  for (int label = 1; label < c->blocks.count; ++label) {
+    lir_basic_block *block = c->blocks.list[label];
+    lir_basic_blocks dom = block->dom;
+    // 最近支配者不能是自身
+    for (int i = dom.count - 1; i >= 0; --i) {
+      if (dom.list[i]->label == block->label) {
+        continue;
+      }
+
+      if (ssa_is_idom(dom, dom.list[i])) {
+        block->idom = dom.list[i];
+        break;
+      }
+    }
+
+    block->idom->be_idom.list[block->idom->be_idom.count] = block;
+  }
+}
+
+/**
+ * 计算支配边界
+ * 定义：n 支配 m 的前驱 p，且n 不严格支配 m (即允许 n = m), 则 m 是 n 的支配边界
+ * (极端情况是会出现 n 的支配者自身的前驱)  http://asset.eienao.com/image-20210802183805691.png
+ * 对定义进行反向推理可以得到
+ *
+ * 如果 m 为汇聚点，对于 m 的任意前驱 p, p 一定会支配自身，且不支配 m. 所以一定有 DF(p) = m
+ * n in Dom(p) (支配着 p 的节点 n), 则有 n 支配 p, 如果 n 不支配 m, 则一定有 DF(p) = m
+ */
+void ssa_df(closure *c) {
+  // 初始化空集为默认行为，不需要特别声明
+//  for (int label = 0; label < c->blocks.count; ++label) {
+//    lir_basic_blocks df = {.count = 0};
+//    c->blocks.list[label]->df = df;
+//  }
+
+  for (int label = 0; label < c->blocks.count; ++label) {
+    lir_basic_block *current_block = c->blocks.list[label];
+    // 非汇聚点不能是支配边界
+    if (current_block->preds.count < 2) {
+      continue;
+    }
+
+    for (int i = 0; i < current_block->preds.count; ++i) {
+      lir_basic_block *runner = current_block->preds.list[i];
+
+      // 只要 pred 不是 当前块的最近支配者, pred 的支配边界就一定包含着 current_block
+      // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
+      // 不可能， 因为是从 current_block->pred->idom(pred)
+      // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
+      while (runner->label != current_block->idom->label) {
+        runner->df.list[runner->df.count++] = current_block;
+
+        // 向上查找
+        runner = runner->idom;
+      }
+    }
+  }
+}
+
 /**
  * 剪枝静态单赋值
  *
@@ -15,7 +150,7 @@
  */
 void ssa_add_phi(closure *c) {
   for (int label = 0; label < c->blocks.count; ++label) {
-    // 定义的每个变量
+    // 定义的每个变量都需要添加到支配边界中
     lir_vars def = c->blocks.list[label]->def;
     lir_basic_blocks df = c->blocks.list[label]->df;
 
@@ -30,6 +165,7 @@ void ssa_add_phi(closure *c) {
         }
 
         // 如果变量不在当前 n ∈ df 入口活跃,则不需要定义
+        // 不在当前入口活跃，是否会在 df_block.success 活跃呢？
         if (!ssa_var_belong(var, df_block->live_in)) {
           continue;
         }
@@ -56,6 +192,10 @@ void ssa_add_phi(closure *c) {
   }
 }
 
+/**
+ * 活动分析
+ * @param c
+ */
 void ssa_live(closure *c) {
   // 初始化 live out 每个基本块为 ∅
   for (int label = 0; label < c->blocks.count; ++label) {
@@ -229,101 +369,20 @@ void ssa_use_def(closure *c) {
   }
 }
 
-// 计算支配边界
-// 只有汇聚点(假设为 n)才能是支配边界，反证：如果一个点 n 只有一个前驱 j, 那么支配 j 则必定支配 n
-// 对于 汇聚点 n 的每个前驱 pred_j, 只要其不是 n 的 idom, n 就是 pred_j' 的支配边界
-// 同理对于 pred_j 的支配者 pred_j', 只要 pred_j' 不是 n的 idom, n 同样也是是 pred_j' 的支配边界
-void ssa_df(closure *c) {
-  for (int label = 0; label < c->blocks.count; ++label) {
-    lir_basic_blocks df = {.count = 0};
-    c->blocks.list[label]->df = df;
-  }
 
-  for (int label = 0; label < c->blocks.count; ++label) {
-    lir_basic_block *current_block = c->blocks.list[label];
-    if (current_block->preds.count < 2) {
-      continue;
-    }
-
-    for (int i = 0; i < current_block->preds.count; ++i) {
-      lir_basic_block *pred = current_block->preds.list[i];
-      // 只要 pred 不是 当前块的最近支配者, pred 的支配边界就一定包含着 current_block
-      // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
-      // 不可能， 因为是从 current_block->pred->idom(pred)
-      // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
-      while (pred->label != current_block->idom->label) {
-        pred->df.list[pred->df.count++] = current_block;
-        // 深度优先，进一步查找
-        pred = pred->idom;
-      }
-    }
-  }
-}
-
-// n0 没有 idom
-// idom 一定是父节点中的某一个
-// 由于采用中序遍历编号，所以父节点的 label 一定小于当前 label
-// 当前 label 的多个支配者中 label 最小的一个就是 idom
-void ssa_idom(closure *c) {
-  // 初始化 be_idom
-  for (int label = 0; label < c->blocks.count; ++label) {
-    lir_basic_blocks be_idom = {.count = 0};
-    c->blocks.list[label]->be_idom = be_idom;
-  }
-  for (int label = 0; label < c->blocks.count; ++label) {
-    lir_basic_block *block = c->blocks.list[label];
-    block->idom = block->dom.list[block->dom.count - -2];
-    // 添加反向关系
-    block->idom->be_idom.list[block->idom->be_idom.count] = block;
-  }
-}
-
-// A -> B -> C
-// A -> E -> F -> C
-// 到达 C 必须要经过前驱 B,F 中的一个，如果一个节点即支配 B 也支配着 F，（此处是 A）
-// 则 A 一定支配着 C, 即如果 A 支配着 C 的所有前驱，则 A 一定支配 C
-void ssa_dom(closure *c) {
-  // 初始化, dom[n0] = {l0}
-  lir_basic_blocks dom = {.count = 0};
-  dom.list[dom.count++] = c->blocks.list[0];
-  c->blocks.list[0]->dom = dom;
-
-  // 初始化其他 dom
-  for (int i = 1; i < c->blocks.count; ++i) {
-    lir_basic_blocks other = {.count = 0};
-
-    for (int k = 0; k < c->blocks.count; ++k) {
-      other.list[other.count++] = c->blocks.list[k];
-    }
-
-    c->blocks.list[i]->dom = other;
-  }
-
-  // 求不动点
-  bool changed = true;
-  while (changed) {
-    changed = false;
-
-    // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
-    for (int label = 1; label < c->blocks.count; ++label) {
-      lir_basic_blocks new_dom = ssa_calc_dom_blocks(c, c->blocks.list[label]);
-      // 判断 dom 是否不同
-      if (ssa_dom_changed(&c->blocks.list[label]->dom, &new_dom)) {
-        changed = true;
-        c->blocks.list[label]->dom = new_dom;
-      }
-    }
-  }
-}
-
-bool ssa_dom_changed(lir_basic_blocks *old, lir_basic_blocks *new) {
-  if (old->count != new->count) {
+/**
+ * old_dom 和 new_dom list 严格按照 label 编号，从小到大排序,所以可以进行顺序比较
+ * @param old_dom
+ * @param new_dom
+ * @return
+ */
+bool ssa_dom_changed(lir_basic_blocks *old_dom, lir_basic_blocks *new_dom) {
+  if (old_dom->count != new_dom->count) {
     true;
   }
 
-  // 因此是根据 block label 从小到大排序的，所以可以这么遍历
-  for (int i = 0; i < old->count; ++i) {
-    if (old->list[i]->label != new->list[i]->label) {
+  for (int i = 0; i < old_dom->count; ++i) {
+    if (old_dom->list[i]->label != new_dom->list[i]->label) {
       return true;
     }
   }
@@ -331,34 +390,39 @@ bool ssa_dom_changed(lir_basic_blocks *old, lir_basic_blocks *new) {
   return false;
 }
 
+/**
+ * 计算基本块 i 的支配者，如果一个基本块支配 i 的所有前驱，则该基本块一定支配 i
+ * @param c
+ * @param block
+ * @return
+ */
 lir_basic_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
   lir_basic_blocks dom = {.count = 0};
 
   // 遍历当前 block 的 preds 的 dom_list, 然后求交集
-  // key => label
-  // value => a number of
+  // 如果一个基本块支配者每一个前驱，那么其数量等于前驱的数量
   uint8_t block_label_count[UINT8_MAX];
+  for (int label = 0; label < c->blocks.count; ++label) {
+    block_label_count[label] = 0;
+  }
+
   for (int i = 0; i < block->preds.count; ++i) {
     // 找到 pred
-    lir_basic_block *pred = block->preds.list[i];
-    // 通过 pred->label，从 dom_list 中找到对应的 dom
-    lir_basic_blocks pred_dom = pred->dom;
+    lir_basic_blocks pred_dom = block->preds.list[i]->dom;
+
     // 遍历 pred_dom 为 label 计数
     for (int k = 0; k < pred_dom.count; ++k) {
       block_label_count[pred_dom.list[k]->label]++;
     }
   }
 
-  // 如果 block 的count 和 preds_count 的数量一致则表示全部相交，即
+  // 如果 block 的count 和 preds_count 的数量一致则表示该基本块支配了所有的前驱
+  // dom 严格按照 label 从小到大排序, 且 block 自身一定是支配自身的
   for (int label = 0; label < c->blocks.count; ++label) {
-    if (block_label_count[label] == block->preds.count) {
+    if (block_label_count[label] == block->preds.count || label == block->label) {
       dom.list[dom.count++] = c->blocks.list[label];
     }
   }
-
-  // 由于 n 的支配者的 label 肯定小于 n, 所以最后添加 n,这样支配者就是按从小往大编号了
-  // 从而便于比较，和找出 idom
-  dom.list[dom.count++] = block;
 
   return dom;
 }
@@ -490,5 +554,22 @@ void ssa_rename_var(lir_operand_var *var, uint8_t number) {
   sprintf(buf, "%s_%d", var->ident, number);
   var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
+
+bool ssa_is_idom(lir_basic_blocks dom, lir_basic_block *await) {
+  for (int i = 0; i < dom.count; ++i) {
+    struct lir_basic_block *item = dom.list[i];
+    if (item->label == await->label) {
+      continue;
+    }
+
+    // 判断是否包含
+    if (!lir_blocks_contains(item->dom, await->label)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 
 

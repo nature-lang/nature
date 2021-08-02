@@ -184,3 +184,12 @@ lir_basic_block *lir_new_basic_block() {
 bool list_op_is_null(lir_op *op) {
   return op == NULL;
 }
+
+bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label) {
+  for (int i = 0; i < blocks.count; ++i) {
+    if (blocks.list[i]->label == label) {
+      return true;
+    }
+  }
+  return false;
+}

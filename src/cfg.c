@@ -26,6 +26,8 @@
  *  sub
  *  shift
  *
+ *  TODO 添加统一结尾块，并将所有的 ret 指令添加跳转到统一结尾块
+ *
  * @param c
  * @return
  */
@@ -42,6 +44,7 @@ void cfg(closure *c) {
 
       // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
       lir_basic_block *new_block = lir_new_basic_block();
+      new_block->label = c->blocks.count;
       new_block->name = operand_label->ident;
       table_set(basic_block_table, new_block->name, new_block);
       c->blocks.list[c->blocks.count++] = new_block;

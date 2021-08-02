@@ -244,7 +244,7 @@ typedef struct lir_basic_block {
   lir_vars use;
   lir_vars def;
   lir_vars live_out;
-  lir_vars live_in;
+  lir_vars live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
   lir_basic_blocks dom; // 当前块被哪些基本块支配
   lir_basic_blocks df;
   lir_basic_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
@@ -294,6 +294,8 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
 lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
+
+bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
 
 list_op *list_op_new();
 list_op *list_op_pop(list_op *l);
