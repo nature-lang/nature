@@ -157,10 +157,6 @@ closure *lir_new_closure(ast_closure_decl *ast) {
 lir_basic_block *lir_new_basic_block() {
   lir_basic_block *basic_block = NEW(lir_basic_block);
   basic_block->operates = list_op_new();
-  basic_block->last_op = 0;
-  basic_block->first_op = NULL;
-  basic_block->last_op = NULL;
-  basic_block->op_count = 0;
   basic_block->preds.count = 0;
   basic_block->succs.count = 0;
 
@@ -192,4 +188,17 @@ bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label) {
     }
   }
   return false;
+}
+
+lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
+  lir_operand *operand = NEW(lir_operand);
+
+  lir_operand_phi_body *phi_body = NEW(lir_operand_phi_body);
+  for (int i = 0; i < count; ++i) {
+    phi_body->list[i] = LIR_NEW_VAR_OPERAND(var->ident);
+  }
+
+  operand->type = LIR_OPERAND_TYPE_PHI_BODY;
+  operand->value = phi_body;
+  return operand;
 }

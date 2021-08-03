@@ -25,7 +25,7 @@ void *table_get(table *t, string key) {
 }
 
 bool table_set(table *t, char *key, void *value) {
-  if (t->count + 1 > t->capacity * TABLE_MAx_LOAD) {
+  if (t->count + 1 > t->capacity * TABLE_MAX_LOAD) {
     int capacity = GROW_CAPACITY(t->capacity);
     table_adjust(t, capacity);
   }
@@ -116,6 +116,19 @@ table *table_new() {
   table *t = malloc(sizeof(table));
   table_init(t);
   return t;
+}
+
+bool table_exist(table *t, char *key) {
+  if (t->count == 0) {
+    return false;
+  }
+
+  table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+  if (entry->key == NULL) {
+    return false;
+  }
+
+  return true;
 }
 
 

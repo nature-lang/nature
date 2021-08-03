@@ -44,7 +44,7 @@ int main() {
   char *source = open("/Users/weiwenhao/Code/nature/example/lir.n");
 
   // scanner
-  list *token_list = scanner(source);
+  list * token_list = scanner(source);
   // parser
   ast_block_stmt stmt_list = parser(token_list);
   // analysis

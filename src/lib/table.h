@@ -4,7 +4,7 @@
 #include "src/value.h"
 
 // hash_string 表写入负载
-#define TABLE_MAx_LOAD 0.75
+#define TABLE_MAX_LOAD 0.75
 
 typedef struct {
   string key;

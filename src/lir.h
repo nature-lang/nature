@@ -56,10 +56,10 @@
 
 #define LIR_NEW_VAR_OPERAND(_ident) \
 ({                                 \
-  lir_operand_var *var = NEW(lir_operand_var); \
-  var->old = NULL;    \
-  var->ident = _ident;              \
-  var;                                   \
+  lir_operand_var *_var = NEW(lir_operand_var); \
+  _var->old = _ident;    \
+  _var->ident = _ident;              \
+  _var;                                   \
 })
 
 #define LIR_NEW_LABEL_OPERAND(_ident) \
@@ -117,7 +117,7 @@ typedef struct {
 typedef struct lir_vars {
   uint8_t count;
   lir_operand_var *list[UINT8_MAX];
-} lir_vars;
+} lir_vars, lir_operand_phi_body;
 
 typedef size_t memory_address;
 
@@ -136,11 +136,6 @@ typedef struct {
   };
   type_category type;
 } lir_operand_immediate;
-
-typedef struct {
-  uint8_t count;
-  lir_vars vars;
-} lir_operand_phi_body;
 
 typedef struct {
   lir_vars vars;
@@ -231,8 +226,6 @@ typedef struct lir_basic_block {
   uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
   lir_op *first_op; // 链表结构， 开始处的指令
-  lir_op *last_op;
-  uint8_t op_count;
 
   list_op *operates;
 
@@ -272,7 +265,6 @@ typedef struct closure {
   list_op *operates; // 指令列表
 } closure;
 
-lir_operand_var *lir_clone_operand_var(lir_operand_var *var);
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
