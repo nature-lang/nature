@@ -76,6 +76,22 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
 }
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
+  // 字符串 copy
+  if (first != NULL && first->type == LIR_OPERAND_TYPE_VAR) {
+    lir_operand_var *operand_var = first->value;
+    first = lir_new_var_operand(operand_var->ident);
+  }
+
+  if (second != NULL && second->type == LIR_OPERAND_TYPE_VAR) {
+    lir_operand_var *operand_var = second->value;
+    second = lir_new_var_operand(operand_var->ident);
+  }
+
+  if (result != NULL && result->type == LIR_OPERAND_TYPE_VAR) {
+    lir_operand_var *operand_var = result->value;
+    result = lir_new_var_operand(operand_var->ident);
+  }
+
   lir_op *op = NEW(lir_op);
   op->type = type;
   op->first = first;

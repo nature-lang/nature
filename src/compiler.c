@@ -718,9 +718,8 @@ list_op *compiler_return(closure *c, ast_return_stmt *ast) {
   lir_operand *target = lir_new_temp_var_operand(ast->expr.data_type);
   list_op *await = compiler_expr(c, ast->expr, target);
   list_op_append(list, await);
-  lir_operand_var *temp = target->value;
 
-  lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, target);
+  lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, target, NULL, NULL);
   list_op_push(list, return_op);
 
   return list;

@@ -72,7 +72,7 @@
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
-   sprintf(temp_name, "%s-%d", _ident, lir_unique_count++); \
+   sprintf(temp_name, "%d-%s", lir_unique_count++, _ident); \
    temp_name;                                   \
 })
 

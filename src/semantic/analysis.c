@@ -610,9 +610,10 @@ bool analysis_redeclare_check(char *ident) {
  */
 char *analysis_unique_ident(char *name) {
   // +2: _ and '\0'
-  char *unique_name = malloc(strlen(name) + sizeof(int) + 2);
-  sprintf(unique_name, "%s-%d", name, unique_name_count++);
-  return unique_name;
+//  char *unique_name = malloc(strlen(name) + sizeof(int) + 2);
+//  sprintf(unique_name, "%d-%s", unique_name_count++, name);
+//  return unique_name;
+  return LIR_UNIQUE_NAME(name);
 }
 
 void analysis_function_begin() {

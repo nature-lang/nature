@@ -97,11 +97,12 @@ void ssa_idom(closure *c) {
 
       if (ssa_is_idom(dom, dom.list[i])) {
         block->idom = dom.list[i];
+
+        // 添加反向关联关系
+        block->idom->be_idom.list[block->idom->be_idom.count++] = block;
         break;
       }
     }
-
-    block->idom->be_idom.list[block->idom->be_idom.count] = block;
   }
 }
 
@@ -544,7 +545,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     lir_basic_block *succ_block = block->succs.list[i];
     // 为 每个 phi 函数的 phi param 命名
     lir_op *succ_op = succ_block->operates->front->succ;
-    while (succ_op->type == LIR_OP_TYPE_PHI) {
+    while (succ_op != NULL && succ_op->type == LIR_OP_TYPE_PHI) {
       lir_operand_phi_body *phi_body = succ_op->first->value;
       lir_operand_var *var = phi_body->list[phi_body->count++];
       var_number_stack *stack = table_get(stack_table, var->ident);
@@ -597,11 +598,10 @@ uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table 
   return result;
 }
 void ssa_rename_var(lir_operand_var *var, uint8_t number) {
-  var->old = var->ident;
   // 1: '\0'
   // 2: '_12'
-  char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 4);
-  sprintf(buf, "%s-ssa%d", var->ident, number);
+  char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
+  sprintf(buf, "%s.s%d", var->ident, number);
   var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
 
@@ -633,6 +633,8 @@ bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
     if (strcmp(phi_var->ident, var->ident) == 0) {
       return true;
     }
+
+    current_op = current_op->succ;
   }
 
   return false;
