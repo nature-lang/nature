@@ -11,6 +11,6 @@ add_executable(nature main.c
         src/syntax/token.c src/syntax/parser.c src/syntax/parser.h src/debug/debug.c src/debug/debug.h src/semantic/analysis.c src/semantic/analysis.h src/semantic/infer.h src/type.h src/semantic/infer.c src/type.c
         src/compiler.h src/compiler.c src/lir.h src/lir.c src/debug/debug_lir.c src/debug/debug_lir.h
         src/cfg.c src/cfg.h
-        src/ssa.h src/ssa.c)
+        src/ssa.h src/ssa.c src/assembler/amd64/elf.h src/assembler/amd64/asm.c src/assembler/amd64/asm.h)
 
 include_directories(.)
