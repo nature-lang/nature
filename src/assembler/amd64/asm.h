@@ -1,22 +1,17 @@
 #ifndef NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 #define NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 
-// 头结构 header
+#include <stdlib.h>
 
-// 段表结构
+// 汇编数据通用结构
 
-// ELF 符号表
-
-// 字符串表
-
-// 段表
-
-// 段表字符串表
-
-// 代码段(16进制)
-
-// 数据段
-
-
+/**
+ * 汇编指令通用结构
+ * 操作符/目的操作数/源操作数
+ * 如何正确的标识操作数？
+ */
+typedef struct {
+  char* op; // movb movl jmp ..
+} asm_inst;
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
