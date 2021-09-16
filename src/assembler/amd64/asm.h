@@ -76,4 +76,6 @@ typedef struct {
 void asm_insts_push(asm_inst inst);
 void asm_data_push(asm_var_decl data);
 
+int hello();
+
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
