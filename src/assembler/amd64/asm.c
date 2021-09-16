@@ -1,5 +1,6 @@
-//
-// Created by weiwenhao on 2021/9/7.
-//
-
 #include "asm.h"
+#include "stdio.h"
+
+int hello() {
+  return 1;
+}
