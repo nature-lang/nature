@@ -6,6 +6,7 @@
 typedef uint64_t elf_address
 typedef uint32_t elf_offset
 typedef uint32_t elf_size
+typedef uint8_t byte
 
 // 头结构 header
 
@@ -56,24 +57,31 @@ typedef struct {
   void *value; // 数据值，空间基于 size 申请
 } elf_data_item;
 
-typedef struct {
+struct {
   int count;
   elf_data_item list[UINT8_MAX];
-} elf_data;
+} elf_data_section;
 
 // 代码段中的每一项如何定义
 typedef struct {
   elf_offset offset; // 指令起始位置，基于段
-  elf_size size; // 指令长度
-  void *value; // 指令二进制内容
+  elf_size size; // 指令长度, Byte 对齐
+  byte value[UINT8_MAX]; // 指令二进制内容
+  uint8_t value_count;
+  // 拆解表示内容
+  byte opcode[3];
+  byte modrm;
+  byte sib;
+  byte displacement[4]; // 8(%ebp) 8 表示偏移
+  byte immediate[4]; // movl $12, %ebp 12 表示立即数
 } elf_text_item; // 代码段
 
-typedef struct {
+struct {
   int count;
   elf_text_item list[UINT8_MAX];
-} elf_text;
+} elf_text_section;
 
-void elf_data_push();
+void elf_data_push(elf_text_item text_item);
 
 void elf_text_push();
 

@@ -11,6 +11,11 @@ typedef enum {
   ASM_OPERAND_TYPE_INDEX_ADDR, // movl 0x001bc(%ebp,%eax,8), %ebx; move base(offset,scale,size)
 } asm_operand_type;
 
+typedef enum {
+  ASM_OP_TYPE_MOV,
+  ASM_OP_TYPE_LABEL,
+} asm_op_type;
+
 typedef struct {
   char *name;
   uint8_t size; // 单位字节
@@ -21,9 +26,9 @@ typedef struct {
 } asm_symbol;
 
 typedef struct {
-  uint8_t size; // 单位字节
+//  uint8_t size; // 立即数没有长度定义，跟随指令长度
   size_t value;
-} asm_imm; // 浮点数也是立即数吗
+} asm_imm; // 浮点数
 
 typedef struct {
   size_t addr;
@@ -42,40 +47,48 @@ typedef struct {
 } asm_index_addr;
 
 typedef struct {
-  uint8_t op; // 操作指令 mov
+  asm_op_type op; // 操作指令 mov
 
   uint8_t size; // 操作长度，单位字节， 1，2，4，8 字节。
 
   void *dst;
-  uint8_t dst_type;
+  asm_operand_type dst_type;
 
   void *src;
-  uint8_t src_type;
+  asm_operand_type src_type;
 } asm_inst;
 
-// 指令结构存储 text
-typedef struct {
-  asm_inst list[UINT16_MAX];
-  uint16_t count;
-} asm_insts;
+typedef enum {
+  ASM_VAR_DECL_TYPE_STRING,
+  ASM_VAR_DECL_TYPE_FLOAT,
+  ASM_VAR_DECL_TYPE_INT,
+} asm_var_decl_type;
 
 // 数据段
 typedef struct {
   char *name;
-  uint8_t type;
-  size_t size;
-//  uint8_t repeat; // 暂时不实现重复功能
-  void *value;
+  asm_var_decl_type type;
+//  size_t size; // 单位 Byte
+  union {
+    int int_value;
+    float float_value;
+    char *string_value;
+  };
 } asm_var_decl;
 
-typedef struct {
+struct {
   asm_var_decl list[UINT16_MAX];
   uint16_t count;
 } asm_data;
 
-void asm_insts_push(asm_inst inst);
-void asm_data_push(asm_var_decl data);
+// 指令结构存储 text
+struct {
+  asm_inst list[UINT16_MAX];
+  uint16_t count;
+} asm_insts;
 
-int hello();
+void asm_init();
+void asm_insts_push(asm_inst inst);
+void asm_data_push(asm_var_decl var_decl);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
