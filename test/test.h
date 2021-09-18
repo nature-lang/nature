@@ -6,5 +6,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <cmocka.h>
+#include <string.h>
+#include "src/value.h"
 
 #endif //NATURE_TEST_TEST_H_

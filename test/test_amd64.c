@@ -1,16 +1,19 @@
 #include "test.h"
 #include "src/assembler/amd64/asm.h"
-#include "string.h"
 
 static int setup(void **state) {
   asm_init();
   return 0;
 }
 
+static void test_amd64_elf_text_push() {
+
+}
+
 static void test_amd64_inst() {
-  asm_reg *reg = malloc(sizeof(asm_reg));
+  asm_reg *reg = NEW(asm_reg);
   reg->name = "rax";
-  asm_imm *imm = malloc(sizeof(asm_imm));
+  asm_imm *imm = NEW(asm_imm);
   imm->value = 65536;
 
   asm_inst inst = {

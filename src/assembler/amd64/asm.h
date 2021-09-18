@@ -2,6 +2,9 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 
 #include <stdlib.h>
+
+#include "elf.h"
+
 typedef enum {
   ASM_OPERAND_TYPE_REG, // rax,eax,ax  影响不大，可以通过标识符来识别
   ASM_OPERAND_TYPE_SYMBOL,
@@ -90,5 +93,7 @@ struct {
 void asm_init();
 void asm_insts_push(asm_inst inst);
 void asm_data_push(asm_var_decl var_decl);
+
+elf_text_item asm_inst_lower(asm_inst inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

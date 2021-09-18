@@ -3,10 +3,20 @@
 
 #include <stdlib.h>
 
-typedef uint64_t elf_address
-typedef uint32_t elf_offset
-typedef uint32_t elf_size
-typedef uint8_t byte
+#define NEW_EFL_TEXT_ITEM() \
+{                             \
+.size = 0, \
+.offset = 0, \
+.disp_index = 0, \
+.disp_size = 0, \
+.imm_index = 0, \
+.imm_size = 0 \
+}
+
+typedef uint64_t elf_address;
+typedef uint32_t elf_offset;
+typedef uint32_t elf_size;
+typedef uint8_t byte;
 
 // 头结构 header
 
@@ -43,10 +53,10 @@ typedef struct {
   elf_offset offset; // 对应 section_header.name
 } elf_str;
 
-typedef struct {
+struct {
   int count;
   elf_str list[UINT8_MAX];
-} elf_section_name_table, elf_symbol_name_table
+} elf_section_name_table, elf_symbol_name_table;
 
 // 数据段存储的是一个一个值，按顺序排列的内存位置
 typedef struct {
@@ -64,16 +74,17 @@ struct {
 
 // 代码段中的每一项如何定义
 typedef struct {
-  elf_offset offset; // 指令起始位置，基于段
-  elf_size size; // 指令长度, Byte 对齐
-  byte value[UINT8_MAX]; // 指令二进制内容
-  uint8_t value_count;
-  // 拆解表示内容
-  byte opcode[3];
-  byte modrm;
-  byte sib;
-  byte displacement[4]; // 8(%ebp) 8 表示偏移
-  byte immediate[4]; // movl $12, %ebp 12 表示立即数
+  elf_offset offset; // 指令起始位置，基于段,可以方便的计算出段内偏移，从而编译 label
+  elf_size size; // 指令长度,可以方便计算出下一次的偏移， Byte
+
+  byte data[30]; // 指令二进制
+//  uint8_t data_count; // 指令长度，毕竟不可能 30 位都用干净, 直接使用上面的 size 即可
+
+  uint8_t disp_index; // 偏移部分在 data 中的索引， 0 表示没有偏移部分
+  uint8_t disp_size; // 偏移部分长度， 单位 Byte， 并不确定用多少，暂时选定 16 字节 128(%ebp)
+
+  uint8_t imm_index; // 立即数部分在 data 中的索引，为 0 表示没有立即数部分
+  uint8_t imm_size; // 立即数长度, 单位 Byte 直接由汇编指令中的 size 确定
 } elf_text_item; // 代码段
 
 struct {
