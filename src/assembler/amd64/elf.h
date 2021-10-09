@@ -92,6 +92,8 @@ struct {
   elf_text_item list[UINT8_MAX];
 } elf_text_section;
 
+elf_offset current_text_offset;
+
 void elf_data_push(elf_text_item text_item);
 
 void elf_text_push();

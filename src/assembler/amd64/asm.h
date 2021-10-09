@@ -59,6 +59,8 @@ typedef struct {
 
   void *src;
   asm_operand_type src_type;
+
+  elf_text_item *elf_data;
 } asm_inst;
 
 typedef enum {

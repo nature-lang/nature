@@ -37,7 +37,7 @@ set(SRC_LIB
         ${SRC_DIR}/lib/list.h
         ${SRC_DIR}/lib/list.c
         ${SRC_DIR}/lib/table.h
-        ${SRC_DIR}/lib/table.c)
+        ${SRC_DIR}/lib/table.c src/lib/byteswap.c src/lib/byteswap.h)
 set(SRC
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c
