@@ -79,7 +79,44 @@ static byte reg_to_number(string reg) {
 }
 
 /**
- * REX.W + C7 /0 id ` MOV imm32 to r/m64 `
+ * REX.W + B8+ rd io MOV imm64 to r64
+ *
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_imm64_to_reg64(asm_inst mov_inst) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+  byte data[30];
+  uint8_t i = 0;
+  asm_reg *dst_reg = mov_inst.dst;
+  asm_imm *src_imm = mov_inst.src;
+
+  byte rex = 0b01001000; // 48H,由于未使用 ModR/w 部分，所以 opcode = opecode + reg
+  byte opcode = 0xB8 + reg_to_number(dst_reg->name);   // opcode, intel 手册都是 16 进制的，所以使用 16 进制表示比较直观，其余依旧使用 2 进制表示
+  data[i++] = rex;
+  data[i++] = opcode;
+
+  // imm 部分使用小端排序
+  int64_t imm = (int64_t) src_imm->value;
+  data[i++] = (int8_t) (imm >> 56);
+  data[i++] = (int8_t) (imm >> 48);
+  data[i++] = (int8_t) (imm >> 40);
+  data[i++] = (int8_t) (imm >> 32);
+  data[i++] = (int8_t) (imm >> 24);
+  data[i++] = (int8_t) (imm >> 16);
+  data[i++] = (int8_t) (imm >> 8);
+  data[i++] = (int8_t) imm;
+
+  result.offset = current_text_offset;
+  result.size = i;
+  current_text_offset += i;
+
+  return result;
+}
+
+/**
+ * REX.W + C7 /0 id => MOV imm32 to r/m64
+ * x64 对于立即数默认使用 imm32 处理，只有立即数的 zie 超过 32 位时才使用 64 位处理
  * @param mov_inst
  * @return
  */
@@ -99,11 +136,11 @@ static elf_text_item mov_imm32_to_reg64(asm_inst mov_inst) {
   data[i++] = opcode;
   data[i++] = modrm;
 
-  // 截取 32 位， to little endian
+  // 数字截取 32 位,并转成小端序
   int32_t imm = (int32_t) src_imm->value;
-  data[i++] = (int8_t) imm >> 24;
-  data[i++] = (int8_t) imm >> 16;
-  data[i++] = (int8_t) imm >> 8;
+  data[i++] = (int8_t) (imm >> 24);
+  data[i++] = (int8_t) (imm >> 16);
+  data[i++] = (int8_t) (imm >> 8);
   data[i++] = (int8_t) imm;
 
   result.offset = current_text_offset;
@@ -162,6 +199,12 @@ static elf_text_item inst_mov_lower(asm_inst mov_inst) {
 
     } else if (is_imm(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       // 32 位 和 64 位分开处理
+      int32_t imm = (int64_t) ((asm_imm *) mov_inst.src)->value;
+      if (imm > INT32_MAX) {
+        return mov_imm64_to_reg64(mov_inst);
+      }
+
+      return mov_imm32_to_reg64(mov_inst);
     }
   }
 

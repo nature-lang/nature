@@ -10,6 +10,23 @@ static void test_amd64_elf_text_push() {
 
 }
 
+static void test_mov_imm64_to_reg64() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rcx";
+  asm_imm *imm = NEW(asm_imm);
+  imm->value = 4224967391;
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .src_type = ASM_OPERAND_TYPE_IMM,
+      .src = imm,
+      .dst_type = ASM_OPERAND_TYPE_REG,
+      .dst = reg
+  };
+
+  elf_text_item item = asm_inst_lower(inst);
+}
+
 static void test_amd64_inst() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rax";
@@ -59,6 +76,7 @@ static void test_amd64_var_decl() {
 
 int main(void) {
   const struct CMUnitTest tests[] = {
+      cmocka_unit_test(test_mov_imm64_to_reg64),
       cmocka_unit_test(test_amd64_inst),
       cmocka_unit_test(test_amd64_var_decl)
   };
