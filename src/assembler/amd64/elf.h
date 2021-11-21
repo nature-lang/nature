@@ -4,7 +4,8 @@
 #include <stdlib.h>
 
 #define NEW_EFL_TEXT_ITEM() \
-{                             \
+{                           \
+.data = {0}, \
 .size = 0, \
 .offset = 0, \
 .disp_index = 0, \

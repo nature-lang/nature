@@ -79,33 +79,72 @@ static byte reg_to_number(string reg) {
 }
 
 /**
- * REX.W + B8+ rd io MOV imm64 to r64
+ * 保护直接寻址，寄存器间接寻址，变址寻址
+ * REX.W + 8B /r  => Move r/m64 to r64.
+ *
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_addr_to_reg64(asm_inst mov_inst) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+  byte data[30];
+  uint8_t i = 0;
+  asm_reg *dst_reg = mov_inst.dst;
+  asm_direct_addr *direct_addr = mov_inst.src; // TODO 处理其他情况
+
+  byte rex = 0b01001000;
+  byte opcode = 0x8B;
+  data[i++] = rex;
+  data[i++] = opcode;
+
+  byte modrm = 0b00000101; // 32 位直接寻址
+  // reg
+  modrm |= (reg_to_number(dst_reg->name) << 3);
+
+  // disp32 处理
+  int32_t addr = (int32_t) direct_addr->addr;
+  data[i++] = (int8_t) (addr >> 24);
+  data[i++] = (int8_t) (addr >> 16);
+  data[i++] = (int8_t) (addr >> 8);
+  data[i++] = (int8_t) addr;
+
+  result.offset = current_text_offset;
+  result.size = i;
+  current_text_offset += i;
+
+  return result;
+}
+
+/**
+ * REX.W + B8+ rd io =>  MOV imm64 to r64
  *
  * @param mov_inst
  * @return
  */
 static elf_text_item mov_imm64_to_reg64(asm_inst mov_inst) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
-  byte data[30];
+  elf_text_item test = {
+      .data = {0}
+  };
   uint8_t i = 0;
   asm_reg *dst_reg = mov_inst.dst;
   asm_imm *src_imm = mov_inst.src;
 
-  byte rex = 0b01001000; // 48H,由于未使用 ModR/w 部分，所以 opcode = opecode + reg
+  byte rex = 0b01001000; // 48H,由于未使用 ModR/w 部分，所以 opcode = opcode + reg
   byte opcode = 0xB8 + reg_to_number(dst_reg->name);   // opcode, intel 手册都是 16 进制的，所以使用 16 进制表示比较直观，其余依旧使用 2 进制表示
-  data[i++] = rex;
-  data[i++] = opcode;
+  result.data[i++] = rex;
+  result.data[i++] = opcode;
 
   // imm 部分使用小端排序
   int64_t imm = (int64_t) src_imm->value;
-  data[i++] = (int8_t) (imm >> 56);
-  data[i++] = (int8_t) (imm >> 48);
-  data[i++] = (int8_t) (imm >> 40);
-  data[i++] = (int8_t) (imm >> 32);
-  data[i++] = (int8_t) (imm >> 24);
-  data[i++] = (int8_t) (imm >> 16);
-  data[i++] = (int8_t) (imm >> 8);
-  data[i++] = (int8_t) imm;
+  result.data[i++] = (int8_t) imm;
+  result.data[i++] = (int8_t) (imm >> 8);
+  result.data[i++] = (int8_t) (imm >> 16);
+  result.data[i++] = (int8_t) (imm >> 24);
+  result.data[i++] = (int8_t) (imm >> 32);
+  result.data[i++] = (int8_t) (imm >> 40);
+  result.data[i++] = (int8_t) (imm >> 48);
+  result.data[i++] = (int8_t) (imm >> 56);
 
   result.offset = current_text_offset;
   result.size = i;
@@ -194,12 +233,11 @@ static elf_text_item inst_mov_lower(asm_inst mov_inst) {
     if (is_reg(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       return mov_reg64_to_reg64(mov_inst);
     } else if (is_reg(mov_inst.src_type) && is_addr(mov_inst.dst_type)) {
-
     } else if (is_addr(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
 
     } else if (is_imm(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       // 32 位 和 64 位分开处理
-      int32_t imm = (int64_t) ((asm_imm *) mov_inst.src)->value;
+      size_t imm = ((asm_imm *) mov_inst.src)->value;
       if (imm > INT32_MAX) {
         return mov_imm64_to_reg64(mov_inst);
       }

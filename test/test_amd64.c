@@ -6,10 +6,9 @@ static int setup(void **state) {
   return 0;
 }
 
-static void test_amd64_elf_text_push() {
-
-}
-
+/**
+ * mov rcx, 4224967391
+ */
 static void test_mov_imm64_to_reg64() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rcx";
@@ -24,7 +23,12 @@ static void test_mov_imm64_to_reg64() {
       .dst = reg
   };
 
-  elf_text_item item = asm_inst_lower(inst);
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0xB9, 0xDF, 0xE2, 0xD3, 0xFB, 00, 00, 00, 00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
 }
 
 static void test_amd64_inst() {

@@ -30,11 +30,11 @@ typedef struct {
 
 typedef struct {
 //  uint8_t size; // 立即数没有长度定义，跟随指令长度
-  size_t value;
+  int64_t value;
 } asm_imm; // 浮点数
 
 typedef struct {
-  size_t addr;
+  int64_t addr;
 } asm_direct_addr; // 立即寻址
 
 typedef struct {
