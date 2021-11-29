@@ -7,6 +7,56 @@ static int setup(void **state) {
 }
 
 /**
+ * mov rcx, [6379]
+ */
+static void test_mov_direct_addr_to_reg() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rcx";
+  asm_imm *direct = NEW(asm_direct_addr);
+  direct->value = 6379; // 10 进制的 100
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .src_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
+      .src = direct,
+      .dst_type = ASM_OPERAND_TYPE_REG,
+      .dst = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0x8B, 0x0D, 0xEB, 0x18, 00, 00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
+/**
+ * mov rcx, [6379]
+ */
+static void test_mov_direct_addr_to_rax() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rax";
+  asm_imm *direct = NEW(asm_direct_addr);
+  direct->value = 6379; // 10 进制的 100
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .src_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
+      .src = direct,
+      .dst_type = ASM_OPERAND_TYPE_REG,
+      .dst = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0xA1, 0xEB, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
+/**
  * mov rcx, 4224967391
  */
 static void test_mov_imm64_to_reg64() {
@@ -80,6 +130,8 @@ static void test_amd64_var_decl() {
 
 int main(void) {
   const struct CMUnitTest tests[] = {
+      cmocka_unit_test(test_mov_direct_addr_to_reg),
+      cmocka_unit_test(test_mov_direct_addr_to_rax),
       cmocka_unit_test(test_mov_imm64_to_reg64),
       cmocka_unit_test(test_amd64_inst),
       cmocka_unit_test(test_amd64_var_decl)
