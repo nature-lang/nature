@@ -39,7 +39,7 @@ typedef struct {
 
 typedef struct {
   char *reg; // 寄存器名称
-  size_t offset; // 单位字节，寄存器便宜，有符号
+  int64_t offset; // 单位字节，寄存器偏移，有符号
 } asm_indirect_addr; // 间接寻址，都是基于寄存器的
 
 typedef struct {

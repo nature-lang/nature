@@ -34,6 +34,10 @@ static bool is_reg(asm_operand_type t) {
   return false;
 }
 
+static bool is_indirect_addr(asm_operand_type t) {
+  return t == ASM_OPERAND_TYPE_INDIRECT_ADDR;
+}
+
 static bool is_direct_addr(asm_operand_type t) {
   return t == ASM_OPERAND_TYPE_DIRECT_ADDR;
 }
@@ -90,7 +94,7 @@ static elf_text_item mov_direct_addr_to_rax(asm_inst mov_inst) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
   asm_reg *dst_reg = mov_inst.dst;
-  asm_direct_addr *direct_addr = mov_inst.src; // TODO 处理其他情况
+  asm_direct_addr *direct_addr = mov_inst.src;
 
   // REX.W => 48H (0100 1000)
   byte rex = 0b01001000;
@@ -109,6 +113,68 @@ static elf_text_item mov_direct_addr_to_rax(asm_inst mov_inst) {
   result.data[i++] = (int8_t) (addr >> 40);
   result.data[i++] = (int8_t) (addr >> 48);
   result.data[i++] = (int8_t) (addr >> 56);
+
+  result.offset = current_text_offset;
+  result.size = i;
+  current_text_offset += i;
+
+  return result;
+}
+
+static byte indirect_disp_mod(int64_t offset) {
+  if (offset == 0) {
+    return 0b00000000;
+  }
+
+  // 8bit
+  if (IN_INT8(offset)) {
+    return 0b01000000;
+  }
+
+  return 0b10000000;
+}
+
+/**
+ * mov rax,[rcx]
+ * mov rax,[rcx+8]
+ * mov rax,[rcx-8]
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+  uint8_t i = 0;
+  asm_reg *dst_reg = mov_inst.dst;
+  asm_indirect_addr *indirect_addr = mov_inst.src;
+  int64_t offset = indirect_addr->offset;
+  if (offset > INT32_MAX || offset < INT32_MIN) {
+    error_exit(0, "offset %d to large", offset);
+  }
+
+  // REX.W => 48H (0100 1000)
+  byte rex = 0b01001000;
+  byte opcode = 0x8B;
+  byte modrm = indirect_disp_mod(indirect_addr->offset);
+  // reg
+  modrm |= (reg_to_number(dst_reg->name) << 3);
+  // r/m
+  modrm |= reg_to_number(indirect_addr->reg);
+
+  result.data[i++] = rex;
+  result.data[i++] = opcode;
+  result.data[i++] = modrm;
+
+  // disp 如果 disp 为负数，c 语言已经使用了补码表示，所以直接求小端即可
+  if ((modrm & 0b11000000) != 0b00000000) {
+    result.data[i++] = (int8_t) offset;
+
+    // int32
+    if ((modrm & 0b11000000) == 0b10000000) {
+      result.data[i++] = (int8_t) (offset >> 8);
+      result.data[i++] = (int8_t) (offset >> 16);
+      result.data[i++] = (int8_t) (offset >> 24);
+    }
+  }
 
   result.offset = current_text_offset;
   result.size = i;
@@ -267,8 +333,8 @@ static elf_text_item inst_mov_lower(asm_inst mov_inst) {
   if (mov_inst.size == 64) {
     if (is_reg(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       return mov_reg64_to_reg64(mov_inst);
-    } else if (is_reg(mov_inst.src_type) && is_addr(mov_inst.dst_type)) {
-
+    } else if (is_indirect_addr(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
+      return mov_indirect_addr_to_reg64(mov_inst);
     } else if (is_direct_addr(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       if (is_rax(mov_inst.dst)) {
         return mov_direct_addr_to_rax(mov_inst);

@@ -12,4 +12,10 @@
 
 #define NEW(type) malloc(sizeof(type))
 
+#define IN_INT8(value) \
+  ((value) < INT8_MAX && (value) > INT8_MIN)
+
+#define IN_INT32(value) \
+  ((value) < INT32_MAX && (value) > INT32_MIN)
+
 #endif //NATURE_SRC_VALUE_H_
