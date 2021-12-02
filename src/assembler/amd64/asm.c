@@ -90,15 +90,12 @@ static byte reg_to_number(string reg) {
   error_exit(0, "cannot parser '%s' reg", reg);
 }
 
-static elf_text_item mov_direct_addr_to_rax(asm_inst mov_inst) {
+static elf_text_item mov_direct_addr_with_rax(asm_direct_addr *direct_addr, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
-  asm_reg *dst_reg = mov_inst.dst;
-  asm_direct_addr *direct_addr = mov_inst.src;
 
   // REX.W => 48H (0100 1000)
   byte rex = 0b01001000;
-  byte opcode = 0xA1;
 
   result.data[i++] = rex;
   result.data[i++] = opcode;
@@ -121,6 +118,18 @@ static elf_text_item mov_direct_addr_to_rax(asm_inst mov_inst) {
   return result;
 }
 
+static elf_text_item mov_direct_addr_to_rax(asm_inst mov_inst) {
+  asm_direct_addr *direct_addr = mov_inst.src;
+  byte opcode = 0xA1;
+  return mov_direct_addr_with_rax(direct_addr, opcode);
+}
+
+static elf_text_item mov_rax_to_direct_addr(asm_inst mov_inst) {
+  asm_direct_addr *direct_addr = mov_inst.dst;
+  byte opcode = 0xA3;
+  return mov_direct_addr_with_rax(direct_addr, opcode);
+}
+
 static byte indirect_disp_mod(int64_t offset) {
   if (offset == 0) {
     return 0b00000000;
@@ -134,18 +143,10 @@ static byte indirect_disp_mod(int64_t offset) {
   return 0b10000000;
 }
 
-/**
- * mov rax,[rcx]
- * mov rax,[rcx+8]
- * mov rax,[rcx-8]
- * @param mov_inst
- * @return
- */
-static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
+static elf_text_item mov_indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *indirect_addr, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
-  asm_reg *dst_reg = mov_inst.dst;
-  asm_indirect_addr *indirect_addr = mov_inst.src;
+
   int64_t offset = indirect_addr->offset;
   if (offset > INT32_MAX || offset < INT32_MIN) {
     error_exit(0, "offset %d to large", offset);
@@ -153,10 +154,9 @@ static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
 
   // REX.W => 48H (0100 1000)
   byte rex = 0b01001000;
-  byte opcode = 0x8B;
   byte modrm = indirect_disp_mod(indirect_addr->offset);
   // reg
-  modrm |= (reg_to_number(dst_reg->name) << 3);
+  modrm |= (reg_to_number(reg->name) << 3);
   // r/m
   modrm |= reg_to_number(indirect_addr->reg);
 
@@ -184,24 +184,51 @@ static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
 }
 
 /**
- * 包括直接寻址，寄存器间接寻址，变址寻址
- * REX.W + 8B /r  => Move r/m64 to r64.
- *
+ * mov rax,[rcx]
+ * mov rax,[rcx+8]
+ * mov rax,[rcx-8]
  * @param mov_inst
  * @return
  */
-static elf_text_item mov_direct_addr_to_reg64(asm_inst mov_inst) {
+static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
+  asm_reg *reg = mov_inst.dst;
+  asm_indirect_addr *indirect_addr = mov_inst.src;
+  byte opcode = 0x8B;
+
+  return mov_indirect_addr_with_reg64(reg, indirect_addr, opcode);
+}
+
+/**
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_reg64_to_indirect_addr(asm_inst mov_inst) {
+  asm_reg *reg = mov_inst.src;
+  asm_indirect_addr *indirect_addr = mov_inst.dst;
+  byte opcode = 0x89;
+
+  return mov_indirect_addr_with_reg64(reg, indirect_addr, opcode);
+}
+
+/**
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_direct_addr_with_reg64(asm_reg *reg, asm_direct_addr *direct_addr, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
-  asm_reg *dst_reg = mov_inst.dst;
-  asm_direct_addr *direct_addr = mov_inst.src;
+
+
+//  asm_reg *src_reg = mov_inst.src;
+//  asm_direct_addr *direct_addr = mov_inst.dst;
+//
+//  byte opcode = 0x89;
 
   // REX.W => 48H (0100 1000)
   byte rex = 0b01001000;
-  byte opcode = 0x8B;
-  byte modrm = 0b00000101; // 32 位直接寻址
+  byte modrm = 0b00000101; // mod:00 + r/m:101 => 32 位直接寻址
   // reg
-  modrm |= (reg_to_number(dst_reg->name) << 3);
+  modrm |= (reg_to_number(reg->name) << 3);
 
   result.data[i++] = rex;
   result.data[i++] = opcode;
@@ -219,6 +246,29 @@ static elf_text_item mov_direct_addr_to_reg64(asm_inst mov_inst) {
   current_text_offset += i;
 
   return result;
+}
+
+static elf_text_item mov_reg64_to_direct_addr(asm_inst mov_inst) {
+  asm_reg *src_reg = mov_inst.src;
+  asm_direct_addr *direct_addr = mov_inst.dst;
+  byte opcode = 0x89;
+
+  return mov_direct_addr_with_reg64(src_reg, direct_addr, opcode);
+}
+
+/**
+ * 包括直接寻址，寄存器间接寻址，变址寻址
+ * REX.W + 8B /r  => Move r/m64 to r64.
+ *
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item mov_direct_addr_to_reg64(asm_inst mov_inst) {
+  asm_reg *dst_reg = mov_inst.dst;
+  asm_direct_addr *direct_addr = mov_inst.src;
+  byte opcode = 0x8B;
+
+  return mov_direct_addr_with_reg64(dst_reg, direct_addr, opcode);
 }
 
 /**
@@ -333,6 +383,13 @@ static elf_text_item inst_mov_lower(asm_inst mov_inst) {
   if (mov_inst.size == 64) {
     if (is_reg(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       return mov_reg64_to_reg64(mov_inst);
+    } else if (is_direct_addr(mov_inst.dst_type) && is_reg(mov_inst.src_type)) {
+      if (is_rax(mov_inst.src)) {
+        return mov_rax_to_direct_addr(mov_inst);
+      }
+      return mov_reg64_to_direct_addr(mov_inst);
+    } else if (is_indirect_addr(mov_inst.dst_type) && is_reg(mov_inst.src_type)) {
+      return mov_reg64_to_indirect_addr(mov_inst);
     } else if (is_indirect_addr(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {
       return mov_indirect_addr_to_reg64(mov_inst);
     } else if (is_direct_addr(mov_inst.src_type) && is_reg(mov_inst.dst_type)) {

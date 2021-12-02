@@ -87,6 +87,30 @@ static void test_mov_indirect_addr_to_reg_disp32() {
   }
 }
 
+static void test_mov_reg_to_indirect_addr_disp32() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rcx";
+
+  asm_indirect_addr *indirect = NEW(asm_direct_addr);
+  indirect->reg = "rax";
+  indirect->offset = 6379;
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .dst_type = ASM_OPERAND_TYPE_INDIRECT_ADDR,
+      .dst = indirect,
+      .src_type = ASM_OPERAND_TYPE_REG,
+      .src = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0x89, 0x88, 0xEB, 0x18, 0x00, 0x00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
 /**
  * mov rcx, [8]
  */
@@ -117,6 +141,31 @@ static void test_mov_indirect_addr_to_reg_basic() {
 /**
  * mov rcx, [6379]
  */
+static void test_mov_reg_to_direct_addr() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rcx";
+  asm_direct_addr *direct = NEW(asm_direct_addr);
+  direct->addr = 6379; // 10 进制的 100
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .dst_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
+      .dst = direct,
+      .src_type = ASM_OPERAND_TYPE_REG,
+      .src = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0x89, 0x0D, 0xEB, 0x18, 00, 00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
+/**
+ * mov rcx, [6379]
+ */
 static void test_mov_direct_addr_to_reg() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rcx";
@@ -134,6 +183,28 @@ static void test_mov_direct_addr_to_reg() {
   elf_text_item actual = asm_inst_lower(inst);
 
   byte expect[30] = {0x48, 0x8B, 0x0D, 0xEB, 0x18, 00, 00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
+static void test_mov_rax_direct_addr() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rax";
+  asm_direct_addr *direct = NEW(asm_direct_addr);
+  direct->addr = 6379; // 10 进制的 100
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .dst_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
+      .dst = direct,
+      .src_type = ASM_OPERAND_TYPE_REG,
+      .src = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0xA3, 0xEB, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
@@ -242,8 +313,11 @@ int main(void) {
       cmocka_unit_test(test_mov_indirect_addr_to_reg_disp32_negative),
       cmocka_unit_test(test_mov_indirect_addr_to_reg_disp32),
       cmocka_unit_test(test_mov_indirect_addr_to_reg_basic),
+      cmocka_unit_test(test_mov_reg_to_indirect_addr_disp32),
       cmocka_unit_test(test_mov_direct_addr_to_reg),
+      cmocka_unit_test(test_mov_reg_to_direct_addr),
       cmocka_unit_test(test_mov_direct_addr_to_rax),
+      cmocka_unit_test(test_mov_rax_direct_addr),
       cmocka_unit_test(test_mov_imm64_to_reg64),
       cmocka_unit_test(test_amd64_inst),
       cmocka_unit_test(test_amd64_var_decl)
