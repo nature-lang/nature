@@ -2,7 +2,9 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 
 #include <stdlib.h>
-
+#include "src/value.h"
+#include "string.h"
+#include "src/lib/error.h"
 #include "elf.h"
 
 typedef enum {
@@ -97,5 +99,81 @@ void asm_insts_push(asm_inst inst);
 void asm_data_push(asm_var_decl var_decl);
 
 elf_text_item asm_inst_lower(asm_inst inst);
+
+/**
+ * 取值 0~7
+ * 0: 00000000 ax
+ * 1: 00000001 cx
+ * 2: 00000010 dx
+ * 3: 00000011 bx
+ * 4: 00000100 sp
+ * 5: 00000101 bp
+ * 6: 00000110 si
+ * 7: 00000111 di
+ * @return
+ */
+static byte reg_to_number(string reg) {
+  if (strcmp(reg, "rax") == 0) {
+    return 0;
+  }
+  if (strcmp(reg, "rcx") == 0) {
+    return 1;
+  }
+  if (strcmp(reg, "rdx") == 0) {
+    return 2;
+  }
+  if (strcmp(reg, "rbx") == 0) {
+    return 3;
+  }
+  if (strcmp(reg, "rsp") == 0) {
+    return 4;
+  }
+  if (strcmp(reg, "rbp") == 0) {
+    return 5;
+  }
+  if (strcmp(reg, "rsi") == 0) {
+    return 6;
+  }
+  if (strcmp(reg, "rdi") == 0) {
+    return 7;
+  }
+
+  error_exit(0, "cannot parser '%s' reg", reg);
+}
+
+
+static bool is_imm(asm_operand_type t) {
+  if (t == ASM_OPERAND_TYPE_IMM) {
+    return true;
+  }
+  return false;
+}
+
+static bool is_rax(asm_reg *reg) {
+  return strcmp(reg->name, "rax") == 0;
+}
+
+static bool is_reg(asm_operand_type t) {
+  if (t == ASM_OPERAND_TYPE_REG) {
+    return true;
+  }
+  return false;
+}
+
+static bool is_indirect_addr(asm_operand_type t) {
+  return t == ASM_OPERAND_TYPE_INDIRECT_ADDR;
+}
+
+static bool is_direct_addr(asm_operand_type t) {
+  return t == ASM_OPERAND_TYPE_DIRECT_ADDR;
+}
+
+static bool is_addr(asm_operand_type t) {
+  if (t == ASM_OPERAND_TYPE_DIRECT_ADDR || t == ASM_OPERAND_TYPE_INDEX_ADDR || t == ASM_OPERAND_TYPE_INDIRECT_ADDR) {
+    return true;
+  }
+  return false;
+}
+
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

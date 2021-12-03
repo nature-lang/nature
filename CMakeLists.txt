@@ -8,7 +8,11 @@ set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/elf.h
         ${SRC_DIR}/assembler/amd64/asm.h
-        ${SRC_DIR}/assembler/amd64/asm.c)
+        ${SRC_DIR}/assembler/amd64/asm.c
+        ${SRC_DIR}/assembler/amd64/mov.h
+        ${SRC_DIR}/assembler/amd64/mov.c
+        ${SRC_DIR}/assembler/amd64/add.c
+        ${SRC_DIR}/assembler/amd64/add.h src/assembler/amd64/mov.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
