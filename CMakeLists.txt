@@ -12,7 +12,7 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/mov.h
         ${SRC_DIR}/assembler/amd64/mov.c
         ${SRC_DIR}/assembler/amd64/add.c
-        ${SRC_DIR}/assembler/amd64/add.h src/assembler/amd64/mov.h)
+        ${SRC_DIR}/assembler/amd64/add.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
