@@ -26,7 +26,13 @@ FetchContent_MakeAvailable(cmocka)
 #include_directories(${PROJECT_SOURCE_DIR}/src)
 
 
-
-add_executable(test_amd64 test_amd64.c ${SRC_ASSEMBLER} ${SRC_LIB})
-target_link_libraries(test_amd64 cmocka) # 远程连接才需要这个
-add_test(test_amd64 test_amd64)
+add_executable(test_amd64_mov
+        test_amd64_mov.c
+        ${SRC_ASSEMBLER} ${SRC_LIB})
+add_executable(test_amd64_add
+        test_amd64_add.c
+        ${SRC_ASSEMBLER} ${SRC_LIB})
+target_link_libraries(test_amd64_mov cmocka) # 远程连接才需要这个
+target_link_libraries(test_amd64_add cmocka) # 远程连接才需要这个
+add_test(test_amd64_mov test_amd64_mov)
+add_test(test_amd64_add test_amd64_add)

@@ -8,6 +8,6 @@
  * @param mov_inst
  * @return
  */
-elf_text_item inst_add_lower(asm_inst mov_inst);
+elf_text_item asm_inst_add_lower(asm_inst mov_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ADD_H_

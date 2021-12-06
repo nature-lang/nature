@@ -139,103 +139,6 @@ static void test_mov_indirect_addr_to_reg_basic() {
 }
 
 /**
- * mov rcx, [6379]
- */
-static void test_mov_reg_to_direct_addr() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rcx";
-  asm_direct_addr *direct = NEW(asm_direct_addr);
-  direct->addr = 6379; // 10 进制的 100
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MOV,
-      .size = 64,
-      .dst_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
-      .dst = direct,
-      .src_type = ASM_OPERAND_TYPE_REG,
-      .src = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x89, 0x0D, 0xEB, 0x18, 00, 00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-/**
- * mov rcx, [6379]
- */
-static void test_mov_direct_addr_to_reg() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rcx";
-  asm_direct_addr *direct = NEW(asm_direct_addr);
-  direct->addr = 6379; // 10 进制的 100
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MOV,
-      .size = 64,
-      .src_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
-      .src = direct,
-      .dst_type = ASM_OPERAND_TYPE_REG,
-      .dst = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x8B, 0x0D, 0xEB, 0x18, 00, 00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-static void test_mov_rax_direct_addr() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rax";
-  asm_direct_addr *direct = NEW(asm_direct_addr);
-  direct->addr = 6379; // 10 进制的 100
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MOV,
-      .size = 64,
-      .dst_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
-      .dst = direct,
-      .src_type = ASM_OPERAND_TYPE_REG,
-      .src = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0xA3, 0xEB, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-/**
- * mov rcx, [6379]
- */
-static void test_mov_direct_addr_to_rax() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rax";
-  asm_direct_addr *direct = NEW(asm_direct_addr);
-  direct->addr = 6379; // 10 进制的 100
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MOV,
-      .size = 64,
-      .src_type = ASM_OPERAND_TYPE_DIRECT_ADDR,
-      .src = direct,
-      .dst_type = ASM_OPERAND_TYPE_REG,
-      .dst = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0xA1, 0xEB, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-/**
  * mov rcx, 4224967391
  */
 static void test_mov_imm64_to_reg64() {
@@ -255,6 +158,31 @@ static void test_mov_imm64_to_reg64() {
   elf_text_item actual = asm_inst_lower(inst);
 
   byte expect[30] = {0x48, 0xB9, 0xDF, 0xE2, 0xD3, 0xFB, 00, 00, 00, 00};
+  for (int i = 0; i < 30; ++i) {
+    assert_int_equal(actual.data[i], expect[i]);
+  }
+}
+
+/**
+ * mov rcx, 6379
+ */
+static void test_mov_imm32_to_reg64() {
+  asm_reg *reg = NEW(asm_reg);
+  reg->name = "rcx";
+  asm_imm *imm = NEW(asm_imm);
+  imm->value = 6379;
+  asm_inst inst = {
+      .op = ASM_OP_TYPE_MOV,
+      .size = 64,
+      .src_type = ASM_OPERAND_TYPE_IMM,
+      .src = imm,
+      .dst_type = ASM_OPERAND_TYPE_REG,
+      .dst = reg
+  };
+
+  elf_text_item actual = asm_inst_lower(inst);
+
+  byte expect[30] = {0x48, 0xC7, 0xC1, 0xEB, 0x18, 00, 00};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
@@ -314,13 +242,10 @@ int main(void) {
       cmocka_unit_test(test_mov_indirect_addr_to_reg_disp32),
       cmocka_unit_test(test_mov_indirect_addr_to_reg_basic),
       cmocka_unit_test(test_mov_reg_to_indirect_addr_disp32),
-      cmocka_unit_test(test_mov_direct_addr_to_reg),
-      cmocka_unit_test(test_mov_reg_to_direct_addr),
-      cmocka_unit_test(test_mov_direct_addr_to_rax),
-      cmocka_unit_test(test_mov_rax_direct_addr),
       cmocka_unit_test(test_mov_imm64_to_reg64),
       cmocka_unit_test(test_amd64_inst),
-      cmocka_unit_test(test_amd64_var_decl)
+      cmocka_unit_test(test_amd64_var_decl),
+      cmocka_unit_test(test_mov_imm32_to_reg64),
   };
 
   return cmocka_run_group_tests(tests, setup, NULL);

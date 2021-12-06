@@ -7,6 +7,28 @@
 #include "src/lib/error.h"
 #include "elf.h"
 
+#define NUM32_TO_DATA(number) \
+  result.data[i++] = (int8_t) (number);          \
+  result.data[i++] = (int8_t) ((number) >> 8);\
+  result.data[i++] = (int8_t) ((number) >> 16);\
+  result.data[i++] = (int8_t) ((number) >> 24);\
+
+#define NUM64_TO_DATA(number) \
+  result.data[i++] = (int8_t) (number);\
+  result.data[i++] = (int8_t) ((number) >> 8);\
+  result.data[i++] = (int8_t) ((number) >> 16);\
+  result.data[i++] = (int8_t) ((number) >> 24);\
+  result.data[i++] = (int8_t) ((number) >> 32);\
+  result.data[i++] = (int8_t) ((number) >> 40);\
+  result.data[i++] = (int8_t) ((number) >> 48);\
+  result.data[i++] = (int8_t) ((number) >> 56);\
+
+
+#define SET_OFFSET(result) \
+  (result).offset = current_text_offset;\
+  (result).size = i;\
+  current_text_offset += i;\
+
 typedef enum {
   ASM_OPERAND_TYPE_REG, // rax,eax,ax  影响不大，可以通过标识符来识别
   ASM_OPERAND_TYPE_SYMBOL,
@@ -17,6 +39,7 @@ typedef enum {
 } asm_operand_type;
 
 typedef enum {
+  ASM_OP_TYPE_ADD,
   ASM_OP_TYPE_MOV,
   ASM_OP_TYPE_LABEL,
 } asm_op_type;
@@ -139,8 +162,8 @@ static byte reg_to_number(string reg) {
   }
 
   error_exit(0, "cannot parser '%s' reg", reg);
+  exit(0);
 }
-
 
 static bool is_imm(asm_operand_type t) {
   if (t == ASM_OPERAND_TYPE_IMM) {
@@ -175,5 +198,81 @@ static bool is_addr(asm_operand_type t) {
   return false;
 }
 
+static elf_text_item imm32_to_reg64(asm_inst mov_inst, byte opcode) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+  uint8_t i = 0;
+
+  byte rex = 0b01001000;
+  asm_reg *dst_reg = mov_inst.dst;
+  asm_imm *src_imm = mov_inst.src;
+  byte modrm = 0b11000000;
+  modrm |= reg_to_number(dst_reg->name);
+
+  result.data[i++] = rex;
+  result.data[i++] = opcode;
+  result.data[i++] = modrm;
+
+  // 数字截取 32 位,并转成小端序
+  NUM32_TO_DATA((int32_t) src_imm->value)
+
+  SET_OFFSET(result)
+
+  return result;
+}
+
+static elf_text_item reg64_to_reg64(asm_inst mov_inst, byte opcode) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+
+  uint8_t i = 0;
+
+  // REX.W => 48H (0100 1000)
+  result.data[i++] = 0b01001000; // rex.w
+  result.data[i++] = opcode; // opcode, intel 手册都是 16 进制的，所以使用 16 进制表示比较直观，其余依旧使用 2 进制表示
+  byte modrm = 0b11000000; // ModR/M mod(11 表示 r/m confirm to reg) + reg + r/m
+
+  asm_reg *src_reg = mov_inst.src;
+  asm_reg *dst_reg = mov_inst.dst;
+  modrm |= reg_to_number(src_reg->name) << 3; // reg
+  modrm |= reg_to_number(dst_reg->name); // r/m
+  result.data[i++] = modrm;
+
+  result.offset = current_text_offset;
+  result.size = i;
+  current_text_offset += i;
+
+  return result;
+}
+
+/**
+ * @param mov_inst
+ * @return
+ */
+static elf_text_item direct_addr_with_reg64(asm_reg *reg, asm_direct_addr *direct_addr, byte opcode) {
+  elf_text_item result = NEW_EFL_TEXT_ITEM();
+  uint8_t i = 0;
+
+
+//  asm_reg *src_reg = mov_inst.src;
+//  asm_direct_addr *direct_addr = mov_inst.dst;
+//
+//  byte opcode = 0x89;
+
+  // REX.W => 48H (0100 1000)
+  byte rex = 0b01001000;
+  byte modrm = 0b00000101; // mod:00 + r/m:101 => 32 位直接寻址
+  // reg
+  modrm |= (reg_to_number(reg->name) << 3);
+
+  result.data[i++] = rex;
+  result.data[i++] = opcode;
+  result.data[i++] = modrm;
+
+  // disp32 处理
+  NUM32_TO_DATA((int32_t) direct_addr->addr);
+
+  SET_OFFSET(result);
+
+  return result;
+}
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
