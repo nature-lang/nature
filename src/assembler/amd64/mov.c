@@ -19,59 +19,6 @@ static elf_text_item mov_direct_addr_with_rax(asm_direct_addr *direct_addr, byte
   return result;
 }
 
-static byte indirect_disp_mod(int64_t offset) {
-  if (offset == 0) {
-    return 0b00000000;
-  }
-
-  // 8bit
-  if (IN_INT8(offset)) {
-    return 0b01000000;
-  }
-
-  return 0b10000000;
-}
-
-static elf_text_item mov_indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *indirect_addr, byte opcode) {
-  elf_text_item result = NEW_EFL_TEXT_ITEM();
-  uint8_t i = 0;
-
-  int64_t offset = indirect_addr->offset;
-  if (offset > INT32_MAX || offset < INT32_MIN) {
-    error_exit(0, "offset %d to large", offset);
-  }
-
-  // REX.W => 48H (0100 1000)
-  byte rex = 0b01001000;
-  byte modrm = indirect_disp_mod(indirect_addr->offset);
-  // reg
-  modrm |= (reg_to_number(reg->name) << 3);
-  // r/m
-  modrm |= reg_to_number(indirect_addr->reg);
-
-  result.data[i++] = rex;
-  result.data[i++] = opcode;
-  result.data[i++] = modrm;
-
-  // disp 如果 disp 为负数，c 语言已经使用了补码表示，所以直接求小端即可
-  if ((modrm & 0b11000000) != 0b00000000) {
-    result.data[i++] = (int8_t) offset;
-
-    // int32
-    if ((modrm & 0b11000000) == 0b10000000) {
-      result.data[i++] = (int8_t) (offset >> 8);
-      result.data[i++] = (int8_t) (offset >> 16);
-      result.data[i++] = (int8_t) (offset >> 24);
-    }
-  }
-
-  result.offset = current_text_offset;
-  result.size = i;
-  current_text_offset += i;
-
-  return result;
-}
-
 /**
  * mov rax,[rcx]
  * mov rax,[rcx+8]
@@ -84,7 +31,7 @@ static elf_text_item mov_indirect_addr_to_reg64(asm_inst mov_inst) {
   asm_indirect_addr *indirect_addr = mov_inst.src;
   byte opcode = 0x8B;
 
-  return mov_indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
 }
 
 /**
@@ -96,7 +43,7 @@ static elf_text_item mov_reg64_to_indirect_addr(asm_inst mov_inst) {
   asm_indirect_addr *indirect_addr = mov_inst.dst;
   byte opcode = 0x89;
 
-  return mov_indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
 }
 
 /**
