@@ -198,13 +198,13 @@ static bool is_addr(asm_operand_type t) {
   return false;
 }
 
-static elf_text_item imm32_to_reg64(asm_inst mov_inst, byte opcode) {
+static elf_text_item imm32_to_reg64(asm_inst inst, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
 
   byte rex = 0b01001000;
-  asm_reg *dst_reg = mov_inst.dst;
-  asm_imm *src_imm = mov_inst.src;
+  asm_reg *dst_reg = inst.dst;
+  asm_imm *src_imm = inst.src;
   byte modrm = 0b11000000;
   modrm |= reg_to_number(dst_reg->name);
 
@@ -220,7 +220,7 @@ static elf_text_item imm32_to_reg64(asm_inst mov_inst, byte opcode) {
   return result;
 }
 
-static elf_text_item reg64_to_reg64(asm_inst mov_inst, byte opcode) {
+static elf_text_item reg64_to_reg64(asm_inst inst, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
 
   uint8_t i = 0;
@@ -230,8 +230,8 @@ static elf_text_item reg64_to_reg64(asm_inst mov_inst, byte opcode) {
   result.data[i++] = opcode; // opcode, intel 手册都是 16 进制的，所以使用 16 进制表示比较直观，其余依旧使用 2 进制表示
   byte modrm = 0b11000000; // ModR/M mod(11 表示 r/m confirm to reg) + reg + r/m
 
-  asm_reg *src_reg = mov_inst.src;
-  asm_reg *dst_reg = mov_inst.dst;
+  asm_reg *src_reg = inst.src;
+  asm_reg *dst_reg = inst.dst;
   modrm |= reg_to_number(src_reg->name) << 3; // reg
   modrm |= reg_to_number(dst_reg->name); // r/m
   result.data[i++] = modrm;
