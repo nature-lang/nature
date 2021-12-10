@@ -1,6 +1,7 @@
 #include "asm.h"
 #include "mov.h"
 #include "add.h"
+#include "sub.h"
 
 void asm_init() {
   asm_insts.count = 0;
@@ -24,6 +25,7 @@ elf_text_item asm_inst_lower(asm_inst inst) {
   switch (inst.op) {
     case ASM_OP_TYPE_MOV: return asm_inst_mov_lower(inst);
     case ASM_OP_TYPE_ADD: return asm_inst_add_lower(inst);
-    default:exit(0);
+    case ASM_OP_TYPE_SUB: return asm_inst_sub_lower(inst);
+    default:error_exit(0, "cannot parser asm_ope_type");
   }
 }

@@ -40,6 +40,7 @@ typedef enum {
 
 typedef enum {
   ASM_OP_TYPE_ADD,
+  ASM_OP_TYPE_SUB,
   ASM_OP_TYPE_MOV,
   ASM_OP_TYPE_LABEL,
 } asm_op_type;
@@ -198,6 +199,12 @@ static bool is_addr(asm_operand_type t) {
   return false;
 }
 
+/**
+ * modrm reg 部分为 /0
+ * @param inst
+ * @param opcode
+ * @return
+ */
 static elf_text_item imm32_to_reg64(asm_inst inst, byte opcode) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;

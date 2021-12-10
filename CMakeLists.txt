@@ -11,6 +11,8 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/asm.c
         ${SRC_DIR}/assembler/amd64/mov.h
         ${SRC_DIR}/assembler/amd64/mov.c
+        ${SRC_DIR}/assembler/amd64/sub.c
+        ${SRC_DIR}/assembler/amd64/sub.h
         ${SRC_DIR}/assembler/amd64/add.c
         ${SRC_DIR}/assembler/amd64/add.h)
 
