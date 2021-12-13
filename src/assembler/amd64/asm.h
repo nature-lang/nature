@@ -39,10 +39,11 @@ typedef enum {
 } asm_operand_type;
 
 typedef enum {
+  ASM_OP_TYPE_MOV,
   ASM_OP_TYPE_ADD,
   ASM_OP_TYPE_SUB,
-  ASM_OP_TYPE_MOV,
   ASM_OP_TYPE_MUL,
+  ASM_OP_TYPE_DIV,
   ASM_OP_TYPE_LABEL,
 } asm_op_type;
 
@@ -295,9 +296,7 @@ static elf_text_item indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *i
     }
   }
 
-  result.offset = current_text_offset;
-  result.size = i;
-  current_text_offset += i;
+  SET_OFFSET(result);
 
   return result;
 }

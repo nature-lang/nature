@@ -3,6 +3,7 @@
 #include "add.h"
 #include "sub.h"
 #include "mul.h"
+#include "div.h"
 
 void asm_init() {
   asm_insts.count = 0;
@@ -28,6 +29,7 @@ elf_text_item asm_inst_lower(asm_inst inst) {
     case ASM_OP_TYPE_ADD: return asm_inst_add_lower(inst);
     case ASM_OP_TYPE_SUB: return asm_inst_sub_lower(inst);
     case ASM_OP_TYPE_MUL: return asm_inst_mul_lower(inst);
+    case ASM_OP_TYPE_DIV: return asm_inst_div_lower(inst);
     default:error_exit(0, "cannot parser asm_ope_type");
   }
 }

@@ -30,54 +30,32 @@ static void test_mul_reg64_to_reg64() {
   }
 }
 
-static void test_add_imm32_to_reg64() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rcx";
-  asm_imm *imm = NEW(asm_imm);
-  imm->value = 6379;
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MUL,
-      .size = 64,
-      .src_type = ASM_OPERAND_TYPE_IMM,
-      .src = imm,
-      .dst_type = ASM_OPERAND_TYPE_REG,
-      .dst = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x81, 0xC1, 0xEB, 0x18, 00, 00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-static void test_add_imm32_to_rax() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rax";
-  asm_imm *imm = NEW(asm_imm);
-  imm->value = 6379;
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MUL,
-      .size = 64,
-      .src_type = ASM_OPERAND_TYPE_IMM,
-      .src = imm,
-      .dst_type = ASM_OPERAND_TYPE_REG,
-      .dst = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x05, 0xEB, 0x18, 00, 00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
+//static void test_mul_imm32_to_reg64() {
+//  asm_reg *reg = NEW(asm_reg);
+//  reg->name = "rcx";
+//  asm_imm *imm = NEW(asm_imm);
+//  imm->value = 6379;
+//  asm_inst inst = {
+//      .op = ASM_OP_TYPE_MUL,
+//      .size = 64,
+//      .src_type = ASM_OPERAND_TYPE_IMM,
+//      .src = imm,
+//      .dst_type = ASM_OPERAND_TYPE_REG,
+//      .dst = reg
+//  };
+//
+//  elf_text_item actual = asm_inst_lower(inst);
+//
+//  byte expect[30] = {0x48, 0x81, 0xC1, 0xEB, 0x18, 00, 00};
+//  for (int i = 0; i < 30; ++i) {
+//    assert_int_equal(actual.data[i], expect[i]);
+//  }
+//}
 
 /**
- * add rcx,[rax-6379]
+ * mul rcx,[rax-6379]
  */
-static void test_add_indirect_addr_to_reg_disp32_negative() {
+static void test_mul_indirect_addr_to_reg_disp32_negative() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rcx";
 
@@ -95,16 +73,16 @@ static void test_add_indirect_addr_to_reg_disp32_negative() {
 
   elf_text_item actual = asm_inst_lower(inst);
 
-  byte expect[30] = {0x48, 0x03, 0x88, 0x15, 0xE7, 0xFF, 0xFF};
+  byte expect[30] = {0x48, 0x0F, 0xAF, 0x88, 0x15, 0xE7, 0xFF, 0xFF};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
 }
 
 /**
- * add rcx, [rax-8]
+ * mul rcx, [rax-8]
  */
-static void test_add_indirect_addr_to_reg_basic_negative() {
+static void test_mul_indirect_addr_to_reg_basic_negative() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rcx";
 
@@ -122,16 +100,16 @@ static void test_add_indirect_addr_to_reg_basic_negative() {
 
   elf_text_item actual = asm_inst_lower(inst);
 
-  byte expect[30] = {0x48, 0x03, 0x48, 0xF8};
+  byte expect[30] = {0x48, 0x0F, 0xAF, 0x48, 0xF8};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
 }
 
 /**
- * add rcx, [rax+6379]
+ * mul rcx, [rax+6379]
  */
-static void test_add_indirect_addr_to_reg_disp32() {
+static void test_mul_indirect_addr_to_reg_disp32() {
   asm_reg *reg = NEW(asm_reg);
   reg->name = "rcx";
 
@@ -149,61 +127,7 @@ static void test_add_indirect_addr_to_reg_disp32() {
 
   elf_text_item actual = asm_inst_lower(inst);
 
-  byte expect[30] = {0x48, 0x03, 0x88, 0xEB, 0x18, 0x00, 0x00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-/**
- * add [rax+6379],rcx
- */
-static void test_add_reg_to_indirect_addr_disp32() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rcx";
-
-  asm_indirect_addr *indirect = NEW(asm_direct_addr);
-  indirect->reg = "rax";
-  indirect->offset = 6379;
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MUL,
-      .size = 64,
-      .dst_type = ASM_OPERAND_TYPE_INDIRECT_ADDR,
-      .dst = indirect,
-      .src_type = ASM_OPERAND_TYPE_REG,
-      .src = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x01, 0x88, 0xEB, 0x18, 0x00, 0x00};
-  for (int i = 0; i < 30; ++i) {
-    assert_int_equal(actual.data[i], expect[i]);
-  }
-}
-
-/**
- * add rcx, [rax+8]
- */
-static void test_add_indirect_addr_to_reg_basic() {
-  asm_reg *reg = NEW(asm_reg);
-  reg->name = "rcx";
-
-  asm_indirect_addr *indirect = NEW(asm_direct_addr);
-  indirect->reg = "rax";
-  indirect->offset = 8;
-  asm_inst inst = {
-      .op = ASM_OP_TYPE_MUL,
-      .size = 64,
-      .src_type = ASM_OPERAND_TYPE_INDIRECT_ADDR,
-      .src = indirect,
-      .dst_type = ASM_OPERAND_TYPE_REG,
-      .dst = reg
-  };
-
-  elf_text_item actual = asm_inst_lower(inst);
-
-  byte expect[30] = {0x48, 0x03, 0x48, 0x08};
+  byte expect[30] = {0x48, 0x0F, 0xAF, 0x88, 0xEB, 0x18, 0x00, 0x00};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
@@ -211,14 +135,12 @@ static void test_add_indirect_addr_to_reg_basic() {
 
 int main(void) {
   const struct CMUnitTest tests[] = {
-//      cmocka_unit_test(test_add_imm32_to_rax),
-//      cmocka_unit_test(test_add_imm32_to_reg64),
+//      cmocka_unit_test(test_mul_imm32_to_rax),
+//      cmocka_unit_test(test_mul_imm32_to_reg64),
       cmocka_unit_test(test_mul_reg64_to_reg64),
-//      cmocka_unit_test(test_add_indirect_addr_to_reg_disp32_negative),
-//      cmocka_unit_test(test_add_indirect_addr_to_reg_basic_negative),
-//      cmocka_unit_test(test_add_indirect_addr_to_reg_disp32),
-//      cmocka_unit_test(test_add_reg_to_indirect_addr_disp32),
-//      cmocka_unit_test(test_add_indirect_addr_to_reg_basic),
+      cmocka_unit_test(test_mul_indirect_addr_to_reg_disp32_negative),
+      cmocka_unit_test(test_mul_indirect_addr_to_reg_basic_negative),
+      cmocka_unit_test(test_mul_indirect_addr_to_reg_disp32),
   };
 
   return cmocka_run_group_tests(tests, setup, NULL);
