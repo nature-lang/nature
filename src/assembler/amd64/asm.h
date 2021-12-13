@@ -42,6 +42,7 @@ typedef enum {
   ASM_OP_TYPE_ADD,
   ASM_OP_TYPE_SUB,
   ASM_OP_TYPE_MOV,
+  ASM_OP_TYPE_MUL,
   ASM_OP_TYPE_LABEL,
 } asm_op_type;
 
@@ -243,9 +244,7 @@ static elf_text_item reg64_to_reg64(asm_inst inst, byte opcode) {
   modrm |= reg_to_number(dst_reg->name); // r/m
   result.data[i++] = modrm;
 
-  result.offset = current_text_offset;
-  result.size = i;
-  current_text_offset += i;
+  SET_OFFSET(result);
 
   return result;
 }

@@ -14,7 +14,9 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/sub.c
         ${SRC_DIR}/assembler/amd64/sub.h
         ${SRC_DIR}/assembler/amd64/add.c
-        ${SRC_DIR}/assembler/amd64/add.h)
+        ${SRC_DIR}/assembler/amd64/add.h
+        ${SRC_DIR}/assembler/amd64/mul.c
+        ${SRC_DIR}/assembler/amd64/mul.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h

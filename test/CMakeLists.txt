@@ -38,9 +38,16 @@ add_executable(test_amd64_sub
         test_amd64_sub.c
         ${SRC_ASSEMBLER} ${SRC_LIB})
 
+add_executable(test_amd64_mul
+        test_amd64_mul.c
+        ${SRC_ASSEMBLER} ${SRC_LIB})
+
 target_link_libraries(test_amd64_mov cmocka) # 远程连接才需要这个
 target_link_libraries(test_amd64_add cmocka) # 远程连接才需要这个
 target_link_libraries(test_amd64_sub cmocka) # 远程连接才需要这个
+target_link_libraries(test_amd64_mul cmocka) # 远程连接才需要这个
+
 add_test(test_amd64_mov test_amd64_mov)
 add_test(test_amd64_add test_amd64_add)
 add_test(test_amd64_sub test_amd64_sub)
+add_test(test_amd64_mul test_amd64_mul)

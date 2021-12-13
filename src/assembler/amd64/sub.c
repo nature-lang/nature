@@ -40,7 +40,7 @@ elf_text_item sub_imm32_to_rax(asm_inst inst) {
   uint8_t i = 0;
 
   byte rex = 0b01001000;
-  byte opcode = 0x05;
+  byte opcode = 0x2D;
 
   result.data[i++] = rex;
   result.data[i++] = opcode;
@@ -62,7 +62,7 @@ elf_text_item sub_imm32_to_rax(asm_inst inst) {
 static elf_text_item sub_reg64_to_indirect_addr(asm_inst inst) {
   asm_reg *reg = inst.src;
   asm_indirect_addr *indirect_addr = inst.dst;
-  byte opcode = 0x01;
+  byte opcode = 0x29;
 
   return indirect_addr_with_reg64(reg, indirect_addr, opcode);
 }
@@ -74,7 +74,7 @@ static elf_text_item sub_reg64_to_indirect_addr(asm_inst inst) {
 static elf_text_item sub_indirect_addr_to_reg64(asm_inst inst) {
   asm_indirect_addr *indirect_addr = inst.src;
   asm_reg *reg = inst.dst;
-  byte opcode = 0x03;
+  byte opcode = 0x2B;
 
   return indirect_addr_with_reg64(reg, indirect_addr, opcode);
 }
