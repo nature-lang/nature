@@ -23,6 +23,18 @@
   result.data[i++] = (int8_t) ((number) >> 48);\
   result.data[i++] = (int8_t) ((number) >> 56);\
 
+#define INDIRECT_OFFSET_TO_DATA(modrm, offset) \
+  if ((offset) > INT32_MAX || (offset) < INT32_MIN) {\
+    error_exit(0, "offset %d to large", offset);\
+  }\
+  if (((modrm) & 0b11000000) != 0b00000000) {\
+    result.data[i++] = (int8_t) (offset);        \
+    if (((modrm) & 0b11000000) == 0b10000000) {\
+      result.data[i++] = (int8_t) ((offset) >> 8);\
+      result.data[i++] = (int8_t) ((offset) >> 16);\
+      result.data[i++] = (int8_t) ((offset) >> 24);\
+    }\
+  }\
 
 #define SET_OFFSET(result) \
   (result).offset = current_text_offset;\
@@ -45,6 +57,12 @@ typedef enum {
   ASM_OP_TYPE_MUL,
   ASM_OP_TYPE_DIV,
   ASM_OP_TYPE_LABEL,
+  ASM_OP_TYPE_SETG, // >
+  ASM_OP_TYPE_SETGE, // >=
+  ASM_OP_TYPE_SETE, // ==
+  ASM_OP_TYPE_SETNE, // !=
+  ASM_OP_TYPE_SETL, // <
+  ASM_OP_TYPE_SETLE, // <=
 } asm_op_type;
 
 typedef struct {
@@ -161,6 +179,32 @@ static byte reg_to_number(string reg) {
     return 6;
   }
   if (strcmp(reg, "rdi") == 0) {
+    return 7;
+  }
+
+  // byte
+  if (strcmp(reg, "al") == 0) {
+    return 0;
+  }
+  if (strcmp(reg, "cl") == 0) {
+    return 1;
+  }
+  if (strcmp(reg, "dl") == 0) {
+    return 2;
+  }
+  if (strcmp(reg, "bl") == 0) {
+    return 3;
+  }
+  if (strcmp(reg, "ah") == 0) {
+    return 4;
+  }
+  if (strcmp(reg, "ch") == 0) {
+    return 5;
+  }
+  if (strcmp(reg, "dh") == 0) {
+    return 6;
+  }
+  if (strcmp(reg, "bh") == 0) {
     return 7;
   }
 
