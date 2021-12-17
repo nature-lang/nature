@@ -168,7 +168,7 @@ typedef enum {
 
   LIR_OP_TYPE_PHI,
   LIR_OP_TYPE_MOVE,
-  LIR_OP_TYPE_CMP_GOTO,
+  LIR_OP_TYPE_CMP_GOTO, // cmp 两个参数总是相等，就跳转 cmp + je
   LIR_OP_TYPE_GOTO,
   LIR_OP_TYPE_PUSH,
   LIR_OP_TYPE_POP,

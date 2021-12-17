@@ -20,7 +20,11 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/div.c
         ${SRC_DIR}/assembler/amd64/div.h
         ${SRC_DIR}/assembler/amd64/set.c
-        ${SRC_DIR}/assembler/amd64/set.h)
+        ${SRC_DIR}/assembler/amd64/set.h
+        ${SRC_DIR}/assembler/amd64/jcc.c
+        ${SRC_DIR}/assembler/amd64/jcc.h
+        ${SRC_DIR}/assembler/amd64/jmp.c
+        ${SRC_DIR}/assembler/amd64/jmp.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h

@@ -311,11 +311,6 @@ static elf_text_item indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *i
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
 
-  int64_t offset = indirect_addr->offset;
-  if (offset > INT32_MAX || offset < INT32_MIN) {
-    error_exit(0, "offset %d to large", offset);
-  }
-
   // REX.W => 48H (0100 1000)
   byte rex = 0b01001000;
   byte modrm = indirect_disp_mod(indirect_addr->offset);
@@ -329,16 +324,7 @@ static elf_text_item indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *i
   result.data[i++] = modrm;
 
   // disp 如果 disp 为负数，c 语言已经使用了补码表示，所以直接求小端即可
-  if ((modrm & 0b11000000) != 0b00000000) {
-    result.data[i++] = (int8_t) offset;
-
-    // int32
-    if ((modrm & 0b11000000) == 0b10000000) {
-      result.data[i++] = (int8_t) (offset >> 8);
-      result.data[i++] = (int8_t) (offset >> 16);
-      result.data[i++] = (int8_t) (offset >> 24);
-    }
-  }
+  INDIRECT_OFFSET_TO_DATA(modrm, indirect_addr->offset);
 
   SET_OFFSET(result);
 
