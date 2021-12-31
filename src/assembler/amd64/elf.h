@@ -86,6 +86,7 @@ typedef struct {
 
   uint8_t imm_index; // 立即数部分在 data 中的索引，为 0 表示没有立即数部分
   uint8_t imm_size; // 立即数长度, 单位 Byte 直接由汇编指令中的 size 确定
+  void *inst; // 指令冗余
 } elf_text_item; // 代码段
 
 struct {

@@ -36,10 +36,13 @@
     }\
   }\
 
-#define SET_OFFSET(result) \
+
+#define RETURN_FILL_RESULT(result) \
   (result).offset = current_text_offset;\
   (result).size = i;\
-  current_text_offset += i;\
+  current_text_offset += i; \
+  return result; \
+
 
 typedef enum {
   ASM_OPERAND_TYPE_REG, // rax,eax,ax  影响不大，可以通过标识符来识别
@@ -57,6 +60,7 @@ typedef enum {
   ASM_OP_TYPE_MUL,
   ASM_OP_TYPE_DIV,
   ASM_OP_TYPE_LABEL,
+  ASM_OP_TYPE_JMP,
   ASM_OP_TYPE_SETG, // >
   ASM_OP_TYPE_SETGE, // >=
   ASM_OP_TYPE_SETE, // ==
@@ -71,7 +75,7 @@ typedef struct {
 } asm_reg;
 
 typedef struct {
-  char *name; // 引用自 data 段的标识符
+  char *name;
 } asm_symbol;
 
 typedef struct {
@@ -234,6 +238,10 @@ static bool is_indirect_addr(asm_operand_type t) {
   return t == ASM_OPERAND_TYPE_INDIRECT_ADDR;
 }
 
+static bool is_symbol(asm_operand_type t) {
+  return t == ASM_OPERAND_TYPE_SYMBOL;
+}
+
 static bool is_direct_addr(asm_operand_type t) {
   return t == ASM_OPERAND_TYPE_DIRECT_ADDR;
 }
@@ -268,9 +276,7 @@ static elf_text_item imm32_to_reg64(asm_inst inst, byte opcode) {
   // 数字截取 32 位,并转成小端序
   NUM32_TO_DATA((int32_t) src_imm->value)
 
-  SET_OFFSET(result)
-
-  return result;
+  RETURN_FILL_RESULT(result)
 }
 
 static elf_text_item reg64_to_reg64(asm_inst inst, byte opcode) {
@@ -289,17 +295,16 @@ static elf_text_item reg64_to_reg64(asm_inst inst, byte opcode) {
   modrm |= reg_to_number(dst_reg->name); // r/m
   result.data[i++] = modrm;
 
-  SET_OFFSET(result);
-
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 static byte indirect_disp_mod(int64_t offset) {
+  // 寄存器间址 [rax]
   if (offset == 0) {
     return 0b00000000;
   }
 
-  // 8bit
+  // 8bit [rax+8]
   if (IN_INT8(offset)) {
     return 0b01000000;
   }
@@ -307,7 +312,9 @@ static byte indirect_disp_mod(int64_t offset) {
   return 0b10000000;
 }
 
-static elf_text_item indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *indirect_addr, byte opcode) {
+static elf_text_item indirect_addr_with_reg64(asm_reg *reg,
+                                              asm_indirect_addr *indirect_addr,
+                                              byte opcode, asm_inst inst) {
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
 
@@ -326,9 +333,7 @@ static elf_text_item indirect_addr_with_reg64(asm_reg *reg, asm_indirect_addr *i
   // disp 如果 disp 为负数，c 语言已经使用了补码表示，所以直接求小端即可
   INDIRECT_OFFSET_TO_DATA(modrm, indirect_addr->offset);
 
-  SET_OFFSET(result);
-
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

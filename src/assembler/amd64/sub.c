@@ -25,8 +25,7 @@ elf_text_item sub_imm32_to_reg(asm_inst inst) {
   // 数字截取 32 位,并转成小端序
   NUM32_TO_DATA((int32_t) src_imm->value);
 
-  SET_OFFSET(result);
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 /**
@@ -50,9 +49,7 @@ elf_text_item sub_imm32_to_rax(asm_inst inst) {
   // imm 部分
   NUM32_TO_DATA((int32_t) src_imm->value);
 
-  SET_OFFSET(result)
-
-  return result;
+  RETURN_FILL_RESULT(result)
 }
 
 /**
@@ -64,7 +61,7 @@ static elf_text_item sub_reg64_to_indirect_addr(asm_inst inst) {
   asm_indirect_addr *indirect_addr = inst.dst;
   byte opcode = 0x29;
 
-  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode, inst);
 }
 
 /**
@@ -76,7 +73,7 @@ static elf_text_item sub_indirect_addr_to_reg64(asm_inst inst) {
   asm_reg *reg = inst.dst;
   byte opcode = 0x2B;
 
-  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode, inst);
 }
 
 elf_text_item asm_inst_sub_lower(asm_inst inst) {

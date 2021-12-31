@@ -28,8 +28,7 @@ static elf_text_item set_indirect_addr(asm_inst inst) {
 
   INDIRECT_OFFSET_TO_DATA(modrm, indirect_addr->offset);
 
-  SET_OFFSET(result);
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 /**
@@ -49,8 +48,7 @@ static elf_text_item set_reg(asm_inst inst) {
   modrm |= reg_to_number(dst_reg->name);
   result.data[i++] = modrm;
 
-  SET_OFFSET(result);
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 elf_text_item asm_inst_set_lower(asm_inst inst) {

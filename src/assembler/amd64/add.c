@@ -31,9 +31,7 @@ elf_text_item add_imm32_to_rax(asm_inst inst) {
   // imm 部分
   NUM32_TO_DATA((int32_t) src_imm->value);
 
-  SET_OFFSET(result)
-
-  return result;
+  RETURN_FILL_RESULT(result)
 }
 
 /**
@@ -45,7 +43,7 @@ static elf_text_item add_reg64_to_indirect_addr(asm_inst inst) {
   asm_indirect_addr *indirect_addr = inst.dst;
   byte opcode = 0x01;
 
-  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode, inst);
 }
 
 /**
@@ -57,7 +55,7 @@ static elf_text_item add_indirect_addr_to_reg64(asm_inst inst) {
   asm_reg *reg = inst.dst;
   byte opcode = 0x03;
 
-  return indirect_addr_with_reg64(reg, indirect_addr, opcode);
+  return indirect_addr_with_reg64(reg, indirect_addr, opcode, inst);
 }
 
 elf_text_item asm_inst_add_lower(asm_inst inst) {

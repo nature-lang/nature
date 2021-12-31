@@ -19,9 +19,7 @@ elf_text_item div_reg64(asm_inst inst) {
   modrm |= reg_to_number(src_reg->name); // r/m
   result.data[i++] = modrm;
 
-  SET_OFFSET(result);
-
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 /**
@@ -30,8 +28,6 @@ elf_text_item div_reg64(asm_inst inst) {
  * @return
  */
 elf_text_item div_indirect_addr(asm_inst inst) {
-  asm_indirect_addr *indirect_addr = inst.src;
-
   elf_text_item result = NEW_EFL_TEXT_ITEM();
   uint8_t i = 0;
 
@@ -41,6 +37,7 @@ elf_text_item div_indirect_addr(asm_inst inst) {
   result.data[i++] = rex;
   result.data[i++] = 0xF7;
 
+  asm_indirect_addr *indirect_addr = inst.src;
   byte modrm = indirect_disp_mod(indirect_addr->offset);
   // reg
   modrm |= 7 << 3;
@@ -49,13 +46,10 @@ elf_text_item div_indirect_addr(asm_inst inst) {
 
   result.data[i++] = modrm;
 
-
   // disp 如果 disp 为负数，c 语言已经使用了补码表示，所以直接求小端即可
   INDIRECT_OFFSET_TO_DATA(modrm, indirect_addr->offset);
 
-  SET_OFFSET(result);
-
-  return result;
+  RETURN_FILL_RESULT(result);
 }
 
 elf_text_item asm_inst_div_lower(asm_inst inst) {
