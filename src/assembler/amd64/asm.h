@@ -6,6 +6,7 @@
 #include "string.h"
 #include "src/lib/error.h"
 #include "elf.h"
+#include "src/lib/table.h"
 
 #define NUM32_TO_DATA(number) \
   result.data[i++] = (int8_t) (number);          \
@@ -41,7 +42,19 @@
   (result).offset = current_text_offset;\
   (result).size = i;\
   current_text_offset += i; \
-  return result; \
+  return result;                   \
+
+
+/**
+ * 符号表记录符号所在位置，尤其是 label 所在位置。
+ * ？普通符号如何使用？ 比如 add
+ * 本质上也还是位置而已。
+ */
+//typedef struct {
+//  string type; // 符号类型
+//  string name; // 符号名称
+//  int64_t offset; // 符号所处偏移
+//} asm_symbol;
 
 
 typedef enum {
@@ -61,6 +74,7 @@ typedef enum {
   ASM_OP_TYPE_DIV,
   ASM_OP_TYPE_LABEL,
   ASM_OP_TYPE_JMP,
+  ASM_OP_TYPE_JE,
   ASM_OP_TYPE_SETG, // >
   ASM_OP_TYPE_SETGE, // >=
   ASM_OP_TYPE_SETE, // ==

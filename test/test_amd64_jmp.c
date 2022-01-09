@@ -37,7 +37,7 @@ static void test_jmp_reg64() {
 
   elf_text_item actual = asm_inst_lower(inst);
 
-  byte expect[30] = {0x48, 0xF7, 0xFA};
+  byte expect[30] = {0xFF, 0xE2};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }
@@ -81,7 +81,7 @@ static void test_jmp_indirect_addr_offset32() {
 
   elf_text_item actual = asm_inst_lower(inst);
 
-  byte expect[30] = {0xFF, 0xA1, 0xEB, 0xEB, 0x18, 0x00, 0x00};
+  byte expect[30] = {0xFF, 0xA1, 0xEB, 0x18, 0x00, 0x00};
   for (int i = 0; i < 30; ++i) {
     assert_int_equal(actual.data[i], expect[i]);
   }

@@ -44,13 +44,20 @@ static elf_text_item jmp_rel32(asm_inst inst) {
   result.data[i++] = 0xE9; // jmp 32
 
   // symbol 目前还是无法解析的
-//  asm_symbol *symbol = inst.dst;
-
-  // 使用 nop 占位
-  result.data[i++] = 0x90; // nop
-  result.data[i++] = 0x90; // nop
-  result.data[i++] = 0x90; // nop
-  result.data[i++] = 0x90; // nop
+  asm_symbol *symbol = inst.dst;
+  if (!table_exist(elf_symbol_table.t, symbol->name)) {
+    // 使用 nop 占位
+    result.data[i++] = 0x90; // nop
+    result.data[i++] = 0x90; // nop
+    result.data[i++] = 0x90; // nop
+    result.data[i++] = 0x90; // nop
+  } else {
+    // 计算 offset,
+    elf_symbol *s = table_get(elf_symbol_table.t, symbol->name);
+    int32_t offset = current_text_offset - s->value;
+    // offset to 16bit
+    NUM32_TO_DATA(offset)
+  }
 
   RETURN_FILL_RESULT(result);
 }
@@ -69,6 +76,6 @@ elf_text_item asm_inst_jmp_lower(asm_inst inst) {
       return jmp_rel32(inst);
     }
   }
-  error_exit(0, "can not parser mov type");
+  error_exit(0, "can not parser inst type");
   exit(0);
 }

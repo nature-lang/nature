@@ -2,6 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_ELF_H_
 
 #include <stdlib.h>
+#include "src/lib/table.h"
 
 #define NEW_EFL_TEXT_ITEM() \
 {                           \
@@ -43,10 +44,11 @@ typedef struct {
   uint8_t section_index; // 符号所在段, 0 表示未定义？
 } elf_symbol;
 
-typedef struct {
+struct {
   int count;
-  elf_symbol list[UINT8_MAX];
-} elf_symbol_table;
+  elf_symbol *list[UINT8_MAX];
+  table *t; // symbol name to index
+} elf_symbol_table;  // 没有 typedef 这就是一个变量
 
 // 段表名称字符串表
 typedef struct {
