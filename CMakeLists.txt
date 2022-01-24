@@ -6,25 +6,30 @@ set(CMAKE_C_STANDARD 99)
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
 set(SRC_ASSEMBLER
-        ${SRC_DIR}/assembler/amd64/elf.h
         ${SRC_DIR}/assembler/amd64/asm.h
         ${SRC_DIR}/assembler/amd64/asm.c
-        ${SRC_DIR}/assembler/amd64/mov.h
-        ${SRC_DIR}/assembler/amd64/mov.c
-        ${SRC_DIR}/assembler/amd64/sub.c
-        ${SRC_DIR}/assembler/amd64/sub.h
-        ${SRC_DIR}/assembler/amd64/add.c
-        ${SRC_DIR}/assembler/amd64/add.h
-        ${SRC_DIR}/assembler/amd64/mul.c
-        ${SRC_DIR}/assembler/amd64/mul.h
-        ${SRC_DIR}/assembler/amd64/div.c
-        ${SRC_DIR}/assembler/amd64/div.h
-        ${SRC_DIR}/assembler/amd64/set.c
-        ${SRC_DIR}/assembler/amd64/set.h
-        ${SRC_DIR}/assembler/amd64/jcc.c
-        ${SRC_DIR}/assembler/amd64/jcc.h
-        ${SRC_DIR}/assembler/amd64/jmp.c
-        ${SRC_DIR}/assembler/amd64/jmp.h)
+        ${SRC_DIR}/assembler/amd64/opcode.h
+#
+#        ${SRC_DIR}/assembler/amd64/elf.h
+#        ${SRC_DIR}/assembler/amd64/asm.h
+#        ${SRC_DIR}/assembler/amd64/asm.c
+#        ${SRC_DIR}/assembler/amd64/mov.h
+#        ${SRC_DIR}/assembler/amd64/mov.c
+#        ${SRC_DIR}/assembler/amd64/sub.c
+#        ${SRC_DIR}/assembler/amd64/sub.h
+#        ${SRC_DIR}/assembler/amd64/add.c
+#        ${SRC_DIR}/assembler/amd64/add.h
+#        ${SRC_DIR}/assembler/amd64/mul.c
+#        ${SRC_DIR}/assembler/amd64/mul.h
+#        ${SRC_DIR}/assembler/amd64/div.c
+#        ${SRC_DIR}/assembler/amd64/div.h
+#        ${SRC_DIR}/assembler/amd64/set.c
+#        ${SRC_DIR}/assembler/amd64/set.h
+#        ${SRC_DIR}/assembler/amd64/jcc.c
+#        ${SRC_DIR}/assembler/amd64/jcc.h
+#        ${SRC_DIR}/assembler/amd64/jmp.c
+#        ${SRC_DIR}/assembler/amd64/jmp.h
+        )
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
@@ -69,7 +74,7 @@ set(SRC
         ${SRC_DIR}/cfg.c
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
-        ${SRC_DIR}/ssa.c)
+        ${SRC_DIR}/ssa.c src/assembler/amd64/register.h src/assembler/amd64/amd64.h)
 
 add_executable(nature main.c
         ${SRC}
