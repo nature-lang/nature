@@ -2,6 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_
 
 #include <stdlib.h>
+#include "src/lib/table.h"
 
 typedef uint8_t size;
 
@@ -118,7 +119,7 @@ typedef struct {
   uint8_t prefix;
   uint8_t opcode[3];
   uint8_t extensions[4];
-  opcode_operand_t operands[4]; // 形参
+  opcode_operand_t *operands[4]; // 形参
 } inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format?
 
 /**
@@ -147,11 +148,24 @@ inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
 // 方式1： key 为 inst operand, 比如进入值为 rm16, 那么将会匹配一个 succs 的列表，然后继续递归啊查找，最终找到一个列表
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
-typedef struct {
-  uint8_t depth; // 第一层 void* 为数据内容，其余层为 operand 内容
-  void *key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64
-  void *succs[];
-} inst_operand_node;
 
+typedef struct {
+  inst_t *opcodes[10];
+  string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
+  table *succs;
+} opcode_tree_node;
+
+opcode_tree_node *opcode_root; // key = root
+
+void *tree_build(inst_t *inst);
+
+void tree_find_or_append(inst_t *inst);
+
+/**
+ * 1. 初始化 opcode_root
+ * 2. 将所有的指令注册到 tree 中
+ * @return
+ */
+void *opcode_init();
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_

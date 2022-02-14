@@ -74,7 +74,7 @@ set(SRC
         ${SRC_DIR}/cfg.c
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
-        ${SRC_DIR}/ssa.c src/assembler/amd64/register.h src/assembler/amd64/amd64.h)
+        ${SRC_DIR}/ssa.c src/assembler/amd64/register.h src/assembler/amd64/amd64.h src/assembler/amd64/opcode.c)
 
 add_executable(nature main.c
         ${SRC}
