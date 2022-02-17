@@ -136,11 +136,11 @@ typedef struct {
   uint8_t immediate[4];
 } inst_format_t; // 机器编码类型
 
-// 注册指令列表
+// 注册指令列表 asm operand
 inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
                        {
                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                           {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
