@@ -119,7 +119,7 @@ typedef struct {
   uint8_t prefix;
   uint8_t opcode[3];
   uint8_t extensions[4];
-  opcode_operand_t *operands[4]; // 形参
+  opcode_operand_t operands[4]; // 形参
 } inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format?
 
 /**
@@ -150,16 +150,39 @@ inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
 
 typedef struct {
-  inst_t *opcodes[10];
+  inst_t *opcodes[10]; // data 数据段，最终的叶子节点才会有该数据
   string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
   table *succs;
-} opcode_tree_node;
+} opcode_tree_node_t;
 
-opcode_tree_node *opcode_root; // key = root
+opcode_tree_node_t *opcode_tree_root; // key = root
 
-void *tree_build(inst_t *inst);
+/**
+ * 低级指令转换为高级指令。
+ * rel8 => uint8
+ * rel16 => uint16
+ * rel32 => uint32
+ * rm8 => register:1/indirect_register:1/disp_register:1/rip_relative:1/sib_register:8
+ * rm16 => register:2/indirect_register:2/disp_register:2/rip_relative:2/sib_register:8
+ * rm32 => register:4/indirect_register:4/disp_register:4/rip_relative:4/sib_register:8
+ * rm64 => register:8/indirect_register:8/disp_register:8/rip_relative:8/sib_register:8
+ * m => disp_register:8/rip_relative:8
+ * m16 => indirect_register:2
+ * m32 => indirect_register:4
+ * m64 => indirect_register:8
+ * r8 => register:1
+ * r16 => register:2
+ * r32 => register:4
+ * r64 => register:8
+ * xmm1 => register:16
+ * xmm2 => register:16
+ * xmm1m64 => register:16/register:8/indirect_reg:8/rip_relative:8/sib_register:8
+ * xmm2m64 => register:16/register:8/indirect_reg:8/rip_relative:8/sib_register:8
+ * xmm2m128 => register:16/register:8/indirect_reg:8/rip_relative:8
+ * ymm1 => register:32
+ * ymm2 => register:32
+ */
 
-void tree_find_or_append(inst_t *inst);
 
 /**
  * 1. 初始化 opcode_root
@@ -167,5 +190,11 @@ void tree_find_or_append(inst_t *inst);
  * @return
  */
 void *opcode_init();
+
+void opcode_tree_build(inst_t *inst);
+
+opcode_tree_node_t *opcode_find_name(string name);
+
+void opcode_find_succs(opcode_tree_node_t node, opcode_operand_t operands[4]);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_

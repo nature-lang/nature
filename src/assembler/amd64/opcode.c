@@ -12,34 +12,51 @@
  * @param inst
  * @return
  */
-void *tree_build(inst_t *inst) {
-  // 第一层结构 指令名称
-  node = find_or_append_name(inst->name);
-
-  uint8_t i = 0;
-  while (inst->operands[i] != NULL) {
-    find_or_append_operand(node, inst->operands)
-  }
-
-  // 其余层级结构,指令参数
+void *opcode_init() {
+  // 收集所有指令，进行注册
 }
 
-// operands
-void *find_succ(node, operands, index) {
-  // 一个 operand 可以产生多个 node, 下一个 operand 应该递归继续生成
+void opcode_tree_build(inst_t *inst) {
+  // 第一层结构 指令名称
+  node = find_name(inst->name);
+
+  // 其余层级结构,指令参数
+  find_succs(node, inst->operands, 0)
+}
+
+/**
+ * @param name
+ */
+opcode_tree_node_t *opcode_find_name(string name) {
+  bool exist = table_exist(opcode_tree_root->succs, name);
+  if (exist) {
+    return table_get(opcode_tree_root->succs, name);
+  }
+
+  opcode_tree_node_t *node = NEW(opcode_tree_node_t);
+  node->key = name;
+  return node;
+}
+
+/**
+ * @param node 树节点
+ * @return
+ */
+void *find_succs(node, operands, index) {
+  // 读取 node
   operand = operands[index];
 
-  // 这一步是干什么？
-  asm_operands = map[operand.type];
-  for
-  asm_operands
-  {
-    // 判断是否存在，存在就找不出，不存在就创建
-    current, exists := node.succs[asm_operand]
-    if !exists
-    {
+  // 将一个底层指令转换成高层指令
+  asm_operands = operand_low_to_high[operand.type];
 
+  // 将高层指令列表注册到下一级树中
+  for (asm_operands as asm_operand) {
+    // 如果不存在就添加到 nodes 中
+    exists := node.succs[asm_operand]
+    if (!exists) {
+      node.success[asm_operand] = new(node)
     }
-    find_succ(current, operands, index + 1)
+
+    find_succ(node.succs[asm_operand], operands, index + 1)
   }
 }
