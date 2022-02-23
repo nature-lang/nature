@@ -2,7 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 
 #include "src/value.h"
-#include "opcode.h"
+//#include "opcode.h"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte
@@ -100,10 +100,10 @@ typedef struct {
 /**
  * 基于 asm_op + inst_t 的指令选择
  */
-inst_t opcode_select();
+//inst_t opcode_select();
 
 // 指令填充, 基于 inst + asm_op 生成 inst_format_t
-inst_format_t inst_gen(inst_t inst); //
+//inst_format_t inst_gen(inst_t inst); //
 
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

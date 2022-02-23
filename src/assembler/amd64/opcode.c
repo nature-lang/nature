@@ -38,6 +38,10 @@ opcode_tree_node_t *opcode_find_name(string name) {
   return node;
 }
 
+char **operand_low_to_high(operand_type t) {
+  
+}
+
 /**
  * @param node 树节点
  * @return

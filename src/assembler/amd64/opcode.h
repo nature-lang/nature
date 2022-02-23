@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include "src/lib/table.h"
+#include "asm.h"
 
 typedef uint8_t size;
 
@@ -157,6 +158,8 @@ typedef struct {
 
 opcode_tree_node_t *opcode_tree_root; // key = root
 
+char *asm_operand_to_string(asm_operand_type type, int byte);
+
 /**
  * 低级指令转换为高级指令。
  * rel8 => uint8
@@ -181,8 +184,10 @@ opcode_tree_node_t *opcode_tree_root; // key = root
  * xmm2m128 => register:16/register:8/indirect_reg:8/rip_relative:8
  * ymm1 => register:32
  * ymm2 => register:32
+ *
+ * 接受一个 type(int) 响应一个 n type + size 的字符串列表
  */
-
+char **operand_low_to_high(operand_type t);
 
 /**
  * 1. 初始化 opcode_root
