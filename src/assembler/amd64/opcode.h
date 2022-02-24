@@ -37,6 +37,7 @@ typedef enum {
 } opcode_ext;
 
 typedef enum {
+  OPERAND_TYPE_NULL,
   OPERAND_TYPE_REL8,
   OPERAND_TYPE_REL16,
   OPERAND_TYPE_REL32,
@@ -152,19 +153,25 @@ inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
 
 typedef struct {
   inst_t *opcodes[10]; // data 数据段，最终的叶子节点才会有该数据
+  int opcodes_count;
   string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
   table *succs;
 } opcode_tree_node_t;
 
+typedef struct {
+  uint16_t *list;
+  int count;
+} asm_keys_t;
+
 opcode_tree_node_t *opcode_tree_root; // key = root
 
-char *asm_operand_to_string(asm_operand_type type, int byte);
+uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
 
 /**
  * 低级指令转换为高级指令。
- * rel8 => uint8
- * rel16 => uint16
- * rel32 => uint32
+ * rel8 => uint8:1
+ * rel16 => uint16:2
+ * rel32 => uint32:4
  * rm8 => register:1/indirect_register:1/disp_register:1/rip_relative:1/sib_register:8
  * rm16 => register:2/indirect_register:2/disp_register:2/rip_relative:2/sib_register:8
  * rm32 => register:4/indirect_register:4/disp_register:4/rip_relative:4/sib_register:8
@@ -187,7 +194,7 @@ char *asm_operand_to_string(asm_operand_type type, int byte);
  *
  * 接受一个 type(int) 响应一个 n type + size 的字符串列表
  */
-char **operand_low_to_high(operand_type t);
+asm_keys_t operand_low_to_high(operand_type t);
 
 /**
  * 1. 初始化 opcode_root
@@ -200,6 +207,6 @@ void opcode_tree_build(inst_t *inst);
 
 opcode_tree_node_t *opcode_find_name(string name);
 
-void opcode_find_succs(opcode_tree_node_t node, opcode_operand_t operands[4]);
+void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_index);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_
