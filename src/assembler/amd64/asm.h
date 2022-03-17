@@ -53,7 +53,7 @@ typedef struct {
  */
 typedef struct {
   string name;
-  uint8_t index;
+  uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
   uint8_t size;
 } asm_operand_register; // size 是个啥？
 
@@ -86,16 +86,18 @@ typedef struct {
 
 typedef struct {
   uint8_t type;
-  void *value;
-} asm_operand;
+  uint8_t size;
+  void *value; // asm_operand_register
+} asm_operand_t;
 
 /**
  * 汇编指令结构(即如何编写汇编指令)
  */
 typedef struct {
   string name; // 指令名称
-  asm_operand *asm_operands[4]; // 最多 4 个参数
-} asm_op;
+  uint8_t asm_operand_count;
+  asm_operand_t *asm_operands[4]; // 最多 4 个参数
+} asm_inst_t;
 
 /**
  * 基于 asm_op + inst_t 的指令选择

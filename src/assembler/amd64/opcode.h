@@ -34,8 +34,12 @@ typedef enum {
   OPCODE_EXT_VEX_W0,
   OPCODE_EXT_VEX_W1,
   OPCODE_EXT_VEX_WIG,
+  OPCODE_EXT_EOF,
 } opcode_ext;
 
+/**
+ * 当一个 asm 指令匹配下面的多个类型时，按从小到大顺序选择
+ */
 typedef enum {
   OPERAND_TYPE_NULL,
   OPERAND_TYPE_REL8,
@@ -76,6 +80,28 @@ typedef enum {
   ENCODING_TYPE_OPCODE_PLUS,
 } encoding_type;
 
+typedef enum {
+  VEX_OPCODE_EXT_NULL,
+  VEX_OPCODE_EXT_66,
+  VEX_OPCODE_EXT_F2,
+  VEX_OPCODE_EXT_F3,
+} vex_opcode_ext;
+
+typedef enum {
+  VEX_LEGACY_BYTE_NULL,
+  VEX_LEGACY_BYTE_0F,
+  VEX_LEGACY_BYTE_0F_38,
+  VEX_LEGACY_BYTE_0F_3A,
+} vex_legacy_byte;
+
+typedef enum {
+  MODRM_MOD_INDIRECT_REGISTER = 0,
+  MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP = 1,
+  MODRM_MOD_INDIRECT_REGISTER_WORD_DISP = 2,
+  MODRM_MOD_DIRECT_REGISTER = 3,
+  MODRM_MOD_SIB_FOLLOWS_RM = 3,
+} modrm_mod;
+
 typedef struct {
   uint8_t source;
   bool l;
@@ -96,7 +122,7 @@ typedef struct {
 } rex_prefix_t;
 
 typedef struct {
-  uint8_t mod; // 6,7
+  modrm_mod mod; // 6,7
   uint8_t reg; // 3,4,5
   uint8_t rm; // 0,1,2
 } modrm_t;
@@ -120,7 +146,7 @@ typedef struct {
   char *name; // 指令名称
   uint8_t prefix;
   uint8_t opcode[3];
-  uint8_t extensions[4];
+  opcode_ext extensions[4];
   opcode_operand_t operands[4]; // 形参
 } inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format?
 
@@ -138,6 +164,13 @@ typedef struct {
   uint8_t immediate[4];
 } inst_format_t; // 机器编码类型
 
+inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                     {
+                         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                         {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                     }
+};
+
 // 注册指令列表 asm operand
 inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
                        {
@@ -146,14 +179,29 @@ inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
                        }
 };
 
+inst_t push_r64 = {
+    "push", 0, {0x50}, {},
+    {
+        {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+    }
+};
+
+/**
+ * 存储多个 opcode 的数据结构
+ */
+typedef struct {
+  inst_t *list[10];
+  int count;
+} insts_t;
+
 // 注册到指令树 map[] + operand_tree
 // 方式1： key 为 inst operand, 比如进入值为 rm16, 那么将会匹配一个 succs 的列表，然后继续递归啊查找，最终找到一个列表
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
-
 typedef struct {
-  inst_t *opcodes[10]; // data 数据段，最终的叶子节点才会有该数据
-  int opcodes_count;
+//  inst_t *opcodes[10]; // data 数据段，最终的叶子节点才会有该数据
+//  int opcodes_count;
+  insts_t insts;
   string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
   table *succs;
 } opcode_tree_node_t;
@@ -201,12 +249,32 @@ asm_keys_t operand_low_to_high(operand_type t);
  * 2. 将所有的指令注册到 tree 中
  * @return
  */
-void *opcode_init();
+void opcode_init();
 
 void opcode_tree_build(inst_t *inst);
 
 opcode_tree_node_t *opcode_find_name(string name);
 
 void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_index);
+
+/**
+ * 指令选择
+ * 根据 asm 指令选择 opcode
+ * 1. map 结构选择指令
+ * 2. tree 结构进一步选择
+ * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
+ */
+inst_t *opcode_select(asm_inst_t asm_inst);
+
+/**
+ * 指令填充
+ * asm_inst + inst = inst_format
+ * 主要是 inst 填充到 inst_format
+ * @param asm_inst
+ * @param inst
+ */
+inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst);
+
+void opcode_sort_insts(insts_t *insts);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_

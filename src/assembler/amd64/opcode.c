@@ -14,10 +14,19 @@
  * @param inst
  * @return
  */
-void *opcode_init() {
+void opcode_init() {
   // 收集所有指令，进行注册
+  opcode_tree_build(&mov_rm8_r8);
+  opcode_tree_build(&mov_r16_rm16);
+  opcode_tree_build(&push_r64);
+  // .... TODO
 }
 
+/**
+ * @param type
+ * @param byte
+ * @return
+ */
 uint16_t asm_operand_to_key(uint8_t type, uint8_t byte) {
   uint16_t flag = ((uint16_t) type << 8) | byte;
   return flag;
@@ -227,9 +236,9 @@ opcode_tree_node_t *opcode_find_name(string name) {
 void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_index) {
   // 读取 node
   opcode_operand_t operand = inst->operands[operands_index];
-  // 表示已经找到头了，深圳有可能溢出
+  // 表示已经找到头了，甚至有可能溢出
   if (operand.type == 0) {
-    node->opcodes[node->opcodes_count++] = inst;
+    node->insts.list[node->insts.count++] = inst;
     return;
   }
 
@@ -248,3 +257,276 @@ void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_inde
     opcode_find_succs(table_get(node->succs, key), inst, operands_index + 1);
   }
 }
+
+inst_t *opcode_select(asm_inst_t asm_inst) {
+  opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
+  if (current == NULL) {
+    error_exit(0, "cannot identify asm opcode %s ", asm_inst.name);
+    return NULL;
+  }
+
+  for (int i = 0; i < asm_inst.asm_operand_count; ++i) {
+    asm_operand_t *operand = asm_inst.asm_operands[i];
+    // 生成 key
+    string key = itoa(asm_operand_to_key(operand->type, operand->size));
+
+    // current 匹配
+    bool exists = table_exist(current->succs, key);
+    if (!exists) {
+      error_exit(0, "cannot identify asm opcode %s with operands", asm_inst.name);
+      return NULL;
+    }
+    current = table_get(current->succs, key);
+  }
+
+  insts_t insts = current->insts;
+  opcode_sort_insts(&insts);
+
+  return insts.list[0];
+}
+
+void opcode_sort_insts(insts_t *insts) {
+  if (insts->count == 0) {
+    return;
+  }
+
+  for (int i; i < insts->count - 1; ++i) {
+    bool change = false;
+    for (int j = 0; j < insts->count - 1 - i; ++j) {
+      if (insts->list[j]->operands[0].type > insts->list[j + 1]->operands[0].type) {
+        inst_t *temp = insts->list[j];
+        insts->list[j] = insts->list[j + 1];
+        insts->list[j + 1] = temp;
+        change = true;
+      }
+    }
+
+    if (!change) {
+      break;
+    }
+  }
+}
+
+static rex_prefix_t *new_rex_prefix() {
+  rex_prefix_t *r = NEW(rex_prefix_t);
+  r->b = false;
+  r->r = false;
+  r->w = false;
+  r->x = false;
+  return r;
+}
+
+static vex_prefix_t *new_vex_prefix() {
+  vex_prefix_t *v = NEW(vex_prefix_t);
+  v->source = 0;
+  v->vex_legacy_byte = 0;
+  v->vex_opcode_extension = 0;
+  v->l = false;
+  v->r = true;
+  v->w = true;
+  v->x = true;
+  v->b = true;
+  return v;
+}
+
+static modrm_t *new_modrm() {
+  modrm_t *m = NEW(modrm_t);
+  m->mod = 0;
+  m->reg = 0;
+  m->rm = 0;
+  return m;
+}
+
+static void fill_ext(inst_format_t *format, opcode_ext ext) {
+  if (ext == OPCODE_EXT_SLASH0) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 0;
+  } else if (ext == OPCODE_EXT_SLASH1) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 1;
+  } else if (ext == OPCODE_EXT_SLASH2) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 2;
+  } else if (ext == OPCODE_EXT_SLASH3) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 3;
+  } else if (ext == OPCODE_EXT_SLASH4) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 4;
+  } else if (ext == OPCODE_EXT_SLASH5) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 5;
+  } else if (ext == OPCODE_EXT_SLASH6) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 6;
+  } else if (ext == OPCODE_EXT_SLASH7) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+    format->modrm->reg = 7;
+  } else if (ext == OPCODE_EXT_SLASHR) {
+    if (format->modrm == NULL) {
+      format->modrm = new_modrm();
+    }
+  } else if (ext == OPCODE_EXT_REX_W) {
+    if (format->rex_prefix == NULL) {
+      format->rex_prefix = new_rex_prefix();
+    }
+    format->rex_prefix->w = true;
+  } else if (ext == OPCODE_EXT_REX) {
+    if (format->rex_prefix == NULL) {
+      format->rex_prefix = new_rex_prefix();
+    }
+  } else if (ext == OPCODE_EXT_VEX_128) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+  } else if (ext == OPCODE_EXT_VEX_256) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->l = true;
+  } else if (ext == OPCODE_EXT_VEX_66) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_OPCODE_EXT_66;
+  } else if (ext == OPCODE_EXT_VEX_F2) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_OPCODE_EXT_F2;
+  } else if (ext == OPCODE_EXT_VEX_F3) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_OPCODE_EXT_F3;
+  } else if (ext == OPCODE_EXT_VEX_0F) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_LEGACY_BYTE_0F;
+  } else if (ext == OPCODE_EXT_VEX_0F_38) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_LEGACY_BYTE_0F_38;
+  } else if (ext == OPCODE_EXT_VEX_0F_3A) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->vex_opcode_extension = VEX_LEGACY_BYTE_0F_3A;
+  } else if (ext == OPCODE_EXT_VEX_W0) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->w = false;
+  } else if (ext == OPCODE_EXT_VEX_W1) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->w = true;
+  } else if (ext == OPCODE_EXT_VEX_WIG) {
+    if (format->vex_prefix == NULL) {
+      format->vex_prefix = new_vex_prefix();
+    }
+    format->vex_prefix->w = false;
+  }
+}
+
+/**
+ *
+ * @param asm_inst
+ * @param inst
+ * @return
+ */
+inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
+  inst_format_t *format = NEW(inst_format_t);
+  // format 填充 prefixes
+  if (inst->prefix > 0) {
+    format->prefix = inst->prefix;
+  }
+
+  // format 填充 extensions
+  int i = 0;
+  bool ext_exists[OPCODE_EXT_EOF] = {false};
+  while (inst->extensions[i] > 0) {
+    opcode_ext ext = inst->extensions[i++];
+
+    fill_ext(format, ext);
+    ext_exists[ext] = true;
+  }
+
+  i = 0;
+  while (inst->operands[i].type > 0) {
+    opcode_operand_t operand = inst->operands[i];
+    asm_operand_t *asm_operand = asm_inst.asm_operands[i];
+    // asm 参数填充
+    if (asm_operand->type == ASM_OPERAND_TYPE_REGISTER) {
+      asm_operand_register *r = asm_operand->value;
+      if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
+
+        format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
+        format->modrm->rm = r->index;
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+          format->rex_prefix->b = r->index > 7;
+        } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
+          format->vex_prefix->b = r->index <= 7;
+        }
+      } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
+
+        format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
+        format->modrm->reg = r->index;
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+          format->rex_prefix->b = r->index > 7;
+        } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
+          format->vex_prefix->b = r->index <= 7;
+        }
+      } else if (operand.encoding == ENCODING_TYPE_OPCODE_PLUS) { // opcode = opcode + reg
+        format->opcode[0] += r->index & 7;
+
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+          format->rex_prefix->b = r->index > 7;
+        }
+      } else if (operand.encoding == ENCODING_TYPE_VEX_VVVV) {
+        if (format->vex_prefix == NULL) {
+          format->vex_prefix = new_vex_prefix();
+        }
+        format->vex_prefix->source = 15 - r->index; // two's complement
+        format->vex_prefix->r = r->index <= 7;
+      } else {
+        error_exit(0, "unsupported encoding %v", operand.encoding);
+        return NULL;
+      }
+
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
+
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_INDIRECT_REGISTER) {
+
+    }
+  }
+
+  return NULL;
+}
+
+
