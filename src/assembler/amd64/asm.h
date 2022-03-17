@@ -64,11 +64,11 @@ typedef struct {
 } asm_operand_sib_register;
 
 typedef struct {
-
+  asm_operand_register reg;
 } asm_operand_indirect_register; // (%rax)
 
 typedef struct {
-  asm_operand_register r;
+  asm_operand_register reg;
   uint8_t disp;
 } asm_operand_disp_register;
 

@@ -160,8 +160,8 @@ typedef struct {
   uint8_t opcode[3];
   modrm_t *modrm;
   sib_t *sib;
-  uint8_t displacement[4];
-  uint8_t immediate[4];
+  uint8_t disps[4]; // 64 位可能是 8 个字节才对
+  uint8_t imms[4];
 } inst_format_t; // 机器编码类型
 
 inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},

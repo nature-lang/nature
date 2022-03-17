@@ -1,4 +1,5 @@
 #include "opcode.h"
+#include "string.h"
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
 
@@ -337,7 +338,7 @@ static modrm_t *new_modrm() {
   return m;
 }
 
-static void fill_ext(inst_format_t *format, opcode_ext ext) {
+static void parser_ext(inst_format_t *format, opcode_ext ext) {
   if (ext == OPCODE_EXT_SLASH0) {
     if (format->modrm == NULL) {
       format->modrm = new_modrm();
@@ -448,6 +449,39 @@ static void fill_ext(inst_format_t *format, opcode_ext ext) {
   }
 }
 
+static void set_disp(inst_format_t *format, string reg, uint8_t disps[], uint8_t count) {
+  // 特殊 register 处理
+  int j = 0;
+  if (strcmp(reg, "rsp") == 0) {
+    format->disps[j++] = 0x24;
+  }
+
+  for (int i = 0; i < count; i++) {
+    format->disps[j++] = disps[i];
+  };
+}
+
+/**
+ * 小端处理
+ * @param src
+ * @param dst
+ */
+static void int32_to_uint8(int32_t src, uint8_t dst[4]) {
+//  memcpy(dst, &src, sizeof(src));
+  dst[0] = src;
+  dst[1] = src >> 8;
+  dst[2] = src >> 16;
+  dst[3] = src >> 24;
+}
+
+static sib_t *new_sib(uint8_t scale, uint8_t index, uint8_t base) {
+  sib_t *s = NEW(sib_t);
+  s->scale = scale;
+  s->index = index;
+  s->base = base;
+  return s;
+}
+
 /**
  *
  * @param asm_inst
@@ -467,7 +501,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
   while (inst->extensions[i] > 0) {
     opcode_ext ext = inst->extensions[i++];
 
-    fill_ext(format, ext);
+    parser_ext(format, ext);
     ext_exists[ext] = true;
   }
 
@@ -485,7 +519,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
 
         format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
         format->modrm->rm = r->index;
-        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
           format->rex_prefix->b = r->index > 7;
         } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
           format->vex_prefix->b = r->index <= 7;
@@ -497,7 +531,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
 
         format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
         format->modrm->reg = r->index;
-        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
           format->rex_prefix->b = r->index > 7;
         } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
           format->vex_prefix->b = r->index <= 7;
@@ -505,7 +539,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       } else if (operand.encoding == ENCODING_TYPE_OPCODE_PLUS) { // opcode = opcode + reg
         format->opcode[0] += r->index & 7;
 
-        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX_W]) {
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
           format->rex_prefix->b = r->index > 7;
         }
       } else if (operand.encoding == ENCODING_TYPE_VEX_VVVV) {
@@ -520,13 +554,117 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       }
 
     } else if (asm_operand->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
+      asm_operand_disp_register *r = asm_operand->value;
+      if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
+
+        format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+        format->modrm->rm = r->reg.index;
+        // 设置 displacement 部分(disp 最多 8个字节，通过 8 字节拆分的形式传参)
+        uint8_t temp[] = {r->disp};
+        set_disp(format, r->reg.name, temp, 1);
+
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+          format->rex_prefix->b = r->reg.index > 7;
+        }
+      } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+          format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+        }
+
+        format->modrm->reg = r->reg.index;
+        uint8_t temp[] = {r->disp};
+        set_disp(format, r->reg.name, temp, 1);
+
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+          format->rex_prefix->b = r->reg.index > 7;
+        }
+      } else {
+        error_exit(0, "unsupported encoding %v", operand.encoding);
+        return NULL;
+      }
 
     } else if (asm_operand->type == ASM_OPERAND_TYPE_INDIRECT_REGISTER) {
+      asm_operand_indirect_register *r = asm_operand->value;
+      if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
 
+        format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+        format->modrm->rm = r->reg.index;
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+          format->rex_prefix->b = r->reg.index > 7;
+        }
+      } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+          format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+        }
+
+        format->modrm->reg = r->reg.index;
+        if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+          format->rex_prefix->b = r->reg.index > 7;
+        }
+      } else {
+        error_exit(0, "unsupported encoding %v", operand.encoding);
+        return NULL;
+      }
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
+      asm_operand_rip_relative *r = asm_operand->value;
+      if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
+
+        format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+        format->modrm->rm = 5;
+
+        // 32 to uint8 []
+        uint8_t temp[4];
+        int32_to_uint8(r->disp, temp);
+        set_disp(format, "", temp, 4);
+      } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
+        if (format->modrm == NULL) {
+          format->modrm = new_modrm();
+        }
+
+        format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+        format->modrm->reg = 5;
+
+        // 小端处理
+        uint8_t temp[4];
+        int32_to_uint8(r->disp, temp);
+        set_disp(format, "", temp, 4);
+      } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REGISTER) {
+        asm_operand_sib_register *r = asm_operand->value;
+        if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+          if (format->modrm == NULL) {
+            format->modrm = new_modrm();
+          }
+
+          format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+          format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM;
+
+          format->sib = new_sib(r->scale, r->index.index, r->base.index);
+          if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+            format->rex_prefix->x = r->index.index > 7;
+            format->rex_prefix->b = r->base.index > 7;
+          }
+
+          if (r->base.index == 13) {
+            format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+            uint8_t temp = {0};
+            set_disp(format, r->base.name, temp, 0);
+          }
+        }
+      }
     }
+
+    return NULL;
   }
 
-  return NULL;
 }
-
-
