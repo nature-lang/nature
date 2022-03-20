@@ -461,6 +461,12 @@ static void set_disp(inst_format_t *format, string reg, uint8_t disps[], uint8_t
   };
 }
 
+static void set_imm(inst_format_t *format, uint8_t imms[], uint8_t count) {
+  for (int i = 0; i < count; ++i) {
+    format->imms[i] = imms[i];
+  }
+}
+
 /**
  * 小端处理
  * @param src
@@ -662,9 +668,173 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           }
         }
       }
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT64) {
+      asm_operand_uint64 *i = asm_operand->value;
+      uint8_t temp[8];
+      memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+      set_imm(format, temp, 8);
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT64) {
+      asm_operand_float64 *f = asm_operand->value;
+      uint8_t temp[8];
+      memcpy(temp, &f->value, sizeof(f->value));
+      set_imm(format, temp, 8);
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32) {
+      asm_operand_uint32 *i = asm_operand->value;
+      uint8_t temp[4];
+      memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+      set_imm(format, temp, 4);
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT16) {
+      asm_operand_uint16 *i = asm_operand->value;
+      uint8_t temp[2];
+      memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+      set_imm(format, temp, 2);
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT8) {
+      asm_operand_uint8 *i = asm_operand->value;
+      uint8_t temp[1] = {i->value};
+      set_imm(format, temp, 1);
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
+      asm_operand_float32 *f = asm_operand->value;
+      uint8_t temp[4];
+      memcpy(temp, &f->value, sizeof(f->value));
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_INT32) {
+      asm_operand_int32 *i = asm_operand->value;
+      uint8_t temp[4];
+      memcpy(temp, &i->value, sizeof(i->value));
+    } else {
+      error_exit(0, "unsupported asm operand type %v", asm_operand->type);
+      return NULL;
     }
 
     return NULL;
   }
-
 }
+
+static void opcode_vex_encoding(inst_format_t *format, uint8_t *data, uint8_t *count) {
+  vex_prefix_t *v = format->vex_prefix;
+  if ((v->vex_legacy_byte == 0 || v->vex_legacy_byte == VEX_LEGACY_BYTE_0F) && v->x && v->b) {
+    uint8_t byte0 = 0xc5;
+    uint8_t byte1 = 0;
+    if (v->r) {
+      byte1 = 1 << 7;
+    }
+
+    byte1 += (v->source << 3);
+    if (v->l) {
+      byte1 += (1 << 2);
+    }
+
+    byte1 += v->vex_opcode_extension;
+    data[*count++] = byte0;
+    data[*count++] = byte1;
+    return;
+  }
+
+  // three byte form
+  uint8_t byte0 = 0xc4;
+  uint8_t byte1 = 0;
+  uint8_t byte2 = 0;
+  if (v->r) {
+    byte1 = 1 << 7;
+  }
+
+  if (v->x) {
+    byte1 += (1 << 6);
+  }
+
+  if (v->b) {
+    byte1 += (1 << 5);
+  }
+
+  byte1 += v->vex_legacy_byte;
+
+  if (v->w) {
+    byte2 = (1 << 7);
+  }
+
+  byte2 += (v->source << 3);
+  if (v->l) {
+    byte2 += (1 << 2);
+  }
+
+  byte2 += v->vex_opcode_extension;
+  data[*count++] = byte0; // count = 1
+  data[*count++] = byte1; // count = 2
+  data[*count++] = byte2; // count = 3
+}
+
+static void opcode_rex_encoding(inst_format_t *format, uint8_t *result) {
+  *result = 0;
+  if (format->rex_prefix->b) {
+    *result = 1;
+  }
+
+  if (format->rex_prefix->x) {
+    *result += 1 << 1;
+  }
+
+  if (format->rex_prefix->r) {
+    *result += 1 << 2;
+  }
+  if (format->rex_prefix->w) {
+    *result += 1 << 3;
+  }
+
+  *result += (1 << 6);
+}
+
+static void opcode_modrm_encoding(inst_format_t *format, uint8_t *result) {
+  modrm_t *modrm = format->modrm;
+  // &7 = &00000111 让其余未归零处理
+  *result = modrm->rm & 7;
+  *result |= (modrm->reg & 7) << 3;
+
+  int mod = (uint8_t) modrm->mod;
+  *result |= (mod << 6);
+}
+
+static void opcode_sib_encoding(inst_format_t *format, uint8_t *result) {
+  sib_t *sib = format->sib;
+  *result = sib->base & 7;
+  *result |= (sib->index & 7) << 3;
+  *result |= (sib->scale << 6);
+}
+
+void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count) {
+  *count = 0;
+  if (format->prefix > 0) {
+    data[*count++] = format->prefix;
+  }
+
+  if (format->vex_prefix != NULL) {
+    opcode_vex_encoding(format, data, count);
+  }
+
+  if (format->rex_prefix != NULL) {
+    opcode_rex_encoding(format, &data[*count++]);
+  }
+
+  uint8_t i = 0;
+  while (format->opcode[i] > 0) {
+    data[*count++] = format->opcode[i++];
+  }
+
+  if (format->modrm != NULL) {
+    opcode_modrm_encoding(format, &data[*count++]);
+  }
+
+  if (format->sib != NULL) {
+    opcode_sib_encoding(format, &data[*count++]);
+  }
+
+  i = 0;
+  while (format->disps[i] > 0) {
+    data[*count++] = format->disps[i++];
+  }
+
+  i = 0;
+  while (format->imms[i] > 0) {
+    data[*count++] = format;
+  }
+}
+
+

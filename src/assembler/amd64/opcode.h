@@ -99,7 +99,7 @@ typedef enum {
   MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP = 1,
   MODRM_MOD_INDIRECT_REGISTER_WORD_DISP = 2,
   MODRM_MOD_DIRECT_REGISTER = 3,
-  MODRM_MOD_SIB_FOLLOWS_RM = 3,
+  MODRM_MOD_SIB_FOLLOWS_RM = 4,
 } modrm_mod;
 
 typedef struct {
@@ -160,8 +160,8 @@ typedef struct {
   uint8_t opcode[3];
   modrm_t *modrm;
   sib_t *sib;
-  uint8_t disps[4]; // 64 位可能是 8 个字节才对
-  uint8_t imms[4];
+  uint8_t disps[8]; // 64 位可能是 8 个字节才对
+  uint8_t imms[8];
 } inst_format_t; // 机器编码类型
 
 inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
@@ -274,6 +274,8 @@ inst_t *opcode_select(asm_inst_t asm_inst);
  * @param inst
  */
 inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst);
+
+void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count);
 
 void opcode_sort_insts(insts_t *insts);
 

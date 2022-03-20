@@ -29,24 +29,34 @@ typedef enum {
 } asm_operand_type;
 
 typedef struct {
-
+  uint8_t value;
 } asm_operand_uint8;
 
 typedef struct {
-
+  uint16_t value;
 } asm_operand_uint16;
 
 typedef struct {
-
+  uint32_t value;
 } asm_operand_uint32;
 
 typedef struct {
-
+  uint64_t value;
 } asm_operand_uint64;
 
 typedef struct {
-
+  int32_t value;
 } asm_operand_int32;
+
+
+typedef struct {
+  float value;
+} asm_operand_float32;
+
+typedef struct {
+  double value;
+} asm_operand_float64;
+
 
 /**
  * 汇编指令参数
@@ -75,14 +85,6 @@ typedef struct {
 typedef struct {
   int32_t disp;
 } asm_operand_rip_relative;
-
-typedef struct {
-
-} asm_operand_float32;
-
-typedef struct {
-
-} asm_operand_float64;
 
 typedef struct {
   uint8_t type;
