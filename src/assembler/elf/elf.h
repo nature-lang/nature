@@ -24,10 +24,12 @@ typedef enum {
  * @param asm_inst
  */
 typedef struct {
-  uint8_t data[30]; // 指令二进制
+  uint8_t *data; // 指令二进制
   uint8_t count; // 指令长度
   uint64_t *offset; // 指令起始 offset
-  bool wait_fill; // 引用 label， 只能使用占位符号
+  asm_inst_t asm_inst; // 原始指令, 指令改写时使用
+  bool may_rel_change; // 引用 label， 只能使用占位符号
+  string rel_symbol; // 使用的符号
 } elf_text_inst_t;
 
 /**
@@ -54,7 +56,7 @@ typedef struct {
   uint64_t *offset;
 } elf_rel_t;
 
-list *elf_text_item_list;
+list *elf_text_inst_list;
 table *elf_symbol_table; // key: symbol_name, value list_node
 list *elf_symbol_list; // list_node link
 list *elf_rel_list;
@@ -62,9 +64,17 @@ list *elf_rel_list;
 // 如果 asm_inst 的参数是 label 或者 inst.name = label 需要进行符号注册与处理
 // 其中需要一个 link 结构来引用最近 128 个字节的指令，做 jmp rel 跳转，原则上不能影响原来的指令
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
-void elf_encoding_asm(asm_inst_t asm_inst);
+void elf_text_inst_build(asm_inst_t asm_inst);
 
 void elf_symbol_insert(elf_symbol_t symbol);
+
+void elf_confirm_text_rel(string name);
+
+/**
+ * rel32 to rel8, count - 3
+ * @param inst
+ */
+void elf_rewrite_text_rel(elf_text_inst_t *inst);
 
 uint64_t *elf_new_current_offset();
 

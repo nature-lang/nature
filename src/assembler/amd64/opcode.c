@@ -461,7 +461,7 @@ static void set_disp(inst_format_t *format, string reg, uint8_t disps[], uint8_t
   };
 }
 
-static void set_imm(inst_format_t *format, uint8_t imms[], uint8_t count) {
+static void set_imm(inst_format_t *format, uint8_t *imms, uint8_t count) {
   for (int i = 0; i < count; ++i) {
     format->imms[i] = imms[i];
   }

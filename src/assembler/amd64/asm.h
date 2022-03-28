@@ -106,6 +106,6 @@ typedef struct {
 
 asm_inst_t asm_rewrite(asm_inst_t asm_inst);
 
-bool asm_has_label(asm_inst_t asm_inst);
+asm_operand_t *asm_has_label_operand(asm_inst_t asm_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
