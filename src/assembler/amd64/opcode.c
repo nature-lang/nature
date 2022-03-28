@@ -266,8 +266,8 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
     return NULL;
   }
 
-  for (int i = 0; i < asm_inst.asm_operand_count; ++i) {
-    asm_operand_t *operand = asm_inst.asm_operands[i];
+  for (int i = 0; i < asm_inst.count; ++i) {
+    asm_operand_t *operand = asm_inst.operands[i];
     // 生成 key
     string key = itoa(asm_operand_to_key(operand->type, operand->size));
 
@@ -514,7 +514,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
   i = 0;
   while (inst->operands[i].type > 0) {
     opcode_operand_t operand = inst->operands[i];
-    asm_operand_t *asm_operand = asm_inst.asm_operands[i];
+    asm_operand_t *asm_operand = asm_inst.operands[i];
     // asm 参数填充
     if (asm_operand->type == ASM_OPERAND_TYPE_REGISTER) {
       asm_operand_register *r = asm_operand->value;

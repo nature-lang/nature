@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "helper.h"
 
 char *itoa(int n) {
@@ -13,5 +14,9 @@ char *itoa(int n) {
   snprintf(str, length + 1, "%d", n);
 
   return str;
+}
+
+bool strequal(char *a, char *b) {
+  return strcmp(a, b) == 0;
 }
 

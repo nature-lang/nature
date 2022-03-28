@@ -279,4 +279,6 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
 
 void opcode_sort_insts(insts_t *insts);
 
+void opcode_encoding(asm_inst_t asm_inst, uint8_t *data, uint8_t *count);
+
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_

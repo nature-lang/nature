@@ -7,6 +7,7 @@
 typedef struct list_node {
   void *value;
   struct list_node *next;
+  struct list_node *prev;
 } list_node;
 
 /**

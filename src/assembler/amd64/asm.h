@@ -48,7 +48,6 @@ typedef struct {
   int32_t value;
 } asm_operand_int32;
 
-
 typedef struct {
   float value;
 } asm_operand_float32;
@@ -56,7 +55,6 @@ typedef struct {
 typedef struct {
   double value;
 } asm_operand_float64;
-
 
 /**
  * 汇编指令参数
@@ -92,22 +90,22 @@ typedef struct {
   void *value; // asm_operand_register
 } asm_operand_t;
 
+typedef struct {
+  string name;
+} asm_operand_symbol_t;
+
 /**
  * 汇编指令结构(即如何编写汇编指令)
+ * 指令名称可以包含 label
  */
 typedef struct {
   string name; // 指令名称
-  uint8_t asm_operand_count;
-  asm_operand_t *asm_operands[4]; // 最多 4 个参数
+  uint8_t count;
+  asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
 
-/**
- * 基于 asm_op + inst_t 的指令选择
- */
-//inst_t opcode_select();
+asm_inst_t asm_rewrite(asm_inst_t asm_inst);
 
-// 指令填充, 基于 inst + asm_op 生成 inst_format_t
-//inst_format_t inst_gen(inst_t inst); //
-
+bool asm_has_label(asm_inst_t asm_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

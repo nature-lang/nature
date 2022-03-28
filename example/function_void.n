@@ -1,0 +1,43 @@
+// 实际开发汇总省略返回值并不常见，所以这种方式还是挺好看的，对闭包的支持也不错
+
+// 可选的函数类型支持(其中第一个参数是函数的返回值)
+// fn<void, string, int>
+
+// 正常函数声明
+bool test(string a, int b) {
+
+}
+
+// 匿名函数声明
+bool (string a, int b) {
+
+}
+
+// 函数赋值给变量
+bool(string, int) test = bool (string a, int b) {
+
+}
+
+// 省略返回值
+void(string, int) test = void(string a, int b) {
+
+}
+
+// 函数参数
+bool foo(bool(string, int) test, int count) {
+	return test()
+}
+
+// 闭包传递
+foo(bool (string, int) {
+	return false
+}, 1);
+
+
+// 响应函数值
+bool(string, int) foo() {
+	return bool(string a, int b){
+		return false
+	}
+}
+

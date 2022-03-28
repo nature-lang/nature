@@ -14,11 +14,12 @@ list *list_new() {
 // 尾部 push
 void list_push(list *l, void *value) {
   list_node *empty = list_new_node();
+  empty->prev = l->rear;
 
   l->rear->value = value;
   l->rear->next = empty;
 
-  l->rear = l->rear->next;
+  l->rear = empty;
   l->count++;
 }
 
@@ -28,10 +29,11 @@ void *list_pop(list *l) {
     return NULL; // null 表示队列为空
   }
 
-  list_node *temp = l->front;
+  list_node *temp = l->front; // 推出头部节点
   void *value = temp->value;
 
   l->front = temp->next;
+  l->front->prev = NULL;
   l->count--;
   free(temp);
 
@@ -41,6 +43,7 @@ list_node *list_new_node() {
   list_node *node = malloc(sizeof(list_node));
   node->value = NULL;
   node->next = NULL;
+  node->prev = NULL;
   return node;
 }
 

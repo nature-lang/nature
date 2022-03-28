@@ -24,6 +24,7 @@ lir_op_type ast_expr_operator_to_lir_op[] = {
 
 int compiler_line = 0;
 
+// 这里是面向单个文件的 closure_list
 compiler_closures closure_list = {.count = 0};
 
 /**

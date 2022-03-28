@@ -27,8 +27,8 @@ type person = struct {
 	int c
 	animal d = animal {
 
-	},
-	list[string] e = ["a", "b", "c", "d"],
+	}
+	list[string] e = ["a", "b", "c", "d"]
 	struct {
 		int foo
 	} f
@@ -47,14 +47,31 @@ map{string:any} = {
 	"int": 1,
 	"null": null
 }
-
-list[any] = [
+set{int} = {1, 2, 3, 4}
+array[any] = [
 	{
 		"a": 1
 	}
 	[]
 ]
 
+tuple(int, bool) = (1, true)
 
+// 带前缀(第一版如果不好编译的话就别省略了,直接通过类型判断数据结构还是挺方便的)
+list[any] a = [1, 2, 3]
+tuple(int, bool) b = (1, true)
+map{string: any} c = {"a": 1, "b": true} // key 必须是简单类型，值则可以是复合类型？
+set{int} d = {1, 2, 3, 4} // 只支持简单类型？
 
+// 省略前缀
+[any] a = [1, 2, 3]
+(int, bool) b = (1, true)
+{string: any} c = {"a": 1, "b": true} // key 必须是简单类型，值则可以是复合类型？
+{int} d = {1, 2, 3, 4} // 只支持简单类型？
+
+// 在函数中的参数(省略返回值)
+void test([int] a, (int, bool) b, {string: any} c, {int} d) {
+}
+
+test(list[1, 2, 3], tuple(1, int), map{"test": b}, set{1, 2, 4})
 
