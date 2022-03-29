@@ -17,6 +17,22 @@ void elf_target_build() {
   // section header table 段表构建
 }
 
+static void elf_fn_operand_rewrite(asm_operand_t *operand, int rel) {
+  if (rel == 0 || abs(rel) > 128) {
+    operand->type = ASM_OPERAND_TYPE_UINT32;
+    operand->size = DWORD;
+    asm_operand_uint32 *v = NEW(asm_operand_uint32);
+    v->value = rel;
+    operand->value = v;
+    return;
+  }
+  operand->type = ASM_OPERAND_TYPE_UINT8;
+  operand->size = BYTE;
+  asm_operand_uint8 *v = NEW(asm_operand_uint8);
+  v->value = int8_complement((int8_t) rel);
+  operand->value = v;
+}
+
 void elf_text_inst_build(asm_inst_t asm_inst) {
   uint64_t *offset = elf_new_current_offset();
   if (strequal(asm_inst.name, "label")) {
@@ -32,54 +48,47 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
     };
     elf_symbol_insert(symbol);
     elf_confirm_text_rel(symbol.name);
+    return; // label 不需要编译成指令
   }
+
+  elf_text_inst_t *inst = NEW(elf_text_inst_t);
+  inst->rel_operand = NULL;
+  inst->rel_symbol = NULL;
 
   // label 引用处理(使用相对跳转)
   asm_operand_t *fn_operand = asm_has_fn_operand(asm_inst);
   if (fn_operand != NULL) {
-    elf_symbol_t *symbol_operand = fn_operand->value;
+    asm_operand_symbol_t *symbol_operand = fn_operand->value;
 
     if (table_exist(elf_symbol_table, symbol_operand->name)) {
-      elf_symbol_t *symbol = table_get(elf_symbol_table, symbol->name);
+      elf_symbol_t *symbol = table_get(elf_symbol_table, symbol_operand->name);
       // 计算 offset 并填充
       int rel_diff = global_offset - *symbol->offset;
-      // 指令修改
-      if (abs(rel_diff) < 128) {
-        fn_operand->type = ASM_OPERAND_TYPE_UINT8;
-        fn_operand->size = BYTE;
-        asm_operand_uint8 *v = NEW(asm_operand_uint8);
-        v->value = int8_complement((int8_t) rel_diff);
-        fn_operand->value = v;
-      } else {
-        fn_operand->type = ASM_OPERAND_TYPE_UINT32;
-        fn_operand->size = DWORD;
-        asm_operand_uint32 *v = NEW(asm_operand_uint32);
-        v->value = int32_complement((int32_t) rel_diff);
-        fn_operand->value = v;
-      }
+      elf_fn_operand_rewrite(fn_operand, rel_diff);
     } else {
       // 引用了 label 符号，但是符号确不在符号表中,也需要改写
-      fn_operand->type = ASM_OPERAND_TYPE_UINT32;
-      fn_operand->size = DWORD;
-      asm_operand_uint32 *v = NEW(asm_operand_uint32);
-      v->value = 0;
-      fn_operand->value = v;
+      elf_fn_operand_rewrite(fn_operand, 0);
+      inst->rel_operand = fn_operand;
+      inst->rel_symbol = symbol_operand->name;
     }
   }
 
   // mov var,reg 处理，处理方式略显不同(暂时不用处理)
-
   uint8_t *data = malloc(sizeof(uint8_t) * 30);
   uint8_t count = 0;
   opcode_encoding(asm_inst, data, &count);
 
-  // 注册 elf_text_inst_t 到 elf_text_inst list 中
+  inst->data = data;
+  inst->count = count;
+  inst->offset = offset;
+  inst->asm_inst = asm_inst;
+
+  // 注册 elf_text_inst_t 到 elf_text_inst_list 和 elf_text_table 中
+  elf_text_insert(inst);
 }
 
 /**
  * 倒推符号表，如果找到符号占用引用则记录位置
- *
- *
  */
 void elf_confirm_text_rel(string name) {
   if (list_empty(elf_text_inst_list)) {
@@ -169,9 +178,11 @@ void elf_text_second_build(list *text_inst_list) {
     if (table_exist(elf_symbol_table, inst->rel_symbol)) {
       // 计算 rel
       elf_symbol_t *symbol = table_get(elf_symbol_table, inst->rel_symbol);
-      int rel_diff = inst->offset - symbol->offset;
-//      if (inst->count ==)
+      int rel_diff = *inst->offset - *symbol->offset;
 
+      elf_fn_operand_rewrite(inst->rel_operand, rel_diff);
+      // 重新 encoding 指令
+      opcode_encoding(inst->asm_inst, inst->data, &inst->count);
     } else {
       // TODO 添加到重定位表
     }
