@@ -2,16 +2,17 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_ASM_H_
 
 #include "src/value.h"
+#include "src/lib/list.h"
 //#include "opcode.h"
 
 // 指令字符宽度
-#define BYTE 1 // 1 byte
-#define WORD 2 // 2 byte
-#define DWORD 4 // 4 byte
-#define QWORD 8 // 8 byte
+#define BYTE 1 // 1 byte = 8 位
+#define WORD 2 // 2 byte = 16 位
+#define DWORD 4 // 4 byte = 32 位
+#define QWORD 8 // 8 byte = 64位
 #define OWORD 16
-#define YWORD 32
-#define ZWORD 64
+#define YWORD 32 // 32 byte
+#define ZWORD 64 // 64 byte
 
 typedef enum {
   ASM_OPERAND_TYPE_REGISTER,
@@ -23,6 +24,7 @@ typedef enum {
   ASM_OPERAND_TYPE_UINT16,
   ASM_OPERAND_TYPE_UINT32,
   ASM_OPERAND_TYPE_UINT64,
+  ASM_OPERAND_TYPE_INT8,
   ASM_OPERAND_TYPE_INT32,
   ASM_OPERAND_TYPE_FLOAT32,
   ASM_OPERAND_TYPE_FLOAT64,
@@ -47,6 +49,10 @@ typedef struct {
 typedef struct {
   int32_t value;
 } asm_operand_int32;
+
+typedef struct {
+  int8_t value;
+} asm_operand_int8;
 
 typedef struct {
   float value;
@@ -104,8 +110,10 @@ typedef struct {
   asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
 
+list *asm_inst_list;
+
 asm_inst_t asm_rewrite(asm_inst_t asm_inst);
 
-asm_operand_t *asm_has_label_operand(asm_inst_t asm_inst);
+asm_operand_t *asm_has_fn_operand(asm_inst_t asm_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

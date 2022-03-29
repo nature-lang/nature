@@ -696,11 +696,18 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       asm_operand_float32 *f = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &f->value, sizeof(f->value));
-    } else if (asm_operand->type == ASM_OPERAND_TYPE_INT32) {
+      set_imm(format, temp, 8);
+    } /*else if (asm_operand->type == ASM_OPERAND_TYPE_INT32) {
       asm_operand_int32 *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
-    } else {
+      // TODO 计算补码
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_INT8) {
+      asm_operand_int32 *i = asm_operand->value;
+      uint8_t temp[4];
+      memcpy(temp, &i->value, sizeof(i->value));
+      // TODO 计算补码 set
+    }*/ else {
       error_exit(0, "unsupported asm operand type %v", asm_operand->type);
       return NULL;
     }

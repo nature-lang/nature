@@ -35,14 +35,39 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
   }
 
   // label 引用处理(使用相对跳转)
-  asm_operand_t *label_operand = asm_has_label_operand(asm_inst);
-  if (label_operand != NULL) {
-    // 判断符号是否在符号表中,在则计算 rel 并改写指令(大于 128 使用 rel32, 小于 128 使用 rel8)
-    // 不在则使用 rel32 占位
+  asm_operand_t *fn_operand = asm_has_fn_operand(asm_inst);
+  if (fn_operand != NULL) {
+    elf_symbol_t *symbol_operand = fn_operand->value;
 
-    // label 改写为 new_operands
-    // symbol_operand to rel operand
+    if (table_exist(elf_symbol_table, symbol_operand->name)) {
+      elf_symbol_t *symbol = table_get(elf_symbol_table, symbol->name);
+      // 计算 offset 并填充
+      int rel_diff = global_offset - *symbol->offset;
+      // 指令修改
+      if (abs(rel_diff) < 128) {
+        fn_operand->type = ASM_OPERAND_TYPE_UINT8;
+        fn_operand->size = BYTE;
+        asm_operand_uint8 *v = NEW(asm_operand_uint8);
+        v->value = int8_complement((int8_t) rel_diff);
+        fn_operand->value = v;
+      } else {
+        fn_operand->type = ASM_OPERAND_TYPE_UINT32;
+        fn_operand->size = DWORD;
+        asm_operand_uint32 *v = NEW(asm_operand_uint32);
+        v->value = int32_complement((int32_t) rel_diff);
+        fn_operand->value = v;
+      }
+    } else {
+      // 引用了 label 符号，但是符号确不在符号表中,也需要改写
+      fn_operand->type = ASM_OPERAND_TYPE_UINT32;
+      fn_operand->size = DWORD;
+      asm_operand_uint32 *v = NEW(asm_operand_uint32);
+      v->value = 0;
+      fn_operand->value = v;
+    }
   }
+
+  // mov var,reg 处理，处理方式略显不同(暂时不用处理)
 
   uint8_t *data = malloc(sizeof(uint8_t) * 30);
   uint8_t count = 0;
@@ -65,11 +90,11 @@ void elf_confirm_text_rel(string name) {
   uint8_t find_count = 0; // 每找到一个 offset 距离将缩短 3 个
   while (true) {
     elf_text_inst_t *inst = current->value;
-    if (current_offset - (find_count * 3) - *inst->offset > 128) {
+    if (global_offset - (find_count * 3) - *inst->offset > 128) {
       break;
     }
 
-    if (inst->may_rel_change && strequal(inst->rel_symbol, name)) {
+    if (inst->rel_symbol != NULL && strequal(inst->rel_symbol, name)) {
       find_count += 1;
     }
 
@@ -101,7 +126,7 @@ void elf_confirm_text_rel(string name) {
   }
 
   // 最新的 offset
-  current_offset = *offset;
+  global_offset = *offset;
 }
 
 /**
@@ -119,6 +144,37 @@ void elf_rewrite_text_rel(elf_text_inst_t *inst) {
   inst->data = malloc(sizeof(uint8_t) * 30);
   inst->count = 0;
   opcode_encoding(inst->asm_inst, inst->data, &inst->count);
-  inst->rel_symbol = "";
-  inst->may_rel_change = false;
+  inst->rel_symbol = NULL;
+}
+
+/**
+ * 遍历  elf_text_inst_list 如果其存在 rel_symbol,即符号引用
+ * 则判断其是否在符号表中，如果其在符号表中，则填充指令 value 部分(此时可以选择重新编译)
+ * 如果其依旧不在符号表中，则表示其引用了外部符号，此时直接添加一条 rel 记录即可
+ * @param elf_text_inst_list
+ */
+void elf_text_second_build(list *text_inst_list) {
+  if (list_empty(text_inst_list)) {
+    return;
+  }
+
+  list_node *current = text_inst_list->front;
+  while (current->value != NULL) {
+    elf_text_inst_t *inst = current->value;
+    if (inst->rel_symbol == NULL) {
+      current = current->next;
+      continue;
+    }
+
+    if (table_exist(elf_symbol_table, inst->rel_symbol)) {
+      // 计算 rel
+      elf_symbol_t *symbol = table_get(elf_symbol_table, inst->rel_symbol);
+      int rel_diff = inst->offset - symbol->offset;
+//      if (inst->count ==)
+
+    } else {
+      // TODO 添加到重定位表
+    }
+
+  }
 }
