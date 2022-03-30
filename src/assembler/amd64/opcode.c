@@ -619,7 +619,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
         error_exit(0, "unsupported encoding %v", operand.encoding);
         return NULL;
       }
-    } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
+    } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
       asm_operand_rip_relative *r = asm_operand->value;
       if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
         if (format->modrm == NULL) {
@@ -627,7 +627,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
         }
 
         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
-        format->modrm->rm = 5;
+        format->modrm->rm = 5; // rm 为啥还有个 5 ?
 
         // 32 to uint8 []
         uint8_t temp[4];
@@ -701,12 +701,10 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       asm_operand_int32 *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
-      // TODO 计算补码
     } else if (asm_operand->type == ASM_OPERAND_TYPE_INT8) {
       asm_operand_int32 *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
-      // TODO 计算补码 set
     }*/ else {
       error_exit(0, "unsupported asm operand type %v", asm_operand->type);
       return NULL;
@@ -821,7 +819,7 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
   }
 
   uint8_t i = 0;
-  while (format->opcode[i] > 0) {
+  while (format->opcode[i] > 0 || i < 3) {
     data[*count++] = format->opcode[i++];
   }
 
@@ -834,12 +832,12 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
   }
 
   i = 0;
-  while (format->disps[i] > 0) {
+  while (format->disps[i] > 0 || i < 8) {
     data[*count++] = format->disps[i++];
   }
 
   i = 0;
-  while (format->imms[i] > 0) {
+  while (format->imms[i] > 0 || i < 8) {
     data[*count++] = format;
   }
 }

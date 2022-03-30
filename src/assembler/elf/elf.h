@@ -39,7 +39,7 @@ typedef struct {
 typedef struct {
   string name;
   uint8_t size; // 8/16/32/64
-  uint8_t type;  // fn/var
+  elf_symbol_type type;  // fn/var
   bool is_rel; // 是否外部符号,外部符号引用也写入到重定位表
   uint8_t section; // 所在段，估计只有 text 段了
   uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内便宜，改地址需要被修正
@@ -51,8 +51,8 @@ typedef struct {
  */
 typedef struct {
   string name;
-//  uint8_t type; // 这个 type 有啥
-  uint8_t section;
+  elf_symbol_type type; // 符号引用还是标签引用
+  uint8_t section; // 使用符号
   uint64_t *offset;
 } elf_rel_t;
 
@@ -69,9 +69,7 @@ void elf_text_inst_build(asm_inst_t asm_inst);
 void elf_text_build(list *asm_inst_list); // 一次构建基于 asm_inst 列表
 void elf_text_second_build(list *elf_text_inst_list); // 二次构建(基于 elf_text_inst_list)
 
-void elf_symbol_insert(elf_symbol_t symbol);
-
-void elf_text_insert(elf_text_inst_t *inst);
+void elf_symbol_insert(elf_symbol_t *symbol);
 
 void elf_confirm_text_rel(string name);
 
@@ -84,7 +82,10 @@ void elf_rewrite_text_rel(elf_text_inst_t *inst);
 uint64_t *elf_new_current_offset();
 
 /**
+ * 编译成 2 进制
+ * 数据来源为符号表，重定位表，代码段
+ * @return
  */
-void elf_text_inst_rewrite();
+uint8_t *elf_encoding();
 
 #endif //NATURE_SRC_ASSEMBLER_ELF_ELF_H_

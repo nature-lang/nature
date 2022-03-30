@@ -2,34 +2,19 @@
 #include "elf.h"
 #include "src/lib/helper.h"
 
-/**
- *
- * 输入：text 代码段 (byte 列表)
- * .data 变量定义段是否需要？
- */
-void elf_target_build() {
-  // elf header 文件头表构建
-
-  // .text 代码段
-
-  // 重定位表
-
-  // section header table 段表构建
-}
-
 static void elf_fn_operand_rewrite(asm_operand_t *operand, int rel) {
   if (rel == 0 || abs(rel) > 128) {
     operand->type = ASM_OPERAND_TYPE_UINT32;
     operand->size = DWORD;
     asm_operand_uint32 *v = NEW(asm_operand_uint32);
-    v->value = rel;
+    v->value = (uint32_t) rel;
     operand->value = v;
     return;
   }
   operand->type = ASM_OPERAND_TYPE_UINT8;
   operand->size = BYTE;
   asm_operand_uint8 *v = NEW(asm_operand_uint8);
-  v->value = int8_complement((int8_t) rel);
+  v->value = (uint8_t) rel;
   operand->value = v;
 }
 
@@ -38,16 +23,15 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
   if (strequal(asm_inst.name, "label")) {
     // text 中唯一需要注册到符号表的数据, 且不需要编译进 elf_text_item
     asm_operand_symbol_t *s = asm_inst.operands[0]->value;
-    elf_symbol_t symbol = {
-        .name = s->name,
-        .type = ELF_SYMBOL_TYPE_FN,
-        .section = ELF_SECTION_TEXT,
-        .offset = offset,
-        .size = 0,
-        .is_rel = false,
-    };
+    elf_symbol_t *symbol = NEW(elf_symbol_t);
+    symbol->name = s->name;
+    symbol->type = ELF_SYMBOL_TYPE_FN;
+    symbol->section = ELF_SECTION_TEXT;
+    symbol->offset = offset;
+    symbol->size = 0;
+    symbol->is_rel = false;
     elf_symbol_insert(symbol);
-    elf_confirm_text_rel(symbol.name);
+    elf_confirm_text_rel(symbol->name);
     return; // label 不需要编译成指令
   }
 
@@ -55,7 +39,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
   inst->rel_operand = NULL;
   inst->rel_symbol = NULL;
 
-  // label 引用处理(使用相对跳转)
+  // 外部符号引用处理
   asm_operand_t *fn_operand = asm_has_fn_operand(asm_inst);
   if (fn_operand != NULL) {
     asm_operand_symbol_t *symbol_operand = fn_operand->value;
@@ -84,7 +68,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
   inst->asm_inst = asm_inst;
 
   // 注册 elf_text_inst_t 到 elf_text_inst_list 和 elf_text_table 中
-  elf_text_insert(inst);
+  list_push(elf_text_inst_list, inst);
 }
 
 /**
@@ -184,8 +168,51 @@ void elf_text_second_build(list *text_inst_list) {
       // 重新 encoding 指令
       opcode_encoding(inst->asm_inst, inst->data, &inst->count);
     } else {
-      // TODO 添加到重定位表
+      // 二次扫描都没有在符号表中找到，说明引用了外部符号(是否需要区分引用的外部符号的类型不同？section 填写的又是什么段？)
+      elf_rel_t *rel = NEW(elf_rel_t);
+      rel->name = inst->rel_symbol;
+      rel->offset = inst->offset;
+      rel->section = ELF_SECTION_TEXT;
+      list_push(elf_rel_list, rel);
     }
 
   }
+}
+
+void elf_text_build(list *asm_inst_list) {
+  if (list_empty(asm_inst_list)) {
+    return;
+  }
+  list_node *current = asm_inst_list->front;
+  while (current->value != NULL) {
+    asm_inst_t *inst = current->value;
+    elf_text_inst_build(*inst);
+  }
+}
+
+void elf_symbol_insert(elf_symbol_t *symbol) {
+  table_set(elf_symbol_table, symbol->name, symbol);
+  list_push(elf_symbol_list, symbol);
+}
+
+uint64_t *elf_new_current_offset() {
+  uint64_t *offset = NEW(uint64_t);
+  *offset = global_offset;
+  return offset;
+}
+
+/**
+ * 文件头表
+ * 代码段 (.text)
+ * 数据段 (.data)
+ * 段表字符串表 (.shstrtab)
+ * 段表 (section header table)
+ * 符号表 (.symtab)
+ * 字符串表(.strtab)
+ * 重定位表(.rel.text)
+ * 重定位表(.rel.data)
+ * @return
+ */
+uint8_t *elf_encoding() {
+  return NULL;
 }

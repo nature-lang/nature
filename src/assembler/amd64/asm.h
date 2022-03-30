@@ -110,6 +110,24 @@ typedef struct {
   asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
 
+// 数据段(编译进符号表即可，数据类型需要兼容高级类型)
+//typedef struct {
+//  char *name;
+//  asm_var_decl_type type;
+////  size_t size; // 单位 Byte
+//  union {
+//    int int_value;
+//    float float_value;
+//    char *string_value;
+//  };
+//} asm_var_decl;
+//
+//struct {
+//  asm_var_decl list[UINT16_MAX];
+//  uint16_t count;
+//} asm_data;
+
+
 list *asm_inst_list;
 
 asm_inst_t asm_rewrite(asm_inst_t asm_inst);

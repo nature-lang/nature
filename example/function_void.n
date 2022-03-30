@@ -35,7 +35,7 @@ foo(bool (string, int) {
 
 
 // 响应函数值
-bool(string, int) foo() {
+bool(string, int) bool(string,int) {
 	return bool(string a, int b){
 		return false
 	}
