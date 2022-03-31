@@ -1,25 +1,3 @@
-//
-// Created by weiwenhao on 2022/3/20.
-//
-
-/* This file defines standard ELF types, structures, and macros.
-   Copyright (C) 1995-2018 Free Software Foundation, Inc.
-   This file is part of the GNU C Library.
-
-   The GNU C Library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option) any later version.
-
-   The GNU C Library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details.
-
-   You should have received a copy of the GNU Lesser General Public
-   License along with the GNU C Library; if not, see
-   <http://www.gnu.org/licenses/>.  */
-
 #ifndef NATURE_SRC_ASSEMBLER_ELF_LIB_ELF_H_
 #define NATURE_SRC_ASSEMBLER_ELF_LIB_ELF_H_
 
@@ -62,23 +40,6 @@ typedef Elf64_Half Elf64_Versym;
 
 #define EI_NIDENT (16)
 
-typedef struct {
-  unsigned char e_ident[EI_NIDENT];    /* Magic number and other info */
-  Elf32_Half e_type;            /* Object file type */
-  Elf32_Half e_machine;        /* Architecture */
-  Elf32_Word e_version;        /* Object file version */
-  Elf32_Addr e_entry;        /* Entry point virtual address */
-  Elf32_Off e_phoff;        /* Program header table file offset */
-  Elf32_Off e_shoff;        /* Section header table file offset */
-  Elf32_Word e_flags;        /* Processor-specific flags */
-  Elf32_Half e_ehsize;        /* ELF header size in bytes */
-  Elf32_Half e_phentsize;        /* Program header table entry size */
-  Elf32_Half e_phnum;        /* Program header table entry count */
-  Elf32_Half e_shentsize;        /* Section header table entry size */
-  Elf32_Half e_shnum;        /* Section header table entry count */
-  Elf32_Half e_shstrndx;        /* Section header string table index */
-} Elf32_Ehdr;
-
 /**
  * 文件头表
  */
@@ -92,7 +53,7 @@ typedef struct {
   Elf64_Off e_shoff;        /* Section header table file offset */ // 段表文件偏移
   Elf64_Word e_flags;        /* Processor-specific flags */ // 平台相关标记
   Elf64_Half e_ehsize;        /* ELF header size in bytes */ // 文件头大小
-  Elf64_Half e_phentsize;        /* Program header table entry size * // 程序投标项大小
+  Elf64_Half e_phentsize;        /* Program header table entry size */ // 程序投标项大小
   Elf64_Half e_phnum;        /* Program header table entry count */ // 程序头表项个数
   Elf64_Half e_shentsize;        /* Section header table entry size */
   Elf64_Half e_shnum;        /* Section header table entry count */
@@ -380,19 +341,7 @@ typedef struct {
 
 /* Section header.  */
 
-typedef struct {
-  Elf32_Word sh_name;        /* Section name (string tbl index) */
-  Elf32_Word sh_type;        /* Section type */
-  Elf32_Word sh_flags;        /* Section flags */
-  Elf32_Addr sh_addr;        /* Section virtual addr at execution */
-  Elf32_Off sh_offset;        /* Section file offset */
-  Elf32_Word sh_size;        /* Section size in bytes */
-  Elf32_Word sh_link;        /* Link to another section */
-  Elf32_Word sh_info;        /* Additional section information */
-  Elf32_Word sh_addralign;        /* Section alignment */
-  Elf32_Word sh_entsize;        /* Entry size if section holds table */
-} Elf32_Shdr;
-
+/* Section header. 段表 */
 typedef struct {
   Elf64_Word sh_name;        /* Section name (string tbl index) */
   Elf64_Word sh_type;        /* Section type */
@@ -486,12 +435,6 @@ typedef struct {
 /* Section compression header.  Used when SHF_COMPRESSED is set.  */
 
 typedef struct {
-  Elf32_Word ch_type;    /* Compression format.  */
-  Elf32_Word ch_size;    /* Uncompressed data size.  */
-  Elf32_Word ch_addralign;    /* Uncompressed data alignment.  */
-} Elf32_Chdr;
-
-typedef struct {
   Elf64_Word ch_type;    /* Compression format.  */
   Elf64_Word ch_reserved;
   Elf64_Xword ch_size;    /* Uncompressed data size.  */
@@ -509,16 +452,6 @@ typedef struct {
 #define GRP_COMDAT    0x1        /* Mark group as COMDAT.  */
 
 /* Symbol table entry.  */
-
-typedef struct {
-  Elf32_Word st_name;        /* Symbol name (string tbl index) */
-  Elf32_Addr st_value;        /* Symbol value */
-  Elf32_Word st_size;        /* Symbol size */
-  unsigned char st_info;        /* Symbol type and binding */
-  unsigned char st_other;        /* Symbol visibility */
-  Elf32_Section st_shndx;        /* Section index */
-} Elf32_Sym;
-
 /**
  * 符号表
  */
@@ -534,7 +467,6 @@ typedef struct {
 
 /* The syminfo section if available contains additional information about
    every dynamic symbol.  */
-
 typedef struct {
   Elf32_Half si_boundto;        /* Direct bindings, symbol bound to */
   Elf32_Half si_flags;            /* Per symbol flags */
@@ -623,12 +555,6 @@ typedef struct {
 #define STV_PROTECTED    3        /* Not preemptible, not exported */
 
 /* Relocation table entry without addend (in section of type SHT_REL).  */
-
-typedef struct {
-  Elf32_Addr r_offset;        /* Address */
-  Elf32_Word r_info;            /* Relocation type and symbol index */
-} Elf32_Rel;
-
 /* I have seen two different definitions of the Elf64_Rel and
    Elf64_Rela structures, so we'll leave them out until Novell (or
    whoever) gets their act together.  */
@@ -668,7 +594,6 @@ typedef struct {
 #define ELF64_R_INFO(sym, type)        ((((Elf64_Xword) (sym)) << 32) + (type))
 
 /* Program segment header.  */
-
 typedef struct {
   Elf32_Word p_type;            /* Segment type */
   Elf32_Off p_offset;        /* Segment file offset */

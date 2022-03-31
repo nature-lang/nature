@@ -97,7 +97,8 @@ typedef struct {
 } asm_operand_t;
 
 typedef struct {
-  string name;
+  string name; // 符号名称
+  bool is_label; // label 类型符号还是数据类型符号
 } asm_operand_symbol_t;
 
 /**
@@ -132,6 +133,6 @@ list *asm_inst_list;
 
 asm_inst_t asm_rewrite(asm_inst_t asm_inst);
 
-asm_operand_t *asm_has_fn_operand(asm_inst_t asm_inst);
+asm_operand_t *asm_has_symbol_operand(asm_inst_t asm_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

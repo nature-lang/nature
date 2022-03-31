@@ -8,4 +8,6 @@ char *itoa(int n);
 
 bool strequal(string a, string b);
 
+char *str_connect(char *a, char *b);
+
 #endif //NATURE_SRC_LIB_HELPER_H_

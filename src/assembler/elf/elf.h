@@ -65,9 +65,8 @@ list *elf_rel_list;
 // 其中需要一个 link 结构来引用最近 128 个字节的指令，做 jmp rel 跳转，原则上不能影响原来的指令
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
 void elf_text_inst_build(asm_inst_t asm_inst);
-
-void elf_text_build(list *asm_inst_list); // 一次构建基于 asm_inst 列表
-void elf_text_second_build(list *elf_text_inst_list); // 二次构建(基于 elf_text_inst_list)
+void elf_text_inst_list_build(list *asm_inst_list); // 一次构建基于 asm_inst 列表
+void elf_text_inst_list_second_build(list *elf_text_inst_list); // 二次构建(基于 elf_text_inst_list)
 
 void elf_symbol_insert(elf_symbol_t *symbol);
 
@@ -82,10 +81,55 @@ void elf_rewrite_text_rel(elf_text_inst_t *inst);
 uint64_t *elf_new_current_offset();
 
 /**
- * 编译成 2 进制
- * 数据来源为符号表，重定位表，代码段
+ * 文件头表
+ * 代码段 (.text)
+ * 数据段 (.data)
+ * 段表字符串表 (.shstrtab)
+ * 段表 (section header table)
+ * 符号表 (.symtab)
+ * 字符串表(.strtab)
+ * 重定位表(.rel.text)
  * @return
  */
-uint8_t *elf_encoding();
+void elf_build();
+
+/**
+ * 生成二进制结果
+ * @param count
+ * @return
+ */
+uint8_t *elf_text_build(uint64_t *count);
+
+/**
+ * 段表构建
+ * @return
+ */
+string elf_section_table_build(uint64_t text_size,
+                               uint64_t symbol_table_size,
+                               uint64_t symbol_last_local_index,
+                               uint64_t string_size,
+                               uint64_t rel_text_size);
+
+/**
+ * 重定位表构建
+ * @param rel_text
+ * @param count
+ */
+void elf_rel_text_table_build(Elf64_Rel *rel_text, uint8_t *count);
+
+/**
+ *
+ * @param symbol 符号表和个数
+ * @param count
+ * @return 字符串表
+ */
+string elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count);
+
+/**
+ * 基于输出二进制
+ * @param count
+ * @return
+ */
+uint8_t *elf_encoding(uint64_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_ELF_ELF_H_
