@@ -39,6 +39,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
     symbol->offset = offset;
     symbol->size = 0;
     symbol->is_rel = false;
+    symbol->is_local = s->is_local; // 局部 label 在生成符号表的时候可以忽略
     elf_symbol_insert(symbol);
     elf_confirm_text_rel(symbol->name);
     return; // label 不需要编译成指令
@@ -183,9 +184,9 @@ void elf_text_inst_list_second_build(list *elf_text_inst_list) {
       continue;
     }
 
-    if (table_exist(elf_symbol_table, inst->rel_symbol)) {
-      // 计算 rel
-      elf_symbol_t *symbol = table_get(elf_symbol_table, inst->rel_symbol);
+    // 计算 rel
+    elf_symbol_t *symbol = table_get(elf_symbol_table, inst->rel_symbol);
+    if (symbol != NULL && !symbol->is_rel) {
       int rel_diff = *inst->offset - *symbol->offset;
 
       elf_fn_operand_rewrite(inst->rel_operand, rel_diff);
@@ -201,7 +202,17 @@ void elf_text_inst_list_second_build(list *elf_text_inst_list) {
       rel->type = ELF_SYMBOL_TYPE_FN;
       list_push(elf_rel_list, rel);
 
-      // TODO 添加符号表
+      if (symbol == NULL) {
+        elf_symbol_t *symbol = NEW(elf_symbol_t);
+        symbol->name = inst->rel_symbol;
+        symbol->type = 0; // 外部符号引用直接 no type ?
+        symbol->section = 0;
+        symbol->offset = 0;
+        symbol->size = 0;
+        symbol->is_rel = true; // 是否为外部引用符号(避免重复添加)
+        symbol->is_local = false; // 局部 label 在生成符号表的时候可以忽略
+        elf_symbol_insert(symbol);
+      }
     }
 
   }
@@ -271,15 +282,17 @@ void elf_build() {
  * .text.data/.rel.text/.shstrtab/.symtab/.strtab
  * @param text_size
  * @param symbol_table_size
- * @param string_size
+ * @param strtab_size
  * @param rel_text_size
  * @return
  */
 char *elf_section_table_build(uint64_t text_size,
                               uint64_t symbol_table_size,
                               uint64_t symbol_last_local_index,
-                              uint64_t string_size,
-                              uint64_t rel_text_size) {
+                              uint64_t strtab_size,
+                              uint64_t rel_text_size,
+                              Elf64_Shdr **section_table,
+                              uint8_t *count) {
   // 段表字符串表
   char *shstrtab_data = "\0";
   uint64_t rela_text_name = strlen(shstrtab_data);
@@ -295,8 +308,29 @@ char *elf_section_table_build(uint64_t text_size,
   shstrtab_data = str_connect(shstrtab_data, ".strtab\0");
 
   uint64_t offset = sizeof(Elf64_Ehdr);
+  uint64_t text_offset = offset;
+  offset += text_size;
+  uint64_t data_offset = offset;
+  offset += 0;
+  uint64_t shstrtab_offset = offset;
+  offset += strlen(shstrtab_data);
 
-  Elf64_Shdr **section_table = malloc(sizeof(Elf64_Shdr) * 5);
+
+//  Elf64_Shdr **section_table = malloc(sizeof(Elf64_Shdr) * 5);
+
+  // 空段
+  Elf64_Shdr *empty = NEW(Elf64_Shdr);
+  empty->sh_name = 0;
+  empty->sh_type = 0; // 表示程序段
+  empty->sh_flags = 0;
+  empty->sh_addr = 0; // 可执行文件才有该地址
+  empty->sh_offset = 0;
+  empty->sh_size = 0;
+  empty->sh_link = 0;
+  empty->sh_info = 0;
+  empty->sh_addralign = 0;
+  empty->sh_entsize = 0;
+  section_table[0] = empty;
 
   // 代码段
   Elf64_Shdr *text = NEW(Elf64_Shdr);
@@ -359,6 +393,19 @@ char *elf_section_table_build(uint64_t text_size,
   section_table[4] = symtab;
 
   // 字符串串表 5
+  Elf64_Shdr *strtab = NEW(Elf64_Shdr);
+  symtab->sh_name = strtab_name;
+  symtab->sh_type = SHT_STRTAB; // 表示程序段
+  symtab->sh_flags = 0;
+  symtab->sh_addr = 0; // 可执行文件才有该地址
+  symtab->sh_offset = offset;
+  symtab->sh_size = strtab_size;
+  offset += symtab->sh_size;
+  symtab->sh_link = 0;
+  symtab->sh_info = 0; // 符号表最后一个 local 符号的索引
+  symtab->sh_addralign = 1;
+  symtab->sh_entsize = 0;
+  section_table[5] = symtab;
 
   // 段表字符串表 6
   Elf64_Shdr *shstrtab = NEW(Elf64_Shdr);
@@ -373,8 +420,20 @@ char *elf_section_table_build(uint64_t text_size,
   shstrtab->sh_info = 0;
   shstrtab->sh_addralign = 1;
   shstrtab->sh_entsize = 0;
-  section_table[2] = shstrtab;
+  section_table[6] = shstrtab;
 
+  *count = 7;
+
+  return shstrtab_data;
+}
+
+char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
+  // 0: NULL
+
+  // 1: file
+
+  // 2: section: 1 = .text
+  // 3: section: 3 = .data
   return NULL;
 }
 

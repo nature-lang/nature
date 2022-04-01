@@ -11,6 +11,8 @@ uint64_t global_offset;
 typedef enum {
   ELF_SYMBOL_TYPE_FN,
   ELF_SYMBOL_TYPE_VAR,
+//  ELF_SYMBOL_TYPE_SECTION,
+//  ELF_SYMBOL_TYPE_FILE,
 } elf_symbol_type;
 
 typedef enum {
@@ -40,7 +42,8 @@ typedef struct {
   string name;
   uint8_t size; // 8/16/32/64
   elf_symbol_type type;  // fn/var
-  bool is_rel; // 是否外部符号,外部符号引用也写入到重定位表
+  bool is_rel; // 是否引用外部符号
+  bool is_local; // 是否是本地符号
   uint8_t section; // 所在段，估计只有 text 段了
   uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内便宜，改地址需要被修正
 } elf_symbol_t;
@@ -107,8 +110,10 @@ uint8_t *elf_text_build(uint64_t *count);
 string elf_section_table_build(uint64_t text_size,
                                uint64_t symbol_table_size,
                                uint64_t symbol_last_local_index,
-                               uint64_t string_size,
-                               uint64_t rel_text_size);
+                               uint64_t strtab_size,
+                               uint64_t rel_text_size,
+                               Elf64_Shdr **section_table,
+                               uint8_t *count);
 
 /**
  * 重定位表构建

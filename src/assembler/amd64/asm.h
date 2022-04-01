@@ -99,6 +99,7 @@ typedef struct {
 typedef struct {
   string name; // 符号名称
   bool is_label; // label 类型符号还是数据类型符号
+  bool is_local; // 是内部符号还是外部符号呢
 } asm_operand_symbol_t;
 
 /**
