@@ -20,7 +20,6 @@ bool strequal(char *a, char *b) {
   return strcmp(a, b) == 0;
 }
 
-
 char *str_connect(char *a, char *b) {
   char *buf = malloc(strlen(a) + strlen(b) + 1);
   sprintf(buf, "%s%s", a, b);

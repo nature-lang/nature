@@ -6,19 +6,27 @@
 #include "src/lib/list.h"
 #include "src/lib/table.h"
 
+#define TEXT_INDEX 1
+#define RELA_TEXT_INDEX 2
+#define DATA_INDEX 3
+#define SYMTAB_INDEX 4
+#define SHSTRTAB_INDEX 5
+#define SYMTAB_LAST_LOCAL_INDEX 3 // 符号表最后一个 local 字符的索引
+string filename;
+
 uint64_t global_offset;
 
 typedef enum {
-  ELF_SYMBOL_TYPE_FN,
-  ELF_SYMBOL_TYPE_VAR,
+  ELF_SYMBOL_TYPE_VAR = 1,
+  ELF_SYMBOL_TYPE_FN = 2,
 //  ELF_SYMBOL_TYPE_SECTION,
 //  ELF_SYMBOL_TYPE_FILE,
 } elf_symbol_type;
 
 typedef enum {
-  ELF_SECTION_TEXT,
-  ELF_SECTION_DATA,
-  ELF_SECTION_REL,
+  ELF_SECTION_TEXT = TEXT_INDEX,
+  ELF_SECTION_DATA = DATA_INDEX,
+  ELF_SECTION_RELA_TEXT = RELA_TEXT_INDEX,
 } elf_section;
 
 /**
@@ -44,7 +52,7 @@ typedef struct {
   elf_symbol_type type;  // fn/var
   bool is_rel; // 是否引用外部符号
   bool is_local; // 是否是本地符号
-  uint8_t section; // 所在段，估计只有 text 段了
+  elf_section section; // 所在段，估计只有 text 段了
   uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内便宜，改地址需要被修正
 } elf_symbol_t;
 
@@ -109,10 +117,9 @@ uint8_t *elf_text_build(uint64_t *count);
  */
 string elf_section_table_build(uint64_t text_size,
                                uint64_t symbol_table_size,
-                               uint64_t symbol_last_local_index,
                                uint64_t strtab_size,
-                               uint64_t rel_text_size,
-                               Elf64_Shdr **section_table,
+                               uint64_t rela_text_size,
+                               Elf64_Shdr *shdr,
                                uint8_t *count);
 
 /**

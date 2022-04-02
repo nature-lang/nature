@@ -288,11 +288,13 @@ void elf_build() {
  */
 char *elf_section_table_build(uint64_t text_size,
                               uint64_t symbol_table_size,
-                              uint64_t symbol_last_local_index,
                               uint64_t strtab_size,
-                              uint64_t rel_text_size,
-                              Elf64_Shdr **section_table,
+                              uint64_t rela_text_size,
+                              Elf64_Shdr *shdr,
                               uint8_t *count) {
+  shdr = malloc(sizeof(Elf64_Shdr) * 7);
+  *count = 7;
+
   // 段表字符串表
   char *shstrtab_data = "\0";
   uint64_t rela_text_name = strlen(shstrtab_data);
@@ -319,122 +321,193 @@ char *elf_section_table_build(uint64_t text_size,
 //  Elf64_Shdr **section_table = malloc(sizeof(Elf64_Shdr) * 5);
 
   // 空段
-  Elf64_Shdr *empty = NEW(Elf64_Shdr);
-  empty->sh_name = 0;
-  empty->sh_type = 0; // 表示程序段
-  empty->sh_flags = 0;
-  empty->sh_addr = 0; // 可执行文件才有该地址
-  empty->sh_offset = 0;
-  empty->sh_size = 0;
-  empty->sh_link = 0;
-  empty->sh_info = 0;
-  empty->sh_addralign = 0;
-  empty->sh_entsize = 0;
-  section_table[0] = empty;
+  shdr[0] = (Elf64_Shdr) {
+      .sh_name = 0,
+      .sh_type = 0, // 表示程序段
+      .sh_flags = 0,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = 0,
+      .sh_size = 0,
+      .sh_link = 0,
+      .sh_info = 0,
+      .sh_addralign = 0,
+      .sh_entsize = 0
+  };
 
   // 代码段
-  Elf64_Shdr *text = NEW(Elf64_Shdr);
-  text->sh_name = text_name;
-  text->sh_type = SHT_PROGBITS; // 表示程序段
-  text->sh_flags = SHF_ALLOC | SHF_EXCLUDE;
-  text->sh_addr = 0; // 可执行文件才有该地址
-  text->sh_offset = offset;
-  text->sh_size = text_size;
+  shdr[1] = (Elf64_Shdr) {
+      .sh_name = text_name,
+      .sh_type = SHT_PROGBITS, // 表示程序段
+      .sh_flags = SHF_ALLOC | SHF_EXCLUDE,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = text_size,
+      .sh_link = 0,
+      .sh_info = 0,
+      .sh_addralign = 1,
+      .sh_entsize = 0
+  };
   offset += text_size;
-  text->sh_link = 0;
-  text->sh_info = 0;
-  text->sh_addralign = 1;
-  text->sh_entsize = 0;
-  section_table[1] = text;
 
   // 代码段重定位表
-  Elf64_Shdr *rela_text = NEW(Elf64_Shdr);
-  rela_text->sh_name = rela_text_name;
-  rela_text->sh_type = SHT_RELA; // 表示程序段
-  rela_text->sh_flags = SHF_INFO_LINK;
-  rela_text->sh_addr = 0; // 可执行文件才有该地址
-  rela_text->sh_offset = offset;
-  rela_text->sh_size = rel_text_size;
-  offset += rela_text->sh_size;
-  rela_text->sh_link = 4; // 使用的符号表所在段(为啥重定位表要在符号表定义)
-  rela_text->sh_info = 1; // 重定位表作用的段的段表索引
-  rela_text->sh_addralign = 8;
-  rela_text->sh_entsize = sizeof(Elf64_Rel);
-  section_table[2] = rela_text;
+  shdr[2] = (Elf64_Shdr) {
+      .sh_name = rela_text_name,
+      .sh_type = SHT_RELA, // 表示程序段
+      .sh_flags = SHF_INFO_LINK,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = rela_text_size,
+      .sh_link = 4,
+      .sh_info = 1,
+      .sh_addralign = 8,
+      .sh_entsize = sizeof(Elf64_Rel)
+  };
+  offset += rela_text_size;
 
   // 数据段
-  Elf64_Shdr *data = NEW(Elf64_Shdr);
-  data->sh_name = data_name;
-  data->sh_type = SHT_PROGBITS; // 表示程序段
-  data->sh_flags = SHF_ALLOC | SHF_WRITE;
-  data->sh_addr = 0; // 可执行文件才有该地址
-  data->sh_offset = offset;
-  data->sh_size = 0;
-  offset += data->sh_size;
-  data->sh_link = 0;
-  data->sh_info = 0;
-  data->sh_addralign = 4;
-  data->sh_entsize = 0;
-  section_table[3] = data;
+  shdr[3] = (Elf64_Shdr) {
+      .sh_name = data_name,
+      .sh_type = SHT_PROGBITS, // 表示程序段
+      .sh_flags =  SHF_ALLOC | SHF_WRITE,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = 0,
+      .sh_link = 0,
+      .sh_info = 0,
+      .sh_addralign = 4,
+      .sh_entsize = 0
+  };
 
   // 符号表段
-  Elf64_Shdr *symtab = NEW(Elf64_Shdr);
-  symtab->sh_name = symtab_name;
-  symtab->sh_type = SHT_SYMTAB; // 表示程序段
-  symtab->sh_flags = 0;
-  symtab->sh_addr = 0; // 可执行文件才有该地址
-  symtab->sh_offset = offset;
-  symtab->sh_size = symbol_table_size;
-  offset += symtab->sh_size;
-  symtab->sh_link = 5;
-  symtab->sh_info = symbol_last_local_index + 1; // 符号表最后一个 local 符号的索引
-  symtab->sh_addralign = 8;
-  symtab->sh_entsize = sizeof(Elf64_Sym);
-  section_table[4] = symtab;
+  shdr[4] = (Elf64_Shdr) {
+      .sh_name = symtab_name,
+      .sh_type = SHT_SYMTAB, // 表示程序段
+      .sh_flags =  0,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = symbol_table_size,
+      .sh_link = 5,
+      .sh_info = SYMTAB_LAST_LOCAL_INDEX + 1, // 符号表最后一个 local 符号的索引
+      .sh_addralign = 8,
+      .sh_entsize = sizeof(Elf64_Sym)
+  };
+  offset += symbol_table_size;
 
   // 字符串串表 5
-  Elf64_Shdr *strtab = NEW(Elf64_Shdr);
-  symtab->sh_name = strtab_name;
-  symtab->sh_type = SHT_STRTAB; // 表示程序段
-  symtab->sh_flags = 0;
-  symtab->sh_addr = 0; // 可执行文件才有该地址
-  symtab->sh_offset = offset;
-  symtab->sh_size = strtab_size;
-  offset += symtab->sh_size;
-  symtab->sh_link = 0;
-  symtab->sh_info = 0; // 符号表最后一个 local 符号的索引
-  symtab->sh_addralign = 1;
-  symtab->sh_entsize = 0;
-  section_table[5] = symtab;
+  shdr[5] = (Elf64_Shdr) {
+      .sh_name = strtab_name,
+      .sh_type = SHT_STRTAB, // 表示程序段
+      .sh_flags =  0,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = strtab_size,
+      .sh_link = 0,
+      .sh_info = 0,
+      .sh_addralign = 1,
+      .sh_entsize = 0,
+  };
+
 
   // 段表字符串表 6
-  Elf64_Shdr *shstrtab = NEW(Elf64_Shdr);
-  shstrtab->sh_name = shstrtab_name;
-  shstrtab->sh_type = SHT_STRTAB; // 表示程序段
-  shstrtab->sh_flags = 0;
-  shstrtab->sh_addr = 0; // 可执行文件才有该地址
-  shstrtab->sh_offset = offset;
-  shstrtab->sh_size = strlen(shstrtab_data);
-  offset += shstrtab->sh_size;
-  shstrtab->sh_link = 0;
-  shstrtab->sh_info = 0;
-  shstrtab->sh_addralign = 1;
-  shstrtab->sh_entsize = 0;
-  section_table[6] = shstrtab;
-
-  *count = 7;
+  shdr[5] = (Elf64_Shdr) {
+      .sh_name = shstrtab_name,
+      .sh_type = SHT_STRTAB, // 表示程序段
+      .sh_flags =  0,
+      .sh_addr = 0, // 可执行文件才有该地址
+      .sh_offset = offset,
+      .sh_size = strlen(shstrtab_data),
+      .sh_link = 0,
+      .sh_info = 0,
+      .sh_addralign = 1,
+      .sh_entsize = 0,
+  };
 
   return shstrtab_data;
 }
 
 char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
+  // 计算需要添加仅符号表的符号的数量(rel/全局 var/外部的 label)
+  int size = 3;
+  list_node *current = elf_symbol_list->front;
+  while (current->value != NULL) {
+    elf_symbol_t *s = current->value;
+    if (!s->is_local) {
+      size++;
+    }
+    current = current->next;
+  }
+
+  // 内部初始化
+  symbol = malloc(sizeof(symbol) * size);
+  *count = 0;
+
+  // 字符串表
+  char *strtab_data = "\0";
+
   // 0: NULL
+  symbol[*count++] = (Elf64_Sym) {
+      .st_name = 0, // 字符串表的偏移
+      .st_value = 0, // 符号相对于所在段基址的偏移
+      .st_size = 0, // 符号的大小，单位字节
+      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_NOTYPE)),
+      .st_other = 0,
+      .st_shndx = 0, // 符号所在段，在段表内的索引
+  };
 
   // 1: file
+  symbol[*count++] = (Elf64_Sym) {
+      .st_name = strlen(strtab_data),
+      .st_value = 0,
+      .st_size = 0,
+      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_FILE)),
+      .st_other = 0,
+      .st_shndx = SHN_ABS,
+  };
+  strtab_data = str_connect(strtab_data, filename);
+  strtab_data = str_connect(strtab_data, "\0");
 
   // 2: section: 1 = .text
+  symbol[*count++] = (Elf64_Sym) {
+      .st_name = 0,
+      .st_value = 0,
+      .st_size = 0,
+      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_SECTION)),
+      .st_other = 0,
+      .st_shndx = TEXT_INDEX,
+  };
+
   // 3: section: 3 = .data
-  return NULL;
+  symbol[*count++] = (Elf64_Sym) {
+      .st_name = 0,
+      .st_value = 0,
+      .st_size = 0,
+      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_SECTION)),
+      .st_other = 0,
+      .st_shndx = DATA_INDEX,
+  };
+
+  // 4. 填充其余符号(list 遍历)
+  current = elf_symbol_list->front;
+  while (current->value != NULL) {
+    elf_symbol_t *s = current->value;
+    if (!s->is_local) {
+      Elf64_Sym sym = {
+          .st_name = strlen(strtab_data),
+          .st_value = *s->offset,
+          .st_size = s->size,
+          .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_GLOBAL), ELF64_ST_TYPE(s->type)),
+          .st_other = 0,
+          .st_shndx = s->section,
+      };
+
+      symbol[*count++] = sym;
+      strtab_data = str_connect(strtab_data, s->name);
+      strtab_data = str_connect(strtab_data, "\0");
+    }
+    current = current->next;
+  }
+
+  return strtab_data;
 }
 
 
