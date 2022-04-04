@@ -26,52 +26,8 @@ FetchContent_MakeAvailable(cmocka)
 #include_directories(${PROJECT_SOURCE_DIR}/src)
 
 
-add_executable(test_amd64_mov
-        test_amd64_mov.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
+add_executable(test_elf test_elf.c ${SRC_ASSEMBLER} ${SRC_LIB})
 
-add_executable(test_amd64_add
-        test_amd64_add.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
+target_link_libraries(test_elf cmocka)
 
-add_executable(test_amd64_sub
-        test_amd64_sub.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-add_executable(test_amd64_mul
-        test_amd64_mul.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-add_executable(test_amd64_div
-        test_amd64_div.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-add_executable(test_amd64_set
-        test_amd64_set.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-add_executable(test_amd64_jmp
-        test_amd64_jmp.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-add_executable(test_amd64_jcc
-        test_amd64_jcc.c
-        ${SRC_ASSEMBLER} ${SRC_LIB})
-
-target_link_libraries(test_amd64_mov cmocka)
-target_link_libraries(test_amd64_add cmocka)
-target_link_libraries(test_amd64_sub cmocka)
-target_link_libraries(test_amd64_mul cmocka)
-target_link_libraries(test_amd64_div cmocka)
-target_link_libraries(test_amd64_set cmocka)
-target_link_libraries(test_amd64_jmp cmocka)
-target_link_libraries(test_amd64_jcc cmocka)
-
-add_test(test_amd64_mov test_amd64_mov)
-add_test(test_amd64_add test_amd64_add)
-add_test(test_amd64_sub test_amd64_sub)
-add_test(test_amd64_mul test_amd64_mul)
-add_test(test_amd64_div test_amd64_div)
-add_test(test_amd64_set test_amd64_set)
-add_test(test_amd64_jmp test_amd64_jmp)
-add_test(test_amd64_jcc test_amd64_jmp)
+add_test(test_elf test_elf)

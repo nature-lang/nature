@@ -129,11 +129,6 @@ typedef struct {
 //  uint16_t count;
 //} asm_data;
 
-
-list *asm_inst_list;
-
-asm_inst_t asm_rewrite(asm_inst_t asm_inst);
-
 asm_operand_t *asm_has_symbol_operand(asm_inst_t asm_inst);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

@@ -9,6 +9,7 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/asm.h
         ${SRC_DIR}/assembler/amd64/asm.c
         ${SRC_DIR}/assembler/amd64/opcode.h
+        ${SRC_DIR}/assembler/amd64/opcode.c
         ${SRC_DIR}/assembler/elf/lib_elf.h
         ${SRC_DIR}/assembler/elf/elf.c
         ${SRC_DIR}/assembler/elf/elf.h)

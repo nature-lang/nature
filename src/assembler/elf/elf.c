@@ -1,7 +1,7 @@
-#include "lib_elf.h"
 #include "elf.h"
 #include "src/lib/helper.h"
 #include <string.h>
+#include <stdio.h>
 
 static void elf_var_operand_rewrite(asm_operand_t *operand) {
   operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
@@ -75,7 +75,8 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
       // 添加到重定位表
       elf_rel_t *rel = NEW(elf_rel_t);
       rel->name = symbol_operand->name;
-      rel->offset = offset; // 引用的具体位置
+      rel->offset = offset + 2; // 引用的具体位置
+      rel->addend = -4;
       rel->section = ELF_SECTION_TEXT;
       rel->type = ELF_SYMBOL_TYPE_VAR;
       list_push(elf_rel_list, rel);
@@ -198,10 +199,12 @@ void elf_text_inst_list_second_build(list *elf_text_inst_list) {
       elf_rel_t *rel = NEW(elf_rel_t);
       rel->name = inst->rel_symbol;
       rel->offset = inst->offset;
+      rel->addend = 0; // 符号表如果都使用 rip,则占 4 个偏移
       rel->section = ELF_SECTION_TEXT;
       rel->type = ELF_SYMBOL_TYPE_FN;
       list_push(elf_rel_list, rel);
 
+      // 重定位表
       if (symbol == NULL) {
         elf_symbol_t *symbol = NEW(elf_symbol_t);
         symbol->name = inst->rel_symbol;
@@ -241,7 +244,7 @@ uint64_t *elf_new_current_offset() {
 }
 
 static char *elf_header_ident() {
-  char *ident = NEW(sizeof(char) * EI_NIDENT);
+  char *ident = malloc(sizeof(char) * EI_NIDENT);
   memset(ident, 0, EI_NIDENT);
 
   ident[0] = 0x7f; // del 符号的编码
@@ -256,24 +259,67 @@ static char *elf_header_ident() {
   return ident;
 }
 
-void elf_build() {
+elf_t elf_new() {
   // 代码段构建 .text
+  uint64_t text_count = 0;
+  uint8_t *text = elf_text_build(&text_count);
+
+  // 符号表构建
+  uint64_t symtab_count = 3;
+  list_node *current = elf_symbol_list->front;
+  while (current->value != NULL) {
+    elf_symbol_t *s = current->value;
+    if (!s->is_local) {
+      symtab_count++;
+    }
+    current = current->next;
+  }
+  Elf64_Sym *symtab = malloc(sizeof(Elf64_Sym) * symtab_count);
+  string strtab = elf_symtab_build(symtab);
+
+  // 代码段重定位表构建
+  uint64_t rel_text_count;
+  Elf64_Rela *rel_text = elf_rela_text_build(&rel_text_count);
+
+  // 段表构建
+  uint8_t shdr_count = 7;
+  Elf64_Shdr *shdr = malloc(sizeof(Elf64_Shdr) * shdr_count);
+  string shstrtab = elf_shdr_build(text_count,
+                                   symtab_count * sizeof(Elf64_Sym),
+                                   strlen(strtab),
+                                   rel_text_count * sizeof(Elf64_Rela),
+                                   shdr);
 
   // 文件头构建
-  Elf64_Ehdr header = {
+  Elf64_Ehdr ehdr = {
       .e_ident = elf_header_ident(),
       .e_type = ET_REL, // elf 文件类型 = 可重定位文件
       .e_machine = EM_X86_64,
       .e_version = EV_CURRENT,
       .e_entry = 0, // elf 文件程序入口的线性绝对地址，一般用于可执行文件，可重定位文件配置为 0 即可
       .e_phoff = 0, // 程序头表在文件中的偏移，对于可重定位文件来说，值同样为 0，
-      .e_shoff = 0, // 段表在文件头表的偏移地址，现在还不能计算出来
+      .e_shoff = sizeof(Elf64_Ehdr) + text_count + strlen(shstrtab), // 段表在文件中偏移地址，现在还不能计算出来
       .e_flags = 0, // elf 平台相关熟悉，设置为 0 即可
       .e_ehsize = sizeof(Elf64_Ehdr), // 文件头表的大小
       .e_phentsize = 0, // 程序头表项的大小, 可重定位表没有这个头
       .e_phnum = 0, // 程序头表项, 这个只能是 0
       .e_shentsize = sizeof(Elf64_Shdr), // 段表项的大小
-      .e_shstrndx = 0 // 段表字符串表在段表中的索引
+      .e_shstrndx = SHSTRTAB_INDEX,
+  };
+
+  // 输出二进制
+  return (elf_t) {
+      .ehdr = ehdr,
+      .text = text,
+      .text_count = text_count,
+      .shstrtab = shstrtab,
+      .shdr = shdr,
+      .shdr_count = shdr_count,
+      .symtab = symtab,
+      .symtab_count = symtab_count,
+      .strtab = strtab,
+      .rela_text = rel_text,
+      .real_text_count = rel_text_count
   };
 }
 
@@ -281,19 +327,18 @@ void elf_build() {
  * 包含的项：
  * .text.data/.rel.text/.shstrtab/.symtab/.strtab
  * @param text_size
- * @param symbol_table_size
+ * @param symtab_size
  * @param strtab_size
  * @param rel_text_size
  * @return
  */
-char *elf_section_table_build(uint64_t text_size,
-                              uint64_t symbol_table_size,
-                              uint64_t strtab_size,
-                              uint64_t rela_text_size,
-                              Elf64_Shdr *shdr,
-                              uint8_t *count) {
-  shdr = malloc(sizeof(Elf64_Shdr) * 7);
-  *count = 7;
+char *elf_shdr_build(uint64_t text_size,
+                     uint64_t symtab_size,
+                     uint64_t strtab_size,
+                     uint64_t rela_text_size,
+                     Elf64_Shdr *shdr) {
+//  shdr = malloc(sizeof(Elf64_Shdr) * 7);
+//  *count = 7;
 
   // 段表字符串表
   char *shstrtab_data = "\0";
@@ -385,13 +430,13 @@ char *elf_section_table_build(uint64_t text_size,
       .sh_flags =  0,
       .sh_addr = 0, // 可执行文件才有该地址
       .sh_offset = offset,
-      .sh_size = symbol_table_size,
+      .sh_size = symtab_size,
       .sh_link = 5,
       .sh_info = SYMTAB_LAST_LOCAL_INDEX + 1, // 符号表最后一个 local 符号的索引
       .sh_addralign = 8,
       .sh_entsize = sizeof(Elf64_Sym)
   };
-  offset += symbol_table_size;
+  offset += symtab_size;
 
   // 字符串串表 5
   shdr[5] = (Elf64_Shdr) {
@@ -409,7 +454,7 @@ char *elf_section_table_build(uint64_t text_size,
 
 
   // 段表字符串表 6
-  shdr[5] = (Elf64_Shdr) {
+  shdr[6] = (Elf64_Shdr) {
       .sh_name = shstrtab_name,
       .sh_type = SHT_STRTAB, // 表示程序段
       .sh_flags =  0,
@@ -425,27 +470,27 @@ char *elf_section_table_build(uint64_t text_size,
   return shstrtab_data;
 }
 
-char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
+char *elf_symtab_build(Elf64_Sym *symbol) {
   // 计算需要添加仅符号表的符号的数量(rel/全局 var/外部的 label)
-  int size = 3;
-  list_node *current = elf_symbol_list->front;
-  while (current->value != NULL) {
-    elf_symbol_t *s = current->value;
-    if (!s->is_local) {
-      size++;
-    }
-    current = current->next;
-  }
+//  int size = 3;
+//  list_node *current = elf_symbol_list->front;
+//  while (current->value != NULL) {
+//    elf_symbol_t *s = current->value;
+//    if (!s->is_local) {
+//      size++;
+//    }
+//    current = current->next;
+//  }
 
   // 内部初始化
-  symbol = malloc(sizeof(symbol) * size);
-  *count = 0;
+//  symbol = malloc(sizeof(symbol) * size);
+  int count = 0;
 
   // 字符串表
   char *strtab_data = "\0";
 
   // 0: NULL
-  symbol[*count++] = (Elf64_Sym) {
+  symbol[count++] = (Elf64_Sym) {
       .st_name = 0, // 字符串表的偏移
       .st_value = 0, // 符号相对于所在段基址的偏移
       .st_size = 0, // 符号的大小，单位字节
@@ -455,7 +500,7 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
   };
 
   // 1: file
-  symbol[*count++] = (Elf64_Sym) {
+  symbol[count++] = (Elf64_Sym) {
       .st_name = strlen(strtab_data),
       .st_value = 0,
       .st_size = 0,
@@ -467,7 +512,7 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
   strtab_data = str_connect(strtab_data, "\0");
 
   // 2: section: 1 = .text
-  symbol[*count++] = (Elf64_Sym) {
+  symbol[count++] = (Elf64_Sym) {
       .st_name = 0,
       .st_value = 0,
       .st_size = 0,
@@ -477,7 +522,7 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
   };
 
   // 3: section: 3 = .data
-  symbol[*count++] = (Elf64_Sym) {
+  symbol[count++] = (Elf64_Sym) {
       .st_name = 0,
       .st_value = 0,
       .st_size = 0,
@@ -487,7 +532,7 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
   };
 
   // 4. 填充其余符号(list 遍历)
-  current = elf_symbol_list->front;
+  list_node *current = elf_symbol_list->front;
   while (current->value != NULL) {
     elf_symbol_t *s = current->value;
     if (!s->is_local) {
@@ -499,8 +544,9 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
           .st_other = 0,
           .st_shndx = s->section,
       };
-
-      symbol[*count++] = sym;
+      int index = count++;
+      symbol[index] = sym;
+      s->symtab_index = index;
       strtab_data = str_connect(strtab_data, s->name);
       strtab_data = str_connect(strtab_data, "\0");
     }
@@ -508,6 +554,79 @@ char *elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count) {
   }
 
   return strtab_data;
+}
+
+Elf64_Rela *elf_rela_text_build(uint64_t *count) {
+  Elf64_Rela *r = malloc(sizeof(Elf64_Rela) * elf_rel_list->count);
+  *count = elf_rel_list->count;
+  list_node *current = elf_rel_list->front;
+  int i = 0;
+  while (current->value != NULL) {
+    elf_rel_t *rel = current->value;
+    elf_symbol_t *s = table_get(elf_symbol_table, rel->name);
+    uint64_t index = s->symtab_index;
+    // r_sym 表示重定位项在符号表内的索引(?)
+    r[i] = (Elf64_Rela) {
+        .r_offset = *rel->offset,
+        .r_info = ELF64_R_INFO(ELF64_R_SYM(index), ELF64_R_TYPE(R_X86_64_PC32)),
+        .r_addend = rel->addend,
+    };
+  }
+
+  return r;
+}
+
+uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
+  *count = sizeof(Elf64_Ehdr) +
+      elf.text_count +
+      sizeof(elf.shstrtab) +
+      sizeof(Elf64_Shdr) * elf.shdr_count +
+      sizeof(Elf64_Sym) * elf.symtab_count +
+      sizeof(elf.strtab) +
+      sizeof(Elf64_Rela) * elf.real_text_count;
+  uint8_t *binary = malloc(*count);
+
+  // 文件头
+  uint8_t *p = binary;
+  memcpy(p, &elf.ehdr, sizeof(Elf64_Ehdr));
+  p += sizeof(Elf64_Ehdr);
+
+  // 代码段
+  memcpy(p, elf.text, elf.text_count);
+  p += elf.text_count;
+
+  // 段表字符串表
+  memcpy(p, elf.shstrtab, sizeof(elf.shstrtab));
+  p += sizeof(elf.shstrtab);
+
+  // 段表
+  memcpy(p, elf.shdr, sizeof(Elf64_Shdr) * elf.shdr_count);
+  p += sizeof(Elf64_Shdr) * elf.shdr_count;
+
+  // 符号表
+  memcpy(p, elf.symtab, sizeof(Elf64_Sym) * elf.symtab_count);
+  p += sizeof(Elf64_Sym) * elf.symtab_count;
+
+  // 字符串表
+  memcpy(p, elf.strtab, sizeof(elf.strtab));
+  p += sizeof(elf.strtab);
+
+  // 重定位表
+  memcpy(p, elf.rela_text, sizeof(Elf64_Rela) * elf.real_text_count);
+  p += sizeof(Elf64_Rela) * elf.real_text_count;
+
+  return binary;
+}
+
+void elf_to_file(uint8_t *binary, uint64_t count, char *target_filename) {
+  FILE *f = fopen(target_filename, "w+b");
+  fwrite(binary, 1, count, f);
+  fclose(f);
+}
+
+// TODO 遍历 elf_text_inst_list 即可
+uint8_t *elf_text_build(uint64_t *count) {
+  return NULL;
 }
 
 

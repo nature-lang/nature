@@ -2,6 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_ELF_ELF_H_
 
 #include "src/assembler/amd64/asm.h"
+#include "lib_elf.h"
 #include "src/assembler/amd64/opcode.h"
 #include "src/lib/list.h"
 #include "src/lib/table.h"
@@ -54,6 +55,7 @@ typedef struct {
   bool is_local; // 是否是本地符号
   elf_section section; // 所在段，估计只有 text 段了
   uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内便宜，改地址需要被修正
+  int symtab_index; // 在符号表的索引
 } elf_symbol_t;
 
 /**
@@ -65,6 +67,7 @@ typedef struct {
   elf_symbol_type type; // 符号引用还是标签引用
   uint8_t section; // 使用符号
   uint64_t *offset;
+  int8_t addend;
 } elf_rel_t;
 
 list *elf_text_inst_list;
@@ -91,6 +94,21 @@ void elf_rewrite_text_rel(elf_text_inst_t *inst);
 
 uint64_t *elf_new_current_offset();
 
+typedef struct {
+  Elf64_Ehdr ehdr;
+  uint8_t *text;
+  uint64_t text_count;
+//  uint8_t *data;// 数据段省略
+  char *shstrtab;
+  Elf64_Shdr *shdr;
+  uint8_t shdr_count;
+  Elf64_Sym *symtab;
+  uint64_t symtab_count;
+  char *strtab;
+  Elf64_Rela *rela_text;
+  uint64_t real_text_count;
+} elf_t;
+
 /**
  * 文件头表
  * 代码段 (.text)
@@ -102,7 +120,11 @@ uint64_t *elf_new_current_offset();
  * 重定位表(.rel.text)
  * @return
  */
-void elf_build();
+elf_t elf_new();
+
+uint8_t *elf_encoding(elf_t elf, uint64_t *count);
+
+void elf_to_file(uint8_t *binary, uint64_t count, string filename);
 
 /**
  * 生成二进制结果
@@ -115,19 +137,18 @@ uint8_t *elf_text_build(uint64_t *count);
  * 段表构建
  * @return
  */
-string elf_section_table_build(uint64_t text_size,
-                               uint64_t symbol_table_size,
-                               uint64_t strtab_size,
-                               uint64_t rela_text_size,
-                               Elf64_Shdr *shdr,
-                               uint8_t *count);
+string elf_shdr_build(uint64_t text_size,
+                      uint64_t symtab_size,
+                      uint64_t strtab_size,
+                      uint64_t rela_text_size,
+                      Elf64_Shdr *shdr);
 
 /**
  * 重定位表构建
  * @param rel_text
  * @param count
  */
-void elf_rel_text_table_build(Elf64_Rel *rel_text, uint8_t *count);
+Elf64_Rela *elf_rela_text_build(uint64_t *count);
 
 /**
  *
@@ -135,13 +156,6 @@ void elf_rel_text_table_build(Elf64_Rel *rel_text, uint8_t *count);
  * @param count
  * @return 字符串表
  */
-string elf_symbol_table_build(Elf64_Sym *symbol, uint8_t *count);
-
-/**
- * 基于输出二进制
- * @param count
- * @return
- */
-uint8_t *elf_encoding(uint64_t *count);
+string elf_symtab_build(Elf64_Sym *symbol);
 
 #endif //NATURE_SRC_ASSEMBLER_ELF_ELF_H_

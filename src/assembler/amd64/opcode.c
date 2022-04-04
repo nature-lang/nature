@@ -3,6 +3,28 @@
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
 
+inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                     {
+                         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                         {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                     }
+};
+
+// 注册指令列表 asm operand
+inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
+                       {
+                           {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
+                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+inst_t push_r64 = {
+    "push", 0, {0x50}, {},
+    {
+        {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+    }
+};
+
 /**
  * 将底层指令整理成树形结构, 如果没有特别声明则
  * operands 表示底层指令， 即 r16/r8/r64/rm
@@ -449,7 +471,7 @@ static void parser_ext(inst_format_t *format, opcode_ext ext) {
   }
 }
 
-static void set_disp(inst_format_t *format, string reg, uint8_t disps[], uint8_t count) {
+static void set_disp(inst_format_t *format, string reg, uint8_t *disps, uint8_t count) {
   // 特殊 register 处理
   int j = 0;
   if (strcmp(reg, "rsp") == 0) {
@@ -663,7 +685,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
 
           if (r->base.index == 13) {
             format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
-            uint8_t temp = {0};
+            uint8_t temp[1] = {0};
             set_disp(format, r->base.name, temp, 0);
           }
         }
@@ -710,8 +732,9 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       return NULL;
     }
 
-    return NULL;
+    i++;
   }
+  return format;
 }
 
 static void opcode_vex_encoding(inst_format_t *format, uint8_t *data, uint8_t *count) {
@@ -838,8 +861,13 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
 
   i = 0;
   while (format->imms[i] > 0 || i < 8) {
-    data[*count++] = format;
+    data[*count++] = format->imms[i++];
   }
+}
+
+// TODO 将指令编译成二进制，编译的结果放在 data + count 中
+void opcode_encoding(asm_inst_t asm_inst, uint8_t *data, uint8_t *count) {
+
 }
 
 

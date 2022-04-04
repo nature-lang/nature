@@ -164,27 +164,6 @@ typedef struct {
   uint8_t imms[8];
 } inst_format_t; // 机器编码类型
 
-inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                     {
-                         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                         {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                     }
-};
-
-// 注册指令列表 asm operand
-inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
-                       {
-                           {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                       }
-};
-
-inst_t push_r64 = {
-    "push", 0, {0x50}, {},
-    {
-        {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
-    }
-};
 
 /**
  * 存储多个 opcode 的数据结构
