@@ -88,9 +88,9 @@ void elf_confirm_text_rel(string name);
 
 /**
  * rel32 to rel8, count - 3
- * @param inst
+ * @param t
  */
-void elf_rewrite_text_rel(elf_text_inst_t *inst);
+void elf_rewrite_text_rel(elf_text_inst_t *t);
 
 uint64_t *elf_new_current_offset();
 

@@ -2,6 +2,7 @@
 #include "string.h"
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
+#include <stdio.h>
 
 inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                      {
@@ -25,6 +26,17 @@ inst_t push_r64 = {
     }
 };
 
+static opcode_tree_node_t *opcode_node_new() {
+  opcode_tree_node_t *node = NEW(opcode_tree_node_t);
+  node->key = "";
+  node->insts = (insts_t) {
+      .count = 0,
+      .list = malloc(sizeof(inst_t) * 10),
+  };
+  node->succs = table_new();
+  return node;
+}
+
 /**
  * 将底层指令整理成树形结构, 如果没有特别声明则
  * operands 表示底层指令， 即 r16/r8/r64/rm
@@ -38,11 +50,12 @@ inst_t push_r64 = {
  * @return
  */
 void opcode_init() {
+  opcode_tree_root = opcode_node_new();
+  opcode_tree_root->key = "root";
   // 收集所有指令，进行注册
   opcode_tree_build(&mov_rm8_r8);
   opcode_tree_build(&mov_r16_rm16);
   opcode_tree_build(&push_r64);
-  // .... TODO
 }
 
 /**
@@ -56,7 +69,9 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte) {
 }
 
 asm_keys_t operand_low_to_high(operand_type t) {
-  asm_keys_t res;
+  asm_keys_t res = {
+      .count = 0,
+  };
 
   if (t == OPERAND_TYPE_REL8) {
     res.count = 1;
@@ -88,8 +103,8 @@ asm_keys_t operand_low_to_high(operand_type t) {
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 1);
     highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 1);
     highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 1);
-    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 1);
-    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, 8);
+    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, QWORD);
     res.list = highs;
     return res;
   }
@@ -100,8 +115,8 @@ asm_keys_t operand_low_to_high(operand_type t) {
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 2);
     highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 2);
     highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 2);
-    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 2);
-    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, 8);
+    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, QWORD);
     res.list = highs;
     return res;
   }
@@ -112,8 +127,8 @@ asm_keys_t operand_low_to_high(operand_type t) {
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 4);
     highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 4);
     highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 4);
-    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 4);
-    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, 8);
+    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, QWORD);
     res.list = highs;
     return res;
   }
@@ -124,8 +139,8 @@ asm_keys_t operand_low_to_high(operand_type t) {
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 8);
     highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 8);
     highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 8);
-    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
-    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, 8);
+    highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+    highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, QWORD);
     res.list = highs;
     return res;
   }
@@ -134,7 +149,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     res.count = 2;
     uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 8);
-    highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
+    highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
     res.list = highs;
     return res;
   }
@@ -203,7 +218,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     return res;
   }
 
-  if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM1M64) {
+  if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
     res.count = 5;
     uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
     highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 8);
@@ -244,7 +259,7 @@ opcode_tree_node_t *opcode_find_name(string name) {
     return table_get(opcode_tree_root->succs, name);
   }
 
-  opcode_tree_node_t *node = NEW(opcode_tree_node_t);
+  opcode_tree_node_t *node = opcode_node_new();
   node->key = name;
 
   table_set(opcode_tree_root->succs, name, node);
@@ -270,14 +285,14 @@ void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_inde
   for (int i = 0; i < asm_keys.count; ++i) {
     uint16_t key_int = asm_keys.list[i];
     char *key = itoa(key_int);
-    bool exists = table_exist(node->succs, key);
-    if (!exists) {
-      opcode_tree_node_t *node = NEW(opcode_tree_node_t);
-      node->key = key;
-      table_set(node->succs, key, node);
+    opcode_tree_node_t *succ = table_get(node->succs, key);
+    if (succ == NULL) {
+      succ = opcode_node_new();
+      succ->key = key;
+      table_set(node->succs, key, succ);
     }
     // 继续寻找下一级node
-    opcode_find_succs(table_get(node->succs, key), inst, operands_index + 1);
+    opcode_find_succs(succ, inst, operands_index + 1);
   }
 }
 
@@ -539,7 +554,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
     asm_operand_t *asm_operand = asm_inst.operands[i];
     // asm 参数填充
     if (asm_operand->type == ASM_OPERAND_TYPE_REGISTER) {
-      asm_operand_register *r = asm_operand->value;
+      asm_operand_register_t *r = asm_operand->value;
       if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
         if (format->modrm == NULL) {
           format->modrm = new_modrm();
@@ -582,20 +597,20 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       }
 
     } else if (asm_operand->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
-      asm_operand_disp_register *r = asm_operand->value;
+      asm_operand_disp_register_t *r = asm_operand->value;
       if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
         if (format->modrm == NULL) {
           format->modrm = new_modrm();
         }
 
         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
-        format->modrm->rm = r->reg.index;
+        format->modrm->rm = r->reg->index;
         // 设置 displacement 部分(disp 最多 8个字节，通过 8 字节拆分的形式传参)
         uint8_t temp[] = {r->disp};
-        set_disp(format, r->reg.name, temp, 1);
+        set_disp(format, r->reg->name, temp, 1);
 
         if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-          format->rex_prefix->b = r->reg.index > 7;
+          format->rex_prefix->b = r->reg->index > 7;
         }
       } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
         if (format->modrm == NULL) {
@@ -603,12 +618,12 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
         }
 
-        format->modrm->reg = r->reg.index;
+        format->modrm->reg = r->reg->index;
         uint8_t temp[] = {r->disp};
-        set_disp(format, r->reg.name, temp, 1);
+        set_disp(format, r->reg->name, temp, 1);
 
         if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-          format->rex_prefix->b = r->reg.index > 7;
+          format->rex_prefix->b = r->reg->index > 7;
         }
       } else {
         error_exit(0, "unsupported encoding %v", operand.encoding);
@@ -616,16 +631,16 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       }
 
     } else if (asm_operand->type == ASM_OPERAND_TYPE_INDIRECT_REGISTER) {
-      asm_operand_indirect_register *r = asm_operand->value;
+      asm_operand_indirect_register_t *r = asm_operand->value;
       if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
         if (format->modrm == NULL) {
           format->modrm = new_modrm();
         }
 
         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
-        format->modrm->rm = r->reg.index;
+        format->modrm->rm = r->reg->index;
         if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-          format->rex_prefix->b = r->reg.index > 7;
+          format->rex_prefix->b = r->reg->index > 7;
         }
       } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
         if (format->modrm == NULL) {
@@ -633,16 +648,16 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
         }
 
-        format->modrm->reg = r->reg.index;
+        format->modrm->reg = r->reg->index;
         if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-          format->rex_prefix->b = r->reg.index > 7;
+          format->rex_prefix->b = r->reg->index > 7;
         }
       } else {
         error_exit(0, "unsupported encoding %v", operand.encoding);
         return NULL;
       }
     } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
-      asm_operand_rip_relative *r = asm_operand->value;
+      asm_operand_rip_relative_t *r = asm_operand->value;
       if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
         if (format->modrm == NULL) {
           format->modrm = new_modrm();
@@ -668,7 +683,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
         int32_to_uint8(r->disp, temp);
         set_disp(format, "", temp, 4);
       } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REGISTER) {
-        asm_operand_sib_register *r = asm_operand->value;
+        asm_operand_sib_register_t *r = asm_operand->value;
         if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
           if (format->modrm == NULL) {
             format->modrm = new_modrm();
@@ -677,45 +692,45 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
           format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM;
 
-          format->sib = new_sib(r->scale, r->index.index, r->base.index);
+          format->sib = new_sib(r->scale, r->index->index, r->base->index);
           if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-            format->rex_prefix->x = r->index.index > 7;
-            format->rex_prefix->b = r->base.index > 7;
+            format->rex_prefix->x = r->index->index > 7;
+            format->rex_prefix->b = r->base->index > 7;
           }
 
-          if (r->base.index == 13) {
+          if (r->base->index == 13) {
             format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
             uint8_t temp[1] = {0};
-            set_disp(format, r->base.name, temp, 0);
+            set_disp(format, r->base->name, temp, 0);
           }
         }
       }
     } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT64) {
-      asm_operand_uint64 *i = asm_operand->value;
+      asm_operand_uint64_t *i = asm_operand->value;
       uint8_t temp[8];
       memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
       set_imm(format, temp, 8);
     } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT64) {
-      asm_operand_float64 *f = asm_operand->value;
+      asm_operand_float64_t *f = asm_operand->value;
       uint8_t temp[8];
       memcpy(temp, &f->value, sizeof(f->value));
       set_imm(format, temp, 8);
     } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32) {
-      asm_operand_uint32 *i = asm_operand->value;
+      asm_operand_uint32_t *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
       set_imm(format, temp, 4);
     } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT16) {
-      asm_operand_uint16 *i = asm_operand->value;
+      asm_operand_uint16_t *i = asm_operand->value;
       uint8_t temp[2];
       memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
       set_imm(format, temp, 2);
     } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT8) {
-      asm_operand_uint8 *i = asm_operand->value;
+      asm_operand_uint8_t *i = asm_operand->value;
       uint8_t temp[1] = {i->value};
       set_imm(format, temp, 1);
     } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
-      asm_operand_float32 *f = asm_operand->value;
+      asm_operand_float32_t *f = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &f->value, sizeof(f->value));
       set_imm(format, temp, 8);
@@ -865,9 +880,15 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
   }
 }
 
-// TODO 将指令编译成二进制，编译的结果放在 data + count 中
-void opcode_encoding(asm_inst_t asm_inst, uint8_t *data, uint8_t *count) {
+uint8_t *opcode_encoding(asm_inst_t asm_inst, uint8_t *count) {
+  *count = 0;
+  uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
+  inst_t *inst = opcode_select(asm_inst);
+  inst_format_t *format = opcode_fill(inst, asm_inst);
+  opcode_format_encoding(format, data, count);
+  realloc(data, *count);
+  return data;
 }
 
 

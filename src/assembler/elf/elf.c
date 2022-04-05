@@ -6,7 +6,7 @@
 static void elf_var_operand_rewrite(asm_operand_t *operand) {
   operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
   operand->size = QWORD;
-  asm_operand_rip_relative *r = NEW(asm_operand_rip_relative);
+  asm_operand_rip_relative_t *r = NEW(asm_operand_rip_relative_t);
   r->disp = 0;
   operand->value = r;
 }
@@ -15,14 +15,14 @@ static void elf_fn_operand_rewrite(asm_operand_t *operand, int rel) {
   if (rel == 0 || abs(rel) > 128) {
     operand->type = ASM_OPERAND_TYPE_UINT32;
     operand->size = DWORD;
-    asm_operand_uint32 *v = NEW(asm_operand_uint32);
+    asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
     v->value = (uint32_t) rel;
     operand->value = v;
     return;
   }
   operand->type = ASM_OPERAND_TYPE_UINT8;
   operand->size = BYTE;
-  asm_operand_uint8 *v = NEW(asm_operand_uint8);
+  asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
   v->value = (uint8_t) rel;
   operand->value = v;
 }
@@ -51,7 +51,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
 
 
   // 外部标签引用处理
-  asm_operand_t *operand = asm_has_symbol_operand(asm_inst);
+  asm_operand_t *operand = asm_symbol_operand(asm_inst);
   if (operand != NULL) {
     // 1. 数据符号引用(直接改写成 0x0(rip))
     // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 占位)
@@ -83,13 +83,9 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
     }
   }
 
-  uint8_t *data = malloc(sizeof(uint8_t) * 30);
-  uint8_t count = 0;
-  opcode_encoding(asm_inst, data, &count);
-  global_offset += count; // advance global offset
+  inst->data = opcode_encoding(asm_inst, &inst->count);
+  global_offset += inst->count; // advance global offset
 
-  inst->data = data;
-  inst->count = count;
   inst->offset = offset;
   inst->asm_inst = asm_inst;
 
@@ -150,20 +146,17 @@ void elf_confirm_text_rel(string name) {
 
 /**
  * inst rel32 to rel8
- * @param inst
+ * @param t
  */
-void elf_rewrite_text_rel(elf_text_inst_t *inst) {
-  asm_operand_uint8 *operand = NEW(asm_operand_uint8);
+void elf_rewrite_text_rel(elf_text_inst_t *t) {
+  asm_operand_uint8_t *operand = NEW(asm_operand_uint8_t);
   operand->value = 0; // 仅占位即可
-  inst->asm_inst.count = 1;
-  inst->asm_inst.operands[0]->type = ASM_OPERAND_TYPE_UINT8;
-  inst->asm_inst.operands[0]->size = BYTE;
-  inst->asm_inst.operands[0]->value = operand;
-
-  inst->data = malloc(sizeof(uint8_t) * 30);
-  inst->count = 0;
-  opcode_encoding(inst->asm_inst, inst->data, &inst->count);
-  inst->rel_symbol = NULL;
+  t->asm_inst.count = 1;
+  t->asm_inst.operands[0]->type = ASM_OPERAND_TYPE_UINT8;
+  t->asm_inst.operands[0]->size = BYTE;
+  t->asm_inst.operands[0]->value = operand;
+  t->data = opcode_encoding(t->asm_inst, &t->count);
+  t->rel_symbol = NULL;
 }
 
 /**
@@ -193,7 +186,7 @@ void elf_text_inst_list_second_build(list *elf_text_inst_list) {
       elf_fn_operand_rewrite(inst->rel_operand, rel_diff);
 
       // 重新 encoding 指令
-      opcode_encoding(inst->asm_inst, inst->data, &inst->count);
+      inst->data = opcode_encoding(inst->asm_inst, &inst->count);
     } else {
       // 二次扫描都没有在符号表中找到，说明引用了外部符号(是否需要区分引用的外部符号的类型不同？section 填写的又是什么段？)
       elf_rel_t *rel = NEW(elf_rel_t);
@@ -624,9 +617,23 @@ void elf_to_file(uint8_t *binary, uint64_t count, char *target_filename) {
   fclose(f);
 }
 
-// TODO 遍历 elf_text_inst_list 即可
 uint8_t *elf_text_build(uint64_t *count) {
-  return NULL;
+  *count = elf_text_inst_list->count;
+  uint8_t *text = malloc(sizeof(uint8_t) * *count);
+  if (*count == 0) {
+    return text;
+  }
+
+  uint8_t *p = text;
+
+  list_node *current = elf_text_inst_list->front;
+  while (current->value != NULL) {
+    elf_text_inst_t *t = current->value;
+    memcpy(p, t->data, t->count);
+    p += t->count;
+  }
+
+  return text;
 }
 
 

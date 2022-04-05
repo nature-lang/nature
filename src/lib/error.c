@@ -17,14 +17,14 @@
 //  exit(0);
 //}
 
-void error_exit(int line, char *format, ...) {
+void error_exit(int code, char *format, ...) {
   va_list args;
   char *buf = malloc(sizeof(char) * ERROR_STR_COUNT);
   va_start(args, format);
   vsprintf(buf, format, args);
   va_end(args);
 
-  printf("line: %d, %s", line, buf);
+  printf("code: %d, %s", code, buf);
   exit(0);
 }
 

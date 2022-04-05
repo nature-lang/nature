@@ -41,8 +41,7 @@ typedef enum {
  * 当一个 asm 指令匹配下面的多个类型时，按从小到大顺序选择
  */
 typedef enum {
-  OPERAND_TYPE_NULL,
-  OPERAND_TYPE_REL8,
+  OPERAND_TYPE_REL8 = 1,
   OPERAND_TYPE_REL16,
   OPERAND_TYPE_REL32,
   // 表示内存地址，用于 lea 指令中
@@ -73,7 +72,7 @@ typedef enum {
 } operand_type;
 
 typedef enum {
-  ENCODING_TYPE_MODRM_RM,
+  ENCODING_TYPE_MODRM_RM = 1,
   ENCODING_TYPE_MODRM_REG,
   ENCODING_TYPE_IMM,
   ENCODING_TYPE_VEX_VVVV,
@@ -81,15 +80,13 @@ typedef enum {
 } encoding_type;
 
 typedef enum {
-  VEX_OPCODE_EXT_NULL,
-  VEX_OPCODE_EXT_66,
+  VEX_OPCODE_EXT_66 = 1,
   VEX_OPCODE_EXT_F2,
   VEX_OPCODE_EXT_F3,
 } vex_opcode_ext;
 
 typedef enum {
-  VEX_LEGACY_BYTE_NULL,
-  VEX_LEGACY_BYTE_0F,
+  VEX_LEGACY_BYTE_0F = 1,
   VEX_LEGACY_BYTE_0F_38,
   VEX_LEGACY_BYTE_0F_3A,
 } vex_legacy_byte;
@@ -169,7 +166,7 @@ typedef struct {
  * 存储多个 opcode 的数据结构
  */
 typedef struct {
-  inst_t *list[10];
+  inst_t **list; // 默认初始化 10 大小
   int count;
 } insts_t;
 
@@ -258,6 +255,6 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
 
 void opcode_sort_insts(insts_t *insts);
 
-void opcode_encoding(asm_inst_t asm_inst, uint8_t *data, uint8_t *count);
+uint8_t *opcode_encoding(asm_inst_t asm_inst, uint8_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_
