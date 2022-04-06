@@ -8,8 +8,7 @@
 typedef uint8_t size;
 
 typedef enum {
-  OPCODE_EXT_NO_EXT,
-  OPCODE_EXT_IMM_BYTE,
+  OPCODE_EXT_IMM_BYTE = 1,
   OPCODE_EXT_IMM_WORD,
   OPCODE_EXT_IMM_DWORD,
   OPCODE_EXT_SLASH0,
@@ -175,9 +174,7 @@ typedef struct {
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
 typedef struct {
-//  inst_t *opcodes[10]; // data 数据段，最终的叶子节点才会有该数据
-//  int opcodes_count;
-  insts_t insts;
+  insts_t insts; // data 数据段，最终的叶子节点才会有该数据
   string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
   table *succs;
 } opcode_tree_node_t;

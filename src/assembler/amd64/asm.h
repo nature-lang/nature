@@ -17,8 +17,8 @@
 #define REG(_reg) ({ \
      asm_operand_t *reg_operand = NEW(asm_operand_t); \
      reg_operand->type = ASM_OPERAND_TYPE_REGISTER;  \
-     reg_operand->size = reg->size;\
-     reg_operand->value = reg;    \
+     reg_operand->size = _reg->size;\
+     reg_operand->value = _reg;    \
      reg_operand;\
 })
 
@@ -105,7 +105,7 @@
 })
 
 typedef enum {
-  ASM_OPERAND_TYPE_REGISTER,
+  ASM_OPERAND_TYPE_REGISTER = 1,
   ASM_OPERAND_TYPE_INDIRECT_REGISTER,
   ASM_OPERAND_TYPE_SIB_REGISTER,
   ASM_OPERAND_TYPE_RIP_RELATIVE,
@@ -182,7 +182,7 @@ typedef struct {
 } asm_operand_rip_relative_t;
 
 typedef struct {
-  uint8_t type;
+  asm_operand_type type;
   uint8_t size;
   void *value; // asm_operand_register
 } asm_operand_t;

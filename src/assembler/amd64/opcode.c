@@ -53,9 +53,9 @@ void opcode_init() {
   opcode_tree_root = opcode_node_new();
   opcode_tree_root->key = "root";
   // 收集所有指令，进行注册
+  opcode_tree_build(&push_r64);
   opcode_tree_build(&mov_rm8_r8);
   opcode_tree_build(&mov_r16_rm16);
-  opcode_tree_build(&push_r64);
 }
 
 /**
@@ -205,7 +205,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
   if (t == OPERAND_TYPE_R64) {
     res.count = 1;
     uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 8);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, QWORD);
     res.list = highs;
     return res;
   }
@@ -311,7 +311,7 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
     // current 匹配
     bool exists = table_exist(current->succs, key);
     if (!exists) {
-      error_exit(0, "cannot identify asm opcode %s with operands", asm_inst.name);
+      error_exit(0, "cannot identify asm opcode %s with operand: %d", asm_inst.name, i);
       return NULL;
     }
     current = table_get(current->succs, key);
@@ -525,6 +525,25 @@ static sib_t *new_sib(uint8_t scale, uint8_t index, uint8_t base) {
   return s;
 }
 
+static inst_format_t *inst_format_new(uint8_t *opcode) {
+  inst_format_t *format = NEW(inst_format_t);
+  for (int i = 0; i < 3; ++i) {
+    format->opcode[i] = opcode[i];
+  }
+
+  format->prefix = 0;
+  format->vex_prefix = NULL;
+  format->rex_prefix = NULL;
+  format->modrm = NULL;
+  format->sib = NULL;
+
+  for (int i = 0; i < 8; ++i) {
+    format->disps[0] = 0;
+    format->imms[0] = 0;
+  }
+  return format;
+}
+
 /**
  *
  * @param asm_inst
@@ -532,7 +551,7 @@ static sib_t *new_sib(uint8_t scale, uint8_t index, uint8_t base) {
  * @return
  */
 inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
-  inst_format_t *format = NEW(inst_format_t);
+  inst_format_t *format = inst_format_new(inst->opcode);
   // format 填充 prefixes
   if (inst->prefix > 0) {
     format->prefix = inst->prefix;

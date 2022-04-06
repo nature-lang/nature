@@ -1,4 +1,5 @@
 #include "table.h"
+#include "helper.h"
 
 void table_init(table *t) {
   t->count = 0;
@@ -89,7 +90,7 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
       if (tombstone == NULL) {
         tombstone = entry;
       }
-    } else if (entry->key == key) {
+    } else if (strequal(entry->key, key)) {
       return entry;
     }
 
