@@ -62,13 +62,14 @@ static void test_opcode_encoding() {
   asm_inst_t inst = {
       .name = "push",
       .operands = {
-          REG(rax),
+          REG(rcx),
       },
       .count = 1
   };
   uint8_t byte_count;
   uint8_t *bytes = opcode_encoding(inst, &byte_count);
-  printf("%d", bytes);
+  uint8_t expect[] = {0x51};
+  assert_memory_equal(bytes, expect, byte_count);
 }
 
 int main(void) {

@@ -2,7 +2,16 @@
 #include "string.h"
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
-#include <stdio.h>
+
+inst_t call_rm64 = {"call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
+                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
+};
+
+inst_t call_rel32 = {
+    "call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD}, {
+        OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
+    }
+};
 
 inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                      {
@@ -786,8 +795,8 @@ static void opcode_vex_encoding(inst_format_t *format, uint8_t *data, uint8_t *c
     }
 
     byte1 += v->vex_opcode_extension;
-    data[*count++] = byte0;
-    data[*count++] = byte1;
+    data[(*count)++] = byte0;
+    data[(*count)++] = byte1;
     return;
   }
 
@@ -819,9 +828,9 @@ static void opcode_vex_encoding(inst_format_t *format, uint8_t *data, uint8_t *c
   }
 
   byte2 += v->vex_opcode_extension;
-  data[*count++] = byte0; // count = 1
-  data[*count++] = byte1; // count = 2
-  data[*count++] = byte2; // count = 3
+  data[(*count)++] = byte0; // count = 1
+  data[(*count)++] = byte1; // count = 2
+  data[(*count)++] = byte2; // count = 3
 }
 
 static void opcode_rex_encoding(inst_format_t *format, uint8_t *result) {
@@ -864,7 +873,7 @@ static void opcode_sib_encoding(inst_format_t *format, uint8_t *result) {
 void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count) {
   *count = 0;
   if (format->prefix > 0) {
-    data[*count++] = format->prefix;
+    data[(*count)++] = format->prefix;
   }
 
   if (format->vex_prefix != NULL) {
@@ -872,30 +881,30 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
   }
 
   if (format->rex_prefix != NULL) {
-    opcode_rex_encoding(format, &data[*count++]);
+    opcode_rex_encoding(format, &data[(*count)++]);
   }
 
   uint8_t i = 0;
-  while (format->opcode[i] > 0 || i < 3) {
-    data[*count++] = format->opcode[i++];
+  while (format->opcode[i] > 0 && i < 3) {
+    data[(*count)++] = format->opcode[i++];
   }
 
   if (format->modrm != NULL) {
-    opcode_modrm_encoding(format, &data[*count++]);
+    opcode_modrm_encoding(format, &data[(*count)++]);
   }
 
   if (format->sib != NULL) {
-    opcode_sib_encoding(format, &data[*count++]);
+    opcode_sib_encoding(format, &data[(*count)++]);
   }
 
   i = 0;
-  while (format->disps[i] > 0 || i < 8) {
-    data[*count++] = format->disps[i++];
+  while (format->disps[i] > 0 && i < 8) {
+    data[(*count)++] = format->disps[i++];
   }
 
   i = 0;
-  while (format->imms[i] > 0 || i < 8) {
-    data[*count++] = format->imms[i++];
+  while (format->imms[i] > 0 && i < 8) {
+    data[(*count)++] = format->imms[i++];
   }
 }
 

@@ -13,9 +13,11 @@
 #define SYMTAB_INDEX 4
 #define SHSTRTAB_INDEX 5
 #define SYMTAB_LAST_LOCAL_INDEX 3 // 符号表最后一个 local 字符的索引
+#define SHDR_COUNT 7
 string filename;
 
-uint64_t global_offset;
+uint64_t global_text_offset = 0; // 代码段偏移
+uint64_t global_data_offset = 0; // 数据段偏移
 
 typedef enum {
   ELF_SYMBOL_TYPE_VAR = 1,
@@ -41,6 +43,7 @@ typedef struct {
   asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用
   string rel_symbol; // 使用的符号
   asm_operand_t *rel_operand; // 引用自 asm_inst
+  bool is_jmp_symbol; // jmp 指令可以从 rel32 优化为 rel8
 } elf_text_inst_t;
 
 /**
@@ -49,14 +52,15 @@ typedef struct {
  */
 typedef struct {
   string name;
-  uint8_t size; // 8/16/32/64
+  uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内偏移，改地址需要被修正
+  uint8_t size;
+  uint8_t *value; // 对于 var, 且其在数据段时，其可能会有预定义的值
   elf_symbol_type type;  // fn/var
   bool is_rel; // 是否引用外部符号
   bool is_local; // 是否是本地符号
-  elf_section section; // 所在段，估计只有 text 段了
-  uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内便宜，改地址需要被修正
-  int symtab_index; // 在符号表的索引
-} elf_symbol_t;
+  elf_section section; // 所在段，text/data
+  int symtab_index; // 在符号表的索引,构建符号表时写入
+} elf_symbol_t; // 用来构造符号表，以及数据段？
 
 /**
  * 重定位表, 如果一个符号引用了外部符号多次，这里就需要记录多次
@@ -75,6 +79,10 @@ table *elf_symbol_table; // key: symbol_name, value list_node
 list *elf_symbol_list; // list_node link
 list *elf_rel_list;
 
+void elf_var_decl_build(asm_var_decl decl);
+
+void elf_var_decl_list_build(list *decl_list);
+
 // 如果 asm_inst 的参数是 label 或者 inst.name = label 需要进行符号注册与处理
 // 其中需要一个 link 结构来引用最近 128 个字节的指令，做 jmp rel 跳转，原则上不能影响原来的指令
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
@@ -92,13 +100,14 @@ void elf_confirm_text_rel(string name);
  */
 void elf_rewrite_text_rel(elf_text_inst_t *t);
 
-uint64_t *elf_new_current_offset();
+uint64_t *elf_current_text_offset();
 
 typedef struct {
   Elf64_Ehdr ehdr;
+  uint8_t *data;
+  uint8_t data_size;
   uint8_t *text;
-  uint64_t text_count;
-//  uint8_t *data;// 数据段省略
+  uint64_t text_size;
   char *shstrtab;
   Elf64_Shdr *shdr;
   uint8_t shdr_count;
@@ -127,17 +136,23 @@ uint8_t *elf_encoding(elf_t elf, uint64_t *count);
 void elf_to_file(uint8_t *binary, uint64_t count, string filename);
 
 /**
+ * @param asm_data
+ */
+uint8_t elf_data_build(uint64_t *size);
+
+/**
  * 生成二进制结果
- * @param count
+ * @param size
  * @return
  */
-uint8_t *elf_text_build(uint64_t *count);
+uint8_t *elf_text_build(uint64_t *size);
 
 /**
  * 段表构建
  * @return
  */
 string elf_shdr_build(uint64_t text_size,
+                      uint64_t data_size,
                       uint64_t symtab_size,
                       uint64_t strtab_size,
                       uint64_t rela_text_size,

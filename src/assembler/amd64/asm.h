@@ -203,22 +203,20 @@ typedef struct {
   asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
 
+typedef enum {
+  ASM_VAR_DECL_TYPE_STRING = 1,
+  ASM_VAR_DECL_TYPE_INT,
+  ASM_VAR_DECL_TYPE_FLOAT,
+} asm_var_decl_type;
+
 // 数据段(编译进符号表即可，数据类型需要兼容高级类型)
-//typedef struct {
-//  char *name;
-//  asm_var_decl_type type;
-////  size_t size; // 单位 Byte
-//  union {
-//    int int_value;
-//    float float_value;
-//    char *string_value;
-//  };
-//} asm_var_decl;
-//
-//struct {
-//  asm_var_decl list[UINT16_MAX];
-//  uint16_t count;
-//} asm_data;
+typedef struct {
+  string name; // 符号名称
+  size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
+  uint8_t *value; // 符号值
+  // 简单符号将其值直接存储在 .data 段中
+  asm_var_decl_type type; // 暂时感觉没什么用
+} asm_var_decl;
 
 asm_operand_t *asm_symbol_operand(asm_inst_t asm_inst);
 
