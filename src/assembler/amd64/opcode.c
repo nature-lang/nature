@@ -21,12 +21,49 @@ inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
 };
 
 // 注册指令列表 asm operand
-inst_t mov_r16_rm16 = {"mov", 0x66, {0xb8}, {OPCODE_EXT_SLASHR},
+inst_t mov_r16_rm16 = {"mov", 0x66, {0xB8}, {OPCODE_EXT_SLASHR},
                        {
                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
                        }
 };
+
+inst_t mov_imm32_r32 = {"mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
+                        {
+                            {OPERAND_TYPE_R32, ENCODING_TYPE_OPCODE_PLUS},
+                            {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                        }
+};
+
+inst_t mov_rm64_imm32 = {"mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+                         {
+                             {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+
+inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W},
+                        {
+                            {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS},
+                            {OPERAND_TYPE_IMM64, ENCODING_TYPE_IMM}
+                        }
+};
+
+inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                           {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+inst_t mov_rm64_r64 = {"mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                           {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+
+inst_t syscall = {"syscall", 0, {0x0F, 0x05}, {}, {}};
 
 inst_t push_r64 = {
     "push", 0, {0x50}, {},
@@ -62,9 +99,17 @@ void opcode_init() {
   opcode_tree_root = opcode_node_new();
   opcode_tree_root->key = "root";
   // 收集所有指令，进行注册
+  opcode_tree_build(&call_rm64);
+  opcode_tree_build(&call_rel32);
   opcode_tree_build(&push_r64);
   opcode_tree_build(&mov_rm8_r8);
   opcode_tree_build(&mov_r16_rm16);
+  opcode_tree_build(&mov_imm32_r32);
+  opcode_tree_build(&mov_rm64_imm32);
+  opcode_tree_build(&mov_r64_imm64);
+  opcode_tree_build(&mov_r64_rm64);
+  opcode_tree_build(&mov_rm64_r64);
+  opcode_tree_build(&syscall);
 }
 
 /**
@@ -182,7 +227,39 @@ asm_keys_t operand_low_to_high(operand_type t) {
   if (t == OPERAND_TYPE_M64) {
     res.count = 1;
     uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 8);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, QWORD);
+    res.list = highs;
+    return res;
+  }
+
+  if (t == OPERAND_TYPE_IMM8) {
+    res.count = 1;
+    uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT8, BYTE);
+    res.list = highs;
+    return res;
+  }
+
+  if (t == OPERAND_TYPE_IMM16) {
+    res.count = 1;
+    uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT16, WORD);
+    res.list = highs;
+    return res;
+  }
+
+  if (t == OPERAND_TYPE_IMM32) {
+    res.count = 1;
+    uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, DWORD);
+    res.list = highs;
+    return res;
+  }
+
+  if (t == OPERAND_TYPE_IMM64) {
+    res.count = 1;
+    uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+    highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT64, QWORD);
     res.list = highs;
     return res;
   }
@@ -247,7 +324,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     return res;
   }
 
-  error_exit(1, "cannot identify operand_type");
+  error_exit(1, "cannot identify operand_type index: %d", t);
   return res;
 }
 
@@ -320,7 +397,7 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
     // current 匹配
     bool exists = table_exist(current->succs, key);
     if (!exists) {
-      error_exit(0, "cannot identify asm opcode %s with operand: %d", asm_inst.name, i);
+      error_exit(0, "cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
       return NULL;
     }
     current = table_get(current->succs, key);

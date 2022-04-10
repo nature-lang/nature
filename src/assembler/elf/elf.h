@@ -14,10 +14,23 @@
 #define SHSTRTAB_INDEX 5
 #define SYMTAB_LAST_LOCAL_INDEX 3 // 符号表最后一个 local 字符的索引
 #define SHDR_COUNT 7
+
+#define ELF_TEXT_INST_NEW(_asm_inst) ({ \
+   elf_text_inst_t *_inst = NEW(elf_text_inst_t); \
+  _inst->data = NULL; \
+  _inst->count = 0; \
+  _inst->offset = 0; \
+  _inst->asm_inst = asm_inst; \
+  _inst->rel_operand = NULL; \
+  _inst->rel_symbol = NULL; \
+  _inst->is_jmp_symbol = 0; \
+  _inst;\
+})
+
 string filename;
 
-uint64_t global_text_offset = 0; // 代码段偏移
-uint64_t global_data_offset = 0; // 数据段偏移
+uint64_t global_text_offset; // 代码段偏移
+uint64_t global_data_offset; // 数据段偏移
 
 typedef enum {
   ELF_SYMBOL_TYPE_VAR = 1,
@@ -79,6 +92,8 @@ table *elf_symbol_table; // key: symbol_name, value list_node
 list *elf_symbol_list; // list_node link
 list *elf_rel_list;
 
+void elf_init(string _filename);
+
 void elf_var_decl_build(asm_var_decl decl);
 
 void elf_var_decl_list_build(list *decl_list);
@@ -88,7 +103,7 @@ void elf_var_decl_list_build(list *decl_list);
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
 void elf_text_inst_build(asm_inst_t asm_inst);
 void elf_text_inst_list_build(list *asm_inst_list); // 一次构建基于 asm_inst 列表
-void elf_text_inst_list_second_build(list *elf_text_inst_list); // 二次构建(基于 elf_text_inst_list)
+void elf_text_inst_list_second_build(); // 二次构建(基于 elf_text_inst_list)
 
 void elf_symbol_insert(elf_symbol_t *symbol);
 
@@ -138,7 +153,7 @@ void elf_to_file(uint8_t *binary, uint64_t count, string filename);
 /**
  * @param asm_data
  */
-uint8_t elf_data_build(uint64_t *size);
+uint8_t *elf_data_build(uint64_t *size);
 
 /**
  * 生成二进制结果

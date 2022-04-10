@@ -39,6 +39,7 @@ void *list_pop(list *l) {
 
   return value;
 }
+
 list_node *list_new_node() {
   list_node *node = malloc(sizeof(list_node));
   node->value = NULL;

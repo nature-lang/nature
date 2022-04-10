@@ -14,6 +14,19 @@
 #define YWORD 32 // 32 byte
 #define ZWORD 64 // 64 byte
 
+#define ASM_INST(_name, ...) ({\
+    asm_inst_t *_inst = NEW(asm_inst_t);\
+    _inst->name = _name;\
+    asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
+    for (int i = 0; i < 4; ++i) {\
+      if (_temp_operands[i] != NULL) {\
+        _inst->operands[i] = _temp_operands[i];\
+        _inst->count++;\
+      }\
+    }\
+    _inst;\
+  })
+
 #define REG(_reg) ({ \
      asm_operand_t *reg_operand = NEW(asm_operand_t); \
      reg_operand->type = ASM_OPERAND_TYPE_REGISTER;  \
@@ -85,14 +98,14 @@
      operand;\
 })
 
-#define UINT8(_value) VALUE_OPERAND(asm_operand_uint8_t, ASM_OPERAND_TYPE_UINT8, (_value), BYTE);
-#define UINT16(_value) VALUE_OPERAND(asm_operand_uint16_t, ASM_OPERAND_TYPE_UINT16, (_value), WORD);
-#define UINT32(_value) VALUE_OPERAND(asm_operand_uint32_t, ASM_OPERAND_TYPE_UINT32, (_value), DWORD);
-#define UINT64(_value) VALUE_OPERAND(asm_operand_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), DWORD);
-#define INT8(_value) VALUE_OPERAND(asm_operand_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE);
-#define INT32(_value) VALUE_OPERAND(asm_operand_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD);
-#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAt32, (_value), DWORD);
-#define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), QWORD);
+#define UINT8(_value) VALUE_OPERAND(asm_operand_uint8_t, ASM_OPERAND_TYPE_UINT8, (_value), BYTE)
+#define UINT16(_value) VALUE_OPERAND(asm_operand_uint16_t, ASM_OPERAND_TYPE_UINT16, (_value), WORD)
+#define UINT32(_value) VALUE_OPERAND(asm_operand_uint32_t, ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
+#define UINT64(_value) VALUE_OPERAND(asm_operand_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
+#define INT8(_value) VALUE_OPERAND(asm_operand_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
+#define INT32(_value) VALUE_OPERAND(asm_operand_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
+#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAt32, (_value), DWORD)
+#define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), QWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
     asm_operand_t *number_operand = malloc(sizeof(asm_operand_t));\
@@ -204,9 +217,9 @@ typedef struct {
 } asm_inst_t;
 
 typedef enum {
-  ASM_VAR_DECL_TYPE_STRING = 1,
-  ASM_VAR_DECL_TYPE_INT,
+  ASM_VAR_DECL_TYPE_INT = 1,
   ASM_VAR_DECL_TYPE_FLOAT,
+  ASM_VAR_DECL_TYPE_STRING,
 } asm_var_decl_type;
 
 // 数据段(编译进符号表即可，数据类型需要兼容高级类型)

@@ -49,10 +49,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
     return; // label 不需要编译成指令
   }
 
-  elf_text_inst_t *inst = NEW(elf_text_inst_t);
-  inst->rel_operand = NULL;
-  inst->rel_symbol = NULL;
-
+  elf_text_inst_t *inst = ELF_TEXT_INST_NEW(asm_inst);
 
   // 外部标签引用处理
   asm_operand_t *operand = asm_symbol_operand(asm_inst);
@@ -172,7 +169,7 @@ void elf_rewrite_text_rel(elf_text_inst_t *t) {
  * 如果其依旧不在符号表中，则表示其引用了外部符号，此时直接添加一条 rel 记录即可
  * @param elf_text_inst_list
  */
-void elf_text_inst_list_second_build(list *elf_text_inst_list) {
+void elf_text_inst_list_second_build() {
   if (list_empty(elf_text_inst_list)) {
     return;
   }
@@ -217,7 +214,7 @@ void elf_text_inst_list_second_build(list *elf_text_inst_list) {
         elf_symbol_insert(symbol);
       }
     }
-
+    current = current->next;
   }
 }
 
@@ -229,6 +226,7 @@ void elf_text_inst_list_build(list *inst_list) {
   while (current->value != NULL) {
     asm_inst_t *inst = current->value;
     elf_text_inst_build(*inst);
+    current = current->next;
   }
 }
 
@@ -253,7 +251,7 @@ static char *elf_header_ident() {
   char *ident = malloc(sizeof(char) * EI_NIDENT);
   memset(ident, 0, EI_NIDENT);
 
-  ident[0] = 0x7f; // del 符号的编码
+  ident[0] = 0x7F; // del 符号的编码
   ident[1] = 'E';
   ident[2] = 'L';
   ident[3] = 'F';
@@ -300,9 +298,20 @@ elf_t elf_new() {
                                    rel_text_count * sizeof(Elf64_Rela),
                                    shdr);
 
+
   // 文件头构建
   Elf64_Ehdr ehdr = {
-      .e_ident = elf_header_ident(),
+      .e_ident = {
+          0x7F, // del 符号编码
+          'E',
+          'L',
+          'F',
+          ELFCLASS64,  // elf 文件类型: 64 位
+          ELFDATA2LSB, // 字节序： 小端
+          EV_CURRENT,   // elf 版本号
+          ELFOSABI_NONE, // os abi = unix v
+          0, // ABI version
+      },
       .e_type = ET_REL, // elf 文件类型 = 可重定位文件
       .e_machine = EM_X86_64,
       .e_version = EV_CURRENT,
@@ -314,7 +323,8 @@ elf_t elf_new() {
       .e_phentsize = 0, // 程序头表项的大小, 可重定位表没有这个头
       .e_phnum = 0, // 程序头表项, 这个只能是 0
       .e_shentsize = sizeof(Elf64_Shdr), // 段表项的大小
-      .e_shstrndx = SHSTRTAB_INDEX,
+      .e_shnum = SHDR_COUNT, // 段表大小
+      .e_shstrndx = SHSTRTAB_INDEX, // 段表索引
   };
 
   // 输出二进制
@@ -595,6 +605,7 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
         .r_info = ELF64_R_INFO(ELF64_R_SYM(index), ELF64_R_TYPE(R_X86_64_PC32)),
         .r_addend = rel->addend,
     };
+    current = current->next;
   }
 
   return r;
@@ -654,7 +665,14 @@ void elf_to_file(uint8_t *binary, uint64_t count, char *target_filename) {
 }
 
 uint8_t *elf_text_build(uint64_t *size) {
-  *size = elf_text_inst_list->count;
+  *size = 0;
+  list_node *current = elf_text_inst_list->front;
+  while (current->value != NULL) {
+    elf_text_inst_t *inst = current->value;
+    *size += inst->count;
+    current = current->next;
+  }
+
   uint8_t *text = malloc(sizeof(uint8_t) * *size);
   if (*size == 0) {
     return text;
@@ -662,11 +680,12 @@ uint8_t *elf_text_build(uint64_t *size) {
 
   uint8_t *p = text;
 
-  list_node *current = elf_text_inst_list->front;
+  current = elf_text_inst_list->front;
   while (current->value != NULL) {
     elf_text_inst_t *inst = current->value;
     memcpy(p, inst->data, inst->count);
     p += inst->count;
+    current = current->next;
   }
 
   return text;
@@ -702,7 +721,7 @@ void elf_var_decl_list_build(list *decl_list) {
   }
 }
 
-uint8_t elf_data_build(uint64_t *size) {
+uint8_t *elf_data_build(uint64_t *size) {
   // 遍历符号表计算数量并申请内存
   list_node *current = elf_symbol_list->front;
   while (current->value != NULL) {
@@ -710,8 +729,8 @@ uint8_t elf_data_build(uint64_t *size) {
     if (t->type != ELF_SYMBOL_TYPE_VAR) {
       continue;
     }
-
     *size += t->size;
+    current = current->next;
   }
   uint8_t *data = malloc(*size);
   uint8_t *p = data;
@@ -727,9 +746,21 @@ uint8_t elf_data_build(uint64_t *size) {
       memcpy(p, symbol->value, symbol->size);
     }
     p += symbol->size;
+    current = current->next;
   }
 
-  return 0;
+  return data;
+}
+
+void elf_init(char *_filename) {
+  filename = _filename;
+  global_data_offset = 0;
+  global_text_offset = 0;
+
+  elf_text_inst_list = list_new();
+  elf_symbol_table = table_new();
+  elf_symbol_list = list_new();
+  elf_rel_list = list_new();
 }
 
 
