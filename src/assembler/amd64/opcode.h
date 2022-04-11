@@ -157,7 +157,9 @@ typedef struct {
   modrm_t *modrm;
   sib_t *sib;
   uint8_t disps[8]; // 64 位可能是 8 个字节才对
+  uint8_t disp_count;
   uint8_t imms[8];
+  uint8_t imm_count;
 } inst_format_t; // 机器编码类型
 
 

@@ -61,17 +61,30 @@ static void test_opcode_encoding() {
       .count = 1
   };
   uint8_t byte_count;
-  uint8_t *bytes = opcode_encoding(inst, &byte_count);
+  uint8_t *actual = opcode_encoding(inst, &byte_count);
   uint8_t expect[] = {0x51};
-  assert_memory_equal(bytes, expect, byte_count);
-}
+  assert_memory_equal(actual, expect, byte_count);
 
-static void test_opcode_encoding2() {
-  register_init();
-  opcode_init();
-  asm_inst_t *inst = ASM_INST("mov", { REG(rdi), UINT64(1) });
-  uint8_t byte_count;
-  uint8_t *bytes = opcode_encoding(*inst, &byte_count);
+  asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
+  uint8_t *actual2 = opcode_encoding(*mov_eax_4, &byte_count);
+  uint8_t expect2[] = {0xB8, 0x01, 0x00, 0x00, 0x00};
+  assert_memory_equal(actual2, expect2, byte_count);
+
+  asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
+  uint8_t *actual3 = opcode_encoding(*mov_1_rdi, &byte_count);
+  uint8_t expect3[] = {0x48, 0xC7, 0xC7, 0x01, 0x00, 0x00, 0x00};
+  assert_memory_equal(actual3, expect3, byte_count);
+
+  asm_inst_t *mov_rip_rsi = ASM_INST("mov", { REG(rsi), RIP_RELATIVE(0) });
+  uint8_t *actual4 = opcode_encoding(*mov_rip_rsi, &byte_count);
+  uint8_t expect4[] = {0x48, 0x8B, 0x35, 0x00, 0x00, 0x00, 0x00};
+  assert_memory_equal(actual4, expect4, byte_count);
+
+  asm_inst_t *syscall = ASM_INST("syscall", {});
+  uint8_t *actual5 = opcode_encoding(*syscall, &byte_count);
+  uint8_t expect5[] = {0x0F, 0x05};
+  assert_memory_equal(actual5, expect5, byte_count);
+
 }
 
 static void test_hello_world() {
@@ -89,14 +102,14 @@ static void test_hello_world() {
 
   // sys_write
   asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
-  asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT64(1) });
+  asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
   asm_inst_t *mov_str_rsi = ASM_INST("mov", { REG(rsi), SYMBOL(decl.name, false, false) });
-  asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT64(decl.size) });
+  asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
   asm_inst_t *syscall = ASM_INST("syscall", {});
 
   // sys_exit
   asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
-  asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT64(0) });
+  asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
   // encoding
   list *inst_list = list_new();
   list_push(inst_list, mov_eax_4);
@@ -129,7 +142,6 @@ int main(void) {
 //      cmocka_unit_test(test_opcode_tree_build),
 //      cmocka_unit_test(test_opcode_init),
 //      cmocka_unit_test(test_opcode_encoding),
-//      cmocka_unit_test(test_opcode_encoding2),
       cmocka_unit_test(test_hello_world),
   };
 

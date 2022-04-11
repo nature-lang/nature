@@ -582,12 +582,14 @@ static void set_disp(inst_format_t *format, string reg, uint8_t *disps, uint8_t 
   for (int i = 0; i < count; i++) {
     format->disps[j++] = disps[i];
   };
+  format->disp_count = count;
 }
 
 static void set_imm(inst_format_t *format, uint8_t *imms, uint8_t count) {
   for (int i = 0; i < count; ++i) {
     format->imms[i] = imms[i];
   }
+  format->imm_count = count;
 }
 
 /**
@@ -627,6 +629,8 @@ static inst_format_t *inst_format_new(uint8_t *opcode) {
     format->disps[0] = 0;
     format->imms[0] = 0;
   }
+  format->disp_count = 0;
+  format->imm_count = 0;
   return format;
 }
 
@@ -961,9 +965,9 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
     opcode_rex_encoding(format, &data[(*count)++]);
   }
 
-  uint8_t i = 0;
-  while (format->opcode[i] > 0 && i < 3) {
-    data[(*count)++] = format->opcode[i++];
+  uint8_t j = 0;
+  while (format->opcode[j] > 0 && j < 3) {
+    data[(*count)++] = format->opcode[j++];
   }
 
   if (format->modrm != NULL) {
@@ -974,14 +978,12 @@ void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count
     opcode_sib_encoding(format, &data[(*count)++]);
   }
 
-  i = 0;
-  while (format->disps[i] > 0 && i < 8) {
-    data[(*count)++] = format->disps[i++];
+  for (int i = 0; i < format->disp_count; ++i) {
+    data[(*count)++] = format->disps[i];
   }
 
-  i = 0;
-  while (format->imms[i] > 0 && i < 8) {
-    data[(*count)++] = format->imms[i++];
+  for (int i = 0; i < format->imm_count; ++i) {
+    data[(*count)++] = format->imms[i];
   }
 }
 

@@ -20,14 +20,16 @@ bool strequal(char *a, char *b) {
   return strcmp(a, b) == 0;
 }
 
-char *str_connect(char *a, char *b) {
-  char *buf = malloc(strlen(a) + strlen(b) + 1);
-  sprintf(buf, "%s%s", a, b);
+char *str_connect(char *dst, char *src) {
+  // TODO realloc
+  char *buf = malloc(strlen(dst) + strlen(src) + 1);
+  sprintf(buf, "%s%s", dst, src);
   return buf;
 }
 
 void str_replace(char *str, char from, char to) {
-  for (int i = 0; i < strlen(str); ++i) {
+  size_t len = strlen(str);
+  for (int i = 0; i < len; ++i) {
     if (str[i] == from) {
       str[i] = to;
     }

@@ -364,7 +364,7 @@ char *elf_shdr_build(uint64_t text_size,
   // 段表字符串表
   char *shstrtab_data = " ";
   uint64_t rela_text_name = strlen(shstrtab_data);
-  uint64_t text_name = 5;
+  uint64_t text_name = 6;
   shstrtab_data = str_connect(shstrtab_data, ".rela.text ");
   uint64_t data_name = strlen(shstrtab_data);
   shstrtab_data = str_connect(shstrtab_data, ".data ");
@@ -420,7 +420,7 @@ char *elf_shdr_build(uint64_t text_size,
   shdr[1] = (Elf64_Shdr) {
       .sh_name = text_name,
       .sh_type = SHT_PROGBITS, // 表示程序段
-      .sh_flags = SHF_ALLOC | SHF_EXCLUDE,
+      .sh_flags = SHF_ALLOC | SHF_EXECINSTR,
       .sh_addr = 0, // 可执行文件才有该地址
       .sh_offset = text_offset,
       .sh_size = text_size,
@@ -441,7 +441,7 @@ char *elf_shdr_build(uint64_t text_size,
       .sh_link = 4,
       .sh_info = 1,
       .sh_addralign = 8,
-      .sh_entsize = sizeof(Elf64_Rel)
+      .sh_entsize = sizeof(Elf64_Rela)
   };
 
   // 数据段
@@ -505,17 +505,6 @@ char *elf_shdr_build(uint64_t text_size,
 }
 
 char *elf_symtab_build(Elf64_Sym *symbol) {
-  // 计算需要添加仅符号表的符号的数量(rel/全局 var/外部的 label)
-//  int size = 3;
-//  list_node *current = elf_symbol_list->front;
-//  while (current->value != NULL) {
-//    elf_symbol_t *s = current->value;
-//    if (!s->is_local) {
-//      size++;
-//    }
-//    current = current->next;
-//  }
-
   // 内部初始化
 //  symbol = malloc(sizeof(symbol) * size);
   int count = 0;
@@ -639,7 +628,7 @@ uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
   size_t len = strlen(elf.shstrtab);
   str_replace(elf.shstrtab, 32, 0);
   memcpy(p, elf.shstrtab, len);
-  p += strlen(elf.shstrtab);
+  p += len;
 
   // 段表
   memcpy(p, elf.shdr, sizeof(Elf64_Shdr) * elf.shdr_count);
@@ -653,7 +642,7 @@ uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
   len = strlen(elf.strtab);
   str_replace(elf.strtab, 32, 0);
   memcpy(p, elf.strtab, len);
-  p += strlen(elf.strtab);
+  p += len;
 
   // 重定位表
   memcpy(p, elf.rela_text, sizeof(Elf64_Rela) * elf.real_text_count);

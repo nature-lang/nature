@@ -94,7 +94,7 @@
      asm_operand_rip_relative_t *rip = NEW(asm_operand_rip_relative_t); \
      rip->disp = _disp;\
      operand->size = QWORD;\
-     operand->value = rip;    \
+     operand->value = rip;  \
      operand;\
 })
 
