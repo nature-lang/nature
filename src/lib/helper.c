@@ -26,3 +26,10 @@ char *str_connect(char *a, char *b) {
   return buf;
 }
 
+void str_replace(char *str, char from, char to) {
+  for (int i = 0; i < strlen(str); ++i) {
+    if (str[i] == from) {
+      str[i] = to;
+    }
+  }
+}

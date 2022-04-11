@@ -11,7 +11,7 @@
 #define RELA_TEXT_INDEX 2
 #define DATA_INDEX 3
 #define SYMTAB_INDEX 4
-#define SHSTRTAB_INDEX 5
+#define SHSTRTAB_INDEX 6
 #define SYMTAB_LAST_LOCAL_INDEX 3 // 符号表最后一个 local 字符的索引
 #define SHDR_COUNT 7
 

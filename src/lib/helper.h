@@ -10,4 +10,6 @@ bool strequal(string a, string b);
 
 char *str_connect(char *a, char *b);
 
+void str_replace(char *str, char from, char to);
+
 #endif //NATURE_SRC_LIB_HELPER_H_
