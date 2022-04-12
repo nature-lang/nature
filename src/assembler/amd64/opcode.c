@@ -63,6 +63,13 @@ inst_t mov_rm64_r64 = {"mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        }
 };
 
+inst_t lea_r64_m = {"lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                    {
+                        {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                        {OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+
 inst_t syscall = {"syscall", 0, {0x0F, 0x05}, {}, {}};
 
 inst_t push_r64 = {
@@ -109,6 +116,7 @@ void opcode_init() {
   opcode_tree_build(&mov_r64_imm64);
   opcode_tree_build(&mov_r64_rm64);
   opcode_tree_build(&mov_rm64_r64);
+  opcode_tree_build(&lea_r64_m);
   opcode_tree_build(&syscall);
 }
 

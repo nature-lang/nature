@@ -95,8 +95,8 @@ static void test_hello_world() {
 
   asm_var_decl decl = {
       .name = "str",
-      .size = strlen("hello world"),
-      .value = (uint8_t *) "hello world",
+      .size = strlen("hello world!\n"),
+      .value = (uint8_t *) "hello world!\n",
       .type = ASM_VAR_DECL_TYPE_STRING
   };
 
@@ -104,7 +104,7 @@ static void test_hello_world() {
   asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", true, false) });
   asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
   asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
-  asm_inst_t *mov_str_rsi = ASM_INST("mov", { REG(rsi), SYMBOL(decl.name, false, false) });
+  asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) });
   asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
   asm_inst_t *syscall = ASM_INST("syscall", {});
 

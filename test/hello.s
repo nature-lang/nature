@@ -1,18 +1,19 @@
-global _start
-
-section .text
+.global _start
+.text
 
 _start:
-  mov rax, 1        ; write(
-  mov rdi, 1        ;   STDOUT_FILENO,
-  mov rsi, msg      ;   "Hello, world!\n",
-  mov rdx, msglen   ;   sizeof("Hello, world!\n")
-  syscall           ; );
+    # write (1, msj, 13)
+    mov $1, %rax            # system call 1 is write
+    mov $1, %rdi            # file handler 1 is stdout
+    mov $message, %rsi      # address of string to output
+    #lea message(%rip), %rsi      # address of string to output
+    mov $13, %rdx           # number of bytes
+    syscall
 
-  mov rax, 60       ; exit(
-  mov rdi, 0        ;   EXIT_SUCCESS
-  syscall           ; );
+    # exit(0)
+    mov $60, %rax           # system call 60 is exit
+    xor %rdi, %rdi          # we want to return code 0
+    syscall
 
-section .data
-  msg: db "Hello, world!", 10
-  msglen: equ $ - msg
+message:
+    .ascii "Hello, world\n"

@@ -595,7 +595,7 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
         .r_addend = rel->addend,
     };
     if (rel->type == ELF_SYMBOL_TYPE_VAR) {
-      r[i].r_offset += 2;
+      r[i].r_offset += 3; // mov 0x0(%rip),%rsi = 48 8b 35 00 00 00 00，其中偏移是从第四个字符开始
     }
 
     i++;
