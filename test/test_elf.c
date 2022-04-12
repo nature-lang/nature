@@ -101,6 +101,7 @@ static void test_hello_world() {
   };
 
   // sys_write
+  asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", true, false) });
   asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
   asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
   asm_inst_t *mov_str_rsi = ASM_INST("mov", { REG(rsi), SYMBOL(decl.name, false, false) });
@@ -112,6 +113,7 @@ static void test_hello_world() {
   asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
   // encoding
   list *inst_list = list_new();
+  list_push(inst_list, start);
   list_push(inst_list, mov_eax_4);
   list_push(inst_list, mov_1_rdi);
   list_push(inst_list, mov_str_rsi);

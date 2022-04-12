@@ -33,7 +33,7 @@ static bool elf_is_jmp(asm_inst_t asm_inst) {
 
 void elf_text_inst_build(asm_inst_t asm_inst) {
   uint64_t *offset = elf_current_text_offset();
-  if (strequal(asm_inst.name, "label")) {
+  if (str_equal(asm_inst.name, "label")) {
     // text 中唯一需要注册到符号表的数据, 且不需要编译进 elf_text_item
     asm_operand_symbol_t *s = asm_inst.operands[0]->value;
     elf_symbol_t *symbol = NEW(elf_symbol_t);
@@ -78,7 +78,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
       // 添加到重定位表
       elf_rel_t *rel = NEW(elf_rel_t);
       rel->name = symbol_operand->name;
-      rel->offset = offset + 2; // 引用的具体位置
+      rel->offset = offset; // 引用的具体位置
       rel->addend = -4;
       rel->section = ELF_SECTION_TEXT;
       rel->type = ELF_SYMBOL_TYPE_VAR;
@@ -113,7 +113,7 @@ void elf_confirm_text_rel(string name) {
       break;
     }
 
-    if (inst->is_jmp_symbol && strequal(inst->rel_symbol, name)) {
+    if (inst->is_jmp_symbol && str_equal(inst->rel_symbol, name)) {
       find_count += 1;
     }
 
@@ -132,7 +132,7 @@ void elf_confirm_text_rel(string name) {
   // 从 current 开始左 rewrite
   while (current->value != NULL) {
     elf_text_inst_t *inst = current->value;
-    if (inst->is_jmp_symbol != NULL && strequal(inst->rel_symbol, name)) {
+    if (inst->is_jmp_symbol != NULL && str_equal(inst->rel_symbol, name)) {
       // 重写 inst 指令 rel32 to rel8
       // jmp 的具体位置可以不计算，等到二次遍历再计算
       // 届时符号表已经全部收集完毕
@@ -273,7 +273,7 @@ elf_t elf_new() {
   uint8_t *text = elf_text_build(&text_size);
 
   // 符号表构建(首先计算符号的数量)
-  uint64_t symtab_count = 3;
+  uint64_t symtab_count = 4;
   list_node *current = elf_symbol_list->front;
   while (current->value != NULL) {
     elf_symbol_t *s = current->value;
@@ -504,30 +504,30 @@ char *elf_shdr_build(uint64_t text_size,
   return shstrtab_data;
 }
 
-char *elf_symtab_build(Elf64_Sym *symbol) {
+char *elf_symtab_build(Elf64_Sym *symtab) {
   // 内部初始化
 //  symbol = malloc(sizeof(symbol) * size);
-  int count = 0;
+  int index = 0;
 
   // 字符串表
   char *strtab_data = " ";
 
   // 0: NULL
-  symbol[count++] = (Elf64_Sym) {
+  symtab[index++] = (Elf64_Sym) {
       .st_name = 0, // 字符串表的偏移
       .st_value = 0, // 符号相对于所在段基址的偏移
       .st_size = 0, // 符号的大小，单位字节
-      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_NOTYPE)),
+      .st_info = ELF64_ST_INFO(STB_LOCAL, STT_NOTYPE),
       .st_other = 0,
       .st_shndx = 0, // 符号所在段，在段表内的索引
   };
 
   // 1: file
-  symbol[count++] = (Elf64_Sym) {
+  symtab[index++] = (Elf64_Sym) {
       .st_name = strlen(strtab_data),
       .st_value = 0,
       .st_size = 0,
-      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_FILE)),
+      .st_info = ELF64_ST_INFO(STB_LOCAL, STT_FILE),
       .st_other = 0,
       .st_shndx = SHN_ABS,
   };
@@ -535,21 +535,21 @@ char *elf_symtab_build(Elf64_Sym *symbol) {
   strtab_data = str_connect(strtab_data, " ");
 
   // 2: section: 1 = .text
-  symbol[count++] = (Elf64_Sym) {
+  symtab[index++] = (Elf64_Sym) {
       .st_name = 0,
       .st_value = 0,
       .st_size = 0,
-      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_SECTION)),
+      .st_info = ELF64_ST_INFO(STB_LOCAL, STT_SECTION),
       .st_other = 0,
       .st_shndx = TEXT_INDEX,
   };
 
   // 3: section: 3 = .data
-  symbol[count++] = (Elf64_Sym) {
+  symtab[index++] = (Elf64_Sym) {
       .st_name = 0,
       .st_value = 0,
       .st_size = 0,
-      .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_LOCAL), ELF64_ST_TYPE(STT_SECTION)),
+      .st_info = ELF64_ST_INFO(STB_LOCAL, STT_SECTION),
       .st_other = 0,
       .st_shndx = DATA_INDEX,
   };
@@ -563,13 +563,13 @@ char *elf_symtab_build(Elf64_Sym *symbol) {
           .st_name = strlen(strtab_data),
           .st_value = *s->offset,
           .st_size = s->size,
-          .st_info = ELF64_ST_INFO(ELF64_ST_BIND(STB_GLOBAL), ELF64_ST_TYPE(s->type)),
+          .st_info = ELF64_ST_INFO(STB_GLOBAL, s->type),
           .st_other = 0,
           .st_shndx = s->section,
       };
-      int index = count++;
-      symbol[index] = sym;
-      s->symtab_index = index;
+      int temp = index++;
+      symtab[temp] = sym;
+      s->symtab_index = temp;
       strtab_data = str_connect(strtab_data, s->name);
       strtab_data = str_connect(strtab_data, " ");
     }
@@ -591,9 +591,14 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
     // r_sym 表示重定位项在符号表内的索引(?)
     r[i] = (Elf64_Rela) {
         .r_offset = *rel->offset,
-        .r_info = ELF64_R_INFO(ELF64_R_SYM(index), ELF64_R_TYPE(R_X86_64_PC32)),
+        .r_info = ELF64_R_INFO(index, R_X86_64_PC32),
         .r_addend = rel->addend,
     };
+    if (rel->type == ELF_SYMBOL_TYPE_VAR) {
+      r[i].r_offset += 2;
+    }
+
+    i++;
     current = current->next;
   }
 
@@ -720,6 +725,7 @@ uint8_t *elf_data_build(uint64_t *size) {
   while (current->value != NULL) {
     elf_symbol_t *t = current->value;
     if (t->type != ELF_SYMBOL_TYPE_VAR) {
+      current = current->next;
       continue;
     }
     *size += t->size;
@@ -737,6 +743,7 @@ uint8_t *elf_data_build(uint64_t *size) {
   while (current->value != NULL) {
     elf_symbol_t *symbol = current->value;
     if (symbol->type != ELF_SYMBOL_TYPE_VAR) {
+      current = current->next;
       continue;
     }
 

@@ -182,10 +182,10 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count);
 
 /**
  *
- * @param symbol 符号表和个数
+ * @param symtab 符号表和个数
  * @param count
  * @return 字符串表
  */
-string elf_symtab_build(Elf64_Sym *symbol);
+string elf_symtab_build(Elf64_Sym *symtab);
 
 #endif //NATURE_SRC_ASSEMBLER_ELF_ELF_H_

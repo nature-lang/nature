@@ -90,7 +90,7 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
       if (tombstone == NULL) {
         tombstone = entry;
       }
-    } else if (strequal(entry->key, key)) {
+    } else if (str_equal(entry->key, key)) {
       return entry;
     }
 

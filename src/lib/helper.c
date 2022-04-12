@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "helper.h"
+#include "error.h"
 
 char *itoa(int n) {
   // 计算长度
@@ -16,12 +17,11 @@ char *itoa(int n) {
   return str;
 }
 
-bool strequal(char *a, char *b) {
+bool str_equal(char *a, char *b) {
   return strcmp(a, b) == 0;
 }
 
 char *str_connect(char *dst, char *src) {
-  // TODO realloc
   char *buf = malloc(strlen(dst) + strlen(src) + 1);
   sprintf(buf, "%s%s", dst, src);
   return buf;
