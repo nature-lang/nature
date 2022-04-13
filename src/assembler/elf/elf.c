@@ -11,19 +11,27 @@ static void elf_var_operand_rewrite(asm_operand_t *operand) {
   operand->value = r;
 }
 
-static void elf_fn_operand_rewrite(asm_operand_t *operand, int rel) {
-  if (rel == 0 || abs(rel) > 128) {
+static void elf_operand_rewrite_rel32(asm_operand_t *operand, int rel) {
+  operand->type = ASM_OPERAND_TYPE_UINT32;
+  operand->size = DWORD;
+  asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
+  v->value = (uint32_t) (rel - 5); // TODO 什么情况下需要加上或者减去当前指令的长度
+  operand->value = v;
+}
+
+static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool is_jmp) {
+  if (rel_diff == 0 || abs(rel_diff) > 128 || !is_jmp) {
     operand->type = ASM_OPERAND_TYPE_UINT32;
     operand->size = DWORD;
     asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-    v->value = (uint32_t) rel;
+    v->value = (uint32_t) (rel_diff - 5); // -5 表示去掉当前指令的差值
     operand->value = v;
     return;
   }
   operand->type = ASM_OPERAND_TYPE_UINT8;
   operand->size = BYTE;
   asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-  v->value = (uint8_t) rel;
+  v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
   operand->value = v;
 }
 
@@ -61,12 +69,13 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
       if (table_exist(elf_symbol_table, symbol_operand->name)) {
         elf_symbol_t *symbol = table_get(elf_symbol_table, symbol_operand->name);
         // 计算 offset 并填充
-        int rel_diff = global_text_offset - *symbol->offset;
-        elf_fn_operand_rewrite(operand, rel_diff);
+        int rel_diff = *symbol->offset - global_text_offset;
+        // call symbol 只有 rel32
+        elf_operand_rewrite_rel(operand, rel_diff, elf_is_jmp(asm_inst));
       } else {
         // 引用了 label 符号，但是符号确不在符号表中
         // 此时使用 rel32 占位，如果是 jmp 指令后续可能需要替换
-        elf_fn_operand_rewrite(operand, 0);
+        elf_operand_rewrite_rel(operand, 0, elf_is_jmp(asm_inst));
         inst->rel_operand = operand;
         inst->rel_symbol = symbol_operand->name;
         inst->is_jmp_symbol = elf_is_jmp(asm_inst);
@@ -185,9 +194,9 @@ void elf_text_inst_list_second_build() {
     // 计算 rel
     elf_symbol_t *symbol = table_get(elf_symbol_table, inst->rel_symbol);
     if (symbol != NULL && !symbol->is_rel) {
-      int rel_diff = *inst->offset - *symbol->offset;
+      int rel_diff = *symbol->offset - *inst->offset;
 
-      elf_fn_operand_rewrite(inst->rel_operand, rel_diff);
+      elf_operand_rewrite_rel(inst->rel_operand, rel_diff, inst->is_jmp_symbol);
 
       // 重新 encoding 指令
       inst->data = opcode_encoding(inst->asm_inst, &inst->count);
@@ -561,12 +570,14 @@ char *elf_symtab_build(Elf64_Sym *symtab) {
     if (!s->is_local) {
       Elf64_Sym sym = {
           .st_name = strlen(strtab_data),
-          .st_value = *s->offset,
           .st_size = s->size,
           .st_info = ELF64_ST_INFO(STB_GLOBAL, s->type),
           .st_other = 0,
           .st_shndx = s->section,
       };
+      if (s->offset != NULL) {
+        sym.st_value = *s->offset;
+      }
       int temp = index++;
       symtab[temp] = sym;
       s->symtab_index = temp;

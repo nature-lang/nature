@@ -138,13 +138,74 @@ static void test_hello_world() {
   elf_to_file(binary, count, "hello.o");
 }
 
+static void test_call() {
+  register_init();
+  opcode_init();
+  // elf_init
+  elf_init("hello.n");
+
+  asm_var_decl decl = {
+      .name = "str",
+      .size = strlen("hello world!\n"),
+      .value = (uint8_t *) "hello world!\n",
+      .type = ASM_VAR_DECL_TYPE_STRING
+  };
+
+  // sys_write
+  asm_inst_t *start_label = ASM_INST("label", { SYMBOL("_start", true, false) });
+  asm_inst_t *call_hello = ASM_INST("call", { SYMBOL("hello", true, false) });
+
+  asm_inst_t *hello_label = ASM_INST("label", { SYMBOL("hello", true, false) });
+  asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
+  asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
+  asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) });
+  asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
+  asm_inst_t *syscall = ASM_INST("syscall", {});
+
+  // sys_exit
+  asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
+  asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
+
+
+  // encoding
+  list *inst_list = list_new();
+
+  list_push(inst_list, hello_label);
+  list_push(inst_list, mov_eax_4);
+  list_push(inst_list, mov_1_rdi);
+  list_push(inst_list, mov_str_rsi);
+  list_push(inst_list, mov_len_rdx);
+  list_push(inst_list, syscall);
+  list_push(inst_list, mov_60_eax);
+  list_push(inst_list, mov_0_rdi);
+  list_push(inst_list, syscall);
+
+  list_push(inst_list, start_label);
+  list_push(inst_list, call_hello);
+
+  // 数据段编译
+  elf_var_decl_build(decl);
+  // 代码段编译
+  elf_text_inst_list_build(inst_list);
+  elf_text_inst_list_second_build();
+
+  // 构造 elf
+  elf_t elf = elf_new();
+  // 编码成二进制
+  uint64_t count;
+  uint8_t *binary = elf_encoding(elf, &count);
+  // 输出到文件
+  elf_to_file(binary, count, "call.o");
+}
+
 int main(void) {
   const struct CMUnitTest tests[] = {
-//      cmocka_unit_test(test_elf_to_file),
-//      cmocka_unit_test(test_opcode_tree_build),
-//      cmocka_unit_test(test_opcode_init),
-//      cmocka_unit_test(test_opcode_encoding),
+      cmocka_unit_test(test_elf_to_file),
+      cmocka_unit_test(test_opcode_tree_build),
+      cmocka_unit_test(test_opcode_init),
+      cmocka_unit_test(test_opcode_encoding),
       cmocka_unit_test(test_hello_world),
+      cmocka_unit_test(test_call),
   };
 
   return cmocka_run_group_tests(tests, NULL, NULL);
