@@ -54,12 +54,20 @@ set(SRC
         ${SRC_DIR}/type.c
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
-        ${SRC_DIR}/lir.h
-        ${SRC_DIR}/lir.c
+        ${SRC_DIR}/lir/lir.h
+        ${SRC_DIR}/lir/lir.c
         ${SRC_DIR}/cfg.c
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
-        ${SRC_DIR}/ssa.c src/assembler/amd64/register.h src/assembler/amd64/amd64.h src/assembler/amd64/opcode.c src/assembler/elf/elf.h)
+        ${SRC_DIR}/ssa.c
+        ${SRC_DIR}/register/register.h
+        #        ${SRC_DIR}/register/allocate.h
+        #        ${SRC_DIR}/register/allocate.c
+        #        ${SRC_DIR}/register/interval.h
+        #        ${SRC_DIR}/register/interval.c
+        ${SRC_DIR}/ssa.c
+        ${SRC_DIR}/lir/lower/amd64.c
+        ${SRC_DIR}/lir/lower/amd64.h)
 
 add_executable(nature main.c
         ${SRC}

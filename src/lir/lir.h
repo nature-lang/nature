@@ -112,6 +112,8 @@ typedef enum {
 typedef struct {
   string ident;
   string old;
+  // TODO stack offset
+  // TODO reg_name
 } lir_operand_var;
 
 typedef struct lir_vars {
@@ -191,10 +193,19 @@ typedef enum {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-  lir_op_type type;
+  lir_op_type op;
   lir_operand *first; // 参数1
   lir_operand *second; // 参数2
   lir_operand *result; // 参数3
+
+  // result 符号大小, 1, 2, 4, 8 byte
+  uint8_t size;
+  // result 类型
+  // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
+  // TYPE_STRING/LIST/MAP/SET = 8
+  uint8_t type;
+
+  string struct_name;
 
   int id; // 编号
   struct lir_op *succ;

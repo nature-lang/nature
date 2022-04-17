@@ -3,7 +3,7 @@
 
 #include "src/lib/list.h"
 #include "ast.h"
-#include "src/lir.h"
+#include "src/lir/lir.h"
 
 typedef struct {
   size_t count;

@@ -7,12 +7,12 @@
 #define TYPE_NEW_INT() ast_new_simple_type(TYPE_INT)
 
 typedef enum {
-  TYPE_STRING,
-  TYPE_BOOL,
+  TYPE_BOOL = 1,
   TYPE_FLOAT,
   TYPE_INT,
   TYPE_VOID,
   TYPE_VAR,
+  TYPE_STRING,
   TYPE_ANY,
   TYPE_STRUCT, // ast_struct_decl
   TYPE_DECL_IDENT, // char*

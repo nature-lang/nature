@@ -39,7 +39,7 @@ void cfg(closure *c) {
   lir_basic_block *current_block = NULL;
   lir_op *current_op = c->operates->front;
   while (current_op != NULL) {
-    if (current_op->type == LIR_OP_TYPE_LABEL) {
+    if (current_op->op == LIR_OP_TYPE_LABEL) {
       lir_operand_label *operand_label = current_op->result->value;
 
       // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
@@ -51,7 +51,7 @@ void cfg(closure *c) {
 
 
       // 3. 建立顺序关联关系 (由于顺序遍历 op, 所以只能建立顺序关系)
-      if (current_block != NULL && current_block->operates->rear->type != LIR_OP_TYPE_GOTO) {
+      if (current_block != NULL && current_block->operates->rear->op != LIR_OP_TYPE_GOTO) {
         LIR_BLOCKS_PUSH(&current_block->succs, new_block);
         LIR_BLOCKS_PUSH(&new_block->preds, current_block);
       }
@@ -75,7 +75,7 @@ void cfg(closure *c) {
   for (int i = 0; i < c->blocks.count; ++i) {
     current_block = c->blocks.list[i];
     lir_op *last_op = current_block->operates->rear;
-    if (last_op->type != LIR_OP_TYPE_GOTO && last_op->type != LIR_OP_TYPE_CMP_GOTO) {
+    if (last_op->op != LIR_OP_TYPE_GOTO && last_op->op != LIR_OP_TYPE_CMP_GOTO) {
       continue;
     }
     lir_operand_label *operand_label = last_op->result->value;

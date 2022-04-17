@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_REGISTER_INTERVAL_H_
 #define NATURE_SRC_REGISTER_INTERVAL_H_
 
-#include "src/lir.h"
+#include "src/lir/lir.h"
 #include "src/lib/list.h"
 
 typedef enum {

@@ -503,7 +503,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
   // 当前块内的先命名
   while (current_op != NULL) {
     // phi body 由当前块的前驱进行编号
-    if (current_op->type == LIR_OP_TYPE_PHI) {
+    if (current_op->op == LIR_OP_TYPE_PHI) {
       uint8_t number = ssa_new_var_number((lir_operand_var *) current_op->result->value, var_number_table, stack_table);
       ssa_rename_var((lir_operand_var *) current_op->result->value, number);
 
@@ -545,7 +545,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     lir_basic_block *succ_block = block->succs.list[i];
     // 为 每个 phi 函数的 phi param 命名
     lir_op *succ_op = succ_block->operates->front->succ;
-    while (succ_op != NULL && succ_op->type == LIR_OP_TYPE_PHI) {
+    while (succ_op != NULL && succ_op->op == LIR_OP_TYPE_PHI) {
       lir_operand_phi_body *phi_body = succ_op->first->value;
       lir_operand_var *var = phi_body->list[phi_body->count++];
       var_number_stack *stack = table_get(stack_table, var->ident);
@@ -628,7 +628,7 @@ bool ssa_is_idom(lir_basic_blocks dom, lir_basic_block *await) {
  */
 bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
   lir_op *current_op = block->operates->front->succ;
-  while (current_op != NULL && current_op->type == LIR_OP_TYPE_PHI) {
+  while (current_op != NULL && current_op->op == LIR_OP_TYPE_PHI) {
     lir_operand_var *phi_var = current_op->result->value;
     if (strcmp(phi_var->ident, var->ident) == 0) {
       return true;

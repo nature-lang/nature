@@ -93,7 +93,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
   }
 
   lir_op *op = NEW(lir_op);
-  op->type = type;
+  op->op = type;
   op->first = first;
   op->second = second;
   op->result = result;
