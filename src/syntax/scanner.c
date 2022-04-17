@@ -72,7 +72,7 @@ list *scanner(string source) {
 
     // if is end or error
     if (scanner_has_error()) {
-      error_exit(0, s_error.message);
+      error_exit( s_error.message);
     }
 
     if (scanner_is_at_end()) {

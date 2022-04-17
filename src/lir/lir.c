@@ -10,6 +10,7 @@ lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t len
   memory_operand->base = base;
   // 根据 index + 类型计算偏移量
   memory_operand->offset = offset;
+  memory_operand->length = length;
 
   lir_operand *operand = NEW(lir_operand);
   operand->type = LIR_OPERAND_TYPE_MEMORY;

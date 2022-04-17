@@ -2,10 +2,10 @@
 #define NATURE_SRC_LIR_H_
 
 #include "src/lib/list.h"
-#include "value.h"
-#include "ast.h"
-#include "lib/table.h"
-#include "register/register.h"
+#include "src/value.h"
+#include "src/ast.h"
+#include "src/lib/table.h"
+#include "src/register/register.h"
 
 #define TEMP_IDENT "t"
 #define CONTINUE_IDENT "continue"
@@ -112,8 +112,9 @@ typedef enum {
 typedef struct {
   string ident;
   string old;
-  // TODO stack offset
-  // TODO reg_name
+  uint16_t stack_frame_offset;
+  uint8_t reg_id; // reg list index
+  // TODO 不如冗余一下尺寸?
 } lir_operand_var;
 
 typedef struct lir_vars {
@@ -131,10 +132,10 @@ typedef struct {
 
 typedef struct {
   union {
-    int int_value;
+    int64_t int_value;
     float float_value;
     bool bool_value;
-    string string_value;
+//    string string_value;
   };
   type_category type;
 } lir_operand_immediate;
@@ -261,7 +262,7 @@ typedef struct lir_basic_block {
 // cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
 typedef struct closure {
   lir_vars globals; // closure 中定义的变量列表
-  regs fixed_regs; // 作为临时寄存器使用到的寄存器
+  regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
   lir_basic_blocks blocks; // 根据解析顺序得到
 
 

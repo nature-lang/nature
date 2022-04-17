@@ -4,12 +4,14 @@
 
 typedef struct {
   string name;
-  uint8_t id; // 唯一编码, 可以是 regs 中的 index
-} reg;
+  uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
+  uint8_t size;
+  uint8_t id; // 在 physical register 中的 index
+} reg_t; // 做类型转换
 
 typedef struct {
   uint8_t count;
-  reg *list[UINT8_MAX];
+  reg_t *list[UINT8_MAX];
 } regs_t; // 指定架构的物理寄存器列表
 
 // TODO 根据指定系统填充 physical_regs

@@ -3,7 +3,7 @@
 
 #define ERROR_STR_COUNT 1000
 
-void error_exit(int code, char *format, ...);
+void error_exit(char *format, ...);
 
 void error_message(int line, char *message);
 

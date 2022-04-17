@@ -59,7 +59,7 @@ ast_type infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
 
 /**
  * if (expr_type.category == TYPE_VAR && stmt->var_decl->type.category == TYPE_VAR) {
- *  error_exit(0, "var type ambiguity");
+ *  error_exit(, "var type ambiguity");
  * }
  * @param left
  * @param right

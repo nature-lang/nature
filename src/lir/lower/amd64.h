@@ -9,13 +9,23 @@
 #include "src/lir/lir.h"
 #include "src/register/register.h"
 
-typedef struct {
-  asm_inst_t *inst_list;
-  uint8_t inst_count;
-  // fixed reg(需要一个更加朴素的保存方式)
-  regs_t fixed_regs;
-} amd64_lower_result_t;
+//typedef struct {
+//  asm_inst_t *inst_list;
+//  uint8_t inst_count;
+//  regs_t fixed_regs;
+//} amd64_lower_result_t;
 
-void amd64_lower(lir_op op);
+typedef asm_inst_t *(*amd64_lower_fn)(lir_op op, uint8_t *count);
+
+asm_inst_t *amd64_lower(lir_op op, uint8_t *count);
+
+asm_inst_t *amd64_lower_add(lir_op op, uint8_t *count);
+
+/**
+ * lir 中的简单操作数转换成 asm 中的操作数
+ * @param operand
+ * @return
+ */
+asm_operand_t *amd64_lir_to_operand(lir_operand *operand);
 
 #endif //NATURE_SRC_LIR_LOWER_AMD64_H_

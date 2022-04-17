@@ -139,7 +139,7 @@ ast_type infer_expr(ast_expr *expr) {
       break;
     }
     default: {
-      error_exit(0, "unknown expr");
+      error_exit( "unknown expr");
       exit(0);
     }
   }
@@ -186,7 +186,7 @@ ast_type infer_binary(ast_binary_expr *expr) {
       return ast_new_simple_type(TYPE_BOOL);
     }
     default: {
-      error_exit(0, "unknown operator type");
+      error_exit( "unknown operator type");
       exit(0);
     }
   }
@@ -200,12 +200,12 @@ ast_type infer_binary(ast_binary_expr *expr) {
 ast_type infer_unary(ast_unary_expr *expr) {
   ast_type operand_type = infer_expr(&expr->operand);
   if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.category != TYPE_BOOL) {
-    error_exit(0, "!expr, expr must be bool type");
+    error_exit( "!expr, expr must be bool type");
   }
 
   if ((expr->operator == AST_EXPR_OPERATOR_MINUS) && operand_type.category != TYPE_INT
       && operand_type.category != TYPE_FLOAT) {
-    error_exit(0, "!expr, expr must be int or float");
+    error_exit( "!expr, expr must be int or float");
   }
 
   return operand_type;
@@ -537,7 +537,7 @@ void infer_assign(ast_assign_stmt *stmt) {
 void infer_if(ast_if_stmt *stmt) {
   ast_type condition_type = infer_expr(&stmt->condition);
   if (condition_type.category != TYPE_BOOL) {
-    error_exit(0, "if stmt condition must bool");
+    error_exit( "if stmt condition must bool");
   }
 
   infer_block(&stmt->consequent);
@@ -547,7 +547,7 @@ void infer_if(ast_if_stmt *stmt) {
 void infer_while(ast_while_stmt *stmt) {
   ast_type condition_type = infer_expr(&stmt->condition);
   if (condition_type.category != TYPE_BOOL) {
-    error_exit(0, "while stmt condition must bool");
+    error_exit( "while stmt condition must bool");
   }
   infer_block(&stmt->body);
 }

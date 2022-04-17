@@ -44,26 +44,26 @@
 })
 
 #define SYMBOL(_name, _is_label, _is_local) ({ \
-     asm_operand_t *operand = NEW(asm_operand_t); \
+     asm_operand_t *_operand = NEW(asm_operand_t); \
      operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
      asm_operand_symbol_t *_symbol = NEW(asm_operand_symbol_t); \
      _symbol->name = _name;    \
      _symbol->is_label = _is_label;    \
      _symbol->is_local = _is_local;    \
-     operand->size = 0;\
-     operand->value = _symbol;    \
-     operand;\
+     _operand->size = 0;\
+     _operand->value = _symbol;    \
+     _operand;\
 })
 
 #define DISP_REG(_reg, _disp) ({ \
-     asm_operand_t *operand = NEW(asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
+     asm_operand_t *_operand = NEW(asm_operand_t); \
+     _operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
      asm_operand_disp_register_t *_disp_reg = NEW(asm_operand_disp_register_t); \
      _disp_reg->reg = _reg;    \
      _disp_reg->disp = _disp;    \
-     operand->size = _reg->size;\
-     operand->value = _disp_reg;    \
-     operand;\
+     _operand->size = _reg->size;\
+     _operand->value = _disp_reg;    \
+     _operand;\
 })
 
 #define INDIRECT_REG(_reg) ({ \
@@ -104,7 +104,7 @@
 #define UINT64(_value) VALUE_OPERAND(asm_operand_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
 #define INT8(_value) VALUE_OPERAND(asm_operand_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
 #define INT32(_value) VALUE_OPERAND(asm_operand_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
-#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAt32, (_value), DWORD)
+#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), DWORD)
 #define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), QWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
@@ -173,6 +173,7 @@ typedef struct {
   string name;
   uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
   uint8_t size;
+  uint8_t id; // 在 physical register 中的 index
 } asm_operand_register_t; // size 是个啥？
 
 typedef struct {
@@ -222,12 +223,10 @@ typedef enum {
   ASM_VAR_DECL_TYPE_STRING,
 } asm_var_decl_type;
 
-// 数据段(编译进符号表即可，数据类型需要兼容高级类型)
 typedef struct {
   string name; // 符号名称
   size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
   uint8_t *value; // 符号值
-  // 简单符号将其值直接存储在 .data 段中
   asm_var_decl_type type; // 暂时感觉没什么用
 } asm_var_decl;
 

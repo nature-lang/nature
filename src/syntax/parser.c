@@ -294,7 +294,7 @@ ast_expr parser_unary() {
   } else if (operator_token->type == TOKEN_MINUS) {
     unary_expr->operator = AST_EXPR_OPERATOR_MINUS;
   } else {
-    error_exit(0, "unknown operator type");
+    error_exit( "unknown operator type");
   }
 
   unary_expr->operand = operand;
@@ -769,7 +769,7 @@ void parser_cursor_init(list *token_list) {
 
 token *parser_advance() {
   if (p_cursor.current->next == NULL) {
-    error_exit(0, "next token is null");
+    error_exit( "next token is null");
   }
   token *t = p_cursor.current->value;
   p_cursor.current = p_cursor.current->next;
@@ -1026,7 +1026,7 @@ bool parser_must_stmt_end() {
 bool parser_is_function_decl(list_node *current) {
   token *t = current->value;
   if (t->type != TOKEN_LEFT_PAREN) {
-    error_exit(0, "parser_is_function_decl param must be TOKEN_LEFT_PAREN");
+    error_exit( "parser_is_function_decl param must be TOKEN_LEFT_PAREN");
     return false;
   }
 
