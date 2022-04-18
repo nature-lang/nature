@@ -130,7 +130,7 @@ asm_operand_register_t *zmm15;
 void register_init() {
   rax = REG_OPERAND("rax", 0, QWORD);
   rcx = REG_OPERAND("rcx", 1, QWORD);
-  rdx = REG_OPERAND("rcx", 2, QWORD);
+  rdx = REG_OPERAND("rdx", 2, QWORD);
   rbx = REG_OPERAND("rbx", 3, QWORD);
   rsp = REG_OPERAND("rsp", 4, QWORD);
   rbp = REG_OPERAND("rbp", 5, QWORD);

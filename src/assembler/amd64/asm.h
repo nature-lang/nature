@@ -15,17 +15,17 @@
 #define ZWORD 64 // 64 byte
 
 #define ASM_INST(_name, ...) ({\
-    asm_inst_t *_inst = NEW(asm_inst_t);\
-    _inst->name = _name;\
-    asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
-    for (int i = 0; i < 4; ++i) {\
-      if (_temp_operands[i] != NULL) {\
-        _inst->operands[i] = _temp_operands[i];\
-        _inst->count++;\
-      }\
+  asm_inst_t *_inst = NEW(asm_inst_t);\
+  _inst->name = _name;\
+  asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
+  for (int i = 0; i < 4; ++i) {\
+    if (_temp_operands[i] != NULL) {\
+      _inst->operands[i] = _temp_operands[i];\
+      _inst->count++;\
     }\
-    _inst;\
-  })
+  }\
+  _inst;\
+})
 
 #define REG(_reg) ({ \
      asm_operand_t *reg_operand = NEW(asm_operand_t); \
@@ -45,7 +45,7 @@
 
 #define SYMBOL(_name, _is_label, _is_local) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
+     _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
      asm_operand_symbol_t *_symbol = NEW(asm_operand_symbol_t); \
      _symbol->name = _name;    \
      _symbol->is_label = _is_label;    \
@@ -54,6 +54,12 @@
      _operand->value = _symbol;    \
      _operand;\
 })
+
+#define ASM_OPERAND_COPY(_dst, _src)  \
+   _dst->type = _src->type;\
+   _dst->size = _src->size;\
+   _dst->value = _src->value;\
+
 
 #define DISP_REG(_reg, _disp) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
