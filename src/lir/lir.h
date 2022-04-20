@@ -204,7 +204,8 @@ typedef struct lir_op {
   // result 类型
   // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
   // TYPE_STRING/LIST/MAP/SET = 8
-  uint8_t type;
+  // CUSTOM_TYPE 如何处理？
+  uint8_t data_type;
 
   string struct_name;
 
