@@ -3,6 +3,11 @@
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
 
+inst_t movsq = {
+    "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
+    {}
+};
+
 inst_t call_rm64 = {"call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
                     {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
 };
@@ -332,7 +337,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     return res;
   }
 
-  error_exit( "cannot identify operand_type index: %d", t);
+  error_exit("cannot identify operand_type index: %d", t);
   return res;
 }
 
@@ -393,7 +398,7 @@ void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_inde
 inst_t *opcode_select(asm_inst_t asm_inst) {
   opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
   if (current == NULL) {
-    error_exit( "cannot identify asm opcode %s ", asm_inst.name);
+    error_exit("cannot identify asm opcode %s ", asm_inst.name);
     return NULL;
   }
 
@@ -405,7 +410,7 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
     // current 匹配
     bool exists = table_exist(current->succs, key);
     if (!exists) {
-      error_exit( "cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
+      error_exit("cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
       return NULL;
     }
     current = table_get(current->succs, key);
@@ -650,6 +655,11 @@ static inst_format_t *inst_format_new(uint8_t *opcode) {
  */
 inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
   inst_format_t *format = inst_format_new(inst->opcode);
+
+  if (asm_inst.prefix > 0) {
+    inst->prefix = asm_inst.prefix;
+  }
+
   // format 填充 prefixes
   if (inst->prefix > 0) {
     format->prefix = inst->prefix;
@@ -709,7 +719,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
         format->vex_prefix->source = 15 - r->index; // two's complement
         format->vex_prefix->r = r->index <= 7;
       } else {
-        error_exit( "unsupported encoding %v", operand.encoding);
+        error_exit("unsupported encoding %v", operand.encoding);
         return NULL;
       }
 
@@ -743,7 +753,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           format->rex_prefix->b = r->reg->index > 7;
         }
       } else {
-        error_exit( "unsupported encoding %v", operand.encoding);
+        error_exit("unsupported encoding %v", operand.encoding);
         return NULL;
       }
 
@@ -770,7 +780,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
           format->rex_prefix->b = r->reg->index > 7;
         }
       } else {
-        error_exit( "unsupported encoding %v", operand.encoding);
+        error_exit("unsupported encoding %v", operand.encoding);
         return NULL;
       }
     } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
@@ -860,7 +870,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
     }*/ else {
-      error_exit( "unsupported asm operand type %v", asm_operand->type);
+      error_exit("unsupported asm operand type %v", asm_operand->type);
       return NULL;
     }
 

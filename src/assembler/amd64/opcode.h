@@ -150,7 +150,7 @@ typedef struct {
  * 机器码指令结构, 难道是这个的描述性不好？
  */
 typedef struct {
-  uint8_t prefix; // 不知道是干嘛的，命名都有 rex.prefix 和 vex.prefix 了
+  uint8_t prefix; // 不知道是干嘛的，明明都有 rex.prefix 和 vex.prefix 了
   vex_prefix_t *vex_prefix;
   rex_prefix_t *rex_prefix;
   uint8_t opcode[3];

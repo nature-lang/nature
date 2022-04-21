@@ -14,6 +14,14 @@
 #define YWORD 32 // 32 byte
 #define ZWORD 64 // 64 byte
 
+#define MOVSQ(_prefix) ({\
+  asm_inst_t *_inst = NEW(asm_inst_t);\
+  _inst->name = "movsq"; \
+  _inst->prefix = _prefix; \
+  _inst->cound = 0;\
+  _inst;\
+})
+
 #define ASM_INST(_name, ...) ({\
   asm_inst_t *_inst = NEW(asm_inst_t);\
   _inst->name = _name;\
@@ -219,6 +227,7 @@ typedef struct {
  */
 typedef struct {
   string name; // 指令名称
+  uint8_t prefix; // 自定义指令前缀，覆盖
   uint8_t count;
   asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
