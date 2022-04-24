@@ -2,10 +2,30 @@
 #include "src/type.h"
 #include "src/assembler/amd64/register.h"
 #include "src/lib/error.h"
+#include <math.h>
 
 amd64_lower_fn amd64_lower_table[] = {
     [LIR_OP_TYPE_ADD] = amd64_lower_add,
 };
+
+/**
+ * LIR_OP_TYPE_CALL
+ * @param op
+ * @param count
+ * @return
+ */
+asm_inst_t **amd64_lower_call(lir_op op, uint8_t *count) {
+  // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
+}
+
+/**
+ * LIR_OP_TYPE_RETURN
+ * @param op
+ * @param count
+ * @return
+ */
+asm_inst_t **amd64_lower_return(lir_op op, uint8_t *count) {
+}
 
 /**
  * -0x18(%rbp) = indirect addr
@@ -80,6 +100,40 @@ asm_inst_t **amd64_lower_mov(lir_op op, uint8_t *count) {
     insts[(*count)++] = ASM_INST("mov", { REG(reg), first });
     insts[(*count)++] = ASM_INST("mov", { result, REG(reg) });
 
+    realloc(insts, *count);
+    return insts;
+  }
+
+  // 结构体处理
+  if (op.data_type == TYPE_STRUCT) {
+    *count = 0;
+    asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);
+//    regs_t used_regs = {.count = 0};
+    // first => result
+    // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
+    // lea first to rax
+    asm_operand_t *first_reg = REG(rax);
+    asm_operand_t *first = amd64_lower_simple_lir_to_asm_operand(op.first);
+    if (first->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
+      insts[(*count)++] = ASM_INST("lea", { REG(rax), first });
+    } else {
+      first_reg = first;
+    }
+    // lea result to rdx
+    asm_operand_t *result_reg = REG(rdx);
+    asm_operand_t *result = amd64_lower_simple_lir_to_asm_operand(op.result);
+    if (result->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
+      insts[(*count)++] = ASM_INST("lea", { REG(rdx), result });
+    } else {
+      result_reg = result;
+    }
+
+    // mov rax,rsi, mov rdx,rdi, mov count,rcx
+    int rep_count = ceil((float) op.size / QWORD);
+    insts[(*count)++] = ASM_INST("mov", { REG(rsi), first_reg });
+    insts[(*count)++] = ASM_INST("mov", { REG(rdi), result_reg });
+    insts[(*count)++] = ASM_INST("mov", { REG(rcx), UINT64(rep_count) });
+    insts[(*count)++] = MOVSQ(0xF3);
     realloc(insts, *count);
     return insts;
   }

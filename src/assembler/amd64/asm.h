@@ -18,7 +18,7 @@
   asm_inst_t *_inst = NEW(asm_inst_t);\
   _inst->name = "movsq"; \
   _inst->prefix = _prefix; \
-  _inst->cound = 0;\
+  _inst->count = 0;\
   _inst;\
 })
 
