@@ -72,6 +72,15 @@ void table_adjust(table *t, int capacity) {
   t->capacity = capacity;
 }
 
+/**
+ * 寻找 hash 算法命中的 entry,可能是空桶或者已经存储了元素的桶，但是要需要考虑到开放寻址法
+ * tombstone 相当于是一个删除占位符，由于采用了开放寻址法，所以我们无法简单的删除一个 entry。
+ * 那会造成开放寻址寻找错误,开放寻址遇到 hash 冲突时会查找线性地址的下一个。删除有可能会造成中断。
+ * @param entries
+ * @param capacity
+ * @param key
+ * @return
+ */
 table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
   // 计算 hash 值(TODO 可以优化为预计算 hash_string 值)
   uint32_t hash = hash_string(key);
@@ -86,7 +95,8 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
         return tombstone != NULL ? tombstone : entry;
       }
 
-      // 找到已经被删除的节点时不能停止
+      // key = NULL, value 不为 NULL 表示这是一个被已经被删除的节点
+      // 所以不只能停止遍历，继续进行开放寻址
       if (tombstone == NULL) {
         tombstone = entry;
       }

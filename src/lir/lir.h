@@ -135,7 +135,7 @@ typedef struct {
     int64_t int_value;
     float float_value;
     bool bool_value;
-//    string string_value;
+    string string_value;
   };
   type_category type;
 } lir_operand_immediate;

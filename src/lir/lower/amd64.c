@@ -19,9 +19,14 @@ asm_inst_t **amd64_lower_call(lir_op op, uint8_t *count) {
 }
 
 /**
- * LIR_OP_TYPE_RETURN
- * @param op
- * @param count
+ * 核心问题是: 在结构体作为返回值时，当外部调用将函数的返回地址作为参数 rdi 传递给函数时，
+ * 根据 ABI 规定，函数操作的第一步就是对 rdi 入栈，但是当 lower return 时,我并不知道 rdi 被存储在了栈的什么位置？
+ * 但是实际上是能够知道的，包括初始化时 sub rbp,n 的 n 也是可以在寄存器分配阶段就确定下来的。
+ * n 的信息作为 closure 的属性存储在 closure 中，如何将相关信息传递给 lower ?, 参数 1 改成 closure?
+ * 在结构体中 temp_var 存储的是结构体的起始地址。不能直接 return 起始地址，大数据会随着函数栈帧消亡。 而是将结构体作为整个值传递。
+ * 既然已经知道了结构体的起始位置，以及隐藏参数的所在栈帧。 就可以直接进行结构体返回值的构建。
+ * @param c
+ * @param ast
  * @return
  */
 asm_inst_t **amd64_lower_return(lir_op op, uint8_t *count) {
