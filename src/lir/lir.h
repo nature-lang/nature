@@ -283,6 +283,9 @@ typedef struct closure {
   string env_name;
   struct closure *parent;
   list_op *operates; // 指令列表
+
+  // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
+  uint16_t return_offset;
 } closure;
 
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);

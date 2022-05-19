@@ -14,7 +14,7 @@ amd64_lower_fn amd64_lower_table[] = {
  * @param count
  * @return
  */
-asm_inst_t **amd64_lower_call(lir_op op, uint8_t *count) {
+asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
   // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
 }
 
@@ -29,7 +29,7 @@ asm_inst_t **amd64_lower_call(lir_op op, uint8_t *count) {
  * @param ast
  * @return
  */
-asm_inst_t **amd64_lower_return(lir_op op, uint8_t *count) {
+asm_inst_t **amd64_lower_return(closure *c, lir_op op, uint8_t *count) {
 }
 
 /**
@@ -38,7 +38,7 @@ asm_inst_t **amd64_lower_return(lir_op op, uint8_t *count) {
  * @param count
  * @return
  */
-asm_inst_t **amd64_lower_add(lir_op op, uint8_t *count) {
+asm_inst_t **amd64_lower_add(closure *c, lir_op op, uint8_t *count) {
   if (op.data_type == TYPE_INT) {
     *count = 0; // 指令类型不太确定，所以指令长度也不是特别的确定
     asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);
@@ -78,7 +78,7 @@ asm_inst_t **amd64_lower_add(lir_op op, uint8_t *count) {
   return NULL;
 }
 
-asm_inst_t **amd64_lower_mov(lir_op op, uint8_t *count) {
+asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count) {
   if (op.data_type == TYPE_INT) {
     *count = 0; // 指令类型不太确定，所以指令长度也不是特别的确定
     asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);

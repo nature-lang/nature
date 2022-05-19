@@ -15,13 +15,13 @@ typedef struct {
 //  regs_t used_regs; // 使用的寄存器列表
 } amd64_lower_result_t;
 
-typedef asm_inst_t **(*amd64_lower_fn)(lir_op op, uint8_t *count);
+typedef asm_inst_t **(*amd64_lower_fn)(closure *c, lir_op op, uint8_t *count);
 
-asm_inst_t **amd64_lower(lir_op op, uint8_t *count);
+asm_inst_t **amd64_lower(closure *c, lir_op op, uint8_t *count);
 
-asm_inst_t **amd64_lower_add(lir_op op, uint8_t *count);
+asm_inst_t **amd64_lower_add(closure *c, lir_op op, uint8_t *count);
 
-asm_inst_t **amd64_lower_mov(lir_op op, uint8_t *count);
+asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count);
 
 /**
  * lir 中的简单操作数转换成 asm 中的操作数
