@@ -19,6 +19,8 @@ typedef asm_inst_t **(*amd64_lower_fn)(closure *c, lir_op op, uint8_t *count);
 
 asm_inst_t **amd64_lower(closure *c, lir_op op, uint8_t *count);
 
+asm_inst_t **amd64_lower_return(closure *c, lir_op op, uint8_t *count);
+
 asm_inst_t **amd64_lower_add(closure *c, lir_op op, uint8_t *count);
 
 asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count);

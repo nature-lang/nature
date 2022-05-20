@@ -30,6 +30,7 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
  * @return
  */
 asm_inst_t **amd64_lower_return(closure *c, lir_op op, uint8_t *count) {
+  // 判断数据类型是否为大值类型(list/map/set/tuple/struct) 如果是大值，则通过特殊方式返回
 }
 
 /**

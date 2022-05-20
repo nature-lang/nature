@@ -1,7 +1,7 @@
 import "lib"
-import "http" // 和内置模块命名冲突问题？
-import "helper/calc" // 相对还是绝对
-import "helper/calc" // 提示报错？
+import "http"
+import "helper/calc"
+import "helper/calc"
 
 void get() {
 
