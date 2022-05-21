@@ -22,6 +22,7 @@
   _inst;\
 })
 
+// ASM_INST("mov", { to, from });
 #define ASM_INST(_name, ...) ({\
   asm_inst_t *_inst = NEW(asm_inst_t);\
   _inst->name = _name;\
@@ -231,6 +232,11 @@ typedef struct {
   uint8_t count;
   asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
+
+typedef struct {
+  asm_inst_t **list;
+  uint8_t count;
+} asm_insts_t;
 
 typedef enum {
   ASM_VAR_DECL_TYPE_INT = 1,

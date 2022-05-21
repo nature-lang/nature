@@ -720,7 +720,7 @@ list_op *compiler_return(closure *c, ast_return_stmt *ast) {
   list_op *await = compiler_expr(c, ast->expr, target);
   list_op_append(list, await);
 
-  lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, target, NULL, NULL);
+  lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, target);
   list_op_push(list, return_op);
 
   return list;

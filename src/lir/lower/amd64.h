@@ -30,15 +30,15 @@ asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count);
  * @param operand
  * @return
  */
-asm_operand_t *amd64_lower_simple_lir_to_asm_operand(lir_operand *operand);
+asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand);
 
 bool amd64_lower_is_complex_operand(lir_operand *operand);
 
 reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size);
 
 // 只要返回了指令就有一个使用的寄存器的列表，已经使用的固定寄存器就不能重复使用
-amd64_lower_result_t amd64_lower_lir_to_asm_operand(lir_operand *operand,
-                                                    asm_operand_t *asm_operand,
-                                                    regs_t *used_regs);
+asm_insts_t amd64_lower_complex_to_asm_operand(lir_operand *operand,
+                                               asm_operand_t *asm_operand,
+                                               regs_t *used_regs);
 
 #endif //NATURE_SRC_LIR_LOWER_AMD64_H_
