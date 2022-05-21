@@ -101,41 +101,21 @@ asm_inst_t **amd64_lower_add(closure *c, lir_op op, uint8_t *count) {
   return NULL;
 }
 
+/**
+ * mov foo => bar
+ * mov 1 => var
+ * mov 1.1 => var
+ * @param c
+ * @param op
+ * @param count
+ * @return
+ */
 asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count) {
-  if (op.data_type == TYPE_INT) {
-    *count = 0; // 指令类型不太确定，所以指令长度也不是特别的确定
-    asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);
-    regs_t used_regs = {.count = 0};
-
-    // 参数转换
-    asm_operand_t *first = NEW(asm_operand_t);
-    asm_insts_t temp = amd64_lower_complex_to_asm_operand(op.first, first, &used_regs);
-    if (temp.count > 0) {
-      for (int i = 0; i < temp.count; ++i) {
-        insts[(*count)++] = temp.list[i];
-      }
-    }
-
-    asm_operand_t *result = NEW(asm_operand_t);
-    temp = amd64_lower_complex_to_asm_operand(op.result, result, &used_regs);
-    if (temp.count > 0) {
-      for (int i = 0; i < temp.count; ++i) {
-        insts[(*count)++] = temp.list[i];
-      }
-    }
-
-    reg_t *reg = amd64_lower_next_reg(&used_regs, op.size);
-    insts[(*count)++] = ASM_INST("mov", { REG(reg), first });
-    insts[(*count)++] = ASM_INST("mov", { result, REG(reg) });
-
-    realloc(insts, *count);
-    return insts;
-  }
+  *count = 0;
+  asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);
 
   // 结构体处理
   if (op.data_type == TYPE_STRUCT) {
-    *count = 0;
-    asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 100);
 //    regs_t used_regs = {.count = 0};
     // first => result
     // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
@@ -165,6 +145,32 @@ asm_inst_t **amd64_lower_mov(closure *c, lir_op op, uint8_t *count) {
     realloc(insts, *count);
     return insts;
   }
+
+  regs_t used_regs = {.count = 0};
+
+  // 参数转换
+  asm_operand_t *first = NEW(asm_operand_t);
+  asm_insts_t temp = amd64_lower_complex_to_asm_operand(op.first, first, &used_regs);
+  if (temp.count > 0) {
+    for (int i = 0; i < temp.count; ++i) {
+      insts[(*count)++] = temp.list[i];
+    }
+  }
+
+  asm_operand_t *result = NEW(asm_operand_t);
+  temp = amd64_lower_complex_to_asm_operand(op.result, result, &used_regs);
+  if (temp.count > 0) {
+    for (int i = 0; i < temp.count; ++i) {
+      insts[(*count)++] = temp.list[i];
+    }
+  }
+
+  reg_t *reg = amd64_lower_next_reg(&used_regs, op.data_type);
+  insts[(*count)++] = ASM_INST("mov", { REG(reg), first });
+  insts[(*count)++] = ASM_INST("mov", { result, REG(reg) });
+
+  realloc(insts, *count);
+  return insts;
 }
 
 asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
@@ -212,6 +218,11 @@ asm_insts_t amd64_lower_complex_to_asm_operand(lir_operand *operand,
       .count = 0,
       .list = NULL,
   };
+
+  // 浮点数需要基于 data 段特殊处理, 并将其值存储到 asm_operand 中
+  if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+
+  }
 
   if (operand->type == LIR_OPERAND_TYPE_MEMORY) {
     lir_operand_memory *v = operand->value;
