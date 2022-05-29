@@ -14,12 +14,12 @@ bool (string a, int b) {
 }
 
 // 函数赋值给变量
-bool(string, int) test = bool (string a, int b) {
+bool (string, int) test = bool (string a, int b) {
 
 }
 
 // 省略返回值
-void(string, int) test = void(string a, int b) {
+void(string, int) test = void (string a, int b) {
 
 }
 

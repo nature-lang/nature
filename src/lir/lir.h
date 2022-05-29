@@ -112,8 +112,8 @@ typedef enum {
 typedef struct {
   string ident;
   string old;
-  uint16_t stack_frame_offset;
-  uint8_t reg_id; // reg list index
+  uint16_t stack_frame_offset; // 栈分配
+  uint8_t reg_id; // reg list index, 寄存器分配
   // TODO 不如冗余一下尺寸?
 } lir_operand_var;
 
@@ -261,12 +261,15 @@ typedef struct lir_basic_block {
 } lir_basic_block;
 
 /**
- * cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
+ * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
  * 形参有一条专门的指令 lir_formal_param 编译这条指令的时候处理形参即可
  * lir_formal_param 在寄存器分配阶段已经分配了合适的 stack or reg, 所以依次遍历处理即可
  * 如果函数的返回值大于 8 个字节，则需要引用传递返回, ABI 规定形参 1 为引用返回地址
  * 假如形参和所有局部变量占用的总长为 N Byte, 那么 -n(rbp) 处存储的就是最后一个形参的位置(向上存储)
  * 所以还是需要 closure 增加一个字段记录大值地址响应值, 从而可以正常返回
+ *
+ * 2. closure 可以能定义在文件中的全局函数，也可能是定义在结构体中的局部函数，在类型推导阶段是有能力识别到函数的左值
+ * 是一个变量，还是结构体的元素
  */
 typedef struct closure {
   lir_vars globals; // closure 中定义的变量列表

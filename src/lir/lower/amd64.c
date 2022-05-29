@@ -9,13 +9,31 @@ amd64_lower_fn amd64_lower_table[] = {
 };
 
 /**
- * LIR_OP_TYPE_CALL
+ * LIR_OP_TYPE_CALL base, param => result
+ * base 有哪些形态？
+ * http.get() // 外部符号引用,无非就是是否在符号表中
+ * sum() // 内部符号引用, sum 是否属于 var? 所有的符号都被记录为 var
+ * test[0]() // 经过计算后的左值，其值最终存储在了一个临时变量中 => temp var
+ * 所以 base 最终只有一个形态，那就是 var, 如果 var 在当前 closure 有定义，那其至少会被
+ * - 会被堆栈分配,此时如何调用 call 指令？
+ * asm call + stack[1]([indirect addr]) or asm call + reg ?
+ * 没啥可以担心的，这都是被支持的
+ *
+ * - 但是如果其如果没有被寄存器分配，就属于外部符号(label)
+ * asm call + SYMBOL 即可
+ * 所以最终
  * @param op
  * @param count
  * @return
  */
 asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
   // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
+  // 1. 实参传递(封装一个 static 函数处理),
+  base = op.first;
+
+
+  // 2. 调用 call 指令(处理地址)
+  // 3. 响应处理
 }
 
 /**

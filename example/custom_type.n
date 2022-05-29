@@ -41,7 +41,7 @@ var max = person {
 }
 
 
-map{string:any} = {
+map{string:any} foo = {
 	"list": ["1", "2", "3"],
 	"bool": true,
 	"int": 1,
@@ -58,7 +58,8 @@ array[any] = [
 tuple(int, bool) = (1, true)
 
 // 带前缀(第一版如果不好编译的话就别省略了,直接通过类型判断数据结构还是挺方便的)
-list[any] a = [1, 2, 3]
+array[int] a = [1, 2, 3]
+array[int, 2] a = [1, 2]
 tuple(int, bool) b = (1, true)
 map{string: any} c = {"a": 1, "b": true} // key 必须是简单类型，值则可以是复合类型？
 set{int} d = {1, 2, 3, 4} // 只支持简单类型？
