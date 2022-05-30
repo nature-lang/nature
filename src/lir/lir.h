@@ -115,6 +115,8 @@ typedef struct {
   uint16_t stack_frame_offset; // 栈分配
   uint8_t reg_id; // reg list index, 寄存器分配
   // TODO 不如冗余一下尺寸?
+  // 是否为 label
+  bool is_label;
 } lir_operand_var;
 
 typedef struct lir_vars {

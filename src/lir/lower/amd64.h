@@ -36,6 +36,8 @@ bool amd64_lower_is_complex_operand(lir_operand *operand);
 
 reg_t *amd64_lower_next_reg(regs_t *used, uint8_t type);
 
+asm_operand_t *amd64_lower_next_actual_target(uint8_t *count, asm_operand_t *asm_operand);
+
 // 只要返回了指令就有一个使用的寄存器的列表，已经使用的固定寄存器就不能重复使用
 asm_insts_t amd64_lower_complex_to_asm_operand(lir_operand *operand,
                                                asm_operand_t *asm_operand,

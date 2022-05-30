@@ -27,12 +27,28 @@ amd64_lower_fn amd64_lower_table[] = {
  * @return
  */
 asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
+  *count = 0;
+  asm_inst_t **insts = malloc(sizeof(asm_inst_t *) * 500);
+
   // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
   // 1. 实参传递(封装一个 static 函数处理),
-  base = op.first;
-
+  asm_operand_t *first = amd64_lower_to_asm_operand(op.first);
+  uint8_t next_param = 0;
+  // 1. 大返回值处理
+  // 2. env 处理
+  // 3. this 处理
 
   // 2. 调用 call 指令(处理地址)
+//  lir_ope op.second;
+  lir_operand_actual_param *v = op.second->value;
+  for (int i = 0; i < v->count; ++i) {
+    lir_operand *operand = v->list[i];
+    asm_operand_t *source = amd64_lower_to_asm_operand(operand);
+    asm_operand_t *target = amd64_lower_next_actual_target(&next_param, source);
+    // mov 指令
+  }
+
+
   // 3. 响应处理
 }
 
@@ -201,7 +217,9 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
       asm_operand_register_t *reg = (asm_operand_register_t *) physical_regs.list[v->reg_id];
       return REG(reg);
     }
-    error_exit("[amd64_lower_to_asm_operand] type var not a reg or stack_frame_offset");
+
+    return SYMBOL(v->ident, v->is_label, false);
+//    error_exit("[amd64_lower_to_asm_operand] type var not a reg or stack_frame_offset");
   }
 
   // 立即数
