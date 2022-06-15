@@ -34,9 +34,9 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
   // 1. 实参传递(封装一个 static 函数处理),
   asm_operand_t *first = amd64_lower_to_asm_operand(op.first);
   uint8_t next_param = 0;
-  // 1. 大返回值处理
-  // 2. env 处理
-  // 3. this 处理
+  // 1. 大返回值处理(使用 rdi)
+  // 2. env 处理 必选
+  // 3. this 处理 (可选)
 
   // 2. 调用 call 指令(处理地址)
 //  lir_ope op.second;
@@ -45,7 +45,7 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
     lir_operand *operand = v->list[i];
     asm_operand_t *source = amd64_lower_to_asm_operand(operand);
     asm_operand_t *target = amd64_lower_next_actual_target(&next_param, source);
-    // mov 指令
+    insts[(*count)++] = ASM_INST("mov", { target, source });
   }
 
 
@@ -78,13 +78,14 @@ asm_inst_t **amd64_lower_return(closure *c, lir_op op, uint8_t *count) {
     insts[(*count)++] = ASM_INST("mov", { REG(rdi), return_disp_rbp });
     insts[(*count)++] = ASM_INST("mov", { REG(rcx), UINT64(rep_count) });
     insts[(*count)++] = MOVSQ(0xF3);
+
+    insts[(*count)++] = ASM_INST("mov", { REG(rax), REG(rdi) });
   } else if (op.data_type == TYPE_FLOAT) {
     insts[(*count)++] = ASM_INST("mov", { REG(xmm0), result });
   } else {
     insts[(*count)++] = ASM_INST("mov", { REG(rax), result });
   }
 
-  insts[(*count)++] = ASM_INST("ret", {});
   realloc(insts, *count);
   return insts;
 }
