@@ -27,9 +27,9 @@
   asm_inst_t *_inst = NEW(asm_inst_t);\
   _inst->name = _name;\
   asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
-  for (int i = 0; i < 4; ++i) {\
-    if (_temp_operands[i] != NULL) {\
-      _inst->operands[i] = _temp_operands[i];\
+  for (int _i = 0; _i < 4; ++_i) {\
+    if (_temp_operands[_i] != NULL) {\
+      _inst->operands[_i] = _temp_operands[_i];\
       _inst->count++;\
     }\
   }\

@@ -203,11 +203,11 @@ typedef struct {
 // call a_233;
 // type.b = 12; ??
 typedef struct {
-  ast_expr left;
+  ast_expr left; // left is struct
   string property;
 
-  ast_struct_decl *struct_decl;
-  ast_struct_property *struct_property;
+  ast_struct_decl *struct_decl; // 指针引用
+  ast_struct_property *struct_property; // 指针引用
 } ast_select_property;
 
 /**
@@ -310,7 +310,7 @@ typedef struct {
 typedef struct {
   ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
   uint8_t env_count;
-  string env_name;
+  string env_name; // 唯一标识，可以全局定位
   ast_function_decl *function;
 } ast_closure_decl;
 

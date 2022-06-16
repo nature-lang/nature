@@ -366,6 +366,9 @@ list_op *compiler_call(closure *c, ast_call *call, lir_operand *target) {
 //  lir_operand *base_target = NEW(lir_operand);
   lir_operand *base_target = lir_new_temp_var_operand(TYPE_NEW_POINT());
 
+  // TODO 如果 left 是一个结构体调用？ compiler_select_property
+  // 那么应该将 struct 的地址拿出来，传递成第一二参数
+
   list_op *list = compiler_expr(c, call->left, base_target);
 
 //  if (base_target->type != LIR_OPERAND_TYPE_VAR) {
