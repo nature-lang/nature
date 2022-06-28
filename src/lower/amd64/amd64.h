@@ -1,7 +1,3 @@
-//
-// Created by weiwenhao on 2022/4/17.
-//
-
 #ifndef NATURE_SRC_LIR_LOWER_AMD64_H_
 #define NATURE_SRC_LIR_LOWER_AMD64_H_
 

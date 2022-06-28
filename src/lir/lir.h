@@ -16,16 +16,23 @@
 #define END_IF_IDENT "end_if"
 #define ALTERNATE_IF_IDENT "alternate_if"
 
-#define RUNTIME_CALL_MAKE_LIST "make_list"
+#define RUNTIME_CALL_LIST_NEW "list_new"
 #define RUNTIME_CALL_LIST_VALUE "list_value"
-#define RUNTIME_CALL_MAKE_MAP "make_map"
+
+#define RUNTIME_CALL_MAP_NEW "map_new"
 #define RUNTIME_CALL_MAP_VALUE "map_value"
 #define RUNTIME_CALL_ITERATE_COUNT "iterate_count"
+
 #define RUNTIME_CALL_ITERATE_GEN_KEY "iterate_gen_key"
 #define RUNTIME_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
-#define RUNTIME_CALL_MAKE_ENV "make_env"
+
+#define RUNTIME_CALL_ENV_NEW "env_new"
 #define RUNTIME_CALL_SET_ENV "set_env"
 #define RUNTIME_CALL_GET_ENV "get_env"
+
+#define RUNTIME_CALL_STRING_NEW "string_new"
+#define RUNTIME_CALL_STRING_ADDR "string_addr"
+#define RUNTIME_CALL_STRING_LENGTH "string_length"
 
 #define LIST_OP_COPY(dst, src) \
 ({                             \

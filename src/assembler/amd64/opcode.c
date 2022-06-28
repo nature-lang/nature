@@ -77,8 +77,18 @@ inst_t lea_r64_m = {"lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
 
 inst_t syscall = {"syscall", 0, {0x0F, 0x05}, {}, {}};
 
+// TODO 什么时候使用 near 什么时候使用 far?
+inst_t ret = {"ret", 0, {0xC3}, {}, {}};
+
 inst_t push_r64 = {
     "push", 0, {0x50}, {},
+    {
+        {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+    }
+};
+
+inst_t pop_r64 = {
+    "pop", 0, {0x58}, {},
     {
         {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
     }
@@ -113,7 +123,9 @@ void opcode_init() {
   // 收集所有指令，进行注册
   opcode_tree_build(&call_rm64);
   opcode_tree_build(&call_rel32);
+  opcode_tree_build(&ret);
   opcode_tree_build(&push_r64);
+  opcode_tree_build(&pop_r64);
   opcode_tree_build(&mov_rm8_r8);
   opcode_tree_build(&mov_r16_rm16);
   opcode_tree_build(&mov_imm32_r32);
@@ -697,9 +709,9 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
       } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
         if (format->modrm == NULL) {
           format->modrm = new_modrm();
+          format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
         }
 
-        format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
         format->modrm->reg = r->index;
         if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
           format->rex_prefix->b = r->index > 7;
