@@ -5,6 +5,61 @@
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/elf/elf.h"
 
+static void test_union_c() {
+  register_init();
+  opcode_init();
+  // elf_init
+  elf_init("union.n");
+
+  asm_var_decl decl = {
+      .name = "str",
+      .size = strlen("hello world!\n"),
+      .value = (uint8_t *) "hello world!\n",
+      .type = ASM_VAR_DECL_TYPE_STRING
+  };
+
+  list *inst_list = list_new();
+  // sys_write
+  list_push(inst_list, ASM_INST("label", { SYMBOL("_start", true, false) }));
+  list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
+
+  list_push(inst_list, ASM_INST("call", { SYMBOL("length", true, false) }));
+  list_push(inst_list, ASM_INST("mov", { DISP_REG(rbp, -8), REG(rax) }));
+  list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(1) }));
+  list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) }));
+  list_push(inst_list, ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) }));
+  list_push(inst_list, ASM_INST("mov", { REG(rdx), DISP_REG(rbp, -8) }));
+  list_push(inst_list, ASM_INST("syscall", {}));
+
+
+  // sys_exit
+  list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(60) }));
+  list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(0) }));
+  list_push(inst_list, ASM_INST("syscall", {}));
+
+//  list_push(inst_list, ASM_INST("label", { SYMBOL("length", true, false) }));
+//  list_push(inst_list, ASM_INST("push", { REG(rbp) }));
+//  list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
+//  list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(5) }));
+//  list_push(inst_list, ASM_INST("pop", { REG(rbp) }));
+//  list_push(inst_list, ASM_INST("ret", {}));
+
+
+  // 数据段编译
+  elf_var_decl_build(decl);
+  // 代码段编译
+  elf_text_inst_list_build(inst_list);
+  elf_text_inst_list_second_build();
+
+  // 构造 elf
+  elf_t elf = elf_new();
+  // 编码成二进制
+  uint64_t count;
+  uint8_t *binary = elf_encoding(elf, &count);
+  // 输出到文件
+  elf_to_file(binary, count, "union.o");
+}
+
 static void test_builtin_print() {
   register_init();
   opcode_init();
@@ -51,6 +106,7 @@ static void test_builtin_print() {
 
 int main(void) {
   const struct CMUnitTest tests[] = {
+      cmocka_unit_test(test_union_c),
       cmocka_unit_test(test_builtin_print),
   };
   return cmocka_run_group_tests(tests, NULL, NULL);

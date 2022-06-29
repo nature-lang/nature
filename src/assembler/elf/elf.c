@@ -11,14 +11,6 @@ static void elf_var_operand_rewrite(asm_operand_t *operand) {
   operand->value = r;
 }
 
-static void elf_operand_rewrite_rel32(asm_operand_t *operand, int rel) {
-  operand->type = ASM_OPERAND_TYPE_UINT32;
-  operand->size = DWORD;
-  asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-  v->value = (uint32_t) (rel - 5); // TODO 什么情况下需要加上或者减去当前指令的长度
-  operand->value = v;
-}
-
 static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool is_jmp) {
   if (rel_diff == 0 || abs(rel_diff) > 128 || !is_jmp) {
     operand->type = ASM_OPERAND_TYPE_UINT32;
@@ -28,6 +20,8 @@ static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool i
     operand->value = v;
     return;
   }
+
+  // jmp 指定
   operand->type = ASM_OPERAND_TYPE_UINT8;
   operand->size = BYTE;
   asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
@@ -205,7 +199,7 @@ void elf_text_inst_list_second_build() {
       elf_rel_t *rel = NEW(elf_rel_t);
       rel->name = inst->rel_symbol;
       rel->offset = inst->offset;
-      rel->addend = 0; // 符号表如果都使用 rip,则占 4 个偏移
+      rel->addend = -4; // 符号表如果都使用 rip,则占 4 个偏移
       rel->section = ELF_SECTION_TEXT;
       rel->type = ELF_SYMBOL_TYPE_FN;
       list_push(elf_rel_list, rel);

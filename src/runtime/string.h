@@ -15,4 +15,6 @@ void *string_new(uint8_t *raw, int count);
 
 void *string_addr(void *point);
 
+int string_length(void *point);
+
 #endif //NATURE_SRC_RUNTIME_STRING_H_

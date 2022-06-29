@@ -53,6 +53,7 @@ typedef struct {
   uint8_t *data; // 指令二进制
   uint8_t count; // 指令长度
   uint64_t *offset; // 指令起始 offset
+  uint64_t *rel_offset; // 内容重写部分 offset
   asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用
   string rel_symbol; // 使用的符号
   asm_operand_t *rel_operand; // 引用自 asm_inst

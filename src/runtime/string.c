@@ -18,3 +18,7 @@ void *string_new(uint8_t *point, int length) {
 void *string_addr(void *point) {
   return ((string_t *) point)->content;
 }
+
+int string_length(void *point) {
+  return ((string_t *) point)->length;;
+}
