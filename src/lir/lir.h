@@ -178,7 +178,8 @@ typedef enum {
   LIR_OP_TYPE_PUSH,
   LIR_OP_TYPE_POP,
   LIR_OP_TYPE_CALL,
-  LIR_OP_TYPE_RUNTIME_CALL, // builtin call?
+  LIR_OP_TYPE_RUNTIME_CALL,
+  LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
   LIR_OP_TYPE_RETURN,
   LIR_OP_TYPE_LABEL,
 } lir_op_type;

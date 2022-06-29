@@ -253,4 +253,10 @@ typedef struct {
 
 asm_operand_t *asm_symbol_operand(asm_inst_t asm_inst);
 
+asm_insts_t asm_insts_new();
+
+asm_insts_t asm_insts_push(asm_inst_t *asm_inst);
+
+asm_insts_t asm_insts_merge(asm_insts_t dst, asm_insts_t src);
+
 #endif //NATURE_SRC_ASSEMBLER_AMD64_ASM_H_

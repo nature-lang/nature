@@ -17,6 +17,17 @@ typedef struct {
 
 typedef asm_inst_t **(*amd64_lower_fn)(closure *c, lir_op op, uint8_t *count);
 
+/**
+ * 调用方式和 call 没有什么区别。关键是怎么调过去？
+ * 假如我自定义有一个 c 函数叫 print,直接在这里用 if else 调用过去？
+ * 不行，最终需要的是生成的 .a 运行时，print 函数需要在 .a 目标文件中才行。
+ * @param c
+ * @param op
+ * @param count
+ * @return
+ */
+asm_inst_t **amd64_lower_builtin_call(closure *c, lir_op op, uint8_t *count);
+
 asm_inst_t **amd64_lower(closure *c, lir_op op, uint8_t *count);
 
 asm_inst_t **amd64_lower_return(closure *c, lir_op op, uint8_t *count);

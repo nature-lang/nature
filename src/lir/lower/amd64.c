@@ -33,8 +33,9 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
   asm_operand_t *result = amd64_lower_to_asm_operand(op.result); // 可能是寄存器，也可能是内存地址
 
   // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
-  // 1. 实参传递(封装一个 static 函数处理),
+  // 实参传递(封装一个 static 函数处理),
   asm_operand_t *first = amd64_lower_to_asm_operand(op.first);
+
   uint8_t next_param = 0;
   // 1. 大返回值处理(使用 rdi)
   if (op.data_type == TYPE_STRUCT) {
@@ -42,7 +43,7 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
     insts[(*count)++] = ASM_INST("lea", { target, result });
   }
 
-  // 3. 参数处理  lir_ope op.second;
+  // 2. 参数处理  lir_ope op.second;
   lir_operand_actual_param *v = op.second->value;
   for (int i = 0; i < v->count; ++i) {
     lir_operand *operand = v->list[i];
@@ -52,8 +53,17 @@ asm_inst_t **amd64_lower_call(closure *c, lir_op op, uint8_t *count) {
   }
 
   // 3. 调用 call 指令(处理地址)
+  insts[(*count)++] = ASM_INST("call", { first });
 
-  // 4. 响应处理
+  // 4. 响应处理(取出响应值传递给 result)
+  if (op.data_type == TYPE_FLOAT) {
+    insts[(*count)++] = ASM_INST("mov", { REG(xmm0), result });
+  } else {
+    insts[(*count)++] = ASM_INST("mov", { REG(rax), result });
+  }
+
+  realloc(insts, *count);
+  return insts;
 }
 
 /**

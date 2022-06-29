@@ -12,7 +12,9 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/opcode.c
         ${SRC_DIR}/assembler/elf/lib_elf.h
         ${SRC_DIR}/assembler/elf/elf.c
-        ${SRC_DIR}/assembler/elf/elf.h)
+        ${SRC_DIR}/assembler/elf/elf.h
+        ${SRC_DIR}/assembler/amd64/builtin.c
+        ${SRC_DIR}/assembler/amd64/builtin.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
