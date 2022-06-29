@@ -16,16 +16,22 @@ static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool i
     operand->type = ASM_OPERAND_TYPE_UINT32;
     operand->size = DWORD;
     asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-    v->value = (uint32_t) (rel_diff - 5); // -5 表示去掉当前指令的差值
+    v->value = 0;
+    if (rel_diff != 0) {
+      v->value = (uint32_t) (rel_diff - 5); // -5 表示去掉当前指令的差值
+    }
     operand->value = v;
     return;
   }
 
-  // jmp 指定
+  // jmp 指令
   operand->type = ASM_OPERAND_TYPE_UINT8;
   operand->size = BYTE;
   asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-  v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
+  v->value = 0;
+  if (rel_diff != 0) {
+    v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
+  }
   operand->value = v;
 }
 
@@ -60,6 +66,7 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
     // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 占位)
     asm_operand_symbol_t *symbol_operand = operand->value;
     if (symbol_operand->is_label) {
+      // 引用了内部符号,根据实际距离判断使用 rel32 还是 rel8
       if (table_exist(elf_symbol_table, symbol_operand->name)) {
         elf_symbol_t *symbol = table_get(elf_symbol_table, symbol_operand->name);
         // 计算 offset 并填充
@@ -135,8 +142,8 @@ void elf_confirm_text_rel(string name) {
   // 从 current 开始左 rewrite
   while (current->value != NULL) {
     elf_text_inst_t *inst = current->value;
-    if (inst->is_jmp_symbol != NULL && str_equal(inst->rel_symbol, name)) {
-      // 重写 inst 指令 rel32 to rel8
+    if (inst->is_jmp_symbol && str_equal(inst->rel_symbol, name)) {
+      // 重写 inst 指令 rel32 为 rel8
       // jmp 的具体位置可以不计算，等到二次遍历再计算
       // 届时符号表已经全部收集完毕
       elf_rewrite_text_rel(inst);
@@ -195,18 +202,21 @@ void elf_text_inst_list_second_build() {
       // 重新 encoding 指令
       inst->data = opcode_encoding(inst->asm_inst, &inst->count);
     } else {
-      // 二次扫描都没有在符号表中找到，说明引用了外部符号(是否需要区分引用的外部符号的类型不同？section 填写的又是什么段？)
+      // 二次扫描都没有在符号表中找到
+      // 说明引用了外部 label 符号(是否需要区分引用的外部符号的类型不同？section 填写的又是什么段？)
+      // jmp or call rel32
       elf_rel_t *rel = NEW(elf_rel_t);
       rel->name = inst->rel_symbol;
-      rel->offset = inst->offset;
+      *inst->offset += 1; // 定位到 rel 而不是 inst offset
+      rel->offset = inst->offset; // 实际引用位置
       rel->addend = -4; // 符号表如果都使用 rip,则占 4 个偏移
       rel->section = ELF_SECTION_TEXT;
       rel->type = ELF_SYMBOL_TYPE_FN;
       list_push(elf_rel_list, rel);
 
-      // 重定位表
+      // 添加到符号表表
       if (symbol == NULL) {
-        elf_symbol_t *symbol = NEW(elf_symbol_t);
+        symbol = NEW(elf_symbol_t);
         symbol->name = inst->rel_symbol;
         symbol->type = 0; // 外部符号引用直接 no type ?
         symbol->section = 0;

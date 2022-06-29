@@ -148,7 +148,7 @@ static void test_call() {
   register_init();
   opcode_init();
   // elf_init
-  elf_init("hello.n");
+  elf_init("call.n");
 
   asm_var_decl decl = {
       .name = "str",

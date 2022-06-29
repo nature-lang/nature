@@ -37,14 +37,6 @@ static void test_union_c() {
   list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(0) }));
   list_push(inst_list, ASM_INST("syscall", {}));
 
-//  list_push(inst_list, ASM_INST("label", { SYMBOL("length", true, false) }));
-//  list_push(inst_list, ASM_INST("push", { REG(rbp) }));
-//  list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
-//  list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(5) }));
-//  list_push(inst_list, ASM_INST("pop", { REG(rbp) }));
-//  list_push(inst_list, ASM_INST("ret", {}));
-
-
   // 数据段编译
   elf_var_decl_build(decl);
   // 代码段编译
@@ -107,7 +99,7 @@ static void test_builtin_print() {
 int main(void) {
   const struct CMUnitTest tests[] = {
       cmocka_unit_test(test_union_c),
-      cmocka_unit_test(test_builtin_print),
+//      cmocka_unit_test(test_builtin_print),
   };
   return cmocka_run_group_tests(tests, NULL, NULL);
 }
