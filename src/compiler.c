@@ -63,7 +63,7 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *t
     // 1. make env_n by count
     lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, parent->env_name);
     lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->env_count);
-    list_op_push(parent_list, lir_runtime_call(RUNTIME_CALL_MAKE_ENV, NULL, 2, env_name_param, capacity_param));
+    list_op_push(parent_list, lir_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
 
     // 2. for set ast_ident/ast_access_env to env n
     for (int i = 0; i < ast->env_count; ++i) {
@@ -474,7 +474,7 @@ list_op *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) 
   lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
   lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) type_sizeof(ast->type));
   lir_op *call_op = lir_runtime_call(
-      RUNTIME_CALL_MAKE_LIST,
+      RUNTIME_CALL_LIST_NEW,
       base_target,
       2,
       capacity_operand,
@@ -586,7 +586,7 @@ list_op *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
       (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
 
   lir_op *call_op = lir_runtime_call(
-      RUNTIME_CALL_MAKE_MAP,
+      RUNTIME_CALL_MAP_NEW,
       base_target,
       2,
       capacity_operand,

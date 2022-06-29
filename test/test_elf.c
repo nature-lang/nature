@@ -85,6 +85,12 @@ static void test_opcode_encoding() {
   uint8_t expect5[] = {0x0F, 0x05};
   assert_memory_equal(actual5, expect5, byte_count);
 
+  asm_inst_t *mov_rax_disp = ASM_INST("mov", { DISP_REG(rbp, -8), REG(rax) });
+  uint8_t *actual6 = opcode_encoding(*mov_rax_disp, &byte_count);
+  // 0x43 => mod:01 reg:000 rm:101
+  uint8_t expect6[] = {0x48, 0x89, 0x45, 0xF8};
+  assert_memory_equal(actual6, expect6, byte_count);
+
 }
 
 static void test_hello_world() {

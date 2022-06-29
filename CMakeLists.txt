@@ -13,8 +13,18 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/elf/lib_elf.h
         ${SRC_DIR}/assembler/elf/elf.c
         ${SRC_DIR}/assembler/elf/elf.h
-        ${SRC_DIR}/assembler/amd64/builtin.c
-        ${SRC_DIR}/assembler/amd64/builtin.h)
+        ${SRC_DIR}/assembler/amd64/register.h
+        ${SRC_DIR}/assembler/amd64/register.c)
+
+set(SRC_LOWER
+        #        ${SRC_DIR}/lower/amd64/amd64.c
+        #        ${SRC_DIR}/lower/amd64/amd64.h
+        ${SRC_DIR}/lower/amd64/builtin.h
+        ${SRC_DIR}/lower/amd64/builtin.c)
+
+set(SRC_RUNTIME
+        ${SRC_DIR}/runtime/string.c
+        ${SRC_DIR}/runtime/string.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
@@ -62,18 +72,18 @@ set(SRC
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
         ${SRC_DIR}/ssa.c
-        ${SRC_DIR}/register/register.h
+#        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c
         #        ${SRC_DIR}/register/interval.h
         #        ${SRC_DIR}/register/interval.c
-        ${SRC_DIR}/ssa.c
-        ${SRC_DIR}/lir/lower/amd64.c
-        ${SRC_DIR}/lir/lower/amd64.h)
+        ${SRC_DIR}/ssa.c)
 
 add_executable(nature main.c
         ${SRC}
         ${SRC_LIB}
+        ${SRC_LOWER}
+        ${SRC_RUNTIME}
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}
         ${SRC_SYNTAX}
