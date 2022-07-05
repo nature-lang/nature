@@ -1,6 +1,7 @@
 #ifndef NATURE_SRC_VALUE_H_
 #define NATURE_SRC_VALUE_H_
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #define FIXED_ARRAY_COUNT 1000

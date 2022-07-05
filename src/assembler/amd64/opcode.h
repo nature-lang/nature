@@ -2,6 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 #include "src/lib/table.h"
 #include "asm.h"
 

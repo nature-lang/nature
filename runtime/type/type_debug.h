@@ -1,0 +1,6 @@
+#ifndef NATURE_RUNTIME_TYPE_TYPE_DEBUG_H_
+#define NATURE_RUNTIME_TYPE_TYPE_DEBUG_H_
+
+void *gen_hello_world();
+
+#endif //NATURE_RUNTIME_TYPE_TYPE_DEBUG_H_

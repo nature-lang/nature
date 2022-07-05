@@ -64,6 +64,9 @@
      _operand;\
 })
 
+
+#define LABEL(_name) (SYMBOL(_name, true, false))
+
 #define ASM_OPERAND_COPY(_dst, _src)  \
    _dst->type = _src->type;\
    _dst->size = _src->size;\

@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_LIST_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 #include "src/value.h"
 
 typedef struct list_node {

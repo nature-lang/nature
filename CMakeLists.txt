@@ -68,12 +68,18 @@ set(SRC
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
         ${SRC_DIR}/ssa.c
-#        ${SRC_DIR}/register/register.h
+        #        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c
         #        ${SRC_DIR}/register/interval.h
         #        ${SRC_DIR}/register/interval.c
         ${SRC_DIR}/ssa.c)
+
+set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/type/string.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/string.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.h)
 
 add_executable(nature main.c
         ${SRC}
