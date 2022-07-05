@@ -2,8 +2,8 @@
 #define NATURE_SRC_RUNTIME_STRING_H_
 
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
-#include "string.h"
 
 typedef struct {
   int length; // 实际长度

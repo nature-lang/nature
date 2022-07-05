@@ -24,7 +24,7 @@
 
 #define	_PATH_DEV	"/dev/"
 #define	_PATH_TMP	"/tmp/"
-#define	_PATH_VARDB	"/var/musl/misc/"
+#define	_PATH_VARDB	"/var/lib/misc/"
 #define	_PATH_VARRUN	"/var/run/"
 #define	_PATH_VARTMP	"/var/tmp/"
 

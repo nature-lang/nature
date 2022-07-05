@@ -1,3 +1,4 @@
 cmake-build-debug/
+cmake-build-debug-vm/
 .idea
 .DS_store
