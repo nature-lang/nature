@@ -22,10 +22,6 @@ set(SRC_LOWER
         ${SRC_DIR}/lower/amd64/builtin.h
         ${SRC_DIR}/lower/amd64/builtin.c)
 
-set(SRC_RUNTIME
-        ${SRC_DIR}/runtime/string.c
-        ${SRC_DIR}/runtime/string.h)
-
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
         ${SRC_DIR}/syntax/scanner.c
@@ -83,7 +79,6 @@ add_executable(nature main.c
         ${SRC}
         ${SRC_LIB}
         ${SRC_LOWER}
-        ${SRC_RUNTIME}
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}
         ${SRC_SYNTAX}
@@ -93,3 +88,4 @@ include_directories(.)
 
 enable_testing()
 add_subdirectory(test)
+add_subdirectory(runtime)

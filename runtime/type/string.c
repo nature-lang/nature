@@ -1,5 +1,4 @@
 #include "string.h"
-#include <string.h>
 
 /**
  * point 就是一个堆内存的地址，谁能够在堆内存中写入一组数据？大概只有系统调用了

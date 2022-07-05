@@ -866,7 +866,7 @@ typedef struct {
 #define DF_1_DIRECT    0x00000100    /* Direct binding enabled.  */
 #define DF_1_TRANS    0x00000200
 #define DF_1_INTERPOSE    0x00000400    /* Object is used to interpose.  */
-#define DF_1_NODEFLIB    0x00000800    /* Ignore default lib search path.  */
+#define DF_1_NODEFLIB    0x00000800    /* Ignore default musl search path.  */
 #define DF_1_NODUMP    0x00001000    /* Object can't be dldump'ed.  */
 #define DF_1_CONFALT    0x00002000    /* Configuration alternative created.*/
 #define DF_1_ENDFILTEE    0x00004000    /* Filtee terminates filters search. */
@@ -2167,7 +2167,7 @@ enum {
 
 /* Cygnus local bits below */
 #define EF_PPC_RELOCATABLE    0x00010000    /* PowerPC -mrelocatable flag*/
-#define EF_PPC_RELOCATABLE_LIB    0x00008000    /* PowerPC -mrelocatable-lib
+#define EF_PPC_RELOCATABLE_LIB    0x00008000    /* PowerPC -mrelocatable-musl
 						   flag */
 
 /* PowerPC relocations defined by the ABIs */

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include "string.h"
 
 typedef struct {
   int length; // 实际长度
