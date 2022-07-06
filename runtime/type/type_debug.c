@@ -4,12 +4,10 @@
 #include <string.h>
 #include <stdio.h>
 
-void* gen_hello_world() {
-//    char *str = "hello world";
-//    size_t len = strlen(str);
-//    void *point = malloc(len);
-//    strcpy(point, str);
-    printf("hello world");
-    return NULL;
+void *gen_hello_world() {
+    char *str = "hello world!\n";
+    size_t len = strlen(str);
+    void *point = malloc(len);
+    strcpy(point, str);
+    return point;
 }
-

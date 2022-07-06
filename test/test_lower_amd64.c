@@ -51,7 +51,7 @@ static void test_union_c() {
     elf_to_file(binary, count, "union.o");
 }
 
-static void test_builtin_print() {
+static void test_union_builtin_print() {
     register_init();
     opcode_init();
 
@@ -95,6 +95,25 @@ static void test_builtin_print() {
     elf_to_file(binary, count, "hello.o");
 }
 
+static void test_builtin_print_target() {
+    register_init();
+    opcode_init();
+
+    // 数据段
+
+    // 构造 elf
+    elf_init("builtin_print.n");
+    // 代码段
+    elf_text_inst_list_build(builtin_print());
+    elf_text_inst_list_second_build();
+    elf_t elf = elf_new();
+    // 编码成二进制
+    uint64_t count;
+    uint8_t *binary = elf_encoding(elf, &count);
+    // 输出到文件
+    elf_to_file(binary, count, "builtin_print.o");
+}
+
 static void test_runtime_string_print() {
     register_init();
     opcode_init();
@@ -106,26 +125,18 @@ static void test_runtime_string_print() {
     list_push(inst_list, ASM_INST("label", { LABEL("_start") }));
 
     // 1. 运行时调用 runtime_call gen_hello_world 在堆内存中生成字符串(响应结果在 rax(rax 和 eax 共用内存) 中)
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
     list_push(inst_list, ASM_INST("call", { LABEL("gen_hello_world") }));
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
-    list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdx) }));
-
-
 
     // 2. 调用 string_new 模拟 nature 中的字符串生成 string s = "hello world" = runtime_call string_new("xxx")
-//  list_push(inst_list, ASM_INST("mov", { REG(rdi), REG(rax) }));
-//  list_push(inst_list, ASM_INST("mov", { REG(rsi), UINT32(11) }));
-//  list_push(inst_list, ASM_INST("call", { LABEL(RUNTIME_CALL_STRING_NEW) })); // 生成 nature 字符串对象, 结果响应在 rax 中
+    list_push(inst_list, ASM_INST("mov", { REG(rsi), UINT32(13) }));
+    list_push(inst_list, ASM_INST("mov", { REG(rdi), REG(rax) }));
+    list_push(inst_list, ASM_INST("call", { LABEL(RUNTIME_CALL_STRING_NEW) })); // 生成 nature 字符串对象, 结果响应在 rax 中
 
     // 3. 准备调用 builtin print 输出字符串
-//  list_push(inst_list, ASM_INST("mov", { REG(rdi), REG(rax) })); // 参数传递
-//  list_push(inst_list, ASM_INST("call", { LABEL("builtin_print") }));
+    list_push(inst_list, ASM_INST("mov", { REG(rdi), REG(rax) })); // 参数传递
+    list_push(inst_list, ASM_INST("call", { LABEL("builtin_print") }));
 
-    // sys_exit
+    // 4. sys_exit
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(60) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(0) }));
     list_push(inst_list, ASM_INST("syscall", {}));
@@ -134,7 +145,7 @@ static void test_runtime_string_print() {
     elf_init("runtime_hello.n");
     // 代码段
     elf_text_inst_list_build(inst_list);
-//  elf_text_inst_list_build(builtin_print());
+    elf_text_inst_list_build(builtin_print());
     elf_text_inst_list_second_build();
     elf_t elf = elf_new();
     // 编码成二进制
@@ -146,8 +157,9 @@ static void test_runtime_string_print() {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-//      cmocka_unit_test(test_union_c),
-//      cmocka_unit_test(test_builtin_print),
+//            cmocka_unit_test(test_union_c),
+//            cmocka_unit_test(test_union_builtin_print),
+//            cmocka_unit_test(test_builtin_print_target),
             cmocka_unit_test(test_runtime_string_print),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
