@@ -157,9 +157,9 @@ static void test_runtime_string_print() {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-//            cmocka_unit_test(test_union_c),
-//            cmocka_unit_test(test_union_builtin_print),
-//            cmocka_unit_test(test_builtin_print_target),
+            cmocka_unit_test(test_union_c),
+            cmocka_unit_test(test_union_builtin_print),
+            cmocka_unit_test(test_builtin_print_target),
             cmocka_unit_test(test_runtime_string_print),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
