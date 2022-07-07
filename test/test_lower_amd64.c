@@ -1,6 +1,6 @@
 #include "test.h"
 #include <stdio.h>
-#include "src/lower/amd64/builtin.h"
+#include "runtime/builtin/builtin.h"
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/elf/elf.h"
 

@@ -12,7 +12,7 @@ amd64_lower_fn amd64_lower_table[] = {
  * LIR_OP_TYPE_CALL base, param => result
  * base 有哪些形态？
  * http.get() // 外部符号引用,无非就是是否在符号表中
- * sum() // 内部符号引用, sum 是否属于 var? 所有的符号都被记录为 var
+ * sum.n() // 内部符号引用, sum.n 是否属于 var? 所有的符号都被记录为 var
  * test[0]() // 经过计算后的左值，其值最终存储在了一个临时变量中 => temp var
  * 所以 base 最终只有一个形态，那就是 var, 如果 var 在当前 closure 有定义，那其至少会被
  * - 会被堆栈分配,此时如何调用 call 指令？

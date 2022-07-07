@@ -196,7 +196,7 @@ typedef enum {
  * add first second -> result
  * move first -> result // a = 12
  * 例如
- * call sum 12, 14 // 指令是 call
+ * call sum.n 12, 14 // 指令是 call
  * first param 是函数名称（label）
  * second param 是函数参数，函数调用并不产生新的变量，因此没必要放在 result 中
  * 原则上会新增变量的放在 result,使用变量放在 first/second
