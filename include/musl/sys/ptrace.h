@@ -42,7 +42,7 @@ extern "C" {
 #define PTRACE_SECCOMP_GET_FILTER 0x420c
 #define PTRACE_SECCOMP_GET_METADATA 0x420d
 #define PTRACE_GET_SYSCALL_INFO 0x420e
-#define PTRACE_GET_RSEQ_CONFIGURATION	0x420f
+#define PTRACE_GET_RSEQ_CONFIGURATION    0x420f
 
 #define PT_READ_I PTRACE_PEEKTEXT
 #define PT_READ_D PTRACE_PEEKDATA
@@ -98,45 +98,45 @@ extern "C" {
 #include <bits/ptrace.h>
 
 struct __ptrace_peeksiginfo_args {
-	uint64_t off;
-	uint32_t flags;
-	int32_t nr;
+    uint64_t off;
+    uint32_t flags;
+    int32_t nr;
 };
 
 struct __ptrace_seccomp_metadata {
-	uint64_t filter_off;
-	uint64_t flags;
+    uint64_t filter_off;
+    uint64_t flags;
 };
 
 struct __ptrace_syscall_info {
-	uint8_t op;
-	uint8_t __pad[3];
-	uint32_t arch;
-	uint64_t instruction_pointer;
-	uint64_t stack_pointer;
-	union {
-		struct {
-			uint64_t nr;
-			uint64_t args[6];
-		} entry;
-		struct {
-			int64_t rval;
-			uint8_t is_error;
-		} exit;
-		struct {
-			uint64_t nr;
-			uint64_t args[6];
-			uint32_t ret_data;
-		} seccomp;
-	};
+    uint8_t op;
+    uint8_t __pad[3];
+    uint32_t arch;
+    uint64_t instruction_pointer;
+    uint64_t stack_pointer;
+    union {
+        struct {
+            uint64_t nr;
+            uint64_t args[6];
+        } entry;
+        struct {
+            int64_t rval;
+            uint8_t is_error;
+        } exit;
+        struct {
+            uint64_t nr;
+            uint64_t args[6];
+            uint32_t ret_data;
+        } seccomp;
+    };
 };
 
 struct __ptrace_rseq_configuration {
-	uint64_t rseq_abi_pointer;
-	uint32_t rseq_abi_size;
-	uint32_t signature;
-	uint32_t flags;
-	uint32_t pad;
+    uint64_t rseq_abi_pointer;
+    uint32_t rseq_abi_size;
+    uint32_t signature;
+    uint32_t flags;
+    uint32_t pad;
 };
 
 long ptrace(int, ...);

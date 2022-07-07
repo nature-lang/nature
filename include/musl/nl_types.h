@@ -11,9 +11,11 @@ extern "C" {
 typedef int nl_item;
 typedef void *nl_catd;
 
-nl_catd catopen (const char *, int);
-char *catgets (nl_catd, int, int, const char *);
-int catclose (nl_catd);
+nl_catd catopen(const char *, int);
+
+char *catgets(nl_catd, int, int, const char *);
+
+int catclose(nl_catd);
 
 #ifdef __cplusplus
 }

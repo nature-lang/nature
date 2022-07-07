@@ -9,158 +9,158 @@
 typedef uint8_t size;
 
 typedef enum {
-  OPCODE_EXT_IMM_BYTE = 1,
-  OPCODE_EXT_IMM_WORD,
-  OPCODE_EXT_IMM_DWORD,
-  OPCODE_EXT_SLASH0,
-  OPCODE_EXT_SLASH1,
-  OPCODE_EXT_SLASH2,
-  OPCODE_EXT_SLASH3,
-  OPCODE_EXT_SLASH4,
-  OPCODE_EXT_SLASH5,
-  OPCODE_EXT_SLASH6,
-  OPCODE_EXT_SLASH7,
-  OPCODE_EXT_SLASHR,
-  OPCODE_EXT_REX,
-  OPCODE_EXT_REX_W,
-  OPCODE_EXT_VEX_128,
-  OPCODE_EXT_VEX_256,
-  OPCODE_EXT_VEX_66,
-  OPCODE_EXT_VEX_F3,
-  OPCODE_EXT_VEX_F2,
-  OPCODE_EXT_VEX_0F,
-  OPCODE_EXT_VEX_0F_38,
-  OPCODE_EXT_VEX_0F_3A,
-  OPCODE_EXT_VEX_W0,
-  OPCODE_EXT_VEX_W1,
-  OPCODE_EXT_VEX_WIG,
-  OPCODE_EXT_EOF,
+    OPCODE_EXT_IMM_BYTE = 1,
+    OPCODE_EXT_IMM_WORD,
+    OPCODE_EXT_IMM_DWORD,
+    OPCODE_EXT_SLASH0,
+    OPCODE_EXT_SLASH1,
+    OPCODE_EXT_SLASH2,
+    OPCODE_EXT_SLASH3,
+    OPCODE_EXT_SLASH4,
+    OPCODE_EXT_SLASH5,
+    OPCODE_EXT_SLASH6,
+    OPCODE_EXT_SLASH7,
+    OPCODE_EXT_SLASHR,
+    OPCODE_EXT_REX,
+    OPCODE_EXT_REX_W,
+    OPCODE_EXT_VEX_128,
+    OPCODE_EXT_VEX_256,
+    OPCODE_EXT_VEX_66,
+    OPCODE_EXT_VEX_F3,
+    OPCODE_EXT_VEX_F2,
+    OPCODE_EXT_VEX_0F,
+    OPCODE_EXT_VEX_0F_38,
+    OPCODE_EXT_VEX_0F_3A,
+    OPCODE_EXT_VEX_W0,
+    OPCODE_EXT_VEX_W1,
+    OPCODE_EXT_VEX_WIG,
+    OPCODE_EXT_EOF,
 } opcode_ext;
 
 /**
  * 当一个 asm 指令匹配下面的多个类型时，按从小到大顺序选择
  */
 typedef enum {
-  OPERAND_TYPE_REL8 = 1,
-  OPERAND_TYPE_REL16,
-  OPERAND_TYPE_REL32,
-  // 表示内存地址，用于 lea 指令中
-  OPERAND_TYPE_M,
-  OPERAND_TYPE_M16,
-  OPERAND_TYPE_M32,
-  OPERAND_TYPE_M64,
-  OPERAND_TYPE_RM8,
-  OPERAND_TYPE_RM16,
-  OPERAND_TYPE_RM32,
-  OPERAND_TYPE_RM64,
-  OPERAND_TYPE_R8,
-  OPERAND_TYPE_R16,
-  OPERAND_TYPE_R32,
-  OPERAND_TYPE_R64,
-  OPERAND_TYPE_IMM8,
-  OPERAND_TYPE_IMM16,
-  OPERAND_TYPE_IMM32,
-  OPERAND_TYPE_IMM64,
-  OPERAND_TYPE_XMM1,
-  OPERAND_TYPE_XMM1M64,
-  OPERAND_TYPE_XMM2,
-  OPERAND_TYPE_XMM2M64,
-  OPERAND_TYPE_XMM2M128,
-  OPERAND_TYPE_YMM1,
-  OPERAND_TYPE_YMM2,
-  OPERAND_TYPE_YMM2M128,
+    OPERAND_TYPE_REL8 = 1,
+    OPERAND_TYPE_REL16,
+    OPERAND_TYPE_REL32,
+    // 表示内存地址，用于 lea 指令中
+    OPERAND_TYPE_M,
+    OPERAND_TYPE_M16,
+    OPERAND_TYPE_M32,
+    OPERAND_TYPE_M64,
+    OPERAND_TYPE_RM8,
+    OPERAND_TYPE_RM16,
+    OPERAND_TYPE_RM32,
+    OPERAND_TYPE_RM64,
+    OPERAND_TYPE_R8,
+    OPERAND_TYPE_R16,
+    OPERAND_TYPE_R32,
+    OPERAND_TYPE_R64,
+    OPERAND_TYPE_IMM8,
+    OPERAND_TYPE_IMM16,
+    OPERAND_TYPE_IMM32,
+    OPERAND_TYPE_IMM64,
+    OPERAND_TYPE_XMM1,
+    OPERAND_TYPE_XMM1M64,
+    OPERAND_TYPE_XMM2,
+    OPERAND_TYPE_XMM2M64,
+    OPERAND_TYPE_XMM2M128,
+    OPERAND_TYPE_YMM1,
+    OPERAND_TYPE_YMM2,
+    OPERAND_TYPE_YMM2M128,
 } operand_type;
 
 typedef enum {
-  ENCODING_TYPE_MODRM_RM = 1,
-  ENCODING_TYPE_MODRM_REG,
-  ENCODING_TYPE_IMM,
-  ENCODING_TYPE_VEX_VVVV,
-  ENCODING_TYPE_OPCODE_PLUS,
+    ENCODING_TYPE_MODRM_RM = 1,
+    ENCODING_TYPE_MODRM_REG,
+    ENCODING_TYPE_IMM,
+    ENCODING_TYPE_VEX_VVVV,
+    ENCODING_TYPE_OPCODE_PLUS,
 } encoding_type;
 
 typedef enum {
-  VEX_OPCODE_EXT_66 = 1,
-  VEX_OPCODE_EXT_F2,
-  VEX_OPCODE_EXT_F3,
+    VEX_OPCODE_EXT_66 = 1,
+    VEX_OPCODE_EXT_F2,
+    VEX_OPCODE_EXT_F3,
 } vex_opcode_ext;
 
 typedef enum {
-  VEX_LEGACY_BYTE_0F = 1,
-  VEX_LEGACY_BYTE_0F_38,
-  VEX_LEGACY_BYTE_0F_3A,
+    VEX_LEGACY_BYTE_0F = 1,
+    VEX_LEGACY_BYTE_0F_38,
+    VEX_LEGACY_BYTE_0F_3A,
 } vex_legacy_byte;
 
 typedef enum {
-  MODRM_MOD_INDIRECT_REGISTER = 0,
-  MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP = 1, // 01
-  MODRM_MOD_INDIRECT_REGISTER_WORD_DISP = 2,
-  MODRM_MOD_DIRECT_REGISTER = 3,
-  MODRM_MOD_SIB_FOLLOWS_RM = 4,
+    MODRM_MOD_INDIRECT_REGISTER = 0,
+    MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP = 1, // 01
+    MODRM_MOD_INDIRECT_REGISTER_WORD_DISP = 2,
+    MODRM_MOD_DIRECT_REGISTER = 3,
+    MODRM_MOD_SIB_FOLLOWS_RM = 4,
 } modrm_mod;
 
 typedef struct {
-  uint8_t source;
-  bool l;
-  bool r;
-  bool w;
-  bool x;
-  bool b;
+    uint8_t source;
+    bool l;
+    bool r;
+    bool w;
+    bool x;
+    bool b;
 
-  uint8_t vex_opcode_extension;
-  uint8_t vex_legacy_byte;
+    uint8_t vex_opcode_extension;
+    uint8_t vex_legacy_byte;
 } vex_prefix_t;
 
 typedef struct {
-  bool w;
-  bool r;
-  bool x;
-  bool b;
+    bool w;
+    bool r;
+    bool x;
+    bool b;
 } rex_prefix_t;
 
 typedef struct {
-  modrm_mod mod; // 6,7
-  uint8_t reg; // 3,4,5
-  uint8_t rm; // 0,1,2
+    modrm_mod mod; // 6,7
+    uint8_t reg; // 3,4,5
+    uint8_t rm; // 0,1,2
 } modrm_t;
 
 typedef struct {
-  uint8_t scale;
-  uint8_t index;
-  uint8_t base;
+    uint8_t scale;
+    uint8_t index;
+    uint8_t base;
 } sib_t;
 
 /**
  * 机器码指令参数结构
  */
 typedef struct {
-  operand_type type;
-  encoding_type encoding; // 编码函数,将汇编参数编码成指令参数
-  uint8_t size;
+    operand_type type;
+    encoding_type encoding; // 编码函数,将汇编参数编码成指令参数
+    uint8_t size;
 } opcode_operand_t; // reg 64
 
 typedef struct {
-  char *name; // 指令名称
-  uint8_t prefix;
-  uint8_t opcode[3];
-  opcode_ext extensions[4];
-  opcode_operand_t operands[4]; // 形参
+    char *name; // 指令名称
+    uint8_t prefix;
+    uint8_t opcode[3];
+    opcode_ext extensions[4];
+    opcode_operand_t operands[4]; // 形参
 } inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format?
 
 /**
  * 机器码指令结构, 难道是这个的描述性不好？
  */
 typedef struct {
-  uint8_t prefix; // 不知道是干嘛的，明明都有 rex.prefix 和 vex.prefix 了
-  vex_prefix_t *vex_prefix;
-  rex_prefix_t *rex_prefix;
-  uint8_t opcode[3];
-  modrm_t *modrm;
-  sib_t *sib;
-  uint8_t disps[8]; // 64 位可能是 8 个字节才对
-  uint8_t disp_count;
-  uint8_t imms[8];
-  uint8_t imm_count;
+    uint8_t prefix; // 不知道是干嘛的，明明都有 rex.prefix 和 vex.prefix 了
+    vex_prefix_t *vex_prefix;
+    rex_prefix_t *rex_prefix;
+    uint8_t opcode[3];
+    modrm_t *modrm;
+    sib_t *sib;
+    uint8_t disps[8]; // 64 位可能是 8 个字节才对
+    uint8_t disp_count;
+    uint8_t imms[8];
+    uint8_t imm_count;
 } inst_format_t; // 机器编码类型
 
 
@@ -168,8 +168,8 @@ typedef struct {
  * 存储多个 opcode 的数据结构
  */
 typedef struct {
-  inst_t **list; // 默认初始化 10 大小
-  int count;
+    inst_t **list; // 默认初始化 10 大小
+    int count;
 } insts_t;
 
 // 注册到指令树 map[] + operand_tree
@@ -177,14 +177,14 @@ typedef struct {
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
 typedef struct {
-  insts_t insts; // data 数据段，最终的叶子节点才会有该数据
-  string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
-  table *succs;
+    insts_t insts; // data 数据段，最终的叶子节点才会有该数据
+    string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
+    table *succs;
 } opcode_tree_node_t;
 
 typedef struct {
-  uint16_t *list;
-  int count;
+    uint16_t *list;
+    int count;
 } asm_keys_t;
 
 opcode_tree_node_t *opcode_tree_root; // key = root

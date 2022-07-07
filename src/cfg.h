@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_CFG_H_
 #define NATURE_SRC_CFG_H_
 
-#include "lir.h"
+#include "src/lir/lir.h"
 
 #define LIR_BLOCKS_PUSH(_list, item) (_list)->list[(_list)->count++] = (item)
 

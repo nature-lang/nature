@@ -12,24 +12,24 @@ extern "C" {
 
 #define ICMP6_FILTER 1
 
-#define ICMP6_FILTER_BLOCK		1
-#define ICMP6_FILTER_PASS		2
-#define ICMP6_FILTER_BLOCKOTHERS	3
-#define ICMP6_FILTER_PASSONLY		4
+#define ICMP6_FILTER_BLOCK        1
+#define ICMP6_FILTER_PASS        2
+#define ICMP6_FILTER_BLOCKOTHERS    3
+#define ICMP6_FILTER_PASSONLY        4
 
 struct icmp6_filter {
-	uint32_t icmp6_filt[8];
+    uint32_t icmp6_filt[8];
 };
 
 struct icmp6_hdr {
-	uint8_t     icmp6_type;
-	uint8_t     icmp6_code;
-	uint16_t    icmp6_cksum;
-	union {
-		uint32_t  icmp6_un_data32[1];
-		uint16_t  icmp6_un_data16[2];
-		uint8_t   icmp6_un_data8[4];
-	} icmp6_dataun;
+    uint8_t icmp6_type;
+    uint8_t icmp6_code;
+    uint16_t icmp6_cksum;
+    union {
+        uint32_t icmp6_un_data32[1];
+        uint16_t icmp6_un_data16[2];
+        uint8_t icmp6_un_data8[4];
+    } icmp6_dataun;
 };
 
 #define icmp6_data32    icmp6_dataun.icmp6_un_data32
@@ -68,22 +68,22 @@ struct icmp6_hdr {
 #define ICMP6_PARAMPROB_OPTION        2
 
 #define ICMP6_FILTER_WILLPASS(type, filterp) \
-	((((filterp)->icmp6_filt[(type) >> 5]) & (1 << ((type) & 31))) == 0)
+    ((((filterp)->icmp6_filt[(type) >> 5]) & (1 << ((type) & 31))) == 0)
 
 #define ICMP6_FILTER_WILLBLOCK(type, filterp) \
-	((((filterp)->icmp6_filt[(type) >> 5]) & (1 << ((type) & 31))) != 0)
+    ((((filterp)->icmp6_filt[(type) >> 5]) & (1 << ((type) & 31))) != 0)
 
 #define ICMP6_FILTER_SETPASS(type, filterp) \
-	((((filterp)->icmp6_filt[(type) >> 5]) &= ~(1 << ((type) & 31))))
+    ((((filterp)->icmp6_filt[(type) >> 5]) &= ~(1 << ((type) & 31))))
 
 #define ICMP6_FILTER_SETBLOCK(type, filterp) \
-	((((filterp)->icmp6_filt[(type) >> 5]) |=  (1 << ((type) & 31))))
+    ((((filterp)->icmp6_filt[(type) >> 5]) |=  (1 << ((type) & 31))))
 
 #define ICMP6_FILTER_SETPASSALL(filterp) \
-	memset (filterp, 0, sizeof (struct icmp6_filter));
+    memset (filterp, 0, sizeof (struct icmp6_filter));
 
 #define ICMP6_FILTER_SETBLOCKALL(filterp) \
-	memset (filterp, 0xFF, sizeof (struct icmp6_filter));
+    memset (filterp, 0xFF, sizeof (struct icmp6_filter));
 
 #define ND_ROUTER_SOLICIT           133
 #define ND_ROUTER_ADVERT            134
@@ -92,7 +92,7 @@ struct icmp6_hdr {
 #define ND_REDIRECT                 137
 
 struct nd_router_solicit {
-	struct icmp6_hdr  nd_rs_hdr;
+    struct icmp6_hdr nd_rs_hdr;
 };
 
 #define nd_rs_type               nd_rs_hdr.icmp6_type
@@ -101,9 +101,9 @@ struct nd_router_solicit {
 #define nd_rs_reserved           nd_rs_hdr.icmp6_data32[0]
 
 struct nd_router_advert {
-	struct icmp6_hdr  nd_ra_hdr;
-	uint32_t   nd_ra_reachable;
-	uint32_t   nd_ra_retransmit;
+    struct icmp6_hdr nd_ra_hdr;
+    uint32_t nd_ra_reachable;
+    uint32_t nd_ra_retransmit;
 };
 
 #define nd_ra_type               nd_ra_hdr.icmp6_type
@@ -117,8 +117,8 @@ struct nd_router_advert {
 #define nd_ra_router_lifetime    nd_ra_hdr.icmp6_data16[1]
 
 struct nd_neighbor_solicit {
-	struct icmp6_hdr  nd_ns_hdr;
-	struct in6_addr   nd_ns_target;
+    struct icmp6_hdr nd_ns_hdr;
+    struct in6_addr nd_ns_target;
 };
 
 #define nd_ns_type               nd_ns_hdr.icmp6_type
@@ -127,8 +127,8 @@ struct nd_neighbor_solicit {
 #define nd_ns_reserved           nd_ns_hdr.icmp6_data32[0]
 
 struct nd_neighbor_advert {
-	struct icmp6_hdr  nd_na_hdr;
-	struct in6_addr   nd_na_target;
+    struct icmp6_hdr nd_na_hdr;
+    struct in6_addr nd_na_target;
 };
 
 #define nd_na_type               nd_na_hdr.icmp6_type
@@ -146,9 +146,9 @@ struct nd_neighbor_advert {
 #endif
 
 struct nd_redirect {
-	struct icmp6_hdr  nd_rd_hdr;
-	struct in6_addr   nd_rd_target;
-	struct in6_addr   nd_rd_dst;
+    struct icmp6_hdr nd_rd_hdr;
+    struct in6_addr nd_rd_target;
+    struct in6_addr nd_rd_dst;
 };
 
 #define nd_rd_type               nd_rd_hdr.icmp6_type
@@ -157,50 +157,50 @@ struct nd_redirect {
 #define nd_rd_reserved           nd_rd_hdr.icmp6_data32[0]
 
 struct nd_opt_hdr {
-	uint8_t  nd_opt_type;
-	uint8_t  nd_opt_len;
+    uint8_t nd_opt_type;
+    uint8_t nd_opt_len;
 };
 
-#define ND_OPT_SOURCE_LINKADDR		1
-#define ND_OPT_TARGET_LINKADDR		2
-#define ND_OPT_PREFIX_INFORMATION	3
-#define ND_OPT_REDIRECTED_HEADER	4
-#define ND_OPT_MTU			5
-#define ND_OPT_RTR_ADV_INTERVAL		7
-#define ND_OPT_HOME_AGENT_INFO		8
+#define ND_OPT_SOURCE_LINKADDR        1
+#define ND_OPT_TARGET_LINKADDR        2
+#define ND_OPT_PREFIX_INFORMATION    3
+#define ND_OPT_REDIRECTED_HEADER    4
+#define ND_OPT_MTU            5
+#define ND_OPT_RTR_ADV_INTERVAL        7
+#define ND_OPT_HOME_AGENT_INFO        8
 
 struct nd_opt_prefix_info {
-	uint8_t   nd_opt_pi_type;
-	uint8_t   nd_opt_pi_len;
-	uint8_t   nd_opt_pi_prefix_len;
-	uint8_t   nd_opt_pi_flags_reserved;
-	uint32_t  nd_opt_pi_valid_time;
-	uint32_t  nd_opt_pi_preferred_time;
-	uint32_t  nd_opt_pi_reserved2;
-	struct in6_addr  nd_opt_pi_prefix;
+    uint8_t nd_opt_pi_type;
+    uint8_t nd_opt_pi_len;
+    uint8_t nd_opt_pi_prefix_len;
+    uint8_t nd_opt_pi_flags_reserved;
+    uint32_t nd_opt_pi_valid_time;
+    uint32_t nd_opt_pi_preferred_time;
+    uint32_t nd_opt_pi_reserved2;
+    struct in6_addr nd_opt_pi_prefix;
 };
 
-#define ND_OPT_PI_FLAG_ONLINK	0x80
-#define ND_OPT_PI_FLAG_AUTO	0x40
-#define ND_OPT_PI_FLAG_RADDR	0x20
+#define ND_OPT_PI_FLAG_ONLINK    0x80
+#define ND_OPT_PI_FLAG_AUTO    0x40
+#define ND_OPT_PI_FLAG_RADDR    0x20
 
 struct nd_opt_rd_hdr {
-	uint8_t   nd_opt_rh_type;
-	uint8_t   nd_opt_rh_len;
-	uint16_t  nd_opt_rh_reserved1;
-	uint32_t  nd_opt_rh_reserved2;
+    uint8_t nd_opt_rh_type;
+    uint8_t nd_opt_rh_len;
+    uint16_t nd_opt_rh_reserved1;
+    uint32_t nd_opt_rh_reserved2;
 };
 
 struct nd_opt_mtu {
-	uint8_t   nd_opt_mtu_type;
-	uint8_t   nd_opt_mtu_len;
-	uint16_t  nd_opt_mtu_reserved;
-	uint32_t  nd_opt_mtu_mtu;
+    uint8_t nd_opt_mtu_type;
+    uint8_t nd_opt_mtu_len;
+    uint16_t nd_opt_mtu_reserved;
+    uint32_t nd_opt_mtu_mtu;
 };
 
 struct mld_hdr {
-	struct icmp6_hdr    mld_icmp6_hdr;
-	struct in6_addr     mld_addr;
+    struct icmp6_hdr mld_icmp6_hdr;
+    struct in6_addr mld_addr;
 };
 
 #define mld_type        mld_icmp6_hdr.icmp6_type
@@ -212,14 +212,14 @@ struct mld_hdr {
 #define ICMP6_ROUTER_RENUMBERING    138
 
 struct icmp6_router_renum {
-	struct icmp6_hdr    rr_hdr;
-	uint8_t             rr_segnum;
-	uint8_t             rr_flags;
-	uint16_t            rr_maxdelay;
-	uint32_t            rr_reserved;
+    struct icmp6_hdr rr_hdr;
+    uint8_t rr_segnum;
+    uint8_t rr_flags;
+    uint16_t rr_maxdelay;
+    uint32_t rr_reserved;
 };
 
-#define rr_type		rr_hdr.icmp6_type
+#define rr_type        rr_hdr.icmp6_type
 #define rr_code         rr_hdr.icmp6_code
 #define rr_cksum        rr_hdr.icmp6_cksum
 #define rr_seqnum       rr_hdr.icmp6_data32[0]
@@ -231,14 +231,14 @@ struct icmp6_router_renum {
 #define ICMP6_RR_FLAGS_PREVDONE         0x08
 
 struct rr_pco_match {
-	uint8_t             rpm_code;
-	uint8_t             rpm_len;
-	uint8_t             rpm_ordinal;
-	uint8_t             rpm_matchlen;
-	uint8_t             rpm_minlen;
-	uint8_t             rpm_maxlen;
-	uint16_t            rpm_reserved;
-	struct in6_addr     rpm_prefix;
+    uint8_t rpm_code;
+    uint8_t rpm_len;
+    uint8_t rpm_ordinal;
+    uint8_t rpm_matchlen;
+    uint8_t rpm_minlen;
+    uint8_t rpm_maxlen;
+    uint16_t rpm_reserved;
+    struct in6_addr rpm_prefix;
 };
 
 #define RPM_PCO_ADD             1
@@ -246,14 +246,14 @@ struct rr_pco_match {
 #define RPM_PCO_SETGLOBAL       3
 
 struct rr_pco_use {
-	uint8_t             rpu_uselen;
-	uint8_t             rpu_keeplen;
-	uint8_t             rpu_ramask;
-	uint8_t             rpu_raflags;
-	uint32_t            rpu_vltime;
-	uint32_t            rpu_pltime;
-	uint32_t            rpu_flags;
-	struct in6_addr     rpu_prefix;
+    uint8_t rpu_uselen;
+    uint8_t rpu_keeplen;
+    uint8_t rpu_ramask;
+    uint8_t rpu_raflags;
+    uint32_t rpu_vltime;
+    uint32_t rpu_pltime;
+    uint32_t rpu_flags;
+    struct in6_addr rpu_prefix;
 };
 
 #define ICMP6_RR_PCOUSE_RAFLAGS_ONLINK  0x20
@@ -268,11 +268,11 @@ struct rr_pco_use {
 #endif
 
 struct rr_result {
-	uint16_t            rrr_flags;
-	uint8_t             rrr_ordinal;
-	uint8_t             rrr_matchedlen;
-	uint32_t            rrr_ifid;
-	struct in6_addr     rrr_prefix;
+    uint16_t rrr_flags;
+    uint8_t rrr_ordinal;
+    uint8_t rrr_matchedlen;
+    uint32_t rrr_ifid;
+    struct in6_addr rrr_prefix;
 };
 
 #if __BYTE_ORDER == __BIG_ENDIAN
@@ -284,18 +284,18 @@ struct rr_result {
 #endif
 
 struct nd_opt_adv_interval {
-	uint8_t   nd_opt_adv_interval_type;
-	uint8_t   nd_opt_adv_interval_len;
-	uint16_t  nd_opt_adv_interval_reserved;
-	uint32_t  nd_opt_adv_interval_ival;
+    uint8_t nd_opt_adv_interval_type;
+    uint8_t nd_opt_adv_interval_len;
+    uint16_t nd_opt_adv_interval_reserved;
+    uint32_t nd_opt_adv_interval_ival;
 };
 
 struct nd_opt_home_agent_info {
-	uint8_t   nd_opt_home_agent_info_type;
-	uint8_t   nd_opt_home_agent_info_len;
-	uint16_t  nd_opt_home_agent_info_reserved;
-	uint16_t  nd_opt_home_agent_info_preference;
-	uint16_t  nd_opt_home_agent_info_lifetime;
+    uint8_t nd_opt_home_agent_info_type;
+    uint8_t nd_opt_home_agent_info_len;
+    uint16_t nd_opt_home_agent_info_reserved;
+    uint16_t nd_opt_home_agent_info_preference;
+    uint16_t nd_opt_home_agent_info_lifetime;
 };
 
 #ifdef __cplusplus

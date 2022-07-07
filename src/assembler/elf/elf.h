@@ -33,16 +33,16 @@ uint64_t global_text_offset; // 代码段偏移
 uint64_t global_data_offset; // 数据段偏移
 
 typedef enum {
-  ELF_SYMBOL_TYPE_VAR = 1,
-  ELF_SYMBOL_TYPE_FN = 2,
+    ELF_SYMBOL_TYPE_VAR = 1,
+    ELF_SYMBOL_TYPE_FN = 2,
 //  ELF_SYMBOL_TYPE_SECTION,
 //  ELF_SYMBOL_TYPE_FILE,
 } elf_symbol_type;
 
 typedef enum {
-  ELF_SECTION_TEXT = TEXT_INDEX,
-  ELF_SECTION_DATA = DATA_INDEX,
-  ELF_SECTION_RELA_TEXT = RELA_TEXT_INDEX,
+    ELF_SECTION_TEXT = TEXT_INDEX,
+    ELF_SECTION_DATA = DATA_INDEX,
+    ELF_SECTION_RELA_TEXT = RELA_TEXT_INDEX,
 } elf_section;
 
 /**
@@ -50,13 +50,13 @@ typedef enum {
  * @param asm_inst
  */
 typedef struct {
-  uint8_t *data; // 指令二进制
-  uint8_t count; // 指令长度
-  uint64_t *offset; // 指令起始 offset
-  asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用
-  string rel_symbol; // 使用的符号
-  asm_operand_t *rel_operand; // 引用自 asm_inst
-  bool is_jmp_symbol; // jmp 指令可以从 rel32 优化为 rel8
+    uint8_t *data; // 指令二进制
+    uint8_t count; // 指令长度
+    uint64_t *offset; // 指令起始 offset
+    asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用
+    string rel_symbol; // 使用的符号
+    asm_operand_t *rel_operand; // 引用自 asm_inst
+    bool is_jmp_symbol; // jmp 指令可以从 rel32 优化为 rel8
 } elf_text_inst_t;
 
 /**
@@ -64,15 +64,15 @@ typedef struct {
  * @param asm_inst
  */
 typedef struct {
-  string name;
-  uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内偏移，改地址需要被修正
-  uint8_t size;
-  uint8_t *value; // 对于 var, 且其在数据段时，其可能会有预定义的值
-  elf_symbol_type type;  // fn/var
-  bool is_rel; // 是否引用外部符号
-  bool is_local; // 是否是本地符号
-  elf_section section; // 所在段，text/data
-  int symtab_index; // 在符号表的索引,构建符号表时写入
+    string name;
+    uint64_t *offset;  // 符号所在偏移, 只有符号定义需要这个偏移地址,现阶段只有 text 段内偏移，改地址需要被修正
+    uint8_t size;
+    uint8_t *value; // 对于 var, 且其在数据段时，其可能会有预定义的值
+    elf_symbol_type type;  // fn/var
+    bool is_rel; // 是否引用外部符号
+    bool is_local; // 是否是本地符号
+    elf_section section; // 所在段，text/data
+    int symtab_index; // 在符号表的索引,构建符号表时写入
 } elf_symbol_t; // 用来构造符号表，以及数据段？
 
 /**
@@ -80,11 +80,11 @@ typedef struct {
  * @param asm_inst
  */
 typedef struct {
-  string name;
-  elf_symbol_type type; // 符号引用还是标签引用
-  uint8_t section; // 使用符号
-  uint64_t *offset;
-  int8_t addend;
+    string name;
+    elf_symbol_type type; // 符号引用还是标签引用
+    uint8_t section; // 使用符号
+    uint64_t *offset;
+    int8_t addend;
 } elf_rel_t;
 
 list *elf_text_inst_list;
@@ -102,6 +102,7 @@ void elf_var_decl_list_build(list *decl_list);
 // 其中需要一个 link 结构来引用最近 128 个字节的指令，做 jmp rel 跳转，原则上不能影响原来的指令
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
 void elf_text_inst_build(asm_inst_t asm_inst);
+
 void elf_text_inst_list_build(list *asm_inst_list); // 一次构建基于 asm_inst 列表
 void elf_text_inst_list_second_build(); // 二次构建(基于 elf_text_inst_list)
 
@@ -118,19 +119,19 @@ void elf_rewrite_text_rel(elf_text_inst_t *t);
 uint64_t *elf_current_text_offset();
 
 typedef struct {
-  Elf64_Ehdr ehdr;
-  uint8_t *data;
-  uint8_t data_size;
-  uint8_t *text;
-  uint64_t text_size;
-  char *shstrtab;
-  Elf64_Shdr *shdr;
-  uint8_t shdr_count;
-  Elf64_Sym *symtab;
-  uint64_t symtab_count;
-  char *strtab;
-  Elf64_Rela *rela_text;
-  uint64_t real_text_count;
+    Elf64_Ehdr ehdr;
+    uint8_t *data;
+    uint8_t data_size;
+    uint8_t *text;
+    uint64_t text_size;
+    char *shstrtab;
+    Elf64_Shdr *shdr;
+    uint8_t shdr_count;
+    Elf64_Sym *symtab;
+    uint64_t symtab_count;
+    char *strtab;
+    Elf64_Rela *rela_text;
+    uint64_t real_text_count;
 } elf_t;
 
 /**

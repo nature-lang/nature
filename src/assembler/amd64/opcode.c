@@ -1033,7 +1033,7 @@ uint8_t *opcode_encoding(asm_inst_t asm_inst, uint8_t *count) {
     inst_t *inst = opcode_select(asm_inst);
     inst_format_t *format = opcode_fill(inst, asm_inst);
     opcode_format_encoding(format, data, count);
-    realloc(data, *count);
+    void *_ = realloc(data, *count);
     return data;
 }
 

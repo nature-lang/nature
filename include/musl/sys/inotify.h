@@ -9,9 +9,9 @@ extern "C" {
 #include <fcntl.h>
 
 struct inotify_event {
-	int wd;
-	uint32_t mask, cookie, len;
-	char name[];
+    int wd;
+    uint32_t mask, cookie, len;
+    char name[];
 };
 
 #define IN_CLOEXEC O_CLOEXEC
@@ -47,8 +47,11 @@ struct inotify_event {
 #define IN_ONESHOT       0x80000000
 
 int inotify_init(void);
+
 int inotify_init1(int);
+
 int inotify_add_watch(int, const char *, uint32_t);
+
 int inotify_rm_watch(int, int);
 
 #ifdef __cplusplus

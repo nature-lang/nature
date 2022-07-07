@@ -23,8 +23,9 @@ extern "C" {
 
 #define UIO_MAXIOV 1024
 
-ssize_t readv (int, const struct iovec *, int);
-ssize_t writev (int, const struct iovec *, int);
+ssize_t readv(int, const struct iovec *, int);
+
+ssize_t writev(int, const struct iovec *, int);
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 ssize_t preadv (int, const struct iovec *, int, off_t);

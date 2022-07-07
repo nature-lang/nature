@@ -1,5 +1,5 @@
-#ifndef	_SYS_UN_H
-#define	_SYS_UN_H
+#ifndef    _SYS_UN_H
+#define    _SYS_UN_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,8 +15,8 @@ extern "C" {
 #include <bits/alltypes.h>
 
 struct sockaddr_un {
-	sa_family_t sun_family;
-	char sun_path[108];
+    sa_family_t sun_family;
+    char sun_path[108];
 };
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)

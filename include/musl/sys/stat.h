@@ -1,5 +1,5 @@
-#ifndef	_SYS_STAT_H
-#define	_SYS_STAT_H
+#ifndef    _SYS_STAT_H
+#define    _SYS_STAT_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -71,16 +71,27 @@ extern "C" {
 #define UTIME_OMIT 0x3ffffffe
 
 int stat(const char *__restrict, struct stat *__restrict);
+
 int fstat(int, struct stat *);
+
 int lstat(const char *__restrict, struct stat *__restrict);
+
 int fstatat(int, const char *__restrict, struct stat *__restrict, int);
+
 int chmod(const char *, mode_t);
+
 int fchmod(int, mode_t);
+
 int fchmodat(int, const char *, mode_t, int);
+
 mode_t umask(mode_t);
+
 int mkdir(const char *, mode_t);
+
 int mkfifo(const char *, mode_t);
+
 int mkdirat(int, const char *, mode_t);
+
 int mkfifoat(int, const char *, mode_t);
 
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
@@ -89,6 +100,7 @@ int mknodat(int, const char *, mode_t, dev_t);
 #endif
 
 int futimens(int, const struct timespec [2]);
+
 int utimensat(int, const char *, const struct timespec [2], int);
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)

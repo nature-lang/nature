@@ -1,5 +1,5 @@
-#ifndef	_POLL_H
-#define	_POLL_H
+#ifndef    _POLL_H
+#define    _POLL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,12 +29,12 @@ extern "C" {
 typedef unsigned long nfds_t;
 
 struct pollfd {
-	int fd;
-	short events;
-	short revents;
+    int fd;
+    short events;
+    short revents;
 };
 
-int poll (struct pollfd *, nfds_t, int);
+int poll(struct pollfd *, nfds_t, int);
 
 #ifdef _GNU_SOURCE
 #define __NEED_time_t

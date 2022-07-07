@@ -77,7 +77,7 @@
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
      asm_operand_disp_register_t *_disp_reg = NEW(asm_operand_disp_register_t); \
-     _disp_reg->reg = _reg;    \
+     _disp_reg->reg = (asm_operand_disp_register_t*)_reg;    \
      _disp_reg->disp = _disp;    \
      _operand->size = _reg->size;\
      _operand->value = _disp_reg;    \
@@ -136,93 +136,93 @@
 })
 
 typedef enum {
-  ASM_OPERAND_TYPE_REGISTER = 1,
-  ASM_OPERAND_TYPE_INDIRECT_REGISTER,
-  ASM_OPERAND_TYPE_SIB_REGISTER,
-  ASM_OPERAND_TYPE_RIP_RELATIVE,
-  ASM_OPERAND_TYPE_DISP_REGISTER,
-  ASM_OPERAND_TYPE_SYMBOL,
-  ASM_OPERAND_TYPE_UINT8,
-  ASM_OPERAND_TYPE_UINT16,
-  ASM_OPERAND_TYPE_UINT32,
-  ASM_OPERAND_TYPE_UINT64,
-  ASM_OPERAND_TYPE_INT8,
-  ASM_OPERAND_TYPE_INT32,
-  ASM_OPERAND_TYPE_FLOAT32,
-  ASM_OPERAND_TYPE_FLOAT64,
+    ASM_OPERAND_TYPE_REGISTER = 1,
+    ASM_OPERAND_TYPE_INDIRECT_REGISTER,
+    ASM_OPERAND_TYPE_SIB_REGISTER,
+    ASM_OPERAND_TYPE_RIP_RELATIVE,
+    ASM_OPERAND_TYPE_DISP_REGISTER,
+    ASM_OPERAND_TYPE_SYMBOL,
+    ASM_OPERAND_TYPE_UINT8,
+    ASM_OPERAND_TYPE_UINT16,
+    ASM_OPERAND_TYPE_UINT32,
+    ASM_OPERAND_TYPE_UINT64,
+    ASM_OPERAND_TYPE_INT8,
+    ASM_OPERAND_TYPE_INT32,
+    ASM_OPERAND_TYPE_FLOAT32,
+    ASM_OPERAND_TYPE_FLOAT64,
 } asm_operand_type;
 
 typedef struct {
-  uint8_t value;
+    uint8_t value;
 } asm_operand_uint8_t;
 
 typedef struct {
-  uint16_t value;
+    uint16_t value;
 } asm_operand_uint16_t;
 
 typedef struct {
-  uint32_t value;
+    uint32_t value;
 } asm_operand_uint32_t;
 
 typedef struct {
-  uint64_t value;
+    uint64_t value;
 } asm_operand_uint64_t;
 
 typedef struct {
-  int32_t value;
+    int32_t value;
 } asm_operand_int32_t;
 
 typedef struct {
-  int8_t value;
+    int8_t value;
 } asm_operand_int8_t;
 
 typedef struct {
-  float value;
+    float value;
 } asm_operand_float32_t;
 
 typedef struct {
-  double value;
+    double value;
 } asm_operand_float64_t;
 
 /**
  * 汇编指令参数
  */
 typedef struct {
-  string name;
-  uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
-  uint8_t size;
-  uint8_t id; // 在 physical register 中的 index
+    string name;
+    uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
+    uint8_t size;
+    uint8_t id; // 在 physical register 中的 index
 } asm_operand_register_t; // size 是个啥？
 
 typedef struct {
-  asm_operand_register_t *base; // 决定了宽度
-  asm_operand_register_t *index;
-  uint8_t scale;
+    asm_operand_register_t *base; // 决定了宽度
+    asm_operand_register_t *index;
+    uint8_t scale;
 } asm_operand_sib_register_t;
 
 typedef struct {
-  asm_operand_register_t *reg;
+    asm_operand_register_t *reg;
 } asm_operand_indirect_register_t; // (%rax)
 
 typedef struct {
-  asm_operand_register_t *reg;
-  uint8_t disp;
+    asm_operand_register_t *reg;
+    uint8_t disp;
 } asm_operand_disp_register_t;
 
 typedef struct {
-  int32_t disp;
+    int32_t disp;
 } asm_operand_rip_relative_t;
 
 typedef struct {
-  asm_operand_type type;
-  uint8_t size;
-  void *value; // asm_operand_register
+    asm_operand_type type;
+    uint8_t size;
+    void *value; // asm_operand_register
 } asm_operand_t;
 
 typedef struct {
-  string name; // 符号名称
-  bool is_label; // label 类型符号还是数据类型符号
-  bool is_local; // 是内部符号，还是全局符号(global_fn,global_var 或者当前文件不存在的 var)
+    string name; // 符号名称
+    bool is_label; // label 类型符号还是数据类型符号
+    bool is_local; // 是内部符号，还是全局符号(global_fn,global_var 或者当前文件不存在的 var)
 } asm_operand_symbol_t;
 
 /**
@@ -230,28 +230,28 @@ typedef struct {
  * 指令名称可以包含 label
  */
 typedef struct {
-  string name; // 指令名称
-  uint8_t prefix; // 自定义指令前缀，覆盖
-  uint8_t count;
-  asm_operand_t *operands[4]; // 最多 4 个参数
+    string name; // 指令名称
+    uint8_t prefix; // 自定义指令前缀，覆盖
+    uint8_t count;
+    asm_operand_t *operands[4]; // 最多 4 个参数
 } asm_inst_t;
 
 typedef struct {
-  asm_inst_t **list;
-  uint8_t count;
+    asm_inst_t **list;
+    uint8_t count;
 } asm_insts_t;
 
 typedef enum {
-  ASM_VAR_DECL_TYPE_INT = 1,
-  ASM_VAR_DECL_TYPE_FLOAT,
-  ASM_VAR_DECL_TYPE_STRING,
+    ASM_VAR_DECL_TYPE_INT = 1,
+    ASM_VAR_DECL_TYPE_FLOAT,
+    ASM_VAR_DECL_TYPE_STRING,
 } asm_var_decl_type;
 
 typedef struct {
-  string name; // 符号名称
-  size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
-  uint8_t *value; // 符号值
-  asm_var_decl_type type; // 暂时感觉没什么用
+    string name; // 符号名称
+    size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
+    uint8_t *value; // 符号值
+    asm_var_decl_type type; // 暂时感觉没什么用
 } asm_var_decl;
 
 asm_operand_t *asm_symbol_operand(asm_inst_t asm_inst);

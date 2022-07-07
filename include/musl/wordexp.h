@@ -1,5 +1,5 @@
-#ifndef	_WORDEXP_H
-#define	_WORDEXP_H
+#ifndef    _WORDEXP_H
+#define    _WORDEXP_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,9 +19,9 @@ extern "C" {
 #define WRDE_UNDEF   32
 
 typedef struct {
-	size_t we_wordc;
-	char **we_wordv;
-	size_t we_offs;
+    size_t we_wordc;
+    char **we_wordv;
+    size_t we_offs;
 } wordexp_t;
 
 #define WRDE_NOSYS   -1
@@ -31,8 +31,9 @@ typedef struct {
 #define WRDE_CMDSUB  4
 #define WRDE_SYNTAX  5
 
-int wordexp (const char *__restrict, wordexp_t *__restrict, int);
-void wordfree (wordexp_t *);
+int wordexp(const char *__restrict, wordexp_t *__restrict, int);
+
+void wordfree(wordexp_t *);
 
 #ifdef __cplusplus
 }

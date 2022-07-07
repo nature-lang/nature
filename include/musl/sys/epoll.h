@@ -1,5 +1,5 @@
-#ifndef	_SYS_EPOLL_H
-#define	_SYS_EPOLL_H
+#ifndef    _SYS_EPOLL_H
+#define    _SYS_EPOLL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,7 +16,9 @@ extern "C" {
 #define EPOLL_CLOEXEC O_CLOEXEC
 #define EPOLL_NONBLOCK O_NONBLOCK
 
-enum EPOLL_EVENTS { __EPOLL_DUMMY };
+enum EPOLL_EVENTS {
+    __EPOLL_DUMMY
+};
 #define EPOLLIN 0x001
 #define EPOLLPRI 0x002
 #define EPOLLOUT 0x004
@@ -39,26 +41,30 @@ enum EPOLL_EVENTS { __EPOLL_DUMMY };
 #define EPOLL_CTL_MOD 3
 
 typedef union epoll_data {
-	void *ptr;
-	int fd;
-	uint32_t u32;
-	uint64_t u64;
+    void *ptr;
+    int fd;
+    uint32_t u32;
+    uint64_t u64;
 } epoll_data_t;
 
 struct epoll_event {
-	uint32_t events;
-	epoll_data_t data;
+    uint32_t events;
+    epoll_data_t data;
 }
 #ifdef __x86_64__
-__attribute__ ((__packed__))
+    __attribute__ ((__packed__))
 #endif
 ;
 
 
 int epoll_create(int);
+
 int epoll_create1(int);
+
 int epoll_ctl(int, int, int, struct epoll_event *);
+
 int epoll_wait(int, struct epoll_event *, int, int);
+
 int epoll_pwait(int, struct epoll_event *, int, int, const sigset_t *);
 
 

@@ -1,4 +1,4 @@
-#ifndef	_SYSEXITS_H
+#ifndef    _SYSEXITS_H
 #define _SYSEXITS_H
 #define EX_OK 0
 #define EX__BASE 64

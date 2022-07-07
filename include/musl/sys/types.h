@@ -1,5 +1,5 @@
-#ifndef	_SYS_TYPES_H
-#define	_SYS_TYPES_H
+#ifndef    _SYS_TYPES_H
+#define    _SYS_TYPES_H
 #ifdef __cplusplus
 extern "C" {
 #endif

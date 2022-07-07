@@ -17,27 +17,34 @@ extern "C" {
 #include <bits/alltypes.h>
 
 struct sched_param {
-	int sched_priority;
-	int __reserved1;
+    int sched_priority;
+    int __reserved1;
 #if _REDIR_TIME64
-	long __reserved2[4];
+    long __reserved2[4];
 #else
-	struct {
-		time_t __reserved1;
-		long __reserved2;
-	} __reserved2[2];
+    struct {
+        time_t __reserved1;
+        long __reserved2;
+    } __reserved2[2];
 #endif
-	int __reserved3;
+    int __reserved3;
 };
 
-int    sched_get_priority_max(int);
-int    sched_get_priority_min(int);
-int    sched_getparam(pid_t, struct sched_param *);
-int    sched_getscheduler(pid_t);
-int    sched_rr_get_interval(pid_t, struct timespec *);
-int    sched_setparam(pid_t, const struct sched_param *);
-int    sched_setscheduler(pid_t, int, const struct sched_param *);
-int     sched_yield(void);
+int sched_get_priority_max(int);
+
+int sched_get_priority_min(int);
+
+int sched_getparam(pid_t, struct sched_param *);
+
+int sched_getscheduler(pid_t);
+
+int sched_rr_get_interval(pid_t, struct timespec *);
+
+int sched_setparam(pid_t, const struct sched_param *);
+
+int sched_setscheduler(pid_t, int, const struct sched_param *);
+
+int sched_yield(void);
 
 #define SCHED_OTHER 0
 #define SCHED_FIFO 1
@@ -91,7 +98,7 @@ int sched_getaffinity(pid_t, size_t, cpu_set_t *);
 int sched_setaffinity(pid_t, size_t, const cpu_set_t *);
 
 #define __CPU_op_S(i, size, set, op) ( (i)/8U >= (size) ? 0 : \
-	(((unsigned long *)(set))[(i)/8/sizeof(long)] op (1UL<<((i)%(8*sizeof(long))))) )
+    (((unsigned long *)(set))[(i)/8/sizeof(long)] op (1UL<<((i)%(8*sizeof(long))))) )
 
 #define CPU_SET_S(i, size, set) __CPU_op_S(i, size, set, |=)
 #define CPU_CLR_S(i, size, set) __CPU_op_S(i, size, set, &=~)
@@ -99,12 +106,12 @@ int sched_setaffinity(pid_t, size_t, const cpu_set_t *);
 
 #define __CPU_op_func_S(func, op) \
 static __inline void __CPU_##func##_S(size_t __size, cpu_set_t *__dest, \
-	const cpu_set_t *__src1, const cpu_set_t *__src2) \
+    const cpu_set_t *__src1, const cpu_set_t *__src2) \
 { \
-	size_t __i; \
-	for (__i=0; __i<__size/sizeof(long); __i++) \
-		((unsigned long *)__dest)[__i] = ((unsigned long *)__src1)[__i] \
-			op ((unsigned long *)__src2)[__i] ; \
+    size_t __i; \
+    for (__i=0; __i<__size/sizeof(long); __i++) \
+        ((unsigned long *)__dest)[__i] = ((unsigned long *)__src1)[__i] \
+            op ((unsigned long *)__src2)[__i] ; \
 }
 
 __CPU_op_func_S(AND, &)
@@ -120,7 +127,7 @@ __CPU_op_func_S(XOR, ^)
 #define CPU_EQUAL_S(size,set1,set2) (!memcmp(set1,set2,size))
 
 #define CPU_ALLOC_SIZE(n) (sizeof(long) * ( (n)/(8*sizeof(long)) \
-	+ ((n)%(8*sizeof(long)) + 8*sizeof(long)-1)/(8*sizeof(long)) ) )
+    + ((n)%(8*sizeof(long)) + 8*sizeof(long)-1)/(8*sizeof(long)) ) )
 #define CPU_ALLOC(n) ((cpu_set_t *)calloc(1,CPU_ALLOC_SIZE(n)))
 #define CPU_FREE(set) free(set)
 

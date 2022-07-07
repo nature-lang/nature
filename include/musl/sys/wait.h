@@ -1,5 +1,5 @@
-#ifndef	_SYS_WAIT_H
-#define	_SYS_WAIT_H
+#ifndef    _SYS_WAIT_H
+#define    _SYS_WAIT_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -8,23 +8,28 @@ extern "C" {
 
 #define __NEED_pid_t
 #define __NEED_id_t
+
 #include <bits/alltypes.h>
 
 typedef enum {
-	P_ALL = 0,
-	P_PID = 1,
-	P_PGID = 2,
-	P_PIDFD = 3
+    P_ALL = 0,
+    P_PID = 1,
+    P_PGID = 2,
+    P_PIDFD = 3
 } idtype_t;
 
-pid_t wait (int *);
-pid_t waitpid (pid_t, int *, int );
+pid_t wait(int *);
+
+pid_t waitpid(pid_t, int *, int);
 
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
+
 #include <signal.h>
-int waitid (idtype_t, id_t, siginfo_t *, int);
+
+int waitid(idtype_t, id_t, siginfo_t *, int);
+
 #endif
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)

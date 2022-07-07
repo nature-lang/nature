@@ -102,7 +102,7 @@
 #endif
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE) \
- || (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE+0 < 700)
+ || (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE + 0 < 700)
 
 #define NL_NMAX 16
 

@@ -13,9 +13,9 @@ extern "C" {
 #define UT_LINESIZE 32
 
 struct lastlog {
-	time_t ll_time;
-	char ll_line[UT_LINESIZE];
-	char ll_host[UT_HOSTSIZE];
+    time_t ll_time;
+    char ll_line[UT_LINESIZE];
+    char ll_host[UT_HOSTSIZE];
 };
 
 #define ut_time ut_tv.tv_sec
@@ -25,14 +25,20 @@ struct lastlog {
 #define e_exit __e_exit
 #define e_termination __e_termination
 
-void         endutent(void);
+void endutent(void);
+
 struct utmp *getutent(void);
+
 struct utmp *getutid(const struct utmp *);
+
 struct utmp *getutline(const struct utmp *);
+
 struct utmp *pututline(const struct utmp *);
-void         setutent(void);
+
+void setutent(void);
 
 void updwtmp(const char *, const struct utmp *);
+
 int utmpname(const char *);
 
 int login_tty(int);

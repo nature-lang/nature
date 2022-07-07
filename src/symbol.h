@@ -15,8 +15,8 @@
 table *symbol_ident_table; // analysis_local_ident
 
 typedef enum {
-  SYMBOL_TYPE_VAR,
-  SYMBOL_TYPE_CUSTOM_TYPE,
+    SYMBOL_TYPE_VAR,
+    SYMBOL_TYPE_CUSTOM_TYPE,
 //  SYMBOL_TYPE_FUNCTION,
 } symbol_type;
 

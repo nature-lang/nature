@@ -92,58 +92,58 @@ typedef struct sigaltstack stack_t;
 #define CLD_CONTINUED 6
 
 union sigval {
-	int sival_int;
-	void *sival_ptr;
+    int sival_int;
+    void *sival_ptr;
 };
 
 typedef struct {
 #ifdef __SI_SWAP_ERRNO_CODE
-	int si_signo, si_code, si_errno;
+    int si_signo, si_code, si_errno;
 #else
-	int si_signo, si_errno, si_code;
+    int si_signo, si_errno, si_code;
 #endif
-	union {
-		char __pad[128 - 2*sizeof(int) - sizeof(long)];
-		struct {
-			union {
-				struct {
-					pid_t si_pid;
-					uid_t si_uid;
-				} __piduid;
-				struct {
-					int si_timerid;
-					int si_overrun;
-				} __timer;
-			} __first;
-			union {
-				union sigval si_value;
-				struct {
-					int si_status;
-					clock_t si_utime, si_stime;
-				} __sigchld;
-			} __second;
-		} __si_common;
-		struct {
-			void *si_addr;
-			short si_addr_lsb;
-			union {
-				struct {
-					void *si_lower;
-					void *si_upper;
-				} __addr_bnd;
-				unsigned si_pkey;
-			} __first;
-		} __sigfault;
-		struct {
-			long si_band;
-			int si_fd;
-		} __sigpoll;
-		struct {
-			void *si_call_addr;
-			int si_syscall;
-			unsigned si_arch;
-		} __sigsys;
-	} __si_fields;
+    union {
+        char __pad[128 - 2 * sizeof(int) - sizeof(long)];
+        struct {
+            union {
+                struct {
+                    pid_t si_pid;
+                    uid_t si_uid;
+                } __piduid;
+                struct {
+                    int si_timerid;
+                    int si_overrun;
+                } __timer;
+            } __first;
+            union {
+                union sigval si_value;
+                struct {
+                    int si_status;
+                    clock_t si_utime, si_stime;
+                } __sigchld;
+            } __second;
+        } __si_common;
+        struct {
+            void *si_addr;
+            short si_addr_lsb;
+            union {
+                struct {
+                    void *si_lower;
+                    void *si_upper;
+                } __addr_bnd;
+                unsigned si_pkey;
+            } __first;
+        } __sigfault;
+        struct {
+            long si_band;
+            int si_fd;
+        } __sigpoll;
+        struct {
+            void *si_call_addr;
+            int si_syscall;
+            unsigned si_arch;
+        } __sigsys;
+    } __si_fields;
 } siginfo_t;
 #define si_pid     __si_fields.__si_common.__first.__piduid.si_pid
 #define si_uid     __si_fields.__si_common.__first.__piduid.si_uid
@@ -167,14 +167,18 @@ typedef struct {
 #define si_arch    __si_fields.__sigsys.si_arch
 
 struct sigaction {
-	union {
-		void (*sa_handler)(int);
-		void (*sa_sigaction)(int, siginfo_t *, void *);
-	} __sa_handler;
-	sigset_t sa_mask;
-	int sa_flags;
-	void (*sa_restorer)(void);
+    union {
+        void (*sa_handler)(int);
+
+        void (*sa_sigaction)(int, siginfo_t *, void *);
+    } __sa_handler;
+
+    sigset_t sa_mask;
+    int sa_flags;
+
+    void (*sa_restorer)(void);
 };
+
 #define sa_handler   __sa_handler.sa_handler
 #define sa_sigaction __sa_handler.sa_sigaction
 
@@ -182,17 +186,19 @@ struct sigaction {
 #define SA_EXPOSE_TAGBITS 0x00000800
 
 struct sigevent {
-	union sigval sigev_value;
-	int sigev_signo;
-	int sigev_notify;
-	union {
-		char __pad[64 - 2*sizeof(int) - sizeof(union sigval)];
-		pid_t sigev_notify_thread_id;
-		struct {
-			void (*sigev_notify_function)(union sigval);
-			pthread_attr_t *sigev_notify_attributes;
-		} __sev_thread;
-	} __sev_fields;
+    union sigval sigev_value;
+    int sigev_signo;
+    int sigev_notify;
+    union {
+        char __pad[64 - 2 * sizeof(int) - sizeof(union sigval)];
+        pid_t sigev_notify_thread_id;
+
+        struct {
+            void (*sigev_notify_function)(union sigval);
+
+            pthread_attr_t *sigev_notify_attributes;
+        } __sev_thread;
+    } __sev_fields;
 };
 
 #define sigev_notify_thread_id __sev_fields.sigev_notify_thread_id
@@ -205,6 +211,7 @@ struct sigevent {
 #define SIGEV_THREAD_ID 4
 
 int __libc_current_sigrtmin(void);
+
 int __libc_current_sigrtmax(void);
 
 #define SIGRTMIN  (__libc_current_sigrtmin())
@@ -213,37 +220,59 @@ int __libc_current_sigrtmax(void);
 int kill(pid_t, int);
 
 int sigemptyset(sigset_t *);
+
 int sigfillset(sigset_t *);
+
 int sigaddset(sigset_t *, int);
+
 int sigdelset(sigset_t *, int);
+
 int sigismember(const sigset_t *, int);
 
 int sigprocmask(int, const sigset_t *__restrict, sigset_t *__restrict);
+
 int sigsuspend(const sigset_t *);
+
 int sigaction(int, const struct sigaction *__restrict, struct sigaction *__restrict);
+
 int sigpending(sigset_t *);
+
 int sigwait(const sigset_t *__restrict, int *__restrict);
+
 int sigwaitinfo(const sigset_t *__restrict, siginfo_t *__restrict);
+
 int sigtimedwait(const sigset_t *__restrict, siginfo_t *__restrict, const struct timespec *__restrict);
+
 int sigqueue(pid_t, int, union sigval);
 
 int pthread_sigmask(int, const sigset_t *__restrict, sigset_t *__restrict);
+
 int pthread_kill(pthread_t, int);
 
 void psiginfo(const siginfo_t *, const char *);
+
 void psignal(int, const char *);
 
 #endif
 
 #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+
 int killpg(pid_t, int);
+
 int sigaltstack(const stack_t *__restrict, stack_t *__restrict);
+
 int sighold(int);
+
 int sigignore(int);
+
 int siginterrupt(int, int);
+
 int sigpause(int);
+
 int sigrelse(int);
+
 void (*sigset(int, void (*)(int)))(int);
+
 #define TRAP_BRKPT 1
 #define TRAP_TRACE 2
 #define TRAP_BRANCH 3
@@ -263,6 +292,7 @@ void (*sigset(int, void (*)(int)))(int);
 
 #if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 #define NSIG _NSIG
+
 typedef void (*sig_t)(int);
 
 #define SYS_SECCOMP 1
@@ -287,6 +317,7 @@ int sigandset(sigset_t *, const sigset_t *, const sigset_t *);
 typedef int sig_atomic_t;
 
 void (*signal(int, void (*)(int)))(int);
+
 int raise(int);
 
 #if _REDIR_TIME64

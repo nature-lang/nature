@@ -18,25 +18,32 @@ extern "C" {
 #include <bits/alltypes.h>
 
 struct passwd {
-	char *pw_name;
-	char *pw_passwd;
-	uid_t pw_uid;
-	gid_t pw_gid;
-	char *pw_gecos;
-	char *pw_dir;
-	char *pw_shell;
+    char *pw_name;
+    char *pw_passwd;
+    uid_t pw_uid;
+    gid_t pw_gid;
+    char *pw_gecos;
+    char *pw_dir;
+    char *pw_shell;
 };
 
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
-void setpwent (void);
-void endpwent (void);
-struct passwd *getpwent (void);
+
+void setpwent(void);
+
+void endpwent(void);
+
+struct passwd *getpwent(void);
+
 #endif
 
-struct passwd *getpwuid (uid_t);
-struct passwd *getpwnam (const char *);
-int getpwuid_r (uid_t, struct passwd *, char *, size_t, struct passwd **);
-int getpwnam_r (const char *, struct passwd *, char *, size_t, struct passwd **);
+struct passwd *getpwuid(uid_t);
+
+struct passwd *getpwnam(const char *);
+
+int getpwuid_r(uid_t, struct passwd *, char *, size_t, struct passwd **);
+
+int getpwnam_r(const char *, struct passwd *, char *, size_t, struct passwd **);
 
 #ifdef _GNU_SOURCE
 struct passwd *fgetpwent(FILE *);

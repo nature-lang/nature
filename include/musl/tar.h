@@ -1,5 +1,5 @@
-#ifndef	_TAR_H
-#define	_TAR_H
+#ifndef    _TAR_H
+#define    _TAR_H
 
 #define TSUID   04000
 #define TSGID   02000

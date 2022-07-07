@@ -19,8 +19,7 @@ set(SRC_ASSEMBLER
 set(SRC_LOWER
         #        ${SRC_DIR}/lower/amd64/amd64.c
         #        ${SRC_DIR}/lower/amd64/amd64.h
-        ${SRC_DIR}/lower/amd64/builtin.h
-        ${SRC_DIR}/lower/amd64/builtin.c)
+        )
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h

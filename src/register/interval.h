@@ -5,30 +5,30 @@
 #include "src/lib/list.h"
 
 typedef enum {
-  LOOP_DETECTION_FLAG_VISITED,
-  LOOP_DETECTION_FLAG_ACTIVE,
-  LOOP_DETECTION_FLAG_NULL,
+    LOOP_DETECTION_FLAG_VISITED,
+    LOOP_DETECTION_FLAG_ACTIVE,
+    LOOP_DETECTION_FLAG_NULL,
 } loop_detection_flag;
 
 typedef struct {
-  int from;
-  int to;
+    int from;
+    int to;
 } interval_range;
 
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
-  int first_from;
-  int last_to;
-  list *ranges;
-  list *use_positions; // 存储 use_position 列表
-  struct interval *split_parent;
-  list *split_children; // 动态数组
+    int first_from;
+    int last_to;
+    list *ranges;
+    list *use_positions; // 存储 use_position 列表
+    struct interval *split_parent;
+    list *split_children; // 动态数组
 
-  lir_operand_var *var; // 变量名称
-  reg *reg;
-  reg *assigned;
+    lir_operand_var *var; // 变量名称
+    reg *reg;
+    reg *assigned;
 
-  bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
+    bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
 } interval;
 
 /**

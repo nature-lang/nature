@@ -1,5 +1,5 @@
-#ifndef	_SYS_IOCTL_H
-#define	_SYS_IOCTL_H
+#ifndef    _SYS_IOCTL_H
+#define    _SYS_IOCTL_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -112,7 +112,7 @@ extern "C" {
 #define SIOCDEVPRIVATE     0x89F0
 #define SIOCPROTOPRIVATE   0x89E0
 
-int ioctl (int, int, ...);
+int ioctl(int, int, ...);
 
 #ifdef __cplusplus
 }

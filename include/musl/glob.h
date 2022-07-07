@@ -1,5 +1,5 @@
-#ifndef	_GLOB_H
-#define	_GLOB_H
+#ifndef    _GLOB_H
+#define    _GLOB_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,14 +12,15 @@ extern "C" {
 #include <bits/alltypes.h>
 
 typedef struct {
-	size_t gl_pathc;
-	char **gl_pathv;
-	size_t gl_offs;
-	int __dummy1;
-	void *__dummy2[5];
+    size_t gl_pathc;
+    char **gl_pathv;
+    size_t gl_offs;
+    int __dummy1;
+    void *__dummy2[5];
 } glob_t;
 
-int  glob(const char *__restrict, int, int (*)(const char *, int), glob_t *__restrict);
+int glob(const char *__restrict, int, int (*)(const char *, int), glob_t *__restrict);
+
 void globfree(glob_t *);
 
 #define GLOB_ERR      0x01
@@ -29,7 +30,7 @@ void globfree(glob_t *);
 #define GLOB_NOCHECK  0x10
 #define GLOB_APPEND   0x20
 #define GLOB_NOESCAPE 0x40
-#define	GLOB_PERIOD   0x80
+#define    GLOB_PERIOD   0x80
 
 #define GLOB_TILDE       0x1000
 #define GLOB_TILDE_CHECK 0x4000

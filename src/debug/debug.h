@@ -4,17 +4,17 @@
 #include "src/value.h"
 #include "src/ast.h"
 #include "src/syntax/token.h"
-#include "src/lir.h"
+#include "src/lir/lir.h"
 
 #define DEBUG_STR_COUNT 1000
 
-//#define DEBUG_SCANNER
+#define DEBUG_SCANNER
 
-//#define DEBUG_PARSER
+#define DEBUG_PARSER
 
-//#define DEBUG_ANALYSIS
+#define DEBUG_ANALYSIS
 
-// #define DEBUG_INFER
+#define DEBUG_INFER
 
 //#define DEBUG_COMPILER
 
@@ -32,7 +32,7 @@ void debug_stmt(string type, ast_stmt stmt);
 
 void debug_lir(int lir_line, lir_op *op);
 
-void debug_cfg(closure* c);
+void debug_cfg(closure *c);
 
 void debug_basic_block(lir_basic_block *block);
 

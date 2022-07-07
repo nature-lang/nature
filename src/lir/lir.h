@@ -87,26 +87,26 @@ int lir_unique_count;
 int lir_line;
 
 typedef struct lir_operand {
-  uint8_t type;
-  void *value;
+    uint8_t type;
+    void *value;
 } lir_operand;
 
 typedef enum {
-  LIR_OPERAND_TYPE_NULL,
-  LIR_OPERAND_TYPE_VAR,
-  LIR_OPERAND_TYPE_REG,
-  LIR_OPERAND_TYPE_PHI_BODY,
-  LIR_OPERAND_TYPE_FORMAL_PARAM,
-  LIR_OPERAND_TYPE_ACTUAL_PARAM,
-  LIR_OPERAND_TYPE_LABEL,
-  LIR_OPERAND_TYPE_IMMEDIATE,
-  LIR_OPERAND_TYPE_MEMORY,
+    LIR_OPERAND_TYPE_NULL,
+    LIR_OPERAND_TYPE_VAR,
+    LIR_OPERAND_TYPE_REG,
+    LIR_OPERAND_TYPE_PHI_BODY,
+    LIR_OPERAND_TYPE_FORMAL_PARAM,
+    LIR_OPERAND_TYPE_ACTUAL_PARAM,
+    LIR_OPERAND_TYPE_LABEL,
+    LIR_OPERAND_TYPE_IMMEDIATE,
+    LIR_OPERAND_TYPE_MEMORY,
 } lir_operand_type;
 
 typedef enum {
-  LIR_IMMEDIATE_TYPE_INT,
-  LIR_IMMEDIATE_TYPE_BOOL,
-  LIR_IMMEDIATE_TYPE_FLOAT,
+    LIR_IMMEDIATE_TYPE_INT,
+    LIR_IMMEDIATE_TYPE_BOOL,
+    LIR_IMMEDIATE_TYPE_FLOAT,
 } lir_immediate_type;
 
 //typedef struct {
@@ -117,78 +117,78 @@ typedef enum {
  * 存放在寄存器或者内存中, var a = 1
  */
 typedef struct {
-  string ident;
-  string old;
-  uint16_t stack_frame_offset; // 栈分配
-  uint8_t reg_id; // reg list index, 寄存器分配
-  // TODO 不如冗余一下尺寸?
-  // 是否为 label
-  bool is_label;
+    string ident;
+    string old;
+    uint16_t stack_frame_offset; // 栈分配
+    uint8_t reg_id; // reg list index, 寄存器分配
+    // TODO 不如冗余一下尺寸?
+    // 是否为 label
+    bool is_label;
 } lir_operand_var;
 
 typedef struct lir_vars {
-  uint8_t count;
-  lir_operand_var *list[UINT8_MAX];
+    uint8_t count;
+    lir_operand_var *list[UINT8_MAX];
 } lir_vars, lir_operand_phi_body;
 
 typedef size_t memory_address;
 
 typedef struct {
-  lir_operand *base;
-  size_t offset; // 偏移量是可以计算出来的
-  size_t length; // 数据长度
+    lir_operand *base;
+    size_t offset; // 偏移量是可以计算出来的
+    size_t length; // 数据长度
 } lir_operand_memory;
 
 typedef struct {
-  union {
-    int64_t int_value;
-    float float_value;
-    bool bool_value;
-//    string string_value;
-  };
-  type_category type;
+    union {
+        int64_t int_value;
+        float float_value;
+        bool bool_value;
+        string string_value;
+    };
+    type_category type;
 } lir_operand_immediate;
 
 typedef struct {
-  lir_vars vars;
-  uint8_t count;
+    lir_vars vars;
+    uint8_t count;
 } lir_operand_formal_param;
 
 typedef struct {
-  lir_operand *list[UINT8_MAX];
-  uint8_t count;
+    lir_operand *list[UINT8_MAX];
+    uint8_t count;
 } lir_operand_actual_param;
 
 typedef struct {
-  char *ident;
+    char *ident;
 } lir_operand_label;
 
 typedef enum {
-  LIR_OP_TYPE_NULL,
-  LIR_OP_TYPE_ADD,
-  LIR_OP_TYPE_SUB,
-  LIR_OP_TYPE_MUL,
-  LIR_OP_TYPE_DIV,
-  LIR_OP_TYPE_LT,
-  LIR_OP_TYPE_LTE,
-  LIR_OP_TYPE_GT,
-  LIR_OP_TYPE_GTE,
-  LIR_OP_TYPE_EQ_EQ,
-  LIR_OP_TYPE_NOT_EQ,
-  LIR_OP_TYPE_NOT,
-  LIR_OP_TYPE_MINUS,
+    LIR_OP_TYPE_NULL,
+    LIR_OP_TYPE_ADD,
+    LIR_OP_TYPE_SUB,
+    LIR_OP_TYPE_MUL,
+    LIR_OP_TYPE_DIV,
+    LIR_OP_TYPE_LT,
+    LIR_OP_TYPE_LTE,
+    LIR_OP_TYPE_GT,
+    LIR_OP_TYPE_GTE,
+    LIR_OP_TYPE_EQ_EQ,
+    LIR_OP_TYPE_NOT_EQ,
+    LIR_OP_TYPE_NOT,
+    LIR_OP_TYPE_MINUS,
 
-  LIR_OP_TYPE_PHI,
-  LIR_OP_TYPE_MOVE,
-  LIR_OP_TYPE_CMP_GOTO, // cmp 两个参数总是相等，就跳转 cmp + je
-  LIR_OP_TYPE_GOTO,
-  LIR_OP_TYPE_PUSH,
-  LIR_OP_TYPE_POP,
-  LIR_OP_TYPE_CALL,
-  LIR_OP_TYPE_RUNTIME_CALL,
-  LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
-  LIR_OP_TYPE_RETURN,
-  LIR_OP_TYPE_LABEL,
+    LIR_OP_TYPE_PHI,
+    LIR_OP_TYPE_MOVE,
+    LIR_OP_TYPE_CMP_GOTO, // cmp 两个参数总是相等，就跳转 cmp + je
+    LIR_OP_TYPE_GOTO,
+    LIR_OP_TYPE_PUSH,
+    LIR_OP_TYPE_POP,
+    LIR_OP_TYPE_CALL,
+    LIR_OP_TYPE_RUNTIME_CALL,
+    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
+    LIR_OP_TYPE_RETURN,
+    LIR_OP_TYPE_LABEL,
 } lir_op_type;
 
 /**
@@ -204,70 +204,70 @@ typedef enum {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-  lir_op_type op;
-  lir_operand *first; // 参数1
-  lir_operand *second; // 参数2
-  lir_operand *result; // 参数3
+    lir_op_type op;
+    lir_operand *first; // 参数1
+    lir_operand *second; // 参数2
+    lir_operand *result; // 参数3
 
-  // result 符号大小, 1, 2, 4, 8 byte
-  uint8_t size;
-  // result 类型
-  // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
-  // TYPE_STRING/LIST/MAP/SET = 8
-  // CUSTOM_TYPE 如何处理？
-  uint8_t data_type;
+    // result 符号大小, 1, 2, 4, 8 byte
+    uint8_t size;
+    // result 类型
+    // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
+    // TYPE_STRING/LIST/MAP/SET = 8
+    // CUSTOM_TYPE 如何处理？
+    uint8_t data_type;
 
-  string struct_name;
+    string struct_name;
 
-  int id; // 编号
-  struct lir_op *succ;
-  struct lir_op *pred;
+    int id; // 编号
+    struct lir_op *succ;
+    struct lir_op *pred;
 } lir_op;
 
 // op 列表
 typedef struct {
-  lir_op *front;
-  lir_op *rear;
-  uint16_t count;
+    lir_op *front;
+    lir_op *rear;
+    uint16_t count;
 } list_op;
 
 typedef struct {
-  uint8_t count;
-  struct lir_basic_block *list[UINT8_MAX];
+    uint8_t count;
+    struct lir_basic_block *list[UINT8_MAX];
 } lir_basic_blocks;
 
 typedef struct {
-  uint8_t flag;
-  uint8_t tree_high;
-  uint8_t index_list[UINT8_MAX];
-  uint8_t index;
-  uint8_t depth;
+    uint8_t flag;
+    uint8_t tree_high;
+    uint8_t index_list[UINT8_MAX];
+    uint8_t index;
+    uint8_t depth;
 } loop_detection;
 
 typedef struct lir_basic_block {
-  string name;
-  uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
+    string name;
+    uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
-  lir_op *first_op; // 链表结构， 开始处的指令
+    lir_op *first_op; // 链表结构， 开始处的指令
 
-  list_op *operates;
+    list_op *operates;
 
-  lir_basic_blocks preds;
-  lir_basic_blocks succs;
-  lir_basic_blocks forward_succs;
-  uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
+    lir_basic_blocks preds;
+    lir_basic_blocks succs;
+    lir_basic_blocks forward_succs;
+    uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
-  lir_vars use;
-  lir_vars def;
-  lir_vars live_out;
-  lir_vars live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-  lir_basic_blocks dom; // 当前块被哪些基本块支配
-  lir_basic_blocks df;
-  lir_basic_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
-  struct lir_basic_block *idom; // 当前块的最近支配者
+    lir_vars use;
+    lir_vars def;
+    lir_vars live_out;
+    lir_vars live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
+    lir_basic_blocks dom; // 当前块被哪些基本块支配
+    lir_basic_blocks df;
+    lir_basic_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
+    struct lir_basic_block *idom; // 当前块的最近支配者
 
-  // loop detection
-  loop_detection loop;
+    // loop detection
+    loop_detection loop;
 } lir_basic_block;
 
 /**
@@ -282,43 +282,53 @@ typedef struct lir_basic_block {
  * 是一个变量，还是结构体的元素
  */
 typedef struct closure {
-  lir_vars globals; // closure 中定义的变量列表
-  regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
-  lir_basic_blocks blocks; // 根据解析顺序得到
+    lir_vars globals; // closure 中定义的变量列表
+    regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
+    lir_basic_blocks blocks; // 根据解析顺序得到
 
 
-  lir_basic_block *entry; // 基本块入口
-  lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
-  table *interval_table; // key包括 fixed register name 和 variable.ident
+    lir_basic_block *entry; // 基本块入口
+    lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
+    table *interval_table; // key包括 fixed register name 和 variable.ident
 
-  // 定义环境
-  string name;
-  string env_name;
-  struct closure *parent;
-  list_op *operates; // 指令列表
+    // 定义环境
+    string name;
+    string env_name;
+    struct closure *parent;
+    list_op *operates; // 指令列表
 
-  // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
-  uint16_t return_offset;
+    // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
+    uint16_t return_offset;
 } closure;
 
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
+
 lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure(ast_closure_decl *ast);
 
 lir_operand *lir_new_var_operand(string ident);
+
 lir_operand *lir_new_temp_var_operand(ast_type type);
+
 lir_operand *lir_new_param_var_operand();
+
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
+
 lir_operand *lir_new_label_operand(string ident);
 
 lir_operand_actual_param *lir_new_actual_param();
+
 lir_op *lir_op_label(string name);
+
 lir_op *lir_op_unique_label(string name);
+
 lir_op *lir_op_goto(lir_operand *label);
+
 //lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
+
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
 lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
@@ -326,9 +336,13 @@ lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
 
 list_op *list_op_new();
+
 list_op *list_op_pop(list_op *l);
+
 bool list_op_is_null(lir_op *op);
+
 void list_op_push(list_op *l, lir_op *op);
+
 list_op *list_op_append(list_op *dst, list_op *src);
 
 #endif //NATURE_SRC_LIR_H_

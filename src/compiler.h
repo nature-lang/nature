@@ -6,8 +6,8 @@
 #include "src/lir/lir.h"
 
 typedef struct {
-  size_t count;
-  closure *list[FIXED_ARRAY_COUNT];
+    size_t count;
+    closure *list[FIXED_ARRAY_COUNT];
 } compiler_closures;
 
 compiler_closures compiler(ast_closure_decl *ast);

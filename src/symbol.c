@@ -7,16 +7,20 @@
 #define POINT_SIZE_BYTE 8
 
 void symbol_ident_table_init() {
-  symbol_ident_table = table_new();
+    symbol_ident_table = table_new();
 }
 
 size_t type_sizeof(ast_type type) {
-  switch (type.category) {
-    case TYPE_BOOL: return BOOL_SIZE_BYTE;
-    case TYPE_INT: return INT_SIZE_BYTE;
-    case TYPE_FLOAT: return FLOAT_SIZE_BYTE;
-    default:return POINT_SIZE_BYTE;
-  }
+    switch (type.category) {
+        case TYPE_BOOL:
+            return BOOL_SIZE_BYTE;
+        case TYPE_INT:
+            return INT_SIZE_BYTE;
+        case TYPE_FLOAT:
+            return FLOAT_SIZE_BYTE;
+        default:
+            return POINT_SIZE_BYTE;
+    }
 }
 
 /**
@@ -26,23 +30,23 @@ size_t type_sizeof(ast_type type) {
  * @return
  */
 size_t struct_offset(ast_struct_decl *struct_decl, char *property) {
-  size_t offset = 0;
-  for (int i = 0; i < struct_decl->count; ++i) {
-    offset += type_sizeof(struct_decl->list[i].type);
-  }
-  return offset;
+    size_t offset = 0;
+    for (int i = 0; i < struct_decl->count; ++i) {
+        offset += type_sizeof(struct_decl->list[i].type);
+    }
+    return offset;
 }
 
 void symbol_set_temp_ident(char *unique_ident, ast_type type) {
-  ast_var_decl *var_decl = NEW(ast_var_decl);
-  var_decl->type = type;
-  var_decl->ident = unique_ident;
+    ast_var_decl *var_decl = NEW(ast_var_decl);
+    var_decl->type = type;
+    var_decl->ident = unique_ident;
 
-  analysis_local_ident *local = NEW(analysis_local_ident);
-  local->unique_ident = unique_ident;
-  local->decl = var_decl;
-  local->belong = SYMBOL_TYPE_VAR;
+    analysis_local_ident *local = NEW(analysis_local_ident);
+    local->unique_ident = unique_ident;
+    local->decl = var_decl;
+    local->belong = SYMBOL_TYPE_VAR;
 
-  // 添加到符号表中
-  table_set(symbol_ident_table, unique_ident, local);
+    // 添加到符号表中
+    table_set(symbol_ident_table, unique_ident, local);
 }

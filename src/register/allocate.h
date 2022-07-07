@@ -6,17 +6,18 @@
 #include "interval.h"
 
 typedef struct {
-  list *unhandled;
-  list *handled;
-  list *active;
-  list *inactive;
-  interval *current; // 正在分配的寄存器
+    list *unhandled;
+    list *handled;
+    list *active;
+    list *inactive;
+    interval *current; // 正在分配的寄存器
 } allocate;
 
 /**
  * 主分配方法
  */
 void allocate_walk(closure *c);
+
 bool allocate_free_reg(allocate *a);
 
 /**
