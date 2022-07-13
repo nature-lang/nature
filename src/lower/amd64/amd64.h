@@ -6,6 +6,7 @@
 #include "src/register/register.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 typedef list *(*amd64_lower_fn)(closure *c, lir_op *op);
 

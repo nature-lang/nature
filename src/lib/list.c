@@ -55,5 +55,12 @@ bool list_empty(list *l) {
     return false;
 }
 
-
+void list_merge(list *dst, list *src) {
+    list_node *current = src->front;
+    while (current->value != NULL) {
+        void *v = current->value;
+        list_push(dst, v);
+        current = current->next;
+    }
+}
 

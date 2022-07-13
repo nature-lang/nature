@@ -2,7 +2,6 @@
 #include "src/type.h"
 #include "src/assembler/amd64/register.h"
 #include "src/lib/error.h"
-#include <math.h>
 
 amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_ADD] = amd64_lower_add,
@@ -32,17 +31,20 @@ amd64_lower_fn amd64_lower_table[] = {
 list *amd64_lower_call(closure *c, lir_op *op) {
     list *insts = list_new();
 
-    asm_operand_t *result = amd64_lower_to_asm_operand(op->result); // 可能是寄存器，也可能是内存地址
+    asm_operand_t *result = NULL;
+    if (op->result != NULL) {
+        result = amd64_lower_to_asm_operand(op->result); // 可能是寄存器，也可能是内存地址
+    }
 
     // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
     // 实参传递(封装一个 static 函数处理),
     asm_operand_t *first = amd64_lower_to_asm_operand(op->first);
 
     uint8_t next_param = 0;
-    // 1. 大返回值处理(使用 rdi)
-    if (op->data_type == TYPE_STRUCT) {
-        asm_operand_t *target = amd64_lower_next_actual_reg_target(&next_param, QWORD);
-        list_push(insts, ASM_INST("lea", { target, result }));
+    // 1. 大返回值处理(使用 rdi 预处理)
+    if (op->data_type == TYPE_STRUCT && result != NULL) {
+        reg_t *target_reg = amd64_lower_next_actual_reg_target(&next_param, QWORD);
+        list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
     }
 
     // 2. 参数处理  lir_ope op->second;
@@ -61,17 +63,21 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         } else {
             list_push(temp, ASM_INST("mov", { REG(target_reg), source }));
         }
-        list_push(temp, param_insts);
+        list_merge(temp, param_insts);
     }
+
+    list_merge(insts, param_insts);
 
     // 3. 调用 call 指令(处理地址)
     list_push(insts, ASM_INST("call", { first }));
 
     // 4. 响应处理(取出响应值传递给 result)
-    if (op->data_type == TYPE_FLOAT) {
-        list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
-    } else {
-        list_push(insts, ASM_INST("mov", { REG(rax), result }));
+    if (result != NULL) {
+        if (op->data_type == TYPE_FLOAT) {
+            list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
+        } else {
+            list_push(insts, ASM_INST("mov", { REG(rax), result }));
+        }
     }
 
     return insts;

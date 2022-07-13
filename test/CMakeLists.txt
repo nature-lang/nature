@@ -30,8 +30,8 @@ add_executable(test_elf test_elf.c ${SRC_ASSEMBLER} ${SRC_LIB})
 target_link_libraries(test_elf cmocka)
 add_test(test_elf test_elf)
 
-add_executable(test_lower_amd64 test_lower_amd64.c ${SRC_ASSEMBLER} ${SRC_LIB} ${SRC_LOWER})
-target_link_libraries(test_lower_amd64 cmocka)
+add_executable(test_lower_amd64 test_lower_amd64.c ${SRC} ${SRC_ASSEMBLER} ${SRC_LIB} ${SRC_LOWER})
+target_link_libraries(test_lower_amd64 cmocka m)
 add_test(test_lower_amd64 test_lower_amd64)
 
 add_executable(test_runtime test_runtime.c ${RUNTIME_FILES})

@@ -132,7 +132,7 @@ asm_operand_register_t *zmm15;
 
 void amd64_register_init();
 
-asm_operand_register_t *reg_operand_new(string name, uint8_t index, uint8_t size);
+asm_operand_register_t *amd64_register_operand_new(char *name, uint8_t index, uint8_t size);
 
 asm_operand_register_t *amd64_register_find(uint8_t index, uint8_t size);
 

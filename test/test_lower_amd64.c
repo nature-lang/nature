@@ -30,14 +30,11 @@ static void test_lower_hello_world() {
     list *asm_insts = amd64_lower(c, call_op);
     list_merge(insts, asm_insts);
 
-    elf_init("hello.n");
-
+    elf_init("hello_world.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
     elf_var_decl_list_build(amd64_decl_list);
-
     // 代码段
     elf_text_inst_list_build(insts);
-    elf_text_inst_list_build(builtin_print());
     elf_text_inst_list_second_build();
     elf_t elf = elf_new();
 
@@ -45,7 +42,7 @@ static void test_lower_hello_world() {
     uint64_t count;
     uint8_t *binary = elf_encoding(elf, &count);
     // 输出到文件
-    elf_to_file(binary, count, "builtin_print.o");
+    elf_to_file(binary, count, "hello_world.o");
 }
 
 int main(void) {
