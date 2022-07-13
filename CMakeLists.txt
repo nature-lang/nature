@@ -17,9 +17,8 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/register.c)
 
 set(SRC_LOWER
-        #        ${SRC_DIR}/lower/amd64/amd64.c
-        #        ${SRC_DIR}/lower/amd64/amd64.h
-        )
+        ${SRC_DIR}/lower/amd64/amd64.c
+        ${SRC_DIR}/lower/amd64/amd64.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h

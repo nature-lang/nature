@@ -1,6 +1,8 @@
 #include "register.h"
+#include "src/lib/error.h"
+#include "src/lib/helper.h"
 
-void register_init() {
+void amd64_register_init() {
     rax = REG_OPERAND("rax", 0, QWORD);
     rcx = REG_OPERAND("rcx", 1, QWORD);
     rdx = REG_OPERAND("rdx", 2, QWORD);
@@ -124,4 +126,24 @@ void register_init() {
     zmm13 = REG_OPERAND("zmm13", 13, ZWORD);
     zmm14 = REG_OPERAND("zmm14", 14, ZWORD);
     zmm15 = REG_OPERAND("zmm15", 15, ZWORD);
+
+}
+
+static string amd64_register_table_key(uint8_t index, uint8_t size) {
+    uint16_t int_key = ((uint16_t) index << 8) | size;
+    return itoa(int_key);
+}
+
+asm_operand_register_t *amd64_register_find(uint8_t index, uint8_t size) {
+    return table_get(amd64_regs_table, amd64_register_table_key(index, size));
+}
+
+asm_operand_register_t *reg_operand_new(char *name, uint8_t index, uint8_t size) {
+    asm_operand_register_t *reg = NEW(asm_operand_register_t);
+    reg->name = name;
+    reg->index = index;
+    reg->size = size;
+
+    table_set(amd64_regs_table, amd64_register_table_key(index, size), reg);
+    return reg;
 }

@@ -52,7 +52,7 @@ static void test_opcode_init() {
 }
 
 static void test_opcode_encoding() {
-    register_init();
+    amd64_register_init();
     opcode_init();
     asm_inst_t inst = {
             .name = "push",
@@ -95,7 +95,7 @@ static void test_opcode_encoding() {
 }
 
 static void test_hello_world() {
-    register_init();
+    amd64_register_init();
     opcode_init();
     // elf_init
     elf_init("hello.n");
@@ -146,7 +146,7 @@ static void test_hello_world() {
 }
 
 static void test_call() {
-    register_init();
+    amd64_register_init();
     opcode_init();
     // elf_init
     elf_init("call.n");
@@ -207,7 +207,7 @@ static void test_call() {
 
 
 static void test_union_c() {
-    register_init();
+    amd64_register_init();
     opcode_init();
     // elf_init
     elf_init("union.n");
@@ -254,7 +254,7 @@ static void test_union_c() {
 }
 
 static void test_union_builtin_print() {
-    register_init();
+    amd64_register_init();
     opcode_init();
 
     // 数据段
@@ -298,7 +298,7 @@ static void test_union_builtin_print() {
 }
 
 static void test_builtin_print_target() {
-    register_init();
+    amd64_register_init();
     opcode_init();
 
     // 构造 elf
@@ -315,7 +315,7 @@ static void test_builtin_print_target() {
 }
 
 static void test_runtime_string_print() {
-    register_init();
+    amd64_register_init();
     opcode_init();
 
     // 数据段

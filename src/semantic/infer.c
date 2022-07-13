@@ -514,7 +514,7 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
         return;
     }
 
-    // 类型还原
+    // 左值类型还原()
     stmt->var_decl->type = infer_type(stmt->var_decl->type);
 
     // 判断类型是否一致 compare

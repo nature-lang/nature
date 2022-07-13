@@ -333,6 +333,8 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
 
 lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
 
+lir_op *lir_builtin_call(char *name, lir_operand *result, int arg_count, ...);
+
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
 
 list_op *list_op_new();

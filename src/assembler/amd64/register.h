@@ -2,6 +2,9 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_REGISTER_H_
 
 #include "asm.h"
+#include "src/lib/table.h"
+
+table *amd64_regs_table; // key index_size
 
 asm_operand_register_t *rax;
 asm_operand_register_t *rcx;
@@ -127,6 +130,10 @@ asm_operand_register_t *zmm13;
 asm_operand_register_t *zmm14;
 asm_operand_register_t *zmm15;
 
-void register_init();
+void amd64_register_init();
+
+asm_operand_register_t *reg_operand_new(string name, uint8_t index, uint8_t size);
+
+asm_operand_register_t *amd64_register_find(uint8_t index, uint8_t size);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_REGISTER_H_

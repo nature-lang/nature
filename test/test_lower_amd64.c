@@ -8,25 +8,32 @@
 
 
 static void test_lower_hello_world() {
-    register_init();
+    amd64_register_init();
     opcode_init();
+    amd64_lower_init();
+
+
     list *insts = list_new();
-
     closure *c = NEW(closure);
-    // builtin_call print "hello world" => void
-    lir_operand *first = lir_new_label_operand("print");
+
+    // 编写 lir builtin_call print "hello world" => void
     // 参数构造（字符串的构造）
-    lir_operand_actual_param *params_operand = NEW(lir_operand_actual_param);
-    params_operand->count = 1;
-    params_operand->list[0] =  // 如何构造字符串对象(就像如何构造 map 对象一样)
-    lir_operand * second = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *first_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "hello world!");
+    // no result
+    lir_op *call_op = lir_builtin_call(
+            "print",
+            NULL,
+            1,
+            first_param);
 
-
-//    lir_operand* second = lir_new_actual_param() //
-
-//    lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, )
+    // lir_lower
+    list *asm_insts = amd64_lower(c, call_op);
+    list_merge(insts, asm_insts);
 
     elf_init("hello.n");
+
+    //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
+    elf_var_decl_list_build(amd64_decl_list);
 
     // 代码段
     elf_text_inst_list_build(insts);

@@ -10,7 +10,7 @@
 #define WORD 2 // 2 byte = 16 位
 #define DWORD 4 // 4 byte = 32 位
 #define QWORD 8 // 8 byte = 64位
-#define OWORD 16
+#define OWORD 16 // 16 byte = 128位
 #define YWORD 32 // 32 byte
 #define ZWORD 64 // 64 byte
 
@@ -48,7 +48,7 @@
      asm_operand_register_t *reg = NEW(asm_operand_register_t); \
      reg->name = _name;\
      reg->index = _index;\
-     reg->size = _size;\
+     reg->size = _size;                      \
      reg;\
 })
 
