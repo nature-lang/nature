@@ -64,6 +64,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
             list_push(temp, ASM_INST("mov", { REG(target_reg), source }));
         }
         list_merge(temp, param_insts);
+        param_insts = temp;
     }
 
     list_merge(insts, param_insts);
@@ -220,7 +221,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (v->stack_frame_offset > 0) {
-            return DISP_REG(rbp, v->stack_frame_offset);
+            return DISP_REG(rbp, -v->stack_frame_offset); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             asm_operand_register_t *reg = (asm_operand_register_t *) physical_regs.list[v->reg_id];
@@ -228,7 +229,6 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
         }
 
         return SYMBOL(v->ident, v->is_label, false);
-//    error_exit("[amd64_lower_to_asm_operand] type var not a reg or stack_frame_offset");
     }
 
     // 简单立即数
@@ -246,10 +246,9 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
         error_exit("[amd64_lower_to_asm_operand] type immediate not expected");
     }
 
-    // label(都是局部 label)
     if (operand->type == LIR_OPERAND_TYPE_LABEL) {
         lir_operand_label *v = operand->value;
-        return SYMBOL(v->ident, true, true);
+        return LABEL(v->ident);
     }
 
     error_exit("[amd64_lower_to_asm_operand] operand type not ident");
@@ -271,7 +270,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_STRING) {
-            // 生成符号表
+            // 生成符号表(TODO 使用字符串 md5 代替)
             char *unique_name = AMD64_DECL_UNIQUE_NAME();
             asm_var_decl *decl = NEW(asm_var_decl);
             decl->name = unique_name;
@@ -315,7 +314,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
             // 生成 mov 指令（asm_mov）
-            list_push(inst_list, ASM_INST("mov", { REG(reg), DISP_REG(rbp, var->stack_frame_offset) }));
+            list_push(inst_list, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset) }));
             asm_operand_t *temp = DISP_REG(reg, v->offset);
             ASM_OPERAND_COPY(asm_operand, temp);
             return inst_list;

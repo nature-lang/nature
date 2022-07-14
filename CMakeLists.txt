@@ -74,10 +74,12 @@ set(SRC
         ${SRC_DIR}/ssa.c)
 
 set(RUNTIME_FILES
-        ${PROJECT_SOURCE_DIR}/runtime/type/string.c
+        ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
+        ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/string.h
-        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.c
-        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.h)
+        ${PROJECT_SOURCE_DIR}/runtime/type/string.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/type_debug.c)
 
 add_executable(nature main.c
         ${SRC}

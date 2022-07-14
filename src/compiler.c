@@ -176,7 +176,7 @@ list_op *compiler_stmt(closure *c, ast_stmt stmt) {
  */
 list_op *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
     list_op *list = list_op_new();
-    lir_operand *dst = lir_new_var_operand(stmt->var_decl->ident);
+    lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(stmt->var_decl->ident));
     lir_operand *src = lir_new_temp_var_operand(stmt->expr.data_type);
     list_op_append(list, compiler_expr(c, stmt->expr, src));
 
@@ -662,8 +662,8 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
 
     // gen key
     // gen value
-    lir_operand *key_target = lir_new_var_operand(ast->gen_key->ident);
-    lir_operand *value_target = lir_new_var_operand(ast->gen_value->ident);
+    lir_operand *key_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(ast->gen_key->ident));
+    lir_operand *value_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(ast->gen_value->ident));
     list_op_push(list, lir_runtime_call(
             RUNTIME_CALL_ITERATE_GEN_KEY,
             key_target,
@@ -790,6 +790,7 @@ list_op *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target
 
 list_op *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
     lir_operand *temp_operand;
+    list_op *list = list_op_new();
     switch (literal->type) {
         case TYPE_INT: {
             temp_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, atoi(literal->value));
@@ -808,8 +809,16 @@ list_op *compiler_literal(closure *c, ast_literal *literal, lir_operand *target)
             break;
         }
         case TYPE_STRING: {
-            temp_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
-            break;
+            // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
+            lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
+            lir_op *call_op = lir_runtime_call(
+                    RUNTIME_CALL_STRING_NEW,
+                    target,
+                    2,
+                    imm_string_operand,
+                    strlen(literal->value));
+            list_op_push(list, call_op);
+            return list;
         }
         default: {
             error_printf(compiler_line, "cannot compiler literal->type");

@@ -49,14 +49,6 @@ lir_op *lir_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
     return lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, lir_new_label_operand(name), call_params_operand, result);
 }
 
-
-lir_operand *lir_new_var_operand(char *ident) {
-    lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_VAR;
-    operand->value = LIR_NEW_VAR_OPERAND(ident);
-    return operand;
-}
-
 /**
  * 临时变量是否影响变量入栈？
  * @param type
@@ -67,7 +59,7 @@ lir_operand *lir_new_temp_var_operand(ast_type type) {
 
     symbol_set_temp_ident(unique_ident, type);
 
-    return lir_new_var_operand(unique_ident);
+    return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(unique_ident));
 }
 
 lir_operand *lir_new_label_operand(char *ident) {
@@ -97,17 +89,18 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     // 字符串 copy
     if (first != NULL && first->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *operand_var = first->value;
-        first = lir_new_var_operand(operand_var->ident);
+        first = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
 
     if (second != NULL && second->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *operand_var = second->value;
-        second = lir_new_var_operand(operand_var->ident);
+        second = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
 
     if (result != NULL && result->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *operand_var = result->value;
-        result = lir_new_var_operand(operand_var->ident);
+
+        result = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
 
     lir_op *op = NEW(lir_op);

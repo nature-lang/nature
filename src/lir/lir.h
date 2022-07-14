@@ -55,10 +55,10 @@
 
 #define LIR_NEW_OPERAND(_type, _value) \
 ({                                 \
-  lir_operand *operand = NEW(lir_operand); \
-  operand->type = _type;           \
-  operand->value = _value;    \
-  operand;                                   \
+  lir_operand *_operand = NEW(lir_operand); \
+  _operand->type = _type;           \
+  _operand->value = _value;    \
+  _operand;                                   \
 })
 
 #define LIR_NEW_VAR_OPERAND(_ident) \
@@ -68,6 +68,18 @@
   _var->ident = _ident;              \
   _var;                                   \
 })
+
+#define LIR_COPY_VAR_OPERAND(_original) \
+({                                 \
+  lir_operand_var *_var = NEW(lir_operand_var); \
+  _var->old = (_original)->old;    \
+  _var->ident = (_original)->ident; \
+  _var->stack_frame_offset = (_original)->stack_frame_offset; \
+  _var->reg_id = (_original)->reg_id; \
+  _var->is_label = (_original)->is_label; \
+  _var;                                   \
+})
+
 
 #define LIR_NEW_LABEL_OPERAND(_ident) \
 ({                                 \
@@ -79,7 +91,7 @@
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
-   sprintf(temp_name, "%d-%s", lir_unique_count++, _ident); \
+   sprintf(temp_name, "%s_%d", _ident, lir_unique_count++); \
    temp_name;                                   \
 })
 
@@ -307,8 +319,6 @@ lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure(ast_closure_decl *ast);
-
-lir_operand *lir_new_var_operand(string ident);
 
 lir_operand *lir_new_temp_var_operand(ast_type type);
 

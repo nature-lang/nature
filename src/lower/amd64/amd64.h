@@ -14,11 +14,13 @@ list *amd64_decl_list;
 
 int amd64_decl_unique_count;
 
+#define ADM64_DECL_PREFIX "v"
+
 
 #define AMD64_DECL_UNIQUE_NAME() \
 ({                                 \
-   char *temp_name = malloc(strlen("tmp") + sizeof(int) + 2); \
-   sprintf(temp_name, "%d-%s", amd64_decl_unique_count++, "tmp"); \
+   char *temp_name = malloc(strlen(ADM64_DECL_PREFIX) + sizeof(int) + 2); \
+   sprintf(temp_name, "%s_%d", ADM64_DECL_PREFIX, amd64_decl_unique_count++); \
    temp_name;                                   \
 })
 

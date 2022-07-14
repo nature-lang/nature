@@ -212,7 +212,7 @@ void ssa_add_phi(closure *c) {
                 }
 
                 // add phi (x1, x2, x3) => x
-                lir_operand *result_param = lir_new_var_operand(var->ident);
+                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(var->ident));
                 lir_operand *first_param = lir_new_phi_body(var, df_block->preds.count);
                 lir_op *phi_op = lir_op_new(LIR_OP_TYPE_PHI, first_param, NULL, result_param);
 

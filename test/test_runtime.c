@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include "runtime/type/string.h"
 #include "runtime/type/type_debug.h"
+#include "src/lib/list.h"
+#include "src/lir/lir.h"
+#include "src/assembler/amd64/asm.h"
+#include "src/assembler/amd64/register.h"
 
 static void test_string() {
     void *point = gen_hello_world();

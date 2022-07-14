@@ -729,8 +729,9 @@ void elf_var_decl_list_build(list *decl_list) {
     }
     list_node *current = decl_list->front;
     while (current->value != NULL) {
-        asm_var_decl *inst = current->value;
-        elf_var_decl_build(*inst);
+        asm_var_decl *decl = current->value;
+        elf_var_decl_build(*decl);
+        current = current->next;
     }
 }
 

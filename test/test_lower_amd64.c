@@ -6,6 +6,38 @@
 #include "src/lower/amd64/amd64.h"
 #include "src/lir/lir.h"
 
+static lir_operand *test_lir_temp(char *ident, int stack_frame_offset, int8_t reg_id) {
+    lir_operand *operand = NEW(lir_operand);
+    operand->type = LIR_OPERAND_TYPE_VAR;
+    lir_operand_var *var = NEW(lir_operand_var);
+    var->old = ident;
+    var->ident = ident;
+    if (stack_frame_offset >= 0) {
+        var->stack_frame_offset = stack_frame_offset;
+    }
+    if (reg_id >= 0) {
+        var->reg_id = reg_id;
+    }
+
+    operand->value = var;
+    return operand;
+}
+
+static list *test_elf_start_insts(int stack_offset) {
+    list *insts = list_new();
+    list_push(insts, ASM_INST("label", { SYMBOL("_start", true, false) }));
+    list_push(insts, ASM_INST("push", { REG(rbp) }));
+    list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
+    list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(stack_offset) })); // 防止其他函数调用占用这一段栈空间
+}
+
+static list *test_elf_exit_insts() {
+    list *insts = list_new();
+    list_push(insts, ASM_INST("mov", { REG(eax), UINT32(60) }));
+    list_push(insts, ASM_INST("mov", { REG(rdi), UINT32(0) }));
+    list_push(insts, ASM_INST("syscall", {}));
+    return insts;
+}
 
 static void test_lower_hello_world() {
     amd64_register_init();
@@ -13,22 +45,27 @@ static void test_lower_hello_world() {
     amd64_lower_init();
 
 
-    list *insts = list_new();
+//    list *insts = list_new();
+    list *insts = test_elf_start_insts(50);
     closure *c = NEW(closure);
 
-    // 编写 lir builtin_call print "hello world" => void
-    // 参数构造（字符串的构造）
+    /**
+     * lir:
+     *  runtime_call string_new(imm:"hello world") => tmp_0(分配栈偏移)
+     *  builtin_call builtin_print(tmp_0)
+     */
+    lir_operand *temp_var = test_lir_temp("temp_1", 8, -1); // var 的 size 是多少？
     lir_operand *first_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "hello world!");
-    // no result
-    lir_op *call_op = lir_builtin_call(
-            "print",
-            NULL,
-            1,
-            first_param);
+
+    lir_op *string_new_op = lir_runtime_call(RUNTIME_CALL_STRING_NEW, temp_var, 1, first_param);
+    lir_op *print_op = lir_builtin_call("builtin_print", NULL, 1, temp_var);
 
     // lir_lower
-    list *asm_insts = amd64_lower(c, call_op);
-    list_merge(insts, asm_insts);
+    list_merge(insts, amd64_lower(c, string_new_op));
+    list_merge(insts, amd64_lower(c, print_op));
+
+    // exit
+    list_merge(insts, test_elf_exit_insts());
 
     elf_init("hello_world.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
