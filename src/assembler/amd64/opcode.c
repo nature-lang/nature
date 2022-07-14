@@ -19,12 +19,20 @@ inst_t call_rel32 = {
 };
 
 
-inst_t sub_imm32_r32 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+inst_t sub_imm32_rm64 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+
+inst_t sub_imm8_rm64 = {"sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                         }
 };
+
 
 inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                      {
@@ -134,7 +142,8 @@ void opcode_init() {
     opcode_tree_build(&ret);
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
-    opcode_tree_build(&sub_imm32_r32);
+    opcode_tree_build(&sub_imm32_rm64);
+    opcode_tree_build(&sub_imm8_rm64);
     opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_r16_rm16);
     opcode_tree_build(&mov_imm32_r32);

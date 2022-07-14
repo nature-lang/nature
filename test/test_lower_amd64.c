@@ -23,19 +23,32 @@ static lir_operand *test_lir_temp(char *ident, int stack_frame_offset, int8_t re
     return operand;
 }
 
-static list *test_elf_start_insts(int stack_offset) {
+static list *test_elf_main_insts(uint8_t stack_offset) {
     list *insts = list_new();
-    list_push(insts, ASM_INST("label", { SYMBOL("_start", true, false) }));
+//    list_push(insts, ASM_INST("label", { SYMBOL("_start", true, false) }));
+    list_push(insts, ASM_INST("label", { SYMBOL("main", true, false) }));
     list_push(insts, ASM_INST("push", { REG(rbp) }));
     list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(stack_offset) })); // 防止其他函数调用占用这一段栈空间
 }
 
+static list *test_elf_return_insts() {
+    list *insts = list_new();
+    list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
+    list_push(insts, ASM_INST("pop", { REG(rbp) }));
+    list_push(insts, ASM_INST("ret", {}));
+
+    return insts;
+}
+
 static list *test_elf_exit_insts() {
     list *insts = list_new();
-    list_push(insts, ASM_INST("mov", { REG(eax), UINT32(60) }));
-    list_push(insts, ASM_INST("mov", { REG(rdi), UINT32(0) }));
-    list_push(insts, ASM_INST("syscall", {}));
+//    list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
+//    list_push(insts, ASM_INST("pop", { REG(rbp) }));
+    list_push(insts, ASM_INST("call", { LABEL("exit") }));
+//    list_push(insts, ASM_INST("mov", { REG(eax), UINT32(60) }));
+//    list_push(insts, ASM_INST("mov", { REG(rdi), UINT32(0) }));
+//    list_push(insts, ASM_INST("syscall", {}));
     return insts;
 }
 
@@ -46,9 +59,12 @@ static void test_lower_hello_world() {
 
 
 //    list *insts = list_new();
-    list *insts = test_elf_start_insts(50);
+    list *insts = test_elf_main_insts(16);
     closure *c = NEW(closure);
 
+    // test
+//    list_push(insts, ASM_INST("mov", { REG(rax), UINT32(0) }));
+//    list_push(insts, ASM_INST("call", { LABEL("builtin_print") }));
     /**
      * lir:
      *  runtime_call string_new(imm:"hello world") => tmp_0(分配栈偏移)
@@ -61,11 +77,13 @@ static void test_lower_hello_world() {
     lir_op *print_op = lir_builtin_call("builtin_print", NULL, 1, temp_var);
 
     // lir_lower
-    list_merge(insts, amd64_lower(c, string_new_op));
+//    list_merge(insts, amd64_lower(c, string_new_op));
     list_merge(insts, amd64_lower(c, print_op));
 
+
+
     // exit
-    list_merge(insts, test_elf_exit_insts());
+    list_merge(insts, test_elf_return_insts());
 
     elf_init("hello_world.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
