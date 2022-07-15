@@ -40,10 +40,10 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     // 实参传递(封装一个 static 函数处理),
     asm_operand_t *first = amd64_lower_to_asm_operand(op->first);
 
-    uint8_t next_param = 0;
+    uint8_t used[2] = {0};
     // 1. 大返回值处理(使用 rdi 预处理)
     if (op->data_type == TYPE_STRUCT && result != NULL) {
-        reg_t *target_reg = amd64_lower_next_actual_reg_target(&next_param, QWORD);
+        reg_t *target_reg = amd64_lower_next_actual_reg_target(used, QWORD);
         list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
     }
 
@@ -56,7 +56,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         regs_t used_regs = {.count = 0};
         asm_operand_t *source = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(operand, source, &used_regs);
-        reg_t *target_reg = amd64_lower_next_actual_reg_target(&next_param, source->size); // source 和 target 大小要匹配
+        reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source->size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
             list_push(temp, ASM_INST("push", { source }));
@@ -69,15 +69,15 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     list_merge(insts, param_insts);
 
-    // 3. 调用 call 指令(处理地址)
+    // 3. 调用 call 指令(处理地址), 响应的结果在 rax 中
     list_push(insts, ASM_INST("call", { first }));
 
     // 4. 响应处理(取出响应值传递给 result)
     if (result != NULL) {
         if (op->data_type == TYPE_FLOAT) {
-            list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
+            list_push(insts, ASM_INST("mov", { result, REG(xmm0) }));
         } else {
-            list_push(insts, ASM_INST("mov", { REG(rax), result }));
+            list_push(insts, ASM_INST("mov", { result, REG(rax) }));
         }
     }
 
@@ -235,7 +235,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_INT) {
-            return UINT64(v->int_value);
+            return UINT32(v->int_value);
         }
         if (v->type == TYPE_FLOAT) {
             return FLOAT32(v->float_value);
@@ -359,9 +359,12 @@ reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size) {
  * @param size
  * @return
  */
-reg_t *amd64_lower_next_actual_reg_target(uint8_t used[7], uint8_t size) {
-    uint8_t used_index = (uint8_t) log2f(size);
-    uint8_t count = used[used_index];
+reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
+    uint8_t used_index = 0; // 8bit ~ 64bit
+    if (used_index > 8) {
+        used_index = 1;
+    }
+    uint8_t count = used[used_index]++;
     uint8_t reg_index_list[] = {7, 6, 2, 1, 8, 9};
     // 通用寄存器 (0~5 = 6 个)
     if (size <= QWORD && count <= 5) {

@@ -70,17 +70,17 @@ static void test_lower_hello_world() {
      *  runtime_call string_new(imm:"hello world") => tmp_0(分配栈偏移)
      *  builtin_call builtin_print(tmp_0)
      */
+    char *str = "nature is best\n";
     lir_operand *temp_var = test_lir_temp("temp_1", 8, -1); // var 的 size 是多少？
-    lir_operand *first_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "hello world!");
+    lir_op *string_new_op = lir_runtime_call(RUNTIME_CALL_STRING_NEW, temp_var, 2,
+                                             LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str),
+                                             LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(str)));
 
-    lir_op *string_new_op = lir_runtime_call(RUNTIME_CALL_STRING_NEW, temp_var, 1, first_param);
     lir_op *print_op = lir_builtin_call("builtin_print", NULL, 1, temp_var);
 
     // lir_lower
-//    list_merge(insts, amd64_lower(c, string_new_op));
+    list_merge(insts, amd64_lower(c, string_new_op));
     list_merge(insts, amd64_lower(c, print_op));
-
-
 
     // exit
     list_merge(insts, test_elf_return_insts());
