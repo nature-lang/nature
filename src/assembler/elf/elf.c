@@ -12,6 +12,22 @@ static void elf_var_operand_rewrite(asm_operand_t *operand) {
 }
 
 static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool is_jmp) {
+    if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
+        if (rel_diff == 0) {
+            return;
+        }
+        if (operand->type == ASM_OPERAND_TYPE_UINT32) {
+            asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
+            v->value = (uint32_t) (rel_diff - 5);
+            operand->value = v;
+        } else {
+            asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
+            v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
+            operand->value = v;
+        }
+        return;
+    }
+
     if (rel_diff == 0 || abs(rel_diff) > 128 || !is_jmp) {
         operand->type = ASM_OPERAND_TYPE_UINT32;
         operand->size = DWORD;
@@ -28,10 +44,7 @@ static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool i
     operand->type = ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-    v->value = 0;
-    if (rel_diff != 0) {
-        v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
-    }
+    v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
     operand->value = v;
 }
 
@@ -40,7 +53,6 @@ static bool elf_is_jmp(asm_inst_t asm_inst) {
 }
 
 void elf_text_inst_build(asm_inst_t asm_inst) {
-    uint64_t *offset = elf_current_text_offset();
     if (str_equal(asm_inst.name, "label")) {
         // text 中唯一需要注册到符号表的数据, 且不需要编译进 elf_text_item
         asm_operand_symbol_t *s = asm_inst.operands[0]->value;
@@ -48,15 +60,18 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
         symbol->name = s->name;
         symbol->type = ELF_SYMBOL_TYPE_FN;
         symbol->section = ELF_SECTION_TEXT;
-        symbol->offset = offset;
         symbol->size = 0;
         symbol->is_rel = false;
         symbol->is_local = s->is_local; // 局部 label 在生成符号表的时候可以忽略
-        elf_symbol_insert(symbol);
         elf_confirm_text_rel(symbol->name);
+
+        // confirm 后可能会产生 offset 修正,所以需要在 confirm 之后再确定当前 offset
+        symbol->offset = elf_current_text_offset();
+        elf_symbol_insert(symbol);
         return; // label 不需要编译成指令
     }
 
+    uint64_t *offset = elf_current_text_offset();
     elf_text_inst_t *inst = ELF_TEXT_INST_NEW(asm_inst);
 
     // 外部标签引用处理
@@ -117,6 +132,7 @@ void elf_confirm_text_rel(string name) {
 
     list_node *current = elf_text_inst_list->rear->prev; // rear 为 empty 占位
     uint8_t find_count = 0; // 每找到一个 offset 距离将缩短 3 个
+    // 从尾部像前找, 找到超过 128 即可
     while (true) {
         elf_text_inst_t *inst = current->value;
         if (global_text_offset - (find_count * 3) - *inst->offset > 128) {
@@ -139,7 +155,7 @@ void elf_confirm_text_rel(string name) {
     }
 
     uint64_t *offset = ((elf_text_inst_t *) current->value)->offset;
-    // 从 current 开始左 rewrite
+    // 从 current 开始，从左往右做 rewrite
     while (current->value != NULL) {
         elf_text_inst_t *inst = current->value;
         if (inst->is_jmp_symbol && str_equal(inst->rel_symbol, name)) {
@@ -147,10 +163,9 @@ void elf_confirm_text_rel(string name) {
             // jmp 的具体位置可以不计算，等到二次遍历再计算
             // 届时符号表已经全部收集完毕
             elf_rewrite_text_rel(inst);
-            *inst->offset = *offset; // 值替换，而不是指针地址替换
         }
-
-        *offset += inst->count; // 重新计算 offset
+        *inst->offset = *offset;
+        *offset += inst->count; // 重新计算当前 offset
         current = current->next;
     }
 
@@ -170,7 +185,7 @@ void elf_rewrite_text_rel(elf_text_inst_t *t) {
     t->asm_inst.operands[0]->size = BYTE;
     t->asm_inst.operands[0]->value = operand;
     t->data = opcode_encoding(t->asm_inst, &t->count);
-    t->rel_symbol = NULL;
+//    t->rel_symbol = NULL; // TODO 这里为啥要清空引用的 rel_symbol?
 }
 
 /**
@@ -720,7 +735,7 @@ void elf_var_decl_build(asm_var_decl decl) {
     symbol->is_rel = false;
     symbol->is_local = false; // data 段的都是全局符号，可以被其他文件引用
     elf_symbol_insert(symbol);
-    elf_confirm_text_rel(symbol->name);
+//    elf_confirm_text_rel(symbol->name); // TODO 符号表需要指定重排吗？
 }
 
 void elf_var_decl_list_build(list *decl_list) {

@@ -133,9 +133,8 @@ typedef struct {
     string old;
     uint16_t stack_frame_offset; // 栈分配
     uint8_t reg_id; // reg list index, 寄存器分配
-    // TODO 不如冗余一下尺寸?
-    // 是否为 label
-    bool is_label;
+    uint8_t size; // BYTE/QWORD/DWORD
+    bool is_label; // 是否为函数符号
 } lir_operand_var;
 
 typedef struct lir_vars {
@@ -306,6 +305,7 @@ typedef struct closure {
 
     // 定义环境
     string name;
+    string end_label; // 结束地址
     string env_name;
     struct closure *parent;
     list_op *operates; // 指令列表

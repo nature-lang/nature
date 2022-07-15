@@ -12,8 +12,20 @@ inst_t call_rm64 = {"call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
                     {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
 };
 
-inst_t call_rel32 = {
-        "call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD}, {
+inst_t call_rel32 = {"call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD},
+                     {
+                             OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
+                     }
+};
+
+inst_t jmp_rel8 = {
+        "jmp", 0, {0xEB}, {OPCODE_EXT_IMM_BYTE}, {
+                OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
+        }
+};
+
+inst_t jmp_rel32 = {
+        "jmp", 0, {0xE9}, {OPCODE_EXT_IMM_DWORD}, {
                 OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
         }
 };
@@ -32,6 +44,21 @@ inst_t add_imm32_rm64 = {"add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0,
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                          }
+};
+
+// intel 指令顺序
+inst_t add_r64_rm64 = {"add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+inst_t add_rm64_r64 = {"add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
 };
 
 inst_t sub_imm8_rm64 = {"sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
@@ -85,6 +112,7 @@ inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W},
                         }
 };
 
+// intel 指令顺序
 inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
@@ -154,6 +182,8 @@ void opcode_init() {
     // 收集所有指令，进行注册
     opcode_tree_build(&call_rm64);
     opcode_tree_build(&call_rel32);
+    opcode_tree_build(&jmp_rel8);
+    opcode_tree_build(&jmp_rel32);
     opcode_tree_build(&ret);
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
@@ -161,6 +191,8 @@ void opcode_init() {
     opcode_tree_build(&sub_imm8_rm64);
     opcode_tree_build(&add_imm32_rm64);
     opcode_tree_build(&add_imm8_rm64);
+    opcode_tree_build(&add_r64_rm64);
+    opcode_tree_build(&add_rm64_r64);
     opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_r16_rm16);
     opcode_tree_build(&mov_imm32_r32);

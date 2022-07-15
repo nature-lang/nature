@@ -9,6 +9,7 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_BUILTIN_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_RUNTIME_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_LABEL] = amd64_lower_label,
+        [LIR_OP_TYPE_RETURN] = amd64_lower_return,
 };
 
 /**
@@ -119,7 +120,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
         list_push(inst_list, ASM_INST("mov", { REG(rax), result }));
     }
 
-    // TODO jmp function_ret
+    list_push(inst_list, ASM_INST("jmp", { SYMBOL(c->end_label, true, true) }));
 
     return inst_list;
 }
@@ -340,8 +341,11 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
     return inst_list;
 }
 
-list *amd64_lower(closure *c, lir_op *op) {
+list *amd64_lower_op(closure *c, lir_op *op) {
     amd64_lower_fn fn = amd64_lower_table[op->op];
+    if (fn == NULL) {
+        error_exit("[amd64_lower_op] amd64_lower_table not found fn: %d", op->op);
+    }
     return fn(c, op);
 }
 
@@ -391,7 +395,7 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
     return NULL;
 }
 
-list *amd64_fn_begin(closure *c) {
+list *amd64_lower_fn_begin(closure *c) {
     list *insts = list_new();
     list_push(insts, ASM_INST("label", { LABEL(c->name) }));
     list_push(insts, ASM_INST("push", { REG(rbp) }));
@@ -403,11 +407,45 @@ list *amd64_fn_begin(closure *c) {
     return insts;
 }
 
-list *amd64_fn_end(closure *c) {
+list *amd64_lower_fn_end(closure *c) {
     list *insts = list_new();
+    list_push(insts, ASM_INST("label", { SYMBOL(c->end_label, true, true) }));
     list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
-    list_push(insts, ASM_INST("pop", { REG(rbp) }));
+    list_push(insts, ASM_INST("pop", {
+        REG(rbp)
+    }
+
+    ));
     list_push(insts, ASM_INST("ret", {}));
+    return
+            insts;
+}
+
+list *amd64_lower_fn_formal_params(closure *c) {
+    list *insts = list_new();
+    // 已经在栈里面的就不用管了，只取寄存器中的。存放在 lir_var 中的 stack_offset 中即可
+    uint8_t used[2] = {0};
+    for (int i = 0; i < c->formal_params.count; i++) {
+        lir_operand_var *var = c->formal_params.list[i];
+        asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var));
+        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, var->size);
+        list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+    }
+    return insts;
+}
+
+list *amd64_lower_closure(closure *c) {
+    list *insts = list_new();
+    list_append(insts, amd64_lower_fn_begin(c));
+    list_append(insts, amd64_lower_fn_formal_params(c));
+
+    lir_op *current = c->operates->front;
+    while (current != NULL) {
+        list_append(insts, amd64_lower_op(c, current));
+        current = current->succ;
+    }
+    list_append(insts, amd64_lower_fn_end(c));
+
     return insts;
 }
 

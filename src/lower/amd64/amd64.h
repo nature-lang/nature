@@ -31,9 +31,13 @@ void amd64_lower_init();
  * @param c
  * @return
  */
-list *amd64_fn_begin(closure *c);
+list *amd64_lower_fn_begin(closure *c);
 
-list *amd64_fn_end(closure *c);
+list *amd64_lower_fn_formal_params(closure *c);
+
+list *amd64_lower_fn_end(closure *c);
+
+list *amd64_lower_closure(closure *c);
 
 /**
  * 分发入口, 基于 op->op 做选择(包含 label op)
@@ -41,7 +45,7 @@ list *amd64_fn_end(closure *c);
  * @param op
  * @return
  */
-list *amd64_lower(closure *c, lir_op *op);
+list *amd64_lower_op(closure *c, lir_op *op);
 
 list *amd64_lower_label(closure *c, lir_op *op);
 

@@ -6,20 +6,21 @@
 #include "src/lower/amd64/amd64.h"
 #include "src/lir/lir.h"
 
-static lir_operand *test_lir_temp(char *ident, int stack_frame_offset, int8_t reg_id) {
-    lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_VAR;
+static lir_operand_var *test_lir_operand_var(char *ident, int stack_frame_offset, uint8_t size) {
     lir_operand_var *var = NEW(lir_operand_var);
     var->old = ident;
     var->ident = ident;
     if (stack_frame_offset >= 0) {
         var->stack_frame_offset = stack_frame_offset;
     }
-    if (reg_id >= 0) {
-        var->reg_id = reg_id;
-    }
+    var->size = size;
+    var->is_label = false;
+}
 
-    operand->value = var;
+static lir_operand *test_lir_temp(char *ident, int stack_frame_offset) {
+    lir_operand *operand = NEW(lir_operand);
+    operand->type = LIR_OPERAND_TYPE_VAR;
+    operand->value = test_lir_operand_var(ident, stack_frame_offset, QWORD);
     return operand;
 }
 
@@ -71,7 +72,7 @@ static void test_lower_hello() {
      *  builtin_call builtin_print(tmp_0)
      */
     char *str = "nature is best\n";
-    lir_operand *temp_var = test_lir_temp("temp_1", 8, -1); // var 的 size 是多少？
+    lir_operand *temp_var = test_lir_temp("temp_1", 8); // var 的 size 是多少？
     lir_op *string_new_op = lir_op_call(RUNTIME_CALL_STRING_NEW, temp_var, 2,
                                         LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str),
                                         LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(str)));
@@ -79,8 +80,8 @@ static void test_lower_hello() {
     lir_op *print_op = lir_op_call("builtin_print", NULL, 1, temp_var);
 
     // lir_lower
-    list_append(insts, amd64_lower(c, string_new_op));
-    list_append(insts, amd64_lower(c, print_op));
+    list_append(insts, amd64_lower_op(c, string_new_op));
+    list_append(insts, amd64_lower_op(c, print_op));
 
     // exit
     list_append(insts, test_elf_return_insts());
@@ -126,7 +127,7 @@ static void test_lower_debug_printf() {
                                           LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 2333));
 
     // lir_lower
-    list_append(insts, amd64_lower(c, debug_printf_op));
+    list_append(insts, amd64_lower_op(c, debug_printf_op));
 
     // exit
     list_append(insts, test_elf_return_insts());
@@ -162,7 +163,7 @@ static void test_lower_sum() {
      *  runtime_call string_new(imm:"hello world") => tmp_0(分配栈偏移)
      *  builtin_call builtin_print(tmp_0)
      */
-    lir_operand *temp_var = test_lir_temp("sum_1", 8, -1); // var 的 size 是多少？
+    lir_operand *temp_var = test_lir_temp("sum_1", 8); // var 的 size 是多少？
     lir_op *sum_op = lir_op_new(LIR_OP_TYPE_ADD,
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 22),
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 33),
@@ -175,8 +176,8 @@ static void test_lower_sum() {
                                 temp_var);
 
     // lir_lower
-    list_append(insts, amd64_lower(c, sum_op));
-    list_append(insts, amd64_lower(c, debug));
+    list_append(insts, amd64_lower_op(c, sum_op));
+    list_append(insts, amd64_lower_op(c, debug));
 
     // exit
     list_append(insts, test_elf_return_insts());
@@ -214,16 +215,39 @@ static void test_lower_call() {
     //  }
     closure *sum_closure = NEW(closure);
     sum_closure->name = "sum";
-    sum_closure->stack_length = 16;
+    sum_closure->end_label = "sum_end";
+    sum_closure->stack_length = 32;
+    lir_operand_var *a = test_lir_operand_var("a", 8, QWORD);
+    lir_operand_var *b = test_lir_operand_var("b", 16, QWORD);
+    lir_operand_var *temp = test_lir_operand_var("temp_var", 24, QWORD);
+    lir_vars vars = {.count = 2, .list = {a, b}};
+    sum_closure->formal_params = vars;
     sum_closure->operates = list_op_new();
+    lir_op *sum_op = lir_op_new(LIR_OP_TYPE_ADD,
+                                LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, a),
+                                LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, b),
+                                LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
+    sum_op->data_type = TYPE_INT;
+    sum_op->size = QWORD;
+    lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
+    return_op->data_type = TYPE_INT;
+    return_op->size = QWORD;
+    list_op_push(sum_closure->operates, sum_op);
+    list_op_push(sum_closure->operates, return_op);
 
+//    char *str = "hello world";
+//    lir_op *debug_printf_op = lir_op_call("debug_printf",
+//                                          NULL, 2, LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str)
+//    );
+//    list_op_push(sum_closure->operates, debug_printf_op);
 
     // main closure
     closure *main_closure = NEW(closure);
     main_closure->name = "main";
+    main_closure->end_label = "main_end";
     main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
     main_closure->operates = list_op_new();
-    lir_operand *foo = test_lir_temp("foo", 8, -1); // var 的 size 是多少？
+    lir_operand *foo = test_lir_temp("foo", 8);
 
     //  call sum(1, 10) => foo
     lir_op *call_op = lir_op_call("sum", foo, 2,
@@ -236,14 +260,16 @@ static void test_lower_call() {
     lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
                                    LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "sum(1, 10) =>  %d\n"),
                                    foo);
+
     list_op_push(main_closure->operates, call_op);
     list_op_push(main_closure->operates, debug_op);
 
-    // lir_lower
+    list *insts = amd64_lower_closure(main_closure);
+    list_append(insts, amd64_lower_closure(sum_closure));
+//    list *insts = amd64_lower_closure(sum_closure);
 
-    // exit
 
-    elf_init("sum.n");
+    elf_init("call.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
     elf_var_decl_list_build(amd64_decl_list);
     // 代码段
@@ -255,7 +281,7 @@ static void test_lower_call() {
     uint64_t count;
     uint8_t *binary = elf_encoding(elf, &count);
     // 输出到文件
-    elf_to_file(binary, count, "sum.o");
+    elf_to_file(binary, count, "call.o");
 }
 
 int main(void) {
@@ -263,6 +289,7 @@ int main(void) {
 //            cmocka_unit_test(test_lower_hello),
 //            cmocka_unit_test(test_lower_debug_printf),
 //            cmocka_unit_test(test_lower_sum),
+            cmocka_unit_test(test_lower_call),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
