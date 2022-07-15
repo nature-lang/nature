@@ -8,6 +8,7 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_BUILTIN_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_RUNTIME_CALL] = amd64_lower_call,
+        [LIR_OP_TYPE_LABEL] = amd64_lower_label,
 };
 
 /**
@@ -63,11 +64,11 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         } else {
             list_push(temp, ASM_INST("mov", { REG(target_reg), source }));
         }
-        list_merge(temp, param_insts);
+        list_append(temp, param_insts);
         param_insts = temp;
     }
 
-    list_merge(insts, param_insts);
+    list_append(insts, param_insts);
 
     // 3. 调用 call 指令(处理地址), 响应的结果在 rax 中
     list_push(insts, ASM_INST("call", { first }));
@@ -137,14 +138,14 @@ list *amd64_lower_add(closure *c, lir_op *op) {
         // 参数转换
         asm_operand_t *first = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-        list_merge(inst_list, temp);
+        list_append(inst_list, temp);
         asm_operand_t *second = NEW(asm_operand_t);
         temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
-        list_merge(inst_list, temp);
+        list_append(inst_list, temp);
 
         asm_operand_t *result = NEW(asm_operand_t);
         temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-        list_merge(inst_list, temp);
+        list_append(inst_list, temp);
 
         reg_t *reg = amd64_lower_next_reg(&used_regs, op->size);
         list_push(inst_list, ASM_INST("mov", { REG(reg), first }));
@@ -153,8 +154,18 @@ list *amd64_lower_add(closure *c, lir_op *op) {
 
         return inst_list;
     }
+    error_exit("[amd64_lower_add] op->data_type not identify");
     return NULL;
 }
+
+
+list *amd64_lower_label(closure *c, lir_op *op) {
+    list *insts = list_new();
+    lir_operand_label *label_operand = op->result->value;
+    list_push(insts, ASM_INST("label", { LABEL(label_operand->ident) }));
+    return insts;
+}
+
 
 /**
  * mov foo => bar
@@ -204,11 +215,11 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     // 参数转换
     asm_operand_t *first = NEW(asm_operand_t);
     list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-    list_merge(inst_list, temp);
+    list_append(inst_list, temp);
 
     asm_operand_t *result = NEW(asm_operand_t);
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-    list_merge(inst_list, temp);
+    list_append(inst_list, temp);
 
     reg_t *reg = amd64_lower_next_reg(&used_regs, op->data_type);
     list_push(inst_list, ASM_INST("mov", { REG(reg), first }));
@@ -379,3 +390,24 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
 
     return NULL;
 }
+
+list *amd64_fn_begin(closure *c) {
+    list *insts = list_new();
+    list_push(insts, ASM_INST("label", { LABEL(c->name) }));
+    list_push(insts, ASM_INST("push", { REG(rbp) }));
+    list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
+    list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_length) }));
+
+    // 形参入栈
+
+    return insts;
+}
+
+list *amd64_fn_end(closure *c) {
+    list *insts = list_new();
+    list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
+    list_push(insts, ASM_INST("pop", { REG(rbp) }));
+    list_push(insts, ASM_INST("ret", {}));
+    return insts;
+}
+

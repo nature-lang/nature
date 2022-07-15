@@ -295,6 +295,7 @@ typedef struct lir_basic_block {
  */
 typedef struct closure {
     lir_vars globals; // closure 中定义的变量列表
+    lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
     regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
     lir_basic_blocks blocks; // 根据解析顺序得到
 
@@ -311,6 +312,7 @@ typedef struct closure {
 
     // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
     uint16_t return_offset;
+    uint16_t stack_length; // 栈长度, byte, 等于局部变量的长度
 } closure;
 
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
@@ -341,9 +343,9 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
-lir_op *lir_runtime_call(string name, lir_operand *result, int arg_count, ...);
+lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
-lir_op *lir_builtin_call(char *name, lir_operand *result, int arg_count, ...);
+lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...);
 
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
 

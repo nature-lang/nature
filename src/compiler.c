@@ -63,7 +63,7 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *t
         // 1. make env_n by count
         lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, parent->env_name);
         lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->env_count);
-        list_op_push(parent_list, lir_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
+        list_op_push(parent_list, lir_op_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
 
         // 2. for set ast_ident/ast_access_env to env n
         for (int i = 0; i < ast->env_count; ++i) {
@@ -71,7 +71,7 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *t
             lir_operand *expr_target = lir_new_temp_var_operand(item_expr.data_type);
             list_op_append(parent_list, compiler_expr(parent, item_expr, expr_target));
             lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
-            lir_op *call_op = lir_runtime_call(
+            lir_op *call_op = lir_op_call(
                     RUNTIME_CALL_SET_ENV,
                     NULL,
                     3,
@@ -441,7 +441,7 @@ list_op *compiler_access_list(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand *index_target = lir_new_temp_var_operand(ast->index.data_type);
     list_op_append(list, compiler_expr(c, ast->index, index_target));
 
-    lir_op *call_op = lir_runtime_call(
+    lir_op *call_op = lir_op_call(
             RUNTIME_CALL_LIST_VALUE,
             target,
             2,
@@ -474,7 +474,7 @@ list_op *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) 
     // 类型，容量 runtime.make_list(capacity, size)
     lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) type_sizeof(ast->type));
-    lir_op *call_op = lir_runtime_call(
+    lir_op *call_op = lir_op_call(
             RUNTIME_CALL_LIST_NEW,
             base_target,
             2,
@@ -492,7 +492,7 @@ list_op *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) 
 
         lir_operand *refer_target = lir_new_temp_var_operand(TYPE_NEW_POINT());
         lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
-        call_op = lir_runtime_call(
+        call_op = lir_op_call(
                 RUNTIME_CALL_LIST_VALUE,
                 refer_target,
                 2,
@@ -520,7 +520,7 @@ list_op *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, c->env_name);
     lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
 
-    lir_op *call_op = lir_runtime_call(
+    lir_op *call_op = lir_op_call(
             RUNTIME_CALL_GET_ENV,
             target,
             2,
@@ -557,7 +557,7 @@ list_op *compiler_access_map(closure *c, ast_expr expr, lir_operand *target) {
     list_op_append(list, compiler_expr(c, ast->key, key_target));
 
     // runtime get offset by temp var runtime.map_offset(base, "key")
-    lir_op *call_op = lir_runtime_call(
+    lir_op *call_op = lir_op_call(
             RUNTIME_CALL_MAP_VALUE,
             target,
             2,
@@ -586,7 +586,7 @@ list_op *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
             int_value,
             (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
 
-    lir_op *call_op = lir_runtime_call(
+    lir_op *call_op = lir_op_call(
             RUNTIME_CALL_MAP_NEW,
             base_target,
             2,
@@ -606,7 +606,7 @@ list_op *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
         list_op_append(list, compiler_expr(c, value_expr, value_target));
 
         lir_operand *refer_target = lir_new_temp_var_operand(TYPE_NEW_POINT());
-        call_op = lir_runtime_call(
+        call_op = lir_op_call(
                 RUNTIME_CALL_MAP_VALUE,
                 refer_target,
                 2,
@@ -640,7 +640,7 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     list_op *list = compiler_expr(c, ast->iterate, base_target);
 
     lir_operand *count_target = lir_new_temp_var_operand(TYPE_NEW_INT()); // ?? 这个值特么存在哪里，我现在不可知呀？
-    list_op_push(list, lir_runtime_call(
+    list_op_push(list, lir_op_call(
             RUNTIME_CALL_ITERATE_COUNT,
             count_target,
             1,
@@ -664,12 +664,12 @@ list_op *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     // gen value
     lir_operand *key_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(ast->gen_key->ident));
     lir_operand *value_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(ast->gen_value->ident));
-    list_op_push(list, lir_runtime_call(
+    list_op_push(list, lir_op_call(
             RUNTIME_CALL_ITERATE_GEN_KEY,
             key_target,
             1,
             base_target));
-    list_op_push(list, lir_runtime_call(
+    list_op_push(list, lir_op_call(
             RUNTIME_CALL_ITERATE_GEN_VALUE,
             value_target,
             1,
@@ -811,7 +811,7 @@ list_op *compiler_literal(closure *c, ast_literal *literal, lir_operand *target)
         case TYPE_STRING: {
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
             lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
-            lir_op *call_op = lir_runtime_call(
+            lir_op *call_op = lir_op_call(
                     RUNTIME_CALL_STRING_NEW,
                     target,
                     2,

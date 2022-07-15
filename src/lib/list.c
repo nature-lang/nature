@@ -55,7 +55,7 @@ bool list_empty(list *l) {
     return false;
 }
 
-void list_merge(list *dst, list *src) {
+void list_append(list *dst, list *src) {
     list_node *current = src->front;
     while (current->value != NULL) {
         void *v = current->value;

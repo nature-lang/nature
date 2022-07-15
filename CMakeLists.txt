@@ -71,9 +71,11 @@ set(SRC
         #        ${SRC_DIR}/register/allocate.c
         #        ${SRC_DIR}/register/interval.h
         #        ${SRC_DIR}/register/interval.c
-        ${SRC_DIR}/ssa.c)
+        )
 
 set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/debug.h
+        ${PROJECT_SOURCE_DIR}/runtime/debug.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/string.h

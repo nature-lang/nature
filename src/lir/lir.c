@@ -18,7 +18,7 @@ lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t len
     return operand;
 }
 
-lir_op *lir_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
+lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
 
@@ -30,23 +30,7 @@ lir_op *lir_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
     }
     va_end(args);
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_RUNTIME_CALL, lir_new_label_operand(name), call_params_operand, result);
-}
-
-
-lir_op *lir_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
-    lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
-    params_operand->count = 0;
-
-    va_list args;
-    va_start(args, arg_count); // 初始化参数
-    for (int i = 0; i < arg_count; ++i) {
-        lir_operand *param = va_arg(args, lir_operand*);
-        params_operand->list[params_operand->count++] = param;
-    }
-    va_end(args);
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, lir_new_label_operand(name), call_params_operand, result);
+    return lir_op_new(LIR_OP_TYPE_CALL, lir_new_label_operand(name), call_params_operand, result);
 }
 
 /**

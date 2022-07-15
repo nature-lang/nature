@@ -23,7 +23,7 @@ typedef struct {
 list *list_new(); // 空队列， 初始化时，head,tail = NULL
 void *list_pop(list *l); // 头出队列
 void list_push(list *l, void *value); // 尾入队列
-void list_merge(list *dst, list *src); // src 追加到 dst 中
+void list_append(list *dst, list *src); // src 追加到 dst 中
 
 list_node *list_new_node();
 
