@@ -10,6 +10,8 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_RUNTIME_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_LABEL] = amd64_lower_label,
         [LIR_OP_TYPE_RETURN] = amd64_lower_return,
+        [LIR_OP_TYPE_CMP_GOTO] = amd64_lower_cmp_goto,
+        [LIR_OP_TYPE_GOTO] = amd64_lower_goto,
 };
 
 /**
@@ -255,6 +257,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     // 简单立即数
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
+        // TODO 根据 int_value 的大小来选择合适的数据类型
         if (v->type == TYPE_INT) {
             return UINT32(v->int_value);
         }

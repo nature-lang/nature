@@ -285,12 +285,62 @@ static void test_lower_call() {
     elf_to_file(binary, count, "call.o");
 }
 
+
+static void test_lower_if() {
+    amd64_register_init();
+    opcode_init();
+    amd64_lower_init();
+
+
+    // main closure
+    closure *main_closure = NEW(closure);
+    main_closure->name = "main";
+    main_closure->end_label = "main_end";
+    main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
+    main_closure->operates = list_op_new();
+    lir_operand *foo = test_lir_temp("foo", 8);
+
+    // 编写指令
+
+    // mov [rbp+8],1
+    lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1));
+    mov_op->data_type = TYPE_INT;
+    mov_op->size = QWORD;
+
+    // TODO foo > 1 的指令实现
+
+    lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
+                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "sum(1, 10) =>  %d\n"),
+                                   foo);
+
+    list_op_push(main_closure->operates, call_op);
+    list_op_push(main_closure->operates, debug_op);
+
+    list *insts = amd64_lower_closure(main_closure);
+
+
+    elf_init("call.n");
+    //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
+    elf_var_decl_list_build(amd64_decl_list);
+    // 代码段
+    elf_text_inst_list_build(insts);
+    elf_text_inst_list_second_build();
+    elf_t elf = elf_new();
+
+    // 编码成二进制
+    uint64_t count;
+    uint8_t *binary = elf_encoding(elf, &count);
+    // 输出到文件
+    elf_to_file(binary, count, "call.o");
+}
+
+
 int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_lower_hello),
 //            cmocka_unit_test(test_lower_debug_printf),
 //            cmocka_unit_test(test_lower_sum),
-            cmocka_unit_test(test_lower_call),
+//            cmocka_unit_test(test_lower_call),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -1,6 +1,6 @@
-int a = 1
-if a > 1 {
-    print("a > 1")
+int foo = 1
+if (foo > 1) {
+    print("foo > 1")
     return
 }
-print("a <= 1")
+print("foo <= 1")
