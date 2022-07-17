@@ -49,7 +49,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
     }
 
-    // 2. 参数处理  lir_ope op->second;
+    // 2. 参数处理  lir_ope type->second;
     lir_operand_actual_param *v = op->second->value;
     list *param_insts = list_new();
     for (int i = 0; i < v->count; ++i) {
@@ -99,7 +99,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
  */
 list *amd64_lower_return(closure *c, lir_op *op) {
     // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
-    list *inst_list = list_new();
+    list *insts = list_new();
 
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
 
@@ -108,21 +108,30 @@ list *amd64_lower_return(closure *c, lir_op *op) {
         int rep_count = ceil((float) op->size / QWORD);
         asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset);
 
-        list_push(inst_list, ASM_INST("mov", { REG(rsi), result }));
-        list_push(inst_list, ASM_INST("mov", { REG(rdi), return_disp_rbp }));
-        list_push(inst_list, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
-        list_push(inst_list, MOVSQ(0xF3));
+        list_push(insts, ASM_INST("mov", { REG(rsi), result }));
+        list_push(insts, ASM_INST("mov", { REG(rdi), return_disp_rbp }));
+        list_push(insts, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
+        list_push(insts, MOVSQ(0xF3));
 
-        list_push(inst_list, ASM_INST("mov", { REG(rax), REG(rdi) }));
+        list_push(insts, ASM_INST("mov", { REG(rax), REG(rdi) }));
     } else if (op->data_type == TYPE_FLOAT) {
-        list_push(inst_list, ASM_INST("mov", { REG(xmm0), result }));
+        list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
     } else {
-        list_push(inst_list, ASM_INST("mov", { REG(rax), result }));
+        list_push(insts, ASM_INST("mov", { REG(rax), result }));
     }
 
-    list_push(inst_list, ASM_INST("jmp", { SYMBOL(c->end_label, true, true) }));
+    // lir goto 指令已经做过了，cfg 分析就需要这个操作了，不需要在这里多此一举
+//    list_push(insts, ASM_INST("jmp", { SYMBOL(c->end_label, true, true) }));
 
-    return inst_list;
+    return insts;
+}
+
+
+list *amd64_lower_goto(closure *c, lir_op *op) {
+    list *insts = list_new();
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+    list_push(insts, ASM_INST("jmp", { result }));
+    return insts;
 }
 
 /**
@@ -133,29 +142,29 @@ list *amd64_lower_return(closure *c, lir_op *op) {
  */
 list *amd64_lower_add(closure *c, lir_op *op) {
     if (op->data_type == TYPE_INT) {
-        list *inst_list = list_new();
+        list *insts = list_new();
         regs_t used_regs = {.count = 0};
 
         // 参数转换
         asm_operand_t *first = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-        list_append(inst_list, temp);
+        list_append(insts, temp);
         asm_operand_t *second = NEW(asm_operand_t);
         temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
-        list_append(inst_list, temp);
+        list_append(insts, temp);
 
         asm_operand_t *result = NEW(asm_operand_t);
         temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-        list_append(inst_list, temp);
+        list_append(insts, temp);
 
         reg_t *reg = amd64_lower_next_reg(&used_regs, op->size);
-        list_push(inst_list, ASM_INST("mov", { REG(reg), first }));
-        list_push(inst_list, ASM_INST("add", { REG(reg), second }));
-        list_push(inst_list, ASM_INST("mov", { result, REG(reg) }));
+        list_push(insts, ASM_INST("mov", { REG(reg), first }));
+        list_push(insts, ASM_INST("add", { REG(reg), second }));
+        list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
-        return inst_list;
+        return insts;
     }
-    error_exit("[amd64_lower_add] op->data_type not identify");
+    error_exit("[amd64_lower_add] type->data_type not identify");
     return NULL;
 }
 
@@ -178,7 +187,7 @@ list *amd64_lower_label(closure *c, lir_op *op) {
  * @return
  */
 list *amd64_lower_mov(closure *c, lir_op *op) {
-    list *inst_list = list_new();
+    list *insts = list_new();
 
     // 结构体处理
     if (op->data_type == TYPE_STRUCT) {
@@ -189,7 +198,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
         asm_operand_t *first_reg = REG(rax);
         asm_operand_t *first = amd64_lower_to_asm_operand(op->first);
         if (first->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
-            list_push(inst_list, ASM_INST("lea", { REG(rax), first }));
+            list_push(insts, ASM_INST("lea", { REG(rax), first }));
         } else {
             first_reg = first;
         }
@@ -197,18 +206,18 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
         asm_operand_t *result_reg = REG(rdx);
         asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
         if (result->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
-            list_push(inst_list, ASM_INST("lea", { REG(rdx), result }));
+            list_push(insts, ASM_INST("lea", { REG(rdx), result }));
         } else {
             result_reg = result;
         }
 
         // mov rax,rsi, mov rdx,rdi, mov count,rcx
         int rep_count = ceil((float) op->size / QWORD);
-        list_push(inst_list, ASM_INST("mov", { REG(rsi), first_reg }));
-        list_push(inst_list, ASM_INST("mov", { REG(rdi), result_reg }));
-        list_push(inst_list, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
-        list_push(inst_list, MOVSQ(0xF3));
-        return inst_list;
+        list_push(insts, ASM_INST("mov", { REG(rsi), first_reg }));
+        list_push(insts, ASM_INST("mov", { REG(rdi), result_reg }));
+        list_push(insts, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
+        list_push(insts, MOVSQ(0xF3));
+        return insts;
     }
 
     regs_t used_regs = {.count = 0};
@@ -216,17 +225,17 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     // 参数转换
     asm_operand_t *first = NEW(asm_operand_t);
     list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-    list_append(inst_list, temp);
+    list_append(insts, temp);
 
     asm_operand_t *result = NEW(asm_operand_t);
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-    list_append(inst_list, temp);
+    list_append(insts, temp);
 
     reg_t *reg = amd64_lower_next_reg(&used_regs, op->data_type);
-    list_push(inst_list, ASM_INST("mov", { REG(reg), first }));
-    list_push(inst_list, ASM_INST("mov", { result, REG(reg) }));
+    list_push(insts, ASM_INST("mov", { REG(reg), first }));
+    list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
-    return inst_list;
+    return insts;
 }
 
 asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
@@ -277,7 +286,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
 list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
                                          asm_operand_t *asm_operand,
                                          regs_t *used_regs) {
-    list *inst_list = list_new();
+    list *insts = list_new();
 
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
@@ -294,12 +303,12 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             // 使用临时寄存器保存结果(会增加一条 lea 指令)
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
-            list_push(inst_list, ASM_INST("lea", { REG(reg), SYMBOL(unique_name, false, false) }));
+            list_push(insts, ASM_INST("lea", { REG(reg), SYMBOL(unique_name, false, false) }));
 
             // asm_copy
             ASM_OPERAND_COPY(asm_operand, REG(reg));
 
-            return inst_list;
+            return insts;
         }
         // 匹配失败继续往下走,简单转换里面还有一层 imm 匹配
     }
@@ -318,7 +327,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             asm_operand_t *temp = DISP_REG(reg, v->offset);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
-            return inst_list;
+            return insts;
         }
 
         if (var->stack_frame_offset > 0) {
@@ -326,10 +335,10 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
             // 生成 mov 指令（asm_mov）
-            list_push(inst_list, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset) }));
+            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset) }));
             asm_operand_t *temp = DISP_REG(reg, v->offset);
             ASM_OPERAND_COPY(asm_operand, temp);
-            return inst_list;
+            return insts;
         }
 
         error_exit("[amd64_lir_to_asm_operand]  var cannot reg_id or stack_frame_offset");
@@ -338,13 +347,13 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
     // 按简单参数处理
     asm_operand_t *temp = amd64_lower_to_asm_operand(operand);
     ASM_OPERAND_COPY(asm_operand, temp);
-    return inst_list;
+    return insts;
 }
 
 list *amd64_lower_op(closure *c, lir_op *op) {
-    amd64_lower_fn fn = amd64_lower_table[op->op];
+    amd64_lower_fn fn = amd64_lower_table[op->type];
     if (fn == NULL) {
-        error_exit("[amd64_lower_op] amd64_lower_table not found fn: %d", op->op);
+        error_exit("[amd64_lower_op] amd64_lower_table not found fn: %d", op->type);
     }
     return fn(c, op);
 }
@@ -407,15 +416,15 @@ list *amd64_lower_fn_begin(closure *c) {
     return insts;
 }
 
+/**
+ * 拼接在函数尾部，实现结尾块自然退出。
+ * @param c
+ * @return
+ */
 list *amd64_lower_fn_end(closure *c) {
     list *insts = list_new();
-    list_push(insts, ASM_INST("label", { SYMBOL(c->end_label, true, true) }));
     list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
-    list_push(insts, ASM_INST("pop", {
-        REG(rbp)
-    }
-
-    ));
+    list_push(insts, ASM_INST("pop", { REG(rbp) }));
     list_push(insts, ASM_INST("ret", {}));
     return
             insts;
@@ -448,4 +457,19 @@ list *amd64_lower_closure(closure *c) {
 
     return insts;
 }
+
+list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
+    // 比较 first 是否等于 second，如果相等就跳转到 result label
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first); // imm uint8
+    asm_operand_t *second = amd64_lower_to_asm_operand(op->second); // disp
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+
+    // cmp 指令比较
+    list *insts = list_new();
+    list_push(insts, ASM_INST("cmp", { second, first }));
+    list_push(insts, ASM_INST("je", { result }));
+
+    return insts;
+}
+
 

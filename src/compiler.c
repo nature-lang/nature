@@ -352,8 +352,8 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 }
 
 /**
- * 1.0 函数参数使用 param var 存储,按约定从左到右(op.result 为 param, op.first 为实参)
- * 1.0.1 op.operand 模仿 phi body 弄成列表的形式！
+ * 1.0 函数参数使用 param var 存储,按约定从左到右(type.result 为 param, type.first 为实参)
+ * 1.0.1 type.operand 模仿 phi body 弄成列表的形式！
  * 2. 目前编译依旧使用 var，所以不需要考虑寄存器溢出
  * 3. 函数返回结果存储在 target 中
  *

@@ -272,7 +272,7 @@ ast_expr parser_binary(ast_expr left) {
     result.type = AST_EXPR_BINARY;
     result.expr = binary_expr;
 
-//  printf("op: %s\n", operator_token->literal);
+//  printf("type: %s\n", operator_token->literal);
 
     return result;
 }

@@ -30,6 +30,18 @@ inst_t jmp_rel32 = {
         }
 };
 
+inst_t je_rel8 = {
+        "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {
+                OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
+        }
+};
+
+inst_t je_rel32 = {
+        "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {
+                OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
+        }
+};
+
 
 inst_t sub_imm32_rm64 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
                          {
@@ -153,6 +165,50 @@ inst_t pop_r64 = {
         }
 };
 
+// intel 指令顺序
+inst_t cmp_r64_rm64 = {"cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+inst_t cmp_rm64_r64 = {"cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+
+inst_t cmp_rm64_imm8 = {"cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
+                        {
+                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                        }
+};
+
+inst_t cmp_rm64_imm32 = {"cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+
+inst_t cmp_rax_imm32 = {"cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_DWORD},
+                        {
+                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                                {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                        }
+};
+
+inst_t cmp_al_imm32 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
+                       {
+                               {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                       }
+};
+
+
 static opcode_tree_node_t *opcode_node_new() {
     opcode_tree_node_t *node = NEW(opcode_tree_node_t);
     node->key = "";
@@ -184,6 +240,8 @@ void opcode_init() {
     opcode_tree_build(&call_rel32);
     opcode_tree_build(&jmp_rel8);
     opcode_tree_build(&jmp_rel32);
+    opcode_tree_build(&je_rel8);
+    opcode_tree_build(&je_rel32);
     opcode_tree_build(&ret);
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
@@ -200,6 +258,12 @@ void opcode_init() {
     opcode_tree_build(&mov_r64_imm64);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_rm64_r64);
+    opcode_tree_build(&cmp_al_imm32);
+    opcode_tree_build(&cmp_rax_imm32);
+    opcode_tree_build(&cmp_r64_rm64);
+    opcode_tree_build(&cmp_rm64_imm32);
+    opcode_tree_build(&cmp_rm64_imm8);
+    opcode_tree_build(&cmp_rm64_r64);
     opcode_tree_build(&lea_r64_m);
     opcode_tree_build(&syscall);
 }

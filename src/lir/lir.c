@@ -88,7 +88,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     }
 
     lir_op *op = NEW(lir_op);
-    op->op = type;
+    op->type = type;
     op->first = first;
     op->second = second;
     op->result = result;
@@ -96,7 +96,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     op->succ = NULL;
 
 #ifdef DEBUG_COMPILER_LIR
-    debug_lir(lir_line, op);
+    debug_lir(lir_line, type);
 #endif
 
     return op;

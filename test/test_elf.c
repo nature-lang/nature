@@ -143,7 +143,6 @@ static void test_opcode_encoding() {
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect7[] = {0x48, 0x03, 0x45, 0xF8};
     assert_memory_equal(actual7, expect7, byte_count);
-
 }
 
 static void test_hello_world() {

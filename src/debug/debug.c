@@ -147,7 +147,7 @@ void debug_stmt(string type, ast_stmt stmt) {
 
 void debug_lir(int line, lir_op *op) {
     printf("[DEBUG] LIR %d:\t", line);
-    if (op->op == LIR_OP_TYPE_LABEL) {
+    if (op->type == LIR_OP_TYPE_LABEL) {
         printf(
                 "%s:\n",
                 lir_operand_to_string(op->result)
@@ -156,7 +156,7 @@ void debug_lir(int line, lir_op *op) {
     }
     printf(
             "\t\t%s\t\t%s , %s => %s",
-            lir_op_type_to_debug[op->op],
+            lir_op_type_to_debug[op->type],
             lir_operand_to_string(op->first),
             lir_operand_to_string(op->second),
             lir_operand_to_string(op->result)
@@ -195,7 +195,7 @@ void debug_basic_block(lir_basic_block *block) {
     while (current != NULL) {
         printf(
                 "\t\t%s\t%s , %s => %s\n",
-                lir_op_type_to_debug[current->op],
+                lir_op_type_to_debug[current->type],
                 lir_operand_to_string(current->first),
                 lir_operand_to_string(current->second),
                 lir_operand_to_string(current->result)

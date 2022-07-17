@@ -235,6 +235,7 @@ static void test_lower_call() {
     list_op_push(sum_closure->operates, sum_op);
     list_op_push(sum_closure->operates, return_op);
 
+//   test
 //    char *str = "hello world";
 //    lir_op *debug_printf_op = lir_op_call("debug_printf",
 //                                          NULL, 2, LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str)
@@ -251,8 +252,8 @@ static void test_lower_call() {
 
     //  call sum(1, 10) => foo
     lir_op *call_op = lir_op_call("sum", foo, 2,
-                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 10),
-                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1));
+                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1),
+                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 10));
     call_op->data_type = TYPE_INT;
     call_op->size = QWORD;
 

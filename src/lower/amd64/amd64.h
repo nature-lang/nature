@@ -40,7 +40,7 @@ list *amd64_lower_fn_end(closure *c);
 list *amd64_lower_closure(closure *c);
 
 /**
- * 分发入口, 基于 op->op 做选择(包含 label op)
+ * 分发入口, 基于 type->type 做选择(包含 label type)
  * @param c
  * @param op
  * @return
@@ -52,6 +52,10 @@ list *amd64_lower_label(closure *c, lir_op *op);
 list *amd64_lower_call(closure *c, lir_op *op);
 
 list *amd64_lower_return(closure *c, lir_op *op);
+
+list *amd64_lower_goto(closure *c, lir_op *op);
+
+list *amd64_lower_cmp_goto(closure *c, lir_op *op);
 
 list *amd64_lower_add(closure *c, lir_op *op);
 

@@ -198,7 +198,7 @@ typedef enum {
     LIR_OP_TYPE_CALL,
     LIR_OP_TYPE_RUNTIME_CALL,
     LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
-    LIR_OP_TYPE_RETURN,
+    LIR_OP_TYPE_RETURN, // return 并不能真的就推出函数执行
     LIR_OP_TYPE_LABEL,
 } lir_op_type;
 
@@ -215,7 +215,7 @@ typedef enum {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-    lir_op_type op;
+    lir_op_type type;
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
@@ -235,7 +235,7 @@ typedef struct lir_op {
     struct lir_op *pred;
 } lir_op;
 
-// op 列表
+// type 列表
 typedef struct {
     lir_op *front;
     lir_op *rear;
