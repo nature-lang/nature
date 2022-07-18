@@ -77,6 +77,7 @@
   _var->stack_frame_offset = (_original)->stack_frame_offset; \
   _var->reg_id = (_original)->reg_id; \
   _var->is_label = (_original)->is_label; \
+  _var->size = (_original)->size; \
   _var;                                   \
 })
 

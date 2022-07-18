@@ -10,9 +10,9 @@
 
 static list *test_gen_asm_print() {
     //static list *asm_builtin_print() {
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8);
-    asm_operand_t *string_addr_var = DISP_REG(rbp, -16);
-    asm_operand_t *string_len_var = DISP_REG(rbp, -24);
+    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
+    asm_operand_t *string_addr_var = DISP_REG(rbp, -16, QWORD);
+    asm_operand_t *string_len_var = DISP_REG(rbp, -24, QWORD);
 
     list *inst_list = list_new();
     list_push(inst_list, ASM_INST("label", { SYMBOL("builtin_print", true, false) }));
@@ -132,19 +132,19 @@ static void test_opcode_encoding() {
     uint8_t expect5[] = {0x0F, 0x05};
     assert_memory_equal(actual5, expect5, byte_count);
 
-    asm_inst_t *mov_rax_disp = ASM_INST("mov", { DISP_REG(rbp, -8), REG(rax) });
+    asm_inst_t *mov_rax_disp = ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) });
     uint8_t *actual6 = opcode_encoding(*mov_rax_disp, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect6[] = {0x48, 0x89, 0x45, 0xF8};
     assert_memory_equal(actual6, expect6, byte_count);
 
-    asm_inst_t *add_disp_rax = ASM_INST("add", { REG(rax), DISP_REG(rbp, -8), });
+    asm_inst_t *add_disp_rax = ASM_INST("add", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual7 = opcode_encoding(*add_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect7[] = {0x48, 0x03, 0x45, 0xF8};
     assert_memory_equal(actual7, expect7, byte_count);
 
-    asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8), });
+    asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual8 = opcode_encoding(*mov_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect18[] = {0x48, 0x03, 0x45, 0xF8};
@@ -282,11 +282,11 @@ static void test_union_c() {
     list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
 
     list_push(inst_list, ASM_INST("call", { SYMBOL("length", true, false) }));
-    list_push(inst_list, ASM_INST("mov", { DISP_REG(rbp, -8), REG(rax) }));
+    list_push(inst_list, ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) }));
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(1) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) }));
     list_push(inst_list, ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) }));
-    list_push(inst_list, ASM_INST("mov", { REG(rdx), DISP_REG(rbp, -8) }));
+    list_push(inst_list, ASM_INST("mov", { REG(rdx), DISP_REG(rbp, -8, QWORD) }));
     list_push(inst_list, ASM_INST("syscall", {}));
 
 
@@ -321,7 +321,7 @@ static void test_union_builtin_print() {
             .value = (uint8_t *) "hello world!\n",
             .type = ASM_VAR_DECL_TYPE_STRING
     };
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8);
+    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
 
     list *builtin_call_list = list_new();
     list_push(builtin_call_list, ASM_INST("label", { SYMBOL("_start", true, false) }));
@@ -376,7 +376,7 @@ static void test_runtime_string_print() {
     opcode_init();
 
     // 数据段
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8);
+    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
 
     list *inst_list = list_new();
     list_push(inst_list, ASM_INST("label", { LABEL("_start") }));

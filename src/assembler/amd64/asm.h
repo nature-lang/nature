@@ -73,13 +73,13 @@
    _dst->value = _src->value;\
 
 
-#define DISP_REG(_reg, _disp) ({ \
+#define DISP_REG(_reg, _disp, _size) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
      asm_operand_disp_register_t *_disp_reg = NEW(asm_operand_disp_register_t); \
      _disp_reg->reg = (asm_operand_register_t*)(_reg);    \
      _disp_reg->disp = _disp;    \
-     _operand->size = (_reg)->size;\
+     _operand->size = _size; \
      _operand->value = _disp_reg;    \
      _operand;\
 })

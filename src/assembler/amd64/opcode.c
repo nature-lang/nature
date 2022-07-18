@@ -196,6 +196,13 @@ inst_t cmp_rm64_imm8 = {"cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, 
                         }
 };
 
+inst_t cmp_rm8_imm8 = {"cmp", 0, {0x80}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
+                       {
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                       }
+};
+
 inst_t cmp_rm64_imm32 = {"cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
@@ -216,6 +223,7 @@ inst_t cmp_al_imm32 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                        }
 };
+
 
 inst_t setg_rm8 = {
         "setg", 0, {0x0F, 0x9F}, {}, {
@@ -284,6 +292,7 @@ void opcode_init() {
     opcode_tree_build(&cmp_r64_rm64);
     opcode_tree_build(&cmp_rm64_imm32);
     opcode_tree_build(&cmp_rm64_imm8);
+    opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rm64_r64);
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);

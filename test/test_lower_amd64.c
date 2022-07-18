@@ -333,7 +333,7 @@ static void test_lower_if() {
     list_op_push(main_closure->operates, cmp_goto_op);
     list_op_push(main_closure->operates, true_op);
     list_op_push(main_closure->operates, goto_end);
-    list_op_push(main_closure->operates, label_alert_op);
+//    list_op_push(main_closure->operates, label_alert_op);
     list_op_push(main_closure->operates, false_op);
     list_op_push(main_closure->operates, label_end_main);
 

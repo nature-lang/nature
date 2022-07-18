@@ -110,7 +110,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
     if (op->data_type == TYPE_STRUCT) {
         // 计算长度
         int rep_count = ceil((float) op->size / QWORD);
-        asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset);
+        asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset, QWORD);
 
         list_push(insts, ASM_INST("mov", { REG(rsi), result }));
         list_push(insts, ASM_INST("mov", { REG(rdi), return_disp_rbp }));
@@ -174,36 +174,33 @@ list *amd64_lower_add(closure *c, lir_op *op) {
 
 // lir GT foo,bar => result
 list *amd64_lower_gt(closure *c, lir_op *op) {
-    if (op->data_type == TYPE_BOOL) {
-        list *insts = list_new();
-        regs_t used_regs = {.count = 0};
+    list *insts = list_new();
+    regs_t used_regs = {.count = 0};
 
-        asm_operand_t *first = NEW(asm_operand_t);
-        list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-        list_append(insts, temp);
-        asm_operand_t *second = NEW(asm_operand_t);
-        temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
-        list_append(insts, temp);
+    asm_operand_t *first = NEW(asm_operand_t);
+    list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
+    list_append(insts, temp);
+    asm_operand_t *second = NEW(asm_operand_t);
+    temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
+    list_append(insts, temp);
 
-        asm_operand_t *result = NEW(asm_operand_t);
-        temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-        list_append(insts, temp);
+    asm_operand_t *result = NEW(asm_operand_t);
+    temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
+    list_append(insts, temp);
 
-        // TODO 不应该是 op 的 size， 而是参数的 size
-        // bool = int64 > int64
-        reg_t *reg = amd64_lower_next_reg(&used_regs, first->size);
-        list_push(insts, ASM_INST("mov", { REG(reg), first }));
-        list_push(insts, ASM_INST("cmp", { REG(reg), second }));
+    // bool = int64 > int64
+    reg_t *reg = amd64_lower_next_reg(&used_regs, first->size);
+    list_push(insts, ASM_INST("mov", { REG(reg), first }));
+    list_push(insts, ASM_INST("cmp", { REG(reg), second }));
 
-        // setg r/m8
-        list_push(insts, ASM_INST("setg", { result }));
+    // setg r/m8
+    list_push(insts, ASM_INST("setg", { result }));
 
-        return insts;
-    }
+    return insts;
 
     // float
-    error_exit("[amd64_lower_gt] type->data_type not identify, only support TYPE_INT");
-    return NULL;
+//    error_exit("[amd64_lower_gt] type->data_type not identify, only support TYPE_INT");
+//    return NULL;
 }
 
 
@@ -279,7 +276,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (v->stack_frame_offset > 0) {
-            return DISP_REG(rbp, -v->stack_frame_offset); // amd64 栈空间从大往小递增
+            return DISP_REG(rbp, -v->stack_frame_offset, v->size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
@@ -293,7 +290,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     // 简单立即数
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
-        // TODO 根据 int_value 的大小来选择合适的数据类型
+        // TODO 根据 int_value 的大小来选择合适的数据类型, 只有 UINT，负数有人用补码实现了。
         if (v->type == TYPE_INT) {
             return UINT32(v->int_value);
         }
@@ -364,7 +361,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
             asm_operand_register_t *reg = amd64_register_find(var->reg_id, var->size);;
-            asm_operand_t *temp = DISP_REG(reg, v->offset);
+            asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
             return insts;
@@ -375,8 +372,8 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
             // 生成 mov 指令（asm_mov）
-            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset) }));
-            asm_operand_t *temp = DISP_REG(reg, v->offset);
+            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset, QWORD) }));
+            asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             return insts;
         }
@@ -405,7 +402,7 @@ void amd64_lower_init() {
 reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size) {
     reg_t *r = (reg_t *) amd64_register_find(used->count, size);
     if (r == NULL) {
-        error_exit("[amd64_register_find] result null, count: %d, size: %v", used->count, size);
+        error_exit("[amd64_register_find] result null, count: %d, size: %d", used->count, size);
     }
     used->list[used->count++] = r;
     return r;
