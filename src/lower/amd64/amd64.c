@@ -12,6 +12,8 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_RETURN] = amd64_lower_return,
         [LIR_OP_TYPE_CMP_GOTO] = amd64_lower_cmp_goto,
         [LIR_OP_TYPE_GOTO] = amd64_lower_goto,
+        [LIR_OP_TYPE_GT] = amd64_lower_gt,
+        [LIR_OP_TYPE_MOVE] = amd64_lower_mov,
 };
 
 /**
@@ -170,6 +172,40 @@ list *amd64_lower_add(closure *c, lir_op *op) {
     return NULL;
 }
 
+// lir GT foo,bar => result
+list *amd64_lower_gt(closure *c, lir_op *op) {
+    if (op->data_type == TYPE_BOOL) {
+        list *insts = list_new();
+        regs_t used_regs = {.count = 0};
+
+        asm_operand_t *first = NEW(asm_operand_t);
+        list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
+        list_append(insts, temp);
+        asm_operand_t *second = NEW(asm_operand_t);
+        temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
+        list_append(insts, temp);
+
+        asm_operand_t *result = NEW(asm_operand_t);
+        temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
+        list_append(insts, temp);
+
+        // TODO 不应该是 op 的 size， 而是参数的 size
+        // bool = int64 > int64
+        reg_t *reg = amd64_lower_next_reg(&used_regs, first->size);
+        list_push(insts, ASM_INST("mov", { REG(reg), first }));
+        list_push(insts, ASM_INST("cmp", { REG(reg), second }));
+
+        // setg r/m8
+        list_push(insts, ASM_INST("setg", { result }));
+
+        return insts;
+    }
+
+    // float
+    error_exit("[amd64_lower_gt] type->data_type not identify, only support TYPE_INT");
+    return NULL;
+}
+
 
 list *amd64_lower_label(closure *c, lir_op *op) {
     list *insts = list_new();
@@ -191,7 +227,6 @@ list *amd64_lower_label(closure *c, lir_op *op) {
 list *amd64_lower_mov(closure *c, lir_op *op) {
     list *insts = list_new();
 
-    // 结构体处理
     if (op->data_type == TYPE_STRUCT) {
 //    regs_t used_regs = {.count = 0};
         // first => result
@@ -233,7 +268,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, op->data_type);
+    reg_t *reg = amd64_lower_next_reg(&used_regs, op->size);
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
@@ -247,7 +282,8 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
             return DISP_REG(rbp, -v->stack_frame_offset); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
-            asm_operand_register_t *reg = (asm_operand_register_t *) physical_regs.list[v->reg_id];
+            // 如果是 bool 类型
+            asm_operand_register_t *reg = amd64_register_find(v->reg_id, v->size);;
             return REG(reg);
         }
 
@@ -280,7 +316,8 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
 }
 
 /**
- * used_regs 围绕着单个指令进行
+ * lir_operand 中不能直接转换为 asm_operand 的参数
+ * type_string/lir_operand_memory
  * @param operand
  * @param asm_operand
  * @param used_regs
@@ -326,7 +363,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         lir_operand_var *var = v->base->value;
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
-            asm_operand_register_t *reg = (asm_operand_register_t *) physical_regs.list[var->reg_id];
+            asm_operand_register_t *reg = amd64_register_find(var->reg_id, var->size);;
             asm_operand_t *temp = DISP_REG(reg, v->offset);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
@@ -429,8 +466,7 @@ list *amd64_lower_fn_end(closure *c) {
     list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
     list_push(insts, ASM_INST("pop", { REG(rbp) }));
     list_push(insts, ASM_INST("ret", {}));
-    return
-            insts;
+    return insts;
 }
 
 list *amd64_lower_fn_formal_params(closure *c) {

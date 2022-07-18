@@ -1,6 +1,8 @@
 #include "register.h"
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
+#include "src/register/register.h"
+
 
 void amd64_register_init() {
     amd64_regs_table = table_new();
@@ -148,4 +150,11 @@ asm_operand_register_t *amd64_register_operand_new(char *name, uint8_t index, ui
 
     table_set(amd64_regs_table, amd64_register_table_key(index, size), reg);
     return reg;
+}
+
+regs_t *register_find(uint8_t index, uint8_t size) {
+    if (true) {
+        return (regs_t *) amd64_register_find(index, size);
+    }
+    return NULL;
 }

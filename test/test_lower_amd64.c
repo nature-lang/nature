@@ -299,27 +299,49 @@ static void test_lower_if() {
     main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
     main_closure->operates = list_op_new();
     lir_operand *foo = test_lir_temp("foo", 8);
+    lir_operand *cmp_res = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var("cmp_res", 16, BYTE));
 
     // 编写指令
-
     // mov [rbp+8],1
     lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1));
     mov_op->data_type = TYPE_INT;
     mov_op->size = QWORD;
 
-    // TODO foo > 1 的指令实现
 
-    lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
-                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "sum(1, 10) =>  %d\n"),
-                                   foo);
+    // cmp foo，1 => cmp_res
+    lir_op *cmp_gt_op = lir_op_new(LIR_OP_TYPE_GT, foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1), cmp_res);
+    cmp_gt_op->data_type = TYPE_BOOL;
+    cmp_gt_op->size = BYTE;
 
-    list_op_push(main_closure->operates, call_op);
-    list_op_push(main_closure->operates, debug_op);
+    // cmp goto
+    lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_CMP_GOTO, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
+                                     cmp_res, lir_new_label_operand(ALTERNATE_IF_IDENT));
+
+    //  true 条件
+    lir_op *true_op = lir_op_call("debug_printf", NULL, 1,
+                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo > 1\n"));
+    // return to end fn
+    lir_op *goto_end = lir_op_goto(lir_new_label_operand("end_main"));
+
+    lir_op *label_alert_op = lir_op_label(ALTERNATE_IF_IDENT);
+    lir_op *false_op = lir_op_call("debug_printf", NULL, 1,
+                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo <= 1\n"));
+    lir_op *label_end_main = lir_op_label("end_main");
+
+    list_op_push(main_closure->operates, mov_op);
+    list_op_push(main_closure->operates, cmp_gt_op);
+    list_op_push(main_closure->operates, cmp_goto_op);
+    list_op_push(main_closure->operates, true_op);
+    list_op_push(main_closure->operates, goto_end);
+    list_op_push(main_closure->operates, label_alert_op);
+    list_op_push(main_closure->operates, false_op);
+    list_op_push(main_closure->operates, label_end_main);
 
     list *insts = amd64_lower_closure(main_closure);
 
+//    insts = amd64_lower_op(main_closure, mov_op);
 
-    elf_init("call.n");
+    elf_init("if.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
     elf_var_decl_list_build(amd64_decl_list);
     // 代码段
@@ -331,7 +353,7 @@ static void test_lower_if() {
     uint64_t count;
     uint8_t *binary = elf_encoding(elf, &count);
     // 输出到文件
-    elf_to_file(binary, count, "call.o");
+    elf_to_file(binary, count, "if.o");
 }
 
 
@@ -341,6 +363,7 @@ int main(void) {
 //            cmocka_unit_test(test_lower_debug_printf),
 //            cmocka_unit_test(test_lower_sum),
 //            cmocka_unit_test(test_lower_call),
+            cmocka_unit_test(test_lower_if),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
