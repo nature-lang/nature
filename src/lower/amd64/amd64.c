@@ -345,7 +345,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             char *unique_name = AMD64_DECL_UNIQUE_NAME();
             asm_var_decl *decl = NEW(asm_var_decl);
             decl->name = unique_name;
-            decl->size = strlen(v->string_value);
+            decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
             decl->type = ASM_VAR_DECL_TYPE_STRING;
             list_push(amd64_decl_list, decl);

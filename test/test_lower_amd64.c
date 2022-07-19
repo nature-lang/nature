@@ -300,7 +300,7 @@ static void test_lower_if() {
 
     // 编写指令
     // mov [rbp+8],1
-    lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT32, int_value, 66));
+    lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT32, int_value, 2));
     mov_op->data_type = TYPE_INT;
     mov_op->size = QWORD;
 
