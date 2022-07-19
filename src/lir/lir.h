@@ -81,14 +81,6 @@
   _var;                                   \
 })
 
-
-#define LIR_NEW_LABEL_OPERAND(_ident) \
-({                                 \
-  lir_operand_label *label = NEW(lir_operand_label); \
-  label->ident = _ident;              \
-  label;                                   \
-})
-
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
@@ -173,6 +165,7 @@ typedef struct {
 
 typedef struct {
     char *ident;
+    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
 } lir_operand_label;
 
 typedef enum {
@@ -329,11 +322,11 @@ lir_operand *lir_new_param_var_operand();
 
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
 
-lir_operand *lir_new_label_operand(string ident);
+lir_operand *lir_new_label_operand(string ident, bool is_local);
 
 lir_operand_actual_param *lir_new_actual_param();
 
-lir_op *lir_op_label(string name);
+lir_op *lir_op_label(string name, bool is_local);
 
 lir_op *lir_op_unique_label(string name);
 

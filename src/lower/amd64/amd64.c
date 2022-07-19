@@ -207,7 +207,7 @@ list *amd64_lower_gt(closure *c, lir_op *op) {
 list *amd64_lower_label(closure *c, lir_op *op) {
     list *insts = list_new();
     lir_operand_label *label_operand = op->result->value;
-    list_push(insts, ASM_INST("label", { LABEL(label_operand->ident) }));
+    list_push(insts, ASM_INST("label", { SYMBOL(label_operand->ident, true, label_operand->is_local) }));
     return insts;
 }
 
@@ -265,7 +265,9 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, op->size);
+    // TODO 是否需要选择 result 和 first 中的较大的一方？
+    // TODO 如果是 int 类型，则不能使用，所以提取 size 需要封装一个方法来实现
+    reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
@@ -290,9 +292,20 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     // 简单立即数
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
-        // TODO 根据 int_value 的大小来选择合适的数据类型, 只有 UINT，负数有人用补码实现了。
         if (v->type == TYPE_INT) {
             return UINT32(v->int_value);
+        }
+        if (v->type == TYPE_INT8) {
+            return UINT8(v->int_value);
+        }
+        if (v->type == TYPE_INT16) {
+            return UINT16(v->int_value);
+        }
+        if (v->type == TYPE_INT32) {
+            return UINT32(v->int_value);
+        }
+        if (v->type == TYPE_INT64) {
+            return UINT64(v->int_value);
         }
         if (v->type == TYPE_FLOAT) {
             return FLOAT32(v->float_value);

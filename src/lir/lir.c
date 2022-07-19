@@ -30,7 +30,7 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
     }
     va_end(args);
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_CALL, lir_new_label_operand(name), call_params_operand, result);
+    return lir_op_new(LIR_OP_TYPE_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
 /**
@@ -46,19 +46,23 @@ lir_operand *lir_new_temp_var_operand(ast_type type) {
     return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(unique_ident));
 }
 
-lir_operand *lir_new_label_operand(char *ident) {
+lir_operand *lir_new_label_operand(char *ident, bool is_local) {
+    lir_operand_label *label = NEW(lir_operand_label);
+    label->ident = ident;
+    label->is_local = is_local;
+
     lir_operand *operand = NEW(lir_operand);
     operand->type = LIR_OPERAND_TYPE_LABEL;
-    operand->value = LIR_NEW_LABEL_OPERAND(ident);
+    operand->value = label;
     return operand;
 }
 
-lir_op *lir_op_label(char *ident) {
-    return lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, lir_new_label_operand(ident));
+lir_op *lir_op_label(char *ident, bool is_local) {
+    return lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, lir_new_label_operand(ident, is_local));
 }
 
 lir_op *lir_op_unique_label(char *ident) {
-    return lir_op_label(LIR_UNIQUE_NAME(ident));
+    return lir_op_label(LIR_UNIQUE_NAME(ident), false);
 }
 
 lir_op *lir_op_goto(lir_operand *label) {

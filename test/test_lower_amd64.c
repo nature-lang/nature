@@ -18,10 +18,7 @@ static lir_operand_var *test_lir_operand_var(char *ident, int stack_frame_offset
 }
 
 static lir_operand *test_lir_temp(char *ident, int stack_frame_offset) {
-    lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_VAR;
-    operand->value = test_lir_operand_var(ident, stack_frame_offset, QWORD);
-    return operand;
+    return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var(ident, stack_frame_offset, QWORD));
 }
 
 static list *test_elf_main_insts(uint8_t stack_offset) {
@@ -298,12 +295,12 @@ static void test_lower_if() {
     main_closure->end_label = "main_end";
     main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
     main_closure->operates = list_op_new();
-    lir_operand *foo = test_lir_temp("foo", 8);
+    lir_operand *foo = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var("foo", 8, QWORD));
     lir_operand *cmp_res = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var("cmp_res", 16, BYTE));
 
     // 编写指令
     // mov [rbp+8],1
-    lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1));
+    lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT32, int_value, 66));
     mov_op->data_type = TYPE_INT;
     mov_op->size = QWORD;
 
@@ -315,25 +312,27 @@ static void test_lower_if() {
 
     // cmp goto
     lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_CMP_GOTO, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
-                                     cmp_res, lir_new_label_operand(ALTERNATE_IF_IDENT));
+                                     cmp_res, lir_new_label_operand(END_IF_IDENT, true));
 
     //  true 条件
     lir_op *true_op = lir_op_call("debug_printf", NULL, 1,
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo > 1\n"));
-    // return to end fn
-    lir_op *goto_end = lir_op_goto(lir_new_label_operand("end_main"));
 
-    lir_op *label_alert_op = lir_op_label(ALTERNATE_IF_IDENT);
+    // return to end fn
+    lir_op *goto_end = lir_op_goto(lir_new_label_operand("end_main", true));
+
+    lir_op *label_end_if_op = lir_op_label(END_IF_IDENT, false);
     lir_op *false_op = lir_op_call("debug_printf", NULL, 1,
                                    LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo <= 1\n"));
-    lir_op *label_end_main = lir_op_label("end_main");
+
+    lir_op *label_end_main = lir_op_label("end_main", false);
 
     list_op_push(main_closure->operates, mov_op);
     list_op_push(main_closure->operates, cmp_gt_op);
     list_op_push(main_closure->operates, cmp_goto_op);
     list_op_push(main_closure->operates, true_op);
     list_op_push(main_closure->operates, goto_end);
-//    list_op_push(main_closure->operates, label_alert_op);
+    list_op_push(main_closure->operates, label_end_if_op);
     list_op_push(main_closure->operates, false_op);
     list_op_push(main_closure->operates, label_end_main);
 

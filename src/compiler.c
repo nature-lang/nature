@@ -92,7 +92,7 @@ list_op *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *t
 
     list_op *list = list_op_new();
     // 添加 label 入口
-    list_op_push(list, lir_op_label(ast->function->name));
+    list_op_push(list, lir_op_label(ast->function->name, false));
 
     // 将 label 添加到 target 中
     if (target != NULL) {
@@ -321,8 +321,8 @@ list_op *compiler_if(closure *c, ast_if_stmt *if_stmt) {
     list_op *list = compiler_expr(c, if_stmt->condition, condition_target);
     // 判断结果是否为 false, false 对应 else
     lir_operand *false_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false);
-    lir_operand *end_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_IF_IDENT));
-    lir_operand *alternate_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(ALTERNATE_IF_IDENT));
+    lir_operand *end_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_IF_IDENT), true);
+    lir_operand *alternate_label_operand = lir_new_label_operand(LIR_UNIQUE_NAME(ALTERNATE_IF_IDENT), true);
 
     lir_op *cmp_goto;
     if (if_stmt->alternate.count == 0) {
@@ -699,7 +699,7 @@ list_op *compiler_while(closure *c, ast_while_stmt *ast) {
     list_op *list = list_op_new();
     lir_op *while_label = lir_op_unique_label(WHILE_IDENT);
     list_op_push(list, while_label);
-    lir_operand *end_while_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_WHILE_IDENT));
+    lir_operand *end_while_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_WHILE_IDENT), true);
 
     lir_operand *condition_target = lir_new_temp_var_operand(ast->condition.data_type);
     list_op_append(list, compiler_expr(c, ast->condition, condition_target));

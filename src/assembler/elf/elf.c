@@ -1,5 +1,6 @@
 #include "elf.h"
 #include "src/lib/helper.h"
+#include "src/lib/error.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -11,14 +12,56 @@ static void elf_var_operand_rewrite(asm_operand_t *operand) {
     operand->value = r;
 }
 
-static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool is_jmp) {
+
+static bool elf_is_jmp(asm_inst_t asm_inst) {
+    return asm_inst.name[0] == 'j';
+}
+
+static bool elf_is_call(asm_inst_t asm_inst) {
+    return str_equal(asm_inst.name, "call");
+}
+
+static uint8_t elf_jmp_reduce_count(asm_inst_t asm_inst) {
+    if (asm_inst.name[0] != 'j') {
+        return 0;
+    }
+
+    if (str_equal(asm_inst.name, "jmp")) {
+        //   b:	eb f3                	jmp    0 <test>
+        //   d:	e9 14 00 00 00       	jmpq   26 <test+0x26>
+        return 5 - 2;
+    }
+    //   3:	74 fb                	je     0 <test>
+    //   5:	0f 84 08 00 00 00    	je     13 <test+0x13>
+    return 6 - 2;
+}
+
+static uint8_t elf_jmp_inst_count(asm_inst_t inst, uint8_t size) {
+    if (inst.name[0] != 'j') {
+        error_exit("[elf_jmp_inst_count] inst: %s not jmp or jcc:", inst.name);
+    }
+    if (size == BYTE) {
+        return 2;
+    }
+    if (str_equal(inst.name, "jmp")) {
+        return 5;
+    }
+    return 6;
+}
+
+static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int rel_diff) {
+    // 已经确定了指令长度，不能再随意修正了
     if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
         if (rel_diff == 0) {
             return;
         }
         if (operand->type == ASM_OPERAND_TYPE_UINT32) {
+            uint8_t inst_count = 5;
+            if (!elf_is_call(inst)) {
+                inst_count = elf_jmp_inst_count(inst, DWORD);
+            }
             asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-            v->value = (uint32_t) (rel_diff - 5);
+            v->value = (uint32_t) (rel_diff - inst_count);
             operand->value = v;
         } else {
             asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
@@ -28,13 +71,20 @@ static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool i
         return;
     }
 
-    if (rel_diff == 0 || abs(rel_diff) > 128 || !is_jmp) {
+    // symbol to rel32
+    // call 指令不能改写成 rel8
+    if (rel_diff == 0 || abs(rel_diff) > 128 || elf_is_call(inst)) {
+        uint8_t inst_count = 5;
+        if (!elf_is_call(inst)) {
+            inst_count = elf_jmp_inst_count(inst, DWORD);
+        }
+
         operand->type = ASM_OPERAND_TYPE_UINT32;
         operand->size = DWORD;
         asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
-            v->value = (uint32_t) (rel_diff - 5); // -5 表示去掉当前指令的差值
+            v->value = (uint32_t) (rel_diff - inst_count); // -5 表示去掉当前指令的差值
         }
         operand->value = v;
         return;
@@ -48,30 +98,12 @@ static void elf_operand_rewrite_rel(asm_operand_t *operand, int rel_diff, bool i
     operand->value = v;
 }
 
-static bool elf_is_jmp(asm_inst_t asm_inst) {
-    return asm_inst.name[0] == 'j';
-}
 
-void elf_text_inst_build(asm_inst_t asm_inst) {
-    if (str_equal(asm_inst.name, "label")) {
-        // text 中唯一需要注册到符号表的数据, 且不需要编译进 elf_text_item
-        asm_operand_symbol_t *s = asm_inst.operands[0]->value;
-        elf_symbol_t *symbol = NEW(elf_symbol_t);
-        symbol->name = s->name;
-        symbol->type = ELF_SYMBOL_TYPE_FN;
-        symbol->section = ELF_SECTION_TEXT;
-        symbol->size = 0;
-        symbol->is_rel = false;
-        symbol->is_local = s->is_local; // 局部 label 在生成符号表的时候可以忽略
-        elf_confirm_text_rel(symbol->name);
-
-        // confirm 后可能会产生 offset 修正,所以需要在 confirm 之后再确定当前 offset
-        symbol->offset = elf_current_text_offset();
-        elf_symbol_insert(symbol);
-        return; // label 不需要编译成指令
-    }
-
-    uint64_t *offset = elf_current_text_offset();
+/**
+ * TODO symbol 必须和 起始 inst 或者虚拟 label 共用 offset
+ * @param asm_inst
+ */
+void elf_text_inst_build(asm_inst_t asm_inst, uint64_t *offset) {
     elf_text_inst_t *inst = ELF_TEXT_INST_NEW(asm_inst);
 
     // 外部标签引用处理
@@ -87,14 +119,19 @@ void elf_text_inst_build(asm_inst_t asm_inst) {
                 // 计算 offset 并填充
                 int rel_diff = *symbol->offset - global_text_offset;
                 // call symbol 只有 rel32
-                elf_operand_rewrite_rel(operand, rel_diff, elf_is_jmp(asm_inst));
+                elf_operand_rewrite_rel(asm_inst, operand, rel_diff);
             } else {
                 // 引用了 label 符号，但是符号确不在符号表中
                 // 此时使用 rel32 占位，如果是 jmp 指令后续可能需要替换
-                elf_operand_rewrite_rel(operand, 0, elf_is_jmp(asm_inst));
-                inst->rel_operand = operand;
-                inst->rel_symbol = symbol_operand->name;
-                inst->is_jmp_symbol = elf_is_jmp(asm_inst);
+                elf_operand_rewrite_rel(asm_inst, operand, 0);
+                inst->rel_operand = operand; // 二次遍历时改写
+                inst->rel_symbol = symbol_operand->name; // 二次遍历是需要
+                // 如果是 jmp 或者 jcc 指令就需要改写
+                uint8_t reduce_count = elf_jmp_reduce_count(asm_inst);
+                if (reduce_count > 0) {
+                    inst->may_need_reduce = true;
+                    inst->reduce_count = reduce_count;
+                }
             }
         } else {
             // 数据符号重写(symbol to 0(%rip))
@@ -131,16 +168,16 @@ void elf_confirm_text_rel(string name) {
     }
 
     list_node *current = elf_text_inst_list->rear->prev; // rear 为 empty 占位
-    uint8_t find_count = 0; // 每找到一个 offset 距离将缩短 3 个
+    uint8_t reduce_count = 0;
     // 从尾部像前找, 找到超过 128 即可
     while (true) {
         elf_text_inst_t *inst = current->value;
-        if (global_text_offset - (find_count * 3) - *inst->offset > 128) {
+        if ((global_text_offset - reduce_count - *inst->offset) > 128) {
             break;
         }
 
-        if (inst->is_jmp_symbol && str_equal(inst->rel_symbol, name)) {
-            find_count += 1;
+        if (inst->may_need_reduce && str_equal(inst->rel_symbol, name)) {
+            reduce_count += inst->reduce_count;
         }
 
         // current 保存当前值
@@ -150,15 +187,17 @@ void elf_confirm_text_rel(string name) {
         current = current->prev;
     }
 
-    if (find_count == 0) {
+    if (reduce_count == 0) {
         return;
     }
 
-    uint64_t *offset = ((elf_text_inst_t *) current->value)->offset;
+    // 这一行非常关键
+    uint64_t *offset = NEW(uint64_t);
+    *offset = *(((elf_text_inst_t *) current->value)->offset);
     // 从 current 开始，从左往右做 rewrite
     while (current->value != NULL) {
         elf_text_inst_t *inst = current->value;
-        if (inst->is_jmp_symbol && str_equal(inst->rel_symbol, name)) {
+        if (inst->may_need_reduce && str_equal(inst->rel_symbol, name)) {
             // 重写 inst 指令 rel32 为 rel8
             // jmp 的具体位置可以不计算，等到二次遍历再计算
             // 届时符号表已经全部收集完毕
@@ -185,7 +224,7 @@ void elf_rewrite_text_rel(elf_text_inst_t *t) {
     t->asm_inst.operands[0]->size = BYTE;
     t->asm_inst.operands[0]->value = operand;
     t->data = opcode_encoding(t->asm_inst, &t->count);
-//    t->rel_symbol = NULL; // TODO 这里为啥要清空引用的 rel_symbol?
+    t->may_need_reduce = false;
 }
 
 /**
@@ -212,7 +251,7 @@ void elf_text_inst_list_second_build() {
         if (symbol != NULL && !symbol->is_rel) {
             int rel_diff = *symbol->offset - *inst->offset;
 
-            elf_operand_rewrite_rel(inst->rel_operand, rel_diff, inst->is_jmp_symbol);
+            elf_operand_rewrite_rel(inst->asm_inst, inst->rel_operand, rel_diff);
 
             // 重新 encoding 指令
             inst->data = opcode_encoding(inst->asm_inst, &inst->count);
@@ -251,9 +290,17 @@ void elf_text_inst_list_build(list *inst_list) {
         return;
     }
     list_node *current = inst_list->front;
+    uint64_t *offset = elf_current_text_offset();
     while (current->value != NULL) {
         asm_inst_t *inst = current->value;
-        elf_text_inst_build(*inst);
+        if (str_equal(inst->name, "label")) {
+            elf_text_label_build(*inst, offset);
+            current = current->next;
+            continue;
+        }
+        elf_text_inst_build(*inst, offset);
+        offset = elf_current_text_offset();
+
         current = current->next;
     }
 }
@@ -799,4 +846,21 @@ void elf_init(char *_filename) {
     elf_rel_list = list_new();
 }
 
+void elf_text_label_build(asm_inst_t asm_inst, uint64_t *offset) {
+    // text 中唯一需要注册到符号表的数据, 且不需要编译进 elf_text_item
+    asm_operand_symbol_t *s = asm_inst.operands[0]->value;
+    elf_symbol_t *symbol = NEW(elf_symbol_t);
+    symbol->name = s->name;
+    symbol->type = ELF_SYMBOL_TYPE_FN;
+    symbol->section = ELF_SECTION_TEXT;
+    symbol->size = 0;
+    symbol->is_rel = false;
+    symbol->is_local = s->is_local; // 局部 label 在生成符号表的时候可以忽略
 
+    elf_confirm_text_rel(symbol->name);
+
+    // confirm 后可能会产生 offset 修正,所以需要在 confirm 之后再确定当前 offset
+    *offset = global_text_offset;
+    symbol->offset = offset; // symbol 和 inst 共用 offset
+    elf_symbol_insert(symbol);
+}
