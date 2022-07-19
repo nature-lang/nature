@@ -71,7 +71,7 @@ string ast_expr_operator_to_string[100];
 typedef struct {
     void *value; // char**,ast_map_decl*....
     type_category category; // base_type, custom_type, function, list, map
-    bool is_origin;
+    bool is_origin; // type a = int, type b = a，int is origin
 } ast_type;
 
 typedef struct {
@@ -83,7 +83,7 @@ typedef struct {
 typedef struct {
     int line;
     ast_stmt_expr_type type; // 表达式类型
-    ast_type data_type; // 数据类型
+    ast_type data_type;
     void *expr;
 } ast_expr;
 
@@ -129,7 +129,7 @@ typedef struct {
 // int a;
 typedef struct {
     string ident;
-    ast_type type;
+    ast_type type; // ast_type 已经决定了 size
 } ast_var_decl;
 
 // 值类型

@@ -13,8 +13,8 @@ int analysis_line;
 
 typedef struct {
 //  ast_type type;
-    symbol_type belong; // function/var/
-    void *decl; // ast_var_decl,ast_custom_type_decl,ast_function_decl
+    symbol_type belong; // function/var/type_decl
+    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_function_decl
     string ident; // 原始名称
     string unique_ident; // 唯一名称
     int scope_depth;

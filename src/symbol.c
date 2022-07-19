@@ -37,6 +37,7 @@ size_t struct_offset(ast_struct_decl *struct_decl, char *property) {
     return offset;
 }
 
+// compiler 阶段临时生成的数据
 void symbol_set_temp_ident(char *unique_ident, ast_type type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;

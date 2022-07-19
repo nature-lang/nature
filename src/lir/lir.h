@@ -65,7 +65,7 @@
 ({                                 \
   lir_operand_var *_var = NEW(lir_operand_var); \
   _var->old = _ident;    \
-  _var->ident = _ident;              \
+  _var->ident = _ident;             \
   _var;                                   \
 })
 
@@ -127,7 +127,7 @@ typedef struct {
     uint16_t stack_frame_offset; // 栈分配
     uint8_t reg_id; // reg list index, 寄存器分配
     uint8_t size; // BYTE/QWORD/DWORD
-    bool is_label; // 是否为函数符号
+    bool is_label;
 } lir_operand_var;
 
 typedef struct lir_vars {
@@ -315,6 +315,8 @@ lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure(ast_closure_decl *ast);
+
+lir_operand_var *lir_new_var_operand(string ident, ast_type type);
 
 lir_operand *lir_new_temp_var_operand(ast_type type);
 

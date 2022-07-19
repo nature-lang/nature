@@ -41,7 +41,7 @@ static char *open(char *path) {
 
 int main() {
     // 读取文件
-    char *source = open("/home/vagrant/Code/nature/example/string.n");
+    char *source = open("/home/vagrant/Code/nature/example/ssa.n");
 
     // scanner
     list *token_list = scanner(source);

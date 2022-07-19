@@ -100,7 +100,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     op->succ = NULL;
 
 #ifdef DEBUG_COMPILER_LIR
-    debug_lir(lir_line, type);
+    debug_lir(lir_line, op);
 #endif
 
     return op;

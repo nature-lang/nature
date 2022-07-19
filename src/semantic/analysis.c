@@ -278,8 +278,7 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analy
 void analysis_begin_scope() {
     analysis_current->scope_depth++;
     analysis_local_scope *current_scope = analysis_current->current_scope;
-    analysis_current->current_scope =
-            analysis_new_local_scope(analysis_current->scope_depth, current_scope);
+    analysis_current->current_scope = analysis_new_local_scope(analysis_current->scope_depth, current_scope);
 }
 
 void analysis_end_scope() {
@@ -396,7 +395,7 @@ void analysis_ident(ast_expr *expr) {
         exit(0);
     }
 
-    // 外部作用域变量改写, 假如 foo 是外部便令，则 foo => env[free_var_index]
+    // 外部作用域变量改写, 假如 foo 是外部变量，则 foo => env[free_var_index]
     expr->type = AST_EXPR_ACCESS_ENV;
     ast_access_env *env_index = malloc(sizeof(ast_access_env));
     env_index->env = ast_new_ident(analysis_current->env_unique_name);

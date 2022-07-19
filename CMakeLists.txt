@@ -92,6 +92,8 @@ add_executable(nature main.c
         ${SRC_SYNTAX}
         ${SRC_ASSEMBLER})
 
+target_link_libraries(nature m)
+
 include_directories(.)
 
 enable_testing()
