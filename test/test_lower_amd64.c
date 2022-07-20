@@ -11,10 +11,9 @@ static lir_operand_var *test_lir_operand_var(char *ident, int stack_frame_offset
     var->old = ident;
     var->ident = ident;
     if (stack_frame_offset >= 0) {
-        var->stack_frame_offset = stack_frame_offset;
+        var->local->stack_frame_offset = stack_frame_offset;
     }
     var->size = size;
-    var->is_label = false;
 }
 
 static lir_operand *test_lir_temp(char *ident, int stack_frame_offset) {
@@ -24,7 +23,7 @@ static lir_operand *test_lir_temp(char *ident, int stack_frame_offset) {
 static list *test_elf_main_insts(uint8_t stack_offset) {
     list *insts = list_new();
 //    list_push(insts, ASM_INST("label", { SYMBOL("_start", true, false) }));
-    list_push(insts, ASM_INST("label", { SYMBOL("main", true, false) }));
+    list_push(insts, ASM_INST("label", { SYMBOL("main", false) }));
     list_push(insts, ASM_INST("push", { REG(rbp) }));
     list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(stack_offset) })); // 防止其他函数调用占用这一段栈空间
@@ -165,8 +164,7 @@ static void test_lower_sum() {
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 22),
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 33),
                                 temp_var);
-    sum_op->data_type = TYPE_INT;
-    sum_op->size = QWORD;
+    sum_op->result_type = TYPE_INT;
 
     lir_op *debug = lir_op_call("debug_printf", NULL, 2,
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "add 22 + 33 = %d\n"),
@@ -224,11 +222,9 @@ static void test_lower_call() {
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, a),
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, b),
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
-    sum_op->data_type = TYPE_INT;
-    sum_op->size = QWORD;
+    sum_op->result_type = TYPE_INT;
     lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
-    return_op->data_type = TYPE_INT;
-    return_op->size = QWORD;
+    return_op->result_type = TYPE_INT;
     list_push(sum_closure->operates, sum_op);
     list_push(sum_closure->operates, return_op);
 
@@ -251,8 +247,7 @@ static void test_lower_call() {
     lir_op *call_op = lir_op_call("sum", foo, 2,
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1),
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 10));
-    call_op->data_type = TYPE_INT;
-    call_op->size = QWORD;
+    call_op->result_type = TYPE_INT;
 
 
     lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
@@ -301,14 +296,12 @@ static void test_lower_if() {
     // 编写指令
     // mov [rbp+8],1
     lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT32, int_value, 2));
-    mov_op->data_type = TYPE_INT;
-    mov_op->size = QWORD;
+    mov_op->result_type = TYPE_INT;
 
 
     // cmp foo，1 => cmp_res
     lir_op *cmp_gt_op = lir_op_new(LIR_OP_TYPE_GT, foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1), cmp_res);
-    cmp_gt_op->data_type = TYPE_BOOL;
-    cmp_gt_op->size = BYTE;
+    cmp_gt_op->result_type = TYPE_BOOL;
 
     // cmp goto
     lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_CMP_GOTO, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),

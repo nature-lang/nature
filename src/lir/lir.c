@@ -39,12 +39,13 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand *lir_new_temp_var_operand(ast_type type) {
+lir_operand *lir_new_temp_var_operand(closure *c, ast_type type) {
     string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
 
     symbol_set_temp_ident(unique_ident, type);
+    lir_new_local_var(c, unique_ident, type);
 
-    return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(unique_ident));
+    return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, unique_ident));
 }
 
 lir_operand *lir_new_label_operand(char *ident, bool is_local) {
@@ -75,7 +76,7 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
 }
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
-    // 字符串 copy
+    // 变量 copy,避免寄存器分配时相互粘连
     if (first != NULL && first->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *operand_var = first->value;
         first = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
@@ -97,8 +98,6 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     op->first = first;
     op->second = second;
     op->result = result;
-    op->pred = NULL;
-    op->succ = NULL;
 
 #ifdef DEBUG_COMPILER_LIR
     debug_lir(lir_line, op);
@@ -119,6 +118,7 @@ closure *lir_new_closure(ast_closure_decl *ast) {
     new->blocks.count = 0;
     new->order_blocks.count = 0;
 
+    new->local_vars = table_new();
     new->interval_table = table_new();
 
     return new;
@@ -173,14 +173,15 @@ lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
     // 1. 读取符号信息
     lir_local_var *local = table_get(c->local_vars, ident);
     // TODO 也有可能是外部 ident
+    // 假如使用了外部的符号，比如  int m = request.max 需要为其分配栈空间吗？
+    // 不用，能够使用的外部符号都是在 .data 段有一席之地的。但是如何能够知道 size？
     if (local == NULL) {
         error_exit("[lir_new_var_operand] ident '%s' not found in closure", ident);
     }
     lir_operand_var *var = NEW(lir_operand_var);
+    var->local = local;
     var->ident = ident;
     var->old = ident;
-    var->is_label = false;
-    var->stack_frame_offset = local->stack_frame_offset;
     var->reg_id = 0;
     var->size = type_sizeof(local->type);
 

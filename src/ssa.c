@@ -341,11 +341,12 @@ void ssa_use_def(closure *c) {
 
         lir_basic_block *block = c->blocks.list[label];
 
-        lir_op *current_op = block->operates->front;
-        while (current_op != NULL) {
+        list_node *current = block->operates->front;
+        while (current->value != NULL) {
+            lir_op *op = current->value;
             // first param (use)
-            if (current_op->first != NULL && current_op->first->type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) current_op->first->value;
+            if (op->first != NULL && op->first->type == LIR_OPERAND_TYPE_VAR) {
+                lir_operand_var *var = (lir_operand_var *) op->first->value;
                 bool is_def = ssa_var_belong(var, def);
                 if (!is_def && !table_exist(exist_use, var->ident)) {
                     use.list[use.count++] = var;
@@ -359,8 +360,8 @@ void ssa_use_def(closure *c) {
             }
 
             // second param (use)
-            if (current_op->second != NULL && current_op->second->type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) current_op->second->value;
+            if (op->second != NULL && op->second->type == LIR_OPERAND_TYPE_VAR) {
+                lir_operand_var *var = (lir_operand_var *) op->second->value;
                 bool is_def = ssa_var_belong(var, def);
                 if (!is_def && !table_exist(exist_use, var->ident)) {
                     use.list[use.count++] = var;
@@ -374,8 +375,8 @@ void ssa_use_def(closure *c) {
             }
 
             // def
-            if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) current_op->result->value;
+            if (op->result != NULL && op->result->type == LIR_OPERAND_TYPE_VAR) {
+                lir_operand_var *var = (lir_operand_var *) op->result->value;
                 if (!table_exist(exist_def, var->ident)) {
                     def.list[def.count++] = var;
                     table_set(exist_use, var->ident, var);
@@ -387,7 +388,7 @@ void ssa_use_def(closure *c) {
                 }
             }
 
-            current_op = current_op->succ;
+            current = current->next;
         }
 
         block->use = use;
@@ -496,33 +497,33 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
 
     // 当前块内的先命名
     while (current->value != NULL) {
-        lir_op *current_op = current->value;
+        lir_op *op = current->value;
         // phi body 由当前块的前驱进行编号
-        if (current_op->type == LIR_OP_TYPE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_operand_var *) current_op->result->value, var_number_table,
+        if (op->type == LIR_OP_TYPE_PHI) {
+            uint8_t number = ssa_new_var_number((lir_operand_var *) op->result->value, var_number_table,
                                                 stack_table);
-            ssa_rename_var((lir_operand_var *) current_op->result->value, number);
+            ssa_rename_var((lir_operand_var *) op->result->value, number);
 
-            current_op = current_op->succ;
+            current = current->next;
             continue;
         }
 
-        if (current_op->first != NULL && current_op->first->type == LIR_OPERAND_TYPE_VAR) {
-            lir_operand_var *var = (lir_operand_var *) current_op->first->value;
+        if (op->first != NULL && op->first->type == LIR_OPERAND_TYPE_VAR) {
+            lir_operand_var *var = (lir_operand_var *) op->first->value;
             var_number_stack *stack = table_get(stack_table, var->old);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
         }
 
-        if (current_op->second != NULL && current_op->second->type == LIR_OPERAND_TYPE_VAR) {
-            lir_operand_var *var = (lir_operand_var *) current_op->second->value;
+        if (op->second != NULL && op->second->type == LIR_OPERAND_TYPE_VAR) {
+            lir_operand_var *var = (lir_operand_var *) op->second->value;
             var_number_stack *stack = table_get(stack_table, var->old);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
         }
 
-        if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_TYPE_VAR) {
-            lir_operand_var *var = (lir_operand_var *) current_op->result->value;
+        if (op->result != NULL && op->result->type == LIR_OPERAND_TYPE_VAR) {
+            lir_operand_var *var = (lir_operand_var *) op->result->value;
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table);
             ssa_rename_var(var, number);
         }

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "src/lib/helper.h"
 #include "analysis.h"
 #include "src/lib/error.h"
 #include "src/lib/table.h"
@@ -373,6 +374,11 @@ void analysis_expr(ast_expr *expr) {
 void analysis_ident(ast_expr *expr) {
     ast_ident *ident = expr->expr;
 
+    // if ident is external symbol，not analysis and rename
+    if (is_extern_symbol(ident->literal)) {
+        return;
+    }
+
     // 在当前函数作用域中查找变量定义
     analysis_local_scope *current_scope = analysis_current->current_scope;
     while (current_scope != NULL) {
@@ -387,7 +393,6 @@ void analysis_ident(ast_expr *expr) {
         current_scope = current_scope->parent;
     }
 
-
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
     int8_t free_var_index = analysis_resolve_free(analysis_current, ident->literal);
     if (free_var_index == -1) {
@@ -395,7 +400,7 @@ void analysis_ident(ast_expr *expr) {
         exit(0);
     }
 
-    // 外部作用域变量改写, 假如 foo 是外部变量，则 foo => env[free_var_index]
+    // 外部作用域变量改写, 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
     expr->type = AST_EXPR_ACCESS_ENV;
     ast_access_env *env_index = malloc(sizeof(ast_access_env));
     env_index->env = ast_new_ident(analysis_current->env_unique_name);

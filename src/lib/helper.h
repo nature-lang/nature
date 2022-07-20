@@ -13,4 +13,6 @@ char *str_connect(char *a, char *b);
 
 void str_replace(char *str, char from, char to);
 
+char *file_read(char *path);
+
 #endif //NATURE_SRC_LIB_HELPER_H_

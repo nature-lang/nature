@@ -50,7 +50,8 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     ast_var_decl *var_decl = SYMBOL_GET_VAR_DECL(var->old);
 
-    sprintf(buf, "VAR[%s:%s]", type_to_string[var_decl->type.category], var->ident);
+    sprintf(buf, "VAR[%d|%s:%s]", *var->local->stack_frame_offset, type_to_string[var->local->type.category],
+            var->ident);
     return buf;
 }
 

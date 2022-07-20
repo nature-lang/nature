@@ -61,11 +61,11 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
                 inst_count = elf_jmp_inst_count(inst, DWORD);
             }
             asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-            v->value = (uint32_t)(rel_diff - inst_count);
+            v->value = (uint32_t) (rel_diff - inst_count);
             operand->value = v;
         } else {
             asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-            v->value = (uint8_t)(rel_diff - 2); // -2 表示去掉当前指令的差值
+            v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
             operand->value = v;
         }
         return;
@@ -84,7 +84,7 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
         asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
-            v->value = (uint32_t)(rel_diff - inst_count); // -5 表示去掉当前指令的差值
+            v->value = (uint32_t) (rel_diff - inst_count); // -5 表示去掉当前指令的差值
         }
         operand->value = v;
         return;
@@ -94,7 +94,7 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
     operand->type = ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-    v->value = (uint8_t)(rel_diff - 2); // -2 表示去掉当前指令的差值
+    v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
     operand->value = v;
 }
 
@@ -107,24 +107,25 @@ void elf_text_inst_build(asm_inst_t asm_inst, uint64_t *offset) {
     elf_text_inst_t *inst = ELF_TEXT_INST_NEW(asm_inst);
 
     // 外部标签引用处理
-    asm_operand_t *operand = asm_symbol_operand(asm_inst);
-    if (operand != NULL) {
+    asm_operand_t *rel_operand = asm_symbol_operand(asm_inst);
+    // TODO call 和 jmp 和 jcc 指令，则 rel_operand 必定是 label, 否则是 symbol
+    if (rel_operand != NULL) {
         // 1. 数据符号引用(直接改写成 0x0(rip))
         // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 占位)
-        asm_operand_symbol_t *symbol_operand = operand->value;
-        if (symbol_operand->is_label) {
+        asm_operand_symbol_t *symbol_operand = rel_operand->value;
+        if (elf_is_call(asm_inst) || elf_is_jmp(asm_inst)) {
             // 引用了内部符号,根据实际距离判断使用 rel32 还是 rel8
             if (table_exist(elf_symbol_table, symbol_operand->name)) {
                 elf_symbol_t *symbol = table_get(elf_symbol_table, symbol_operand->name);
                 // 计算 offset 并填充
                 int rel_diff = *symbol->offset - global_text_offset;
                 // call symbol 只有 rel32
-                elf_operand_rewrite_rel(asm_inst, operand, rel_diff);
+                elf_operand_rewrite_rel(asm_inst, rel_operand, rel_diff);
             } else {
                 // 引用了 label 符号，但是符号确不在符号表中
                 // 此时使用 rel32 占位，如果是 jmp 指令后续可能需要替换
-                elf_operand_rewrite_rel(asm_inst, operand, 0);
-                inst->rel_operand = operand; // 二次遍历时改写
+                elf_operand_rewrite_rel(asm_inst, rel_operand, 0);
+                inst->rel_operand = rel_operand; // 二次遍历时改写
                 inst->rel_symbol = symbol_operand->name; // 二次遍历是需要
                 // 如果是 jmp 或者 jcc 指令就需要改写
                 uint8_t reduce_count = elf_jmp_reduce_count(asm_inst);
@@ -135,7 +136,7 @@ void elf_text_inst_build(asm_inst_t asm_inst, uint64_t *offset) {
             }
         } else {
             // 数据符号重写(symbol to 0(%rip))
-            elf_var_operand_rewrite(operand);
+            elf_var_operand_rewrite(rel_operand);
 
             // 添加到重定位表
             elf_rel_t *rel = NEW(elf_rel_t);

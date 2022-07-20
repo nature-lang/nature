@@ -1,5 +1,6 @@
 #include "symbol.h"
 #include "src/semantic/analysis.h"
+#include "src/lib/helper.h"
 
 #define BOOL_SIZE_BYTE 1
 #define INT_SIZE_BYTE 8
@@ -51,3 +52,14 @@ void symbol_set_temp_ident(char *unique_ident, ast_type type) {
     // 添加到符号表中
     table_set(symbol_ident_table, unique_ident, local);
 }
+
+bool is_extern_symbol(char *ident) {
+    if (str_equal(ident, "print")) {
+        return true;
+    }
+    if (str_equal(ident, "debug_printf")) {
+        return true;
+    }
+    return false;
+}
+

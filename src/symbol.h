@@ -36,4 +36,10 @@ size_t type_sizeof(ast_type type);
 
 void symbol_ident_table_init();
 
+// 添加内置函数
+void symbol_set_builtin_ident();
+//extern
+bool is_extern_symbol(string ident);
+
+
 #endif //NATURE_SRC_AST_SYMBOL_H_

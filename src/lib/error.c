@@ -29,7 +29,7 @@ void error_exit(char *format, ...) {
 }
 
 void error_ident_not_found(int line, char *ident) {
-    printf("line: %d, identifier '%s' undeclared \n", line, ident);
+    printf("[error_ident_not_found] line: %d, identifier '%s' undeclared \n", line, ident);
     exit(0);
 }
 

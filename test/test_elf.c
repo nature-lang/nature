@@ -15,7 +15,7 @@ static list *test_gen_asm_print() {
     asm_operand_t *string_len_var = DISP_REG(rbp, -24, QWORD);
 
     list *inst_list = list_new();
-    list_push(inst_list, ASM_INST("label", { SYMBOL("builtin_print", true, false) }));
+    list_push(inst_list, ASM_INST("label", { SYMBOL("builtin_print", false) }));
     list_push(inst_list, ASM_INST("push", { REG(rbp) }));
     list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     list_push(inst_list, ASM_INST("sub", { REG(rsp), UINT32(24) })); // 防止其他函数调用占用这一段栈空间
@@ -30,7 +30,7 @@ static list *test_gen_asm_print() {
 
     // runtime_call string_len => len
     list_push(inst_list, ASM_INST("mov", { REG(rdi), string_entity_var }));
-    list_push(inst_list, ASM_INST("call", { SYMBOL(RUNTIME_CALL_STRING_LENGTH, true, false) }));
+    list_push(inst_list, ASM_INST("call", { SYMBOL(RUNTIME_CALL_STRING_LENGTH, false) }));
     list_push(inst_list, ASM_INST("mov", { string_len_var, REG(rax) }));
 
 
@@ -165,10 +165,10 @@ static void test_hello_world() {
     };
 
     // sys_write
-    asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", true, false) });
+    asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", false) });
     asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
     asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
-    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) });
+    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
     asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
     asm_inst_t *syscall = ASM_INST("syscall", {});
 
@@ -216,13 +216,13 @@ static void test_call() {
     };
 
     // sys_write
-    asm_inst_t *start_label = ASM_INST("label", { SYMBOL("_start", true, false) });
-    asm_inst_t *call_hello = ASM_INST("call", { SYMBOL("hello", true, false) });
+    asm_inst_t *start_label = ASM_INST("label", { SYMBOL("_start", false) });
+    asm_inst_t *call_hello = ASM_INST("call", { SYMBOL("hello", false) });
 
-    asm_inst_t *hello_label = ASM_INST("label", { SYMBOL("hello", true, false) });
+    asm_inst_t *hello_label = ASM_INST("label", { SYMBOL("hello", false) });
     asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
     asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
-    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) });
+    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
     asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
     asm_inst_t *syscall = ASM_INST("syscall", {});
 
@@ -278,14 +278,14 @@ static void test_union_c() {
 
     list *inst_list = list_new();
     // sys_write
-    list_push(inst_list, ASM_INST("label", { SYMBOL("_start", true, false) }));
+    list_push(inst_list, ASM_INST("label", { SYMBOL("_start",false) }));
     list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
 
-    list_push(inst_list, ASM_INST("call", { SYMBOL("length", true, false) }));
+    list_push(inst_list, ASM_INST("call", { SYMBOL("length",false) }));
     list_push(inst_list, ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) }));
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(1) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) }));
-    list_push(inst_list, ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false, false) }));
+    list_push(inst_list, ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdx), DISP_REG(rbp, -8, QWORD) }));
     list_push(inst_list, ASM_INST("syscall", {}));
 
@@ -324,19 +324,19 @@ static void test_union_builtin_print() {
     asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
 
     list *builtin_call_list = list_new();
-    list_push(builtin_call_list, ASM_INST("label", { SYMBOL("_start", true, false) }));
+    list_push(builtin_call_list, ASM_INST("label", { SYMBOL("_start", false) }));
 
     // 1. 创造一组字符串结构,并将字符串地址存储在 rbp - 8 中,当然不是在编译时创造，那没有任何意义
     // 这里还是考虑使用数据段临时构建，实际使用中通常都是
     // socket.write 写入到堆内存中
-    list_push(builtin_call_list, ASM_INST("lea", { REG(rdi), SYMBOL(decl.name, false, false) }));
+    list_push(builtin_call_list, ASM_INST("lea", { REG(rdi), SYMBOL(decl.name, false) }));
     list_push(builtin_call_list, ASM_INST("mov", { REG(rsi), UINT32(decl.size) }));
-    list_push(builtin_call_list, ASM_INST("call", { SYMBOL(RUNTIME_CALL_STRING_NEW, true, false) }));
+    list_push(builtin_call_list, ASM_INST("call", { SYMBOL(RUNTIME_CALL_STRING_NEW, false) }));
     list_push(builtin_call_list, ASM_INST("mov", { string_entity_var, REG(rax) }));
 
     // 调用内置函数 print
     list_push(builtin_call_list, ASM_INST("mov", { REG(rdi), string_entity_var }));
-    list_push(builtin_call_list, ASM_INST("call", { SYMBOL("builtin_print", true, false) }));
+    list_push(builtin_call_list, ASM_INST("call", { SYMBOL("builtin_print", false) }));
 
     // 构造 elf
     elf_init("hello.n");

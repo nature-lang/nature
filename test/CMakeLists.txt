@@ -37,3 +37,7 @@ add_test(test_lower_amd64 test_lower_amd64)
 add_executable(test_runtime test_runtime.c ${RUNTIME_FILES})
 target_link_libraries(test_runtime cmocka)
 add_test(test_runtime test_runtime)
+
+add_executable(test_compiler_lower_amd64 test_compiler_lower_amd64.c ${SRC} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_ASSEMBLER} ${SRC_LIB} ${SRC_LOWER})
+target_link_libraries(test_compiler_lower_amd64 cmocka m)
+add_test(test_runtime test_compiler_lower_amd64)

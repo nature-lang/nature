@@ -4,4 +4,4 @@ int sum(int a, int b) {
 
 int foo = sum(1, 10)
 
-print("%d", foo)
+debug_printf("%d", foo)

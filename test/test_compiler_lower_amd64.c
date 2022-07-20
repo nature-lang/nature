@@ -1,19 +1,21 @@
+#include "test.h"
 #include <stdio.h>
-#include <stdlib.h>
+#include "runtime/type/string.h"
+#include "runtime/type/type_debug.h"
+#include "src/lib/list.h"
+#include "src/lib/helper.h"
+#include "src/lir/lir.h"
+#include "src/assembler/amd64/asm.h"
+#include "src/assembler/amd64/register.h"
 #include "src/syntax/scanner.h"
 #include "src/syntax/parser.h"
 #include "src/semantic/analysis.h"
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
 #include "src/cfg.h"
-#include "src/lib/helper.h"
-//#include "src/ssa.h"
-#include "src/debug/debug.h"
 
-int main() {
-    // 读取文件
-    char *source = file_read("/home/vagrant/Code/nature/example/ssa.n");
-
+static void test_hello() {
+    char *source = file_read("/home/vagrant/Code/nature/test/stubs/001_hello.n");
     // scanner
     list *token_list = scanner(source);
     // parser
@@ -34,12 +36,17 @@ int main() {
 
         // 构造 ssa
 //    ssa(c);
-
 #ifdef DEBUG_CFG
         debug_cfg(closures.list[i]);
 #endif
     }
 
-    printf("Hello, World!\n");
-    return 0;
+
+}
+
+int main(void) {
+    const struct CMUnitTest tests[] = {
+            cmocka_unit_test(test_hello),
+    };
+    return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -52,12 +52,11 @@
      reg;\
 })
 
-#define SYMBOL(_name, _is_label, _is_local) ({ \
+#define SYMBOL(_name, _is_local) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
      asm_operand_symbol_t *_symbol = NEW(asm_operand_symbol_t); \
      _symbol->name = _name;    \
-     _symbol->is_label = _is_label;    \
      _symbol->is_local = _is_local;    \
      _operand->size = 0;\
      _operand->value = _symbol;    \
@@ -65,7 +64,7 @@
 })
 
 
-#define LABEL(_name) (SYMBOL(_name, true, false))
+#define LABEL(_name) (SYMBOL(_name, false))
 
 #define ASM_OPERAND_COPY(_dst, _src)  \
    _dst->type = _src->type;\
@@ -221,7 +220,6 @@ typedef struct {
 
 typedef struct {
     string name; // 符号名称
-    bool is_label; // label 类型符号还是数据类型符号
     bool is_local; // 是内部符号，还是全局符号(global_fn,global_var 或者当前文件不存在的 var)
 } asm_operand_symbol_t;
 

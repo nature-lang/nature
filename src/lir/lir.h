@@ -74,9 +74,8 @@
   lir_operand_var *_var = NEW(lir_operand_var); \
   _var->old = (_original)->old;    \
   _var->ident = (_original)->ident; \
-  _var->stack_frame_offset = (_original)->stack_frame_offset; \
+  _var->local = (_original)->local; \
   _var->reg_id = (_original)->reg_id; \
-  _var->is_label = (_original)->is_label; \
   _var->size = (_original)->size; \
   _var;                                   \
 })
@@ -118,6 +117,12 @@ typedef enum {
 //  string ident;
 //} lir_operand_reg;
 
+typedef struct {
+    string ident;
+    ast_type type;
+    uint16_t *stack_frame_offset;
+} lir_local_var;
+
 /**
  * 存放在寄存器或者内存中, var a = 1
  */
@@ -125,9 +130,8 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old;
     uint8_t reg_id; // reg list index, 寄存器分配
-    uint16_t *stack_frame_offset; // 栈分配
+    lir_local_var *local;
     uint8_t size; // BYTE/QWORD/DWORD
-    bool is_label;
 } lir_operand_var;
 
 typedef struct lir_vars {
@@ -214,19 +218,15 @@ typedef struct lir_op {
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
 
-    // result 符号大小, 1, 2, 4, 8 byte
-    uint8_t size;
     // result 类型
     // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
     // TYPE_STRING/LIST/MAP/SET = 8
     // CUSTOM_TYPE 如何处理？
-    uint8_t data_type;
+    type_category result_type;
 
-    string struct_name;
+//    string struct_name;
 
     int id; // 编号
-    struct lir_op *succ;
-    struct lir_op *pred;
 } lir_op;
 
 // type 列表
@@ -274,12 +274,6 @@ typedef struct lir_basic_block {
     // loop detection
     loop_detection loop;
 } lir_basic_block;
-
-typedef struct {
-    string ident;
-    ast_type type;
-    uint16_t *stack_frame_offset;
-} lir_local_var;
 
 /**
  * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
@@ -339,7 +333,7 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  */
 void lir_new_local_var(closure *c, string ident, ast_type type);
 
-lir_operand *lir_new_temp_var_operand(ast_type type);
+lir_operand *lir_new_temp_var_operand(closure *c, ast_type type);
 
 lir_operand *lir_new_param_var_operand();
 
