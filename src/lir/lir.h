@@ -122,10 +122,10 @@ typedef enum {
  * 存放在寄存器或者内存中, var a = 1
  */
 typedef struct {
-    string ident;
+    string ident; // ssa 后的新名称
     string old;
-    uint16_t stack_frame_offset; // 栈分配
     uint8_t reg_id; // reg list index, 寄存器分配
+    uint16_t *stack_frame_offset; // 栈分配
     uint8_t size; // BYTE/QWORD/DWORD
     bool is_label;
 } lir_operand_var;
@@ -255,7 +255,7 @@ typedef struct lir_basic_block {
 
     lir_op *first_op; // 链表结构， 开始处的指令
 
-    list_op *operates;
+    list *operates;
 
     lir_basic_blocks preds;
     lir_basic_blocks succs;
@@ -275,6 +275,12 @@ typedef struct lir_basic_block {
     loop_detection loop;
 } lir_basic_block;
 
+typedef struct {
+    string ident;
+    ast_type type;
+    uint16_t *stack_frame_offset;
+} lir_local_var;
+
 /**
  * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
  * 形参有一条专门的指令 lir_formal_param 编译这条指令的时候处理形参即可
@@ -287,11 +293,10 @@ typedef struct lir_basic_block {
  * 是一个变量，还是结构体的元素
  */
 typedef struct closure {
-    lir_vars globals; // closure 中定义的变量列表
+    lir_vars globals; // closure 中定义的变量列表, 用于 ssa 构建
     lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
     regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
     lir_basic_blocks blocks; // 根据解析顺序得到
-
 
     lir_basic_block *entry; // 基本块入口
     lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
@@ -302,7 +307,9 @@ typedef struct closure {
     string end_label; // 结束地址
     string env_name;
     struct closure *parent;
-    list_op *operates; // 指令列表
+    list *operates; // 指令列表
+
+    table *local_vars; // 主要是用于栈分配(但是该结构不适合遍历)
 
     // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
     uint16_t return_offset;
@@ -316,7 +323,21 @@ lir_basic_block *lir_new_basic_block();
 
 closure *lir_new_closure(ast_closure_decl *ast);
 
-lir_operand_var *lir_new_var_operand(string ident, ast_type type);
+/**
+ * 符号使用
+ * @param ident
+ * @param type
+ * @return
+ */
+lir_operand_var *lir_new_var_operand(closure *c, string ident);
+
+/**
+ * 符号定义
+ * 定义一个 local var operand
+ * @param ident
+ * @param type
+ */
+void lir_new_local_var(closure *c, string ident, ast_type type);
 
 lir_operand *lir_new_temp_var_operand(ast_type type);
 
@@ -341,18 +362,6 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
 
 lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
-lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...);
-
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
-
-list_op *list_op_new();
-
-list_op *list_op_pop(list_op *l);
-
-bool list_op_is_null(lir_op *op);
-
-void list_op_push(list_op *l, lir_op *op);
-
-list_op *list_op_append(list_op *dst, list_op *src);
 
 #endif //NATURE_SRC_LIR_H_

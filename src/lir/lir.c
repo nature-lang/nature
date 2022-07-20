@@ -4,6 +4,7 @@
 #include "lir.h"
 #include "src/debug/debug.h"
 #include "src/semantic/analysis.h"
+#include "src/lib/error.h"
 
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
     lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
@@ -106,52 +107,6 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     return op;
 }
 
-list_op *list_op_new() {
-    list_op *list = NEW(list_op);
-    list->count = 0;
-
-    list->front = NULL;
-    list->rear = NULL;
-
-    return list;
-}
-
-void list_op_push(list_op *l, lir_op *op) {
-    if (l->count == 0) {
-        l->front = op;
-        l->rear = op;
-        l->count = 1;
-        return;
-    }
-
-    l->rear->succ = op;
-    op->pred = l->rear;
-    l->rear = op;
-
-    l->count++;
-}
-
-list_op *list_op_append(list_op *dst, list_op *src) {
-    if (src->count == 0) {
-        return dst;
-    }
-
-    // src.count 肯定 > 0
-    if (dst->count == 0) {
-        dst->front = src->front;
-        dst->rear = src->rear;
-        dst->count = src->count;
-        return dst;
-    }
-
-    dst->count += src->count;
-    // 链接
-    dst->rear->succ = src->front;
-    // 关联关系
-    dst->rear = src->rear;
-    return dst;
-}
-
 closure *lir_new_closure(ast_closure_decl *ast) {
     closure *new = NEW(closure);
     new->name = ast->function->name;
@@ -171,7 +126,7 @@ closure *lir_new_closure(ast_closure_decl *ast) {
 
 lir_basic_block *lir_new_basic_block() {
     lir_basic_block *basic_block = NEW(lir_basic_block);
-    basic_block->operates = list_op_new();
+    basic_block->operates = list_new();
     basic_block->preds.count = 0;
     basic_block->succs.count = 0;
 
@@ -190,10 +145,6 @@ lir_basic_block *lir_new_basic_block() {
     basic_block->loop.flag = 0;
 
     return basic_block;
-}
-
-bool list_op_is_null(lir_op *op) {
-    return op == NULL;
 }
 
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label) {
@@ -216,4 +167,32 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
     operand->type = LIR_OPERAND_TYPE_PHI_BODY;
     operand->value = phi_body;
     return operand;
+}
+
+lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
+    // 1. 读取符号信息
+    lir_local_var *local = table_get(c->local_vars, ident);
+    // TODO 也有可能是外部 ident
+    if (local == NULL) {
+        error_exit("[lir_new_var_operand] ident '%s' not found in closure", ident);
+    }
+    lir_operand_var *var = NEW(lir_operand_var);
+    var->ident = ident;
+    var->old = ident;
+    var->is_label = false;
+    var->stack_frame_offset = local->stack_frame_offset;
+    var->reg_id = 0;
+    var->size = type_sizeof(local->type);
+
+    return var;
+}
+
+void lir_new_local_var(closure *c, char *ident, ast_type type) {
+    lir_local_var *local = NEW(lir_local_var);
+    local->type = type;
+    local->stack_frame_offset = NEW(uint16_t);
+    local->ident = ident;
+    *local->stack_frame_offset = c->stack_length;
+    c->stack_length += type_sizeof(type);
+    table_set(c->local_vars, ident, local);
 }

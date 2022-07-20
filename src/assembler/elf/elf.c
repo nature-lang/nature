@@ -61,11 +61,11 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
                 inst_count = elf_jmp_inst_count(inst, DWORD);
             }
             asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
-            v->value = (uint32_t) (rel_diff - inst_count);
+            v->value = (uint32_t)(rel_diff - inst_count);
             operand->value = v;
         } else {
             asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-            v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
+            v->value = (uint8_t)(rel_diff - 2); // -2 表示去掉当前指令的差值
             operand->value = v;
         }
         return;
@@ -84,7 +84,7 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
         asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
-            v->value = (uint32_t) (rel_diff - inst_count); // -5 表示去掉当前指令的差值
+            v->value = (uint32_t)(rel_diff - inst_count); // -5 表示去掉当前指令的差值
         }
         operand->value = v;
         return;
@@ -94,7 +94,7 @@ static void elf_operand_rewrite_rel(asm_inst_t inst, asm_operand_t *operand, int
     operand->type = ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-    v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
+    v->value = (uint8_t)(rel_diff - 2); // -2 表示去掉当前指令的差值
     operand->value = v;
 }
 
@@ -167,7 +167,7 @@ void elf_confirm_text_rel(string name) {
         return;
     }
 
-    list_node *current = elf_text_inst_list->rear->prev; // rear 为 empty 占位
+    list_node *current = list_last(elf_text_inst_list); // rear 为 empty 占位
     uint8_t reduce_count = 0;
     // 从尾部像前找, 找到超过 128 即可
     while (true) {

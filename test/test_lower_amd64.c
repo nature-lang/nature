@@ -219,7 +219,7 @@ static void test_lower_call() {
     lir_operand_var *temp = test_lir_operand_var("temp_var", 24, QWORD);
     lir_vars vars = {.count = 2, .list = {a, b}};
     sum_closure->formal_params = vars;
-    sum_closure->operates = list_op_new();
+    sum_closure->operates = list_new();
     lir_op *sum_op = lir_op_new(LIR_OP_TYPE_ADD,
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, a),
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, b),
@@ -229,22 +229,22 @@ static void test_lower_call() {
     lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
     return_op->data_type = TYPE_INT;
     return_op->size = QWORD;
-    list_op_push(sum_closure->operates, sum_op);
-    list_op_push(sum_closure->operates, return_op);
+    list_push(sum_closure->operates, sum_op);
+    list_push(sum_closure->operates, return_op);
 
 //   test
 //    char *str = "hello world";
 //    lir_op *debug_printf_op = lir_op_call("debug_printf",
 //                                          NULL, 2, LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str)
 //    );
-//    list_op_push(sum_closure->operates, debug_printf_op);
+//    list_push(sum_closure->operates, debug_printf_op);
 
     // main closure
     closure *main_closure = NEW(closure);
     main_closure->name = "main";
     main_closure->end_label = "main_end";
     main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
-    main_closure->operates = list_op_new();
+    main_closure->operates = list_new();
     lir_operand *foo = test_lir_temp("foo", 8);
 
     //  call sum(1, 10) => foo
@@ -259,8 +259,8 @@ static void test_lower_call() {
                                    LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "sum(1, 10) =>  %d\n"),
                                    foo);
 
-    list_op_push(main_closure->operates, call_op);
-    list_op_push(main_closure->operates, debug_op);
+    list_push(main_closure->operates, call_op);
+    list_push(main_closure->operates, debug_op);
 
     list *insts = amd64_lower_closure(main_closure);
     list_append(insts, amd64_lower_closure(sum_closure));
@@ -294,7 +294,7 @@ static void test_lower_if() {
     main_closure->name = "main";
     main_closure->end_label = "main_end";
     main_closure->stack_length = 16; // 所有局部变量合， 16字节对齐
-    main_closure->operates = list_op_new();
+    main_closure->operates = list_new();
     lir_operand *foo = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var("foo", 8, QWORD));
     lir_operand *cmp_res = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, test_lir_operand_var("cmp_res", 16, BYTE));
 
@@ -327,14 +327,14 @@ static void test_lower_if() {
 
     lir_op *label_end_main = lir_op_label("end_main", false);
 
-    list_op_push(main_closure->operates, mov_op);
-    list_op_push(main_closure->operates, cmp_gt_op);
-    list_op_push(main_closure->operates, cmp_goto_op);
-    list_op_push(main_closure->operates, true_op);
-    list_op_push(main_closure->operates, goto_end);
-    list_op_push(main_closure->operates, label_end_if_op);
-    list_op_push(main_closure->operates, false_op);
-    list_op_push(main_closure->operates, label_end_main);
+    list_push(main_closure->operates, mov_op);
+    list_push(main_closure->operates, cmp_gt_op);
+    list_push(main_closure->operates, cmp_goto_op);
+    list_push(main_closure->operates, true_op);
+    list_push(main_closure->operates, goto_end);
+    list_push(main_closure->operates, label_end_if_op);
+    list_push(main_closure->operates, false_op);
+    list_push(main_closure->operates, label_end_main);
 
     list *insts = amd64_lower_closure(main_closure);
 
@@ -358,10 +358,10 @@ static void test_lower_if() {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-//            cmocka_unit_test(test_lower_hello),
-//            cmocka_unit_test(test_lower_debug_printf),
-//            cmocka_unit_test(test_lower_sum),
-//            cmocka_unit_test(test_lower_call),
+            cmocka_unit_test(test_lower_hello),
+            cmocka_unit_test(test_lower_debug_printf),
+            cmocka_unit_test(test_lower_sum),
+            cmocka_unit_test(test_lower_call),
             cmocka_unit_test(test_lower_if),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);

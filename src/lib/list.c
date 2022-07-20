@@ -23,6 +23,30 @@ void list_push(list *l, void *value) {
     l->count++;
 }
 
+// 在指定位置插入节点，尾部需要是 empty 节点, rear 指向 empty
+void list_splice(list *l, list_node *node, void *value) {
+    list_node *await = list_new_node();
+    await->value = value;
+
+    // 如果是要在最后一个节点 直接调用 push 就行了
+    if (node == l->rear) {
+        list_push(l, value);
+        return;
+    }
+
+    // node <-> await <-> next
+    list_node *next = node->next;
+
+    node->next = await;
+    await->prev = node;
+
+    await->next = next;
+    next->prev = await;
+
+    l->count++;
+}
+
+
 // 头部 pop
 void *list_pop(list *l) {
     if (l->count == 0) {
@@ -64,3 +88,9 @@ void list_append(list *dst, list *src) {
     }
 }
 
+list_node *list_last(list *l) {
+    if (list_empty(l)) {
+        return NULL;
+    }
+    return l->rear->prev;
+}

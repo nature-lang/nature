@@ -278,7 +278,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (v->stack_frame_offset > 0) {
-            return DISP_REG(rbp, -v->stack_frame_offset, v->size); // amd64 栈空间从大往小递增
+            return DISP_REG(rbp, -(*v->stack_frame_offset), v->size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
@@ -385,7 +385,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
             // 生成 mov 指令（asm_mov）
-            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -var->stack_frame_offset, QWORD) }));
+            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -(*var->stack_frame_offset), QWORD) }));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             return insts;
@@ -497,10 +497,11 @@ list *amd64_lower_closure(closure *c) {
     list_append(insts, amd64_lower_fn_begin(c));
     list_append(insts, amd64_lower_fn_formal_params(c));
 
-    lir_op *current = c->operates->front;
+    list_node *current = c->operates->front;
     while (current != NULL) {
-        list_append(insts, amd64_lower_op(c, current));
-        current = current->succ;
+        lir_op *op = current->value;
+        list_append(insts, amd64_lower_op(c, op));
+        current = current->next;
     }
     list_append(insts, amd64_lower_fn_end(c));
 

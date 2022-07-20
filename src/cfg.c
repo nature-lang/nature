@@ -37,44 +37,49 @@ void cfg(closure *c) {
 
     // 1.根据 label 分块,仅考虑顺序块挂链关系
     lir_basic_block *current_block = NULL;
-    lir_op *current_op = c->operates->front;
-    while (current_op != NULL) {
-        if (current_op->type == LIR_OP_TYPE_LABEL) {
-            lir_operand_label *operand_label = current_op->result->value;
+    list_node *current = c->operates->front;
+    while (current->value != NULL) {
+        lir_op *op = current->value;
+        if (op->type == LIR_OP_TYPE_LABEL) {
+            lir_operand_label *operand_label = op->result->value;
 
             // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
             lir_basic_block *new_block = lir_new_basic_block();
             new_block->label = c->blocks.count;
             new_block->name = operand_label->ident;
+            new_block->operates = list_new();
             table_set(basic_block_table, new_block->name, new_block);
             c->blocks.list[c->blocks.count++] = new_block;
 
 
             // 3. 建立顺序关联关系 (由于顺序遍历 type, 所以只能建立顺序关系)
-            if (current_block != NULL && current_block->operates->rear->type != LIR_OP_TYPE_GOTO) {
-                LIR_BLOCKS_PUSH(&current_block->succs, new_block);
-                LIR_BLOCKS_PUSH(&new_block->preds, current_block);
+            if (current_block != NULL) {
+                lir_op *rear_op = list_last(current_block->operates)->value;
+                if (rear_op->type != LIR_OP_TYPE_GOTO) {
+                    LIR_BLOCKS_PUSH(&current_block->succs, new_block);
+                    LIR_BLOCKS_PUSH(&new_block->preds, current_block);
+                }
             }
 
             // 4. 截断 current block
-            if (current_block != NULL) {
-                current_block->operates->rear->succ = NULL;
-            }
+//            if (current_block != NULL) {
+//                current_block->operates->rear->succ = NULL;
+//            }
 
 
             // 5. current = new
             current_block = new_block;
         }
 
-        list_op_push(current_block->operates, current_op);
-        current_op = current_op->succ;
+        list_push(current_block->operates, op);
+        current = current->next;
     }
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系
     // call 调到别的 closure 去了，不在当前 closure cfg 构造的考虑范围
     for (int i = 0; i < c->blocks.count; ++i) {
         current_block = c->blocks.list[i];
-        lir_op *last_op = current_block->operates->rear;
+        lir_op *last_op = list_last(current_block->operates)->value;
         if (last_op->type != LIR_OP_TYPE_GOTO && last_op->type != LIR_OP_TYPE_CMP_GOTO) {
             continue;
         }

@@ -218,15 +218,8 @@ void ssa_add_phi(closure *c) {
 
 
                 // insert to list(可能只有一个 label )
-                lir_op *label_op = df_block->operates->front;
-                df_block->operates->count++;
-                lir_op *succ_op = label_op->succ;
-                label_op->succ = phi_op;
-                phi_op->pred = label_op;
-                if (succ_op != NULL) {
-                    phi_op->succ = succ_op;
-                    succ_op->pred = label_op;
-                }
+                list_node *label_node = df_block->operates->front;
+                list_splice(df_block->operates, label_node, phi_op);
             }
         }
     }
@@ -498,10 +491,12 @@ void ssa_rename(closure *c) {
 
 void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *stack_table) {
     // skip label type
-    lir_op *current_op = block->operates->front->succ;
+//    lir_op *current_op = block->operates->front->succ;
+    list_node *current = block->operates->front->next;
 
     // 当前块内的先命名
-    while (current_op != NULL) {
+    while (current->value != NULL) {
+        lir_op *current_op = current->value;
         // phi body 由当前块的前驱进行编号
         if (current_op->type == LIR_OP_TYPE_PHI) {
             uint8_t number = ssa_new_var_number((lir_operand_var *) current_op->result->value, var_number_table,
@@ -532,7 +527,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             ssa_rename_var(var, number);
         }
 
-        current_op = current_op->succ;
+        current = current->next;
     }
 
     // 遍历当前块的 cfg 后继为 phi body 编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
@@ -545,15 +540,17 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     for (int i = 0; i < block->succs.count; ++i) {
         lir_basic_block *succ_block = block->succs.list[i];
         // 为 每个 phi 函数的 phi param 命名
-        lir_op *succ_op = succ_block->operates->front->succ;
-        while (succ_op != NULL && succ_op->type == LIR_OP_TYPE_PHI) {
+//        lir_op *succ_op = succ_block->operates->front->succ;
+        list_node *succ_node = succ_block->operates->front->next;
+        while (succ_node->value != NULL && ((lir_op *) succ_node->value)->type == LIR_OP_TYPE_PHI) {
+            lir_op *succ_op = succ_node->value;
             lir_operand_phi_body *phi_body = succ_op->first->value;
             lir_operand_var *var = phi_body->list[phi_body->count++];
             var_number_stack *stack = table_get(stack_table, var->ident);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
 
-            succ_op = succ_op->succ;
+            succ_node = succ_node->next;
         }
     }
 
@@ -566,8 +563,9 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     // 此时如果父节点定义了 x (1), 在左子节点重新定义 了 x (2), 如果在右子节点有 b = x + 1, 然后又有 x = c + 2
     // 此时 stack[x].top = 2;  但实际上右子节点使用的是 x1, 所以此时需要探出在左子节点定义的所有变量的 stack 空间。
     // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
-    current_op = block->operates->front->succ;
-    while (current_op != NULL) {
+    list_node *current_node = block->operates->front->next;
+    while (current_node->value != NULL) {
+        lir_op *current_op = current_node->value;
         if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_TYPE_VAR) {
             lir_operand_var *var = (lir_operand_var *) current_op->result->value;
 
@@ -575,7 +573,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             var_number_stack *stack = table_get(stack_table, var->old);
             stack->count--;
         }
-        current_op = current_op->succ;
+        current = current_node->next;
     }
 }
 
@@ -629,14 +627,15 @@ bool ssa_is_idom(lir_basic_blocks dom, lir_basic_block *await) {
  * @return
  */
 bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
-    lir_op *current_op = block->operates->front->succ;
-    while (current_op != NULL && current_op->type == LIR_OP_TYPE_PHI) {
-        lir_operand_var *phi_var = current_op->result->value;
+    list_node *current = block->operates->front->next;
+    while (current->value != NULL && ((lir_op *) current->value)->type == LIR_OP_TYPE_PHI) {
+        lir_op *op = current->value;
+        lir_operand_var *phi_var = op->result->value;
         if (strcmp(phi_var->ident, var->ident) == 0) {
             return true;
         }
 
-        current_op = current_op->succ;
+        current = current->next;
     }
 
     return false;

@@ -191,16 +191,17 @@ void debug_basic_block(lir_basic_block *block) {
     // block name, ops, succ, pred
     printf("block: %s\n", block->name);
 
-    lir_op *current = block->operates->front;
-    while (current != NULL) {
+    list_node *current = block->operates->front;
+    while (current->value != NULL) {
+        lir_op* op = current->value;
         printf(
                 "\t\t%s\t%s , %s => %s\n",
-                lir_op_type_to_debug[current->type],
-                lir_operand_to_string(current->first),
-                lir_operand_to_string(current->second),
-                lir_operand_to_string(current->result)
+                lir_op_type_to_debug[op->type],
+                lir_operand_to_string(op->first),
+                lir_operand_to_string(op->second),
+                lir_operand_to_string(op->result)
         );
-        current = current->succ;
+        current = current->next;
     }
 
     printf("\n\t\tpred:");
