@@ -8,7 +8,7 @@
 #define POINT_SIZE_BYTE 8
 
 void symbol_ident_table_init() {
-    symbol_ident_table = table_new();
+    symbol_table = table_new();
 }
 
 size_t type_sizeof(ast_type type) {
@@ -47,13 +47,13 @@ void symbol_set_temp_ident(char *unique_ident, ast_type type) {
     analysis_local_ident *local = NEW(analysis_local_ident);
     local->unique_ident = unique_ident;
     local->decl = var_decl;
-    local->belong = SYMBOL_TYPE_VAR;
+    local->type = SYMBOL_TYPE_VAR;
 
     // 添加到符号表中
-    table_set(symbol_ident_table, unique_ident, local);
+    symbol_table_set(unique_ident, SYMBOL_TYPE_VAR, var_decl);
 }
 
-bool is_extern_symbol(char *ident) {
+bool is_debug_symbol(char *ident) {
     if (str_equal(ident, "print")) {
         return true;
     }
@@ -61,5 +61,17 @@ bool is_extern_symbol(char *ident) {
         return true;
     }
     return false;
+}
+
+void symbol_table_set(char *ident, symbol_type type, void *decl) {
+    symbol_t* s = NEW(symbol_t);
+    s->ident = ident;
+    s->type = type;
+    s->decl = decl;
+    table_set(symbol_table, ident, s);
+}
+
+symbol_t *symbol_table_get(char *ident) {
+    return table_get(symbol_table, ident);
 }
 

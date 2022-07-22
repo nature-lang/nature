@@ -12,17 +12,25 @@
     (ast_var_decl*) local_ident->decl; \
 })
 
-table *symbol_ident_table; // analysis_local_ident
+table *symbol_table; // analysis_local_ident
 
 typedef enum {
     SYMBOL_TYPE_VAR,
-    SYMBOL_TYPE_CUSTOM_TYPE,
-//  SYMBOL_TYPE_FUNCTION,
+    SYMBOL_TYPE_CUSTOM,
+    SYMBOL_TYPE_FN,
 } symbol_type;
 
-void symbol_set_temp_ident(string unique_ident, ast_type type);
+typedef struct {
+    string ident;
+    symbol_type type;
+    void *decl; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
+} symbol_t;
 
-int64_t list_offset(ast_type type, uint64_t index);
+void symbol_table_set(string ident, symbol_type type, void *decl);
+
+symbol_t *symbol_table_get(string ident);
+
+void symbol_set_temp_ident(string unique_ident, ast_type type);
 
 size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
@@ -39,7 +47,7 @@ void symbol_ident_table_init();
 // 添加内置函数
 void symbol_set_builtin_ident();
 //extern
-bool is_extern_symbol(string ident);
+bool is_debug_symbol(string ident);
 
 
 #endif //NATURE_SRC_AST_SYMBOL_H_

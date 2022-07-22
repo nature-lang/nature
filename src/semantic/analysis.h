@@ -12,9 +12,8 @@ int unique_name_count;
 int analysis_line;
 
 typedef struct {
-//  ast_type type;
-    symbol_type belong; // function/var/type_decl
-    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_function_decl
+    symbol_type type;
+    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
     string ident; // 原始名称
     string unique_ident; // 唯一名称
     int scope_depth;
@@ -94,9 +93,9 @@ void analysis_var_decl(ast_var_decl *stmt);
 
 void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt);
 
-ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analysis_local_scope *scope);
+ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_local_scope *scope);
 
-void analysis_function_decl_ident(ast_function_decl *function_decl);
+void analysis_function_decl_ident(ast_new_fn *new_fn);
 
 void analysis_stmt(ast_stmt *stmt);
 
@@ -142,7 +141,7 @@ void analysis_new_list(ast_new_list *expr);
 
 bool analysis_redeclare_check(string ident);
 
-analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident);
+analysis_local_ident *analysis_new_local(symbol_type type, void *decl, string ident);
 
 string analysis_unique_ident(string name);
 
@@ -150,8 +149,6 @@ void analysis_begin_scope();
 
 void analysis_end_scope();
 
-ast_type analysis_function_to_type(ast_function_decl *function_decl);
-
-ast_var_decl *analysis_function_to_var_decl(ast_function_decl *function_decl);
+ast_type analysis_function_to_type(ast_new_fn *function_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_

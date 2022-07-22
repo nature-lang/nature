@@ -48,10 +48,16 @@ string lir_operand_label_to_string(lir_operand_label *label) {
  */
 char *lir_operand_var_to_string(lir_operand_var *var) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    ast_var_decl *var_decl = SYMBOL_GET_VAR_DECL(var->old);
+    int stack_frame_offset = 0;
+    char *type_string = "";
+    if (var->local != NULL) {
+        stack_frame_offset = *var->local->stack_frame_offset;
+        type_string = type_to_string[var->local->type.category];
+        sprintf(buf, "VAR[%d|%s:%s]", stack_frame_offset, type_string, var->ident);
+    } else {
+        sprintf(buf, "VAR[extern:%s]", var->ident);
+    }
 
-    sprintf(buf, "VAR[%d|%s:%s]", *var->local->stack_frame_offset, type_to_string[var->local->type.category],
-            var->ident);
     return buf;
 }
 

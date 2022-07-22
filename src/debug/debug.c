@@ -25,9 +25,9 @@ string ast_stmt_expr_type_to_debug[] = {
         [AST_STMT_IF]="AST_STMT_IF",
         [AST_STMT_FOR_IN]="AST_STMT_FOR_IN",
         [AST_STMT_WHILE]="AST_STMT_WHILE",
-        [AST_FUNCTION_DECL]="AST_FUNCTION_DECL",
+        [AST_NEW_FN]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
-        [AST_CLOSURE_DECL]="AST_CLOSURE_DECL",
+        [AST_NEW_CLOSURE]="AST_CLOSURE_DECL",
         [AST_STMT_TYPE_DECL]="AST_STMT_TYPE_DECL",
 };
 

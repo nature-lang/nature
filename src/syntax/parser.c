@@ -224,7 +224,7 @@ ast_stmt parser_var_or_function_decl() {
 
     // 声明时函数名称仅占用一个 token
     if (parser_is(TOKEN_LEFT_PAREN) || parser_next_is(1, TOKEN_LEFT_PAREN)) {
-        result.type = AST_FUNCTION_DECL;
+        result.type = AST_NEW_FN;
         result.stmt = parser_function_decl(type);
         return result;
     }
@@ -494,7 +494,7 @@ void parser_type_function_formal_param(ast_function_type_decl *type_function) {
     parser_must(TOKEN_RIGHT_PAREN);
 }
 
-void parser_formal_param(ast_function_decl *function_decl) {
+void parser_formal_param(ast_new_fn *function_decl) {
     parser_must(TOKEN_LEFT_PAREN);
 
     if (!parser_is(TOKEN_RIGHT_PAREN)) {
@@ -584,7 +584,7 @@ ast_type parser_type() {
         parser_type_function_formal_param(type_function);
         parser_must(TOKEN_RIGHT_ANGLE);
 
-        result.category = TYPE_FUNCTION;
+        result.category = TYPE_FN;
         result.value = type_function;
         return result;
     }
@@ -607,8 +607,8 @@ ast_type parser_type() {
  * }
  * @return
  */
-ast_function_decl *parser_function_decl(ast_type type) {
-    ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
+ast_new_fn *parser_function_decl(ast_type type) {
+    ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
 
     // 必选 type
     function_decl->return_type = type;
@@ -825,14 +825,14 @@ ast_stmt parser_ident_stmt() {
         return stmt;
     }
 
-    if (left.type == AST_FUNCTION_DECL) {
+    if (left.type == AST_NEW_FN) {
         if (parser_is(TOKEN_EQUAL)) {
             error_printf(parser_line(), "function decl cannot assign value");
             exit(0);
         }
 
         ast_stmt stmt = parser_new_stmt();
-        stmt.type = AST_FUNCTION_DECL;
+        stmt.type = AST_NEW_FN;
         stmt.stmt = left.expr;
         return stmt;
     }
@@ -844,7 +844,7 @@ ast_stmt parser_ident_stmt() {
 
 ast_expr parser_function_decl_expr(ast_type type) {
     ast_expr result = parser_new_expr();
-    result.type = AST_FUNCTION_DECL;
+    result.type = AST_NEW_FN;
     result.expr = parser_function_decl(type);
 
     return result;

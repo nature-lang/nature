@@ -170,20 +170,20 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
 }
 
 lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
+    lir_operand_var *var = NEW(lir_operand_var);
+    var->ident = ident;
+    var->old = ident;
+    var->reg_id = 0;
+
     // 1. 读取符号信息
     lir_local_var *local = table_get(c->local_vars, ident);
     // TODO 也有可能是外部 ident
     // 假如使用了外部的符号，比如  int m = request.max 需要为其分配栈空间吗？
     // 不用，能够使用的外部符号都是在 .data 段有一席之地的。但是如何能够知道 size？
-    if (local == NULL) {
-        error_exit("[lir_new_var_operand] ident '%s' not found in closure", ident);
+    if (local != NULL) {
+        var->local = local;
+        var->size = type_sizeof(local->type);
     }
-    lir_operand_var *var = NEW(lir_operand_var);
-    var->local = local;
-    var->ident = ident;
-    var->old = ident;
-    var->reg_id = 0;
-    var->size = type_sizeof(local->type);
 
     return var;
 }

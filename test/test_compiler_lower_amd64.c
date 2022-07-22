@@ -15,7 +15,8 @@
 #include "src/cfg.h"
 
 static void test_hello() {
-    char *source = file_read("/home/vagrant/Code/nature/test/stubs/001_hello.n");
+//    char *source = file_read("/home/vagrant/Code/nature/test/stubs/001_hello.n");
+    char *source = file_read("/home/vagrant/Code/nature/example/ssa.n");
     // scanner
     list *token_list = scanner(source);
     // parser

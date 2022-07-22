@@ -97,13 +97,13 @@ ast_stmt parser_type_decl_stmt();
 
 ast_block_stmt parser_else_if();
 
-ast_function_decl *parser_function_decl(ast_type type);
+ast_new_fn *parser_function_decl(ast_type type);
 
 ast_var_decl *parser_var_decl();
 
 void parser_actual_param(ast_call *call);
 
-void parser_formal_param(ast_function_decl *function_decl);
+void parser_formal_param(ast_new_fn *function_decl);
 
 void parser_type_function_formal_param(ast_function_type_decl *type_function);
 

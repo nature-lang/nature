@@ -22,7 +22,7 @@ typedef enum {
     TYPE_DECL_IDENT, // char*
     TYPE_LIST,
     TYPE_MAP, // ast_map_decl
-    TYPE_FUNCTION,
+    TYPE_FN, // fn<int,void> ast_function_type_decl
     TYPE_POINT,
     TYPE_NULL,
 } type_category;

@@ -45,8 +45,8 @@ typedef enum {
     AST_STMT_TYPE_DECL,
 //  AST_STRUCT_DECL,
     AST_CALL,
-    AST_FUNCTION_DECL,
-    AST_CLOSURE_DECL,
+    AST_NEW_FN,
+    AST_NEW_CLOSURE,
 } ast_stmt_expr_type;
 
 typedef enum {
@@ -250,6 +250,7 @@ typedef struct {
     ast_type type;
 } ast_list_decl;
 
+// map{int:int}
 typedef struct {
     ast_type key_type;
     ast_type value_type;
@@ -281,13 +282,6 @@ typedef struct {
 //  // struct items
 //} ast_struct_stmt;
 
-typedef struct {
-//  string name;
-    ast_type return_type; // 基础类型 + 动态类型
-    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
-    uint8_t formal_param_count;
-} ast_function_type_decl;
-
 /**
  * type my_int = int
  * type my_string =  string
@@ -300,18 +294,25 @@ typedef struct {
 } ast_type_decl_stmt;
 
 typedef struct {
+//    string name;
+    ast_type return_type; // 基础类型 + 动态类型
+    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
+    uint8_t formal_param_count;
+} ast_function_type_decl;
+
+typedef struct {
     string name;
     ast_type return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
     ast_block_stmt body; // 函数体
-} ast_function_decl; // 既可以是 expression,也可以是 stmt
+} ast_new_fn; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
     ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
     uint8_t env_count;
     string env_name; // 唯一标识，可以全局定位
-    ast_function_decl *function;
+    ast_new_fn *function;
 } ast_closure_decl;
 
 ast_block_stmt ast_new_block_stmt();

@@ -16,7 +16,7 @@ ast_closure_decl analysis(ast_block_stmt block_stmt) {
     analysis_line = 0;
 
     // block 封装进 function,再封装到 closure 中
-    ast_function_decl *function_decl = malloc(sizeof(ast_function_decl));
+    ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
     function_decl->name = MAIN_FUNCTION_NAME;
     function_decl->body = block_stmt;
     function_decl->return_type = ast_new_simple_type(TYPE_VOID);
@@ -51,9 +51,9 @@ void analysis_stmt(ast_stmt *stmt) {
             analysis_assign((ast_assign_stmt *) stmt->stmt);
             break;
         }
-        case AST_FUNCTION_DECL: {
+        case AST_NEW_FN: {
             // 注册 function_decl_type + ident
-            analysis_function_decl_ident((ast_function_decl *) stmt->stmt);
+            analysis_function_decl_ident((ast_new_fn *) stmt->stmt);
 
             // 函数体添加到 延迟处理
             uint8_t count = analysis_current->contains_fn_count++;
@@ -144,7 +144,7 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     analysis_expr(&stmt->expr);
 }
 
-ast_type analysis_function_to_type(ast_function_decl *function_decl) {
+ast_type analysis_function_to_type(ast_new_fn *function_decl) {
     ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
     function_type_decl->return_type = function_decl->return_type;
     for (int i = 0; i < function_decl->formal_param_count; ++i) {
@@ -153,37 +153,29 @@ ast_type analysis_function_to_type(ast_function_decl *function_decl) {
     function_type_decl->formal_param_count = function_decl->formal_param_count;
     ast_type type = {
             .is_origin = false,
-            .category = TYPE_FUNCTION,
+            .category = TYPE_FN,
             .value = function_type_decl
     };
     return type;
 }
 
-ast_var_decl *analysis_function_to_var_decl(ast_function_decl *function_decl) {
-    ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
-    var_decl->ident = function_decl->name;
-
-    var_decl->type = analysis_function_to_type(function_decl);
-    return var_decl;
-}
-
-void analysis_function_decl_ident(ast_function_decl *function_decl) {
+void analysis_function_decl_ident(ast_new_fn *new_fn) {
     // 仅 fun 再次定义 name 才需要再次添加到符号表
-    if (strcmp(function_decl->name, MAIN_FUNCTION_NAME) != 0) {
-        if (strlen(function_decl->name) == 0) {
+    if (strcmp(new_fn->name, MAIN_FUNCTION_NAME) != 0) {
+        if (strlen(new_fn->name) == 0) {
             // 如果没有函数名称，则添加匿名函数名称
-            function_decl->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
+            new_fn->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
         }
 
-        analysis_redeclare_check(function_decl->name);
+        analysis_redeclare_check(new_fn->name);
 
         // 函数名称改写
         analysis_local_ident *local = analysis_new_local(
-                SYMBOL_TYPE_VAR,
-                analysis_function_to_var_decl(function_decl),
-                function_decl->name);
+                SYMBOL_TYPE_FN,
+                new_fn,
+                new_fn->name);
 
-        function_decl->name = local->unique_ident;
+        new_fn->name = local->unique_ident;
     }
 }
 
@@ -196,13 +188,15 @@ void analysis_function_decl_ident(ast_function_decl *function_decl) {
  * }
  *
  * 函数此时有两个名称,所以需要添加两次符号表
+ * 其中 foo 属于 var[type == fn]
+ * bar 属于 label
  * fn<void(int, int)> foo = void bar(int a, int b) {
  *
  * }
  * @param function_decl
  * @return
  */
-ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analysis_local_scope *scope) {
+ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_local_scope *scope) {
     ast_closure_decl *closure = malloc(sizeof(ast_closure_decl));
     analysis_type(&function_decl->return_type);
 
@@ -256,15 +250,16 @@ ast_closure_decl *analysis_function_decl(ast_function_decl *function_decl, analy
     for (int i = 0; i < analysis_current->contains_fn_count; ++i) {
         if (analysis_current->contains_fn_decl[i].is_stmt) {
             ast_stmt *stmt = analysis_current->contains_fn_decl[i].stmt;
+            // 函数注册到符号表已经在函数定义点注册过了
             ast_closure_decl *closure_decl = analysis_function_decl(stmt->stmt,
                                                                     analysis_current->contains_fn_decl[i].scope);
-            stmt->type = AST_CLOSURE_DECL;
+            stmt->type = AST_NEW_CLOSURE;
             stmt->stmt = closure_decl;
         } else {
             ast_expr *expr = analysis_current->contains_fn_decl[i].expr;
             ast_closure_decl *closure_decl = analysis_function_decl(expr->expr,
                                                                     analysis_current->contains_fn_decl[i].scope);
-            expr->type = AST_CLOSURE_DECL;
+            expr->type = AST_NEW_CLOSURE;
             expr->expr = closure_decl;
         };
     }
@@ -294,7 +289,7 @@ void analysis_end_scope() {
  * @param ident
  * @return
  */
-analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string ident) {
+analysis_local_ident *analysis_new_local(symbol_type type, void *decl, string ident) {
     // unique ident
     string unique_ident = analysis_unique_ident(ident);
 
@@ -303,13 +298,14 @@ analysis_local_ident *analysis_new_local(symbol_type belong, void *decl, string 
     local->unique_ident = unique_ident;
     local->scope_depth = analysis_current->scope_depth;
     local->decl = decl;
-    local->belong = belong;
+    local->type = type;
 
     // 添加 locals
     analysis_local_scope *current_scope = analysis_current->current_scope;
     current_scope->idents[current_scope->count++] = local;
 
-    table_set(symbol_ident_table, unique_ident, local);
+    // 添加到全局符号表
+    symbol_table_set(local->unique_ident, type, decl);
 
     return local;
 }
@@ -353,8 +349,8 @@ void analysis_expr(ast_expr *expr) {
             analysis_call((ast_call *) expr->expr);
             break;
         }
-        case AST_FUNCTION_DECL: {
-            analysis_function_decl_ident((ast_function_decl *) expr->expr);
+        case AST_NEW_FN: { // 右值
+            analysis_function_decl_ident((ast_new_fn *) expr->expr);
 
             // 函数体添加到 延迟处理
             uint8_t count = analysis_current->contains_fn_count++;
@@ -375,7 +371,7 @@ void analysis_ident(ast_expr *expr) {
     ast_ident *ident = expr->expr;
 
     // if ident is external symbol，not analysis and rename
-    if (is_extern_symbol(ident->literal)) {
+    if (is_debug_symbol(ident->literal)) {
         return;
     }
 
@@ -467,7 +463,7 @@ void analysis_type(ast_type *type) {
         return;
     }
 
-    if (type->category == TYPE_FUNCTION) {
+    if (type->category == TYPE_FN) {
         ast_function_type_decl *function_type_decl = type->value;
         analysis_type(&function_type_decl->return_type);
         for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
@@ -559,7 +555,7 @@ void analysis_type_decl(ast_type_decl_stmt *stmt) {
     analysis_type(&stmt->type);
 
     analysis_local_ident
-            *local = analysis_new_local(SYMBOL_TYPE_CUSTOM_TYPE, stmt, stmt->ident);
+            *local = analysis_new_local(SYMBOL_TYPE_CUSTOM, stmt, stmt->ident);
     stmt->ident = local->unique_ident;
 }
 
@@ -657,9 +653,3 @@ analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_loc
     new->parent = parent;
     return new;
 }
-
-
-
-
-
-

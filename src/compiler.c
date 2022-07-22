@@ -139,7 +139,7 @@ list *compiler_block(closure *c, ast_block_stmt *block) {
 
 list *compiler_stmt(closure *c, ast_stmt stmt) {
     switch (stmt.type) {
-        case AST_CLOSURE_DECL: {
+        case AST_NEW_CLOSURE: {
             return compiler_closure(c, (ast_closure_decl *) stmt.stmt, NULL);
         }
         case AST_VAR_DECL: {
@@ -248,6 +248,9 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
         }
         case AST_EXPR_IDENT: {
             ast_ident *ident = expr.expr;
+            // TODO 生成 lir 时无论是外部符号还是内部符号都必须知道符号的是 fn 还是 var
+
+            // 直接修改数据类型
             target->type = LIR_OPERAND_TYPE_VAR;
             target->value = lir_new_var_operand(c, ident->literal);
             return list_new();
@@ -276,7 +279,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
         case AST_EXPR_ACCESS_ENV: {
             return compiler_access_env(c, expr, target);
         }
-        case AST_CLOSURE_DECL: {
+        case AST_NEW_CLOSURE: {
             return compiler_closure(c, (ast_closure_decl *) expr.expr, target);
         }
         default: {
@@ -823,12 +826,13 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
         case TYPE_STRING: {
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
             lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
+            lir_operand *imm_len_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(literal->value));
             lir_op *call_op = lir_op_call(
                     RUNTIME_CALL_STRING_NEW,
                     target,
                     2,
                     imm_string_operand,
-                    strlen(literal->value));
+                    imm_len_operand);
             list_push(operates, call_op);
             return operates;
         }

@@ -90,14 +90,9 @@
 int lir_unique_count;
 int lir_line;
 
-typedef struct lir_operand {
-    uint8_t type;
-    void *value;
-} lir_operand;
-
 typedef enum {
     LIR_OPERAND_TYPE_NULL,
-    LIR_OPERAND_TYPE_VAR,
+    LIR_OPERAND_TYPE_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_TYPE_REG,
     LIR_OPERAND_TYPE_PHI_BODY,
     LIR_OPERAND_TYPE_FORMAL_PARAM,
@@ -106,6 +101,11 @@ typedef enum {
     LIR_OPERAND_TYPE_IMMEDIATE,
     LIR_OPERAND_TYPE_MEMORY,
 } lir_operand_type;
+
+typedef struct lir_operand {
+    lir_operand_type type;
+    void *value;
+} lir_operand;
 
 typedef enum {
     LIR_IMMEDIATE_TYPE_INT,
@@ -130,9 +130,18 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old;
     uint8_t reg_id; // reg list index, 寄存器分配
-    lir_local_var *local;
-    uint8_t size; // BYTE/QWORD/DWORD
+    lir_local_var *local; // local 如果为 nil 就是外部符号引用
+    uint8_t size; // BYTE/QWORD/DWORD ? 指针怎么说？
 } lir_operand_var;
+
+typedef struct {
+    char *ident;
+    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
+} lir_operand_label;
+
+typedef struct {
+    string ident;
+} lir_operand_symbol; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
     uint8_t count;
@@ -166,11 +175,6 @@ typedef struct {
     lir_operand *list[UINT8_MAX];
     uint8_t count;
 } lir_operand_actual_param;
-
-typedef struct {
-    char *ident;
-    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
-} lir_operand_label;
 
 typedef enum {
     LIR_OP_TYPE_NULL,

@@ -13,7 +13,7 @@ string type_to_string[] = {
         [TYPE_DECL_IDENT] = "decl", // char*
         [TYPE_LIST] = "list",
         [TYPE_MAP] = "map", // ast_map_decl
-        [TYPE_FUNCTION] = "function",
+        [TYPE_FN] = "function",
         [TYPE_POINT] = "point",
         [TYPE_NULL] = "null",
 };

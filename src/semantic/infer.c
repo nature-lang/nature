@@ -11,7 +11,7 @@ void infer(ast_closure_decl *closure_decl) {
 }
 
 ast_type infer_closure_decl(ast_closure_decl *closure_decl) {
-    ast_function_decl *function_decl = closure_decl->function;
+    ast_new_fn *function_decl = closure_decl->function;
 
     // 类型还原
     function_decl->return_type = infer_type(function_decl->return_type);
@@ -57,7 +57,7 @@ void infer_stmt(ast_stmt *stmt) {
             infer_assign((ast_assign_stmt *) stmt->stmt);
             break;
         }
-        case AST_CLOSURE_DECL: {
+        case AST_NEW_CLOSURE: {
             infer_closure_decl((ast_closure_decl *) stmt->stmt);
             break;
         }
@@ -131,7 +131,7 @@ ast_type infer_expr(ast_expr *expr) {
             type = infer_call((ast_call *) expr->expr);
             break;
         }
-        case AST_CLOSURE_DECL: {
+        case AST_NEW_CLOSURE: {
             type = infer_closure_decl((ast_closure_decl *) expr->expr);
             break;
         }
@@ -225,16 +225,22 @@ ast_type infer_unary(ast_unary_expr *expr) {
  */
 ast_type infer_ident(ast_ident *expr) {
     string unique_ident = expr->literal;
-    analysis_local_ident *local_ident = table_get(symbol_ident_table, unique_ident);
-    if (local_ident->belong != SYMBOL_TYPE_VAR) {
-        error_message(infer_line, "ident type exception");
+    symbol_t *symbol = symbol_table_get(unique_ident);
+    if (symbol->type == SYMBOL_TYPE_VAR) {
+        // 类型还原，并回写到 local_ident
+        ast_var_decl *var_decl = symbol->decl;
+        var_decl->type = infer_type(var_decl->type);
+        return var_decl->type;
     }
 
-    // 类型还原，并回写到 local_ident
-    ast_var_decl *var_decl = local_ident->decl;
-    var_decl->type = infer_type(var_decl->type);
+    if (symbol->type == SYMBOL_TYPE_FN) {
+        ast_new_fn *new_fn = symbol->decl;
+        return infer_type(analysis_function_to_type(new_fn));
+    }
 
-    return var_decl->type;
+
+    error_exit("ident type exception");
+    exit(0);
 }
 
 /**
@@ -449,9 +455,16 @@ ast_type infer_select_property(ast_select_property *select_property) {
 ast_type infer_call(ast_call *call) {
     ast_type result;
 
+    if (call->left.type == AST_EXPR_IDENT) {
+        ast_ident *ident = call->left.expr;
+        if (is_debug_symbol(ident->literal)) {
+            return ast_new_simple_type(TYPE_FN);
+        }
+    }
+
     ast_type left_type = infer_expr(&call->left);
 
-    if (left_type.category != TYPE_FUNCTION) {
+    if (left_type.category != TYPE_FN) {
         error_printf(infer_line, "expression not function type(%s), cannot call", type_to_string[left_type.category]);
     }
 
@@ -655,7 +668,7 @@ bool infer_compare_type(ast_type left, ast_type right) {
         }
     }
 
-    if (left.category == TYPE_FUNCTION) {
+    if (left.category == TYPE_FN) {
         ast_function_type_decl *left_function = left.value;
         ast_function_type_decl *right_function = right.value;
         if (!infer_compare_type(left_function->return_type, right_function->return_type)) {
@@ -751,7 +764,7 @@ ast_type infer_type(ast_type type) {
         return type;
     }
 
-    if (type.category == TYPE_FUNCTION) {
+    if (type.category == TYPE_FN) {
         ast_function_type_decl *fn_type_decl = type.value;
         fn_type_decl->return_type = infer_type(fn_type_decl->return_type);
         for (int i = 0; i < fn_type_decl->formal_param_count; ++i) {
@@ -767,12 +780,12 @@ ast_type infer_type(ast_type type) {
 
 ast_type infer_type_decl_ident(ast_ident *ident) {
     // 符号表找到相关类型
-    analysis_local_ident *local_ident = table_get(symbol_ident_table, ident->literal);
-    if (local_ident->belong != SYMBOL_TYPE_CUSTOM_TYPE) {
-        error_printf(infer_line, "'%s' is not a type", local_ident->ident);
+    symbol_t *symbol = symbol_table_get(ident->literal);
+    if (symbol->type != SYMBOL_TYPE_CUSTOM) {
+        error_printf(infer_line, "'%s' is not a type", symbol->ident);
     }
 
-    ast_type_decl_stmt *type_decl_stmt = local_ident->decl;
+    ast_type_decl_stmt *type_decl_stmt = symbol->decl;
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->type 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
