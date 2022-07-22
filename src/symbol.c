@@ -9,6 +9,20 @@
 
 void symbol_ident_table_init() {
     symbol_table = table_new();
+
+    symbol_table_set("builtin_print", SYMBOL_TYPE_FN, NULL, false);
+    symbol_table_set("debug_printf", SYMBOL_TYPE_FN, NULL, false);
+}
+
+// TODO 临时测试使用
+bool is_debug_symbol(char *ident) {
+    if (str_equal(ident, "builtin_print")) {
+        return true;
+    }
+    if (str_equal(ident, "debug_printf")) {
+        return true;
+    }
+    return false;
 }
 
 size_t type_sizeof(ast_type type) {
@@ -44,30 +58,16 @@ void symbol_set_temp_ident(char *unique_ident, ast_type type) {
     var_decl->type = type;
     var_decl->ident = unique_ident;
 
-    analysis_local_ident *local = NEW(analysis_local_ident);
-    local->unique_ident = unique_ident;
-    local->decl = var_decl;
-    local->type = SYMBOL_TYPE_VAR;
-
     // 添加到符号表中
-    symbol_table_set(unique_ident, SYMBOL_TYPE_VAR, var_decl);
+    symbol_table_set(unique_ident, SYMBOL_TYPE_VAR, var_decl, true);
 }
 
-bool is_debug_symbol(char *ident) {
-    if (str_equal(ident, "print")) {
-        return true;
-    }
-    if (str_equal(ident, "debug_printf")) {
-        return true;
-    }
-    return false;
-}
-
-void symbol_table_set(char *ident, symbol_type type, void *decl) {
-    symbol_t* s = NEW(symbol_t);
+void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local) {
+    symbol_t *s = NEW(symbol_t);
     s->ident = ident;
     s->type = type;
     s->decl = decl;
+    s->is_local = is_local;
     table_set(symbol_table, ident, s);
 }
 

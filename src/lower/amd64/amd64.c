@@ -14,6 +14,8 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_GOTO] = amd64_lower_goto,
         [LIR_OP_TYPE_GT] = amd64_lower_gt,
         [LIR_OP_TYPE_MOVE] = amd64_lower_mov,
+        [LIR_OP_TYPE_FN_BEGIN] = amd64_lower_fn_begin,
+        [LIR_OP_TYPE_FN_END] = amd64_lower_fn_end,
 };
 
 /**
@@ -454,14 +456,14 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
     return NULL;
 }
 
-list *amd64_lower_fn_begin(closure *c) {
+list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list *insts = list_new();
-    list_push(insts, ASM_INST("label", { LABEL(c->name) }));
     list_push(insts, ASM_INST("push", { REG(rbp) }));
     list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_length) }));
 
     // 形参入栈
+    list_append(insts, amd64_lower_fn_formal_params(c));
 
     return insts;
 }
@@ -471,7 +473,7 @@ list *amd64_lower_fn_begin(closure *c) {
  * @param c
  * @return
  */
-list *amd64_lower_fn_end(closure *c) {
+list *amd64_lower_fn_end(closure *c, lir_op *op) {
     list *insts = list_new();
     list_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
     list_push(insts, ASM_INST("pop", { REG(rbp) }));
@@ -494,19 +496,28 @@ list *amd64_lower_fn_formal_params(closure *c) {
 
 list *amd64_lower_closure(closure *c) {
     list *insts = list_new();
-    list_append(insts, amd64_lower_fn_begin(c));
-    list_append(insts, amd64_lower_fn_formal_params(c));
 
-    list_node *current = c->operates->front;
-    while (current != NULL) {
+    // 遍历 block
+    for (int i = 0; i < c->blocks.count; ++i) {
+        lir_basic_block *block = c->blocks.list[i];
+        list_append(insts, amd64_lower_block(c, block));
+    }
+
+    return insts;
+}
+
+
+list *amd64_lower_block(closure *c, lir_basic_block *block) {
+    list *insts = list_new();
+    list_node *current = block->operates->front;
+    while (current->value != NULL) {
         lir_op *op = current->value;
         list_append(insts, amd64_lower_op(c, op));
         current = current->next;
     }
-    list_append(insts, amd64_lower_fn_end(c));
-
     return insts;
 }
+
 
 list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     // 比较 first 是否等于 second，如果相等就跳转到 result label
@@ -521,5 +532,4 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
 
     return insts;
 }
-
 

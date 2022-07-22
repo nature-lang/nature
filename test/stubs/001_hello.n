@@ -1,1 +1,1 @@
-print("hello world")
+builtin_print("hello world")

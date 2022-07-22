@@ -19,6 +19,8 @@ list *compiler_block(closure *c, ast_block_stmt *block);
 
 list *compiler_var_decl(closure *c, ast_var_decl *var_decl);
 
+list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target);
+
 list *compiler_if(closure *c, ast_if_stmt *if_stmt);
 
 list *compiler_for_in(closure *c, ast_for_in_stmt *ast);

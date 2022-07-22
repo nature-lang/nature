@@ -23,10 +23,11 @@ typedef enum {
 typedef struct {
     string ident;
     symbol_type type;
+    bool is_local; // 是否为本地符号
     void *decl; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
 } symbol_t;
 
-void symbol_table_set(string ident, symbol_type type, void *decl);
+void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local);
 
 symbol_t *symbol_table_get(string ident);
 
@@ -44,8 +45,6 @@ size_t type_sizeof(ast_type type);
 
 void symbol_ident_table_init();
 
-// 添加内置函数
-void symbol_set_builtin_ident();
 //extern
 bool is_debug_symbol(string ident);
 

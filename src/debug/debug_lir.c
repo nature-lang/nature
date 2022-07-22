@@ -5,6 +5,14 @@
 #include "src/symbol.h"
 #include "src/semantic/analysis.h"
 
+static char *lir_operand_symbol_to_string(lir_operand_symbol *ptr) {
+    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
+    realloc(buf, len);
+
+    return buf;
+}
+
 string lir_operand_to_string(lir_operand *operand) {
     if (operand == NULL) {
         return "_";
@@ -13,6 +21,9 @@ string lir_operand_to_string(lir_operand *operand) {
     switch (operand->type) {
         case LIR_OPERAND_TYPE_LABEL: {
             return lir_operand_label_to_string((lir_operand_label *) operand->value);
+        }
+        case LIR_OPERAND_TYPE_SYMBOL: {
+            return lir_operand_symbol_to_string((lir_operand_symbol *) operand->value);
         }
         case LIR_OPERAND_TYPE_VAR: {
             return lir_operand_var_to_string((lir_operand_var *) operand->value);
@@ -38,7 +49,12 @@ string lir_operand_to_string(lir_operand *operand) {
 
 string lir_operand_label_to_string(lir_operand_label *label) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    sprintf(buf, "LABEL[%s]", label->ident);
+    string scope = "G";
+    if (label->is_local) {
+        scope = "L";
+    }
+
+    sprintf(buf, "LABEL[%s|%s]", label->ident, scope);
     return buf;
 }
 
@@ -48,40 +64,40 @@ string lir_operand_label_to_string(lir_operand_label *label) {
  */
 char *lir_operand_var_to_string(lir_operand_var *var) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    int stack_frame_offset = 0;
+//    int stack_frame_offset = 0;
     char *type_string = "";
-    if (var->local != NULL) {
-        stack_frame_offset = *var->local->stack_frame_offset;
-        type_string = type_to_string[var->local->type.category];
-        sprintf(buf, "VAR[%d|%s:%s]", stack_frame_offset, type_string, var->ident);
-    } else {
-        sprintf(buf, "VAR[extern:%s]", var->ident);
-    }
+    int len;
 
+//    stack_frame_offset = *var->local->stack_frame_offset;
+    type_string = type_to_string[var->local->type.category];
+    len = sprintf(buf, "VAR[%s|%s]", var->ident, type_string);
+
+    realloc(buf, len);
     return buf;
 }
 
 char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    int len;
     switch (immediate->type) {
         case TYPE_BOOL: {
             string bool_str = "true";
             if (immediate->bool_value == false) {
                 bool_str = "false";
             }
-            sprintf(buf, "IMM[BOOL:%s]", bool_str);
+            len = sprintf(buf, "IMM[%s|BOOL]", bool_str);
             break;
         }
         case TYPE_INT: {
-            sprintf(buf, "IMM[INT:%ld]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:INT]", immediate->int_value);
             break;
         }
         case TYPE_FLOAT: {
-            sprintf(buf, "IMM[FLOAT:%f]", immediate->float_value);
+            len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
             break;
         }
         case TYPE_STRING: {
-            sprintf(buf, "IMM[STRING:%s]", immediate->string_value);
+            len = sprintf(buf, "IMM[%s:STRING]", immediate->string_value);
             break;
         }
         default:
@@ -101,8 +117,8 @@ char *lir_operand_memory_to_string(lir_operand_memory *operand_memory) {
 }
 
 char *lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT * (actual_param->count + 1));
-    string params = malloc(sizeof(char) * DEBUG_STR_COUNT * actual_param->count);
+    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string params = malloc(sizeof(char) * DEBUG_STR_COUNT);
     for (int i = 0; i < actual_param->count; ++i) {
         string src = lir_operand_to_string(actual_param->list[i]);
         strcat(params, src);

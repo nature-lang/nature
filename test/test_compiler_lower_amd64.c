@@ -13,10 +13,13 @@
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
 #include "src/cfg.h"
+#include "src/lower/amd64/amd64.h"
+#include "src/assembler/amd64/register.h"
+#include "src/assembler/amd64/opcode.h"
+#include "src/assembler/elf/elf.h"
 
 static void test_hello() {
-//    char *source = file_read("/home/vagrant/Code/nature/test/stubs/001_hello.n");
-    char *source = file_read("/home/vagrant/Code/nature/example/ssa.n");
+    char *source = file_read("/home/vagrant/Code/nature/test/stubs/001_hello.n");
     // scanner
     list *token_list = scanner(source);
     // parser
@@ -42,7 +45,28 @@ static void test_hello() {
 #endif
     }
 
+    amd64_register_init();
+    opcode_init();
+    amd64_lower_init();
 
+    list *insts = list_new();
+    for (int i = 0; i < closures.count; ++i) {
+        closure *c = closures.list[i];
+        list_append(insts, amd64_lower_closure(c));
+    }
+
+    elf_init("hello.n");
+    //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
+    elf_var_decl_list_build(amd64_decl_list);
+    // 代码段
+    elf_text_inst_list_build(insts);
+    elf_text_inst_list_second_build();
+    elf_t elf = elf_new();
+    // 编码成二进制
+    uint64_t count;
+    uint8_t *binary = elf_encoding(elf, &count);
+    // 输出到文件
+    elf_to_file(binary, count, "hello.o");
 }
 
 int main(void) {

@@ -95,6 +95,8 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *targ
     list *operates = list_new();
     // 添加 label 入口
     list_push(operates, lir_op_label(ast->function->name, false));
+    list_push(operates, lir_op_new(LIR_OP_TYPE_FN_BEGIN, NULL, NULL, NULL));
+
 
     // 直接改写 target 而不是使用一个 move 操作
     if (target != NULL) {
@@ -112,9 +114,9 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *targ
     list *await = compiler_block(c, &ast->function->body);
     list_append(operates, await);
 
-    // 尾部添加结尾 label
+    // 尾部添加结尾 label(basic_block)
     list_push(operates, lir_op_label(c->end_label, true));
-
+    list_push(operates, lir_op_new(LIR_OP_TYPE_FN_END, NULL, NULL, NULL));
 
     c->operates = operates;
 
@@ -247,13 +249,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
             return compiler_literal(c, (ast_literal *) expr.expr, target);
         }
         case AST_EXPR_IDENT: {
-            ast_ident *ident = expr.expr;
-            // TODO 生成 lir 时无论是外部符号还是内部符号都必须知道符号的是 fn 还是 var
-
-            // 直接修改数据类型
-            target->type = LIR_OPERAND_TYPE_VAR;
-            target->value = lir_new_var_operand(c, ident->literal);
-            return list_new();
+            return compiler_ident(c, (ast_ident *) expr.expr, target);
         }
         case AST_CALL: {
             return compiler_call(c, (ast_call *) expr.expr, target);
@@ -378,7 +374,6 @@ list *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
     // push 指令所有的物理寄存器入栈
 //  lir_operand *base_target = NEW(lir_operand);
-    // TODO 这个符号应该是 label?
     lir_operand *base_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
 
     // TODO 如果 left 是一个结构体调用？ compiler_select_property
@@ -845,5 +840,31 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
     // 执行改写类型，而不是重复 mov 操作
     target->type = temp_operand->type;
     target->value = temp_operand->value;
+    return list_new();
+}
+
+list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
+    symbol_t *s = symbol_table_get(ident->literal);
+    if (s->type == SYMBOL_TYPE_FN) {
+        // label
+        target->type = LIR_OPERAND_TYPE_LABEL;
+        target->value = lir_new_label_operand(s->ident, s->is_local)->value;
+    }
+    if (s->type == SYMBOL_TYPE_VAR) {
+        if (s->is_local) {
+            target->type = LIR_OPERAND_TYPE_VAR;
+            target->value = lir_new_var_operand(c, ident->literal);
+        } else {
+            lir_operand_symbol *symbol = NEW(lir_operand_symbol);
+            symbol->ident = ident->literal;
+            target->type = LIR_OPERAND_TYPE_SYMBOL;
+            target->value = symbol;
+        }
+    }
+
+    if (s->type == SYMBOL_TYPE_CUSTOM) {
+        error_exit("[compiler_ident] s->type not ident  SYMBOL_TYPE_CUSTOM");
+    }
+
     return list_new();
 }

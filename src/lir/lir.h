@@ -93,6 +93,7 @@ int lir_line;
 typedef enum {
     LIR_OPERAND_TYPE_NULL,
     LIR_OPERAND_TYPE_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
+    LIR_OPERAND_TYPE_SYMBOL, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
     LIR_OPERAND_TYPE_REG,
     LIR_OPERAND_TYPE_PHI_BODY,
     LIR_OPERAND_TYPE_FORMAL_PARAM,
@@ -202,6 +203,8 @@ typedef enum {
     LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
     LIR_OP_TYPE_RETURN, // return 并不能真的就推出函数执行
     LIR_OP_TYPE_LABEL,
+    LIR_OP_TYPE_FN_BEGIN,
+    LIR_OP_TYPE_FN_END,
 } lir_op_type;
 
 /**

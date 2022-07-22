@@ -27,17 +27,15 @@ int amd64_decl_unique_count;
 
 void amd64_lower_init();
 
-/**
- * @param c
- * @return
- */
-list *amd64_lower_fn_begin(closure *c);
-
 list *amd64_lower_fn_formal_params(closure *c);
 
-list *amd64_lower_fn_end(closure *c);
+list *amd64_lower_fn_begin(closure *c, lir_op *op);
+
+list *amd64_lower_fn_end(closure *c, lir_op *op);
 
 list *amd64_lower_closure(closure *c);
+
+list *amd64_lower_block(closure *c, lir_basic_block *block);
 
 /**
  * 分发入口, 基于 type->type 做选择(包含 label type)

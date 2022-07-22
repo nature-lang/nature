@@ -305,7 +305,7 @@ analysis_local_ident *analysis_new_local(symbol_type type, void *decl, string id
     current_scope->idents[current_scope->count++] = local;
 
     // 添加到全局符号表
-    symbol_table_set(local->unique_ident, type, decl);
+    symbol_table_set(local->unique_ident, type, decl, true);
 
     return local;
 }

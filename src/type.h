@@ -7,7 +7,8 @@
 #define TYPE_NEW_INT() ast_new_simple_type(TYPE_INT)
 
 typedef enum {
-    TYPE_BOOL = 1,
+    TYPE_NULL,
+    TYPE_BOOL,
     TYPE_FLOAT,
     TYPE_INT,
     TYPE_INT8,
@@ -24,9 +25,8 @@ typedef enum {
     TYPE_MAP, // ast_map_decl
     TYPE_FN, // fn<int,void> ast_function_type_decl
     TYPE_POINT,
-    TYPE_NULL,
 } type_category;
 
-string type_to_string[TYPE_NULL + 1];
+string type_to_string[UINT8_MAX];
 
 #endif //NATURE_SRC_TYPE_H_
