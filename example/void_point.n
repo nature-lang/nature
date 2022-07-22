@@ -1,0 +1,14 @@
+// c 的 void* 和 golang interface 基本实现了各种复杂的类型操作
+// 但是都依赖于手动的类型推断,如果能做到动态的类型推断，代码的编写会更加简单？
+
+
+// 肯定无法做到编译时的类型推导!
+any a = 1
+any test() {
+	if (http.get() > 0) {
+		return "foo";
+	}
+
+	return 1
+}
+a = test()

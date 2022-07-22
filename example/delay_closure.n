@@ -1,0 +1,13 @@
+
+void test() {
+	if (a > 1) {
+		var c = 12
+	}
+	int sum() {
+		c = 3
+	}
+}
+
+bool a = false
+int b
+test()

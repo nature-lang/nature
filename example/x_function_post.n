@@ -1,0 +1,38 @@
+// 正常函数声明
+fn test(string a, int b): bool {
+
+}
+
+// 匿名函数声明
+fn(string a, int b): bool {
+
+}
+
+// 函数赋值给变量
+fn(string, int): bool test = fn(string a, int b): bool {
+
+}
+
+// 省略返回值
+fn(string, int) test = fn(string a, int b) {
+
+}
+
+// 函数参数
+foo(fn(string, int): bool test, int count): bool {
+	return test()
+}
+
+// 闭包传递
+foo(fn(string, int): bool {
+	return false
+}, 1);
+
+
+// 响应函数值
+foo(): fn(string, int): bool {
+	return fn(string a, int b): bool{
+		return false
+	}
+}
+

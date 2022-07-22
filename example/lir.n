@@ -1,0 +1,54 @@
+int a = 10
+bool ag = true
+if (ag) {
+	var a = 12
+	if (a > 2) {
+		type name = int
+		name a = 33
+	}
+} else if (a > 2) {
+	var b = 14
+} else {
+	var c = 16
+}
+a = 2
+
+var b = 1 + 2
+
+var c = b + 3 * 3
+
+bool d = true
+
+bool e = a > 2
+
+list[map{string:int}] f = [{"age": 24}]
+
+f[0]["age"] = 25
+
+type sex = bool
+
+sex g = true
+
+int sum(int a, int b) {
+	return a + b
+}
+
+fn<int(int, int)> make() {
+	var c = int (int a, int b) {
+		return a + b
+	}
+	var d = 12
+	if (d > 1) {
+		d = d + 1
+	}
+	return c
+}
+
+var callback = make()
+
+int a_1 = 10
+while (a_1 > 0) {
+	var a = a_1
+
+	a_1 = a_1 - 1
+}
