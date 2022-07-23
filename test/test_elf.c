@@ -147,8 +147,22 @@ static void test_opcode_encoding() {
     asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual8 = opcode_encoding(*mov_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
-    uint8_t expect18[] = {0x48, 0x03, 0x45, 0xF8};
+    uint8_t expect18[] = {0x48, 0x8b, 0x45, 0xF8};
     assert_memory_equal(actual8, expect18, byte_count);
+
+    asm_inst_t *mov_xmm0_disp = ASM_INST("mov", { REG(xmm0), DISP_REG(rbp, -8, QWORD), });
+    uint8_t *actual9 = opcode_encoding(*mov_xmm0_disp, &byte_count);
+    // 0x43 => mod:01 reg:000 rm:101
+    uint8_t expect19[] = {0xF2, 0x0F, 0x10, 0x45, 0xF8};
+    assert_memory_equal(actual9, expect19, byte_count);
+
+    uint8_t expect10[] = {0xF2, 0x0F, 0x10, 0xC1};
+    uint8_t *actual10 = opcode_encoding(*ASM_INST("mov", { REG(xmm0), REG(xmm1) }), &byte_count);
+    assert_memory_equal(actual10, expect10, byte_count);
+
+    uint8_t expect11[] = {0xF2, 0x0F, 0x11, 0x4D, 0xF8};
+    uint8_t *actual11 = opcode_encoding(*ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(xmm1) }), &byte_count);
+    assert_memory_equal(actual11, expect11, byte_count);
 }
 
 static void test_hello_world() {
@@ -278,10 +292,10 @@ static void test_union_c() {
 
     list *inst_list = list_new();
     // sys_write
-    list_push(inst_list, ASM_INST("label", { SYMBOL("_start",false) }));
+    list_push(inst_list, ASM_INST("label", { SYMBOL("_start", false) }));
     list_push(inst_list, ASM_INST("mov", { REG(rbp), REG(rsp) }));
 
-    list_push(inst_list, ASM_INST("call", { SYMBOL("length",false) }));
+    list_push(inst_list, ASM_INST("call", { SYMBOL("length", false) }));
     list_push(inst_list, ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) }));
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(1) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) }));

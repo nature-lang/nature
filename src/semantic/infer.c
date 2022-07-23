@@ -455,21 +455,26 @@ ast_type infer_select_property(ast_select_property *select_property) {
 ast_type infer_call(ast_call *call) {
     ast_type result;
 
+    // 实参推导
+    ast_type actual_types[call->actual_param_count];
+    for (int i = 0; i < call->actual_param_count; ++i) {
+        actual_types[i] = infer_expr(&call->actual_params[i]);
+    }
+
     if (call->left.type == AST_EXPR_IDENT) {
         ast_ident *ident = call->left.expr;
-        if (is_debug_symbol(ident->literal)) {
+        if (is_print_symbol(ident->literal)) {
             return ast_new_simple_type(TYPE_FN);
         }
     }
 
+    // 左值符号推导(外部符号暂时偷懒没有进行具体的推导)
     ast_type left_type = infer_expr(&call->left);
-
     if (left_type.category != TYPE_FN) {
         error_printf(infer_line, "expression not function type(%s), cannot call", type_to_string[left_type.category]);
     }
 
     ast_function_type_decl *function_type_decl = left_type.value;
-
     if (function_type_decl->formal_param_count != call->actual_param_count) {
         error_printf(infer_line, "function param count not match");
         exit(0);
@@ -478,8 +483,7 @@ ast_type infer_call(ast_call *call) {
     // call param check
     for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
         ast_var_decl *formal_param = function_type_decl->formal_params[i];
-
-        ast_type actual_param_type = infer_expr(&call->actual_params[i]);
+        ast_type actual_param_type = actual_types[i];
         if (!infer_compare_type(formal_param->type, actual_param_type)) {
             error_printf(infer_line, "call param[%d] type error, expect '%s' type, actual '%s' type",
                          i,

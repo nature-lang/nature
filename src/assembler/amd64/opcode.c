@@ -95,7 +95,6 @@ inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                      }
 };
 
-
 inst_t mov_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
@@ -139,6 +138,29 @@ inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                        }
 };
+
+inst_t movsd_xmm1_xmm2 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                          {
+                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                          }
+};
+
+
+inst_t movsd_xmm1_m64 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                         }
+};
+
+inst_t movsd_xmm1m64_xmm2 = {"mov", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
+                                     {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
+                             }
+};
+
 
 inst_t mov_rm64_r64 = {"mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
@@ -287,6 +309,9 @@ void opcode_init() {
     opcode_tree_build(&mov_r64_imm64);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_rm64_r64);
+    opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
+    opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
+    opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
     opcode_tree_build(&cmp_al_imm32);
     opcode_tree_build(&cmp_rax_imm32);
     opcode_tree_build(&cmp_r64_rm64);
@@ -487,19 +512,20 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_XMM1 || t == OPERAND_TYPE_XMM2) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 16);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, OWORD);
         res.list = highs;
         return res;
     }
 
     if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
-        res.count = 5;
+        res.count = 6;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 8);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 16);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 8);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 16);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REGISTER, 8);
         highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
         highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REGISTER, 8);
+        highs[5] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REGISTER, 8);
         res.list = highs;
         return res;
     }

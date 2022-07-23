@@ -372,19 +372,15 @@ list *compiler_if(closure *c, ast_if_stmt *if_stmt) {
  * @return
  */
 list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
+    // call->left is debug ident
     // push 指令所有的物理寄存器入栈
-//  lir_operand *base_target = NEW(lir_operand);
     lir_operand *base_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
-
-    // TODO 如果 left 是一个结构体调用？ compiler_select_property
-    // 那么应该将 struct 的地址拿出来，传递成第一二参数
-
     list *operates = compiler_expr(c, call->left, base_target);
 
-//  if (base_target->type != LIR_OPERAND_TYPE_VAR) {
-//    error_printf(compiler_line, "function call left must confirm label!");
-//    exit(0);
-//  }
+    if (base_target->type == LIR_OPERAND_TYPE_LABEL &&
+        is_print_symbol(((lir_operand_label *) base_target->value)->ident)) {
+        return compiler_builtin_print(c, call);
+    }
 
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
@@ -822,7 +818,7 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
             lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
             lir_operand *imm_len_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(literal->value));
-            lir_op *call_op = lir_op_call(
+            lir_op *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_STRING_NEW,
                     target,
                     2,
@@ -867,4 +863,45 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
     }
 
     return list_new();
+}
+
+list *compiler_builtin_print(closure *c, ast_call *call) {
+    list *operates = list_new();
+    lir_operand *base_target = lir_new_label_operand("builtin_print", false);
+    lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
+    params_operand->count = 0;
+    params_operand->list[params_operand->count++] = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
+                                                                              call->actual_param_count);
+    for (int i = 0; i < call->actual_param_count; ++i) {
+        ast_expr ast_param_expr = call->actual_params[i];
+
+        lir_operand *origin_value_target = lir_new_temp_var_operand(c, ast_param_expr.data_type);
+        list_append(operates, compiler_expr(c, ast_param_expr, origin_value_target));
+
+        lir_operand *param_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
+        lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
+                                                                 ast_param_expr.data_type.category);
+        lir_operand *point_param = lir_new_temp_var_operand(c, ast_new_simple_type(TYPE_NULL));
+        lir_operand *imm_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_FLOAT, float_value, 0);
+
+        if (origin_value_target->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+            lir_operand_immediate *imm = origin_value_target->value;
+            imm->type = TYPE_INT; // 即使是 float 也直接使用 rdi 等寄存器传递，而不是使用 xmm 寄存器
+        }
+
+        lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_value_target);
+        // 包裹 type
+        list_push(operates, op);
+
+        // 写入到 call 指令中
+        params_operand->list[params_operand->count++] = param_target;
+    }
+
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+
+    lir_op *call_op = lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, base_target, call_params_operand, NULL);
+
+    list_push(operates, call_op);
+
+    return operates;
 }

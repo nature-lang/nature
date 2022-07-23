@@ -45,6 +45,8 @@ size_t type_sizeof(ast_type type);
 
 void symbol_ident_table_init();
 
+bool is_print_symbol(char *ident);
+
 //extern
 bool is_debug_symbol(string ident);
 

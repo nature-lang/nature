@@ -2,6 +2,7 @@
 #include "src/type.h"
 #include "src/assembler/amd64/register.h"
 #include "src/lib/error.h"
+#include "src/symbol.h"
 
 amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_ADD] = amd64_lower_add,
@@ -76,6 +77,12 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     }
 
     list_append(insts, param_insts);
+
+    if (first->type == ASM_OPERAND_TYPE_SYMBOL && is_print_symbol(((asm_operand_symbol_t *) first->value)->name)) {
+        // x. TODO 仅调用变成函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长函数？
+        list_push(insts, ASM_INST("mov", { REG(rax), UINT32(0) }));
+    }
+
 
     // 3. 调用 call 指令(处理地址), 响应的结果在 rax 中
     list_push(insts, ASM_INST("call", { first }));
@@ -362,6 +369,26 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
 
             return insts;
         }
+
+        if (v->type == TYPE_FLOAT) {
+            char *unique_name = AMD64_DECL_UNIQUE_NAME();
+            asm_var_decl *decl = NEW(asm_var_decl);
+            decl->name = unique_name;
+            decl->size = QWORD;
+            decl->value = (uint8_t *) &v->float_value; // float to uint8
+            decl->type = ASM_VAR_DECL_TYPE_FLOAT;
+            list_push(amd64_decl_list, decl);
+
+            // 使用临时寄存器保存结果
+            reg_t *reg = amd64_lower_next_reg(used_regs, OWORD);
+
+            // movq xmm1,rm64
+            list_push(insts, ASM_INST("mov", { REG(reg), SYMBOL(unique_name, false) }));
+
+            ASM_OPERAND_COPY(asm_operand, REG(reg));
+            return insts;
+        }
+
         // 匹配失败继续往下走,简单转换里面还有一层 imm 匹配
     }
 
@@ -437,7 +464,7 @@ reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size) {
  */
 reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
     uint8_t used_index = 0; // 8bit ~ 64bit
-    if (used_index > 8) {
+    if (size > 8) {
         used_index = 1;
     }
     uint8_t count = used[used_index]++;

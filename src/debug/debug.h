@@ -8,15 +8,15 @@
 
 #define DEBUG_STR_COUNT 1000
 
-#define DEBUG_SCANNER
+//#define DEBUG_SCANNER
 
-#define DEBUG_PARSER
+//#define DEBUG_PARSER
 
-#define DEBUG_ANALYSIS
+//#define DEBUG_ANALYSIS
 
-#define DEBUG_INFER
+//#define DEBUG_INFER
 
-#define DEBUG_COMPILER
+//#define DEBUG_COMPILER
 
 #define DEBUG_COMPILER_LIR
 

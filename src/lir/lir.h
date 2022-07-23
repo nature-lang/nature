@@ -159,10 +159,10 @@ typedef struct {
 
 typedef struct {
     union {
-        int64_t int_value;
-        float float_value;
-        bool bool_value;
-        string string_value;
+        int64_t int_value; // 8bit
+        float float_value; // 4bit = c.float
+        bool bool_value; // 1bit
+        string string_value; // 8bit
     };
     type_category type;
 } lir_operand_immediate;
@@ -360,6 +360,10 @@ lir_op *lir_op_goto(lir_operand *label);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
+
+lir_op *lir_op_builtin_call(string name, lir_operand *result, int arg_count, ...);
+
+lir_op *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...);
 
 lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 

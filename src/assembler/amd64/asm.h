@@ -10,8 +10,8 @@
 #define WORD 2 // 2 byte = 16 位
 #define DWORD 4 // 4 byte = 32 位
 #define QWORD 8 // 8 byte = 64位
-#define OWORD 16 // 16 byte = 128位
-#define YWORD 32 // 32 byte
+#define OWORD 16 // 16 byte = 128位 xmm
+#define YWORD 32 // 32 byte = ymm
 #define ZWORD 64 // 64 byte
 
 #define MOVSQ(_prefix) ({\
@@ -121,8 +121,8 @@
 #define UINT64(_value) VALUE_OPERAND(asm_operand_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
 #define INT8(_value) VALUE_OPERAND(asm_operand_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
 #define INT32(_value) VALUE_OPERAND(asm_operand_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
-#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), DWORD)
-#define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), QWORD)
+#define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
+#define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
     asm_operand_t *number_operand = malloc(sizeof(asm_operand_t));\

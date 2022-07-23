@@ -10,16 +10,26 @@
 void symbol_ident_table_init() {
     symbol_table = table_new();
 
-    symbol_table_set("builtin_print", SYMBOL_TYPE_FN, NULL, false);
+    symbol_table_set("print", SYMBOL_TYPE_FN, NULL, false);
     symbol_table_set("debug_printf", SYMBOL_TYPE_FN, NULL, false);
 }
 
 // TODO 临时测试使用
 bool is_debug_symbol(char *ident) {
-    if (str_equal(ident, "builtin_print")) {
+    if (str_equal(ident, "print")) {
         return true;
     }
     if (str_equal(ident, "debug_printf")) {
+        return true;
+    }
+    return false;
+}
+
+bool is_print_symbol(char *ident) {
+    if (str_equal(ident, "print")) {
+        return true;
+    }
+    if (str_equal(ident, "builtin_print")) {
         return true;
     }
     return false;
@@ -74,4 +84,5 @@ void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local)
 symbol_t *symbol_table_get(char *ident) {
     return table_get(symbol_table, ident);
 }
+
 

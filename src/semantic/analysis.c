@@ -370,8 +370,7 @@ void analysis_expr(ast_expr *expr) {
 void analysis_ident(ast_expr *expr) {
     ast_ident *ident = expr->expr;
 
-    // if ident is external symbol，not analysis and rename
-    if (is_debug_symbol(ident->literal)) {
+    if (is_print_symbol(ident->literal)) {
         return;
     }
 

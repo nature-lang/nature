@@ -7,10 +7,10 @@
 #define TYPE_NEW_INT() ast_new_simple_type(TYPE_INT)
 
 typedef enum {
-    TYPE_NULL,
+    TYPE_NULL = 1,
     TYPE_BOOL,
-    TYPE_FLOAT,
-    TYPE_INT,
+    TYPE_FLOAT, // 默认 4bit = c float
+    TYPE_INT, // 默认 8bit
     TYPE_INT8,
     TYPE_INT16,
     TYPE_INT32,

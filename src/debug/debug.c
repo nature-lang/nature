@@ -118,9 +118,12 @@ string lir_op_type_to_debug[] = {
         [LIR_OP_TYPE_PUSH]="PUSH  ",
         [LIR_OP_TYPE_POP]="POP   ",
         [LIR_OP_TYPE_CALL]="CALL  ",
+        [LIR_OP_TYPE_BUILTIN_CALL]="B_CALL",
         [LIR_OP_TYPE_RUNTIME_CALL]="R_CALL",
         [LIR_OP_TYPE_RETURN]="RET   ",
         [LIR_OP_TYPE_LABEL]="LABEL ",
+        [LIR_OP_TYPE_FN_BEGIN] = "FN_BEGIN",
+        [LIR_OP_TYPE_FN_END] = "FN_END",
 };
 
 void debug_parser(int line, char *token) {
@@ -155,7 +158,7 @@ void debug_lir(int line, lir_op *op) {
         return;
     }
     printf(
-            "\t\t%s\t\t%s , %s => %s",
+            "\t\t%s\t\t%s , %s -> %s",
             lir_op_type_to_debug[op->type],
             lir_operand_to_string(op->first),
             lir_operand_to_string(op->second),
@@ -193,7 +196,7 @@ void debug_basic_block(lir_basic_block *block) {
 
     list_node *current = block->operates->front;
     while (current->value != NULL) {
-        lir_op* op = current->value;
+        lir_op *op = current->value;
         printf(
                 "\t\t%s\t%s , %s => %s\n",
                 lir_op_type_to_debug[op->type],
