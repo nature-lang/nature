@@ -18,8 +18,8 @@
 #include "src/assembler/amd64/opcode.h"
 #include "src/assembler/elf/elf.h"
 
-static void test_hello() {
-    char *source = file_read("/home/vagrant/Code/nature/test/stubs/hello.n");
+static void built_target(string path, string name) {
+    char *source = file_read(path);
     // scanner
     list *token_list = scanner(source);
     // parser
@@ -55,7 +55,7 @@ static void test_hello() {
         list_append(insts, amd64_lower_closure(c));
     }
 
-    elf_init("hello.n");
+    elf_init(name);
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
     elf_var_decl_list_build(amd64_decl_list);
     // 代码段
@@ -66,12 +66,21 @@ static void test_hello() {
     uint64_t count;
     uint8_t *binary = elf_encoding(elf, &count);
     // 输出到文件
-    elf_to_file(binary, count, "hello.o");
+    elf_to_file(binary, count, str_connect(name, ".o"));
+}
+
+static void test_hello() {
+    built_target("/home/vagrant/Code/nature/test/stubs/hello.n", "hello.n");
+}
+
+static void test_sum() {
+    built_target("/home/vagrant/Code/nature/test/stubs/sum.n", "sum.n");
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_hello),
+//            cmocka_unit_test(test_hello),
+            cmocka_unit_test(test_sum),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -46,12 +46,9 @@ void builtin_print(int arg_count, ...) {
 //    write(STDOUT_FILENO, "\n", 1);
 }
 
-builtin_operand_t *builtin_new_operand(type_category type, void *point_value, uint64_t imm_value) {
+builtin_operand_t *builtin_new_operand(type_category type, void *value) {
     builtin_operand_t *operand = malloc(sizeof(builtin_operand_t));
     operand->type = type;
-    operand->point_value = point_value;
-    if (type == TYPE_INT || type == TYPE_FLOAT || type == TYPE_BOOL) {
-        operand->int_value = imm_value;
-    }
+    operand->point_value = value;
     return operand;
 }

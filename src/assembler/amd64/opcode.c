@@ -307,8 +307,8 @@ void opcode_init() {
     opcode_tree_build(&je_rel8);
     opcode_tree_build(&je_rel32);
     opcode_tree_build(&ret);
-    opcode_tree_build(&push_r64);
     opcode_tree_build(&push_rm64);
+    opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
     opcode_tree_build(&pop_rm64);
     opcode_tree_build(&sub_imm32_rm64);
@@ -644,7 +644,8 @@ void opcode_sort_insts(insts_t *insts) {
         return;
     }
 
-    for (int i; i < insts->count - 1; ++i) {
+    // [2, 3, 4, 5, 6] // 升序排列
+    for (int i = 0; i < insts->count - 1; ++i) {
         bool change = false;
         for (int j = 0; j < insts->count - 1 - i; ++j) {
             if (insts->list[j]->operands[0].type > insts->list[j + 1]->operands[0].type) {

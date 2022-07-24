@@ -859,12 +859,14 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     }
     if (s->type == SYMBOL_TYPE_VAR) {
+        ast_var_decl *var = s->decl;
         if (s->is_local) {
             target->type = LIR_OPERAND_TYPE_VAR;
             target->value = lir_new_var_operand(c, ident->literal);
         } else {
             lir_operand_symbol *symbol = NEW(lir_operand_symbol);
             symbol->ident = ident->literal;
+            symbol->type = var->type;
             target->type = LIR_OPERAND_TYPE_SYMBOL;
             target->value = symbol;
         }
@@ -890,23 +892,17 @@ list *compiler_builtin_print(closure *c, ast_call *call) {
         lir_operand *origin_param_target = lir_new_empty_operand();
         list_append(operates, compiler_expr(c, ast_param_expr, origin_param_target));
 
-        lir_operand *point_param = origin_param_target;
-        lir_operand *imm_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0); // 统一使用 int
         if (origin_param_target->type == LIR_OPERAND_TYPE_IMMEDIATE) {
-            imm_param = origin_param_target;
+            lir_operand *imm_param = origin_param_target;
             lir_operand_immediate *imm = imm_param->value;
-            imm->type = TYPE_INT;
-
-            // 占位符号值
-            point_param = lir_new_temp_var_operand(c, ast_new_simple_type(TYPE_NULL));
+            imm->type = TYPE_INT64; // int 默认都使用了 mov asm uint 32 处理。但是这里确实需要 64 位处理。
         }
 
         lir_operand *param_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
         lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
                                                                  ast_param_expr.data_type.category);
 
-        lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 3, data_type_param,
-                                         point_param, imm_param);
+        lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_param_target);
         // 包裹 type
         list_push(operates, op);
 

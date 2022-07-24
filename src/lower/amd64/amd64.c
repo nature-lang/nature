@@ -52,7 +52,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     uint8_t used[2] = {0};
     // 1. 大返回值处理(使用 rdi 预处理)
-    if (op->result_type == TYPE_STRUCT && result != NULL) {
+    if (op->result != NULL && lir_type_category(op->result) == TYPE_STRUCT) {
         reg_t *target_reg = amd64_lower_next_actual_reg_target(used, QWORD);
         list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
     }
@@ -97,8 +97,8 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     list_push(insts, ASM_INST("call", { first }));
 
     // 4. 响应处理(取出响应值传递给 result)
-    if (result != NULL) {
-        if (op->result_type == TYPE_FLOAT) {
+    if (op->result != NULL) {
+        if (lir_type_category(op->result) == TYPE_FLOAT) {
             list_push(insts, ASM_INST("mov", { result, REG(xmm0) }));
         } else {
             list_push(insts, ASM_INST("mov", { result, REG(rax) }));
@@ -125,7 +125,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
 
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
 
-    if (op->result_type == TYPE_STRUCT) {
+    if (lir_type_category(op->result) == TYPE_STRUCT) {
         // 计算长度
         int rep_count = ceil((float) result->size / QWORD);
         asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset, QWORD);
@@ -136,7 +136,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
         list_push(insts, MOVSQ(0xF3));
 
         list_push(insts, ASM_INST("mov", { REG(rax), REG(rdi) }));
-    } else if (op->result_type == TYPE_FLOAT) {
+    } else if (lir_type_category(op->result) == TYPE_FLOAT) {
         list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
     } else {
         list_push(insts, ASM_INST("mov", { REG(rax), result }));
@@ -163,31 +163,31 @@ list *amd64_lower_goto(closure *c, lir_op *op) {
  * @return
  */
 list *amd64_lower_add(closure *c, lir_op *op) {
-    if (op->result_type == TYPE_INT) {
-        list *insts = list_new();
-        regs_t used_regs = {.count = 0};
+    list *insts = list_new();
+    regs_t used_regs = {.count = 0};
 
-        // 参数转换
-        asm_operand_t *first = NEW(asm_operand_t);
-        list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
-        list_append(insts, temp);
-        asm_operand_t *second = NEW(asm_operand_t);
-        temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
-        list_append(insts, temp);
+    // 参数转换
+    asm_operand_t *first = NEW(asm_operand_t);
+    list *temp = amd64_lower_complex_to_asm_operand(op->first, first, &used_regs);
+    list_append(insts, temp);
+    asm_operand_t *second = NEW(asm_operand_t);
+    temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
+    list_append(insts, temp);
 
-        asm_operand_t *result = NEW(asm_operand_t);
-        temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-        list_append(insts, temp);
+    asm_operand_t *result = NEW(asm_operand_t);
+    temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
+    list_append(insts, temp);
 
-        reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
-        list_push(insts, ASM_INST("mov", { REG(reg), first }));
-        list_push(insts, ASM_INST("add", { REG(reg), second }));
-        list_push(insts, ASM_INST("mov", { result, REG(reg) }));
+    // imm64 会造成溢出？所以最大只能是?
 
-        return insts;
-    }
-    error_exit("[amd64_lower_add] type->result_type not identify");
-    return NULL;
+    reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
+    list_push(insts, ASM_INST("mov", { REG(reg), first }));
+    list_push(insts, ASM_INST("add", { REG(reg), second }));
+    list_push(insts, ASM_INST("mov", { result, REG(reg) }));
+
+    return insts;
+//    error_exit("[amd64_lower_add] type->result_type not identify");
+//    return NULL;
 }
 
 // lir GT foo,bar => result
@@ -242,7 +242,7 @@ list *amd64_lower_label(closure *c, lir_op *op) {
 list *amd64_lower_mov(closure *c, lir_op *op) {
     list *insts = list_new();
 
-    if (op->result_type == TYPE_STRUCT) {
+    if (lir_type_category(op->result) == TYPE_STRUCT) {
 //    regs_t used_regs = {.count = 0};
         // first => result
         // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
@@ -311,7 +311,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_INT) {
-            return UINT64(v->int_value);
+            return UINT32(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
         }
         if (v->type == TYPE_INT8) {
             return UINT8(v->int_value);

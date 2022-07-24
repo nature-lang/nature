@@ -224,8 +224,8 @@ void lir_new_local_var(closure *c, char *ident, ast_type type) {
     local->type = type;
     local->stack_frame_offset = NEW(uint16_t);
     local->ident = ident;
-    *local->stack_frame_offset = c->stack_length;
     c->stack_length += type_sizeof(type);
+    *local->stack_frame_offset = c->stack_length;
     table_set(c->local_vars, ident, local);
 }
 
@@ -234,4 +234,18 @@ lir_operand *lir_new_empty_operand() {
     operand->type = 0;
     operand->value = NULL;
     return operand;
+}
+
+type_category lir_type_category(lir_operand *operand) {
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = operand->value;
+        return var->local->type.category;
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_SYMBOL) {
+        lir_operand_symbol *s = operand->value;
+        return s->type.category;
+    }
+
+    return TYPE_NULL;
 }

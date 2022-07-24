@@ -92,6 +92,10 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
             len = sprintf(buf, "IMM[%ld:INT]", immediate->int_value);
             break;
         }
+        case TYPE_INT64: {
+            len = sprintf(buf, "IMM[%ld:INT64]", immediate->int_value);
+            break;
+        }
         case TYPE_FLOAT: {
             len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
             break;

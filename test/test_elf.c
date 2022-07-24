@@ -100,15 +100,9 @@ static void test_opcode_init() {
 static void test_opcode_encoding() {
     amd64_register_init();
     opcode_init();
-    asm_inst_t inst = {
-            .name = "push",
-            .operands = {
-                    REG(rcx),
-            },
-            .count = 1
-    };
     uint8_t byte_count;
-    uint8_t *actual = opcode_encoding(inst, &byte_count);
+
+    uint8_t *actual = opcode_encoding(*ASM_INST("push", { REG(rcx) }), &byte_count);
     uint8_t expect[] = {0x51};
     assert_memory_equal(actual, expect, byte_count);
 

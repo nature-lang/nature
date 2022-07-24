@@ -142,6 +142,7 @@ typedef struct {
 
 typedef struct {
     string ident;
+    ast_type type;
 } lir_operand_symbol; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
@@ -229,7 +230,7 @@ typedef struct lir_op {
     // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
     // TYPE_STRING/LIST/MAP/SET = 8
     // CUSTOM_TYPE 如何处理？
-    type_category result_type;
+    type_category result_data_type;
 
 //    string struct_name;
 
@@ -339,6 +340,8 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  * @param type
  */
 void lir_new_local_var(closure *c, string ident, ast_type type);
+
+type_category lir_type_category(lir_operand *operand);
 
 lir_operand *lir_new_temp_var_operand(closure *c, ast_type type);
 

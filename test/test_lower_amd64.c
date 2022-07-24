@@ -164,7 +164,6 @@ static void test_lower_sum() {
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 22),
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 33),
                                 temp_var);
-    sum_op->result_type = TYPE_INT;
 
     lir_op *debug = lir_op_call("debug_printf", NULL, 2,
                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "add 22 + 33 = %d\n"),
@@ -222,9 +221,7 @@ static void test_lower_call() {
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, a),
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, b),
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
-    sum_op->result_type = TYPE_INT;
     lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, temp));
-    return_op->result_type = TYPE_INT;
     list_push(sum_closure->operates, sum_op);
     list_push(sum_closure->operates, return_op);
 
@@ -247,7 +244,6 @@ static void test_lower_call() {
     lir_op *call_op = lir_op_call("sum", foo, 2,
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1),
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 10));
-    call_op->result_type = TYPE_INT;
 
 
     lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
@@ -296,12 +292,10 @@ static void test_lower_if() {
     // 编写指令
     // mov [rbp+8],1
     lir_op *mov_op = lir_op_move(foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT32, int_value, 2));
-    mov_op->result_type = TYPE_INT;
 
 
     // cmp foo，1 => cmp_res
     lir_op *cmp_gt_op = lir_op_new(LIR_OP_TYPE_GT, foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1), cmp_res);
-    cmp_gt_op->result_type = TYPE_BOOL;
 
     // cmp goto
     lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_CMP_GOTO, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),

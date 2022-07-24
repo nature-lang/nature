@@ -17,12 +17,9 @@ static void test_string() {
 }
 
 static void test_builtin_print() {
-//    char *a = "hello hahah";
-//    string_t *param1 = string_new(a, 11);
-//    char *b = "wordwordword";
-//    string_t *param2 = string_new(b, 11);
-
-    builtin_print(1, builtin_new_operand(TYPE_FLOAT, NULL, 1235));
+    int a = 1;
+    builtin_operand_t *operand = builtin_new_operand(TYPE_INT, a, 0);
+    builtin_print(1, operand);
 }
 
 int main(void) {
