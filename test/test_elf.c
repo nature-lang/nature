@@ -163,6 +163,14 @@ static void test_opcode_encoding() {
     uint8_t expect11[] = {0xF2, 0x0F, 0x11, 0x4D, 0xF8};
     uint8_t *actual11 = opcode_encoding(*ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(xmm1) }), &byte_count);
     assert_memory_equal(actual11, expect11, byte_count);
+
+    uint8_t expect12[] = {0x48, 0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F};
+    uint8_t *actual12 = opcode_encoding(*ASM_INST("mov", { REG(rax), UINT64(9223372036854775807) }), &byte_count);
+    assert_memory_equal(actual12, expect12, byte_count);
+
+    uint8_t expect13[] = {0x4C, 0x8B, 0x45, 0xF8};
+    uint8_t *actual13 = opcode_encoding(*ASM_INST("mov", { REG(r8), DISP_REG(rbp, -8, QWORD) }), &byte_count);
+    assert_memory_equal(actual13, expect13, byte_count);
 }
 
 static void test_hello_world() {
@@ -433,7 +441,6 @@ int main(void) {
             cmocka_unit_test(test_opcode_tree_build),
             cmocka_unit_test(test_opcode_init),
             cmocka_unit_test(test_opcode_encoding),
-            cmocka_unit_test(test_hello_world),
             cmocka_unit_test(test_call),
             cmocka_unit_test(test_union_c),
             cmocka_unit_test(test_union_builtin_print),

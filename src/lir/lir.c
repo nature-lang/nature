@@ -228,3 +228,10 @@ void lir_new_local_var(closure *c, char *ident, ast_type type) {
     c->stack_length += type_sizeof(type);
     table_set(c->local_vars, ident, local);
 }
+
+lir_operand *lir_new_empty_operand() {
+    lir_operand *operand = NEW(lir_operand);
+    operand->type = 0;
+    operand->value = NULL;
+    return operand;
+}

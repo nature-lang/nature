@@ -9,7 +9,7 @@
 typedef enum {
     TYPE_NULL = 1,
     TYPE_BOOL,
-    TYPE_FLOAT, // 默认 4bit = c float
+    TYPE_FLOAT, // 默认 8bit = double
     TYPE_INT, // 默认 8bit
     TYPE_INT8,
     TYPE_INT16,

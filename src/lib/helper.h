@@ -15,4 +15,6 @@ void str_replace(char *str, char from, char to);
 
 char *file_read(char *path);
 
+uint64_t memory_align(uint64_t n, uint8_t align);
+
 #endif //NATURE_SRC_LIB_HELPER_H_

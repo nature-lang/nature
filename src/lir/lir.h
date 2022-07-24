@@ -159,8 +159,8 @@ typedef struct {
 
 typedef struct {
     union {
-        int64_t int_value; // 8bit
-        float float_value; // 4bit = c.float
+        uint64_t int_value; // 8bit
+        double float_value; // 8bit = c.double
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
@@ -342,7 +342,7 @@ void lir_new_local_var(closure *c, string ident, ast_type type);
 
 lir_operand *lir_new_temp_var_operand(closure *c, ast_type type);
 
-lir_operand *lir_new_param_var_operand();
+lir_operand *lir_new_empty_operand();
 
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
 

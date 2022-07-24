@@ -1,1 +1,1 @@
-print("hello world!!!")
+print("hello world", " ", 2022, 0724," ", 8.12, "!!!")

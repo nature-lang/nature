@@ -124,7 +124,7 @@ inst_t mov_rm64_imm32 = {"mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0,
                          }
 };
 
-inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W},
+inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD},
                         {
                                 {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS},
                                 {OPERAND_TYPE_IMM64, ENCODING_TYPE_IMM}
@@ -189,10 +189,24 @@ inst_t push_r64 = {
         }
 };
 
+inst_t push_rm64 = {
+        "push", 0, {0xFF}, {OPCODE_EXT_SLASH6},
+        {
+                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+        }
+};
+
 inst_t pop_r64 = {
         "pop", 0, {0x58}, {},
         {
                 {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+        }
+};
+
+inst_t pop_rm64 = {
+        "pop", 0, {0x8F}, {OPCODE_EXT_SLASH0},
+        {
+                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
         }
 };
 
@@ -294,7 +308,9 @@ void opcode_init() {
     opcode_tree_build(&je_rel32);
     opcode_tree_build(&ret);
     opcode_tree_build(&push_r64);
+    opcode_tree_build(&push_rm64);
     opcode_tree_build(&pop_r64);
+    opcode_tree_build(&pop_rm64);
     opcode_tree_build(&sub_imm32_rm64);
     opcode_tree_build(&sub_imm8_rm64);
     opcode_tree_build(&add_imm32_rm64);
@@ -903,9 +919,9 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
 
                 format->modrm->reg = r->index;
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                    format->rex_prefix->b = r->index > 7;
+                    format->rex_prefix->r = r->index > 7; // 添加 rex_prefix-b 前缀
                 } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
-                    format->vex_prefix->b = r->index <= 7;
+                    format->vex_prefix->r = r->index <= 7;
                 }
             } else if (operand.encoding == ENCODING_TYPE_OPCODE_PLUS) { // opcode = opcode + reg
                 format->opcode[0] += r->index & 7;
@@ -951,7 +967,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
                 set_disp(format, r->reg->name, temp, 1);
 
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                    format->rex_prefix->b = r->reg->index > 7;
+                    format->rex_prefix->r = r->reg->index > 7;
                 }
             } else {
                 error_exit("unsupported encoding %v", operand.encoding);
@@ -978,7 +994,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
 
                 format->modrm->reg = r->reg->index;
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                    format->rex_prefix->b = r->reg->index > 7;
+                    format->rex_prefix->r = r->reg->index > 7;
                 }
             } else {
                 error_exit("unsupported encoding %v", operand.encoding);

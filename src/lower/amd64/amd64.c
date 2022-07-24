@@ -2,6 +2,7 @@
 #include "src/type.h"
 #include "src/assembler/amd64/register.h"
 #include "src/lib/error.h"
+#include "src/lib/helper.h"
 #include "src/symbol.h"
 
 amd64_lower_fn amd64_lower_table[] = {
@@ -59,6 +60,8 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     // 2. 参数处理  lir_ope type->second;
     lir_operand_actual_param *v = op->second->value;
     list *param_insts = list_new();
+    // 计算 push 总长度，进行栈对齐
+    int push_length = 0;
     for (int i = 0; i < v->count; ++i) {
         lir_operand *operand = v->list[i];
         // 实参可能是简单参数，也有可能是复杂参数
@@ -68,12 +71,18 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source->size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
-            list_push(temp, ASM_INST("push", { source }));
+            list_push(temp, ASM_INST("push", { source })); // push 会导致 rsp 栈不对齐
+            push_length += source->size;
         } else {
             list_push(temp, ASM_INST("mov", { REG(target_reg), source }));
         }
         list_append(temp, param_insts);
         param_insts = temp;
+    }
+    // 栈对齐
+    uint64_t diff_length = memory_align(push_length, 16) - push_length;
+    if (diff_length > 0) {
+        list_push(insts, ASM_INST("sub", { REG(rsp), UINT8(diff_length) }));
     }
 
     list_append(insts, param_insts);
@@ -302,7 +311,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_INT) {
-            return UINT32(v->int_value);
+            return UINT64(v->int_value);
         }
         if (v->type == TYPE_INT8) {
             return UINT8(v->int_value);
@@ -485,6 +494,9 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
 
 list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list *insts = list_new();
+    // 16 对齐
+    c->stack_length = memory_align(c->stack_length, 16);
+
     list_push(insts, ASM_INST("push", { REG(rbp) }));
     list_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     list_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_length) }));
