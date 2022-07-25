@@ -206,7 +206,7 @@ typedef struct {
 
 typedef struct {
     asm_operand_register_t *reg;
-    uint8_t disp;
+    int32_t disp;
 } asm_operand_disp_register_t;
 
 typedef struct {

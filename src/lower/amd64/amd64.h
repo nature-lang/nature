@@ -66,7 +66,7 @@ list *amd64_lower_mov(closure *c, lir_op *op);
  * @param operand
  * @return
  */
-asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand);
+asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_size);
 
 // 返回下一个可用的寄存器(属于一条指令的 fixed_reg)
 reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size);

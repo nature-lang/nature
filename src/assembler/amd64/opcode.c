@@ -2,6 +2,7 @@
 #include "string.h"
 #include "src/lib/error.h"
 #include "src/lib/helper.h"
+#include <math.h>
 
 inst_t movsq = {
         "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
@@ -139,6 +140,13 @@ inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        }
 };
 
+inst_t mov_r32_rm32 = {"mov", 0, {0x8B}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
 inst_t movsd_xmm1_xmm2 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
@@ -166,6 +174,13 @@ inst_t mov_rm64_r64 = {"mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+
+inst_t mov_rm32_r32 = {"mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
                        }
 };
 
@@ -324,7 +339,9 @@ void opcode_init() {
     opcode_tree_build(&mov_rm64_imm32);
     opcode_tree_build(&mov_r64_imm64);
     opcode_tree_build(&mov_r64_rm64);
+    opcode_tree_build(&mov_r32_rm32);
     opcode_tree_build(&mov_rm64_r64);
+    opcode_tree_build(&mov_rm32_r32);
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
@@ -960,11 +977,20 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
                     format->modrm = new_modrm();
                 }
 
-                format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
                 format->modrm->rm = r->reg->index;
+
+                format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+                uint8_t count = 1;
+
                 // 设置 displacement 部分(disp 最多 8个字节，通过 8 字节拆分的形式传参)
-                uint8_t temp[] = {r->disp};
-                set_disp(format, r->reg->name, temp, 1);
+                uint8_t temp[4];
+                int32_to_uint8(r->disp, temp);
+                if (abs(r->disp) > 128) {
+                    count = 4;
+                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_DWORD_DISP;
+                }
+
+                set_disp(format, r->reg->name, temp, count);
 
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
                     format->rex_prefix->b = r->reg->index > 7;
@@ -1021,7 +1047,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
                 }
 
                 format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
-                format->modrm->rm = 5; // rm 为啥还有个 5 ?
+                format->modrm->rm = 5; // rm 为啥还有个 5 ?, 是考虑的 disp 比较长？
 
                 // 32 to uint8 []
                 uint8_t temp[4];

@@ -43,12 +43,12 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     asm_operand_t *result = NULL;
     if (op->result != NULL) {
-        result = amd64_lower_to_asm_operand(op->result); // 可能是寄存器，也可能是内存地址
+        result = amd64_lower_to_asm_operand(op->result, 0); // 可能是寄存器，也可能是内存地址
     }
 
     // 特殊逻辑，如果响应的参数是一个结构体，就需要做隐藏参数的处理
     // 实参传递(封装一个 static 函数处理),
-    asm_operand_t *first = amd64_lower_to_asm_operand(op->first);
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0);
 
     uint8_t used[2] = {0};
     // 1. 大返回值处理(使用 rdi 预处理)
@@ -68,7 +68,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         regs_t used_regs = {.count = 0};
         asm_operand_t *source = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(operand, source, &used_regs);
-        uint8_t source_size = type_sizeof(lir_type_category(operand));
+        uint8_t source_size = amd64_type_sizeof(lir_type_category(operand));
         reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source_size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
@@ -124,7 +124,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
     // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
     list *insts = list_new();
 
-    asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
 
     if (lir_type_category(op->result) == TYPE_STRUCT) {
         // 计算长度
@@ -152,7 +152,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
 
 list *amd64_lower_goto(closure *c, lir_op *op) {
     list *insts = list_new();
-    asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
     list_push(insts, ASM_INST("jmp", { result }));
     return insts;
 }
@@ -179,7 +179,7 @@ list *amd64_lower_add(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->result)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->result)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("add", { REG(reg), second }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
@@ -201,16 +201,15 @@ list *amd64_lower_gt(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->second, second, &used_regs);
     list_append(insts, temp);
 
-    asm_operand_t *result = NEW(asm_operand_t);
-    temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
-    list_append(insts, temp);
+    // result 用于 setg, 必须强制 byte 大小
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, BYTE);
 
     // bool = int64 > int64
-    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->first)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->first)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("cmp", { REG(reg), second }));
 
-    // setg r/m8
+    // setg r/m8(TODO 强制要求 1bit 用于 setg)
     list_push(insts, ASM_INST("setg", { result }));
 
     return insts;
@@ -247,7 +246,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
         // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
         // lea first to rax
         asm_operand_t *first_reg = REG(rax);
-        asm_operand_t *first = amd64_lower_to_asm_operand(op->first);
+        asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0);
         if (first->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
             list_push(insts, ASM_INST("lea", { REG(rax), first }));
         } else {
@@ -255,7 +254,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
         }
         // lea result to rdx
         asm_operand_t *result_reg = REG(rdx);
-        asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+        asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
         if (result->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
             list_push(insts, ASM_INST("lea", { REG(rdx), result }));
         } else {
@@ -282,22 +281,25 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->result)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->result)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
     return insts;
 }
 
-asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
+asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_size) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
+        if (force_size == 0) {
+            force_size = amd64_type_sizeof(v->type);
+        }
         if (v->local->stack_frame_offset > 0) {
-            return DISP_REG(rbp, -(*v->local->stack_frame_offset), v->size); // amd64 栈空间从大往小递增
+            return DISP_REG(rbp, -(*v->local->stack_frame_offset), force_size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
-            asm_operand_register_t *reg = amd64_register_find(v->reg_id, v->size);
+            asm_operand_register_t *reg = amd64_register_find(v->reg_id, amd64_type_sizeof(v->type));
             return REG(reg);
         }
 
@@ -408,7 +410,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         lir_operand_var *var = v->base->value;
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
-            asm_operand_register_t *reg = amd64_register_find(var->reg_id, var->size);
+            asm_operand_register_t *reg = amd64_register_find(var->reg_id, amd64_type_sizeof(var->type));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
@@ -430,7 +432,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
     }
 
     // 按简单参数处理
-    asm_operand_t *temp = amd64_lower_to_asm_operand(operand);
+    asm_operand_t *temp = amd64_lower_to_asm_operand(operand, 0);
     ASM_OPERAND_COPY(asm_operand, temp);
     return insts;
 }
@@ -491,6 +493,16 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
 
 list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list *insts = list_new();
+    // 计算堆栈信息(TODO 在寄存器分配之后再进行堆栈分配合理吗？)
+    list_node *current = c->local_vars->front;
+    while (current->value != NULL) {
+        lir_local_var *var = current->value;
+        c->stack_length += amd64_type_sizeof(var->type.category);
+        *var->stack_frame_offset = c->stack_length;
+
+        current = current->next;
+    }
+
     // 16 对齐
     c->stack_length = memory_align(c->stack_length, 16);
 
@@ -523,8 +535,8 @@ list *amd64_lower_fn_formal_params(closure *c) {
     uint8_t used[2] = {0};
     for (int i = 0; i < c->formal_params.count; i++) {
         lir_operand_var *var = c->formal_params.list[i];
-        asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var));
-        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, var->size);
+        asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), 0);
+        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, amd64_type_sizeof(var->type));
         if (source_reg != NULL) {
             list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
         }
@@ -559,9 +571,10 @@ list *amd64_lower_block(closure *c, lir_basic_block *block) {
 
 list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     // 比较 first 是否等于 second，如果相等就跳转到 result label
-    asm_operand_t *first = amd64_lower_to_asm_operand(op->first); // imm uint8
-    asm_operand_t *second = amd64_lower_to_asm_operand(op->second); // disp
-    asm_operand_t *result = amd64_lower_to_asm_operand(op->result);
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0); // imm uint8
+    asm_operand_t *second = amd64_lower_to_asm_operand(op->second, first->size); // disp TODO 同大小比较
+
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0); // 标签跳转
 
     // cmp 指令比较
     list *insts = list_new();
@@ -576,7 +589,6 @@ uint8_t amd64_type_sizeof(type_category type) {
         case TYPE_BOOL:
             return DWORD;
         case TYPE_INT:
-            return QWORD;
         case TYPE_FLOAT:
             return QWORD;
         default:
