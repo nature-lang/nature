@@ -545,7 +545,9 @@ void analysis_for_in(ast_for_in_stmt *stmt) {
 }
 
 void analysis_return(ast_return_stmt *stmt) {
-    analysis_expr(&stmt->expr);
+    if (stmt->expr != NULL) {
+        analysis_expr(stmt->expr);
+    }
 }
 
 // unique name

@@ -1,6 +1,2 @@
-int foo = 1
-if (foo > 1) {
-    debug_printf("foo > 1")
-    return
-}
-debug_printf("foo <= 1")
+bool foo = 1 > 2
+print(foo)

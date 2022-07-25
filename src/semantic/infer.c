@@ -605,7 +605,10 @@ void infer_for_in(ast_for_in_stmt *stmt) {
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {
-    ast_type return_type = infer_expr(&stmt->expr);
+    ast_type return_type = ast_new_simple_type(TYPE_VOID);
+    if (stmt->expr != NULL) {
+        return_type = infer_expr(stmt->expr);
+    }
 
     ast_type expect_type = infer_current->closure_decl->function->return_type;
     if (!infer_compare_type(expect_type, return_type)) {

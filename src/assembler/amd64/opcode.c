@@ -248,7 +248,7 @@ inst_t cmp_rm64_imm32 = {"cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7,
 
 inst_t cmp_rax_imm32 = {"cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_DWORD},
                         {
-                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                                {OPERAND_TYPE_RAX, ENCODING_TYPE_MODRM_RAX},
                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                         }
 };
@@ -518,6 +518,14 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_R64) {
+        res.count = 1;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, QWORD);
+        res.list = highs;
+        return res;
+    }
+
+    if (t == OPERAND_TYPE_RAX) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, QWORD);
@@ -911,6 +919,10 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
                     format->rex_prefix->b = r->index > 7;
                 } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
                     format->vex_prefix->b = r->index <= 7;
+                }
+            } else if (operand.encoding == ENCODING_TYPE_MODRM_RAX) {
+                if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
+                    format->vex_prefix->r = true;
                 }
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
                 if (format->modrm == NULL) {

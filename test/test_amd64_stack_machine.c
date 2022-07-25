@@ -82,11 +82,16 @@ static void test_call() {
     built_target("/home/vagrant/Code/nature/test/stubs/call.n", "call.n");
 }
 
+static void test_if() {
+    built_target("/home/vagrant/Code/nature/test/stubs/if.n", "if.n");
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_hello),
 //            cmocka_unit_test(test_sum),
-            cmocka_unit_test(test_call),
+//            cmocka_unit_test(test_call),
+            cmocka_unit_test(test_if),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

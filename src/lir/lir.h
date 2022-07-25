@@ -76,7 +76,7 @@
   _var->ident = (_original)->ident; \
   _var->local = (_original)->local; \
   _var->reg_id = (_original)->reg_id; \
-  _var->size = (_original)->size; \
+  _var->type = (_original)->type; \
   _var;                                   \
 })
 
@@ -132,7 +132,7 @@ typedef struct {
     string old;
     uint8_t reg_id; // reg list index, 寄存器分配
     lir_local_var *local; // local 如果为 nil 就是外部符号引用
-    uint8_t size; // BYTE/QWORD/DWORD ? 指针怎么说？
+    type_category type;// lir 为了保证通用性，只能有类型，不能有 size
 } lir_operand_var;
 
 typedef struct {
@@ -142,7 +142,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    ast_type type;
+    type_category type;
 } lir_operand_symbol; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
@@ -312,7 +312,8 @@ typedef struct closure {
 
     lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
 
-    table *local_vars; // 主要是用于栈分配(但是该结构不适合遍历)
+    table *local_vars_table; // 主要是用于栈分配(但是该结构不适合遍历)
+    list *local_vars;
 
     // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
     uint16_t return_offset;

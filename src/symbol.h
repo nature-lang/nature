@@ -41,7 +41,7 @@ size_t struct_offset(ast_struct_decl *struct_decl, string property);
  * @param type
  * @return
  */
-size_t type_sizeof(ast_type type);
+size_t type_sizeof(type_category t);
 
 void symbol_ident_table_init();
 

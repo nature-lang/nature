@@ -2,6 +2,7 @@
 #include "src/lib/error.h"
 #include <stdio.h>
 #include "src/debug/debug.h"
+#include <string.h>
 
 parser_cursor p_cursor;
 
@@ -877,7 +878,14 @@ ast_stmt parser_return_stmt() {
     ast_stmt result = parser_new_stmt();
     parser_advance();
     ast_return_stmt *stmt = malloc(sizeof(ast_return_stmt));
-    stmt->expr = parser_expr();
+
+    // return } 或者 ;
+    stmt->expr = NULL;
+    if (!parser_is(TOKEN_EOF) && !parser_is(TOKEN_RIGHT_CURLY)) {
+        ast_expr temp = parser_expr();
+        stmt->expr = NEW(ast_expr);
+        memcpy(stmt->expr, &temp, sizeof(ast_expr));
+    }
     result.type = AST_STMT_RETURN;
     result.stmt = stmt;
 

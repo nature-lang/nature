@@ -68,7 +68,8 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         regs_t used_regs = {.count = 0};
         asm_operand_t *source = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(operand, source, &used_regs);
-        reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source->size); // source 和 target 大小要匹配
+        uint8_t source_size = type_sizeof(lir_type_category(operand));
+        reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source_size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
             list_push(temp, ASM_INST("push", { source })); // push 会导致 rsp 栈不对齐
@@ -178,9 +179,7 @@ list *amd64_lower_add(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    // imm64 会造成溢出？所以最大只能是?
-
-    reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
+    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->result)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("add", { REG(reg), second }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
@@ -207,7 +206,7 @@ list *amd64_lower_gt(closure *c, lir_op *op) {
     list_append(insts, temp);
 
     // bool = int64 > int64
-    reg_t *reg = amd64_lower_next_reg(&used_regs, first->size);
+    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->first)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("cmp", { REG(reg), second }));
 
@@ -283,9 +282,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    // TODO 是否需要选择 result 和 first 中的较大的一方？
-    // TODO 如果是 int 类型，则不能使用，所以提取 size 需要封装一个方法来实现
-    reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
+    reg_t *reg = amd64_lower_next_reg(&used_regs, type_sizeof(lir_type_category(op->result)));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
@@ -311,7 +308,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_INT) {
-            return UINT32(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
+            return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
         }
         if (v->type == TYPE_INT8) {
             return UINT8(v->int_value);
@@ -572,5 +569,18 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     list_push(insts, ASM_INST("je", { result }));
 
     return insts;
+}
+
+uint8_t amd64_type_sizeof(type_category type) {
+    switch (type) {
+        case TYPE_BOOL:
+            return DWORD;
+        case TYPE_INT:
+            return QWORD;
+        case TYPE_FLOAT:
+            return QWORD;
+        default:
+            return QWORD;
+    }
 }
 

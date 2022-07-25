@@ -102,6 +102,10 @@ static void test_opcode_encoding() {
     opcode_init();
     uint8_t byte_count;
 
+    uint8_t expect14[] = {0x48, 0x3D, 0xD2, 0x04, 0x00, 0x00};
+    uint8_t *actual14 = opcode_encoding(*ASM_INST("cmp", { REG(rax), UINT32(1234) }), &byte_count);
+    assert_memory_equal(actual14, expect14, byte_count);
+
     uint8_t *actual = opcode_encoding(*ASM_INST("push", { REG(rcx) }), &byte_count);
     uint8_t expect[] = {0x51};
     assert_memory_equal(actual, expect, byte_count);

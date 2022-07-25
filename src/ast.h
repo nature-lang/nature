@@ -172,7 +172,7 @@ typedef struct {
 } ast_for_in_stmt;
 
 typedef struct {
-    ast_expr expr;
+    ast_expr *expr;
 } ast_return_stmt;
 
 typedef struct {

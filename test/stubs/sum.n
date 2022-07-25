@@ -1,2 +1,2 @@
-int foo = 22 + 33
+int foo = -33 + 5
 print("foo=", foo)

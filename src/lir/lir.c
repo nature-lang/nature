@@ -151,8 +151,11 @@ closure *lir_new_closure(ast_closure_decl *ast) {
 
     new->interval_table = table_new();
 
-    new->local_vars = table_new();
+    new->local_vars_table = table_new();
+    new->local_vars = list_new();
     new->formal_params.count = 0;
+    new->stack_length = 0;
+    new->return_offset = 0;
 
     return new;
 }
@@ -209,13 +212,13 @@ lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
     var->reg_id = 0;
 
     // 1. 读取符号信息
-    lir_local_var *local = table_get(c->local_vars, ident);
+    lir_local_var *local = table_get(c->local_vars_table, ident);
     // TODO 也有可能是外部 ident
     // 假如使用了外部的符号，比如  int m = request.max 需要为其分配栈空间吗？
     // 不用，能够使用的外部符号都是在 .data 段有一席之地的。但是如何能够知道 size？
     if (local != NULL) {
         var->local = local;
-        var->size = type_sizeof(local->type);
+        var->type = local->type.category;
     }
 
     return var;
@@ -225,10 +228,10 @@ void lir_new_local_var(closure *c, char *ident, ast_type type) {
     lir_local_var *local = NEW(lir_local_var);
     local->type = type;
     local->stack_frame_offset = NEW(uint16_t);
+    local->stack_frame_offset = 0;
     local->ident = ident;
-    c->stack_length += type_sizeof(type);
-    *local->stack_frame_offset = c->stack_length;
-    table_set(c->local_vars, ident, local);
+    table_set(c->local_vars_table, ident, local);
+    list_push(c->local_vars, local);
 }
 
 lir_operand *lir_new_empty_operand() {
@@ -246,7 +249,7 @@ type_category lir_type_category(lir_operand *operand) {
 
     if (operand->type == LIR_OPERAND_TYPE_SYMBOL) {
         lir_operand_symbol *s = operand->value;
-        return s->type.category;
+        return s->type;
     }
 
     return TYPE_NULL;

@@ -22,7 +22,7 @@ list *scanner(string source) {
     while (true) {
         scanner_skip_space();
 
-        if (s_cursor.has_entry && scanner_is_at_stmt_end()) {
+        if (s_cursor.has_newline && scanner_is_at_stmt_end()) {
             // push token TOKEN_STMT_EOF
             list_push(list, token_new(TOKEN_STMT_EOF, ";", s_cursor.line - 1));
         }
@@ -168,7 +168,7 @@ void scanner_cursor_init(char *source) {
     s_cursor.guard = source;
     s_cursor.length = 0;
     s_cursor.line = 1;
-    s_cursor.has_entry = false;
+    s_cursor.has_newline = false;
     s_cursor.space_prev = STRING_EOF;
     s_cursor.space_next = STRING_EOF;
 }
@@ -182,7 +182,7 @@ void scanner_error_init() {
  * 在没有 ; 号的情况下，换行符在大多数时候承担着判断是否需要添加 TOKEN_EOF
  */
 void scanner_skip_space() {
-    s_cursor.has_entry = false;
+    s_cursor.has_newline = false;
     if (s_cursor.guard != s_cursor.current) {
         s_cursor.space_prev = s_cursor.guard[-1];
     }
@@ -199,7 +199,7 @@ void scanner_skip_space() {
             case '\n': {
                 scanner_guard_advance();
                 s_cursor.line++;
-                s_cursor.has_entry = true;
+                s_cursor.has_newline = true;
                 break;
             }
             case '/':

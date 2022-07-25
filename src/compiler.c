@@ -320,6 +320,16 @@ list *compiler_unary(closure *c, ast_expr expr, lir_operand *result_target) {
     lir_operand *first = lir_new_empty_operand();
     list_append(operates, compiler_expr(c, unary_expr->operand, first));
 
+    // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
+    // !imm 为异常, parse 阶段已经识别了, [] 有可能
+    if (unary_expr->operator == AST_EXPR_OPERATOR_MINUS && first->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+        lir_operand_immediate *imm = first->value;
+        imm->int_value = -imm->int_value;
+        // move 操作即可
+        list_push(operates, lir_op_move(result_target, first));
+        return operates;
+    }
+
     lir_op_type type = ast_expr_operator_to_lir_op[unary_expr->operator];
     lir_op *unary = lir_op_new(type, first, NULL, result_target);
 
@@ -481,7 +491,8 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
 
     // 类型，容量 runtime.make_list(capacity, size)
     lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
-    lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) type_sizeof(ast->type));
+    lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
+                                                               (int) type_sizeof(ast->type.category));
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_LIST_NEW,
             base_target,
@@ -592,7 +603,7 @@ list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(
             TYPE_INT,
             int_value,
-            (int) type_sizeof(ast->key_type) + (int) type_sizeof(ast->value_type));
+            (int) type_sizeof(ast->key_type.category) + (int) type_sizeof(ast->value_type.category));
 
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_MAP_NEW,
@@ -729,11 +740,13 @@ list *compiler_while(closure *c, ast_while_stmt *ast) {
 list *compiler_return(closure *c, ast_return_stmt *ast) {
     list *operates = list_new();
     lir_operand *target = lir_new_empty_operand();
-    list *await = compiler_expr(c, ast->expr, target);
-    list_append(operates, await);
+    if (ast->expr != NULL) {
+        list *await = compiler_expr(c, *ast->expr, target);
+        list_append(operates, await);
+        lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, target);
+        list_push(operates, return_op); // return op 只是做了个 mov result -> rax 的操作
+    }
 
-    lir_op *return_op = lir_op_new(LIR_OP_TYPE_RETURN, NULL, NULL, target);
-    list_push(operates, return_op);
     list_push(operates, lir_op_goto(lir_new_label_operand(c->end_label, false)));
 
     return operates;
@@ -868,7 +881,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
         } else {
             lir_operand_symbol *symbol = NEW(lir_operand_symbol);
             symbol->ident = ident->literal;
-            symbol->type = var->type;
+            symbol->type = var->type.category;
             target->type = LIR_OPERAND_TYPE_SYMBOL;
             target->value = symbol;
         }

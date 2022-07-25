@@ -35,8 +35,8 @@ bool is_print_symbol(char *ident) {
     return false;
 }
 
-size_t type_sizeof(ast_type type) {
-    switch (type.category) {
+size_t type_sizeof(type_category t) {
+    switch (t) {
         case TYPE_BOOL:
             return BOOL_SIZE_BYTE;
         case TYPE_INT:
@@ -57,7 +57,7 @@ size_t type_sizeof(ast_type type) {
 size_t struct_offset(ast_struct_decl *struct_decl, char *property) {
     size_t offset = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        offset += type_sizeof(struct_decl->list[i].type);
+        offset += type_sizeof(struct_decl->list[i].type.category);
     }
     return offset;
 }
