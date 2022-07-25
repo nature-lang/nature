@@ -214,8 +214,8 @@ static void test_lower_call() {
     lir_operand_var *a = test_lir_operand_var("a", 8, QWORD);
     lir_operand_var *b = test_lir_operand_var("b", 16, QWORD);
     lir_operand_var *temp = test_lir_operand_var("temp_var", 24, QWORD);
-    lir_vars vars = {.count = 2, .list = {a, b}};
-    sum_closure->formal_params = vars;
+//    lir_vars vars = {.count = 2, .list = {a, b}};
+//    sum_closure->formal_params = vars;
     sum_closure->operates = list_new();
     lir_op *sum_op = lir_op_new(LIR_OP_TYPE_ADD,
                                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, a),

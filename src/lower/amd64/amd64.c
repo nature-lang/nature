@@ -528,7 +528,9 @@ list *amd64_lower_fn_formal_params(closure *c) {
         lir_operand_var *var = c->formal_params.list[i];
         asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var));
         reg_t *source_reg = amd64_lower_next_actual_reg_target(used, var->size);
-        list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+        if (source_reg != NULL) {
+            list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+        }
     }
     return insts;
 }

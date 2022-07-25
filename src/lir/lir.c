@@ -149,8 +149,10 @@ closure *lir_new_closure(ast_closure_decl *ast) {
     new->blocks.count = 0;
     new->order_blocks.count = 0;
 
-    new->local_vars = table_new();
     new->interval_table = table_new();
+
+    new->local_vars = table_new();
+    new->formal_params.count = 0;
 
     return new;
 }

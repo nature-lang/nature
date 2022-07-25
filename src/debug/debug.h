@@ -18,7 +18,7 @@
 
 //#define DEBUG_COMPILER
 
-#define DEBUG_COMPILER_LIR
+//#define DEBUG_COMPILER_LIR
 
 #define DEBUG_CFG
 

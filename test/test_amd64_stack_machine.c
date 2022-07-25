@@ -17,6 +17,7 @@
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/amd64/opcode.h"
 #include "src/assembler/elf/elf.h"
+#include "src/debug/debug.h"
 
 static void built_target(string path, string name) {
     char *source = file_read(path);
@@ -77,10 +78,15 @@ static void test_sum() {
     built_target("/home/vagrant/Code/nature/test/stubs/sum.n", "sum.n");
 }
 
+static void test_call() {
+    built_target("/home/vagrant/Code/nature/test/stubs/call.n", "call.n");
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_hello),
-            cmocka_unit_test(test_sum),
+//            cmocka_unit_test(test_sum),
+            cmocka_unit_test(test_call),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -160,7 +160,7 @@ typedef struct {
 
 typedef struct {
     union {
-        uint64_t int_value; // 8bit
+        uint64_t int_value; // 8bit, 负数使用补码存储
         double float_value; // 8bit = c.double
         bool bool_value; // 1bit
         string string_value; // 8bit
@@ -296,7 +296,6 @@ typedef struct lir_basic_block {
  */
 typedef struct closure {
     lir_vars globals; // closure 中定义的变量列表, 用于 ssa 构建
-    lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
     regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
     lir_basic_blocks blocks; // 根据解析顺序得到
 
@@ -310,6 +309,8 @@ typedef struct closure {
     string env_name;
     struct closure *parent;
     list *operates; // 指令列表
+
+    lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
 
     table *local_vars; // 主要是用于栈分配(但是该结构不适合遍历)
 

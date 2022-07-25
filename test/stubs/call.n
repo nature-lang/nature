@@ -2,6 +2,6 @@ int sum(int a, int b) {
     return a + b
 }
 
-int foo = sum(1, 10)
+int foo = sum(15, -10)
 
-debug_printf("%d", foo)
+print("foo=", foo)
