@@ -102,6 +102,10 @@ static void test_opcode_encoding() {
     opcode_init();
     uint8_t byte_count;
 
+    uint8_t expect18[] = {0x3C, 0x01};
+    uint8_t *actual18 = opcode_encoding(*ASM_INST("cmp", { REG(al), UINT8(1) }), &byte_count);
+    assert_memory_equal(actual18, expect18, byte_count);
+
     uint8_t expect17[] = {0x8B, 0x45, 0xF8};
     uint8_t *actual17 = opcode_encoding(*ASM_INST("mov", { REG(eax), DISP_REG(rbp, -8, DWORD) }), &byte_count);
     assert_memory_equal(actual17, expect17, byte_count);
@@ -157,8 +161,8 @@ static void test_opcode_encoding() {
     asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual8 = opcode_encoding(*mov_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
-    uint8_t expect18[] = {0x48, 0x8b, 0x45, 0xF8};
-    assert_memory_equal(actual8, expect18, byte_count);
+    uint8_t expect8[] = {0x48, 0x8b, 0x45, 0xF8};
+    assert_memory_equal(actual8, expect8, byte_count);
 
     asm_inst_t *mov_xmm0_disp = ASM_INST("mov", { REG(xmm0), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual9 = opcode_encoding(*mov_xmm0_disp, &byte_count);

@@ -52,25 +52,27 @@ compiler_closures compiler(ast_closure_decl *ast) {
  * call set_env => a target
  * call get_env => t1 target
  * @param parent
- * @param ast
+ * @param ast_closure
  * @return
  */
-list *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *target) {
+list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_operand *target) {
 // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
     list *parent_list = list_new();
 
-    if (parent != NULL && ast->env_count > 0) {
+    if (parent != NULL && ast_closure->env_count > 0) {
         // 处理 env ---------------
         // 1. make env_n by count
-        lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, parent->env_name);
-        lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->env_count);
+        lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, ast_closure->env_name);
+        lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast_closure->env_count);
         list_push(parent_list, lir_op_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
 
         // 2. for set ast_ident/ast_access_env to env n
-        for (int i = 0; i < ast->env_count; ++i) {
-            ast_expr item_expr = ast->env[i];
+        for (int i = 0; i < ast_closure->env_count; ++i) {
+            ast_expr item_expr = ast_closure->env[i];
+
             lir_operand *expr_target = lir_new_empty_operand();
             list_append(parent_list, compiler_expr(parent, item_expr, expr_target));
+
             lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
             lir_op *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_SET_ENV,
@@ -86,34 +88,34 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *targ
     }
 
     // new 一个新的 closure ---------------
-    closure *c = lir_new_closure(ast);
-    c->name = ast->function->name;
+    closure *c = lir_new_closure(ast_closure);
+    c->name = ast_closure->function->name;
     c->end_label = str_connect("end_", c->name);
     c->parent = parent;
     closure_list.list[closure_list.count++] = c;
 
     list *operates = list_new();
     // 添加 label 和 fn begin 入口
-    list_push(operates, lir_op_label(ast->function->name, false));
+    list_push(operates, lir_op_label(ast_closure->function->name, false));
     list_push(operates, lir_op_new(LIR_OP_TYPE_FN_BEGIN, NULL, NULL, NULL));
 
 
     // 直接改写 target 而不是使用一个 move 操作
     if (target != NULL) {
         target->type = LIR_OPERAND_TYPE_VAR;
-        target->value = lir_new_var_operand(c, ast->function->name);
+        target->value = lir_new_var_operand(c, ast_closure->function->name);
     }
 
     // compiler formal param
-    for (int i = 0; i < ast->function->formal_param_count; ++i) {
-        ast_var_decl *param = ast->function->formal_params[i];
+    for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
+        ast_var_decl *param = ast_closure->function->formal_params[i];
         list_append(operates, compiler_var_decl(c, param));
 
         c->formal_params.list[c->formal_params.count++] = lir_new_var_operand(c, param->ident);
     }
 
     // 编译 body
-    list *await = compiler_block(c, &ast->function->body);
+    list *await = compiler_block(c, &ast_closure->function->body);
     list_append(operates, await);
 
     // 尾部添加结尾 label(basic_block)
@@ -283,7 +285,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
             return compiler_closure(c, (ast_closure_decl *) expr.expr, target);
         }
         default: {
-            error_printf(compiler_line, "unknown expr");
+            error_exit("[compiler_expr]unknown expr: %v", expr.type);
             exit(0);
         }
     }

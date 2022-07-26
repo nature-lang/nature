@@ -578,7 +578,10 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
 
     // cmp 指令比较
     list *insts = list_new();
-    list_push(insts, ASM_INST("cmp", { second, first }));
+    regs_t used_regs = {.count = 0};
+    reg_t *reg = amd64_lower_next_reg(&used_regs, first->size);
+    list_push(insts, ASM_INST("mov", { REG(reg), first }));
+    list_push(insts, ASM_INST("cmp", { REG(reg), second }));
     list_push(insts, ASM_INST("je", { result }));
 
     return insts;

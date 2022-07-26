@@ -78,7 +78,7 @@ analysis_function *analysis_current;
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换
 ast_closure_decl analysis(ast_block_stmt stmt_list);
 
-analysis_function *analysis_current_init(analysis_local_scope *scope);
+analysis_function *analysis_current_init(analysis_local_scope *scope, string fn_name);
 
 analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope *parent);
 
@@ -109,7 +109,7 @@ void analysis_ident(ast_expr *expr);
 
 void analysis_type(ast_type *type);
 
-int8_t analysis_resolve_free(analysis_function *current, string ident);
+int8_t analysis_resolve_free(analysis_function *current, string *ident);
 
 uint8_t analysis_push_free(analysis_function *f, bool is_local, int8_t index);
 

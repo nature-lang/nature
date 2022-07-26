@@ -103,7 +103,7 @@ ast_type infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_IDENT: {
-            type = infer_ident((ast_ident *) expr->expr);
+            type = infer_ident(((ast_ident *) expr->expr)->literal);
             break;
         }
         case AST_EXPR_NEW_LIST: {
@@ -139,8 +139,12 @@ ast_type infer_expr(ast_expr *expr) {
             type = infer_literal((ast_literal *) expr->expr);
             break;
         }
+        case AST_EXPR_ACCESS_ENV: {
+            type = infer_access_env((ast_access_env *) expr->expr);
+            break;
+        }
         default: {
-            error_exit("unknown expr");
+            error_exit("[infer_expr]unknown expr %v", expr->type);
             exit(0);
         }
     }
@@ -223,8 +227,7 @@ ast_type infer_unary(ast_unary_expr *expr) {
  * @param expr
  * @return
  */
-ast_type infer_ident(ast_ident *expr) {
-    string unique_ident = expr->literal;
+ast_type infer_ident(string unique_ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
     if (symbol->type == SYMBOL_TYPE_VAR) {
         // 类型还原，并回写到 local_ident
@@ -867,5 +870,10 @@ bool infer_var_type_can_confirm(ast_type right) {
     }
 
     return true;
+}
+
+ast_type infer_access_env(ast_access_env *expr) {
+    ast_type t = infer_ident(expr->unique_ident);
+    return t;
 }
 

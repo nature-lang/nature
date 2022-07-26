@@ -90,13 +90,18 @@ static void test_while() {
     built_target("/home/vagrant/Code/nature/test/stubs/4_while.n", "while.n");
 }
 
+static void test_closure() {
+    built_target("/home/vagrant/Code/nature/test/stubs/5_closure.n", "closure.n");
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_hello),
 //            cmocka_unit_test(test_sum),
 //            cmocka_unit_test(test_call),
 //            cmocka_unit_test(test_if),
-            cmocka_unit_test(test_while),
+//            cmocka_unit_test(test_while),
+            cmocka_unit_test(test_closure),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

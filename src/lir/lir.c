@@ -249,5 +249,11 @@ type_category lir_type_category(lir_operand *operand) {
         return s->type;
     }
 
+    if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+        lir_operand_immediate *imm = operand->value;
+        return imm->type;
+
+    }
+
     return TYPE_NULL;
 }

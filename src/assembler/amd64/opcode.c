@@ -132,6 +132,20 @@ inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWOR
                         }
 };
 
+inst_t mov_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+                       {
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                       }
+};
+
+inst_t mov_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
+                      {
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
+                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                      }
+};
+
 // intel 指令顺序
 inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
@@ -268,11 +282,11 @@ inst_t cmp_rax_imm32 = {"cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_DWOR
                         }
 };
 
-inst_t cmp_al_imm32 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
-                       {
-                               {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                       }
+inst_t cmp_al_imm8 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
+                      {
+                              {OPERAND_TYPE_AL, ENCODING_TYPE_MODRM_AL},
+                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                      }
 };
 
 
@@ -338,6 +352,8 @@ void opcode_init() {
     opcode_tree_build(&mov_imm32_r32);
     opcode_tree_build(&mov_rm64_imm32);
     opcode_tree_build(&mov_r64_imm64);
+    opcode_tree_build(&mov_rm8_imm8);
+    opcode_tree_build(&mov_r8_imm8);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_r32_rm32);
     opcode_tree_build(&mov_rm64_r64);
@@ -345,7 +361,7 @@ void opcode_init() {
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
-    opcode_tree_build(&cmp_al_imm32);
+    opcode_tree_build(&cmp_al_imm8);
     opcode_tree_build(&cmp_rax_imm32);
     opcode_tree_build(&cmp_r64_rm64);
     opcode_tree_build(&cmp_rm64_imm32);
@@ -513,10 +529,18 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_R8) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, 1);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, BYTE);
         res.list = highs;
         return res;
     }
+    if (t == OPERAND_TYPE_AL) {
+        res.count = 1;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REGISTER, BYTE);
+        res.list = highs;
+        return res;
+    }
+
 
     if (t == OPERAND_TYPE_R16) {
         res.count = 1;
@@ -937,7 +961,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
                 } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
                     format->vex_prefix->b = r->index <= 7;
                 }
-            } else if (operand.encoding == ENCODING_TYPE_MODRM_RAX) {
+            } else if (operand.encoding == ENCODING_TYPE_MODRM_RAX || operand.encoding == ENCODING_TYPE_MODRM_AL) {
                 if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
                     format->vex_prefix->r = true;
                 }

@@ -161,7 +161,7 @@ ast_type analysis_function_to_type(ast_new_fn *function_decl) {
 
 void analysis_function_decl_ident(ast_new_fn *new_fn) {
     // 仅 fun 再次定义 name 才需要再次添加到符号表
-    if (strcmp(new_fn->name, MAIN_FUNCTION_NAME) != 0) {
+    if (!str_equal(new_fn->name, MAIN_FUNCTION_NAME)) {
         if (strlen(new_fn->name) == 0) {
             // 如果没有函数名称，则添加匿名函数名称
             new_fn->name = analysis_unique_ident(ANONYMOUS_FUNCTION_NAME);
@@ -201,7 +201,7 @@ ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_loc
     analysis_type(&function_decl->return_type);
 
     // 初始化
-    analysis_current_init(scope);
+    analysis_current_init(scope, function_decl->name);
     // 开启一个新的 function 作用域
     analysis_function_begin();
 
@@ -227,20 +227,20 @@ ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_loc
     // 构造 env
     for (int i = 0; i < analysis_current->free_count; ++i) {
         analysis_free_ident free_var = analysis_current->frees[i];
-        ast_expr expr = closure->env[i];
+        ast_expr *expr = &closure->env[i];
 
         // 逃逸变量就在当前环境中
         if (free_var.is_local) {
             // ast_ident 表达式
-            expr.type = AST_EXPR_IDENT;
-            expr.expr = ast_new_ident(analysis_current->parent->current_scope->idents[free_var.index]->unique_ident);
+            expr->type = AST_EXPR_IDENT;
+            expr->expr = ast_new_ident(analysis_current->parent->current_scope->idents[free_var.index]->unique_ident);
         } else {
             // ast_env_index 表达式
-            expr.type = AST_EXPR_ACCESS_ENV;
+            expr->type = AST_EXPR_ACCESS_ENV;
             ast_access_env *access_env = malloc(sizeof(ast_access_env));
             access_env->env = ast_new_ident(analysis_current->parent->env_unique_name);
             access_env->index = free_var.index;
-            expr.expr = access_env;
+            expr->expr = access_env;
         }
     }
     closure->env_count = analysis_current->free_count;
@@ -389,7 +389,7 @@ void analysis_ident(ast_expr *expr) {
     }
 
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-    int8_t free_var_index = analysis_resolve_free(analysis_current, ident->literal);
+    int8_t free_var_index = analysis_resolve_free(analysis_current, &ident->literal);
     if (free_var_index == -1) {
         error_ident_not_found(expr->line, ident->literal);
         exit(0);
@@ -400,6 +400,7 @@ void analysis_ident(ast_expr *expr) {
     ast_access_env *env_index = malloc(sizeof(ast_access_env));
     env_index->env = ast_new_ident(analysis_current->env_unique_name);
     env_index->index = free_var_index;
+    env_index->unique_ident = ident->literal;
     expr->expr = env_index;
 }
 
@@ -409,7 +410,7 @@ void analysis_ident(ast_expr *expr) {
  * @param ident
  * @return
  */
-int8_t analysis_resolve_free(analysis_function *current, string ident) {
+int8_t analysis_resolve_free(analysis_function *current, string*ident) {
     if (current->parent == NULL) {
         return -1;
     }
@@ -419,9 +420,9 @@ int8_t analysis_resolve_free(analysis_function *current, string ident) {
         analysis_local_ident *local = scope->idents[i];
 
         // 在父级作用域找到对应的 ident
-        if (strcmp(ident, local->ident) == 0) {
+        if (strcmp(*ident, local->ident) == 0) {
             scope->idents[i]->is_capture = true; // 被下级作用域引用
-
+            *ident = local->unique_ident;
             return (int8_t) analysis_push_free(current, true, (int8_t) i);
         }
     }
@@ -631,12 +632,12 @@ void analysis_function_end() {
     analysis_current = analysis_current->parent;
 }
 
-analysis_function *analysis_current_init(analysis_local_scope *scope) {
+analysis_function *analysis_current_init(analysis_local_scope *scope, string fn_name) {
     analysis_function *new = malloc(sizeof(analysis_function));
 //  new->local_count = 0;
     new->free_count = 0;
     new->scope_depth = 0;
-    new->env_unique_name = analysis_unique_ident(ENV_IDENT);
+    new->env_unique_name = str_connect(fn_name, "_env");
     new->contains_fn_count = 0;
     new->current_scope = scope;
 

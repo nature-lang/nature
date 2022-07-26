@@ -1,0 +1,6 @@
+int a = 1
+int b = 3
+int sum() {
+    return a + b
+}
+sum()

@@ -4,6 +4,7 @@
 #include "value.h"
 
 #define TYPE_NEW_POINT() ast_new_simple_type(TYPE_POINT)
+#define TYPE_NEW_NULL() ast_new_simple_type(TYPE_NULL)
 #define TYPE_NEW_INT() ast_new_simple_type(TYPE_INT)
 
 typedef enum {

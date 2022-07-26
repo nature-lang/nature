@@ -16,7 +16,7 @@ typedef enum {
 } ast_complex_type;
 
 typedef enum {
-    AST_EXPR_LITERAL, // 常数值 => 预计将存储在 data 段中
+    AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
     AST_EXPR_BINARY,
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
@@ -270,11 +270,11 @@ typedef struct {
     ast_type value_type; // 类型推导截断冗余
 } ast_new_map;
 
-// 改写后是否需要添加类型系统支持？
+// 改写后是否需要添加类型系统支持？需要，不然怎么过类型推导
 typedef struct {
-    string type;
     ast_ident *env;
     uint8_t index;
+    char *unique_ident;
 } ast_access_env;
 
 //typedef struct {

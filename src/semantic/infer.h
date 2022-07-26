@@ -46,7 +46,7 @@ ast_type infer_binary(ast_binary_expr *expr);
 
 ast_type infer_unary(ast_unary_expr *expr);
 
-ast_type infer_ident(ast_ident *expr);
+ast_type infer_ident(string unique_ident);
 
 ast_type infer_literal(ast_literal *literal);
 
@@ -57,6 +57,8 @@ ast_type infer_new_map(ast_new_map *new_map);
 ast_type infer_new_struct(ast_new_struct *new_struct);
 
 ast_type infer_access(ast_expr *expr);
+
+ast_type infer_access_env(ast_access_env *expr);
 
 ast_type infer_select_property(ast_select_property *select_property);
 

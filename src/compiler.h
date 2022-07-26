@@ -13,7 +13,7 @@ typedef struct {
 
 compiler_closures compiler(ast_closure_decl *ast);
 
-list *compiler_closure(closure *parent, ast_closure_decl *ast, lir_operand *target);
+list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_operand *target);
 
 list *compiler_block(closure *c, ast_block_stmt *block);
 
