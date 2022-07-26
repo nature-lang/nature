@@ -39,7 +39,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target);
 
 list *compiler_call(closure *c, ast_call *call, lir_operand *target);
 
-list *compiler_builtin_print(closure *c, ast_call *call);
+list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix);
 
 list *compiler_return(closure *c, ast_return_stmt *ast);
 

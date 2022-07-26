@@ -95,7 +95,7 @@ lir_op *lir_op_label(char *ident, bool is_local) {
 }
 
 lir_op *lir_op_unique_label(char *ident) {
-    return lir_op_label(LIR_UNIQUE_NAME(ident), false);
+    return lir_op_label(LIR_UNIQUE_NAME(ident), true);
 }
 
 lir_op *lir_op_goto(lir_operand *label) {

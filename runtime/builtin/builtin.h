@@ -16,6 +16,8 @@ typedef struct {
 
 void builtin_print(int arg_count, ...);
 
+void builtin_println(int arg_count, ...);
+
 builtin_operand_t *builtin_new_operand(type_category type, void *value);
 
 #endif //NATURE_SRC_LIR_LOWER_BUILTIN_H_

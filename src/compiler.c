@@ -394,7 +394,7 @@ list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
 
     if (base_target->type == LIR_OPERAND_TYPE_LABEL &&
         is_print_symbol(((lir_operand_label *) base_target->value)->ident)) {
-        return compiler_builtin_print(c, call);
+        return compiler_builtin_print(c, call, ((lir_operand_label *) base_target->value)->ident);
     }
 
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
@@ -732,6 +732,8 @@ list *compiler_while(closure *c, ast_while_stmt *ast) {
 
     list_append(operates, compiler_block(c, &ast->body));
 
+    list_push(operates, lir_op_goto(while_label->result));
+
     list_push(operates, lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, end_while_operand));
 
     return operates;
@@ -894,9 +896,8 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
     return list_new();
 }
 
-list *compiler_builtin_print(closure *c, ast_call *call) {
+list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
     list *operates = list_new();
-    lir_operand *base_target = lir_new_label_operand("builtin_print", false);
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
     params_operand->list[params_operand->count++] = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
@@ -926,6 +927,11 @@ list *compiler_builtin_print(closure *c, ast_call *call) {
     }
 
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+
+    lir_operand *base_target = lir_new_label_operand("builtin_print", false);
+    if (str_equal("println", print_suffix)) {
+        base_target = lir_new_label_operand("builtin_println", false);
+    }
 
     lir_op *call_op = lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, base_target, call_params_operand, NULL);
 

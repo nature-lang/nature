@@ -5,15 +5,7 @@
 
 static char sprint_buf[1024];
 
-void builtin_print(int arg_count, ...) {
-    builtin_operand_t *operands[arg_count];
-    va_list args;
-    va_start(args, arg_count); // 初始化参数
-    for (int i = 0; i < arg_count; ++i) {
-        operands[i] = va_arg(args, builtin_operand_t*);
-    }
-    va_end(args);
-
+static void builtin_print_operand(int arg_count, builtin_operand_t **operands) {
     for (int i = 0; i < arg_count; ++i) {
         builtin_operand_t *operand = operands[i];
         if (operand->type == TYPE_STRING) {
@@ -43,7 +35,31 @@ void builtin_print(int arg_count, ...) {
         write(STDOUT_FILENO, "operand type error\n", 20);
     }
 
-//    write(STDOUT_FILENO, "\n", 1);
+}
+
+void builtin_print(int arg_count, ...) {
+    builtin_operand_t *operands[arg_count];
+    va_list args;
+    va_start(args, arg_count); // 初始化参数
+    for (int i = 0; i < arg_count; ++i) {
+        operands[i] = va_arg(args, builtin_operand_t*);
+    }
+    va_end(args);
+
+    builtin_print_operand(arg_count, operands);
+}
+
+void builtin_println(int arg_count, ...) {
+    builtin_operand_t *operands[arg_count];
+    va_list args;
+    va_start(args, arg_count); // 初始化参数
+    for (int i = 0; i < arg_count; ++i) {
+        operands[i] = va_arg(args, builtin_operand_t*);
+    }
+    va_end(args);
+
+    builtin_print_operand(arg_count, operands);
+    write(STDOUT_FILENO, "\n", 1);
 }
 
 builtin_operand_t *builtin_new_operand(type_category type, void *value) {

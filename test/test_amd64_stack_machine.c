@@ -71,19 +71,23 @@ static void built_target(string path, string name) {
 }
 
 static void test_hello() {
-    built_target("/home/vagrant/Code/nature/test/stubs/hello.n", "hello.n");
+    built_target("/home/vagrant/Code/nature/test/stubs/0_hello.n", "hello.n");
 }
 
 static void test_sum() {
-    built_target("/home/vagrant/Code/nature/test/stubs/sum.n", "sum.n");
+    built_target("/home/vagrant/Code/nature/test/stubs/1_sum.n", "sum.n");
 }
 
 static void test_call() {
-    built_target("/home/vagrant/Code/nature/test/stubs/call.n", "call.n");
+    built_target("/home/vagrant/Code/nature/test/stubs/2_call.n", "call.n");
 }
 
 static void test_if() {
-    built_target("/home/vagrant/Code/nature/test/stubs/if.n", "if.n");
+    built_target("/home/vagrant/Code/nature/test/stubs/3_if.n", "if.n");
+}
+
+static void test_while() {
+    built_target("/home/vagrant/Code/nature/test/stubs/4_while.n", "while.n");
 }
 
 int main(void) {
@@ -91,7 +95,8 @@ int main(void) {
 //            cmocka_unit_test(test_hello),
 //            cmocka_unit_test(test_sum),
 //            cmocka_unit_test(test_call),
-            cmocka_unit_test(test_if),
+//            cmocka_unit_test(test_if),
+            cmocka_unit_test(test_while),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
