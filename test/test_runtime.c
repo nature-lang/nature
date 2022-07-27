@@ -1,7 +1,7 @@
 #include "test.h"
 #include <stdio.h>
 #include "runtime/type/string.h"
-#include "runtime/type/type_debug.h"
+#include "runtime/debug.h"
 #include "runtime/builtin/builtin.h"
 #include "src/lib/list.h"
 #include "src/lir/lir.h"
@@ -17,14 +17,14 @@ static void test_string() {
 }
 
 static void test_builtin_print() {
-    int a = 1;
-    builtin_operand_t *operand = builtin_new_operand(TYPE_INT, a, 0);
+    char *a = "hello test_builtin_print";
+    builtin_operand_t *operand = builtin_new_operand(TYPE_INT, a);
     builtin_print(1, operand);
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-//            cmocka_unit_test(test_string),
+            cmocka_unit_test(test_string),
             cmocka_unit_test(test_builtin_print),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);

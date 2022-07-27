@@ -1,7 +1,6 @@
 #include "test.h"
 #include <stdio.h>
 #include "runtime/type/string.h"
-#include "runtime/type/type_debug.h"
 #include "src/lib/list.h"
 #include "src/lib/helper.h"
 #include "src/lir/lir.h"

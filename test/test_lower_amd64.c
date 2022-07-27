@@ -70,7 +70,7 @@ static void test_lower_hello() {
     char *str = "nature is best\n";
     lir_operand *temp_var = test_lir_temp("temp_1", 8); // var 的 size 是多少？
     lir_op *string_new_op = lir_op_call(RUNTIME_CALL_STRING_NEW, temp_var, 2,
-                                        LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str),
+                                        LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, str),
                                         LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(str)));
 
     lir_op *print_op = lir_op_call("builtin_print", NULL, 1, temp_var);
@@ -119,7 +119,7 @@ static void test_lower_debug_printf() {
     lir_op *debug_printf_op = lir_op_call("debug_printf",
                                           NULL,
                                           2,
-                                          LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str),
+                                          LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, str),
                                           LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 2333));
 
     // lir_lower
@@ -166,7 +166,7 @@ static void test_lower_sum() {
                                 temp_var);
 
     lir_op *debug = lir_op_call("debug_printf", NULL, 2,
-                                LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "add 22 + 33 = %d\n"),
+                                LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, "add 22 + 33 = %d\n"),
                                 temp_var);
 
     // lir_lower
@@ -228,7 +228,7 @@ static void test_lower_call() {
 //   test
 //    char *str = "hello world";
 //    lir_op *debug_printf_op = lir_op_call("debug_printf",
-//                                          NULL, 2, LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, str)
+//                                          NULL, 2, LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, str)
 //    );
 //    list_push(sum_closure->operates, debug_printf_op);
 
@@ -247,7 +247,7 @@ static void test_lower_call() {
 
 
     lir_op *debug_op = lir_op_call("debug_printf", NULL, 2,
-                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "sum(1, 10) =>  %d\n"),
+                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, "sum(1, 10) =>  %d\n"),
                                    foo);
 
     list_push(main_closure->operates, call_op);
@@ -303,14 +303,14 @@ static void test_lower_if() {
 
     //  true 条件
     lir_op *true_op = lir_op_call("debug_printf", NULL, 1,
-                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo > 1\n"));
+                                  LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, "foo > 1\n"));
 
     // return to end fn
     lir_op *goto_end = lir_op_goto(lir_new_label_operand("end_main", true));
 
     lir_op *label_end_if_op = lir_op_label(END_IF_IDENT, false);
     lir_op *false_op = lir_op_call("debug_printf", NULL, 1,
-                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, "foo <= 1\n"));
+                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, "foo <= 1\n"));
 
     lir_op *label_end_main = lir_op_label("end_main", false);
 

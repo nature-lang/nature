@@ -19,6 +19,7 @@ typedef enum {
     TYPE_VOID,
     TYPE_VAR,
     TYPE_STRING,
+    TYPE_STRING_RAW, // 不使用 string_t 封装一层
     TYPE_ANY,
     TYPE_STRUCT, // ast_struct_decl
     TYPE_DECL_IDENT, // char*

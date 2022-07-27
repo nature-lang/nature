@@ -108,12 +108,6 @@ typedef struct lir_operand {
     void *value;
 } lir_operand;
 
-typedef enum {
-    LIR_IMMEDIATE_TYPE_INT,
-    LIR_IMMEDIATE_TYPE_BOOL,
-    LIR_IMMEDIATE_TYPE_FLOAT,
-} lir_immediate_type;
-
 //typedef struct {
 //  string ident;
 //} lir_operand_reg;

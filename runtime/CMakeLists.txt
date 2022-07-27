@@ -7,4 +7,4 @@ include_directories(../include/musl)
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/amd64)
 
-add_library(runtime STATIC ${RUNTIME_FILES})
+add_library(runtime STATIC ${RUNTIME_FILES} ${SRC_LIB})

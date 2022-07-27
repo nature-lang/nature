@@ -357,7 +357,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
 
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *v = operand->value;
-        if (v->type == TYPE_STRING) {
+        if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
             char *unique_name = AMD64_DECL_UNIQUE_NAME();
             asm_var_decl *decl = NEW(asm_var_decl);

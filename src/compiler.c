@@ -62,7 +62,7 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
     if (parent != NULL && ast_closure->env_count > 0) {
         // 处理 env ---------------
         // 1. make env_n by count
-        lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, ast_closure->env_name);
+        lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, ast_closure->env_name);
         lir_operand *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast_closure->env_count);
         list_push(parent_list, lir_op_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
 
@@ -538,7 +538,7 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
 list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     ast_access_env *ast = expr.expr;
     list *operates = list_new();
-    lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, c->env_name);
+    lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, c->env_name);
     lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
 
     lir_op *call_op = lir_op_runtime_call(
@@ -830,7 +830,7 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
             target->value = temp->value;
 
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
-            lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING, string_value, literal->value);
+            lir_operand *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, literal->value);
             lir_operand *imm_len_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(literal->value));
             lir_op *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_STRING_NEW,
@@ -840,6 +840,10 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
                     imm_len_operand);
             list_push(operates, call_op);
             return operates;
+        }
+        case TYPE_STRING_RAW: {
+            temp_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, literal->value);
+            break;
         }
         case TYPE_INT: {
             temp_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, atoi(literal->value));

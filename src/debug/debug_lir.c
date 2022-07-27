@@ -100,8 +100,8 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
             len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
             break;
         }
-        case TYPE_STRING: {
-            len = sprintf(buf, "IMM[%s:STRING]", immediate->string_value);
+        case TYPE_STRING_RAW: {
+            len = sprintf(buf, "IMM[%s:STRING_RAW]", immediate->string_value);
             break;
         }
         default:
