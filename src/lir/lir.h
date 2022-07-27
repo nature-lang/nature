@@ -98,10 +98,43 @@ typedef enum {
     LIR_OPERAND_TYPE_PHI_BODY,
     LIR_OPERAND_TYPE_FORMAL_PARAM,
     LIR_OPERAND_TYPE_ACTUAL_PARAM,
-    LIR_OPERAND_TYPE_LABEL,
+    LIR_OPERAND_TYPE_LABEL_SYMBOL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_TYPE_IMMEDIATE,
     LIR_OPERAND_TYPE_MEMORY,
 } lir_operand_type;
+
+typedef enum {
+    LIR_OP_TYPE_ADD = 1,
+    LIR_OP_TYPE_SUB,
+    LIR_OP_TYPE_MUL,
+    LIR_OP_TYPE_DIV,
+    LIR_OP_TYPE_REM, // remainder
+    LIR_OP_TYPE_SLT, // set less than
+    LIR_OP_TYPE_SLE, // set less eq
+    LIR_OP_TYPE_SGT,
+    LIR_OP_TYPE_SGE,
+    LIR_OP_TYPE_SEE,
+    LIR_OP_TYPE_SNE,
+    LIR_OP_TYPE_NOT, // ! 取反
+    LIR_OP_TYPE_NEG, // -取负数
+
+    LIR_OP_TYPE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
+    LIR_OP_TYPE_IA, // 解地址引用  indirect addr
+
+    LIR_OP_TYPE_PHI,
+    LIR_OP_TYPE_MOVE,
+    LIR_OP_TYPE_BEQ, // branch if eq a,b
+    LIR_OP_TYPE_BAL, // branch always
+    LIR_OP_TYPE_PUSH,
+    LIR_OP_TYPE_POP,
+    LIR_OP_TYPE_CALL,
+    LIR_OP_TYPE_RUNTIME_CALL,
+    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
+    LIR_OP_TYPE_RETURN, // return 并不能真的就推出函数执行
+    LIR_OP_TYPE_LABEL,
+    LIR_OP_TYPE_FN_BEGIN,
+    LIR_OP_TYPE_FN_END,
+} lir_op_type;
 
 typedef struct lir_operand {
     lir_operand_type type;
@@ -114,7 +147,7 @@ typedef struct lir_operand {
 
 typedef struct {
     string ident;
-    ast_type type;
+    ast_type type; // 原始类型存储
     uint16_t *stack_frame_offset;
 } lir_local_var;
 
@@ -132,7 +165,7 @@ typedef struct {
 typedef struct {
     char *ident;
     bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
-} lir_operand_label;
+} lir_operand_label_symbol;
 
 typedef struct {
     string ident;
@@ -172,35 +205,6 @@ typedef struct {
     uint8_t count;
 } lir_operand_actual_param;
 
-typedef enum {
-    LIR_OP_TYPE_NULL,
-    LIR_OP_TYPE_ADD,
-    LIR_OP_TYPE_SUB,
-    LIR_OP_TYPE_MUL,
-    LIR_OP_TYPE_DIV,
-    LIR_OP_TYPE_LT,
-    LIR_OP_TYPE_LTE,
-    LIR_OP_TYPE_GT,
-    LIR_OP_TYPE_GTE,
-    LIR_OP_TYPE_EQ_EQ,
-    LIR_OP_TYPE_NOT_EQ,
-    LIR_OP_TYPE_NOT,
-    LIR_OP_TYPE_MINUS,
-
-    LIR_OP_TYPE_PHI,
-    LIR_OP_TYPE_MOVE,
-    LIR_OP_TYPE_CMP_GOTO, // cmp 两个参数总是相等，就跳转 cmp + je
-    LIR_OP_TYPE_GOTO,
-    LIR_OP_TYPE_PUSH,
-    LIR_OP_TYPE_POP,
-    LIR_OP_TYPE_CALL,
-    LIR_OP_TYPE_RUNTIME_CALL,
-    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
-    LIR_OP_TYPE_RETURN, // return 并不能真的就推出函数执行
-    LIR_OP_TYPE_LABEL,
-    LIR_OP_TYPE_FN_BEGIN,
-    LIR_OP_TYPE_FN_END,
-} lir_op_type;
 
 /**
  * 四元组
@@ -353,7 +357,7 @@ lir_op *lir_op_label(string name, bool is_local);
 
 lir_op *lir_op_unique_label(string name);
 
-lir_op *lir_op_goto(lir_operand *label);
+lir_op *lir_op_bal(lir_operand *label);
 
 //lir_op *lir_new_push(lir_operand *operand);
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src);

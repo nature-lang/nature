@@ -80,12 +80,12 @@ lir_operand *lir_new_temp_var_operand(closure *c, ast_type type) {
 }
 
 lir_operand *lir_new_label_operand(char *ident, bool is_local) {
-    lir_operand_label *label = NEW(lir_operand_label);
+    lir_operand_label_symbol *label = NEW(lir_operand_label_symbol);
     label->ident = ident;
     label->is_local = is_local;
 
     lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_LABEL;
+    operand->type = LIR_OPERAND_TYPE_LABEL_SYMBOL;
     operand->value = label;
     return operand;
 }
@@ -98,8 +98,8 @@ lir_op *lir_op_unique_label(char *ident) {
     return lir_op_label(LIR_UNIQUE_NAME(ident), true);
 }
 
-lir_op *lir_op_goto(lir_operand *label) {
-    return lir_op_new(LIR_OP_TYPE_GOTO, NULL, NULL, label);
+lir_op *lir_op_bal(lir_operand *label) {
+    return lir_op_new(LIR_OP_TYPE_BAL, NULL, NULL, label);
 }
 
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {

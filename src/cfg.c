@@ -41,7 +41,7 @@ void cfg(closure *c) {
     while (current->value != NULL) {
         lir_op *op = current->value;
         if (op->type == LIR_OP_TYPE_LABEL) {
-            lir_operand_label *operand_label = op->result->value;
+            lir_operand_label_symbol *operand_label = op->result->value;
 
             // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
             lir_basic_block *new_block = lir_new_basic_block();
@@ -55,7 +55,7 @@ void cfg(closure *c) {
             // 3. 建立顺序关联关系 (由于顺序遍历 type, 所以只能建立顺序关系)
             if (current_block != NULL) {
                 lir_op *rear_op = list_last(current_block->operates)->value;
-                if (rear_op->type != LIR_OP_TYPE_GOTO) {
+                if (rear_op->type != LIR_OP_TYPE_BAL) {
                     LIR_BLOCKS_PUSH(&current_block->succs, new_block);
                     LIR_BLOCKS_PUSH(&new_block->preds, current_block);
                 }
@@ -80,10 +80,10 @@ void cfg(closure *c) {
     for (int i = 0; i < c->blocks.count; ++i) {
         current_block = c->blocks.list[i];
         lir_op *last_op = list_last(current_block->operates)->value;
-        if (last_op->type != LIR_OP_TYPE_GOTO && last_op->type != LIR_OP_TYPE_CMP_GOTO) {
+        if (last_op->type != LIR_OP_TYPE_BAL && last_op->type != LIR_OP_TYPE_BEQ) {
             continue;
         }
-        lir_operand_label *operand_label = last_op->result->value;
+        lir_operand_label_symbol *operand_label = last_op->result->value;
 
         // 处理 goto 模式的关联关系
         string name = operand_label->ident;

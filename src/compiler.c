@@ -12,15 +12,15 @@ lir_op_type ast_expr_operator_to_lir_op[] = {
         [AST_EXPR_OPERATOR_MUL] = LIR_OP_TYPE_MUL,
         [AST_EXPR_OPERATOR_DIV] = LIR_OP_TYPE_DIV,
 
-        [AST_EXPR_OPERATOR_LT] = LIR_OP_TYPE_LT,
-        [AST_EXPR_OPERATOR_LTE] = LIR_OP_TYPE_LTE,
-        [AST_EXPR_OPERATOR_GT] = LIR_OP_TYPE_GT,
-        [AST_EXPR_OPERATOR_GTE] = LIR_OP_TYPE_GTE,
-        [AST_EXPR_OPERATOR_EQ_EQ] = LIR_OP_TYPE_EQ_EQ,
-        [AST_EXPR_OPERATOR_NOT_EQ] = LIR_OP_TYPE_NOT_EQ,
+        [AST_EXPR_OPERATOR_LT] = LIR_OP_TYPE_SLT,
+        [AST_EXPR_OPERATOR_LTE] = LIR_OP_TYPE_SLE,
+        [AST_EXPR_OPERATOR_GT] = LIR_OP_TYPE_SGT,
+        [AST_EXPR_OPERATOR_GTE] = LIR_OP_TYPE_SGE,
+        [AST_EXPR_OPERATOR_EQ_EQ] = LIR_OP_TYPE_SEE,
+        [AST_EXPR_OPERATOR_NOT_EQ] = LIR_OP_TYPE_SNE,
 
         [AST_EXPR_OPERATOR_NOT] = LIR_OP_TYPE_NOT,
-        [AST_EXPR_OPERATOR_MINUS] = LIR_OP_TYPE_MINUS,
+        [AST_EXPR_OPERATOR_MINUS] = LIR_OP_TYPE_NEG,
 };
 
 int compiler_line = 0;
@@ -72,6 +72,12 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
 
             lir_operand *expr_target = lir_new_empty_operand();
             list_append(parent_list, compiler_expr(parent, item_expr, expr_target));
+            if (expr_target->type != LIR_OPERAND_TYPE_VAR) {
+                error_exit("[compiler_closure] expr_target type not var, cannot use by env set");
+            }
+
+            // TODO 提取变量的地址? 使用 operand 还是新增 lea 指令
+
 
             lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
             lir_op *call_op = lir_op_runtime_call(
@@ -351,16 +357,16 @@ list *compiler_if(closure *c, ast_if_stmt *if_stmt) {
 
     lir_op *cmp_goto;
     if (if_stmt->alternate.count == 0) {
-        cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, false_target, condition_target, end_label_operand);
+        cmp_goto = lir_op_new(LIR_OP_TYPE_BEQ, false_target, condition_target, end_label_operand);
     } else {
-        cmp_goto = lir_op_new(LIR_OP_TYPE_CMP_GOTO, false_target, condition_target, alternate_label_operand);
+        cmp_goto = lir_op_new(LIR_OP_TYPE_BEQ, false_target, condition_target, alternate_label_operand);
     }
     list_push(operates, cmp_goto);
     list_push(operates, lir_op_unique_label(CONTINUE_IDENT));
 
     // 编译 consequent block
     list *consequent_list = compiler_block(c, &if_stmt->consequent);
-    list_push(consequent_list, lir_op_goto(end_label_operand));
+    list_push(consequent_list, lir_op_bal(end_label_operand));
     list_append(operates, consequent_list);
 
     // 编译 alternate block
@@ -394,9 +400,9 @@ list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
     lir_operand *base_target = lir_new_empty_operand();
     list *operates = compiler_expr(c, call->left, base_target);
 
-    if (base_target->type == LIR_OPERAND_TYPE_LABEL &&
-        is_print_symbol(((lir_operand_label *) base_target->value)->ident)) {
-        return compiler_builtin_print(c, call, ((lir_operand_label *) base_target->value)->ident);
+    if (base_target->type == LIR_OPERAND_TYPE_LABEL_SYMBOL &&
+        is_print_symbol(((lir_operand_label_symbol *) base_target->value)->ident)) {
+        return compiler_builtin_print(c, call, ((lir_operand_label_symbol *) base_target->value)->ident);
     }
 
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
@@ -543,7 +549,7 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
 
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_GET_ENV,
-            target,
+            target, // TODO 响应一个什么东西给到 target? 内存地址？内存地址又怎么还原呢？
             2,
             env_name_param,
             env_index_param
@@ -672,7 +678,7 @@ list *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     list_push(operates, for_label);
 
     lir_op *cmp_goto = lir_op_new(
-            LIR_OP_TYPE_CMP_GOTO,
+            LIR_OP_TYPE_BEQ,
             LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0),
             count_target,
             end_for_label->result);
@@ -709,7 +715,7 @@ list *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     list_push(operates, sub_op);
 
     // goto for
-    list_push(operates, lir_op_goto(for_label->result));
+    list_push(operates, lir_op_bal(for_label->result));
 
     list_push(operates, end_for_label);
 
@@ -725,7 +731,7 @@ list *compiler_while(closure *c, ast_while_stmt *ast) {
     lir_operand *condition_target = lir_new_empty_operand();
     list_append(operates, compiler_expr(c, ast->condition, condition_target));
     lir_op *cmp_goto = lir_op_new(
-            LIR_OP_TYPE_CMP_GOTO,
+            LIR_OP_TYPE_BEQ,
             LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
             condition_target,
             end_while_operand);
@@ -734,7 +740,7 @@ list *compiler_while(closure *c, ast_while_stmt *ast) {
 
     list_append(operates, compiler_block(c, &ast->body));
 
-    list_push(operates, lir_op_goto(while_label->result));
+    list_push(operates, lir_op_bal(while_label->result));
 
     list_push(operates, lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, end_while_operand));
 
@@ -751,7 +757,7 @@ list *compiler_return(closure *c, ast_return_stmt *ast) {
         list_push(operates, return_op); // return op 只是做了个 mov result -> rax 的操作
     }
 
-    list_push(operates, lir_op_goto(lir_new_label_operand(c->end_label, false)));
+    list_push(operates, lir_op_bal(lir_new_label_operand(c->end_label, false)));
 
     return operates;
 }
@@ -878,7 +884,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
     symbol_t *s = symbol_table_get(ident->literal);
     if (s->type == SYMBOL_TYPE_FN) {
         // label
-        target->type = LIR_OPERAND_TYPE_LABEL;
+        target->type = LIR_OPERAND_TYPE_LABEL_SYMBOL;
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     }
     if (s->type == SYMBOL_TYPE_VAR) {

@@ -295,10 +295,10 @@ static void test_lower_if() {
 
 
     // cmp foo，1 => cmp_res
-    lir_op *cmp_gt_op = lir_op_new(LIR_OP_TYPE_GT, foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1), cmp_res);
+    lir_op *cmp_gt_op = lir_op_new(LIR_OP_TYPE_SGT, foo, LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 1), cmp_res);
 
     // cmp goto
-    lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_CMP_GOTO, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
+    lir_op *cmp_goto_op = lir_op_new(LIR_OP_TYPE_BEQ, LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
                                      cmp_res, lir_new_label_operand(END_IF_IDENT, true));
 
     //  true 条件
@@ -306,7 +306,7 @@ static void test_lower_if() {
                                   LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, "foo > 1\n"));
 
     // return to end fn
-    lir_op *goto_end = lir_op_goto(lir_new_label_operand("end_main", true));
+    lir_op *goto_end = lir_op_bal(lir_new_label_operand("end_main", true));
 
     lir_op *label_end_if_op = lir_op_label(END_IF_IDENT, false);
     lir_op *false_op = lir_op_call("debug_printf", NULL, 1,

@@ -51,13 +51,13 @@ list *amd64_lower_call(closure *c, lir_op *op);
 
 list *amd64_lower_return(closure *c, lir_op *op);
 
-list *amd64_lower_goto(closure *c, lir_op *op);
+list *amd64_lower_bal(closure *c, lir_op *op);
 
 list *amd64_lower_cmp_goto(closure *c, lir_op *op);
 
 list *amd64_lower_add(closure *c, lir_op *op);
 
-list *amd64_lower_gt(closure *c, lir_op *op);
+list *amd64_lower_sgt(closure *c, lir_op *op);
 
 list *amd64_lower_mov(closure *c, lir_op *op);
 

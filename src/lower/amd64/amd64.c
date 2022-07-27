@@ -12,9 +12,9 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_RUNTIME_CALL] = amd64_lower_call,
         [LIR_OP_TYPE_LABEL] = amd64_lower_label,
         [LIR_OP_TYPE_RETURN] = amd64_lower_return,
-        [LIR_OP_TYPE_CMP_GOTO] = amd64_lower_cmp_goto,
-        [LIR_OP_TYPE_GOTO] = amd64_lower_goto,
-        [LIR_OP_TYPE_GT] = amd64_lower_gt,
+        [LIR_OP_TYPE_BEQ] = amd64_lower_cmp_goto,
+        [LIR_OP_TYPE_BAL] = amd64_lower_bal,
+        [LIR_OP_TYPE_SGT] = amd64_lower_sgt,
         [LIR_OP_TYPE_MOVE] = amd64_lower_mov,
         [LIR_OP_TYPE_FN_BEGIN] = amd64_lower_fn_begin,
         [LIR_OP_TYPE_FN_END] = amd64_lower_fn_end,
@@ -150,7 +150,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
 }
 
 
-list *amd64_lower_goto(closure *c, lir_op *op) {
+list *amd64_lower_bal(closure *c, lir_op *op) {
     list *insts = list_new();
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
     list_push(insts, ASM_INST("jmp", { result }));
@@ -190,7 +190,7 @@ list *amd64_lower_add(closure *c, lir_op *op) {
 }
 
 // lir GT foo,bar => result
-list *amd64_lower_gt(closure *c, lir_op *op) {
+list *amd64_lower_sgt(closure *c, lir_op *op) {
     list *insts = list_new();
     regs_t used_regs = {.count = 0};
 
@@ -222,7 +222,7 @@ list *amd64_lower_gt(closure *c, lir_op *op) {
 
 list *amd64_lower_label(closure *c, lir_op *op) {
     list *insts = list_new();
-    lir_operand_label *label_operand = op->result->value;
+    lir_operand_label_symbol *label_operand = op->result->value;
     list_push(insts, ASM_INST("label", { SYMBOL(label_operand->ident, label_operand->is_local) }));
     return insts;
 }
@@ -333,8 +333,8 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_si
         error_exit("[amd64_lower_to_asm_operand] type immediate not expected");
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_LABEL) {
-        lir_operand_label *v = operand->value;
+    if (operand->type == LIR_OPERAND_TYPE_LABEL_SYMBOL) {
+        lir_operand_label_symbol *v = operand->value;
         return LABEL(v->ident);
     }
 

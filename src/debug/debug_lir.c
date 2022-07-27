@@ -19,8 +19,8 @@ string lir_operand_to_string(lir_operand *operand) {
     }
 
     switch (operand->type) {
-        case LIR_OPERAND_TYPE_LABEL: {
-            return lir_operand_label_to_string((lir_operand_label *) operand->value);
+        case LIR_OPERAND_TYPE_LABEL_SYMBOL: {
+            return lir_operand_label_to_string((lir_operand_label_symbol *) operand->value);
         }
         case LIR_OPERAND_TYPE_SYMBOL: {
             return lir_operand_symbol_to_string((lir_operand_symbol *) operand->value);
@@ -47,7 +47,7 @@ string lir_operand_to_string(lir_operand *operand) {
 
 }
 
-string lir_operand_label_to_string(lir_operand_label *label) {
+string lir_operand_label_to_string(lir_operand_label_symbol *label) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string scope = "G";
     if (label->is_local) {
