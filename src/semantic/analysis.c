@@ -442,6 +442,9 @@ int8_t analysis_resolve_free(analysis_function *current, string*ident) {
  */
 void analysis_type(ast_type *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
+    // TODO 如果出现死循环，应该告警退出
+    // type foo = int
+    // 'foo' is type_decl_ident
     if (type->category == TYPE_DECL_IDENT) {
         // 向上查查查
         ast_ident *ident = type->value;
@@ -552,6 +555,7 @@ void analysis_return(ast_return_stmt *stmt) {
 }
 
 // unique name
+// type foo = int
 void analysis_type_decl(ast_type_decl_stmt *stmt) {
     analysis_redeclare_check(stmt->ident);
     analysis_type(&stmt->type);
@@ -593,7 +597,7 @@ uint8_t analysis_push_free(analysis_function *current, bool is_local, int8_t ind
 }
 
 /**
- * 检查当前作用域及当前 scope
+ * 检查当前作用域及当前 scope 是否重复定义了 ident
  * @param ident
  * @return
  */

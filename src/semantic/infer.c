@@ -757,6 +757,7 @@ ast_type infer_type(ast_type type) {
         return type;
     }
 
+    // type foo = int, 'foo' is type_dec_ident
     if (type.category == TYPE_DECL_IDENT) {
         return infer_type_decl_ident((ast_ident *) type.value);
     }

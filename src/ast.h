@@ -69,9 +69,10 @@ typedef enum {
 string ast_expr_operator_to_string[100];
 
 typedef struct {
-    void *value; // char**,ast_map_decl*....
+    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
     type_category category; // base_type, custom_type, function, list, map
     bool is_origin; // type a = int, type b = a，int is origin
+    uint8_t point_level; // 指针等级, 如果等于0 表示非指针
 } ast_type;
 
 typedef struct {
@@ -188,7 +189,7 @@ typedef struct {
 } ast_struct_decl; // 多个 property 组成一个
 
 typedef struct {
-    ast_type type;
+    ast_type type; // 为什么这里声明的是一个类型而不是 ident?
     ast_struct_property list[INT8_MAX];
     int8_t count;
 } ast_new_struct;
@@ -289,8 +290,8 @@ typedef struct {
  * type my = struct {}
  */
 typedef struct {
-    string ident;
-    ast_type type;
+    string ident; // foo
+    ast_type type; // int
 } ast_type_decl_stmt;
 
 typedef struct {

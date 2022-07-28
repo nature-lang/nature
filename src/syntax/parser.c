@@ -142,14 +142,18 @@ ast_stmt parser_stmt() {
     return parser_new_stmt();
 }
 
+/**
+ * type foo = int
+ * @return
+ */
 ast_stmt parser_type_decl_stmt() {
     ast_stmt result = parser_new_stmt();
     ast_type_decl_stmt *type_decl_stmt = malloc(sizeof(ast_type_decl_stmt));
-    parser_must(TOKEN_TYPE);
-    type_decl_stmt->ident = parser_advance()->literal;
-    parser_must(TOKEN_EQUAL);
+    parser_must(TOKEN_TYPE); // type
+    type_decl_stmt->ident = parser_advance()->literal; // ident
+    parser_must(TOKEN_EQUAL); // =
     // 类型解析
-    type_decl_stmt->type = parser_type();
+    type_decl_stmt->type = parser_type(); // int
 
     result.type = AST_STMT_TYPE_DECL;
     result.stmt = type_decl_stmt;
@@ -331,6 +335,7 @@ ast_expr parser_literal() {
 }
 
 /**
+ * 右值是 ident 开头的处理
  * ident is custom type or variable
  * ident 如果是 type 则需要特殊处理
  * @return
@@ -339,16 +344,25 @@ ast_expr parser_ident_expr() {
     ast_expr result = parser_new_expr();
     token *ident_token = parser_advance();
 
+    // ast_type ident 通常表示自定义类型，如 type foo = int, 其就是 foo 类型。
+    // 所以应该使用 ast_type 保存这种类型。这种类型保存在 ast_type 中，其 category 应该是什么呢？
+    // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     ast_type type_decl_ident = {
             .is_origin = false,
             .category = TYPE_DECL_IDENT,
             .value = ast_new_ident(ident_token->literal)
     };
 
-    // person {
-    //  a = 1
-    //  b = 2
-    // }
+    /**
+      * 请注意这里是实例化一个结构体,而不是声明一个结构体
+      * 声明 type person = struct{int a, int b}
+      * 实例化
+      * var a =  person {
+      *              a = 1
+      *              b = 2
+      * }
+      * var a= struct {int a, int b} {b = 1, b = 2}
+      **/
     if (parser_consume(TOKEN_LEFT_CURLY)) {
         return parser_new_struct(type_decl_ident);
     }
@@ -357,7 +371,7 @@ ast_expr parser_ident_expr() {
     if (parser_is(TOKEN_LITERAL_IDENT) && parser_next_is(1, TOKEN_LEFT_PAREN)) {
         return parser_function_decl_expr(type_decl_ident);
     };
-    // type() {}
+    // type () {}
     if (parser_is(TOKEN_LEFT_PAREN) && parser_is_function_decl(parser_next(0))) {
         return parser_function_decl_expr(type_decl_ident);
     }
@@ -799,9 +813,14 @@ bool parser_consume(token_type expect) {
 }
 
 /**
+ * ident 开头的表达式情况
+ *
  * custom_type baz = 1;
  * custom_type baz;
  *
+ * custom_type f() {
+ *
+ * }
  * call();
  * type() {
  * }

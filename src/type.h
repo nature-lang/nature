@@ -22,7 +22,8 @@ typedef enum {
     TYPE_STRING_RAW, // 不使用 string_t 封装一层
     TYPE_ANY,
     TYPE_STRUCT, // ast_struct_decl
-    TYPE_DECL_IDENT, // char*
+    // 可以理解为自定义类型的关键字，在没有进行类型还原之前，它就是类型！ type foo = int, foo 就是 type_decl_ident
+    TYPE_DECL_IDENT,
     TYPE_LIST,
     TYPE_MAP, // ast_map_decl
     TYPE_FN, // fn<int,void> ast_function_type_decl
