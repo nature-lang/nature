@@ -31,7 +31,7 @@ void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local)
 
 symbol_t *symbol_table_get(string ident);
 
-void symbol_set_temp_ident(string unique_ident, ast_type type);
+void symbol_set_temp_ident(string unique_ident, ast_type_t type);
 
 size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
@@ -41,7 +41,7 @@ size_t struct_offset(ast_struct_decl *struct_decl, string property);
  * @param type
  * @return
  */
-size_t type_sizeof(type_category t);
+size_t type_sizeof(type_system t);
 
 void symbol_ident_table_init();
 

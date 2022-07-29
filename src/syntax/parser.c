@@ -19,7 +19,7 @@ ast_expr_operator token_to_ast_expr_operator[] = {
         [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
 };
 
-type_category token_to_type_category[] = {
+type_system token_to_type_category[] = {
         // literal
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
@@ -225,7 +225,7 @@ ast_expr parser_expr() {
 ast_stmt parser_var_or_function_decl() {
     ast_stmt result = parser_new_stmt();
 
-    ast_type type = parser_type();
+    ast_type_t type = parser_type();
 
     // 声明时函数名称仅占用一个 token
     if (parser_is(TOKEN_LEFT_PAREN) || parser_next_is(1, TOKEN_LEFT_PAREN)) {
@@ -347,9 +347,9 @@ ast_expr parser_ident_expr() {
     // ast_type ident 通常表示自定义类型，如 type foo = int, 其就是 foo 类型。
     // 所以应该使用 ast_type 保存这种类型。这种类型保存在 ast_type 中，其 category 应该是什么呢？
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
-    ast_type type_decl_ident = {
+    ast_type_t type_decl_ident = {
             .is_origin = false,
-            .category = TYPE_DECL_IDENT,
+            .type = TYPE_DECL_IDENT,
             .value = ast_new_ident(ident_token->literal)
     };
 
@@ -475,7 +475,7 @@ void parser_actual_param(ast_call *call) {
 }
 
 ast_var_decl *parser_var_decl() {
-    ast_type var_type = parser_type();
+    ast_type_t var_type = parser_type();
     token *var_ident = parser_advance();
     if (var_ident->type != TOKEN_LITERAL_IDENT) {
         error_printf(parser_line(), "parser variable definitions error, '%s' not a ident", var_ident->literal);
@@ -531,15 +531,15 @@ void parser_formal_param(ast_new_fn *function_decl) {
  * 兼容 var
  * @return
  */
-ast_type parser_type() {
-    ast_type result = {
+ast_type_t parser_type() {
+    ast_type_t result = {
             .is_origin = false
     };
 
     // int/float/bool/string/void/var/any
     if (parser_is_simple_type()) {
         token *type_token = parser_advance();
-        result.category = token_to_type_category[type_token->type];
+        result.type = token_to_type_category[type_token->type];
         result.value = type_token->literal;
         return result;
     }
@@ -552,7 +552,7 @@ ast_type parser_type() {
 
         parser_must(TOKEN_RIGHT_SQUARE);
 
-        result.category = TYPE_LIST;
+        result.type = TYPE_LIST;
         result.value = type_list_decl;
         return result;
     }
@@ -565,7 +565,7 @@ ast_type parser_type() {
         type_map_decl->value_type = parser_type();
         parser_must(TOKEN_RIGHT_CURLY);
 
-        result.category = TYPE_MAP;
+        result.type = TYPE_MAP;
         result.value = type_map_decl;
         return result;
     }
@@ -586,7 +586,7 @@ ast_type parser_type() {
 
         parser_must(TOKEN_RIGHT_CURLY);
 
-        result.category = TYPE_STRUCT;
+        result.type = TYPE_STRUCT;
         result.value = type_struct_decl;
         return result;
     }
@@ -599,7 +599,7 @@ ast_type parser_type() {
         parser_type_function_formal_param(type_function);
         parser_must(TOKEN_RIGHT_ANGLE);
 
-        result.category = TYPE_FN;
+        result.type = TYPE_FN;
         result.value = type_function;
         return result;
     }
@@ -609,7 +609,7 @@ ast_type parser_type() {
     }
     // 神奇的 ident
     token *type_token = parser_advance();
-    result.category = TYPE_DECL_IDENT;
+    result.type = TYPE_DECL_IDENT;
     result.value = ast_new_ident(type_token->literal);
     return result;
 }
@@ -622,7 +622,7 @@ ast_type parser_type() {
  * }
  * @return
  */
-ast_new_fn *parser_function_decl(ast_type type) {
+ast_new_fn *parser_function_decl(ast_type_t type) {
     ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
 
     // 必选 type
@@ -718,7 +718,7 @@ ast_stmt parser_for_stmt() {
     for_in_stmt->gen_key = malloc(sizeof(ast_var_decl));
 
     parser_must(TOKEN_LEFT_PAREN);
-    ast_type type_var = parser_type();
+    ast_type_t type_var = parser_type();
     for_in_stmt->gen_key->type = type_var;
     for_in_stmt->gen_key->ident = parser_advance()->literal;
 
@@ -862,7 +862,7 @@ ast_stmt parser_ident_stmt() {
     return parser_assign(left);
 }
 
-ast_expr parser_function_decl_expr(ast_type type) {
+ast_expr parser_function_decl_expr(ast_type_t type) {
     ast_expr result = parser_new_expr();
     result.type = AST_NEW_FN;
     result.expr = parser_function_decl(type);
@@ -1107,7 +1107,7 @@ int parser_line() {
     return parser_peek()->line;
 }
 
-ast_expr parser_new_struct(ast_type type) {
+ast_expr parser_new_struct(ast_type_t type) {
     ast_expr result;
     ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
     new_struct->count = 0;
@@ -1135,12 +1135,12 @@ ast_expr parser_new_struct(ast_type type) {
  * @return
  */
 ast_expr parser_direct_type_expr() {
-    ast_type type = parser_type();
+    ast_type_t type = parser_type();
     return parser_function_decl_expr(type);
 }
 
 ast_expr parser_struct_type_expr() {
-    ast_type struct_type = parser_type();
+    ast_type_t struct_type = parser_type();
     if (parser_consume(TOKEN_LEFT_CURLY)) {
         return parser_new_struct(struct_type);
     }

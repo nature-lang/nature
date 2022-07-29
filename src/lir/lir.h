@@ -72,11 +72,11 @@
 #define LIR_COPY_VAR_OPERAND(_original) \
 ({                                 \
   lir_operand_var *_var = NEW(lir_operand_var); \
-  _var->old = (_original)->old;    \
   _var->ident = (_original)->ident; \
-  _var->local = (_original)->local; \
+  _var->old = (_original)->old;    \
   _var->reg_id = (_original)->reg_id; \
-  _var->type = (_original)->type; \
+  _var->decl = (_original)->decl; \
+  _var->infer_size_type = (_original)->infer_size_type; \
   _var;                                   \
 })
 
@@ -147,19 +147,19 @@ typedef struct lir_operand {
 
 typedef struct {
     string ident;
-    ast_type type; // 原始类型存储
+    ast_type_t ast_type; // 原始类型存储(包含指针深度)
     uint16_t *stack_frame_offset;
-} lir_local_var;
+} lir_local_var_decl;
 
 /**
  * 存放在寄存器或者内存中, var a = 1
  */
 typedef struct {
     string ident; // ssa 后的新名称
-    string old;
+    string old; // ssa 之前的名称
     uint8_t reg_id; // reg list index, 寄存器分配
-    lir_local_var *local; // local 如果为 nil 就是外部符号引用
-    type_category type;// lir 为了保证通用性，只能有类型，不能有 size
+    lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
+    type_system infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
 } lir_operand_var;
 
 typedef struct {
@@ -169,7 +169,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_category type;
+    type_system type;
 } lir_operand_symbol; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
@@ -192,7 +192,7 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
-    type_category type;
+    type_system type;
 } lir_operand_immediate;
 
 typedef struct {
@@ -228,7 +228,7 @@ typedef struct lir_op {
     // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
     // TYPE_STRING/LIST/MAP/SET = 8
     // CUSTOM_TYPE 如何处理？
-    type_category result_data_type;
+    type_system result_data_type;
 
 //    string struct_name;
 
@@ -339,11 +339,11 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  * @param ident
  * @param type
  */
-void lir_new_local_var(closure *c, string ident, ast_type type);
+void lir_new_local_var(closure *c, string ident, ast_type_t type);
 
-type_category lir_type_category(lir_operand *operand);
+type_system lir_type_category(lir_operand *operand);
 
-lir_operand *lir_new_temp_var_operand(closure *c, ast_type type);
+lir_operand *lir_new_temp_var_operand(closure *c, ast_type_t type);
 
 lir_operand *lir_new_empty_operand();
 

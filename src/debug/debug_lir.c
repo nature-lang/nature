@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "debug_lir.h"
 #include "src/symbol.h"
+#include "src/lib/helper.h"
 #include "src/semantic/analysis.h"
 
 static char *lir_operand_symbol_to_string(lir_operand_symbol *ptr) {
@@ -69,7 +70,10 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
     int len;
 
 //    stack_frame_offset = *var->local->stack_frame_offset;
-    type_string = type_to_string[var->local->type.category];
+    type_string = type_to_string[var->decl->ast_type.type];
+    for (int i = 0; i < var->decl->ast_type.point; ++i) {
+        type_string = str_connect(type_string, "*");
+    }
     len = sprintf(buf, "VAR[%s|%s]", var->ident, type_string);
 
     realloc(buf, len);

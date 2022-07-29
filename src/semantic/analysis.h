@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
     bool is_local;
     uint8_t index;
+    string ident;
 } analysis_free_ident;
 
 typedef struct analysis_local_scope {
@@ -107,11 +108,11 @@ void analysis_unary(ast_unary_expr *expr);
 
 void analysis_ident(ast_expr *expr);
 
-void analysis_type(ast_type *type);
+void analysis_type(ast_type_t *type);
 
-int8_t analysis_resolve_free(analysis_function *current, string *ident);
+int8_t analysis_resolve_free(analysis_function *current, string*ident);
 
-uint8_t analysis_push_free(analysis_function *f, bool is_local, int8_t index);
+uint8_t analysis_push_free(analysis_function *f, bool is_local, int8_t index, string ident);
 
 void analysis_call(ast_call *call);
 
@@ -149,6 +150,6 @@ void analysis_begin_scope();
 
 void analysis_end_scope();
 
-ast_type analysis_function_to_type(ast_new_fn *function_decl);
+ast_type_t analysis_function_to_type(ast_new_fn *function_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_

@@ -292,14 +292,14 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_si
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (force_size == 0) {
-            force_size = amd64_type_sizeof(v->type);
+            force_size = amd64_type_sizeof(v->infer_size_type);
         }
-        if (v->local->stack_frame_offset > 0) {
-            return DISP_REG(rbp, -(*v->local->stack_frame_offset), force_size); // amd64 栈空间从大往小递增
+        if (v->decl->stack_frame_offset > 0) {
+            return DISP_REG(rbp, -(*v->decl->stack_frame_offset), force_size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
-            asm_operand_register_t *reg = amd64_register_find(v->reg_id, amd64_type_sizeof(v->type));
+            asm_operand_register_t *reg = amd64_register_find(v->reg_id, amd64_type_sizeof(v->infer_size_type));
             return REG(reg);
         }
 
@@ -410,19 +410,19 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         lir_operand_var *var = v->base->value;
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
-            asm_operand_register_t *reg = amd64_register_find(var->reg_id, amd64_type_sizeof(var->type));
+            asm_operand_register_t *reg = amd64_register_find(var->reg_id, amd64_type_sizeof(var->infer_size_type));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
             return insts;
         }
 
-        if (var->local->stack_frame_offset > 0) {
+        if (var->decl->stack_frame_offset > 0) {
             // 需要占用一个临时寄存器
             reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
             // 生成 mov 指令（asm_mov）
-            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -(*var->local->stack_frame_offset), QWORD) }));
+            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -(*var->decl->stack_frame_offset), QWORD) }));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             return insts;
@@ -496,8 +496,8 @@ list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     // 计算堆栈信息(TODO 在寄存器分配之后再进行堆栈分配合理吗？)
     list_node *current = c->local_vars->front;
     while (current->value != NULL) {
-        lir_local_var *var = current->value;
-        c->stack_length += amd64_type_sizeof(var->type.category);
+        lir_local_var_decl *var = current->value;
+        c->stack_length += amd64_type_sizeof(var->ast_type.type);
         *var->stack_frame_offset = c->stack_length;
 
         current = current->next;
@@ -536,7 +536,7 @@ list *amd64_lower_fn_formal_params(closure *c) {
     for (int i = 0; i < c->formal_params.count; i++) {
         lir_operand_var *var = c->formal_params.list[i];
         asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), 0);
-        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, amd64_type_sizeof(var->type));
+        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, amd64_type_sizeof(var->infer_size_type));
         if (source_reg != NULL) {
             list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
         }
@@ -587,7 +587,7 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     return insts;
 }
 
-uint8_t amd64_type_sizeof(type_category type) {
+uint8_t amd64_type_sizeof(type_system type) {
     switch (type) {
         case TYPE_BOOL:
             return DWORD;

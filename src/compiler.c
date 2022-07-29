@@ -76,8 +76,9 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
                 error_exit("[compiler_closure] expr_target type not var, cannot use by env set");
             }
 
-            // TODO 提取变量的地址? 使用 operand 还是新增 lea 指令
-
+            // 1 表示指针深度为 1
+            lir_operand *env_point_target = lir_new_temp_var_operand(parent, ast_new_point_type(item_expr.ast_type, 1));
+            list_push(parent_list, lir_op_new(LIR_OP_TYPE_LEA, expr_target, NULL, env_point_target));
 
             lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
             lir_op *call_op = lir_op_runtime_call(
@@ -252,7 +253,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
         return compiler_ident(c, (ast_ident *) expr.expr, target);
     }
 
-    lir_operand *temp = lir_new_temp_var_operand(c, expr.data_type);
+    lir_operand *temp = lir_new_temp_var_operand(c, expr.ast_type);
     target->type = temp->type;
     target->value = temp->value;
 
@@ -500,7 +501,7 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
     // 类型，容量 runtime.make_list(capacity, size)
     lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                               (int) type_sizeof(ast->type.category));
+                                                               (int) type_sizeof(ast->type.type));
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_LIST_NEW,
             base_target,
@@ -547,15 +548,18 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, c->env_name);
     lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
 
+    // target 通常就是一个 temp_var
+    lir_operand *env_point_target = lir_new_temp_var_operand(c, ast_new_point_type(expr.ast_type, 1));
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_GET_ENV,
-            target, // TODO 响应一个什么东西给到 target? 内存地址？内存地址又怎么还原呢？
+            env_point_target,
             2,
             env_name_param,
             env_index_param
     );
 
     list_push(operates, call_op);
+    list_push(operates, lir_op_new(LIR_OP_TYPE_IA, env_point_target, NULL, target));
 
     return operates;
 }
@@ -611,7 +615,7 @@ list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(
             TYPE_INT,
             int_value,
-            (int) type_sizeof(ast->key_type.category) + (int) type_sizeof(ast->value_type.category));
+            (int) type_sizeof(ast->key_type.type) + (int) type_sizeof(ast->value_type.type));
 
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_MAP_NEW,
@@ -895,7 +899,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
         } else {
             lir_operand_symbol *symbol = NEW(lir_operand_symbol);
             symbol->ident = ident->literal;
-            symbol->type = var->type.category;
+            symbol->type = var->type.type;
             target->type = LIR_OPERAND_TYPE_SYMBOL;
             target->value = symbol;
         }
@@ -928,7 +932,7 @@ list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
 
         lir_operand *param_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
         lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                                 ast_param_expr.data_type.category);
+                                                                 ast_param_expr.ast_type.type);
 
         lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_param_target);
         // 包裹 type

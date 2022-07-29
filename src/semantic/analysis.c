@@ -144,16 +144,16 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     analysis_expr(&stmt->expr);
 }
 
-ast_type analysis_function_to_type(ast_new_fn *function_decl) {
+ast_type_t analysis_function_to_type(ast_new_fn *function_decl) {
     ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
     function_type_decl->return_type = function_decl->return_type;
     for (int i = 0; i < function_decl->formal_param_count; ++i) {
         function_type_decl->formal_params[i] = function_decl->formal_params[i];
     }
     function_type_decl->formal_param_count = function_decl->formal_param_count;
-    ast_type type = {
+    ast_type_t type = {
             .is_origin = false,
-            .category = TYPE_FN,
+            .type = TYPE_FN,
             .value = function_type_decl
     };
     return type;
@@ -229,17 +229,18 @@ ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_loc
         analysis_free_ident free_var = analysis_current->frees[i];
         ast_expr *expr = &closure->env[i];
 
-        // 逃逸变量就在当前环境中
+        // 逃逸变量就在当前作用域中
         if (free_var.is_local) {
             // ast_ident 表达式
             expr->type = AST_EXPR_IDENT;
-            expr->expr = ast_new_ident(analysis_current->parent->current_scope->idents[free_var.index]->unique_ident);
+            expr->expr = ast_new_ident(free_var.ident);
         } else {
             // ast_env_index 表达式
             expr->type = AST_EXPR_ACCESS_ENV;
             ast_access_env *access_env = malloc(sizeof(ast_access_env));
             access_env->env = ast_new_ident(analysis_current->parent->env_unique_name);
             access_env->index = free_var.index;
+            access_env->unique_ident = free_var.ident;
             expr->expr = access_env;
         }
     }
@@ -423,14 +424,14 @@ int8_t analysis_resolve_free(analysis_function *current, string*ident) {
         if (strcmp(*ident, local->ident) == 0) {
             scope->idents[i]->is_capture = true; // 被下级作用域引用
             *ident = local->unique_ident;
-            return (int8_t) analysis_push_free(current, true, (int8_t) i);
+            return (int8_t) analysis_push_free(current, true, (int8_t) i, *ident);
         }
     }
 
     // 继续向上递归查询
     int8_t parent_free_index = analysis_resolve_free(current->parent, ident);
     if (parent_free_index != -1) {
-        return (int8_t) analysis_push_free(current, false, parent_free_index);
+        return (int8_t) analysis_push_free(current, false, parent_free_index, *ident);
     }
 
     return -1;
@@ -440,12 +441,12 @@ int8_t analysis_resolve_free(analysis_function *current, string*ident) {
  * 类型的处理较为简单，不需要做将其引用的环境封闭。直接定位唯一名称即可
  * @param type
  */
-void analysis_type(ast_type *type) {
+void analysis_type(ast_type_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // TODO 如果出现死循环，应该告警退出
     // type foo = int
     // 'foo' is type_decl_ident
-    if (type->category == TYPE_DECL_IDENT) {
+    if (type->type == TYPE_DECL_IDENT) {
         // 向上查查查
         ast_ident *ident = type->value;
         string unique_name = analysis_resolve_type(analysis_current, ident->literal);
@@ -453,20 +454,20 @@ void analysis_type(ast_type *type) {
         return;
     }
 
-    if (type->category == TYPE_MAP) {
+    if (type->type == TYPE_MAP) {
         ast_map_decl *map_decl = type->value;
         analysis_type(&map_decl->key_type);
         analysis_type(&map_decl->value_type);
         return;
     }
 
-    if (type->category == TYPE_LIST) {
+    if (type->type == TYPE_LIST) {
         ast_list_decl *map_decl = type->value;
         analysis_type(&map_decl->type);
         return;
     }
 
-    if (type->category == TYPE_FN) {
+    if (type->type == TYPE_FN) {
         ast_function_type_decl *function_type_decl = type->value;
         analysis_type(&function_type_decl->return_type);
         for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
@@ -475,7 +476,7 @@ void analysis_type(ast_type *type) {
         }
     }
 
-    if (type->category == TYPE_STRUCT) {
+    if (type->type == TYPE_STRUCT) {
         ast_struct_decl *struct_decl = type->value;
         for (int i = 0; i < struct_decl->count; ++i) {
             ast_struct_property item = struct_decl->list[i];
@@ -585,10 +586,11 @@ char *analysis_resolve_type(analysis_function *current, string ident) {
     return analysis_resolve_type(current->parent, ident);
 }
 
-uint8_t analysis_push_free(analysis_function *current, bool is_local, int8_t index) {
+uint8_t analysis_push_free(analysis_function *current, bool is_local, int8_t index, string ident) {
     analysis_free_ident free = {
             .is_local = is_local,
-            .index = index
+            .index = index,
+            .ident = ident,
     };
     uint8_t free_index = current->free_count++;
     current->frees[free_index] = free;

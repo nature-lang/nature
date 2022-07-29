@@ -62,9 +62,9 @@ ast_expr parser_access(ast_expr left);
 
 ast_expr parser_binary(ast_expr left);
 
-ast_expr parser_function_decl_expr(ast_type type);
+ast_expr parser_function_decl_expr(ast_type_t type);
 
-ast_expr parser_new_struct(ast_type type);
+ast_expr parser_new_struct(ast_type_t type);
 
 ast_expr parser_new_list();
 
@@ -97,7 +97,7 @@ ast_stmt parser_type_decl_stmt();
 
 ast_block_stmt parser_else_if();
 
-ast_new_fn *parser_function_decl(ast_type type);
+ast_new_fn *parser_function_decl(ast_type_t type);
 
 ast_var_decl *parser_var_decl();
 
@@ -107,7 +107,7 @@ void parser_formal_param(ast_new_fn *function_decl);
 
 void parser_type_function_formal_param(ast_function_type_decl *type_function);
 
-ast_type parser_type();
+ast_type_t parser_type();
 
 /**
  * foo = 12

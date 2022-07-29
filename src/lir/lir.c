@@ -34,7 +34,6 @@ lir_op *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...)
     return lir_op_new(LIR_OP_TYPE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
-
 lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
@@ -70,7 +69,7 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand *lir_new_temp_var_operand(closure *c, ast_type type) {
+lir_operand *lir_new_temp_var_operand(closure *c, ast_type_t type) {
     string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
 
     symbol_set_temp_ident(unique_ident, type);
@@ -212,18 +211,18 @@ lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
     var->reg_id = 0;
 
     // 1. 读取符号信息
-    lir_local_var *local = table_get(c->local_vars_table, ident);
+    lir_local_var_decl *local = table_get(c->local_vars_table, ident);
 //    if (local != NULL) {
-    var->local = local;
-    var->type = local->type.category;
+    var->decl = local;
+    var->infer_size_type = local->ast_type.type;
 //    }
 
     return var;
 }
 
-void lir_new_local_var(closure *c, char *ident, ast_type type) {
-    lir_local_var *local = NEW(lir_local_var);
-    local->type = type;
+void lir_new_local_var(closure *c, char *ident, ast_type_t type) {
+    lir_local_var_decl *local = NEW(lir_local_var_decl);
+    local->ast_type = type;
     local->stack_frame_offset = NEW(uint16_t);
     *local->stack_frame_offset = 0;
     local->ident = ident;
@@ -238,10 +237,10 @@ lir_operand *lir_new_empty_operand() {
     return operand;
 }
 
-type_category lir_type_category(lir_operand *operand) {
+type_system lir_type_category(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = operand->value;
-        return var->type;
+        return var->infer_size_type;
     }
 
     if (operand->type == LIR_OPERAND_TYPE_SYMBOL) {

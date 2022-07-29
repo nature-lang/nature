@@ -28,7 +28,7 @@ typedef enum {
     TYPE_MAP, // ast_map_decl
     TYPE_FN, // fn<int,void> ast_function_type_decl
     TYPE_POINT,
-} type_category;
+} type_system;
 
 string type_to_string[UINT8_MAX];
 

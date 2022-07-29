@@ -62,7 +62,7 @@ void builtin_println(int arg_count, ...) {
     write(STDOUT_FILENO, "\n", 1);
 }
 
-builtin_operand_t *builtin_new_operand(type_category type, void *value) {
+builtin_operand_t *builtin_new_operand(type_system type, void *value) {
     builtin_operand_t *operand = malloc(sizeof(builtin_operand_t));
     operand->type = type;
     operand->point_value = value;
