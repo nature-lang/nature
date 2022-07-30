@@ -16,6 +16,8 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_BAL] = amd64_lower_bal,
         [LIR_OP_TYPE_SGT] = amd64_lower_sgt,
         [LIR_OP_TYPE_MOVE] = amd64_lower_mov,
+        [LIR_OP_TYPE_LEA] = amd64_lower_lea,
+        [LIR_OP_TYPE_LIA] = amd64_lower_lia,
         [LIR_OP_TYPE_FN_BEGIN] = amd64_lower_fn_begin,
         [LIR_OP_TYPE_FN_END] = amd64_lower_fn_end,
 };
@@ -431,6 +433,24 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         error_exit("[amd64_lir_to_asm_operand]  var cannot reg_id or stack_frame_offset");
     }
 
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *v = operand->value;
+        // 解引用处理
+        if (v->indirect_addr) {
+            // 非指针则不允许走到这里
+            if (v->decl->ast_type.point == 0) {
+                error_exit("[amd64_lir_to_asm_operand]  indirect addr var %s must be point", v->ident);
+            }
+
+            reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
+            asm_operand_t *var_operand = amd64_lower_to_asm_operand(operand, 0);
+            list_push(insts, ASM_INST("mov", { REG(reg), var_operand }));
+            // 解引用
+            ASM_OPERAND_COPY(asm_operand, INDIRECT_REG(reg));
+            return insts;
+        }
+    }
+
     // 按简单参数处理
     asm_operand_t *temp = amd64_lower_to_asm_operand(operand, 0);
     ASM_OPERAND_COPY(asm_operand, temp);
@@ -599,3 +619,78 @@ uint8_t amd64_type_sizeof(type_system type) {
     }
 }
 
+list *amd64_lower_lea(closure *c, lir_op *op) {
+    if (op->first->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] first operand type not LIR_OPERAND_TYPE_VAR");
+    }
+    if (op->result->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] result operand type not LIR_OPERAND_TYPE_VAR");
+    }
+
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0); // imm uint8
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0); // 标签跳转
+
+    list *insts = list_new();
+    regs_t used_regs = {.count = 0};
+    reg_t *reg = amd64_lower_next_reg(&used_regs, result->size);
+    list_push(insts, ASM_INST("lea", { REG(reg), first }));
+    list_push(insts, ASM_INST("mov", { result, REG(reg) }));
+    return insts;
+}
+
+/**
+ * lia [rax] -> rdx
+ * @param c
+ * @param op
+ * @return
+ */
+list *amd64_lower_lia(closure *c, lir_op *op) {
+    if (op->first->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] first operand type not LIR_OPERAND_TYPE_VAR");
+    }
+    if (op->result->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] result operand type not LIR_OPERAND_TYPE_VAR");
+    }
+
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0); // imm uint8
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0); // 标签跳转
+    list *insts = list_new();
+    regs_t used_regs = {.count = 0};
+    reg_t *addr_reg = amd64_lower_next_reg(&used_regs, first->size);
+    reg_t *temp_reg = amd64_lower_next_reg(&used_regs, result->size);
+
+    list_push(insts, ASM_INST("mov", { REG(addr_reg), first }));
+
+    list_push(insts, ASM_INST("mov", { REG(temp_reg), INDIRECT_REG(addr_reg) }));
+    // 指针解引用的方式移动给目标
+    list_push(insts, ASM_INST("mov", { result, REG(temp_reg) }));
+    return insts;
+}
+
+/**
+ * lia rdx -> [rax]
+ * @param c
+ * @param op
+ * @return
+ */
+list *amd64_lower_sia(closure *c, lir_op *op) {
+    if (op->first->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] first operand type not LIR_OPERAND_TYPE_VAR");
+    }
+    if (op->result->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[amd64_lower_lead] result operand type not LIR_OPERAND_TYPE_VAR");
+    }
+
+    asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0); // imm uint8
+    asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0); // 标签跳转
+    list *insts = list_new();
+    regs_t used_regs = {.count = 0};
+    reg_t *addr_reg = amd64_lower_next_reg(&used_regs, result->size);
+    reg_t *temp_reg = amd64_lower_next_reg(&used_regs, first->size);
+
+    list_push(insts, ASM_INST("mov", { REG(temp_reg), first }));
+    list_push(insts, ASM_INST("mov", { REG(addr_reg), result }));
+    list_push(insts, ASM_INST("mov", { INDIRECT_REG(addr_reg), REG(temp_reg) }));
+
+    return insts;
+}

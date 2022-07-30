@@ -112,6 +112,7 @@ string lir_op_type_to_debug[] = {
         [LIR_OP_TYPE_NOT]="NOT  ",
         [LIR_OP_TYPE_NEG]="NEG   ",
         [LIR_OP_TYPE_LEA]="LEA   ",
+        [LIR_OP_TYPE_SIA]="SIA  ",
         [LIR_OP_TYPE_PHI]="PHI  ",
         [LIR_OP_TYPE_MOVE]="MOVE ",
         [LIR_OP_TYPE_BEQ]="CMP_GO",

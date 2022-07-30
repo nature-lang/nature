@@ -1,6 +1,14 @@
-int a = 1
-int b = 3
-int sum() {
-    return a + b
+int cash = 1000
+int save(int number) {
+    cash = cash + number
 }
-sum()
+
+println("init, cash=", cash)
+
+save(10)
+
+println("saved 10, cash=", cash)
+
+save(20)
+
+println("saved 20, cash=", cash)

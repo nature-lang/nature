@@ -297,7 +297,7 @@ ast_expr parser_unary() {
     if (operator_token->type == TOKEN_NOT) {
         unary_expr->operator = AST_EXPR_OPERATOR_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {
-        unary_expr->operator = AST_EXPR_OPERATOR_MINUS;
+        unary_expr->operator = AST_EXPR_OPERATOR_NEG;
     } else {
         error_exit("unknown operator type");
     }

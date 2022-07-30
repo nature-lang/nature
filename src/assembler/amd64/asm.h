@@ -84,13 +84,13 @@
 })
 
 #define INDIRECT_REG(_reg) ({ \
-     asm_operand_t *operand = NEW(asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
+     asm_operand_t *_operand = NEW(asm_operand_t); \
+     _operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
      asm_operand_indirect_register_t *_indirect = NEW(asm_operand_indirect_register_t); \
-     _indirect->reg = _reg;    \
-     operand->size = _reg->size;\
-     operand->value = _indirect;    \
-     operand;\
+     _indirect->reg = (asm_operand_register_t*)_reg;    \
+     _operand->size = _reg->size;\
+     _operand->value = _indirect;    \
+     _operand;\
 })
 
 #define SIB_REG(_base, _index, _scale) ({ \

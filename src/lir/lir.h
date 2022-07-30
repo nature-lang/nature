@@ -77,6 +77,7 @@
   _var->reg_id = (_original)->reg_id; \
   _var->decl = (_original)->decl; \
   _var->infer_size_type = (_original)->infer_size_type; \
+  _var->indirect_addr = (_original)->indirect_addr; \
   _var;                                   \
 })
 
@@ -119,7 +120,8 @@ typedef enum {
     LIR_OP_TYPE_NEG, // -取负数
 
     LIR_OP_TYPE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
-    LIR_OP_TYPE_IA, // 解地址引用  indirect addr
+    LIR_OP_TYPE_LIA, // load indirect addr to reg ，将内存中的数据加载到寄存器中
+    LIR_OP_TYPE_SIA, // store reg to indirect addr，将寄存器中的数据存入内存
 
     LIR_OP_TYPE_PHI,
     LIR_OP_TYPE_MOVE,
@@ -160,6 +162,7 @@ typedef struct {
     uint8_t reg_id; // reg list index, 寄存器分配
     lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
     type_system infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
+    bool indirect_addr;
 } lir_operand_var;
 
 typedef struct {

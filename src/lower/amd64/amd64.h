@@ -61,6 +61,12 @@ list *amd64_lower_sgt(closure *c, lir_op *op);
 
 list *amd64_lower_mov(closure *c, lir_op *op);
 
+list *amd64_lower_lea(closure *c, lir_op *op);
+
+list *amd64_lower_lia(closure *c, lir_op *op);
+
+list *amd64_lower_sia(closure *c, lir_op *op);
+
 /**
  * lir 中的简单操作数转换成 asm 中的操作数
  * @param operand

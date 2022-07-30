@@ -63,7 +63,8 @@ typedef enum {
     AST_EXPR_OPERATOR_NOT_EQ, // !=
 
     AST_EXPR_OPERATOR_NOT, // unary !expr
-    AST_EXPR_OPERATOR_MINUS, // unary -expr
+    AST_EXPR_OPERATOR_NEG, // unary -expr
+    AST_EXPR_OPERATOR_IA, // *解引用
 } ast_expr_operator;
 
 string ast_expr_operator_to_string[100];
@@ -109,7 +110,7 @@ typedef struct {
 
 // 一元表达式
 typedef struct {
-    ast_expr_operator operator; // 取反，取绝对值
+    ast_expr_operator operator; // 取反，取绝对值, 解引用等
     ast_expr operand; // 操作对象
 } ast_unary_expr;
 

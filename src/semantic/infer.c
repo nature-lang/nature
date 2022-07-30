@@ -213,7 +213,7 @@ ast_type_t infer_unary(ast_unary_expr *expr) {
         error_exit("!expr, expr must be bool type");
     }
 
-    if ((expr->operator == AST_EXPR_OPERATOR_MINUS) && operand_type.type != TYPE_INT
+    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.type != TYPE_INT
         && operand_type.type != TYPE_FLOAT) {
         error_exit("!expr, expr must be int or float");
     }

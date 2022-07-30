@@ -14,7 +14,7 @@ string ast_expr_operator_to_string[100] = {
         [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
 
         [AST_EXPR_OPERATOR_NOT] = "!", // unary !expr
-        [AST_EXPR_OPERATOR_MINUS] = "-", // unary -expr
+        [AST_EXPR_OPERATOR_NEG] = "-", // unary -expr
 };
 
 ast_block_stmt ast_new_block_stmt() {

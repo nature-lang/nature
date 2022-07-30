@@ -74,7 +74,12 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
     for (int i = 0; i < var->decl->ast_type.point; ++i) {
         type_string = str_connect(type_string, "*");
     }
-    len = sprintf(buf, "VAR[%s|%s]", var->ident, type_string);
+
+    string ident = var->ident;
+    if (var->indirect_addr) {
+        ident = str_connect("*", ident);
+    }
+    len = sprintf(buf, "VAR[%s|%s]", ident, type_string);
 
     realloc(buf, len);
     return buf;

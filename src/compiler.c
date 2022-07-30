@@ -20,7 +20,7 @@ lir_op_type ast_expr_operator_to_lir_op[] = {
         [AST_EXPR_OPERATOR_NOT_EQ] = LIR_OP_TYPE_SNE,
 
         [AST_EXPR_OPERATOR_NOT] = LIR_OP_TYPE_NOT,
-        [AST_EXPR_OPERATOR_MINUS] = LIR_OP_TYPE_NEG,
+        [AST_EXPR_OPERATOR_NEG] = LIR_OP_TYPE_NEG,
 };
 
 int compiler_line = 0;
@@ -87,7 +87,7 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
                     3,
                     env_name_param,
                     env_index_param,
-                    expr_target
+                    env_point_target
             );
             list_push(parent_list, call_op);
         }
@@ -331,12 +331,23 @@ list *compiler_unary(closure *c, ast_expr expr, lir_operand *result_target) {
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator == AST_EXPR_OPERATOR_MINUS && first->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *imm = first->value;
         imm->int_value = -imm->int_value;
         // move 操作即可
         list_push(operates, lir_op_move(result_target, first));
         return operates;
+    }
+
+    if (unary_expr->operator == AST_EXPR_OPERATOR_IA) {
+        // 如果 first 都不是指针，那就不给解引用直接报错，只有变量才能是指针类型
+        if (first->type != LIR_OPERAND_TYPE_VAR) {
+            error_exit("[compiler_unary] operator IA, but operand not var");
+        }
+
+        // 添加引用标识(var 维度，而不是变量维度,而不是 local_var_decl 维度)
+        lir_operand_var *var = first->value;
+        var->indirect_addr = true;
     }
 
     lir_op_type type = ast_expr_operator_to_lir_op[unary_expr->operator];
@@ -544,6 +555,10 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
  */
 list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     ast_access_env *ast = expr.expr;
+    if (target->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[compiler_access_env] ");
+    }
+
     list *operates = list_new();
     lir_operand *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, c->env_name);
     lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
@@ -558,9 +573,14 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
             env_index_param
     );
 
-    list_push(operates, call_op);
-    list_push(operates, lir_op_new(LIR_OP_TYPE_IA, env_point_target, NULL, target));
+    // 合理怀疑 target 为 empty var, 现在将返回值移动给他，并为其添加解引用标识，再继续观察解引用标识能否传递
+    lir_operand_var *var = target->value;
+    var->decl->ast_type.point = 1;
 
+    list_push(operates, call_op);
+    list_push(operates, lir_op_new(LIR_OP_TYPE_MOVE, env_point_target, NULL, target));
+
+    var->indirect_addr = true; // 添加解引用标识，推断后续的操作肯定需要这个标识
     return operates;
 }
 
