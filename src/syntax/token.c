@@ -54,7 +54,7 @@ string token_type_to_string[] = {
         [TOKEN_FLOAT] = "float",
         [TOKEN_INT] = "int",
 
-        [TOKEN_LIST] = "list",
+        [TOKEN_ARRAY] = "list",
         [TOKEN_MAP] = "map",
         [TOKEN_FUNCTION] = "fn",
         [TOKEN_VOID] = "void",

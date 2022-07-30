@@ -329,7 +329,7 @@ void analysis_expr(ast_expr *expr) {
             analysis_new_map((ast_new_map *) expr->expr);
             break;
         }
-        case AST_EXPR_NEW_LIST: {
+        case AST_EXPR_NEW_ARRAY: {
             analysis_new_list((ast_new_list *) expr->expr);
             break;
         }
@@ -461,9 +461,9 @@ void analysis_type(ast_type_t *type) {
         return;
     }
 
-    if (type->type == TYPE_LIST) {
-        ast_list_decl *map_decl = type->value;
-        analysis_type(&map_decl->type);
+    if (type->type == TYPE_ARRAY) {
+        ast_array_decl *map_decl = type->value;
+        analysis_type(&map_decl->ast_type);
         return;
     }
 

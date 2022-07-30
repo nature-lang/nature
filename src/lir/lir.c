@@ -237,7 +237,7 @@ lir_operand *lir_new_empty_operand() {
     return operand;
 }
 
-type_system lir_type_category(lir_operand *operand) {
+type_system lir_operand_type_system(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = operand->value;
         return var->infer_size_type;
@@ -251,8 +251,11 @@ type_system lir_type_category(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
         lir_operand_immediate *imm = operand->value;
         return imm->type;
-
     }
 
-    return TYPE_NULL;
+    return TYPE_UNKNOWN;
+}
+
+uint8_t lir_operand_sizeof(lir_operand *operand) {
+    return type_sizeof(lir_operand_type_system(operand));
 }

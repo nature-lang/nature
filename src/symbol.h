@@ -35,14 +35,6 @@ void symbol_set_temp_ident(string unique_ident, ast_type_t type);
 
 size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
-/**
- * 单位 byte
- * 字符串类型，list 类型， map 类型,都按照指针来计算大小
- * @param type
- * @return
- */
-size_t type_sizeof(type_system t);
-
 void symbol_ident_table_init();
 
 bool is_print_symbol(char *ident);

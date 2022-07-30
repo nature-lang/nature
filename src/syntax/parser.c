@@ -73,7 +73,7 @@ parser_rule rules[] = {
         [TOKEN_STRING] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_FUNCTION] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_MAP] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
-        [TOKEN_LIST] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_ARRAY] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
         // type decl 不会出现在表达式这里
         [TOKEN_STRUCT] = {parser_struct_type_expr, NULL, PRECEDENCE_NULL},
 
@@ -544,22 +544,31 @@ ast_type_t parser_type() {
         return result;
     }
 
-    if (parser_consume(TOKEN_LIST)) {
-        ast_list_decl *type_list_decl = malloc(sizeof(ast_list_decl));
-        parser_must(TOKEN_LEFT_SQUARE);
+    if (parser_consume(TOKEN_LEFT_SQUARE)) {
+        ast_array_decl *type_array_decl = malloc(sizeof(ast_array_decl));
+//        parser_must(TOKEN_LEFT_SQUARE);
 
-        type_list_decl->type = parser_type();
+        type_array_decl->ast_type = parser_type();
+
+        if (parser_consume(TOKEN_COMMA)) {
+            token *token = parser_advance();
+            if (token->type != TOKEN_LITERAL_INT) {
+                error_exit("[parser_type] array count literal parser err, not int token, actual %d", token->type);
+            }
+            int count = atoi(token->literal);
+            type_array_decl->count = count;
+        }
 
         parser_must(TOKEN_RIGHT_SQUARE);
 
-        result.type = TYPE_LIST;
-        result.value = type_list_decl;
+        result.type = TYPE_ARRAY;
+        result.value = type_array_decl;
         return result;
     }
 
-    if (parser_consume(TOKEN_MAP)) {
+    if (parser_consume(TOKEN_LEFT_CURLY)) {
         ast_map_decl *type_map_decl = malloc(sizeof(ast_map_decl));
-        parser_must(TOKEN_LEFT_CURLY);
+//        parser_must(TOKEN_LEFT_CURLY);
         type_map_decl->key_type = parser_type();
         parser_must(TOKEN_COLON);
         type_map_decl->value_type = parser_type();
@@ -879,10 +888,15 @@ bool parser_is_direct_type() {
         return true;
     }
 
+    // 复合类型前缀 [int] a; {int:int} b;
+    if (parser_is(TOKEN_LEFT_SQUARE) || parser_is(TOKEN_LEFT_CURLY)) {
+        return true;
+    }
+
     if (parser_is(TOKEN_FUNCTION)
         || parser_is(TOKEN_STRUCT)
         || parser_is(TOKEN_MAP)
-        || parser_is(TOKEN_LIST)) {
+        || parser_is(TOKEN_ARRAY)) {
         return true;
     }
 
@@ -975,7 +989,6 @@ ast_expr parser_new_list() {
     ast_expr result = parser_new_expr();
     ast_new_list *expr = malloc(sizeof(ast_new_list));
     expr->count = 0;
-    expr->capacity = 0;
     parser_must(TOKEN_LEFT_SQUARE);
 
     if (!parser_is(TOKEN_RIGHT_SQUARE)) {
@@ -985,9 +998,8 @@ ast_expr parser_new_list() {
         }
     }
     parser_must(TOKEN_RIGHT_SQUARE);
-    expr->capacity = expr->count;
 
-    result.type = AST_EXPR_NEW_LIST;
+    result.type = AST_EXPR_NEW_ARRAY;
     result.expr = expr;
 
     return result;

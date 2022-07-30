@@ -90,7 +90,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
                                          asm_operand_t *asm_operand,
                                          regs_t *used_regs);
 
-uint8_t amd64_type_sizeof(type_system type);
+uint8_t amd64_min_size(uint8_t size);
 
 
 #endif //NATURE_SRC_LIR_LOWER_AMD64_H_

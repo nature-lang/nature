@@ -50,7 +50,7 @@ ast_type_t infer_ident(string unique_ident);
 
 ast_type_t infer_literal(ast_literal *literal);
 
-ast_type_t infer_new_list(ast_new_list *new_list);
+ast_type_t infer_new_array(ast_new_list *new_list);
 
 ast_type_t infer_new_map(ast_new_map *new_map);
 

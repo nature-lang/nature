@@ -293,7 +293,17 @@ token_type scanner_ident_type(char *word, int length) {
             if (length == 2 && word[1] == 's') {
                 return TOKEN_AS;
             }
-            return scanner_rest_ident_type(word, length, 1, 2, "ny", TOKEN_ANY);
+            if (length > 1) {
+                switch (word[1]) {
+                    case 'n': {
+                        return scanner_rest_ident_type(word, length, 1, 2, "ny", TOKEN_ANY);
+                    }
+                    case 'r': {
+                        return scanner_rest_ident_type(word, length, 1, 3, "ray", TOKEN_ANY);
+                    }
+                }
+            }
+
         }
         case 'b':
             return scanner_rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
@@ -332,8 +342,8 @@ token_type scanner_ident_type(char *word, int length) {
                 }
             }
         }
-        case 'l':
-            return scanner_rest_ident_type(word, length, 1, 3, "ist", TOKEN_LIST);
+//        case 'l':
+//            return scanner_rest_ident_type(word, length, 1, 3, "ist", TOKEN_ARRAY);
         case 'm':
             return scanner_rest_ident_type(word, length, 1, 2, "ap", TOKEN_MAP);
         case 'n':

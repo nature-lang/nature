@@ -16,8 +16,8 @@
 #define END_IF_IDENT "end_if"
 #define ALTERNATE_IF_IDENT "alternate_if"
 
-#define RUNTIME_CALL_LIST_NEW "list_new"
-#define RUNTIME_CALL_LIST_VALUE "list_value"
+#define RUNTIME_CALL_ARRAY_NEW "array_new"
+#define RUNTIME_CALL_ARRAY_VALUE "array_value"
 
 #define RUNTIME_CALL_MAP_NEW "map_new"
 #define RUNTIME_CALL_MAP_VALUE "map_value"
@@ -162,6 +162,7 @@ typedef struct {
     uint8_t reg_id; // reg list index, 寄存器分配
     lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
     type_system infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
+    uint8_t size; // lir 阶段根据编译的目标平台就已经能确定操作树的大小了
     bool indirect_addr;
 } lir_operand_var;
 
@@ -226,15 +227,6 @@ typedef struct lir_op {
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
-
-    // result 类型
-    // TYPE_BOOL = 1, TYPE_FLOAT = 8, TYPE_INT = 8, ,
-    // TYPE_STRING/LIST/MAP/SET = 8
-    // CUSTOM_TYPE 如何处理？
-    type_system result_data_type;
-
-//    string struct_name;
-
     int id; // 编号
 } lir_op;
 
@@ -344,7 +336,9 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  */
 void lir_new_local_var(closure *c, string ident, ast_type_t type);
 
-type_system lir_type_category(lir_operand *operand);
+type_system lir_operand_type_system(lir_operand *operand);
+
+uint8_t lir_operand_sizeof(lir_operand *operand);
 
 lir_operand *lir_new_temp_var_operand(closure *c, ast_type_t type);
 

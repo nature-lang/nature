@@ -1,0 +1,7 @@
+[int] list = [] // 右侧数组的子类型未知，但是至少不是 any
+
+list[0] = 111 // 无法在编译时确定数组是否越界
+list[1] = 222
+list[2] = 333
+
+println(list[0], list[1], list[2])

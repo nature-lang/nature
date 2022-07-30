@@ -111,8 +111,8 @@ ast_type_t infer_expr(ast_expr *expr) {
             type = infer_ident(((ast_ident *) expr->expr)->literal);
             break;
         }
-        case AST_EXPR_NEW_LIST: {
-            type = infer_new_list((ast_new_list *) expr->expr);
+        case AST_EXPR_NEW_ARRAY: {
+            type = infer_new_array((ast_new_list *) expr->expr);
             break;
         }
         case AST_EXPR_NEW_MAP: {
@@ -256,28 +256,30 @@ ast_type_t infer_ident(string unique_ident) {
  * @param new_list
  * @return 
  */
-ast_type_t infer_new_list(ast_new_list *new_list) {
+ast_type_t infer_new_array(ast_new_list *new_list) {
     ast_type_t result = {
             .is_origin = true,
-            .type = TYPE_LIST,
+            .type = TYPE_ARRAY,
     };
-    ast_list_decl *list_decl = malloc(sizeof(ast_list_decl));
-    list_decl->type = ast_new_simple_type(TYPE_VAR);
+    ast_array_decl *decl = malloc(sizeof(ast_array_decl));
+    decl->ast_type = ast_new_simple_type(TYPE_UNKNOWN); // unknown 可以适配任何类型
+    decl->count = new_list->count;
 
     for (int i = 0; i < new_list->count; ++i) {
         ast_type_t item_type = infer_expr(&new_list->values[i]);
-        if (list_decl->type.type == TYPE_VAR) {
-            // 初始化赋值
-            list_decl->type = item_type;
+        if (decl->ast_type.type == TYPE_UNKNOWN) {
+            // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
+            decl->ast_type = item_type;
         } else {
-            if (!infer_compare_type(item_type, list_decl->type)) {
-                list_decl->type = ast_new_simple_type(TYPE_ANY);
+            if (!infer_compare_type(item_type, decl->ast_type)) {
+                // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
+                decl->ast_type = ast_new_simple_type(TYPE_ANY);
                 break;
             }
         }
     }
-
-    result.value = list_decl;
+    result.value = decl;
+    new_list->ast_type = result;
 
     return result;
 }
@@ -398,7 +400,7 @@ ast_type_t infer_access(ast_expr *expr) {
 
         // 返回值
         result = map_decl->value_type;
-    } else if (left_type.type == TYPE_LIST) {
+    } else if (left_type.type == TYPE_ARRAY) {
         if (key_type.type != TYPE_INT) {
             error_printf(infer_line,
                          "access list error, index expr type must by int, cannot '%s'",
@@ -406,16 +408,16 @@ ast_type_t infer_access(ast_expr *expr) {
         }
 
         ast_access_list *access_list = malloc(sizeof(ast_access_map));
-        ast_list_decl *list_decl = left_type.value;
+        ast_array_decl *list_decl = left_type.value;
 
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
-        access_list->type = list_decl->type;
+        access_list->type = list_decl->ast_type;
         expr->type = AST_EXPR_ACCESS_LIST;
         expr->expr = access_list;
 
-        result = list_decl->type;
+        result = list_decl->ast_type;
     } else {
         error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.type]);
         exit(0);
@@ -585,7 +587,7 @@ void infer_while(ast_while_stmt *stmt) {
 void infer_for_in(ast_for_in_stmt *stmt) {
     // 经过 infer_expr 的类型一定是已经被还原过的
     ast_type_t iterate_type = infer_expr(&stmt->iterate);
-    if (iterate_type.type != TYPE_MAP && iterate_type.type != TYPE_LIST) {
+    if (iterate_type.type != TYPE_MAP && iterate_type.type != TYPE_ARRAY) {
         error_printf(infer_line,
                      "for in iterate type must be map/list, actual:(%s)",
                      type_to_string[iterate_type.type]);
@@ -599,9 +601,9 @@ void infer_for_in(ast_for_in_stmt *stmt) {
         key_decl->type = map_decl->key_type;
         value_decl->type = map_decl->value_type;
     } else {
-        ast_list_decl *list_decl = iterate_type.value;
+        ast_array_decl *list_decl = iterate_type.value;
         key_decl->type = ast_new_simple_type(TYPE_INT);
-        value_decl->type = list_decl->type;
+        value_decl->type = list_decl->ast_type;
 
     }
 
@@ -675,12 +677,31 @@ bool infer_compare_type(ast_type_t left, ast_type_t right) {
         }
     }
 
-    if (left.type == TYPE_LIST) {
-        ast_list_decl *left_list_decl = left.value;
-        ast_list_decl *right_list_decl = right.value;
-        if (!infer_compare_type(left_list_decl->type, right_list_decl->type)) {
+    if (left.type == TYPE_ARRAY) {
+        ast_array_decl *left_list_decl = left.value;
+        ast_array_decl *right_list_decl = right.value;
+        if (right_list_decl->ast_type.type == TYPE_UNKNOWN) {
+            // 但是这样在 compiler_array 时将完全不知道将右值初始化多大空间的 capacity
+            // 但是其可以完全继承左值, 左值进入到该方法之前已经经过了类型推断，这里肯定不是 var 了
+            right_list_decl->ast_type = left_list_decl->ast_type;
+            right_list_decl->count = left_list_decl->count;
+            return true;
+        }
+        // 类型不相同
+        if (!infer_compare_type(left_list_decl->ast_type, right_list_decl->ast_type)) {
             return false;
         }
+
+        if (left_list_decl->count == 0) {
+            left_list_decl->count = right_list_decl->count;
+        }
+
+        if (left_list_decl->count < right_list_decl->count) {
+            return false;
+        }
+
+        right_list_decl->count = left_list_decl->count;
+        return true;
     }
 
     if (left.type == TYPE_FN) {
@@ -774,9 +795,9 @@ ast_type_t infer_type(ast_type_t type) {
         return type;
     }
 
-    if (type.type == TYPE_LIST) {
-        ast_list_decl *list_decl = type.value;
-        list_decl->type = infer_type(list_decl->type);
+    if (type.type == TYPE_ARRAY) {
+        ast_array_decl *list_decl = type.value;
+        list_decl->ast_type = infer_type(list_decl->ast_type);
         return type;
     }
 
@@ -858,9 +879,10 @@ bool infer_var_type_can_confirm(ast_type_t right) {
         return false;
     }
 
-    if (right.type == TYPE_LIST) {
-        ast_list_decl *list_decl = right.value;
-        if (list_decl->type.type == TYPE_VAR) {
+    // var a = []  这样就完全不知道是个啥。。。
+    if (right.type == TYPE_ARRAY) {
+        ast_array_decl *list_decl = right.value;
+        if (list_decl->ast_type.type == TYPE_UNKNOWN) {
             return false;
         }
     }

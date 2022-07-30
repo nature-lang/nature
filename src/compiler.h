@@ -31,7 +31,7 @@ list *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt);
 
 list *compiler_assign(closure *c, ast_assign_stmt *stmt);
 
-list *compiler_access_list(closure *c, ast_expr expr, lir_operand *refer_target);
+list *compiler_array_value(closure *c, ast_expr expr, lir_operand *target);
 
 list *compiler_stmt(closure *c, ast_stmt stmt);
 
@@ -43,7 +43,7 @@ list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix);
 
 list *compiler_return(closure *c, ast_return_stmt *ast);
 
-list *compiler_new_list(closure *c, ast_expr expr, lir_operand *target);
+list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target);
 
 list *compiler_access_map(closure *c, ast_expr expr, lir_operand *target);
 

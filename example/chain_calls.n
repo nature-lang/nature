@@ -1,4 +1,4 @@
-type queue = struct {
+ast_type queue = struct {
 	[string] list
 	int () len
 	void push(string) // void (string) push

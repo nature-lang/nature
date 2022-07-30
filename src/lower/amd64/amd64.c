@@ -54,7 +54,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     uint8_t used[2] = {0};
     // 1. 大返回值处理(使用 rdi 预处理)
-    if (op->result != NULL && lir_type_category(op->result) == TYPE_STRUCT) {
+    if (op->result != NULL && lir_operand_type_system(op->result) == TYPE_STRUCT) {
         reg_t *target_reg = amd64_lower_next_actual_reg_target(used, QWORD);
         list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
     }
@@ -70,7 +70,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         regs_t used_regs = {.count = 0};
         asm_operand_t *source = NEW(asm_operand_t);
         list *temp = amd64_lower_complex_to_asm_operand(operand, source, &used_regs);
-        uint8_t source_size = amd64_type_sizeof(lir_type_category(operand));
+        uint8_t source_size = lir_operand_sizeof(operand);
         reg_t *target_reg = amd64_lower_next_actual_reg_target(used, source_size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
@@ -101,7 +101,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     // 4. 响应处理(取出响应值传递给 result)
     if (op->result != NULL) {
-        if (lir_type_category(op->result) == TYPE_FLOAT) {
+        if (lir_operand_type_system(op->result) == TYPE_FLOAT) {
             list_push(insts, ASM_INST("mov", { result, REG(xmm0) }));
         } else {
             list_push(insts, ASM_INST("mov", { result, REG(rax) }));
@@ -128,7 +128,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
 
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
 
-    if (lir_type_category(op->result) == TYPE_STRUCT) {
+    if (lir_operand_type_system(op->result) == TYPE_STRUCT) {
         // 计算长度
         int rep_count = ceil((float) result->size / QWORD);
         asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset, QWORD);
@@ -139,7 +139,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
         list_push(insts, MOVSQ(0xF3));
 
         list_push(insts, ASM_INST("mov", { REG(rax), REG(rdi) }));
-    } else if (lir_type_category(op->result) == TYPE_FLOAT) {
+    } else if (lir_operand_type_system(op->result) == TYPE_FLOAT) {
         list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
     } else {
         list_push(insts, ASM_INST("mov", { REG(rax), result }));
@@ -181,7 +181,7 @@ list *amd64_lower_add(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->result)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, lir_operand_sizeof(op->result));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("add", { REG(reg), second }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
@@ -207,7 +207,7 @@ list *amd64_lower_sgt(closure *c, lir_op *op) {
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result, BYTE);
 
     // bool = int64 > int64
-    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->first)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, lir_operand_sizeof(op->first));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("cmp", { REG(reg), second }));
 
@@ -242,7 +242,7 @@ list *amd64_lower_label(closure *c, lir_op *op) {
 list *amd64_lower_mov(closure *c, lir_op *op) {
     list *insts = list_new();
 
-    if (lir_type_category(op->result) == TYPE_STRUCT) {
+    if (lir_operand_type_system(op->result) == TYPE_STRUCT) {
 //    regs_t used_regs = {.count = 0};
         // first => result
         // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
@@ -283,7 +283,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     temp = amd64_lower_complex_to_asm_operand(op->result, result, &used_regs);
     list_append(insts, temp);
 
-    reg_t *reg = amd64_lower_next_reg(&used_regs, amd64_type_sizeof(lir_type_category(op->result)));
+    reg_t *reg = amd64_lower_next_reg(&used_regs, lir_operand_sizeof(op->result));
     list_push(insts, ASM_INST("mov", { REG(reg), first }));
     list_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
@@ -294,14 +294,14 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_si
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (force_size == 0) {
-            force_size = amd64_type_sizeof(v->infer_size_type);
+            force_size = type_sizeof(v->infer_size_type);
         }
         if (v->decl->stack_frame_offset > 0) {
             return DISP_REG(rbp, -(*v->decl->stack_frame_offset), force_size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
-            asm_operand_register_t *reg = amd64_register_find(v->reg_id, amd64_type_sizeof(v->infer_size_type));
+            asm_operand_register_t *reg = amd64_register_find(v->reg_id, type_sizeof(v->infer_size_type));
             return REG(reg);
         }
 
@@ -412,7 +412,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         lir_operand_var *var = v->base->value;
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
-            asm_operand_register_t *reg = amd64_register_find(var->reg_id, amd64_type_sizeof(var->infer_size_type));
+            asm_operand_register_t *reg = amd64_register_find(var->reg_id, type_sizeof(var->infer_size_type));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
@@ -470,6 +470,8 @@ void amd64_lower_init() {
 }
 
 reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size) {
+    size = amd64_min_size(size);
+
     reg_t *r = (reg_t *) amd64_register_find(used->count, size);
     if (r == NULL) {
         error_exit("[amd64_register_find] result null, count: %d, size: %d", used->count, size);
@@ -491,6 +493,9 @@ reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size) {
  * @return
  */
 reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
+    // 参数部分不使用太小的寄存器
+    size = amd64_min_size(size);
+
     uint8_t used_index = 0; // 8bit ~ 64bit
     if (size > 8) {
         used_index = 1;
@@ -517,7 +522,10 @@ list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list_node *current = c->local_vars->front;
     while (current->value != NULL) {
         lir_local_var_decl *var = current->value;
-        c->stack_length += amd64_type_sizeof(var->ast_type.type);
+        // 栈需要对齐，所以最小值需要是 4
+        uint8_t size = type_sizeof(var->ast_type.type);
+        size = amd64_min_size(size);
+        c->stack_length += size;
         *var->stack_frame_offset = c->stack_length;
 
         current = current->next;
@@ -556,7 +564,7 @@ list *amd64_lower_fn_formal_params(closure *c) {
     for (int i = 0; i < c->formal_params.count; i++) {
         lir_operand_var *var = c->formal_params.list[i];
         asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), 0);
-        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, amd64_type_sizeof(var->infer_size_type));
+        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, type_sizeof(var->infer_size_type));
         if (source_reg != NULL) {
             list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
         }
@@ -605,18 +613,6 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     list_push(insts, ASM_INST("je", { result }));
 
     return insts;
-}
-
-uint8_t amd64_type_sizeof(type_system type) {
-    switch (type) {
-        case TYPE_BOOL:
-            return DWORD;
-        case TYPE_INT:
-        case TYPE_FLOAT:
-            return QWORD;
-        default:
-            return QWORD;
-    }
 }
 
 list *amd64_lower_lea(closure *c, lir_op *op) {
@@ -693,4 +689,11 @@ list *amd64_lower_sia(closure *c, lir_op *op) {
     list_push(insts, ASM_INST("mov", { INDIRECT_REG(addr_reg), REG(temp_reg) }));
 
     return insts;
+}
+
+uint8_t amd64_min_size(uint8_t size) {
+    if (size < 4) {
+        size = 4;
+    }
+    return size;
 }

@@ -268,10 +268,10 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
             return compiler_call(c, (ast_call *) expr.expr, target);
         }
         case AST_EXPR_ACCESS_LIST: {
-            return compiler_access_list(c, expr, target);
+            return compiler_array_value(c, expr, target);
         }
-        case AST_EXPR_NEW_LIST: {
-            return compiler_new_list(c, expr, target);
+        case AST_EXPR_NEW_ARRAY: {
+            return compiler_new_array(c, expr, target);
         }
         case AST_EXPR_ACCESS_MAP: {
             return compiler_access_map(c, expr, target);
@@ -456,9 +456,13 @@ list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
  *
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
-list *compiler_access_list(closure *c, ast_expr expr, lir_operand *target) {
-    lir_operand_var *operand_var = target->value;
-    symbol_set_temp_ident(operand_var->ident, TYPE_NEW_POINT());
+list *compiler_array_value(closure *c, ast_expr expr, lir_operand *target) {
+    if (target->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[compiler_access_env] target not var, actual %d", target->type);
+    }
+
+    lir_operand_var *var = target->value;
+    var->decl->ast_type.point = 1;
 
     ast_access_list *ast = expr.expr;
     // new tmp 是无类型的。
@@ -479,14 +483,16 @@ list *compiler_access_list(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand *index_target = lir_new_empty_operand();
     list_append(operates, compiler_expr(c, ast->index, index_target));
 
+    // 如果使用是没问题的，但是外部的值没法写入进去
     lir_op *call_op = lir_op_runtime_call(
-            RUNTIME_CALL_LIST_VALUE,
+            RUNTIME_CALL_ARRAY_VALUE,
             target,
             2,
             base_target,
             index_target
     );
 
+    var->indirect_addr = 1;
     list_push(operates, call_op);
 
     return operates;
@@ -505,19 +511,21 @@ list *compiler_access_list(closure *c, ast_expr expr, lir_operand *target) {
  * @param target
  * @return
  */
-list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
+list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
     ast_new_list *ast = expr.expr;
     list *operates = list_new();
 
     // 类型，容量 runtime.make_list(capacity, size)
-    lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
+    ast_array_decl *array_decl = ast->ast_type.value;
+    lir_operand *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, array_decl->count);
+
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                               (int) type_sizeof(ast->type.type));
+                                                               (int) type_sizeof(ast->ast_type.type));
     lir_op *call_op = lir_op_runtime_call(
-            RUNTIME_CALL_LIST_NEW,
+            RUNTIME_CALL_ARRAY_NEW,
             base_target,
             2,
-            capacity_operand,
+            count_operand,
             item_size_operand
     );
 
@@ -532,7 +540,7 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
         lir_operand *refer_target = lir_new_empty_operand();
         lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
         call_op = lir_op_runtime_call(
-                RUNTIME_CALL_LIST_VALUE,
+                RUNTIME_CALL_ARRAY_VALUE,
                 refer_target,
                 2,
                 base_target,
@@ -556,7 +564,7 @@ list *compiler_new_list(closure *c, ast_expr expr, lir_operand *base_target) {
 list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     ast_access_env *ast = expr.expr;
     if (target->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[compiler_access_env] ");
+        error_exit("[compiler_access_env] target not var, actual %d", target->type);
     }
 
     list *operates = list_new();

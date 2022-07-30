@@ -3,7 +3,7 @@ bool ag = true
 if (ag) {
 	var a = 12
 	if (a > 2) {
-		type name = int
+		ast_type name = int
 		name a = 33
 	}
 } else if (a > 2) {
@@ -25,7 +25,7 @@ list[map{string:int}] f = [{"age": 24}]
 
 f[0]["age"] = 25
 
-type sex = bool
+ast_type sex = bool
 
 sex g = true
 

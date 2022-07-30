@@ -42,19 +42,6 @@ bool is_print_symbol(char *ident) {
     return false;
 }
 
-size_t type_sizeof(type_system t) {
-    switch (t) {
-        case TYPE_BOOL:
-            return BOOL_SIZE_BYTE;
-        case TYPE_INT:
-            return INT_SIZE_BYTE;
-        case TYPE_FLOAT:
-            return FLOAT_SIZE_BYTE;
-        default:
-            return POINT_SIZE_BYTE;
-    }
-}
-
 /**
  * 默认 struct_decl 已经排序过了
  * @param struct_decl

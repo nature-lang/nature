@@ -26,7 +26,7 @@ typedef enum {
     AST_EXPR_ACCESS_LIST,
 
     AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
-    AST_EXPR_NEW_LIST, // [1, 2, 3]
+    AST_EXPR_NEW_ARRAY, // [1, 2, 3]
     AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
     AST_EXPR_NEW_STRUCT, // person {a = 1; b = 2}
 
@@ -243,14 +243,14 @@ typedef struct {
 typedef struct {
     ast_expr values[UINT8_MAX]; // TODO dynamic
     uint64_t count; // count
-    uint64_t capacity; // 初始容量
-    ast_type_t type; // list的类型 (类型推导截断冗余)
+    ast_type_t ast_type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 
-// list[int]
+// [int,5]
 typedef struct {
-    ast_type_t type;
-} ast_list_decl;
+    ast_type_t ast_type;
+    uint64_t count; // 可选，初始化声明大小
+} ast_array_decl;
 
 // map{int:int}
 typedef struct {
