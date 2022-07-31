@@ -1,6 +1,6 @@
 // 方案 1
-//ast_type foo = bar
-//ast_type person = struct {
+//type foo = bar
+//type person = struct {
 //	int a,
 //	float b,
 //	bool c,
@@ -21,7 +21,7 @@
 
 
 // 方案 2, 暂时不实现赋默认值,但是最终肯定是要实现的
-ast_type person = struct {
+type person = struct {
 	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法，但是这里的初始化就和奇怪，甚至不知道应该发生在什么时候?
 	int b
 	int c

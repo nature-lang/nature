@@ -31,7 +31,7 @@ void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local)
 
 symbol_t *symbol_table_get(string ident);
 
-void symbol_set_temp_ident(string unique_ident, ast_type_t type);
+void symbol_set_temp_ident(string unique_ident, type_t type);
 
 size_t struct_offset(ast_struct_decl *struct_decl, string property);
 
@@ -41,6 +41,5 @@ bool is_print_symbol(char *ident);
 
 //extern
 bool is_debug_symbol(string ident);
-
 
 #endif //NATURE_SRC_AST_SYMBOL_H_

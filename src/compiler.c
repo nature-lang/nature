@@ -77,7 +77,7 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
             }
 
             // 1 表示指针深度为 1
-            lir_operand *env_point_target = lir_new_temp_var_operand(parent, ast_new_point_type(item_expr.ast_type, 1));
+            lir_operand *env_point_target = lir_new_temp_var_operand(parent, type_new_point(item_expr.type, 1));
             list_push(parent_list, lir_op_new(LIR_OP_TYPE_LEA, expr_target, NULL, env_point_target));
 
             lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
@@ -246,18 +246,18 @@ list *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
 list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     // target is empty
     // 简单类型表达式直接处理
-    if (expr.type == AST_EXPR_LITERAL) {
+    if (expr.assert_type == AST_EXPR_LITERAL) {
         return compiler_literal(c, (ast_literal *) expr.expr, target);
     }
-    if (expr.type == AST_EXPR_IDENT) {
+    if (expr.assert_type == AST_EXPR_IDENT) {
         return compiler_ident(c, (ast_ident *) expr.expr, target);
     }
 
-    lir_operand *temp = lir_new_temp_var_operand(c, expr.ast_type);
+    lir_operand *temp = lir_new_temp_var_operand(c, expr.type);
     target->type = temp->type;
     target->value = temp->value;
 
-    switch (expr.type) {
+    switch (expr.assert_type) {
         case AST_EXPR_BINARY: {
             return compiler_binary(c, expr, target);
         }
@@ -292,7 +292,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
             return compiler_closure(c, (ast_closure_decl *) expr.expr, target);
         }
         default: {
-            error_exit("[compiler_expr]unknown expr: %v", expr.type);
+            error_exit("[compiler_expr]unknown expr: %v", expr.assert_type);
             exit(0);
         }
     }
@@ -520,7 +520,7 @@ list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
     lir_operand *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, array_decl->count);
 
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                               (int) type_sizeof(ast->ast_type.type));
+                                                               (int) type_base_sizeof(ast->ast_type.base));
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_NEW,
             base_target,
@@ -533,11 +533,11 @@ list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
 
     // compiler_expr to access_list
     for (int i = 0; i < ast->count; ++i) {
-        ast_expr item = ast->values[i];
+        ast_expr item_expr = ast->values[i];
         lir_operand *value_target = lir_new_empty_operand();
-        list_append(operates, compiler_expr(c, item, value_target));
+        list_append(operates, compiler_expr(c, item_expr, value_target));
 
-        lir_operand *refer_target = lir_new_empty_operand();
+        lir_operand *refer_target = lir_new_temp_var_operand(c, type_new_point(item_expr.type, 1));
         lir_operand *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_ARRAY_VALUE,
@@ -547,7 +547,7 @@ list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
                 index_target
         );
         list_push(operates, call_op);
-        list_push(operates, lir_op_move(refer_target, value_target));
+        list_push(operates, lir_op_move(set_indirect_addr(refer_target), value_target));
     }
 
     return operates;
@@ -572,7 +572,7 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
 
     // target 通常就是一个 temp_var
-    lir_operand *env_point_target = lir_new_temp_var_operand(c, ast_new_point_type(expr.ast_type, 1));
+    lir_operand *env_point_target = lir_new_temp_var_operand(c, type_new_point(expr.type, 1));
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_GET_ENV,
             env_point_target,
@@ -604,7 +604,7 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
  */
 list *compiler_access_map(closure *c, ast_expr expr, lir_operand *target) {
     lir_operand_var *operand_var = target->value;
-    symbol_set_temp_ident(operand_var->ident, TYPE_NEW_POINT());
+    symbol_set_temp_ident(operand_var->ident, type_new_base(TYPE_POINT));
 
     ast_access_map *ast = expr.expr;
     // compiler base address left_target
@@ -643,7 +643,7 @@ list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
     lir_operand *item_size_operand = LIR_NEW_IMMEDIATE_OPERAND(
             TYPE_INT,
             int_value,
-            (int) type_sizeof(ast->key_type.type) + (int) type_sizeof(ast->value_type.type));
+            (int) type_base_sizeof(ast->key_type.base) + (int) type_base_sizeof(ast->value_type.base));
 
     lir_op *call_op = lir_op_runtime_call(
             RUNTIME_CALL_MAP_NEW,
@@ -664,7 +664,7 @@ list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
         list_append(operates, compiler_expr(c, key_expr, key_target));
         list_append(operates, compiler_expr(c, value_expr, value_target));
 
-        lir_operand *refer_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
+        lir_operand *refer_target = lir_new_temp_var_operand(c, type_new_base(TYPE_POINT));
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_MAP_VALUE,
                 refer_target,
@@ -698,7 +698,7 @@ list *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     lir_operand *base_target = lir_new_empty_operand();
     list *operates = compiler_expr(c, ast->iterate, base_target);
 
-    lir_operand *count_target = lir_new_temp_var_operand(c, TYPE_NEW_INT()); // ?? 这个值特么存在哪里，我现在不可知呀？
+    lir_operand *count_target = lir_new_temp_var_operand(c, type_new_base(TYPE_INT)); // ?? 这个值特么存在哪里，我现在不可知呀？
     list_push(operates, lir_op_runtime_call(
             RUNTIME_CALL_ITERATE_COUNT,
             count_target,
@@ -805,11 +805,13 @@ list *compiler_return(closure *c, ast_return_stmt *ast) {
 list *compiler_select_property(closure *c, ast_expr expr, lir_operand *target) {
     ast_select_property *ast = expr.expr;
     list *operates = list_new();
+
     // 计算基值
     lir_operand *base_target = lir_new_empty_operand();
     list_append(operates, compiler_expr(c, ast->left, base_target));
     size_t offset = struct_offset(ast->struct_decl, ast->property);
 
+    // TODO 如何正确的访问属性? lir_memory 是否应该重新涉及
     lir_operand *src = lir_new_memory_operand(base_target, offset, ast->struct_property->length);
 
     lir_op *move_op = lir_op_move(target, src);
@@ -863,7 +865,7 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
     list *operates = list_new();
     switch (literal->type) {
         case TYPE_STRING: {
-            lir_operand *temp = lir_new_temp_var_operand(c, ast_new_simple_type(TYPE_STRING));
+            lir_operand *temp = lir_new_temp_var_operand(c, type_new_base(TYPE_STRING));
             target->type = temp->type;
             target->value = temp->value;
 
@@ -927,7 +929,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
         } else {
             lir_operand_symbol *symbol = NEW(lir_operand_symbol);
             symbol->ident = ident->literal;
-            symbol->type = var->type.type;
+            symbol->type = var->type.base;
             target->type = LIR_OPERAND_TYPE_SYMBOL;
             target->value = symbol;
         }
@@ -958,9 +960,9 @@ list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
             imm->type = TYPE_INT64; // int 默认都使用了 mov asm uint 32 处理。但是这里确实需要 64 位处理。
         }
 
-        lir_operand *param_target = lir_new_temp_var_operand(c, TYPE_NEW_POINT());
+        lir_operand *param_target = lir_new_temp_var_operand(c, type_new_base(TYPE_POINT));
         lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                                 ast_param_expr.ast_type.type);
+                                                                 ast_param_expr.type.base);
 
         lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_param_target);
         // 包裹 type

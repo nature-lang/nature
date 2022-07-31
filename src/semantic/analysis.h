@@ -108,7 +108,7 @@ void analysis_unary(ast_unary_expr *expr);
 
 void analysis_ident(ast_expr *expr);
 
-void analysis_type(ast_type_t *type);
+void analysis_type(type_t *type);
 
 int8_t analysis_resolve_free(analysis_function *current, string*ident);
 
@@ -150,6 +150,6 @@ void analysis_begin_scope();
 
 void analysis_end_scope();
 
-ast_type_t analysis_function_to_type(ast_new_fn *function_decl);
+type_t analysis_function_to_type(ast_new_fn *function_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_

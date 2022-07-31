@@ -15,7 +15,7 @@ foo[bar] = 12
 foo.bar()
 
 // 如何区分其类型？还是压根不需要区分？
-// 从左往右解析，每一层级都应该获取一个 ast_type,从而最终可以确定表达式的类型
+// 从左往右解析，每一层级都应该获取一个 type,从而最终可以确定表达式的类型
 map_foo()[bar][1]
 list_bar().car[1]
 
@@ -42,8 +42,8 @@ map{string:int} foo = {
 map<int,string> car = {}
 
 // 自定义类型
-ast_type custom = int
-ast_type custom_struct = struct {
+type custom = int
+type custom_struct = struct {
 	int i,
 	bool b,
 	list[int] c

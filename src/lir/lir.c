@@ -6,6 +6,15 @@
 #include "src/semantic/analysis.h"
 #include "src/lib/error.h"
 
+lir_operand *set_indirect_addr(lir_operand *operand) {
+    if (operand->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_TYPE_VAR, actual %d", operand->type);
+    }
+    lir_operand_var *var = operand->value;
+    var->indirect_addr = true;
+    return operand;
+}
+
 lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
     lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
     memory_operand->base = base;
@@ -69,7 +78,7 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand *lir_new_temp_var_operand(closure *c, ast_type_t type) {
+lir_operand *lir_new_temp_var_operand(closure *c, type_t type) {
     string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
 
     symbol_set_temp_ident(unique_ident, type);
@@ -214,13 +223,13 @@ lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
     lir_local_var_decl *local = table_get(c->local_vars_table, ident);
 //    if (local != NULL) {
     var->decl = local;
-    var->infer_size_type = local->ast_type.type;
+    var->infer_size_type = local->ast_type.base;
 //    }
 
     return var;
 }
 
-void lir_new_local_var(closure *c, char *ident, ast_type_t type) {
+void lir_new_local_var(closure *c, char *ident, type_t type) {
     lir_local_var_decl *local = NEW(lir_local_var_decl);
     local->ast_type = type;
     local->stack_frame_offset = NEW(uint16_t);
@@ -237,7 +246,7 @@ lir_operand *lir_new_empty_operand() {
     return operand;
 }
 
-type_system lir_operand_type_system(lir_operand *operand) {
+type_base_t lir_operand_type_system(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = operand->value;
         return var->infer_size_type;
@@ -257,5 +266,5 @@ type_system lir_operand_type_system(lir_operand *operand) {
 }
 
 uint8_t lir_operand_sizeof(lir_operand *operand) {
-    return type_sizeof(lir_operand_type_system(operand));
+    return type_base_sizeof(lir_operand_type_system(operand));
 }

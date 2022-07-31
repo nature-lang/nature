@@ -68,13 +68,13 @@ typedef enum {
 } ast_expr_operator;
 
 string ast_expr_operator_to_string[100];
-
-typedef struct {
-    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
-    type_system type; // base_type, custom_type, function, list, map
-    bool is_origin; // type a = int, type b = a，int is origin
-    uint8_t point; // 指针等级, 如果等于0 表示非指针
-} ast_type_t;
+//
+//typedef struct {
+//    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
+//    type_system type; // base_type, custom_type, function, list, map
+//    bool is_origin; // type a = int, type b = a，int is origin
+//    uint8_t point; // 指针等级, 如果等于0 表示非指针
+//} ast_type_t;
 
 typedef struct {
     int line; // 行号
@@ -84,8 +84,8 @@ typedef struct {
 
 typedef struct {
     int line;
-    ast_stmt_expr_type type; // 表达式类型
-    ast_type_t ast_type;
+    ast_stmt_expr_type assert_type; // 表达式类型
+    type_t type;
     void *expr;
 } ast_expr;
 
@@ -98,15 +98,6 @@ typedef struct {
 typedef struct {
     string literal;
 } ast_ident;
-
-// TODO 没必要,都去符号表取找吧
-//typedef struct {
-//  void *type; // 类型引用，主要是结构体引用
-//  int size; // 数据结构字长 至少1个字
-//  bool built_in; // 是否内置类型
-//  string type_name; // 数据类型名称
-//  string name; // 标识符名称
-//} ast_ident_expr;
 
 // 一元表达式
 typedef struct {
@@ -131,12 +122,12 @@ typedef struct {
 // int a;
 typedef struct {
     string ident;
-    ast_type_t type; // ast_type 已经决定了 size
+    type_t type; // ast_type 已经决定了 size
 } ast_var_decl;
 
 // 值类型
 typedef struct {
-    type_system type;
+    type_base_t type;
     string value;
 } ast_literal; // 标量值
 
@@ -178,7 +169,7 @@ typedef struct {
 } ast_return_stmt;
 
 typedef struct {
-    ast_type_t type;
+    type_t type;
     string key;
     ast_expr value;
     size_t length; // byte
@@ -190,7 +181,7 @@ typedef struct {
 } ast_struct_decl; // 多个 property 组成一个
 
 typedef struct {
-    ast_type_t type; // 为什么这里声明的是一个类型而不是 ident?
+    type_t type; // 为什么这里声明的是一个类型而不是 ident?
     ast_struct_property list[INT8_MAX];
     int8_t count;
 } ast_new_struct;
@@ -217,14 +208,14 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    ast_type_t type; // list的类型
+    type_t type; // list的类型
     ast_expr left;
     ast_expr index;
 } ast_access_list;
 
 typedef struct {
-    ast_type_t key_type;
-    ast_type_t value_type;
+    type_t key_type;
+    type_t value_type;
 
     ast_expr left;
     ast_expr key;
@@ -243,19 +234,19 @@ typedef struct {
 typedef struct {
     ast_expr values[UINT8_MAX]; // TODO dynamic
     uint64_t count; // count
-    ast_type_t ast_type; // list的类型 (类型推导截断冗余)
+    type_t ast_type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 
 // [int,5]
 typedef struct {
-    ast_type_t ast_type;
+    type_t ast_type;
     uint64_t count; // 可选，初始化声明大小
 } ast_array_decl;
 
 // map{int:int}
 typedef struct {
-    ast_type_t key_type;
-    ast_type_t value_type;
+    type_t key_type;
+    type_t value_type;
 } ast_map_decl;
 
 typedef struct {
@@ -268,8 +259,8 @@ typedef struct {
     ast_map_item values[UINT8_MAX];
     uint64_t count; // 默认初始化的数量
     uint64_t capacity; // 初始容量
-    ast_type_t key_type; // 类型推导截断冗余
-    ast_type_t value_type; // 类型推导截断冗余
+    type_t key_type; // 类型推导截断冗余
+    type_t value_type; // 类型推导截断冗余
 } ast_new_map;
 
 // 改写后是否需要添加类型系统支持？需要，不然怎么过类型推导
@@ -292,19 +283,12 @@ typedef struct {
  */
 typedef struct {
     string ident; // foo
-    ast_type_t type; // int
+    type_t type; // int
 } ast_type_decl_stmt;
 
 typedef struct {
-//    string name;
-    ast_type_t return_type; // 基础类型 + 动态类型
-    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
-    uint8_t formal_param_count;
-} ast_function_type_decl;
-
-typedef struct {
     string name;
-    ast_type_t return_type; // 基础类型 + 动态类型
+    type_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
     ast_block_stmt body; // 函数体
@@ -320,10 +304,6 @@ typedef struct {
 ast_block_stmt ast_new_block_stmt();
 
 void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
-
-ast_type_t ast_new_simple_type(type_system type);
-
-ast_type_t ast_new_point_type(ast_type_t ast_type, uint8_t point);
 
 ast_ident *ast_new_ident(string literal);
 

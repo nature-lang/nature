@@ -51,13 +51,13 @@ bool is_print_symbol(char *ident) {
 size_t struct_offset(ast_struct_decl *struct_decl, char *property) {
     size_t offset = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        offset += type_sizeof(struct_decl->list[i].type.type);
+        offset += type_base_sizeof(struct_decl->list[i].type.base);
     }
     return offset;
 }
 
 // compiler 阶段临时生成的数据
-void symbol_set_temp_ident(char *unique_ident, ast_type_t type) {
+void symbol_set_temp_ident(char *unique_ident, type_t type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;
     var_decl->ident = unique_ident;

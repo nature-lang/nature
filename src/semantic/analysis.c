@@ -19,7 +19,7 @@ ast_closure_decl analysis(ast_block_stmt block_stmt) {
     ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
     function_decl->name = MAIN_FUNCTION_NAME;
     function_decl->body = block_stmt;
-    function_decl->return_type = ast_new_simple_type(TYPE_VOID);
+    function_decl->return_type = type_new_base(TYPE_VOID);
     function_decl->formal_param_count = 0;
 
     ast_closure_decl *closure_decl = analysis_function_decl(function_decl, NULL);
@@ -144,17 +144,17 @@ void analysis_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     analysis_expr(&stmt->expr);
 }
 
-ast_type_t analysis_function_to_type(ast_new_fn *function_decl) {
-    ast_function_type_decl *function_type_decl = malloc(sizeof(ast_function_type_decl));
-    function_type_decl->return_type = function_decl->return_type;
+type_t analysis_function_to_type(ast_new_fn *function_decl) {
+    type_fn_t *fn_type = NEW(type_fn_t);
+    fn_type->return_type = function_decl->return_type;
     for (int i = 0; i < function_decl->formal_param_count; ++i) {
-        function_type_decl->formal_params[i] = function_decl->formal_params[i];
+        fn_type->formal_param_types[i] = function_decl->formal_params[i]->type;
     }
-    function_type_decl->formal_param_count = function_decl->formal_param_count;
-    ast_type_t type = {
+    fn_type->formal_param_count = function_decl->formal_param_count;
+    type_t type = {
             .is_origin = false,
-            .type = TYPE_FN,
-            .value = function_type_decl
+            .base = TYPE_FN,
+            .value = fn_type
     };
     return type;
 }
@@ -232,11 +232,11 @@ ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_loc
         // 逃逸变量就在当前作用域中
         if (free_var.is_local) {
             // ast_ident 表达式
-            expr->type = AST_EXPR_IDENT;
+            expr->assert_type = AST_EXPR_IDENT;
             expr->expr = ast_new_ident(free_var.ident);
         } else {
             // ast_env_index 表达式
-            expr->type = AST_EXPR_ACCESS_ENV;
+            expr->assert_type = AST_EXPR_ACCESS_ENV;
             ast_access_env *access_env = malloc(sizeof(ast_access_env));
             access_env->env = ast_new_ident(analysis_current->parent->env_unique_name);
             access_env->index = free_var.index;
@@ -260,7 +260,7 @@ ast_closure_decl *analysis_function_decl(ast_new_fn *function_decl, analysis_loc
             ast_expr *expr = analysis_current->contains_fn_decl[i].expr;
             ast_closure_decl *closure_decl = analysis_function_decl(expr->expr,
                                                                     analysis_current->contains_fn_decl[i].scope);
-            expr->type = AST_NEW_CLOSURE;
+            expr->assert_type = AST_NEW_CLOSURE;
             expr->expr = closure_decl;
         };
     }
@@ -312,7 +312,7 @@ analysis_local_ident *analysis_new_local(symbol_type type, void *decl, string id
 }
 
 void analysis_expr(ast_expr *expr) {
-    switch (expr->type) {
+    switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
             analysis_binary((ast_binary_expr *) expr->expr);
             break;
@@ -338,7 +338,9 @@ void analysis_expr(ast_expr *expr) {
             break;
         };
         case AST_EXPR_SELECT_PROPERTY: {
-            analysis_select_property((ast_select_property *) expr->expr);
+            // analysis 仅进行了变量重命名，此时作用域不明确，无法进行任何的表达式改写。
+            ast_select_property *select_property = expr->expr;
+            analysis_select_property(select_property);
             break;
         };
         case AST_EXPR_IDENT: {
@@ -397,7 +399,7 @@ void analysis_ident(ast_expr *expr) {
     }
 
     // 外部作用域变量改写, 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
-    expr->type = AST_EXPR_ACCESS_ENV;
+    expr->assert_type = AST_EXPR_ACCESS_ENV;
     ast_access_env *env_index = malloc(sizeof(ast_access_env));
     env_index->env = ast_new_ident(analysis_current->env_unique_name);
     env_index->index = free_var_index;
@@ -441,12 +443,12 @@ int8_t analysis_resolve_free(analysis_function *current, string*ident) {
  * 类型的处理较为简单，不需要做将其引用的环境封闭。直接定位唯一名称即可
  * @param type
  */
-void analysis_type(ast_type_t *type) {
+void analysis_type(type_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // TODO 如果出现死循环，应该告警退出
     // type foo = int
     // 'foo' is type_decl_ident
-    if (type->type == TYPE_DECL_IDENT) {
+    if (type->base == TYPE_DECL_IDENT) {
         // 向上查查查
         ast_ident *ident = type->value;
         string unique_name = analysis_resolve_type(analysis_current, ident->literal);
@@ -454,29 +456,29 @@ void analysis_type(ast_type_t *type) {
         return;
     }
 
-    if (type->type == TYPE_MAP) {
+    if (type->base == TYPE_MAP) {
         ast_map_decl *map_decl = type->value;
         analysis_type(&map_decl->key_type);
         analysis_type(&map_decl->value_type);
         return;
     }
 
-    if (type->type == TYPE_ARRAY) {
+    if (type->base == TYPE_ARRAY) {
         ast_array_decl *map_decl = type->value;
         analysis_type(&map_decl->ast_type);
         return;
     }
 
-    if (type->type == TYPE_FN) {
-        ast_function_type_decl *function_type_decl = type->value;
-        analysis_type(&function_type_decl->return_type);
-        for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
-            ast_var_decl *param = function_type_decl->formal_params[i];
-            analysis_type(&param->type);
+    if (type->base == TYPE_FN) {
+        type_fn_t *type_fn = type->value;
+        analysis_type(&type_fn->return_type);
+        for (int i = 0; i < type_fn->formal_param_count; ++i) {
+            type_t t = type_fn->formal_param_types[i];
+            analysis_type(&t);
         }
     }
 
-    if (type->type == TYPE_STRUCT) {
+    if (type->base == TYPE_STRUCT) {
         ast_struct_decl *struct_decl = type->value;
         for (int i = 0; i < struct_decl->count; ++i) {
             ast_struct_property item = struct_decl->list[i];

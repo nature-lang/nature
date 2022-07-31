@@ -34,27 +34,8 @@ void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt) {
     block->list[block->count++] = stmt;
 }
 
-ast_type_t ast_new_simple_type(type_system type) {
-    ast_type_t result = {
-            .is_origin = true,
-            .value = NULL,
-            .type = type
-    };
-    return result;
-}
-
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = malloc(sizeof(ast_ident));
     ident->literal = literal;
     return ident;
 }
-
-ast_type_t ast_new_point_type(ast_type_t ast_type, uint8_t point) {
-    ast_type_t result;
-    result.is_origin = ast_type.is_origin;
-    result.type = ast_type.type;
-    result.value = ast_type.value;
-    result.point = point;
-    return result;
-}
-

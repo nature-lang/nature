@@ -5,7 +5,7 @@
 #include "src/type.h"
 
 typedef struct {
-    type_system type;
+    type_base_t type;
     union {
         void *point_value; // 8bit
         double float_value; // 8bit
@@ -18,6 +18,6 @@ void builtin_print(int arg_count, ...);
 
 void builtin_println(int arg_count, ...);
 
-builtin_operand_t *builtin_new_operand(type_system type, void *value);
+builtin_operand_t *builtin_new_operand(type_base_t type, void *value);
 
 #endif //NATURE_SRC_LIR_LOWER_BUILTIN_H_

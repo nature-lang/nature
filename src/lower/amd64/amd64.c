@@ -294,14 +294,14 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_si
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *v = operand->value;
         if (force_size == 0) {
-            force_size = type_sizeof(v->infer_size_type);
+            force_size = type_base_sizeof(v->infer_size_type);
         }
         if (v->decl->stack_frame_offset > 0) {
             return DISP_REG(rbp, -(*v->decl->stack_frame_offset), force_size); // amd64 栈空间从大往小递增
         }
         if (v->reg_id > 0) {
             // 如果是 bool 类型
-            asm_operand_register_t *reg = amd64_register_find(v->reg_id, type_sizeof(v->infer_size_type));
+            asm_operand_register_t *reg = amd64_register_find(v->reg_id, type_base_sizeof(v->infer_size_type));
             return REG(reg);
         }
 
@@ -412,7 +412,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         lir_operand_var *var = v->base->value;
         // 如果是寄存器类型就直接返回 disp reg operand
         if (var->reg_id > 0) {
-            asm_operand_register_t *reg = amd64_register_find(var->reg_id, type_sizeof(var->infer_size_type));
+            asm_operand_register_t *reg = amd64_register_find(var->reg_id, type_base_sizeof(var->infer_size_type));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
             free(temp);
@@ -523,7 +523,7 @@ list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     while (current->value != NULL) {
         lir_local_var_decl *var = current->value;
         // 栈需要对齐，所以最小值需要是 4
-        uint8_t size = type_sizeof(var->ast_type.type);
+        uint8_t size = type_base_sizeof(var->ast_type.base);
         size = amd64_min_size(size);
         c->stack_length += size;
         *var->stack_frame_offset = c->stack_length;
@@ -564,7 +564,7 @@ list *amd64_lower_fn_formal_params(closure *c) {
     for (int i = 0; i < c->formal_params.count; i++) {
         lir_operand_var *var = c->formal_params.list[i];
         asm_operand_t *target = amd64_lower_to_asm_operand(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), 0);
-        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, type_sizeof(var->infer_size_type));
+        reg_t *source_reg = amd64_lower_next_actual_reg_target(used, type_base_sizeof(var->infer_size_type));
         if (source_reg != NULL) {
             list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
         }

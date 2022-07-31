@@ -149,7 +149,7 @@ typedef struct lir_operand {
 
 typedef struct {
     string ident;
-    ast_type_t ast_type; // 原始类型存储(包含指针深度)
+    type_t ast_type; // 原始类型存储(包含指针深度)
     uint16_t *stack_frame_offset;
 } lir_local_var_decl;
 
@@ -161,7 +161,7 @@ typedef struct {
     string old; // ssa 之前的名称
     uint8_t reg_id; // reg list index, 寄存器分配
     lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
-    type_system infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
+    type_base_t infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
     uint8_t size; // lir 阶段根据编译的目标平台就已经能确定操作树的大小了
     bool indirect_addr;
 } lir_operand_var;
@@ -173,7 +173,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_system type;
+    type_base_t type;
 } lir_operand_symbol; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
@@ -196,7 +196,7 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
-    type_system type;
+    type_base_t type;
 } lir_operand_immediate;
 
 typedef struct {
@@ -313,6 +313,8 @@ typedef struct closure {
     uint16_t stack_length; // 栈长度, byte, 等于局部变量的长度
 } closure;
 
+lir_operand *set_indirect_addr(lir_operand *operand);
+
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 
 lir_basic_block *lir_new_basic_block();
@@ -334,13 +336,13 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  * @param ident
  * @param type
  */
-void lir_new_local_var(closure *c, string ident, ast_type_t type);
+void lir_new_local_var(closure *c, string ident, type_t type);
 
-type_system lir_operand_type_system(lir_operand *operand);
+type_base_t lir_operand_type_system(lir_operand *operand);
 
 uint8_t lir_operand_sizeof(lir_operand *operand);
 
-lir_operand *lir_new_temp_var_operand(closure *c, ast_type_t type);
+lir_operand *lir_new_temp_var_operand(closure *c, type_t type);
 
 lir_operand *lir_new_empty_operand();
 

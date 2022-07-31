@@ -7,7 +7,8 @@ string type_to_string[] = {
         [TYPE_FLOAT] = "float",
         [TYPE_INT] = "int",
         [TYPE_VOID] = "void",
-        [TYPE_VAR] = "var",
+        [TYPE_UNKNOWN] = "unknown",
+        [TYPE_BUILTIN_ANY] = "builtin_any",
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_DECL_IDENT] = "decl", // char*
@@ -18,7 +19,7 @@ string type_to_string[] = {
         [TYPE_NULL] = "null",
 };
 
-uint8_t type_sizeof(type_system t) {
+uint8_t type_base_sizeof(type_base_t t) {
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:
@@ -36,4 +37,37 @@ uint8_t type_sizeof(type_system t) {
         default:
             return POINT_SIZE_BYTE;
     }
+}
+
+type_t type_new_base(type_base_t type) {
+    type_t result = {
+            .is_origin = true,
+            .value = NULL,
+            .base = type
+    };
+    return result;
+}
+
+type_t type_new_point(type_t ast_type, uint8_t point) {
+    type_t result;
+    result.is_origin = ast_type.is_origin;
+    result.base = ast_type.base;
+    result.value = ast_type.value;
+    result.point = point;
+    return result;
+}
+
+type_t type_runtime_array_push() {
+    type_t result;
+    result.base = TYPE_FN;
+    result.is_origin = true;
+
+    type_fn_t *fn = NEW(type_fn_t);
+    fn->return_type = type_new_base(TYPE_BUILTIN_ANY);
+    fn->formal_param_count = 1;
+    fn->formal_param_types[0] = type_new_base(TYPE_BUILTIN_ANY);
+
+    result.value = fn;
+    result.point = 0;
+    return result;
 }

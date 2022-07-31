@@ -4,13 +4,14 @@
 #include "src/symbol.h"
 #include "analysis.h"
 #include "src/debug/debug.h"
+#include "src/lib/helper.h"
 
 void infer(ast_closure_decl *closure_decl) {
     infer_line = 0;
     infer_closure_decl(closure_decl);
 }
 
-ast_type_t infer_closure_decl(ast_closure_decl *closure_decl) {
+type_t infer_closure_decl(ast_closure_decl *closure_decl) {
     ast_new_fn *function_decl = closure_decl->function;
 
     // 类型还原
@@ -25,7 +26,7 @@ ast_type_t infer_closure_decl(ast_closure_decl *closure_decl) {
     }
 
     infer_current_init(closure_decl);
-    ast_type_t result = analysis_function_to_type(function_decl);
+    type_t result = analysis_function_to_type(function_decl);
     result = infer_type(result);
 
     infer_block(&function_decl->body);
@@ -96,9 +97,9 @@ void infer_stmt(ast_stmt *stmt) {
  * @param expr
  * @return
  */
-ast_type_t infer_expr(ast_expr *expr) {
-    ast_type_t type;
-    switch (expr->type) {
+type_t infer_expr(ast_expr *expr) {
+    type_t type;
+    switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
             type = infer_binary((ast_binary_expr *) expr->expr);
             break;
@@ -149,12 +150,12 @@ ast_type_t infer_expr(ast_expr *expr) {
             break;
         }
         default: {
-            error_exit("[infer_expr]unknown expr %v", expr->type);
+            error_exit("[infer_expr]unknown expr %v", expr->assert_type);
             exit(0);
         }
     }
 
-    expr->ast_type = type;
+    expr->type = type;
 
     return type;
 }
@@ -163,21 +164,21 @@ ast_type_t infer_expr(ast_expr *expr) {
  * @param expr
  * @return
  */
-ast_type_t infer_binary(ast_binary_expr *expr) {
+type_t infer_binary(ast_binary_expr *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    ast_type_t left_type = infer_expr(&expr->left);
-    ast_type_t right_type = infer_expr(&expr->right);
+    type_t left_type = infer_expr(&expr->left);
+    type_t right_type = infer_expr(&expr->right);
 
-    if (left_type.type != TYPE_INT && left_type.type != TYPE_FLOAT) {
+    if (left_type.base != TYPE_INT && left_type.base != TYPE_FLOAT) {
         error_printf(infer_line, "invalid operation: %s, expr type must be int or float, cannot '%s' type",
                      ast_expr_operator_to_string[expr->operator],
-                     type_to_string[left_type.type]);
+                     type_to_string[left_type.base]);
     }
 
-    if (right_type.type != TYPE_INT && right_type.type != TYPE_FLOAT) {
+    if (right_type.base != TYPE_INT && right_type.base != TYPE_FLOAT) {
         error_printf(infer_line, "invalid operation: %s,  expr type must be int or float, cannot '%s' type",
                      ast_expr_operator_to_string[expr->operator],
-                     type_to_string[right_type.type]);
+                     type_to_string[right_type.base]);
     }
 
     switch (expr->operator) {
@@ -193,7 +194,7 @@ ast_type_t infer_binary(ast_binary_expr *expr) {
         case AST_EXPR_OPERATOR_GTE:
         case AST_EXPR_OPERATOR_EQ_EQ:
         case AST_EXPR_OPERATOR_NOT_EQ: {
-            return ast_new_simple_type(TYPE_BOOL);
+            return type_new_base(TYPE_BOOL);
         }
         default: {
             error_exit("unknown operator type");
@@ -207,14 +208,14 @@ ast_type_t infer_binary(ast_binary_expr *expr) {
  * @param expr
  * @return
  */
-ast_type_t infer_unary(ast_unary_expr *expr) {
-    ast_type_t operand_type = infer_expr(&expr->operand);
-    if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.type != TYPE_BOOL) {
+type_t infer_unary(ast_unary_expr *expr) {
+    type_t operand_type = infer_expr(&expr->operand);
+    if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.base != TYPE_BOOL) {
         error_exit("!expr, expr must be bool type");
     }
 
-    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.type != TYPE_INT
-        && operand_type.type != TYPE_FLOAT) {
+    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.base != TYPE_INT
+        && operand_type.base != TYPE_FLOAT) {
         error_exit("!expr, expr must be int or float");
     }
 
@@ -232,7 +233,7 @@ ast_type_t infer_unary(ast_unary_expr *expr) {
  * @param expr
  * @return
  */
-ast_type_t infer_ident(string unique_ident) {
+type_t infer_ident(string unique_ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
     if (symbol->type == SYMBOL_TYPE_VAR) {
         // 类型还原，并回写到 local_ident
@@ -256,24 +257,24 @@ ast_type_t infer_ident(string unique_ident) {
  * @param new_list
  * @return 
  */
-ast_type_t infer_new_array(ast_new_list *new_list) {
-    ast_type_t result = {
+type_t infer_new_array(ast_new_list *new_list) {
+    type_t result = {
             .is_origin = true,
-            .type = TYPE_ARRAY,
+            .base = TYPE_ARRAY,
     };
     ast_array_decl *decl = malloc(sizeof(ast_array_decl));
-    decl->ast_type = ast_new_simple_type(TYPE_UNKNOWN); // unknown 可以适配任何类型
+    decl->ast_type = type_new_base(TYPE_UNKNOWN); // unknown 可以适配任何类型
     decl->count = new_list->count;
 
     for (int i = 0; i < new_list->count; ++i) {
-        ast_type_t item_type = infer_expr(&new_list->values[i]);
-        if (decl->ast_type.type == TYPE_UNKNOWN) {
+        type_t item_type = infer_expr(&new_list->values[i]);
+        if (decl->ast_type.base == TYPE_UNKNOWN) {
             // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
             decl->ast_type = item_type;
         } else {
             if (!infer_compare_type(item_type, decl->ast_type)) {
                 // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                decl->ast_type = ast_new_simple_type(TYPE_ANY);
+                decl->ast_type = type_new_base(TYPE_ANY);
                 break;
             }
         }
@@ -289,34 +290,34 @@ ast_type_t infer_new_array(ast_new_list *new_list) {
  * @param new_map
  * @return
  */
-ast_type_t infer_new_map(ast_new_map *new_map) {
-    ast_type_t result = {
+type_t infer_new_map(ast_new_map *new_map) {
+    type_t result = {
             .is_origin = true,
-            .type = TYPE_MAP,
+            .base = TYPE_MAP,
     };
     ast_map_decl *map_decl = NEW(ast_map_decl);
-    map_decl->key_type = ast_new_simple_type(TYPE_VAR);
-    map_decl->value_type = ast_new_simple_type(TYPE_VAR);
+    map_decl->key_type = type_new_base(TYPE_UNKNOWN);
+    map_decl->value_type = type_new_base(TYPE_UNKNOWN);
     for (int i = 0; i < new_map->count; ++i) {
-        ast_type_t key_type = infer_expr(&new_map->values[i].key);
-        ast_type_t value_type = infer_expr(&new_map->values[i].value);
+        type_t key_type = infer_expr(&new_map->values[i].key);
+        type_t value_type = infer_expr(&new_map->values[i].value);
 
         // key
-        if (map_decl->key_type.type == TYPE_VAR) {
+        if (map_decl->key_type.base == TYPE_UNKNOWN) {
             map_decl->key_type = key_type;
         } else {
             if (!infer_compare_type(key_type, map_decl->key_type)) {
-                map_decl->key_type = ast_new_simple_type(TYPE_ANY);
+                map_decl->key_type = type_new_base(TYPE_ANY);
                 break;
             }
         }
 
         // value
-        if (map_decl->value_type.type == TYPE_VAR) {
+        if (map_decl->value_type.base == TYPE_UNKNOWN) {
             map_decl->value_type = value_type;
         } else {
             if (!infer_compare_type(value_type, map_decl->value_type)) {
-                map_decl->value_type = ast_new_simple_type(TYPE_ANY);
+                map_decl->value_type = type_new_base(TYPE_ANY);
                 break;
             }
         }
@@ -344,12 +345,12 @@ ast_type_t infer_new_map(ast_new_map *new_map) {
  * @param new_struct
  * @return
  */
-ast_type_t infer_new_struct(ast_new_struct *new_struct) {
+type_t infer_new_struct(ast_new_struct *new_struct) {
     // 类型还原, struct ident 一定会被还原回 struct 原始结构
     // 如果本身已经是 struct 结构，那么期中的 struct property type 也会被还原成原始类型
     new_struct->type = infer_type(new_struct->type);
 
-    if (new_struct->type.type != TYPE_STRUCT) {
+    if (new_struct->type.base != TYPE_STRUCT) {
         error_printf(infer_line, "ident not struct");
     }
 
@@ -358,15 +359,15 @@ ast_type_t infer_new_struct(ast_new_struct *new_struct) {
         ast_struct_property struct_property = new_struct->list[i];
 
         // struct_decl 已经是被还原过的类型了
-        ast_type_t expect_type = infer_struct_property_type(struct_decl, struct_property.key);
-        ast_type_t actual_type = infer_expr(&struct_property.value);
+        type_t expect_type = infer_struct_property_type(struct_decl, struct_property.key);
+        type_t actual_type = infer_expr(&struct_property.value);
 
         // expect type type 并不允许为 var
         if (!infer_compare_type(actual_type, expect_type)) {
             error_printf(infer_line, "property '%s' expect '%s' type, cannot assign '%s' type",
                          struct_property.key,
-                         type_to_string[expect_type.type],
-                         type_to_string[actual_type.type]);
+                         type_to_string[expect_type.base],
+                         type_to_string[actual_type.base]);
         }
     }
 
@@ -377,13 +378,13 @@ ast_type_t infer_new_struct(ast_new_struct *new_struct) {
  * @param expr
  * @return
  */
-ast_type_t infer_access(ast_expr *expr) {
-    ast_type_t result;
+type_t infer_access(ast_expr *expr) {
+    type_t result;
     ast_access *access = expr->expr;
-    ast_type_t left_type = infer_expr(&access->left);
-    ast_type_t key_type = infer_expr(&access->key);
+    type_t left_type = infer_expr(&access->left);
+    type_t key_type = infer_expr(&access->key);
 
-    if (left_type.type == TYPE_MAP) {
+    if (left_type.base == TYPE_MAP) {
         ast_access_map *access_map = malloc(sizeof(ast_access_map));
         ast_map_decl *map_decl = left_type.value;
 
@@ -394,17 +395,17 @@ ast_type_t infer_access(ast_expr *expr) {
         // access_map 冗余字段处理
         access_map->key_type = map_decl->key_type;
         access_map->value_type = map_decl->value_type;
-        expr->type = AST_EXPR_ACCESS_MAP;
+        expr->assert_type = AST_EXPR_ACCESS_MAP;
         expr->expr = access_map;
 
 
         // 返回值
         result = map_decl->value_type;
-    } else if (left_type.type == TYPE_ARRAY) {
-        if (key_type.type != TYPE_INT) {
+    } else if (left_type.base == TYPE_ARRAY) {
+        if (key_type.base != TYPE_INT) {
             error_printf(infer_line,
                          "access list error, index expr type must by int, cannot '%s'",
-                         type_to_string[key_type.type]);
+                         type_to_string[key_type.base]);
         }
 
         ast_access_list *access_list = malloc(sizeof(ast_access_map));
@@ -414,12 +415,12 @@ ast_type_t infer_access(ast_expr *expr) {
         access_list->left = access->left;
         access_list->index = access->key;
         access_list->type = list_decl->ast_type;
-        expr->type = AST_EXPR_ACCESS_LIST;
+        expr->assert_type = AST_EXPR_ACCESS_LIST;
         expr->expr = access_list;
 
         result = list_decl->ast_type;
     } else {
-        error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.type]);
+        error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.base]);
         exit(0);
     };
 
@@ -433,11 +434,10 @@ ast_type_t infer_access(ast_expr *expr) {
  * @param select_property
  * @return
  */
-ast_type_t infer_select_property(ast_select_property *select_property) {
-    ast_type_t left_type = infer_expr(&select_property->left);
-
-    if (left_type.type != TYPE_STRUCT) {
-        error_printf(infer_line, "expr not struct, cannot select property");
+type_t infer_select_property(ast_select_property *select_property) {
+    type_t left_type = infer_expr(&select_property->left);
+    if (left_type.base != TYPE_STRUCT) {
+        error_printf(infer_line, "[infer_select_property]expr not struct, cannot select property");
         exit(0);
     }
 
@@ -462,47 +462,48 @@ ast_type_t infer_select_property(ast_select_property *select_property) {
  * @param call
  * @return
  */
-ast_type_t infer_call(ast_call *call) {
-    ast_type_t result;
+type_t infer_call(ast_call *call) {
+    type_t result;
 
     // 实参推导
-    ast_type_t actual_types[call->actual_param_count];
+    type_t actual_types[call->actual_param_count];
     for (int i = 0; i < call->actual_param_count; ++i) {
         actual_types[i] = infer_expr(&call->actual_params[i]);
     }
 
-    if (call->left.type == AST_EXPR_IDENT) {
+    if (call->left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = call->left.expr;
         if (is_print_symbol(ident->literal)) {
-            return ast_new_simple_type(TYPE_FN);
+            return type_new_base(TYPE_FN);
         }
     }
 
-    // 左值符号推导(外部符号暂时偷懒没有进行具体的推导)
-    ast_type_t left_type = infer_expr(&call->left);
-    if (left_type.type != TYPE_FN) {
-        error_printf(infer_line, "expression not function type(%s), cannot call", type_to_string[left_type.type]);
+    // 左值符号推导(TODO 外部符号暂时偷懒没有进行具体的推导)
+    type_t left_type = infer_expr(&call->left);
+    if (left_type.base != TYPE_FN) {
+        error_printf(infer_line, "[infer_call]expression not function type(%s), cannot call",
+                     type_to_string[left_type.base]);
     }
 
-    ast_function_type_decl *function_type_decl = left_type.value;
-    if (function_type_decl->formal_param_count != call->actual_param_count) {
-        error_printf(infer_line, "function param count not match");
+    type_fn_t *type_fn = left_type.value;
+    if (type_fn->formal_param_count != call->actual_param_count) {
+        error_printf(infer_line, "[infer_call] function param count not match");
         exit(0);
     }
 
     // call param check
-    for (int i = 0; i < function_type_decl->formal_param_count; ++i) {
-        ast_var_decl *formal_param = function_type_decl->formal_params[i];
-        ast_type_t actual_param_type = actual_types[i];
-        if (!infer_compare_type(formal_param->type, actual_param_type)) {
-            error_printf(infer_line, "call param[%d] type error, expect '%s' type, actual '%s' type",
+    for (int i = 0; i < type_fn->formal_param_count; ++i) {
+        type_t t = type_fn->formal_param_types[i];
+        type_t actual_param_type = actual_types[i];
+        if (!infer_compare_type(t, actual_param_type)) {
+            error_printf(infer_line, "[infer_call] call param[%d] type error, expect '%s' type, actual '%s' type",
                          i,
-                         type_to_string[formal_param->type.type],
-                         type_to_string[actual_param_type.type]);
+                         type_to_string[t.base],
+                         type_to_string[actual_param_type.base]);
         }
     }
 
-    result = function_type_decl->return_type;
+    result = type_fn->return_type;
     return result;
 }
 
@@ -512,9 +513,9 @@ ast_type_t infer_call(ast_call *call) {
  * @param var_decl
  */
 void infer_var_decl(ast_var_decl *var_decl) {
-    ast_type_t type = var_decl->type;
-    if (type.type == TYPE_VAR || type.type == TYPE_VOID || type.type == TYPE_NULL) {
-        error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.type]);
+    type_t type = var_decl->type;
+    if (type.base == TYPE_UNKNOWN || type.base == TYPE_VOID || type.base == TYPE_NULL) {
+        error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.base]);
     }
 }
 
@@ -529,10 +530,10 @@ void infer_var_decl(ast_var_decl *var_decl) {
  * var h = call();
  */
 void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
-    ast_type_t expr_type = infer_expr(&stmt->expr);
+    type_t expr_type = infer_expr(&stmt->expr);
 
     // 类型推断(不需要再比较类型是否一致)
-    if (stmt->var_decl->type.type == TYPE_VAR) {
+    if (stmt->var_decl->type.base == TYPE_UNKNOWN) {
         if (!infer_var_type_can_confirm(expr_type)) {
             error_printf(infer_line, "type inference error, right expr type is not clear");
             return;
@@ -554,8 +555,8 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
  * @param stmt
  */
 void infer_assign(ast_assign_stmt *stmt) {
-    ast_type_t left_type = infer_expr(&stmt->left);
-    ast_type_t right_type = infer_expr(&stmt->right);
+    type_t left_type = infer_expr(&stmt->left);
+    type_t right_type = infer_expr(&stmt->right);
 
     if (!infer_compare_type(left_type, right_type)) {
         error_type_not_match(infer_line);
@@ -563,8 +564,8 @@ void infer_assign(ast_assign_stmt *stmt) {
 }
 
 void infer_if(ast_if_stmt *stmt) {
-    ast_type_t condition_type = infer_expr(&stmt->condition);
-    if (condition_type.type != TYPE_BOOL) {
+    type_t condition_type = infer_expr(&stmt->condition);
+    if (condition_type.base != TYPE_BOOL) {
         error_exit("if stmt condition must bool");
     }
 
@@ -573,8 +574,8 @@ void infer_if(ast_if_stmt *stmt) {
 }
 
 void infer_while(ast_while_stmt *stmt) {
-    ast_type_t condition_type = infer_expr(&stmt->condition);
-    if (condition_type.type != TYPE_BOOL) {
+    type_t condition_type = infer_expr(&stmt->condition);
+    if (condition_type.base != TYPE_BOOL) {
         error_exit("while stmt condition must bool");
     }
     infer_block(&stmt->body);
@@ -586,23 +587,23 @@ void infer_while(ast_while_stmt *stmt) {
  */
 void infer_for_in(ast_for_in_stmt *stmt) {
     // 经过 infer_expr 的类型一定是已经被还原过的
-    ast_type_t iterate_type = infer_expr(&stmt->iterate);
-    if (iterate_type.type != TYPE_MAP && iterate_type.type != TYPE_ARRAY) {
+    type_t iterate_type = infer_expr(&stmt->iterate);
+    if (iterate_type.base != TYPE_MAP && iterate_type.base != TYPE_ARRAY) {
         error_printf(infer_line,
                      "for in iterate type must be map/list, actual:(%s)",
-                     type_to_string[iterate_type.type]);
+                     type_to_string[iterate_type.base]);
     }
 
     // 类型推断
     ast_var_decl *key_decl = stmt->gen_key;
     ast_var_decl *value_decl = stmt->gen_value;
-    if (iterate_type.type == TYPE_MAP) {
+    if (iterate_type.base == TYPE_MAP) {
         ast_map_decl *map_decl = iterate_type.value;
         key_decl->type = map_decl->key_type;
         value_decl->type = map_decl->value_type;
     } else {
         ast_array_decl *list_decl = iterate_type.value;
-        key_decl->type = ast_new_simple_type(TYPE_INT);
+        key_decl->type = type_new_base(TYPE_INT);
         value_decl->type = list_decl->ast_type;
 
     }
@@ -615,16 +616,16 @@ void infer_for_in(ast_for_in_stmt *stmt) {
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {
-    ast_type_t return_type = ast_new_simple_type(TYPE_VOID);
+    type_t return_type = type_new_base(TYPE_VOID);
     if (stmt->expr != NULL) {
         return_type = infer_expr(stmt->expr);
     }
 
-    ast_type_t expect_type = infer_current->closure_decl->function->return_type;
+    type_t expect_type = infer_current->closure_decl->function->return_type;
     if (!infer_compare_type(expect_type, return_type)) {
         error_printf(infer_line, "return type(%s) error,expect '%s' type",
-                     type_to_string[return_type.type],
-                     type_to_string[expect_type.type]);
+                     type_to_string[return_type.base],
+                     type_to_string[expect_type.base]);
     }
 }
 
@@ -643,28 +644,32 @@ infer_closure *infer_current_init(ast_closure_decl *closure_decl) {
  * @param right
  * @return
  */
-bool infer_compare_type(ast_type_t left, ast_type_t right) {
+bool infer_compare_type(type_t left, type_t right) {
     if (!left.is_origin || !right.is_origin) {
         error_printf(infer_line, "type not origin, left: '%s', right: '%s'",
-                     type_to_string[left.type],
-                     type_to_string[right.type]);
+                     type_to_string[left.base],
+                     type_to_string[right.base]);
         return false;
     }
 
-    if (left.type == TYPE_VAR && right.type == TYPE_VAR) {
+    if (left.base == TYPE_BUILTIN_ANY || right.base == TYPE_BUILTIN_ANY) {
+        return true;
+    }
+
+    if (left.base == TYPE_UNKNOWN && right.base == TYPE_UNKNOWN) {
         error_printf(infer_line, "type cannot infer");
         return false;
     }
 
-    if (left.type == TYPE_ANY) {
+    if (left.base == TYPE_ANY) {
         return true;
     }
 
-    if (left.type != right.type) {
+    if (left.base != right.base) {
         return false;
     }
 
-    if (left.type == TYPE_MAP) {
+    if (left.base == TYPE_MAP) {
         ast_map_decl *left_map_decl = left.value;
         ast_map_decl *right_map_decl = right.value;
 
@@ -677,10 +682,10 @@ bool infer_compare_type(ast_type_t left, ast_type_t right) {
         }
     }
 
-    if (left.type == TYPE_ARRAY) {
+    if (left.base == TYPE_ARRAY) {
         ast_array_decl *left_list_decl = left.value;
         ast_array_decl *right_list_decl = right.value;
-        if (right_list_decl->ast_type.type == TYPE_UNKNOWN) {
+        if (right_list_decl->ast_type.base == TYPE_UNKNOWN) {
             // 但是这样在 compiler_array 时将完全不知道将右值初始化多大空间的 capacity
             // 但是其可以完全继承左值, 左值进入到该方法之前已经经过了类型推断，这里肯定不是 var 了
             right_list_decl->ast_type = left_list_decl->ast_type;
@@ -704,28 +709,28 @@ bool infer_compare_type(ast_type_t left, ast_type_t right) {
         return true;
     }
 
-    if (left.type == TYPE_FN) {
-        ast_function_type_decl *left_function = left.value;
-        ast_function_type_decl *right_function = right.value;
-        if (!infer_compare_type(left_function->return_type, right_function->return_type)) {
+    if (left.base == TYPE_FN) {
+        type_fn_t *left_type_fn = left.value;
+        type_fn_t *right_type_fn = right.value;
+        if (!infer_compare_type(left_type_fn->return_type, right_type_fn->return_type)) {
             return false;
         }
 
-        if (left_function->formal_param_count != right_function->formal_param_count) {
+        if (left_type_fn->formal_param_count != right_type_fn->formal_param_count) {
             return false;
         }
 
-        for (int i = 0; i < left_function->formal_param_count; ++i) {
+        for (int i = 0; i < left_type_fn->formal_param_count; ++i) {
             if (!infer_compare_type(
-                    left_function->formal_params[i]->type,
-                    right_function->formal_params[i]->type
+                    left_type_fn->formal_param_types[i],
+                    right_type_fn->formal_param_types[i]
             )) {
                 return false;
             }
         }
     }
 
-    if (left.type == TYPE_STRUCT) {
+    if (left.base == TYPE_STRUCT) {
         ast_struct_decl *left_struct_decl = left.value;
         ast_struct_decl *right_struct_decl = right.value;
         if (left_struct_decl->count != right_struct_decl->count) {
@@ -758,20 +763,20 @@ bool infer_compare_type(ast_type_t left, ast_type_t right) {
  * @param type
  * @return
  */
-ast_type_t infer_type(ast_type_t type) {
+type_t infer_type(type_t type) {
     if (type.is_origin) {
         return type;
     }
 
     type.is_origin = true;
-    if (type.type == TYPE_INT || type.type == TYPE_BOOL || type.type == TYPE_FLOAT
-        || type.type == TYPE_STRING
-        || type.type == TYPE_ANY
-        || type.type == TYPE_VOID) {
+    if (type.base == TYPE_INT || type.base == TYPE_BOOL || type.base == TYPE_FLOAT
+        || type.base == TYPE_STRING
+        || type.base == TYPE_ANY
+        || type.base == TYPE_VOID) {
         return type;
     }
 
-    if (type.type == TYPE_STRUCT) {
+    if (type.base == TYPE_STRUCT) {
         ast_struct_decl *struct_decl = type.value;
         infer_sort_struct_decl(struct_decl); // 按照 key 排序
 
@@ -784,38 +789,38 @@ ast_type_t infer_type(ast_type_t type) {
     }
 
     // type foo = int, 'foo' is type_dec_ident
-    if (type.type == TYPE_DECL_IDENT) {
+    if (type.base == TYPE_DECL_IDENT) {
         return infer_type_decl_ident((ast_ident *) type.value);
     }
 
-    if (type.type == TYPE_MAP) {
+    if (type.base == TYPE_MAP) {
         ast_map_decl *map_decl = type.value;
         map_decl->key_type = infer_type(map_decl->key_type);
         map_decl->value_type = infer_type(map_decl->value_type);
         return type;
     }
 
-    if (type.type == TYPE_ARRAY) {
+    if (type.base == TYPE_ARRAY) {
         ast_array_decl *list_decl = type.value;
         list_decl->ast_type = infer_type(list_decl->ast_type);
         return type;
     }
 
-    if (type.type == TYPE_FN) {
-        ast_function_type_decl *fn_type_decl = type.value;
-        fn_type_decl->return_type = infer_type(fn_type_decl->return_type);
-        for (int i = 0; i < fn_type_decl->formal_param_count; ++i) {
-            fn_type_decl->formal_params[i]->type = infer_type(fn_type_decl->formal_params[i]->type);
+    if (type.base == TYPE_FN) {
+        type_fn_t *type_fn = type.value;
+        type_fn->return_type = infer_type(type_fn->return_type);
+        for (int i = 0; i < type_fn->formal_param_count; ++i) {
+            type_fn->formal_param_types[i] = infer_type(type_fn->formal_param_types[i]);
         }
 
         return type;
     }
 
-    error_printf(infer_line, "cannot parser type %s", type_to_string[type.type]);
+    error_printf(infer_line, "cannot parser type %s", type_to_string[type.base]);
     exit(0);
 }
 
-ast_type_t infer_type_decl_ident(ast_ident *ident) {
+type_t infer_type_decl_ident(ast_ident *ident) {
     // 符号表找到相关类型
     symbol_t *symbol = symbol_table_get(ident->literal);
     if (symbol->type != SYMBOL_TYPE_CUSTOM) {
@@ -826,7 +831,7 @@ ast_type_t infer_type_decl_ident(ast_ident *ident) {
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->type 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
-    ast_type_t origin_type = infer_type(type_decl_stmt->type);
+    type_t origin_type = infer_type(type_decl_stmt->type);
 
     return origin_type;
 }
@@ -837,7 +842,7 @@ ast_type_t infer_type_decl_ident(ast_ident *ident) {
  * @param ident
  * @return
  */
-ast_type_t infer_struct_property_type(ast_struct_decl *struct_decl, char *ident) {
+type_t infer_struct_property_type(ast_struct_decl *struct_decl, char *ident) {
     for (int i = 0; i < struct_decl->count; ++i) {
         if (strcmp(struct_decl->list[i].key, ident) == 0) {
             return struct_decl->list[i].type;
@@ -865,8 +870,8 @@ void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
     }
 }
 
-ast_type_t infer_literal(ast_literal *literal) {
-    return ast_new_simple_type(literal->type);
+type_t infer_literal(ast_literal *literal) {
+    return type_new_base(literal->type);
 }
 
 /**
@@ -874,25 +879,25 @@ ast_type_t infer_literal(ast_literal *literal) {
  * @param right
  * @return
  */
-bool infer_var_type_can_confirm(ast_type_t right) {
-    if (right.type == TYPE_VAR) {
+bool infer_var_type_can_confirm(type_t right) {
+    if (right.base == TYPE_UNKNOWN) {
         return false;
     }
 
     // var a = []  这样就完全不知道是个啥。。。
-    if (right.type == TYPE_ARRAY) {
+    if (right.base == TYPE_ARRAY) {
         ast_array_decl *list_decl = right.value;
-        if (list_decl->ast_type.type == TYPE_UNKNOWN) {
+        if (list_decl->ast_type.base == TYPE_UNKNOWN) {
             return false;
         }
     }
 
-    if (right.type == TYPE_MAP) {
+    if (right.base == TYPE_MAP) {
         ast_map_decl *map_decl = right.value;
-        if (map_decl->key_type.type == TYPE_VAR) {
+        if (map_decl->key_type.base == TYPE_UNKNOWN) {
             return false;
         }
-        if (map_decl->value_type.type == TYPE_VAR) {
+        if (map_decl->value_type.base == TYPE_UNKNOWN) {
             return false;
         }
     }
@@ -900,8 +905,8 @@ bool infer_var_type_can_confirm(ast_type_t right) {
     return true;
 }
 
-ast_type_t infer_access_env(ast_access_env *expr) {
-    ast_type_t t = infer_ident(expr->unique_ident);
+type_t infer_access_env(ast_access_env *expr) {
+    type_t t = infer_ident(expr->unique_ident);
     return t;
 }
 
