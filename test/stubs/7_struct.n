@@ -1,0 +1,22 @@
+// 自定义类型
+type people = struct {
+    int i
+    bool b
+    test c
+    void push(int)
+}
+
+// 实例化类型
+var foo = people {
+    i = 1
+    c = 3
+    push = void (int a) {
+        println("push a=", a)
+    }
+}
+
+// 外部赋值
+foo.c = 4
+
+// 结构体函数调用
+foo.push(12)

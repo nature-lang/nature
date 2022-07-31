@@ -44,9 +44,9 @@ map<int,string> car = {}
 // 自定义类型
 type custom = int
 type custom_struct = struct {
-	int i,
-	bool b,
-	list[int] c
+	int i
+	bool b
+	[int] c
 }
 
 
