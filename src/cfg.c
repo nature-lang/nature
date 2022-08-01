@@ -41,7 +41,7 @@ void cfg(closure *c) {
     while (current->value != NULL) {
         lir_op *op = current->value;
         if (op->type == LIR_OP_TYPE_LABEL) {
-            lir_operand_label_symbol *operand_label = op->result->value;
+            lir_operand_symbol_label *operand_label = op->result->value;
 
             // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
             lir_basic_block *new_block = lir_new_basic_block();
@@ -83,7 +83,7 @@ void cfg(closure *c) {
         if (last_op->type != LIR_OP_TYPE_BAL && last_op->type != LIR_OP_TYPE_BEQ) {
             continue;
         }
-        lir_operand_label_symbol *operand_label = last_op->result->value;
+        lir_operand_symbol_label *operand_label = last_op->result->value;
 
         // 处理 goto 模式的关联关系
         string name = operand_label->ident;

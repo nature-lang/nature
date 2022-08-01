@@ -254,6 +254,21 @@ inst_t cmp_rm64_r64 = {"cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        }
 };
 
+inst_t cmp_rm8_r8 = {"cmp", 0, {0x38}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                     }
+};
+
+inst_t cmp_r8_rm8 = {"cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                     }
+};
+
+
 inst_t cmp_rm64_imm8 = {"cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
@@ -367,6 +382,8 @@ void opcode_init() {
     opcode_tree_build(&cmp_rm64_imm32);
     opcode_tree_build(&cmp_rm64_imm8);
     opcode_tree_build(&cmp_rm8_imm8);
+    opcode_tree_build(&cmp_rm8_r8);
+    opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_rm64_r64);
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);
@@ -511,9 +528,10 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_IMM32) {
-        res.count = 1;
+        res.count = 2;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, DWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT, QWORD);
         res.list = highs;
         return res;
     }
@@ -1122,7 +1140,7 @@ inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst) {
             uint8_t temp[8];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32) {
+        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32 || asm_operand->type == ASM_OPERAND_TYPE_UINT) {
             asm_operand_uint32_t *i = asm_operand->value;
             uint8_t temp[4];
             memcpy(temp, &i->value, sizeof(i->value)); // 小端处理

@@ -412,9 +412,9 @@ list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
     lir_operand *base_target = lir_new_empty_operand();
     list *operates = compiler_expr(c, call->left, base_target);
 
-    if (base_target->type == LIR_OPERAND_TYPE_LABEL_SYMBOL &&
-        is_print_symbol(((lir_operand_label_symbol *) base_target->value)->ident)) {
-        return compiler_builtin_print(c, call, ((lir_operand_label_symbol *) base_target->value)->ident);
+    if (base_target->type == LIR_OPERAND_TYPE_SYMBOL_LABEL &&
+        is_print_symbol(((lir_operand_symbol_label *) base_target->value)->ident)) {
+        return compiler_builtin_print(c, call, ((lir_operand_symbol_label *) base_target->value)->ident);
     }
 
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
@@ -931,7 +931,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
     symbol_t *s = symbol_table_get(ident->literal);
     if (s->type == SYMBOL_TYPE_FN) {
         // label
-        target->type = LIR_OPERAND_TYPE_LABEL_SYMBOL;
+        target->type = LIR_OPERAND_TYPE_SYMBOL_LABEL;
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     }
     if (s->type == SYMBOL_TYPE_VAR) {
@@ -940,10 +940,10 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
             target->type = LIR_OPERAND_TYPE_VAR;
             target->value = lir_new_var_operand(c, ident->literal);
         } else {
-            lir_operand_symbol *symbol = NEW(lir_operand_symbol);
+            lir_operand_symbol_var *symbol = NEW(lir_operand_symbol_var);
             symbol->ident = ident->literal;
             symbol->type = var->type.base;
-            target->type = LIR_OPERAND_TYPE_SYMBOL;
+            target->type = LIR_OPERAND_TYPE_SYMBOL_VAR;
             target->value = symbol;
         }
     }
@@ -974,7 +974,7 @@ list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
         }
 
         lir_operand *param_target = lir_new_temp_var_operand(c, type_new_base(TYPE_POINT));
-        lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
+        lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value,
                                                                  ast_param_expr.type.base);
 
         lir_op *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_param_target);

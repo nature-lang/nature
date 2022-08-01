@@ -1,5 +1,5 @@
 int foo = -23
-if (true) {
+if (foo > 1) {
     print("foo > 1")
     return
 }

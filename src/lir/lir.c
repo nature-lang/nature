@@ -94,12 +94,12 @@ lir_operand *lir_new_temp_var_operand(closure *c, type_t type) {
 }
 
 lir_operand *lir_new_label_operand(char *ident, bool is_local) {
-    lir_operand_label_symbol *label = NEW(lir_operand_label_symbol);
+    lir_operand_symbol_label *label = NEW(lir_operand_symbol_label);
     label->ident = ident;
     label->is_local = is_local;
 
     lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_LABEL_SYMBOL;
+    operand->type = LIR_OPERAND_TYPE_SYMBOL_LABEL;
     operand->value = label;
     return operand;
 }
@@ -238,8 +238,8 @@ lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
 void lir_new_local_var(closure *c, char *ident, type_t type) {
     lir_local_var_decl *local = NEW(lir_local_var_decl);
     local->ast_type = type;
-    local->stack_frame_offset = NEW(uint16_t);
-    *local->stack_frame_offset = 0;
+    local->stack_offset = NEW(uint16_t);
+    *local->stack_offset = 0;
     local->ident = ident;
     table_set(c->local_vars_table, ident, local);
     list_push(c->local_vars, local);
@@ -252,7 +252,7 @@ lir_operand *lir_new_empty_operand() {
     return operand;
 }
 
-type_base_t lir_operand_type_system(lir_operand *operand) {
+type_base_t lir_operand_type_base(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = operand->value;
         return var->infer_size_type;
@@ -263,8 +263,8 @@ type_base_t lir_operand_type_system(lir_operand *operand) {
         return addr->infer_size_type;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_SYMBOL) {
-        lir_operand_symbol *s = operand->value;
+    if (operand->type == LIR_OPERAND_TYPE_SYMBOL_VAR) {
+        lir_operand_symbol_var *s = operand->value;
         return s->type;
     }
 
@@ -277,5 +277,5 @@ type_base_t lir_operand_type_system(lir_operand *operand) {
 }
 
 uint8_t lir_operand_sizeof(lir_operand *operand) {
-    return type_base_sizeof(lir_operand_type_system(operand));
+    return type_base_sizeof(lir_operand_type_base(operand));
 }

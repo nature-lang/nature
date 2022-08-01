@@ -97,12 +97,12 @@ int lir_line;
 typedef enum {
     LIR_OPERAND_TYPE_NULL,
     LIR_OPERAND_TYPE_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
-    LIR_OPERAND_TYPE_SYMBOL, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
+    LIR_OPERAND_TYPE_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
     LIR_OPERAND_TYPE_REG,
     LIR_OPERAND_TYPE_PHI_BODY,
     LIR_OPERAND_TYPE_FORMAL_PARAM,
     LIR_OPERAND_TYPE_ACTUAL_PARAM,
-    LIR_OPERAND_TYPE_LABEL_SYMBOL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
+    LIR_OPERAND_TYPE_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_TYPE_IMM,
     LIR_OPERAND_TYPE_ADDR,
 } lir_operand_type;
@@ -153,7 +153,7 @@ typedef struct lir_operand {
 typedef struct {
     string ident;
     type_t ast_type; // 原始类型存储(包含指针深度)
-    uint16_t *stack_frame_offset;
+    uint16_t *stack_offset;
 } lir_local_var_decl;
 
 /**
@@ -172,12 +172,12 @@ typedef struct {
 typedef struct {
     char *ident;
     bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
-} lir_operand_label_symbol;
+} lir_operand_symbol_label;
 
 typedef struct {
     string ident;
     type_base_t type;
-} lir_operand_symbol; // 外部符号引用, 外部符号引用
+} lir_operand_symbol_var; // 外部符号引用, 外部符号引用
 
 typedef struct lir_vars {
     uint8_t count;
@@ -342,7 +342,7 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  */
 void lir_new_local_var(closure *c, string ident, type_t type);
 
-type_base_t lir_operand_type_system(lir_operand *operand);
+type_base_t lir_operand_type_base(lir_operand *operand);
 
 uint8_t lir_operand_sizeof(lir_operand *operand);
 

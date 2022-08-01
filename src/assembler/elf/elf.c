@@ -665,6 +665,9 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
     while (current->value != NULL) {
         elf_rel_t *rel = current->value;
         elf_symbol_t *s = table_get(elf_symbol_table, rel->name);
+        if (s == NULL) {
+            error_exit("[elf_rela_text_build] not found symbol %s in table", rel->name);
+        }
         uint64_t index = s->symtab_index;
         // r_sym 表示重定位项在符号表内的索引(?)
         r[i] = (Elf64_Rela) {

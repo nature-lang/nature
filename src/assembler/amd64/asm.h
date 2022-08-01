@@ -83,12 +83,12 @@
      _operand;\
 })
 
-#define INDIRECT_REG(_reg) ({ \
+#define INDIRECT_REG(_reg, _size) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
      asm_operand_indirect_register_t *_indirect = NEW(asm_operand_indirect_register_t); \
-     _indirect->reg = (asm_operand_register_t*)_reg;    \
-     _operand->size = _reg->size;\
+     _indirect->reg = (asm_operand_register_t*)(_reg);    \
+     _operand->size = _size;\
      _operand->value = _indirect;    \
      _operand;\
 })
@@ -119,7 +119,7 @@
 #define UINT16(_value) VALUE_OPERAND(asm_operand_uint16_t, ASM_OPERAND_TYPE_UINT16, (_value), WORD)
 #define UINT32(_value) VALUE_OPERAND(asm_operand_uint32_t, ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
 #define UINT64(_value) VALUE_OPERAND(asm_operand_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
-#define UINT(_value) VALUE_OPERAND(asm_operand_uint32_t, ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
+#define UINT(_value) VALUE_OPERAND(asm_operand_uint32_t, ASM_OPERAND_TYPE_UINT, (_value), QWORD)
 #define INT8(_value) VALUE_OPERAND(asm_operand_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
 #define INT32(_value) VALUE_OPERAND(asm_operand_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
 #define FLOAT32(_value) VALUE_OPERAND(asm_operand_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
@@ -146,6 +146,7 @@ typedef enum {
     ASM_OPERAND_TYPE_UINT16,
     ASM_OPERAND_TYPE_UINT32,
     ASM_OPERAND_TYPE_UINT64,
+    ASM_OPERAND_TYPE_UINT,
     ASM_OPERAND_TYPE_INT8,
     ASM_OPERAND_TYPE_INT32,
     ASM_OPERAND_TYPE_FLOAT32,

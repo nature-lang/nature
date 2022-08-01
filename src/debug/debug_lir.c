@@ -6,7 +6,7 @@
 #include "src/lib/helper.h"
 #include "src/semantic/analysis.h"
 
-static char *lir_operand_symbol_to_string(lir_operand_symbol *ptr) {
+static char *lir_operand_symbol_to_string(lir_operand_symbol_var *ptr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
     realloc(buf, len);
@@ -20,11 +20,11 @@ string lir_operand_to_string(lir_operand *operand) {
     }
 
     switch (operand->type) {
-        case LIR_OPERAND_TYPE_LABEL_SYMBOL: {
-            return lir_operand_label_to_string((lir_operand_label_symbol *) operand->value);
+        case LIR_OPERAND_TYPE_SYMBOL_LABEL: {
+            return lir_operand_label_to_string((lir_operand_symbol_label *) operand->value);
         }
-        case LIR_OPERAND_TYPE_SYMBOL: {
-            return lir_operand_symbol_to_string((lir_operand_symbol *) operand->value);
+        case LIR_OPERAND_TYPE_SYMBOL_VAR: {
+            return lir_operand_symbol_to_string((lir_operand_symbol_var *) operand->value);
         }
         case LIR_OPERAND_TYPE_VAR: {
             return lir_operand_var_to_string((lir_operand_var *) operand->value);
@@ -48,7 +48,7 @@ string lir_operand_to_string(lir_operand *operand) {
 
 }
 
-string lir_operand_label_to_string(lir_operand_label_symbol *label) {
+string lir_operand_label_to_string(lir_operand_symbol_label *label) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string scope = "G";
     if (label->is_local) {
@@ -100,6 +100,10 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
         }
         case TYPE_INT: {
             len = sprintf(buf, "IMM[%ld:INT]", immediate->int_value);
+            break;
+        }
+        case TYPE_INT8: {
+            len = sprintf(buf, "IMM[%ld:INT8]", immediate->int_value);
             break;
         }
         case TYPE_INT64: {

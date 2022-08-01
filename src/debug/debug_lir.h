@@ -11,7 +11,7 @@
  */
 string lir_operand_to_string(lir_operand *operand);
 
-string lir_operand_label_to_string(lir_operand_label_symbol *label);
+string lir_operand_label_to_string(lir_operand_symbol_label *label);
 
 string lir_operand_var_to_string(lir_operand_var *var);
 

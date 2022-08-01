@@ -63,21 +63,9 @@ list *amd64_lower_mov(closure *c, lir_op *op);
 
 list *amd64_lower_lea(closure *c, lir_op *op);
 
-list *amd64_lower_lia(closure *c, lir_op *op);
-
-list *amd64_lower_sia(closure *c, lir_op *op);
-
-/**
- * lir 中的简单操作数转换成 asm 中的操作数
- * @param operand
- * @return
- */
-asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_size);
 
 // 返回下一个可用的寄存器(属于一条指令的 fixed_reg)
-reg_t *amd64_lower_next_reg(regs_t *used, uint8_t size);
-
-reg_t *amd64_lower_find_reg(uint8_t *index, uint8_t size);
+reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size);
 
 /**
  * 返回下一个可用参数，可能是寄存器参数也可能是内存偏移
@@ -88,9 +76,9 @@ reg_t *amd64_lower_find_reg(uint8_t *index, uint8_t size);
 reg_t *amd64_lower_next_actual_reg_target(uint8_t used[7], uint8_t size);
 
 // 只要返回了指令就有一个使用的寄存器的列表，已经使用的固定寄存器就不能重复使用
-list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
-                                         asm_operand_t *asm_operand,
-                                         regs_t *used_regs);
+list *amd64_lower_operand_transform(lir_operand *operand,
+                                    asm_operand_t *asm_operand,
+                                    uint8_t used[2]);
 
 uint8_t amd64_min_size(uint8_t size);
 

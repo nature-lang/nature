@@ -11,7 +11,7 @@ static lir_operand_var *test_lir_operand_var(char *ident, int stack_frame_offset
     var->old = ident;
     var->ident = ident;
     if (stack_frame_offset >= 0) {
-        var->decl->stack_frame_offset = stack_frame_offset;
+        var->decl->stack_offset = stack_frame_offset;
     }
 }
 
