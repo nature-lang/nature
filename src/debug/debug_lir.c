@@ -29,11 +29,11 @@ string lir_operand_to_string(lir_operand *operand) {
         case LIR_OPERAND_TYPE_VAR: {
             return lir_operand_var_to_string((lir_operand_var *) operand->value);
         }
-        case LIR_OPERAND_TYPE_IMMEDIATE: {
+        case LIR_OPERAND_TYPE_IMM: {
             return lir_operand_imm_to_string((lir_operand_immediate *) operand->value);
         }
-        case LIR_OPERAND_TYPE_MEMORY: {
-            return lir_operand_memory_to_string((lir_operand_memory *) operand->value);
+        case LIR_OPERAND_TYPE_ADDR: {
+            return lir_operand_addr_to_string((lir_operand_addr *) operand->value);
         }
         case LIR_OPERAND_TYPE_ACTUAL_PARAM: {
             return lir_operand_actual_param_to_string((lir_operand_actual_param *) operand->value);
@@ -76,10 +76,11 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
     }
 
     string ident = var->ident;
+    string indirect_addr = "";
     if (var->indirect_addr) {
-        ident = str_connect("*", ident);
+        indirect_addr = "*";
     }
-    len = sprintf(buf, "VAR[%s|%s]", ident, type_string);
+    len = sprintf(buf, "%sVAR[%s|%s]", indirect_addr, ident, type_string);
 
     realloc(buf, len);
     return buf;
@@ -120,12 +121,16 @@ char *lir_operand_imm_to_string(lir_operand_immediate *immediate) {
     return buf;
 }
 
-char *lir_operand_memory_to_string(lir_operand_memory *operand_memory) {
+char *lir_operand_addr_to_string(lir_operand_addr *operand_addr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    sprintf(buf, "MEM[%s:%zu,%zu]",
-            lir_operand_to_string(operand_memory->base),
-            operand_memory->offset,
-            operand_memory->length);
+    string indirect_addr_str = "";
+    if (operand_addr->indirect_addr) {
+        indirect_addr_str = "*";
+    }
+    string type_string = type_to_string[operand_addr->infer_size_type];
+    sprintf(buf, "%sADDR[%s:%zu:%s]",
+            indirect_addr_str,
+            lir_operand_to_string(operand_addr->base), operand_addr->offset, type_string);
     return buf;
 }
 

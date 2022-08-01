@@ -74,6 +74,8 @@ set(SRC
         )
 
 set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/gc.h
+        ${PROJECT_SOURCE_DIR}/runtime/gc.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h
         ${PROJECT_SOURCE_DIR}/runtime/env.c
         ${PROJECT_SOURCE_DIR}/runtime/debug.h

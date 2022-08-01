@@ -17,7 +17,7 @@ int a = list[0]; // 访问数组中的元素
 // 类型相关操作,链式调用
 list.push(1) // 头部添加元素
 int b = list.pop() // 尾部减少元素
-int len = list.length() // 获取数组的长度
+int len = list.size() // 获取数组的长度
 
 
 

@@ -1,22 +1,13 @@
-// 自定义类型
+// 自定义类型(不进行任何实质的操作)
 type people = struct {
-    int i
+    int a
     bool b
-    test c
-    void push(int)
+    int c
 }
 
-// 实例化类型
+// 实例化类型(包含赋值操作了，其中 TYPE_FN 长度为 8)
 var foo = people {
-    i = 1
-    c = 3
-    push = void (int a) {
-        println("push a=", a)
-    }
+    b = true
 }
 
 // 外部赋值
-foo.c = 4
-
-// 结构体函数调用
-foo.push(12)

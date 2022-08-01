@@ -33,8 +33,6 @@ symbol_t *symbol_table_get(string ident);
 
 void symbol_set_temp_ident(string unique_ident, type_t type);
 
-size_t struct_offset(ast_struct_decl *struct_decl, string property);
-
 void symbol_ident_table_init();
 
 bool is_print_symbol(char *ident);

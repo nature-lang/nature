@@ -53,11 +53,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0);
 
     uint8_t used[2] = {0};
-    // 1. 大返回值处理(使用 rdi 预处理)
-    if (op->result != NULL && lir_operand_type_system(op->result) == TYPE_STRUCT) {
-        reg_t *target_reg = amd64_lower_next_actual_reg_target(used, QWORD);
-        list_push(insts, ASM_INST("lea", { REG(target_reg), result }));
-    }
+    // 1. 大返回值处理(使用 rdi 预处理) - discard
 
     // 2. 参数处理  lir_ope type->second;
     lir_operand_actual_param *v = op->second->value;
@@ -128,25 +124,11 @@ list *amd64_lower_return(closure *c, lir_op *op) {
 
     asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
 
-    if (lir_operand_type_system(op->result) == TYPE_STRUCT) {
-        // 计算长度
-        int rep_count = ceil((float) result->size / QWORD);
-        asm_operand_t *return_disp_rbp = DISP_REG(rbp, c->return_offset, QWORD);
-
-        list_push(insts, ASM_INST("mov", { REG(rsi), result }));
-        list_push(insts, ASM_INST("mov", { REG(rdi), return_disp_rbp }));
-        list_push(insts, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
-        list_push(insts, MOVSQ(0xF3));
-
-        list_push(insts, ASM_INST("mov", { REG(rax), REG(rdi) }));
-    } else if (lir_operand_type_system(op->result) == TYPE_FLOAT) {
+    if (lir_operand_type_system(op->result) == TYPE_FLOAT) {
         list_push(insts, ASM_INST("mov", { REG(xmm0), result }));
     } else {
         list_push(insts, ASM_INST("mov", { REG(rax), result }));
     }
-
-    // lir goto 指令已经做过了，cfg 分析就需要这个操作了，不需要在这里多此一举
-//    list_push(insts, ASM_INST("jmp", { SYMBOL(c->end_label, true, true) }));
 
     return insts;
 }
@@ -242,36 +224,6 @@ list *amd64_lower_label(closure *c, lir_op *op) {
 list *amd64_lower_mov(closure *c, lir_op *op) {
     list *insts = list_new();
 
-    if (lir_operand_type_system(op->result) == TYPE_STRUCT) {
-//    regs_t used_regs = {.count = 0};
-        // first => result
-        // 如果操作数是内存地址，则直接 lea, 如果操作数是寄存器，则不用操作
-        // lea first to rax
-        asm_operand_t *first_reg = REG(rax);
-        asm_operand_t *first = amd64_lower_to_asm_operand(op->first, 0);
-        if (first->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
-            list_push(insts, ASM_INST("lea", { REG(rax), first }));
-        } else {
-            first_reg = first;
-        }
-        // lea result to rdx
-        asm_operand_t *result_reg = REG(rdx);
-        asm_operand_t *result = amd64_lower_to_asm_operand(op->result, 0);
-        if (result->type == ASM_OPERAND_TYPE_DISP_REGISTER) {
-            list_push(insts, ASM_INST("lea", { REG(rdx), result }));
-        } else {
-            result_reg = result;
-        }
-
-        // mov rax,rsi, mov rdx,rdi, mov count,rcx
-        int rep_count = ceil((float) result->size / QWORD);
-        list_push(insts, ASM_INST("mov", { REG(rsi), first_reg }));
-        list_push(insts, ASM_INST("mov", { REG(rdi), result_reg }));
-        list_push(insts, ASM_INST("mov", { REG(rcx), UINT64(rep_count) }));
-        list_push(insts, MOVSQ(0xF3));
-        return insts;
-    }
-
     regs_t used_regs = {.count = 0};
 
     // 参数转换
@@ -309,7 +261,7 @@ asm_operand_t *amd64_lower_to_asm_operand(lir_operand *operand, uint8_t force_si
     }
 
     // 简单立即数
-    if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+    if (operand->type == LIR_OPERAND_TYPE_IMM) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_INT) {
             return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
@@ -357,7 +309,7 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
                                          regs_t *used_regs) {
     list *insts = list_new();
 
-    if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+    if (operand->type == LIR_OPERAND_TYPE_IMM) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
@@ -402,35 +354,35 @@ list *amd64_lower_complex_to_asm_operand(lir_operand *operand,
         // 匹配失败继续往下走,简单转换里面还有一层 imm 匹配
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_MEMORY) {
-        lir_operand_memory *v = operand->value;
+    if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+        lir_operand_addr *v = operand->value;
         // base 类型必须为 var
         if (v->base->type != LIR_OPERAND_TYPE_VAR) {
             error_exit("[amd64_lir_to_asm_operand] operand type memory, but that base not type var");
         }
 
         lir_operand_var *var = v->base->value;
-        // 如果是寄存器类型就直接返回 disp reg operand
-        if (var->reg_id > 0) {
-            asm_operand_register_t *reg = amd64_register_find(var->reg_id, type_base_sizeof(var->infer_size_type));
-            asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
-            ASM_OPERAND_COPY(asm_operand, temp);
-            free(temp);
-            return insts;
+
+        // rbp 存储了 base,
+        if (var->decl->stack_frame_offset == 0) {
+            error_exit("[amd64_lir_to_asm_operand]  var cannot stack_frame_offset in var %s", var->ident);
         }
+        // 需要占用一个临时寄存器
+        reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
 
-        if (var->decl->stack_frame_offset > 0) {
-            // 需要占用一个临时寄存器
-            reg_t *reg = amd64_lower_next_reg(used_regs, QWORD);
-
+        // 如果设置了 indirect_addr, 则编译成 [rxx+offset]
+        // 否则应该编译成 ADD  rxx -> offset, asm_operand 配置成 rxx
+        if (v->indirect_addr) {
             // 生成 mov 指令（asm_mov）
             list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -(*var->decl->stack_frame_offset), QWORD) }));
             asm_operand_t *temp = DISP_REG(reg, v->offset, QWORD);
             ASM_OPERAND_COPY(asm_operand, temp);
-            return insts;
+        } else {
+            list_push(insts, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
+            ASM_OPERAND_COPY(asm_operand, REG(reg));
         }
 
-        error_exit("[amd64_lir_to_asm_operand]  var cannot reg_id or stack_frame_offset");
+        return insts;
     }
 
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
@@ -696,4 +648,14 @@ uint8_t amd64_min_size(uint8_t size) {
         size = 4;
     }
     return size;
+}
+
+reg_t *amd64_lower_find_reg(uint8_t *index, uint8_t size) {
+    reg_t *r = (reg_t *) amd64_register_find(*index, size);
+    if (r == NULL) {
+        error_exit("[amd64_register_find] result null, index: %d, size: %d", *index, size);
+    }
+
+    *index++;
+    return r;
 }

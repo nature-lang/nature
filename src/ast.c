@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "src/lib/helper.h"
 
 string ast_expr_operator_to_string[100] = {
         [AST_EXPR_OPERATOR_ADD] = "+",
@@ -38,4 +39,31 @@ ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = malloc(sizeof(ast_ident));
     ident->literal = literal;
     return ident;
+}
+
+int ast_struct_decl_size(ast_struct_decl *struct_decl) {
+    int size = 0;
+    for (int i = 0; i < struct_decl->count; ++i) {
+        ast_struct_property property = struct_decl->list[i];
+        size += type_base_sizeof(property.type.base);
+    }
+    return size;
+}
+
+/**
+ * 默认 struct_decl 已经排序过了
+ * @param struct_decl
+ * @param property
+ * @return
+ */
+int ast_struct_offset(ast_struct_decl *struct_decl, char *property) {
+    int offset = 0;
+    for (int i = 0; i < struct_decl->count; ++i) {
+        ast_struct_property item = struct_decl->list[i];
+        if (str_equal(item.key, property)) {
+            break;
+        }
+        offset += type_base_sizeof(item.type.base);
+    }
+    return offset;
 }

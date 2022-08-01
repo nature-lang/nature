@@ -172,17 +172,34 @@ typedef struct {
     type_t type;
     string key;
     ast_expr value;
-    size_t length; // byte
+    uint8_t size; // byte
 } ast_struct_property;
 
+/**
+ * 使用了 type, key, size
+ * struct {
+ *    int a
+ *    int b
+ *    int c
+ * }
+ */
 typedef struct {
-    ast_struct_property list[INT8_MAX];
+    ast_struct_property list[UINT8_MAX];
     int8_t count;
 } ast_struct_decl; // 多个 property 组成一个
 
+/**
+ * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，
+ * 使用了 key, value
+ * people {
+ *    a = 1
+ *    b = 2
+ *    c = 3
+ * }
+ */
 typedef struct {
     type_t type; // 为什么这里声明的是一个类型而不是 ident?
-    ast_struct_property list[INT8_MAX];
+    ast_struct_property list[UINT8_MAX];
     int8_t count;
 } ast_new_struct;
 
@@ -306,5 +323,9 @@ ast_block_stmt ast_new_block_stmt();
 void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 ast_ident *ast_new_ident(string literal);
+
+int ast_struct_decl_size(ast_struct_decl *struct_decl);
+
+int ast_struct_offset(ast_struct_decl *struct_decl, string property);
 
 #endif //NATURE_SRC_AST_H_

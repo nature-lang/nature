@@ -355,17 +355,18 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
     }
 
     ast_struct_decl *struct_decl = (ast_struct_decl *) new_struct->type.value;
+    // new_struct->count 小于等于 struct_decl->count, 允许 new_struct 期间不进行赋值
     for (int i = 0; i < new_struct->count; ++i) {
-        ast_struct_property struct_property = new_struct->list[i];
+        ast_struct_property *struct_property = &new_struct->list[i];
 
         // struct_decl 已经是被还原过的类型了
-        type_t expect_type = infer_struct_property_type(struct_decl, struct_property.key);
-        type_t actual_type = infer_expr(&struct_property.value);
+        type_t expect_type = infer_struct_property_type(struct_decl, struct_property->key);
+        type_t actual_type = infer_expr(&struct_property->value);
 
-        // expect type type 并不允许为 var
+        // expect type 并不允许为 var
         if (!infer_compare_type(actual_type, expect_type)) {
             error_printf(infer_line, "property '%s' expect '%s' type, cannot assign '%s' type",
-                         struct_property.key,
+                         struct_property->key,
                          type_to_string[expect_type.base],
                          type_to_string[actual_type.base]);
         }

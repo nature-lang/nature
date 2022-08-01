@@ -13,7 +13,6 @@ static lir_operand_var *test_lir_operand_var(char *ident, int stack_frame_offset
     if (stack_frame_offset >= 0) {
         var->decl->stack_frame_offset = stack_frame_offset;
     }
-    var->size = size;
 }
 
 static lir_operand *test_lir_temp(char *ident, int stack_frame_offset) {

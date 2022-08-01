@@ -97,6 +97,10 @@ static void test_array() {
     built_target("/home/vagrant/Code/nature/test/stubs/6_array.n", "array.n");
 }
 
+static void test_struct() {
+    built_target("/home/vagrant/Code/nature/test/stubs/7_struct.n", "struct.n");
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_hello),
@@ -105,7 +109,9 @@ int main(void) {
 //            cmocka_unit_test(test_if),
 //            cmocka_unit_test(test_while),
 //            cmocka_unit_test(test_closure),
-            cmocka_unit_test(test_array),
+//            cmocka_unit_test(test_array),
+            cmocka_unit_test(test_struct),
+
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

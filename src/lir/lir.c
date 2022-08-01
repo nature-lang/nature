@@ -7,24 +7,30 @@
 #include "src/lib/error.h"
 
 lir_operand *set_indirect_addr(lir_operand *operand) {
-    if (operand->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_TYPE_VAR, actual %d", operand->type);
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = operand->value;
+        var->indirect_addr = true;
+        return operand;
+    } else if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+        lir_operand_addr *addr = operand->value;
+        addr->indirect_addr = true;
+        return operand;
     }
-    lir_operand_var *var = operand->value;
-    var->indirect_addr = true;
-    return operand;
+
+    error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_TYPE_VAR or LIR_OPERAND_TYPE_ADDR, actual %d",
+               operand->type);
+    return NULL;
 }
 
-lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length) {
-    lir_operand_memory *memory_operand = malloc(sizeof(lir_operand_memory));
-    memory_operand->base = base;
-    // 根据 index + 类型计算偏移量
-    memory_operand->offset = offset;
-    memory_operand->length = length;
+lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t infer_size_type) {
+    lir_operand_addr *addr_operand = malloc(sizeof(lir_operand_addr));
+    addr_operand->base = base;
+    addr_operand->offset = offset;
+    addr_operand->infer_size_type = infer_size_type;
 
     lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_MEMORY;
-    operand->value = memory_operand;
+    operand->type = LIR_OPERAND_TYPE_ADDR;
+    operand->value = addr_operand;
     return operand;
 }
 
@@ -252,12 +258,17 @@ type_base_t lir_operand_type_system(lir_operand *operand) {
         return var->infer_size_type;
     }
 
+    if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+        lir_operand_addr *addr = operand->value;
+        return addr->infer_size_type;
+    }
+
     if (operand->type == LIR_OPERAND_TYPE_SYMBOL) {
         lir_operand_symbol *s = operand->value;
         return s->type;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+    if (operand->type == LIR_OPERAND_TYPE_IMM) {
         lir_operand_immediate *imm = operand->value;
         return imm->type;
     }

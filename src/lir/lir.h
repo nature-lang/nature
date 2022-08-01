@@ -34,6 +34,9 @@
 #define RUNTIME_CALL_STRING_ADDR "string_addr"
 #define RUNTIME_CALL_STRING_LENGTH "string_length"
 
+// GC 相关函数
+#define RUNTIME_CALL_GC_NEW "gc_new"
+
 #define LIST_OP_COPY(dst, src) \
 ({                             \
     dst->type = src->type; \
@@ -48,7 +51,7 @@
    imm_operand->type = operand_type; \
    imm_operand->key = val; \
    lir_operand *operand = malloc(sizeof(lir_operand)); \
-   operand->type = LIR_OPERAND_TYPE_IMMEDIATE; \
+   operand->type = LIR_OPERAND_TYPE_IMM; \
    operand->value = imm_operand;              \
    operand; \
 })
@@ -100,8 +103,8 @@ typedef enum {
     LIR_OPERAND_TYPE_FORMAL_PARAM,
     LIR_OPERAND_TYPE_ACTUAL_PARAM,
     LIR_OPERAND_TYPE_LABEL_SYMBOL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
-    LIR_OPERAND_TYPE_IMMEDIATE,
-    LIR_OPERAND_TYPE_MEMORY,
+    LIR_OPERAND_TYPE_IMM,
+    LIR_OPERAND_TYPE_ADDR,
 } lir_operand_type;
 
 typedef enum {
@@ -162,7 +165,7 @@ typedef struct {
     uint8_t reg_id; // reg list index, 寄存器分配
     lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
     type_base_t infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
-    uint8_t size; // lir 阶段根据编译的目标平台就已经能确定操作树的大小了
+//    uint8_t size; // lir 阶段根据编译的目标平台就已经能确定操作树的大小了
     bool indirect_addr;
 } lir_operand_var;
 
@@ -185,9 +188,10 @@ typedef size_t memory_address;
 
 typedef struct {
     lir_operand *base;
-    size_t offset; // 偏移量是可以计算出来的
-    size_t length; // 数据长度
-} lir_operand_memory;
+    int offset; // 偏移量是可以计算出来的, 默认为 0
+    type_base_t infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
+    bool indirect_addr;
+} lir_operand_addr;
 
 typedef struct {
     union {
@@ -346,7 +350,7 @@ lir_operand *lir_new_temp_var_operand(closure *c, type_t type);
 
 lir_operand *lir_new_empty_operand();
 
-lir_operand *lir_new_memory_operand(lir_operand *base, size_t offset, size_t length);
+lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t infer_size_type);
 
 lir_operand *lir_new_label_operand(string ident, bool is_local);
 

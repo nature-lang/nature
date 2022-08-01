@@ -331,7 +331,7 @@ list *compiler_unary(closure *c, ast_expr expr, lir_operand *result_target) {
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->type == LIR_OPERAND_TYPE_IMM) {
         lir_operand_immediate *imm = first->value;
         imm->int_value = -imm->int_value;
         // move 操作即可
@@ -806,16 +806,22 @@ list *compiler_select_property(closure *c, ast_expr expr, lir_operand *target) {
     ast_select_property *ast = expr.expr;
     list *operates = list_new();
 
+    if (target->type != LIR_OPERAND_TYPE_VAR) {
+        error_exit("[compiler_select_property] target not var, actual %d", target->type);
+    }
+
     // 计算基值
     lir_operand *base_target = lir_new_empty_operand();
     list_append(operates, compiler_expr(c, ast->left, base_target));
-    size_t offset = struct_offset(ast->struct_decl, ast->property);
 
-    // TODO 如何正确的访问属性? lir_memory 是否应该重新涉及
-    lir_operand *src = lir_new_memory_operand(base_target, offset, ast->struct_property->length);
+    int offset = ast_struct_offset(ast->struct_decl, ast->property);
+    lir_operand *src = lir_new_addr_operand(base_target, offset, expr.type.base);
 
-    lir_op *move_op = lir_op_move(target, src);
-    list_push(operates, move_op);
+    // target 就是个临时变量，直接修改 target 为 addr 类型,省心又省力
+
+    set_indirect_addr(src);
+    target->type = src->type;
+    target->value = src->value;
 
     return operates;
 }
@@ -839,15 +845,22 @@ list *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target) {
     ast_new_struct *ast = expr.expr;
     list *operates = list_new();
     ast_struct_decl *struct_decl = ast->type.value;
+
+    int size = ast_struct_decl_size(struct_decl);
+    // new struct by runtime call, base_target
+    list_push(operates, lir_op_runtime_call(RUNTIME_CALL_GC_NEW, base_target, 1,
+                                            LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, size)));
+
+    // set init value
     for (int i = 0; i < ast->count; ++i) {
         ast_struct_property struct_property = ast->list[i];
 
-        lir_operand *src = lir_new_empty_operand();
-        list_append(operates, compiler_expr(c, struct_property.value, src));
+        lir_operand *src_temp = lir_new_empty_operand();
+        list_append(operates, compiler_expr(c, struct_property.value, src_temp));
 
-        size_t offset = struct_offset(struct_decl, struct_property.key);
-        lir_operand *dst = lir_new_memory_operand(base_target, offset, struct_property.length);
-        lir_op *move_op = lir_op_move(dst, src);
+        int offset = ast_struct_offset(struct_decl, struct_property.key);
+        lir_operand *dst = lir_new_addr_operand(base_target, offset, struct_property.value.type.base);
+        lir_op *move_op = lir_op_move(set_indirect_addr(dst), src_temp);
         list_push(operates, move_op);
     }
 
@@ -954,7 +967,7 @@ list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
         lir_operand *origin_param_target = lir_new_empty_operand();
         list_append(operates, compiler_expr(c, ast_param_expr, origin_param_target));
 
-        if (origin_param_target->type == LIR_OPERAND_TYPE_IMMEDIATE) {
+        if (origin_param_target->type == LIR_OPERAND_TYPE_IMM) {
             lir_operand *imm_param = origin_param_target;
             lir_operand_immediate *imm = imm_param->value;
             imm->type = TYPE_INT64; // int 默认都使用了 mov asm uint 32 处理。但是这里确实需要 64 位处理。
