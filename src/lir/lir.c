@@ -240,7 +240,7 @@ lir_local_var_decl *lir_new_local_var_decl(closure *c, char *ident, type_t type)
     *local->stack_offset = 0;
     local->ident = ident;
     table_set(c->local_var_decl_table, ident, local);
-//    list_push(c->local_var_decls, local);
+    return local;
 }
 
 lir_operand *lir_new_empty_operand() {

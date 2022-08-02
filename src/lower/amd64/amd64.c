@@ -84,8 +84,10 @@ list *amd64_lower_call(closure *c, lir_op *op) {
         asm_operand_t *source = NEW(asm_operand_t);
         uint8_t actual_transform_used[2] = {0};
         list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
+        // TODO 目标操作数总是 8byte, 但是源操作数可能有 uint8 等如何处理
 
-        reg_t *target_reg = amd64_lower_fn_next_reg_target(actual_used, source->size); // source 和 target 大小要匹配
+        reg_t *target_reg = amd64_lower_fn_next_reg_target(actual_used,
+                                                           lir_operand_type_base(operand)); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
             list_push(temp_insts, ASM_INST("push", { source })); // push 会导致 rsp 栈不对齐
@@ -446,9 +448,14 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
  * @param size
  * @return
  */
-reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], uint8_t size) {
+reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
+    uint8_t size = QWORD;
+    if (base == TYPE_FLOAT) { // TODO 更多 float 类型
+        size = OWORD;
+    }
+
     uint8_t used_index = 0; // 8bit ~ 64bit
-    if (size > 8) {
+    if (size > QWORD) {
         used_index = 1;
     }
     uint8_t count = used[used_index]++;
@@ -469,7 +476,7 @@ reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], uint8_t size) {
 
 list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list *insts = list_new();
-    // 计算堆栈信息
+    // 计算堆栈信息(倒序 )
     list_node *current = list_last(c->local_var_decls); // rear 为 empty 占位
     while (current != NULL) {
         lir_local_var_decl *var = current->value;
@@ -481,18 +488,33 @@ list *amd64_lower_fn_begin(closure *c, lir_op *op) {
         current = current->prev;
     }
 
+    // 一次堆栈对齐,对齐后再继续分配栈空间，分配完成后需要进行二次栈对齐。
+    c->stack_length = memory_align(c->stack_length, 16);
+
     // 部分局部变量需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
     // 还有一部分 push
+    uint8_t used[2] = {0};
+    int16_t stack_param_offset = 16; // 16byte 起点
+
     current = c->formal_params->front;
     while (current->value != NULL) {
         lir_local_var_decl *var = current->value;
-        // TODO 为什么不能直接接着堆栈走？
+
+        reg_t *reg = amd64_lower_fn_next_reg_target(used, var->ast_type.base);
+        if (reg != NULL) {
+            // rbp-x
+            c->stack_length += QWORD;
+            *var->stack_offset = -(c->stack_length);
+        } else {
+            // rbp+x
+            *var->stack_offset = stack_param_offset;
+            stack_param_offset += QWORD;
+        }
 
         current = current->next;
     }
 
-
-    // 16 对齐
+    // 二次对齐
     c->stack_length = memory_align(c->stack_length, 16);
 
     list_push(insts, ASM_INST("push", { REG(rbp) }));
@@ -522,18 +544,19 @@ list *amd64_lower_fn_formal_params(closure *c) {
     list *insts = list_new();
     // 已经在栈里面的就不用管了，只取寄存器中的。存放在 lir_var 中的 stack_offset 中即可
     uint8_t formal_used[2] = {0};
-    for (int i = 0; i < c->formal_params.count; i++) {
-        lir_operand_var *var = c->formal_params.list[i];
-
-        uint8_t used[2] = {0};
-        asm_operand_t *target = NEW(asm_operand_t);
-        list_append(insts, amd64_lower_operand_transform(
-                LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), target, used));
-
-        reg_t *source_reg = amd64_lower_fn_next_reg_target(formal_used, type_base_sizeof(var->infer_size_type));
-        if (source_reg != NULL) {
-            list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+    list_node *current = c->formal_params->front;
+    while (current->value != NULL) {
+        lir_local_var_decl *var_decl = current->value;
+        reg_t *source_reg = amd64_lower_fn_next_reg_target(formal_used, var_decl->ast_type.base);
+        if (source_reg == NULL) {
+            continue;
         }
+
+        // 直接使用 var 转换
+        asm_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->ast_type.base));
+        list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+
+        current = current->next;
     }
     return insts;
 }

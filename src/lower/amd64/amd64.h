@@ -73,7 +73,7 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size);
  * @param asm_operand
  * @return
  */
-reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], uint8_t size);
+reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base);
 
 // 只要返回了指令就有一个使用的寄存器的列表，已经使用的固定寄存器就不能重复使用
 list *amd64_lower_operand_transform(lir_operand *operand,
