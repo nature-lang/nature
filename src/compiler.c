@@ -116,9 +116,8 @@ list *compiler_closure(closure *parent, ast_closure_decl *ast_closure, lir_opera
     // compiler formal param
     for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
         ast_var_decl *param = ast_closure->function->formal_params[i];
-        list_append(operates, compiler_var_decl(c, param));
-
-        c->formal_params.list[c->formal_params.count++] = lir_new_var_operand(c, param->ident);
+        lir_local_var_decl *local = lir_new_local_var_decl(c, param->ident, param->type);
+        list_push(c->formal_params, local);
     }
 
     // 编译 body
@@ -196,7 +195,8 @@ list *compiler_stmt(closure *c, ast_stmt stmt) {
  */
 list *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
     list *operates = list_new();
-    lir_new_local_var(c, stmt->var_decl->ident, stmt->var_decl->type);
+    lir_local_var_decl *local = lir_new_local_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
+    list_push(c->local_var_decls, local);
 
     lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
     lir_operand *src = lir_new_empty_operand();
@@ -232,7 +232,8 @@ list *compiler_assign(closure *c, ast_assign_stmt *stmt) {
  * @return
  */
 list *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
-    lir_new_local_var(c, var_decl->ident, var_decl->type);
+    lir_local_var_decl *local = lir_new_local_var_decl(c, var_decl->ident, var_decl->type);
+    list_push(c->local_var_decls, local);
     return list_new();
 }
 

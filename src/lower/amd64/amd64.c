@@ -79,18 +79,13 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     for (int i = 0; i < v->count; ++i) {
         lir_operand *operand = v->list[i];
 
+        // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
         list *temp_insts = list_new();
         asm_operand_t *source = NEW(asm_operand_t);
-        if (operand->type == LIR_OPERAND_TYPE_VAR) {
-            lir_operand_var *var = operand->value;
-            uint8_t size = amd64_min_size(type_base_sizeof(var->infer_size_type));
-            source = amd64_lower_operand_var_transform(var, size);
-        } else {
-            uint8_t actual_transform_used[2] = {0};
-            list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
-        }
+        uint8_t actual_transform_used[2] = {0};
+        list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
 
-        reg_t *target_reg = amd64_lower_next_actual_reg_target(actual_used, source->size); // source 和 target 大小要匹配
+        reg_t *target_reg = amd64_lower_fn_next_reg_target(actual_used, source->size); // source 和 target 大小要匹配
         if (target_reg == NULL) {
             // push
             list_push(temp_insts, ASM_INST("push", { source })); // push 会导致 rsp 栈不对齐
@@ -440,6 +435,7 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
 
 
 /**
+ * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
  * 返回下一个可用的寄存器或者内存地址
  * 但是这样就需要占用 rbp 偏移，怎么做？
  * 每个函数定义的最开始已经使用 sub n => rsp, 已经申请了栈空间 [0 ~ n]
@@ -450,10 +446,7 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
  * @param size
  * @return
  */
-reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
-    // 参数部分不使用太小的寄存器
-    size = amd64_min_size(size);
-
+reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], uint8_t size) {
     uint8_t used_index = 0; // 8bit ~ 64bit
     if (size > 8) {
         used_index = 1;
@@ -463,12 +456,12 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
     // 通用寄存器 (0~5 = 6 个)
     if (size <= QWORD && count <= 5) {
         uint8_t reg_index = reg_index_list[count];
-        return (reg_t *) amd64_register_find(reg_index, size);
+        return (reg_t *) amd64_register_find(reg_index, QWORD);
     }
 
     // 浮点寄存器(0~7 = 8 个)
     if (size > QWORD && count <= 7) {
-        return (reg_t *) amd64_register_find(count, size);
+        return (reg_t *) amd64_register_find(count, OWORD);
     }
 
     return NULL;
@@ -476,18 +469,28 @@ reg_t *amd64_lower_next_actual_reg_target(uint8_t used[2], uint8_t size) {
 
 list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     list *insts = list_new();
-    // 计算堆栈信息(TODO 在寄存器分配之后再进行堆栈分配合理吗？)
-    list_node *current = c->local_vars->front;
+    // 计算堆栈信息
+    list_node *current = list_last(c->local_var_decls); // rear 为 empty 占位
+    while (current != NULL) {
+        lir_local_var_decl *var = current->value;
+        // 局部变量不需要考虑什么最小值的问题，直接网上涨就好了
+        uint8_t size = type_base_sizeof(var->ast_type.base);
+        c->stack_length += size;
+        *var->stack_offset = -(c->stack_length); // rbp-n, 所以这里取负数
+
+        current = current->prev;
+    }
+
+    // 部分局部变量需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
+    // 还有一部分 push
+    current = c->formal_params->front;
     while (current->value != NULL) {
         lir_local_var_decl *var = current->value;
-        // 栈需要对齐，所以最小值需要是 4
-        uint8_t size = type_base_sizeof(var->ast_type.base);
-        size = amd64_min_size(size);
-        c->stack_length += size;
-        *var->stack_offset = c->stack_length;
+        // TODO 为什么不能直接接着堆栈走？
 
         current = current->next;
     }
+
 
     // 16 对齐
     c->stack_length = memory_align(c->stack_length, 16);
@@ -527,7 +530,7 @@ list *amd64_lower_fn_formal_params(closure *c) {
         list_append(insts, amd64_lower_operand_transform(
                 LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), target, used));
 
-        reg_t *source_reg = amd64_lower_next_actual_reg_target(formal_used, type_base_sizeof(var->infer_size_type));
+        reg_t *source_reg = amd64_lower_fn_next_reg_target(formal_used, type_base_sizeof(var->infer_size_type));
         if (source_reg != NULL) {
             list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
         }
@@ -607,9 +610,9 @@ list *amd64_lower_lea(closure *c, lir_op *op) {
     return insts;
 }
 
-uint8_t amd64_min_size(uint8_t size) {
-    if (size < 4) {
-        size = 4;
+uint8_t amd64_formal_min_stack(uint8_t size) {
+    if (size < 8) {
+        size = 8;
     }
     return size;
 }

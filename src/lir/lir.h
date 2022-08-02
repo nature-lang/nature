@@ -153,7 +153,7 @@ typedef struct lir_operand {
 typedef struct {
     string ident;
     type_t ast_type; // 原始类型存储(包含指针深度)
-    uint16_t *stack_offset;
+    int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
 } lir_local_var_decl;
 
 /**
@@ -307,13 +307,10 @@ typedef struct closure {
     struct closure *parent;
     list *operates; // 指令列表
 
-    lir_vars formal_params; // closure 形参列表, 堆栈分配时有一席之地。
+    table *local_var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
+    list *local_var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
+    list *formal_params; // 依旧为了堆栈分配
 
-    table *local_vars_table; // 主要是用于栈分配(但是该结构不适合遍历)
-    list *local_vars;
-
-    // 大响应值分配的栈偏移(初始时肯定为 rdi,然后被分配到内存中, 根据观察，栈内存分配没有考虑过函数内的进出栈)
-    uint16_t return_offset;
     uint16_t stack_length; // 栈长度, byte, 等于局部变量的长度
 } closure;
 
@@ -340,7 +337,7 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  * @param ident
  * @param type
  */
-void lir_new_local_var(closure *c, string ident, type_t type);
+lir_local_var_decl *lir_new_local_var_decl(closure *c, string ident, type_t type);
 
 type_base_t lir_operand_type_base(lir_operand *operand);
 
