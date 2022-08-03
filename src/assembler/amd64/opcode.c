@@ -89,11 +89,18 @@ inst_t add_imm8_rm64 = {"add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, 
 };
 
 
-inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                      }
+};
+
+inst_t mov_rex_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                         }
 };
 
 inst_t mov_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
@@ -101,6 +108,13 @@ inst_t mov_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
                      }
+};
+
+inst_t mov_rex_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                         }
 };
 
 // 注册指令列表 asm operand
@@ -393,7 +407,9 @@ void opcode_init() {
     opcode_tree_build(&add_r64_rm64);
     opcode_tree_build(&add_rm64_r64);
     opcode_tree_build(&mov_rm8_r8);
+    opcode_tree_build(&mov_rex_rm8_r8);
     opcode_tree_build(&mov_r8_rm8);
+    opcode_tree_build(&mov_rex_r8_rm8);
     opcode_tree_build(&mov_r16_rm16);
     opcode_tree_build(&mov_imm32_r32);
     opcode_tree_build(&mov_rm64_imm32);
@@ -840,8 +856,10 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
         insts.list[insts.count++] = inst;
     }
     if (insts.count == 0) {
-        error_exit("[opcode_select] opcode %s not match insts, has 64: %d, has high eight: %d",
+        error_exit("[opcode_select] opcode %s 1_size:%d, 2_size: %d not match insts,  has 64: %d, has high eight: %d",
                    asm_inst.name,
+                   asm_inst.operands[0]->size,
+                   asm_inst.operands[1]->size,
                    has64Reg,
                    hasHighEightReg);
     }

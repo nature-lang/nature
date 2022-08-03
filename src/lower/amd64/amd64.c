@@ -376,8 +376,10 @@ list *amd64_lower_operand_transform(lir_operand *operand,
         // 如果设置了 indirect_addr, 则编译成 [rxx+offset]
         // 否则应该编译成 ADD  rxx -> offset, asm_operand 配置成 rxx
         if (v->indirect_addr) {
+            asm_operand_t *base_addr_operand = amd64_lower_operand_var_transform(base_var, 0);
             // 生成 mov 指令（asm_mov）
-            list_push(insts, ASM_INST("mov", { REG(reg), DISP_REG(rbp, -(*base_var->decl->stack_offset), QWORD) }));
+            list_push(insts, ASM_INST("mov", { REG(reg), base_addr_operand }));
+
             asm_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->infer_size_type));
             ASM_OPERAND_COPY(asm_operand, temp);
         } else {

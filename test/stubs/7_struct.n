@@ -14,6 +14,6 @@ var foo = people {
 // 外部赋值
 foo.c = 11
 
-println("foo.a = ", a)
+println("foo.a = ", foo.a)
 println("foo.b = ", foo.b)
 println("foo.c = ", foo.c)

@@ -109,14 +109,13 @@ int main(void) {
     const struct CMUnitTest tests[] = {
 //            cmocka_unit_test(test_hello),
 //            cmocka_unit_test(test_sum),
-            cmocka_unit_test(test_call),
+//            cmocka_unit_test(test_call),
 //            cmocka_unit_test(test_if),
 //            cmocka_unit_test(test_while),
 //            cmocka_unit_test(test_closure),
 //            cmocka_unit_test(test_array),
-//            cmocka_unit_test(test_struct),
+            cmocka_unit_test(test_struct),
 //            cmocka_unit_test(test_bool),
-
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
