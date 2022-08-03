@@ -58,6 +58,12 @@ void amd64_register_init() {
     r14w = amd64_register_operand_new("r14w", 14, WORD);
     r15w = amd64_register_operand_new("r15w", 15, WORD);
 
+    // 正常来说也应该是 0, 1, 2, 3, 但是 intel 手册规定了使用 4，5，6, 7
+    ah = amd64_register_operand_new("ah", 4, BYTE);
+    ch = amd64_register_operand_new("ch", 5, BYTE);
+    dh = amd64_register_operand_new("dh", 6, BYTE);
+    bh = amd64_register_operand_new("bh", 7, BYTE);
+
     al = amd64_register_operand_new("al", 0, BYTE);
     cl = amd64_register_operand_new("cl", 1, BYTE);
     dl = amd64_register_operand_new("dl", 2, BYTE);
@@ -74,11 +80,6 @@ void amd64_register_init() {
     r13b = amd64_register_operand_new("r13b", 13, BYTE);
     r14b = amd64_register_operand_new("r14b", 14, BYTE);
     r15b = amd64_register_operand_new("r15b", 15, BYTE);
-
-    ah = amd64_register_operand_new("ah", 4, BYTE);
-    ch = amd64_register_operand_new("ch", 5, BYTE);
-    dh = amd64_register_operand_new("dh", 6, BYTE);
-    bh = amd64_register_operand_new("bh", 7, BYTE);
 
     xmm0 = amd64_register_operand_new("xmm0", 0, OWORD);
     xmm1 = amd64_register_operand_new("xmm1", 1, OWORD);

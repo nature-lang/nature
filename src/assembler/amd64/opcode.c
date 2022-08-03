@@ -139,12 +139,28 @@ inst_t mov_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE
                        }
 };
 
+inst_t mov_rex_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+                           {
+                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                   {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                           }
+};
+
+
 inst_t mov_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
                       {
                               {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                       }
 };
+
+inst_t mov_rex_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
+                          {
+                                  {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
+                                  {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                          }
+};
+
 
 // intel 指令顺序
 inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
@@ -198,6 +214,21 @@ inst_t mov_rm32_r32 = {"mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
                        }
 };
 
+// intel 指令顺序
+inst_t xor_r64_rm64 = {"xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+// intel 指令顺序
+inst_t xor_rm64_r64 = {"xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
 
 inst_t lea_r64_m = {"lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                     {
@@ -367,6 +398,8 @@ void opcode_init() {
     opcode_tree_build(&mov_imm32_r32);
     opcode_tree_build(&mov_rm64_imm32);
     opcode_tree_build(&mov_r64_imm64);
+    opcode_tree_build(&mov_rex_rm8_imm8);
+    opcode_tree_build(&mov_rex_r8_imm8);
     opcode_tree_build(&mov_rm8_imm8);
     opcode_tree_build(&mov_r8_imm8);
     opcode_tree_build(&mov_r64_rm64);
@@ -376,6 +409,8 @@ void opcode_init() {
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
+    opcode_tree_build(&xor_r64_rm64); // xmm 到内存或者xmm
+    opcode_tree_build(&xor_rm64_r64); // xmm 到内存或者xmm
     opcode_tree_build(&cmp_al_imm8);
     opcode_tree_build(&cmp_rax_imm32);
     opcode_tree_build(&cmp_r64_rm64);
@@ -679,6 +714,77 @@ void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_inde
     }
 }
 
+// spl,bpl,sil,dil and reg index >= 8
+// must has rex/rexw/vex128/vex256
+static bool is_64_reg(asm_operand_register_t *reg) {
+    if (str_equal(reg->name, "spl")) {
+        return true;
+    }
+    if (str_equal(reg->name, "bpl")) {
+        return true;
+    }
+    if (str_equal(reg->name, "sil")) {
+        return true;
+    }
+    if (str_equal(reg->name, "dil")) {
+        return true;
+    }
+    if (reg->index >= 8) {
+        return true;
+    }
+    return false;
+}
+
+
+// ah,ch,dh,bh
+// must skip rex/rexw
+static bool is_high_eight_reg(asm_operand_register_t *reg) {
+    if (str_equal(reg->name, "ah")) {
+        return true;
+    }
+    if (str_equal(reg->name, "bh")) {
+        return true;
+    }
+    if (str_equal(reg->name, "ch")) {
+        return true;
+    }
+    if (str_equal(reg->name, "dh")) {
+        return true;
+    }
+
+    return false;
+}
+
+static bool has_64_extension(opcode_ext *list) {
+    for (int i = 0; i < 4; ++i) {
+        if (list[i] == OPCODE_EXT_REX) {
+            return true;
+        }
+        if (list[i] == OPCODE_EXT_REX_W) {
+            return true;
+        }
+        if (list[i] == OPCODE_EXT_VEX_128) {
+            return true;
+        }
+        if (list[i] == OPCODE_EXT_VEX_256) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool has_rex_extension(opcode_ext *list) {
+    for (int i = 0; i < 4; ++i) {
+        if (list[i] == OPCODE_EXT_REX) {
+            return true;
+        }
+        if (list[i] == OPCODE_EXT_REX_W) {
+            return true;
+        }
+    }
+    return false;
+}
+
 inst_t *opcode_select(asm_inst_t asm_inst) {
     opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
     if (current == NULL) {
@@ -686,21 +792,60 @@ inst_t *opcode_select(asm_inst_t asm_inst) {
         return NULL;
     }
 
+    // 这里仅使用了大小匹配，但是对于 r8 和 rm8 存在一些特殊情况需要处理
+    // 比如 ah 寄存器对应的操作码必须包含扩展 rex
+    bool has64Reg = false;
+    bool hasHighEightReg = false;
+
     for (int i = 0; i < asm_inst.count; ++i) {
         asm_operand_t *operand = asm_inst.operands[i];
+        if (operand->type == ASM_OPERAND_TYPE_REGISTER) {
+            if (is_high_eight_reg(operand->value)) {
+                hasHighEightReg = true;
+            }
+            if (is_64_reg(operand->value)) {
+                has64Reg = true;
+            }
+
+        }
+
         // 生成 key
         string key = itoa(asm_operand_to_key(operand->type, operand->size));
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
         if (!exists) {
-            error_exit("cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
+            error_exit("[opcode_select]cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
             return NULL;
         }
         current = table_get(current->succs, key);
     }
 
-    insts_t insts = current->insts;
+    insts_t temps = current->insts;
+
+    insts_t insts = {
+            .count = 0,
+            .list= malloc(sizeof(inst_t) * 10)
+    };
+    for (int i = 0; i < temps.count; ++i) {
+        inst_t *inst = temps.list[i];
+        if (has64Reg && !has_64_extension(inst->extensions)) {
+            continue;
+        }
+
+        if (hasHighEightReg && has_rex_extension(inst->extensions)) {
+            continue;
+        }
+
+        insts.list[insts.count++] = inst;
+    }
+    if (insts.count == 0) {
+        error_exit("[opcode_select] opcode %s not match insts, has 64: %d, has high eight: %d",
+                   asm_inst.name,
+                   has64Reg,
+                   hasHighEightReg);
+    }
+
     opcode_sort_insts(&insts);
 
     return insts.list[0];

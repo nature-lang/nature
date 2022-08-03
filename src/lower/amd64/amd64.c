@@ -31,11 +31,22 @@ static asm_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, ui
         asm_operand_register_t *reg = amd64_register_find(var->reg_id, size);
         return REG(reg);
     }
-    if (var->decl->stack_offset > 0) {
-        return DISP_REG(rbp, -(*var->decl->stack_offset), size);
+
+    if (var->decl->stack_offset != 0) {
+        return DISP_REG(rbp, *var->decl->stack_offset, size);
     }
 
     error_exit("[amd64_lower_var_operand] var %d not reg_id or stack offset", var->ident);
+}
+
+asm_inst_t *amd64_lower_empty_reg(reg_t *reg) {
+    // TODO ah/bh/ch/dh 不能这么清理
+
+    reg_t *r = (reg_t *) amd64_register_find(reg->index, QWORD);
+    if (r == NULL) {
+        error_exit("[amd64_lower_empty_reg] reg not found, index: %d, size: %d", reg->index, QWORD);
+    }
+    return ASM_INST("xor", { REG(r), REG(r) });
 }
 
 /**
@@ -79,20 +90,26 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     for (int i = 0; i < v->count; ++i) {
         lir_operand *operand = v->list[i];
 
-        // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
         list *temp_insts = list_new();
-        asm_operand_t *source = NEW(asm_operand_t);
-        uint8_t actual_transform_used[2] = {0};
-        list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
-        // TODO 目标操作数总是 8byte, 但是源操作数可能有 uint8 等如何处理
 
+        // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
+        uint8_t actual_transform_used[2] = {0};
+        asm_operand_t *source = NEW(asm_operand_t);
+        list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
+
+        // 根据实际大小选择寄存器
         reg_t *target_reg = amd64_lower_fn_next_reg_target(actual_used,
                                                            lir_operand_type_base(operand)); // source 和 target 大小要匹配
+
         if (target_reg == NULL) {
             // push
             list_push(temp_insts, ASM_INST("push", { source })); // push 会导致 rsp 栈不对齐
             push_length += source->size;
         } else {
+            if (target_reg->size < 8) {
+                list_push(temp_insts, amd64_lower_empty_reg(target_reg));
+            }
+
             list_push(temp_insts, ASM_INST("mov", { REG(target_reg), source }));
         }
         list_append(temp_insts, param_insts);
@@ -449,8 +466,8 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
  * @return
  */
 reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
-    uint8_t size = QWORD;
-    if (base == TYPE_FLOAT) { // TODO 更多 float 类型
+    uint8_t size = type_base_sizeof(base);
+    if (base == TYPE_FLOAT) { // TODO 更多 float 类型, float 虽然栈大小为 8byte, 但是使用的寄存器确是 16byte 的
         size = OWORD;
     }
 
@@ -463,12 +480,12 @@ reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     // 通用寄存器 (0~5 = 6 个)
     if (size <= QWORD && count <= 5) {
         uint8_t reg_index = reg_index_list[count];
-        return (reg_t *) amd64_register_find(reg_index, QWORD);
+        return (reg_t *) amd64_register_find(reg_index, size);
     }
 
     // 浮点寄存器(0~7 = 8 个)
     if (size > QWORD && count <= 7) {
-        return (reg_t *) amd64_register_find(count, OWORD);
+        return (reg_t *) amd64_register_find(count, size);
     }
 
     return NULL;
