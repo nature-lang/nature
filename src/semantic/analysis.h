@@ -4,6 +4,8 @@
 #include "src/ast.h"
 #include "src/symbol.h"
 
+#include "src/target.h"
+
 #define MAIN_FUNCTION_NAME "main"
 #define ENV_IDENT "env"
 #define ANONYMOUS_FUNCTION_NAME "fn"
@@ -74,10 +76,15 @@ typedef struct analysis_function {
     uint8_t contains_fn_count;
 } analysis_function;
 
-analysis_function *analysis_current;
+analysis_function *analysis_current; // 全局变量
 
-// 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换
-ast_closure_decl analysis(ast_block_stmt stmt_list);
+// 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换,import 收集
+ast_closure_decl analysis(target_t *t, ast_block_stmt stmt_list);
+
+void analysis_main(target_t *t, ast_block_stmt stmt_list);
+
+// 符号表等其他信息已经注册到了 target 中
+void analysis_target(target_t *t, ast_block_stmt stmt_list);
 
 analysis_function *analysis_current_init(analysis_local_scope *scope, string fn_name);
 

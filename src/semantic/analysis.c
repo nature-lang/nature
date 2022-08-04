@@ -9,7 +9,9 @@
 #include "src/symbol.h"
 #include "src/debug/debug.h"
 
-ast_closure_decl analysis(ast_block_stmt block_stmt) {
+ast_closure_decl analysis_main(target_t *t, ast_block_stmt stmt_list) {
+    // import 段
+
     // init
     symbol_ident_table_init();
     unique_name_count = 0;
@@ -662,4 +664,11 @@ analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_loc
     new->scope_depth = scope_depth;
     new->parent = parent;
     return new;
+}
+
+void analysis_target(target_t *t, ast_block_stmt stmt_list) {
+    // 解析 import
+
+    // 解析 var decl/struct_decl/fn_decl(如果由其他表达式，报错就好了)
+
 }

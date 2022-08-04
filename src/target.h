@@ -6,6 +6,8 @@
 #include "import.h"
 #include "utils/list.h"
 #include "value.h"
+#include "semantic/analysis.h"
+
 
 // 记录遍历过的 import(根据 full path 判断)
 
@@ -14,8 +16,8 @@
  */
 typedef struct {
     char *source; // 源文件
-    string namespace;
-    string package;
+    string namespace; // 通常配置为完整文件路径
+    string package; // 为文件名称
 
     scanner_cursor s_cursor;
     scanner_error s_error;
@@ -25,6 +27,8 @@ typedef struct {
     ast_block_stmt stmt_list;
 
     // analysis
+    analysis_function analysis_current;
+
     // TODO var_decls to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/var_decls(symbol)/closure_decls
     list *imports; // import_t, 图遍历 imports

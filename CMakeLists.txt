@@ -66,6 +66,8 @@ set(SRC
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
         ${SRC_DIR}/ssa.c
+        ${SRC_DIR}/target.h
+        ${SRC_DIR}/target.c
         #        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c
