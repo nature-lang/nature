@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include "src/value.h"
-#include "src/lib/table.h"
+#include "utils/table.h"
 #include "ast.h"
 
 #define SYMBOL_GET_VAR_DECL(ident) \

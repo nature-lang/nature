@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_SYNTAX_PARSER_H_
 #define NATURE_SRC_SYNTAX_PARSER_H_
 
-#include "src/lib/list.h"
+#include "utils/list.h"
 #include "src/ast.h"
 #include "token.h"
 #include <stdlib.h>

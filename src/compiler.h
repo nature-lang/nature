@@ -1,10 +1,10 @@
 #ifndef NATURE_SRC_COMPILER_H_
 #define NATURE_SRC_COMPILER_H_
 
-#include "src/lib/list.h"
+#include "utils/list.h"
 #include "ast.h"
 #include "src/lir/lir.h"
-#include "src/lib/list.h"
+#include "utils/list.h"
 
 typedef struct {
     size_t count;

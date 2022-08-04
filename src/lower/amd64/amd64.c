@@ -1,8 +1,8 @@
 #include "amd64.h"
 #include "src/type.h"
 #include "src/assembler/amd64/register.h"
-#include "src/lib/error.h"
-#include "src/lib/helper.h"
+#include "utils/error.h"
+#include "utils/helper.h"
 #include "src/symbol.h"
 
 amd64_lower_fn amd64_lower_table[] = {

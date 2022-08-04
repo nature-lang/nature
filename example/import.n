@@ -13,6 +13,6 @@ import "http"
 import "./http"
 import "./project/module_a/http" // 当前目录下同名处理方法
 import "project/module_a/http"
-// project 为 build 目录，一旦 n build 第一件事就是记录当前目录, 一旦 import 开头使用了改路径，则表示基于根目录引入
+// project 为 build 目录，一旦 n build 第一件事就是记录当前目录, 一旦 import 开头使用了该路径，则表示基于根目录引入
 // n build foo/bar/main.n => 包起点就是 main 目录所在文件夹 bar
 

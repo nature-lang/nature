@@ -1,6 +1,6 @@
 #include "elf.h"
-#include "src/lib/helper.h"
-#include "src/lib/error.h"
+#include "utils/helper.h"
+#include "utils/error.h"
 #include <string.h>
 #include <stdio.h>
 

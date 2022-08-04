@@ -1,10 +1,10 @@
 #include <string.h>
 #include "infer.h"
-#include "src/lib/error.h"
+#include "utils/error.h"
 #include "src/symbol.h"
 #include "analysis.h"
 #include "src/debug/debug.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 
 void infer(ast_closure_decl *closure_decl) {
     infer_line = 0;

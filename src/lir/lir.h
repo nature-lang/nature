@@ -1,10 +1,10 @@
 #ifndef NATURE_SRC_LIR_H_
 #define NATURE_SRC_LIR_H_
 
-#include "src/lib/list.h"
+#include "utils/list.h"
 #include "src/value.h"
 #include "src/ast.h"
-#include "src/lib/table.h"
+#include "utils/table.h"
 #include "src/register/register.h"
 
 #define TEMP_IDENT "t"

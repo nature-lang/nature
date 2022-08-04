@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 #include "analysis.h"
-#include "src/lib/error.h"
-#include "src/lib/table.h"
+#include "utils/error.h"
+#include "utils/table.h"
 #include "src/symbol.h"
 #include "src/debug/debug.h"
 

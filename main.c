@@ -6,9 +6,10 @@
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
 #include "src/cfg.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 //#include "src/ssa.h"
 #include "src/debug/debug.h"
+#include <unistd.h>
 
 int main() {
     // 读取文件

@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "src/lib/table.h"
+#include "utils/table.h"
 #include "asm.h"
 
 typedef uint8_t size;

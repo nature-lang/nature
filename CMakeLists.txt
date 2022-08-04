@@ -41,15 +41,15 @@ set(SRC_DEBUG
         ${SRC_DIR}/debug/debug_lir.c
         ${SRC_DIR}/debug/debug_lir.h)
 
-set(SRC_LIB
-        ${SRC_DIR}/lib/error.c
-        ${SRC_DIR}/lib/error.h
-        ${SRC_DIR}/lib/list.h
-        ${SRC_DIR}/lib/list.c
-        ${SRC_DIR}/lib/table.h
-        ${SRC_DIR}/lib/table.c
-        ${SRC_DIR}/lib/helper.h
-        ${SRC_DIR}/lib/helper.c)
+set(UTILS
+        ${PROJECT_SOURCE_DIR}/utils/error.c
+        ${PROJECT_SOURCE_DIR}/utils/error.h
+        ${PROJECT_SOURCE_DIR}/utils/list.h
+        ${PROJECT_SOURCE_DIR}/utils/list.c
+        ${PROJECT_SOURCE_DIR}/utils/table.h
+        ${PROJECT_SOURCE_DIR}/utils/table.c
+        ${PROJECT_SOURCE_DIR}/utils/helper.h
+        ${PROJECT_SOURCE_DIR}/utils/helper.c)
 set(SRC
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c

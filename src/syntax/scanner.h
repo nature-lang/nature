@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_SCANNER_H_
 #define NATURE_SRC_SCANNER_H_
 
-#include "src/lib/list.h"
+#include "utils/list.h"
 #include "src/value.h"
 #include "src/syntax/token.h"
 

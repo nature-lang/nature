@@ -1,5 +1,7 @@
 cmake-build-debug/
 cmake-build-debug-vm/
+debug/
+release/
 tmp/
 .idea
 .DS_store

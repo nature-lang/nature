@@ -2,7 +2,7 @@
 #define NATURE_SRC_REGISTER_INTERVAL_H_
 
 #include "src/lir/lir.h"
-#include "src/lib/list.h"
+#include "utils/list.h"
 
 typedef enum {
     LOOP_DETECTION_FLAG_VISITED,

@@ -1,5 +1,5 @@
 #include "parser.h"
-#include "src/lib/error.h"
+#include "utils/error.h"
 #include <stdio.h>
 #include "src/debug/debug.h"
 #include <string.h>

@@ -4,7 +4,7 @@
 #include "lir.h"
 #include "src/debug/debug.h"
 #include "src/semantic/analysis.h"
-#include "src/lib/error.h"
+#include "utils/error.h"
 
 lir_operand *set_indirect_addr(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {

@@ -3,7 +3,7 @@
 #include "debug.h"
 #include "debug_lir.h"
 #include "src/symbol.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 #include "src/semantic/analysis.h"
 
 static char *lir_operand_symbol_to_string(lir_operand_symbol_var *ptr) {

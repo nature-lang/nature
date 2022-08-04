@@ -4,8 +4,8 @@
 #include "src/assembler/amd64/asm.h"
 #include "lib_elf.h"
 #include "src/assembler/amd64/opcode.h"
-#include "src/lib/list.h"
-#include "src/lib/table.h"
+#include "utils/list.h"
+#include "utils/table.h"
 
 #define TEXT_INDEX 1
 #define RELA_TEXT_INDEX 2

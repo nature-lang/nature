@@ -1,6 +1,6 @@
 #include "interval.h"
-#include "src/lib/list.h"
-#include "src/lib/stack.h"
+#include "utils/list.h"
+#include "utils/stack.h"
 
 // 每个块需要存储什么数据？
 // loop flag

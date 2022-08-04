@@ -1,8 +1,8 @@
 #include "test.h"
 #include <stdio.h>
 #include "runtime/type/string.h"
-#include "src/lib/list.h"
-#include "src/lib/helper.h"
+#include "utils/list.h"
+#include "utils/helper.h"
 #include "src/lir/lir.h"
 #include "src/assembler/amd64/asm.h"
 #include "src/assembler/amd64/register.h"

@@ -1,8 +1,8 @@
 #ifndef NATURE_SRC_REGISTER_ALLOCATE_H_
 #define NATURE_SRC_REGISTER_ALLOCATE_H_
 
-#include "src/lib/slice.h"
-#include "src/lib/list.h"
+#include "utils/slice.h"
+#include "utils/list.h"
 #include "interval.h"
 
 typedef struct {

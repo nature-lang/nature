@@ -1,7 +1,7 @@
 #include "opcode.h"
 #include "string.h"
-#include "src/lib/error.h"
-#include "src/lib/helper.h"
+#include "utils/error.h"
+#include "utils/helper.h"
 #include <math.h>
 
 inst_t movsq = {

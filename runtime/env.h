@@ -1,7 +1,7 @@
 #ifndef NATURE_ENV_H
 #define NATURE_ENV_H
 
-#include "src/lib/table.h"
+#include "utils/table.h"
 
 table *env_table;
 

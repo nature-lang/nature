@@ -1,9 +1,9 @@
 #include <string.h>
 #include "compiler.h"
 #include "symbol.h"
-#include "src/lib/error.h"
+#include "utils/error.h"
 #include "src/debug/debug.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 #include "stdio.h"
 
 lir_op_type ast_expr_operator_to_lir_op[] = {

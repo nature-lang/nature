@@ -1,6 +1,6 @@
 #include "symbol.h"
 #include "src/semantic/analysis.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 
 #define BOOL_SIZE_BYTE 1
 #define INT_SIZE_BYTE 8

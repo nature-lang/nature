@@ -1,5 +1,5 @@
 #include "ast.h"
-#include "src/lib/helper.h"
+#include "utils/helper.h"
 
 string ast_expr_operator_to_string[100] = {
         [AST_EXPR_OPERATOR_ADD] = "+",

@@ -3,7 +3,7 @@
 #include "token.h"
 #include "scanner.h"
 #include "stdio.h"
-#include "src/lib/error.h"
+#include "utils/error.h"
 
 scanner_cursor s_cursor;
 scanner_error s_error;

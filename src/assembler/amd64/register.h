@@ -2,7 +2,7 @@
 #define NATURE_SRC_ASSEMBLER_AMD64_REGISTER_H_
 
 #include "asm.h"
-#include "src/lib/table.h"
+#include "utils/table.h"
 
 table *amd64_regs_table; // key index_size
 
