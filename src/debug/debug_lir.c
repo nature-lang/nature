@@ -132,7 +132,7 @@ char *lir_operand_addr_to_string(lir_operand_addr *operand_addr) {
         indirect_addr_str = "*";
     }
     string type_string = type_to_string[operand_addr->infer_size_type];
-    sprintf(buf, "%sADDR[%s:%zu:%s]",
+    sprintf(buf, "%sADDR[%s:%u:%s]",
             indirect_addr_str,
             lir_operand_to_string(operand_addr->base), operand_addr->offset, type_string);
     return buf;

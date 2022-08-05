@@ -1,22 +1,22 @@
 #ifndef NATURE_SRC_LIB_SLICE_H_
 #define NATURE_SRC_LIB_SLICE_H_
 
-#include <stdlib.h>
-
 /**
  * slice 是一个动态数组，存储的内容为数据指针,其内容存储依旧是在内存中的连续空间。
  * 当空间不足时，会将整个数组进行迁移
  */
 typedef struct {
-    int count;
-    int capacity;
-    void **take;
-} slice;
+    int count; // 实际占用的元素数量
+    int capacity; // 申请的内存容量
+    void **take; // type take[count] = type *take = void* *take
+} slice_t;
 
-slice *slice_new();
+/**
+ * 初始给 8 个大小
+ * @return
+ */
+slice_t *slice_new();
 
-void slice_insert(slice *s, void *value);
-
-void slice_free(slice *s);
+void slice_push(slice_t *s, void *value);
 
 #endif //NATURE_SRC_LIB_SLICE_H_

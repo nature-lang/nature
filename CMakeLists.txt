@@ -42,6 +42,8 @@ set(SRC_DEBUG
         ${SRC_DIR}/debug/debug_lir.h)
 
 set(UTILS
+        ${PROJECT_SOURCE_DIR}/utils/slice.c
+        ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/error.c
         ${PROJECT_SOURCE_DIR}/utils/error.h
         ${PROJECT_SOURCE_DIR}/utils/list.h
@@ -91,7 +93,7 @@ set(RUNTIME_FILES
 
 add_executable(nature main.c
         ${SRC}
-        ${SRC_LIB}
+        ${UTILS}
         ${SRC_LOWER}
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}

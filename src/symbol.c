@@ -1,5 +1,4 @@
 #include "symbol.h"
-#include "src/semantic/analysis.h"
 #include "utils/helper.h"
 
 #define BOOL_SIZE_BYTE 1

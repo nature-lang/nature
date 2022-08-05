@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_SSA_H_
 #define NATURE_SRC_SSA_H_
 
-#include "lib/table.h"
+#include "utils/table.h"
 #include "src/lir/lir.h"
 
 typedef struct {

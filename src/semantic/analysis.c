@@ -9,7 +9,7 @@
 #include "src/symbol.h"
 #include "src/debug/debug.h"
 
-ast_closure_decl analysis_main(target_t *t, ast_block_stmt stmt_list) {
+void analysis_main(target_t *t, ast_block_stmt stmt_list) {
     // import 段
 
     // init
@@ -20,12 +20,11 @@ ast_closure_decl analysis_main(target_t *t, ast_block_stmt stmt_list) {
     // block 封装进 function,再封装到 closure 中
     ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
     function_decl->name = MAIN_FUNCTION_NAME;
-    function_decl->body = block_stmt;
+    function_decl->body = stmt_list;
     function_decl->return_type = type_new_base(TYPE_VOID);
     function_decl->formal_param_count = 0;
 
     ast_closure_decl *closure_decl = analysis_function_decl(function_decl, NULL);
-    return *closure_decl;
 }
 
 void analysis_block(ast_block_stmt *block) {
@@ -666,9 +665,14 @@ analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_loc
     return new;
 }
 
-void analysis_target(target_t *t, ast_block_stmt stmt_list) {
-    // 解析 import
-
-    // 解析 var decl/struct_decl/fn_decl(如果由其他表达式，报错就好了)
-
-}
+//void analysis_target(target_t *t, ast_block_stmt stmt_list) {
+//    int import_end_index = 0;
+//    for (int i = 0; i < stmt_list.count; ++i) {
+//        ast_stmt stmt = stmt_list.list[i];
+//        if (stmt.type != AST_STMT_ASSIGN)
+//    }
+//    // 解析 import
+//
+//    // 解析 var decl/struct_decl/fn_decl(如果由其他表达式，报错就好了)
+//
+//}

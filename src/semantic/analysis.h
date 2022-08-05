@@ -3,7 +3,6 @@
 
 #include "src/ast.h"
 #include "src/symbol.h"
-
 #include "src/target.h"
 
 #define MAIN_FUNCTION_NAME "main"
@@ -13,77 +12,24 @@
 int unique_name_count;
 int analysis_line;
 
-typedef struct {
-    symbol_type type;
-    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
-    string ident; // 原始名称
-    string unique_ident; // 唯一名称
-    int scope_depth;
-    bool is_capture; // 是否被捕获(是否被下级引用)
-} analysis_local_ident;
-
-/**
- * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
- * 所以这里的 is_local 指的是在 parent 中的位置
- * 如果 is_local 为 true 则 index 为 parent.locals[index]
- * 如果 is_local 为 false 则 index 为参数 env[index]
- */
-typedef struct {
-    bool is_local;
-    uint8_t index;
-    string ident;
-} analysis_free_ident;
-
-typedef struct analysis_local_scope {
-    struct analysis_local_scope *parent;
-    analysis_local_ident *idents[UINT8_MAX];
-    uint8_t count;
-    uint8_t scope_depth;
-} analysis_local_scope;
-
-/**
- * 词法作用域
- */
-typedef struct analysis_function {
-    struct analysis_function *parent;
-
-    analysis_local_scope *current_scope;
-
-//  analysis_local_ident *locals[UINT8_MAX];
-//  uint8_t local_count;
-
-    // wwh: 使用了当前作用域之外的变量
-    analysis_free_ident frees[UINT8_MAX];
-    uint8_t free_count;
-
-    // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
-    uint8_t scope_depth;
-
-    // 便于值改写, 放心 env unique name 会注册到字符表的要用
-    string env_unique_name;
-
-    // 函数定义在当前作用域仅加载 function name
-    // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
-    struct {
-        // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-        analysis_local_scope *scope;
-        union {
-            ast_stmt *stmt;
-            ast_expr *expr;
-        };
-        bool is_stmt;
-    } contains_fn_decl[UINT8_MAX];
-    uint8_t contains_fn_count;
-} analysis_function;
-
-analysis_function *analysis_current; // 全局变量
-
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换,import 收集
-ast_closure_decl analysis(target_t *t, ast_block_stmt stmt_list);
+// 都放在 target 中就行了
+/**
+ * 根据 package name 确定使用 analysis_main 还是 analysis_target
+ * @param t
+ * @param stmt_list
+ */
+void analysis(target_t *t, ast_block_stmt stmt_list);
 
 void analysis_main(target_t *t, ast_block_stmt stmt_list);
 
-// 符号表等其他信息已经注册到了 target 中
+/**
+ * 1. 符号表信息注册
+ * 2. 检测 stmt 类型是否合法
+ * 3. 将所有的 var_decl 编译到 init closure
+ * @param t
+ * @param stmt_list
+ */
 void analysis_target(target_t *t, ast_block_stmt stmt_list);
 
 analysis_function *analysis_current_init(analysis_local_scope *scope, string fn_name);
