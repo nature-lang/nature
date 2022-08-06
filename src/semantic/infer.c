@@ -515,6 +515,7 @@ type_t infer_call(ast_call *call) {
  * @param var_decl
  */
 void infer_var_decl(ast_var_decl *var_decl) {
+    var_decl->type = infer_type(var_decl->type);
     type_t type = var_decl->type;
     if (type.base == TYPE_UNKNOWN || type.base == TYPE_VOID || type.base == TYPE_NULL) {
         error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.base]);

@@ -28,11 +28,6 @@
   _inst;\
 })
 
-string filename;
-
-uint64_t global_text_offset; // 代码段偏移
-uint64_t global_data_offset; // 数据段偏移
-
 typedef enum {
     ELF_SYMBOL_TYPE_VAR = 1,
     ELF_SYMBOL_TYPE_FN = 2,
@@ -93,6 +88,20 @@ list *elf_text_inst_list;
 table *elf_symbol_table; // key: symbol_name, value list_node
 list *elf_symbol_list; // list_node link
 list *elf_rel_list;
+string filename;
+uint64_t global_text_offset; // 代码段偏移
+uint64_t global_data_offset; // 数据段偏移
+
+//typedef struct {
+//    list *elf_text_inst_list;
+//    table *elf_symbol_table; // key: symbol_name, value list_node
+//    list *elf_symbol_list; // list_node link
+//    list *elf_rel_list;
+//    string filename;
+//    uint64_t global_text_offset; // 代码段偏移
+//    uint64_t global_data_offset; // 数据段偏移
+//} elf_built_t;
+
 
 void elf_init(string _filename);
 

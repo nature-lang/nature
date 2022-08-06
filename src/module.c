@@ -76,8 +76,6 @@ module_t *module_new(char *source_path, bool entry) {
     m->import_table = table_new();
     m->symbols = slice_new();
     m->ast_closures = slice_new();
-    m->compiler_closures = slice_new();
-    m->lir_line = 0;
 
     m->source_path = source_path;
 

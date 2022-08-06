@@ -92,6 +92,7 @@
 })
 
 int var_unique_count;
+int lir_line;
 
 typedef enum {
     LIR_OPERAND_TYPE_NULL,

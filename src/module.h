@@ -133,9 +133,15 @@ typedef struct {
     slice_t *ast_closures; // 全局的或者非全局的都在这里了
 
     // compiler 阶段得到
-    slice_t *compiler_closures;
-    int compiler_line;
-    int lir_line;
+    slice_t *compiler_closures; // 包含 lir
+
+    // lower -> asm_insts
+    list *asm_insts; // asm_inst
+    list *var_decl_list;
+
+    // elf target.o
+    uint64_t elf_count;
+    uint8_t *elf_binary;
 } module_t;
 
 // module_path + path + ident

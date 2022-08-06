@@ -311,7 +311,7 @@ list *amd64_lower_operand_transform(lir_operand *operand,
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
-            decl->type = ASM_VAR_DECL_TYPE_STRING;
+//            decl->type = ASM_VAR_DECL_TYPE_STRING;
             list_push(amd64_decl_list, decl);
 
             // 使用临时寄存器保存结果(会增加一条 lea 指令)
@@ -415,7 +415,9 @@ list *amd64_lower_operand_transform(lir_operand *operand,
 
     if (operand->type == LIR_OPERAND_TYPE_SYMBOL_VAR) {
         lir_operand_symbol_var *v = operand->value;
-        ASM_OPERAND_COPY(asm_operand, LABEL(v->ident));
+        ASM_OPERAND_COPY(asm_operand, SYMBOL(v->ident, false));
+        // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov
+        asm_operand->size = type_base_sizeof(v->type);
         return insts;
     }
 

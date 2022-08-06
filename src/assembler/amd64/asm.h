@@ -245,6 +245,7 @@ typedef enum {
     ASM_VAR_DECL_TYPE_INT = 1,
     ASM_VAR_DECL_TYPE_FLOAT,
     ASM_VAR_DECL_TYPE_STRING,
+    ASM_VAR_DECL_TYPE_UNKNOWN,
 } asm_var_decl_type;
 
 typedef struct {
