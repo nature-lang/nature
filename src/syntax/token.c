@@ -61,7 +61,7 @@ string token_type_to_string[] = {
         [TOKEN_RETURN] = "return",
 
         [TOKEN_IMPORT] = " import",
-        [TOKEN_AS] = "as",
+        [TOKEN_AS] = "module_name",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",

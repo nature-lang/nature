@@ -102,7 +102,7 @@ void elf_var_decl_list_build(list *decl_list);
 
 void elf_text_label_build(asm_inst_t asm_inst, uint64_t *offset);
 
-// 如果 asm_inst 的参数是 label 或者 inst.name = label 需要进行符号注册与处理
+// 如果 asm_inst 的参数是 label 或者 inst.as = label 需要进行符号注册与处理
 // 其中需要一个 link 结构来引用最近 128 个字节的指令，做 jmp rel 跳转，原则上不能影响原来的指令
 // 符号表的收集工作，符号表收集需要记录偏移地址，所以如果存在修改，也需要涉及到这里的数据修改
 void elf_text_inst_build(asm_inst_t asm_inst, uint64_t *offset);

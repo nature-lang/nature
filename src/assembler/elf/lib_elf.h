@@ -76,7 +76,7 @@ typedef struct {
 #define EI_MAG3        3        /* File identification byte 3 index */
 #define ELFMAG3        'F'        /* Magic number byte 3 */
 
-/* Conglomeration of the identification bytes, for easy testing as a word.  */
+/* Conglomeration of the identification bytes, for easy testing module_name a word.  */
 #define    ELFMAG        "\177ELF"
 #define    SELFMAG        4
 
@@ -343,7 +343,7 @@ typedef struct {
 
 /* Section header. 段表 */
 typedef struct {
-    Elf64_Word sh_name;        /* Section name (string tbl index) */
+    Elf64_Word sh_name;        /* Section as (string tbl index) */
     Elf64_Word sh_type;        /* Section type */
     Elf64_Xword sh_flags;        /* Section flags */
     Elf64_Addr sh_addr;        /* Section virtual addr at execution */
@@ -449,14 +449,14 @@ typedef struct {
 #define ELFCOMPRESS_HIPROC    0x7fffffff /* End of processor-specific.  */
 
 /* Section group handling.  */
-#define GRP_COMDAT    0x1        /* Mark group as COMDAT.  */
+#define GRP_COMDAT    0x1        /* Mark group module_name COMDAT.  */
 
 /* Symbol table entry.  */
 /**
  * 符号表
  */
 typedef struct {
-    Elf64_Word st_name;        /* Symbol name (string tbl index) */ // .strtab 段内的偏移
+    Elf64_Word st_name;        /* Symbol as (string tbl index) */ // .strtab 段内的偏移
     unsigned char st_info;        /* Symbol type and binding */
     unsigned char st_other;        /* Symbol visibility */
     Elf64_Section st_shndx;        /* Section index */
@@ -523,7 +523,7 @@ typedef struct {
 #define STT_OBJECT    1        /* Symbol is a data object */
 #define STT_FUNC    2        /* Symbol is a code object */
 #define STT_SECTION    3        /* Symbol associated with a section */
-#define STT_FILE    4        /* Symbol's name is file name */
+#define STT_FILE    4        /* Symbol's as is file as */
 #define STT_COMMON    5        /* Symbol is a common data object */
 #define STT_TLS        6        /* Symbol is thread-local data object*/
 #define    STT_NUM        7        /* Number of defined types.  */
@@ -754,7 +754,7 @@ typedef struct {
 #define DT_INIT        12        /* Address of init function */
 #define DT_FINI        13        /* Address of termination function */
 #define DT_SONAME    14        /* Name of shared object */
-#define DT_RPATH    15        /* Library search path (deprecated) */
+#define DT_RPATH    15        /* Library search module_path (deprecated) */
 #define DT_SYMBOLIC    16        /* Start symbol search here */
 #define DT_REL        17        /* Address of Rel relocs */
 #define DT_RELSZ    18        /* Total size of Rel relocs */
@@ -768,7 +768,7 @@ typedef struct {
 #define    DT_FINI_ARRAY    26        /* Array with addresses of fini fct */
 #define    DT_INIT_ARRAYSZ    27        /* Size in bytes of DT_INIT_ARRAY */
 #define    DT_FINI_ARRAYSZ    28        /* Size in bytes of DT_FINI_ARRAY */
-#define DT_RUNPATH    29        /* Library search path */
+#define DT_RUNPATH    29        /* Library search module_path */
 #define DT_FLAGS    30        /* Flags for the object being loaded */
 #define DT_ENCODING    32        /* Start of encoded range */
 #define DT_PREINIT_ARRAY 32        /* Array with addresses of preinit fct*/
@@ -821,7 +821,7 @@ typedef struct {
 #define DT_ADDRTAGIDX(tag)    (DT_ADDRRNGHI - (tag))    /* Reverse order! */
 #define DT_ADDRNUM 11
 
-/* The versioning entry types.  The next are defined as part of the
+/* The versioning entry types.  The next are defined module_name part of the
    GNU extension.  */
 #define DT_VERSYM    0x6ffffff0
 
@@ -866,7 +866,7 @@ typedef struct {
 #define DF_1_DIRECT    0x00000100    /* Direct binding enabled.  */
 #define DF_1_TRANS    0x00000200
 #define DF_1_INTERPOSE    0x00000400    /* Object is used to interpose.  */
-#define DF_1_NODEFLIB    0x00000800    /* Ignore default musl search path.  */
+#define DF_1_NODEFLIB    0x00000800    /* Ignore default musl search module_path.  */
 #define DF_1_NODUMP    0x00001000    /* Object can't be dldump'ed.  */
 #define DF_1_CONFALT    0x00002000    /* Configuration alternative created.*/
 #define DF_1_ENDFILTEE    0x00004000    /* Filtee terminates filters search. */
@@ -900,7 +900,7 @@ typedef struct {
     Elf32_Half vd_flags;        /* Version information */
     Elf32_Half vd_ndx;            /* Version Index */
     Elf32_Half vd_cnt;            /* Number of associated aux entries */
-    Elf32_Word vd_hash;        /* Version name hash value */
+    Elf32_Word vd_hash;        /* Version as hash value */
     Elf32_Word vd_aux;            /* Offset in bytes to verdaux array */
     Elf32_Word vd_next;        /* Offset in bytes to next verdef
 					   entry */
@@ -911,7 +911,7 @@ typedef struct {
     Elf64_Half vd_flags;        /* Version information */
     Elf64_Half vd_ndx;            /* Version Index */
     Elf64_Half vd_cnt;            /* Number of associated aux entries */
-    Elf64_Word vd_hash;        /* Version name hash value */
+    Elf64_Word vd_hash;        /* Version as hash value */
     Elf64_Word vd_aux;            /* Offset in bytes to verdaux array */
     Elf64_Word vd_next;        /* Offset in bytes to next verdef
 					   entry */
@@ -978,19 +978,19 @@ typedef struct {
 /* Auxiliary needed version information.  */
 
 typedef struct {
-    Elf32_Word vna_hash;        /* Hash value of dependency name */
+    Elf32_Word vna_hash;        /* Hash value of dependency as */
     Elf32_Half vna_flags;        /* Dependency specific information */
     Elf32_Half vna_other;        /* Unused */
-    Elf32_Word vna_name;        /* Dependency name string offset */
+    Elf32_Word vna_name;        /* Dependency as string offset */
     Elf32_Word vna_next;        /* Offset in bytes to next vernaux
 					   entry */
 } Elf32_Vernaux;
 
 typedef struct {
-    Elf64_Word vna_hash;        /* Hash value of dependency name */
+    Elf64_Word vna_hash;        /* Hash value of dependency as */
     Elf64_Half vna_flags;        /* Dependency specific information */
     Elf64_Half vna_other;        /* Unused */
-    Elf64_Word vna_name;        /* Dependency name string offset */
+    Elf64_Word vna_name;        /* Dependency as string offset */
     Elf64_Word vna_next;        /* Offset in bytes to next vernaux
 					   entry */
 } Elf64_Vernaux;
@@ -1003,7 +1003,7 @@ typedef struct {
 /* Auxiliary vector.  */
 
 /* This vector is normally only used by the program interpreter.  The
-   usual definition in an ABI supplement uses the name auxv_t.  The
+   usual definition in an ABI supplement uses the as auxv_t.  The
    vector is not usually defined in a standard <elf.h> file, but it
    can't hurt.  We rename it to avoid conflicts.  The sizes of these
    types are an arrangement between the exec server and the program
@@ -1033,23 +1033,23 @@ typedef struct {
    a header of a fixed form.  */
 
 typedef struct {
-    Elf32_Word n_namesz;            /* Length of the note's name.  */
+    Elf32_Word n_namesz;            /* Length of the note's as.  */
     Elf32_Word n_descsz;            /* Length of the note's descriptor.  */
     Elf32_Word n_type;            /* Type of the note.  */
 } Elf32_Nhdr;
 
 typedef struct {
-    Elf64_Word n_namesz;            /* Length of the note's name.  */
+    Elf64_Word n_namesz;            /* Length of the note's as.  */
     Elf64_Word n_descsz;            /* Length of the note's descriptor.  */
     Elf64_Word n_type;            /* Type of the note.  */
 } Elf64_Nhdr;
 
 /* Known names of notes.  */
 
-/* Solaris entries in the note section have this name.  */
+/* Solaris entries in the note section have this as.  */
 #define ELF_NOTE_SOLARIS    "SUNW Solaris"
 
-/* Note entries for GNU systems have this name.  */
+/* Note entries for GNU systems have this as.  */
 #define ELF_NOTE_GNU        "GNU"
 
 
@@ -1068,7 +1068,7 @@ typedef struct {
    word 3: subminor version of the ABI
 */
 #define NT_GNU_ABI_TAG    1
-#define ELF_NOTE_ABI    NT_GNU_ABI_TAG /* Old name.  */
+#define ELF_NOTE_ABI    NT_GNU_ABI_TAG /* Old as.  */
 
 /* Known OSes.  These values can appear in word 0 of an
    NT_GNU_ABI_TAG note section entry.  */
@@ -1081,11 +1081,11 @@ typedef struct {
    word 0: number of entries
    word 1: bitmask of enabled entries
    Then follow variable-length entries, one byte followed by a
-   '\0'-terminated hwcap name string.  The byte gives the bit
+   '\0'-terminated hwcap as string.  The byte gives the bit
    number to test if enabled, (1U << bit) & bitmask.  */
 #define NT_GNU_HWCAP    2
 
-/* Build ID bits as generated by ld --build-id.
+/* Build ID bits module_name generated by ld --build-id.
    The descriptor consists of any nonzero number of bytes.  */
 #define NT_GNU_BUILD_ID    3
 
@@ -1095,7 +1095,7 @@ typedef struct {
 /* Program property.  */
 #define NT_GNU_PROPERTY_TYPE_0 5
 
-/* Note section name of program property.   */
+/* Note section as of program property.   */
 #define NOTE_GNU_PROPERTY_SECTION_NAME ".note.gnu.property"
 
 /* Values used in GNU .note.gnu.property notes (NT_GNU_PROPERTY_TYPE_0).  */
@@ -1212,9 +1212,9 @@ typedef struct {
 #define R_68K_TLS_LDM32     28          /* 32 bit GOT offset for LDM */
 #define R_68K_TLS_LDM16     29          /* 16 bit GOT offset for LDM */
 #define R_68K_TLS_LDM8      30          /* 8 bit GOT offset for LDM */
-#define R_68K_TLS_LDO32     31          /* 32 bit module-relative offset */
-#define R_68K_TLS_LDO16     32          /* 16 bit module-relative offset */
-#define R_68K_TLS_LDO8      33          /* 8 bit module-relative offset */
+#define R_68K_TLS_LDO32     31          /* 32 bit module_path-relative offset */
+#define R_68K_TLS_LDO16     32          /* 16 bit module_path-relative offset */
+#define R_68K_TLS_LDO8      33          /* 8 bit module_path-relative offset */
 #define R_68K_TLS_IE32      34          /* 32 bit GOT offset for IE */
 #define R_68K_TLS_IE16      35          /* 16 bit GOT offset for IE */
 #define R_68K_TLS_IE8       36          /* 8 bit GOT offset for IE */
@@ -1224,8 +1224,8 @@ typedef struct {
 					   static TLS block */
 #define R_68K_TLS_LE8       39          /* 8 bit offset relative to
 					   static TLS block */
-#define R_68K_TLS_DTPMOD32  40          /* 32 bit module number */
-#define R_68K_TLS_DTPREL32  41          /* 32 bit module-relative offset */
+#define R_68K_TLS_DTPMOD32  40          /* 32 bit module_path number */
+#define R_68K_TLS_DTPREL32  41          /* 32 bit module_path-relative offset */
 #define R_68K_TLS_TPREL32   42          /* 32 bit TP-relative offset */
 /* Keep this the last entry.  */
 #define R_68K_NUM    43
@@ -1279,7 +1279,7 @@ typedef struct {
 					   block offset */
 #define R_386_TLS_LE_32       34        /* Negated offset relative to static
 					   TLS block */
-#define R_386_TLS_DTPMOD32 35        /* ID of module containing symbol */
+#define R_386_TLS_DTPMOD32 35        /* ID of module_path containing symbol */
 #define R_386_TLS_DTPOFF32 36        /* Offset in TLS block */
 #define R_386_TLS_TPOFF32  37        /* Negated offset in static TLS block */
 #define R_386_SIZE32       38        /* 32-bit symbol size */
@@ -1747,7 +1747,7 @@ typedef struct {
    value.  */
 #define DT_MIPS_RWPLT        0x70000034
 /* An alternative description of the classic MIPS RLD_MAP that is usable
-   in a PIE as it stores a relative offset from the address of the tag
+   in a PIE module_name it stores a relative offset from the address of the tag
    rather than an absolute address.  */
 #define DT_MIPS_RLD_MAP_REL  0x70000035
 #define DT_MIPS_NUM         0x36
@@ -2038,13 +2038,13 @@ enum {
 #define R_PARISC_TLS_GD21L    234    /* GD 21-bit left.  */
 #define R_PARISC_TLS_GD14R    235    /* GD 14-bit right.  */
 #define R_PARISC_TLS_GDCALL    236    /* GD call to __t_g_a.  */
-#define R_PARISC_TLS_LDM21L    237    /* LD module 21-bit left.  */
-#define R_PARISC_TLS_LDM14R    238    /* LD module 14-bit right.  */
-#define R_PARISC_TLS_LDMCALL    239    /* LD module call to __t_g_a.  */
+#define R_PARISC_TLS_LDM21L    237    /* LD module_path 21-bit left.  */
+#define R_PARISC_TLS_LDM14R    238    /* LD module_path 14-bit right.  */
+#define R_PARISC_TLS_LDMCALL    239    /* LD module_path call to __t_g_a.  */
 #define R_PARISC_TLS_LDO21L    240    /* LD offset 21-bit left.  */
 #define R_PARISC_TLS_LDO14R    241    /* LD offset 14-bit right.  */
-#define R_PARISC_TLS_DTPMOD32    242    /* DTP module 32-bit.  */
-#define R_PARISC_TLS_DTPMOD64    243    /* DTP module 64-bit.  */
+#define R_PARISC_TLS_DTPMOD32    242    /* DTP module_path 32-bit.  */
+#define R_PARISC_TLS_DTPMOD64    243    /* DTP module_path 64-bit.  */
 #define R_PARISC_TLS_DTPOFF32    244    /* DTP offset 32-bit.  */
 #define R_PARISC_TLS_DTPOFF64    245    /* DTP offset 32-bit.  */
 #define R_PARISC_TLS_LE21L    R_PARISC_TPREL21L
@@ -2677,7 +2677,7 @@ enum {
 #define R_ARM_THM_SWI8        14    /* Reserved.  */
 #define R_ARM_XPC25        15    /* Reserved.  */
 #define R_ARM_THM_XPC22        16    /* Reserved.  */
-#define R_ARM_TLS_DTPMOD32    17    /* ID of module containing symbol */
+#define R_ARM_TLS_DTPMOD32    17    /* ID of module_path containing symbol */
 #define R_ARM_TLS_DTPOFF32    18    /* Offset in TLS block */
 #define R_ARM_TLS_TPOFF32    19    /* Offset in static TLS block */
 #define R_ARM_COPY        20    /* Copy symbol at runtime */
@@ -3080,7 +3080,7 @@ enum {
 					   block.  */
 #define R_390_TLS_LDO64        53    /* 64 bit offset relative to TLS
 					   block.  */
-#define R_390_TLS_DTPMOD    54    /* ID of module containing symbol.  */
+#define R_390_TLS_DTPMOD    54    /* ID of module_path containing symbol.  */
 #define R_390_TLS_DTPOFF    55    /* Offset in TLS block.	 */
 #define R_390_TLS_TPOFF        56    /* Negated offset in static TLS
 					   block.  */
@@ -3137,8 +3137,8 @@ enum {
 #define R_X86_64_PC16        13    /* 16 bit sign extended pc relative */
 #define R_X86_64_8        14    /* Direct 8 bit sign extended  */
 #define R_X86_64_PC8        15    /* 8 bit sign extended pc relative */
-#define R_X86_64_DTPMOD64    16    /* ID of module containing symbol */
-#define R_X86_64_DTPOFF64    17    /* Offset in module's TLS block */
+#define R_X86_64_DTPMOD64    16    /* ID of module_path containing symbol */
+#define R_X86_64_DTPOFF64    17    /* Offset in module_path's TLS block */
 #define R_X86_64_TPOFF64    18    /* Offset in initial TLS block */
 #define R_X86_64_TLSGD        19    /* 32 bit signed PC relative offset
 					   to two GOT entries for GD symbol */
@@ -3212,10 +3212,10 @@ enum {
 					   offset.  */
 #define R_MN10300_TLS_LE    29    /* Offset relative to static TLS
 					   block.  */
-#define R_MN10300_TLS_DTPMOD    30    /* ID of module containing symbol.  */
-#define R_MN10300_TLS_DTPOFF    31    /* Offset in module TLS block.  */
+#define R_MN10300_TLS_DTPMOD    30    /* ID of module_path containing symbol.  */
+#define R_MN10300_TLS_DTPOFF    31    /* Offset in module_path TLS block.  */
 #define R_MN10300_TLS_TPOFF    32    /* Offset in static TLS block.  */
-#define R_MN10300_SYM_DIFF    33    /* Adjustment for next reloc as needed
+#define R_MN10300_SYM_DIFF    33    /* Adjustment for next reloc module_name needed
 					   by linker relaxation.  */
 #define R_MN10300_ALIGN        34    /* Alignment requirement for linker
 					   relaxation.  */
@@ -3344,7 +3344,7 @@ enum {
 #define R_NIOS2_PCREL_HA    27    /* %hiadj of PC relative offset.  */
 #define R_NIOS2_TLS_GD16    28    /* 16 bit GOT offset for TLS GD.  */
 #define R_NIOS2_TLS_LDM16    29    /* 16 bit GOT offset for TLS LDM.  */
-#define R_NIOS2_TLS_LDO16    30    /* 16 bit module relative offset.  */
+#define R_NIOS2_TLS_LDO16    30    /* 16 bit module_path relative offset.  */
 #define R_NIOS2_TLS_IE16    31    /* 16 bit GOT offset for TLS IE.  */
 #define R_NIOS2_TLS_LE16    32    /* 16 bit LE TP-relative offset.  */
 #define R_NIOS2_TLS_DTPMOD    33    /* Module number.  */
@@ -3441,7 +3441,7 @@ enum {
 #define R_TILEPRO_IMM16_X1_TLS_IE_HI 79    /* X1 pipe high 16-bit TLS IE offset */
 #define R_TILEPRO_IMM16_X0_TLS_IE_HA 80    /* X0 pipe ha() 16-bit TLS IE offset */
 #define R_TILEPRO_IMM16_X1_TLS_IE_HA 81    /* X1 pipe ha() 16-bit TLS IE offset */
-#define R_TILEPRO_TLS_DTPMOD32    82    /* ID of module containing symbol */
+#define R_TILEPRO_TLS_DTPMOD32    82    /* ID of module_path containing symbol */
 #define R_TILEPRO_TLS_DTPOFF32    83    /* Offset in TLS block */
 #define R_TILEPRO_TLS_TPOFF32    84    /* Offset in static TLS block */
 #define R_TILEPRO_IMM16_X0_TLS_LE 85    /* X0 pipe 16-bit TLS LE offset */
@@ -3564,10 +3564,10 @@ enum {
 #define R_TILEGX_IMM16_X0_HW1_LAST_TLS_IE 102 /* X0 pipe last hword 1 IE off */
 #define R_TILEGX_IMM16_X1_HW1_LAST_TLS_IE 103 /* X1 pipe last hword 1 IE off */
 /* Relocs 104-105 are currently not defined.  */
-#define R_TILEGX_TLS_DTPMOD64    106    /* 64-bit ID of symbol's module */
+#define R_TILEGX_TLS_DTPMOD64    106    /* 64-bit ID of symbol's module_path */
 #define R_TILEGX_TLS_DTPOFF64    107    /* 64-bit offset in TLS block */
 #define R_TILEGX_TLS_TPOFF64    108    /* 64-bit offset in static TLS block */
-#define R_TILEGX_TLS_DTPMOD32    109    /* 32-bit ID of symbol's module */
+#define R_TILEGX_TLS_DTPMOD32    109    /* 32-bit ID of symbol's module_path */
 #define R_TILEGX_TLS_DTPOFF32    110    /* 32-bit offset in TLS block */
 #define R_TILEGX_TLS_TPOFF32    111    /* 32-bit offset in static TLS block */
 #define R_TILEGX_TLS_GD_CALL    112    /* "jal" for TLS GD */

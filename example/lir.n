@@ -3,8 +3,8 @@ bool ag = true
 if (ag) {
 	var a = 12
 	if (a > 2) {
-		type name = int
-		name a = 33
+		type as = int
+		as a = 33
 	}
 } else if (a > 2) {
 	var b = 14

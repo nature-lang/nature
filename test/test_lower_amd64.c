@@ -44,7 +44,7 @@ static list *test_elf_exit_insts() {
     list_push(insts, ASM_INST("call", { LABEL("exit") }));
 //    list_push(insts, ASM_INST("mov", { REG(eax), UINT32(60) }));
 //    list_push(insts, ASM_INST("mov", { REG(rdi), UINT32(0) }));
-//    list_push(insts, ASM_INST("syscall", {}));
+//    list_push(insts, ASM_INST("syscall_inst", {}));
     return insts;
 }
 

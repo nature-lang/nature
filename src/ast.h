@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include "src/value.h"
+#include "utils/slice.h"
 #include "type.h"
 
 #define AST_BASE_TYPE_FALSE "false"
@@ -36,6 +37,7 @@ typedef enum {
     AST_VAR_DECL,
 
     // stmt
+    AST_STMT_IMPORT,
     AST_STMT_VAR_DECL_ASSIGN,
     AST_STMT_ASSIGN,
     AST_STMT_RETURN,
@@ -143,13 +145,13 @@ typedef struct {
 
 typedef struct {
     ast_expr condition;
-    ast_block_stmt consequent;
-    ast_block_stmt alternate;
+    slice_t *consequent; // ast_stmt
+    slice_t *alternate;
 } ast_if_stmt;
 
 typedef struct {
     ast_expr condition;
-    ast_block_stmt body;
+    slice_t *body;
 } ast_while_stmt;
 
 /**
@@ -161,12 +163,22 @@ typedef struct {
     ast_expr iterate; // list, foo.list, bar[0]
     ast_var_decl *gen_key; // 类型推导, type 可能是 int 或者 string
     ast_var_decl *gen_value; // 类型推导
-    ast_block_stmt body;
+    slice_t *body;
 } ast_for_in_stmt;
 
 typedef struct {
     ast_expr *expr;
 } ast_return_stmt;
+
+// import "module_path" module_name alias
+typedef struct {
+    string path; // import "xxx" 的 xxx 部分
+    string as; // import "foo/bar" as xxx 的 xxx 部分  代码中使用都是基于这个 as 的，没有就使用 bra 作为 as
+
+    // 计算得出
+    string full_path; // 绝对完整的文件路径
+    string module_unique_name; // 在符号表中的名称前缀,基于 full_path 计算出来
+} ast_import;
 
 typedef struct {
     type_t type;
@@ -288,7 +300,7 @@ typedef struct {
 } ast_access_env;
 
 //typedef struct {
-//  string name;
+//  string as;
 //  // struct items
 //} ast_struct_stmt;
 
@@ -308,7 +320,7 @@ typedef struct {
     type_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
-    ast_block_stmt body; // 函数体
+    slice_t *body; // ast_stmt* 函数体
 } ast_new_fn; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
@@ -316,11 +328,9 @@ typedef struct {
     uint8_t env_count;
     string env_name; // 唯一标识，可以全局定位
     ast_new_fn *function;
-} ast_closure_decl;
+} ast_closure;
 
 ast_block_stmt ast_new_block_stmt();
-
-void ast_block_stmt_push(ast_block_stmt *block, ast_stmt stmt);
 
 ast_ident *ast_new_ident(string literal);
 

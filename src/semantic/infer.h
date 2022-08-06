@@ -8,21 +8,21 @@
 
 typedef struct infer_closure {
     struct infer_closure *parent;
-    ast_closure_decl *closure_decl;
+    ast_closure *closure_decl;
 } infer_closure;
 
 infer_closure *infer_current;
 int infer_line;
 
-infer_closure *infer_current_init(ast_closure_decl *closure_decl);
+infer_closure *infer_current_init(ast_closure *closure_decl);
 
-void infer(ast_closure_decl *closure_decl);
+void infer(ast_closure *closure_decl);
 
-void infer_block(ast_block_stmt *block_stmt);
+void infer_block(slice_t *block_stmt);
 
 void infer_stmt(ast_stmt *stmt);
 
-type_t infer_closure_decl(ast_closure_decl *closure_decl);
+type_t infer_closure_decl(ast_closure *closure_decl);
 
 void infer_var_decl(ast_var_decl *var_decl);
 

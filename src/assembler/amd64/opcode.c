@@ -2,7 +2,6 @@
 #include "string.h"
 #include "utils/error.h"
 #include "utils/helper.h"
-#include <math.h>
 
 inst_t movsq = {
         "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
@@ -251,7 +250,7 @@ inst_t lea_r64_m = {"lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                     }
 };
 
-inst_t syscall = {"syscall", 0, {0x0F, 0x05}, {}, {}};
+inst_t syscall_inst = {"syscall_inst", 0, {0x0F, 0x05}, {}, {}};
 
 // TODO 什么时候使用 near 什么时候使用 far?
 inst_t ret = {"ret", 0, {0xC3}, {}, {}};
@@ -439,7 +438,7 @@ void opcode_init() {
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);
     opcode_tree_build(&lea_r64_m);
-    opcode_tree_build(&syscall);
+    opcode_tree_build(&syscall_inst);
 }
 
 /**

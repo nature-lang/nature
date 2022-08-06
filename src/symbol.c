@@ -1,11 +1,6 @@
 #include "symbol.h"
 #include "utils/helper.h"
 
-#define BOOL_SIZE_BYTE 1
-#define INT_SIZE_BYTE 8
-#define FLOAT_SIZE_BYTE 16
-#define POINT_SIZE_BYTE 8
-
 void symbol_ident_table_init() {
     symbol_table = table_new();
 

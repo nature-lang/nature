@@ -6,12 +6,12 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-void infer(ast_closure_decl *closure_decl) {
+void infer(ast_closure *closure_decl) {
     infer_line = 0;
     infer_closure_decl(closure_decl);
 }
 
-type_t infer_closure_decl(ast_closure_decl *closure_decl) {
+type_t infer_closure_decl(ast_closure *closure_decl) {
     ast_new_fn *function_decl = closure_decl->function;
 
     // 类型还原
@@ -29,23 +29,21 @@ type_t infer_closure_decl(ast_closure_decl *closure_decl) {
     type_t result = analysis_function_to_type(function_decl);
     result = infer_type(result);
 
-    infer_block(&function_decl->body);
+    infer_block(function_decl->body);
 
     infer_current = infer_current->parent;
 
     return result;
 }
 
-void infer_block(ast_block_stmt *block) {
+void infer_block(slice_t *block) {
     for (int i = 0; i < block->count; ++i) {
-        infer_line = block->list[i].line;
-
 #ifdef DEBUG_INFER
         debug_stmt("INFER", block->list[i]);
 #endif
 
         // switch 结构导向优化
-        infer_stmt(&block->list[i]);
+        infer_stmt(block->take[i]);
     }
 }
 
@@ -64,7 +62,7 @@ void infer_stmt(ast_stmt *stmt) {
             break;
         }
         case AST_NEW_CLOSURE: {
-            infer_closure_decl((ast_closure_decl *) stmt->stmt);
+            infer_closure_decl((ast_closure *) stmt->stmt);
             break;
         }
         case AST_CALL: {
@@ -138,7 +136,7 @@ type_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_NEW_CLOSURE: {
-            type = infer_closure_decl((ast_closure_decl *) expr->expr);
+            type = infer_closure_decl((ast_closure *) expr->expr);
             break;
         }
         case AST_EXPR_LITERAL: {
@@ -235,8 +233,12 @@ type_t infer_unary(ast_unary_expr *expr) {
  */
 type_t infer_ident(string unique_ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
+    if (symbol == NULL) {
+        error_exit("[infer_ident] ident %s not found in symbol table", unique_ident);
+    }
+
     if (symbol->type == SYMBOL_TYPE_VAR) {
-        // 类型还原，并回写到 local_ident
+        // 类型还原，并回写到 local_ident TODO 跨文件能还原吗？
         ast_var_decl *var_decl = symbol->decl;
         var_decl->type = infer_type(var_decl->type);
         return var_decl->type;
@@ -246,7 +248,6 @@ type_t infer_ident(string unique_ident) {
         ast_new_fn *new_fn = symbol->decl;
         return infer_type(analysis_function_to_type(new_fn));
     }
-
 
     error_exit("ident type exception");
     exit(0);
@@ -570,8 +571,8 @@ void infer_if(ast_if_stmt *stmt) {
         error_exit("if stmt condition must bool");
     }
 
-    infer_block(&stmt->consequent);
-    infer_block(&stmt->alternate);
+    infer_block(stmt->consequent);
+    infer_block(stmt->alternate);
 }
 
 void infer_while(ast_while_stmt *stmt) {
@@ -579,7 +580,7 @@ void infer_while(ast_while_stmt *stmt) {
     if (condition_type.base != TYPE_BOOL) {
         error_exit("while stmt condition must bool");
     }
-    infer_block(&stmt->body);
+    infer_block(stmt->body);
 }
 
 /**
@@ -609,7 +610,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
 
     }
 
-    infer_block(&stmt->body);
+    infer_block(stmt->body);
 }
 
 /**
@@ -630,7 +631,7 @@ void infer_return(ast_return_stmt *stmt) {
     }
 }
 
-infer_closure *infer_current_init(ast_closure_decl *closure_decl) {
+infer_closure *infer_current_init(ast_closure *closure_decl) {
     infer_closure *new = malloc(sizeof(infer_closure));
     new->closure_decl = closure_decl;
     new->parent = infer_current;

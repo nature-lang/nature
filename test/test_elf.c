@@ -34,12 +34,12 @@ static list *test_gen_asm_print() {
     list_push(inst_list, ASM_INST("mov", { string_len_var, REG(rax) }));
 
 
-    // syscall
+    // syscall_inst
     list_push(inst_list, ASM_INST("mov", { REG(rax), UINT32(1) })); // 声明系统调用编号 write
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) })); // 参数 1： 声明系统输出为标准输出 STDOUT_FILENO
     list_push(inst_list, ASM_INST("mov", { REG(rsi), string_addr_var })); // 参数 2: 字符串地址
     list_push(inst_list, ASM_INST("mov", { REG(rdx), string_len_var })); // 参数 3：字符串长度
-    list_push(inst_list, ASM_INST("syscall", {})); // syscall
+    list_push(inst_list, ASM_INST("syscall_inst", {})); // syscall_inst
 
     // linux abi 要求 callee 在结束函数块前恢复 rsp 和 rpb
     // pop rbp 将恢复 caller 的栈帧赋, 且rsp - 8,
@@ -141,7 +141,7 @@ static void test_opcode_encoding() {
     uint8_t expect4[] = {0x48, 0x8B, 0x35, 0x00, 0x00, 0x00, 0x00};
     assert_memory_equal(actual4, expect4, byte_count);
 
-    asm_inst_t *syscall = ASM_INST("syscall", {});
+    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
     uint8_t *actual5 = opcode_encoding(*syscall, &byte_count);
     uint8_t expect5[] = {0x0F, 0x05};
     assert_memory_equal(actual5, expect5, byte_count);
@@ -206,7 +206,7 @@ static void test_hello_world() {
     asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
     asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
     asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
-    asm_inst_t *syscall = ASM_INST("syscall", {});
+    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
 
     // sys_exit
     asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
@@ -260,7 +260,7 @@ static void test_call() {
     asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
     asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
     asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
-    asm_inst_t *syscall = ASM_INST("syscall", {});
+    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
 
     // sys_exit
     asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
@@ -323,13 +323,13 @@ static void test_union_c() {
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(1) }));
     list_push(inst_list, ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdx), DISP_REG(rbp, -8, QWORD) }));
-    list_push(inst_list, ASM_INST("syscall", {}));
+    list_push(inst_list, ASM_INST("syscall_inst", {}));
 
 
     // sys_exit
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(60) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(0) }));
-    list_push(inst_list, ASM_INST("syscall", {}));
+    list_push(inst_list, ASM_INST("syscall_inst", {}));
 
     // 数据段编译
     elf_var_decl_build(decl);
@@ -432,7 +432,7 @@ static void test_runtime_string_print() {
     // 4. sys_exit
     list_push(inst_list, ASM_INST("mov", { REG(eax), UINT32(60) }));
     list_push(inst_list, ASM_INST("mov", { REG(rdi), UINT32(0) }));
-    list_push(inst_list, ASM_INST("syscall", {}));
+    list_push(inst_list, ASM_INST("syscall_inst", {}));
 
     // 构造 elf
     elf_init("runtime_hello.n");

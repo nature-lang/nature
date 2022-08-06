@@ -4,44 +4,28 @@
 #include "utils/list.h"
 #include "src/value.h"
 #include "src/syntax/token.h"
+#include "src/module.h"
 
-typedef struct {
-    char *source;
-    char *current;
-    char *guard;
-    int length;
-    int line; // 当前所在代码行，用于代码报错提示
+list *scanner(module_t *module);
 
-    bool has_newline;
-    char space_prev;
-    char space_next;
-} scanner_cursor;
+void scanner_cursor_init(module_t *module);
 
-typedef struct {
-    bool has;
-    char *message;
-} scanner_error;
+void scanner_error_init(module_t *module);
 
-list *scanner(string source);
+void scanner_skip_space(module_t *module);
 
-void scanner_cursor_init(string source);
+bool scanner_is_alpha(module_t *module, char c);
 
-void scanner_error_init();
+bool scanner_is_string(module_t *module, char s); // '/"/`
+bool scanner_is_number(module_t *module, char c);
 
-void scanner_skip_space();
+bool scanner_is_float(module_t *module, char *word);
 
-bool scanner_is_alpha(char c);
+char *scanner_ident_advance(module_t *module);
 
-bool scanner_is_string(char s); // '/"/`
-bool scanner_is_number(char c);
+char *scanner_number_advance(module_t *module);
 
-bool scanner_is_float(char *word);
-
-char *scanner_ident_advance();
-
-char *scanner_number_advance();
-
-char *scanner_string_advance(char c);
+char *scanner_string_advance(module_t *module, char c);
 
 token_type scanner_ident_type(char *word, int length);
 
@@ -52,18 +36,18 @@ token_type scanner_rest_ident_type(char *word,
                                    char *rest,
                                    int8_t type);
 
-token_type scanner_special_char_type();
+token_type scanner_special_char_type(module_t *module);
 
-char scanner_guard_advance(); // guard 前进一个字符
-char *scanner_gen_word();
+char scanner_guard_advance(module_t *module); // guard 前进一个字符
+char *scanner_gen_word(module_t *module);
 
-bool scanner_is_at_end(); // guard 是否遇见了 '\0'
-bool scanner_has_error();
+bool scanner_is_at_end(module_t *module); // guard 是否遇见了 '\0'
+bool scanner_has_error(module_t *module);
 
-bool scanner_match(char expected);
+bool scanner_match(module_t *module, char expected);
 
 bool scanner_is_space(char c);
 
-bool scanner_is_at_stmt_end();
+bool scanner_is_at_stmt_end(module_t *module);
 
 #endif //NATURE_SRC_SCANNER_H_

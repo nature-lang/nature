@@ -23,9 +23,9 @@ static void built_target(string path, string name) {
     // scanner
     list *token_list = scanner(source);
     // parser
-    ast_block_stmt stmt_list = parser(token_list);
+    slice_t *stmt_list = parser(token_list);
     // analysis
-    ast_closure_decl closure_decl = analysis(stmt_list);
+    ast_closure closure_decl = analysis(stmt_list);
     // infer 类型检查和推导
     infer(&closure_decl);
 

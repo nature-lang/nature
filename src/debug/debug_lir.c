@@ -9,7 +9,7 @@
 static char *lir_operand_symbol_to_string(lir_operand_symbol_var *ptr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
-    realloc(buf, len);
+    realloc(buf, len + 1);
 
     return buf;
 }

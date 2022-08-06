@@ -87,12 +87,11 @@
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
-   sprintf(temp_name, "%s_%d", _ident, lir_unique_count++); \
+   sprintf(temp_name, "%s_%d", _ident, var_unique_count++); \
    temp_name;                                   \
 })
 
-int lir_unique_count;
-int lir_line;
+int var_unique_count;
 
 typedef enum {
     LIR_OPERAND_TYPE_NULL,
@@ -298,7 +297,7 @@ typedef struct closure {
 
     lir_basic_block *entry; // 基本块入口
     lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
-    table *interval_table; // key包括 fixed register name 和 variable.ident
+    table *interval_table; // key包括 fixed register as 和 variable.ident
 
     // 定义环境
     string name;
@@ -321,7 +320,7 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 
-closure *lir_new_closure(ast_closure_decl *ast);
+closure *lir_new_closure(ast_closure *ast);
 
 /**
  * 符号使用

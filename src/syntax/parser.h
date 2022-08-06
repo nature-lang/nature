@@ -2,9 +2,11 @@
 #define NATURE_SRC_SYNTAX_PARSER_H_
 
 #include "utils/list.h"
+#include "utils/slice.h"
 #include "src/ast.h"
 #include "token.h"
 #include <stdlib.h>
+#include "src/module.h"
 
 typedef enum {
     PRECEDENCE_NULL, // 最低优先级
@@ -20,9 +22,9 @@ typedef enum {
     PRECEDENCE_PRIMARY,
 } parser_precedence;
 
-typedef ast_expr (*parser_prefix_fn)();
+typedef ast_expr (*parser_prefix_fn)(module_t *module);
 
-typedef ast_expr (*parser_infix_fn)(ast_expr prefix);
+typedef ast_expr (*parser_infix_fn)(module_t *module, ast_expr prefix);
 
 typedef struct {
     parser_prefix_fn prefix;
@@ -30,84 +32,81 @@ typedef struct {
     parser_precedence infix_precedence;
 } parser_rule;
 
-typedef struct {
-    list_node *current;
-} parser_cursor;
-
 /**
  * @param type
  * @return
  */
 parser_rule *parser_get_rule(token_type type);
 
-ast_block_stmt parser(list *token_list);
+slice_t *parser(module_t *m, list *token_list);
 
-ast_expr parser_expr();
+ast_expr parser_expr(module_t *m);
 
-ast_expr parser_precedence_expr(parser_precedence precedence);
+ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
 
-ast_expr parser_literal();
+ast_expr parser_literal(module_t *m);
 
-ast_expr parser_unary();
+ast_expr parser_unary(module_t *m);
 
-ast_expr parser_grouping();
+ast_expr parser_grouping(module_t *m);
 
-ast_expr parser_ident_expr();
+ast_expr parser_ident_expr(module_t *m);
 
-ast_expr parser_call_expr(ast_expr left_expr);
+ast_expr parser_call_expr(module_t *m, ast_expr left_expr);
 
-ast_expr parser_select_property(ast_expr left);
+ast_expr parser_select_property(module_t *m, ast_expr left);
 
-ast_expr parser_access(ast_expr left);
+ast_expr parser_access(module_t *m, ast_expr left);
 
-ast_expr parser_binary(ast_expr left);
+ast_expr parser_binary(module_t *m, ast_expr left);
 
-ast_expr parser_function_decl_expr(type_t type);
+ast_expr parser_function_decl_expr(module_t *m, type_t type);
 
-ast_expr parser_new_struct(type_t type);
+ast_expr parser_new_struct(module_t *m, type_t type);
 
-ast_expr parser_new_list();
+ast_expr parser_new_list(module_t *m);
 
-ast_expr parser_new_map();
+ast_expr parser_new_map(module_t *m);
 
-ast_expr parser_direct_type_expr();
+ast_expr parser_direct_type_expr(module_t *m);
 
-ast_expr parser_struct_type_expr();
+ast_expr parser_struct_type_expr(module_t *m);
 
-ast_stmt parser_stmt();
+ast_stmt *parser_stmt(module_t *m);
 
-ast_block_stmt parser_block();
+slice_t *parser_block(module_t *m);
 
-ast_stmt parser_ident_stmt();
+ast_stmt *parser_ident_stmt(module_t *m);
 
-//ast_stmt parser_call_stmt();
-ast_stmt parser_return_stmt();
+ast_stmt *parser_import_stmt(module_t *m);
 
-ast_stmt parser_auto_infer_decl();
+ast_stmt *parser_return_stmt(module_t *m);
 
-ast_stmt parser_var_or_function_decl();
+ast_stmt *parser_auto_infer_decl(module_t *m);
 
-ast_stmt parser_if_stmt();
+ast_stmt *parser_var_or_function_decl(module_t *m);
 
-ast_stmt parser_for_stmt();
+ast_stmt *parser_if_stmt(module_t *m);
 
-ast_stmt parser_while_stmt();
+ast_stmt *parser_for_stmt(module_t *m);
 
-ast_stmt parser_type_decl_stmt();
+ast_stmt *parser_while_stmt(module_t *m);
 
-ast_block_stmt parser_else_if();
+ast_stmt *parser_type_decl_stmt(module_t *m);
 
-ast_new_fn *parser_function_decl(type_t type);
+slice_t *parser_else_if(module_t *m);
 
-ast_var_decl *parser_var_decl();
+ast_new_fn *parser_function_decl(module_t *m, type_t type);
 
-void parser_actual_param(ast_call *call);
+ast_var_decl *parser_var_decl(module_t *m);
 
-void parser_formal_param(ast_new_fn *function_decl);
+void parser_actual_param(module_t *m, ast_call *call);
 
-void parser_type_function_formal_param(type_fn_t *type_fn);
+void parser_formal_param(module_t *m, ast_new_fn *function_decl);
 
-type_t parser_type();
+void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn);
+
+type_t parser_type(module_t *m);
 
 /**
  * foo = 12
@@ -116,42 +115,42 @@ type_t parser_type();
  * @param ident
  * @return
  */
-ast_stmt parser_assign(ast_expr left);
+ast_stmt *parser_assign(module_t *m, ast_expr left);
 
-token *parser_advance();
+token *parser_advance(module_t *m);
 
-token *parser_peek();
+token *parser_peek(module_t *m);
 
-int parser_line();
+int parser_line(module_t *m);
 
-bool parser_consume(token_type t);
+bool parser_consume(module_t *m, token_type t);
 
-bool parser_is(token_type t);
+bool parser_is(module_t *m, token_type t);
 
-bool parser_next_is(int step, token_type t);
+bool parser_next_is(module_t *m, int step, token_type t);
 
-list_node *parser_next(int step);
+list_node *parser_next(module_t *m, int step);
 
 /**
  * 兼容 void
  * @return
  */
-bool parser_is_direct_type();
+bool parser_is_direct_type(module_t *m);
 
-bool parser_is_custom_type_var();
+bool parser_is_custom_type_var(module_t *m);
 
-bool parser_is_simple_type();
+bool parser_is_simple_type(module_t *m);
 
-token *parser_must(token_type t);
+token *parser_must(module_t *m, token_type t);
 
-bool parser_must_stmt_end();
+bool parser_must_stmt_end(module_t *m);
 
-bool parser_is_function_decl(list_node *current);
+bool parser_is_function_decl(module_t *m, list_node *current);
 
-void parser_cursor_init(list *token_list);
+void parser_cursor_init(module_t *m, list *token_list);
 
-ast_stmt parser_new_stmt();
+ast_stmt *parser_new_stmt();
 
-ast_expr parser_new_expr();
+ast_expr parser_new_expr(module_t *m);
 
 #endif //NATURE_SRC_SYNTAX_PARSER_H_

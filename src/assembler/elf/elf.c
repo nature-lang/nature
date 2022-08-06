@@ -786,7 +786,7 @@ void elf_var_decl_build(asm_var_decl decl) {
     symbol->is_rel = false;
     symbol->is_local = false; // data 段的都是全局符号，可以被其他文件引用
     elf_symbol_insert(symbol);
-//    elf_confirm_text_rel(symbol->name); // TODO 符号表需要指定重排吗？
+//    elf_confirm_text_rel(symbol->as); // TODO 符号表需要指定重排吗？
 }
 
 void elf_var_decl_list_build(list *decl_list) {

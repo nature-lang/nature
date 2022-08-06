@@ -7,11 +7,11 @@ _start:
   mov rdi, 1
   mov rsi, msg
   mov rdx, msglen
-syscall
+syscall_inst
 
   mov rax, 60
   mov rdi, 0
-syscall
+syscall_inst
 
 section .data
   msg: db "Hello, world!", 10

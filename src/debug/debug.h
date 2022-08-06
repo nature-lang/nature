@@ -6,7 +6,7 @@
 #include "src/syntax/token.h"
 #include "src/lir/lir.h"
 
-#define DEBUG_STR_COUNT 1000
+#define DEBUG_STR_COUNT 1024
 
 //#define DEBUG_SCANNER
 

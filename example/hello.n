@@ -1,5 +1,5 @@
-//import "src/redis" as local_redis // redis.set
-//import "github.com/weiwenhao/redis" as remote_redis // redis.set
+//import "src/redis" module_name local_redis // redis.set
+//import "github.com/weiwenhao/redis" module_name remote_redis // redis.set
 
 int foo
 foo = 1 + bar

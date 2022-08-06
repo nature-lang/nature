@@ -182,7 +182,7 @@ void debug_cfg(closure *c) {
 }
 
 /**
- * block: name
+ * block: as
  *     move....
  *     xxx...
  *     xxx..
@@ -193,7 +193,7 @@ void debug_cfg(closure *c) {
  * @param block
  */
 void debug_basic_block(lir_basic_block *block) {
-    // block name, ops, succ, pred
+    // block as, ops, succ, pred
     printf("block: %s\n", block->name);
 
     list_node *current = block->operates->front;

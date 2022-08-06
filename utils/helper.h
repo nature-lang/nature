@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_HELPER_H_
 
 #include "src/value.h"
+#include <unistd.h>
 
 //void string_to_unique_list(string *list, string value);
 
@@ -16,5 +17,11 @@ void str_replace(char *str, char from, char to);
 char *file_read(char *path);
 
 uint64_t memory_align(uint64_t n, uint8_t align);
+
+bool file_exists(char *path);
+
+char *get_work_dir();
+
+char *rtrim(char *str, size_t trim_len);
 
 #endif //NATURE_SRC_LIB_HELPER_H_

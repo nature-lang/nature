@@ -69,3 +69,25 @@ char *file_read(char *path) {
 uint64_t memory_align(uint64_t n, uint8_t align) {
     return (n + align - 1) & (~(align - 1));
 }
+
+
+bool file_exists(char *path) {
+    return (access(path, R_OK) == 0);
+}
+
+char *rtrim(char *str, size_t trim_len) {
+    size_t len = strlen(str) - trim_len + 1; // +1 表示 \0 部分
+    char *res = malloc(len);
+
+    strncpy(res, str, len);
+    res[len - 1] = '\0';
+
+    return res;
+}
+
+char *get_work_dir() {
+    int size = 256;
+    char *buf = malloc(size);
+    getcwd(buf, size);
+    return buf;
+}

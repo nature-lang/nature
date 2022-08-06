@@ -41,6 +41,12 @@ set(SRC_DEBUG
         ${SRC_DIR}/debug/debug_lir.c
         ${SRC_DIR}/debug/debug_lir.h)
 
+set(SRC_DEBUG
+        ${SRC_DIR}/debug/debug.c
+        ${SRC_DIR}/debug/debug.h
+        ${SRC_DIR}/debug/debug_lir.c
+        ${SRC_DIR}/debug/debug_lir.h)
+
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
@@ -52,6 +58,10 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/table.c
         ${PROJECT_SOURCE_DIR}/utils/helper.h
         ${PROJECT_SOURCE_DIR}/utils/helper.c)
+
+set(CMD
+        ${PROJECT_SOURCE_DIR}/cmd/build.h
+        ${PROJECT_SOURCE_DIR}/cmd/build.c)
 set(SRC
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c
@@ -68,8 +78,8 @@ set(SRC
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
         ${SRC_DIR}/ssa.c
-        ${SRC_DIR}/target.h
-        ${SRC_DIR}/target.c
+        ${SRC_DIR}/module.h
+        ${SRC_DIR}/module.c
         #        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c
@@ -94,6 +104,7 @@ set(RUNTIME_FILES
 add_executable(nature main.c
         ${SRC}
         ${UTILS}
+        ${CMD}
         ${SRC_LOWER}
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}

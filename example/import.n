@@ -1,8 +1,8 @@
-import "syscall" // 系统调用, 命名空间 syscall
+import "syscall_inst" // 系统调用, 命名空间 syscall_inst
 import "project/file" // 本地包引用, 命名空间 file
 import "project/bar" // 如果指定的是一个目录，默认则引用目录同名文件, root/foo/bar.n, 命名空间 bar
 import "github.com/nature-lang/request" // 命名空间 request
-import "project/request" as request_v2 // 命名空间 request_v2
+import "project/request" module_name request_v2 // 命名空间 request_v2
 import "http" // 内置
 
 // 优先 ./http.n ./http/http.n
