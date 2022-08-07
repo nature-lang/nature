@@ -57,7 +57,9 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/table.h
         ${PROJECT_SOURCE_DIR}/utils/table.c
         ${PROJECT_SOURCE_DIR}/utils/helper.h
-        ${PROJECT_SOURCE_DIR}/utils/helper.c)
+        ${PROJECT_SOURCE_DIR}/utils/helper.c
+        ${PROJECT_SOURCE_DIR}/utils/exec.c
+        ${PROJECT_SOURCE_DIR}/utils/exec.h)
 
 set(CMD
         ${PROJECT_SOURCE_DIR}/cmd/build.h
@@ -80,6 +82,7 @@ set(SRC
         ${SRC_DIR}/ssa.c
         ${SRC_DIR}/module.h
         ${SRC_DIR}/module.c
+        ${SRC_DIR}/cross.h
         #        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c

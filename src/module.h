@@ -142,6 +142,7 @@ typedef struct {
     // elf target.o
     uint64_t elf_count;
     uint8_t *elf_binary;
+    string linker_file_name;
 } module_t;
 
 // module_path + path + ident

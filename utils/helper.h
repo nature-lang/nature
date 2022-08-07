@@ -10,6 +10,8 @@ char *itoa(int n);
 
 bool str_equal(string a, string b);
 
+char *file_join(char *dst, char *src);
+
 char *str_connect(char *a, char *b);
 
 void str_replace(char *str, char from, char to);

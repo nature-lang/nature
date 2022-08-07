@@ -146,6 +146,21 @@ void elf_text_inst_build(asm_inst_t asm_inst, uint64_t *offset) {
             rel->section = ELF_SECTION_TEXT;
             rel->type = ELF_SYMBOL_TYPE_VAR;
             list_push(elf_rel_list, rel);
+
+            // 如果符号表中不存在就直接添加到符号,请勿重复添加
+            elf_symbol_t *symbol = table_get(elf_symbol_table, symbol_operand->name);
+            if (symbol == NULL) {
+                symbol = NEW(elf_symbol_t);
+                symbol->name = symbol_operand->name;
+                symbol->type = 0; // 外部符号引用直接 no type
+                symbol->section = 0; // 外部符号，所以这些信息都没有
+                symbol->offset = 0;
+                symbol->size = 0;
+                symbol->is_rel = true; // 是否为外部引用符号(避免重复添加)
+                symbol->is_local = false; // 局部 label 在生成符号表的时候可以忽略
+                elf_symbol_insert(symbol);
+            }
+
         }
     }
 
@@ -664,9 +679,11 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
     int i = 0;
     while (current->value != NULL) {
         elf_rel_t *rel = current->value;
+        // 宿友的 elf 都必须在符号表中找到,因为 rela_text 中的 info 存储着在符号表中的索引
         elf_symbol_t *s = table_get(elf_symbol_table, rel->name);
         if (s == NULL) {
-            error_exit("[elf_rela_text_build] not found symbol %s in table", rel->name);
+            error_exit("[elf_rela_text_build] not found symbol %s in table, all rel symbol must store to symbol table",
+                       rel->name);
         }
         uint64_t index = s->symtab_index;
         // r_sym 表示重定位项在符号表内的索引(?)
@@ -737,8 +754,8 @@ uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
     return binary;
 }
 
-void elf_to_file(uint8_t *binary, uint64_t count, char *target_filename) {
-    FILE *f = fopen(target_filename, "w+b");
+void elf_to_file(uint8_t *binary, uint64_t count, char *file) {
+    FILE *f = fopen(file, "w+b");
     fwrite(binary, 1, count, f);
     fclose(f);
 }

@@ -1,5 +1,6 @@
+#include <stdio.h>
+#include <unistd.h>
 #include "build.h"
-#include "stdio.h"
 #include "src/module.h"
 #include "utils/helper.h"
 #include "src/semantic/infer.h"
@@ -10,6 +11,14 @@
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/amd64/opcode.h"
 #include "src/assembler/elf/elf.h"
+#include "utils/error.h"
+#include "src/cross.h"
+
+#define LINUX_BUILD_DIR  "/tmp/nature-build.XXXXXX"
+
+char *lib_dir = "/home/vagrant/Code/nature/debug/lib";
+
+char *ld_path = "/usr/bin/ld";
 
 // nature build xxx.n
 void build(string build_target) {
@@ -60,7 +69,7 @@ void build(string build_target) {
     amd64_register_init();
     opcode_init();
 
-    // infer 处理
+    // 文件维度编译，最终会生成 elf_binary target
     for (int i = 0; i < module_list->count; ++i) {
         module_t *m = module_list->take[i];
 
@@ -125,11 +134,29 @@ void build(string build_target) {
         // 编码为 elf 二进制格式
         elf_t elf = elf_new(); // 基于全局变量
         m->elf_binary = elf_encoding(elf, &m->elf_count);
+
+        // 确定待链接的文件名称(不能包含 /，包含了就不能生成目录)
+        m->linker_file_name = str_connect(m->module_unique_name, ".n.o");
+        str_replace(m->linker_file_name, '/', '.');
     }
 
     // 遍历 path 列表进行编译和目标文件生成(temp_dir)
+    char build_dir[] = LINUX_BUILD_DIR;
+    char *tempdir = mkdtemp(build_dir);
+    if (tempdir == NULL) {
+        error_exit("[build] mk temp dir failed");
+    }
 
-    // 解析外挂 ld 进行连接(TODO runtime 在哪里?, binary_path)
+    char *wait_ld_files = "";
+    for (int i = 0; i < module_list->count; ++i) {
+        module_t *m = module_list->take[i];
+
+        // 写入到 tmp 目录
+        char *file = file_join(tempdir, m->linker_file_name);
+        elf_to_file(m->elf_binary, m->elf_count, file);
+    }
+
+    // 解析外挂 ld 进行连接
 
     printf("hello in build");
 }

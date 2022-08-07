@@ -162,7 +162,7 @@ elf_t elf_new();
 
 uint8_t *elf_encoding(elf_t elf, uint64_t *count);
 
-void elf_to_file(uint8_t *binary, uint64_t count, string filename);
+void elf_to_file(uint8_t *binary, uint64_t count, string file);
 
 /**
  * @param asm_data

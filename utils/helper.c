@@ -27,6 +27,12 @@ char *str_connect(char *dst, char *src) {
     return buf;
 }
 
+char *file_join(char *dst, char *src) {
+    dst = str_connect(dst, "/");
+    dst = str_connect(dst, src);
+    return dst;
+}
+
 void str_replace(char *str, char from, char to) {
     size_t len = strlen(str);
     for (int i = 0; i < len; ++i) {
