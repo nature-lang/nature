@@ -180,8 +180,8 @@ void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn) {
  * @param function_decl
  * @return
  */
-ast_closure *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope *scope) {
-    ast_closure *closure = malloc(sizeof(ast_closure));
+ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope *scope) {
+    ast_closure_t *closure = malloc(sizeof(ast_closure_t));
     analysis_type(m, &function_decl->return_type);
 
     // 初始化
@@ -236,14 +236,14 @@ ast_closure *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_lo
         if (m->analysis_current->contains_fn_decl[i].is_stmt) {
             ast_stmt *stmt = m->analysis_current->contains_fn_decl[i].stmt;
             // 函数注册到符号表已经在函数定义点注册过了
-            ast_closure *closure_decl = analysis_new_fn(m, stmt->stmt,
-                                                        m->analysis_current->contains_fn_decl[i].scope);
+            ast_closure_t *closure_decl = analysis_new_fn(m, stmt->stmt,
+                                                          m->analysis_current->contains_fn_decl[i].scope);
             stmt->type = AST_NEW_CLOSURE;
             stmt->stmt = closure_decl;
         } else {
             ast_expr *expr = m->analysis_current->contains_fn_decl[i].expr;
-            ast_closure *closure_decl = analysis_new_fn(m, expr->expr,
-                                                        m->analysis_current->contains_fn_decl[i].scope);
+            ast_closure_t *closure_decl = analysis_new_fn(m, expr->expr,
+                                                          m->analysis_current->contains_fn_decl[i].scope);
             expr->assert_type = AST_NEW_CLOSURE;
             expr->expr = closure_decl;
         };
@@ -777,13 +777,24 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     s->is_local = false;
     slice_push(m->symbols, s);
     table_set(symbol_table, s->ident, s);
-
     slice_push(fn_list, fn_init);
+
+    // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
+    ast_stmt *temp_stmt = NEW(ast_stmt);
+    ast_call *call = NEW(ast_call);
+    call->left = (ast_expr) {
+            .assert_type = AST_EXPR_IDENT,
+            .expr = ast_new_ident(s->ident),
+    };
+    call->actual_param_count = 0;
+    temp_stmt->type = AST_CALL;
+    temp_stmt->stmt = call;
+    m->call_init_stmt = temp_stmt;
 
     // 遍历 fn list
     for (int i = 0; i < fn_list->count; ++i) {
         ast_new_fn *fn = fn_list->take[i];
-        ast_closure *closure = analysis_new_fn(m, fn, NULL);
+        ast_closure_t *closure = analysis_new_fn(m, fn, NULL);
         slice_push(m->ast_closures, closure);
     }
 }
@@ -824,7 +835,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
         slice_push(new_fn->body, stmt_list->take[i]);
     }
 
-    ast_closure *closure = analysis_new_fn(m, new_fn, NULL);
+    ast_closure_t *closure = analysis_new_fn(m, new_fn, NULL);
     slice_push(m->ast_closures, closure);
 }
 

@@ -328,7 +328,7 @@ typedef struct {
     uint8_t env_count;
     string env_name; // 唯一标识，可以全局定位
     ast_new_fn *function;
-} ast_closure;
+} ast_closure_t;
 
 ast_block_stmt ast_new_block_stmt();
 

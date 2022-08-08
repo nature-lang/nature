@@ -9,9 +9,9 @@
 
 slice_t *compiler_closures;
 
-slice_t *compiler(ast_closure *ast);
+slice_t *compiler(ast_closure_t *ast);
 
-list *compiler_closure(closure *parent, ast_closure *ast_closure, lir_operand *target);
+list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand *target);
 
 list *compiler_block(closure *c, slice_t *block);
 

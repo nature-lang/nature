@@ -30,7 +30,7 @@ int compiler_line = 0;
  * @param ast
  * @return
  */
-slice_t *compiler(ast_closure *ast) {
+slice_t *compiler(ast_closure_t *ast) {
     compiler_closures = slice_new();
     compiler_closure(NULL, ast, NULL);
     return compiler_closures;
@@ -51,7 +51,7 @@ slice_t *compiler(ast_closure *ast) {
  * @param ast_closure
  * @return
  */
-list *compiler_closure(closure *parent, ast_closure *ast_closure, lir_operand *target) {
+list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand *target) {
 // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
     list *parent_list = list_new();
 
@@ -148,7 +148,7 @@ list *compiler_block(closure *c, slice_t *block) {
 list *compiler_stmt(closure *c, ast_stmt *stmt) {
     switch (stmt->type) {
         case AST_NEW_CLOSURE: {
-            return compiler_closure(c, (ast_closure *) stmt->stmt, NULL);
+            return compiler_closure(c, (ast_closure_t *) stmt->stmt, NULL);
         }
         case AST_VAR_DECL: {
             return compiler_var_decl(c, (ast_var_decl *) stmt->stmt);
@@ -286,7 +286,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
             return compiler_access_env(c, expr, target);
         }
         case AST_NEW_CLOSURE: {
-            return compiler_closure(c, (ast_closure *) expr.expr, target);
+            return compiler_closure(c, (ast_closure_t *) expr.expr, target);
         }
         default: {
             error_exit("[compiler_expr]unknown expr: %v", expr.assert_type);

@@ -321,7 +321,7 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 lir_basic_block *lir_new_basic_block();
 //string lir_label_to_string(uint8_t label);
 
-closure *lir_new_closure(ast_closure *ast);
+closure *lir_new_closure(ast_closure_t *ast);
 
 /**
  * 符号使用

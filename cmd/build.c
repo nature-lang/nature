@@ -13,7 +13,6 @@
 #include "src/assembler/elf/elf.h"
 #include "utils/error.h"
 #include "utils/exec.h"
-#include "utils/helper.h"
 #include "src/cross.h"
 
 #define LINUX_BUILD_DIR  "/tmp/nature-build.XXXXXX"
@@ -21,6 +20,7 @@
 char *lib_dir = "/home/vagrant/Code/nature/debug/lib/linux_amd64";
 
 char *ld_path = "/usr/bin/ld";
+char *output_name = "main";
 
 // nature build xxx.n
 void build(string build_target) {
@@ -64,13 +64,24 @@ void build(string build_target) {
         work_list = temp_list;
     }
 
-    // TODO root module stmt add call all module init
-
     // TODO 暂时只支持单进程，因为多个文件共享了全局的数据
     // TODO 根据架构选择对应的 lower 入口
     // 全局维度初始化
     amd64_register_init();
     opcode_init();
+
+    // root module stmt add call all module init
+    ast_closure_t *root_ast_closure = root->ast_closures->take[0];
+    for (int i = 1; i < module_list->count; ++i) {
+        module_t *m = module_list->take[i];
+        if (m->call_init_stmt == NULL) {
+            error_exit("[build] module %s not found init fn stmt", m->module_unique_name);
+        }
+        slice_t *temp = slice_new();
+        slice_push(temp, m->call_init_stmt);
+        slice_append_free(temp, root_ast_closure->function->body);
+        root_ast_closure->function->body = temp;
+    }
 
     // 文件维度编译，最终会生成 elf_binary target
     for (int i = 0; i < module_list->count; ++i) {
@@ -94,11 +105,11 @@ void build(string build_target) {
         }
 
         for (int j = 0; j < m->ast_closures->count; ++j) {
-            ast_closure *closure = m->ast_closures->take[j];
+            ast_closure_t *closure = m->ast_closures->take[j];
             // 类型推断
             infer(closure);
             // 编译
-            slice_append(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
+            slice_append_free(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
         }
 
         // 构造 cfg, 并转成目标架构编码
@@ -151,6 +162,7 @@ void build(string build_target) {
         error_exit("[build] mk temp dir failed");
     }
 
+    // ld
     slice_t *ld_params = slice_new();
     for (int i = 0; i < module_list->count; ++i) {
         module_t *m = module_list->take[i];
@@ -158,28 +170,33 @@ void build(string build_target) {
         // 写入到 tmp 目录
         char *file = file_join(temp_dir, m->linker_file_name);
         elf_to_file(m->elf_binary, m->elf_count, file);
-        // 暂时使用完整路径
-        slice_push(ld_params, file);
+
+        // 工作目录再 temp_dir 中,所以之类使用相对路径即可
+        slice_push(ld_params, m->linker_file_name);
     }
 
     slice_push(ld_params, "-Bstatic"); // 静态链接
     slice_push(ld_params, "-nostdinc"); // 忽略标准库头文件
     slice_push(ld_params, "-nostdlib"); // 忽略标准库
     // 引入标准库
-    char *runtime_path = file_join(lib_dir, "libruntime.a");
     char *libstart_path = file_join(lib_dir, "crt1.o");
+    char *runtime_path = file_join(lib_dir, "libruntime.a");
     char *libc_path = file_join(lib_dir, "libc.a");
     slice_push(ld_params, runtime_path);
     slice_push(ld_params, libstart_path);
     slice_push(ld_params, libc_path);
 
     slice_push(ld_params, "-o"); // 输出名称
-    slice_push(ld_params, "hello"); // 输出名称
+    slice_push(ld_params, "a.out"); // 固定输出名称
 
     // 解析外挂 ld 进行连接
-    char *result = exec(work_dir, "ld", ld_params);
-    printf("%s", result);
+    exec(temp_dir, "ld", ld_params);
 
-    printf("hello in build");
+    // copy 移动
+    char *src_path = file_join(temp_dir, "a.out");
+    char *dst_path = file_join(work_dir, output_name);
+    copy(dst_path, src_path, 0755);
+
+    printf("hello in build,\n temp_dir: %s\n work_dir: %s", temp_dir, work_dir);
 }
 

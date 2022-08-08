@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include "cmd/build.h"
+#include <string.h>
+#include <sys/stat.h>
 
 int main(int argc, char *argv[]) {
     binary_path = argv[0];

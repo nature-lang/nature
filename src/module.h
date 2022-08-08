@@ -121,6 +121,9 @@ typedef struct {
     analysis_function *analysis_current;
     int analysis_line;
 
+    // call init stmt
+    ast_stmt *call_init_stmt;  // analysis 阶段写入
+
     // TODO var_decls to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/var_decls(symbol)/closure_decls
     slice_t *imports; // import_t, 图遍历 imports

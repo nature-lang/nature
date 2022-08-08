@@ -26,4 +26,6 @@ char *get_work_dir();
 
 char *rtrim(char *str, size_t trim_len);
 
+void *copy(char *dst, char *src, uint mode);
+
 #endif //NATURE_SRC_LIB_HELPER_H_

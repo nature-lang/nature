@@ -19,6 +19,6 @@ slice_t *slice_new();
 
 void slice_push(slice_t *s, void *value);
 
-void slice_append(slice_t *dst, slice_t *src);
+void slice_append_free(slice_t *dst, slice_t *src);
 
 #endif //NATURE_SRC_LIB_SLICE_H_

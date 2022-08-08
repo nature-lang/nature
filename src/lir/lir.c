@@ -152,7 +152,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     return op;
 }
 
-closure *lir_new_closure(ast_closure *ast) {
+closure *lir_new_closure(ast_closure_t *ast) {
     closure *new = NEW(closure);
     new->name = ast->function->name;
     new->env_name = ast->env_name;

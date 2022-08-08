@@ -6,12 +6,12 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-void infer(ast_closure *closure_decl) {
+void infer(ast_closure_t *closure_decl) {
     infer_line = 0;
     infer_closure_decl(closure_decl);
 }
 
-type_t infer_closure_decl(ast_closure *closure_decl) {
+type_t infer_closure_decl(ast_closure_t *closure_decl) {
     ast_new_fn *function_decl = closure_decl->function;
 
     // 类型还原
@@ -62,7 +62,7 @@ void infer_stmt(ast_stmt *stmt) {
             break;
         }
         case AST_NEW_CLOSURE: {
-            infer_closure_decl((ast_closure *) stmt->stmt);
+            infer_closure_decl((ast_closure_t *) stmt->stmt);
             break;
         }
         case AST_CALL: {
@@ -136,7 +136,7 @@ type_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_NEW_CLOSURE: {
-            type = infer_closure_decl((ast_closure *) expr->expr);
+            type = infer_closure_decl((ast_closure_t *) expr->expr);
             break;
         }
         case AST_EXPR_LITERAL: {
@@ -632,7 +632,7 @@ void infer_return(ast_return_stmt *stmt) {
     }
 }
 
-infer_closure *infer_current_init(ast_closure *closure_decl) {
+infer_closure *infer_current_init(ast_closure_t *closure_decl) {
     infer_closure *new = malloc(sizeof(infer_closure));
     new->closure_decl = closure_decl;
     new->parent = infer_current;
