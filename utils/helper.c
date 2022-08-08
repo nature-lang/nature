@@ -102,6 +102,9 @@ char *get_work_dir() {
 void *copy(char *dst, char *src, uint mode) {
     FILE *src_fd, *dst_fd;
     src_fd = fopen(src, "rb");
+    if (src_fd == NULL) {
+        error_exit("[copy] src %s not found", src);
+    }
     dst_fd = fopen(dst, "wb");
     fchmod(fileno(dst_fd), mode);
 

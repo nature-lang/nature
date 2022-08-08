@@ -37,7 +37,7 @@ void build(string build_target) {
 
     table *module_table = table_new();
     slice_t *module_list = slice_new();
-    module_t *root = module_build(source_path, true);
+    module_t *root = module_front_build(source_path, true);
     slice_push(module_list, root);
 
 
@@ -55,7 +55,7 @@ void build(string build_target) {
                     continue;
                 }
 
-                module_t *new_m = module_build(import->full_path, false);
+                module_t *new_m = module_front_build(import->full_path, false);
                 slice_push(temp_list, new_m);
                 slice_push(module_list, new_m);
                 table_set(module_table, import->full_path, new_m);
