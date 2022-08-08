@@ -92,7 +92,7 @@ list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand 
 
     // new 一个新的 closure ---------------
     closure *c = lir_new_closure(ast_closure);
-    c->name = ast_closure->function->name;
+    c->name = ast_closure->function->name; // analysis 阶段已经进行了唯一名称处理
     c->end_label = str_connect("end_", c->name);
     c->parent = parent;
     slice_push(compiler_closures, c);

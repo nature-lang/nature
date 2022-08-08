@@ -748,9 +748,11 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->type == AST_NEW_FN) {
             ast_new_fn *new_fn = stmt->stmt;
+            new_fn->name = ident_with_module_unique_name(m->module_unique_name, new_fn->name); // 全局函数改名
+
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_FN;
-            s->ident = ident_with_module_unique_name(m->module_unique_name, new_fn->name);
+            s->ident = new_fn->name;
             s->decl = new_fn;
             s->is_local = false;
             slice_push(m->symbols, s);
@@ -764,7 +766,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
-    fn_init->name = INIT_FN_NAME; // TODO unique name
+    fn_init->name = ident_with_module_unique_name(m->module_unique_name, INIT_FN_NAME);
     fn_init->return_type = type_new_base(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
@@ -772,7 +774,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 加入到全局符号表，等着调用就好了
     symbol_t *s = NEW(symbol_t);
     s->type = SYMBOL_TYPE_FN;
-    s->ident = ident_with_module_unique_name(m->module_unique_name, fn_init->name);
+    s->ident = fn_init->name;
     s->decl = fn_init;
     s->is_local = false;
     slice_push(m->symbols, s);
