@@ -3,6 +3,6 @@
 
 #include "slice.h"
 
-char *exec(char *path, slice_t *argv);
+char *exec(char *work_dir, char *file, slice_t *list);
 
 #endif //NATURE_EXEC_H

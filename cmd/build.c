@@ -12,11 +12,13 @@
 #include "src/assembler/amd64/opcode.h"
 #include "src/assembler/elf/elf.h"
 #include "utils/error.h"
+#include "utils/exec.h"
+#include "utils/helper.h"
 #include "src/cross.h"
 
 #define LINUX_BUILD_DIR  "/tmp/nature-build.XXXXXX"
 
-char *lib_dir = "/home/vagrant/Code/nature/debug/lib";
+char *lib_dir = "/home/vagrant/Code/nature/debug/lib/linux_amd64";
 
 char *ld_path = "/usr/bin/ld";
 
@@ -35,7 +37,7 @@ void build(string build_target) {
 
     table *module_table = table_new();
     slice_t *module_list = slice_new();
-    module_t *root = module_new(source_path, true);
+    module_t *root = module_build(source_path, true);
     slice_push(module_list, root);
 
 
@@ -53,7 +55,7 @@ void build(string build_target) {
                     continue;
                 }
 
-                module_t *new_m = module_new(import->full_path, false);
+                module_t *new_m = module_build(import->full_path, false);
                 slice_push(temp_list, new_m);
                 slice_push(module_list, new_m);
                 table_set(module_table, import->full_path, new_m);
@@ -63,6 +65,7 @@ void build(string build_target) {
     }
 
     // TODO root module stmt add call all module init
+
     // TODO 暂时只支持单进程，因为多个文件共享了全局的数据
     // TODO 根据架构选择对应的 lower 入口
     // 全局维度初始化
@@ -83,7 +86,7 @@ void build(string build_target) {
 
         // 全局符号的定义也需要推导以下原始类型
         for (int j = 0; j < m->symbols->count; ++j) {
-            symbol_t *s = m->symbols->take[i];
+            symbol_t *s = m->symbols->take[j];
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
@@ -94,6 +97,7 @@ void build(string build_target) {
             ast_closure *closure = m->ast_closures->take[j];
             // 类型推断
             infer(closure);
+            // 编译
             slice_append(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
         }
 
@@ -111,7 +115,7 @@ void build(string build_target) {
         m->var_decl_list = amd64_decl_list;
         // symbol to var_decl
         for (int j = 0; j < m->symbols->count; ++j) {
-            symbol_t *s = m->symbols->take[i];
+            symbol_t *s = m->symbols->take[j];
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
@@ -142,21 +146,39 @@ void build(string build_target) {
 
     // 遍历 path 列表进行编译和目标文件生成(temp_dir)
     char build_dir[] = LINUX_BUILD_DIR;
-    char *tempdir = mkdtemp(build_dir);
-    if (tempdir == NULL) {
+    char *temp_dir = mkdtemp(build_dir);
+    if (temp_dir == NULL) {
         error_exit("[build] mk temp dir failed");
     }
 
-    char *wait_ld_files = "";
+    slice_t *ld_params = slice_new();
     for (int i = 0; i < module_list->count; ++i) {
         module_t *m = module_list->take[i];
 
         // 写入到 tmp 目录
-        char *file = file_join(tempdir, m->linker_file_name);
+        char *file = file_join(temp_dir, m->linker_file_name);
         elf_to_file(m->elf_binary, m->elf_count, file);
+        // 暂时使用完整路径
+        slice_push(ld_params, file);
     }
 
+    slice_push(ld_params, "-Bstatic"); // 静态链接
+    slice_push(ld_params, "-nostdinc"); // 忽略标准库头文件
+    slice_push(ld_params, "-nostdlib"); // 忽略标准库
+    // 引入标准库
+    char *runtime_path = file_join(lib_dir, "libruntime.a");
+    char *libstart_path = file_join(lib_dir, "crt1.o");
+    char *libc_path = file_join(lib_dir, "libc.a");
+    slice_push(ld_params, runtime_path);
+    slice_push(ld_params, libstart_path);
+    slice_push(ld_params, libc_path);
+
+    slice_push(ld_params, "-o"); // 输出名称
+    slice_push(ld_params, "hello"); // 输出名称
+
     // 解析外挂 ld 进行连接
+    char *result = exec(work_dir, "ld", ld_params);
+    printf("%s", result);
 
     printf("hello in build");
 }

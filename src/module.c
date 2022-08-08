@@ -70,7 +70,7 @@ char *parser_base_ns(char *dir) {
     return result;
 }
 
-module_t *module_new(char *source_path, bool entry) {
+module_t *module_build(char *source_path, bool entry) {
     module_t *m = NEW(module_t);
     m->imports = slice_new();
     m->import_table = table_new();
@@ -80,7 +80,7 @@ module_t *module_new(char *source_path, bool entry) {
     m->source_path = source_path;
 
     if (!file_exists(source_path)) {
-        error_exit("[module_new] file %s not found", source_path);
+        error_exit("[module_build] file %s not found", source_path);
     }
     m->source = file_read(source_path);
     char *temp = strrchr(source_path, '/');

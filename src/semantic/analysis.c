@@ -768,6 +768,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     fn_init->return_type = type_new_base(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
+
     // 加入到全局符号表，等着调用就好了
     symbol_t *s = NEW(symbol_t);
     s->type = SYMBOL_TYPE_FN;
@@ -776,6 +777,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     s->is_local = false;
     slice_push(m->symbols, s);
     table_set(symbol_table, s->ident, s);
+
     slice_push(fn_list, fn_init);
 
     // 遍历 fn list

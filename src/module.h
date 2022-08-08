@@ -137,7 +137,7 @@ typedef struct {
 
     // lower -> asm_insts
     list *asm_insts; // asm_inst
-    list *var_decl_list;
+    list *var_decl_list; // asm_var_decl
 
     // elf target.o
     uint64_t elf_count;
@@ -157,7 +157,7 @@ void complete_import(string importer_dir, ast_import *import);
 
 char *parser_base_ns(char *dir);
 
-module_t *module_new(string source_path, bool entry);
+module_t *module_build(string source_path, bool entry);
 
 /**
  * 从 base_ns 开始，去掉结尾的 .n 部分
