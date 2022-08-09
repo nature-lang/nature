@@ -190,7 +190,7 @@ static void test_opcode_encoding() {
 static void test_hello_world() {
     amd64_register_init();
     opcode_init();
-    // elf_init
+    // linux_elf_init
     elf_init("hello.n");
 
     amd64_asm_var_decl decl = {
@@ -241,7 +241,7 @@ static void test_hello_world() {
 static void test_call() {
     amd64_register_init();
     opcode_init();
-    // elf_init
+    // linux_elf_init
     elf_init("call.n");
 
     amd64_asm_var_decl decl = {
@@ -302,7 +302,7 @@ static void test_call() {
 static void test_union_c() {
     amd64_register_init();
     opcode_init();
-    // elf_init
+    // linux_elf_init
     elf_init("union.n");
 
     amd64_asm_var_decl decl = {

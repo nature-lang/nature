@@ -3,26 +3,20 @@
 #include "utils/error.h"
 #include <string.h>
 #include <stdio.h>
+#include "amd64_inst.h"
 
-
-void elf_symbol_insert(elf_symbol_t *symbol) {
-    table_set(elf_symbol_table, symbol->name, symbol);
-    list_push(elf_symbol_list, symbol);
+void linux_elf_symbol_insert(elf_symbol_t *symbol) {
+    table_set(linux_elf_symbol_table, symbol->name, symbol);
+    list_push(linux_elf_symbol_list, symbol);
 }
 
-uint64_t *elf_current_text_offset() {
-    uint64_t *offset = NEW(uint64_t);
-    *offset = global_text_offset;
-    return offset;
-}
-
-uint64_t *elf_current_data_offset() {
+uint64_t *linux_elf_current_data_offset() {
     uint64_t *offset = NEW(uint64_t);
     *offset = global_data_offset;
     return offset;
 }
 
-static char *elf_header_ident() {
+static char *linux_elf_header_ident() {
     char *ident = malloc(sizeof(char) * EI_NIDENT);
     memset(ident, 0, EI_NIDENT);
 
@@ -38,18 +32,18 @@ static char *elf_header_ident() {
     return ident;
 }
 
-elf_t elf_new() {
+linux_elf_t linux_elf_new() {
     // 数据段构建(依旧是遍历符号表)
     uint64_t data_size = 0;
-    uint8_t *data = elf_data_build(&data_size);
+    uint8_t *data = linux_elf_data_build(&data_size);
 
     // 代码段构建 .text
     uint64_t text_size = 0;
-    uint8_t *text = elf_text_build(&text_size);
+    uint8_t *text = linux_elf_text_build(&text_size);
 
     // 符号表构建(首先计算符号的数量)
     uint64_t symtab_count = 4;
-    list_node *current = elf_symbol_list->front;
+    list_node *current = linux_elf_symbol_list->front;
     while (current->value != NULL) {
         elf_symbol_t *s = current->value;
         if (!s->is_local) {
@@ -58,20 +52,20 @@ elf_t elf_new() {
         current = current->next;
     }
     Elf64_Sym *symtab = malloc(sizeof(Elf64_Sym) * symtab_count);
-    string strtab = elf_symtab_build(symtab);
+    string strtab = linux_elf_symtab_build(symtab);
 
     // 代码段重定位表构建
     uint64_t rel_text_count;
-    Elf64_Rela *rel_text = elf_rela_text_build(&rel_text_count);
+    Elf64_Rela *rel_text = linux_elf_rela_text_build(&rel_text_count);
 
     // 段表构建
     Elf64_Shdr *shdr = malloc(sizeof(Elf64_Shdr) * SHDR_COUNT);
-    string shstrtab = elf_shdr_build(text_size,
-                                     data_size,
-                                     symtab_count * sizeof(Elf64_Sym),
-                                     strlen(strtab),
-                                     rel_text_count * sizeof(Elf64_Rela),
-                                     shdr);
+    string shstrtab = linux_elf_shdr_build(text_size,
+                                           data_size,
+                                           symtab_count * sizeof(Elf64_Sym),
+                                           strlen(strtab),
+                                           rel_text_count * sizeof(Elf64_Rela),
+                                           shdr);
 
     Elf64_Off shoff = sizeof(Elf64_Ehdr) + text_size + data_size + strlen(shstrtab);
     // 文件头构建
@@ -103,7 +97,7 @@ elf_t elf_new() {
     };
 
     // 输出二进制
-    return (elf_t) {
+    return (linux_elf_t) {
             .ehdr = ehdr,
             .text = text,
             .text_size = text_size,
@@ -129,12 +123,12 @@ elf_t elf_new() {
  * @param rel_text_size
  * @return
  */
-char *elf_shdr_build(uint64_t text_size,
-                     uint64_t data_size,
-                     uint64_t symtab_size,
-                     uint64_t strtab_size,
-                     uint64_t rela_text_size,
-                     Elf64_Shdr *shdr) {
+char *linux_elf_shdr_build(uint64_t text_size,
+                           uint64_t data_size,
+                           uint64_t symtab_size,
+                           uint64_t strtab_size,
+                           uint64_t rela_text_size,
+                           Elf64_Shdr *shdr) {
 
     // 段表字符串表
     char *shstrtab_data = " ";
@@ -279,7 +273,7 @@ char *elf_shdr_build(uint64_t text_size,
     return shstrtab_data;
 }
 
-char *elf_symtab_build(Elf64_Sym *symtab) {
+char *linux_elf_symtab_build(Elf64_Sym *symtab) {
     // 内部初始化
 //  symbol = malloc(sizeof(symbol) * size);
     int index = 0;
@@ -330,7 +324,7 @@ char *elf_symtab_build(Elf64_Sym *symtab) {
     };
 
     // 4. 填充其余符号(list 遍历)
-    list_node *current = elf_symbol_list->front;
+    list_node *current = linux_elf_symbol_list->front;
     while (current->value != NULL) {
         elf_symbol_t *s = current->value;
         if (!s->is_local) {
@@ -356,18 +350,19 @@ char *elf_symtab_build(Elf64_Sym *symtab) {
     return strtab_data;
 }
 
-Elf64_Rela *elf_rela_text_build(uint64_t *count) {
-    Elf64_Rela *r = malloc(sizeof(Elf64_Rela) * elf_rel_list->count);
-    *count = elf_rel_list->count;
-    list_node *current = elf_rel_list->front;
+Elf64_Rela *linux_elf_rela_text_build(uint64_t *count) {
+    Elf64_Rela *r = malloc(sizeof(Elf64_Rela) * linux_elf_rel_list->count);
+    *count = linux_elf_rel_list->count;
+    list_node *current = linux_elf_rel_list->front;
     int i = 0;
     while (current->value != NULL) {
         elf_rel_t *rel = current->value;
         // 宿友的 elf 都必须在符号表中找到,因为 rela_text 中的 info 存储着在符号表中的索引
-        elf_symbol_t *s = table_get(elf_symbol_table, rel->name);
+        elf_symbol_t *s = table_get(linux_elf_symbol_table, rel->name);
         if (s == NULL) {
-            error_exit("[elf_rela_text_build] not found symbol %s in table, all rel symbol must store to symbol table",
-                       rel->name);
+            error_exit(
+                    "[linux_elf_rela_text_build] not found symbol %s in table, all rel symbol must store to symbol table",
+                    rel->name);
         }
         uint64_t index = s->symtab_index;
         // r_sym 表示重定位项在符号表内的索引(?)
@@ -387,7 +382,7 @@ Elf64_Rela *elf_rela_text_build(uint64_t *count) {
     return r;
 }
 
-uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
+uint8_t *linux_elf_encoding(linux_elf_t elf, uint64_t *count) {
     *count = sizeof(Elf64_Ehdr) +
              elf.data_size +
              elf.text_size +
@@ -438,15 +433,15 @@ uint8_t *elf_encoding(elf_t elf, uint64_t *count) {
     return binary;
 }
 
-void elf_to_file(uint8_t *binary, uint64_t count, char *file) {
+void linux_elf_to_file(uint8_t *binary, uint64_t count, char *file) {
     FILE *f = fopen(file, "w+b");
     fwrite(binary, 1, count, f);
     fclose(f);
 }
 
-uint8_t *elf_text_build(uint64_t *size) {
+uint8_t *linux_elf_text_build(uint64_t *size) {
     *size = 0;
-    list_node *current = elf_text_inst_list->front;
+    list_node *current = linux_elf_text_inst_list->front;
     while (current->value != NULL) {
         linux_elf_text_inst_t *inst = current->value;
         *size += inst->count;
@@ -460,7 +455,7 @@ uint8_t *elf_text_build(uint64_t *size) {
 
     uint8_t *p = text;
 
-    current = elf_text_inst_list->front;
+    current = linux_elf_text_inst_list->front;
     while (current->value != NULL) {
         linux_elf_text_inst_t *inst = current->value;
         memcpy(p, inst->data, inst->count);
@@ -475,36 +470,36 @@ uint8_t *elf_text_build(uint64_t *size) {
  * 写入 custom 符号表即可
  * @param decl
  */
-void elf_var_decl_build(amd64_asm_var_decl decl) {
+void linux_elf_var_decl_build(amd64_asm_var_decl decl) {
     elf_symbol_t *symbol = NEW(elf_symbol_t);
     symbol->name = decl.name;
     symbol->type = ELF_SYMBOL_TYPE_VAR;
     symbol->section = ELF_SECTION_DATA;
-    symbol->offset = elf_current_data_offset();
+    symbol->offset = linux_elf_current_data_offset();
     global_data_offset += decl.size;
     symbol->size = decl.size;
     symbol->value = decl.value;
     symbol->is_rel = false;
     symbol->is_local = false; // data 段的都是全局符号，可以被其他文件引用
-    elf_symbol_insert(symbol);
-//    elf_confirm_text_rel(symbol->as); // TODO 符号表需要指定重排吗？
+    linux_elf_symbol_insert(symbol);
+//    linux_elf_amd64_confirm_text_rel(symbol->as); // TODO 符号表需要指定重排吗？
 }
 
-void elf_var_decl_list_build(list *decl_list) {
+void linux_elf_var_decl_list_build(list *decl_list) {
     if (list_empty(decl_list)) {
         return;
     }
     list_node *current = decl_list->front;
     while (current->value != NULL) {
         amd64_asm_var_decl *decl = current->value;
-        elf_var_decl_build(*decl);
+        linux_elf_var_decl_build(*decl);
         current = current->next;
     }
 }
 
-uint8_t *elf_data_build(uint64_t *size) {
+uint8_t *linux_elf_data_build(uint64_t *size) {
     // 遍历符号表计算数量并申请内存
-    list_node *current = elf_symbol_list->front;
+    list_node *current = linux_elf_symbol_list->front;
     while (current->value != NULL) {
         elf_symbol_t *t = current->value;
         if (t->type != ELF_SYMBOL_TYPE_VAR) {
@@ -522,7 +517,7 @@ uint8_t *elf_data_build(uint64_t *size) {
     uint8_t *data = malloc(*size);
     uint8_t *p = data;
 
-    current = elf_symbol_list->front;
+    current = linux_elf_symbol_list->front;
     while (current->value != NULL) {
         elf_symbol_t *symbol = current->value;
         if (symbol->type != ELF_SYMBOL_TYPE_VAR) {
@@ -540,13 +535,19 @@ uint8_t *elf_data_build(uint64_t *size) {
     return data;
 }
 
-void elf_init(char *_filename) {
+linux_elf_t linux_elf_init(char *_filename, list *var_decl_list, list *_linux_elf_text_inst_list) {
     filename = _filename;
+    // 按 cpu 架构选择编译
+    linux_elf_symbol_table = table_new();
+    linux_elf_symbol_list = list_new();
+    linux_elf_rel_list = list_new();
+    linux_elf_text_inst_list = _linux_elf_text_inst_list;
+
     global_data_offset = 0;
     global_text_offset = 0;
 
-    elf_text_inst_list = list_new();
-    elf_symbol_table = table_new();
-    elf_symbol_list = list_new();
-    elf_rel_list = list_new();
+    // 符号表构造 -> linux_elf_symbol_list
+    linux_elf_var_decl_list_build(var_decl_list);
+
+    return linux_elf_new();
 }

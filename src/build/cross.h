@@ -1,11 +1,8 @@
-#ifndef NATURE_CROSS_H
-#define NATURE_CROSS_H
+#ifndef NATURE_BUILD_CROSS_H
+#define NATURE_BUILD_CROSS_H
 
 #include "utils/list.h"
 #include "src/module.h"
-
-char *goos; // linux
-char *arch; // amd64
 
 // lower select by arch
 typedef list *(*lower_fn)(closure *c);

@@ -13,7 +13,7 @@
 #include "src/assembler/linux_elf/elf.h"
 #include "utils/error.h"
 #include "utils/exec.h"
-#include "src/cross.h"
+#include "src/build/cross.h"
 
 #define LINUX_BUILD_DIR  "/tmp/nature-build.XXXXXX"
 
@@ -140,22 +140,6 @@ void build(string build_target) {
             decl->value = NULL;
             list_push(m->var_decl_list, decl);
         }
-
-
-        // 构造 elf
-        elf_init(m->source_path);
-        // 数据段遍历
-        elf_var_decl_list_build(m->var_decl_list);
-        // 代码段编译
-        elf_text_inst_list_build(m->asm_insts);
-        elf_text_inst_list_second_build();
-        // 编码为 elf 二进制格式
-        elf_t elf = elf_new(); // 基于全局变量
-        m->elf_binary = elf_encoding(elf, &m->elf_count);
-
-        // 确定待链接的文件名称(不能包含 /，包含了就不能生成目录)
-        m->linker_file_name = str_connect(m->module_unique_name, ".n.o");
-        str_replace(m->linker_file_name, '/', '.');
     }
 
     // 遍历 path 列表进行编译和目标文件生成(temp_dir)
@@ -172,7 +156,7 @@ void build(string build_target) {
 
         // 写入到 tmp 目录
         char *file = file_join(temp_dir, m->linker_file_name);
-        elf_to_file(m->elf_binary, m->elf_count, file);
+        linux_elf_to_file(m->elf_binary, m->elf_count, file);
 
         // 工作目录再 temp_dir 中,所以之类使用相对路径即可
         slice_push(ld_params, m->linker_file_name);

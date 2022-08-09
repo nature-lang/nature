@@ -91,7 +91,7 @@ set(SRC
         #        ${SRC_DIR}/register/allocate.c
         #        ${SRC_DIR}/register/interval.h
         #        ${SRC_DIR}/register/interval.c
-        )
+        src/build/env.c src/build/env.h)
 
 set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/gc.h
