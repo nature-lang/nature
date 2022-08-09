@@ -21,7 +21,7 @@ amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_FN_END] = amd64_lower_fn_end,
 };
 
-static asm_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, uint8_t force_size) {
+static amd64_asm_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, uint8_t force_size) {
     uint8_t size = type_base_sizeof(var->infer_size_type);
     if (force_size > 0) {
         size = force_size;
@@ -39,7 +39,7 @@ static asm_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, ui
     error_exit("[amd64_lower_var_operand] var %d not reg_id or stack offset", var->ident);
 }
 
-asm_inst_t *amd64_lower_empty_reg(reg_t *reg) {
+amd64_asm_inst_t *amd64_lower_empty_reg(reg_t *reg) {
     // TODO ah/bh/ch/dh 不能这么清理
 
     reg_t *r = (reg_t *) amd64_register_find(reg->index, QWORD);
@@ -71,14 +71,14 @@ list *amd64_lower_call(closure *c, lir_op *op) {
     list *insts = list_new();
 
     uint8_t used[2] = {0};
-    asm_operand_t *result = NULL;
+    amd64_asm_operand_t *result = NULL;
     if (op->result != NULL) {
-        result = NEW(asm_operand_t);
+        result = NEW(amd64_asm_operand_t);
         list_append(insts, amd64_lower_operand_transform(op->result, result, used));
     }
 
     // 实参传递(封装一个 static 函数处理),
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->first, first, used));
 
     uint8_t actual_used[2] = {0};
@@ -94,7 +94,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
         // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
         uint8_t actual_transform_used[2] = {0};
-        asm_operand_t *source = NEW(asm_operand_t);
+        amd64_asm_operand_t *source = NEW(amd64_asm_operand_t);
         list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
 
         // 根据实际大小选择寄存器
@@ -123,7 +123,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     list_append(insts, param_insts);
 
-    if (first->type == ASM_OPERAND_TYPE_SYMBOL && is_print_symbol(((asm_operand_symbol_t *) first->value)->name)) {
+    if (first->type == ASM_OPERAND_TYPE_SYMBOL && is_print_symbol(((amd64_asm_operand_symbol_t *) first->value)->name)) {
         // x. TODO 仅调用变成函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长函数？
         list_push(insts, ASM_INST("mov", { REG(rax), UINT32(0) }));
     }
@@ -160,7 +160,7 @@ list *amd64_lower_return(closure *c, lir_op *op) {
     list *insts = list_new();
     uint8_t used[2] = {0};
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->result, result, used));
 
     if (lir_operand_type_base(op->result) == TYPE_FLOAT) {
@@ -177,7 +177,7 @@ list *amd64_lower_bal(closure *c, lir_op *op) {
     list *insts = list_new();
     uint8_t used[2] = {0};
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->result, result, used));
     list_push(insts, ASM_INST("jmp", { result }));
     return insts;
@@ -194,14 +194,14 @@ list *amd64_lower_add(closure *c, lir_op *op) {
     uint8_t used[2] = {0};
 
     // 参数转换
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list *temp = amd64_lower_operand_transform(op->first, first, used);
     list_append(insts, temp);
-    asm_operand_t *second = NEW(asm_operand_t);
+    amd64_asm_operand_t *second = NEW(amd64_asm_operand_t);
     temp = amd64_lower_operand_transform(op->second, second, used);
     list_append(insts, temp);
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     temp = amd64_lower_operand_transform(op->result, result, used);
     list_append(insts, temp);
 
@@ -220,16 +220,16 @@ list *amd64_lower_sgt(closure *c, lir_op *op) {
     list *insts = list_new();
     uint8_t used[2] = {0};
 
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list *temp = amd64_lower_operand_transform(op->first, first, used);
     list_append(insts, temp);
 
-    asm_operand_t *second = NEW(asm_operand_t);
+    amd64_asm_operand_t *second = NEW(amd64_asm_operand_t);
     temp = amd64_lower_operand_transform(op->second, second, used);
     list_append(insts, temp);
 
     // result 用于 setg, 必须强制 byte 大小
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->result, result, used));
 
     // bool = int64 > int64
@@ -271,11 +271,11 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
     uint8_t used[2] = {0};
 
     // 参数转换
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list *temp = amd64_lower_operand_transform(op->first, first, used);
     list_append(insts, temp);
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     temp = amd64_lower_operand_transform(op->result, result, used);
     list_append(insts, temp);
 
@@ -298,7 +298,7 @@ list *amd64_lower_mov(closure *c, lir_op *op) {
  * @return
  */
 list *amd64_lower_operand_transform(lir_operand *operand,
-                                    asm_operand_t *asm_operand,
+                                    amd64_asm_operand_t *asm_operand,
                                     uint8_t used[2]) {
     list *insts = list_new();
 
@@ -307,7 +307,7 @@ list *amd64_lower_operand_transform(lir_operand *operand,
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
             char *unique_name = AMD64_DECL_UNIQUE_NAME();
-            asm_var_decl *decl = NEW(asm_var_decl);
+            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
@@ -323,7 +323,7 @@ list *amd64_lower_operand_transform(lir_operand *operand,
             ASM_OPERAND_COPY(asm_operand, REG(reg));
         } else if (v->type == TYPE_FLOAT) {
             char *unique_name = AMD64_DECL_UNIQUE_NAME();
-            asm_var_decl *decl = NEW(asm_var_decl);
+            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
             decl->name = unique_name;
             decl->size = QWORD;
             decl->value = (uint8_t *) &v->float_value; // float to uint8
@@ -376,11 +376,11 @@ list *amd64_lower_operand_transform(lir_operand *operand,
         // 如果设置了 indirect_addr, 则编译成 [rxx+offset]
         // 否则应该编译成 ADD  rxx -> offset, asm_operand 配置成 rxx
         if (v->indirect_addr) {
-            asm_operand_t *base_addr_operand = amd64_lower_operand_var_transform(base_var, 0);
+            amd64_asm_operand_t *base_addr_operand = amd64_lower_operand_var_transform(base_var, 0);
             // 生成 mov 指令（asm_mov）
             list_push(insts, ASM_INST("mov", { REG(reg), base_addr_operand }));
 
-            asm_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->infer_size_type));
+            amd64_asm_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->infer_size_type));
             ASM_OPERAND_COPY(asm_operand, temp);
         } else {
             list_push(insts, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
@@ -401,7 +401,7 @@ list *amd64_lower_operand_transform(lir_operand *operand,
             }
 
             reg_t *reg = amd64_lower_next_reg(used, QWORD);
-            asm_operand_t *var_operand = amd64_lower_operand_var_transform(v, 0);
+            amd64_asm_operand_t *var_operand = amd64_lower_operand_var_transform(v, 0);
             list_push(insts, ASM_INST("mov", { REG(reg), var_operand }));
 
             // 解引用
@@ -574,7 +574,7 @@ list *amd64_lower_fn_formal_params(closure *c) {
         }
 
         // 直接使用 var 转换
-        asm_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->ast_type.base));
+        amd64_asm_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->ast_type.base));
         list_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
 
         current = current->next;
@@ -612,13 +612,13 @@ list *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     uint8_t used[2] = {0};
 
     // 比较 first 是否等于 second，如果相等就跳转到 result label
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->first, first, used));
 
-    asm_operand_t *second = NEW(asm_operand_t);
+    amd64_asm_operand_t *second = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->second, second, used));
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->result, result, used));
 
     // cmp 指令比较
@@ -641,10 +641,10 @@ list *amd64_lower_lea(closure *c, lir_op *op) {
     list *insts = list_new();
     uint8_t used[2] = {0};
 
-    asm_operand_t *first = NEW(asm_operand_t);
+    amd64_asm_operand_t *first = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->first, first, used));
 
-    asm_operand_t *result = NEW(asm_operand_t);
+    amd64_asm_operand_t *result = NEW(amd64_asm_operand_t);
     list_append(insts, amd64_lower_operand_transform(op->result, result, used));
 
 

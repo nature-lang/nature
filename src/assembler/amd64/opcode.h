@@ -166,7 +166,7 @@ typedef struct {
     uint8_t disp_count;
     uint8_t imms[8];
     uint8_t imm_count;
-} inst_format_t; // 机器编码类型
+} amd64_inst_format_t; // 机器编码类型
 
 
 /**
@@ -175,24 +175,24 @@ typedef struct {
 typedef struct {
     inst_t **list; // 默认初始化 10 大小
     int count;
-} insts_t;
+} amd64_insts_t;
 
 // 注册到指令树 map[] + operand_tree
 // 方式1： key 为 inst operand, 比如进入值为 rm16, 那么将会匹配一个 succs 的列表，然后继续递归啊查找，最终找到一个列表
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
 typedef struct {
-    insts_t insts; // data 数据段，最终的叶子节点才会有该数据
+    amd64_insts_t insts; // data 数据段，最终的叶子节点才会有该数据
     string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
     table *succs;
-} opcode_tree_node_t;
+} amd64_opcode_tree_node_t;
 
 typedef struct {
     uint16_t *list;
     int count;
 } asm_keys_t;
 
-opcode_tree_node_t *opcode_tree_root; // key = root
+amd64_opcode_tree_node_t *opcode_tree_root; // key = root
 
 uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
 
@@ -234,9 +234,9 @@ void opcode_init();
 
 void opcode_tree_build(inst_t *inst);
 
-opcode_tree_node_t *opcode_find_name(string name);
+amd64_opcode_tree_node_t *opcode_find_name(string name);
 
-void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_index);
+void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operands_index);
 
 /**
  * 指令选择
@@ -245,7 +245,7 @@ void opcode_find_succs(opcode_tree_node_t *node, inst_t *inst, int operands_inde
  * 2. tree 结构进一步选择
  * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
  */
-inst_t *opcode_select(asm_inst_t asm_inst);
+inst_t *opcode_select(amd64_asm_inst_t asm_inst);
 
 /**
  * 指令填充
@@ -254,12 +254,12 @@ inst_t *opcode_select(asm_inst_t asm_inst);
  * @param asm_inst
  * @param inst
  */
-inst_format_t *opcode_fill(inst_t *inst, asm_inst_t asm_inst);
+amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_asm_inst_t asm_inst);
 
-void opcode_format_encoding(inst_format_t *format, uint8_t *data, uint8_t *count);
+void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t *count);
 
-void opcode_sort_insts(insts_t *insts);
+void opcode_sort_insts(amd64_insts_t *insts);
 
-uint8_t *opcode_encoding(asm_inst_t asm_inst, uint8_t *count);
+uint8_t *amd64_opcode_encoding(amd64_asm_inst_t asm_inst, uint8_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_AMD64_OPCODE_H_

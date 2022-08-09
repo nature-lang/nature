@@ -10,9 +10,9 @@
 
 static list *test_gen_asm_print() {
     //static list *asm_builtin_print() {
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
-    asm_operand_t *string_addr_var = DISP_REG(rbp, -16, QWORD);
-    asm_operand_t *string_len_var = DISP_REG(rbp, -24, QWORD);
+    amd64_asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
+    amd64_asm_operand_t *string_addr_var = DISP_REG(rbp, -16, QWORD);
+    amd64_asm_operand_t *string_len_var = DISP_REG(rbp, -24, QWORD);
 
     list *inst_list = list_new();
     list_push(inst_list, ASM_INST("label", { SYMBOL("builtin_print", false) }));
@@ -126,45 +126,45 @@ static void test_opcode_encoding() {
     uint8_t expect[] = {0x51};
     assert_memory_equal(actual, expect, byte_count);
 
-    asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
+    amd64_asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
     uint8_t *actual2 = opcode_encoding(*mov_eax_4, &byte_count);
     uint8_t expect2[] = {0xB8, 0x01, 0x00, 0x00, 0x00};
     assert_memory_equal(actual2, expect2, byte_count);
 
-    asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
+    amd64_asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
     uint8_t *actual3 = opcode_encoding(*mov_1_rdi, &byte_count);
     uint8_t expect3[] = {0x48, 0xC7, 0xC7, 0x01, 0x00, 0x00, 0x00};
     assert_memory_equal(actual3, expect3, byte_count);
 
-    asm_inst_t *mov_rip_rsi = ASM_INST("mov", { REG(rsi), RIP_RELATIVE(0) });
+    amd64_asm_inst_t *mov_rip_rsi = ASM_INST("mov", { REG(rsi), RIP_RELATIVE(0) });
     uint8_t *actual4 = opcode_encoding(*mov_rip_rsi, &byte_count);
     uint8_t expect4[] = {0x48, 0x8B, 0x35, 0x00, 0x00, 0x00, 0x00};
     assert_memory_equal(actual4, expect4, byte_count);
 
-    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
+    amd64_asm_inst_t *syscall = ASM_INST("syscall_inst", {});
     uint8_t *actual5 = opcode_encoding(*syscall, &byte_count);
     uint8_t expect5[] = {0x0F, 0x05};
     assert_memory_equal(actual5, expect5, byte_count);
 
-    asm_inst_t *mov_rax_disp = ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) });
+    amd64_asm_inst_t *mov_rax_disp = ASM_INST("mov", { DISP_REG(rbp, -8, QWORD), REG(rax) });
     uint8_t *actual6 = opcode_encoding(*mov_rax_disp, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect6[] = {0x48, 0x89, 0x45, 0xF8};
     assert_memory_equal(actual6, expect6, byte_count);
 
-    asm_inst_t *add_disp_rax = ASM_INST("add", { REG(rax), DISP_REG(rbp, -8, QWORD), });
+    amd64_asm_inst_t *add_disp_rax = ASM_INST("add", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual7 = opcode_encoding(*add_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect7[] = {0x48, 0x03, 0x45, 0xF8};
     assert_memory_equal(actual7, expect7, byte_count);
 
-    asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8, QWORD), });
+    amd64_asm_inst_t *mov_disp_rax = ASM_INST("mov", { REG(rax), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual8 = opcode_encoding(*mov_disp_rax, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect8[] = {0x48, 0x8b, 0x45, 0xF8};
     assert_memory_equal(actual8, expect8, byte_count);
 
-    asm_inst_t *mov_xmm0_disp = ASM_INST("mov", { REG(xmm0), DISP_REG(rbp, -8, QWORD), });
+    amd64_asm_inst_t *mov_xmm0_disp = ASM_INST("mov", { REG(xmm0), DISP_REG(rbp, -8, QWORD), });
     uint8_t *actual9 = opcode_encoding(*mov_xmm0_disp, &byte_count);
     // 0x43 => mod:01 reg:000 rm:101
     uint8_t expect19[] = {0xF2, 0x0F, 0x10, 0x45, 0xF8};
@@ -193,7 +193,7 @@ static void test_hello_world() {
     // elf_init
     elf_init("hello.n");
 
-    asm_var_decl decl = {
+    amd64_asm_var_decl decl = {
             .name = "str",
             .size = strlen("hello world!\n"),
             .value = (uint8_t *) "hello world!\n",
@@ -201,16 +201,16 @@ static void test_hello_world() {
     };
 
     // sys_write
-    asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", false) });
-    asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
-    asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
-    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
-    asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
-    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
+    amd64_asm_inst_t *start = ASM_INST("label", { SYMBOL("_start", false) });
+    amd64_asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
+    amd64_asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
+    amd64_asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
+    amd64_asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
+    amd64_asm_inst_t *syscall = ASM_INST("syscall_inst", {});
 
     // sys_exit
-    asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
-    asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
+    amd64_asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
+    amd64_asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
     // encoding
     list *inst_list = list_new();
     list_push(inst_list, start);
@@ -244,7 +244,7 @@ static void test_call() {
     // elf_init
     elf_init("call.n");
 
-    asm_var_decl decl = {
+    amd64_asm_var_decl decl = {
             .name = "str",
             .size = strlen("hello world!\n"),
             .value = (uint8_t *) "hello world!\n",
@@ -252,19 +252,19 @@ static void test_call() {
     };
 
     // sys_write
-    asm_inst_t *start_label = ASM_INST("label", { SYMBOL("_start", false) });
-    asm_inst_t *call_hello = ASM_INST("call", { SYMBOL("hello", false) });
+    amd64_asm_inst_t *start_label = ASM_INST("label", { SYMBOL("_start", false) });
+    amd64_asm_inst_t *call_hello = ASM_INST("call", { SYMBOL("hello", false) });
 
-    asm_inst_t *hello_label = ASM_INST("label", { SYMBOL("hello", false) });
-    asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
-    asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
-    asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
-    asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
-    asm_inst_t *syscall = ASM_INST("syscall_inst", {});
+    amd64_asm_inst_t *hello_label = ASM_INST("label", { SYMBOL("hello", false) });
+    amd64_asm_inst_t *mov_eax_4 = ASM_INST("mov", { REG(eax), UINT32(1) });
+    amd64_asm_inst_t *mov_1_rdi = ASM_INST("mov", { REG(rdi), UINT32(1) });
+    amd64_asm_inst_t *mov_str_rsi = ASM_INST("lea", { REG(rsi), SYMBOL(decl.name, false) });
+    amd64_asm_inst_t *mov_len_rdx = ASM_INST("mov", { REG(rdx), UINT32(decl.size) });
+    amd64_asm_inst_t *syscall = ASM_INST("syscall_inst", {});
 
     // sys_exit
-    asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
-    asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
+    amd64_asm_inst_t *mov_60_eax = ASM_INST("mov", { REG(eax), UINT32(60) });
+    amd64_asm_inst_t *mov_0_rdi = ASM_INST("mov", { REG(rdi), UINT32(0) });
 
 
     // encoding
@@ -305,7 +305,7 @@ static void test_union_c() {
     // elf_init
     elf_init("union.n");
 
-    asm_var_decl decl = {
+    amd64_asm_var_decl decl = {
             .name = "str",
             .size = strlen("hello world!\n"),
             .value = (uint8_t *) "hello world!\n",
@@ -351,13 +351,13 @@ static void test_union_builtin_print() {
     opcode_init();
 
     // 数据段
-    asm_var_decl decl = {
+    amd64_asm_var_decl decl = {
             .name = "str",
             .size = strlen("hello world!\n"),
             .value = (uint8_t *) "hello world!\n",
             .type = ASM_VAR_DECL_TYPE_STRING
     };
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
+    amd64_asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
 
     list *builtin_call_list = list_new();
     list_push(builtin_call_list, ASM_INST("label", { SYMBOL("_start", false) }));
@@ -412,7 +412,7 @@ static void test_runtime_string_print() {
     opcode_init();
 
     // 数据段
-    asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
+    amd64_asm_operand_t *string_entity_var = DISP_REG(rbp, -8, QWORD);
 
     list *inst_list = list_new();
     list_push(inst_list, ASM_INST("label", { LABEL("_start") }));

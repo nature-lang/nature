@@ -22,6 +22,8 @@ uint64_t memory_align(uint64_t n, uint8_t align);
 
 bool file_exists(char *path);
 
+bool ends_with(char* str, char* suffix);
+
 char *get_work_dir();
 
 char *rtrim(char *str, size_t trim_len);

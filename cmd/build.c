@@ -10,7 +10,7 @@
 #include "src/lower/amd64/amd64.h"
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/amd64/opcode.h"
-#include "src/assembler/elf/elf.h"
+#include "src/assembler/linux_elf/elf.h"
 #include "utils/error.h"
 #include "utils/exec.h"
 #include "src/cross.h"
@@ -123,6 +123,9 @@ void build(string build_target) {
             list_append(m->asm_insts, amd64_lower_closure(c));
         }
 
+
+        // TODO 按架构编译
+
         m->var_decl_list = amd64_decl_list;
         // symbol to var_decl
         for (int j = 0; j < m->symbols->count; ++j) {
@@ -131,7 +134,7 @@ void build(string build_target) {
                 continue;
             }
             ast_var_decl *var_decl = s->decl;
-            asm_var_decl *decl = NEW(asm_var_decl);
+            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
             decl->value = NULL;
@@ -197,6 +200,26 @@ void build(string build_target) {
     char *dst_path = file_join(work_dir, output_name);
     copy(dst_path, src_path, 0755);
 
-    printf("hello in build,\n temp_dir: %s\n work_dir: %s", temp_dir, work_dir);
+//    printf("hello in build,\n temp_dir: %s\n work_dir: %s", temp_dir, work_dir);
+}
+
+void build_arg(int argc, char **argv) {
+    char *build_file = argv[argc - 1];
+    if (!ends_with(build_file, ".n")) {
+        error_exit("[build_arg] named files must be .n files: %s", build_file);
+        return;
+    }
+
+    // -o 参数解析
+    int c;
+    while ((c = getopt(argc, argv, "o:")) != -1) {
+        switch (c) {
+            case 'o':
+                output_name = optarg;
+                break;
+        }
+    }
+
+    build(build_file);
 }
 

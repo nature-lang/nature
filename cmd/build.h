@@ -14,4 +14,6 @@ string binary_path;
  */
 void build(string build_target);
 
+void build_arg(int argc, char *argv[]);
+
 #endif //NATURE_BUILD_H
