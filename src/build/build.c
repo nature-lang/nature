@@ -8,6 +8,7 @@
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/lower/amd64/amd64.h"
+#include "src/lower/lower.h"
 #include "src/assembler/amd64/register.h"
 #include "src/assembler/amd64/opcode.h"
 #include "src/assembler/linux_elf/elf.h"
@@ -20,7 +21,10 @@
 
 // nature build xxx.n
 void build(char *build_target) {
-    // 初始化阶段
+    env_init();
+    config_init();
+
+    // 初始化全局符号表
     symbol_ident_table_init();
     var_unique_count = 0;
 
@@ -58,10 +62,8 @@ void build(char *build_target) {
     }
 
     // TODO 暂时只支持单进程，因为多个文件共享了全局的数据
-    // TODO 根据架构选择对应的 lower 入口
     // 全局维度初始化
-    amd64_register_init();
-    opcode_init();
+
 
     // root module stmt add call all module init
     ast_closure_t *root_ast_closure = root->ast_closures->take[0];
@@ -84,8 +86,6 @@ void build(char *build_target) {
         var_unique_count = 0;
         lir_line = 0;
         m->compiler_closures = slice_new();
-        m->asm_insts = list_new();
-        m->var_decl_list = list_new();
 
         // 全局符号的定义也需要推导以下原始类型
         for (int j = 0; j < m->symbols->count; ++j) {
@@ -112,75 +112,30 @@ void build(char *build_target) {
             debug_cfg(c);
 #endif
         }
+    }
 
+    // lower + assembler
+    for (int i = 0; i < module_list->count; ++i) {
+        module_t *m = module_list->take[i];
+        m->var_decl_list = list_new();
 
-        // TODO 按架构编译
-
-
-        m->var_decl_list = amd64_decl_list;
-        // symbol to var_decl
+        // symbol to var_decl(架构无关), assembler 会使用 var_decl
         for (int j = 0; j < m->symbols->count; ++j) {
             symbol_t *s = m->symbols->take[j];
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
             ast_var_decl *var_decl = s->decl;
-            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
+            lower_var_decl_t *decl = NEW(lower_var_decl_t);
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
-            decl->value = NULL;
+            decl->value = NULL; // TODO 如果是立即数可以直接赋值
             list_push(m->var_decl_list, decl);
         }
-    }
 
-    // lower + assembler
-    for (int i = 0; i < module_list->count; ++i) {
-        module_t *m = module_list->take[i];
         cross_lower(m);
         cross_assembler(m);
     }
 
-    // 遍历 path 列表进行编译和目标文件生成(temp_dir)
-    char build_dir[] = LINUX_BUILD_DIR;
-    char *temp_dir = mkdtemp(build_dir);
-    if (temp_dir == NULL) {
-        error_exit("[build] mk temp dir failed");
-    }
-
-    // ld
-    slice_t *ld_params = slice_new();
-    for (int i = 0; i < module_list->count; ++i) {
-        module_t *m = module_list->take[i];
-
-        // 写入到 tmp 目录
-        char *file = file_join(temp_dir, m->linker_file_name);
-        linux_elf_to_file(m->elf_binary, m->elf_count, file);
-
-        // 工作目录再 temp_dir 中,所以之类使用相对路径即可
-        slice_push(ld_params, m->linker_file_name);
-    }
-
-    slice_push(ld_params, "-Bstatic"); // 静态链接
-    slice_push(ld_params, "-nostdinc"); // 忽略标准库头文件
-    slice_push(ld_params, "-nostdlib"); // 忽略标准库
-    // 引入标准库
-    char *libstart_path = file_join(lib_dir, "crt1.o");
-    char *runtime_path = file_join(lib_dir, "libruntime.a");
-    char *libc_path = file_join(lib_dir, "libc.a");
-    slice_push(ld_params, runtime_path);
-    slice_push(ld_params, libstart_path);
-    slice_push(ld_params, libc_path);
-
-    slice_push(ld_params, "-o"); // 输出名称
-    slice_push(ld_params, "a.out"); // 固定输出名称
-
-    // 解析外挂 ld 进行连接
-    exec(temp_dir, "ld", ld_params);
-
-    // copy 移动
-    char *src_path = file_join(temp_dir, "a.out");
-    char *dst_path = file_join(work_dir, output_name);
-    copy(dst_path, src_path, 0755);
-
-//    printf("hello in build,\n temp_dir: %s\n work_dir: %s", temp_dir, work_dir);
+    cross_linker(module_list);
 }

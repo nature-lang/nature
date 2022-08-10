@@ -470,7 +470,7 @@ uint8_t *linux_elf_text_build(uint64_t *size) {
  * 写入 custom 符号表即可
  * @param decl
  */
-void linux_elf_var_decl_build(amd64_asm_var_decl decl) {
+void linux_elf_var_decl_build(lower_var_decl_t decl) {
     elf_symbol_t *symbol = NEW(elf_symbol_t);
     symbol->name = decl.name;
     symbol->type = ELF_SYMBOL_TYPE_VAR;
@@ -491,7 +491,7 @@ void linux_elf_var_decl_list_build(list *decl_list) {
     }
     list_node *current = decl_list->front;
     while (current->value != NULL) {
-        amd64_asm_var_decl *decl = current->value;
+        lower_var_decl_t *decl = current->value;
         linux_elf_var_decl_build(*decl);
         current = current->next;
     }
@@ -535,19 +535,16 @@ uint8_t *linux_elf_data_build(uint64_t *size) {
     return data;
 }
 
-linux_elf_t linux_elf_init(char *_filename, list *var_decl_list, list *_linux_elf_text_inst_list) {
+void linux_elf_init(char *_filename, list *var_decl_list) {
     filename = _filename;
     // 按 cpu 架构选择编译
     linux_elf_symbol_table = table_new();
     linux_elf_symbol_list = list_new();
     linux_elf_rel_list = list_new();
-    linux_elf_text_inst_list = _linux_elf_text_inst_list;
 
     global_data_offset = 0;
     global_text_offset = 0;
 
     // 符号表构造 -> linux_elf_symbol_list
     linux_elf_var_decl_list_build(var_decl_list);
-
-    return linux_elf_new();
 }

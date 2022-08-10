@@ -83,7 +83,7 @@ static void test_lower_hello() {
 
     elf_init("hello_world.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
-    elf_var_decl_list_build(amd64_decl_list);
+    elf_var_decl_list_build(amd64_var_decl_list);
     // 代码段
     elf_text_inst_list_build(insts);
     elf_text_inst_list_second_build();
@@ -129,7 +129,7 @@ static void test_lower_debug_printf() {
 
     elf_init("debug_printf.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
-    elf_var_decl_list_build(amd64_decl_list);
+    elf_var_decl_list_build(amd64_var_decl_list);
     // 代码段
     elf_text_inst_list_build(insts);
     elf_text_inst_list_second_build();
@@ -177,7 +177,7 @@ static void test_lower_sum() {
 
     elf_init("sum.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
-    elf_var_decl_list_build(amd64_decl_list);
+    elf_var_decl_list_build(amd64_var_decl_list);
     // 代码段
     elf_text_inst_list_build(insts);
     elf_text_inst_list_second_build();
@@ -259,7 +259,7 @@ static void test_lower_call() {
 
     elf_init("call.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
-    elf_var_decl_list_build(amd64_decl_list);
+    elf_var_decl_list_build(amd64_var_decl_list);
     // 代码段
     elf_text_inst_list_build(insts);
     elf_text_inst_list_second_build();
@@ -328,7 +328,7 @@ static void test_lower_if() {
 
     elf_init("if.n");
     //  数据段编译(直接从 lower 中取还是从全局变量中取? 后者)
-    elf_var_decl_list_build(amd64_decl_list);
+    elf_var_decl_list_build(amd64_var_decl_list);
     // 代码段
     elf_text_inst_list_build(insts);
     elf_text_inst_list_second_build();

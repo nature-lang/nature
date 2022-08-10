@@ -4,6 +4,7 @@
 #include "utils/error.h"
 #include "utils/helper.h"
 #include "src/symbol.h"
+#include "src/lower/lower.h"
 
 amd64_lower_fn amd64_lower_table[] = {
         [LIR_OP_TYPE_ADD] = amd64_lower_add,
@@ -123,7 +124,8 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
     list_append(insts, param_insts);
 
-    if (first->type == ASM_OPERAND_TYPE_SYMBOL && is_print_symbol(((amd64_asm_operand_symbol_t *) first->value)->name)) {
+    if (first->type == ASM_OPERAND_TYPE_SYMBOL &&
+        is_print_symbol(((amd64_asm_operand_symbol_t *) first->value)->name)) {
         // x. TODO 仅调用变成函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长函数？
         list_push(insts, ASM_INST("mov", { REG(rax), UINT32(0) }));
     }
@@ -306,13 +308,13 @@ list *amd64_lower_operand_transform(lir_operand *operand,
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
-            char *unique_name = AMD64_DECL_UNIQUE_NAME();
-            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
+            char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
+            lower_var_decl_t *decl = NEW(lower_var_decl_t);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
 //            decl->type = ASM_VAR_DECL_TYPE_STRING;
-            list_push(amd64_decl_list, decl);
+            list_push(lower_var_decl_list, decl);
 
             // 使用临时寄存器保存结果(会增加一条 lea 指令)
             reg_t *reg = amd64_lower_next_reg(used, QWORD);
@@ -322,13 +324,13 @@ list *amd64_lower_operand_transform(lir_operand *operand,
             // asm_copy
             ASM_OPERAND_COPY(asm_operand, REG(reg));
         } else if (v->type == TYPE_FLOAT) {
-            char *unique_name = AMD64_DECL_UNIQUE_NAME();
-            amd64_asm_var_decl *decl = NEW(amd64_asm_var_decl);
+            char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
+            lower_var_decl_t *decl = NEW(lower_var_decl_t);
             decl->name = unique_name;
             decl->size = QWORD;
             decl->value = (uint8_t *) &v->float_value; // float to uint8
-            decl->type = ASM_VAR_DECL_TYPE_FLOAT;
-            list_push(amd64_decl_list, decl);
+//            decl->type = ASM_VAR_DECL_TYPE_FLOAT;
+            list_push(lower_var_decl_list, decl);
 
             // 使用临时寄存器保存结果
             reg_t *reg = amd64_lower_next_reg(used, OWORD);
@@ -436,10 +438,6 @@ list *amd64_lower_op(closure *c, lir_op *op) {
         error_exit("[amd64_lower_op] amd64_lower_table not found fn: %d", op->type);
     }
     return fn(c, op);
-}
-
-void amd64_lower_init() {
-    amd64_decl_list = list_new();
 }
 
 reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {

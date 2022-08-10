@@ -122,6 +122,7 @@ list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand 
 
     // 尾部添加结尾 label(basic_block)
     list_push(operates, lir_op_label(c->end_label, true));
+    // 添加函数结束指令
     list_push(operates, lir_op_new(LIR_OP_TYPE_FN_END, NULL, NULL, NULL));
 
     c->operates = operates;

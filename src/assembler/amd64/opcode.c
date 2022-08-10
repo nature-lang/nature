@@ -384,7 +384,7 @@ static amd64_opcode_tree_node_t *opcode_node_new() {
  * @param inst
  * @return
  */
-void opcode_init() {
+void amd64_opcode_init() {
     opcode_tree_root = opcode_node_new();
     opcode_tree_root->key = "root";
     // 收集所有指令，进行注册

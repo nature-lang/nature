@@ -2,9 +2,11 @@
 #include "utils/helper.h"
 #include "utils/error.h"
 #include "utils/exec.h"
+#include "src/assembler/amd64/register.h"
 #include "src/assembler/linux_elf/elf.h"
 #include "src/assembler/linux_elf/amd64_inst.h"
 #include "src/lower/amd64/amd64.h"
+#include "src/lower/lower.h"
 #include "config.h"
 
 /**
@@ -12,20 +14,38 @@
  * @return  m->asm_insts
  */
 void cross_lower(module_t *m) {
+    lower_var_decl_list = list_new();
     m->asm_insts = list_new();
-    // init
+
+    // pre
     if (str_equal(BUILD_ARCH, "amd64")) {
-        amd64_lower_init(); // 每个文件都需要清空 var_decl 表, 所以暂时不支持多线程
+        amd64_register_init();
+        amd64_opcode_init();
     } else {
-        error_exit("[cross_assembler] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+        goto ERROR;
     };
 
+    // lower
     for (int i = 0; i < m->compiler_closures->count; ++i) {
         closure *c = m->compiler_closures->take[i];
         if (str_equal(BUILD_ARCH, "amd64")) {
             list_append(m->asm_insts, amd64_lower_closure(c));
+        } else {
+            goto ERROR;
         }
     }
+
+    // post
+    if (str_equal(BUILD_ARCH, "amd64")) {
+        list_append(m->var_decl_list, lower_var_decl_list);
+    } else {
+        goto ERROR;
+    }
+
+    return;
+    ERROR:
+    error_exit("[cross_lower] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+
 }
 
 /**
@@ -34,20 +54,28 @@ void cross_lower(module_t *m) {
  */
 void cross_assembler(module_t *m) {
     if (str_equal(BUILD_OS, "linux")) {
-        list *text_inst_list;
+        // 符号表初始化
+        char *_filename = str_connect(m->module_unique_name, ".n");
+        linux_elf_init(_filename, m->var_decl_list);
+
         if (str_equal(BUILD_ARCH, "amd64")) {
-            text_inst_list = linux_elf_amd64_insts_build(m->asm_insts);
+            // 依赖 elf_init 中的符号表，重定位表
+            linux_elf_text_inst_list = linux_elf_amd64_insts_build(m->asm_insts);
         } else {
             goto ERROR;
         }
 
-        char *_filename = str_connect(m->module_unique_name, ".n");
-        linux_elf_t elf = linux_elf_init(_filename, m->var_decl_list, text_inst_list);
+        // 创建 elf 实例
+        linux_elf_t elf = linux_elf_new();
         m->elf_binary = linux_elf_encoding(elf, &m->elf_count);
         m->linker_file_name = str_connect(filename, ".o");
         str_replace(m->linker_file_name, '/', '.');
+    } else {
+        goto ERROR;
     }
 
+
+    return;
     ERROR:
     error_exit("[cross_assembler] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
 }
@@ -70,10 +98,9 @@ static char *lib_file_path(char *file) {
  * @param module_list
  */
 void cross_linker(slice_t *module_list) {
-    char *build_tmp_dir = cross_tmp_dir();
-    char *tmp_dir = mkdtemp(build_tmp_dir);
+    char *tmp_dir = cross_tmp_dir();
     if (tmp_dir == NULL) {
-        error_exit("[cross_linker] mk tmp dir failed");
+        error_exit("[cross_linker] create tmp dir failed");
     }
 
     slice_t *ld_args = slice_new();
@@ -101,7 +128,7 @@ void cross_linker(slice_t *module_list) {
     exec(tmp_dir, LINKER_ELF_NAME, ld_args);
 
     // 检测是否生成
-    char *src_path = file_join(tmp_dir, LINKER_ELF_NAME);
+    char *src_path = file_join(tmp_dir, LINKER_OUTPUT);
     char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
     if (!file_exists(src_path)) {
         error_exit("[cross_linker] linker failed");
@@ -110,9 +137,20 @@ void cross_linker(slice_t *module_list) {
 }
 
 char *cross_tmp_dir() {
+    char *tmp_dir;
     if (str_equal(BUILD_OS, "linux")) {
-        return LINUX_BUILD_TMP_DIR;
+        char temp[] = LINUX_BUILD_TMP_DIR;
+        mkdtemp(temp);
+
+        size_t size = strlen(LINUX_BUILD_TMP_DIR) + 1;
+        tmp_dir = malloc(size);
+        memset(tmp_dir, '\0', size);
+        strcpy(tmp_dir, temp);
+    } else {
+        goto ERROR;
     }
+
+    return tmp_dir;
     ERROR:
     error_exit("[cross_tmp_dir] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
 }

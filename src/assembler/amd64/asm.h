@@ -26,7 +26,7 @@
 #define ASM_INST(_name, ...) ({\
   amd64_asm_inst_t *_inst = NEW(amd64_asm_inst_t);\
   _inst->name = _name;\
-  asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
+  amd64_asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
   for (int _i = 0; _i < 4; ++_i) {\
     if (_temp_operands[_i] != NULL) {\
       _inst->operands[_i] = _temp_operands[_i];\
@@ -53,9 +53,9 @@
 })
 
 #define SYMBOL(_name, _is_local) ({ \
-     asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
-     asm_operand_symbol_t *_symbol = NEW(amd64_asm_operand_symbol_t); \
+     amd64_asm_operand_symbol_t *_symbol = NEW(amd64_asm_operand_symbol_t); \
      _symbol->name = _name;    \
      _symbol->is_local = _is_local;    \
      _operand->size = 0;\
@@ -84,7 +84,7 @@
 })
 
 #define INDIRECT_REG(_reg, _size) ({ \
-     asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
      asm_operand_indirect_register_t *_indirect = NEW(asm_operand_indirect_register_t); \
      _indirect->reg = (asm_operand_register_t*)(_reg);    \
@@ -94,7 +94,7 @@
 })
 
 #define SIB_REG(_base, _index, _scale) ({ \
-     asm_operand_t *operand = NEW(amd64_asm_operand_t); \
+     amd64_asm_operand_t *operand = NEW(amd64_asm_operand_t); \
      operand->type = ASM_OPERAND_TYPE_SIB_REGISTER;  \
      asm_operand_sib_register_t *_sib = NEW(asm_operand_sib_register_t); \
      _sib->base = _base;\
@@ -106,7 +106,7 @@
 })
 
 #define RIP_RELATIVE(_disp) ({ \
-     asm_operand_t *operand = NEW(amd64_asm_operand_t); \
+     amd64_asm_operand_t *operand = NEW(amd64_asm_operand_t); \
      operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;  \
      asm_operand_rip_relative_t *rip = NEW(asm_operand_rip_relative_t); \
      rip->disp = _disp;\
@@ -126,7 +126,7 @@
 #define FLOAT64(_value) VALUE_OPERAND(asm_operand_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
-    asm_operand_t *number_operand = malloc(sizeof(asm_operand_t));\
+    amd64_asm_operand_t *number_operand = malloc(sizeof(amd64_asm_operand_t));\
     number_operand->type = (_operand_type);\
     _type *number = malloc(sizeof(_type));\
     number->value = (_value);\
@@ -248,11 +248,11 @@ typedef struct {
 //    ASM_VAR_DECL_TYPE_UNKNOWN,
 //} asm_var_decl_type;
 
-typedef struct {
-    string name; // 符号名称
-    size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
-    uint8_t *value; // 符号值
-} amd64_asm_var_decl;
+//typedef struct {
+//    string name; // 符号名称
+//    size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
+//    uint8_t *value; // 符号值
+//} amd64_asm_var_decl;
 
 amd64_asm_operand_t *amd64_asm_symbol_operand(amd64_asm_inst_t asm_inst);
 

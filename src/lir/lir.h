@@ -134,8 +134,8 @@ typedef enum {
     LIR_OP_TYPE_POP,
     LIR_OP_TYPE_CALL,
     LIR_OP_TYPE_RUNTIME_CALL,
-    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params => nil
-    LIR_OP_TYPE_RETURN, // return 并不能真的就推出函数执行
+    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
+    LIR_OP_TYPE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OP_TYPE_LABEL,
     LIR_OP_TYPE_FN_BEGIN,
     LIR_OP_TYPE_FN_END,

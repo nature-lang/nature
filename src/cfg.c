@@ -26,8 +26,6 @@
  *  sub
  *  shift
  *
- *  TODO 添加统一结尾块，并将所有的 ret 指令添加跳转到统一结尾块
- *
  * @param c
  * @return
  */

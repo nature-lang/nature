@@ -3,6 +3,6 @@
 
 #include "src/value.h"
 
-void build_arg(int argc, char *argv[]);
+void cmd_build_arg(int argc, char *argv[]);
 
 #endif //NATURE_BUILD_H

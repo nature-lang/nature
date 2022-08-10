@@ -135,8 +135,8 @@ typedef struct {
     slice_t *compiler_closures; // 包含 lir
 
     // lower -> asm_insts
-    list *asm_insts; // asm_inst
-    list *var_decl_list; // asm_var_decl
+    list *asm_insts; // 和架构相关
+    list *var_decl_list; // 和架构无关
 
     // elf target.o
     uint64_t elf_count;

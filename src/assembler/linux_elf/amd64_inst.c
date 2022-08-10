@@ -360,8 +360,11 @@ uint64_t *linux_elf_amd64_current_text_offset() {
 }
 
 list *linux_elf_amd64_insts_build(list *insts) {
+    linux_elf_amd64_text_insts = list_new();
+
     elf_text_inst_list_build(insts);
     linux_elf_adm64_text_inst_list_second_build();
+
     // 转换成 elf text inst 标准格式返回
     list *text_inst_list = list_new();
     list_node *current = linux_elf_amd64_text_insts->front;

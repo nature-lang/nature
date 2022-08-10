@@ -17,12 +17,10 @@
 #include "src/build/config.h"
 #include "src/build/build.h"
 
-#define LINUX_BUILD_DIR  "/tmp/nature-build.XXXXXX"
-
-void build_arg(int argc, char **argv) {
+void cmd_build_arg(int argc, char **argv) {
     char *build_file = argv[argc - 1];
     if (!ends_with(build_file, ".n")) {
-        error_exit("[build_arg] named files must be .n files: %s", build_file);
+        error_exit("[cmd_build_arg] named files must be .n files: %s", build_file);
         return;
     }
 
@@ -31,7 +29,7 @@ void build_arg(int argc, char **argv) {
     while ((c = getopt(argc, argv, "o:")) != -1) {
         switch (c) {
             case 'o':
-                output_name = optarg;
+                BUILD_OUTPUT = optarg;
                 break;
         }
     }

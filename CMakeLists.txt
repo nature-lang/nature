@@ -19,6 +19,8 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/register.c)
 
 set(SRC_LOWER
+        ${SRC_DIR}/lower/lower.h
+        ${SRC_DIR}/lower/lower.c
         ${SRC_DIR}/lower/amd64/amd64.c
         ${SRC_DIR}/lower/amd64/amd64.h)
 

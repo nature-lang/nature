@@ -230,7 +230,7 @@ asm_keys_t operand_low_to_high(operand_type t);
  * 2. 将所有的指令注册到 tree 中
  * @return
  */
-void opcode_init();
+void amd64_opcode_init();
 
 void opcode_tree_build(inst_t *inst);
 

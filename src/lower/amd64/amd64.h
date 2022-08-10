@@ -10,23 +10,6 @@
 
 typedef list *(*amd64_lower_fn)(closure *c, lir_op *op);
 
-list *amd64_decl_list;
-
-int amd64_decl_unique_count;
-
-#define ADM64_DECL_PREFIX "v"
-
-
-#define AMD64_DECL_UNIQUE_NAME() \
-({                                 \
-   char *temp_name = malloc(strlen(ADM64_DECL_PREFIX) + sizeof(int) + 2); \
-   sprintf(temp_name, "%s_%d", ADM64_DECL_PREFIX, amd64_decl_unique_count++); \
-   temp_name;                                   \
-})
-
-
-void amd64_lower_init();
-
 list *amd64_lower_fn_formal_params(closure *c);
 
 list *amd64_lower_fn_begin(closure *c, lir_op *op);

@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <unistd.h>
 #include "cmd/build.h"
 #include "utils/helper.h"
 
@@ -13,7 +12,6 @@
  */
 int main(int argc, char *argv[]) {
     // set binary_path
-    binary_path = argv[0];
     if (argc == 1) {
         printf("unknown command, recommend to use 'nature build main.n'");
         return 0;
@@ -23,7 +21,7 @@ int main(int argc, char *argv[]) {
     if (str_equal(first, ARG_BUILD)) {
         argv[1] = argv[0];
         argv += 1;
-        build_arg(argc - 1, argv);
+        cmd_build_arg(argc - 1, argv);
         return 0;
     }
     printf("unknown command: %s\n", first);

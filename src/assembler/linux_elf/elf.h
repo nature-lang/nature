@@ -4,6 +4,7 @@
 #include "lib_elf.h"
 #include "src/assembler/amd64/asm.h"
 #include "src/assembler/amd64/opcode.h"
+#include "src/lower/lower.h"
 #include "utils/list.h"
 #include "utils/table.h"
 
@@ -157,9 +158,9 @@ Elf64_Rela *linux_elf_rela_text_build(uint64_t *count);
  */
 string linux_elf_symtab_build(Elf64_Sym *symtab);
 
-linux_elf_t linux_elf_init(char *_filename, list *var_decl_list, list *_linux_elf_text_inst_list);
+void linux_elf_init(char *_filename, list *var_decl_list);
 
-void linux_elf_var_decl_build(amd64_asm_var_decl decl);
+void linux_elf_var_decl_build(lower_var_decl_t decl);
 
 void linux_elf_var_decl_list_build(list *decl_list);
 
