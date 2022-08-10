@@ -1,8 +1,6 @@
 #ifndef NATURE_BUILD_H
 #define NATURE_BUILD_H
 
-#include "src/value.h"
-
-void build_arg(int argc, char *argv[]);
+void build(char* build_target);
 
 #endif //NATURE_BUILD_H

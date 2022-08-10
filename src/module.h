@@ -93,10 +93,6 @@ typedef struct analysis_function {
     uint8_t contains_fn_count;
 } analysis_function;
 
-// nature build main.c // 执行命令所在目录 /Users/weiwenhao/Code/nature-test
-string work_dir; // /Users/weiwenhao/Code/nature-test
-string base_ns; // nature-test
-
 /**
  * path 基于 import 编译， import 能提供完整的 full_path 以及 module_name
  * Target district

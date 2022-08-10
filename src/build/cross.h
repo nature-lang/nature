@@ -4,16 +4,21 @@
 #include "utils/list.h"
 #include "src/module.h"
 
+#define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
+#define DARWIN_BUILD_TMP_DIR  ""
+
 // lower select by arch
 typedef list *(*lower_fn)(closure *c);
 
 // assembler select by goos + arch
 
+char *cross_tmp_dir();
+
 /**
  * lir to arch asm insts
  * @return
  */
-list *cross_lower(module_t *m);
+void cross_lower(module_t *m);
 
 
 /**
@@ -24,7 +29,7 @@ void cross_assembler(module_t *m);
 /**
  * 链接器
  */
-void cross_linker(slice_t *list);
+void cross_linker(slice_t *module_list);
 
 
 #endif //NATURE_CROSS_H

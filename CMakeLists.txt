@@ -84,14 +84,18 @@ set(SRC
         ${SRC_DIR}/ssa.c
         ${SRC_DIR}/module.h
         ${SRC_DIR}/module.c
-        ${SRC_DIR}/cross.h
-        ${SRC_DIR}/cross.c
+        ${SRC_DIR}/build/cross.h
+        ${SRC_DIR}/build/cross.c
+        ${SRC_DIR}/build/config.h
+        ${SRC_DIR}/build/config.c
+        ${SRC_DIR}/build/build.h
+        ${SRC_DIR}/build/build.c
         #        ${SRC_DIR}/register/register.h
         #        ${SRC_DIR}/register/allocate.h
         #        ${SRC_DIR}/register/allocate.c
         #        ${SRC_DIR}/register/interval.h
         #        ${SRC_DIR}/register/interval.c
-        src/build/env.c src/build/env.h)
+        )
 
 set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/gc.h
