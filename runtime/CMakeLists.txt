@@ -1,10 +1,17 @@
-cmake_minimum_required(VERSION 3.17)
-project(runtime C)
+set(LIB_OUTPUT_PREFIX ${PROJECT_SOURCE_DIR}/debug/lib)
 
-set(CMAKE_C_STANDARD 99)
+# linux amd64
+set(CMAKE_C_COMPILER x86_64-linux-gnu-gcc)
+add_library(runtime_linux_amd64 STATIC ${UTILS} ${RUNTIME_FILES})
+set_target_properties(runtime_linux_amd64 PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/linux_amd64
+        OUTPUT_NAME runtime
+        CMAKE_C_COMPILER x86_64-linux-gnu-gcc)
 
-include_directories(../include/musl)
-
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/amd64)
-
-add_library(runtime STATIC ${RUNTIME_FILES} ${SRC_LIB})
+# linux riscv64
+set(CMAKE_C_COMPILER riscv64-linux-gnu-gcc)
+add_library(runtime_linux_riscv64 STATIC ${UTILS} ${RUNTIME_FILES})
+set_target_properties(runtime_linux_riscv64 PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/linux_riscv64
+        OUTPUT_NAME runtime
+        CMAKE_C_COMPILER riscv64-linux-gnu-gcc)

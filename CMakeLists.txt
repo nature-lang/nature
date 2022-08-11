@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.22)
 project(nature C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
@@ -123,7 +123,8 @@ add_executable(nature main.c
         ${SRC_SYNTAX}
         ${SRC_ASSEMBLER})
 
-target_link_libraries(nature m)
+target_link_libraries(nature m) # 链接数学计算库
+set_target_properties(nature PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/debug/bin)
 
 include_directories(.)
 

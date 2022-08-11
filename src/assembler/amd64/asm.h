@@ -3,7 +3,7 @@
 
 #include "src/value.h"
 #include "utils/list.h"
-//#musl "opcode.h"
+//#linux_amd64 "opcode.h"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
