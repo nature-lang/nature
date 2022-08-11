@@ -4,7 +4,7 @@ include(FetchContent)
 # Declare our target. We want the lastest stable version, not the master.
 # Also specify GIT_SHALLOW to avoid cloning branch we don't care about
 FetchContent_Declare(
-        cmocka
+        ../tests/cmocka
         GIT_REPOSITORY https://git.cryptomilk.org/projects/cmocka.git
         GIT_TAG cmocka-1.1.5
         GIT_SHALLOW 1
@@ -31,13 +31,13 @@ target_link_libraries(test_elf cmocka)
 add_test(test_elf test_elf)
 
 add_executable(test_lower_amd64 test_lower_amd64.c ${SRC} ${SRC_ASSEMBLER} ${SRC_LIB} ${SRC_LOWER})
-target_link_libraries(test_lower_amd64 cmocka m)
+target_link_libraries(test_lower_amd64 ../tests/cmocka m)
 add_test(test_lower_amd64 test_lower_amd64)
 
 add_executable(test_runtime test_runtime.c ${RUNTIME_FILES})
-target_link_libraries(test_runtime cmocka)
+target_link_libraries(test_runtime ../tests/cmocka)
 add_test(test_runtime test_runtime)
 
 add_executable(test_amd64_stack_machine test_amd64_stack_machine.c ${SRC} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_ASSEMBLER} ${SRC_LIB} ${SRC_LOWER})
-target_link_libraries(test_amd64_stack_machine cmocka m)
+target_link_libraries(test_amd64_stack_machine ../tests/cmocka m)
 add_test(test_amd64_stack_machine test_amd64_stack_machine)

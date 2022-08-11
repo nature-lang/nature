@@ -1,0 +1,34 @@
+From addb1927eb979310a01abc65f29a5408a970da11 Mon Sep 17 00:00:00 2001
+From: Richard Bayerle <richi.bayerle@gmail.com>
+Date: Sun, 24 Feb 2019 16:38:05 +0000
+Subject: [PATCH] XML output is JUnit XML, not xUnit XML.
+
+---
+ doc/mainpage.dox | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/doc/mainpage.dox b/doc/mainpage.dox
+index 4c26d96..c378bb1 100644
+--- a/doc/mainpage.dox
++++ b/doc/mainpage.dox
+@@ -33,7 +33,7 @@ The CMocka library provides:
+  - Very well tested
+  - Testing of memory leaks, buffer overflows and underflows.
+  - A set of assert macros.
+- - Several supported output formats (stdout, TAP, xUnit XML, Subunit)
++ - Several supported output formats (stdout, TAP, JUnit XML, Subunit)
+  - License: Apache License 2.0
+ 
+ @section main-test A cmocka test
+@@ -119,7 +119,7 @@ supported values are:
+  - <tt>STDOUT</tt> for the default standard output printer
+  - <tt>SUBUNIT</tt> for subunit output
+  - <tt>TAP</tt> for Test Anything Protocol (TAP) output
+- - <tt>XML</tt> for xUnit XML format
++ - <tt>XML</tt> for JUnit XML format
+ The case doesn't matter.
+ 
+ The XML output goes to stderr by default. If the environment variable
+-- 
+2.18.1
+

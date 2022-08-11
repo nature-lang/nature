@@ -128,5 +128,5 @@ target_link_libraries(nature m)
 include_directories(.)
 
 enable_testing()
-add_subdirectory(test)
+add_subdirectory(tests)
 add_subdirectory(runtime)

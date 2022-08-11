@@ -1,0 +1,2 @@
+bool a = false
+println(a)

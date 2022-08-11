@@ -1,0 +1,5 @@
+[int] list = [1, 2]
+
+list[1] = 22
+
+println(list[0], list[1])
