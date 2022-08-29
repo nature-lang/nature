@@ -18,6 +18,16 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/register.h
         ${SRC_DIR}/assembler/amd64/register.c)
 
+set(SRC_BINARY
+        ${SRC_DIR}/binary/elf/elf.h
+        ${SRC_DIR}/binary/elf/output.h
+        ${SRC_DIR}/binary/elf/output.h
+        ${SRC_DIR}/binary/elf/linker.c
+        ${SRC_DIR}/binary/elf/linker.c
+        ${SRC_DIR}/binary/elf/assembler.h
+        ${SRC_DIR}/binary/elf/assembler.c)
+
+
 set(SRC_LOWER
         ${SRC_DIR}/lower/lower.h
         ${SRC_DIR}/lower/lower.c
@@ -121,7 +131,8 @@ add_executable(nature main.c
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}
         ${SRC_SYNTAX}
-        ${SRC_ASSEMBLER})
+        ${SRC_ASSEMBLER}
+        ${SRC_BINARY})
 
 target_link_libraries(nature m) # 链接数学计算库
 set_target_properties(nature PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/debug/bin)

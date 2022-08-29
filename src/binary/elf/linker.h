@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <elf.h>
 #include "utils/slice.h"
+#include "utils/table.h"
 
 #define addr_t uint64_t
 
@@ -37,17 +38,39 @@ typedef struct section_t {
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前短指向使用的重定位段, 比如 .rela.text
     struct section_t *prev; // slice 中的上一个 section
-    struct section_t *hash; // 符号表 section 对应的 hash section
+    table *symbol_table; // 符号表 section 对应的 hash 表
 } section_t;
 
 typedef struct {
+
+} elf_merge_section_t;
+
+typedef struct {
     slice_t sections;
+    section_t *symtab_section;
 } linker_t;
 
-/**
- * 加载可重定位目标文件文件
- */
-void elf_load_object_file();
 
+/**
+ * 加载归档文件
+ * @param l
+ */
+void elf_load_archive(linker_t *l);
+
+/**
+ * 加载可重定位目标文件文件到全局 section 中
+ */
+void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset);
+
+/**
+ * 从文件中加载数据到 section data 中
+ * @param l
+ */
+void elf_file_load_data(linker_t *l);
+
+/**
+ * 构造 elf 可执行文件结构,依旧是段结构数据
+ */
+void elf_file_format();
 
 #endif //NATURE_LINKER_H

@@ -6,4 +6,9 @@
  * 最终经过 output 输出可重定位文件
  */
 
+/**
+ * build
+ */
+void elf_object_format();
+
 #endif //NATURE_ASSEMBLER_H
