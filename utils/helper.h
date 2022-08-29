@@ -30,4 +30,6 @@ char *rtrim(char *str, size_t trim_len);
 
 void *copy(char *dst, char *src, uint mode);
 
+ssize_t full_read(int fd, void* buf, size_t count);
+
 #endif //NATURE_SRC_LIB_HELPER_H_

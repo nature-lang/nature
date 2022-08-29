@@ -1,5 +1,6 @@
 cmake-build-debug/
 cmake-build-debug-vm/
+cmake-build-debug-vm-nature/
 debug/
 release/
 tmp/

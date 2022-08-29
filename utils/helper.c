@@ -128,3 +128,29 @@ bool ends_with(char *str, char *suffix) {
         return 0;
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
+
+ssize_t full_read(int fd, void *buf, size_t count) {
+    char *cursor = buf;
+    size_t read_count = 0;
+    while (1) {
+        // read 从文件中读取 n 个字符
+        // 成功时返回读取到的字节数(为零表示读到文件描述符),  此返回值受文件剩余字节数限制.当返回值小
+        // 于指定的字节数时 并不意味着错误;这可能是因为当前可读取的字节数小于指定的 字节数(比如已经接
+        // 近文件结尾,或者正在从管道或者终端读取数 据,或者 read()被信号中断).   发生错误时返回-1,并置
+        // errno 为相应值.在这种情况下无法得知文件偏移位置是否有变化.
+        ssize_t num = read(fd, cursor, count - read_count);
+        // 错误处理
+        if (num == -1) {
+            return num;
+        }
+
+        // 读到了 eof
+        if (num == 0) {
+            return read_count;
+        }
+
+        // num 已经读到的字节数
+        read_count += num;
+        cursor += num;
+    }
+}

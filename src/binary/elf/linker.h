@@ -42,8 +42,11 @@ typedef struct section_t {
 } section_t;
 
 typedef struct {
-
-} elf_merge_section_t;
+    section_t *s; // 引用全局 section
+    uint64_t offset;
+    bool new; // 是否为当前 object file 中第一次定义的 section
+    bool link_once;
+} object_section_t;
 
 typedef struct {
     slice_t sections;
@@ -66,7 +69,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset);
  * 从文件中加载数据到 section data 中
  * @param l
  */
-void elf_file_load_data(linker_t *l);
+void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
