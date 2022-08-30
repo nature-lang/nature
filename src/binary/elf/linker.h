@@ -32,13 +32,12 @@ typedef struct section_t {
     uint64_t data_count; // 数据位置
     uint64_t data_capacity; // 极限容量
     uint8_t *data; // 段二进制数据
-    int index; // 段表索引
+    int sh_index; // 段表索引
     char name[50]; // 段表名称字符串冗余
 
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
-    struct section_t *relocate; // 当前短指向使用的重定位段, 比如 .rela.text
+    struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 relocate 指向 .rela.text
     struct section_t *prev; // slice 中的上一个 section
-    table *symbol_table; // 符号表 section 对应的 hash 表
 } section_t;
 
 typedef struct {
@@ -52,6 +51,7 @@ typedef struct {
     slice_t *sections;
     slice_t *private_sections;
     section_t *symtab_section;
+    table *symbol_table; // 直接指向符号表 sym
 } linker_t;
 
 
@@ -93,5 +93,13 @@ void *elf_section_data_read_ptr(section_t *section, addr_t size);
 size_t elf_section_data_forward(section_t *section, addr_t size, int align);
 
 void *elf_section_realloc(section_t *section, uint64_t new_size);
+
+uint64_t elf_set_sym(linker_t *l,
+                     addr_t st_value,
+                     uint64_t st_size,
+                     uint st_info,
+                     uint st_other,
+                     uint st_shndx,
+                     char *name);
 
 #endif //NATURE_LINKER_H
