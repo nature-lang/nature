@@ -18,14 +18,14 @@
  */
 typedef struct section_t {
     // Elf64_Shdr 原始字段继承
-    int sh_name; // 段名称，段表字符串表 offset ~ \0
-    int sh_type; // 段类型，
-    int sh_flags;
-    int sh_info;
-    int sh_addralign;
-    int sh_entsize;
-    int sh_size;
-    int sh_offset;
+    uint sh_name; // 段名称，段表字符串表 offset ~ \0
+    uint sh_type; // 段类型，
+    uint sh_flags;
+    uint sh_info;
+    uint sh_addralign;
+    uint sh_entsize;
+    uint sh_size;
+    uint sh_offset;
     addr_t sh_addr; // 可重定位地址
 
 
@@ -42,14 +42,15 @@ typedef struct section_t {
 } section_t;
 
 typedef struct {
-    section_t *s; // 引用全局 section
+    section_t *section; // 引用全局 section
     uint64_t offset;
-    bool new; // 是否为当前 object file 中第一次定义的 section
+    bool is_new; // 是否为当前 object file 中第一次定义的 section
     bool link_once;
 } object_section_t;
 
 typedef struct {
-    slice_t sections;
+    slice_t *sections;
+    slice_t *private_sections;
     section_t *symtab_section;
 } linker_t;
 
@@ -75,5 +76,22 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
 void elf_file_format();
+
+section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags);
+
+/**
+ * 全局 section data 写入点
+ * size 位需要写入的数据的长度
+ * @return
+ */
+void *elf_section_data_read_ptr(section_t *section, addr_t size);
+
+/**
+ * data_count forward
+ * @return
+ */
+size_t elf_section_data_forward(section_t *section, addr_t size, int align);
+
+void *elf_section_realloc(section_t *section, uint64_t new_size);
 
 #endif //NATURE_LINKER_H
