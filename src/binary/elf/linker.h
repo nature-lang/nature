@@ -12,6 +12,13 @@
 #include "utils/table.h"
 
 #define addr_t uint64_t
+/* special flag to indicate that the section should not be linked to the other ones */
+#define SHF_PRIVATE 0x80000000
+/* section is dynsymtab_section */
+#define SHF_DYNSYM 0x40000000
+
+#define ST_ASM_SET 0x04
+
 
 /**
  * 段表与相应的二进制数据合并
@@ -50,8 +57,9 @@ typedef struct {
 typedef struct {
     slice_t *sections;
     slice_t *private_sections;
-    section_t *symtab_section;
     table *symbol_table; // 直接指向符号表 sym
+    section_t *symtab_section;
+    section_t *bss_section;
 } linker_t;
 
 
@@ -84,7 +92,7 @@ section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags)
  * size 位需要写入的数据的长度
  * @return
  */
-void *elf_section_data_read_ptr(section_t *section, addr_t size);
+void *elf_section_data_add_ptr(section_t *section, addr_t size);
 
 /**
  * data_count forward
@@ -94,12 +102,12 @@ size_t elf_section_data_forward(section_t *section, addr_t size, int align);
 
 void *elf_section_realloc(section_t *section, uint64_t new_size);
 
-uint64_t elf_set_sym(linker_t *l,
-                     addr_t st_value,
-                     uint64_t st_size,
-                     uint st_info,
-                     uint st_other,
-                     uint st_shndx,
+uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name);
+
+uint64_t elf_put_sym(linker_t *l,
+                     Elf64_Sym *sym,
                      char *name);
+
+uint64_t elf_put_str(section_t *s, char *str);
 
 #endif //NATURE_LINKER_H
