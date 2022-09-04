@@ -4,14 +4,19 @@
 /**
  * 包含 loader 和 linker 两部分
  */
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <elf.h>
 #include "utils/slice.h"
 #include "utils/table.h"
 
+#define SECTION_TACK(_sh_index) ((section_t *) l->sections->take[_sh_index])
+
 #define addr_t uint64_t
+#define PTR_SIZE 8
+
+# define REL_SECTION_FMT ".rela%s"
+
 /* special flag to indicate that the section should not be linked to the other ones */
 #define SHF_PRIVATE 0x80000000
 /* section is dynsymtab_section */
@@ -19,6 +24,19 @@
 
 #define ST_ASM_SET 0x04
 
+enum gotplt_entry {
+    NO_GOTPLT_ENTRY,    /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
+    BUILD_GOT_ONLY,    /* only build GOT (eg. TPOFF relocs) */
+    AUTO_GOTPLT_ENTRY,    /* generate if sym is UNDEF */
+    ALWAYS_GOTPLT_ENTRY    /* always generate (eg. PLTOFF relocs) */
+};
+
+typedef struct {
+    uint got_offset;
+    uint plt_offset;
+    uint64_t plt_sym;
+    int dyn_index;
+} sym_attr_t;
 
 /**
  * 段表与相应的二进制数据合并
@@ -42,6 +60,11 @@ typedef struct section_t {
     int sh_index; // 段表索引
     char name[50]; // 段表名称字符串冗余
 
+    // 排序字段
+    int order_index;
+    int order_weight;
+    uint order_flags;
+
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 relocate 指向 .rela.text
     struct section_t *prev; // slice 中的上一个 section
@@ -59,7 +82,14 @@ typedef struct {
     slice_t *private_sections;
     table *symbol_table; // 直接指向符号表 sym
     section_t *symtab_section;
+    sym_attr_t *sym_attrs;
+    uint sym_attrs_count;
     section_t *bss_section;
+    section_t *data_section;
+    section_t *text_section;
+    section_t *rodata_section;
+    section_t *got;
+    section_t *plt;
 } linker_t;
 
 
@@ -83,7 +113,7 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
-void elf_file_format();
+void execute_file_format();
 
 section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags);
 
@@ -98,7 +128,7 @@ void *elf_section_data_add_ptr(section_t *section, addr_t size);
  * data_count forward
  * @return
  */
-size_t elf_section_data_forward(section_t *section, addr_t size, int align);
+size_t elf_section_data_forward(section_t *section, addr_t size, uint align);
 
 void *elf_section_realloc(section_t *section, uint64_t new_size);
 
@@ -109,5 +139,12 @@ uint64_t elf_put_sym(linker_t *l,
                      char *name);
 
 uint64_t elf_put_str(section_t *s, char *str);
+
+void elf_resolve_common_symbols(linker_t *l);
+
+void elf_build_got_entries(linker_t *l, uint got_sym_index);
+
+void elf_put_relocate(linker_t *l, section_t *sym_section, section_t *apply_section, uint64_t offset, int type,
+                      int sym_index, int64_t addend);
 
 #endif //NATURE_LINKER_H
