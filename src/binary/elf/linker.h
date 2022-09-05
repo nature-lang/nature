@@ -12,8 +12,10 @@
 
 #define SECTION_TACK(_sh_index) ((section_t *) l->sections->take[_sh_index])
 
+#define SECTION_START(_type, _section) ((_type*) _section->data)
+#define SECTION_END(_type, _section) ((_type*) (_section->data + _section->data_count))
+
 #define addr_t uint64_t
-#define PTR_SIZE 8
 
 # define REL_SECTION_FMT ".rela%s"
 
@@ -90,6 +92,10 @@ typedef struct {
     section_t *rodata_section;
     section_t *got;
     section_t *plt;
+
+    // 可执行文件构建字段
+    Elf64_Phdr *phdr_list; // 程序头表
+    uint phdr_count; // 程序头表数量
 } linker_t;
 
 
@@ -113,7 +119,7 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
-void execute_file_format();
+void executable_file_format();
 
 section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags);
 
@@ -146,5 +152,19 @@ void elf_build_got_entries(linker_t *l, uint got_sym_index);
 
 void elf_put_relocate(linker_t *l, section_t *sym_section, section_t *apply_section, uint64_t offset, int type,
                       int sym_index, int64_t addend);
+
+void elf_relocate_symbols(linker_t *l, section_t *symtab);
+
+void elf_relocate_sections(linker_t *l);
+
+void elf_relocate_section(linker_t *l, section_t *apply_section, section_t *rel_section);
+
+sym_attr_t *elf_get_sym_attr(linker_t *l, uint sym_index, bool alloc);
+
+void elf_fill_got(linker_t *l);
+
+void elf_fill_got_entry(linker_t *l, Elf64_Rela *rel);
+
+int tidy_section_headers(linker_t *l);
 
 #endif //NATURE_LINKER_H

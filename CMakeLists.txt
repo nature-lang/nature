@@ -22,10 +22,10 @@ set(SRC_BINARY
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
         ${SRC_DIR}/binary/elf/output.h
-        ${SRC_DIR}/binary/elf/arch/arch.h
-        ${SRC_DIR}/binary/elf/arch/arch.c
-        ${SRC_DIR}/binary/elf/arch/x86_64.h
-        ${SRC_DIR}/binary/elf/arch/x86_64.c
+        ${SRC_DIR}/binary/elf/arch.h
+        ${SRC_DIR}/binary/elf/arch.c
+        ${SRC_DIR}/binary/elf/x86_64.h
+        ${SRC_DIR}/binary/elf/x86_64.c
         ${SRC_DIR}/binary/elf/linker.h
         ${SRC_DIR}/binary/elf/linker.c
         ${SRC_DIR}/binary/elf/assembler.h
