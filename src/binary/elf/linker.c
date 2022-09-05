@@ -65,7 +65,7 @@ static int sort_sections(linker_t *l) {
                 if (l->plt && s == l->plt->relocate) {
                     sub_weight = 0x21;
                 }
-            } else if (s == l->rodata_section || str_equal(s->name, ".data.rel.ro")) {
+            } else if (str_equal(s->name, ".data.rel.ro")) {
                 sub_weight = 0x45;
             } else if (s->sh_type == SHT_DYNAMIC) {
                 sub_weight = 0x46;
@@ -1164,4 +1164,27 @@ void elf_load_archive(linker_t *l, int fd) {
             ++bound;
         }
     } while (bound);
+}
+
+linker_t *linker_new(char *output) {
+    linker_t *l = malloc(sizeof(linker_t));
+    l->output = output;
+    l->sections = slice_new();
+    /* create standard sections */
+    l->text_section = elf_new_section(l, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    l->data_section = elf_new_section(l, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    /* create ro data section (make ro after relocation done with GNU_RELRO) */
+    l->bss_section = elf_new_section(l, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
+
+    /* symbols are always generated for linking stage */
+    l->symtab_section = elf_new_section(l, ".symtab", SHT_SYMTAB, 0);
+    l->symtab_section->sh_entsize = sizeof(Elf64_Sym);
+    section_t *strtab = elf_new_section(l, "strtab", SHT_STRTAB, 0);
+    elf_put_str(strtab, "");
+    l->symtab_section->link = strtab;
+    Elf64_Sym empty_sym = {0};
+    elf_put_sym(l, &empty_sym, NULL);
+
+    elf_get_sym_attr(l, 0, 1);
+    return l;
 }

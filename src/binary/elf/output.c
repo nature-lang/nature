@@ -11,10 +11,10 @@
 
 void output_executable_file(linker_t *l) {
     FILE *f;
-    unlink(l->filename);
-    int fd = open(l->filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0777);
+    unlink(l->output);
+    int fd = open(l->output, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0777);
     if (fd < 0 || (f = fdopen(fd, "wb")) == NULL) {
-        error_exit("[output_executable_file] could not write '%s: %s'", l->filename);
+        error_exit("[output_executable_file] could not write '%s: %s'", l->output);
         return;
     }
     Elf64_Ehdr ehdr;

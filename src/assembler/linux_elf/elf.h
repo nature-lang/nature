@@ -81,7 +81,7 @@ uint64_t global_data_offset; // 数据段偏移
 //    table *linux_elf_symbol_table; // key: symbol_name, value list_node
 //    list *linux_elf_symbol_list; // list_node link
 //    list *linux_elf_rel_list;
-//    string filename;
+//    string output;
 //    uint64_t global_text_offset; // 代码段偏移
 //    uint64_t global_data_offset; // 数据段偏移
 //} elf_built_t;

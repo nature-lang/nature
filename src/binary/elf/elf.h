@@ -1072,7 +1072,7 @@ typedef struct
 {
   Elf32_Half	vn_version;		/* Version of structure */
   Elf32_Half	vn_cnt;			/* Number of associated aux entries */
-  Elf32_Word	vn_file;		/* Offset of filename for this
+  Elf32_Word	vn_file;		/* Offset of output for this
 					   dependency */
   Elf32_Word	vn_aux;			/* Offset in bytes to vernaux array */
   Elf32_Word	vn_next;		/* Offset in bytes to next verneed
@@ -1083,7 +1083,7 @@ typedef struct
 {
   Elf64_Half	vn_version;		/* Version of structure */
   Elf64_Half	vn_cnt;			/* Number of associated aux entries */
-  Elf64_Word	vn_file;		/* Offset of filename for this
+  Elf64_Word	vn_file;		/* Offset of output for this
 					   dependency */
   Elf64_Word	vn_aux;			/* Offset in bytes to vernaux array */
   Elf64_Word	vn_next;		/* Offset in bytes to next verneed

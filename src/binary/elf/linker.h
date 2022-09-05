@@ -102,7 +102,7 @@ typedef struct {
     section_t *bss_section;
     section_t *data_section;
     section_t *text_section;
-    section_t *rodata_section;
+//    section_t *rodata_section;
     section_t *got;
     section_t *plt;
 
@@ -111,7 +111,7 @@ typedef struct {
     uint phdr_count; // 程序头表数量
 
     uint64_t file_offset;
-    char *filename; // 完整路径名称
+    char *output; // 完整路径名称
 } linker_t;
 
 
@@ -186,5 +186,7 @@ void elf_fill_got_entry(linker_t *l, Elf64_Rela *rel);
 int tidy_section_headers(linker_t *l);
 
 void sort_symbols(linker_t *l, section_t *s);
+
+linker_t *linker_new(char *output);
 
 #endif //NATURE_LINKER_H
