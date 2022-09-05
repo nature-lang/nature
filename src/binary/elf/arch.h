@@ -24,4 +24,6 @@ uint64_t elf_page_size();
 
 void relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
 
+uint16_t ehdr_machine();
+
 #endif //NATURE_ARCH_H

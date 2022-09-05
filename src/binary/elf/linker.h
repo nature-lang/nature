@@ -26,12 +26,25 @@
 
 #define ST_ASM_SET 0x04
 
+#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
+#define ARFMAG "`\n"
+
 enum gotplt_entry {
     NO_GOTPLT_ENTRY,    /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
     BUILD_GOT_ONLY,    /* only build GOT (eg. TPOFF relocs) */
     AUTO_GOTPLT_ENTRY,    /* generate if sym is UNDEF */
     ALWAYS_GOTPLT_ENTRY    /* always generate (eg. PLTOFF relocs) */
 };
+
+typedef struct {
+    char ar_name[16];           /* name of this member */
+    char ar_date[12];           /* file mtime */
+    char ar_uid[6];             /* owner uid; printed as decimal */
+    char ar_gid[6];             /* owner gid; printed as decimal */
+    char ar_mode[8];            /* file mode, printed as octal   */
+    char ar_size[10];           /* file size, printed as decimal */
+    char ar_fmag[2];            /* should contain ARFMAG */
+} archive_header_t;
 
 typedef struct {
     uint got_offset;
@@ -96,6 +109,9 @@ typedef struct {
     // 可执行文件构建字段
     Elf64_Phdr *phdr_list; // 程序头表
     uint phdr_count; // 程序头表数量
+
+    uint64_t file_offset;
+    char *filename; // 完整路径名称
 } linker_t;
 
 
@@ -103,7 +119,7 @@ typedef struct {
  * 加载归档文件
  * @param l
  */
-void elf_load_archive(linker_t *l);
+void elf_load_archive(linker_t *l, int fd);
 
 /**
  * 加载可重定位目标文件文件到全局 section 中
@@ -119,7 +135,7 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
-void executable_file_format();
+void executable_file_format(linker_t *l);
 
 section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags);
 
@@ -161,10 +177,14 @@ void elf_relocate_section(linker_t *l, section_t *apply_section, section_t *rel_
 
 sym_attr_t *elf_get_sym_attr(linker_t *l, uint sym_index, bool alloc);
 
+addr_t elf_get_sym_addr(linker_t *l, char *name);
+
 void elf_fill_got(linker_t *l);
 
 void elf_fill_got_entry(linker_t *l, Elf64_Rela *rel);
 
 int tidy_section_headers(linker_t *l);
+
+void sort_symbols(linker_t *l, section_t *s);
 
 #endif //NATURE_LINKER_H

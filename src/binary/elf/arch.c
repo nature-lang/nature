@@ -55,3 +55,10 @@ void relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr,
         return x86_64_relocate(l, rel, type, ptr, addr, val);
     }
 }
+
+uint16_t ehdr_machine() {
+    if (arch == ARCH_X86_64) {
+        return EM_X86_64;
+    }
+    return 0;
+}

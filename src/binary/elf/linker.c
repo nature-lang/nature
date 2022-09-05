@@ -4,10 +4,32 @@
 #include "utils/error.h"
 #include "x86_64.h"
 #include "arch.h"
+#include "output.h"
 
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+
+static uint64_t get_be(const uint8_t *b, int n) {
+    uint64_t ret = 0;
+    while (n)
+        ret = (ret << 8) | *b++, --n;
+    return ret;
+}
+
+static ssize_t read_ar_header(int fd, uint64_t offset, archive_header_t *arhdr) {
+    char *p, *e;
+    lseek(fd, offset, SEEK_SET);
+    ssize_t len = full_read(fd, arhdr, sizeof(archive_header_t));
+    if (len != sizeof(archive_header_t))
+        return len ? -1 : 0;
+    p = arhdr->ar_name;
+    for (e = p + sizeof arhdr->ar_name; e > p && e[-1] == ' ';)
+        --e;
+    *e = '\0';
+    arhdr->ar_size[sizeof arhdr->ar_size - 1] = 0;
+    return len;
+}
 
 static int sort_sections(linker_t *l) {
     for (int sh_index = 0; sh_index < l->sections->count; ++sh_index) {
@@ -116,7 +138,7 @@ static int sort_sections(linker_t *l) {
     return phdr_count;
 }
 
-static int layout_sections(linker_t *l) {
+static void layout_sections(linker_t *l) {
     int phdr_count = sort_sections(l);
     l->phdr_count = phdr_count;
     l->phdr_list = malloc(phdr_count * sizeof(Elf64_Phdr));
@@ -196,7 +218,7 @@ static int layout_sections(linker_t *l) {
         phdr->p_memsz = addr - phdr->p_vaddr;
     }
 
-    return file_offset;
+    l->file_offset = file_offset;
 }
 
 static void alloc_section_names(linker_t *l, bool is_obj) {
@@ -654,8 +676,22 @@ uint64_t elf_put_str(section_t *s, char *str) {
  * - fill got
  * - output execute
  */
-void executable_file_format() {
+void executable_file_format(linker_t *l) {
+    elf_resolve_common_symbols(l);
 
+    elf_build_got_entries(l, 0);
+
+    set_section_sizes(l);
+
+    alloc_section_names(l, 0);
+
+    layout_sections(l);
+
+    elf_relocate_symbols(l, l->symtab_section);
+
+    elf_relocate_sections(l);
+
+    elf_fill_got(l);
 }
 
 void elf_resolve_common_symbols(linker_t *l) {
@@ -1007,4 +1043,125 @@ section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags)
     }
 
     return s;
+}
+
+addr_t elf_get_sym_addr(linker_t *l, char *name) {
+    uint64_t sym_index = (uint64_t) table_get(l->symbol_table, name);
+    if (sym_index == 0) {
+        error_exit("[elf_get_sym_addr] undefined symbol %s", name);
+    }
+    Elf64_Sym *sym = &((Elf64_Sym *) l->symtab_section->data)[sym_index];
+    if (sym->st_shndx == SHN_UNDEF) {
+        error_exit("[elf_get_sym_addr] undefined symbol %s", name);
+    }
+    return sym->st_value;
+}
+
+void sort_symbols(linker_t *l, section_t *s) {
+    int sym_count = s->data_count / sizeof(Elf64_Sym);
+    Elf64_Sym *new_symtab = malloc(sizeof(Elf64_Sym) * sym_count);
+    uint64_t *symtab_index_map = malloc(sizeof(uint64_t) * sym_count);
+
+    Elf64_Sym *new_sym = new_symtab;
+
+    // first pass
+    Elf64_Sym *sym = (Elf64_Sym *) s->data;
+    for (int i = 0; i < sym_count; ++i) {
+        if (ELF64_ST_BIND(sym->st_info) == STB_LOCAL) {
+            // nwe_symtab 相当于起始点, 第一次就是索引为 0
+            symtab_index_map[i] = new_sym - new_symtab;
+            *new_sym++ = *sym;
+        }
+        sym++;
+    }
+
+    if (s->sh_size) {
+        s->sh_info = new_sym - new_symtab;
+    }
+
+    // second pass
+    sym = (Elf64_Sym *) s->data;
+    for (int i = 0; i < sym_count; ++i) {
+        if (ELF64_ST_BIND(sym->st_info) != STB_LOCAL) {
+            // nwe_symtab 相当于起始点, 第一次就是索引为 0
+            symtab_index_map[i] = new_sym - new_symtab;
+            *new_sym++ = *sym;
+        }
+        sym++;
+    }
+
+    // 将新符号复制到就符号中
+    memcpy(s->data, new_symtab, sym_count * sizeof(Elf64_Sym));
+
+    // 调整符号索引
+    for (int sh_index = 0; sh_index < l->sections->count; ++sh_index) {
+        section_t *rel_section = SECTION_TACK(sh_index);
+        if (rel_section->sh_type != SHT_RELA || rel_section->link != s) {
+            continue;
+        }
+        Elf64_Rela *rel;
+        for (rel = SECTION_START(Elf64_Rela, rel_section); rel < SECTION_END(Elf64_Rela, rel_section); rel++) {
+            uint64_t sym_index = ELF64_R_SYM(rel->r_info);
+            int type = ELF64_R_TYPE(rel->r_info);
+            sym_index = symtab_index_map[sym_index];
+            rel->r_info = ELF64_R_INFO(sym_index, type);
+        }
+    }
+}
+
+void elf_load_archive(linker_t *l, int fd) {
+    archive_header_t arhdr;
+    uint64_t file_offset = sizeof(ARMAG) - 1;
+    ssize_t len = read_ar_header(fd, file_offset, &arhdr);
+    if (len < 0) {
+        error_exit("invalid archive");
+    }
+    file_offset += len;
+    int32_t size = strtol(arhdr.ar_size, NULL, 0);
+    size = (size + 1) & ~1;
+    int entrysize = 4;
+    uint8_t *data = malloc(size);
+    ssize_t read_size = full_read(fd, data, size);
+    if (read_size != size) {
+        error_exit("invalid archive size");
+    }
+
+    uint64_t symbol_count = get_be(data, entrysize);
+    uint8_t *ar_index = data + entrysize;
+    char *ar_names = (char *) ar_index + symbol_count * entrysize;
+    char *sym_name;
+    int bound;
+    int i;
+    do {
+        bound = 0;
+        sym_name = ar_names;
+        int i = 0;
+        while (i < symbol_count) {
+            section_t *s = l->symtab_section;
+            uint64_t sym_index = (uint64_t) table_get(l->symbol_table, sym_name);
+            if (!sym_index) {
+                continue;
+            }
+            Elf64_Sym *sym = &((Elf64_Sym *) s->data)[sym_index];
+            if (sym->st_shndx != SHN_UNDEF) {
+                continue;
+            }
+
+            // 已经加载到内存中的符号存在对该符号的依赖
+            uint64_t offset = get_be(ar_index + i * entrysize, entrysize);
+            len = read_ar_header(fd, offset, &arhdr);
+            int cmp = memcmp(arhdr.ar_fmag, ARFMAG, 2);
+            if (len <= 0 || cmp != 0) {
+                error_exit("invalid archive ar_fmag");
+            }
+
+            offset += len;
+            printf("   -> %s\n", arhdr.ar_name);
+            elf_load_object_file(l, fd, offset);
+
+            i++;
+            sym_name += strlen(sym_name) + 1;
+            ++bound;
+        }
+    } while (bound);
 }

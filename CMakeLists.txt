@@ -21,7 +21,7 @@ set(SRC_ASSEMBLER
 set(SRC_BINARY
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
-        ${SRC_DIR}/binary/elf/output.h
+        ${SRC_DIR}/binary/elf/output.c
         ${SRC_DIR}/binary/elf/arch.h
         ${SRC_DIR}/binary/elf/arch.c
         ${SRC_DIR}/binary/elf/x86_64.h
