@@ -90,7 +90,7 @@ typedef struct {
     uint64_t offset;
     bool is_new; // 是否为当前 object file 中第一次定义的 section
     bool link_once;
-} object_section_t;
+} local_section_t;
 
 typedef struct {
     slice_t *sections;
@@ -152,7 +152,7 @@ void *elf_section_data_add_ptr(section_t *section, addr_t size);
  */
 size_t elf_section_data_forward(section_t *section, addr_t size, uint align);
 
-void *elf_section_realloc(section_t *section, uint64_t new_size);
+void elf_section_realloc(section_t *section, uint64_t new_size);
 
 uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name);
 

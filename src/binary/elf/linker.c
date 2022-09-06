@@ -141,7 +141,7 @@ static int sort_sections(linker_t *l) {
 static void layout_sections(linker_t *l) {
     int phdr_count = sort_sections(l);
     l->phdr_count = phdr_count;
-    l->phdr_list = malloc(phdr_count * sizeof(Elf64_Phdr));
+    l->phdr_list = mallocz(phdr_count * sizeof(Elf64_Phdr));
 
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
     addr_t s_align = elf_page_size();
@@ -349,7 +349,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
 
     // read section header table
     Elf64_Shdr *shdr_list = elf_file_load_data(fd, file_offset + ehdr.e_shoff, sizeof(*shdr) * ehdr.e_shnum);
-    object_section_t *local_sections = malloc(sizeof(object_section_t) * ehdr.e_shnum);
+    local_section_t *local_sections = mallocz(sizeof(local_section_t) * ehdr.e_shnum);
 
     // 加载段表字符串表 e_shstrndx = Section header string table index
     shdr = &shdr_list[ehdr.e_shstrndx]; // 必须使用引用，否则无法修改 shdr 的值
@@ -360,7 +360,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
     Elf64_Sym *sym;
     uint64_t sym_count = 0;
     char *strtab = NULL;
-    for (int sh_index = 0; sh_index < ehdr.e_shnum; ++sh_index) {
+    for (int sh_index = 1; sh_index < ehdr.e_shnum; ++sh_index) {
         shdr = &shdr_list[sh_index];
         if (shdr->sh_type != SHT_SYMTAB) {
             continue;
@@ -380,7 +380,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
     }
 
     // 段合并(按段名称合并，而不是段的类型, 其中不包含符号表，主要是对 data、text 段的合并)
-    for (int sh_index; sh_index < ehdr.e_shnum; ++sh_index) {
+    for (int sh_index = 0; sh_index < ehdr.e_shnum; ++sh_index) {
         // 跳过段表字符串表
         if (sh_index == ehdr.e_shstrndx) {
             continue;
@@ -444,7 +444,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
     }
 
     // 完善 section 中的关联关系，比如 section.link
-    for (int sh_index; sh_index < ehdr.e_shnum; ++sh_index) {
+    for (int sh_index = 0; sh_index < ehdr.e_shnum; ++sh_index) {
         section_t *section = local_sections[sh_index].section;
         if (!section || !local_sections[sh_index].is_new) {
             continue;
@@ -467,23 +467,25 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
     }
 
     // 符号重定位
-    uint64_t *symtab_index_map = malloc(sizeof(uint64_t) * sym_count);
+    uint64_t *symtab_index_map = mallocz(sizeof(uint64_t) * sym_count);
     // 遍历所有符号(符号表的第一个符号为 NULL)
     sym = symtab + 1;
-    for (int i = 0; i < sym_count; ++i, sym++) {
+    for (int i = 1; i < sym_count; ++i, sym++) {
+        // add symbol
+        char *sym_name = strtab + sym->st_name;
+//        printf("sym_name: %s\n", sym_name);
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
-            object_section_t local = local_sections[sym->st_shndx]; // st_shndx 定义符号的段
-            if (!local.section) {
+            local_section_t *local = &local_sections[sym->st_shndx]; // st_shndx 定义符号的段
+            if (!local->section) {
                 continue;
             }
 
             // convert section index
-            sym->st_shndx = local.section->sh_index;
+            sym->st_shndx = local->section->sh_index;
             // sm->offset 是 section' data 合并到全局 section 时的起始地址，所以 st_value 自然要加上这个起始地址
-            sym->st_value += local.offset;
+            sym->st_value += local->offset;
         }
-        // add symbol
-        char *sym_name = strtab + sym->st_name;
+
         // 当前目标文件中定义的符号
         uint64_t sym_index = elf_set_sym(l, sym, sym_name);
         symtab_index_map[i] = sym_index;
@@ -506,8 +508,8 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
 
         // 应用 rel 的 section
         uint64_t apply_offset = local_sections[shdr->sh_info].offset;
-        Elf64_Rel *rel = (Elf64_Rel *) s->data + offset;
-        Elf64_Rel *rel_end = (Elf64_Rel *) s->data + offset + sh_size;
+        Elf64_Rela *rel = (Elf64_Rela *) s->data + (offset / sizeof(Elf64_Rela));
+        Elf64_Rela *rel_end = (Elf64_Rela *) s->data + ((offset + sh_size) / sizeof(Elf64_Rela)); // 指针移动操作
         while (rel < rel_end) {
             uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
@@ -621,6 +623,9 @@ uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name) {
                 error_exit("symbol %s repeat defined", name);
             }
         }
+    } else {
+        // local 符号
+        goto DEF;
     }
 
     PATCH:
@@ -1009,7 +1014,7 @@ int tidy_section_headers(linker_t *l) {
 }
 
 section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags) {
-    section_t *s = malloc(sizeof(section_t));
+    section_t *s = mallocz(sizeof(section_t));
     strcpy(s->name, name);
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
@@ -1129,26 +1134,26 @@ void elf_load_archive(linker_t *l, int fd) {
     uint64_t symbol_count = get_be(data, entrysize);
     uint8_t *ar_index = data + entrysize;
     char *ar_names = (char *) ar_index + symbol_count * entrysize;
-    char *sym_name;
     int bound;
     int i;
+    uint64_t offset;
     do {
         bound = 0;
-        sym_name = ar_names;
+        char *sym_name = ar_names;
         int i = 0;
         while (i < symbol_count) {
             section_t *s = l->symtab_section;
             uint64_t sym_index = (uint64_t) table_get(l->symbol_table, sym_name);
             if (!sym_index) {
-                continue;
+                goto CONTINUE;
             }
             Elf64_Sym *sym = &((Elf64_Sym *) s->data)[sym_index];
             if (sym->st_shndx != SHN_UNDEF) {
-                continue;
+                goto CONTINUE;
             }
 
             // 已经加载到内存中的符号存在对该符号的依赖
-            uint64_t offset = get_be(ar_index + i * entrysize, entrysize);
+            offset = get_be(ar_index + i * entrysize, entrysize);
             len = read_ar_header(fd, offset, &arhdr);
             int cmp = memcmp(arhdr.ar_fmag, ARFMAG, 2);
             if (len <= 0 || cmp != 0) {
@@ -1158,18 +1163,20 @@ void elf_load_archive(linker_t *l, int fd) {
             offset += len;
             printf("   -> %s\n", arhdr.ar_name);
             elf_load_object_file(l, fd, offset);
+            ++bound;
 
+            CONTINUE:
             i++;
             sym_name += strlen(sym_name) + 1;
-            ++bound;
         }
     } while (bound);
 }
 
 linker_t *linker_new(char *output) {
-    linker_t *l = malloc(sizeof(linker_t));
+    linker_t *l = mallocz(sizeof(linker_t));
     l->output = output;
     l->sections = slice_new();
+    l->symbol_table = table_new();
     /* create standard sections */
     l->text_section = elf_new_section(l, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     l->data_section = elf_new_section(l, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
@@ -1187,4 +1194,25 @@ linker_t *linker_new(char *output) {
 
     elf_get_sym_attr(l, 0, 1);
     return l;
+}
+
+void *elf_file_load_data(int fd, uint64_t offset, uint64_t size) {
+    void *data = malloc(size);
+    lseek(fd, offset, SEEK_SET);
+    full_read(fd, data, size);
+    return data;
+}
+
+void elf_section_realloc(section_t *section, uint64_t new_size) {
+    uint64_t size = section->data_capacity;
+    if (size == 0) {
+        size = 1;
+    }
+    while (size < new_size) {
+        size = size * 2;
+    }
+    uint8_t *data = realloc(section->data, size);
+    memset(data + section->data_capacity, 0, size - section->data_capacity);
+    section->data = data;
+    section->data_capacity = size;
 }

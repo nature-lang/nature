@@ -32,9 +32,9 @@ set(LIBRARY_SOVERSION "0")
 
 # include cmake files
 include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-include(DefineOptions.cmake)
-include(CPackConfig.cmake)
+#include(CMakePackageConfigHelpers)
+#include(DefineOptions.cmake)
+#include(CPackConfig.cmake)
 include(CompilerChecks.cmake)
 
 # disallow in-source build
@@ -53,16 +53,6 @@ endif (MINGW)
 # check subdirectories
 add_subdirectory(include)
 add_subdirectory(src)
-add_subdirectory(doc)
-
-include(AddCMockaTest)
-if (UNIT_TESTING)
-    add_subdirectory(tests)
-endif (UNIT_TESTING)
-
-if (WITH_EXAMPLES)
-    add_subdirectory(example)
-endif ()
 
 # pkg-config file
 configure_file(cmocka.pc.cmake ${CMAKE_CURRENT_BINARY_DIR}/cmocka.pc)
@@ -84,16 +74,16 @@ endif()
 
 set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE INTERNAL "")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE INTERNAL "")
-configure_package_config_file(${PROJECT_NAME}-config.cmake.in
-                              ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake
-                              PATH_VARS
-                                  INCLUDE_INSTALL_DIR LIB_INSTALL_DIR
-                              INSTALL_DESTINATION
-                                  ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+#configure_package_config_file(${PROJECT_NAME}-config.cmake.in
+#                              ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake
+#                              PATH_VARS
+#                                  INCLUDE_INSTALL_DIR LIB_INSTALL_DIR
+#                              INSTALL_DESTINATION
+#                                  ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
-write_basic_package_version_file(${PROJECT_NAME}-config-version.cmake
-                                 COMPATIBILITY
-                                     AnyNewerVersion)
+#write_basic_package_version_file(${PROJECT_NAME}-config-version.cmake
+#                                 COMPATIBILITY
+#                                     AnyNewerVersion)
 
 install(
     FILES

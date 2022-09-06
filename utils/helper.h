@@ -67,4 +67,13 @@ static inline void add64le(unsigned char *p, int64_t x) {
     write64le(p, read64le(p) + x);
 }
 
+static inline void *mallocz(size_t size) {
+    void *ptr;
+    ptr = malloc(size);
+    if (size) {
+        memset(ptr, 0, size);
+    }
+    return ptr;
+}
+
 #endif //NATURE_SRC_LIB_HELPER_H_
