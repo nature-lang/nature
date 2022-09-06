@@ -55,9 +55,9 @@ void output_executable_file(linker_t *l) {
     }
     uint64_t offset = sizeof(Elf64_Ehdr) + l->phdr_count * sizeof(Elf64_Phdr);
     sort_symbols(l, l->symtab_section);
-    for (int sh_index = 0; sh_index < shdr_count; ++sh_index) {
-        int order_index = SECTION_TACK(sh_index)->order_index;
-        section_t *s = SECTION_TACK(order_index);
+    for (int sh_index = 1; sh_index < shdr_count; ++sh_index) {
+        int order_index = SEC_TACK(sh_index)->actual_sh_index;
+        section_t *s = SEC_TACK(order_index);
         if (s->sh_type != SHT_NOBITS) {
             while (offset < s->sh_offset) {
                 fputc(0, f);
@@ -78,7 +78,7 @@ void output_executable_file(linker_t *l) {
     for (int sh_index = 0; sh_index < shdr_count; ++sh_index) {
         Elf64_Shdr shdr;
         memset(&shdr, 0, sizeof(shdr));
-        section_t *s = SECTION_TACK(sh_index);
+        section_t *s = SEC_TACK(sh_index);
         if (s) {
             shdr.sh_name = s->sh_name;
             shdr.sh_type = s->sh_type;

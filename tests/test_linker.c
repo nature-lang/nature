@@ -29,9 +29,13 @@ static void test_basic() {
     int libc_fd = open("/usr/local/musl/lib/libc.a", O_RDONLY | O_BINARY);
 
     elf_load_object_file(l, main_fd, 0);
+    section_t *s = l->sections->take[6];
     elf_load_object_file(l, crt1_fd, 0);
     elf_load_archive(l, libc_fd);
-    printf("current: %s\n", "haha");
+
+    executable_file_format(l);
+
+    output_executable_file(l);
 }
 
 int main(void) {

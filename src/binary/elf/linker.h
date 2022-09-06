@@ -10,10 +10,10 @@
 #include "utils/slice.h"
 #include "utils/table.h"
 
-#define SECTION_TACK(_sh_index) ((section_t *) l->sections->take[_sh_index])
+#define SEC_TACK(_sh_index) ((section_t *) l->sections->take[_sh_index])
 
-#define SECTION_START(_type, _section) ((_type*) _section->data)
-#define SECTION_END(_type, _section) ((_type*) (_section->data + _section->data_count))
+#define SEC_START(_type, _section) ((_type*) _section->data)
+#define SEC_END(_type, _section) ((_type*) (_section->data + _section->data_count))
 
 #define addr_t uint64_t
 
@@ -76,9 +76,9 @@ typedef struct section_t {
     char name[50]; // 段表名称字符串冗余
 
     // 排序字段
-    int order_index;
-    int order_weight;
-    uint order_flags;
+    int actual_sh_index;
+    int actual_sh_weight;
+    uint phdr_flags;
 
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 relocate 指向 .rela.text
@@ -169,7 +169,7 @@ void elf_build_got_entries(linker_t *l, uint got_sym_index);
 void elf_put_relocate(linker_t *l, section_t *sym_section, section_t *apply_section, uint64_t offset, int type,
                       int sym_index, int64_t addend);
 
-void elf_relocate_symbols(linker_t *l, section_t *symtab);
+void elf_relocate_symbols(linker_t *l, section_t *sym_section);
 
 void elf_relocate_sections(linker_t *l);
 

@@ -208,7 +208,7 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
                 memcpy(ptr - 4, replace, sizeof(replace));
                 rel[1].r_info = ELF64_R_INFO(0, R_X86_64_NONE);
                 sym = &((Elf64_Sym *) l->symtab_section->data)[sym_index];
-                section = SECTION_TACK(sym->st_shndx);
+                section = SEC_TACK(sym->st_shndx);
                 x = sym->st_value - section->sh_addr - section->data_count;
                 add32le(ptr + 8, x);
             } else {
@@ -240,7 +240,7 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
         case R_X86_64_DTPOFF32:
         case R_X86_64_TPOFF32: {
             Elf64_Sym *sym = &((Elf64_Sym *) l->symtab_section->data)[sym_index];
-            section_t *s = SECTION_TACK(sym->st_shndx);
+            section_t *s = SEC_TACK(sym->st_shndx);
             int32_t x;
 
             x = val - s->sh_addr - s->data_count;
@@ -250,7 +250,7 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
         case R_X86_64_DTPOFF64:
         case R_X86_64_TPOFF64: {
             Elf64_Sym *sym = &((Elf64_Sym *) l->symtab_section->data)[sym_index];
-            section_t *s = SECTION_TACK(sym->st_shndx);
+            section_t *s = SEC_TACK(sym->st_shndx);
             int32_t x;
 
             x = val - s->sh_addr - s->data_count;
