@@ -149,10 +149,10 @@ static void layout_sections(linker_t *l) {
     addr_t base = addr;
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
+    Elf64_Phdr *phdr;
     for (int sh_index = 1; sh_index < l->sections->count; ++sh_index) {
         int order_index = SEC_TACK(sh_index)->actual_sh_index;
         section_t *s = SEC_TACK(order_index);
-        Elf64_Phdr *phdr = &l->phdr_list[n]; // ph fill 看起来像是预留的段空间
         uint flags = s->phdr_flags;
         uint align = s->sh_addralign - 1;
         if (flags == 0) { // no alloc in memory
@@ -165,7 +165,7 @@ static void layout_sections(linker_t *l) {
         }
 
         // 右数第 8 位如果为 1，标识可装载(can alloc)
-        if (flags & 1 << 8 && n) {
+        if ((flags & 1 << 8) && n) {
             if ((addr & (s_align - 1)) != 0) {
                 addr += s_align;
             }
@@ -181,6 +181,7 @@ static void layout_sections(linker_t *l) {
         // f &  x  = 最终判断第 8 位的值是否为 1, 为 1 表示需要创建一个新的 program header
         // pt load 段写入(可装载段)
         if (flags & 1 << 8) {
+            phdr = &l->phdr_list[n]; // ph fill 看起来像是预留的段空间
             /* set new program header */
             phdr->p_type = PT_LOAD;
             phdr->p_align = s_align;
@@ -210,6 +211,7 @@ static void layout_sections(linker_t *l) {
         }
 
         addr += s->sh_size;
+        // nobit 不需要真的申请文件位置，比如 data [1000] 你都没有初始化，直接在数据段申请 1000 个空间，那进程的空间就太大了
         if (s->sh_type != SHT_NOBITS) {
             file_offset += s->sh_size;
         }
@@ -443,6 +445,8 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
         };
     }
 
+//    section_t *debug_section = SEC_TACK(6);
+
     // 完善 section 中的关联关系，比如 section.link
     for (int sh_index = 1; sh_index < ehdr.e_shnum; ++sh_index) {
         section_t *section = local_sections[sh_index].section;
@@ -494,11 +498,8 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
     // rela patch
     // 当然并不是所有的符号都已经被 patch 了，不过没关系，先指向 undef 就行，一旦符号被加载进来就会自动修复的，而不是重新建
     for (int sh_index = 1; sh_index < ehdr.e_shnum; ++sh_index) {
-        section_t *s = local_sections[sh_index].section;
-        if (!s) {
-            continue;
-        }
-        if (s->sh_type != SHT_RELA) {
+        section_t *rel_section = local_sections[sh_index].section;
+        if (!rel_section) {
             continue;
         }
 
@@ -506,11 +507,15 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
         uint64_t offset = local_sections[sh_index].offset;
         uint64_t sh_size = shdr->sh_size;
 
+        if (rel_section->sh_type != SHT_RELA) {
+            continue;
+        }
+
         // 应用 rel 的 section
         uint64_t apply_offset = local_sections[shdr->sh_info].offset;
-        Elf64_Rela *rel = (Elf64_Rela *) s->data + (offset / sizeof(Elf64_Rela));
-        Elf64_Rela *rel_end = (Elf64_Rela *) s->data + ((offset + sh_size) / sizeof(Elf64_Rela)); // 指针移动操作
-        while (rel < rel_end) {
+        Elf64_Rela *rel;
+        for (rel = (Elf64_Rela *) rel_section->data + (offset / sizeof(Elf64_Rela));
+             rel < (Elf64_Rela *) rel_section->data + ((offset + sh_size) / sizeof(Elf64_Rela)); rel++) {
             uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
 
@@ -524,8 +529,7 @@ void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset) {
             }
 
             rel->r_info = ELF64_R_INFO(sym_index, rel_type);
-            rel->r_offset = apply_offset;
-            rel++;
+            rel->r_offset += apply_offset;
         }
     }
 }
