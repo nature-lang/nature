@@ -14,10 +14,10 @@ uint64_t global_text_offset; // 代码段偏移
  * @param asm_inst
  */
 typedef struct {
-    uint8_t *data; // 指令二进制
-    uint8_t count; // 指令长度
+    uint8_t *data; // 二进制指令
+    uint8_t count; // 二进制指令的长度
     uint64_t *offset; // 指令起始 offset
-    amd64_asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
+    amd64_asm_inst_t asm_inst; // 原始指令, 指令改写与二次扫描时使用(只有 x86_64 用得上？)
     string rel_symbol; // 使用的符号
     amd64_asm_operand_t *rel_operand; // 引用自 asm_inst
     bool may_need_reduce; // jmp 指令可以从 rel32 优化为 rel8

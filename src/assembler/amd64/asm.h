@@ -236,11 +236,6 @@ typedef struct {
     amd64_asm_operand_t *operands[4]; // 最多 4 个参数
 } amd64_asm_inst_t;
 
-typedef struct {
-    amd64_asm_inst_t **list;
-    uint8_t count;
-} amd64_asm_insts_t;
-
 //typedef enum {
 //    ASM_VAR_DECL_TYPE_INT = 1,
 //    ASM_VAR_DECL_TYPE_FLOAT,

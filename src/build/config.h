@@ -6,7 +6,7 @@
 #define NATURE_BUILD_ENV_H
 
 char *BUILD_OS; // linux
-char *BUILD_ARCH; // amd64
+char *BUILD_ARCH; // x86_64
 char *NATURE_ROOT; // nature root
 char *BUILD_OUTPUT; // default is main
 

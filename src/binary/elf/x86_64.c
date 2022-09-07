@@ -5,6 +5,93 @@
 #include "utils/error.h"
 #include "string.h"
 
+// TODO
+static x86_64_operand_t *has_symbol_operand(x86_64_opcode_t *opcode) {
+
+}
+
+static bool is_call_opcode(char *name) {
+    return str_equal(name, "call");
+}
+
+static bool is_jmp_opcode(char *name) {
+    return name[0] == 'j';
+}
+
+static x86_64_build_temp_t *build_temp_new(x86_64_opcode_t *opcode) {
+    x86_64_build_temp_t *temp = NEW(x86_64_build_temp_t);
+    temp->data = NULL;
+    temp->data_count = 0;
+    temp->offset = NULL;
+    temp->opcode = opcode;
+    temp->rel_operand = NULL;
+    temp->rel_symbol = NULL;
+    temp->may_need_reduce = false;
+    temp->reduce_count = 0;
+    temp->sym_index = 0;
+    return temp;
+}
+
+static void x86_64_rewrite_rel32(x86_64_build_temp_t *temp) {
+    asm_operand_uint8_t *operand = NEW(asm_operand_uint8_t);
+    operand->value = 0; // 仅占位即可
+    temp->opcode->count = 1;
+    temp->opcode->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
+    temp->opcode->operands[0]->size = BYTE;
+    temp->opcode->operands[0]->value = operand;
+    temp->data = x86_64_opcode_encoding(*temp->opcode, &temp->data_count);
+    temp->may_need_reduce = false;
+}
+
+static void x86_64_confirm_rel32(section_t *symtab, slice_t *build_temps, uint64_t *section_offset, string name) {
+    if (build_temps->count == 0) {
+        return;
+    }
+
+    x86_64_build_temp_t *temp;
+    int i;
+    uint8_t reduce_count = 0;
+
+    // 从尾部开始查找,
+    for (i = build_temps->count; i > 0; --i) {
+        temp = build_temps->take[i];
+        // 直到总指令长度超过 128 就可以结束查找
+        if ((*section_offset - reduce_count - *temp->offset) > 128) {
+            break;
+        }
+
+        // 前 128 个指令内找到了符号引用
+        if (temp->may_need_reduce && str_equal(temp->rel_symbol, name)) {
+            reduce_count += temp->reduce_count;
+        }
+    }
+
+    if (reduce_count == 0) {
+        return;
+    }
+
+    // 指令偏移修复
+    uint64_t temp_offset = *temp->offset;
+    // 从 temp 开始遍历
+    for (int j = i; j < build_temps->count; ++j) {
+        temp = build_temps->take[j];
+        *temp->offset = temp_offset;
+
+        if (temp->may_need_reduce && str_equal(temp->rel_symbol, name)) {
+            x86_64_rewrite_rel32(temp);
+        }
+        // 如果存在符号表引用了位置数据，则修正符号表中的数据
+        if (temp->sym_index > 0) {
+            ((Elf64_Sym *) symtab->data)[temp->sym_index].st_value = *temp->offset;
+        }
+
+        temp_offset += temp->data_count;
+    }
+
+    // 更新 section offset
+    *section_offset = temp_offset;
+}
+
 int x86_64_gotplt_entry_type(uint relocate_type) {
     switch (relocate_type) {
         case R_X86_64_GLOB_DAT:
@@ -166,7 +253,7 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
             add32le(ptr, l->got->sh_addr - addr +
-                    elf_get_sym_attr(l, sym_index, 0)->got_offset - 4);
+                         elf_get_sym_attr(l, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
             add32le(ptr, l->got->sh_addr - addr + rel->r_addend);
@@ -266,4 +353,60 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
             error_exit("[x86_64_relocate] unknown rel type");
             break;
     }
+}
+
+void x86_64_opcode_encodings(assembler_t *a, slice_t *opcodes) {
+    if (opcodes->count == 0) {
+        return;
+    }
+
+    slice_t *build_temps = slice_new();
+
+    uint64_t section_offset = 0; // text section offset
+    // 一次遍历
+    for (int i = 0; i < opcodes->count; ++i) {
+        uint64_t *offset = NEW(uint64_t);
+        *offset = section_offset;
+
+        x86_64_opcode_t *opcode = opcodes->take[i];
+        x86_64_build_temp_t *temp = build_temp_new(opcode);
+
+        // 定义符号
+        if (str_equal(opcode->name, "label")) {
+            // 解析符号值，并添加到符号表
+            x86_64_operand_symbol_t *s = opcode->operands[0]->value;
+            // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
+            // 一旦发现定义点,就需要反推
+            x86_64_confirm_rel32(a->symtab_section, build_temps, &section_offset, s->name);
+
+            // confirm_rel32 可能会修改 section_offset， 所以需要重新计算
+            *offset = section_offset;
+            Elf64_Sym sym = {
+                    .st_shndx = a->text_section->sh_index,
+                    .st_size = 0,
+                    .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
+                    .st_other = 0,
+                    .st_value = *offset,
+            };
+            uint64_t sym_index = elf_put_sym(a->symtab_section, a->symtab_hash, &sym, s->name);
+            temp->sym_index = sym_index;
+            temp->offset = offset;
+            slice_push(build_temps, temp);
+            continue;
+        }
+
+        x86_64_operand_t *rel_operand = has_symbol_operand(opcode);
+        if (rel_operand != NULL) {
+            // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
+            // 1. 数据符号引用(直接改写成 0x0(rip))
+            // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位)
+            x86_64_operand_symbol_t *symbol_operand = rel_operand->value;
+            // 判断是否为标签符号引用, 比如 call symbol call
+            if (is_call_opcode(opcode->name) || is_jmp_opcode(opcode->name)) {
+                // 标签符号
+            }
+        }
+    }
+
+
 }

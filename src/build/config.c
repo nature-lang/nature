@@ -5,7 +5,7 @@
 
 // TODO 根据当前操作系统添加 IFDEF 判断
 char *BUILD_OS = "linux"; // BUILD_OS/ BUILD_ARCH / BUILD_OUTPUT/NATURE_ROOT
-char *BUILD_ARCH = "amd64";
+char *BUILD_ARCH = "x86_64";
 char *BUILD_OUTPUT = "main";
 char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default root
 

@@ -95,7 +95,7 @@ typedef struct {
 typedef struct {
     slice_t *sections;
     slice_t *private_sections;
-    table *symbol_table; // 直接指向符号表 sym
+    table *symtab_hash; // 直接指向符号表 sym
     section_t *symtab_section;
     sym_attr_t *sym_attrs;
     uint sym_attrs_count;
@@ -156,9 +156,7 @@ void elf_section_realloc(section_t *section, uint64_t new_size);
 
 uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name);
 
-uint64_t elf_put_sym(linker_t *l,
-                     Elf64_Sym *sym,
-                     char *name);
+uint64_t elf_put_sym(section_t *symtab_section, table *symtab_hash, Elf64_Sym *sym, char *name);
 
 uint64_t elf_put_str(section_t *s, char *str);
 

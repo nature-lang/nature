@@ -503,7 +503,7 @@ void analysis_select_property(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // 改写成 symbol_table 中的名字
+    // 改写成 symtab_hash 中的名字
     char *unique_ident = ident_with_module_unique_name(import->module_unique_name, select->property);
     expr->assert_type = AST_EXPR_IDENT;
     expr->expr = ast_new_ident(unique_ident);

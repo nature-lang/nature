@@ -18,7 +18,7 @@ void cross_lower(module_t *m) {
     m->asm_insts = list_new();
 
     // pre
-    if (str_equal(BUILD_ARCH, "amd64")) {
+    if (str_equal(BUILD_ARCH, "x86_64")) {
         amd64_register_init();
         amd64_opcode_init();
     } else {
@@ -28,7 +28,7 @@ void cross_lower(module_t *m) {
     // lower
     for (int i = 0; i < m->compiler_closures->count; ++i) {
         closure *c = m->compiler_closures->take[i];
-        if (str_equal(BUILD_ARCH, "amd64")) {
+        if (str_equal(BUILD_ARCH, "x86_64")) {
             list_append(m->asm_insts, amd64_lower_closure(c));
         } else {
             goto ERROR;
@@ -36,7 +36,7 @@ void cross_lower(module_t *m) {
     }
 
     // post
-    if (str_equal(BUILD_ARCH, "amd64")) {
+    if (str_equal(BUILD_ARCH, "x86_64")) {
         list_append(m->var_decl_list, lower_var_decl_list);
     } else {
         goto ERROR;
@@ -49,7 +49,7 @@ void cross_lower(module_t *m) {
 }
 
 /**
- * 汇编器目前只支持 linux elf amd64
+ * 汇编器目前只支持 linux elf x86_64
  * @param m
  */
 void cross_assembler(module_t *m) {
@@ -58,7 +58,7 @@ void cross_assembler(module_t *m) {
         char *_filename = str_connect(m->module_unique_name, ".n");
         linux_elf_init(_filename, m->var_decl_list);
 
-        if (str_equal(BUILD_ARCH, "amd64")) {
+        if (str_equal(BUILD_ARCH, "x86_64")) {
             // 依赖 elf_init 中的符号表，重定位表
             linux_elf_text_inst_list = linux_elf_amd64_insts_build(m->asm_insts);
         } else {

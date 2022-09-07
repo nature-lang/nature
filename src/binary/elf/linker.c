@@ -329,7 +329,7 @@ static sym_attr_t *put_got_entry(linker_t *l, int relocate_type, uint64_t sym_in
         new_sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC);
         new_sym->st_other = 0;
         new_sym->st_shndx = l->plt->sh_index;
-        attr->plt_sym = elf_put_sym(l, new_sym, plt_name);
+        attr->plt_sym = elf_put_sym(l->symtab_section, l->symtab_hash, new_sym, plt_name);
     } else {
         attr->got_offset = got_offset;
     }
@@ -557,7 +557,7 @@ void *elf_section_data_add_ptr(section_t *section, uint64_t size) {
 uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name) {
 
     section_t *s = l->symtab_section;
-    table *symbol_table = l->symbol_table;
+    table *symbol_table = l->symtab_hash;
     uint sym_bind = ELF64_ST_BIND(sym->st_info);
     uint sym_type = ELF64_ST_TYPE(sym->st_info);
     uint8_t sym_visible = ELF64_ST_VISIBILITY(sym->st_other);
@@ -640,16 +640,15 @@ uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name) {
     return sym_index;
 
     DEF:
-    sym_index = elf_put_sym(l, sym, name);
+    sym_index = elf_put_sym(l->symtab_section, l->symtab_hash, sym, name);
     return sym_index;
 }
 
-uint64_t elf_put_sym(linker_t *l, Elf64_Sym *sym, char *name) {
-    section_t *s = l->symtab_section;
-    Elf64_Sym *new_sym = elf_section_data_add_ptr(s, sizeof(Elf64_Sym));
+uint64_t elf_put_sym(section_t *symtab_section, table *symtab_hash, Elf64_Sym *sym, char *name) {
+    Elf64_Sym *new_sym = elf_section_data_add_ptr(symtab_section, sizeof(Elf64_Sym));
     uint64_t name_offset = 0;
     if (name && name[0]) {
-        name_offset = elf_put_str(s->link, name);
+        name_offset = elf_put_str(symtab_section->link, name);
     }
 
     new_sym->st_name = name_offset;
@@ -658,9 +657,9 @@ uint64_t elf_put_sym(linker_t *l, Elf64_Sym *sym, char *name) {
     new_sym->st_info = sym->st_info;
     new_sym->st_other = sym->st_other;
     new_sym->st_shndx = sym->st_shndx;
-    uint64_t sym_index = new_sym - (Elf64_Sym *) s->data; // 终点 - 起点 = 数量
+    uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data; // 终点 - 起点 = 数量
 
-    table_set(l->symbol_table, name, (void *) sym_index);
+    table_set(symtab_hash, name, (void *) sym_index);
 
     return sym_index;
 }
@@ -1056,7 +1055,7 @@ section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags)
 }
 
 addr_t elf_get_sym_addr(linker_t *l, char *name) {
-    uint64_t sym_index = (uint64_t) table_get(l->symbol_table, name);
+    uint64_t sym_index = (uint64_t) table_get(l->symtab_hash, name);
     if (sym_index == 0) {
         error_exit("[elf_get_sym_addr] undefined symbol %s", name);
     }
@@ -1148,7 +1147,7 @@ void elf_load_archive(linker_t *l, int fd) {
         int i = 0;
         while (i < symbol_count) {
             section_t *s = l->symtab_section;
-            uint64_t sym_index = (uint64_t) table_get(l->symbol_table, sym_name);
+            uint64_t sym_index = (uint64_t) table_get(l->symtab_hash, sym_name);
             if (!sym_index) {
                 goto CONTINUE;
             }
@@ -1185,7 +1184,7 @@ linker_t *linker_new(char *output) {
     l->sections = slice_new();
     slice_push(l->sections, NULL);
 
-    l->symbol_table = table_new();
+    l->symtab_hash = table_new();
     /* create standard sections */
     l->text_section = elf_new_section(l, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     l->data_section = elf_new_section(l, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
@@ -1199,7 +1198,7 @@ linker_t *linker_new(char *output) {
     elf_put_str(strtab, "");
     l->symtab_section->link = strtab;
     Elf64_Sym empty_sym = {0};
-    elf_put_sym(l, &empty_sym, NULL);
+    elf_put_sym(l->symtab_section, l->symtab_hash, &empty_sym, NULL);
 
     elf_get_sym_attr(l, 0, 1);
     return l;

@@ -93,7 +93,7 @@ list *amd64_lower_call(closure *c, lir_op *op) {
 
         list *temp_insts = list_new();
 
-        // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
+        // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 x86_64 位下都是统一 8bit
         uint8_t actual_transform_used[2] = {0};
         amd64_asm_operand_t *source = NEW(amd64_asm_operand_t);
         list_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
@@ -456,7 +456,7 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
 
 
 /**
- * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
+ * x86_64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
  * 返回下一个可用的寄存器或者内存地址
  * 但是这样就需要占用 rbp 偏移，怎么做？
  * 每个函数定义的最开始已经使用 sub n => rsp, 已经申请了栈空间 [0 ~ n]
@@ -510,7 +510,7 @@ list *amd64_lower_fn_begin(closure *c, lir_op *op) {
     // 一次堆栈对齐,对齐后再继续分配栈空间，分配完成后需要进行二次栈对齐。
     c->stack_length = memory_align(c->stack_length, 16);
 
-    // 部分局部变量需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
+    // 部分局部变量需要占用一部分栈空间(x86_64 架构下统一使用 8byte)， 按顺序使用堆栈即可
     // 还有一部分 push
     uint8_t used[2] = {0};
     int16_t stack_param_offset = 16; // 16byte 起点

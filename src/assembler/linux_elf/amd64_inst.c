@@ -233,6 +233,8 @@ void linux_elf_amd64_confirm_text_rel(string name) {
             linux_elf_amd64_rewrite_text_rel(inst);
         }
         *inst->offset = *offset;
+        // label 指令需要同步修改符号表中的符号值
+
         *offset += inst->count; // 重新计算当前 offset
         current = current->next;
     }
@@ -323,7 +325,7 @@ void elf_text_inst_list_build(list *inst_list) {
     while (current->value != NULL) {
         amd64_asm_inst_t *inst = current->value;
         if (str_equal(inst->name, "label")) {
-            elf_text_label_build(*inst, offset);
+            elf_text_label_build(*inst, offset); // 此处包含了指令修正
             current = current->next;
             continue;
         }

@@ -19,6 +19,12 @@ set(SRC_ASSEMBLER
         ${SRC_DIR}/assembler/amd64/register.c)
 
 set(SRC_BINARY
+        ${SRC_DIR}/binary/opcode/x86_64/asm.c
+        ${SRC_DIR}/binary/opcode/x86_64/asm.h
+        ${SRC_DIR}/binary/opcode/x86_64/opcode.c
+        ${SRC_DIR}/binary/opcode/x86_64/opcode.h
+        ${SRC_DIR}/binary/opcode/x86_64/register.c
+        ${SRC_DIR}/binary/opcode/x86_64/register.h
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
         ${SRC_DIR}/binary/elf/output.c
