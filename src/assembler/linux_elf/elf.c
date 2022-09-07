@@ -372,6 +372,7 @@ Elf64_Rela *linux_elf_rela_text_build(uint64_t *count) {
                 .r_addend = rel->addend,
         };
         if (rel->type == ELF_SYMBOL_TYPE_VAR) {
+            // TODO 此处有些不可理喻了
             r[i].r_offset += 3; // mov 0x0(%rip),%rsi = 48 8b 35 00 00 00 00，其中偏移是从第四个字符开始
         }
 

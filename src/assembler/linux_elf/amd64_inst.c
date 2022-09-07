@@ -290,7 +290,7 @@ void linux_elf_adm64_text_inst_list_second_build() {
             // jmp or call rel32
             elf_rel_t *rel = NEW(elf_rel_t);
             rel->name = inst->rel_symbol;
-            *inst->offset += 1; // 定位到 rel 而不是 inst offset
+            *inst->offset += 1; // 定位到实际需要 rel 的位置，而不是 inst offset
             rel->offset = inst->offset; // 实际引用位置
             rel->addend = -4; // 符号表如果都使用 rip,则占 4 个偏移
             rel->section = ELF_SECTION_TEXT;
