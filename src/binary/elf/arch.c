@@ -50,7 +50,7 @@ uint64_t elf_page_size() {
     return 0;
 }
 
-void relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
+void relocate(elf_context *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
     if (arch == ARCH_X86_64) {
         return x86_64_relocate(l, rel, type, ptr, addr, val);
     }

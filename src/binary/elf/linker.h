@@ -112,19 +112,19 @@ typedef struct {
 
     uint64_t file_offset;
     char *output; // 完整路径名称
-} linker_t;
+} elf_context;
 
 
 /**
  * 加载归档文件
  * @param l
  */
-void elf_load_archive(linker_t *l, int fd);
+void elf_load_archive(elf_context *l, int fd);
 
 /**
  * 加载可重定位目标文件文件到全局 section 中
  */
-void elf_load_object_file(linker_t *l, int fd, uint64_t file_offset);
+void elf_load_object_file(elf_context *l, int fd, uint64_t file_offset);
 
 /**
  * 从文件中加载数据到 section data 中
@@ -135,9 +135,9 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
-void executable_file_format(linker_t *l);
+void executable_file_format(elf_context *l);
 
-section_t *elf_new_section(linker_t *l, char *name, uint sh_type, uint sh_flags);
+section_t *elf_new_section(elf_context *l, char *name, uint sh_type, uint sh_flags);
 
 /**
  * 全局 section data 写入点
@@ -154,37 +154,41 @@ size_t elf_section_data_forward(section_t *section, addr_t size, uint align);
 
 void elf_section_realloc(section_t *section, uint64_t new_size);
 
-uint64_t elf_set_sym(linker_t *l, Elf64_Sym *sym, char *name);
+uint64_t elf_set_sym(elf_context *l, Elf64_Sym *sym, char *name);
 
 uint64_t elf_put_sym(section_t *symtab_section, table *symtab_hash, Elf64_Sym *sym, char *name);
 
 uint64_t elf_put_str(section_t *s, char *str);
 
-void elf_resolve_common_symbols(linker_t *l);
+uint64_t elf_put_opcode_data(section_t *s, uint8_t *opcode, uint8_t count);
 
-void elf_build_got_entries(linker_t *l, uint got_sym_index);
+void elf_resolve_common_symbols(elf_context *l);
 
-void elf_put_relocate(linker_t *l, section_t *sym_section, section_t *apply_section, uint64_t offset, int type,
-                      int sym_index, int64_t addend);
+void elf_build_got_entries(elf_context *l, uint got_sym_index);
 
-void elf_relocate_symbols(linker_t *l, section_t *sym_section);
+Elf64_Rela *elf_put_relocate(elf_context *l, section_t *sym_section, section_t *apply_section,
+                             uint64_t offset, int type, int sym_index, int64_t addend);
 
-void elf_relocate_sections(linker_t *l);
+void elf_relocate_symbols(elf_context *l, section_t *sym_section);
 
-void elf_relocate_section(linker_t *l, section_t *apply_section, section_t *rel_section);
+void elf_relocate_sections(elf_context *l);
 
-sym_attr_t *elf_get_sym_attr(linker_t *l, uint sym_index, bool alloc);
+void elf_relocate_section(elf_context *l, section_t *apply_section, section_t *rel_section);
 
-addr_t elf_get_sym_addr(linker_t *l, char *name);
+sym_attr_t *elf_get_sym_attr(elf_context *l, uint sym_index, bool alloc);
 
-void elf_fill_got(linker_t *l);
+addr_t elf_get_sym_addr(elf_context *l, char *name);
 
-void elf_fill_got_entry(linker_t *l, Elf64_Rela *rel);
+Elf64_Sym *elf_find_sym(elf_context *ctx, char *name);
 
-int tidy_section_headers(linker_t *l);
+void elf_fill_got(elf_context *l);
 
-void sort_symbols(linker_t *l, section_t *s);
+void elf_fill_got_entry(elf_context *l, Elf64_Rela *rel);
 
-linker_t *linker_new(char *output);
+int tidy_section_headers(elf_context *l);
+
+void sort_symbols(elf_context *l, section_t *s);
+
+elf_context *linker_new(char *output);
 
 #endif //NATURE_LINKER_H

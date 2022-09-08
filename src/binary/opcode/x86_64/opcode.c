@@ -1465,12 +1465,12 @@ void opcode_format_encoding(x86_64_inst_format_t *format, uint8_t *data, uint8_t
     }
 }
 
-uint8_t *x86_64_opcode_encoding(x86_64_opcode_t asm_inst, uint8_t *count) {
+uint8_t *x86_64_opcode_encoding(x86_64_opcode_t opcode, uint8_t *count) {
     *count = 0;
     uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
-    inst_t *inst = opcode_select(asm_inst);
-    x86_64_inst_format_t *format = opcode_fill(inst, asm_inst);
+    inst_t *inst = opcode_select(opcode);
+    x86_64_inst_format_t *format = opcode_fill(inst, opcode);
     opcode_format_encoding(format, data, count);
     void *_ = realloc(data, *count);
     return data;

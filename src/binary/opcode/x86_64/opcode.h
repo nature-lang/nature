@@ -260,6 +260,6 @@ void opcode_format_encoding(x86_64_inst_format_t *format, uint8_t *data, uint8_t
 
 void opcode_sort_insts(x86_64_insts_t *insts);
 
-uint8_t *x86_64_opcode_encoding(x86_64_opcode_t asm_inst, uint8_t *count);
+uint8_t *x86_64_opcode_encoding(x86_64_opcode_t opcode, uint8_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_X86_64_OPCODE_H_

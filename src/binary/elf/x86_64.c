@@ -5,6 +5,48 @@
 #include "utils/error.h"
 #include "string.h"
 
+/**
+ * mov 0x0(%rip),%rsi = 48 8b 35 00 00 00 00，return 3
+ * call 0x0(%rip) // ff 15 00 00 00 00
+ * call rel32 // e8 00 00 00 00
+ * jmp rel32 // e9 00 00 00 00
+ * 其中偏移是从第四个字符开始, offset 从 0 开始算，所以使用 + 3, 但是不同指令需要不同对待
+ * @param opcode
+ * @return
+ */
+uint64_t opcode_rip_offset(x86_64_opcode_t *opcode) {
+    if (str_equal(opcode->name, "mov")) {
+        // rip 相对寻址
+        return 3;
+    }
+
+    if (str_equal(opcode->name, "call")) {
+//        if (opcode->operands[0]->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
+//            return 2;
+//        }
+
+        return 1;
+    }
+    if (opcode->name[0] == 'j') {
+        return 1;
+    }
+
+    error_exit("[opcode_rip_offset] cannot ident opcode: %s", opcode->name);
+    return 0;
+}
+
+uint8_t jmp_rewrite_rel8_reduce_count(x86_64_opcode_t *opcode);
+
+/**
+ * symbol to rel32 or rel8
+ * @param opcode
+ * @param operand
+ * @param rel_diff
+ */
+static void x86_64_rewrite_symbol(x86_64_opcode_t *opcode, x86_64_operand_t *operand, int rel_diff) {
+
+}
+
 // TODO
 static x86_64_operand_t *has_symbol_operand(x86_64_opcode_t *opcode) {
 
@@ -29,10 +71,11 @@ static x86_64_build_temp_t *build_temp_new(x86_64_opcode_t *opcode) {
     temp->may_need_reduce = false;
     temp->reduce_count = 0;
     temp->sym_index = 0;
+    temp->elf_rel = NULL;
     return temp;
 }
 
-static void x86_64_rewrite_rel32(x86_64_build_temp_t *temp) {
+static void x86_64_rewrite_rel32_to_rel8(x86_64_build_temp_t *temp) {
     asm_operand_uint8_t *operand = NEW(asm_operand_uint8_t);
     operand->value = 0; // 仅占位即可
     temp->opcode->count = 1;
@@ -43,7 +86,7 @@ static void x86_64_rewrite_rel32(x86_64_build_temp_t *temp) {
     temp->may_need_reduce = false;
 }
 
-static void x86_64_confirm_rel32(section_t *symtab, slice_t *build_temps, uint64_t *section_offset, string name) {
+static void x86_64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t *section_offset, string name) {
     if (build_temps->count == 0) {
         return;
     }
@@ -71,25 +114,28 @@ static void x86_64_confirm_rel32(section_t *symtab, slice_t *build_temps, uint64
     }
 
     // 指令偏移修复
-    uint64_t temp_offset = *temp->offset;
+    uint64_t temp_section_offset = *temp->offset;
     // 从 temp 开始遍历
     for (int j = i; j < build_temps->count; ++j) {
         temp = build_temps->take[j];
-        *temp->offset = temp_offset;
+        *temp->offset = temp_section_offset;
 
         if (temp->may_need_reduce && str_equal(temp->rel_symbol, name)) {
-            x86_64_rewrite_rel32(temp);
+            x86_64_rewrite_rel32_to_rel8(temp);
         }
         // 如果存在符号表引用了位置数据，则修正符号表中的数据
         if (temp->sym_index > 0) {
             ((Elf64_Sym *) symtab->data)[temp->sym_index].st_value = *temp->offset;
         }
+        if (temp->elf_rel) {
+            temp->elf_rel->r_offset = *temp->offset += opcode_rip_offset(temp->opcode);
+        }
 
-        temp_offset += temp->data_count;
+        temp_section_offset += temp->data_count;
     }
 
     // 更新 section offset
-    *section_offset = temp_offset;
+    *section_offset = temp_section_offset;
 }
 
 int x86_64_gotplt_entry_type(uint relocate_type) {
@@ -135,7 +181,7 @@ int x86_64_gotplt_entry_type(uint relocate_type) {
     return -1;
 }
 
-uint x86_64_create_plt_entry(linker_t *l, uint got_offset, sym_attr_t *attr) {
+uint x86_64_create_plt_entry(elf_context *l, uint got_offset, sym_attr_t *attr) {
     section_t *plt = l->plt;
 
     int modrm = 0x25;
@@ -198,7 +244,7 @@ int8_t x86_64_is_code_relocate(uint relocate_type) {
     return -1;
 }
 
-void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
+void x86_64_relocate(elf_context *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
     int sym_index = ELF64_R_SYM(rel->r_info);
     switch (type) {
         case R_X86_64_64:
@@ -355,7 +401,7 @@ void x86_64_relocate(linker_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, uint6
     }
 }
 
-void x86_64_opcode_encodings(assembler_t *a, slice_t *opcodes) {
+void x86_64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
     if (opcodes->count == 0) {
         return;
     }
@@ -365,11 +411,11 @@ void x86_64_opcode_encodings(assembler_t *a, slice_t *opcodes) {
     uint64_t section_offset = 0; // text section offset
     // 一次遍历
     for (int i = 0; i < opcodes->count; ++i) {
-        uint64_t *offset = NEW(uint64_t);
-        *offset = section_offset;
-
         x86_64_opcode_t *opcode = opcodes->take[i];
         x86_64_build_temp_t *temp = build_temp_new(opcode);
+        slice_push(build_temps, temp);
+
+        *temp->offset = section_offset;
 
         // 定义符号
         if (str_equal(opcode->name, "label")) {
@@ -377,21 +423,19 @@ void x86_64_opcode_encodings(assembler_t *a, slice_t *opcodes) {
             x86_64_operand_symbol_t *s = opcode->operands[0]->value;
             // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
             // 一旦发现定义点,就需要反推
-            x86_64_confirm_rel32(a->symtab_section, build_temps, &section_offset, s->name);
+            x86_64_confirm_rel(ctx->symtab_section, build_temps, &section_offset, s->name);
 
             // confirm_rel32 可能会修改 section_offset， 所以需要重新计算
-            *offset = section_offset;
+            *temp->offset = section_offset;
             Elf64_Sym sym = {
-                    .st_shndx = a->text_section->sh_index,
+                    .st_shndx = ctx->text_section->sh_index,
                     .st_size = 0,
                     .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
                     .st_other = 0,
-                    .st_value = *offset,
+                    .st_value = *temp->offset,
             };
-            uint64_t sym_index = elf_put_sym(a->symtab_section, a->symtab_hash, &sym, s->name);
+            uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
             temp->sym_index = sym_index;
-            temp->offset = offset;
-            slice_push(build_temps, temp);
             continue;
         }
 
@@ -404,9 +448,91 @@ void x86_64_opcode_encodings(assembler_t *a, slice_t *opcodes) {
             // 判断是否为标签符号引用, 比如 call symbol call
             if (is_call_opcode(opcode->name) || is_jmp_opcode(opcode->name)) {
                 // 标签符号
+                uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
+                if (sym_index > 0) {
+                    // 引用了已经存在的符号，直接计算相对位置即可
+                    Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+                    int rel_diff = sym.st_value - section_offset;
+                    x86_64_rewrite_symbol(opcode, rel_operand, rel_diff);
+                } else {
+                    // 引用了 label 符号，但是符号确不在符号表中
+                    // 此时使用 rel32 占位，其中 jmp 指令后续可能需要替换 rel8
+                    x86_64_rewrite_symbol(opcode, rel_operand, 0);
+                    temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
+                    temp->rel_symbol = symbol_operand->name;
+                    uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(opcode);
+                    if (reduce_count > 0) {
+                        temp->may_need_reduce = true;
+                        temp->reduce_count = reduce_count;
+                    }
+                }
+            } else {
+                // TODO 可以通过读取全局符号表判断符号是 fn 还是 var
+                // 其他指令引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip) 让重定位阶段去找改符号进行重定位即可
+                // 完全不用考虑是标签符号还是数据符号
+                // 添加到重定位表(.rela.text)
+                // 根据指令计算 offset 重定位 rip offset
+                uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
+                if (sym_index == 0) {
+                    Elf64_Sym sym = {
+                            .st_shndx = 0,
+                            .st_size = 0,
+                            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                            .st_other = 0,
+                            .st_value = 0,
+                    };
+                    sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
+                }
+
+                uint64_t rel_offset = *temp->offset += opcode_rip_offset(opcode);
+                temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
+                                                 rel_offset, R_X86_64_PC32, (int) sym_index, -4);
             }
         }
+
+        // 编码
+        temp->data = x86_64_opcode_encoding(*opcode, &temp->data_count);
+        section_offset += temp->data_count;
     }
 
+    // 二次遍历,基于 build_temps
+    for (int i = 0; i < build_temps->count; ++i) {
+        x86_64_build_temp_t *temp = build_temps->take[i];
+        if (!temp->rel_symbol) {
+            continue;
+        }
 
+        // 二次扫描时再符号表中找到了符号
+        // rel_symbol 仅记录了 label, 数据符号直接使用 rip 寻址
+        uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, temp->rel_symbol);
+        if (sym_index == 0) {
+            Elf64_Sym sym = {
+                    .st_shndx = 0,
+                    .st_size = 0,
+                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                    .st_other = 0,
+                    .st_value = 0,
+            };
+            sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, temp->rel_symbol);
+        }
+
+        Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+        if (sym->st_value > 0) {
+            int rel_diff = sym->st_value - *temp->offset;
+            x86_64_rewrite_symbol(temp->opcode, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
+            temp->data = x86_64_opcode_encoding(*temp->opcode, &temp->data_count);
+        } else {
+            // 外部符号添加重定位信息
+            uint64_t rel_offset = *temp->offset += opcode_rip_offset(temp->opcode);
+            temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
+                                             rel_offset, R_X86_64_PC32, (int) sym_index, -4);
+        }
+
+    }
+
+    // 代码段已经确定，生成 text 数据
+    for (int i = 0; i < build_temps->count; ++i) {
+        x86_64_build_temp_t *temp = build_temps->take[i];
+        elf_put_opcode_data(ctx->text_section, temp->data, temp->data_count);
+    }
 }

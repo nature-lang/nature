@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-void output_executable_file(linker_t *l) {
+void output_executable_file(elf_context *l) {
     FILE *f;
     unlink(l->output);
     int fd = open(l->output, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0777);

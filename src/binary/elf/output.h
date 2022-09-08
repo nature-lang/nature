@@ -10,6 +10,6 @@
 /**
  * 包含可重定位文件和可执行文件的输出
  */
-void output_executable_file(linker_t *l);
+void output_executable_file(elf_context *l);
 
 #endif //NATURE_OUTPUT_H

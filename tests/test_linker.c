@@ -19,7 +19,7 @@ int teardown(void **state) {
 static void test_basic() {
     char *output = "main";
     // linker new
-    linker_t *l = linker_new(output);
+    elf_context *l = linker_new(output);
 
     // 读取 main.o
     int main_fd = open("./stubs/linker/main.o", O_RDONLY | O_BINARY);
