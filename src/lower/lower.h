@@ -11,7 +11,7 @@ typedef struct {
     uint8_t *value; // 符号值
 } lower_var_decl_t;
 
-list *lower_var_decl_list;
+slice_t *lower_var_decls;
 
 int lower_decl_temp_unique_count;
 

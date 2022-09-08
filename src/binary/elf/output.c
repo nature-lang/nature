@@ -9,26 +9,27 @@
 #include <stdio.h>
 #include <string.h>
 
-void output_executable_file(elf_context *l) {
+void elf_output(elf_context *ctx) {
     FILE *f;
-    unlink(l->output);
-    int fd = open(l->output, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0777);
+    unlink(ctx->output);
+    int fd = open(ctx->output, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0777);
     if (fd < 0 || (f = fdopen(fd, "wb")) == NULL) {
-        error_exit("[output_executable_file] could not write '%s: %s'", l->output);
+        error_exit("[elf_output] could not write '%s: %s'", ctx->output);
         return;
     }
     Elf64_Ehdr ehdr;
     memset(&ehdr, 0, sizeof(ehdr));
-    int shdr_count = l->sections->count;
+    int shdr_count = ctx->sections->count;
 
-    if (l->phdr_count > 0) {
+    // 可重定位文件不包含程序头
+    if (ctx->phdr_count > 0) {
         ehdr.e_phentsize = sizeof(Elf64_Phdr);
-        ehdr.e_phnum = l->phdr_count;
+        ehdr.e_phnum = ctx->phdr_count;
         ehdr.e_phoff = sizeof(Elf64_Ehdr);
-        shdr_count = tidy_section_headers(l);
+        shdr_count = tidy_section_headers(ctx);
     }
 
-    l->file_offset = (l->file_offset + 3) & -4;
+    ctx->file_offset = (ctx->file_offset + 3) & -4;
 
     // fill header
     ehdr.e_ident[0] = ELFMAG0;
@@ -39,22 +40,27 @@ void output_executable_file(elf_context *l) {
     ehdr.e_ident[5] = ELFDATA2LSB;
     ehdr.e_ident[6] = EV_CURRENT;
 
-    ehdr.e_type = ET_EXEC;
-    ehdr.e_entry = elf_get_sym_addr(l, "_start");
+    if (ctx->output_type == OUTPUT_OBJECT) {
+        ehdr.e_type = ET_REL;
+    } else {
+        // 仅可执行文件需要入口
+        ehdr.e_type = ET_EXEC;
+        ehdr.e_entry = elf_get_sym_addr(ctx, "_start");
+    }
 
     ehdr.e_machine = ehdr_machine();
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_shoff = l->file_offset;
+    ehdr.e_shoff = ctx->file_offset;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
     ehdr.e_shentsize = sizeof(Elf64_Shdr);
     ehdr.e_shnum = shdr_count;
     ehdr.e_shstrndx = shdr_count - 1;
     fwrite(&ehdr, 1, sizeof(Elf64_Ehdr), f);
-    if (l->phdr_list) {
-        fwrite(l->phdr_list, 1, l->phdr_count * sizeof(Elf64_Phdr), f);
+    if (ctx->phdr_list) {
+        fwrite(ctx->phdr_list, 1, ctx->phdr_count * sizeof(Elf64_Phdr), f);
     }
-    uint64_t offset = sizeof(Elf64_Ehdr) + l->phdr_count * sizeof(Elf64_Phdr);
-    sort_symbols(l, l->symtab_section);
+    uint64_t offset = sizeof(Elf64_Ehdr) + ctx->phdr_count * sizeof(Elf64_Phdr);
+    sort_symbols(ctx, ctx->symtab_section);
     for (int sh_index = 1; sh_index < shdr_count; ++sh_index) {
         int order_index = SEC_TACK(sh_index)->actual_sh_index;
         section_t *s = SEC_TACK(order_index);

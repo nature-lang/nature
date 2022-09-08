@@ -361,10 +361,10 @@ inst_t setge_rm8 = {
 };
 
 
-static x86_64_opcode_tree_node_t *opcode_node_new() {
-    x86_64_opcode_tree_node_t *node = NEW(x86_64_opcode_tree_node_t);
+static amd64_opcode_tree_node_t *opcode_node_new() {
+    amd64_opcode_tree_node_t *node = NEW(amd64_opcode_tree_node_t);
     node->key = "";
-    node->insts = (x86_64_insts_t) {
+    node->insts = (amd64_insts_t) {
             .count = 0,
             .list = malloc(sizeof(inst_t) * 10),
     };
@@ -384,7 +384,7 @@ static x86_64_opcode_tree_node_t *opcode_node_new() {
  * @param inst
  * @return
  */
-void x86_64_opcode_init() {
+void amd64_opcode_init() {
     opcode_tree_root = opcode_node_new();
     opcode_tree_root->key = "root";
     // 收集所有指令，进行注册
@@ -677,7 +677,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
 
 void opcode_tree_build(inst_t *inst) {
     // 第一层结构 指令名称
-    x86_64_opcode_tree_node_t *node = opcode_find_name(inst->name);
+    amd64_opcode_tree_node_t *node = opcode_find_name(inst->name);
 
     // 其余层级结构,指令参数
     opcode_find_succs(node, inst, 0);
@@ -686,13 +686,13 @@ void opcode_tree_build(inst_t *inst) {
 /**
  * @param name
  */
-x86_64_opcode_tree_node_t *opcode_find_name(string name) {
+amd64_opcode_tree_node_t *opcode_find_name(string name) {
     bool exist = table_exist(opcode_tree_root->succs, name);
     if (exist) {
         return table_get(opcode_tree_root->succs, name);
     }
 
-    x86_64_opcode_tree_node_t *node = opcode_node_new();
+    amd64_opcode_tree_node_t *node = opcode_node_new();
     node->key = name;
 
     table_set(opcode_tree_root->succs, name, node);
@@ -704,7 +704,7 @@ x86_64_opcode_tree_node_t *opcode_find_name(string name) {
  * @param node 树节点
  * @return
  */
-void opcode_find_succs(x86_64_opcode_tree_node_t *node, inst_t *inst, int operands_index) {
+void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operands_index) {
     // 读取 node
     opcode_operand_t operand = inst->operands[operands_index];
     // 表示已经找到头了，甚至有可能溢出
@@ -718,7 +718,7 @@ void opcode_find_succs(x86_64_opcode_tree_node_t *node, inst_t *inst, int operan
     for (int i = 0; i < asm_keys.count; ++i) {
         uint16_t key_int = asm_keys.list[i];
         char *key = itoa(key_int);
-        x86_64_opcode_tree_node_t *succ = table_get(node->succs, key);
+        amd64_opcode_tree_node_t *succ = table_get(node->succs, key);
         if (succ == NULL) {
             succ = opcode_node_new();
             succ->key = key;
@@ -800,8 +800,8 @@ static bool has_rex_extension(opcode_ext *list) {
     return false;
 }
 
-inst_t *opcode_select(x86_64_opcode_t asm_inst) {
-    x86_64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
+inst_t *opcode_select(amd64_opcode_t asm_inst) {
+    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
     if (current == NULL) {
         error_exit("cannot identify asm opcode %s ", asm_inst.name);
         return NULL;
@@ -813,7 +813,7 @@ inst_t *opcode_select(x86_64_opcode_t asm_inst) {
     bool hasHighEightReg = false;
 
     for (int i = 0; i < asm_inst.count; ++i) {
-        x86_64_operand_t *operand = asm_inst.operands[i];
+        amd64_operand_t *operand = asm_inst.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REGISTER) {
             if (is_high_eight_reg(operand->value)) {
                 hasHighEightReg = true;
@@ -836,9 +836,9 @@ inst_t *opcode_select(x86_64_opcode_t asm_inst) {
         current = table_get(current->succs, key);
     }
 
-    x86_64_insts_t temps = current->insts;
+    amd64_insts_t temps = current->insts;
 
-    x86_64_insts_t insts = {
+    amd64_insts_t insts = {
             .count = 0,
             .list= malloc(sizeof(inst_t) * 10)
     };
@@ -868,7 +868,7 @@ inst_t *opcode_select(x86_64_opcode_t asm_inst) {
     return insts.list[0];
 }
 
-void opcode_sort_insts(x86_64_insts_t *insts) {
+void opcode_sort_insts(amd64_insts_t *insts) {
     if (insts->count == 0) {
         return;
     }
@@ -921,7 +921,7 @@ static modrm_t *new_modrm() {
     return m;
 }
 
-static void parser_ext(x86_64_inst_format_t *format, opcode_ext ext) {
+static void parser_ext(amd64_inst_format_t *format, opcode_ext ext) {
     if (ext == OPCODE_EXT_SLASH0) {
         if (format->modrm == NULL) {
             format->modrm = new_modrm();
@@ -1032,7 +1032,7 @@ static void parser_ext(x86_64_inst_format_t *format, opcode_ext ext) {
     }
 }
 
-static void set_disp(x86_64_inst_format_t *format, string reg, uint8_t *disps, uint8_t count) {
+static void set_disp(amd64_inst_format_t *format, string reg, uint8_t *disps, uint8_t count) {
     // 特殊 register 处理
     int j = 0;
     if (strcmp(reg, "rsp") == 0) {
@@ -1045,7 +1045,7 @@ static void set_disp(x86_64_inst_format_t *format, string reg, uint8_t *disps, u
     format->disp_count = count;
 }
 
-static void set_imm(x86_64_inst_format_t *format, uint8_t *imms, uint8_t count) {
+static void set_imm(amd64_inst_format_t *format, uint8_t *imms, uint8_t count) {
     for (int i = 0; i < count; ++i) {
         format->imms[i] = imms[i];
     }
@@ -1073,8 +1073,8 @@ static sib_t *new_sib(uint8_t scale, uint8_t index, uint8_t base) {
     return s;
 }
 
-static x86_64_inst_format_t *inst_format_new(uint8_t *opcode) {
-    x86_64_inst_format_t *format = NEW(x86_64_inst_format_t);
+static amd64_inst_format_t *inst_format_new(uint8_t *opcode) {
+    amd64_inst_format_t *format = NEW(amd64_inst_format_t);
     for (int i = 0; i < 3; ++i) {
         format->opcode[i] = opcode[i];
     }
@@ -1100,8 +1100,8 @@ static x86_64_inst_format_t *inst_format_new(uint8_t *opcode) {
  * @param inst
  * @return
  */
-x86_64_inst_format_t *opcode_fill(inst_t *inst, x86_64_opcode_t asm_inst) {
-    x86_64_inst_format_t *format = inst_format_new(inst->opcode);
+amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_opcode_t asm_inst) {
+    amd64_inst_format_t *format = inst_format_new(inst->opcode);
 
     if (asm_inst.prefix > 0) {
         inst->prefix = asm_inst.prefix;
@@ -1125,7 +1125,7 @@ x86_64_inst_format_t *opcode_fill(inst_t *inst, x86_64_opcode_t asm_inst) {
     i = 0;
     while (inst->operands[i].type > 0) {
         opcode_operand_t operand = inst->operands[i];
-        x86_64_operand_t *asm_operand = asm_inst.operands[i];
+        amd64_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
         if (asm_operand->type == ASM_OPERAND_TYPE_REGISTER) {
             asm_operand_register_t *r = asm_operand->value;
@@ -1339,7 +1339,7 @@ x86_64_inst_format_t *opcode_fill(inst_t *inst, x86_64_opcode_t asm_inst) {
     return format;
 }
 
-static void opcode_vex_encoding(x86_64_inst_format_t *format, uint8_t *data, uint8_t *count) {
+static void opcode_vex_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t *count) {
     vex_prefix_t *v = format->vex_prefix;
     if ((v->vex_legacy_byte == 0 || v->vex_legacy_byte == VEX_LEGACY_BYTE_0F) && v->x && v->b) {
         uint8_t byte0 = 0xc5;
@@ -1392,7 +1392,7 @@ static void opcode_vex_encoding(x86_64_inst_format_t *format, uint8_t *data, uin
     data[(*count)++] = byte2; // count = 3
 }
 
-static void opcode_rex_encoding(x86_64_inst_format_t *format, uint8_t *result) {
+static void opcode_rex_encoding(amd64_inst_format_t *format, uint8_t *result) {
     *result = 0;
     if (format->rex_prefix->b) {
         *result = 1;
@@ -1412,7 +1412,7 @@ static void opcode_rex_encoding(x86_64_inst_format_t *format, uint8_t *result) {
     *result += (1 << 6);
 }
 
-static void opcode_modrm_encoding(x86_64_inst_format_t *format, uint8_t *result) {
+static void opcode_modrm_encoding(amd64_inst_format_t *format, uint8_t *result) {
     modrm_t *modrm = format->modrm;
     // &7 = &00000111 让其余未归零处理
     *result = modrm->rm & 7;
@@ -1422,14 +1422,14 @@ static void opcode_modrm_encoding(x86_64_inst_format_t *format, uint8_t *result)
     *result |= (mod << 6);
 }
 
-static void opcode_sib_encoding(x86_64_inst_format_t *format, uint8_t *result) {
+static void opcode_sib_encoding(amd64_inst_format_t *format, uint8_t *result) {
     sib_t *sib = format->sib;
     *result = sib->base & 7;
     *result |= (sib->index & 7) << 3;
     *result |= (sib->scale << 6);
 }
 
-void opcode_format_encoding(x86_64_inst_format_t *format, uint8_t *data, uint8_t *count) {
+void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t *count) {
     *count = 0;
     if (format->prefix > 0) {
         data[(*count)++] = format->prefix;
@@ -1465,12 +1465,12 @@ void opcode_format_encoding(x86_64_inst_format_t *format, uint8_t *data, uint8_t
     }
 }
 
-uint8_t *x86_64_opcode_encoding(x86_64_opcode_t opcode, uint8_t *count) {
+uint8_t *amd64_opcode_encoding(amd64_opcode_t opcode, uint8_t *count) {
     *count = 0;
     uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
     inst_t *inst = opcode_select(opcode);
-    x86_64_inst_format_t *format = opcode_fill(inst, opcode);
+    amd64_inst_format_t *format = opcode_fill(inst, opcode);
     opcode_format_encoding(format, data, count);
     void *_ = realloc(data, *count);
     return data;

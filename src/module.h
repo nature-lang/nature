@@ -134,14 +134,14 @@ typedef struct {
     // compiler 阶段得到
     slice_t *compiler_closures; // 包含 lir
 
-    // lower -> asm_insts
-    list *asm_insts; // 和架构相关
-    list *var_decl_list; // 和架构无关
+    // lower -> opcodes
+    slice_t *opcodes; // 和架构相关
+    slice_t *var_decls; // 和架构无关
 
     // elf target.o
     uint64_t elf_count;
     uint8_t *elf_binary;
-    string linker_file_name;
+    string object_file;
 } module_t;
 
 // module_path + path + ident

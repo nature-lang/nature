@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <unistd.h>
 #include "build.h"
 #include "src/module.h"
 #include "utils/helper.h"
@@ -9,15 +7,127 @@
 #include "src/debug/debug.h"
 #include "src/lower/amd64/amd64.h"
 #include "src/lower/lower.h"
-#include "src/assembler/amd64/register.h"
-#include "src/assembler/amd64/opcode.h"
-#include "src/assembler/linux_elf/elf.h"
+#include "src/binary/opcode/amd64/register.h"
+#include "src/binary/opcode/amd64/opcode.h"
+#include "src/binary/elf/linker.h"
+#include "src/binary/elf/amd64.h"
+#include "src/binary/elf/output.h"
 #include "utils/error.h"
-#include "utils/exec.h"
-#include "src/build/cross.h"
-#include "src/build/config.h"
-#include "src/build/build.h"
+#include "config.h"
 
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
+
+/**
+ * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
+ * @return
+ */
+static char *lib_file_path(char *file) {
+    char *_os_arch = str_connect(os_to_string(BUILD_OS), "_");
+    _os_arch = str_connect(_os_arch, arch_to_string(BUILD_ARCH));
+
+    char *dir = file_join(NATURE_ROOT, "lib");
+    dir = file_join(dir, _os_arch);
+    return file_join(dir, file);
+}
+
+/**
+ * @param m
+ * @return  m->opcodes
+ */
+void cross_lower(module_t *m) {
+    lower_var_decls = slice_new();
+    m->opcodes = slice_new();
+
+    // pre
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_register_init();
+        amd64_opcode_init();
+    } else {
+        goto ERROR;
+    };
+
+    // lower
+    for (int i = 0; i < m->compiler_closures->count; ++i) {
+        closure *c = m->compiler_closures->take[i];
+        if (BUILD_ARCH == ARCH_AMD64) {
+            slice_append(m->opcodes, amd64_lower_closure(c));
+        } else {
+            goto ERROR;
+        }
+    }
+
+    // post
+    slice_append(m->var_decls, lower_var_decls);
+
+
+    return;
+    ERROR:
+    error_exit("[cross_lower] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+}
+
+/**
+ * 汇编器目前只支持 linux elf amd64
+ * @param m
+ */
+void build_assembler(module_t *m) {
+    if (BUILD_OS == OS_LINUX) {
+        char *object_file_name = str_connect(m->module_unique_name, ".n.o");
+        str_replace(object_file_name, '/', '.');
+
+        char *output = str_connect(TEMP_DIR, output);
+        elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
+        linkable_object_format(ctx, m->opcodes, m->var_decls);
+        elf_output(ctx);
+
+        // 完整输出路径
+        printf(" --> assembler: %s", output);
+        m->object_file = output;
+    } else {
+        goto ERROR;
+    }
+
+    return;
+    ERROR:
+    error_exit("[build_assembler] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+}
+
+/**
+ * modules module_list
+ * @param module_list
+ */
+void build_linker(slice_t *module_list) {
+    // 检测是否生成
+    int fd;
+    char *output = file_join(TEMP_DIR, LINKER_OUTPUT);
+    elf_context *ctx = elf_context_new(output, OUTPUT_EXECUTABLE);
+
+    for (int i = 0; i < module_list->count; ++i) {
+        module_t *m = module_list->take[i];
+
+        fd = open(m->object_file, O_RDONLY | O_BINARY);
+        elf_load_object_file(ctx, fd, 0);
+    }
+
+    // crt1.o
+    fd = open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
+    elf_load_object_file(ctx, fd, 0);
+
+    // libruntime.a
+    fd = open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
+    elf_load_archive(ctx, fd);
+
+    // libc.a
+    fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
+    elf_load_archive(ctx, fd);
+    elf_output(ctx);
+    if (!file_exists(output)) {
+        error_exit("[build_linker] linker failed");
+    }
+    char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
+    copy(dst_path, output, 0755);
+}
 
 // nature build xxx.n
 void build(char *build_target) {
@@ -63,7 +173,6 @@ void build(char *build_target) {
 
     // TODO 暂时只支持单进程，因为多个文件共享了全局的数据
     // 全局维度初始化
-
 
     // root module stmt add call all module init
     ast_closure_t *root_ast_closure = root->ast_closures->take[0];
@@ -117,7 +226,8 @@ void build(char *build_target) {
     // lower + assembler
     for (int i = 0; i < module_list->count; ++i) {
         module_t *m = module_list->take[i];
-        m->var_decl_list = list_new();
+        // 首次初始化符号定义
+        m->var_decls = slice_new();
 
         // symbol to var_decl(架构无关), assembler 会使用 var_decl
         for (int j = 0; j < m->symbols->count; ++j) {
@@ -130,12 +240,13 @@ void build(char *build_target) {
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
             decl->value = NULL; // TODO 如果是立即数可以直接赋值
-            list_push(m->var_decl_list, decl);
+            slice_push(m->var_decls, decl);
         }
 
         cross_lower(m);
-        cross_assembler(m);
+        build_assembler(m);
     }
 
-    cross_linker(module_list);
+    // 链接
+    build_linker(module_list);
 }

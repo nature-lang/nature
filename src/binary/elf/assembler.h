@@ -9,11 +9,17 @@
  * 最终经过 output 输出可重定位文件
  */
 /**
- *
+ * - 编译变量
+ * - 编译指令
  */
-void linkable_object_format();
+void linkable_object_format(elf_context *ctx, slice_t *opcodes, slice_t *var_decls);
 
 
-void var_decl_encodings(elf_context *ctx, slice_t *var_decl);
+/**
+ * 变量声明编码
+ * @param ctx
+ * @param var_decls
+ */
+void var_decl_encodings(elf_context *ctx, slice_t *var_decls);
 
 #endif //NATURE_ASSEMBLER_H

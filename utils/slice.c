@@ -18,6 +18,12 @@ void slice_push(slice_t *s, void *value) {
     s->take[s->count++] = value;
 }
 
+void slice_append(slice_t *dst, slice_t *src) {
+    for (int i = 0; i < src->count; ++i) {
+        slice_push(dst, src->take[i]);
+    }
+}
+
 void slice_append_free(slice_t *dst, slice_t *src) {
     for (int i = 0; i < src->count; ++i) {
         slice_push(dst, src->take[i]);

@@ -5,33 +5,33 @@ set(CMAKE_C_STANDARD 11)
 
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
-set(SRC_ASSEMBLER
-        ${SRC_DIR}/assembler/amd64/asm.h
-        ${SRC_DIR}/assembler/amd64/asm.c
-        ${SRC_DIR}/assembler/amd64/opcode.h
-        ${SRC_DIR}/assembler/amd64/opcode.c
-        ${SRC_DIR}/assembler/linux_elf/lib_elf.h
-        ${SRC_DIR}/assembler/linux_elf/amd64_inst.h
-        ${SRC_DIR}/assembler/linux_elf/amd64_inst.c
-        ${SRC_DIR}/assembler/linux_elf/elf.c
-        ${SRC_DIR}/assembler/linux_elf/elf.h
-        ${SRC_DIR}/assembler/amd64/register.h
-        ${SRC_DIR}/assembler/amd64/register.c)
+#set(SRC_ASSEMBLER
+#        ${SRC_DIR}/assembler/amd64/asm.h
+#        ${SRC_DIR}/assembler/amd64/asm.c
+#        ${SRC_DIR}/assembler/amd64/opcode.h
+#        ${SRC_DIR}/assembler/amd64/opcode.c
+#        ${SRC_DIR}/assembler/linux_elf/lib_elf.h
+#        ${SRC_DIR}/assembler/linux_elf/amd64_inst.h
+#        ${SRC_DIR}/assembler/linux_elf/amd64_inst.c
+#        ${SRC_DIR}/assembler/linux_elf/elf.c
+#        ${SRC_DIR}/assembler/linux_elf/elf.h
+#        ${SRC_DIR}/assembler/amd64/register.h
+#        ${SRC_DIR}/assembler/amd64/register.c)
 
 set(SRC_BINARY
-        ${SRC_DIR}/binary/opcode/x86_64/asm.c
-        ${SRC_DIR}/binary/opcode/x86_64/asm.h
-        ${SRC_DIR}/binary/opcode/x86_64/opcode.c
-        ${SRC_DIR}/binary/opcode/x86_64/opcode.h
-        ${SRC_DIR}/binary/opcode/x86_64/register.c
-        ${SRC_DIR}/binary/opcode/x86_64/register.h
+        ${SRC_DIR}/binary/opcode/amd64/asm.c
+        ${SRC_DIR}/binary/opcode/amd64/asm.h
+        ${SRC_DIR}/binary/opcode/amd64/opcode.c
+        ${SRC_DIR}/binary/opcode/amd64/opcode.h
+        ${SRC_DIR}/binary/opcode/amd64/register.c
+        ${SRC_DIR}/binary/opcode/amd64/register.h
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
         ${SRC_DIR}/binary/elf/output.c
         ${SRC_DIR}/binary/elf/arch.h
         ${SRC_DIR}/binary/elf/arch.c
-        ${SRC_DIR}/binary/elf/x86_64.h
-        ${SRC_DIR}/binary/elf/x86_64.c
+        ${SRC_DIR}/binary/elf/amd64.h
+        ${SRC_DIR}/binary/elf/amd64.c
         ${SRC_DIR}/binary/elf/linker.h
         ${SRC_DIR}/binary/elf/linker.c
         ${SRC_DIR}/binary/elf/assembler.h
@@ -58,12 +58,6 @@ set(SRC_SEMANTIC
         ${SRC_DIR}/semantic/infer.h
         ${SRC_DIR}/semantic/infer.c
         ${SRC_DIR}/semantic/infer.c)
-
-set(SRC_DEBUG
-        ${SRC_DIR}/debug/debug.c
-        ${SRC_DIR}/debug/debug.h
-        ${SRC_DIR}/debug/debug_lir.c
-        ${SRC_DIR}/debug/debug_lir.h)
 
 set(SRC_DEBUG
         ${SRC_DIR}/debug/debug.c
@@ -106,8 +100,6 @@ set(SRC
         ${SRC_DIR}/ssa.c
         ${SRC_DIR}/module.h
         ${SRC_DIR}/module.c
-        ${SRC_DIR}/build/cross.h
-        ${SRC_DIR}/build/cross.c
         ${SRC_DIR}/build/config.h
         ${SRC_DIR}/build/config.c
         ${SRC_DIR}/build/build.h
@@ -141,7 +133,6 @@ add_executable(nature main.c
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}
         ${SRC_SYNTAX}
-        ${SRC_ASSEMBLER}
         ${SRC_BINARY})
 
 target_link_libraries(nature m) # 链接数学计算库

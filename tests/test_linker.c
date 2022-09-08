@@ -19,7 +19,7 @@ int teardown(void **state) {
 static void test_basic() {
     char *output = "main";
     // linker new
-    elf_context *l = linker_new(output);
+    elf_context *l = elf_context_new(output, OUTPUT_EXECUTABLE);
 
     // 读取 main.o
     int main_fd = open("./stubs/linker/main.o", O_RDONLY | O_BINARY);
@@ -34,7 +34,7 @@ static void test_basic() {
 
     executable_file_format(l);
 
-    output_executable_file(l);
+    elf_output(l);
 }
 
 int main(void) {
