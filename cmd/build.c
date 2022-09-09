@@ -8,12 +8,8 @@
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/lower/amd64/amd64.h"
-#include "src/assembler/amd64/register.h"
-#include "src/assembler/amd64/opcode.h"
-#include "src/assembler/linux_elf/elf.h"
 #include "utils/error.h"
 #include "utils/exec.h"
-#include "src/build/cross.h"
 #include "src/build/config.h"
 #include "src/build/build.h"
 

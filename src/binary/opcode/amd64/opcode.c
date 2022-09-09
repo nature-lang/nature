@@ -800,10 +800,10 @@ static bool has_rex_extension(opcode_ext *list) {
     return false;
 }
 
-inst_t *opcode_select(amd64_opcode_t asm_inst) {
-    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst.name);
+inst_t *opcode_select(amd64_opcode_t opcode) {
+    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, opcode.name);
     if (current == NULL) {
-        error_exit("cannot identify asm opcode %s ", asm_inst.name);
+        error_exit("cannot identify asm opcode %s ", opcode.name);
         return NULL;
     }
 
@@ -812,8 +812,8 @@ inst_t *opcode_select(amd64_opcode_t asm_inst) {
     bool has64Reg = false;
     bool hasHighEightReg = false;
 
-    for (int i = 0; i < asm_inst.count; ++i) {
-        amd64_operand_t *operand = asm_inst.operands[i];
+    for (int i = 0; i < opcode.count; ++i) {
+        amd64_operand_t *operand = opcode.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REGISTER) {
             if (is_high_eight_reg(operand->value)) {
                 hasHighEightReg = true;
@@ -830,7 +830,7 @@ inst_t *opcode_select(amd64_opcode_t asm_inst) {
         // current 匹配
         bool exists = table_exist(current->succs, key);
         if (!exists) {
-            error_exit("[opcode_select]cannot identify asm opcode %s with operand index: %d", asm_inst.name, i);
+            error_exit("[opcode_select]cannot identify asm opcode %s with operand index: %d", opcode.name, i);
             return NULL;
         }
         current = table_get(current->succs, key);
@@ -856,9 +856,9 @@ inst_t *opcode_select(amd64_opcode_t asm_inst) {
     }
     if (insts.count == 0) {
         error_exit("[opcode_select] opcode %s 1_size:%d, 2_size: %d not match insts,  has 64: %d, has high eight: %d",
-                   asm_inst.name,
-                   asm_inst.operands[0]->size,
-                   asm_inst.operands[1]->size,
+                   opcode.name,
+                   opcode.operands[0]->size,
+                   opcode.operands[1]->size,
                    has64Reg,
                    hasHighEightReg);
     }

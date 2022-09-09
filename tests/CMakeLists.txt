@@ -12,3 +12,15 @@ add_test(test_hello test_hello)
 add_executable(test_linker test_linker.c ${UTILS} ${SRC_BINARY})
 target_link_libraries(test_linker cmocka)
 add_test(test_linker test_linker)
+
+add_executable(test_build
+        test_build.c
+        ${SRC}
+        ${UTILS}
+        ${SRC_DEBUG}
+        ${SRC_SEMANTIC}
+        ${SRC_SYNTAX}
+        ${SRC_LOWER}
+        ${SRC_BINARY})
+target_link_libraries(test_build cmocka)
+add_test(test_build test_build)

@@ -74,15 +74,15 @@ void cross_lower(module_t *m) {
 void build_assembler(module_t *m) {
     if (BUILD_OS == OS_LINUX) {
         char *object_file_name = str_connect(m->module_unique_name, ".n.o");
-        str_replace(object_file_name, '/', '.');
+        str_replace_char(object_file_name, '/', '.');
 
-        char *output = str_connect(TEMP_DIR, output);
+        char *output = file_join(TEMP_DIR, object_file_name);
         elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
         linkable_object_format(ctx, m->opcodes, m->var_decls);
         elf_output(ctx);
 
         // 完整输出路径
-        printf(" --> assembler: %s", output);
+        printf(" --> assembler: %s\n", output);
         m->object_file = output;
     } else {
         goto ERROR;
@@ -129,24 +129,35 @@ void build_linker(slice_t *module_list) {
     copy(dst_path, output, 0755);
 }
 
-// nature build xxx.n
-void build(char *build_target) {
+/**
+ * nature build main.n, build_entry = "main.n"
+ * nature build client/main.n build_entry = "client/main.n"
+ * @param build_entry
+ */
+void build(char *build_entry) {
     env_init();
+    // 获取当前 pwd
     config_init();
+    string source_path = file_join(WORK_DIR, build_entry);
+
+    printf("NATURE_ROOT: %s\n", NATURE_ROOT);
+    printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
+    printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
+    printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT);
+    printf("WORK_DIR: %s\n", WORK_DIR);
+    printf("BASE_NS: %s\n", BASE_NS);
+    printf("TERM_DIR: %s\n", TEMP_DIR);
+    printf("build_entry: %s\n", build_entry);
+    printf("source_path: %s\n", source_path);
 
     // 初始化全局符号表
     symbol_ident_table_init();
     var_unique_count = 0;
 
-    // 获取当前 pwd
-    string source_path = str_connect(WORK_DIR, "/");
-    source_path = str_connect(source_path, build_target);
-
     table *module_table = table_new();
     slice_t *module_list = slice_new();
     module_t *root = module_front_build(source_path, true);
     slice_push(module_list, root);
-
 
     slice_t *work_list = slice_new();
     slice_push(work_list, root);

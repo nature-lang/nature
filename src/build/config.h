@@ -1,12 +1,10 @@
-/**
- * 各种编译相关参数
- */
-
 #ifndef NATURE_BUILD_ENV_H
 #define NATURE_BUILD_ENV_H
 
 #define ARCH_AMD64 1
 #define OS_LINUX 1
+
+#include "stdint.h"
 
 uint8_t BUILD_OS; // linux
 uint8_t BUILD_ARCH; // amd64
@@ -23,7 +21,6 @@ char *TEMP_DIR; // 链接临时目录
 #define LIB_START_FILE "crt1.o"
 #define LIB_RUNTIME_FILE "libruntime.a"
 #define LIB_C_FILE "libc.a"
-#define LINKER_ELF_NAME "ld"
 #define LINKER_OUTPUT "a.out"
 
 void env_init();

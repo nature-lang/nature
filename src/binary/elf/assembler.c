@@ -24,4 +24,15 @@ void var_decl_encodings(elf_context *ctx, slice_t *var_decls) {
 void linkable_object_format(elf_context *ctx, slice_t *opcodes, slice_t *var_decls) {
     var_decl_encodings(ctx, var_decls);
     opcode_encodings(ctx, opcodes);
+    alloc_section_names(ctx, 1);
+    size_t file_offset = sizeof(Elf64_Ehdr);
+    for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
+        section_t *s = SEC_TACK(sh_index);
+        file_offset = (file_offset + 15) & -16; // 这 + 15 - 16 ??
+        s->sh_offset = file_offset;
+        if (s->sh_type != SHT_NOBITS) {
+            file_offset += s->sh_size;
+        }
+    }
+    ctx->file_offset = file_offset;
 }

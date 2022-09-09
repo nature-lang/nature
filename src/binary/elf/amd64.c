@@ -6,7 +6,8 @@
 #include "string.h"
 
 /**
- * mov 0x0(%rip),%rsi = 48 8b 35 00 00 00 00，return 3
+ * mov 0x0(%rip),%rsi  // 48 8b 35 00 00 00 00，return 3
+ * lea 0x0(%rip),%rax // 48 8d 05 00 00 00 00
  * call 0x0(%rip) // ff 15 00 00 00 00
  * call rel32 // e8 00 00 00 00
  * jmp rel32 // e9 00 00 00 00
@@ -17,6 +18,9 @@
 uint64_t opcode_rip_offset(amd64_opcode_t *opcode) {
     if (str_equal(opcode->name, "mov")) {
         // rip 相对寻址
+        return 3;
+    }
+    if (str_equal(opcode->name, "lea")) {
         return 3;
     }
 
@@ -77,7 +81,7 @@ static bool is_jmp_opcode(char *name) {
  * @param operand
  * @param rel_diff
  */
-static void amd64_rewrite_symbol(amd64_opcode_t *opcode, amd64_operand_t *operand, int rel_diff) {
+static void amd64_rewrite_rel_symbol(amd64_opcode_t *opcode, amd64_operand_t *operand, int rel_diff) {
     if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
         // 已经确定了指令长度，不能在随意修正了
         if (rel_diff == 0) {
@@ -128,6 +132,15 @@ static void amd64_rewrite_symbol(amd64_opcode_t *opcode, amd64_operand_t *operan
     operand->value = v;
 }
 
+static void amd64_rewrite_rip_symbol(amd64_operand_t *operand) {
+    operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
+    operand->size = QWORD;
+    asm_operand_rip_relative_t *r = NEW(asm_operand_rip_relative_t);
+    r->disp = 0;
+    operand->value = r;
+}
+
+
 static amd64_operand_t *has_symbol_operand(amd64_opcode_t *opcode) {
     for (int i = 0; i < opcode->count; ++i) {
         amd64_operand_t *operand = opcode->operands[i];
@@ -143,7 +156,7 @@ static amd64_build_temp_t *build_temp_new(amd64_opcode_t *opcode) {
     amd64_build_temp_t *temp = NEW(amd64_build_temp_t);
     temp->data = NULL;
     temp->data_count = 0;
-    temp->offset = NULL;
+    temp->offset = NEW(uint64_t);
     temp->opcode = opcode;
     temp->rel_operand = NULL;
     temp->rel_symbol = NULL;
@@ -175,7 +188,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
     uint8_t reduce_count = 0;
 
     // 从尾部开始查找,
-    for (i = build_temps->count; i > 0; --i) {
+    for (i = build_temps->count - 1; i > 0; --i) {
         temp = build_temps->take[i];
         // 直到总指令长度超过 128 就可以结束查找
         if ((*section_offset - reduce_count - *temp->offset) > 128) {
@@ -532,11 +545,11 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
                     // 引用了已经存在的符号，直接计算相对位置即可
                     Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
                     int rel_diff = sym.st_value - section_offset;
-                    amd64_rewrite_symbol(opcode, rel_operand, rel_diff);
+                    amd64_rewrite_rel_symbol(opcode, rel_operand, rel_diff);
                 } else {
                     // 引用了 label 符号，但是符号确不在符号表中
                     // 此时使用 rel32 占位，其中 jmp 指令后续可能需要替换 rel8
-                    amd64_rewrite_symbol(opcode, rel_operand, 0);
+                    amd64_rewrite_rel_symbol(opcode, rel_operand, 0);
                     temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
                     temp->rel_symbol = symbol_operand->name;
                     uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(opcode);
@@ -566,6 +579,9 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
                 uint64_t rel_offset = *temp->offset += opcode_rip_offset(opcode);
                 temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                                  rel_offset, R_X86_64_PC32, (int) sym_index, -4);
+
+                // rewrite symbol
+                amd64_rewrite_rip_symbol(rel_operand);
             }
         }
 
@@ -598,7 +614,7 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
             int rel_diff = sym->st_value - *temp->offset;
-            amd64_rewrite_symbol(temp->opcode, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
+            amd64_rewrite_rel_symbol(temp->opcode, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
             temp->data = amd64_opcode_encoding(*temp->opcode, &temp->data_count);
         } else {
             // 外部符号添加重定位信息

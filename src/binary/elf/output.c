@@ -60,9 +60,13 @@ void elf_output(elf_context *ctx) {
         fwrite(ctx->phdr_list, 1, ctx->phdr_count * sizeof(Elf64_Phdr), f);
     }
     uint64_t offset = sizeof(Elf64_Ehdr) + ctx->phdr_count * sizeof(Elf64_Phdr);
+    // 符号排序
     sort_symbols(ctx, ctx->symtab_section);
     for (int sh_index = 1; sh_index < shdr_count; ++sh_index) {
-        int order_index = SEC_TACK(sh_index)->actual_sh_index;
+        int order_index = sh_index;
+        if (ctx->output_type == OUTPUT_EXECUTABLE) {
+            order_index = SEC_TACK(sh_index)->actual_sh_index;
+        }
         section_t *s = SEC_TACK(order_index);
         if (s->sh_type != SHT_NOBITS) {
             while (offset < s->sh_offset) {

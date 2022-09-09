@@ -196,4 +196,6 @@ void sort_symbols(elf_context *ctx, section_t *s);
 
 elf_context *elf_context_new(char *output, uint8_t type);
 
+void alloc_section_names(elf_context *ctx, bool is_obj);
+
 #endif //NATURE_LINKER_H

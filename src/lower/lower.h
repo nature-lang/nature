@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "utils/list.h"
+#include "utils/slice.h"
 
 typedef struct {
     char *name; // 符号名称

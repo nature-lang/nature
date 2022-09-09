@@ -82,6 +82,7 @@ set(UTILS
 set(CMD
         ${PROJECT_SOURCE_DIR}/cmd/build.h
         ${PROJECT_SOURCE_DIR}/cmd/build.c)
+
 set(SRC
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c

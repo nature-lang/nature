@@ -1,8 +1,8 @@
 #include "config.h"
-#include <stdlib.h>
 #include "utils/helper.h"
 #include "utils/error.h"
 #include <string.h>
+#include <stdlib.h>
 
 uint8_t BUILD_OS = OS_LINUX; // BUILD_OS/ BUILD_ARCH / BUILD_OUTPUT/NATURE_ROOT
 uint8_t BUILD_ARCH = ARCH_AMD64;
@@ -60,4 +60,32 @@ void config_init() {
     WORK_DIR = get_work_dir();
     BASE_NS = parser_base_ns(WORK_DIR);
     TEMP_DIR = temp_dir();
+}
+
+char *os_to_string(uint8_t os) {
+    if (os == OS_LINUX) {
+        return "linux";
+    }
+    return NULL;
+}
+
+char *arch_to_string(uint8_t arch) {
+    if (arch == ARCH_AMD64) {
+        return "amd64";
+    }
+    return NULL;
+}
+
+uint8_t os_to_uint8(char *os) {
+    if (str_equal(os, "linux")) {
+        return OS_LINUX;
+    }
+    return 0;
+}
+
+uint8_t arch_to_uint8(char *arch) {
+    if (str_equal(arch, "amd64")) {
+        return ARCH_AMD64;
+    }
+    return 0;
 }

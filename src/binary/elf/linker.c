@@ -224,7 +224,7 @@ static void layout_sections(elf_context *ctx) {
     ctx->file_offset = file_offset;
 }
 
-static void alloc_section_names(elf_context *ctx, bool is_obj) {
+void alloc_section_names(elf_context *ctx, bool is_obj) {
     section_t *shstr_section;
     shstr_section = elf_new_section(ctx, ".shstrtab", SHT_STRTAB, 0);
     elf_put_str(shstr_section, "");
@@ -1209,8 +1209,18 @@ elf_context *elf_context_new(char *output, uint8_t type) {
     section_t *strtab = elf_new_section(ctx, ".strtab", SHT_STRTAB, 0);
     elf_put_str(strtab, "");
     ctx->symtab_section->link = strtab;
+    // 添加空符号
     Elf64_Sym empty_sym = {0};
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &empty_sym, NULL);
+    // 添加文件符号
+    Elf64_Sym file_sym = {
+            .st_value = 0,
+            .st_size = 0,
+            .st_info = ELF64_ST_INFO(STB_LOCAL, STT_FILE),
+            .st_other = 0,
+            .st_shndx = SHN_ABS,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &file_sym, output);
 
     elf_get_sym_attr(ctx, 0, 1);
     return ctx;
