@@ -121,12 +121,17 @@ void build_linker(slice_t *module_list) {
     // libc.a
     fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
+
+    executable_file_format(ctx);
+
     elf_output(ctx);
     if (!file_exists(output)) {
         error_exit("[build_linker] linker failed");
     }
     char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
     copy(dst_path, output, 0755);
+    printf("linker output--> %s\n", output);
+    printf("build output--> %s\n", dst_path);
 }
 
 /**

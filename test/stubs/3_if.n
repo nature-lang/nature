@@ -1,6 +1,0 @@
-int foo = 23
-if (foo > 1) {
-    print("foo > 1")
-    return
-}
-print("foo <= 1")

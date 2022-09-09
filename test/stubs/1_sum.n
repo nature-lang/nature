@@ -1,2 +1,0 @@
-int foo = -33 + 5
-print("foo=", foo)

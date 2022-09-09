@@ -344,7 +344,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
     Elf64_Shdr *shdr;
     ssize_t read_size = full_read(fd, &ehdr, sizeof(ehdr));
     if (read_size != sizeof(ehdr)) {
-        error_exit("[elf_load_object_file] size: %d not equal sizeof ehdr", read_size);
+        error_exit("[elf_load_object_file] size: %d not equal sizeof(ehdr)", read_size);
     }
     if (ehdr.e_type != ET_REL) {
         error_exit("[elf_load_object_file] ehdr.e_type not rel file");
@@ -493,6 +493,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
         // 当前目标文件中定义的符号
         uint64_t sym_index = elf_set_sym(ctx, sym, sym_name);
+        // i 表示的是当前可中定位文件中的符号索引，而 sym_index 则是全局符号表中的索引
         symtab_index_map[i] = sym_index;
     }
 
@@ -525,7 +526,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
             }
 
             sym_index = symtab_index_map[sym_index];
-            if (!sym_index) {
+            if (!sym_index /**&& type != R_RISCV_ALIGN && type != R_RISCV_RELAX **/) {
                 error_exit("[elf_load_object_file] sym index not found");
             }
 
