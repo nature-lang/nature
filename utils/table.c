@@ -1,5 +1,6 @@
 #include "table.h"
 #include "helper.h"
+#include "stdlib.h"
 
 void table_init(table *t) {
     t->count = 0;

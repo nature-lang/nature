@@ -296,7 +296,7 @@ typedef struct closure {
     regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
     lir_basic_blocks blocks; // 根据解析顺序得到
 
-    lir_basic_block *entry; // 基本块入口
+    lir_basic_block *entry; // 基本块入口, 指向 blocks[0]
     lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
     table *interval_table; // key包括 fixed register as 和 variable.ident
 

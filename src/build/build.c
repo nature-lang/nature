@@ -12,6 +12,7 @@
 #include "src/binary/elf/linker.h"
 #include "src/binary/elf/amd64.h"
 #include "src/binary/elf/output.h"
+#include "src/ssa.h"
 #include "utils/error.h"
 #include "config.h"
 
@@ -233,6 +234,8 @@ void build(char *build_entry) {
         for (int j = 0; j < m->compiler_closures->count; ++j) {
             closure *c = m->compiler_closures->take[j];
             cfg(c);
+            // 构造 ssa
+//            ssa(c);
 #ifdef DEBUG_CFG
             debug_cfg(c);
 #endif

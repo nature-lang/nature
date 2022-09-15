@@ -671,6 +671,8 @@ ast_new_fn *parser_function_decl(module_t *m, type_t type) {
 ast_stmt *parser_if_stmt(module_t *m) {
     ast_stmt *result = parser_new_stmt();
     ast_if_stmt *if_stmt = malloc(sizeof(ast_if_stmt));
+    if_stmt->alternate = slice_new();
+    if_stmt->consequent = slice_new();
     if_stmt->consequent->count = 0;
     if_stmt->alternate->count = 0;
 

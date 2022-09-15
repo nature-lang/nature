@@ -246,7 +246,7 @@ lir_vars ssa_calc_live_out(closure *c, lir_basic_block *block) {
         }
     }
 
-    table_free(exist_var);
+//    table_free(exist_var);
     return live_out;
 }
 
@@ -282,7 +282,7 @@ lir_vars ssa_calc_live_in(closure *c, lir_basic_block *block) {
         table_set(exist_var, var->ident, var);
     }
 
-    table_free(exist_var);
+//    table_free(exist_var);
     return live_in;
 }
 
@@ -308,7 +308,7 @@ bool ssa_live_changed(lir_vars *old, lir_vars *new) {
         string ident = new->list[i]->ident;
         void *has = table_get(var_count, ident);
         if (has == NULL) {
-            table_free(var_count);
+//            table_free(var_count);
             return true;
         }
 
@@ -316,11 +316,11 @@ bool ssa_live_changed(lir_vars *old, lir_vars *new) {
     }
 
     if (double_count != new->count) {
-        table_free(var_count);
+//        table_free(var_count);
         return true;
     }
 
-    table_free(var_count);
+//    table_free(var_count);
     return false;
 }
 
@@ -337,7 +337,7 @@ void ssa_use_def(closure *c) {
         lir_vars def = {.count=0};
 
         table *exist_use = table_new();
-        table *exist_def = table_new();;
+        table *exist_def = table_new();
 
         lir_basic_block *block = c->blocks.list[label];
 
@@ -393,9 +393,6 @@ void ssa_use_def(closure *c) {
 
         block->use = use;
         block->def = def;
-
-        table_free(exist_use);
-        table_free(exist_def);
     }
 }
 
@@ -486,8 +483,8 @@ void ssa_rename(closure *c) {
         free(number);
         free(stack);
     }
-    table_free(var_number_table);
-    table_free(stack_table);
+//    table_free(var_number_table);
+//    table_free(stack_table);
 }
 
 void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *stack_table) {
@@ -574,7 +571,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             var_number_stack *stack = table_get(stack_table, var->old);
             stack->count--;
         }
-        current = current_node->next;
+        current_node = current_node->next;
     }
 }
 

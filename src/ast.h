@@ -330,7 +330,7 @@ typedef struct {
     ast_new_fn *function;
 } ast_closure_t;
 
-ast_block_stmt ast_new_block_stmt();
+//ast_block_stmt ast_new_block_stmt();
 
 ast_ident *ast_new_ident(string literal);
 
