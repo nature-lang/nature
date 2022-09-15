@@ -220,7 +220,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
             ((Elf64_Sym *) symtab->data)[temp->sym_index].st_value = *temp->offset;
         }
         if (temp->elf_rel) {
-            temp->elf_rel->r_offset = *temp->offset += opcode_rip_offset(temp->opcode);
+            temp->elf_rel->r_offset = *temp->offset + opcode_rip_offset(temp->opcode);
         }
 
         temp_section_offset += temp->data_count;

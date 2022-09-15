@@ -68,9 +68,11 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
     int len;
 
 //    stack_frame_offset = *var->local->stack_frame_offset;
-    type_string = type_to_string[var->decl->ast_type.base];
-    for (int i = 0; i < var->decl->ast_type.point; ++i) {
-        type_string = str_connect(type_string, "*");
+    if (var->decl) {
+        type_string = type_to_string[var->decl->ast_type.base];
+        for (int i = 0; i < var->decl->ast_type.point; ++i) {
+            type_string = str_connect(type_string, "*");
+        }
     }
 
     string ident = var->ident;

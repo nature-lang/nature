@@ -912,7 +912,9 @@ ast_stmt *parser_return_stmt(module_t *m) {
 
     // return } 或者 ;
     stmt->expr = NULL;
-    if (!parser_is(m, TOKEN_EOF) && !parser_is(m, TOKEN_RIGHT_CURLY)) {
+    if (!parser_is(m, TOKEN_EOF) &&
+        !parser_is(m, TOKEN_STMT_EOF) &&
+        !parser_is(m, TOKEN_RIGHT_CURLY)) {
         ast_expr temp = parser_expr(m);
         stmt->expr = NEW(ast_expr);
         memcpy(stmt->expr, &temp, sizeof(ast_expr));

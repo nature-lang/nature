@@ -235,7 +235,7 @@ void build(char *build_entry) {
             closure *c = m->compiler_closures->take[j];
             cfg(c);
             // 构造 ssa
-//            ssa(c);
+            ssa(c);
 #ifdef DEBUG_CFG
             debug_cfg(c);
 #endif
