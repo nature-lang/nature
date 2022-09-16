@@ -126,19 +126,19 @@ typedef enum {
     LIR_OP_TYPE_LIA, // load indirect addr to reg ，将内存中的数据加载到寄存器中
     LIR_OP_TYPE_SIA, // store reg to indirect addr，将寄存器中的数据存入内存
 
-    LIR_OP_TYPE_PHI,
+    LIR_OP_TYPE_PHI, // 复合指令, 位置在 first_param
     LIR_OP_TYPE_MOVE,
     LIR_OP_TYPE_BEQ, // branch if eq a,b
     LIR_OP_TYPE_BAL, // branch always
     LIR_OP_TYPE_PUSH,
     LIR_OP_TYPE_POP,
-    LIR_OP_TYPE_CALL,
+    LIR_OP_TYPE_CALL, // 复合指令，位置在 second
     LIR_OP_TYPE_RUNTIME_CALL,
     LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
     LIR_OP_TYPE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OP_TYPE_LABEL,
-    LIR_OP_TYPE_FN_BEGIN,
-    LIR_OP_TYPE_FN_END,
+    LIR_OP_TYPE_FN_BEGIN, // 无操作数
+    LIR_OP_TYPE_FN_END, // 无操作数
 } lir_op_type;
 
 typedef struct lir_operand {
@@ -371,5 +371,12 @@ lir_op *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...
 lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
 bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
+
+/**
+ * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配
+ * @param operand
+ * @return
+ */
+lir_vars lir_vars_by_operand(lir_operand *operand);
 
 #endif //NATURE_SRC_LIR_H_

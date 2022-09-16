@@ -4,6 +4,24 @@
 #include "utils/table.h"
 #include "src/lir/lir.h"
 
+#define OPERAND_VAR_USR(_vars) \
+if (_vars.count > 0) { \
+    for (int i = 0; i < _vars.count; ++i) {\
+        lir_operand_var *var = _vars.list[i]; \
+        bool is_def = ssa_var_belong(var, def); \
+        if (!is_def && !table_exist(exist_use, var->ident)) {\
+            use.list[use.count++] = var; \
+            table_set(exist_use, var->ident, var);\
+        } \
+        if (!table_exist(exist_var, var->ident)) {\
+            c->globals.list[c->globals.count++] = var;\
+            table_set(exist_var, var->ident, var); \
+        } \
+    } \
+}  \
+
+
+
 typedef struct {
     uint8_t numbers[UINT8_MAX];
     uint8_t count;

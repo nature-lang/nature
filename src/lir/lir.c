@@ -8,7 +8,7 @@
 
 lir_operand *set_indirect_addr(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
-        lir_operand_var * var = operand->value;
+        lir_operand_var *var = operand->value;
         var->indirect_addr = true;
         return operand;
     } else if (operand->type == LIR_OPERAND_TYPE_ADDR) {
@@ -124,17 +124,17 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
     // 变量 copy,避免寄存器分配时相互粘连
     if (first != NULL && first->type == LIR_OPERAND_TYPE_VAR) {
-        lir_operand_var * operand_var = first->value;
+        lir_operand_var *operand_var = first->value;
         first = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
 
     if (second != NULL && second->type == LIR_OPERAND_TYPE_VAR) {
-        lir_operand_var * operand_var = second->value;
+        lir_operand_var *operand_var = second->value;
         second = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
 
     if (result != NULL && result->type == LIR_OPERAND_TYPE_VAR) {
-        lir_operand_var * operand_var = result->value;
+        lir_operand_var *operand_var = result->value;
 
         result = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_COPY_VAR_OPERAND(operand_var));
     }
@@ -220,7 +220,7 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
 }
 
 lir_operand_var *lir_new_var_operand(closure *c, char *ident) {
-    lir_operand_var * var = NEW(lir_operand_var);
+    lir_operand_var *var = NEW(lir_operand_var);
     var->ident = ident;
     var->old = ident;
     var->reg_id = 0;
@@ -252,7 +252,7 @@ lir_operand *lir_new_empty_operand() {
 
 type_base_t lir_operand_type_base(lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
-        lir_operand_var * var = operand->value;
+        lir_operand_var *var = operand->value;
         return var->infer_size_type;
     }
 
@@ -276,4 +276,31 @@ type_base_t lir_operand_type_base(lir_operand *operand) {
 
 uint8_t lir_operand_sizeof(lir_operand *operand) {
     return type_base_sizeof(lir_operand_type_base(operand));
+}
+
+lir_vars lir_vars_by_operand(lir_operand *operand) {
+    lir_vars result = {0};
+    if (!operand) {
+        return result;
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        result.list[result.count++] = operand->value;
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_ACTUAL_PARAM) {
+        lir_operand_actual_param *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand *o = operands->list[i];
+            if (o->type == LIR_OPERAND_TYPE_ACTUAL_PARAM) {
+                error_exit("[lir_vars_by_operand] ACTUAL_PARAM nesting is not allowed");
+            }
+
+            if (o->type == LIR_OPERAND_TYPE_VAR) {
+                result.list[result.count++] = o->value;
+            }
+        }
+    }
+
+    return result;
 }

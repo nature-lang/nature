@@ -1177,7 +1177,7 @@ void elf_load_archive(elf_context *ctx, int fd) {
             }
 
             offset += len;
-            printf("   -> %s\n", arhdr.ar_name);
+//            printf("   -> %s\n", arhdr.ar_name);
             elf_load_object_file(ctx, fd, offset);
             ++bound;
 

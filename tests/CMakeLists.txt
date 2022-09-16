@@ -23,3 +23,7 @@ add_executable(test_build
         ${SRC_BINARY})
 target_link_libraries(test_build cmocka)
 add_test(test_build test_build)
+
+add_executable(test_ssa test_ssa.c ${SRC} ${UTILS} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_LOWER} ${SRC_BINARY})
+target_link_libraries(test_ssa cmocka)
+add_test(test_ssa test_ssa)
