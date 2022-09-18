@@ -731,7 +731,7 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operand
 
 // spl,bpl,sil,dil and reg index >= 8
 // must has rex/rexw/vex128/vex256
-static bool is_64_reg(asm_operand_register_t *reg) {
+static bool is_64_reg(reg_t *reg) {
     if (str_equal(reg->name, "spl")) {
         return true;
     }
@@ -753,7 +753,7 @@ static bool is_64_reg(asm_operand_register_t *reg) {
 
 // ah,ch,dh,bh
 // must skip rex/rexw
-static bool is_high_eight_reg(asm_operand_register_t *reg) {
+static bool is_high_eight_reg(reg_t *reg) {
     if (str_equal(reg->name, "ah")) {
         return true;
     }
@@ -1128,7 +1128,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_opcode_t asm_inst) {
         amd64_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
         if (asm_operand->type == ASM_OPERAND_TYPE_REGISTER) {
-            asm_operand_register_t *r = asm_operand->value;
+            reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
                     format->modrm = new_modrm();

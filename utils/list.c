@@ -94,3 +94,7 @@ list_node *list_last(list *l) {
     }
     return l->rear->prev;
 }
+
+list_node *list_first(list *l) {
+    return l->front;
+}

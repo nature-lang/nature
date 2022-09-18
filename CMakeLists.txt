@@ -5,26 +5,11 @@ set(CMAKE_C_STANDARD 11)
 
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
-#set(SRC_ASSEMBLER
-#        ${SRC_DIR}/assembler/amd64/asm.h
-#        ${SRC_DIR}/assembler/amd64/asm.c
-#        ${SRC_DIR}/assembler/amd64/opcode.h
-#        ${SRC_DIR}/assembler/amd64/opcode.c
-#        ${SRC_DIR}/assembler/linux_elf/lib_elf.h
-#        ${SRC_DIR}/assembler/linux_elf/amd64_inst.h
-#        ${SRC_DIR}/assembler/linux_elf/amd64_inst.c
-#        ${SRC_DIR}/assembler/linux_elf/elf.c
-#        ${SRC_DIR}/assembler/linux_elf/elf.h
-#        ${SRC_DIR}/assembler/amd64/register.h
-#        ${SRC_DIR}/assembler/amd64/register.c)
-
 set(SRC_BINARY
         ${SRC_DIR}/binary/opcode/amd64/asm.c
         ${SRC_DIR}/binary/opcode/amd64/asm.h
         ${SRC_DIR}/binary/opcode/amd64/opcode.c
         ${SRC_DIR}/binary/opcode/amd64/opcode.h
-        ${SRC_DIR}/binary/opcode/amd64/register.c
-        ${SRC_DIR}/binary/opcode/amd64/register.h
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
         ${SRC_DIR}/binary/elf/output.c
@@ -68,6 +53,8 @@ set(SRC_DEBUG
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
+        ${PROJECT_SOURCE_DIR}/utils/stack.c
+        ${PROJECT_SOURCE_DIR}/utils/stack.h
         ${PROJECT_SOURCE_DIR}/utils/error.c
         ${PROJECT_SOURCE_DIR}/utils/error.h
         ${PROJECT_SOURCE_DIR}/utils/list.h
@@ -105,11 +92,14 @@ set(SRC
         ${SRC_DIR}/build/config.c
         ${SRC_DIR}/build/build.h
         ${SRC_DIR}/build/build.c
-        #        ${SRC_DIR}/register/register.h
-        #        ${SRC_DIR}/register/allocate.h
-        #        ${SRC_DIR}/register/allocate.c
-        #        ${SRC_DIR}/register/interval.h
-        #        ${SRC_DIR}/register/interval.c
+        ${SRC_DIR}/register/amd64.h
+        ${SRC_DIR}/register/amd64.c
+        ${SRC_DIR}/register/register.h
+        ${SRC_DIR}/register/register.c
+        ${SRC_DIR}/register/allocate.h
+        ${SRC_DIR}/register/allocate.c
+        ${SRC_DIR}/register/interval.h
+        ${SRC_DIR}/register/interval.c
         )
 
 set(RUNTIME_FILES

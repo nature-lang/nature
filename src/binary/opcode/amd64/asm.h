@@ -3,7 +3,7 @@
 
 #include "src/value.h"
 #include "utils/list.h"
-//#linux_amd64 "opcode.h"
+#include "src/register/register.h"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
@@ -45,7 +45,7 @@
 })
 
 #define REG_OPERAND(_name, _index, _size) ({ \
-     asm_operand_register_t *reg = NEW(asm_operand_register_t); \
+     reg_t *reg = NEW(reg_t); \
      reg->name = _name;\
      reg->index = _index;\
      reg->size = _size;                      \
@@ -76,7 +76,7 @@
      amd64_operand_t *_operand = NEW(amd64_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
      asm_operand_disp_register_t *_disp_reg = NEW(asm_operand_disp_register_t); \
-     _disp_reg->reg = (asm_operand_register_t*)(_reg);    \
+     _disp_reg->reg = (reg_t*)(_reg);    \
      _disp_reg->disp = _disp;    \
      _operand->size = _size; \
      _operand->value = _disp_reg;    \
@@ -87,7 +87,7 @@
      amd64_operand_t *_operand = NEW(amd64_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
      asm_operand_indirect_register_t *_indirect = NEW(asm_operand_indirect_register_t); \
-     _indirect->reg = (asm_operand_register_t*)(_reg);    \
+     _indirect->reg = (reg_t*)(_reg);    \
      _operand->size = _size;\
      _operand->value = _indirect;    \
      _operand;\
@@ -185,28 +185,18 @@ typedef struct {
     double value;
 } asm_operand_float64_t;
 
-/**
- * 汇编指令参数
- */
 typedef struct {
-    string name;
-    uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
-    uint8_t size;
-    uint8_t id; // 在 physical register 中的 index
-} asm_operand_register_t; // size 是个啥？
-
-typedef struct {
-    asm_operand_register_t *base; // 决定了宽度
-    asm_operand_register_t *index;
+    reg_t *base; // 决定了宽度
+    reg_t *index;
     uint8_t scale;
 } asm_operand_sib_register_t;
 
 typedef struct {
-    asm_operand_register_t *reg;
+    reg_t *reg;
 } asm_operand_indirect_register_t; // (%rax)
 
 typedef struct {
-    asm_operand_register_t *reg;
+    reg_t *reg;
     int32_t disp;
 } asm_operand_disp_register_t;
 

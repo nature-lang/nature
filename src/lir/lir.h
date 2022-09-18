@@ -258,22 +258,22 @@ typedef struct lir_basic_block {
     string name;
     uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
-    lir_op *first_op; // 链表结构， 开始处的指令
+//    lir_op *first_op; // 链表结构， 开始处的指令
 
     list *operates;
 
-    lir_basic_blocks preds;
-    lir_basic_blocks succs;
-    lir_basic_blocks forward_succs;
+    slice_t *preds;
+    slice_t *succs;
+    slice_t *forward_succs;
     uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
     lir_vars use;
     lir_vars def;
     lir_vars live_out;
     lir_vars live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    lir_basic_blocks dom; // 当前块被哪些基本块支配
-    lir_basic_blocks df;
-    lir_basic_blocks be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
+    slice_t *dom; // 当前块被哪些基本块支配
+    slice_t *df;
+    slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
     struct lir_basic_block *idom; // 当前块的最近支配者
 
     // loop detection
@@ -293,11 +293,11 @@ typedef struct lir_basic_block {
  */
 typedef struct closure {
     lir_vars globals; // closure 中定义的变量列表, 用于 ssa 构建
-    regs_t fixed_regs; // 作为临时寄存器使用到的寄存器
-    lir_basic_blocks blocks; // 根据解析顺序得到
+    slice_t *fixed_regs; // 作为临时寄存器使用到的寄存器
+    slice_t *blocks; // 根据解析顺序得到
 
     lir_basic_block *entry; // 基本块入口, 指向 blocks[0]
-    lir_basic_blocks order_blocks; // 寄存器分配前根据权重进行重新排序
+    slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
     table *interval_table; // key包括 fixed register as 和 variable.ident
 
     // 定义环境
@@ -370,7 +370,7 @@ lir_op *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...
 
 lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
-bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
+bool lir_blocks_contains(slice_t *blocks, uint8_t label);
 
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配
@@ -378,5 +378,9 @@ bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label);
  * @return
  */
 lir_vars lir_vars_by_operand(lir_operand *operand);
+
+lir_vars lir_input_vars(lir_op *op);
+
+lir_vars lir_output_vars(lir_op *op);
 
 #endif //NATURE_SRC_LIR_H_

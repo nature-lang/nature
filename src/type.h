@@ -6,6 +6,15 @@
 #define INT_SIZE_BYTE  8; //  // 根据编译的目标平台不同，可以通过编译参数确定大小
 #define POINT_SIZE_BYTE  8;
 
+// 指令字符宽度
+#define BYTE 1 // 1 byte = 8 位
+#define WORD 2 // 2 byte = 16 位
+#define DWORD 4 // 4 byte = 32 位
+#define QWORD 8 // 8 byte = 64位
+#define OWORD 16 // 16 byte = 128位 xmm
+#define YWORD 32 // 32 byte = ymm
+#define ZWORD 64 // 64 byte
+
 typedef enum {
     TYPE_NULL = 1,
     TYPE_BOOL,
@@ -40,7 +49,6 @@ typedef struct {
     bool is_origin; // type a = int, type b = a，int is origin
     uint8_t point; // 指针等级, 如果等于0 表示非指针
 } type_t;
-
 
 typedef struct {
     type_t return_type; // 基础类型 + 动态类型

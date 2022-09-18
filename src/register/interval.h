@@ -5,9 +5,8 @@
 #include "utils/list.h"
 
 typedef enum {
-    LOOP_DETECTION_FLAG_VISITED,
+    LOOP_DETECTION_FLAG_VISITED = 1,
     LOOP_DETECTION_FLAG_ACTIVE,
-    LOOP_DETECTION_FLAG_NULL,
 } loop_detection_flag;
 
 typedef struct {
@@ -25,8 +24,8 @@ typedef struct interval {
     list *split_children; // 动态数组
 
     lir_operand_var *var; // 变量名称
-    reg *reg;
-    reg *assigned;
+    reg_t *reg;
+    reg_t *assigned;
 
     bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
 } interval;

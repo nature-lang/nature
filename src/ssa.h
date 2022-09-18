@@ -34,7 +34,7 @@ void ssa_dom(closure *c);
 
 void ssa_idom(closure *c);
 
-bool ssa_is_idom(lir_basic_blocks dom, lir_basic_block *await);
+bool ssa_is_idom(slice_t *dom, lir_basic_block *await);
 
 void ssa_df(closure *c);
 
@@ -60,9 +60,9 @@ uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table 
 
 void ssa_rename_var(lir_operand_var *var, uint8_t number);
 
-lir_basic_blocks ssa_calc_dom_blocks(closure *c, lir_basic_block *block);
+slice_t *ssa_calc_dom_blocks(closure *c, lir_basic_block *block);
 
-bool ssa_dom_changed(lir_basic_blocks *old_dom, lir_basic_blocks *new_dom);
+bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom);
 
 bool ssa_var_belong(lir_operand_var *var, lir_vars vars);
 

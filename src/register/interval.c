@@ -1,6 +1,7 @@
 #include "interval.h"
 #include "utils/list.h"
 #include "utils/stack.h"
+#include "utils/helper.h"
 
 // 每个块需要存储什么数据？
 // loop flag
@@ -27,9 +28,9 @@ void interval_loop_detection(closure *c) {
         // 是否会出现 succ 的 flag 是 visited?
         // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
         // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
-        lir_basic_blocks forward_succs = {.count = 0};
-        for (int i = 0; i < block->succs.count; ++i) {
-            lir_basic_block *succ = block->succs.list[i];
+        slice_t *forward_succs = slice_new();
+        for (int i = 0; i < block->succs->count; ++i) {
+            lir_basic_block *succ = block->succs->take[i];
             succ->loop.tree_high = block->loop.tree_high + 1;
 
             // 如果发现循环, backward branches
@@ -46,7 +47,7 @@ void interval_loop_detection(closure *c) {
                 continue;
             }
 
-            forward_succs.list[forward_succs.count++] = succ; // 后继的数量
+            slice_push(forward_succs, succ);
             succ->incoming_forward_count++; // 前驱中正向进我的数量
             succ->loop.flag = LOOP_DETECTION_FLAG_VISITED;
         }
@@ -62,7 +63,7 @@ void interval_loop_detection(closure *c) {
         lir_basic_block *end = loop_ends.list[i];
         list_push(work_list, end);
         table *exist_table = table_new();
-        table_set(exist_table, lir_label_to_string(end->label), end);
+        table_set(exist_table, itoa(end->label), end);
 
         while (!list_empty(work_list)) {
             lir_basic_block *block = list_pop(work_list);
@@ -72,14 +73,14 @@ void interval_loop_detection(closure *c) {
             // 标号
             block->loop.index_list[block->loop.depth++] = end->loop.index;
 
-            for (int k = 0; k < block->preds.count; ++k) {
-                lir_basic_block *pred = block->preds.list[k];
+            for (int k = 0; k < block->preds->count; ++k) {
+                lir_basic_block *pred = block->preds->take[k];
 
                 // 判断是否已经入过队(标号)
-                if (table_exist(exist_table, lir_label_to_string(pred->label))) {
+                if (table_exist(exist_table, itoa(pred->label))) {
                     continue;
                 }
-                table_set(exist_table, lir_label_to_string(block->label), block);
+                table_set(exist_table, itoa(block->label), block);
                 list_push(work_list, pred);
             }
         }
@@ -87,8 +88,8 @@ void interval_loop_detection(closure *c) {
     }
 
     // 3. 遍历所有 basic_block ,通过 loop.index_list 确定 index
-    for (int label = 0; label < c->blocks.count; ++label) {
-        lir_basic_block *block = c->blocks.list[label];
+    for (int label = 0; label < c->blocks->count; ++label) {
+        lir_basic_block *block = c->blocks->take[label];
         if (block->loop.index != 0) {
             continue;
         }
@@ -109,9 +110,9 @@ void interval_loop_detection(closure *c) {
 }
 
 // 大值在栈顶被优先处理
-static void interval_insert_to_stack_by_depth(stack *work_list, lir_basic_block *block) {
+static void interval_insert_to_stack_by_depth(stack_t *work_list, lir_basic_block *block) {
     // next->next->next
-    stack_node *p = work_list->top;
+    stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
     while (p->next != NULL && ((lir_basic_block *) p->next->value)->loop.depth > block->loop.depth) {
         p = p->next;
     }
@@ -120,8 +121,7 @@ static void interval_insert_to_stack_by_depth(stack *work_list, lir_basic_block 
     // p = 3 block = 2  p_next = 2
     stack_node *last_node = p->next;
     // 初始化一个 node
-    stack_node *await_node = stack_new_node();
-    await_node->value = block;
+    stack_node *await_node = stack_new_node(block);
     p->next = await_node;
 
     if (last_node != NULL) {
@@ -133,16 +133,16 @@ static void interval_insert_to_stack_by_depth(stack *work_list, lir_basic_block 
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
 void interval_block_order(closure *c) {
-    stack *work_list = stack_new();
+    stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
 
     while (!stack_empty(work_list)) {
         lir_basic_block *block = stack_pop(work_list);
-        c->order_blocks.list[c->order_blocks.count++] = block;
+        slice_push(c->order_blocks, block);
 
         // 需要计算每一个块的正向前驱的数量
-        for (int i = 0; i < block->forward_succs.count; ++i) {
-            lir_basic_block *succ = block->forward_succs.list[i];
+        for (int i = 0; i < block->forward_succs->count; ++i) {
+            lir_basic_block *succ = block->forward_succs->take[i];
             succ->incoming_forward_count--;
             if (succ->incoming_forward_count == 0) {
                 // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
@@ -154,18 +154,20 @@ void interval_block_order(closure *c) {
 
 void interval_mark_number(closure *c) {
     int next_id = 0;
-    for (int i = 0; i < c->order_blocks.count; ++i) {
-        lir_op *op = c->order_blocks.list[i]->first_op;
-        while (op != NULL) {
+    for (int i = 0; i < c->order_blocks->count; ++i) {
+        lir_basic_block *block = c->order_blocks->take[i];
+        list_node *current = list_first(block->operates);
+
+        while (current->value != NULL) {
+            lir_op *op = current->value;
             if (op->type == LIR_OP_TYPE_PHI) {
-                op = op->succ;
+                current = current->next;
                 continue;
             }
 
             op->id = next_id;
             next_id += 2;
-
-            op = op->succ;
+            current = current->next;
         }
     }
 }
@@ -179,10 +181,11 @@ void interval_build(closure *c) {
     }
 
     // 倒序遍历基本块
-    for (int i = c->order_blocks.count - 1; i >= 0; --i) {
-        lir_basic_block *block = c->order_blocks.list[i];
-        int block_from = block->first_op->id;
-        int block_to = block->first_op->id + 2; // 为什么加 2 我也没想好
+    for (int i = c->order_blocks->count - 1; i >= 0; --i) {
+        lir_basic_block *block = c->order_blocks->take[i];
+        lir_op *first_op = list_first(block->operates)->value;
+        int block_from = first_op->id;
+        int block_to = first_op->id + 2;
 
         // 遍历所有的 live_out,直接添加最长间隔,后面会逐渐缩减该间隔
         for (int k = 0; k < block->live_out.count; ++k) {
@@ -190,32 +193,26 @@ void interval_build(closure *c) {
         }
 
         // 倒序遍历所有块指令
-        lir_op *op = block->last_op;
-        while (op != NULL) {
+        list_node *current = list_last(block->operates);
+        while (current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
+            lir_op *op = current->value;
 
-            // result param
-            if (op->result.type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) op->result.value;
+            lir_vars output_vars = lir_output_vars(op);
+            for (int j = 0; j < output_vars.count; ++j) {
+                lir_operand_var *var = output_vars.list[j];
                 interval_cut_first_range_from(c, var, op->id); // 截断操作
                 interval_add_use_position(c, var, op->id);
             }
 
-            // first param
-            if (op->first.type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) op->first.value;
-                interval_add_range(c, var, block_from, op->id);
+            lir_vars input_vars = lir_input_vars(op);
+            for (int j = 0; j < input_vars.count; ++j) {
+                lir_operand_var *var = input_vars.list[j];
+                interval_add_range(c, var, block_from, op->id); // 添加整段长度
                 interval_add_use_position(c, var, op->id);
             }
 
-            // second param
-            if (op->second.type == LIR_OPERAND_TYPE_VAR) {
-                lir_operand_var *var = (lir_operand_var *) op->second.value;
-                interval_add_range(c, var, block_from, op->id);
-                interval_add_use_position(c, var, op->id);
-            }
-
-            op = op->pred;
+            current = current->prev;
         }
     }
 }

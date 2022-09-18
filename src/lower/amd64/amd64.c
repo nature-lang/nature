@@ -1,6 +1,7 @@
 #include "amd64.h"
 #include "src/type.h"
-#include "src/binary/opcode/amd64/register.h"
+#include "src/register/register.h"
+#include "src/register/amd64.h"
 #include "utils/error.h"
 #include "utils/helper.h"
 #include "src/symbol.h"
@@ -29,7 +30,7 @@ static amd64_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, 
     }
     if (var->reg_id > 0) {
         // 如果是 bool 类型
-        asm_operand_register_t *reg = amd64_register_find(var->reg_id, size);
+        reg_t *reg = register_find(var->reg_id, size);
         return REG(reg);
     }
 
@@ -43,7 +44,7 @@ static amd64_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, 
 amd64_opcode_t *amd64_lower_empty_reg(reg_t *reg) {
     // TODO ah/bh/ch/dh 不能这么清理
 
-    reg_t *r = (reg_t *) amd64_register_find(reg->index, QWORD);
+    reg_t *r = (reg_t *) register_find(reg->index, QWORD);
     if (r == NULL) {
         error_exit("[amd64_lower_empty_reg] reg not found, index: %d, size: %d", reg->index, QWORD);
     }
@@ -447,9 +448,9 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
     }
     uint8_t count = used[used_index]++;
 
-    reg_t *r = (reg_t *) amd64_register_find(count, size);
+    reg_t *r = (reg_t *) register_find(count, size);
     if (r == NULL) {
-        error_exit("[amd64_register_find] not found, count: %d, size: %d", count, size);
+        error_exit("[register_find] not found, count: %d, size: %d", count, size);
     }
     return r;
 }
@@ -482,12 +483,12 @@ reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     // 通用寄存器 (0~5 = 6 个)
     if (size <= QWORD && count <= 5) {
         uint8_t reg_index = reg_index_list[count];
-        return (reg_t *) amd64_register_find(reg_index, size);
+        return (reg_t *) register_find(reg_index, size);
     }
 
     // 浮点寄存器(0~7 = 8 个)
     if (size > QWORD && count <= 7) {
-        return (reg_t *) amd64_register_find(count, size);
+        return (reg_t *) register_find(count, size);
     }
 
     return NULL;
@@ -584,8 +585,8 @@ slice_t *amd64_lower_closure(closure *c) {
     slice_t *insts = slice_new();
 
     // 遍历 block
-    for (int i = 0; i < c->blocks.count; ++i) {
-        lir_basic_block *block = c->blocks.list[i];
+    for (int i = 0; i < c->blocks->count; ++i) {
+        lir_basic_block *block = c->blocks->take[i];
         slice_append(insts, amd64_lower_block(c, block));
     }
 

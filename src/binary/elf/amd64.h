@@ -5,7 +5,6 @@
 #include "assembler.h"
 #include "src/binary/opcode/amd64/asm.h"
 #include "src/binary/opcode/amd64/opcode.h"
-#include "src/binary/opcode/amd64/register.h"
 
 #include <stdlib.h>
 

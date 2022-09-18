@@ -160,9 +160,9 @@ closure *lir_new_closure(ast_closure_t *ast) {
     new->operates = NULL;
     new->entry = NULL;
     new->globals.count = 0;
-    new->fixed_regs.count = 0;
-    new->blocks.count = 0;
-    new->order_blocks.count = 0;
+    new->fixed_regs = slice_new(); // reg_t
+    new->blocks = slice_new(); // lir_basic_block
+    new->order_blocks = slice_new(); // lir_basic_block
 
     new->interval_table = table_new();
 
@@ -177,18 +177,18 @@ closure *lir_new_closure(ast_closure_t *ast) {
 lir_basic_block *lir_new_basic_block() {
     lir_basic_block *basic_block = NEW(lir_basic_block);
     basic_block->operates = list_new();
-    basic_block->preds.count = 0;
-    basic_block->succs.count = 0;
+    basic_block->preds = slice_new();
+    basic_block->succs = slice_new();
 
-    basic_block->forward_succs.count = 0;
+    basic_block->forward_succs = slice_new();
     basic_block->incoming_forward_count = 0;
     basic_block->use.count = 0;
     basic_block->def.count = 0;
     basic_block->live_in.count = 0;
     basic_block->live_out.count = 0;
-    basic_block->dom.count = 0;
-    basic_block->df.count = 0;
-    basic_block->be_idom.count = 0;
+    basic_block->dom = slice_new();
+    basic_block->df = slice_new();
+    basic_block->be_idom = slice_new();
     basic_block->loop.tree_high = 0;
     basic_block->loop.index = 0;
     basic_block->loop.depth = 0;
@@ -197,9 +197,9 @@ lir_basic_block *lir_new_basic_block() {
     return basic_block;
 }
 
-bool lir_blocks_contains(lir_basic_blocks blocks, uint8_t label) {
-    for (int i = 0; i < blocks.count; ++i) {
-        if (blocks.list[i]->label == label) {
+bool lir_blocks_contains(slice_t *blocks, uint8_t label) {
+    for (int i = 0; i < blocks->count; ++i) {
+        if (((lir_basic_block *) blocks->take[i])->label == label) {
             return true;
         }
     }
@@ -303,4 +303,17 @@ lir_vars lir_vars_by_operand(lir_operand *operand) {
     }
 
     return result;
+}
+
+lir_vars lir_input_vars(lir_op *op) {
+    lir_vars result = lir_vars_by_operand(op->first);
+    lir_vars temp = lir_vars_by_operand(op->second);
+    for (int i = 0; i < temp.count; ++i) {
+        result.list[result.count++] = temp.list[i];
+    }
+    return result;
+}
+
+lir_vars lir_output_vars(lir_op *op) {
+    return lir_vars_by_operand(op->result);
 }

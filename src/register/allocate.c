@@ -104,8 +104,8 @@ list *init_unhandled(closure *c) {
         to_unhandled(unhandled, item);
     }
     // 遍历所有固定寄存器
-    for (int i = 0; i < c->fixed_regs.count; ++i) {
-        void *raw = table_get(c->interval_table, c->fixed_regs.list[i]->ident);
+    for (int i = 0; i < c->fixed_regs->count; ++i) {
+        void *raw = table_get(c->interval_table, SLICE_TACK(reg_t, c->fixed_regs, i)->name);
         if (raw == NULL) {
             continue;
         }
@@ -158,15 +158,15 @@ static uint8_t max_pos_index(const uint32_t list[UINT8_MAX]) {
 
 bool allocate_free_reg(allocate *a) {
     uint32_t free_pos[UINT8_MAX];
-    for (int i = 0; i < physical_regs.count; ++i) {
-        set_pos(free_pos, physical_regs.list[i]->id, UINT32_MAX);
+    for (int i = 0; i < regs->count; ++i) {
+        set_pos(free_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
     }
 
     // active interval 不予分配，所以 pos 设置为 0
     list_node *curr = a->active->front;
     while (curr->value != NULL) {
         interval *select = (interval *) curr->value;
-        set_pos(free_pos, select->assigned->id, 0);
+        set_pos(free_pos, select->assigned->index, 0);
         curr = curr->next;
     }
 
@@ -174,7 +174,7 @@ bool allocate_free_reg(allocate *a) {
     while (curr->value != NULL) {
         interval *select = (interval *) curr->value;
         uint32_t pos = interval_next_intersection(a->current, select);
-        set_pos(free_pos, select->assigned->id, pos);
+        set_pos(free_pos, select->assigned->index, pos);
 
         curr = curr->next;
     }
@@ -187,7 +187,7 @@ bool allocate_free_reg(allocate *a) {
     }
 
     if (free_pos[max_reg_id] > a->current->last_to) {
-        a->current->assigned = physical_regs.list[max_reg_id];
+        a->current->assigned = regs->take[max_reg_id];
         return true;
     }
 
@@ -195,7 +195,7 @@ bool allocate_free_reg(allocate *a) {
     uint32_t optimal_position = interval_optimal_position(a->current, free_pos[max_reg_id]);
     // 从最佳位置切割 interval
     interval_split_interval(a->current, optimal_position);
-    a->current->assigned = physical_regs.list[max_reg_id];
+    a->current->assigned = regs->take[max_reg_id];
 
     return true;
 }
@@ -205,9 +205,9 @@ bool allocate_block_reg(allocate *a) {
     uint32_t use_pos[UINT8_MAX];
     // 被固定物理寄存器强制使用位置,有一些指令需要使用目标机器的固定寄存器，比如 ret eax 就需要强制使用 eax 寄存器
     uint32_t fixed_pos[UINT8_MAX];
-    for (int i = 0; i < physical_regs.count; ++i) {
-        set_pos(use_pos, physical_regs.list[i]->id, UINT32_MAX);
-        set_pos(fixed_pos, physical_regs.list[i]->id, UINT32_MAX);
+    for (int i = 0; i < regs->count; ++i) {
+        set_pos(use_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
+        set_pos(fixed_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
     }
     uint32_t first_use_position = interval_first_use_position(a->current);
 
@@ -218,12 +218,12 @@ bool allocate_block_reg(allocate *a) {
         // 是否为固定间隔
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
-            set_pos(use_pos, select->assigned->id, 0);
-            set_pos(fixed_pos, select->assigned->id, 0);
+            set_pos(use_pos, select->assigned->index, 0);
+            set_pos(fixed_pos, select->assigned->index, 0);
         } else {
             // 找一个大于 current first use_position 的位置(可以为0，0 表示没找到)
             uint32_t pos = interval_next_use_position(select, first_use_position);
-            set_pos(use_pos, select->assigned->id, pos);
+            set_pos(use_pos, select->assigned->index, pos);
         }
 
         curr = curr->next;
@@ -240,11 +240,11 @@ bool allocate_block_reg(allocate *a) {
         }
 
         if (select->fixed) {
-            set_pos(fixed_pos, select->assigned->id, pos);
-            set_pos(use_pos, select->assigned->id, pos);
+            set_pos(fixed_pos, select->assigned->index, pos);
+            set_pos(use_pos, select->assigned->index, pos);
         } else {
             uint32_t pos = interval_next_use_position(select, first_use_position);
-            set_pos(use_pos, select->assigned->id, pos);
+            set_pos(use_pos, select->assigned->index, pos);
         }
 
         curr = curr->next;

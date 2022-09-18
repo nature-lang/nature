@@ -1,6 +1,8 @@
 #ifndef NATURE_SRC_LIB_SLICE_H_
 #define NATURE_SRC_LIB_SLICE_H_
 
+#define SLICE_TACK(_type, _slice,_index) ((_type*) _slice->take[_index])
+
 /**
  * slice 是一个动态数组，存储的内容为数据指针,其内容存储依旧是在内存中的连续空间。
  * 当空间不足时，会将整个数组进行迁移

@@ -7,7 +7,7 @@
 #include "src/debug/debug.h"
 #include "src/lower/amd64/amd64.h"
 #include "src/lower/lower.h"
-#include "src/binary/opcode/amd64/register.h"
+#include "src/register/register.h"
 #include "src/binary/opcode/amd64/opcode.h"
 #include "src/binary/elf/linker.h"
 #include "src/binary/elf/amd64.h"
@@ -42,8 +42,8 @@ void cross_lower(module_t *m) {
     m->opcodes = slice_new();
 
     // pre
+    register_init();
     if (BUILD_ARCH == ARCH_AMD64) {
-        amd64_register_init();
         amd64_opcode_init();
     } else {
         goto ERROR;
