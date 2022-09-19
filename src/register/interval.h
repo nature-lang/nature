@@ -16,6 +16,7 @@ typedef struct {
 
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
+    int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
     int first_from;
     int last_to;
     list *ranges;
@@ -23,7 +24,8 @@ typedef struct interval {
     struct interval_t *split_parent;
     list *split_children; // 动态数组
 
-    lir_operand_var *var; // 变量名称
+    lir_operand_var *var; // 对 var 进行编码，新拆分的间隔使用新的编码
+
     reg_t *reg;
     reg_t *assigned;
 
@@ -92,10 +94,10 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position);
  * 在 position 位置，将 interval 切割成两份
  * [first_from, position) 为 split_parent
  * [position, last_to) 为 split_children
- * @param current
+ * @param i
  * @param position
  */
-void interval_split_interval(interval_t *current, uint32_t position);
+void interval_split_interval(interval_t *i, uint32_t position);
 
 /**
  * current 需要在 before 之前被 split,需要找到一个最佳的位置

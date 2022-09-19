@@ -192,10 +192,10 @@ bool allocate_free_reg(allocate *a) {
         a->current->assigned = regs->take[max_reg_index];
         return true;
     }
-    
-    // await split, 从哪个位置 split ?(研究一下 optimal 策略，目前就从 before[reg] 吧)
+
+    // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
     uint32_t optimal_position = interval_optimal_position(a->current, free_pos[max_reg_index]);
-    // 从最佳位置切割 interval
+    // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器
     interval_split_interval(a->current, optimal_position);
     a->current->assigned = regs->take[max_reg_index];
 
