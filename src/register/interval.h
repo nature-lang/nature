@@ -12,7 +12,7 @@ typedef enum {
 typedef struct {
     int from;
     int to;
-} interval_range;
+} interval_range_t;
 
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
@@ -20,7 +20,7 @@ typedef struct interval {
     int last_to;
     list *ranges;
     list *use_positions; // 存储 use_position 列表
-    struct interval *split_parent;
+    struct interval_t *split_parent;
     list *split_children; // 动态数组
 
     lir_operand_var *var; // 变量名称
@@ -28,7 +28,7 @@ typedef struct interval {
     reg_t *assigned;
 
     bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
-} interval;
+} interval_t;
 
 /**
  * 标记循环路线和每个基本块是否处于循环中，以及循环的深度
@@ -60,7 +60,7 @@ void interval_build(closure *c);
  * @param var
  * @return
  */
-interval *interval_new(lir_operand_var *var);
+interval_t *interval_new(lir_operand_var *var);
 
 /**
  * 添加 range 到 interval.ranges 中
@@ -95,7 +95,7 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position);
  * @param current
  * @param position
  */
-void interval_split_interval(interval *current, uint32_t position);
+void interval_split_interval(interval_t *current, uint32_t position);
 
 /**
  * current 需要在 before 之前被 split,需要找到一个最佳的位置
@@ -104,7 +104,7 @@ void interval_split_interval(interval *current, uint32_t position);
  * @param before
  * @return
  */
-uint32_t interval_optimal_position(interval *current, uint32_t before);
+uint32_t interval_optimal_position(interval_t *current, uint32_t before);
 
 /**
  * interval 的 range 是否包含了 position
@@ -112,7 +112,7 @@ uint32_t interval_optimal_position(interval *current, uint32_t before);
  * @param position
  * @return
  */
-bool interval_is_covers(interval *i, uint32_t position);
+bool interval_is_covers(interval_t *i, uint32_t position);
 
 /**
  * 寻找 current 和 select 的第一个相交点
@@ -123,7 +123,7 @@ bool interval_is_covers(interval *i, uint32_t position);
  * @param select
  * @return
  */
-uint32_t interval_next_intersection(interval *current, interval *select);
+uint32_t interval_next_intersection(interval_t *current, interval_t *select);
 
 /**
  * 寻找 select interval 大于 after 的第一个 use_position
@@ -132,7 +132,7 @@ uint32_t interval_next_intersection(interval *current, interval *select);
  * @param after
  * @return
  */
-uint32_t interval_next_use_position(interval *select, uint32_t after);
+uint32_t interval_next_use_position(interval_t *select, uint32_t after);
 
 /**
  * interval 的第一个使用位置
@@ -140,6 +140,6 @@ uint32_t interval_next_use_position(interval *select, uint32_t after);
  * @param i
  * @return
  */
-uint32_t interval_first_use_position(interval *i);
+uint32_t interval_first_use_position(interval_t *i);
 
 #endif

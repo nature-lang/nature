@@ -5,7 +5,7 @@ static void handle_active(allocate *a) {
     list_node *active_curr = a->active->front;
     list_node *active_prev = NULL;
     while (active_curr->value != NULL) {
-        interval *select = (interval *) active_curr->value;
+        interval_t *select = (interval_t *) active_curr->value;
         bool is_expired = select->last_to < position;
         bool is_covers = interval_is_covers(select, position);
 
@@ -33,7 +33,7 @@ static void handle_inactive(allocate *a) {
     list_node *inactive_curr = a->inactive->front;
     list_node *inactive_prev = NULL;
     while (inactive_curr->value != NULL) {
-        interval *select = (interval *) inactive_curr->value;
+        interval_t *select = (interval_t *) inactive_curr->value;
         bool is_expired = select->last_to < position;
         bool is_covers = interval_is_covers(select, position);
 
@@ -72,7 +72,7 @@ void allocate_walk(closure *c) {
     a->inactive = list_new();
 
     while (a->unhandled->count != 0) {
-        a->current = (interval *) list_pop(a->unhandled);
+        a->current = (interval_t *) list_pop(a->unhandled);
         // handle active
         handle_active(a);
         // handle inactive
@@ -100,7 +100,7 @@ list *init_unhandled(closure *c) {
         if (raw == NULL) {
             continue;
         }
-        interval *item = (interval *) raw;
+        interval_t *item = (interval_t *) raw;
         to_unhandled(unhandled, item);
     }
     // 遍历所有固定寄存器
@@ -109,18 +109,18 @@ list *init_unhandled(closure *c) {
         if (raw == NULL) {
             continue;
         }
-        interval *item = (interval *) raw;
+        interval_t *item = (interval_t *) raw;
         to_unhandled(unhandled, item);
     }
 
     return unhandled;
 }
 
-void to_unhandled(list *unhandled, interval *to) {
+void to_unhandled(list *unhandled, interval_t *to) {
     // 从头部取出,最小的元素
     list_node *temp = unhandled->front;
     list_node *prev = NULL;
-    while (temp->value != NULL && ((interval *) temp->value)->first_from < to->first_from) {
+    while (temp->value != NULL && ((interval_t *) temp->value)->first_from < to->first_from) {
         prev = temp;
         temp = temp->next;
     }
@@ -157,7 +157,7 @@ static uint8_t max_pos_index(const uint32_t list[UINT8_MAX]) {
 }
 
 bool allocate_free_reg(allocate *a) {
-    uint32_t free_pos[UINT8_MAX];
+    uint32_t free_pos[UINT8_MAX] = {0};
     for (int i = 0; i < regs->count; ++i) {
         set_pos(free_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
     }
@@ -165,37 +165,39 @@ bool allocate_free_reg(allocate *a) {
     // active interval 不予分配，所以 pos 设置为 0
     list_node *curr = a->active->front;
     while (curr->value != NULL) {
-        interval *select = (interval *) curr->value;
+        interval_t *select = (interval_t *) curr->value;
         set_pos(free_pos, select->assigned->index, 0);
         curr = curr->next;
     }
 
     curr = a->inactive->front;
     while (curr->value != NULL) {
-        interval *select = (interval *) curr->value;
-        uint32_t pos = interval_next_intersection(a->current, select);
-        set_pos(free_pos, select->assigned->index, pos);
+        interval_t *select = (interval_t *) curr->value;
+        uint32_t position = interval_next_intersection(a->current, select);
+        // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
+        set_pos(free_pos, select->assigned->index, position);
 
         curr = curr->next;
     }
 
-    // 找到最大的值
-    uint8_t max_reg_id = max_pos_index(free_pos);
+    // 找到权重最大的寄存器寄存器进行分配
+    uint8_t max_reg_index = max_pos_index(free_pos);
     // 没有可用的寄存器用于分配
-    if (free_pos[max_reg_id] == 0) {
+    if (free_pos[max_reg_index] == 0) {
         return false;
     }
 
-    if (free_pos[max_reg_id] > a->current->last_to) {
-        a->current->assigned = regs->take[max_reg_id];
+    // 寄存器有足够的 free 空间供当前寄存器使用，可以直接分配
+    if (free_pos[max_reg_index] > a->current->last_to) {
+        a->current->assigned = regs->take[max_reg_index];
         return true;
     }
-
-    // await split, 从哪个位置 split ?(研究以下 optimal 策略，目前就从 before[reg] 吧)
-    uint32_t optimal_position = interval_optimal_position(a->current, free_pos[max_reg_id]);
+    
+    // await split, 从哪个位置 split ?(研究一下 optimal 策略，目前就从 before[reg] 吧)
+    uint32_t optimal_position = interval_optimal_position(a->current, free_pos[max_reg_index]);
     // 从最佳位置切割 interval
     interval_split_interval(a->current, optimal_position);
-    a->current->assigned = regs->take[max_reg_id];
+    a->current->assigned = regs->take[max_reg_index];
 
     return true;
 }
@@ -214,7 +216,7 @@ bool allocate_block_reg(allocate *a) {
     // 遍历固定寄存器
     list_node *curr = a->active->front;
     while (curr->value != NULL) {
-        interval *select = (interval *) curr->value;
+        interval_t *select = (interval_t *) curr->value;
         // 是否为固定间隔
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
@@ -232,7 +234,7 @@ bool allocate_block_reg(allocate *a) {
     // 遍历非固定寄存器
     curr = a->inactive->front;
     while (curr->value != NULL) {
-        interval *select = (interval *) curr->value;
+        interval_t *select = (interval_t *) curr->value;
         // 判断是否和当前 current 相交
         uint32_t pos = interval_next_intersection(a->current, select);
         if (pos >= a->current->last_to) {

@@ -10,7 +10,7 @@ typedef struct {
     list *handled;
     list *active;
     list *inactive;
-    interval *current; // 正在分配的寄存器
+    interval_t *current; // 正在分配的寄存器
 } allocate;
 
 /**
@@ -32,7 +32,7 @@ bool allocate_block_reg(allocate *a);
  * @param to
  * @param unhandled
  */
-void to_unhandled(list *unhandled, interval *to);
+void to_unhandled(list *unhandled, interval_t *to);
 
 /**
  * 根据 interval 列表 初始化 unhandled 列表

@@ -217,8 +217,8 @@ void interval_build(closure *c) {
     }
 }
 
-interval *interval_new(lir_operand_var *var) {
-    interval *entity = malloc(sizeof(interval));
+interval_t *interval_new(lir_operand_var *var) {
+    interval_t *entity = malloc(sizeof(interval_t));
     entity->var = var;
     entity->ranges = list_new();
     entity->use_positions = list_new();
@@ -229,6 +229,31 @@ interval *interval_new(lir_operand_var *var) {
 
 void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
     // 排序，合并
+}
+
+bool interval_is_covers(interval_t *i, uint32_t position) {
+    list_node *current = list_first(i->ranges);
+    while (current->value != NULL) {
+        interval_range_t *range = current->value;
+        if (range->from <= position && range->to >= position) {
+            return true;
+        }
+
+        current = current->next;
+    }
+    return 0;
+}
+
+uint32_t interval_next_intersection(interval_t *current, interval_t *select) {
+    uint32_t position = current->first_from; // first_from 指向 range 的开头
+    while (position < current->last_to) {
+        if (interval_is_covers(current, position) && interval_is_covers(select, position)) {
+            return position;
+        }
+        position++;
+    }
+
+    return position;
 }
 
 
