@@ -10,6 +10,11 @@ typedef enum {
 } loop_detection_flag;
 
 typedef struct {
+    int position;
+    int kind;
+} use_position_t;
+
+typedef struct {
     int from;
     int to;
 } interval_range_t;
@@ -17,8 +22,8 @@ typedef struct {
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
 typedef struct interval {
     int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
-    int first_from;
-    int last_to;
+    interval_range_t *first_range;
+    interval_range_t *last_range;
     list *ranges;
     list *use_positions; // 存储 use_position 列表
     struct interval_t *split_parent;
@@ -65,7 +70,8 @@ void interval_build(closure *c);
 interval_t *interval_new(lir_operand_var *var);
 
 /**
- * 添加 range 到 interval.ranges 中
+ * 添加 range 到 interval.ranges 头中,并调整 first_range 的指向
+ * 由于使用了后续遍历操作数，所以并不需要考虑单个 interval range 重叠等问题
  * @param c
  * @param var
  * @param from
@@ -88,7 +94,7 @@ void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from);
  * @param var
  * @param position
  */
-void interval_add_use_position(closure *c, lir_operand_var *var, int position);
+void interval_add_use_position(closure *c, lir_operand_var *var, int position, int kind);
 
 /**
  * 在 position 位置，将 interval 切割成两份
@@ -131,10 +137,10 @@ uint32_t interval_next_intersection(interval_t *current, interval_t *select);
  * 寻找 select interval 大于 after 的第一个 use_position
  * first_use_position != first_from
  * @param select
- * @param after
+ * @param after_position
  * @return
  */
-uint32_t interval_next_use_position(interval_t *select, uint32_t after);
+uint32_t interval_next_use_position(interval_t *i, uint32_t after_position);
 
 /**
  * interval 的第一个使用位置

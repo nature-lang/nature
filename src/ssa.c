@@ -221,7 +221,7 @@ void ssa_add_phi(closure *c) {
 
                 // insert to list(可能只有一个 label )
                 list_node *label_node = df_block->operates->front;
-                list_splice(df_block->operates, label_node, phi_op);
+                list_insert(df_block->operates, label_node, phi_op);
             }
         }
     }
@@ -369,7 +369,7 @@ void ssa_use_def(closure *c) {
                 }
             }
 
-            current = current->next;
+            current = current->succ;
         }
 
         block->use = use;
@@ -471,7 +471,7 @@ void ssa_rename(closure *c) {
 void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *stack_table) {
     // skip label type
 //    lir_op *current_op = block->operates->front->succ;
-    list_node *current = block->operates->front->next;
+    list_node *current = block->operates->front->succ;
 
     // 当前块内的先命名
     while (current->value != NULL) {
@@ -482,7 +482,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
                                                 stack_table);
             ssa_rename_var((lir_operand_var *) op->result->value, number);
 
-            current = current->next;
+            current = current->succ;
             continue;
         }
 
@@ -512,7 +512,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             ssa_rename_var(var, number);
         }
 
-        current = current->next;
+        current = current->succ;
     }
 
     // 遍历当前块的 cfg 后继为 phi body 编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
@@ -526,7 +526,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
         lir_basic_block *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->operates->front->succ;
-        list_node *succ_node = succ_block->operates->front->next;
+        list_node *succ_node = succ_block->operates->front->succ;
         while (succ_node->value != NULL && ((lir_op *) succ_node->value)->type == LIR_OP_TYPE_PHI) {
             lir_op *succ_op = succ_node->value;
             lir_operand_phi_body *phi_body = succ_op->first->value;
@@ -535,7 +535,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
 
-            succ_node = succ_node->next;
+            succ_node = succ_node->succ;
         }
     }
 
@@ -548,7 +548,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     // 此时如果父节点定义了 x (1), 在左子节点重新定义 了 x (2), 如果在右子节点有 b = x + 1, 然后又有 x = c + 2
     // 此时 stack[x].top = 2;  但实际上右子节点使用的是 x1, 所以此时需要探出在左子节点定义的所有变量的 stack 空间。
     // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
-    list_node *current_node = block->operates->front->next;
+    list_node *current_node = block->operates->front->succ;
     while (current_node->value != NULL) {
         lir_op *current_op = current_node->value;
         if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_TYPE_VAR) {
@@ -558,7 +558,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
             var_number_stack *stack = table_get(stack_table, var->old);
             stack->count--;
         }
-        current_node = current_node->next;
+        current_node = current_node->succ;
     }
 }
 
@@ -612,7 +612,7 @@ bool ssa_is_idom(slice_t *dom, lir_basic_block *await) {
  * @return
  */
 bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
-    list_node *current = block->operates->front->next;
+    list_node *current = block->operates->front->succ;
     while (current->value != NULL && ((lir_op *) current->value)->type == LIR_OP_TYPE_PHI) {
         lir_op *op = current->value;
         lir_operand_var *phi_var = op->result->value;
@@ -620,7 +620,7 @@ bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
             return true;
         }
 
-        current = current->next;
+        current = current->succ;
     }
 
     return false;

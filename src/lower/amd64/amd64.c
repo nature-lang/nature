@@ -531,7 +531,7 @@ slice_t *amd64_lower_fn_begin(closure *c, lir_op *op) {
             stack_param_offset += QWORD;
         }
 
-        current = current->next;
+        current = current->succ;
     }
 
     // 二次对齐
@@ -576,7 +576,7 @@ slice_t *amd64_lower_fn_formal_params(closure *c) {
         amd64_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->ast_type.base));
         slice_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
 
-        current = current->next;
+        current = current->succ;
     }
     return insts;
 }
@@ -600,7 +600,7 @@ slice_t *amd64_lower_block(closure *c, lir_basic_block *block) {
     while (current->value != NULL) {
         lir_op *op = current->value;
         slice_append(insts, amd64_lower_op(c, op));
-        current = current->next;
+        current = current->succ;
     }
     return insts;
 }

@@ -70,7 +70,7 @@ void cfg(closure *c) {
         }
 
         list_push(current_block->operates, op);
-        current = current->next;
+        current = current->succ;
     }
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系

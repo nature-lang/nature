@@ -790,11 +790,11 @@ void parser_cursor_init(module_t *module, list *token_list) {
 }
 
 token *parser_advance(module_t *m) {
-    if (m->p_cursor.current->next == NULL) {
+    if (m->p_cursor.current->succ == NULL) {
         error_exit("next token is null");
     }
     token *t = m->p_cursor.current->value;
-    m->p_cursor.current = m->p_cursor.current->next;
+    m->p_cursor.current = m->p_cursor.current->succ;
 #ifdef DEBUG_PARSER
     debug_parser(t->line, t->literal);
 #endif
@@ -984,10 +984,10 @@ bool parser_next_is(module_t *m, int step, token_type expect) {
     list_node *current = m->p_cursor.current;
 
     while (step > 0) {
-        if (current->next == NULL) {
+        if (current->succ == NULL) {
             return false;
         }
-        current = current->next;
+        current = current->succ;
         step--;
     }
 
@@ -999,11 +999,11 @@ list_node *parser_next(module_t *m, int step) {
     list_node *current = m->p_cursor.current;
 
     while (step > 0) {
-        if (current->next == NULL) {
+        if (current->succ == NULL) {
             return NULL;
         }
 
-        current = current->next;
+        current = current->succ;
         step--;
     }
 
@@ -1102,7 +1102,7 @@ bool parser_is_function_decl(module_t *m, list_node *current) {
     int close = 1;
 
     while (t->type != TOKEN_EOF) {
-        current = current->next;
+        current = current->succ;
         t = current->value;
 
         if (t->type == TOKEN_LEFT_PAREN) {
@@ -1122,7 +1122,7 @@ bool parser_is_function_decl(module_t *m, list_node *current) {
     }
 
     // next is '{' ?
-    t = current->next->value;
+    t = current->succ->value;
     if (t->type != TOKEN_LEFT_CURLY) {
         return false;
     }

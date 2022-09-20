@@ -17,31 +17,39 @@ void list_push(list *l, void *value) {
     empty->prev = l->rear;
 
     l->rear->value = value;
-    l->rear->next = empty;
+    l->rear->succ = empty;
 
     l->rear = empty;
     l->count++;
 }
 
-// 在指定位置插入节点，尾部需要是 empty 节点, rear 指向 empty
-void list_splice(list *l, list_node *node, void *value) {
+// 在指定位置的后方插入节点，尾部需要是 empty 节点, rear 指向 empty
+void list_insert(list *l, list_node *prev, void *value) {
     list_node *await = list_new_node();
     await->value = value;
 
     // 如果是要在最后一个节点 直接调用 push 就行了
-    if (node == l->rear) {
+    if (prev == l->rear) {
         list_push(l, value);
         return;
     }
 
-    // node <-> await <-> next
-    list_node *next = node->next;
+    if (prev == NULL) {
+        // 直接插入到头部之前
+        await->succ = l->front;
+        l->front->prev = await;
 
-    node->next = await;
-    await->prev = node;
+        l->front = await;
+    } else {
+        // prev <-> await <-> next
+        list_node *next = prev->succ;
 
-    await->next = next;
-    next->prev = await;
+        prev->succ = await;
+        await->prev = prev;
+
+        await->succ = next;
+        next->prev = await;
+    }
 
     l->count++;
 }
@@ -56,7 +64,7 @@ void *list_pop(list *l) {
     list_node *temp = l->front; // 推出头部节点
     void *value = temp->value;
 
-    l->front = temp->next;
+    l->front = temp->succ;
     l->front->prev = NULL;
     l->count--;
     free(temp);
@@ -67,7 +75,7 @@ void *list_pop(list *l) {
 list_node *list_new_node() {
     list_node *node = malloc(sizeof(list_node));
     node->value = NULL;
-    node->next = NULL;
+    node->succ = NULL;
     node->prev = NULL;
     return node;
 }
@@ -84,7 +92,7 @@ void list_append(list *dst, list *src) {
     while (current->value != NULL) {
         void *v = current->value;
         list_push(dst, v);
-        current = current->next;
+        current = current->succ;
     }
 }
 

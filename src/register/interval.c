@@ -161,13 +161,13 @@ void interval_mark_number(closure *c) {
         while (current->value != NULL) {
             lir_op *op = current->value;
             if (op->type == LIR_OP_TYPE_PHI) {
-                current = current->next;
+                current = current->succ;
                 continue;
             }
 
             op->id = next_id;
             next_id += 2;
-            current = current->next;
+            current = current->succ;
         }
     }
 }
@@ -202,14 +202,14 @@ void interval_build(closure *c) {
             for (int j = 0; j < output_vars.count; ++j) {
                 lir_operand_var *var = output_vars.list[j];
                 interval_cut_first_range_from(c, var, op->id); // 截断操作
-                interval_add_use_position(c, var, op->id);
+                interval_add_use_position(c, var, op->id, 0);
             }
 
             lir_vars input_vars = lir_input_vars(op);
             for (int j = 0; j < input_vars.count; ++j) {
                 lir_operand_var *var = input_vars.list[j];
                 interval_add_range(c, var, block_from, op->id); // 添加整段长度
-                interval_add_use_position(c, var, op->id);
+                interval_add_use_position(c, var, op->id, 0);
             }
 
             current = current->prev;
@@ -227,10 +227,6 @@ interval_t *interval_new(lir_operand_var *var) {
     return entity;
 }
 
-void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
-    // 排序，合并
-}
-
 bool interval_is_covers(interval_t *i, uint32_t position) {
     list_node *current = list_first(i->ranges);
     while (current->value != NULL) {
@@ -239,14 +235,14 @@ bool interval_is_covers(interval_t *i, uint32_t position) {
             return true;
         }
 
-        current = current->next;
+        current = current->succ;
     }
     return 0;
 }
 
 uint32_t interval_next_intersection(interval_t *current, interval_t *select) {
-    uint32_t position = current->first_from; // first_from 指向 range 的开头
-    while (position < current->last_to) {
+    uint32_t position = current->first_range->from; // first_from 指向 range 的开头
+    while (position < current->last_range->to) {
         if (interval_is_covers(current, position) && interval_is_covers(select, position)) {
             return position;
         }
@@ -266,15 +262,91 @@ void interval_split_interval(interval_t *i, uint32_t position) {
     while (current->value != NULL) {
         interval_range_t *range = current->value;
         if (range->from > position || range->to < position) {
-            current = current->next;
+            current = current->succ;
             continue;
         }
         // split current from
 
 
 
-        current = current->next;
+        current = current->succ;
     }
+}
+
+void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
+    // 排序，合并
+    interval_t *i = table_get(c->interval_table, var->ident);
+    list *ranges = i->ranges;
+    // 如果 from 或者 to 和已经存在的 range 由重叠的部分，则需要合并两个 range
+    // 否则按从小到大的顺序插入 ranges
+    interval_range_t *range = NEW(interval_range_t);
+    range->from = from;
+    range->to = to;
+    if (list_empty(ranges)) {
+        i->last_range = range;
+    }
+
+    list_insert(ranges, NULL, range);
+    i->first_range = range;
+}
+
+/**
+ * 按从小到大排序
+ * @param c
+ * @param var
+ * @param position
+ * @param kind
+ */
+void interval_add_use_position(closure *c, lir_operand_var *var, int position, int kind) {
+    interval_t *i = table_get(c->interval_table, var->ident);
+    list *pos_list = i->use_positions;
+
+    use_position_t *new_pos = NEW(use_position_t);
+    new_pos->kind = kind;
+    new_pos->position = position;
+
+    list_node *current = list_first(pos_list);
+    while (current->value != NULL) {
+        use_position_t *current_pos = current->value;
+        // 找到一个大于当前位置的节点
+        if (current_pos->position > new_pos->position) {
+            // 当前位置一旦大于 await
+            // 就表示 current->prev < await < current
+            // 或者 await < current, 也就是 current 就是第一个元素
+            list_insert(pos_list, current->prev, new_pos);
+            return;
+        }
+
+        current = current->succ;
+    }
+}
+
+void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from) {
+    interval_t *i = table_get(c->interval_table, var->ident);
+    i->first_range->from = from;
+}
+
+uint32_t interval_first_use_position(interval_t *i) {
+    list *pos_list = i->use_positions;
+    if (list_empty(pos_list)) {
+        return 0;
+    }
+    use_position_t *use_pos = list_first(pos_list)->value;
+    return use_pos->position;
+}
+
+uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
+    list *pos_list = i->use_positions;
+    list_node *current = list_first(pos_list);
+    while (current->value != NULL) {
+        use_position_t *current_pos = current->value;
+        if (current_pos->position > after_position) {
+            return current_pos->position;
+        }
+
+        current = current->succ;
+    }
+    return 0;
 }
 
 

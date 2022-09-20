@@ -12,7 +12,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#ifndef DEBUG_CFG
 #define DEBUG_CFG true
+#endif
 
 int setup(void **state) {
     printf("setup\n");

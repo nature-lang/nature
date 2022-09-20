@@ -206,7 +206,7 @@ void debug_basic_block(lir_basic_block *block) {
                 lir_operand_to_string(op->second),
                 lir_operand_to_string(op->result)
         );
-        current = current->next;
+        current = current->succ;
     }
 
     printf("\n\t\tpred:");

@@ -1,19 +1,19 @@
 #include "allocate.h"
 
 static void handle_active(allocate *a) {
-    int position = a->current->first_from;
+    int position = a->current->first_range->from;
     list_node *active_curr = a->active->front;
     list_node *active_prev = NULL;
     while (active_curr->value != NULL) {
         interval_t *select = (interval_t *) active_curr->value;
-        bool is_expired = select->last_to < position;
+        bool is_expired = select->last_range->to < position;
         bool is_covers = interval_is_covers(select, position);
 
         if (!is_covers || is_expired) {
             if (active_prev == NULL) {
-                a->active->front = active_curr->next;
+                a->active->front = active_curr->succ;
             } else {
-                active_prev->next = active_curr->next;
+                active_prev->succ = active_curr->succ;
             }
             a->active->count--;
             if (is_expired) {
@@ -24,24 +24,24 @@ static void handle_active(allocate *a) {
         }
 
         active_prev = active_curr;
-        active_curr = active_curr->next;
+        active_curr = active_curr->succ;
     }
 }
 
 static void handle_inactive(allocate *a) {
-    int position = a->current->first_from;
+    int position = a->current->first_range->from;
     list_node *inactive_curr = a->inactive->front;
     list_node *inactive_prev = NULL;
     while (inactive_curr->value != NULL) {
         interval_t *select = (interval_t *) inactive_curr->value;
-        bool is_expired = select->last_to < position;
+        bool is_expired = select->last_range->to < position;
         bool is_covers = interval_is_covers(select, position);
 
         if (is_covers || is_expired) {
             if (inactive_prev == NULL) {
-                a->inactive->front = inactive_curr->next;
+                a->inactive->front = inactive_curr->succ;
             } else {
-                inactive_prev->next = inactive_curr->next;
+                inactive_prev->succ = inactive_curr->succ;
             }
             a->inactive->count--;
             if (is_expired) {
@@ -52,7 +52,7 @@ static void handle_inactive(allocate *a) {
         }
 
         inactive_prev = inactive_curr;
-        inactive_curr = inactive_curr->next;
+        inactive_curr = inactive_curr->succ;
     }
 }
 
@@ -120,28 +120,28 @@ void to_unhandled(list *unhandled, interval_t *to) {
     // 从头部取出,最小的元素
     list_node *temp = unhandled->front;
     list_node *prev = NULL;
-    while (temp->value != NULL && ((interval_t *) temp->value)->first_from < to->first_from) {
+    while (temp->value != NULL && ((interval_t *) temp->value)->first_range->from < to->first_range->from) {
         prev = temp;
-        temp = temp->next;
+        temp = temp->succ;
     }
 
     // temp is rear
     if (temp->value == NULL) {
         list_node *empty = list_new_node();
         temp->value = to;
-        temp->next = empty;
+        temp->succ = empty;
         unhandled->rear = empty;
         unhandled->count++;
         return;
     }
 
-    // temp->value->first_from > await_to->first_from > prev->value->first_from
+    // temp->value->first_range->from > await_to->first_range->from > prev->value->first_range->from
     list_node *await_node = list_new_node();
     await_node->value = to;
-    await_node->next = temp;
+    await_node->succ = temp;
     unhandled->count++;
     if (prev != NULL) {
-        prev->next = await_node;
+        prev->succ = await_node;
     }
 }
 
@@ -167,7 +167,7 @@ bool allocate_free_reg(allocate *a) {
     while (curr->value != NULL) {
         interval_t *select = (interval_t *) curr->value;
         set_pos(free_pos, select->assigned->index, 0);
-        curr = curr->next;
+        curr = curr->succ;
     }
 
     curr = a->inactive->front;
@@ -177,7 +177,7 @@ bool allocate_free_reg(allocate *a) {
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned->index, position);
 
-        curr = curr->next;
+        curr = curr->succ;
     }
 
     // 找到权重最大的寄存器寄存器进行分配
@@ -188,7 +188,7 @@ bool allocate_free_reg(allocate *a) {
     }
 
     // 寄存器有足够的 free 空间供当前寄存器使用，可以直接分配
-    if (free_pos[max_reg_index] > a->current->last_to) {
+    if (free_pos[max_reg_index] > a->current->last_range->to) {
         a->current->assigned = regs->take[max_reg_index];
         return true;
     }
@@ -228,16 +228,17 @@ bool allocate_block_reg(allocate *a) {
             set_pos(use_pos, select->assigned->index, pos);
         }
 
-        curr = curr->next;
+        curr = curr->succ;
     }
 
     // 遍历非固定寄存器
+    uint32_t pos;
     curr = a->inactive->front;
     while (curr->value != NULL) {
         interval_t *select = (interval_t *) curr->value;
         // 判断是否和当前 current 相交
-        uint32_t pos = interval_next_intersection(a->current, select);
-        if (pos >= a->current->last_to) {
+        pos = interval_next_intersection(a->current, select);
+        if (pos >= a->current->last_range->to) {
             continue;
         }
 
@@ -245,11 +246,11 @@ bool allocate_block_reg(allocate *a) {
             set_pos(fixed_pos, select->assigned->index, pos);
             set_pos(use_pos, select->assigned->index, pos);
         } else {
-            uint32_t pos = interval_next_use_position(select, first_use_position);
+            pos = interval_next_use_position(select, first_use_position);
             set_pos(use_pos, select->assigned->index, pos);
         }
 
-        curr = curr->next;
+        curr = curr->succ;
     }
 
     uint8_t max_reg_id = max_pos_index(use_pos);
