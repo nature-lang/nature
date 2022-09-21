@@ -180,7 +180,7 @@ void interval_build(closure *c) {
         table_set(c->interval_table, var->ident, interval_new(var));
     }
 
-    // 倒序遍历基本块
+    // 倒序遍历顺序基本块基本块
     for (int i = c->order_blocks->count - 1; i >= 0; --i) {
         lir_basic_block *block = c->order_blocks->take[i];
         lir_op *first_op = list_first(block->operates)->value;

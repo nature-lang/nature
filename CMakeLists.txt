@@ -100,6 +100,8 @@ set(SRC
         ${SRC_DIR}/register/allocate.c
         ${SRC_DIR}/register/interval.h
         ${SRC_DIR}/register/interval.c
+        ${SRC_DIR}/register/linearscan.h
+        ${SRC_DIR}/register/linearscan.c
         )
 
 set(RUNTIME_FILES

@@ -1,5 +1,4 @@
 #include "test.h"
-#include "src/binary/elf/linker.h"
 #include "src/build/build.h"
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
@@ -8,6 +7,8 @@
 #include "utils/helper.h"
 #include "src/debug/debug.h"
 #include "src/build/config.h"
+#include "src/register/interval.h"
+#include "src/register/allocate.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -76,6 +77,9 @@ static void test_basic() {
         cfg(c);
         // 构造 ssa
         ssa(c);
+
+        // 构造 interval
+
 #ifdef DEBUG_CFG
         debug_cfg(c);
 #endif

@@ -1,6 +1,6 @@
 #include "allocate.h"
 
-static void handle_active(allocate *a) {
+static void handle_active(allocate_t *a) {
     int position = a->current->first_range->from;
     list_node *active_curr = a->active->front;
     list_node *active_prev = NULL;
@@ -28,7 +28,7 @@ static void handle_active(allocate *a) {
     }
 }
 
-static void handle_inactive(allocate *a) {
+static void handle_inactive(allocate_t *a) {
     int position = a->current->first_range->from;
     list_node *inactive_curr = a->inactive->front;
     list_node *inactive_prev = NULL;
@@ -65,7 +65,7 @@ static void set_pos(uint32_t list[UINT8_MAX], uint8_t index, uint32_t position) 
 }
 
 void allocate_walk(closure *c) {
-    allocate *a = malloc(sizeof(allocate));
+    allocate_t *a = malloc(sizeof(allocate_t));
     a->unhandled = init_unhandled(c);
     a->handled = list_new();
     a->active = list_new();
@@ -156,24 +156,24 @@ static uint8_t max_pos_index(const uint32_t list[UINT8_MAX]) {
     return max_index;
 }
 
-bool allocate_free_reg(allocate *a) {
+bool allocate_free_reg(allocate_t *allocate) {
     uint32_t free_pos[UINT8_MAX] = {0};
     for (int i = 0; i < regs->count; ++i) {
         set_pos(free_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
     }
 
     // active interval 不予分配，所以 pos 设置为 0
-    list_node *curr = a->active->front;
+    list_node *curr = allocate->active->front;
     while (curr->value != NULL) {
         interval_t *select = (interval_t *) curr->value;
         set_pos(free_pos, select->assigned->index, 0);
         curr = curr->succ;
     }
 
-    curr = a->inactive->front;
+    curr = allocate->inactive->front;
     while (curr->value != NULL) {
         interval_t *select = (interval_t *) curr->value;
-        uint32_t position = interval_next_intersection(a->current, select);
+        uint32_t position = interval_next_intersection(allocate->current, select);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned->index, position);
 
@@ -188,21 +188,23 @@ bool allocate_free_reg(allocate *a) {
     }
 
     // 寄存器有足够的 free 空间供当前寄存器使用，可以直接分配
-    if (free_pos[max_reg_index] > a->current->last_range->to) {
-        a->current->assigned = regs->take[max_reg_index];
+    // 一旦 assigned， 就表示整个 var 对应的 interval 都将获得寄存器
+    // 如果后续需要 spill, 则会创建一个新的 temp var + 对应的 interval
+    if (free_pos[max_reg_index] > allocate->current->last_range->to) {
+        allocate->current->assigned = regs->take[max_reg_index];
         return true;
     }
 
     // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
-    uint32_t optimal_position = interval_optimal_position(a->current, free_pos[max_reg_index]);
+    uint32_t optimal_position = interval_optimal_position(allocate->current, free_pos[max_reg_index]);
     // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器
-    interval_split_interval(a->current, optimal_position);
-    a->current->assigned = regs->take[max_reg_index];
+    interval_split_interval(allocate->current, optimal_position);
+    allocate->current->assigned = regs->take[max_reg_index];
 
     return true;
 }
 
-bool allocate_block_reg(allocate *a) {
+bool allocate_block_reg(allocate_t *a) {
     // 用于判断寄存器的空闲时间
     uint32_t use_pos[UINT8_MAX];
     // 被固定物理寄存器强制使用位置,有一些指令需要使用目标机器的固定寄存器，比如 ret eax 就需要强制使用 eax 寄存器

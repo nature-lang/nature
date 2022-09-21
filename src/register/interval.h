@@ -31,7 +31,6 @@ typedef struct interval {
 
     lir_operand_var *var; // 对 var 进行编码，新拆分的间隔使用新的编码
 
-    reg_t *reg;
     reg_t *assigned;
 
     bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
