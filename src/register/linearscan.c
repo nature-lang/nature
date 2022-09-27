@@ -14,7 +14,12 @@
  *
  * // allocate registers
  * WALK_INTERVALS
+ *
+ * INSERT_MOV between lifetime hole or spill/reload
+ *
+ * // in block boundary
  * RESOLVE_DATA_FLOW
+ *
  * // replace virtual registers with physical registers
  * ASSIGN_REG_NUM
  * @param c

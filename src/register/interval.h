@@ -96,13 +96,10 @@ void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from);
 void interval_add_use_position(closure *c, lir_operand_var *var, int position, int kind);
 
 /**
- * 在 position 位置，将 interval 切割成两份
- * [first_from, position) 为 split_parent
- * [position, last_to) 为 split_children
  * @param i
  * @param position
  */
-void interval_split_interval(interval_t *i, uint32_t position);
+void interval_split_at(closure *c, interval_t *i, int position);
 
 /**
  * current 需要在 before 之前被 split,需要找到一个最佳的位置

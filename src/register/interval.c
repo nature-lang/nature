@@ -257,22 +257,6 @@ uint32_t interval_optimal_position(interval_t *current, uint32_t before) {
     return before;
 }
 
-void interval_split_interval(interval_t *i, uint32_t position) {
-    list_node *current = list_first(i->ranges);
-    while (current->value != NULL) {
-        interval_range_t *range = current->value;
-        if (range->from > position || range->to < position) {
-            current = current->succ;
-            continue;
-        }
-        // split current from
-
-
-
-        current = current->succ;
-    }
-}
-
 void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
     // 排序，合并
     interval_t *i = table_get(c->interval_table, var->ident);

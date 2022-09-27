@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include "src/value.h"
 
+// rear 为 empty node, 不会进入到循环中(一旦不满足条件，就会立即退出)
+#define LIST_FOR(_list) for (list_node *node = _list->front; node != _list->rear; node = node->succ)
+
+#define LIST_VALUE() (node->value)
+
 typedef struct list_node {
     void *value;
     struct list_node *succ;
