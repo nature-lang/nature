@@ -10,24 +10,24 @@ typedef enum {
 } loop_detection_flag;
 
 typedef struct {
-    int position;
+    int value;
     int kind;
 } use_position_t;
 
 typedef struct {
-    int from;
-    int to;
+    int from; // 包含
+    int to; // 不包含
 } interval_range_t;
 
 // interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
-typedef struct interval {
+typedef struct interval_t {
     int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
     interval_range_t *first_range;
     interval_range_t *last_range;
     list *ranges;
     list *use_positions; // 存储 use_position 列表
-    struct interval_t *split_parent;
-    list *split_children; // 动态数组
+    struct interval_t *parent;
+    list *children; // 动态数组
 
     lir_operand_var *var; // 对 var 进行编码，新拆分的间隔使用新的编码
 
@@ -66,7 +66,7 @@ void interval_build(closure *c);
  * @param var
  * @return
  */
-interval_t *interval_new(lir_operand_var *var);
+interval_t *interval_new(closure *c, lir_operand_var *var);
 
 /**
  * 添加 range 到 interval.ranges 头中,并调整 first_range 的指向

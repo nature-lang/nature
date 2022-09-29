@@ -2,6 +2,11 @@
 #include "utils/list.h"
 #include "utils/stack.h"
 #include "utils/helper.h"
+#include "assert.h"
+
+static bool in_range(interval_range_t *range, int position) {
+    return range->from <= position && position < range->to;
+}
 
 // 每个块需要存储什么数据？
 // loop flag
@@ -177,7 +182,7 @@ void interval_build(closure *c) {
     c->interval_table = table_new();
     for (int i = 0; i < c->globals.count; ++i) {
         lir_operand_var *var = c->globals.list[i];
-        table_set(c->interval_table, var->ident, interval_new(var));
+        table_set(c->interval_table, var->ident, interval_new(c, var));
     }
 
     // 倒序遍历顺序基本块基本块
@@ -217,13 +222,14 @@ void interval_build(closure *c) {
     }
 }
 
-interval_t *interval_new(lir_operand_var *var) {
+interval_t *interval_new(closure *c, lir_operand_var *var) {
     interval_t *entity = malloc(sizeof(interval_t));
     entity->var = var;
     entity->ranges = list_new();
     entity->use_positions = list_new();
-    entity->split_children = list_new();
-    entity->split_parent = NULL;
+    entity->children = list_new();
+    entity->parent = NULL;
+    entity->index = c->interval_count++; // 基于 closure 做自增 id 即可
     return entity;
 }
 
@@ -287,13 +293,13 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position, i
 
     use_position_t *new_pos = NEW(use_position_t);
     new_pos->kind = kind;
-    new_pos->position = position;
+    new_pos->value = position;
 
     list_node *current = list_first(pos_list);
     while (current->value != NULL) {
         use_position_t *current_pos = current->value;
         // 找到一个大于当前位置的节点
-        if (current_pos->position > new_pos->position) {
+        if (current_pos->value > new_pos->value) {
             // 当前位置一旦大于 await
             // 就表示 current->prev < await < current
             // 或者 await < current, 也就是 current 就是第一个元素
@@ -316,7 +322,7 @@ uint32_t interval_first_use_position(interval_t *i) {
         return 0;
     }
     use_position_t *use_pos = list_first(pos_list)->value;
-    return use_pos->position;
+    return use_pos->value;
 }
 
 uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
@@ -324,8 +330,8 @@ uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
     list_node *current = list_first(pos_list);
     while (current->value != NULL) {
         use_position_t *current_pos = current->value;
-        if (current_pos->position > after_position) {
-            return current_pos->position;
+        if (current_pos->value > after_position) {
+            return current_pos->value;
         }
 
         current = current->succ;
@@ -333,4 +339,70 @@ uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
     return 0;
 }
 
+/**
+ * 从 position 将 interval 分成两端，多个 child interval 在一个 list 中，而不是多级 list
+ * 如果 position 被 range cover, 则对 range 进行切分
+ * @param c
+ * @param i
+ * @param position
+ */
+void interval_split_at(closure *c, interval_t *i, int position) {
+    assert(i->last_range->to < position);
+    assert(i->first_range->from < position);
+
+    interval_t *child = interval_new(c, i->var);
+
+    interval_t *parent = i;
+    if (i->parent != NULL) {
+        parent = i->parent;
+    }
+
+    // 将 child 加入 parent 的 children 中,
+    // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
+    LIST_FOR(parent->children) {
+        interval_t *current = LIST_VALUE();
+        if (current->index == i->index) {
+            list_insert(parent->children, LIST_NODE(), child);
+            break;
+        }
+    }
+
+    // 切割 range
+    LIST_FOR(i->ranges) {
+        interval_range_t *range = LIST_VALUE();
+        if (!in_range(range, position)) {
+            continue;
+        }
+
+        // 如果 position 在 range 的起始位置，则直接将 ranges list 的当前部分和剩余部分分给 child interval 即可
+        // 否则 对 range 进行切割
+        // tips: position 必定不等于 range->to, 因为 to 是 excluded
+        if (position == range->from) {
+            child->ranges = list_split(i->ranges, LIST_NODE());
+            break;
+        }
+
+        interval_range_t *new_range = NEW(interval_range_t);
+        new_range->from = position;
+        new_range->to = range->to;
+        range->to = position;
+
+        // 将 new_range 插入到 ranges 中
+        list_insert(i->ranges, LIST_NODE(), new_range);
+        child->ranges = list_split(i->ranges, LIST_NODE());
+        break;
+    }
+
+    // 划分 position
+    LIST_FOR(i->use_positions) {
+        use_position_t *pos = LIST_VALUE();
+        if (pos->value < position) {
+            continue;
+        }
+
+        // pos->value >= position, pos 和其之后的 pos 都需要加入到 new child 中
+        child->use_positions = list_split(i->use_positions, LIST_NODE());
+        break;
+    }
+}
 

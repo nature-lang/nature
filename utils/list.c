@@ -1,5 +1,13 @@
 #include "list.h"
 
+static uint16_t list_count(list *l) {
+    uint16_t count = 0;
+    LIST_FOR(l) {
+        count++;
+    }
+    return count;
+}
+
 list *list_new() {
     list *l = malloc(sizeof(list));
     l->count = 0;
@@ -85,6 +93,35 @@ bool list_empty(list *l) {
         return true;
     }
     return false;
+}
+
+/**
+ * 在 node 位置将 list 分成两部分，其中 node 属于第二部分
+ * 截断第一部分,rear 为 empty 节点
+ * @param l
+ * @param node
+ * @return
+ */
+list *list_split(list *l, list_node *node) {
+    list *new_list = list_new();
+
+    if (node == NULL) {
+        return new_list;
+    }
+
+    new_list->front = node;
+    new_list->rear = l->rear;
+    new_list->count = list_count(new_list);
+
+    // 第一部分截断
+    list_node *rear_empty = list_new_node();
+    list_node *last = node->prev;
+    rear_empty->prev = last;
+    last->succ = rear_empty;
+    l->rear = rear_empty;
+    l->count = list_count(l);
+
+    return new_list;
 }
 
 void list_append(list *dst, list *src) {

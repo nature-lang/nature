@@ -298,7 +298,8 @@ typedef struct closure {
 
     lir_basic_block *entry; // 基本块入口, 指向 blocks[0]
     slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
-    table *interval_table; // key包括 fixed register as 和 variable.ident
+    table *interval_table; // key 包括 fixed register as 和 variable.ident
+    int interval_count;
 
     // 定义环境
     string name;
@@ -311,7 +312,7 @@ typedef struct closure {
     list *local_var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
     list *formal_params; // 依旧为了堆栈分配
 
-    uint16_t stack_length; // 栈长度, byte, 等于局部变量的长度
+    uint stack_length; // 栈长度, byte, 等于局部变量的长度
 } closure;
 
 lir_operand *set_indirect_addr(lir_operand *operand);
