@@ -66,7 +66,7 @@ static void set_pos(uint32_t list[UINT8_MAX], uint8_t index, uint32_t position) 
 
 void allocate_walk(closure *c) {
     allocate_t *a = malloc(sizeof(allocate_t));
-    a->unhandled = init_unhandled(c);
+    a->unhandled = unhandled_new(c);
     a->handled = list_new();
     a->active = list_new();
     a->inactive = list_new();
@@ -92,7 +92,7 @@ void allocate_walk(closure *c) {
     }
 }
 
-list *init_unhandled(closure *c) {
+list *unhandled_new(closure *c) {
     list *unhandled = list_new();
     // 遍历所有变量
     for (int i = 0; i < c->globals.count; ++i) {
@@ -116,32 +116,19 @@ list *init_unhandled(closure *c) {
     return unhandled;
 }
 
+/**
+ * 将 to 根据 LIST_VALUE 的 from 字段排序，值越小越靠前
+ * @param unhandled
+ * @param to
+ */
 void to_unhandled(list *unhandled, interval_t *to) {
-    // 从头部取出,最小的元素
-    list_node *temp = unhandled->front;
-    list_node *prev = NULL;
-    while (temp->value != NULL && ((interval_t *) temp->value)->first_range->from < to->first_range->from) {
-        prev = temp;
-        temp = temp->succ;
-    }
-
-    // temp is rear
-    if (temp->value == NULL) {
-        list_node *empty = list_new_node();
-        temp->value = to;
-        temp->succ = empty;
-        unhandled->rear = empty;
-        unhandled->count++;
-        return;
-    }
-
-    // temp->value->first_range->from > await_to->first_range->from > prev->value->first_range->from
-    list_node *await_node = list_new_node();
-    await_node->value = to;
-    await_node->succ = temp;
-    unhandled->count++;
-    if (prev != NULL) {
-        prev->succ = await_node;
+    LIST_FOR(unhandled) {
+        interval_t *i = LIST_VALUE();
+        // 当 i->from 大于 to->from 时，将 to 插入到 i 前面
+        if (i->first_range->from > to->first_range->from) {
+            list_insert_before(unhandled, LIST_NODE(), to);
+            return;
+        }
     }
 }
 
@@ -197,8 +184,12 @@ bool allocate_free_reg(allocate_t *allocate) {
 
     // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
     uint32_t optimal_position = interval_optimal_position(allocate->current, free_pos[max_reg_index]);
-    // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器
-    interval_split_interval(allocate->current, optimal_position);
+
+    // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
+    interval_t *i = interval_split_at(allocate->current, optimal_position);
+    to_unhandled(allocate->unhandled, i);
+
+    // 为当前 interval 分配寄存器
     allocate->current->assigned = regs->take[max_reg_index];
 
     return true;

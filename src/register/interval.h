@@ -29,7 +29,7 @@ typedef struct interval_t {
     struct interval_t *parent;
     list *children; // 动态数组
 
-    lir_operand_var *var; // 对 var 进行编码，新拆分的间隔使用新的编码
+    lir_operand_var *var; // var 中存储着 stack slot
 
     reg_t *assigned;
 
@@ -99,7 +99,7 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position, i
  * @param i
  * @param position
  */
-void interval_split_at(closure *c, interval_t *i, int position);
+interval_t *interval_split_at(closure *c, interval_t *i, int position);
 
 /**
  * current 需要在 before 之前被 split,需要找到一个最佳的位置

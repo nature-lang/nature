@@ -221,7 +221,7 @@ void ssa_add_phi(closure *c) {
 
                 // insert to list(可能只有一个 label )
                 list_node *label_node = df_block->operates->front;
-                list_insert(df_block->operates, label_node, phi_op);
+                list_insert_after(df_block->operates, label_node, phi_op);
             }
         }
     }

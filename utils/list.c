@@ -31,38 +31,6 @@ void list_push(list *l, void *value) {
     l->count++;
 }
 
-// 在指定位置的后方插入节点，尾部需要是 empty 节点, rear 指向 empty
-void list_insert(list *l, list_node *prev, void *value) {
-    list_node *await = list_new_node();
-    await->value = value;
-
-    // 如果是要在最后一个节点 直接调用 push 就行了
-    if (prev == l->rear) {
-        list_push(l, value);
-        return;
-    }
-
-    if (prev == NULL) {
-        // 直接插入到头部之前
-        await->succ = l->front;
-        l->front->prev = await;
-
-        l->front = await;
-    } else {
-        // prev <-> await <-> next
-        list_node *next = prev->succ;
-
-        prev->succ = await;
-        await->prev = prev;
-
-        await->succ = next;
-        next->prev = await;
-    }
-
-    l->count++;
-}
-
-
 // 头部 pop
 void *list_pop(list *l) {
     if (l->count == 0) {
@@ -142,4 +110,67 @@ list_node *list_last(list *l) {
 
 list_node *list_first(list *l) {
     return l->front;
+}
+
+// 在指定位置的后方插入节点，尾部需要是 empty 节点, rear 指向 empty
+void list_insert_after(list *l, list_node *prev, void *value) {
+    list_node *await = list_new_node();
+    await->value = value;
+
+    // 如果是要在最后一个节点 直接调用 push 就行了
+    if (prev == l->rear) {
+        list_push(l, value);
+        return;
+    }
+
+    if (prev == NULL) {
+        // 直接插入到头部之前
+        await->succ = l->front;
+        l->front->prev = await;
+
+        l->front = await;
+    } else {
+        // prev <-> await <-> next
+        list_node *next = prev->succ;
+
+        prev->succ = await;
+        await->prev = prev;
+
+        await->succ = next;
+        next->prev = await;
+    }
+
+    l->count++;
+}
+
+// 在指定位置的前方插入节点，尾部需要是 empty 节点, rear 指向 empty
+void list_insert_before(list *l, list_node *succ, void *value) {
+    list_node *await = list_new_node();
+    await->value = value;
+
+    // 如果是要在最后一个节点 直接调用 push 就行了
+    if (succ == l->rear) {
+        list_push(l, value);
+        return;
+    }
+
+    if (succ == NULL) {
+        // 直接插入到头部之前
+        await->succ = l->front;
+        l->front->prev = await;
+
+        l->front = await;
+    } else {
+        // prev <-> await <-> succ
+        list_node *prev = succ->prev;
+
+        prev->succ = await;
+
+        await->prev = prev;
+        await->succ = succ;
+
+        succ->prev = await;
+    }
+
+    l->count++;
 }

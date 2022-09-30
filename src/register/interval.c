@@ -276,7 +276,7 @@ void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
         i->last_range = range;
     }
 
-    list_insert(ranges, NULL, range);
+    list_insert_after(ranges, NULL, range);
     i->first_range = range;
 }
 
@@ -303,7 +303,7 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position, i
             // 当前位置一旦大于 await
             // 就表示 current->prev < await < current
             // 或者 await < current, 也就是 current 就是第一个元素
-            list_insert(pos_list, current->prev, new_pos);
+            list_insert_after(pos_list, current->prev, new_pos);
             return;
         }
 
@@ -346,7 +346,7 @@ uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
  * @param i
  * @param position
  */
-void interval_split_at(closure *c, interval_t *i, int position) {
+interval_t *interval_split_at(closure *c, interval_t *i, int position) {
     assert(i->last_range->to < position);
     assert(i->first_range->from < position);
 
@@ -362,7 +362,7 @@ void interval_split_at(closure *c, interval_t *i, int position) {
     LIST_FOR(parent->children) {
         interval_t *current = LIST_VALUE();
         if (current->index == i->index) {
-            list_insert(parent->children, LIST_NODE(), child);
+            list_insert_after(parent->children, LIST_NODE(), child);
             break;
         }
     }
@@ -388,7 +388,7 @@ void interval_split_at(closure *c, interval_t *i, int position) {
         range->to = position;
 
         // 将 new_range 插入到 ranges 中
-        list_insert(i->ranges, LIST_NODE(), new_range);
+        list_insert_after(i->ranges, LIST_NODE(), new_range);
         child->ranges = list_split(i->ranges, LIST_NODE());
         break;
     }
@@ -404,5 +404,7 @@ void interval_split_at(closure *c, interval_t *i, int position) {
         child->use_positions = list_split(i->use_positions, LIST_NODE());
         break;
     }
+
+    return child;
 }
 

@@ -39,6 +39,6 @@ void to_unhandled(list *unhandled, interval_t *to);
  * 采用链表结构是因为跟方便排序插入，有序遍历
  * @return
  */
-list *init_unhandled(closure *c);
+list *unhandled_new(closure *c);
 
 #endif //NATURE_SRC_REGISTER_ALLOCATE_H_

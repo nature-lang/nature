@@ -31,8 +31,12 @@ void *list_pop(list *l); // 头出队列
 list_node *list_first(list *l); // 最后一个可用元素，绝非空元素
 list_node *list_last(list *l); // 最后一个可用元素，绝非空元素
 void list_push(list *l, void *value); // 尾入队列
-void list_insert(list *l, list_node *prev, void *value);
+void list_insert_after(list *l, list_node *prev, void *value);
+
+void list_insert_before(list *l, list_node *succ, void *value);
+
 list *list_split(list *l, list_node *node);
+
 void list_append(list *dst, list *src); // src 追加到 dst 中
 
 list_node *list_new_node();
