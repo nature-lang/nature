@@ -108,7 +108,7 @@ interval_t *interval_split_at(closure *c, interval_t *i, int position);
  * @param before
  * @return
  */
-uint32_t interval_optimal_position(interval_t *current, uint32_t before);
+int interval_optimal_position(closure *c, interval_t *current, int before);
 
 /**
  * interval 的 range 是否包含了 position
@@ -116,7 +116,7 @@ uint32_t interval_optimal_position(interval_t *current, uint32_t before);
  * @param position
  * @return
  */
-bool interval_is_covers(interval_t *i, uint32_t position);
+bool interval_is_covers(interval_t *i, int position);
 
 /**
  * 寻找 current 和 select 的第一个相交点
@@ -127,7 +127,7 @@ bool interval_is_covers(interval_t *i, uint32_t position);
  * @param select
  * @return
  */
-uint32_t interval_next_intersection(interval_t *current, interval_t *select);
+int interval_next_intersection(interval_t *current, interval_t *select);
 
 /**
  * 寻找 select interval 大于 after 的第一个 use_position
@@ -136,7 +136,7 @@ uint32_t interval_next_intersection(interval_t *current, interval_t *select);
  * @param after_position
  * @return
  */
-uint32_t interval_next_use_position(interval_t *i, uint32_t after_position);
+int interval_next_use_position(interval_t *i, int after_position);
 
 /**
  * interval 的第一个使用位置
@@ -144,6 +144,10 @@ uint32_t interval_next_use_position(interval_t *i, uint32_t after_position);
  * @param i
  * @return
  */
-uint32_t interval_first_use_position(interval_t *i);
+int interval_first_use_position(interval_t *i);
+
+void interval_spill_slot(interval_t *i);
+
+use_position_t *interval_use_pos_of_kind(interval_t *i);
 
 #endif

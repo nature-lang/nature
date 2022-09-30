@@ -56,7 +56,7 @@ static void handle_inactive(allocate_t *a) {
     }
 }
 
-static void set_pos(uint32_t list[UINT8_MAX], uint8_t index, uint32_t position) {
+static void set_pos(int list[UINT8_MAX], uint8_t index, int position) {
     if (position > list[index]) {
         return;
     }
@@ -79,13 +79,13 @@ void allocate_walk(closure *c) {
         handle_inactive(a);
 
         // 尝试为 current 分配寄存器
-        bool allocated = allocate_free_reg(a);
+        bool allocated = allocate_free_reg(c, a);
         if (allocated) {
             list_push(a->active, a->current);
             continue;
         }
 
-        allocated = allocate_block_reg(a);
+        allocated = allocate_block_reg(c, a);
         if (allocated) {
             list_push(a->active, a->current);
         }
@@ -132,7 +132,7 @@ void to_unhandled(list *unhandled, interval_t *to) {
     }
 }
 
-static uint8_t max_pos_index(const uint32_t list[UINT8_MAX]) {
+static uint8_t max_pos_index(const int list[UINT8_MAX]) {
     uint8_t max_index = 0;
     for (int i = 1; i < UINT8_MAX; ++i) {
         if (list[i] > list[max_index]) {
@@ -143,8 +143,8 @@ static uint8_t max_pos_index(const uint32_t list[UINT8_MAX]) {
     return max_index;
 }
 
-bool allocate_free_reg(allocate_t *allocate) {
-    uint32_t free_pos[UINT8_MAX] = {0};
+bool allocate_free_reg(closure *c, allocate_t *allocate) {
+    int free_pos[UINT8_MAX] = {0};
     for (int i = 0; i < regs->count; ++i) {
         set_pos(free_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
     }
@@ -160,7 +160,7 @@ bool allocate_free_reg(allocate_t *allocate) {
     curr = allocate->inactive->front;
     while (curr->value != NULL) {
         interval_t *select = (interval_t *) curr->value;
-        uint32_t position = interval_next_intersection(allocate->current, select);
+        int position = interval_next_intersection(allocate->current, select);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned->index, position);
 
@@ -183,10 +183,10 @@ bool allocate_free_reg(allocate_t *allocate) {
     }
 
     // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
-    uint32_t optimal_position = interval_optimal_position(allocate->current, free_pos[max_reg_index]);
+    int optimal_position = interval_optimal_position(allocate->current, free_pos[max_reg_index]);
 
     // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
-    interval_t *i = interval_split_at(allocate->current, optimal_position);
+    interval_t *i = interval_split_at(c, allocate->current, optimal_position);
     to_unhandled(allocate->unhandled, i);
 
     // 为当前 interval 分配寄存器
@@ -195,40 +195,36 @@ bool allocate_free_reg(allocate_t *allocate) {
     return true;
 }
 
-bool allocate_block_reg(allocate_t *a) {
+bool allocate_block_reg(closure *c, allocate_t *a) {
     // 用于判断寄存器的空闲时间
-    uint32_t use_pos[UINT8_MAX];
-    // 被固定物理寄存器强制使用位置,有一些指令需要使用目标机器的固定寄存器，比如 ret eax 就需要强制使用 eax 寄存器
-    uint32_t fixed_pos[UINT8_MAX];
+    int use_pos[UINT8_MAX];
+    int block_pos[UINT8_MAX];
     for (int i = 0; i < regs->count; ++i) {
-        set_pos(use_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
-        set_pos(fixed_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
+        // INT32_MAX 表示寄存器完全空闲
+        set_pos(use_pos, SLICE_TACK(reg_t, regs, i)->index, INT32_MAX);
+        set_pos(block_pos, SLICE_TACK(reg_t, regs, i)->index, INT32_MAX);
     }
-    uint32_t first_use_position = interval_first_use_position(a->current);
+    int first_use_position = interval_first_use_position(a->current);
 
     // 遍历固定寄存器
-    list_node *curr = a->active->front;
-    while (curr->value != NULL) {
-        interval_t *select = (interval_t *) curr->value;
+    LIST_FOR(a->active) {
+        interval_t *select = LIST_VALUE();
         // 是否为固定间隔
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
             set_pos(use_pos, select->assigned->index, 0);
-            set_pos(fixed_pos, select->assigned->index, 0);
+            set_pos(block_pos, select->assigned->index, 0);
         } else {
             // 找一个大于 current first use_position 的位置(可以为0，0 表示没找到)
-            uint32_t pos = interval_next_use_position(select, first_use_position);
+            int pos = interval_next_use_position(select, first_use_position);
             set_pos(use_pos, select->assigned->index, pos);
         }
-
-        curr = curr->succ;
     }
 
     // 遍历非固定寄存器
-    uint32_t pos;
-    curr = a->inactive->front;
-    while (curr->value != NULL) {
-        interval_t *select = (interval_t *) curr->value;
+    int pos;
+    LIST_FOR(a->inactive) {
+        interval_t *select = LIST_VALUE();
         // 判断是否和当前 current 相交
         pos = interval_next_intersection(a->current, select);
         if (pos >= a->current->last_range->to) {
@@ -236,18 +232,30 @@ bool allocate_block_reg(allocate_t *a) {
         }
 
         if (select->fixed) {
-            set_pos(fixed_pos, select->assigned->index, pos);
+            set_pos(block_pos, select->assigned->index, pos);
             set_pos(use_pos, select->assigned->index, pos);
         } else {
             pos = interval_next_use_position(select, first_use_position);
             set_pos(use_pos, select->assigned->index, pos);
         }
-
-        curr = curr->succ;
     }
 
-    uint8_t max_reg_id = max_pos_index(use_pos);
-    // TODO split and spill
+    uint8_t max_reg = max_pos_index(use_pos);
+    if (use_pos[max_reg] < first_use_position) {
+        //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
+        // assign spill slot to current
+        interval_spill_slot(a->current);
+        // current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
+        // 则需要将 current 重新分配到寄存器，这称为 reload
+        use_position_t *kind_pos = interval_use_pos_of_kind(a->current);
+        if (kind_pos > 0) {
+            int split_pos = interval_optimal_position(c, a->current, kind_pos->value);
+            interval_t *child = interval_split_at(c, a->current, split_pos);
+            to_unhandled(a->unhandled, child);
+        }
+    } else if (block_pos[max_reg] > a->current->last_range->to) {
+        // TODO ??
+    }
 
     return 0;
 }

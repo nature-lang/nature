@@ -18,14 +18,14 @@ typedef struct {
  */
 void allocate_walk(closure *c);
 
-bool allocate_free_reg(allocate_t *allocate);
+bool allocate_free_reg(closure *c, allocate_t *allocate);
 
 /**
  * 当没有物理寄存器用于分配时，则需要使用该方法，选择最长时间空闲的 interval 进行溢出
  * @param a
  * @return
  */
-bool allocate_block_reg(allocate_t *a);
+bool allocate_block_reg(closure *c, allocate_t *a);
 
 /**
  * 将 interval 按照 first_range.from 有序插入到 unhandled 中

@@ -233,7 +233,7 @@ interval_t *interval_new(closure *c, lir_operand_var *var) {
     return entity;
 }
 
-bool interval_is_covers(interval_t *i, uint32_t position) {
+bool interval_is_covers(interval_t *i, int position) {
     list_node *current = list_first(i->ranges);
     while (current->value != NULL) {
         interval_range_t *range = current->value;
@@ -246,8 +246,8 @@ bool interval_is_covers(interval_t *i, uint32_t position) {
     return 0;
 }
 
-uint32_t interval_next_intersection(interval_t *current, interval_t *select) {
-    uint32_t position = current->first_range->from; // first_from 指向 range 的开头
+int interval_next_intersection(interval_t *current, interval_t *select) {
+    int position = current->first_range->from; // first_from 指向 range 的开头
     while (position < current->last_range->to) {
         if (interval_is_covers(current, position) && interval_is_covers(select, position)) {
             return position;
@@ -259,7 +259,7 @@ uint32_t interval_next_intersection(interval_t *current, interval_t *select) {
 }
 
 // 在 before 前挑选一个最佳的位置进行 split
-uint32_t interval_optimal_position(interval_t *current, uint32_t before) {
+int interval_optimal_position(closure *c, interval_t *current, int before) {
     return before;
 }
 
@@ -316,7 +316,7 @@ void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from) {
     i->first_range->from = from;
 }
 
-uint32_t interval_first_use_position(interval_t *i) {
+int interval_first_use_position(interval_t *i) {
     list *pos_list = i->use_positions;
     if (list_empty(pos_list)) {
         return 0;
@@ -325,7 +325,7 @@ uint32_t interval_first_use_position(interval_t *i) {
     return use_pos->value;
 }
 
-uint32_t interval_next_use_position(interval_t *i, uint32_t after_position) {
+int interval_next_use_position(interval_t *i, int after_position) {
     list *pos_list = i->use_positions;
     list_node *current = list_first(pos_list);
     while (current->value != NULL) {
@@ -406,5 +406,28 @@ interval_t *interval_split_at(closure *c, interval_t *i, int position) {
     }
 
     return child;
+}
+
+/**
+ * 其实啥也不用做,早就分配了 slot
+ * @param i
+ */
+void interval_spill_slot(interval_t *i) {
+    i->assigned = NULL;
+}
+
+/**
+ * use_positions 是否包含 kind > 0 的position, 有则返回 use_position，否则返回 NULL
+ * @param i
+ * @return
+ */
+use_position_t *interval_use_pos_of_kind(interval_t *i) {
+    LIST_FOR(i->use_positions) {
+        use_position_t *pos = LIST_VALUE();
+        if (pos->kind > 0) {
+            return pos;
+        }
+    }
+    return NULL;
 }
 
