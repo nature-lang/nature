@@ -5,6 +5,13 @@
 #include "utils/list.h"
 #include "interval.h"
 
+#define SET_USE_POS(_index, _pos) \
+    set_pos(use_pos, _index, _pos)
+
+#define SET_BLOCK_POS(_index, _pos) \
+    set_pos(block_pos, _index, _pos); \
+    set_pos(use_pos, _index, _pos);
+
 typedef struct {
     list *unhandled;
     list *handled;
@@ -40,5 +47,7 @@ void to_unhandled(list *unhandled, interval_t *to);
  * @return
  */
 list *unhandled_new(closure *c);
+
+interval_t *spill_interval(closure *c, interval_t *i, int before_pos);
 
 #endif //NATURE_SRC_REGISTER_ALLOCATE_H_

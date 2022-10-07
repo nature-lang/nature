@@ -33,7 +33,7 @@ typedef struct interval_t {
 
     reg_t *assigned;
 
-    bool fixed; // 是否是固定寄存器,固定寄存器有 reg 没有 var
+    bool fixed; // 是否是固定寄存器所产生的 interval, 固定寄存器有 reg 没有 var
 } interval_t;
 
 /**

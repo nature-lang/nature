@@ -88,7 +88,9 @@ void allocate_walk(closure *c) {
         allocated = allocate_block_reg(c, a);
         if (allocated) {
             list_push(a->active, a->current);
+            return;
         }
+        list_push(a->handled, a->current);
     }
 }
 
@@ -183,7 +185,7 @@ bool allocate_free_reg(closure *c, allocate_t *allocate) {
     }
 
     // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
-    int optimal_position = interval_optimal_position(allocate->current, free_pos[max_reg_index]);
+    int optimal_position = interval_optimal_position(c, allocate->current, free_pos[max_reg_index]);
 
     // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
     interval_t *i = interval_split_at(c, allocate->current, optimal_position);
@@ -197,31 +199,31 @@ bool allocate_free_reg(closure *c, allocate_t *allocate) {
 
 bool allocate_block_reg(closure *c, allocate_t *a) {
     // 用于判断寄存器的空闲时间
+    // key is physical register index, value is position
     int use_pos[UINT8_MAX];
-    int block_pos[UINT8_MAX];
+    int block_pos[UINT8_MAX]; // 设置 block pos 的同时需要隐式设置 use pos
     for (int i = 0; i < regs->count; ++i) {
         // INT32_MAX 表示寄存器完全空闲
-        set_pos(use_pos, SLICE_TACK(reg_t, regs, i)->index, INT32_MAX);
-        set_pos(block_pos, SLICE_TACK(reg_t, regs, i)->index, INT32_MAX);
+        SET_BLOCK_POS(SLICE_TACK(reg_t, regs, i)->index, INT32_MAX)
     }
-    int first_use_position = interval_first_use_position(a->current);
+    int first_use = interval_first_use_position(a->current);
 
-    // 遍历固定寄存器
+    // 遍历固定寄存器(active)
     LIST_FOR(a->active) {
         interval_t *select = LIST_VALUE();
         // 是否为固定间隔
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
-            set_pos(use_pos, select->assigned->index, 0);
-            set_pos(block_pos, select->assigned->index, 0);
+            SET_BLOCK_POS(select->assigned->index, 0);
         } else {
             // 找一个大于 current first use_position 的位置(可以为0，0 表示没找到)
-            int pos = interval_next_use_position(select, first_use_position);
-            set_pos(use_pos, select->assigned->index, pos);
+            int pos = interval_next_use_position(select, first_use);
+            SET_USE_POS(select->assigned->index, pos);
         }
     }
 
-    // 遍历非固定寄存器
+    // 遍历非固定寄存器(active intersect current)
+    // 如果 lifetime hole 没有和 current intersect 在 allocate free 的时候已经用完了
     int pos;
     LIST_FOR(a->inactive) {
         interval_t *select = LIST_VALUE();
@@ -232,31 +234,100 @@ bool allocate_block_reg(closure *c, allocate_t *a) {
         }
 
         if (select->fixed) {
-            set_pos(block_pos, select->assigned->index, pos);
-            set_pos(use_pos, select->assigned->index, pos);
+            // 该 interval 虽然是固定 interval(short range), 但是当前正处于 hole 中
+            // 所以在 pos 之前的位置都是可以使用该 assigned->index 对应都寄存器
+            // 但是一旦到了 pos 位置，current 必须 split at pos and spill child
+            SET_BLOCK_POS(select->assigned->index, pos);
         } else {
-            pos = interval_next_use_position(select, first_use_position);
-            set_pos(use_pos, select->assigned->index, pos);
+            pos = interval_next_use_position(select, first_use);
+            SET_USE_POS(select->assigned->index, pos);
         }
     }
 
-    uint8_t max_reg = max_pos_index(use_pos);
-    if (use_pos[max_reg] < first_use_position) {
+    // max use pos 表示空闲时间最长的寄存器
+    uint8_t reg_index = max_pos_index(use_pos);
+    if (use_pos[reg_index] < first_use) {
         //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
         // assign spill slot to current
         interval_spill_slot(a->current);
-        // current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
-        // 则需要将 current 重新分配到寄存器，这称为 reload
+
+        // 一旦 current spill 到了内存中，则后续就再也不会处理了
+        // 所以 current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
+        // 则需要将 current 重新分配到寄存器，这称为 reload, 在需要 reload 之前，将 interval spilt
         use_position_t *kind_pos = interval_use_pos_of_kind(a->current);
         if (kind_pos > 0) {
             int split_pos = interval_optimal_position(c, a->current, kind_pos->value);
             interval_t *child = interval_split_at(c, a->current, split_pos);
             to_unhandled(a->unhandled, child);
         }
-    } else if (block_pos[max_reg] > a->current->last_range->to) {
-        // TODO ??
+    } else if (block_pos[reg_index] > a->current->last_range->to) {
+        // 一般都会进入到这一条件中
+        // reg_index 对应的寄存器的空闲时间比 current first_user_pos 长
+        // 甚至比 current->last_range->to 都要长，所以优先溢出 reg_index 对应都 interval
+        // 所有和 current intersecting 的 interval 都需要在 current start 之前 split 并且 spill 到内存中
+        // 当然，如果 child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
+        LIST_FOR(a->active) {
+            interval_t *i = LIST_VALUE();
+            if (i->assigned->index != reg_index) {
+                continue;
+            }
+            spill_interval(c, i, first_use);
+        }
+        LIST_FOR(a->inactive) {
+            interval_t *i = LIST_VALUE();
+            if (i->assigned->index != reg_index) {
+                continue;
+            }
+            spill_interval(c, i, first_use);
+        }
+
+        // assign register reg to interval current
+        a->current->assigned = SLICE_TACK(reg_t, regs, reg_index);
+        return true;
+    } else {
+        // 1. current.first_use < use_pos < current.last_use
+        // 2. block_pos < current.last_use
+        // 虽然 first use pos < reg_index 对应的 interval 的使用位置，但是
+        // current start ~ end 之间被 block_pos 所截断，所以必须 split  current in block pos 之前, child in to unhandled list
+        // split and spill interval active/inactive intervals for reg
+        LIST_FOR(a->active) {
+            interval_t *i = LIST_VALUE();
+            if (i->assigned->index != reg_index) {
+                continue;
+            }
+            spill_interval(c, i, first_use);
+        }
+        LIST_FOR(a->inactive) {
+            interval_t *i = LIST_VALUE();
+            if (i->assigned->index != reg_index) {
+                continue;
+            }
+            spill_interval(c, i, first_use);
+        }
+
+        // assign register reg to interval current
+        a->current->assigned = SLICE_TACK(reg_t, regs, reg_index);
+
+        // split current at block_pos
+        int split_current_pos = interval_optimal_position(c, a->current, block_pos[reg_index]);
+        interval_t *child = interval_split_at(c, a->current, split_current_pos);
+        to_unhandled(a->unhandled, child);
+        return true;
     }
 
-    return 0;
+    return false;
+}
+
+interval_t *spill_interval(closure *c, interval_t *i, int before_pos) {
+    // spill current before current first use position
+    int split_pos = interval_optimal_position(c, i, before_pos);
+    interval_t *child = interval_split_at(c, i, split_pos);
+    use_position_t *kind_pos = interval_use_pos_of_kind(child);
+    if (kind_pos > 0) {
+        split_pos = interval_optimal_position(c, child, kind_pos->value);
+        child = interval_split_at(c, child, split_pos);
+        return child;
+    }
+    return NULL;
 }
 

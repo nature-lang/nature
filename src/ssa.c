@@ -636,5 +636,15 @@ bool ssa_var_belong(lir_operand_var *var, lir_vars vars) {
     return false;
 }
 
+/**
+ * linear scan register allocation 之前需要调用该方法
+ * 其将在 phi 的分支块中冗余的插入一个 mov 指令,从而避免例如 a3 = phi(a1, a2) 中 a1 和 a2 在同一指令中,无法分配到同一个寄存器
+ * 但是实际上 a1 和 a2 并不会同时出现，完全可以使用相同的寄存器
+ * @param c
+ */
+void ssa_mov_for_phi(closure *c) {
+  
+}
+
 
 

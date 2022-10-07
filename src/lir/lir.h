@@ -232,14 +232,9 @@ typedef struct lir_op {
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
     int id; // 编号
+    // 预着色，寄存器分配期间会将该寄存器作为 fixed register 处理，比如 call op, regs 包含所有寄存器。又比如某些 operand 也会包含固定寄存器
+    int regs[UINT8_MAX];
 } lir_op;
-
-// type 列表
-typedef struct {
-    lir_op *front;
-    lir_op *rear;
-    uint16_t count;
-} list_op;
 
 typedef struct {
     uint8_t count;

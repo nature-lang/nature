@@ -66,4 +66,6 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom);
 
 bool ssa_var_belong(lir_operand_var *var, lir_vars vars);
 
+void ssa_mov_for_phi(closure *c);
+
 #endif //NATURE_SRC_SSA_H_
