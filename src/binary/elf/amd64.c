@@ -12,38 +12,38 @@
  * call rel32 // e8 00 00 00 00
  * jmp rel32 // e9 00 00 00 00
  * 其中偏移是从第四个字符开始, offset 从 0 开始算，所以使用 + 3, 但是不同指令需要不同对待
- * @param opcode
+ * @param operation
  * @return
  */
-uint64_t opcode_rip_offset(amd64_opcode_t *opcode) {
-    if (str_equal(opcode->name, "mov")) {
+uint64_t operation_rip_offset(amd64_operation_t *operation) {
+    if (str_equal(operation->name, "mov")) {
         // rip 相对寻址
         return 3;
     }
-    if (str_equal(opcode->name, "lea")) {
+    if (str_equal(operation->name, "lea")) {
         return 3;
     }
 
-    if (str_equal(opcode->name, "call")) {
-//        if (opcode->operands[0]->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
+    if (str_equal(operation->name, "call")) {
+//        if (operation->operands[0]->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
 //            return 2;
 //        }
 
         return 1;
     }
-    if (opcode->name[0] == 'j') {
+    if (operation->name[0] == 'j') {
         return 1;
     }
 
-    error_exit("[opcode_rip_offset] cannot ident opcode: %s", opcode->name);
+    error_exit("[operation_rip_offset] cannot ident operation: %s", operation->name);
     return 0;
 }
 
-static uint8_t jmp_rewrite_rel8_reduce_count(amd64_opcode_t *opcode) {
-    if (opcode->name[0] != 'j') {
+static uint8_t jmp_rewrite_rel8_reduce_count(amd64_operation_t *operation) {
+    if (operation->name[0] != 'j') {
         return 0;
     }
-    if (str_equal(opcode->name, "jmp")) {
+    if (str_equal(operation->name, "jmp")) {
         //   b:	eb f3                	jmp    0 <test>
         //   d:	e9 14 00 00 00       	jmpq   26 <test+0x26>
         return 5 - 2;
@@ -53,35 +53,35 @@ static uint8_t jmp_rewrite_rel8_reduce_count(amd64_opcode_t *opcode) {
     return 6 - 2;
 }
 
-static uint8_t jmp_opcode_count(amd64_opcode_t *opcode, uint8_t size) {
-    if (opcode->name[0] != 'j') {
-        error_exit("[linux_elf_amd64_jmp_inst_count] opcode: %s not jmp or jcc:", opcode->name);
+static uint8_t jmp_operation_count(amd64_operation_t *operation, uint8_t size) {
+    if (operation->name[0] != 'j') {
+        error_exit("[linux_elf_amd64_jmp_inst_count] operation: %s not jmp or jcc:", operation->name);
     }
     if (size == BYTE) {
         return 2;
     }
-    if (str_equal(opcode->name, "jmp")) {
+    if (str_equal(operation->name, "jmp")) {
         return 5;
     }
     return 6;
 }
 
 
-static bool is_call_opcode(char *name) {
+static bool is_call_op(char *name) {
     return str_equal(name, "call");
 }
 
-static bool is_jmp_opcode(char *name) {
+static bool is_jmp_op(char *name) {
     return name[0] == 'j';
 }
 
 /**
  * symbol to rel32 or rel8
- * @param opcode
+ * @param operation
  * @param operand
  * @param rel_diff
  */
-static void amd64_rewrite_rel_symbol(amd64_opcode_t *opcode, amd64_operand_t *operand, int rel_diff) {
+static void amd64_rewrite_rel_symbol(amd64_operation_t *operation, amd64_operand_t *operand, int rel_diff) {
     if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
         // 已经确定了指令长度，不能在随意修正了
         if (rel_diff == 0) {
@@ -90,8 +90,8 @@ static void amd64_rewrite_rel_symbol(amd64_opcode_t *opcode, amd64_operand_t *op
 
         if (operand->type == ASM_OPERAND_TYPE_UINT32) {
             uint8_t data_count = 5;
-            if (!is_call_opcode(opcode->name)) {
-                data_count = jmp_opcode_count(opcode, DWORD);
+            if (!is_call_op(operation->name)) {
+                data_count = jmp_operation_count(operation, DWORD);
             }
             asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
             v->value = (uint32_t) (rel_diff - data_count);
@@ -107,10 +107,10 @@ static void amd64_rewrite_rel_symbol(amd64_opcode_t *opcode, amd64_operand_t *op
 
     // symbol to rel32
     // call 指令不能改写成 rel8
-    if (rel_diff == 0 || abs(rel_diff) > 128 || is_call_opcode(opcode->name)) {
+    if (rel_diff == 0 || abs(rel_diff) > 128 || is_call_op(operation->name)) {
         uint8_t data_count = 5;
-        if (!is_call_opcode(opcode->name)) {
-            data_count = jmp_opcode_count(opcode, DWORD);
+        if (!is_call_op(operation->name)) {
+            data_count = jmp_operation_count(operation, DWORD);
         }
 
         operand->type = ASM_OPERAND_TYPE_UINT32;
@@ -128,7 +128,7 @@ static void amd64_rewrite_rel_symbol(amd64_opcode_t *opcode, amd64_operand_t *op
     operand->type = ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
-    v->value = (uint8_t) (rel_diff - jmp_opcode_count(opcode, operand->size)); // 去掉当前指令的差值
+    v->value = (uint8_t) (rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
     operand->value = v;
 }
 
@@ -141,9 +141,9 @@ static void amd64_rewrite_rip_symbol(amd64_operand_t *operand) {
 }
 
 
-static amd64_operand_t *has_symbol_operand(amd64_opcode_t *opcode) {
-    for (int i = 0; i < opcode->count; ++i) {
-        amd64_operand_t *operand = opcode->operands[i];
+static amd64_operand_t *has_symbol_operand(amd64_operation_t *operation) {
+    for (int i = 0; i < operation->count; ++i) {
+        amd64_operand_t *operand = operation->operands[i];
         if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
             return operand;
         }
@@ -152,12 +152,12 @@ static amd64_operand_t *has_symbol_operand(amd64_opcode_t *opcode) {
 }
 
 
-static amd64_build_temp_t *build_temp_new(amd64_opcode_t *opcode) {
+static amd64_build_temp_t *build_temp_new(amd64_operation_t *operation) {
     amd64_build_temp_t *temp = NEW(amd64_build_temp_t);
     temp->data = NULL;
     temp->data_count = 0;
     temp->offset = NEW(uint64_t);
-    temp->opcode = opcode;
+    temp->operation = operation;
     temp->rel_operand = NULL;
     temp->rel_symbol = NULL;
     temp->may_need_reduce = false;
@@ -170,11 +170,11 @@ static amd64_build_temp_t *build_temp_new(amd64_opcode_t *opcode) {
 static void amd64_rewrite_rel32_to_rel8(amd64_build_temp_t *temp) {
     asm_operand_uint8_t *operand = NEW(asm_operand_uint8_t);
     operand->value = 0; // 仅占位即可
-    temp->opcode->count = 1;
-    temp->opcode->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
-    temp->opcode->operands[0]->size = BYTE;
-    temp->opcode->operands[0]->value = operand;
-    temp->data = amd64_opcode_encoding(*temp->opcode, &temp->data_count);
+    temp->operation->count = 1;
+    temp->operation->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
+    temp->operation->operands[0]->size = BYTE;
+    temp->operation->operands[0]->value = operand;
+    temp->data = amd64_operation_encoding(*temp->operation, &temp->data_count);
     temp->may_need_reduce = false;
 }
 
@@ -220,7 +220,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
             ((Elf64_Sym *) symtab->data)[temp->sym_index].st_value = *temp->offset;
         }
         if (temp->elf_rel) {
-            temp->elf_rel->r_offset = *temp->offset + opcode_rip_offset(temp->opcode);
+            temp->elf_rel->r_offset = *temp->offset + operation_rip_offset(temp->operation);
         }
 
         temp_section_offset += temp->data_count;
@@ -493,8 +493,8 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
     }
 }
 
-void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
-    if (opcodes->count == 0) {
+void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
+    if (operations->count == 0) {
         return;
     }
 
@@ -502,17 +502,17 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
 
     uint64_t section_offset = 0; // text section offset
     // 一次遍历
-    for (int i = 0; i < opcodes->count; ++i) {
-        amd64_opcode_t *opcode = opcodes->take[i];
-        amd64_build_temp_t *temp = build_temp_new(opcode);
+    for (int i = 0; i < operations->count; ++i) {
+        amd64_operation_t *operation = operations->take[i];
+        amd64_build_temp_t *temp = build_temp_new(operation);
         slice_push(build_temps, temp);
 
         *temp->offset = section_offset;
 
         // 定义符号
-        if (str_equal(opcode->name, "label")) {
+        if (str_equal(operation->name, "label")) {
             // 解析符号值，并添加到符号表
-            amd64_operand_symbol_t *s = opcode->operands[0]->value;
+            amd64_operand_symbol_t *s = operation->operands[0]->value;
             // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
             // 一旦发现定义点,就需要反推
             amd64_confirm_rel(ctx->symtab_section, build_temps, &section_offset, s->name);
@@ -531,28 +531,28 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
             continue;
         }
 
-        amd64_operand_t *rel_operand = has_symbol_operand(opcode);
+        amd64_operand_t *rel_operand = has_symbol_operand(operation);
         if (rel_operand != NULL) {
             // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
             // 1. 数据符号引用(直接改写成 0x0(rip))
             // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位)
             amd64_operand_symbol_t *symbol_operand = rel_operand->value;
             // 判断是否为标签符号引用, 比如 call symbol call
-            if (is_call_opcode(opcode->name) || is_jmp_opcode(opcode->name)) {
+            if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
                 // 标签符号
                 uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
                 if (sym_index > 0) {
                     // 引用了已经存在的符号，直接计算相对位置即可
                     Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
                     int rel_diff = sym.st_value - section_offset;
-                    amd64_rewrite_rel_symbol(opcode, rel_operand, rel_diff);
+                    amd64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
                 } else {
                     // 引用了 label 符号，但是符号确不在符号表中
                     // 此时使用 rel32 占位，其中 jmp 指令后续可能需要替换 rel8
-                    amd64_rewrite_rel_symbol(opcode, rel_operand, 0);
+                    amd64_rewrite_rel_symbol(operation, rel_operand, 0);
                     temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
                     temp->rel_symbol = symbol_operand->name;
-                    uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(opcode);
+                    uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
                     if (reduce_count > 0) {
                         temp->may_need_reduce = true;
                         temp->reduce_count = reduce_count;
@@ -576,7 +576,7 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
                     sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
                 }
 
-                uint64_t rel_offset = *temp->offset += opcode_rip_offset(opcode);
+                uint64_t rel_offset = *temp->offset += operation_rip_offset(operation);
                 temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                                  rel_offset, R_X86_64_PC32, (int) sym_index, -4);
 
@@ -586,7 +586,7 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
         }
 
         // 编码
-        temp->data = amd64_opcode_encoding(*opcode, &temp->data_count);
+        temp->data = amd64_operation_encoding(*operation, &temp->data_count);
         section_offset += temp->data_count;
     }
 
@@ -614,11 +614,11 @@ void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
             int rel_diff = sym->st_value - *temp->offset;
-            amd64_rewrite_rel_symbol(temp->opcode, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
-            temp->data = amd64_opcode_encoding(*temp->opcode, &temp->data_count);
+            amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
+            temp->data = amd64_operation_encoding(*temp->operation, &temp->data_count);
         } else {
             // 外部符号添加重定位信息
-            uint64_t rel_offset = *temp->offset += opcode_rip_offset(temp->opcode);
+            uint64_t rel_offset = *temp->offset += operation_rip_offset(temp->operation);
             temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                              rel_offset, R_X86_64_PC32, (int) sym_index, -4);
         }

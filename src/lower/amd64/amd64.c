@@ -41,7 +41,7 @@ static amd64_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, 
     error_exit("[amd64_lower_var_operand] var %d not reg_id or stack offset", var->ident);
 }
 
-amd64_opcode_t *amd64_lower_empty_reg(reg_t *reg) {
+amd64_operation_t *amd64_lower_empty_reg(reg_t *reg) {
     // TODO ah/bh/ch/dh 不能这么清理
 
     reg_t *r = (reg_t *) register_find(reg->index, QWORD);
@@ -208,6 +208,8 @@ slice_t *amd64_lower_add(closure *c, lir_op *op) {
     temp = amd64_lower_operand_transform(op->result, result, used);
     slice_append(insts, temp);
 
+    // 并没有强制要求寄存器？但是也没有做冗余的 mov 的强制消除？
+    // 任何一个值都不是必定能分配到寄存器的！除非配置了 use kind?
     reg_t *reg = amd64_lower_next_reg(used, lir_operand_sizeof(op->result));
     slice_push(insts, ASM_INST("mov", { REG(reg), first }));
     slice_push(insts, ASM_INST("add", { REG(reg), second }));

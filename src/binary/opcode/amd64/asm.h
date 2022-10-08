@@ -15,7 +15,7 @@
 #define ZWORD 64 // 64 byte
 
 #define MOVSQ(_prefix) ({\
-  asm_inst_t *_inst = NEW(amd64_opcode_t);\
+  asm_inst_t *_inst = NEW(amd64_operation_t);\
   _inst->name = "movsq"; \
   _inst->prefix = _prefix; \
   _inst->count = 0;\
@@ -24,7 +24,7 @@
 
 // ASM_INST("mov", { to, from });
 #define ASM_INST(_name, ...) ({\
-  amd64_opcode_t *_inst = NEW(amd64_opcode_t);\
+  amd64_operation_t *_inst = NEW(amd64_operation_t);\
   _inst->name = _name;\
   amd64_operand_t *_temp_operands[4] = __VA_ARGS__;\
   for (int _i = 0; _i < 4; ++_i) {\
@@ -224,7 +224,7 @@ typedef struct {
     uint8_t prefix; // 自定义指令前缀，覆盖
     uint8_t count;
     amd64_operand_t *operands[4]; // 最多 4 个参数
-} amd64_opcode_t;
+} amd64_operation_t;
 
 //typedef enum {
 //    ASM_VAR_DECL_TYPE_INT = 1,
@@ -239,7 +239,7 @@ typedef struct {
 //    uint8_t *value; // 符号值
 //} amd64_asm_var_decl;
 
-amd64_operand_t *amd64_asm_symbol_operand(amd64_opcode_t asm_inst);
+amd64_operand_t *amd64_asm_symbol_operand(amd64_operation_t asm_inst);
 
 amd64_operand_t *asm_match_int_operand(int64_t n);
 

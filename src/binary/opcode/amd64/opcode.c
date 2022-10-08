@@ -800,7 +800,7 @@ static bool has_rex_extension(opcode_ext *list) {
     return false;
 }
 
-inst_t *opcode_select(amd64_opcode_t opcode) {
+inst_t *opcode_select(amd64_operation_t opcode) {
     amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, opcode.name);
     if (current == NULL) {
         error_exit("cannot identify asm opcode %s ", opcode.name);
@@ -1100,7 +1100,7 @@ static amd64_inst_format_t *inst_format_new(uint8_t *opcode) {
  * @param inst
  * @return
  */
-amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_opcode_t asm_inst) {
+amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_operation_t asm_inst) {
     amd64_inst_format_t *format = inst_format_new(inst->opcode);
 
     if (asm_inst.prefix > 0) {
@@ -1465,12 +1465,12 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
     }
 }
 
-uint8_t *amd64_opcode_encoding(amd64_opcode_t opcode, uint8_t *count) {
+uint8_t *amd64_operation_encoding(amd64_operation_t operation, uint8_t *count) {
     *count = 0;
     uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
-    inst_t *inst = opcode_select(opcode);
-    amd64_inst_format_t *format = opcode_fill(inst, opcode);
+    inst_t *inst = opcode_select(operation);
+    amd64_inst_format_t *format = opcode_fill(inst, operation);
     opcode_format_encoding(format, data, count);
     void *_ = realloc(data, *count);
     return data;

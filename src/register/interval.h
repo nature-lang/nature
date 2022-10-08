@@ -9,9 +9,15 @@ typedef enum {
     LOOP_DETECTION_FLAG_ACTIVE,
 } loop_detection_flag;
 
+typedef enum {
+    USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
+    USE_KIND_SHOULD = 1, // 尽量分配寄存器，但不强制
+    USE_KIND_MUST = 2, // 必须分配寄存器
+} use_kind_e;
+
 typedef struct {
     int value;
-    int kind;
+    use_kind_e kind;
 } use_position_t;
 
 typedef struct {

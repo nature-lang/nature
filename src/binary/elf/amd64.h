@@ -16,7 +16,7 @@ typedef struct {
     uint8_t *data;
     uint8_t data_count;
     uint64_t *offset; // 指令的其实位置
-    amd64_opcode_t *opcode; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
+    amd64_operation_t *operation; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
     string rel_symbol; // 使用的符号
     amd64_operand_t *rel_operand; // 引用自 asm_inst
     bool may_need_reduce; // jmp 指令可以从 rel32 优化为 rel8
@@ -36,8 +36,8 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, a
 /**
  * 经过两次遍历最终生成 section text、symbol、rela
  * @param ctx
- * @param opcodes amd64_opcode_t
+ * @param operations amd64_opcode_t
  */
-void amd64_opcode_encodings(elf_context *ctx, slice_t *opcodes);
+void amd64_operation_encodings(elf_context *ctx, slice_t *operations);
 
 #endif //NATURE_AMD64_H

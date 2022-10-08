@@ -135,7 +135,7 @@ typedef struct {
     slice_t *compiler_closures; // 包含 lir
 
     // lower -> opcodes
-    slice_t *opcodes; // 和架构相关
+    slice_t *operations; // 和架构相关
     slice_t *var_decls; // 和架构无关
 
     // elf target.o

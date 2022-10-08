@@ -245,7 +245,7 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operand
  * 2. tree 结构进一步选择
  * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
  */
-inst_t *opcode_select(amd64_opcode_t opcode);
+inst_t *opcode_select(amd64_operation_t opcode);
 
 /**
  * 指令填充
@@ -254,12 +254,12 @@ inst_t *opcode_select(amd64_opcode_t opcode);
  * @param asm_inst
  * @param inst
  */
-amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_opcode_t asm_inst);
+amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_operation_t asm_inst);
 
 void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t *count);
 
 void opcode_sort_insts(amd64_insts_t *insts);
 
-uint8_t *amd64_opcode_encoding(amd64_opcode_t opcode, uint8_t *count);
+uint8_t *amd64_operation_encoding(amd64_operation_t operation, uint8_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_X86_64_OPCODE_H_

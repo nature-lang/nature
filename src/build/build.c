@@ -39,7 +39,7 @@ static char *lib_file_path(char *file) {
  */
 void cross_lower(module_t *m) {
     lower_var_decls = slice_new();
-    m->opcodes = slice_new();
+    m->operations = slice_new();
 
     // pre
     register_init();
@@ -53,7 +53,7 @@ void cross_lower(module_t *m) {
     for (int i = 0; i < m->compiler_closures->count; ++i) {
         closure *c = m->compiler_closures->take[i];
         if (BUILD_ARCH == ARCH_AMD64) {
-            slice_append(m->opcodes, amd64_lower_closure(c));
+            slice_append(m->operations, amd64_lower_closure(c));
         } else {
             goto ERROR;
         }
@@ -79,7 +79,7 @@ void build_assembler(module_t *m) {
 
         char *output = file_join(TEMP_DIR, object_file_name);
         elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
-        linkable_object_format(ctx, m->opcodes, m->var_decls);
+        linkable_object_format(ctx, m->operations, m->var_decls);
         elf_output(ctx);
 
         // 完整输出路径

@@ -63,7 +63,7 @@ uint16_t ehdr_machine() {
 
 void opcode_encodings(elf_context *ctx, slice_t *opcodes) {
     if (BUILD_ARCH == ARCH_AMD64) {
-        amd64_opcode_encodings(ctx, opcodes);
+        amd64_operation_encodings(ctx, opcodes);
         return;
     }
 }

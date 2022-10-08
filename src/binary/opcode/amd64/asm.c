@@ -1,6 +1,6 @@
 #include "asm.h"
 
-amd64_operand_t *amd64_asm_symbol_operand(amd64_opcode_t asm_inst) {
+amd64_operand_t *amd64_asm_symbol_operand(amd64_operation_t asm_inst) {
     for (int i = 0; i < asm_inst.count; ++i) {
         amd64_operand_t *operand = asm_inst.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {

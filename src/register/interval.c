@@ -207,14 +207,14 @@ void interval_build(closure *c) {
             for (int j = 0; j < output_vars.count; ++j) {
                 lir_operand_var *var = output_vars.list[j];
                 interval_cut_first_range_from(c, var, op->id); // 截断操作
-                interval_add_use_position(c, var, op->id, 0);
+                interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
             }
 
             lir_vars input_vars = lir_input_vars(op);
             for (int j = 0; j < input_vars.count; ++j) {
                 lir_operand_var *var = input_vars.list[j];
                 interval_add_range(c, var, block_from, op->id); // 添加整段长度
-                interval_add_use_position(c, var, op->id, 0);
+                interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
             }
 
             current = current->prev;
@@ -263,11 +263,11 @@ int interval_optimal_position(closure *c, interval_t *current, int before) {
     return before;
 }
 
+// TODO 是否需要处理重叠部分？
 void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
     // 排序，合并
     interval_t *i = table_get(c->interval_table, var->ident);
     list *ranges = i->ranges;
-    // 如果 from 或者 to 和已经存在的 range 由重叠的部分，则需要合并两个 range
     // 否则按从小到大的顺序插入 ranges
     interval_range_t *range = NEW(interval_range_t);
     range->from = from;
