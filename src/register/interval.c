@@ -161,11 +161,11 @@ void interval_mark_number(closure *c) {
     int next_id = 0;
     for (int i = 0; i < c->order_blocks->count; ++i) {
         lir_basic_block *block = c->order_blocks->take[i];
-        list_node *current = list_first(block->operates);
+        list_node *current = list_first(block->operations);
 
         while (current->value != NULL) {
             lir_op *op = current->value;
-            if (op->type == LIR_OP_TYPE_PHI) {
+            if (op->code == LIR_OPCODE_PHI) {
                 current = current->succ;
                 continue;
             }
@@ -188,7 +188,7 @@ void interval_build(closure *c) {
     // 倒序遍历顺序基本块基本块
     for (int i = c->order_blocks->count - 1; i >= 0; --i) {
         lir_basic_block *block = c->order_blocks->take[i];
-        lir_op *first_op = list_first(block->operates)->value;
+        lir_op *first_op = list_first(block->operations)->value;
         int block_from = first_op->id;
         int block_to = first_op->id + 2;
 
@@ -198,7 +198,7 @@ void interval_build(closure *c) {
         }
 
         // 倒序遍历所有块指令
-        list_node *current = list_last(block->operates);
+        list_node *current = list_last(block->operations);
         while (current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op *op = current->value;

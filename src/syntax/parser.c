@@ -28,7 +28,7 @@ type_base_t token_to_type_category[] = {
         [TOKEN_LITERAL_INT] = TYPE_INT,
         [TOKEN_LITERAL_STRING] = TYPE_STRING,
 
-        // type
+        // code
         [TOKEN_BOOL] = TYPE_BOOL,
         [TOKEN_FLOAT] = TYPE_FLOAT,
         [TOKEN_INT] = TYPE_INT,
@@ -75,7 +75,7 @@ parser_rule rules[] = {
         [TOKEN_FUNCTION] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_MAP] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_ARRAY] = {parser_direct_type_expr, NULL, PRECEDENCE_NULL},
-        // type decl 不会出现在表达式这里
+        // code decl 不会出现在表达式这里
         [TOKEN_STRUCT] = {parser_struct_type_expr, NULL, PRECEDENCE_NULL},
 
         [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
@@ -144,13 +144,13 @@ ast_stmt *parser_stmt(module_t *m) {
 }
 
 /**
- * type foo = int
+ * code foo = int
  * @return
  */
 ast_stmt *parser_type_decl_stmt(module_t *m) {
     ast_stmt *result = parser_new_stmt();
     ast_type_decl_stmt *type_decl_stmt = malloc(sizeof(ast_type_decl_stmt));
-    parser_must(m, TOKEN_TYPE); // type
+    parser_must(m, TOKEN_TYPE); // code
     type_decl_stmt->ident = parser_advance(m)->literal; // ident
     parser_must(m, TOKEN_EQUAL); // =
     // 类型解析
@@ -278,7 +278,7 @@ ast_expr parser_binary(module_t *m, ast_expr left) {
     result.assert_type = AST_EXPR_BINARY;
     result.expr = binary_expr;
 
-//  printf("type: %s\n", operator_token->literal);
+//  printf("code: %s\n", operator_token->literal);
 
     return result;
 }
@@ -300,7 +300,7 @@ ast_expr parser_unary(module_t *m) {
     } else if (operator_token->type == TOKEN_MINUS) {
         unary_expr->operator = AST_EXPR_OPERATOR_NEG;
     } else {
-        error_exit("unknown operator type");
+        error_exit("unknown operator code");
     }
 
     unary_expr->operand = operand;
@@ -337,15 +337,15 @@ ast_expr parser_literal(module_t *m) {
 
 /**
  * 右值是 ident 开头的处理
- * ident is custom type or variable
- * ident 如果是 type 则需要特殊处理
+ * ident is custom code or variable
+ * ident 如果是 code 则需要特殊处理
  * @return
  */
 ast_expr parser_ident_expr(module_t *m) {
     ast_expr result = parser_new_expr(m);
     token *ident_token = parser_advance(m);
 
-    // ast_type ident 通常表示自定义类型，如 type foo = int, 其就是 foo 类型。
+    // ast_type ident 通常表示自定义类型，如 code foo = int, 其就是 foo 类型。
     // 所以应该使用 ast_type 保存这种类型。这种类型保存在 ast_type 中，其 category 应该是什么呢？
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     type_t type_decl_ident = {
@@ -356,7 +356,7 @@ ast_expr parser_ident_expr(module_t *m) {
 
     /**
       * 请注意这里是实例化一个结构体,而不是声明一个结构体
-      * 声明 type person = struct{int a, int b}
+      * 声明 code person = struct{int a, int b}
       * 实例化
       * var a =  person {
       *              a = 1
@@ -372,7 +372,7 @@ ast_expr parser_ident_expr(module_t *m) {
     if (parser_is(m, TOKEN_LITERAL_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return parser_function_decl_expr(m, type_decl_ident);
     };
-    // type () {}
+    // code () {}
     if (parser_is(m, TOKEN_LEFT_PAREN) && parser_is_function_decl(m, parser_next(m, 0))) {
         return parser_function_decl_expr(m, type_decl_ident);
     }
@@ -451,7 +451,7 @@ ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
 //  // param handle
 //  parser_actual_param(call_stmt);
 //
-//  result->type = AST_CALL;
+//  result->code = AST_CALL;
 //  result->stmt = call_stmt;
 //
 //  return result;
@@ -494,7 +494,7 @@ void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn) {
         ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
         var_decl->ident = "";
         var_decl->type = parser_type(m);
-        // formal parameter handle type + ident
+        // formal parameter handle code + ident
         type_fn->formal_param_types[0] = parser_type(m);
         type_fn->formal_param_count = 1;
 
@@ -511,7 +511,7 @@ void parser_formal_param(module_t *m, ast_new_fn *function_decl) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
-        // formal parameter handle type + ident
+        // formal parameter handle code + ident
         function_decl->formal_params[0] = parser_var_decl(m);
         function_decl->formal_param_count = 1;
 
@@ -611,7 +611,7 @@ type_t parser_type(module_t *m) {
     }
 
     if (!parser_is(m, TOKEN_LITERAL_IDENT)) {
-        error_printf(parser_line(m), "parser error,type must base/custom type ident");
+        error_printf(parser_line(m), "parser error,code must base/custom code ident");
     }
     // 神奇的 ident
     token *type_token = parser_advance(m);
@@ -631,7 +631,7 @@ type_t parser_type(module_t *m) {
 ast_new_fn *parser_function_decl(module_t *m, type_t type) {
     ast_new_fn *function_decl = malloc(sizeof(ast_new_fn));
 
-    // 必选 type
+    // 必选 code
     function_decl->return_type = type;
     function_decl->name = ""; // 避免随机值干扰
 
@@ -829,7 +829,7 @@ bool parser_consume(module_t *m, token_type expect) {
  *
  * }
  * call();
- * type() {
+ * code() {
  * }
  *
  * foo = 1

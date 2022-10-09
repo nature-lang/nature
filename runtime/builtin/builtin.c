@@ -31,7 +31,7 @@ static void builtin_print_operand(int arg_count, builtin_operand_t **operands) {
             write(STDOUT_FILENO, raw, strlen(raw));
             continue;
         }
-        printf("operand type err, actual: %d\n", operand->type);
+        printf("operand code err, actual: %d\n", operand->type);
     }
 }
 

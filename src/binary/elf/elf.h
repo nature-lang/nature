@@ -67,7 +67,7 @@ typedef Elf64_Half Elf64_Versym;
 typedef struct
 {
   unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
-  Elf32_Half	e_type;			/* Object file type */
+  Elf32_Half	e_type;			/* Object file code */
   Elf32_Half	e_machine;		/* Architecture */
   Elf32_Word	e_version;		/* Object file version */
   Elf32_Addr	e_entry;		/* Entry point virtual address */
@@ -85,7 +85,7 @@ typedef struct
 typedef struct
 {
   unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
-  Elf64_Half	e_type;			/* Object file type */
+  Elf64_Half	e_type;			/* Object file code */
   Elf64_Half	e_machine;		/* Architecture */
   Elf64_Word	e_version;		/* Object file version */
   Elf64_Addr	e_entry;		/* Entry point virtual address */
@@ -157,9 +157,9 @@ typedef struct
 
 #define EI_PAD		9		/* Byte index of padding bytes */
 
-/* Legal values for e_type (object file type).  */
+/* Legal values for e_type (object file code).  */
 
-#define ET_NONE		0		/* No file type */
+#define ET_NONE		0		/* No file code */
 #define ET_REL		1		/* Relocatable file */
 #define ET_EXEC		2		/* Executable file */
 #define ET_DYN		3		/* Shared object file */
@@ -385,7 +385,7 @@ typedef struct
 typedef struct
 {
   Elf32_Word	sh_name;		/* Section name (string tbl index) */
-  Elf32_Word	sh_type;		/* Section type */
+  Elf32_Word	sh_type;		/* Section code */
   Elf32_Word	sh_flags;		/* Section flags */
   Elf32_Addr	sh_addr;		/* Section virtual addr at execution */
   Elf32_Off	sh_offset;		/* Section file offset */
@@ -399,7 +399,7 @@ typedef struct
 typedef struct
 {
   Elf64_Word	sh_name;		/* Section name (string tbl index) */
-  Elf64_Word	sh_type;		/* Section type */
+  Elf64_Word	sh_type;		/* Section code */
   Elf64_Xword	sh_flags;		/* Section flags */
   Elf64_Addr	sh_addr;		/* Section virtual addr at execution */
   Elf64_Off	sh_offset;		/* Section file offset */
@@ -427,7 +427,7 @@ typedef struct
 #define SHN_XINDEX	0xffff		/* Index is in extra table.  */
 #define SHN_HIRESERVE	0xffff		/* End of reserved indices */
 
-/* Legal values for sh_type (section type).  */
+/* Legal values for sh_type (section code).  */
 
 #define SHT_NULL	  0		/* Section header table entry unused */
 #define SHT_PROGBITS	  1		/* Program data */
@@ -460,7 +460,7 @@ typedef struct
 #define SHT_GNU_verneed	  0x6ffffffe	/* Version needs section.  */
 #define SHT_GNU_versym	  0x6fffffff	/* Version symbol table.  */
 #define SHT_HISUNW	  0x6fffffff	/* Sun-specific high bound.  */
-#define SHT_HIOS	  0x6fffffff	/* End OS-specific type */
+#define SHT_HIOS	  0x6fffffff	/* End OS-specific code */
 #define SHT_LOPROC	  0x70000000	/* Start of processor-specific */
 #define SHT_HIPROC	  0x7fffffff	/* End of processor-specific */
 #define SHT_LOUSER	  0x80000000	/* Start of application-specific */
@@ -521,7 +521,7 @@ typedef struct
   Elf32_Word	st_name;		/* Symbol name (string tbl index) */
   Elf32_Addr	st_value;		/* Symbol value */
   Elf32_Word	st_size;		/* Symbol size */
-  unsigned char	st_info;		/* Symbol type and binding */
+  unsigned char	st_info;		/* Symbol code and binding */
   unsigned char	st_other;		/* Symbol visibility */
   Elf32_Section	st_shndx;		/* Section index */
 } Elf32_Sym;
@@ -529,7 +529,7 @@ typedef struct
 typedef struct
 {
   Elf64_Word	st_name;		/* Symbol name (string tbl index) */
-  unsigned char	st_info;		/* Symbol type and binding */
+  unsigned char	st_info;		/* Symbol code and binding */
   unsigned char st_other;		/* Symbol visibility */
   Elf64_Section	st_shndx;		/* Section index */
   Elf64_Addr	st_value;		/* Symbol value */
@@ -572,12 +572,12 @@ typedef struct
 
 #define ELF32_ST_BIND(val)		(((unsigned char) (val)) >> 4)
 #define ELF32_ST_TYPE(val)		((val) & 0xf)
-#define ELF32_ST_INFO(bind, type)	(((bind) << 4) + ((type) & 0xf))
+#define ELF32_ST_INFO(bind, code)	(((bind) << 4) + ((code) & 0xf))
 
 /* Both Elf32_Sym and Elf64_Sym use the same one-byte st_info field.  */
 #define ELF64_ST_BIND(val)		ELF32_ST_BIND (val)
 #define ELF64_ST_TYPE(val)		ELF32_ST_TYPE (val)
-#define ELF64_ST_INFO(bind, type)	ELF32_ST_INFO ((bind), (type))
+#define ELF64_ST_INFO(bind, code)	ELF32_ST_INFO ((bind), (code))
 
 /* Legal values for ST_BIND subfield of st_info (symbol binding).  */
 
@@ -591,9 +591,9 @@ typedef struct
 #define STB_LOPROC	13		/* Start of processor-specific */
 #define STB_HIPROC	15		/* End of processor-specific */
 
-/* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+/* Legal values for ST_TYPE subfield of st_info (symbol code).  */
 
-#define STT_NOTYPE	0		/* Symbol type is unspecified */
+#define STT_NOTYPE	0		/* Symbol code is unspecified */
 #define STT_OBJECT	1		/* Symbol is a data object */
 #define STT_FUNC	2		/* Symbol is a code object */
 #define STT_SECTION	3		/* Symbol associated with a section */
@@ -629,12 +629,12 @@ typedef struct
 #define STV_PROTECTED	3		/* Not preemptible, not exported */
 
 
-/* Relocation table entry without addend (in section of type SHT_REL).  */
+/* Relocation table entry without addend (in section of code SHT_REL).  */
 
 typedef struct
 {
   Elf32_Addr	r_offset;		/* Address */
-  Elf32_Word	r_info;			/* Relocation type and symbol index */
+  Elf32_Word	r_info;			/* Relocation code and symbol index */
 } Elf32_Rel;
 
 /* I have seen two different definitions of the Elf64_Rel and
@@ -645,22 +645,22 @@ typedef struct
 typedef struct
 {
   Elf64_Addr	r_offset;		/* Address */
-  Elf64_Xword	r_info;			/* Relocation type and symbol index */
+  Elf64_Xword	r_info;			/* Relocation code and symbol index */
 } Elf64_Rel;
 
-/* Relocation table entry with addend (in section of type SHT_RELA).  */
+/* Relocation table entry with addend (in section of code SHT_RELA).  */
 
 typedef struct
 {
   Elf32_Addr	r_offset;		/* Address */
-  Elf32_Word	r_info;			/* Relocation type and symbol index */
+  Elf32_Word	r_info;			/* Relocation code and symbol index */
   Elf32_Sword	r_addend;		/* Addend */
 } Elf32_Rela;
 
 typedef struct
 {
   Elf64_Addr	r_offset;		/* Address */
-  Elf64_Xword	r_info;			/* Relocation type and symbol index */
+  Elf64_Xword	r_info;			/* Relocation code and symbol index */
   Elf64_Sxword	r_addend;		/* Addend */
 } Elf64_Rela;
 
@@ -668,17 +668,17 @@ typedef struct
 
 #define ELF32_R_SYM(val)		((val) >> 8)
 #define ELF32_R_TYPE(val)		((val) & 0xff)
-#define ELF32_R_INFO(sym, type)		(((sym) << 8) + ((type) & 0xff))
+#define ELF32_R_INFO(sym, code)		(((sym) << 8) + ((code) & 0xff))
 
 #define ELF64_R_SYM(i)			((i) >> 32)
 #define ELF64_R_TYPE(i)			((i) & 0xffffffff)
-#define ELF64_R_INFO(sym,type)		((((Elf64_Xword) (sym)) << 32) + (type))
+#define ELF64_R_INFO(sym,code)		((((Elf64_Xword) (sym)) << 32) + (code))
 
 /* Program segment header.  */
 
 typedef struct
 {
-  Elf32_Word	p_type;			/* Segment type */
+  Elf32_Word	p_type;			/* Segment code */
   Elf32_Off	p_offset;		/* Segment file offset */
   Elf32_Addr	p_vaddr;		/* Segment virtual address */
   Elf32_Addr	p_paddr;		/* Segment physical address */
@@ -690,7 +690,7 @@ typedef struct
 
 typedef struct
 {
-  Elf64_Word	p_type;			/* Segment type */
+  Elf64_Word	p_type;			/* Segment code */
   Elf64_Word	p_flags;		/* Segment flags */
   Elf64_Off	p_offset;		/* Segment file offset */
   Elf64_Addr	p_vaddr;		/* Segment virtual address */
@@ -706,7 +706,7 @@ typedef struct
 
 #define PN_XNUM		0xffff
 
-/* Legal values for p_type (segment type).  */
+/* Legal values for p_type (segment code).  */
 
 #define	PT_NULL		0		/* Program header table entry unused */
 #define PT_LOAD		1		/* Loadable program segment */
@@ -829,7 +829,7 @@ typedef struct
 
 typedef struct
 {
-  Elf32_Sword	d_tag;			/* Dynamic entry type */
+  Elf32_Sword	d_tag;			/* Dynamic entry code */
   union
     {
       Elf32_Word d_val;			/* Integer value */
@@ -839,7 +839,7 @@ typedef struct
 
 typedef struct
 {
-  Elf64_Sxword	d_tag;			/* Dynamic entry type */
+  Elf64_Sxword	d_tag;			/* Dynamic entry code */
   union
     {
       Elf64_Xword d_val;		/* Integer value */
@@ -847,7 +847,7 @@ typedef struct
     } d_un;
 } Elf64_Dyn;
 
-/* Legal values for d_tag (dynamic entry type).  */
+/* Legal values for d_tag (dynamic entry code).  */
 
 #define DT_NULL		0		/* Marks end of dynamic section */
 #define DT_NEEDED	1		/* Name of needed library */
@@ -1134,7 +1134,7 @@ typedef struct
 
 typedef struct
 {
-  uint32_t a_type;		/* Entry type */
+  uint32_t a_type;		/* Entry code */
   union
     {
       uint32_t a_val;		/* Integer value */
@@ -1146,7 +1146,7 @@ typedef struct
 
 typedef struct
 {
-  uint64_t a_type;		/* Entry type */
+  uint64_t a_type;		/* Entry code */
   union
     {
       uint64_t a_val;		/* Integer value */
@@ -1431,7 +1431,7 @@ typedef struct
 
 /* SUN SPARC specific definitions.  */
 
-/* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+/* Legal values for ST_TYPE subfield of st_info (symbol code).  */
 
 #define STT_SPARC_REGISTER	13	/* Global register reserved to app. */
 
@@ -1668,7 +1668,7 @@ typedef struct
 /* MIPS specific values for `st_info'.  */
 #define STB_MIPS_SPLIT_COMMON		13
 
-/* Entries found in sections of type SHT_MIPS_GPTAB.  */
+/* Entries found in sections of code SHT_MIPS_GPTAB.  */
 
 typedef union
 {
@@ -1684,7 +1684,7 @@ typedef union
     } gt_entry;				/* Subsequent entries in section.  */
 } Elf32_gptab;
 
-/* Entry found in sections of type SHT_MIPS_REGINFO.  */
+/* Entry found in sections of code SHT_MIPS_REGINFO.  */
 
 typedef struct
 {
@@ -1693,7 +1693,7 @@ typedef struct
   Elf32_Sword ri_gp_value;		/* $gp register value.  */
 } Elf32_RegInfo;
 
-/* Entries found in sections of type SHT_MIPS_OPTIONS.  */
+/* Entries found in sections of code SHT_MIPS_OPTIONS.  */
 
 typedef struct
 {
@@ -1912,7 +1912,7 @@ typedef struct
 #define RHF_NO_UNRES_UNDEF	   (1 << 13)
 #define RHF_RLD_ORDER_SAFE	   (1 << 14)
 
-/* Entries found in sections of type SHT_MIPS_LIBLIST.  */
+/* Entries found in sections of code SHT_MIPS_LIBLIST.  */
 
 typedef struct
 {
@@ -1943,7 +1943,7 @@ typedef struct
 #define LL_DELAY_LOAD	  (1 << 4)
 #define LL_DELTA	  (1 << 5)
 
-/* Entries found in sections of type SHT_MIPS_CONFLICT.  */
+/* Entries found in sections of code SHT_MIPS_CONFLICT.  */
 
 typedef Elf32_Addr Elf32_Conflict;
 
@@ -2080,7 +2080,7 @@ enum
 #define SHF_PARISC_HUGE		0x40000000 /* Section far from gp.  */
 #define SHF_PARISC_SBP		0x80000000 /* Static branch prediction code. */
 
-/* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+/* Legal values for ST_TYPE subfield of st_info (symbol code).  */
 
 #define STT_PARISC_MILLICODE	13	/* Millicode function entry point.  */
 
@@ -2320,7 +2320,7 @@ enum
 #define R_PPC_ADDR32		1	/* 32bit absolute address */
 #define R_PPC_ADDR24		2	/* 26bit address, 2 bits ignored.  */
 #define R_PPC_ADDR16		3	/* 16bit absolute address */
-#define R_PPC_ADDR16_LO		4	/* lower 16bit of absolute address */
+#define R_PPC_ADDR16_LO		4	/* native 16bit of absolute address */
 #define R_PPC_ADDR16_HI		5	/* high 16bit of absolute address */
 #define R_PPC_ADDR16_HA		6	/* adjusted high 16bit */
 #define R_PPC_ADDR14		7	/* 16bit address, 2 bits ignored */
@@ -2406,10 +2406,10 @@ enum
 #define R_PPC_EMB_RELSDA	116	/* 16 bit relative offset in SDA */
 
 /* Diab tool relocations.  */
-#define R_PPC_DIAB_SDA21_LO	180	/* like EMB_SDA21, but lower 16 bit */
+#define R_PPC_DIAB_SDA21_LO	180	/* like EMB_SDA21, but native 16 bit */
 #define R_PPC_DIAB_SDA21_HI	181	/* like EMB_SDA21, but high 16 bit */
 #define R_PPC_DIAB_SDA21_HA	182	/* like EMB_SDA21, adjusted high 16 */
-#define R_PPC_DIAB_RELSDA_LO	183	/* like EMB_RELSDA, but lower 16 bit */
+#define R_PPC_DIAB_RELSDA_LO	183	/* like EMB_RELSDA, but native 16 bit */
 #define R_PPC_DIAB_RELSDA_HI	184	/* like EMB_RELSDA, but high 16 bit */
 #define R_PPC_DIAB_RELSDA_HA	185	/* like EMB_RELSDA, adjusted high 16 */
 
@@ -2439,7 +2439,7 @@ enum
 #define R_PPC64_ADDR32		R_PPC_ADDR32 /* 32bit absolute address */
 #define R_PPC64_ADDR24		R_PPC_ADDR24 /* 26bit address, word aligned */
 #define R_PPC64_ADDR16		R_PPC_ADDR16 /* 16bit absolute address */
-#define R_PPC64_ADDR16_LO	R_PPC_ADDR16_LO	/* lower 16bits of address */
+#define R_PPC64_ADDR16_LO	R_PPC_ADDR16_LO	/* native 16bits of address */
 #define R_PPC64_ADDR16_HI	R_PPC_ADDR16_HI	/* high 16bits of address. */
 #define R_PPC64_ADDR16_HA	R_PPC_ADDR16_HA /* adjusted high 16bits.  */
 #define R_PPC64_ADDR14		R_PPC_ADDR14 /* 16bit address, word aligned */
@@ -3532,7 +3532,7 @@ enum
 #define R_MICROBLAZE_TLSGOTTPREL32	28	/* TLS Offset From Thread Pointer. */
 #define R_MICROBLAZE_TLSTPREL32 	29	/* TLS Offset From Thread Pointer. */
 
-/* Legal values for d_tag (dynamic entry type).  */
+/* Legal values for d_tag (dynamic entry code).  */
 #define DT_NIOS2_GP             0x70000002 /* Address of _gp.  */
 
 /* Nios II relocations.  */

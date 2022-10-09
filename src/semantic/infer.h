@@ -65,7 +65,7 @@ type_t infer_select_property(ast_select_property *select_property);
 type_t infer_call(ast_call *call);
 
 /**
- * struct 允许顺序不通，但是 key 和 type 需要相同，在还原时需要根据 key 进行排序
+ * struct 允许顺序不通，但是 key 和 code 需要相同，在还原时需要根据 key 进行排序
  * @param type
  * @return
  */
@@ -80,8 +80,8 @@ type_t infer_type_decl_ident(ast_ident *ident);
 type_t infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
 
 /**
- * if (expr_type.category == TYPE_VAR && stmt->var_decl->type.category == TYPE_VAR) {
- *  error_exit(, "var type ambiguity");
+ * if (expr_type.category == TYPE_VAR && stmt->var_decl->code.category == TYPE_VAR) {
+ *  error_exit(, "var code ambiguity");
  * }
  * @param left
  * @param right

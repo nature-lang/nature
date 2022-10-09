@@ -46,7 +46,7 @@ lir_op *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...)
     }
     va_end(args);
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
 lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
@@ -61,7 +61,7 @@ lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...)
     }
     va_end(args);
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_BUILTIN_CALL, lir_new_label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_BUILTIN_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
 lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
@@ -76,7 +76,7 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
     }
     va_end(args);
     lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
-    return lir_op_new(LIR_OP_TYPE_CALL, lir_new_label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
 /**
@@ -106,7 +106,7 @@ lir_operand *lir_new_label_operand(char *ident, bool is_local) {
 }
 
 lir_op *lir_op_label(char *ident, bool is_local) {
-    return lir_op_new(LIR_OP_TYPE_LABEL, NULL, NULL, lir_new_label_operand(ident, is_local));
+    return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_new_label_operand(ident, is_local));
 }
 
 lir_op *lir_op_unique_label(char *ident) {
@@ -114,11 +114,11 @@ lir_op *lir_op_unique_label(char *ident) {
 }
 
 lir_op *lir_op_bal(lir_operand *label) {
-    return lir_op_new(LIR_OP_TYPE_BAL, NULL, NULL, label);
+    return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, label);
 }
 
 lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
-    return lir_op_new(LIR_OP_TYPE_MOVE, src, NULL, dst);
+    return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
@@ -140,7 +140,7 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
     }
 
     lir_op *op = NEW(lir_op);
-    op->type = type;
+    op->code = type;
     op->first = first;
     op->second = second;
     op->result = result;
@@ -157,7 +157,7 @@ closure *lir_new_closure(ast_closure_t *ast) {
     new->name = ast->function->name;
     new->env_name = ast->env_name;
     new->parent = NULL;
-    new->operates = NULL;
+    new->operations = NULL;
     new->entry = NULL;
     new->globals.count = 0;
     new->fixed_regs = slice_new(); // reg_t
@@ -176,7 +176,7 @@ closure *lir_new_closure(ast_closure_t *ast) {
 
 lir_basic_block *lir_new_basic_block() {
     lir_basic_block *basic_block = NEW(lir_basic_block);
-    basic_block->operates = list_new();
+    basic_block->operations = list_new();
     basic_block->preds = slice_new();
     basic_block->succs = slice_new();
 

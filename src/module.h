@@ -134,7 +134,7 @@ typedef struct {
     // compiler 阶段得到
     slice_t *compiler_closures; // 包含 lir
 
-    // lower -> opcodes
+    // native -> opcodes
     slice_t *operations; // 和架构相关
     slice_t *var_decls; // 和架构无关
 

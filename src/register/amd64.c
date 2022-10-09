@@ -1,5 +1,6 @@
 #include "amd64.h"
 #include "src/type.h"
+#include "utils/slice.h"
 
 void amd64_register_init() {
     rax = reg_new("rax", 0, QWORD);
@@ -127,4 +128,37 @@ void amd64_register_init() {
     zmm14 = reg_new("zmm14", 14, ZWORD);
     zmm15 = reg_new("zmm15", 15, ZWORD);
 
+}
+
+/**
+ * operations operations 目前属于一个更加抽象的层次，不利于寄存器分配，所以对齐进行更加本土化的处理
+ * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
+ * @param c
+ */
+void amd64_operations_lower(closure *c) {
+    // 按基本块遍历所有指令
+    SLICE_FOR(c->blocks) {
+        lir_basic_block *block = SLICE_VALUE(c->blocks);
+        LIST_FOR(block->operations) {
+            lir_op *op = LIST_VALUE();
+            if (op->code == LIR_OPCODE_RETURN && op->result != NULL) {
+                // 1.1 return 指令需要将返回值放到 rax 中
+                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, rax);
+                lir_op *before = lir_op_move(reg_operand, op->result);
+                op->result = reg_operand;
+                list_insert_before(block->operations, LIST_VALUE(), before);
+            }
+
+            // div 被输数，除数 = 商
+            if (op->code == LIR_OPCODE_DIV) {
+                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, rax);
+                lir_op *before = lir_op_move(reg_operand, op->first);
+                lir_op *after = lir_op_move(op->result, reg_operand);
+                op->first = reg_operand;
+                op->result = reg_operand;
+                list_insert_before(block->operations, LIST_VALUE(), before);
+                list_insert_after(block->operations, LIST_VALUE(), after);
+            }
+        }
+    }
 }

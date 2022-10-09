@@ -24,10 +24,10 @@ set(SRC_BINARY
 
 
 set(SRC_LOWER
-        ${SRC_DIR}/lower/lower.h
-        ${SRC_DIR}/lower/lower.c
-        ${SRC_DIR}/lower/amd64/amd64.c
-        ${SRC_DIR}/lower/amd64/amd64.h)
+        ${SRC_DIR}/native/native.h
+        ${SRC_DIR}/native/native.c
+        ${SRC_DIR}/native/amd64/amd64.c
+        ${SRC_DIR}/native/amd64/amd64.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h

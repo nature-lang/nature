@@ -168,13 +168,13 @@ type_t infer_binary(ast_binary_expr *expr) {
     type_t right_type = infer_expr(&expr->right);
 
     if (left_type.base != TYPE_INT && left_type.base != TYPE_FLOAT) {
-        error_printf(infer_line, "invalid operation: %s, expr type must be int or float, cannot '%s' type",
+        error_printf(infer_line, "invalid operation: %s, expr code must be int or float, cannot '%s' code",
                      ast_expr_operator_to_string[expr->operator],
                      type_to_string[left_type.base]);
     }
 
     if (right_type.base != TYPE_INT && right_type.base != TYPE_FLOAT) {
-        error_printf(infer_line, "invalid operation: %s,  expr type must be int or float, cannot '%s' type",
+        error_printf(infer_line, "invalid operation: %s,  expr code must be int or float, cannot '%s' code",
                      ast_expr_operator_to_string[expr->operator],
                      type_to_string[right_type.base]);
     }
@@ -195,7 +195,7 @@ type_t infer_binary(ast_binary_expr *expr) {
             return type_new_base(TYPE_BOOL);
         }
         default: {
-            error_exit("unknown operator type");
+            error_exit("unknown operator code");
             exit(0);
         }
     }
@@ -209,7 +209,7 @@ type_t infer_binary(ast_binary_expr *expr) {
 type_t infer_unary(ast_unary_expr *expr) {
     type_t operand_type = infer_expr(&expr->operand);
     if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.base != TYPE_BOOL) {
-        error_exit("!expr, expr must be bool type");
+        error_exit("!expr, expr must be bool code");
     }
 
     if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.base != TYPE_INT
@@ -249,7 +249,7 @@ type_t infer_ident(string unique_ident) {
         return infer_type(analysis_function_to_type(new_fn));
     }
 
-    error_exit("ident type exception");
+    error_exit("ident code exception");
     exit(0);
 }
 
@@ -348,7 +348,7 @@ type_t infer_new_map(ast_new_map *new_map) {
  */
 type_t infer_new_struct(ast_new_struct *new_struct) {
     // 类型还原, struct ident 一定会被还原回 struct 原始结构
-    // 如果本身已经是 struct 结构，那么期中的 struct property type 也会被还原成原始类型
+    // 如果本身已经是 struct 结构，那么期中的 struct property code 也会被还原成原始类型
     new_struct->type = infer_type(new_struct->type);
 
     if (new_struct->type.base != TYPE_STRUCT) {
@@ -364,9 +364,9 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
         type_t expect_type = infer_struct_property_type(struct_decl, struct_property->key);
         type_t actual_type = infer_expr(&struct_property->value);
 
-        // expect type 并不允许为 var
+        // expect code 并不允许为 var
         if (!infer_compare_type(actual_type, expect_type)) {
-            error_printf(infer_line, "property '%s' expect '%s' type, cannot assign '%s' type",
+            error_printf(infer_line, "property '%s' expect '%s' code, cannot assign '%s' code",
                          struct_property->key,
                          type_to_string[expect_type.base],
                          type_to_string[actual_type.base]);
@@ -406,7 +406,7 @@ type_t infer_access(ast_expr *expr) {
     } else if (left_type.base == TYPE_ARRAY) {
         if (key_type.base != TYPE_INT) {
             error_printf(infer_line,
-                         "access list error, index expr type must by int, cannot '%s'",
+                         "access list error, index expr code must by int, cannot '%s'",
                          type_to_string[key_type.base]);
         }
 
@@ -422,7 +422,7 @@ type_t infer_access(ast_expr *expr) {
 
         result = list_decl->ast_type;
     } else {
-        error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.base]);
+        error_printf(infer_line, "expr code must map or list, cannot '%s'", type_to_string[left_type.base]);
         exit(0);
     };
 
@@ -483,7 +483,7 @@ type_t infer_call(ast_call *call) {
     // 左值符号推导(TODO 外部符号暂时偷懒没有进行具体的推导)
     type_t left_type = infer_expr(&call->left);
     if (left_type.base != TYPE_FN) {
-        error_printf(infer_line, "[infer_call]expression not function type(%s), cannot call",
+        error_printf(infer_line, "[infer_call]expression not function code(%s), cannot call",
                      type_to_string[left_type.base]);
     }
 
@@ -498,7 +498,7 @@ type_t infer_call(ast_call *call) {
         type_t t = type_fn->formal_param_types[i];
         type_t actual_param_type = actual_types[i];
         if (!infer_compare_type(t, actual_param_type)) {
-            error_printf(infer_line, "[infer_call] call param[%d] type error, expect '%s' type, actual '%s' type",
+            error_printf(infer_line, "[infer_call] call param[%d] code error, expect '%s' code, actual '%s' code",
                          i,
                          type_to_string[t.base],
                          type_to_string[actual_param_type.base]);
@@ -538,7 +538,7 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     // 类型推断(不需要再比较类型是否一致)
     if (stmt->var_decl->type.base == TYPE_UNKNOWN) {
         if (!infer_var_type_can_confirm(expr_type)) {
-            error_printf(infer_line, "type inference error, right expr type is not clear");
+            error_printf(infer_line, "code inference error, right expr code is not clear");
             return;
         }
         stmt->var_decl->type = expr_type;
@@ -593,7 +593,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
     type_t iterate_type = infer_expr(&stmt->iterate);
     if (iterate_type.base != TYPE_MAP && iterate_type.base != TYPE_ARRAY) {
         error_printf(infer_line,
-                     "for in iterate type must be map/list, actual:(%s)",
+                     "for in iterate code must be map/list, actual:(%s)",
                      type_to_string[iterate_type.base]);
     }
 
@@ -626,7 +626,7 @@ void infer_return(ast_return_stmt *stmt) {
 
     type_t expect_type = infer_current->closure_decl->function->return_type;
     if (!infer_compare_type(expect_type, return_type)) {
-        error_printf(infer_line, "return type(%s) error,expect '%s' type",
+        error_printf(infer_line, "return code(%s) error,expect '%s' code",
                      type_to_string[return_type.base],
                      type_to_string[expect_type.base]);
     }
@@ -649,7 +649,7 @@ infer_closure *infer_current_init(ast_closure_t *closure_decl) {
  */
 bool infer_compare_type(type_t left, type_t right) {
     if (!left.is_origin || !right.is_origin) {
-        error_printf(infer_line, "type not origin, left: '%s', right: '%s'",
+        error_printf(infer_line, "code not origin, left: '%s', right: '%s'",
                      type_to_string[left.base],
                      type_to_string[right.base]);
         return false;
@@ -660,7 +660,7 @@ bool infer_compare_type(type_t left, type_t right) {
     }
 
     if (left.base == TYPE_UNKNOWN && right.base == TYPE_UNKNOWN) {
-        error_printf(infer_line, "type cannot infer");
+        error_printf(infer_line, "code cannot infer");
         return false;
     }
 
@@ -748,7 +748,7 @@ bool infer_compare_type(type_t left, type_t right) {
                 return false;
             }
 
-            // type 比较
+            // code 比较
             if (!infer_compare_type(
                     left_struct_decl->list[i].type,
                     right_struct_decl->list[i].type
@@ -762,7 +762,7 @@ bool infer_compare_type(type_t left, type_t right) {
 }
 
 /**
- * struct 允许顺序不通，但是 key 和 type 需要相同，在还原时需要根据 key 进行排序
+ * struct 允许顺序不通，但是 key 和 code 需要相同，在还原时需要根据 key 进行排序
  * @param type
  * @return
  */
@@ -791,7 +791,7 @@ type_t infer_type(type_t type) {
         return type;
     }
 
-    // type foo = int, 'foo' is type_dec_ident
+    // code foo = int, 'foo' is type_dec_ident
     if (type.base == TYPE_DECL_IDENT) {
         return infer_type_decl_ident((ast_ident *) type.value);
     }
@@ -819,7 +819,7 @@ type_t infer_type(type_t type) {
         return type;
     }
 
-    error_printf(infer_line, "cannot parser type %s", type_to_string[type.base]);
+    error_printf(infer_line, "cannot parser code %s", type_to_string[type.base]);
     exit(0);
 }
 
@@ -827,20 +827,20 @@ type_t infer_type_decl_ident(ast_ident *ident) {
     // 符号表找到相关类型
     symbol_t *symbol = symbol_table_get(ident->literal);
     if (symbol->type != SYMBOL_TYPE_CUSTOM) {
-        error_printf(infer_line, "'%s' is not a type", symbol->ident);
+        error_printf(infer_line, "'%s' is not a code", symbol->ident);
     }
 
     ast_type_decl_stmt *type_decl_stmt = symbol->decl;
 
     // type_decl_stmt->ident 为自定义类型名称
-    // type_decl_stmt->type 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
+    // type_decl_stmt->code 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
     type_t origin_type = infer_type(type_decl_stmt->type);
 
     return origin_type;
 }
 
 /**
- * 返回对应的 type
+ * 返回对应的 code
  * @param struct_decl
  * @param ident
  * @return

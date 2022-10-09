@@ -36,7 +36,7 @@ string token_type_to_string[] = {
 
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
-        [TOKEN_TYPE] = "type",
+        [TOKEN_TYPE] = "code",
         [TOKEN_NULL] = "null",
         [TOKEN_ANY] = "any",
         [TOKEN_STRUCT] = "struct",

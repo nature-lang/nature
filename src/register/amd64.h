@@ -1,6 +1,8 @@
 #ifndef NATURE_AMD64_H
 #define NATURE_AMD64_H
+
 #include "register.h"
+#include "src/lir/lir.h"
 
 reg_t *rax;
 reg_t *rcx;
@@ -127,5 +129,7 @@ reg_t *zmm14;
 reg_t *zmm15;
 
 void amd64_register_init();
+
+void amd64_operations_lower(closure *c);
 
 #endif //NATURE_AMD64_H

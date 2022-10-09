@@ -7,7 +7,7 @@
 #include "src/compiler.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
-#include "src/lower/amd64/amd64.h"
+#include "src/native/amd64/amd64.h"
 #include "utils/error.h"
 #include "utils/exec.h"
 #include "src/build/config.h"

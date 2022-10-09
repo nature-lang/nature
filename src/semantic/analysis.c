@@ -172,7 +172,7 @@ void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn) {
  * }
  *
  * 函数此时有两个名称,所以需要添加两次符号表
- * 其中 foo 属于 var[type == fn]
+ * 其中 foo 属于 var[code == fn]
  * bar 属于 label
  * fn<void(int, int)> foo = void bar(int a, int b) {
  *
@@ -269,7 +269,7 @@ void analysis_end_scope(module_t *m) {
 }
 
 /**
- * type 可能还是 var 等待推导,但是基础信息已经填充完毕了
+ * code 可能还是 var 等待推导,但是基础信息已经填充完毕了
  * @param type
  * @param ident
  * @return
@@ -439,7 +439,7 @@ int8_t analysis_resolve_free(analysis_function *current, string*ident) {
 void analysis_type(module_t *m, type_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // TODO 如果出现死循环，应该告警退出
-    // type foo = int
+    // code foo = int
     // 'foo' is type_decl_ident
     if (type->base == TYPE_DECL_IDENT) {
         // 向上查查查
@@ -570,7 +570,7 @@ void analysis_return(module_t *m, ast_return_stmt *stmt) {
 }
 
 // unique as
-// type foo = int
+// code foo = int
 void analysis_type_decl(module_t *m, ast_type_decl_stmt *stmt) {
     analysis_redeclare_check(m, stmt->ident);
     analysis_type(m, &stmt->type);
@@ -726,7 +726,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             assign->left = (ast_expr) {
                     .assert_type = AST_EXPR_IDENT,
                     .expr = ast_new_ident(var_decl->ident),
-//                    .type = var_decl->type,
+//                    .code = var_decl->code,
             };
             assign->right = var_decl_assign->expr;
             temp_stmt->type = AST_STMT_ASSIGN;
@@ -761,7 +761,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        error_exit("[analysis_module] stmt.type not allow, must var_decl/new_fn/type_decl");
+        error_exit("[analysis_module] stmt.code not allow, must var_decl/new_fn/type_decl");
     }
 
     // 添加 init fn

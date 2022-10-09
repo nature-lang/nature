@@ -9,7 +9,7 @@ void build(char *build_entry);
  * lir to arch asm insts
  * @return
  */
-void cross_lower(module_t *m);
+void cross_native(module_t *m);
 
 
 /**

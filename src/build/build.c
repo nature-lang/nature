@@ -5,8 +5,8 @@
 #include "src/compiler.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
-#include "src/lower/amd64/amd64.h"
-#include "src/lower/lower.h"
+#include "src/native/amd64/amd64.h"
+#include "src/native/native.h"
 #include "src/register/register.h"
 #include "src/binary/opcode/amd64/opcode.h"
 #include "src/binary/elf/linker.h"
@@ -37,35 +37,31 @@ static char *lib_file_path(char *file) {
  * @param m
  * @return  m->opcodes
  */
-void cross_lower(module_t *m) {
-    lower_var_decls = slice_new();
+void cross_native(module_t *m) {
+    native_var_decls = slice_new();
     m->operations = slice_new();
 
     // pre
     register_init();
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_opcode_init();
-    } else {
-        goto ERROR;
-    };
+    }
 
-    // lower
+    // native by closure
     for (int i = 0; i < m->compiler_closures->count; ++i) {
         closure *c = m->compiler_closures->take[i];
         if (BUILD_ARCH == ARCH_AMD64) {
-            slice_append(m->operations, amd64_lower_closure(c));
-        } else {
-            goto ERROR;
+            slice_t *operands = amd64_native_closure(c);
+            slice_append(m->operations, operands);
         }
     }
 
     // post
-    slice_append(m->var_decls, lower_var_decls);
-
+    slice_append(m->var_decls, native_var_decls);
 
     return;
     ERROR:
-    error_exit("[cross_lower] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+    error_exit("[cross_native] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
 }
 
 /**
@@ -242,7 +238,7 @@ void build(char *build_entry) {
         }
     }
 
-    // lower + assembler
+    // native + assembler
     for (int i = 0; i < module_list->count; ++i) {
         module_t *m = module_list->take[i];
         // 首次初始化符号定义
@@ -255,14 +251,14 @@ void build(char *build_entry) {
                 continue;
             }
             ast_var_decl *var_decl = s->decl;
-            lower_var_decl_t *decl = NEW(lower_var_decl_t);
+            native_var_decl_t *decl = NEW(native_var_decl_t);
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
             decl->value = NULL; // TODO 如果是立即数可以直接赋值
             slice_push(m->var_decls, decl);
         }
 
-        cross_lower(m);
+        cross_native(m);
         build_assembler(m);
     }
 

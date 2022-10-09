@@ -25,7 +25,7 @@ uint64_t operation_rip_offset(amd64_operation_t *operation) {
     }
 
     if (str_equal(operation->name, "call")) {
-//        if (operation->operands[0]->type == ASM_OPERAND_TYPE_RIP_RELATIVE) {
+//        if (operation->operands[0]->code == ASM_OPERAND_TYPE_RIP_RELATIVE) {
 //            return 2;
 //        }
 
@@ -488,7 +488,7 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
             /* do nothing */
             break;
         default:
-            error_exit("[amd64_relocate] unknown rel type");
+            error_exit("[amd64_relocate] unknown rel code");
             break;
     }
 }

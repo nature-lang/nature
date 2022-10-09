@@ -39,7 +39,7 @@ void error_message(int line, char *message) {
 }
 
 void error_type_not_found(int line, char *ident) {
-    printf("line: %d, type '%s' undeclared \n", line, ident);
+    printf("line: %d, code '%s' undeclared \n", line, ident);
     exit(0);
 }
 
@@ -49,7 +49,7 @@ void error_redeclare_ident(int line, char *ident) {
 }
 
 void error_type_not_match(int line) {
-    printf("line: %d, cannot assigned variables, because type inconsistency", line);
+    printf("line: %d, cannot assigned variables, because code inconsistency", line);
     exit(0);
 }
 

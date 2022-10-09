@@ -423,7 +423,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         FOUND:
         // 同名但是类型不相同
         if (shdr->sh_type != section->sh_type) {
-            error_exit("[elf_load_object_file] sh %s type invalid", shdr_name);
+            error_exit("[elf_load_object_file] sh %s code invalid", shdr_name);
         }
         // align
         section->data_count += -section->data_count & (shdr->sh_addralign - 1);
@@ -526,7 +526,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
             }
 
             sym_index = symtab_index_map[sym_index];
-            if (!sym_index /**&& type != R_RISCV_ALIGN && type != R_RISCV_RELAX **/) {
+            if (!sym_index /**&& code != R_RISCV_ALIGN && code != R_RISCV_RELAX **/) {
                 error_exit("[elf_load_object_file] sym index not found");
             }
 
@@ -759,7 +759,7 @@ void elf_build_got_entries(elf_context *ctx, uint got_sym_index) {
 
             int gotplt_type = gotplt_entry_type(type);
             if (gotplt_type == -1) {
-                error_exit("[elf_build_got_entries] unknown relocation type for got: %d", type);
+                error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
 
             if (gotplt_type == NO_GOTPLT_ENTRY) {
@@ -788,7 +788,7 @@ void elf_build_got_entries(elf_context *ctx, uint got_sym_index) {
             // 代码段 PLT 构建
             int8_t is_code_rel = is_code_relocate(type);
             if (is_code_rel == -1) {
-                error_exit("[elf_build_got_entries] unknown relocation type for got: %d", type);
+                error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
 
             bool is_code_pass = pass == 0;
@@ -901,7 +901,7 @@ void elf_relocate_sections(elf_context *ctx) {
 }
 
 /**
- * 根据 rel type 进行重定位,和 cpu 相关
+ * 根据 rel code 进行重定位,和 cpu 相关
  * @param ctx
  * @param apply_section
  * @param rel_section
@@ -918,7 +918,7 @@ void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t 
         // rel 引用的符号在符号表的索引，在没有修正之前就是 UNDEF, 不过 load elf 的时候已经进行了不停的修正，所以这里已经不会是 undef 了
         int sym_index = ELF64_R_SYM(rel->r_info);
         sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index]; // 符号
-        int type = ELF64_R_TYPE(rel->r_info); // type 就是重定位的类型
+        int type = ELF64_R_TYPE(rel->r_info); // code 就是重定位的类型
         addr_t target = sym->st_value; // 符号定义的位置
         target += rel->r_addend; // 为啥定义符号的位置要加上 rel->addend? 定位到结束位置？
 

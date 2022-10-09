@@ -3,7 +3,12 @@
 
 #define SLICE_TACK(_type, _slice, _index) ((_type*) _slice->take[_index])
 
-#define SLICE_FOR(_slice, _type, _node) for (_type *_node = (_type*) _slice->take[0]; _node <= (_type*) _slice->take[_slice->count]; _node++)
+//#define SLICE_FOR(_slice, _type) for (_type *_node = (_type*) _slice->take[0]; _node <= (_type*) _slice->take[_slice->count]; _node++)
+
+#define SLICE_FOR(_slice) for (int _i = 0; _i < (_slice)->count; ++_i)
+
+#define SLICE_VALUE(_slice) _slice->take[_i];
+
 
 /**
  * slice 是一个动态数组，存储的内容为数据指针,其内容存储依旧是在内存中的连续空间。
@@ -12,7 +17,7 @@
 typedef struct {
     int count; // 实际占用的元素数量
     int capacity; // 申请的内存容量
-    void **take; // type take[count] = type *take = void* *take
+    void **take; // code take[count] = code *take = void* *take
 } slice_t;
 
 /**

@@ -5,25 +5,25 @@
 #include "utils/error.h"
 #include "utils/helper.h"
 #include "src/symbol.h"
-#include "src/lower/lower.h"
+#include "src/native/native.h"
 
-amd64_lower_fn amd64_lower_table[] = {
-        [LIR_OP_TYPE_ADD] = amd64_lower_add,
-        [LIR_OP_TYPE_CALL] = amd64_lower_call,
-        [LIR_OP_TYPE_BUILTIN_CALL] = amd64_lower_call,
-        [LIR_OP_TYPE_RUNTIME_CALL] = amd64_lower_call,
-        [LIR_OP_TYPE_LABEL] = amd64_lower_label,
-        [LIR_OP_TYPE_RETURN] = amd64_lower_return,
-        [LIR_OP_TYPE_BEQ] = amd64_lower_cmp_goto,
-        [LIR_OP_TYPE_BAL] = amd64_lower_bal,
-        [LIR_OP_TYPE_SGT] = amd64_lower_sgt,
-        [LIR_OP_TYPE_MOVE] = amd64_lower_mov,
-        [LIR_OP_TYPE_LEA] = amd64_lower_lea,
-        [LIR_OP_TYPE_FN_BEGIN] = amd64_lower_fn_begin,
-        [LIR_OP_TYPE_FN_END] = amd64_lower_fn_end,
+amd64_native_fn amd64_native_table[] = {
+        [LIR_OPCODE_ADD] = amd64_native_add,
+        [LIR_OPCODE_CALL] = amd64_native_call,
+        [LIR_OPCODE_BUILTIN_CALL] = amd64_native_call,
+        [LIR_OPCODE_RUNTIME_CALL] = amd64_native_call,
+        [LIR_OPCODE_LABEL] = amd64_native_label,
+        [LIR_OPCODE_RETURN] = amd64_native_return,
+        [LIR_OPCODE_BEQ] = amd64_native_cmp_goto,
+        [LIR_OPCODE_BAL] = amd64_native_bal,
+        [LIR_OPCODE_SGT] = amd64_native_sgt,
+        [LIR_OPCODE_MOVE] = amd64_native_mov,
+        [LIR_OPCODE_LEA] = amd64_native_lea,
+        [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
+        [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 };
 
-static amd64_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, uint8_t force_size) {
+static amd64_operand_t *amd64_native_operand_var_transform(lir_operand_var *var, uint8_t force_size) {
     uint8_t size = type_base_sizeof(var->infer_size_type);
     if (force_size > 0) {
         size = force_size;
@@ -38,21 +38,21 @@ static amd64_operand_t *amd64_lower_operand_var_transform(lir_operand_var *var, 
         return DISP_REG(rbp, *var->decl->stack_offset, size);
     }
 
-    error_exit("[amd64_lower_var_operand] var %d not reg_id or stack offset", var->ident);
+    error_exit("[amd64_native_var_operand] var %d not reg_id or stack offset", var->ident);
 }
 
-amd64_operation_t *amd64_lower_empty_reg(reg_t *reg) {
+amd64_operation_t *amd64_native_empty_reg(reg_t *reg) {
     // TODO ah/bh/ch/dh 不能这么清理
 
     reg_t *r = (reg_t *) register_find(reg->index, QWORD);
     if (r == NULL) {
-        error_exit("[amd64_lower_empty_reg] reg not found, index: %d, size: %d", reg->index, QWORD);
+        error_exit("[amd64_native_empty_reg] reg not found, index: %d, size: %d", reg->index, QWORD);
     }
     return ASM_INST("xor", { REG(r), REG(r) });
 }
 
 /**
- * LIR_OP_TYPE_CALL base, param => result
+ * LIR_OPCODE_CALL base, param => result
  * base 有哪些形态？
  * http.get() // 外部符号引用,无非就是是否在符号表中
  * sum.n() // 内部符号引用, sum.n 是否属于 var? 所有的符号都被记录为 var
@@ -69,22 +69,22 @@ amd64_operation_t *amd64_lower_empty_reg(reg_t *reg) {
  * @param count
  * @return
  */
-slice_t *amd64_lower_call(closure *c, lir_op *op) {
+slice_t *amd64_native_call(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
 
     uint8_t used[2] = {0};
     amd64_operand_t *result = NULL;
     if (op->result != NULL) {
         result = NEW(amd64_operand_t);
-        slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+        slice_append(insts, amd64_native_operand_transform(op->result, result, used));
     }
 
     // 实参传递(封装一个 static 函数处理),
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->first, first, used));
+    slice_append(insts, amd64_native_operand_transform(op->first, first, used));
 
     uint8_t actual_used[2] = {0};
-    // 2. 参数处理  lir_ope type->second;
+    // 2. 参数处理  lir_ope code->second;
     lir_operand_actual_param *v = op->second->value;
     slice_t *param_insts = slice_new();
     // 计算 push 总长度，进行栈对齐
@@ -97,10 +97,10 @@ slice_t *amd64_lower_call(closure *c, lir_op *op) {
         // 如果是 bool, source 存在 1bit, 但是不影响寄存器或者堆栈，寄存器和堆栈在 amd64 位下都是统一 8bit
         uint8_t actual_transform_used[2] = {0};
         amd64_operand_t *source = NEW(amd64_operand_t);
-        slice_append(temp_insts, amd64_lower_operand_transform(operand, source, actual_transform_used));
+        slice_append(temp_insts, amd64_native_operand_transform(operand, source, actual_transform_used));
 
         // 根据实际大小选择寄存器
-        reg_t *target_reg = amd64_lower_fn_next_reg_target(actual_used,
+        reg_t *target_reg = amd64_native_fn_next_reg_target(actual_used,
                                                            lir_operand_type_base(operand)); // source 和 target 大小要匹配
 
         if (target_reg == NULL) {
@@ -109,7 +109,7 @@ slice_t *amd64_lower_call(closure *c, lir_op *op) {
             push_length += source->size;
         } else {
             if (target_reg->size < 8) {
-                slice_push(temp_insts, amd64_lower_empty_reg(target_reg));
+                slice_push(temp_insts, amd64_native_empty_reg(target_reg));
             }
 
             slice_push(temp_insts, ASM_INST("mov", { REG(target_reg), source }));
@@ -149,22 +149,22 @@ slice_t *amd64_lower_call(closure *c, lir_op *op) {
 
 /**
  * 核心问题是: 在结构体作为返回值时，当外部调用将函数的返回地址作为参数 rdi 传递给函数时，
- * 根据 ABI 规定，函数操作的第一步就是对 rdi 入栈，但是当 lower return 时,我并不知道 rdi 被存储在了栈的什么位置？
+ * 根据 ABI 规定，函数操作的第一步就是对 rdi 入栈，但是当 native return 时,我并不知道 rdi 被存储在了栈的什么位置？
  * 但是实际上是能够知道的，包括初始化时 sub rbp,n 的 n 也是可以在寄存器分配阶段就确定下来的。
- * n 的信息作为 closure 的属性存储在 closure 中，如何将相关信息传递给 lower ?, 参数 1 改成 closure?
+ * n 的信息作为 closure 的属性存储在 closure 中，如何将相关信息传递给 native ?, 参数 1 改成 closure?
  * 在结构体中 temp_var 存储的是结构体的起始地址。不能直接 return 起始地址，大数据会随着函数栈帧消亡。 而是将结构体作为整个值传递。
  * 既然已经知道了结构体的起始位置，以及隐藏参数的所在栈帧。 就可以直接进行结构体返回值的构建。
  * @param c
  * @param ast
  * @return
  */
-slice_t *amd64_lower_return(closure *c, lir_op *op) {
+slice_t *amd64_native_return(closure *c, lir_op *op) {
     // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+    slice_append(insts, amd64_native_operand_transform(op->result, result, used));
 
     if (lir_operand_type_base(op->result) == TYPE_FLOAT) {
         slice_push(insts, ASM_INST("mov", { REG(xmm0), result }));
@@ -176,12 +176,12 @@ slice_t *amd64_lower_return(closure *c, lir_op *op) {
 }
 
 
-slice_t *amd64_lower_bal(closure *c, lir_op *op) {
+slice_t *amd64_native_bal(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+    slice_append(insts, amd64_native_operand_transform(op->result, result, used));
     slice_push(insts, ASM_INST("jmp", { result }));
     return insts;
 }
@@ -192,53 +192,53 @@ slice_t *amd64_lower_bal(closure *c, lir_op *op) {
  * @param count
  * @return
  */
-slice_t *amd64_lower_add(closure *c, lir_op *op) {
+slice_t *amd64_native_add(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     // 参数转换
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_t *temp = amd64_lower_operand_transform(op->first, first, used);
+    slice_t *temp = amd64_native_operand_transform(op->first, first, used);
     slice_append(insts, temp);
     amd64_operand_t *second = NEW(amd64_operand_t);
-    temp = amd64_lower_operand_transform(op->second, second, used);
+    temp = amd64_native_operand_transform(op->second, second, used);
     slice_append(insts, temp);
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    temp = amd64_lower_operand_transform(op->result, result, used);
+    temp = amd64_native_operand_transform(op->result, result, used);
     slice_append(insts, temp);
 
     // 并没有强制要求寄存器？但是也没有做冗余的 mov 的强制消除？
     // 任何一个值都不是必定能分配到寄存器的！除非配置了 use kind?
-    reg_t *reg = amd64_lower_next_reg(used, lir_operand_sizeof(op->result));
+    reg_t *reg = amd64_native_next_reg(used, lir_operand_sizeof(op->result));
     slice_push(insts, ASM_INST("mov", { REG(reg), first }));
     slice_push(insts, ASM_INST("add", { REG(reg), second }));
     slice_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
     return insts;
-//    error_exit("[amd64_lower_add] type->result_type not identify");
+//    error_exit("[amd64_native_add] code->result_type not identify");
 //    return NULL;
 }
 
 // lir GT foo,bar => result
-slice_t *amd64_lower_sgt(closure *c, lir_op *op) {
+slice_t *amd64_native_sgt(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_t *temp = amd64_lower_operand_transform(op->first, first, used);
+    slice_t *temp = amd64_native_operand_transform(op->first, first, used);
     slice_append(insts, temp);
 
     amd64_operand_t *second = NEW(amd64_operand_t);
-    temp = amd64_lower_operand_transform(op->second, second, used);
+    temp = amd64_native_operand_transform(op->second, second, used);
     slice_append(insts, temp);
 
     // result 用于 setg, 必须强制 byte 大小
     amd64_operand_t *result = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+    slice_append(insts, amd64_native_operand_transform(op->result, result, used));
 
     // bool = int64 > int64
-    reg_t *reg = amd64_lower_next_reg(used, first->size);
+    reg_t *reg = amd64_native_next_reg(used, first->size);
     slice_push(insts, ASM_INST("mov", { REG(reg), first }));
     slice_push(insts, ASM_INST("cmp", { REG(reg), second }));
 
@@ -248,12 +248,12 @@ slice_t *amd64_lower_sgt(closure *c, lir_op *op) {
     return insts;
 
     // float
-//    error_exit("[amd64_lower_gt] type->result_type not identify, only support TYPE_INT");
+//    error_exit("[amd64_native_gt] code->result_type not identify, only support TYPE_INT");
 //    return NULL;
 }
 
 
-slice_t *amd64_lower_label(closure *c, lir_op *op) {
+slice_t *amd64_native_label(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     lir_operand_symbol_label *label_operand = op->result->value;
     slice_push(insts, ASM_INST("label", { SYMBOL(label_operand->ident, label_operand->is_local) }));
@@ -270,23 +270,23 @@ slice_t *amd64_lower_label(closure *c, lir_op *op) {
  * @param count
  * @return
  */
-slice_t *amd64_lower_mov(closure *c, lir_op *op) {
+slice_t *amd64_native_mov(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
 
     uint8_t used[2] = {0};
 
     // 参数转换
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_t *temp = amd64_lower_operand_transform(op->first, first, used);
+    slice_t *temp = amd64_native_operand_transform(op->first, first, used);
     slice_append(insts, temp);
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    temp = amd64_lower_operand_transform(op->result, result, used);
+    temp = amd64_native_operand_transform(op->result, result, used);
     slice_append(insts, temp);
 
     uint8_t size = result->size;
 
-    reg_t *reg = amd64_lower_next_reg(used, size);
+    reg_t *reg = amd64_native_next_reg(used, size);
     slice_push(insts, ASM_INST("mov", { REG(reg), first }));
     slice_push(insts, ASM_INST("mov", { result, REG(reg) }));
 
@@ -302,7 +302,7 @@ slice_t *amd64_lower_mov(closure *c, lir_op *op) {
  * @param used_regs
  * @return
  */
-slice_t *amd64_lower_operand_transform(lir_operand *operand,
+slice_t *amd64_native_operand_transform(lir_operand *operand,
                                        amd64_operand_t *asm_operand,
                                        uint8_t used[2]) {
     slice_t *insts = slice_new();
@@ -312,15 +312,15 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
             char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
-            lower_var_decl_t *decl = NEW(lower_var_decl_t);
+            native_var_decl_t *decl = NEW(native_var_decl_t);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
-//            decl->type = ASM_VAR_DECL_TYPE_STRING;
-            slice_push(lower_var_decls, decl);
+//            decl->code = ASM_VAR_DECL_TYPE_STRING;
+            slice_push(native_var_decls, decl);
 
             // 使用临时寄存器保存结果(会增加一条 lea 指令)
-            reg_t *reg = amd64_lower_next_reg(used, QWORD);
+            reg_t *reg = amd64_native_next_reg(used, QWORD);
 
             slice_push(insts, ASM_INST("lea", { REG(reg), SYMBOL(unique_name, false) }));
 
@@ -328,15 +328,15 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
             ASM_OPERAND_COPY(asm_operand, REG(reg));
         } else if (v->type == TYPE_FLOAT) {
             char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
-            lower_var_decl_t *decl = NEW(lower_var_decl_t);
+            native_var_decl_t *decl = NEW(native_var_decl_t);
             decl->name = unique_name;
             decl->size = QWORD;
             decl->value = (uint8_t *) &v->float_value; // float to uint8
-//            decl->type = ASM_VAR_DECL_TYPE_FLOAT;
-            slice_push(lower_var_decls, decl);
+//            decl->code = ASM_VAR_DECL_TYPE_FLOAT;
+            slice_push(native_var_decls, decl);
 
             // 使用临时寄存器保存结果
-            reg_t *reg = amd64_lower_next_reg(used, OWORD);
+            reg_t *reg = amd64_native_next_reg(used, OWORD);
 
             // movq xmm1,rm64
             slice_push(insts, ASM_INST("mov", { REG(reg), SYMBOL(unique_name, false) }));
@@ -357,7 +357,7 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
         } else if (v->type == TYPE_BOOL) {
             ASM_OPERAND_COPY(asm_operand, UINT8(v->bool_value));
         } else {
-            error_exit("[amd64_lower_to_asm_operand] type immediate not expected");
+            error_exit("[amd64_native_to_asm_operand] code immediate not expected");
         }
         return insts;
     }
@@ -366,7 +366,7 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
         lir_operand_addr *v = operand->value;
         // base 类型必须为 var
         if (v->base->type != LIR_OPERAND_TYPE_VAR) {
-            error_exit("[amd64_lir_to_asm_operand] operand type memory, but that base not type var");
+            error_exit("[amd64_lir_to_asm_operand] operand code memory, but that base not code var");
         }
 
         lir_operand_var *base_var = v->base->value;
@@ -376,12 +376,12 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
             error_exit("[amd64_lir_to_asm_operand]  var cannot stack_frame_offset in var %s", base_var->ident);
         }
         // 需要占用一个临时寄存器
-        reg_t *reg = amd64_lower_next_reg(used, QWORD);
+        reg_t *reg = amd64_native_next_reg(used, QWORD);
 
         // 如果设置了 indirect_addr, 则编译成 [rxx+offset]
         // 否则应该编译成 ADD  rxx -> offset, asm_operand 配置成 rxx
         if (v->indirect_addr) {
-            amd64_operand_t *base_addr_operand = amd64_lower_operand_var_transform(base_var, 0);
+            amd64_operand_t *base_addr_operand = amd64_native_operand_var_transform(base_var, 0);
             // 生成 mov 指令（asm_mov）
             slice_push(insts, ASM_INST("mov", { REG(reg), base_addr_operand }));
 
@@ -405,15 +405,15 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
                 error_exit("[amd64_lir_to_asm_operand]  indirect addr var %s must be point", v->ident);
             }
 
-            reg_t *reg = amd64_lower_next_reg(used, QWORD);
-            amd64_operand_t *var_operand = amd64_lower_operand_var_transform(v, 0);
+            reg_t *reg = amd64_native_next_reg(used, QWORD);
+            amd64_operand_t *var_operand = amd64_native_operand_var_transform(v, 0);
             slice_push(insts, ASM_INST("mov", { REG(reg), var_operand }));
 
             // 解引用
             ASM_OPERAND_COPY(asm_operand, INDIRECT_REG(reg, type_base_sizeof(v->infer_size_type)));
             return insts;
         } else {
-            ASM_OPERAND_COPY(asm_operand, amd64_lower_operand_var_transform(v, 0))
+            ASM_OPERAND_COPY(asm_operand, amd64_native_operand_var_transform(v, 0))
             return insts;
         }
     }
@@ -435,15 +435,15 @@ slice_t *amd64_lower_operand_transform(lir_operand *operand,
     return insts;
 }
 
-slice_t *amd64_lower_op(closure *c, lir_op *op) {
-    amd64_lower_fn fn = amd64_lower_table[op->type];
+slice_t *amd64_native_op(closure *c, lir_op *op) {
+    amd64_native_fn fn = amd64_native_table[op->code];
     if (fn == NULL) {
-        error_exit("[amd64_lower_op] amd64_lower_table not found fn: %d", op->type);
+        error_exit("[amd64_native_op] amd64_native_table not found fn: %d", op->code);
     }
     return fn(c, op);
 }
 
-reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
+reg_t *amd64_native_next_reg(uint8_t used[2], uint8_t size) {
     uint8_t used_index = 0; // 8bit ~ 64bit
     if (size > 8) {
         used_index = 1;
@@ -470,7 +470,7 @@ reg_t *amd64_lower_next_reg(uint8_t used[2], uint8_t size) {
  * @param size
  * @return
  */
-reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
+reg_t *amd64_native_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     uint8_t size = type_base_sizeof(base);
     if (base == TYPE_FLOAT) { // TODO 更多 float 类型, float 虽然栈大小为 8byte, 但是使用的寄存器确是 16byte 的
         size = OWORD;
@@ -496,7 +496,7 @@ reg_t *amd64_lower_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     return NULL;
 }
 
-slice_t *amd64_lower_fn_begin(closure *c, lir_op *op) {
+slice_t *amd64_native_fn_begin(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     // 计算堆栈信息(倒序 )
     list_node *current = list_last(c->local_var_decls); // rear 为 empty 占位
@@ -522,7 +522,7 @@ slice_t *amd64_lower_fn_begin(closure *c, lir_op *op) {
     while (current->value != NULL) {
         lir_local_var_decl *var = current->value;
 
-        reg_t *reg = amd64_lower_fn_next_reg_target(used, var->ast_type.base);
+        reg_t *reg = amd64_native_fn_next_reg_target(used, var->ast_type.base);
         if (reg != NULL) {
             // rbp-x
             c->stack_length += QWORD;
@@ -544,7 +544,7 @@ slice_t *amd64_lower_fn_begin(closure *c, lir_op *op) {
     slice_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_length) }));
 
     // 形参入栈
-    slice_append(insts, amd64_lower_fn_formal_params(c));
+    slice_append(insts, amd64_native_fn_formal_params(c));
 
     return insts;
 }
@@ -554,7 +554,7 @@ slice_t *amd64_lower_fn_begin(closure *c, lir_op *op) {
  * @param c
  * @return
  */
-slice_t *amd64_lower_fn_end(closure *c, lir_op *op) {
+slice_t *amd64_native_fn_end(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     slice_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
     slice_push(insts, ASM_INST("pop", { REG(rbp) }));
@@ -562,14 +562,14 @@ slice_t *amd64_lower_fn_end(closure *c, lir_op *op) {
     return insts;
 }
 
-slice_t *amd64_lower_fn_formal_params(closure *c) {
+slice_t *amd64_native_fn_formal_params(closure *c) {
     slice_t *insts = slice_new();
     // 已经在栈里面的就不用管了，只取寄存器中的。存放在 lir_var 中的 stack_offset 中即可
     uint8_t formal_used[2] = {0};
     list_node *current = c->formal_params->front;
     while (current->value != NULL) {
         lir_local_var_decl *var_decl = current->value;
-        reg_t *source_reg = amd64_lower_fn_next_reg_target(formal_used, var_decl->ast_type.base);
+        reg_t *source_reg = amd64_native_fn_next_reg_target(formal_used, var_decl->ast_type.base);
         if (source_reg == NULL) {
             continue;
         }
@@ -583,47 +583,47 @@ slice_t *amd64_lower_fn_formal_params(closure *c) {
     return insts;
 }
 
-slice_t *amd64_lower_closure(closure *c) {
+slice_t *amd64_native_closure(closure *c) {
     slice_t *insts = slice_new();
 
     // 遍历 block
     for (int i = 0; i < c->blocks->count; ++i) {
         lir_basic_block *block = c->blocks->take[i];
-        slice_append(insts, amd64_lower_block(c, block));
+        slice_append(insts, amd64_native_block(c, block));
     }
 
     return insts;
 }
 
 
-slice_t *amd64_lower_block(closure *c, lir_basic_block *block) {
+slice_t *amd64_native_block(closure *c, lir_basic_block *block) {
     slice_t *insts = slice_new();
-    list_node *current = block->operates->front;
+    list_node *current = block->operations->front;
     while (current->value != NULL) {
         lir_op *op = current->value;
-        slice_append(insts, amd64_lower_op(c, op));
+        slice_append(insts, amd64_native_op(c, op));
         current = current->succ;
     }
     return insts;
 }
 
 
-slice_t *amd64_lower_cmp_goto(closure *c, lir_op *op) {
+slice_t *amd64_native_cmp_goto(closure *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     // 比较 first 是否等于 second，如果相等就跳转到 result label
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->first, first, used));
+    slice_append(insts, amd64_native_operand_transform(op->first, first, used));
 
     amd64_operand_t *second = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->second, second, used));
+    slice_append(insts, amd64_native_operand_transform(op->second, second, used));
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+    slice_append(insts, amd64_native_operand_transform(op->result, result, used));
 
     // cmp 指令比较
-    reg_t *reg = amd64_lower_next_reg(used, first->size);
+    reg_t *reg = amd64_native_next_reg(used, first->size);
     slice_push(insts, ASM_INST("mov", { REG(reg), first }));
     slice_push(insts, ASM_INST("cmp", { REG(reg), second }));
     slice_push(insts, ASM_INST("je", { result }));
@@ -631,25 +631,25 @@ slice_t *amd64_lower_cmp_goto(closure *c, lir_op *op) {
     return insts;
 }
 
-slice_t *amd64_lower_lea(closure *c, lir_op *op) {
+slice_t *amd64_native_lea(closure *c, lir_op *op) {
     if (op->first->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[amd64_lower_lead] first operand type not LIR_OPERAND_TYPE_VAR");
+        error_exit("[amd64_native_lead] first operand code not LIR_OPERAND_TYPE_VAR");
     }
     if (op->result->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[amd64_lower_lead] result operand type not LIR_OPERAND_TYPE_VAR");
+        error_exit("[amd64_native_lead] result operand code not LIR_OPERAND_TYPE_VAR");
     }
 
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
     amd64_operand_t *first = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->first, first, used));
+    slice_append(insts, amd64_native_operand_transform(op->first, first, used));
 
     amd64_operand_t *result = NEW(amd64_operand_t);
-    slice_append(insts, amd64_lower_operand_transform(op->result, result, used));
+    slice_append(insts, amd64_native_operand_transform(op->result, result, used));
 
 
-    reg_t *reg = amd64_lower_next_reg(used, result->size);
+    reg_t *reg = amd64_native_next_reg(used, result->size);
     slice_push(insts, ASM_INST("lea", { REG(reg), first }));
     slice_push(insts, ASM_INST("mov", { result, REG(reg) }));
     return insts;

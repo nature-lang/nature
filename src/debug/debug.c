@@ -99,33 +99,33 @@ string token_type_to_debug[] = {
 };
 
 string lir_op_type_to_debug[] = {
-        [LIR_OP_TYPE_ADD]="ADD  ",
-        [LIR_OP_TYPE_SUB]="SUB  ",
-        [LIR_OP_TYPE_MUL]="MUL  ",
-        [LIR_OP_TYPE_DIV]="DIV  ",
-        [LIR_OP_TYPE_SLT]="SLT   ",
-        [LIR_OP_TYPE_SLE]="SLE  ",
-        [LIR_OP_TYPE_SGT]="SGT   ",
-        [LIR_OP_TYPE_SGE]="SGE  ",
-        [LIR_OP_TYPE_SEE]="SEE ",
-        [LIR_OP_TYPE_SNE]="SNE ",
-        [LIR_OP_TYPE_NOT]="NOT  ",
-        [LIR_OP_TYPE_NEG]="NEG   ",
-        [LIR_OP_TYPE_LEA]="LEA   ",
-        [LIR_OP_TYPE_SIA]="SIA  ",
-        [LIR_OP_TYPE_PHI]="PHI  ",
-        [LIR_OP_TYPE_MOVE]="MOVE ",
-        [LIR_OP_TYPE_BEQ]="BEQ",
-        [LIR_OP_TYPE_BAL]="BAL ",
-        [LIR_OP_TYPE_PUSH]="PUSH  ",
-        [LIR_OP_TYPE_POP]="POP   ",
-        [LIR_OP_TYPE_CALL]="CALL  ",
-        [LIR_OP_TYPE_BUILTIN_CALL]="B_CALL",
-        [LIR_OP_TYPE_RUNTIME_CALL]="R_CALL",
-        [LIR_OP_TYPE_RETURN]="RET   ",
-        [LIR_OP_TYPE_LABEL]="LABEL ",
-        [LIR_OP_TYPE_FN_BEGIN] = "FN_BEGIN",
-        [LIR_OP_TYPE_FN_END] = "FN_END",
+        [LIR_OPCODE_ADD]="ADD  ",
+        [LIR_OPCODE_SUB]="SUB  ",
+        [LIR_OPCODE_MUL]="MUL  ",
+        [LIR_OPCODE_DIV]="DIV  ",
+        [LIR_OPCODE_SLT]="SLT   ",
+        [LIR_OPCODE_SLE]="SLE  ",
+        [LIR_OPCODE_SGT]="SGT   ",
+        [LIR_OPCODE_SGE]="SGE  ",
+        [LIR_OPCODE_SEE]="SEE ",
+        [LIR_OPCODE_SNE]="SNE ",
+        [LIR_OPCODE_NOT]="NOT  ",
+        [LIR_OPCODE_NEG]="NEG   ",
+        [LIR_OPCODE_LEA]="LEA   ",
+        [LIR_OPCODE_SIA]="SIA  ",
+        [LIR_OPCODE_PHI]="PHI  ",
+        [LIR_OPCODE_MOVE]="MOVE ",
+        [LIR_OPCODE_BEQ]="BEQ",
+        [LIR_OPCODE_BAL]="BAL ",
+        [LIR_OPCODE_PUSH]="PUSH  ",
+        [LIR_OPCODE_POP]="POP   ",
+        [LIR_OPCODE_CALL]="CALL  ",
+        [LIR_OPCODE_BUILTIN_CALL]="B_CALL",
+        [LIR_OPCODE_RUNTIME_CALL]="R_CALL",
+        [LIR_OPCODE_RETURN]="RET   ",
+        [LIR_OPCODE_LABEL]="LABEL ",
+        [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
+        [LIR_OPCODE_FN_END] = "FN_END",
 };
 
 void debug_parser(int line, char *token) {
@@ -152,7 +152,7 @@ void debug_stmt(string type, ast_stmt stmt) {
 
 void debug_lir(int line, lir_op *op) {
     printf("[DEBUG] LIR %d:\t", line);
-    if (op->type == LIR_OP_TYPE_LABEL) {
+    if (op->code == LIR_OPCODE_LABEL) {
         printf(
                 "%s:\n",
                 lir_operand_to_string(op->result)
@@ -161,7 +161,7 @@ void debug_lir(int line, lir_op *op) {
     }
     printf(
             "\t\t%s\t\t%s , %s -> %s",
-            lir_op_type_to_debug[op->type],
+            lir_op_type_to_debug[op->code],
             lir_operand_to_string(op->first),
             lir_operand_to_string(op->second),
             lir_operand_to_string(op->result)
@@ -196,12 +196,12 @@ void debug_basic_block(lir_basic_block *block) {
     // block as, ops, succ, pred
     printf("block: %s\n", block->name);
 
-    list_node *current = block->operates->front;
+    list_node *current = block->operations->front;
     while (current->value != NULL) {
         lir_op *op = current->value;
         printf(
                 "\t\t%s\t%s , %s => %s\n",
-                lir_op_type_to_debug[op->type],
+                lir_op_type_to_debug[op->code],
                 lir_operand_to_string(op->first),
                 lir_operand_to_string(op->second),
                 lir_operand_to_string(op->result)

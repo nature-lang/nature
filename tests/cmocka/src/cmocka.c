@@ -2229,7 +2229,7 @@ static LONG WINAPI exception_filter(EXCEPTION_POINTERS *exception_pointers) {
                     "\n"
                     "To debug in Visual Studio...\n"
                     "1. Select menu item File->Open Project\n"
-                    "2. Change 'Files of type' to 'Executable Files'\n"
+                    "2. Change 'Files of code' to 'Executable Files'\n"
                     "3. Open this executable.\n"
                     "4. Select menu item Debug->Start\n"
                     "\n"
@@ -3297,7 +3297,7 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
             current_state = &current_TestState->state;
             break;
         default:
-            print_error("Invalid unit test function type %d\n",
+            print_error("Invalid unit test function code %d\n",
                         test->function_type);
             exit_test(1);
             break;
@@ -3467,7 +3467,7 @@ int _run_group_tests(const UnitTest * const tests, const size_t number_of_tests)
         case UNIT_TEST_FUNCTION_TYPE_GROUP_TEARDOWN:
             break;
         default:
-            print_error("Invalid unit test function type %d\n",
+            print_error("Invalid unit test function code %d\n",
                         test->function_type);
             break;
         }

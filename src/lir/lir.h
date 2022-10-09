@@ -108,37 +108,37 @@ typedef enum {
 } lir_operand_type;
 
 typedef enum {
-    LIR_OP_TYPE_ADD = 1,
-    LIR_OP_TYPE_SUB,
-    LIR_OP_TYPE_MUL,
-    LIR_OP_TYPE_DIV,
-    LIR_OP_TYPE_REM, // remainder
-    LIR_OP_TYPE_SLT, // set less than
-    LIR_OP_TYPE_SLE, // set less eq
-    LIR_OP_TYPE_SGT,
-    LIR_OP_TYPE_SGE,
-    LIR_OP_TYPE_SEE,
-    LIR_OP_TYPE_SNE,
-    LIR_OP_TYPE_NOT, // ! 取反
-    LIR_OP_TYPE_NEG, // -取负数
+    LIR_OPCODE_ADD = 1,
+    LIR_OPCODE_SUB,
+    LIR_OPCODE_MUL,
+    LIR_OPCODE_DIV,
+    LIR_OPCODE_REM, // remainder
+    LIR_OPCODE_SLT, // set less than
+    LIR_OPCODE_SLE, // set less eq
+    LIR_OPCODE_SGT,
+    LIR_OPCODE_SGE,
+    LIR_OPCODE_SEE,
+    LIR_OPCODE_SNE,
+    LIR_OPCODE_NOT, // ! 取反
+    LIR_OPCODE_NEG, // -取负数
 
-    LIR_OP_TYPE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
-    LIR_OP_TYPE_LIA, // load indirect addr to reg ，将内存中的数据加载到寄存器中
-    LIR_OP_TYPE_SIA, // store reg to indirect addr，将寄存器中的数据存入内存
+    LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
+    LIR_OPCODE_LIA, // load indirect addr to reg ，将内存中的数据加载到寄存器中
+    LIR_OPCODE_SIA, // store reg to indirect addr，将寄存器中的数据存入内存
 
-    LIR_OP_TYPE_PHI, // 复合指令, 位置在 first_param
-    LIR_OP_TYPE_MOVE,
-    LIR_OP_TYPE_BEQ, // branch if eq a,b
-    LIR_OP_TYPE_BAL, // branch always
-    LIR_OP_TYPE_PUSH,
-    LIR_OP_TYPE_POP,
-    LIR_OP_TYPE_CALL, // 复合指令，位置在 second
-    LIR_OP_TYPE_RUNTIME_CALL,
-    LIR_OP_TYPE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
-    LIR_OP_TYPE_RETURN, // return != ret, 其主要是做了 mov res -> rax
-    LIR_OP_TYPE_LABEL,
-    LIR_OP_TYPE_FN_BEGIN, // 无操作数
-    LIR_OP_TYPE_FN_END, // 无操作数
+    LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
+    LIR_OPCODE_MOVE,
+    LIR_OPCODE_BEQ, // branch if eq a,b
+    LIR_OPCODE_BAL, // branch always
+    LIR_OPCODE_PUSH,
+    LIR_OPCODE_POP,
+    LIR_OPCODE_CALL, // 复合指令，位置在 second
+    LIR_OPCODE_RUNTIME_CALL,
+    LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
+    LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
+    LIR_OPCODE_LABEL,
+    LIR_OPCODE_FN_BEGIN, // 无操作数
+    LIR_OPCODE_FN_END, // 无操作数
 } lir_op_type;
 
 typedef struct lir_operand {
@@ -227,13 +227,11 @@ typedef struct {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-    lir_op_type type;
+    lir_op_type code;
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
     int id; // 编号
-    // 预着色，寄存器分配期间会将该寄存器作为 fixed register 处理，比如 call op, regs 包含所有寄存器。又比如某些 operand 也会包含固定寄存器
-    int regs[UINT8_MAX];
 } lir_op;
 
 typedef struct {
@@ -253,9 +251,11 @@ typedef struct lir_basic_block {
     string name;
     uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
-//    lir_op *first_op; // 链表结构， 开始处的指令
-
-    list *operates;
+    // op point
+    list_node *phi;
+    list_node *first;
+    list_node *last;
+    list *operations;
 
     slice_t *preds;
     slice_t *succs;
@@ -301,7 +301,7 @@ typedef struct closure {
     string end_label; // 结束地址
     string env_name;
     struct closure *parent;
-    list *operates; // 指令列表
+    list *operations; // 指令列表
 
     table *local_var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
     list *local_var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)

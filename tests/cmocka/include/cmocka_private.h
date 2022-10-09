@@ -151,7 +151,7 @@ WINBASEAPI BOOL WINAPI IsDebuggerPresent(VOID);
  * We should use this function in only in a very few places.
  *
  * Also, please call this via the discard_const_p() macro interface, as that
- * makes the return type safe.
+ * makes the return code safe.
  */
 #define discard_const(ptr) ((void *)((uintptr_t)(ptr)))
 

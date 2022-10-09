@@ -221,7 +221,7 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
  * ymm1 => register:32
  * ymm2 => register:32
  *
- * 接受一个 type(int) 响应一个 n type + size 的字符串列表
+ * 接受一个 code(int) 响应一个 n code + size 的字符串列表
  */
 asm_keys_t operand_low_to_high(operand_type t);
 

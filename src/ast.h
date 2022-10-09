@@ -73,8 +73,8 @@ string ast_expr_operator_to_string[100];
 //
 //typedef struct {
 //    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
-//    type_system type; // base_type, custom_type, function, list, map
-//    bool is_origin; // type a = int, type b = a，int is origin
+//    type_system code; // base_type, custom_type, function, list, map
+//    bool is_origin; // code a = int, code b = a，int is origin
 //    uint8_t point; // 指针等级, 如果等于0 表示非指针
 //} ast_type_t;
 
@@ -161,7 +161,7 @@ typedef struct {
  */
 typedef struct {
     ast_expr iterate; // list, foo.list, bar[0]
-    ast_var_decl *gen_key; // 类型推导, type 可能是 int 或者 string
+    ast_var_decl *gen_key; // 类型推导, code 可能是 int 或者 string
     ast_var_decl *gen_value; // 类型推导
     slice_t *body;
 } ast_for_in_stmt;
@@ -188,7 +188,7 @@ typedef struct {
 } ast_struct_property;
 
 /**
- * 使用了 type, key, size
+ * 使用了 code, key, size
  * struct {
  *    int a
  *    int b
@@ -223,7 +223,7 @@ typedef struct {
 // 中间代码如何表示？a_2233.b = 12
 // a_233().b 左值可以编译成
 // call a_233;
-// type.b = 12; ??
+// code.b = 12; ??
 typedef struct {
     ast_expr left; // left is struct
     string property;
@@ -305,10 +305,10 @@ typedef struct {
 //} ast_struct_stmt;
 
 /**
- * type my_int = int
- * type my_string =  string
- * type my_my_string =  my_string
- * type my = struct {}
+ * code my_int = int
+ * code my_string =  string
+ * code my_my_string =  my_string
+ * code my = struct {}
  */
 typedef struct {
     string ident; // foo

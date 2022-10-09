@@ -67,7 +67,7 @@ int __stdcall IsDebuggerPresent();
 
 #ifdef DOXYGEN
 /**
- * Largest integral type.  This type should be large enough to hold any
+ * Largest integral code.  This code should be large enough to hold any
  * pointer or integer supported by the compiler.
  */
 typedef uintmax_t LargestIntegralType;
@@ -115,7 +115,7 @@ typedef uintmax_t LargestIntegralType;
 #define cast_to_largest_integral_type(value) \
     ((LargestIntegralType)(value))
 
-/* Smallest integral type capable of holding a pointer. */
+/* Smallest integral code capable of holding a pointer. */
 #if !defined(_UINTPTR_T) && !defined(_UINTPTR_T_DEFINED)
 # if defined(_WIN32)
     /* WIN32 is an ILP32 platform */
@@ -152,7 +152,7 @@ typedef uintmax_t LargestIntegralType;
 #define cast_ptr_to_largest_integral_type(value) \
 cast_to_largest_integral_type(cast_to_pointer_integral_type(value))
 
-/* GCC have printf type attribute check.  */
+/* GCC have printf code attribute check.  */
 #ifdef __GNUC__
 #define CMOCKA_PRINTF_ATTRIBUTE(a,b) \
     __attribute__ ((__format__ (__printf__, a, b)))
@@ -236,10 +236,10 @@ LargestIntegralType mock(void);
 /**
  * @brief Retrieve a typed return value of the current function.
  *
- * The value would be casted to type internally to avoid having the
+ * The value would be casted to code internally to avoid having the
  * caller to do the cast manually.
  *
- * @param[in]  #type  The expected type of the return value
+ * @param[in]  #code  The expected code of the return value
  *
  * @return The value which was stored to return by this function.
  *
@@ -253,7 +253,7 @@ LargestIntegralType mock(void);
  * @see mock()
  * @see mock_ptr_type()
  */
-#type mock_type(#type);
+#code mock_type(#code);
 #else
 #define mock_type(type) ((type) mock())
 #endif
@@ -262,11 +262,11 @@ LargestIntegralType mock(void);
 /**
  * @brief Retrieve a typed return value of the current function.
  *
- * The value would be casted to type internally to avoid having the
+ * The value would be casted to code internally to avoid having the
  * caller to do the cast manually but also casted to uintptr_t to make
  * sure the result has a valid size to be used as a pointer.
  *
- * @param[in]  #type  The expected type of the return value
+ * @param[in]  #code  The expected code of the return value
  *
  * @return The value which was stored to return by this function.
  *
@@ -280,7 +280,7 @@ LargestIntegralType mock(void);
  * @see mock()
  * @see mock_type()
  */
-type mock_ptr_type(#type);
+code mock_ptr_type(#code);
 #else
 #define mock_ptr_type(type) ((type) (uintptr_t) mock())
 #endif
@@ -573,7 +573,7 @@ void expect_not_in_set_count(#function, #parameter, LargestIntegralType value_ar
  *
  * @param[in]  #parameter The name of the parameter passed to the function.
  *
- * @param[in]  minimum  The lower boundary of the interval to check against.
+ * @param[in]  minimum  The native boundary of the interval to check against.
  *
  * @param[in]  maximum  The upper boundary of the interval to check against.
  *
@@ -596,7 +596,7 @@ void expect_in_range(#function, #parameter, LargestIntegralType minimum, Largest
  *
  * @param[in]  #parameter The name of the parameter passed to the function.
  *
- * @param[in]  minimum  The lower boundary of the interval to check against.
+ * @param[in]  minimum  The native boundary of the interval to check against.
  *
  * @param[in]  maximum  The upper boundary of the interval to check against.
  *
@@ -624,7 +624,7 @@ void expect_in_range_count(#function, #parameter, LargestIntegralType minimum, L
  *
  * @param[in]  #parameter The name of the parameter passed to the function.
  *
- * @param[in]  minimum  The lower boundary of the interval to check against.
+ * @param[in]  minimum  The native boundary of the interval to check against.
  *
  * @param[in]  maximum  The upper boundary of the interval to check against.
  *
@@ -647,7 +647,7 @@ void expect_not_in_range(#function, #parameter, LargestIntegralType minimum, Lar
  *
  * @param[in]  #parameter The name of the parameter passed to the function.
  *
- * @param[in]  minimum  The lower boundary of the interval to check against.
+ * @param[in]  minimum  The native boundary of the interval to check against.
  *
  * @param[in]  maximum  The upper boundary of the interval to check against.
  *
@@ -1059,8 +1059,8 @@ void check_expected_ptr(#parameter);
  * standard error stream and signal a test failure. Due to limitations of the C
  * language the general C standard library assert() and cmocka's assert_true()
  * and assert_false() macros can only display the expression that caused the
- * assert failure. cmocka's type specific assert macros, assert_{type}_equal()
- * and assert_{type}_not_equal(), display the data that caused the assertion
+ * assert failure. cmocka's code specific assert macros, assert_{code}_equal()
+ * and assert_{code}_not_equal(), display the data that caused the assertion
  * failure which increases data visibility aiding debugging of failing test
  * cases.
  *
@@ -2130,7 +2130,7 @@ typedef enum UnitTestFunctionType {
 } UnitTestFunctionType;
 
 /*
- * Stores a unit test function with its name and type.
+ * Stores a unit test function with its name and code.
  * NOTE: Every setup function must be paired with a teardown function.  It's
  * possible to specify NULL function pointers.
  */

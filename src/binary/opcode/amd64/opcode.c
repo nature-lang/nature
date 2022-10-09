@@ -1321,16 +1321,16 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, amd64_operation_t asm_inst) {
             uint8_t temp[4];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
-        } /*else if (asm_operand->type == ASM_OPERAND_TYPE_INT32) {
+        } /*else if (asm_operand->code == ASM_OPERAND_TYPE_INT32) {
       asm_operand_int32 *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
-    } else if (asm_operand->type == ASM_OPERAND_TYPE_INT8) {
+    } else if (asm_operand->code == ASM_OPERAND_TYPE_INT8) {
       asm_operand_int32 *i = asm_operand->value;
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
     }*/ else {
-            error_exit("unsupported asm operand type %v", asm_operand->type);
+            error_exit("unsupported asm operand code %v", asm_operand->type);
             return NULL;
         }
 
