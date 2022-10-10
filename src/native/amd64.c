@@ -311,7 +311,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
-            char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
+            char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
             native_var_decl_t *decl = NEW(native_var_decl_t);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
@@ -327,7 +327,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
             // asm_copy
             ASM_OPERAND_COPY(asm_operand, REG(reg));
         } else if (v->type == TYPE_FLOAT) {
-            char *unique_name = LOWER_VAR_DECL_UNIQUE_NAME();
+            char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
             native_var_decl_t *decl = NEW(native_var_decl_t);
             decl->name = unique_name;
             decl->size = QWORD;

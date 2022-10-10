@@ -28,14 +28,14 @@ void interval_loop_detection(closure *c) {
 
     // 1. 探测出循环头与循环尾部
     while (!list_empty(work_list)) {
-        lir_basic_block *block = list_pop(work_list);
+        basic_block_t *block = list_pop(work_list);
 
         // 是否会出现 succ 的 flag 是 visited?
         // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
         // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
         slice_t *forward_succs = slice_new();
         for (int i = 0; i < block->succs->count; ++i) {
-            lir_basic_block *succ = block->succs->take[i];
+            basic_block_t *succ = block->succs->take[i];
             succ->loop.tree_high = block->loop.tree_high + 1;
 
             // 如果发现循环, backward branches
@@ -65,27 +65,27 @@ void interval_loop_detection(closure *c) {
 
     // 2. 标号, 这里有一个严肃的问题，如果一个节点有两个前驱时，也能够被标号吗？如果是普通结构不考虑 goto 的情况下，则不会初选这种 cfg
     for (int i = 0; i < loop_ends.count; ++i) {
-        lir_basic_block *end = loop_ends.list[i];
+        basic_block_t *end = loop_ends.list[i];
         list_push(work_list, end);
         table *exist_table = table_new();
-        table_set(exist_table, itoa(end->label), end);
+        table_set(exist_table, itoa(end->label_index), end);
 
         while (!list_empty(work_list)) {
-            lir_basic_block *block = list_pop(work_list);
-            if (block->label != end->label && block->loop.index == end->loop.index) {
+            basic_block_t *block = list_pop(work_list);
+            if (block->label_index != end->label_index && block->loop.index == end->loop.index) {
                 continue;
             }
             // 标号
             block->loop.index_list[block->loop.depth++] = end->loop.index;
 
             for (int k = 0; k < block->preds->count; ++k) {
-                lir_basic_block *pred = block->preds->take[k];
+                basic_block_t *pred = block->preds->take[k];
 
                 // 判断是否已经入过队(标号)
-                if (table_exist(exist_table, itoa(pred->label))) {
+                if (table_exist(exist_table, itoa(pred->label_index))) {
                     continue;
                 }
-                table_set(exist_table, itoa(block->label), block);
+                table_set(exist_table, itoa(block->label_index), block);
                 list_push(work_list, pred);
             }
         }
@@ -94,7 +94,7 @@ void interval_loop_detection(closure *c) {
 
     // 3. 遍历所有 basic_block ,通过 loop.index_list 确定 index
     for (int label = 0; label < c->blocks->count; ++label) {
-        lir_basic_block *block = c->blocks->take[label];
+        basic_block_t *block = c->blocks->take[label];
         if (block->loop.index != 0) {
             continue;
         }
@@ -115,10 +115,10 @@ void interval_loop_detection(closure *c) {
 }
 
 // 大值在栈顶被优先处理
-static void interval_insert_to_stack_by_depth(stack_t *work_list, lir_basic_block *block) {
+static void interval_insert_to_stack_by_depth(stack_t *work_list, basic_block_t *block) {
     // next->next->next
     stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
-    while (p->next != NULL && ((lir_basic_block *) p->next->value)->loop.depth > block->loop.depth) {
+    while (p->next != NULL && ((basic_block_t *) p->next->value)->loop.depth > block->loop.depth) {
         p = p->next;
     }
 
@@ -142,12 +142,12 @@ void interval_block_order(closure *c) {
     stack_push(work_list, c->entry);
 
     while (!stack_empty(work_list)) {
-        lir_basic_block *block = stack_pop(work_list);
+        basic_block_t *block = stack_pop(work_list);
         slice_push(c->order_blocks, block);
 
         // 需要计算每一个块的正向前驱的数量
         for (int i = 0; i < block->forward_succs->count; ++i) {
-            lir_basic_block *succ = block->forward_succs->take[i];
+            basic_block_t *succ = block->forward_succs->take[i];
             succ->incoming_forward_count--;
             if (succ->incoming_forward_count == 0) {
                 // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
@@ -160,7 +160,7 @@ void interval_block_order(closure *c) {
 void interval_mark_number(closure *c) {
     int next_id = 0;
     for (int i = 0; i < c->order_blocks->count; ++i) {
-        lir_basic_block *block = c->order_blocks->take[i];
+        basic_block_t *block = c->order_blocks->take[i];
         list_node *current = list_first(block->operations);
 
         while (current->value != NULL) {
@@ -187,7 +187,7 @@ void interval_build(closure *c) {
 
     // 倒序遍历顺序基本块基本块
     for (int i = c->order_blocks->count - 1; i >= 0; --i) {
-        lir_basic_block *block = c->order_blocks->take[i];
+        basic_block_t *block = c->order_blocks->take[i];
         lir_op *first_op = list_first(block->operations)->value;
         int block_from = first_op->id;
         int block_to = first_op->id + 2;

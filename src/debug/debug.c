@@ -176,7 +176,7 @@ void debug_lir(int line, lir_op *op) {
 void debug_cfg(closure *c) {
     printf("closure: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
-        lir_basic_block *basic_block = c->blocks->take[i];
+        basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);
     }
 }
@@ -192,7 +192,7 @@ void debug_cfg(closure *c) {
  *
  * @param block
  */
-void debug_basic_block(lir_basic_block *block) {
+void debug_basic_block(basic_block_t *block) {
     // block as, ops, succ, pred
     printf("block: %s\n", block->name);
 
@@ -211,11 +211,11 @@ void debug_basic_block(lir_basic_block *block) {
 
     printf("\n\t\tpred:");
     for (int i = 0; i < block->preds->count; ++i) {
-        printf("%s\t", ((lir_basic_block *) block->preds->take[i])->name);
+        printf("%s\t", ((basic_block_t *) block->preds->take[i])->name);
     }
     printf("\n\t\tsucc:");
     for (int i = 0; i < block->succs->count; ++i) {
-        printf("%s\t", ((lir_basic_block *) block->succs->take[i])->name);
+        printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
     }
 
     printf("\n\n\n");

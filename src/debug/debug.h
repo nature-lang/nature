@@ -34,6 +34,6 @@ void debug_lir(int lir_line, lir_op *op);
 
 void debug_cfg(closure *c);
 
-void debug_basic_block(lir_basic_block *block);
+void debug_basic_block(basic_block_t *block);
 
 #endif //NATURE_SRC_DEBUG_DEBUG_H_

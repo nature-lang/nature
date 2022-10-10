@@ -847,7 +847,7 @@ list *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target) {
     int size = ast_struct_decl_size(struct_decl);
     // new struct by runtime call, base_target
     list_push(operations, lir_op_runtime_call(RUNTIME_CALL_GC_NEW, base_target, 1,
-                                            LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, size)));
+                                              LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, size)));
 
     // set init value
     for (int i = 0; i < ast->count; ++i) {

@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIR_LOWER_BUILTIN_H_
-#define NATURE_SRC_LIR_LOWER_BUILTIN_H_
+#ifndef NATURE_SRC_LIR_NATIVE_BUILTIN_H_
+#define NATURE_SRC_LIR_NATIVE_BUILTIN_H_
 
 #include "runtime/type/string.h"
 #include "src/type.h"
@@ -20,4 +20,4 @@ void builtin_println(int arg_count, ...);
 
 builtin_operand_t *builtin_new_operand(type_base_t type, void *value);
 
-#endif //NATURE_SRC_LIR_LOWER_BUILTIN_H_
+#endif //NATURE_SRC_LIR_NATIVE_BUILTIN_H_

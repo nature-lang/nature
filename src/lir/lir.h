@@ -8,6 +8,7 @@
 #include "src/register/register.h"
 
 #define TEMP_IDENT "t"
+#define TEMP_LABEL "l"
 #define CONTINUE_IDENT "continue"
 #define WHILE_IDENT "while"
 #define END_WHILE_IDENT "end_while"
@@ -236,7 +237,7 @@ typedef struct lir_op {
 
 typedef struct {
     uint8_t count;
-    struct lir_basic_block *list[UINT8_MAX];
+    struct basic_block_t *list[UINT8_MAX];
 } lir_basic_blocks;
 
 typedef struct {
@@ -247,14 +248,14 @@ typedef struct {
     uint8_t depth;
 } loop_detection;
 
-typedef struct lir_basic_block {
+typedef struct basic_block_t {
     string name;
-    uint8_t label; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
+    uint8_t label_index; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
     // op point
-    list_node *phi;
-    list_node *first;
-    list_node *last;
+//    list_node *phi; // fist_node 即可
+    list_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+//    list_node *last; // last_node 即可
     list *operations;
 
     slice_t *preds;
@@ -269,11 +270,11 @@ typedef struct lir_basic_block {
     slice_t *dom; // 当前块被哪些基本块支配
     slice_t *df;
     slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
-    struct lir_basic_block *idom; // 当前块的最近支配者
+    struct basic_block_t *idom; // 当前块的最近支配者
 
     // loop detection
     loop_detection loop;
-} lir_basic_block;
+} basic_block_t;
 
 /**
  * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
@@ -291,7 +292,7 @@ typedef struct closure {
     slice_t *fixed_regs; // 作为临时寄存器使用到的寄存器
     slice_t *blocks; // 根据解析顺序得到
 
-    lir_basic_block *entry; // 基本块入口, 指向 blocks[0]
+    basic_block_t *entry; // 基本块入口, 指向 blocks[0]
     slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
     table *interval_table; // key 包括 fixed register as 和 variable.ident
     int interval_count;
@@ -314,7 +315,8 @@ lir_operand *set_indirect_addr(lir_operand *operand);
 
 lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
 
-lir_basic_block *lir_new_basic_block();
+basic_block_t *lir_new_basic_block(char *name, uint8_t label_index);
+
 //string lir_label_to_string(uint8_t label);
 
 closure *lir_new_closure(ast_closure_t *ast);
@@ -367,6 +369,8 @@ lir_op *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...
 lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label);
+
+bool lir_op_is_branch(lir_op *op);
 
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配

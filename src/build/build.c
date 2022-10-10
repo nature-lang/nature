@@ -5,7 +5,7 @@
 #include "src/compiler.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
-#include "src/native/amd64/amd64.h"
+#include "src/native/amd64.h"
 #include "src/native/native.h"
 #include "src/register/register.h"
 #include "src/binary/opcode/amd64/opcode.h"

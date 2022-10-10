@@ -12,4 +12,6 @@
  */
 void cfg(closure *c);
 
+void broken_critical_edges(closure *c);
+
 #endif //NATURE_SRC_CFG_H_

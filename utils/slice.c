@@ -31,3 +31,18 @@ void slice_append_free(slice_t *dst, slice_t *src) {
     free(src->take);
     free(src);
 }
+
+/**
+ * 如果 i == s->count 或者为 -1 则删除最后一个元素
+ * @param s
+ * @param i
+ * @return
+ */
+void *slice_remove(slice_t *s, int i) {
+    void *value = s->take[i];
+    for (int j = i; j < s->count - 1; ++j) {
+        s->take[j] = s->take[j + 1]; // 从 i 开始重拍
+    }
+    s->count--;
+    return value;
+}

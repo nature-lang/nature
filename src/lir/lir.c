@@ -174,8 +174,11 @@ closure *lir_new_closure(ast_closure_t *ast) {
     return new;
 }
 
-lir_basic_block *lir_new_basic_block() {
-    lir_basic_block *basic_block = NEW(lir_basic_block);
+basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
+    basic_block_t *basic_block = NEW(basic_block_t);
+    basic_block->name = name;
+    basic_block->label_index = label_index;
+
     basic_block->operations = list_new();
     basic_block->preds = slice_new();
     basic_block->succs = slice_new();
@@ -199,7 +202,7 @@ lir_basic_block *lir_new_basic_block() {
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label) {
     for (int i = 0; i < blocks->count; ++i) {
-        if (((lir_basic_block *) blocks->take[i])->label == label) {
+        if (((basic_block_t *) blocks->take[i])->label_index == label) {
             return true;
         }
     }
@@ -316,4 +319,12 @@ lir_vars lir_input_vars(lir_op *op) {
 
 lir_vars lir_output_vars(lir_op *op) {
     return lir_vars_by_operand(op->result);
+}
+
+bool lir_op_is_branch(lir_op *op) {
+    if (op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ) {
+        return true;
+    }
+
+    return false;
 }

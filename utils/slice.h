@@ -3,11 +3,12 @@
 
 #define SLICE_TACK(_type, _slice, _index) ((_type*) _slice->take[_index])
 
-//#define SLICE_FOR(_slice, _type) for (_type *_node = (_type*) _slice->take[0]; _node <= (_type*) _slice->take[_slice->count]; _node++)
+#define SLICE_FOR(_slice, _type) for (_type *_node = (_type*) _slice->take[0]; _node <= (_type*) _slice->take[_slice->count]; _node++)
+#define SLICE_VALUE() _node;
 
-#define SLICE_FOR(_slice) for (int _i = 0; _i < (_slice)->count; ++_i)
+//#define SLICE_FOR(_slice) for (int _i = 0; _i < (_slice)->count; ++_i)
 
-#define SLICE_VALUE(_slice) _slice->take[_i];
+//#define SLICE_VALUE(_slice) _slice->take[_i];
 
 
 /**
@@ -31,5 +32,7 @@ void slice_push(slice_t *s, void *value);
 void slice_append(slice_t *dst, slice_t *src);
 
 void slice_append_free(slice_t *dst, slice_t *src);
+
+void *slice_remove(slice_t *s, int i);
 
 #endif //NATURE_SRC_LIB_SLICE_H_

@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIR_LOWER_AMD64_H_
-#define NATURE_SRC_LIR_LOWER_AMD64_H_
+#ifndef NATURE_SRC_LIR_NATIVE_AMD64_H_
+#define NATURE_SRC_LIR_NATIVE_AMD64_H_
 
 #include "src/binary/opcode/amd64/asm.h"
 #include "src/lir/lir.h"
@@ -18,7 +18,7 @@ slice_t *amd64_native_fn_end(closure *c, lir_op *op);
 
 slice_t *amd64_native_closure(closure *c);
 
-slice_t *amd64_native_block(closure *c, lir_basic_block *block);
+slice_t *amd64_native_block(closure *c, basic_block_t *block);
 
 /**
  * 分发入口, 基于 code->code 做选择(包含 label code)
@@ -66,4 +66,4 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
 uint8_t amd64_formal_min_stack(uint8_t size);
 
 
-#endif //NATURE_SRC_LIR_LOWER_AMD64_H_
+#endif //NATURE_SRC_LIR_NATIVE_AMD64_H_

@@ -137,8 +137,8 @@ void amd64_register_init() {
  */
 void amd64_operations_lower(closure *c) {
     // 按基本块遍历所有指令
-    SLICE_FOR(c->blocks) {
-        lir_basic_block *block = SLICE_VALUE(c->blocks);
+    SLICE_FOR(c->blocks, basic_block_t) {
+        basic_block_t *block = SLICE_VALUE();
         LIST_FOR(block->operations) {
             lir_op *op = LIST_VALUE();
             if (op->code == LIR_OPCODE_RETURN && op->result != NULL) {

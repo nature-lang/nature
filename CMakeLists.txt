@@ -23,11 +23,11 @@ set(SRC_BINARY
         ${SRC_DIR}/binary/elf/assembler.c)
 
 
-set(SRC_LOWER
+set(SRC_NATIVE
         ${SRC_DIR}/native/native.h
         ${SRC_DIR}/native/native.c
-        ${SRC_DIR}/native/amd64/amd64.c
-        ${SRC_DIR}/native/amd64/amd64.h)
+        ${SRC_DIR}/native/amd64.c
+        ${SRC_DIR}/native/amd64.h)
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
@@ -122,7 +122,7 @@ add_executable(nature main.c
         ${SRC}
         ${UTILS}
         ${CMD}
-        ${SRC_LOWER}
+        ${SRC_NATIVE}
         ${SRC_SEMANTIC}
         ${SRC_DEBUG}
         ${SRC_SYNTAX}

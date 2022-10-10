@@ -37,7 +37,7 @@ void ssa(closure *c) {
 void ssa_dom(closure *c) {
     // 初始化, dom[n0] = {l0}
     lir_basic_blocks dom = {.count = 1};
-    lir_basic_block *basic_block;
+    basic_block_t *basic_block;
     basic_block = c->blocks->take[0];
     slice_push(basic_block->dom, basic_block);
 
@@ -49,7 +49,7 @@ void ssa_dom(closure *c) {
         for (int k = 0; k < c->blocks->count; ++k) {
             slice_push(other, c->blocks->take[k]);
         }
-        ((lir_basic_block *) c->blocks->take[i])->dom = other;
+        ((basic_block_t *) c->blocks->take[i])->dom = other;
     }
 
     // 求不动点
@@ -59,7 +59,7 @@ void ssa_dom(closure *c) {
 
         // dom[0] 自己支配自己，没必要进一步深挖了,所以从 1 开始遍历
         for (int label = 1; label < c->blocks->count; ++label) {
-            lir_basic_block *block = c->blocks->take[label];
+            basic_block_t *block = c->blocks->take[label];
             slice_t *new_dom = ssa_calc_dom_blocks(c, block);
             // 判断 dom 是否不同
             if (ssa_dom_changed(block->dom, new_dom)) {
@@ -83,16 +83,16 @@ void ssa_idom(closure *c) {
     // 初始化 be_idom(支配者树)
     for (int label = 0; label < c->blocks->count; ++label) {
         slice_t *be_idom = slice_new();
-        ((lir_basic_block *) c->blocks->take[label])->be_idom = be_idom; // 一个基本块可以是节点的 idom, be_idom 用来构造支配者树
+        ((basic_block_t *) c->blocks->take[label])->be_idom = be_idom; // 一个基本块可以是节点的 idom, be_idom 用来构造支配者树
     }
 
     // 计算最近支配者 B0 没有支配者
     for (int label = 1; label < c->blocks->count; ++label) {
-        lir_basic_block *block = c->blocks->take[label];
+        basic_block_t *block = c->blocks->take[label];
         slice_t *dom = block->dom;
         // 最近支配者不能是自身
         for (int i = dom->count - 1; i >= 0; --i) {
-            if (((lir_basic_block *) dom->take[i])->label == block->label) {
+            if (((basic_block_t *) dom->take[i])->label_index == block->label_index) {
                 continue;
             }
 
@@ -124,20 +124,20 @@ void ssa_df(closure *c) {
 //  }
 
     for (int label = 0; label < c->blocks->count; ++label) {
-        lir_basic_block *current_block = c->blocks->take[label];
+        basic_block_t *current_block = c->blocks->take[label];
         // 非汇聚点不能是支配边界
         if (current_block->preds->count < 2) {
             continue;
         }
 
         for (int i = 0; i < current_block->preds->count; ++i) {
-            lir_basic_block *runner = current_block->preds->take[i];
+            basic_block_t *runner = current_block->preds->take[i];
 
             // 只要 pred 不是 当前块的最近支配者, pred 的支配边界就一定包含着 current_block
             // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
             // 不可能， 因为是从 current_block->pred->idom(pred)
             // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
-            while (runner->label != current_block->idom->label) {
+            while (runner->label_index != current_block->idom->label_index) {
                 slice_push(runner->df, current_block);
 
                 // 向上查找
@@ -158,15 +158,15 @@ void ssa_live(closure *c) {
     for (int label = 0; label < c->blocks->count; ++label) {
         lir_vars out = {.count=0};
         lir_vars in = {.count=0};
-        ((lir_basic_block *) c->blocks->take[label])->live_out = out;
-        ((lir_basic_block *) c->blocks->take[label])->live_in = in;
+        ((basic_block_t *) c->blocks->take[label])->live_out = out;
+        ((basic_block_t *) c->blocks->take[label])->live_in = in;
     }
 
     bool changed = true;
     while (changed) {
         changed = false;
         for (int label = c->blocks->count - 1; label >= 0; --label) {
-            lir_basic_block *block = c->blocks->take[label];
+            basic_block_t *block = c->blocks->take[label];
             lir_vars new_live_out = ssa_calc_live_out(c, c->blocks->take[label]);
             if (ssa_live_changed(&block->live_out, &new_live_out)) {
                 changed = true;
@@ -194,7 +194,7 @@ void ssa_live(closure *c) {
 void ssa_add_phi(closure *c) {
     for (int label = 0; label < c->blocks->count; ++label) {
         // 定义的每个变量都需要添加到支配边界中
-        lir_basic_block *basic_block = c->blocks->take[label];
+        basic_block_t *basic_block = c->blocks->take[label];
         lir_vars def = basic_block->def;
         slice_t *df = basic_block->df;
 
@@ -202,7 +202,7 @@ void ssa_add_phi(closure *c) {
             lir_operand_var *var = def.list[i];
 
             for (int k = 0; k < df->count; ++k) {
-                lir_basic_block *df_block = df->take[k];
+                basic_block_t *df_block = df->take[k];
                 // 判断该变量是否已经添加过 phi(另一个分支可能会先创建), 创建则跳过
                 if (ssa_phi_defined(var, df_block)) {
                     continue;
@@ -230,12 +230,12 @@ void ssa_add_phi(closure *c) {
 /**
  * live out 为 n 的所有后继的 live_in 的并集
  */
-lir_vars ssa_calc_live_out(closure *c, lir_basic_block *block) {
+lir_vars ssa_calc_live_out(closure *c, basic_block_t *block) {
     lir_vars live_out = {.count = 0};
     table *exist_var = table_new(); // basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
-        lir_basic_block *succ = block->succs->take[i];
+        basic_block_t *succ = block->succs->take[i];
 
         // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
         for (int k = 0; k < succ->live_in.count; ++k) {
@@ -255,7 +255,7 @@ lir_vars ssa_calc_live_out(closure *c, lir_basic_block *block) {
 /**
  * 在当前块使用的变量 + 离开当前块依旧活跃的变量（这些变量未在当前块重新定义）
  */
-lir_vars ssa_calc_live_in(closure *c, lir_basic_block *block) {
+lir_vars ssa_calc_live_in(closure *c, basic_block_t *block) {
     lir_vars live_in = {.count = 0};
     table *exist_var = table_new(); // basic var ident
 
@@ -341,7 +341,7 @@ void ssa_use_def(closure *c) {
         table *exist_use = table_new();
         table *exist_def = table_new();
 
-        lir_basic_block *block = c->blocks->take[label];
+        basic_block_t *block = c->blocks->take[label];
 
         list_node *current = block->operations->front;
         while (current->value != NULL) {
@@ -390,7 +390,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
     }
 
     for (int i = 0; i < old_dom->count; ++i) {
-        if (((lir_basic_block *) old_dom->take[i])->label != ((lir_basic_block *) new_dom->take[i])->label) {
+        if (((basic_block_t *) old_dom->take[i])->label_index != ((basic_block_t *) new_dom->take[i])->label_index) {
             return true;
         }
     }
@@ -404,7 +404,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
  * @param block
  * @return
  */
-slice_t *ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
+slice_t *ssa_calc_dom_blocks(closure *c, basic_block_t *block) {
     slice_t *dom = slice_new();
 
     // 遍历当前 block 的 preds 的 dom_list, 然后求交集
@@ -416,18 +416,18 @@ slice_t *ssa_calc_dom_blocks(closure *c, lir_basic_block *block) {
 
     for (int i = 0; i < block->preds->count; ++i) {
         // 找到 pred
-        slice_t *pred_dom = ((lir_basic_block *) block->preds->take[i])->dom;
+        slice_t *pred_dom = ((basic_block_t *) block->preds->take[i])->dom;
 
         // 遍历 pred_dom 为 label 计数
         for (int k = 0; k < pred_dom->count; ++k) {
-            block_label_count[((lir_basic_block *) pred_dom->take[k])->label]++;
+            block_label_count[((basic_block_t *) pred_dom->take[k])->label_index]++;
         }
     }
 
     // 如果 block 的count 和 preds_count 的数量一致则表示该基本块支配了所有的前驱
     // dom 严格按照 label 从小到大排序, 且 block 自身一定是支配自身的
     for (int label = 0; label < c->blocks->count; ++label) {
-        if (block_label_count[label] == block->preds->count || label == block->label) {
+        if (block_label_count[label] == block->preds->count || label == block->label_index) {
             slice_push(dom, c->blocks->take[label]);
         }
     }
@@ -468,7 +468,7 @@ void ssa_rename(closure *c) {
 //    table_free(stack_table);
 }
 
-void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *stack_table) {
+void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stack_table) {
     // skip label code
 //    lir_op *current_op = block->operations->front->succ;
     list_node *current = block->operations->front->succ;
@@ -523,7 +523,7 @@ void ssa_rename_basic(lir_basic_block *block, table *var_number_table, table *st
     // D 中变量 x = phi(x of pred-B, x of pred-C，x of pred-E)
     // 当计算到 B 时，即使变量，没有在 b 中定义，只要函数的作用域还在，在 stack 中也一定能找到的变量重命名，无非是同名而已！！！
     for (int i = 0; i < block->succs->count; ++i) {
-        lir_basic_block *succ_block = block->succs->take[i];
+        basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->operations->front->succ;
         list_node *succ_node = succ_block->operations->front->succ;
@@ -590,15 +590,15 @@ void ssa_rename_var(lir_operand_var *var, uint8_t number) {
     var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
 
-bool ssa_is_idom(slice_t *dom, lir_basic_block *await) {
+bool ssa_is_idom(slice_t *dom, basic_block_t *await) {
     for (int i = 0; i < dom->count; ++i) {
-        lir_basic_block *item = dom->take[i];
-        if (item->label == await->label) {
+        basic_block_t *item = dom->take[i];
+        if (item->label_index == await->label_index) {
             continue;
         }
 
         // 判断是否包含
-        if (!lir_blocks_contains(item->dom, await->label)) {
+        if (!lir_blocks_contains(item->dom, await->label_index)) {
             return false;
         }
     }
@@ -611,7 +611,7 @@ bool ssa_is_idom(slice_t *dom, lir_basic_block *await) {
  * @param block
  * @return
  */
-bool ssa_phi_defined(lir_operand_var *var, lir_basic_block *block) {
+bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
     list_node *current = block->operations->front->succ;
     while (current->value != NULL && ((lir_op *) current->value)->code == LIR_OPCODE_PHI) {
         lir_op *op = current->value;

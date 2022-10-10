@@ -15,13 +15,13 @@ slice_t *native_var_decls;
 
 int native_decl_temp_unique_count;
 
-#define LOWER_VAR_DECL_PREFIX "v"
+#define NATIVE_VAR_DECL_PREFIX "v"
 
 
-#define LOWER_VAR_DECL_UNIQUE_NAME() \
+#define NATIVE_VAR_DECL_UNIQUE_NAME() \
 ({                                 \
-   char *temp_name = malloc(strlen(LOWER_VAR_DECL_PREFIX) + sizeof(int) + 2); \
-   sprintf(temp_name, "%s_%d", LOWER_VAR_DECL_PREFIX, native_decl_temp_unique_count++); \
+   char *temp_name = malloc(strlen(NATIVE_VAR_DECL_PREFIX) + sizeof(int) + 2); \
+   sprintf(temp_name, "%s_%d", NATIVE_VAR_DECL_PREFIX, native_decl_temp_unique_count++); \
    temp_name;                                   \
 })
 
