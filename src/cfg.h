@@ -10,8 +10,8 @@
  * 按顺序遍历指令集
  * new lir_basic_block
  */
-void cfg(closure *c);
+void cfg(closure_t *c);
 
-void broken_critical_edges(closure *c);
+void broken_critical_edges(closure_t *c);
 
 #endif //NATURE_SRC_CFG_H_

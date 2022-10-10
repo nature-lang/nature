@@ -802,12 +802,12 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 }
 
 /**
- * main.c 中定义的所有代码都会被丢到 main closure 中
+ * main.c 中定义的所有代码都会被丢到 main closure_t 中
  * @param t
  * @param stmt_list
  */
 void analysis_main(module_t *m, slice_t *stmt_list) {
-    // 过滤处 import 部分, 其余部分再包到 main closure 中
+    // 过滤处 import 部分, 其余部分再包到 main closure_t 中
     int import_end_index = 0;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
@@ -827,7 +827,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     // init
     m->analysis_line = 0;
 
-    // block 封装进 function,再封装到 closure 中
+    // block 封装进 function,再封装到 closure_t 中
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
     new_fn->name = MAIN_FN_NAME;
     new_fn->body = slice_new();

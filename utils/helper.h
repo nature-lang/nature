@@ -5,6 +5,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#define DEEP_COPY(_type, src) ({ \
+    _type *dst = malloc(sizeof(_type)); \
+    memcpy(dst, src, sizeof(_type));    \
+    dst;                               \
+})
+
 //void string_to_unique_list(string *list, string value);
 
 char *itoa(int n);

@@ -37,7 +37,7 @@ string lir_operand_to_string(lir_operand *operand) {
             return lir_operand_actual_param_to_string((lir_operand_actual_param *) operand->value);
         }
         case LIR_OPERAND_TYPE_PHI_BODY: {
-            return lir_operand_phi_body_to_string((lir_operand_phi_body *) operand->value);
+            return lir_operand_phi_body_to_string(operand->value);
         }
         default: {
             return "UNKNOWN";
@@ -69,8 +69,8 @@ char *lir_operand_var_to_string(lir_operand_var *var) {
 
 //    stack_frame_offset = *var->local->stack_frame_offset;
     if (var->decl) {
-        type_string = type_to_string[var->decl->ast_type.base];
-        for (int i = 0; i < var->decl->ast_type.point; ++i) {
+        type_string = type_to_string[var->decl->type.base];
+        for (int i = 0; i < var->decl->type.point; ++i) {
             type_string = str_connect(type_string, "*");
         }
     }
@@ -130,7 +130,7 @@ char *lir_operand_addr_to_string(lir_operand_addr *operand_addr) {
     if (operand_addr->indirect_addr) {
         indirect_addr_str = "*";
     }
-    string type_string = type_to_string[operand_addr->infer_size_type];
+    string type_string = type_to_string[operand_addr->type_base];
     sprintf(buf, "%sADDR[%s:%u:%s]",
             indirect_addr_str,
             lir_operand_to_string(operand_addr->base), operand_addr->offset, type_string);
@@ -156,11 +156,11 @@ char *lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param)
     return buf;
 }
 
-char *lir_operand_phi_body_to_string(lir_operand_phi_body *phi_body) {
+char *lir_operand_phi_body_to_string(slice_t *phi_body) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT * (phi_body->count + 1));
     string params = malloc(sizeof(char) * DEBUG_STR_COUNT * phi_body->count);
     for (int i = 0; i < phi_body->count; ++i) {
-        string src = lir_operand_var_to_string(phi_body->list[i]);
+        string src = lir_operand_var_to_string(phi_body->take[i]);
         strcat(params, src);
 
         if (i < phi_body->count - 1) {

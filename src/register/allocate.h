@@ -23,16 +23,16 @@ typedef struct {
 /**
  * 主分配方法
  */
-void allocate_walk(closure *c);
+void allocate_walk(closure_t *c);
 
-bool allocate_free_reg(closure *c, allocate_t *allocate);
+bool allocate_free_reg(closure_t *c, allocate_t *allocate);
 
 /**
  * 当没有物理寄存器用于分配时，则需要使用该方法，选择最长时间空闲的 interval 进行溢出
  * @param a
  * @return
  */
-bool allocate_block_reg(closure *c, allocate_t *a);
+bool allocate_block_reg(closure_t *c, allocate_t *a);
 
 /**
  * 将 interval 按照 first_range.from 有序插入到 unhandled 中
@@ -46,8 +46,8 @@ void to_unhandled(list *unhandled, interval_t *to);
  * 采用链表结构是因为跟方便排序插入，有序遍历
  * @return
  */
-list *unhandled_new(closure *c);
+list *unhandled_new(closure_t *c);
 
-interval_t *spill_interval(closure *c, interval_t *i, int before_pos);
+void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos);
 
 #endif //NATURE_SRC_REGISTER_ALLOCATE_H_

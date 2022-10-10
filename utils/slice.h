@@ -4,7 +4,7 @@
 #define SLICE_TACK(_type, _slice, _index) ((_type*) _slice->take[_index])
 
 #define SLICE_FOR(_slice, _type) for (_type *_node = (_type*) _slice->take[0]; _node <= (_type*) _slice->take[_slice->count]; _node++)
-#define SLICE_VALUE() _node;
+#define SLICE_VALUE() _node
 
 //#define SLICE_FOR(_slice) for (int _i = 0; _i < (_slice)->count; ++_i)
 

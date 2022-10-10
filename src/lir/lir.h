@@ -2,10 +2,13 @@
 #define NATURE_SRC_LIR_H_
 
 #include "utils/list.h"
+#include "utils/helper.h"
 #include "src/value.h"
 #include "src/ast.h"
 #include "utils/table.h"
 #include "src/register/register.h"
+
+#define MIN_VIR_INTERVAL_OFFSET 40
 
 #define TEMP_IDENT "t"
 #define TEMP_LABEL "l"
@@ -38,14 +41,6 @@
 // GC 相关函数
 #define RUNTIME_CALL_GC_NEW "gc_new"
 
-#define LIST_OP_COPY(dst, src) \
-({                             \
-    dst->type = src->type; \
-    dst->first = src->first; \
-    dst->second = src->second; \
-    dst->result = src->result; \
-})
-
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
    lir_operand_immediate *imm_operand = malloc(sizeof(lir_operand_immediate)); \
@@ -73,17 +68,6 @@
   _var;                                   \
 })
 
-#define LIR_COPY_VAR_OPERAND(_original) \
-({                                 \
-  lir_operand_var *_var = NEW(lir_operand_var); \
-  _var->ident = (_original)->ident; \
-  _var->old = (_original)->old;    \
-  _var->reg_id = (_original)->reg_id; \
-  _var->decl = (_original)->decl; \
-  _var->infer_size_type = (_original)->infer_size_type; \
-  _var->indirect_addr = (_original)->indirect_addr; \
-  _var;                                   \
-})
 
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
@@ -151,11 +135,12 @@ typedef struct lir_operand {
 //  string ident;
 //} lir_operand_reg;
 
+// 变量的定义点
 typedef struct {
     string ident;
-    type_t ast_type; // 原始类型存储(包含指针深度)
+    type_t type; // 原始类型存储(包含指针深度等数据)
     int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
-} lir_local_var_decl;
+} lir_var_decl;
 
 /**
  * 存放在寄存器或者内存中, var a = 1
@@ -163,12 +148,19 @@ typedef struct {
 typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
-    uint8_t reg_id; // reg list index, 寄存器分配
-    lir_local_var_decl *decl; // local 如果为 nil 就是外部符号引用
-    type_base_t infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
-//    uint8_t size; // lir 阶段根据编译的目标平台就已经能确定操作树的大小了
-    bool indirect_addr;
+    uint8_t reg_index; // reg list index, 寄存器分配, 及时是同一个变量,也会有时在寄存器中,有时在内存中
+    uint16_t stack_slot; // 从 0 开始增长的栈位置。
+    lir_var_decl *decl; // local 如果为 nil 就是外部符号引用
+    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
+    bool indirect_addr; // &a 对变量进行解引用操作
 } lir_operand_var;
+
+typedef struct {
+    lir_operand *base;
+    int offset; // 偏移量是可以计算出来的, 默认为 0
+    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size
+    bool indirect_addr;
+} lir_operand_addr;
 
 typedef struct {
     char *ident;
@@ -180,19 +172,7 @@ typedef struct {
     type_base_t type;
 } lir_operand_symbol_var; // 外部符号引用, 外部符号引用
 
-typedef struct lir_vars {
-    uint8_t count;
-    lir_operand_var *list[UINT8_MAX];
-} lir_vars, lir_operand_phi_body;
-
 typedef size_t memory_address;
-
-typedef struct {
-    lir_operand *base;
-    int offset; // 偏移量是可以计算出来的, 默认为 0
-    type_base_t infer_size_type;// lir 为了保证通用性，只能有类型，不能有 size
-    bool indirect_addr;
-} lir_operand_addr;
 
 typedef struct {
     union {
@@ -205,7 +185,7 @@ typedef struct {
 } lir_operand_immediate;
 
 typedef struct {
-    lir_vars vars;
+    slice_t *vars;
     uint8_t count;
 } lir_operand_formal_param;
 
@@ -263,10 +243,10 @@ typedef struct basic_block_t {
     slice_t *forward_succs;
     uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
-    lir_vars use;
-    lir_vars def;
-    lir_vars live_out;
-    lir_vars live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
+    slice_t *use;
+    slice_t *def;
+    slice_t *live_out;
+    slice_t *live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
     slice_t *dom; // 当前块被哪些基本块支配
     slice_t *df;
     slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
@@ -282,26 +262,26 @@ typedef struct basic_block_t {
  * lir_formal_param 在寄存器分配阶段已经分配了合适的 stack or reg, 所以依次遍历处理即可
  * 如果函数的返回值大于 8 个字节，则需要引用传递返回, ABI 规定形参 1 为引用返回地址
  * 假如形参和所有局部变量占用的总长为 N Byte, 那么 -n(rbp) 处存储的就是最后一个形参的位置(向上存储)
- * 所以还是需要 closure 增加一个字段记录大值地址响应值, 从而可以正常返回
+ * 所以还是需要 closure_t 增加一个字段记录大值地址响应值, 从而可以正常返回
  *
- * 2. closure 可以能定义在文件中的全局函数，也可能是定义在结构体中的局部函数，在类型推导阶段是有能力识别到函数的左值
+ * 2. closure_t 可以能定义在文件中的全局函数，也可能是定义在结构体中的局部函数，在类型推导阶段是有能力识别到函数的左值
  * 是一个变量，还是结构体的元素
  */
-typedef struct closure {
-    lir_vars globals; // closure 中定义的变量列表, 用于 ssa 构建
+typedef struct closure_t {
+    slice_t *globals; // closure_t 中定义的变量列表, 用于 ssa 构建, 以及寄存器分配时的 interval 也是基于次
     slice_t *fixed_regs; // 作为临时寄存器使用到的寄存器
     slice_t *blocks; // 根据解析顺序得到
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]
     slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
     table *interval_table; // key 包括 fixed register as 和 variable.ident
-    int interval_count;
+    int interval_offset; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
     string name;
     string end_label; // 结束地址
     string env_name;
-    struct closure *parent;
+    struct closure_t *parent;
     list *operations; // 指令列表
 
     table *local_var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
@@ -309,7 +289,8 @@ typedef struct closure {
     list *formal_params; // 依旧为了堆栈分配
 
     uint stack_length; // 栈长度, byte, 等于局部变量的长度
-} closure;
+    uint stack_slot_offset; // 初始值为 0，用于寄存器 slot 分配
+} closure_t;
 
 lir_operand *set_indirect_addr(lir_operand *operand);
 
@@ -319,7 +300,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index);
 
 //string lir_label_to_string(uint8_t label);
 
-closure *lir_new_closure(ast_closure_t *ast);
+closure_t *lir_new_closure(ast_closure_t *ast);
 
 /**
  * 符号使用
@@ -327,7 +308,7 @@ closure *lir_new_closure(ast_closure_t *ast);
  * @param type
  * @return
  */
-lir_operand_var *lir_new_var_operand(closure *c, string ident);
+lir_operand_var *lir_new_var_operand(closure_t *c, string ident);
 
 /**
  * 符号定义
@@ -335,17 +316,17 @@ lir_operand_var *lir_new_var_operand(closure *c, string ident);
  * @param ident
  * @param type
  */
-lir_local_var_decl *lir_new_local_var_decl(closure *c, string ident, type_t type);
+lir_var_decl *lir_new_var_decl(closure_t *c, string ident, type_t type);
 
 type_base_t lir_operand_type_base(lir_operand *operand);
 
 uint8_t lir_operand_sizeof(lir_operand *operand);
 
-lir_operand *lir_new_temp_var_operand(closure *c, type_t type);
+lir_operand *lir_new_temp_var_operand(closure_t *c, type_t type);
 
 lir_operand *lir_new_empty_operand();
 
-lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t infer_size_type);
+lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t type_base);
 
 lir_operand *lir_new_label_operand(string ident, bool is_local);
 
@@ -377,10 +358,10 @@ bool lir_op_is_branch(lir_op *op);
  * @param operand
  * @return
  */
-lir_vars lir_vars_by_operand(lir_operand *operand);
+slice_t *lir_vars_by_operand(lir_operand *operand);
 
-lir_vars lir_input_vars(lir_op *op);
+slice_t *lir_input_vars(lir_op *op);
 
-lir_vars lir_output_vars(lir_op *op);
+slice_t *lir_output_vars(lir_op *op);
 
 #endif //NATURE_SRC_LIR_H_

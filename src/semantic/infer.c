@@ -615,7 +615,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
 }
 
 /**
- * 但是我又怎么知道自己当前在哪个 closure 里面？
+ * 但是我又怎么知道自己当前在哪个 closure_t 里面？
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {

@@ -4,6 +4,6 @@
 #include "src/lir/lir.h"
 
 
-void linear_scan(closure *c);
+void linear_scan(closure_t *c);
 
 #endif //NATURE_LINEARSCAN_H

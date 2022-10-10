@@ -7,7 +7,7 @@
 /**
  * @param c
  */
-void ssa(closure *c) {
+void ssa(closure_t *c) {
     // 计算每个 basic_block 支配者，一个基本块可以被多个父级基本块支配
     ssa_dom(c);
     // 计算最近支配者
@@ -34,9 +34,8 @@ void ssa(closure *c) {
  * 则 A 一定支配着 C, 即如果 A 支配着 C 的所有前驱，则 A 一定支配 C
  * @param c
  */
-void ssa_dom(closure *c) {
+void ssa_dom(closure_t *c) {
     // 初始化, dom[n0] = {l0}
-    lir_basic_blocks dom = {.count = 1};
     basic_block_t *basic_block;
     basic_block = c->blocks->take[0];
     slice_push(basic_block->dom, basic_block);
@@ -79,7 +78,7 @@ void ssa_dom(closure *c) {
  * 当前 label 的多个支配者中 label 最小的一个就是 idom
  * @param c
  */
-void ssa_idom(closure *c) {
+void ssa_idom(closure_t *c) {
     // 初始化 be_idom(支配者树)
     for (int label = 0; label < c->blocks->count; ++label) {
         slice_t *be_idom = slice_new();
@@ -116,7 +115,7 @@ void ssa_idom(closure *c) {
  * 如果 m 为汇聚点，对于 m 的任意前驱 p, p 一定会支配自身，且不支配 m. 所以一定有 DF(p) = m
  * n in Dom(p) (支配着 p 的节点 n), 则有 n 支配 p, 如果 n 不支配 m, 则一定有 DF(p) = m
  */
-void ssa_df(closure *c) {
+void ssa_df(closure_t *c) {
     // 初始化空集为默认行为，不需要特别声明
 //  for (int label = 0; label < c->blocks.count; ++label) {
 //    lir_basic_blocks df = {.count = 0};
@@ -153,11 +152,11 @@ void ssa_df(closure *c) {
  * live_out 离开当前块后依旧活跃的变量
  * @param c
  */
-void ssa_live(closure *c) {
+void ssa_live(closure_t *c) {
     // 初始化 live out 每个基本块为 ∅
     for (int label = 0; label < c->blocks->count; ++label) {
-        lir_vars out = {.count=0};
-        lir_vars in = {.count=0};
+        slice_t *out = slice_new();
+        slice_t *in = slice_new();
         ((basic_block_t *) c->blocks->take[label])->live_out = out;
         ((basic_block_t *) c->blocks->take[label])->live_in = in;
     }
@@ -167,14 +166,14 @@ void ssa_live(closure *c) {
         changed = false;
         for (int label = c->blocks->count - 1; label >= 0; --label) {
             basic_block_t *block = c->blocks->take[label];
-            lir_vars new_live_out = ssa_calc_live_out(c, c->blocks->take[label]);
-            if (ssa_live_changed(&block->live_out, &new_live_out)) {
+            slice_t *new_live_out = ssa_calc_live_out(c, c->blocks->take[label]);
+            if (ssa_live_changed(block->live_out, new_live_out)) {
                 changed = true;
                 block->live_out = new_live_out;
             }
 
-            lir_vars new_live_in = ssa_calc_live_in(c, c->blocks->take[label]);
-            if (ssa_live_changed(&block->live_in, &new_live_in)) {
+            slice_t *new_live_in = ssa_calc_live_in(c, c->blocks->take[label]);
+            if (ssa_live_changed(block->live_in, new_live_in)) {
                 changed = true;
                 block->live_in = new_live_in;
             }
@@ -191,15 +190,15 @@ void ssa_live(closure *c) {
  * 毕竟谁能保证后续用不到呢(live_out 可以保证哈哈）
  * @param c
  */
-void ssa_add_phi(closure *c) {
+void ssa_add_phi(closure_t *c) {
     for (int label = 0; label < c->blocks->count; ++label) {
         // 定义的每个变量都需要添加到支配边界中
         basic_block_t *basic_block = c->blocks->take[label];
-        lir_vars def = basic_block->def;
+        slice_t *def = basic_block->def;
         slice_t *df = basic_block->df;
 
-        for (int i = 0; i < def.count; ++i) {
-            lir_operand_var *var = def.list[i];
+        for (int i = 0; i < def->count; ++i) {
+            lir_operand_var *var = def->take[i];
 
             for (int k = 0; k < df->count; ++k) {
                 basic_block_t *df_block = df->take[k];
@@ -230,47 +229,46 @@ void ssa_add_phi(closure *c) {
 /**
  * live out 为 n 的所有后继的 live_in 的并集
  */
-lir_vars ssa_calc_live_out(closure *c, basic_block_t *block) {
-    lir_vars live_out = {.count = 0};
+slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
+    slice_t *live_out = slice_new();
     table *exist_var = table_new(); // basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ = block->succs->take[i];
 
         // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
-        for (int k = 0; k < succ->live_in.count; ++k) {
-            lir_operand_var *var = succ->live_in.list[k];
+        for (int k = 0; k < succ->live_in->count; ++k) {
+            lir_operand_var *var = succ->live_in->take[k];
             if (table_exist(exist_var, var->ident)) {
                 continue;
             }
-            live_out.list[live_out.count++] = var;
+            slice_push(live_out, var);
             table_set(exist_var, var->ident, var);
         }
     }
 
-//    table_free(exist_var);
     return live_out;
 }
 
 /**
  * 在当前块使用的变量 + 离开当前块依旧活跃的变量（这些变量未在当前块重新定义）
  */
-lir_vars ssa_calc_live_in(closure *c, basic_block_t *block) {
-    lir_vars live_in = {.count = 0};
+slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
+    slice_t *live_in = slice_new();
     table *exist_var = table_new(); // basic var ident
 
-    for (int i = 0; i < block->use.count; ++i) {
-        lir_operand_var *var = block->use.list[i];
+    SLICE_FOR(block->use, lir_operand_var) {
+        lir_operand_var *var = SLICE_VALUE();
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
 
-        live_in.list[live_in.count++] = var;
+        slice_push(live_in, var);
         table_set(exist_var, var->ident, var);
     }
 
-    for (int i = 0; i < block->live_out.count; ++i) {
-        lir_operand_var *var = block->live_out.list[i];
+    SLICE_FOR(block->live_out, lir_operand_var) {
+        lir_operand_var *var = SLICE_VALUE();
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
@@ -280,11 +278,10 @@ lir_vars ssa_calc_live_in(closure *c, basic_block_t *block) {
             continue;
         }
 
-        live_in.list[live_in.count++] = var;
+        slice_push(live_in, var);
         table_set(exist_var, var->ident, var);
     }
 
-//    table_free(exist_var);
     return live_in;
 }
 
@@ -294,20 +291,20 @@ lir_vars ssa_calc_live_in(closure *c, basic_block_t *block) {
  * @param new
  * @return
  */
-bool ssa_live_changed(lir_vars *old, lir_vars *new) {
+bool ssa_live_changed(slice_t *old, slice_t *new) {
     if (old->count != new->count) {
         return true;
     }
     table *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
-        string ident = old->list[i]->ident;
-        table_set(var_count, ident, old->list[i]);
+        string ident = ((lir_operand_var *) old->take[i])->ident;
+        table_set(var_count, ident, old->take[i]);
     }
 
     // double count 判断同一个变量出现的次数,因为可能出现 new.count > old.count 的情况
     uint8_t double_count = 0;
     for (int i = 0; i < new->count; ++i) {
-        string ident = new->list[i]->ident;
+        string ident = ((lir_operand_var *) new->take[i])->ident;
         void *has = table_get(var_count, ident);
         if (has == NULL) {
 //            table_free(var_count);
@@ -327,49 +324,48 @@ bool ssa_live_changed(lir_vars *old, lir_vars *new) {
 }
 
 /**
+ * 所有使用或者定义的变量，都加入到 global 中
  * use(m) 在 m 中重新定义之前就开始使用的变量
  * def(m) 在 m 中定义的所有变量的集合
  */
-void ssa_use_def(closure *c) {
+void ssa_use_def(closure_t *c) {
     // 可能出现 B0 处未定义，但是直接使用,也需要计入到符号表中
     table *exist_var = table_new();
 
     for (int label = 0; label < c->blocks->count; ++label) {
-        lir_vars use = {.count=0};
-        lir_vars def = {.count=0};
+        slice_t *use = slice_new();
+        slice_t *def = slice_new();
 
         table *exist_use = table_new();
         table *exist_def = table_new();
 
         basic_block_t *block = c->blocks->take[label];
 
-        list_node *current = block->operations->front;
-        while (current->value != NULL) {
-            lir_op *op = current->value;
+        LIST_FOR(block->operations) {
+            lir_op *op = LIST_VALUE();
 
             // first param (use)
-            lir_vars vars = lir_vars_by_operand(op->first);
-            OPERAND_VAR_USR(vars)
+            slice_t *vars = lir_vars_by_operand(op->first);
+            OPERAND_VAR_USE(vars)
 
             // second param 可能包含 actual param
             vars = lir_vars_by_operand(op->second);
-            OPERAND_VAR_USR(vars)
+            OPERAND_VAR_USE(vars)
 
             // def
             if (op->result != NULL && op->result->type == LIR_OPERAND_TYPE_VAR) {
                 lir_operand_var *var = (lir_operand_var *) op->result->value;
                 if (!table_exist(exist_def, var->ident)) {
-                    def.list[def.count++] = var;
+                    slice_push(def, var);
                     table_set(exist_use, var->ident, var);
                 }
 
+                // 变量定义,例如 mov a->b, or add a,b -> c
                 if (!table_exist(exist_var, var->ident)) {
-                    c->globals.list[c->globals.count++] = var;
+                    slice_push(c->globals, var);
                     table_set(exist_var, var->ident, var);
                 }
             }
-
-            current = current->succ;
         }
 
         block->use = use;
@@ -404,7 +400,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
  * @param block
  * @return
  */
-slice_t *ssa_calc_dom_blocks(closure *c, basic_block_t *block) {
+slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
     slice_t *dom = slice_new();
 
     // 遍历当前 block 的 preds 的 dom_list, 然后求交集
@@ -436,13 +432,13 @@ slice_t *ssa_calc_dom_blocks(closure *c, basic_block_t *block) {
 }
 
 // 前序遍历各个基本块
-void ssa_rename(closure *c) {
+void ssa_rename(closure_t *c) {
     table *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
     table *stack_table = table_new(); // use 使用，判断使用的变量的名称
 
     // 遍历所有名字变量,进行初始化
-    for (int i = 0; i < c->globals.count; ++i) {
-        lir_operand_var *var = c->globals.list[i];
+    SLICE_FOR(c->globals, lir_operand_var) {
+        lir_operand_var *var = SLICE_VALUE();
         uint8_t *number = NEW(uint8_t);
         *number = 0;
 
@@ -457,15 +453,13 @@ void ssa_rename(closure *c) {
     ssa_rename_basic(c->entry, var_number_table, stack_table);
 
     // 释放 NEW 的变量
-    for (int i = 0; i < c->globals.count; ++i) {
-        lir_operand_var *var = c->globals.list[i];
+    SLICE_FOR(c->globals, lir_operand_var) {
+        lir_operand_var *var = SLICE_VALUE();
         uint8_t *number = table_get(var_number_table, var->old);
         var_number_stack *stack = table_get(stack_table, var->old);
         free(number);
         free(stack);
     }
-//    table_free(var_number_table);
-//    table_free(stack_table);
 }
 
 void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stack_table) {
@@ -486,10 +480,10 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
             continue;
         }
 
-        lir_vars vars = lir_vars_by_operand(op->first);
-        if (vars.count > 0) {
-            for (int i = 0; i < vars.count; ++i) {
-                lir_operand_var *var = vars.list[i];
+        slice_t *vars = lir_vars_by_operand(op->first);
+        if (vars->count > 0) {
+            SLICE_FOR(vars, lir_operand_var) {
+                lir_operand_var *var = SLICE_VALUE();
                 var_number_stack *stack = table_get(stack_table, var->old);
                 uint8_t number = stack->numbers[stack->count - 1];
                 ssa_rename_var(var, number);
@@ -497,9 +491,9 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
         }
 
         vars = lir_vars_by_operand(op->second);
-        if (vars.count > 0) {
-            for (int i = 0; i < vars.count; ++i) {
-                lir_operand_var *var = vars.list[i];
+        if (vars->count > 0) {
+            SLICE_FOR(vars, lir_operand_var) {
+                lir_operand_var *var = SLICE_VALUE();
                 var_number_stack *stack = table_get(stack_table, var->old);
                 uint8_t number = stack->numbers[stack->count - 1];
                 ssa_rename_var(var, number);
@@ -529,8 +523,8 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
         list_node *succ_node = succ_block->operations->front->succ;
         while (succ_node->value != NULL && ((lir_op *) succ_node->value)->code == LIR_OPCODE_PHI) {
             lir_op *succ_op = succ_node->value;
-            lir_operand_phi_body *phi_body = succ_op->first->value;
-            lir_operand_var *var = phi_body->list[phi_body->count++];
+            slice_t *phi_body = succ_op->first->value;
+            lir_operand_var *var = phi_body->take[phi_body->count++];
             var_number_stack *stack = table_get(stack_table, var->ident);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
@@ -626,9 +620,9 @@ bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
     return false;
 }
 
-bool ssa_var_belong(lir_operand_var *var, lir_vars vars) {
-    for (int i = 0; i < vars.count; ++i) {
-        if (strcmp(vars.list[i]->ident, var->ident) == 0) {
+bool ssa_var_belong(lir_operand_var *var, slice_t *vars) {
+    SLICE_FOR(vars, lir_operand_var) {
+        if (strcmp((SLICE_VALUE())->ident, var->ident) == 0) {
             return true;
         }
     }
@@ -636,15 +630,6 @@ bool ssa_var_belong(lir_operand_var *var, lir_vars vars) {
     return false;
 }
 
-/**
- * linear scan register allocation 之前需要调用该方法
- * 其将在 phi 的分支块中冗余的插入一个 mov 指令,从而避免例如 a3 = phi(a1, a2) 中 a1 和 a2 在同一指令中,无法分配到同一个寄存器
- * 但是实际上 a1 和 a2 并不会同时出现，完全可以使用相同的寄存器
- * @param c
- */
-void ssa_mov_for_phi(closure *c) {
-  
-}
 
 
 

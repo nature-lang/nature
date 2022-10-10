@@ -24,7 +24,7 @@
  * ASSIGN_REG_NUM
  * @param c
  */
-void linear_scan(closure *c) {
+void linear_scan(closure_t *c) {
 
 }
 

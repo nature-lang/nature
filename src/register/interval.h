@@ -37,42 +37,45 @@ typedef struct interval_t {
 
     lir_operand_var *var; // var 中存储着 stack slot
 
-    reg_t *assigned;
+    int16_t *stack_slot;
+    // 当有多个空闲 register 时，优先分配 hint 对应的 register
+    struct interval_t *register_hint;
+    reg_t *assigned; // 分配的 reg
 
-    bool fixed; // 是否是固定寄存器所产生的 interval, 固定寄存器有 reg 没有 var
+    bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
 /**
  * 标记循环路线和每个基本块是否处于循环中，以及循环的深度
  * @param c
  */
-void interval_loop_detection(closure *c);
+void interval_loop_detection(closure_t *c);
 
 /**
- * 根据块的权重（loop.depth） 对所有基本块进行排序插入到 closure->order_blocks 中
+ * 根据块的权重（loop.depth） 对所有基本块进行排序插入到 closure_t->order_blocks 中
  * 权重越大越靠前
  * @param c
  */
-void interval_block_order(closure *c);
+void interval_block_order(closure_t *c);
 
 /**
  * 为 operation 进行编号，采用偶数编号，编号时忽略 phi 指令
  * @param c
  */
-void interval_mark_number(closure *c);
+void interval_mark_number(closure_t *c);
 
 /**
- * 倒序遍历排好序，编好号的 block 和 operation 构造 interval 并添加到 closure->interval_table 中
+ * 倒序遍历排好序，编好号的 block 和 operation 构造 interval 并添加到 closure_t->interval_table 中
  * @param c
  */
-void interval_build(closure *c);
+void interval_build(closure_t *c);
 
 /**
  * 实例化 interval，包含内存申请，值初始化
  * @param var
  * @return
  */
-interval_t *interval_new(closure *c, lir_operand_var *var);
+interval_t *interval_new(closure_t *c, lir_operand_var *var);
 
 /**
  * 添加 range 到 interval.ranges 头中,并调整 first_range 的指向
@@ -82,7 +85,7 @@ interval_t *interval_new(closure *c, lir_operand_var *var);
  * @param from
  * @param to
  */
-void interval_add_range(closure *c, lir_operand_var *var, int from, int to);
+void interval_add_range(closure_t *c, lir_operand_var *var, int from, int to);
 
 /**
  * 上面的 add_range 在倒序 blocks 和 operation(op) 时，通常会将整个 block.first - block.last 添加到 range 中
@@ -91,7 +94,7 @@ void interval_add_range(closure *c, lir_operand_var *var, int from, int to);
  * @param var
  * @param from
  */
-void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from);
+void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from);
 
 /**
  * 添加 use_position 到 c->interval_table[var->ident].user_positions 中
@@ -99,13 +102,13 @@ void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from);
  * @param var
  * @param position
  */
-void interval_add_use_position(closure *c, lir_operand_var *var, int position, int kind);
+void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, int kind);
 
 /**
  * @param i
  * @param position
  */
-interval_t *interval_split_at(closure *c, interval_t *i, int position);
+interval_t *interval_split_at(closure_t *c, interval_t *i, int position);
 
 /**
  * current 需要在 before 之前被 split,需要找到一个最佳的位置
@@ -114,7 +117,7 @@ interval_t *interval_split_at(closure *c, interval_t *i, int position);
  * @param before
  * @return
  */
-int interval_optimal_position(closure *c, interval_t *current, int before);
+int interval_optimal_position(closure_t *c, interval_t *current, int before);
 
 /**
  * interval 的 range 是否包含了 position
@@ -152,7 +155,7 @@ int interval_next_use_position(interval_t *i, int after_position);
  */
 int interval_first_use_position(interval_t *i);
 
-void interval_spill_slot(interval_t *i);
+void interval_spill_slot(closure_t *c, interval_t *i);
 
 use_position_t *interval_use_pos_of_kind(interval_t *i);
 

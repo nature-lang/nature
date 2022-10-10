@@ -17,7 +17,7 @@ static bool in_range(interval_range_t *range, int position) {
 // 假如使用广度优先遍历，编号按照广度优先的层级来编号,则可以方便的计算出树的高度,顶层 为 0，然后依次递增
 // 使用树的高度来标记 loop_index，如果一个块被标记了两个 index ,则 index 大的为内嵌循环
 // 当前层 index 等于父节点 + 1
-void interval_loop_detection(closure *c) {
+void interval_loop_detection(closure_t *c) {
     c->entry->loop.flag = LOOP_DETECTION_FLAG_VISITED;
     c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
     list *work_list = list_new();
@@ -137,7 +137,7 @@ static void interval_insert_to_stack_by_depth(stack_t *work_list, basic_block_t 
 // 优秀的排序从而构造更短更好的 lifetime interval
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
-void interval_block_order(closure *c) {
+void interval_block_order(closure_t *c) {
     stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
 
@@ -157,7 +157,7 @@ void interval_block_order(closure *c) {
     }
 }
 
-void interval_mark_number(closure *c) {
+void interval_mark_number(closure_t *c) {
     int next_id = 0;
     for (int i = 0; i < c->order_blocks->count; ++i) {
         basic_block_t *block = c->order_blocks->take[i];
@@ -177,11 +177,11 @@ void interval_mark_number(closure *c) {
     }
 }
 
-void interval_build(closure *c) {
+void interval_build(closure_t *c) {
     // init interval
     c->interval_table = table_new();
-    for (int i = 0; i < c->globals.count; ++i) {
-        lir_operand_var *var = c->globals.list[i];
+    for (int i = 0; i < c->globals->count; ++i) {
+        lir_operand_var *var = c->globals->take[i];
         table_set(c->interval_table, var->ident, interval_new(c, var));
     }
 
@@ -193,8 +193,8 @@ void interval_build(closure *c) {
         int block_to = first_op->id + 2;
 
         // 遍历所有的 live_out,直接添加最长间隔,后面会逐渐缩减该间隔
-        for (int k = 0; k < block->live_out.count; ++k) {
-            interval_add_range(c, block->live_out.list[k], block_from, block_to);
+        for (int k = 0; k < block->live_out->count; ++k) {
+            interval_add_range(c, block->live_out->take[k], block_from, block_to);
         }
 
         // 倒序遍历所有块指令
@@ -203,16 +203,16 @@ void interval_build(closure *c) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op *op = current->value;
 
-            lir_vars output_vars = lir_output_vars(op);
-            for (int j = 0; j < output_vars.count; ++j) {
-                lir_operand_var *var = output_vars.list[j];
+            slice_t *output_vars = lir_output_vars(op);
+            for (int j = 0; j < output_vars->count; ++j) {
+                lir_operand_var *var = output_vars->take[j];
                 interval_cut_first_range_from(c, var, op->id); // 截断操作
                 interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
             }
 
-            lir_vars input_vars = lir_input_vars(op);
-            for (int j = 0; j < input_vars.count; ++j) {
-                lir_operand_var *var = input_vars.list[j];
+            slice_t *input_vars = lir_input_vars(op);
+            for (int j = 0; j < input_vars->count; ++j) {
+                lir_operand_var *var = input_vars->take[j];
                 interval_add_range(c, var, block_from, op->id); // 添加整段长度
                 interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
             }
@@ -222,14 +222,14 @@ void interval_build(closure *c) {
     }
 }
 
-interval_t *interval_new(closure *c, lir_operand_var *var) {
+interval_t *interval_new(closure_t *c, lir_operand_var *var) {
     interval_t *entity = malloc(sizeof(interval_t));
     entity->var = var;
     entity->ranges = list_new();
     entity->use_positions = list_new();
     entity->children = list_new();
     entity->parent = NULL;
-    entity->index = c->interval_count++; // 基于 closure 做自增 id 即可
+    entity->index = c->interval_offset++; // 基于 closure_t 做自增 id 即可
     return entity;
 }
 
@@ -259,14 +259,16 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
 }
 
 // 在 before 前挑选一个最佳的位置进行 split
-int interval_optimal_position(closure *c, interval_t *current, int before) {
+int interval_optimal_position(closure_t *c, interval_t *current, int before) {
     return before;
 }
 
 // TODO 是否需要处理重叠部分？
-void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
+void interval_add_range(closure_t *c, lir_operand_var *var, int from, int to) {
     // 排序，合并
     interval_t *i = table_get(c->interval_table, var->ident);
+    assert(i != NULL && "interval not found");
+
     list *ranges = i->ranges;
     // 否则按从小到大的顺序插入 ranges
     interval_range_t *range = NEW(interval_range_t);
@@ -287,7 +289,7 @@ void interval_add_range(closure *c, lir_operand_var *var, int from, int to) {
  * @param position
  * @param kind
  */
-void interval_add_use_position(closure *c, lir_operand_var *var, int position, int kind) {
+void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, int kind) {
     interval_t *i = table_get(c->interval_table, var->ident);
     list *pos_list = i->use_positions;
 
@@ -311,7 +313,7 @@ void interval_add_use_position(closure *c, lir_operand_var *var, int position, i
     }
 }
 
-void interval_cut_first_range_from(closure *c, lir_operand_var *var, int from) {
+void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from) {
     interval_t *i = table_get(c->interval_table, var->ident);
     i->first_range->from = from;
 }
@@ -346,7 +348,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
  * @param i
  * @param position
  */
-interval_t *interval_split_at(closure *c, interval_t *i, int position) {
+interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(i->last_range->to < position);
     assert(i->first_range->from < position);
 
@@ -409,10 +411,10 @@ interval_t *interval_split_at(closure *c, interval_t *i, int position) {
 }
 
 /**
- * 其实啥也不用做,早就分配了 slot
+ * spill slot，清空 assign
  * @param i
  */
-void interval_spill_slot(interval_t *i) {
+void interval_spill_slot(closure_t *c, interval_t *i) {
     i->assigned = NULL;
 }
 

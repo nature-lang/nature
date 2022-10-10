@@ -47,9 +47,9 @@ void cross_native(module_t *m) {
         amd64_opcode_init();
     }
 
-    // native by closure
+    // native by closure_t
     for (int i = 0; i < m->compiler_closures->count; ++i) {
-        closure *c = m->compiler_closures->take[i];
+        closure_t *c = m->compiler_closures->take[i];
         if (BUILD_ARCH == ARCH_AMD64) {
             slice_t *operands = amd64_native_closure(c);
             slice_append(m->operations, operands);
@@ -228,7 +228,7 @@ void build(char *build_entry) {
 
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->compiler_closures->count; ++j) {
-            closure *c = m->compiler_closures->take[j];
+            closure_t *c = m->compiler_closures->take[j];
             cfg(c);
             // 构造 ssa
             ssa(c);

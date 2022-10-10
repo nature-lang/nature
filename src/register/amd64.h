@@ -130,6 +130,6 @@ reg_t *zmm15;
 
 void amd64_register_init();
 
-void amd64_operations_lower(closure *c);
+void amd64_operations_lower(closure_t *c);
 
 #endif //NATURE_AMD64_H

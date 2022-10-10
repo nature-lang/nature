@@ -15,7 +15,7 @@ sum(int a, int b) int {
 }
 
 
-fn(int,int):bool closure = (int a, int b): bool {
+fn(int,int):bool closure_t = (int a, int b): bool {
 
 }
 

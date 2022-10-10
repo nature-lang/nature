@@ -124,7 +124,7 @@ typedef struct {
 // int a;
 typedef struct {
     string ident;
-    type_t type; // ast_type 已经决定了 size
+    type_t type; // type 已经决定了 size
 } ast_var_decl;
 
 // 值类型

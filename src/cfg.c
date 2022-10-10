@@ -41,7 +41,7 @@
  * @param c
  * @return
  */
-void cfg(closure *c) {
+void cfg(closure_t *c) {
     // 用于快速定位 block succ/pred
     table *basic_block_table = table_new();
 
@@ -89,7 +89,7 @@ void cfg(closure *c) {
     }
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
-    // call 调到别的 closure 去了，不在当前 closure cfg 构造的考虑范围
+    // call 调到别的 closure_t 去了，不在当前 closure_t cfg 构造的考虑范围
 
     SLICE_FOR(c->blocks, basic_block_t) {
         current_block = SLICE_VALUE();
@@ -116,11 +116,13 @@ void cfg(closure *c) {
         slice_push(target_block->preds, current_block);
     }
 
+    broken_critical_edges(c);
+
     // 添加入口块
     c->entry = c->blocks->take[0];
 }
 
-void broken_critical_edges(closure *c) {
+void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *b = SLICE_VALUE();
         for (int i = 0; i < b->preds->count; ++i) {

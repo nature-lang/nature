@@ -43,7 +43,7 @@ slice_t *compiler(ast_closure_t *ast) {
  *
  * info.f 实际存储了什么？
  *
- * 顶层 closure 不需要再次捕获外部变量
+ * 顶层 closure_t 不需要再次捕获外部变量
  * call make_env
  * call set_env => a target
  * call get_env => t1 target
@@ -51,7 +51,7 @@ slice_t *compiler(ast_closure_t *ast) {
  * @param ast_closure
  * @return
  */
-list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand *target) {
+list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operand *target) {
 // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
     list *parent_list = list_new();
 
@@ -90,8 +90,8 @@ list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand 
 
     }
 
-    // new 一个新的 closure ---------------
-    closure *c = lir_new_closure(ast_closure);
+    // new 一个新的 closure_t ---------------
+    closure_t *c = lir_new_closure(ast_closure);
     c->name = ast_closure->function->name; // analysis 阶段已经进行了唯一名称处理
     c->end_label = str_connect("end_", c->name);
     c->parent = parent;
@@ -112,7 +112,7 @@ list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand 
     // compiler formal param
     for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
         ast_var_decl *param = ast_closure->function->formal_params[i];
-        lir_local_var_decl *local = lir_new_local_var_decl(c, param->ident, param->type);
+        lir_var_decl *local = lir_new_var_decl(c, param->ident, param->type);
         list_push(c->formal_params, local);
     }
 
@@ -130,7 +130,7 @@ list *compiler_closure(closure *parent, ast_closure_t *ast_closure, lir_operand 
     return parent_list;
 }
 
-list *compiler_block(closure *c, slice_t *block) {
+list *compiler_block(closure_t *c, slice_t *block) {
     list *operations = list_new();
     for (int i = 0; i < block->count; ++i) {
         ast_stmt *stmt = block->take[i];
@@ -146,7 +146,7 @@ list *compiler_block(closure *c, slice_t *block) {
     return operations;
 }
 
-list *compiler_stmt(closure *c, ast_stmt *stmt) {
+list *compiler_stmt(closure_t *c, ast_stmt *stmt) {
     switch (stmt->type) {
         case AST_NEW_CLOSURE: {
             return compiler_closure(c, (ast_closure_t *) stmt->stmt, NULL);
@@ -190,9 +190,9 @@ list *compiler_stmt(closure *c, ast_stmt *stmt) {
  * @param stmt
  * @return
  */
-list *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
+list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
     list *operations = list_new();
-    lir_local_var_decl *local = lir_new_local_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
+    lir_var_decl *local = lir_new_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
     list_push(c->local_var_decls, local);
 
     lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
@@ -211,7 +211,7 @@ list *compiler_var_decl_assign(closure *c, ast_var_decl_assign_stmt *stmt) {
  * @param stmt
  * @return
  */
-list *compiler_assign(closure *c, ast_assign_stmt *stmt) {
+list *compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
     lir_operand *left = lir_new_empty_operand();
     list *operations = compiler_expr(c, stmt->left, left);
 
@@ -228,8 +228,8 @@ list *compiler_assign(closure *c, ast_assign_stmt *stmt) {
  * @param var_decl
  * @return
  */
-list *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
-    lir_local_var_decl *local = lir_new_local_var_decl(c, var_decl->ident, var_decl->type);
+list *compiler_var_decl(closure_t *c, ast_var_decl *var_decl) {
+    lir_var_decl *local = lir_new_var_decl(c, var_decl->ident, var_decl->type);
     list_push(c->local_var_decls, local);
     return list_new();
 }
@@ -241,7 +241,7 @@ list *compiler_var_decl(closure *c, ast_var_decl *var_decl) {
  * @param target
  * @return
  */
-list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
+list *compiler_expr(closure_t *c, ast_expr expr, lir_operand *target) {
     // target is empty
     // 简单类型表达式直接处理
     if (expr.assert_type == AST_EXPR_LITERAL) {
@@ -296,7 +296,7 @@ list *compiler_expr(closure *c, ast_expr expr, lir_operand *target) {
     }
 }
 
-list *compiler_binary(closure *c, ast_expr expr, lir_operand *result_target) {
+list *compiler_binary(closure_t *c, ast_expr expr, lir_operand *result_target) {
     ast_binary_expr *binary_expr = expr.expr;
 
     lir_op_type type = ast_expr_operator_to_lir_op[binary_expr->operator];
@@ -320,7 +320,7 @@ list *compiler_binary(closure *c, ast_expr expr, lir_operand *result_target) {
  * @param result_target
  * @return
  */
-list *compiler_unary(closure *c, ast_expr expr, lir_operand *result_target) {
+list *compiler_unary(closure_t *c, ast_expr expr, lir_operand *result_target) {
     list *operations = list_new();
     ast_unary_expr *unary_expr = expr.expr;
 
@@ -356,7 +356,7 @@ list *compiler_unary(closure *c, ast_expr expr, lir_operand *result_target) {
     return operations;
 }
 
-list *compiler_if(closure *c, ast_if_stmt *if_stmt) {
+list *compiler_if(closure_t *c, ast_if_stmt *if_stmt) {
     // 编译 condition
     lir_operand *condition_target = lir_new_empty_operand();
     list *operations = compiler_expr(c, if_stmt->condition, condition_target);
@@ -403,7 +403,7 @@ list *compiler_if(closure *c, ast_if_stmt *if_stmt) {
  * @param expr
  * @return
  */
-list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
+list *compiler_call(closure_t *c, ast_call *call, lir_operand *target) {
     // call->left is debug ident
     // push 指令所有的物理寄存器入栈
     // 这里增加了无意义的堆栈和符号表,不符合简捷之道
@@ -454,13 +454,13 @@ list *compiler_call(closure *c, ast_call *call, lir_operand *target) {
  *
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
-list *compiler_array_value(closure *c, ast_expr expr, lir_operand *target) {
+list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand *target) {
     if (target->type != LIR_OPERAND_TYPE_VAR) {
         error_exit("[compiler_access_env] target not var, actual %d", target->type);
     }
 
     lir_operand_var *var = target->value;
-    var->decl->ast_type.point = 1;
+    var->decl->type.point = 1;
 
     ast_access_list *ast = expr.expr;
     // new tmp 是无类型的。
@@ -490,7 +490,7 @@ list *compiler_array_value(closure *c, ast_expr expr, lir_operand *target) {
             index_target
     );
 
-    var->indirect_addr = 1;
+    var->indirect_addr = true;
     list_push(operations, call_op);
 
     return operations;
@@ -509,7 +509,7 @@ list *compiler_array_value(closure *c, ast_expr expr, lir_operand *target) {
  * @param target
  * @return
  */
-list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
+list *compiler_new_array(closure_t *c, ast_expr expr, lir_operand *base_target) {
     ast_new_list *ast = expr.expr;
     list *operations = list_new();
 
@@ -559,7 +559,7 @@ list *compiler_new_array(closure *c, ast_expr expr, lir_operand *base_target) {
  * @param target
  * @return
  */
-list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
+list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand *target) {
     ast_access_env *ast = expr.expr;
     if (target->type != LIR_OPERAND_TYPE_VAR) {
         error_exit("[compiler_access_env] target not var, actual %d", target->type);
@@ -581,7 +581,7 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
 
     // 合理怀疑 target 为 empty var, 现在将返回值移动给他，并为其添加解引用标识，再继续观察解引用标识能否传递
     lir_operand_var *var = target->value;
-    var->decl->ast_type.point = 1;
+    var->decl->type.point = 1;
 
     list_push(operations, call_op);
     list_push(operations, lir_op_new(LIR_OPCODE_MOVE, env_point_target, NULL, target));
@@ -600,7 +600,7 @@ list *compiler_access_env(closure *c, ast_expr expr, lir_operand *target) {
  * @param target
  * @return
  */
-list *compiler_access_map(closure *c, ast_expr expr, lir_operand *target) {
+list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand *target) {
     lir_operand_var *operand_var = target->value;
     symbol_set_temp_ident(operand_var->ident, type_new_base(TYPE_POINT));
 
@@ -633,7 +633,7 @@ list *compiler_access_map(closure *c, ast_expr expr, lir_operand *target) {
  * @param base_target
  * @return
  */
-list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
+list *compiler_new_map(closure_t *c, ast_expr expr, lir_operand *base_target) {
     ast_new_map *ast = expr.expr;
     list *operations = list_new();
     lir_operand *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
@@ -692,7 +692,7 @@ list *compiler_new_map(closure *c, ast_expr expr, lir_operand *base_target) {
  * @param for_in_stmt
  * @return
  */
-list *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
+list *compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
     lir_operand *base_target = lir_new_empty_operand();
     list *operations = compiler_expr(c, ast->iterate, base_target);
 
@@ -752,7 +752,7 @@ list *compiler_for_in(closure *c, ast_for_in_stmt *ast) {
     return operations;
 }
 
-list *compiler_while(closure *c, ast_while_stmt *ast) {
+list *compiler_while(closure_t *c, ast_while_stmt *ast) {
     list *operations = list_new();
     lir_op *while_label = lir_op_unique_label(WHILE_IDENT);
     list_push(operations, while_label);
@@ -777,7 +777,7 @@ list *compiler_while(closure *c, ast_while_stmt *ast) {
     return operations;
 }
 
-list *compiler_return(closure *c, ast_return_stmt *ast) {
+list *compiler_return(closure_t *c, ast_return_stmt *ast) {
     list *operations = list_new();
     lir_operand *target = lir_new_empty_operand();
     if (ast->expr != NULL) {
@@ -800,7 +800,7 @@ list *compiler_return(closure *c, ast_return_stmt *ast) {
  * @param target
  * @return
  */
-list *compiler_select_property(closure *c, ast_expr expr, lir_operand *target) {
+list *compiler_select_property(closure_t *c, ast_expr expr, lir_operand *target) {
     ast_select_property *ast = expr.expr;
     list *operations = list_new();
 
@@ -839,7 +839,7 @@ list *compiler_select_property(closure *c, ast_expr expr, lir_operand *target) {
  * @param target
  * @return
  */
-list *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target) {
+list *compiler_new_struct(closure_t *c, ast_expr expr, lir_operand *base_target) {
     ast_new_struct *ast = expr.expr;
     list *operations = list_new();
     ast_struct_decl *struct_decl = ast->type.value;
@@ -871,7 +871,7 @@ list *compiler_new_struct(closure *c, ast_expr expr, lir_operand *base_target) {
  * @param target  default is empty
  * @return
  */
-list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
+list *compiler_literal(closure_t *c, ast_literal *literal, lir_operand *target) {
     lir_operand *temp_operand;
     list *operations = list_new();
     switch (literal->type) {
@@ -925,7 +925,7 @@ list *compiler_literal(closure *c, ast_literal *literal, lir_operand *target) {
     return list_new();
 }
 
-list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
+list *compiler_ident(closure_t *c, ast_ident *ident, lir_operand *target) {
     symbol_t *s = symbol_table_get(ident->literal);
     if (s->type == SYMBOL_TYPE_FN) {
         // label
@@ -953,7 +953,7 @@ list *compiler_ident(closure *c, ast_ident *ident, lir_operand *target) {
     return list_new();
 }
 
-list *compiler_builtin_print(closure *c, ast_call *call, string print_suffix) {
+list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) {
     list *operations = list_new();
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;

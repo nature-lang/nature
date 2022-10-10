@@ -345,8 +345,8 @@ ast_expr parser_ident_expr(module_t *m) {
     ast_expr result = parser_new_expr(m);
     token *ident_token = parser_advance(m);
 
-    // ast_type ident 通常表示自定义类型，如 code foo = int, 其就是 foo 类型。
-    // 所以应该使用 ast_type 保存这种类型。这种类型保存在 ast_type 中，其 category 应该是什么呢？
+    // type ident 通常表示自定义类型，如 code foo = int, 其就是 foo 类型。
+    // 所以应该使用 type 保存这种类型。这种类型保存在 type 中，其 category 应该是什么呢？
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     type_t type_decl_ident = {
             .is_origin = false,

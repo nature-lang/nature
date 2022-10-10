@@ -6,6 +6,7 @@
 #include "utils/helper.h"
 #include "src/symbol.h"
 #include "src/native/native.h"
+#include <assert.h>
 
 amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_ADD] = amd64_native_add,
@@ -24,13 +25,13 @@ amd64_native_fn amd64_native_table[] = {
 };
 
 static amd64_operand_t *amd64_native_operand_var_transform(lir_operand_var *var, uint8_t force_size) {
-    uint8_t size = type_base_sizeof(var->infer_size_type);
+    uint8_t size = type_base_sizeof(var->type_base);
     if (force_size > 0) {
         size = force_size;
     }
-    if (var->reg_id > 0) {
+    if (var->reg_index > 0) {
         // 如果是 bool 类型
-        reg_t *reg = register_find(var->reg_id, size);
+        reg_t *reg = register_find(var->reg_index, size);
         return REG(reg);
     }
 
@@ -38,7 +39,7 @@ static amd64_operand_t *amd64_native_operand_var_transform(lir_operand_var *var,
         return DISP_REG(rbp, *var->decl->stack_offset, size);
     }
 
-    error_exit("[amd64_native_var_operand] var %d not reg_id or stack offset", var->ident);
+    error_exit("[amd64_native_var_operand] var %d not reg_index or stack offset", var->ident);
 }
 
 amd64_operation_t *amd64_native_empty_reg(reg_t *reg) {
@@ -57,7 +58,7 @@ amd64_operation_t *amd64_native_empty_reg(reg_t *reg) {
  * http.get() // 外部符号引用,无非就是是否在符号表中
  * sum.n() // 内部符号引用, sum.n 是否属于 var? 所有的符号都被记录为 var
  * test[0]() // 经过计算后的左值，其值最终存储在了一个临时变量中 => temp var
- * 所以 base 最终只有一个形态，那就是 var, 如果 var 在当前 closure 有定义，那其至少会被
+ * 所以 base 最终只有一个形态，那就是 var, 如果 var 在当前 closure_t 有定义，那其至少会被
  * - 会被堆栈分配,此时如何调用 call 指令？
  * asm call + stack[1]([indirect addr]) or asm call + reg ?
  * 没啥可以担心的，这都是被支持的
@@ -69,7 +70,7 @@ amd64_operation_t *amd64_native_empty_reg(reg_t *reg) {
  * @param count
  * @return
  */
-slice_t *amd64_native_call(closure *c, lir_op *op) {
+slice_t *amd64_native_call(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
 
     uint8_t used[2] = {0};
@@ -101,7 +102,7 @@ slice_t *amd64_native_call(closure *c, lir_op *op) {
 
         // 根据实际大小选择寄存器
         reg_t *target_reg = amd64_native_fn_next_reg_target(actual_used,
-                                                           lir_operand_type_base(operand)); // source 和 target 大小要匹配
+                                                            lir_operand_type_base(operand)); // source 和 target 大小要匹配
 
         if (target_reg == NULL) {
             // push
@@ -151,14 +152,14 @@ slice_t *amd64_native_call(closure *c, lir_op *op) {
  * 核心问题是: 在结构体作为返回值时，当外部调用将函数的返回地址作为参数 rdi 传递给函数时，
  * 根据 ABI 规定，函数操作的第一步就是对 rdi 入栈，但是当 native return 时,我并不知道 rdi 被存储在了栈的什么位置？
  * 但是实际上是能够知道的，包括初始化时 sub rbp,n 的 n 也是可以在寄存器分配阶段就确定下来的。
- * n 的信息作为 closure 的属性存储在 closure 中，如何将相关信息传递给 native ?, 参数 1 改成 closure?
+ * n 的信息作为 closure_t 的属性存储在 closure_t 中，如何将相关信息传递给 native ?, 参数 1 改成 closure_t?
  * 在结构体中 temp_var 存储的是结构体的起始地址。不能直接 return 起始地址，大数据会随着函数栈帧消亡。 而是将结构体作为整个值传递。
  * 既然已经知道了结构体的起始位置，以及隐藏参数的所在栈帧。 就可以直接进行结构体返回值的构建。
  * @param c
  * @param ast
  * @return
  */
-slice_t *amd64_native_return(closure *c, lir_op *op) {
+slice_t *amd64_native_return(closure_t *c, lir_op *op) {
     // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
@@ -176,7 +177,7 @@ slice_t *amd64_native_return(closure *c, lir_op *op) {
 }
 
 
-slice_t *amd64_native_bal(closure *c, lir_op *op) {
+slice_t *amd64_native_bal(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
@@ -192,7 +193,7 @@ slice_t *amd64_native_bal(closure *c, lir_op *op) {
  * @param count
  * @return
  */
-slice_t *amd64_native_add(closure *c, lir_op *op) {
+slice_t *amd64_native_add(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
@@ -221,7 +222,7 @@ slice_t *amd64_native_add(closure *c, lir_op *op) {
 }
 
 // lir GT foo,bar => result
-slice_t *amd64_native_sgt(closure *c, lir_op *op) {
+slice_t *amd64_native_sgt(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
@@ -253,7 +254,7 @@ slice_t *amd64_native_sgt(closure *c, lir_op *op) {
 }
 
 
-slice_t *amd64_native_label(closure *c, lir_op *op) {
+slice_t *amd64_native_label(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     lir_operand_symbol_label *label_operand = op->result->value;
     slice_push(insts, ASM_INST("label", { SYMBOL(label_operand->ident, label_operand->is_local) }));
@@ -270,7 +271,7 @@ slice_t *amd64_native_label(closure *c, lir_op *op) {
  * @param count
  * @return
  */
-slice_t *amd64_native_mov(closure *c, lir_op *op) {
+slice_t *amd64_native_mov(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
 
     uint8_t used[2] = {0};
@@ -303,8 +304,8 @@ slice_t *amd64_native_mov(closure *c, lir_op *op) {
  * @return
  */
 slice_t *amd64_native_operand_transform(lir_operand *operand,
-                                       amd64_operand_t *asm_operand,
-                                       uint8_t used[2]) {
+                                        amd64_operand_t *asm_operand,
+                                        uint8_t used[2]) {
     slice_t *insts = slice_new();
 
     if (operand->type == LIR_OPERAND_TYPE_IMM) {
@@ -385,7 +386,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
             // 生成 mov 指令（asm_mov）
             slice_push(insts, ASM_INST("mov", { REG(reg), base_addr_operand }));
 
-            amd64_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->infer_size_type));
+            amd64_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->type_base));
             ASM_OPERAND_COPY(asm_operand, temp);
         } else {
             slice_push(insts, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
@@ -401,16 +402,14 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         if (v->indirect_addr) {
             // bool* a; 为例子 *a 能够承载的大小 = var->infer_type_size
             // 非指针则不允许走到这里
-            if (v->decl->ast_type.point == 0) {
-                error_exit("[amd64_lir_to_asm_operand]  indirect addr var %s must be point", v->ident);
-            }
+            assert(v->decl->type.point > 0 && "indirect addr var must point type");
 
             reg_t *reg = amd64_native_next_reg(used, QWORD);
             amd64_operand_t *var_operand = amd64_native_operand_var_transform(v, 0);
             slice_push(insts, ASM_INST("mov", { REG(reg), var_operand }));
 
             // 解引用
-            ASM_OPERAND_COPY(asm_operand, INDIRECT_REG(reg, type_base_sizeof(v->infer_size_type)));
+            ASM_OPERAND_COPY(asm_operand, INDIRECT_REG(reg, type_base_sizeof(v->type_base)));
             return insts;
         } else {
             ASM_OPERAND_COPY(asm_operand, amd64_native_operand_var_transform(v, 0))
@@ -435,7 +434,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
     return insts;
 }
 
-slice_t *amd64_native_op(closure *c, lir_op *op) {
+slice_t *amd64_native_op(closure_t *c, lir_op *op) {
     amd64_native_fn fn = amd64_native_table[op->code];
     if (fn == NULL) {
         error_exit("[amd64_native_op] amd64_native_table not found fn: %d", op->code);
@@ -496,14 +495,14 @@ reg_t *amd64_native_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     return NULL;
 }
 
-slice_t *amd64_native_fn_begin(closure *c, lir_op *op) {
+slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     // 计算堆栈信息(倒序 )
     list_node *current = list_last(c->local_var_decls); // rear 为 empty 占位
     while (current != NULL) {
-        lir_local_var_decl *var = current->value;
+        lir_var_decl *var = current->value;
         // 局部变量不需要考虑什么最小值的问题，直接网上涨就好了
-        uint8_t size = type_base_sizeof(var->ast_type.base);
+        uint8_t size = type_base_sizeof(var->type.base);
         c->stack_length += size;
         *var->stack_offset = -(c->stack_length); // rbp-n, 所以这里取负数
 
@@ -520,9 +519,9 @@ slice_t *amd64_native_fn_begin(closure *c, lir_op *op) {
 
     current = c->formal_params->front;
     while (current->value != NULL) {
-        lir_local_var_decl *var = current->value;
+        lir_var_decl *var = current->value;
 
-        reg_t *reg = amd64_native_fn_next_reg_target(used, var->ast_type.base);
+        reg_t *reg = amd64_native_fn_next_reg_target(used, var->type.base);
         if (reg != NULL) {
             // rbp-x
             c->stack_length += QWORD;
@@ -554,7 +553,7 @@ slice_t *amd64_native_fn_begin(closure *c, lir_op *op) {
  * @param c
  * @return
  */
-slice_t *amd64_native_fn_end(closure *c, lir_op *op) {
+slice_t *amd64_native_fn_end(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     slice_push(insts, ASM_INST("mov", { REG(rsp), REG(rbp) }));
     slice_push(insts, ASM_INST("pop", { REG(rbp) }));
@@ -562,20 +561,20 @@ slice_t *amd64_native_fn_end(closure *c, lir_op *op) {
     return insts;
 }
 
-slice_t *amd64_native_fn_formal_params(closure *c) {
+slice_t *amd64_native_fn_formal_params(closure_t *c) {
     slice_t *insts = slice_new();
     // 已经在栈里面的就不用管了，只取寄存器中的。存放在 lir_var 中的 stack_offset 中即可
     uint8_t formal_used[2] = {0};
     list_node *current = c->formal_params->front;
     while (current->value != NULL) {
-        lir_local_var_decl *var_decl = current->value;
-        reg_t *source_reg = amd64_native_fn_next_reg_target(formal_used, var_decl->ast_type.base);
+        lir_var_decl *var_decl = current->value;
+        reg_t *source_reg = amd64_native_fn_next_reg_target(formal_used, var_decl->type.base);
         if (source_reg == NULL) {
             continue;
         }
 
         // 直接使用 var 转换
-        amd64_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->ast_type.base));
+        amd64_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->type.base));
         slice_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
 
         current = current->succ;
@@ -583,7 +582,7 @@ slice_t *amd64_native_fn_formal_params(closure *c) {
     return insts;
 }
 
-slice_t *amd64_native_closure(closure *c) {
+slice_t *amd64_native_closure(closure_t *c) {
     slice_t *insts = slice_new();
 
     // 遍历 block
@@ -596,7 +595,7 @@ slice_t *amd64_native_closure(closure *c) {
 }
 
 
-slice_t *amd64_native_block(closure *c, lir_basic_block *block) {
+slice_t *amd64_native_block(closure_t *c, lir_basic_block *block) {
     slice_t *insts = slice_new();
     list_node *current = block->operations->front;
     while (current->value != NULL) {
@@ -608,7 +607,7 @@ slice_t *amd64_native_block(closure *c, lir_basic_block *block) {
 }
 
 
-slice_t *amd64_native_cmp_goto(closure *c, lir_op *op) {
+slice_t *amd64_native_cmp_goto(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     uint8_t used[2] = {0};
 
@@ -631,7 +630,7 @@ slice_t *amd64_native_cmp_goto(closure *c, lir_op *op) {
     return insts;
 }
 
-slice_t *amd64_native_lea(closure *c, lir_op *op) {
+slice_t *amd64_native_lea(closure_t *c, lir_op *op) {
     if (op->first->type != LIR_OPERAND_TYPE_VAR) {
         error_exit("[amd64_native_lead] first operand code not LIR_OPERAND_TYPE_VAR");
     }

@@ -73,7 +73,7 @@ static void test_basic() {
 
     // 构造 cfg, 并转成目标架构编码
     for (int j = 0; j < m->compiler_closures->count; ++j) {
-        closure *c = m->compiler_closures->take[j];
+        closure_t *c = m->compiler_closures->take[j];
         cfg(c);
         // 构造 ssa
         ssa(c);

@@ -173,8 +173,8 @@ void debug_lir(int line, lir_op *op) {
  * 遍历展示 blocks
  * @param c
  */
-void debug_cfg(closure *c) {
-    printf("closure: %s------------------------------------------------------------------------\n", c->name);
+void debug_cfg(closure_t *c) {
+    printf("closure_t: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);

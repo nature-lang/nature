@@ -135,7 +135,7 @@ void amd64_register_init() {
  * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
  * @param c
  */
-void amd64_operations_lower(closure *c) {
+void amd64_operations_lower(closure_t *c) {
     // 按基本块遍历所有指令
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *block = SLICE_VALUE();

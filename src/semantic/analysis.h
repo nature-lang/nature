@@ -25,7 +25,7 @@ void analysis_main(module_t *m, slice_t *stmt_list);
 /**
  * 1. 符号表信息注册
  * 2. 检测 stmt 类型是否合法
- * 3. 将所有的 var_decl 编译到 init closure
+ * 3. 将所有的 var_decl 编译到 init closure_t
  * @param m
  * @param stmt_list
  */
