@@ -22,9 +22,27 @@ void reg_init() {
     }
 }
 
-uint8_t alloc_reg_count() {
+uint8_t alloc_reg_start(type_base_t t) {
     if (BUILD_ARCH == ARCH_AMD64) {
-        return AMD64_ALLOC_REG_COUNT
+        if (t == TYPE_FLOAT) {
+            return AMD64_ALLOC_INT_REG_COUNT;
+        } else {
+            return 0;
+        }
+    }
+    return 0;
+}
+
+uint8_t alloc_reg_end(type_base_t t) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        if (!t) {
+            return AMD64_ALLOC_REG_COUNT;
+        }
+        if (t == TYPE_FLOAT) {
+            return AMD64_ALLOC_REG_COUNT;
+        } else {
+            return AMD64_ALLOC_INT_REG_COUNT;
+        }
     }
     return 0;
 }

@@ -42,6 +42,7 @@ typedef struct interval_t {
     struct interval_t *reg_hint;
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
+    type_base_t type_base;
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
@@ -81,28 +82,19 @@ interval_t *interval_new(closure_t *c);
  * 添加 range 到 interval.ranges 头中,并调整 first_range 的指向
  * 由于使用了后续遍历操作数，所以并不需要考虑单个 interval range 重叠等问题
  * @param c
- * @param var
+ * @param i
  * @param from
  * @param to
  */
-void interval_add_range(closure_t *c, lir_operand_var *var, int from, int to);
-
-/**
- * 上面的 add_range 在倒序 blocks 和 operation(op) 时，通常会将整个 block.first - block.last 添加到 range 中
- * 当遇到 def operation 是会缩减  range.from, 该方法则用于缩减
- * @param c
- * @param var
- * @param from
- */
-void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from);
+void interval_add_range(closure_t *c, interval_t *i, int from, int to);
 
 /**
  * 添加 use_position 到 c->interval_table[var->ident].user_positions 中
  * @param c
- * @param var
+ * @param i
  * @param position
  */
-void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, use_kind_e kind);
+void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind);
 
 /**
  * @param i

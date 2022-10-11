@@ -4,14 +4,84 @@
 #include "utils/helper.h"
 #include "assert.h"
 
+static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = operand->value;
+        interval_t *interval = table_get(c->interval_table, var->ident);
+        assert(interval);
+        return interval;
+    }
+    if (operand->type == LIR_OPERAND_TYPE_REG) {
+        reg_t *reg = operand->value;
+        interval_t *interval = table_get(c->interval_table, reg->name);
+        assert(interval);
+        return interval;
+    }
+
+    return NULL;
+}
+
+static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
+    slice_t *result = slice_new();
+    if (!operand) {
+        return result;
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+        lir_operand_var *var = operand->value;
+        interval_t *interval = table_get(c->interval_table, var->ident);
+        assert(interval);
+        slice_push(result, interval);
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_REG) {
+        reg_t *reg = operand->value;
+        interval_t *interval = table_get(c->interval_table, reg->name);
+        assert(interval);
+        slice_push(result, interval);
+    }
+
+    if (operand->type == LIR_OPERAND_TYPE_ACTUAL_PARAM) {
+        lir_operand_actual_param *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand *o = operands->list[i];
+            assert(o->type != LIR_OPERAND_TYPE_VAR && "ACTUAL_PARAM nesting is not allowed");
+
+            if (o->type == LIR_OPERAND_TYPE_VAR) {
+                lir_operand_var *var = operand->value;
+                interval_t *interval = table_get(c->interval_table, var->ident);
+                assert(interval);
+                slice_push(result, interval);
+            }
+        }
+    }
+
+    return result;
+}
+
+static slice_t *op_output_intervals(closure_t *c, lir_op *op) {
+    return operand_intervals(c, op->result);
+}
+
+static slice_t *op_input_intervals(closure_t *c, lir_op *op) {
+    slice_t *result = operand_intervals(c, op->first);
+    slice_t *temp = operand_intervals(c, op->second);
+
+    SLICE_FOR(temp, interval_t) {
+        slice_push(result, SLICE_VALUE());
+    }
+
+    return result;
+}
+
 /**
  * output 没有特殊情况就必须分一个寄存器，主要是 amd64 的指令基本都是需要寄存器参与的
  * @param c
  * @param op
- * @param var
+ * @param i
  * @return
  */
-static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, lir_operand_var *var) {
+static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, interval_t *i) {
     return USE_KIND_MUST;
 }
 
@@ -19,10 +89,10 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, lir_operand_var *
  * output 已经必须要有寄存器了, input 就无所谓了
  * @param c
  * @param op
- * @param var
+ * @param i
  * @return
  */
-static use_kind_e use_kind_of_input(closure_t *c, lir_op *op, lir_operand_var *var) {
+static use_kind_e use_kind_of_input(closure_t *c, lir_op *op, interval_t *i) {
     return USE_KIND_SHOULD;
 }
 
@@ -200,12 +270,21 @@ void interval_mark_number(closure_t *c) {
 }
 
 void interval_build(closure_t *c) {
-    // TODO all fixed reg build interval
-    for (int i = 0; i < alloc_reg_count(); ++i) {
+    // traverse all physical registers
+    for (int i = alloc_reg_start(TYPE_INT); i < alloc_reg_end(TYPE_INT); ++i) {
         reg_t *reg = alloc_regs[i];
         interval_t *interval = interval_new(c);
         interval->fixed = true;
         interval->assigned = i;
+        interval->type_base = TYPE_INT;
+        table_set(c->interval_table, reg->name, interval_new(c));
+    }
+    for (int i = alloc_reg_start(TYPE_FLOAT); i < alloc_reg_end(TYPE_FLOAT); ++i) {
+        reg_t *reg = alloc_regs[i];
+        interval_t *interval = interval_new(c);
+        interval->fixed = true;
+        interval->assigned = i;
+        interval->type_base = TYPE_FLOAT;
         table_set(c->interval_table, reg->name, interval_new(c));
     }
 
@@ -215,6 +294,7 @@ void interval_build(closure_t *c) {
         lir_operand_var *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
+        interval->type_base = var->type_base;
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -226,6 +306,7 @@ void interval_build(closure_t *c) {
         int block_to = first_op->id + 2;
 
         // 遍历所有的 live_out,直接添加最长间隔,后面会逐渐缩减该间隔
+        // 只包含虚拟寄存器
         for (int k = 0; k < block->live_out->count; ++k) {
             interval_add_range(c, block->live_out->take[k], block_from, block_to);
         }
@@ -236,19 +317,47 @@ void interval_build(closure_t *c) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op *op = current->value;
 
-            // TODO 物理寄存器处理
-            slice_t *output_vars = lir_output_vars(op);
-            for (int j = 0; j < output_vars->count; ++j) {
-                lir_operand_var *var = output_vars->take[j];
-                interval_cut_first_range_from(c, var, op->id); // 截断操作
-                interval_add_use_position(c, var, op->id, use_kind_of_output(c, op, var));
+            if (lir_op_is_call(op)) {
+                // traverse all register
+                for (int j = 0; j < alloc_reg_end(0); ++j) {
+                    reg_t *reg = alloc_regs[j];
+                    interval_t *interval = table_get(c->interval_table, reg->name);
+                    if (interval != NULL) {
+                        interval_add_range(c, interval, op->id, op->id + 1);
+                        interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
+                    }
+                }
             }
 
-            slice_t *input_vars = lir_input_vars(op);
-            for (int j = 0; j < input_vars->count; ++j) {
-                lir_operand_var *var = input_vars->take[j];
-                interval_add_range(c, var, block_from, op->id); // 添加整段长度
-                interval_add_use_position(c, var, op->id, use_kind_of_input(c, op, var));
+            if (op->code == LIR_OPCODE_MOVE) {
+                interval_t *src_interval = operand_interval(c, op->first);
+                interval_t *dst_interval = operand_interval(c, op->result);
+                if (src_interval != NULL && dst_interval != NULL) {
+                    dst_interval->reg_hint = src_interval;
+                }
+            }
+
+            slice_t *intervals = op_output_intervals(c, op);
+            for (int j = 0; j < intervals->count; ++j) {
+                interval_t *interval = intervals->take[j];
+                if (interval->fixed) {
+                    interval_add_range(c, interval, op->id, op->id + 1);
+                } else {
+                    interval->first_range->from = op->id;
+                }
+
+                interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
+            }
+
+            intervals = op_input_intervals(c, op);
+            for (int j = 0; j < intervals->count; ++j) {
+                interval_t *interval = intervals->take[j];
+                if (interval->fixed) {
+                    interval_add_range(c, interval, op->id, op->id + 1);
+                } else {
+                    interval_add_range(c, interval, block_from, op->id);
+                }
+                interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
             }
 
             current = current->prev;
@@ -297,34 +406,47 @@ int interval_optimal_position(closure_t *c, interval_t *current, int before) {
     return before;
 }
 
-// TODO 是否需要处理重叠部分？
-void interval_add_range(closure_t *c, lir_operand_var *var, int from, int to) {
-    // 排序，合并
-    interval_t *i = table_get(c->interval_table, var->ident);
-    assert(i != NULL && "interval not found");
+/**
+ * add range 总是基于 block_from ~ input.id,
+ * 且从后往前遍历，所以只需要根据 to 和 first_from 比较，就能判断出是否重叠
+ * @param c
+ * @param i
+ * @param from
+ * @param to
+ */
+void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
+    assert(from < to);
 
-    list *ranges = i->ranges;
-    // 否则按从小到大的顺序插入 ranges
-    interval_range_t *range = NEW(interval_range_t);
-    range->from = from;
-    range->to = to;
-    if (list_empty(ranges)) {
-        i->last_range = range;
+    if (i->first_range->from <= to) {
+        // form 选小的， to 选大的
+        if (from < i->first_range->from) {
+            i->first_range->from = from;
+        }
+        if (to > i->last_range->to) {
+            i->last_range->to = to;
+        }
+    } else {
+        // 不重叠,则 range 插入到 ranges 的最前面
+        interval_range_t *range = NEW(interval_range_t);
+        range->from = from;
+        range->to = to;
+
+        list_insert_before(i->ranges, NULL, range);
+        i->first_range = range;
+        if (i->ranges->count == 1) {
+            i->last_range = range;
+        }
     }
-
-    list_insert_after(ranges, NULL, range);
-    i->first_range = range;
 }
 
 /**
  * 按从小到大排序
  * @param c
- * @param var
+ * @param i
  * @param position
  * @param kind
  */
-void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, use_kind_e kind) {
-    interval_t *i = table_get(c->interval_table, var->ident);
+void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind) {
     list *pos_list = i->use_positions;
 
     use_pos_t *new_pos = NEW(use_pos_t);
@@ -345,11 +467,6 @@ void interval_add_use_position(closure_t *c, lir_operand_var *var, int position,
 
         current = current->succ;
     }
-}
-
-void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from) {
-    interval_t *i = table_get(c->interval_table, var->ident);
-    i->first_range->from = from;
 }
 
 int interval_first_use_pos(interval_t *i) {
@@ -449,7 +566,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
  * @param i
  */
 void interval_spill_slot(closure_t *c, interval_t *i) {
-    i->assigned = NULL;
+    i->assigned = 0;
 }
 
 /**

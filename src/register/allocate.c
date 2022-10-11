@@ -11,11 +11,11 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
     uint8_t full_reg = 0; // 直接分配不用 split
     uint8_t part_reg = 0; // 需要 split current to unhandled
     uint8_t hint_reg = 0; // register hint 对应的 interval 分配的 reg
-    if (current->reg_hint != NULL && current->reg_hint->assigned != NULL) {
-        hint_reg = current->reg_hint->assigned->index;
+    if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
+        hint_reg = current->reg_hint->assigned;
     }
 
-    for (int i = 0; i < PHYSICAL_REG_COUNT; ++i) {
+    for (int i = 0; i < alloc_reg_end(); ++i) {
         if (free_pos[i] > current->last_range->to) {
             // 寄存器可以直接分配给 current，不需要任何 spilt,不过还是进行一下最优挑选
             // 直接使用 hint reg
@@ -176,25 +176,24 @@ static uint8_t max_pos_index(const int list[UINT8_MAX]) {
     return max_index;
 }
 
-// TODO 选择合适类型的 reg 进行分配
-bool allocate_free_reg(closure_t *c, allocate_t *allocate) {
+bool allocate_free_reg(closure_t *c, allocate_t *a) {
     int free_pos[UINT8_MAX] = {0};
-    for (int i = 0; i < regs->count; ++i) {
-        set_pos(free_pos, SLICE_TACK(reg_t, regs, i)->index, UINT32_MAX);
+    for (int i = alloc_reg_start(a->current->type_base); i < alloc_reg_end(a->current->type_base); ++i) {
+        set_pos(free_pos, i, UINT32_MAX);
     }
 
-    // active interval 不予分配，所以 pos 设置为 0
-    LIST_FOR(allocate->active) {
+    // active(已经分配到了 reg) interval 不予分配，所以 pos 设置为 0
+    LIST_FOR(a->active) {
         interval_t *select = LIST_VALUE();
-        set_pos(free_pos, select->assigned->index, 0);
+        set_pos(free_pos, select->assigned, 0);
     }
 
 
-    LIST_FOR(allocate->inactive) {
+    LIST_FOR(a->inactive) {
         interval_t *select = LIST_VALUE();
-        int pos = interval_next_intersection(allocate->current, select);
+        int pos = interval_next_intersection(a->current, select);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
-        set_pos(free_pos, select->assigned->index, pos);
+        set_pos(free_pos, select->assigned, pos);
     }
 
     // 找到权重最大的寄存器寄存器进行分配
@@ -205,24 +204,23 @@ bool allocate_free_reg(closure_t *c, allocate_t *allocate) {
     }
 
 
-
     // 寄存器有足够的 free 空间供当前寄存器使用，可以直接分配
     // 一旦 assigned， 就表示整个 var 对应的 interval 都将获得寄存器
     // 如果后续需要 spill, 则会创建一个新的 temp var + 对应的 interval
-    if (free_pos[max_reg_index] > allocate->current->last_range->to) {
-        allocate->current->assigned = regs->take[max_reg_index];
+    if (free_pos[max_reg_index] > a->current->last_range->to) {
+        a->current->assigned = regs->take[max_reg_index];
         return true;
     }
 
     // 当前位置有处于空闲位置的寄存器可用，那就不需要 spill 任何区间
-    int optimal_position = interval_optimal_position(c, allocate->current, free_pos[max_reg_index]);
+    int optimal_position = interval_optimal_position(c, a->current, free_pos[max_reg_index]);
 
     // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
-    interval_t *i = interval_split_at(c, allocate->current, optimal_position);
-    to_unhandled(allocate->unhandled, i);
+    interval_t *i = interval_split_at(c, a->current, optimal_position);
+    to_unhandled(a->unhandled, i);
 
     // 为当前 interval 分配寄存器
-    allocate->current->assigned = regs->take[max_reg_index];
+    a->current->assigned = regs->take[max_reg_index];
 
     return true;
 }

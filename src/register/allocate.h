@@ -25,7 +25,7 @@ typedef struct {
  */
 void allocate_walk(closure_t *c);
 
-bool allocate_free_reg(closure_t *c, allocate_t *allocate);
+bool allocate_free_reg(closure_t *c, allocate_t *a);
 
 /**
  * 当没有物理寄存器用于分配时，则需要使用该方法，选择最长时间空闲的 interval 进行溢出

@@ -173,7 +173,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->stack_length = 0;
     new->stack_slot_offset = 0;
 
-    new->interval_offset = alloc_reg_count() + 1;
+    new->interval_offset = alloc_reg_end() + 1;
 
     return new;
 }
@@ -316,24 +316,17 @@ slice_t *lir_vars_by_operand(lir_operand *operand) {
     return result;
 }
 
-slice_t *lir_input_vars(lir_op *op) {
-    slice_t *result = lir_vars_by_operand(op->first);
-    slice_t *temp = lir_vars_by_operand(op->second);
-
-    SLICE_FOR(temp, lir_operand_var) {
-        slice_push(result, SLICE_VALUE());
-    }
-    return result;
-}
-
-slice_t *lir_output_vars(lir_op *op) {
-    return lir_vars_by_operand(op->result);
-}
-
 bool lir_op_is_branch(lir_op *op) {
     if (op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ) {
         return true;
     }
 
+    return false;
+}
+
+bool lir_op_is_call(lir_op *op) {
+    if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RUNTIME_CALL) {
+        return true;
+    }
     return false;
 }

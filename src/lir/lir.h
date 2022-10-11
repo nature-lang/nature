@@ -351,15 +351,13 @@ bool lir_blocks_contains(slice_t *blocks, uint8_t label);
 
 bool lir_op_is_branch(lir_op *op);
 
+bool lir_op_is_call(lir_op *op);
+
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配
  * @param operand
  * @return
  */
 slice_t *lir_vars_by_operand(lir_operand *operand);
-
-slice_t *lir_input_vars(lir_op *op);
-
-slice_t *lir_output_vars(lir_op *op);
 
 #endif //NATURE_SRC_LIR_H_

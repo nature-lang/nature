@@ -5,6 +5,7 @@
 #include "utils/slice.h"
 #include "utils/table.h"
 #include "src/build/config.h"
+#include "src/type.h"
 
 table *reg_table; // 根据 index 和 size 定位具体的寄存器
 slice_t *regs;
@@ -18,7 +19,10 @@ typedef struct {
 
 reg_t *alloc_regs[UINT8_MAX];
 
-uint8_t alloc_reg_count();
+uint8_t alloc_reg_start(type_base_t t);
+
+uint8_t alloc_reg_end(type_base_t t);
+
 
 /**
  * 导向具体架构的 register_find
