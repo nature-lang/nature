@@ -42,7 +42,7 @@ void cross_native(module_t *m) {
     m->operations = slice_new();
 
     // pre
-    register_init();
+    reg_init();
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_opcode_init();
     }

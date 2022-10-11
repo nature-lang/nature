@@ -4,6 +4,28 @@
 #include "utils/helper.h"
 #include "assert.h"
 
+/**
+ * output 没有特殊情况就必须分一个寄存器，主要是 amd64 的指令基本都是需要寄存器参与的
+ * @param c
+ * @param op
+ * @param var
+ * @return
+ */
+static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, lir_operand_var *var) {
+    return USE_KIND_MUST;
+}
+
+/**
+ * output 已经必须要有寄存器了, input 就无所谓了
+ * @param c
+ * @param op
+ * @param var
+ * @return
+ */
+static use_kind_e use_kind_of_input(closure_t *c, lir_op *op, lir_operand_var *var) {
+    return USE_KIND_SHOULD;
+}
+
 static bool in_range(interval_range_t *range, int position) {
     return range->from <= position && position < range->to;
 }
@@ -178,11 +200,22 @@ void interval_mark_number(closure_t *c) {
 }
 
 void interval_build(closure_t *c) {
+    // TODO all fixed reg build interval
+    for (int i = 0; i < alloc_reg_count(); ++i) {
+        reg_t *reg = alloc_regs[i];
+        interval_t *interval = interval_new(c);
+        interval->fixed = true;
+        interval->assigned = i;
+        table_set(c->interval_table, reg->name, interval_new(c));
+    }
+
     // init interval
     c->interval_table = table_new();
     for (int i = 0; i < c->globals->count; ++i) {
         lir_operand_var *var = c->globals->take[i];
-        table_set(c->interval_table, var->ident, interval_new(c, var));
+        interval_t *interval = interval_new(c);
+        interval->var = var;
+        table_set(c->interval_table, var->ident, interval);
     }
 
     // 倒序遍历顺序基本块基本块
@@ -203,18 +236,19 @@ void interval_build(closure_t *c) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op *op = current->value;
 
+            // TODO 物理寄存器处理
             slice_t *output_vars = lir_output_vars(op);
             for (int j = 0; j < output_vars->count; ++j) {
                 lir_operand_var *var = output_vars->take[j];
                 interval_cut_first_range_from(c, var, op->id); // 截断操作
-                interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
+                interval_add_use_position(c, var, op->id, use_kind_of_output(c, op, var));
             }
 
             slice_t *input_vars = lir_input_vars(op);
             for (int j = 0; j < input_vars->count; ++j) {
                 lir_operand_var *var = input_vars->take[j];
                 interval_add_range(c, var, block_from, op->id); // 添加整段长度
-                interval_add_use_position(c, var, op->id, 0); // TODO 计算 use_kind
+                interval_add_use_position(c, var, op->id, use_kind_of_input(c, op, var));
             }
 
             current = current->prev;
@@ -222,15 +256,15 @@ void interval_build(closure_t *c) {
     }
 }
 
-interval_t *interval_new(closure_t *c, lir_operand_var *var) {
-    interval_t *entity = malloc(sizeof(interval_t));
-    entity->var = var;
-    entity->ranges = list_new();
-    entity->use_positions = list_new();
-    entity->children = list_new();
-    entity->parent = NULL;
-    entity->index = c->interval_offset++; // 基于 closure_t 做自增 id 即可
-    return entity;
+interval_t *interval_new(closure_t *c) {
+    interval_t *i = malloc(sizeof(interval_t));
+    i->ranges = list_new();
+    i->use_positions = list_new();
+    i->children = list_new();
+    i->fixed = false;
+    i->parent = NULL;
+    i->index = c->interval_offset++; // 基于 closure_t 做自增 id 即可
+    return i;
 }
 
 bool interval_is_covers(interval_t *i, int position) {
@@ -289,17 +323,17 @@ void interval_add_range(closure_t *c, lir_operand_var *var, int from, int to) {
  * @param position
  * @param kind
  */
-void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, int kind) {
+void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, use_kind_e kind) {
     interval_t *i = table_get(c->interval_table, var->ident);
     list *pos_list = i->use_positions;
 
-    use_position_t *new_pos = NEW(use_position_t);
+    use_pos_t *new_pos = NEW(use_pos_t);
     new_pos->kind = kind;
     new_pos->value = position;
 
     list_node *current = list_first(pos_list);
     while (current->value != NULL) {
-        use_position_t *current_pos = current->value;
+        use_pos_t *current_pos = current->value;
         // 找到一个大于当前位置的节点
         if (current_pos->value > new_pos->value) {
             // 当前位置一旦大于 await
@@ -318,12 +352,12 @@ void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from)
     i->first_range->from = from;
 }
 
-int interval_first_use_position(interval_t *i) {
+int interval_first_use_pos(interval_t *i) {
     list *pos_list = i->use_positions;
     if (list_empty(pos_list)) {
         return 0;
     }
-    use_position_t *use_pos = list_first(pos_list)->value;
+    use_pos_t *use_pos = list_first(pos_list)->value;
     return use_pos->value;
 }
 
@@ -331,7 +365,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
     list *pos_list = i->use_positions;
     list_node *current = list_first(pos_list);
     while (current->value != NULL) {
-        use_position_t *current_pos = current->value;
+        use_pos_t *current_pos = current->value;
         if (current_pos->value > after_position) {
             return current_pos->value;
         }
@@ -352,7 +386,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(i->last_range->to < position);
     assert(i->first_range->from < position);
 
-    interval_t *child = interval_new(c, i->var);
+    interval_t *child = interval_new(c);
 
     interval_t *parent = i;
     if (i->parent != NULL) {
@@ -397,7 +431,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
 
     // 划分 position
     LIST_FOR(i->use_positions) {
-        use_position_t *pos = LIST_VALUE();
+        use_pos_t *pos = LIST_VALUE();
         if (pos->value < position) {
             continue;
         }
@@ -423,9 +457,9 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
  * @param i
  * @return
  */
-use_position_t *interval_use_pos_of_kind(interval_t *i) {
+use_pos_t *interval_use_pos_of_kind(interval_t *i) {
     LIST_FOR(i->use_positions) {
-        use_position_t *pos = LIST_VALUE();
+        use_pos_t *pos = LIST_VALUE();
         if (pos->kind > 0) {
             return pos;
         }

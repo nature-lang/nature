@@ -1,5 +1,36 @@
 #include "allocate.h"
 
+/**
+ * 在 free 中找到一个尽量空闲的寄存器分配给 current, 优先考虑 register hint 分配的寄存器
+ * 如果相应的寄存器不能使用到 current 结束
+ * @param current
+ * @param free_pos
+ * @return
+ */
+static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
+    uint8_t full_reg = 0; // 直接分配不用 split
+    uint8_t part_reg = 0; // 需要 split current to unhandled
+    uint8_t hint_reg = 0; // register hint 对应的 interval 分配的 reg
+    if (current->reg_hint != NULL && current->reg_hint->assigned != NULL) {
+        hint_reg = current->reg_hint->assigned->index;
+    }
+
+    for (int i = 0; i < PHYSICAL_REG_COUNT; ++i) {
+        if (free_pos[i] > current->last_range->to) {
+            // 寄存器可以直接分配给 current，不需要任何 spilt,不过还是进行一下最优挑选
+            // 直接使用 hint reg
+            if (full_reg != 0 && full_reg == hint_reg) {
+                continue;
+            }
+
+            // 挑选空闲时间最长的寄存器
+            if (free_pos[i] > free_pos[full_reg]) {
+                full_reg = i;
+            }
+        }
+    }
+}
+
 static void handle_active(allocate_t *a) {
     int position = a->current->first_range->from;
     list_node *active_curr = a->active->front;
@@ -96,16 +127,16 @@ void allocate_walk(closure_t *c) {
 
 list *unhandled_new(closure_t *c) {
     list *unhandled = list_new();
-    // 遍历所有变量
-    for (int i = 0; i < c->globals.count; ++i) {
-        void *raw = table_get(c->interval_table, c->globals.list[i]->ident);
+    // 遍历所有变量,根据 interval from 进行排序
+    for (int i = 0; i < c->globals->count; ++i) {
+        void *raw = table_get(c->interval_table, ((lir_operand_var *) c->globals->take[i])->ident);
         if (raw == NULL) {
             continue;
         }
         interval_t *item = (interval_t *) raw;
         to_unhandled(unhandled, item);
     }
-    // 遍历所有固定寄存器
+    // 遍历所有固定寄存器生成 fixed_interval TODO 直接从 register.h 中遍历生成,
     for (int i = 0; i < c->fixed_regs->count; ++i) {
         void *raw = table_get(c->interval_table, SLICE_TACK(reg_t, c->fixed_regs, i)->name);
         if (raw == NULL) {
@@ -145,6 +176,7 @@ static uint8_t max_pos_index(const int list[UINT8_MAX]) {
     return max_index;
 }
 
+// TODO 选择合适类型的 reg 进行分配
 bool allocate_free_reg(closure_t *c, allocate_t *allocate) {
     int free_pos[UINT8_MAX] = {0};
     for (int i = 0; i < regs->count; ++i) {
@@ -152,21 +184,17 @@ bool allocate_free_reg(closure_t *c, allocate_t *allocate) {
     }
 
     // active interval 不予分配，所以 pos 设置为 0
-    list_node *curr = allocate->active->front;
-    while (curr->value != NULL) {
-        interval_t *select = (interval_t *) curr->value;
+    LIST_FOR(allocate->active) {
+        interval_t *select = LIST_VALUE();
         set_pos(free_pos, select->assigned->index, 0);
-        curr = curr->succ;
     }
 
-    curr = allocate->inactive->front;
-    while (curr->value != NULL) {
-        interval_t *select = (interval_t *) curr->value;
-        int position = interval_next_intersection(allocate->current, select);
-        // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
-        set_pos(free_pos, select->assigned->index, position);
 
-        curr = curr->succ;
+    LIST_FOR(allocate->inactive) {
+        interval_t *select = LIST_VALUE();
+        int pos = interval_next_intersection(allocate->current, select);
+        // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
+        set_pos(free_pos, select->assigned->index, pos);
     }
 
     // 找到权重最大的寄存器寄存器进行分配
@@ -175,6 +203,8 @@ bool allocate_free_reg(closure_t *c, allocate_t *allocate) {
     if (free_pos[max_reg_index] == 0) {
         return false;
     }
+
+
 
     // 寄存器有足够的 free 空间供当前寄存器使用，可以直接分配
     // 一旦 assigned， 就表示整个 var 对应的 interval 都将获得寄存器
@@ -202,11 +232,12 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // key is physical register index, value is position
     int use_pos[UINT8_MAX];
     int block_pos[UINT8_MAX]; // 设置 block pos 的同时需要隐式设置 use pos
-    for (int i = 0; i < regs->count; ++i) {
+    SLICE_FOR(regs, reg_t) { // TODO index 不可行！ 这特么不是各种覆盖么。。
+        reg_t *reg = SLICE_VALUE();
         // INT32_MAX 表示寄存器完全空闲
-        SET_BLOCK_POS(SLICE_TACK(reg_t, regs, i)->index, INT32_MAX)
+        SET_BLOCK_POS(reg->index, INT32_MAX) // TODO 这里用 id 可能更合理
     }
-    int first_use = interval_first_use_position(a->current);
+    int first_use = interval_first_use_pos(a->current);
 
     // 遍历固定寄存器(active)
     LIST_FOR(a->active) {
@@ -254,7 +285,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // 一旦 current spill 到了内存中，则后续就再也不会处理了
         // 所以 current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
         // 则需要将 current 重新分配到寄存器，这称为 reload, 在需要 reload 之前，将 interval spilt
-        use_position_t *kind_pos = interval_use_pos_of_kind(a->current);
+        use_pos_t *kind_pos = interval_use_pos_of_kind(a->current);
         if (kind_pos > 0) {
             int split_pos = interval_optimal_position(c, a->current, kind_pos->value);
             interval_t *child = interval_split_at(c, a->current, split_pos);
@@ -278,7 +309,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
             if (i->assigned->index != reg_index) {
                 continue;
             }
-            spill_interval(c, i, first_use);
+            spill_interval(c, a, i, first_use);
         }
 
         // assign register reg to interval current
@@ -295,14 +326,14 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
             if (i->assigned->index != reg_index) {
                 continue;
             }
-            spill_interval(c, i, first_use);
+            spill_interval(c, a, i, first_use);
         }
         LIST_FOR(a->inactive) {
             interval_t *i = LIST_VALUE();
             if (i->assigned->index != reg_index) {
                 continue;
             }
-            spill_interval(c, i, first_use);
+            spill_interval(c, a, i, first_use);
         }
 
         // assign register reg to interval current
@@ -330,7 +361,7 @@ void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) 
     // spill current before current first use position
     int split_pos = interval_optimal_position(c, i, before_pos);
     interval_t *child = interval_split_at(c, i, split_pos);
-    use_position_t *kind_pos = interval_use_pos_of_kind(child);
+    use_pos_t *kind_pos = interval_use_pos_of_kind(child);
     if (kind_pos > 0) {
         split_pos = interval_optimal_position(c, child, kind_pos->value);
         interval_t *unhandled = interval_split_at(c, child, split_pos);

@@ -18,7 +18,7 @@ typedef enum {
 typedef struct {
     int value;
     use_kind_e kind;
-} use_position_t;
+} use_pos_t;
 
 typedef struct {
     int from; // 包含
@@ -39,8 +39,8 @@ typedef struct interval_t {
 
     int16_t *stack_slot;
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
-    struct interval_t *register_hint;
-    reg_t *assigned; // 分配的 reg
+    struct interval_t *reg_hint;
+    uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
@@ -75,7 +75,7 @@ void interval_build(closure_t *c);
  * @param var
  * @return
  */
-interval_t *interval_new(closure_t *c, lir_operand_var *var);
+interval_t *interval_new(closure_t *c);
 
 /**
  * 添加 range 到 interval.ranges 头中,并调整 first_range 的指向
@@ -102,7 +102,7 @@ void interval_cut_first_range_from(closure_t *c, lir_operand_var *var, int from)
  * @param var
  * @param position
  */
-void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, int kind);
+void interval_add_use_position(closure_t *c, lir_operand_var *var, int position, use_kind_e kind);
 
 /**
  * @param i
@@ -153,10 +153,10 @@ int interval_next_use_position(interval_t *i, int after_position);
  * @param i
  * @return
  */
-int interval_first_use_position(interval_t *i);
+int interval_first_use_pos(interval_t *i);
 
 void interval_spill_slot(closure_t *c, interval_t *i);
 
-use_position_t *interval_use_pos_of_kind(interval_t *i);
+use_pos_t *interval_use_pos_of_kind(interval_t *i);
 
 #endif

@@ -16,17 +16,19 @@
  * C2:
  *  move
  *  move
+ *  bal end_for
  *
  * end_for:
  *  test
  *  sub
  *  shift
+ *  beq l3
+ *  bal l3
  *
  * l3:
  *  test
  *  sub
  *  shift
- * TODO 可能有基本块不是以 branch 结尾或者 label 开头
  * 当遇到 label_a 时会开启一个新的 basic block, 如果再次遇到一个 label_b 也需要开启一个 branch 指令，但如果 label_a 最后一条指令不是 branch 指令，
  * 则需要添加 branch 指令到 label_a 中链接 label_a 和 label_b, 同理，如果遇到了 branch 指令(需要结束 basic block)到下一条指令不是 label，
  * 则需要添加 label 到 branch 到下一条指令中。 从而能够正确开启新的 basic block

@@ -173,7 +173,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->stack_length = 0;
     new->stack_slot_offset = 0;
 
-    new->interval_offset = MIN_VIR_INTERVAL_OFFSET;
+    new->interval_offset = alloc_reg_count() + 1;
 
     return new;
 }

@@ -8,8 +8,6 @@
 #include "utils/table.h"
 #include "src/register/register.h"
 
-#define MIN_VIR_INTERVAL_OFFSET 40
-
 #define TEMP_IDENT "t"
 #define TEMP_LABEL "l"
 #define CONTINUE_IDENT "continue"

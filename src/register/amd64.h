@@ -128,7 +128,11 @@ reg_t *zmm13;
 reg_t *zmm14;
 reg_t *zmm15;
 
-void amd64_register_init();
+#define AMD64_ALLOC_INT_REG_COUNT 14;
+#define AMD64_ALLOC_FLOAT_REG_COUNT 16;
+#define AMD64_ALLOC_REG_COUNT 14+16;
+
+void amd64_reg_init();
 
 void amd64_operations_lower(closure_t *c);
 
