@@ -153,6 +153,15 @@ typedef struct {
     bool indirect_addr; // &a 对变量进行解引用操作
 } lir_operand_var;
 
+/**
+ * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
+ * 也就是 stack 是向下增长，但是存储数据是从低地址往搞地址存储
+ */
+typedef struct {
+    int offset;
+    int size;
+} lir_operand_stack;
+
 typedef struct {
     lir_operand *base;
     int offset; // 偏移量是可以计算出来的, 默认为 0
@@ -169,8 +178,6 @@ typedef struct {
     string ident;
     type_base_t type;
 } lir_operand_symbol_var; // 外部符号引用, 外部符号引用
-
-typedef size_t memory_address;
 
 typedef struct {
     union {

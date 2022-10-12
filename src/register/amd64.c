@@ -140,6 +140,13 @@ void amd64_operations_lower(closure_t *c) {
         basic_block_t *block = SLICE_VALUE();
         LIST_FOR(block->operations) {
             lir_op *op = LIST_VALUE();
+
+            // if op is fn begin, will set formal param
+            // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
+            if (op->code == LIR_OPCODE_FN_BEGIN) {
+
+            }
+
             if (op->code == LIR_OPCODE_RETURN && op->result != NULL) {
                 // 1.1 return 指令需要将返回值放到 rax 中
                 lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, rax);
