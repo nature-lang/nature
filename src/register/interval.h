@@ -38,11 +38,12 @@ typedef struct interval_t {
     lir_operand_var *var; // var 中存储着 stack slot
 
     int16_t *stack_slot;
+    bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
     struct interval_t *reg_hint;
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
-    type_base_t type_base;
+    reg_type_e alloc_type; // 分配的寄存器的类型
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
@@ -109,7 +110,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position);
  * @param before
  * @return
  */
-int interval_optimal_position(closure_t *c, interval_t *current, int before);
+int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before);
 
 /**
  * interval 的 range 是否包含了 position
@@ -139,16 +140,8 @@ int interval_next_intersection(interval_t *current, interval_t *select);
  */
 int interval_next_use_position(interval_t *i, int after_position);
 
-/**
- * interval 的第一个使用位置
- * first_use_position != first_from
- * @param i
- * @return
- */
-int interval_first_use_pos(interval_t *i);
-
 void interval_spill_slot(closure_t *c, interval_t *i);
 
-use_pos_t *interval_use_pos_of_kind(interval_t *i);
+use_pos_t *interval_must_reg_pos(interval_t *i);
 
 #endif

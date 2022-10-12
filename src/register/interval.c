@@ -270,31 +270,23 @@ void interval_mark_number(closure_t *c) {
 }
 
 void interval_build(closure_t *c) {
-    // traverse all physical registers
-    for (int i = alloc_reg_start(TYPE_INT); i < alloc_reg_end(TYPE_INT); ++i) {
-        reg_t *reg = alloc_regs[i];
+    // physical registers
+    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+        reg_t *reg = alloc_regs[alloc_id];
         interval_t *interval = interval_new(c);
         interval->fixed = true;
-        interval->assigned = i;
-        interval->type_base = TYPE_INT;
-        table_set(c->interval_table, reg->name, interval_new(c));
-    }
-    for (int i = alloc_reg_start(TYPE_FLOAT); i < alloc_reg_end(TYPE_FLOAT); ++i) {
-        reg_t *reg = alloc_regs[i];
-        interval_t *interval = interval_new(c);
-        interval->fixed = true;
-        interval->assigned = i;
-        interval->type_base = TYPE_FLOAT;
+        interval->assigned = alloc_id;
+        interval->alloc_type = reg->type;
         table_set(c->interval_table, reg->name, interval_new(c));
     }
 
-    // init interval
+    // virtual registers
     c->interval_table = table_new();
     for (int i = 0; i < c->globals->count; ++i) {
         lir_operand_var *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->type_base = var->type_base;
+        interval->alloc_type = type_base_trans(var->type_base);
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -319,7 +311,7 @@ void interval_build(closure_t *c) {
 
             if (lir_op_is_call(op)) {
                 // traverse all register
-                for (int j = 0; j < alloc_reg_end(0); ++j) {
+                for (int j = 0; j < alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
                     if (interval != NULL) {
@@ -370,6 +362,9 @@ interval_t *interval_new(closure_t *c) {
     i->ranges = list_new();
     i->use_positions = list_new();
     i->children = list_new();
+    i->stack_slot = NEW(int16_t);
+    *i->stack_slot = -1;
+    i->spilled = false;
     i->fixed = false;
     i->parent = NULL;
     i->index = c->interval_offset++; // 基于 closure_t 做自增 id 即可
@@ -402,7 +397,7 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
 }
 
 // 在 before 前挑选一个最佳的位置进行 split
-int interval_optimal_position(closure_t *c, interval_t *current, int before) {
+int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
     return before;
 }
 
@@ -469,25 +464,15 @@ void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e 
     }
 }
 
-int interval_first_use_pos(interval_t *i) {
-    list *pos_list = i->use_positions;
-    if (list_empty(pos_list)) {
-        return 0;
-    }
-    use_pos_t *use_pos = list_first(pos_list)->value;
-    return use_pos->value;
-}
 
 int interval_next_use_position(interval_t *i, int after_position) {
     list *pos_list = i->use_positions;
-    list_node *current = list_first(pos_list);
-    while (current->value != NULL) {
-        use_pos_t *current_pos = current->value;
+
+    LIST_FOR(pos_list) {
+        use_pos_t *current_pos = LIST_VALUE();
         if (current_pos->value > after_position) {
             return current_pos->value;
         }
-
-        current = current->succ;
     }
     return 0;
 }
@@ -495,6 +480,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
 /**
  * 从 position 将 interval 分成两端，多个 child interval 在一个 list 中，而不是多级 list
  * 如果 position 被 range cover, 则对 range 进行切分
+ * child 的 register_hint 指向 parent
  * @param c
  * @param i
  * @param position
@@ -558,15 +544,32 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         break;
     }
 
+    child->var = parent->var;
+    child->alloc_type = parent->alloc_type;
+    if (parent->fixed) {
+        child->fixed = parent->fixed;
+        child->assigned = parent->assigned;
+    }
+    child->stack_slot = parent->stack_slot;
+    child->reg_hint = parent;
+
     return child;
 }
 
 /**
  * spill slot，清空 assign
+ * 所有 slit_child 都溢出到同一个堆栈插槽（存储在_canonical_spill_slot中）
  * @param i
  */
 void interval_spill_slot(closure_t *c, interval_t *i) {
+    assert(i->stack_slot);
+
     i->assigned = 0;
+    i->spilled = true;
+    if (*i->stack_slot != -1) {
+        return;
+    }
+    // 根据 closure stack offset 分配堆栈插槽
 }
 
 /**
@@ -574,10 +577,10 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
  * @param i
  * @return
  */
-use_pos_t *interval_use_pos_of_kind(interval_t *i) {
+use_pos_t *interval_must_reg_pos(interval_t *i) {
     LIST_FOR(i->use_positions) {
         use_pos_t *pos = LIST_VALUE();
-        if (pos->kind > 0) {
+        if (pos->kind == USE_KIND_MUST) {
             return pos;
         }
     }

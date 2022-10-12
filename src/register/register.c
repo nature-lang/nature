@@ -22,36 +22,20 @@ void reg_init() {
     }
 }
 
-uint8_t alloc_reg_start(type_base_t t) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        if (t == TYPE_FLOAT) {
-            return AMD64_ALLOC_INT_REG_COUNT;
-        } else {
-            return 0;
-        }
-    }
-    return 0;
-}
 
-uint8_t alloc_reg_end(type_base_t t) {
+uint8_t alloc_reg_count() {
     if (BUILD_ARCH == ARCH_AMD64) {
-        if (!t) {
-            return AMD64_ALLOC_REG_COUNT;
-        }
-        if (t == TYPE_FLOAT) {
-            return AMD64_ALLOC_REG_COUNT;
-        } else {
-            return AMD64_ALLOC_INT_REG_COUNT;
-        }
+        return AMD64_ALLOC_REG_COUNT;
     }
     return 0;
 }
 
 
-reg_t *reg_new(char *name, uint8_t index, uint8_t size, int8_t alloc_id) {
+reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, int8_t alloc_id) {
     reg_t *reg = NEW(reg_t);
     reg->name = name;
     reg->index = index;
+    reg->type = type;
     reg->size = size;
     reg->alloc_id = alloc_id; // 默认为 -1，表示不可分配
 
@@ -62,5 +46,13 @@ reg_t *reg_new(char *name, uint8_t index, uint8_t size, int8_t alloc_id) {
     table_set(reg_table, reg_table_key(index, size), reg);
     slice_push(regs, reg);
     return reg;
+}
+
+reg_type_e type_base_trans(type_base_t t) {
+    if (t == TYPE_FLOAT) {
+        return REG_TYPE_FLOAT;
+    }
+
+    return REG_TYPE_INT;
 }
 

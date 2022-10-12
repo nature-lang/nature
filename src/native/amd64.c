@@ -495,6 +495,12 @@ reg_t *amd64_native_fn_next_reg_target(uint8_t used[2], type_base_t base) {
     return NULL;
 }
 
+/**
+ *
+ * @param c
+ * @param op
+ * @return
+ */
 slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     // 计算堆栈信息(倒序 )
@@ -512,7 +518,7 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     // 一次堆栈对齐,对齐后再继续分配栈空间，分配完成后需要进行二次栈对齐。
     c->stack_length = memory_align(c->stack_length, 16);
 
-    // 部分局部变量需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
+    // 部分形参需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
     // 还有一部分 push
     uint8_t used[2] = {0};
     int16_t stack_param_offset = 16; // 16byte 起点
@@ -521,14 +527,16 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     while (current->value != NULL) {
         lir_var_decl *var = current->value;
 
+        // 第一步就是将参数从寄存器分配到 stack 中，所以必须为形参分配一个 stack slot 才能做 mov
         reg_t *reg = amd64_native_fn_next_reg_target(used, var->type.base);
         if (reg != NULL) {
+            // param 分配了寄存器
             // rbp-x
             c->stack_length += QWORD;
-            *var->stack_offset = -(c->stack_length);
+            *var->stack_offset = -(c->stack_length); // 栈底，负数
         } else {
             // rbp+x
-            *var->stack_offset = stack_param_offset;
+            *var->stack_offset = stack_param_offset; // 正数
             stack_param_offset += QWORD;
         }
 
