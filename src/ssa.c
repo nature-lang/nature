@@ -213,7 +213,7 @@ void ssa_add_phi(closure_t *c) {
                 }
 
                 // add phi (x1, x2, x3) => x
-                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, LIR_NEW_VAR_OPERAND(var->ident));
+                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, LIR_NEW_VAR_OPERAND(var->ident));
                 lir_operand *first_param = lir_new_phi_body(var, df_block->preds->count);
                 lir_op *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
 
@@ -353,7 +353,7 @@ void ssa_use_def(closure_t *c) {
             OPERAND_VAR_USE(vars)
 
             // def
-            if (op->result != NULL && op->result->type == LIR_OPERAND_TYPE_VAR) {
+            if (op->result != NULL && op->result->type == LIR_OPERAND_VAR) {
                 lir_operand_var *var = (lir_operand_var *) op->result->value;
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
@@ -500,7 +500,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
             }
         }
 
-        if (op->result != NULL && op->result->type == LIR_OPERAND_TYPE_VAR) {
+        if (op->result != NULL && op->result->type == LIR_OPERAND_VAR) {
             lir_operand_var *var = (lir_operand_var *) op->result->value;
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
@@ -545,7 +545,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
     list_node *current_node = block->operations->front->succ;
     while (current_node->value != NULL) {
         lir_op *current_op = current_node->value;
-        if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_TYPE_VAR) {
+        if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_VAR) {
             lir_operand_var *var = (lir_operand_var *) current_op->result->value;
 
             // pop stack

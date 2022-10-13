@@ -4,18 +4,33 @@
 #include "utils/helper.h"
 #include "assert.h"
 
-// TODO 遍历所有指令进行对应 id 的插入
 static void interval_insert_mov(closure_t *c, int id, interval_t *src_i, interval_t *dst_i) {
+    SLICE_FOR(c->blocks, basic_block_t) {
+        basic_block_t *block = SLICE_VALUE();
+        LIST_FOR(block->operations) {
+            lir_op *op = LIST_VALUE();
+            if (op->id < id) {
+                continue;
+            }
+
+            // last->id < id < op->id
+            lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
+            lir_operand *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
+            lir_op *mov_op = lir_op_move(dst, src);
+            list_insert_before(block->operations, LIST_NODE(), mov_op);
+            return;
+        }
+    }
 }
 
 static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         lir_operand_var *var = operand->value;
         interval_t *interval = table_get(c->interval_table, var->ident);
         assert(interval);
         return interval;
     }
-    if (operand->type == LIR_OPERAND_TYPE_REG) {
+    if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         interval_t *interval = table_get(c->interval_table, reg->name);
         assert(interval);
@@ -31,27 +46,27 @@ static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
         return result;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         lir_operand_var *var = operand->value;
         interval_t *interval = table_get(c->interval_table, var->ident);
         assert(interval);
         slice_push(result, interval);
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_REG) {
+    if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         interval_t *interval = table_get(c->interval_table, reg->name);
         assert(interval);
         slice_push(result, interval);
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_ACTUAL_PARAM) {
+    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
         lir_operand_actual_param *operands = operand->value;
         for (int i = 0; i < operands->count; ++i) {
             lir_operand *o = operands->list[i];
-            assert(o->type != LIR_OPERAND_TYPE_VAR && "ACTUAL_PARAM nesting is not allowed");
+            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
 
-            if (o->type == LIR_OPERAND_TYPE_VAR) {
+            if (o->type == LIR_OPERAND_VAR) {
                 lir_operand_var *var = operand->value;
                 interval_t *interval = table_get(c->interval_table, var->ident);
                 assert(interval);
@@ -600,3 +615,30 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
     return NULL;
 }
 
+
+void resolve_data_flow(closure_t *c) {
+    SLICE_FOR(c->blocks, basic_block_t) {
+        basic_block_t *from = SLICE_VALUE();
+        for (int i = 0; i < from->succs->count; ++i) {
+            basic_block_t *to = from->succs->take[i];
+            // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
+            for (int j = 0; j < to->live_in->count; ++j) {
+                lir_operand_var *var = to->live_in->take[j];
+                interval_t *parent_interval = table_get(c->interval_table, var->ident);
+                // 判断是否在 form->to edge 最终的 interval
+                interval_t *from_interval = interval_child_at(parent_interval, from->last_op->id);
+                interval_t *to_interval = interval_child_at(parent_interval, to->first_op->id);
+                // 因为 from 和 interval 是相连接的 edge,
+                // 如果from_interval != to_interval(指针对比即可)
+                // 则说明在其他 edge 上对 interval 进行了 spilt/reload
+                // 因此需要 link from and to interval
+                if (from_interval != to_interval) {
+                    // TODO add_mapping
+                }
+            }
+
+            // 对一条边的处理完毕，可能涉及多个寄存器，stack, 也有可能一个寄存器被多次操作,所以需要处理覆盖问题
+            // 同一条边上的所有 resolve 操作只插入在同一块中，要么是在 from、要么是在 to。 tips: 所有的 critical edge 都已经被处理了
+        }
+    }
+}

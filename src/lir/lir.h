@@ -45,7 +45,7 @@
    imm_operand->type = operand_type; \
    imm_operand->key = val; \
    lir_operand *operand = malloc(sizeof(lir_operand)); \
-   operand->type = LIR_OPERAND_TYPE_IMM; \
+   operand->type = LIR_OPERAND_IMM; \
    operand->value = imm_operand;              \
    operand; \
 })
@@ -78,17 +78,17 @@ int var_unique_count;
 int lir_line;
 
 typedef enum {
-    LIR_OPERAND_TYPE_NULL,
-    LIR_OPERAND_TYPE_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
-    LIR_OPERAND_TYPE_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
-    LIR_OPERAND_TYPE_REG,
-    LIR_OPERAND_TYPE_STACK,
-    LIR_OPERAND_TYPE_PHI_BODY,
-    LIR_OPERAND_TYPE_FORMAL_PARAM,
-    LIR_OPERAND_TYPE_ACTUAL_PARAM,
-    LIR_OPERAND_TYPE_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
-    LIR_OPERAND_TYPE_IMM,
-    LIR_OPERAND_TYPE_ADDR,
+    LIR_OPERAND_NULL,
+    LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
+    LIR_OPERAND_REG,
+    LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
+    LIR_OPERAND_STACK,
+    LIR_OPERAND_PHI,
+    LIR_OPERAND_FORMAL_PARAM,
+    LIR_OPERAND_ACTUAL_PARAM,
+    LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
+    LIR_OPERAND_IMM,
+    LIR_OPERAND_ADDR,
 } lir_operand_type;
 
 typedef enum {
@@ -239,8 +239,8 @@ typedef struct basic_block_t {
 
     // op point
 //    list_node *phi; // fist_node 即可
-    list_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
-//    list_node *last; // last_node 即可
+    lir_op *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+    lir_op *last_op; // last_node 即可
     list *operations;
 
     slice_t *preds;

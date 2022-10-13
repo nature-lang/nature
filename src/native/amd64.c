@@ -308,7 +308,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
                                         uint8_t used[2]) {
     slice_t *insts = slice_new();
 
-    if (operand->type == LIR_OPERAND_TYPE_IMM) {
+    if (operand->type == LIR_OPERAND_IMM) {
         lir_operand_immediate *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(TODO 使用字符串 md5 代替)
@@ -363,10 +363,10 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         return insts;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+    if (operand->type == LIR_OPERAND_ADDR) {
         lir_operand_addr *v = operand->value;
         // base 类型必须为 var
-        if (v->base->type != LIR_OPERAND_TYPE_VAR) {
+        if (v->base->type != LIR_OPERAND_VAR) {
             error_exit("[amd64_lir_to_asm_operand] operand code memory, but that base not code var");
         }
 
@@ -396,7 +396,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         return insts;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         lir_operand_var *v = operand->value;
         // 解引用处理
         if (v->indirect_addr) {
@@ -417,7 +417,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         }
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_SYMBOL_VAR) {
+    if (operand->type == LIR_OPERAND_SYMBOL_VAR) {
         lir_operand_symbol_var *v = operand->value;
         ASM_OPERAND_COPY(asm_operand, SYMBOL(v->ident, false));
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov
@@ -425,7 +425,7 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         return insts;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_SYMBOL_LABEL) {
+    if (operand->type == LIR_OPERAND_SYMBOL_LABEL) {
         lir_operand_symbol_label *v = operand->value;
         ASM_OPERAND_COPY(asm_operand, SYMBOL(v->ident, false));
         return insts;
@@ -604,11 +604,11 @@ slice_t *amd64_native_cmp_goto(closure_t *c, lir_op *op) {
 }
 
 slice_t *amd64_native_lea(closure_t *c, lir_op *op) {
-    if (op->first->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[amd64_native_lead] first operand code not LIR_OPERAND_TYPE_VAR");
+    if (op->first->type != LIR_OPERAND_VAR) {
+        error_exit("[amd64_native_lead] first operand code not LIR_OPERAND_VAR");
     }
-    if (op->result->type != LIR_OPERAND_TYPE_VAR) {
-        error_exit("[amd64_native_lead] result operand code not LIR_OPERAND_TYPE_VAR");
+    if (op->result->type != LIR_OPERAND_VAR) {
+        error_exit("[amd64_native_lead] result operand code not LIR_OPERAND_VAR");
     }
 
     slice_t *insts = slice_new();

@@ -68,7 +68,7 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
 
             lir_operand *expr_target = lir_new_empty_operand();
             list_append(parent_list, compiler_expr(parent, item_expr, expr_target));
-            if (expr_target->type != LIR_OPERAND_TYPE_VAR) {
+            if (expr_target->type != LIR_OPERAND_VAR) {
                 error_exit("[compiler_closure] expr_target code not var, cannot use by env set");
             }
 
@@ -105,7 +105,7 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
 
     // 直接改写 target 而不是使用一个 move 操作
     if (target != NULL) {
-        target->type = LIR_OPERAND_TYPE_VAR;
+        target->type = LIR_OPERAND_VAR;
         target->value = lir_new_var_operand(c, ast_closure->function->name);
     }
 
@@ -195,7 +195,7 @@ list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
     lir_var_decl *local = lir_new_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
     list_push(c->var_decls, local);
 
-    lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
+    lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
     lir_operand *src = lir_new_empty_operand();
     list_append(operations, compiler_expr(c, stmt->expr, src));
 
@@ -329,7 +329,7 @@ list *compiler_unary(closure_t *c, ast_expr expr, lir_operand *result_target) {
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->type == LIR_OPERAND_TYPE_IMM) {
+    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->type == LIR_OPERAND_IMM) {
         lir_operand_immediate *imm = first->value;
         imm->int_value = -imm->int_value;
         // move 操作即可
@@ -339,7 +339,7 @@ list *compiler_unary(closure_t *c, ast_expr expr, lir_operand *result_target) {
 
     if (unary_expr->operator == AST_EXPR_OPERATOR_IA) {
         // 如果 first 都不是指针，那就不给解引用直接报错，只有变量才能是指针类型
-        if (first->type != LIR_OPERAND_TYPE_VAR) {
+        if (first->type != LIR_OPERAND_VAR) {
             error_exit("[compiler_unary] operator IA, but operand not var");
         }
 
@@ -410,7 +410,7 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand *target) {
     lir_operand *base_target = lir_new_empty_operand();
     list *operations = compiler_expr(c, call->left, base_target);
 
-    if (base_target->type == LIR_OPERAND_TYPE_SYMBOL_LABEL &&
+    if (base_target->type == LIR_OPERAND_SYMBOL_LABEL &&
         is_print_symbol(((lir_operand_symbol_label *) base_target->value)->ident)) {
         return compiler_builtin_print(c, call, ((lir_operand_symbol_label *) base_target->value)->ident);
     }
@@ -428,7 +428,7 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand *target) {
         params_operand->list[params_operand->count++] = param_target;
     }
 
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAM, params_operand);
 
     // return target
     lir_op *call_op = lir_op_new(LIR_OPCODE_CALL, base_target, call_params_operand, target);
@@ -455,7 +455,7 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand *target) {
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
 list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand *target) {
-    if (target->type != LIR_OPERAND_TYPE_VAR) {
+    if (target->type != LIR_OPERAND_VAR) {
         error_exit("[compiler_access_env] target not var, actual %d", target->type);
     }
 
@@ -561,7 +561,7 @@ list *compiler_new_array(closure_t *c, ast_expr expr, lir_operand *base_target) 
  */
 list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand *target) {
     ast_access_env *ast = expr.expr;
-    if (target->type != LIR_OPERAND_TYPE_VAR) {
+    if (target->type != LIR_OPERAND_VAR) {
         error_exit("[compiler_access_env] target not var, actual %d", target->type);
     }
 
@@ -719,8 +719,8 @@ list *compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
 
     // gen key
     // gen value
-    lir_operand *key_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, ast->gen_key->ident));
-    lir_operand *value_target = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, ast->gen_value->ident));
+    lir_operand *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->gen_key->ident));
+    lir_operand *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->gen_value->ident));
     list_push(operations, lir_op_runtime_call(
             RUNTIME_CALL_ITERATE_GEN_KEY,
             key_target,
@@ -804,7 +804,7 @@ list *compiler_select_property(closure_t *c, ast_expr expr, lir_operand *target)
     ast_select_property *ast = expr.expr;
     list *operations = list_new();
 
-    if (target->type != LIR_OPERAND_TYPE_VAR) {
+    if (target->type != LIR_OPERAND_VAR) {
         error_exit("[compiler_select_property] target not var, actual %d", target->type);
     }
 
@@ -929,19 +929,19 @@ list *compiler_ident(closure_t *c, ast_ident *ident, lir_operand *target) {
     symbol_t *s = symbol_table_get(ident->literal);
     if (s->type == SYMBOL_TYPE_FN) {
         // label
-        target->type = LIR_OPERAND_TYPE_SYMBOL_LABEL;
+        target->type = LIR_OPERAND_SYMBOL_LABEL;
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     }
     if (s->type == SYMBOL_TYPE_VAR) {
         ast_var_decl *var = s->decl;
         if (s->is_local) {
-            target->type = LIR_OPERAND_TYPE_VAR;
+            target->type = LIR_OPERAND_VAR;
             target->value = lir_new_var_operand(c, ident->literal);
         } else {
             lir_operand_symbol_var *symbol = NEW(lir_operand_symbol_var);
             symbol->ident = ident->literal;
             symbol->type = var->type.base;
-            target->type = LIR_OPERAND_TYPE_SYMBOL_VAR;
+            target->type = LIR_OPERAND_SYMBOL_VAR;
             target->value = symbol;
         }
     }
@@ -965,7 +965,7 @@ list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) 
         lir_operand *origin_param_target = lir_new_empty_operand();
         list_append(operations, compiler_expr(c, ast_param_expr, origin_param_target));
 
-        if (origin_param_target->type == LIR_OPERAND_TYPE_IMM) {
+        if (origin_param_target->type == LIR_OPERAND_IMM) {
             lir_operand *imm_param = origin_param_target;
             lir_operand_immediate *imm = imm_param->value;
             imm->type = TYPE_INT64; // int 默认都使用了 mov asm uint 32 处理。但是这里确实需要 64 位处理。
@@ -983,7 +983,7 @@ list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) 
         params_operand->list[params_operand->count++] = param_target;
     }
 
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAM, params_operand);
 
     lir_operand *base_target = lir_new_label_operand("builtin_print", false);
     if (str_equal("println", print_suffix)) {

@@ -142,6 +142,8 @@ int interval_next_use_position(interval_t *i, int after_position);
 
 void interval_spill_stack(closure_t *c, interval_t *i);
 
+interval_t *interval_child_at(interval_t *i, int op_id);
+
 use_pos_t *interval_must_reg_pos(interval_t *i);
 
 void resolve_data_flow(closure_t *c);

@@ -13,16 +13,16 @@ list *amd64_formal_params_lower(closure_t *c) {
         lir_operand_var *var = lir_new_var_operand(c, var_decl->ident);
         reg_t *reg = amd64_fn_param_next_reg(used, var->type_base);
         if (reg) {
-            source = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, reg);
+            source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
         } else {
             lir_operand_stack *stack = NEW(lir_operand_stack);
             stack->size = QWORD; // 使用了 push 指令进栈，所以固定 QWORD(float 也是 8字节，只是不直接使用 push)
             stack->offset = stack_param_offset;
             stack_param_offset += QWORD;
-            source = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_STACK, stack);
+            source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
         }
 
-        lir_op *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, var), source);
+        lir_op *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
         list_push(operations, op);
     }
     return operations;
@@ -185,7 +185,7 @@ void amd64_operations_lower(closure_t *c) {
 
             if (op->code == LIR_OPCODE_RETURN && op->result != NULL) {
                 // 1.1 return 指令需要将返回值放到 rax 中
-                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, rax);
+                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
                 lir_op *before = lir_op_move(reg_operand, op->result);
                 op->result = reg_operand;
                 list_insert_before(block->operations, LIST_VALUE(), before);
@@ -193,7 +193,7 @@ void amd64_operations_lower(closure_t *c) {
 
             // div 被输数，除数 = 商
             if (op->code == LIR_OPCODE_DIV) {
-                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_REG, rax);
+                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
                 lir_op *before = lir_op_move(reg_operand, op->first);
                 lir_op *after = lir_op_move(op->result, reg_operand);
                 op->first = reg_operand;

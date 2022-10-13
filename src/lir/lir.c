@@ -8,17 +8,17 @@
 #include "utils/error.h"
 
 lir_operand *set_indirect_addr(lir_operand *operand) {
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         lir_operand_var *var = operand->value;
         var->indirect_addr = true;
         return operand;
-    } else if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+    } else if (operand->type == LIR_OPERAND_ADDR) {
         lir_operand_addr *addr = operand->value;
         addr->indirect_addr = true;
         return operand;
     }
 
-    error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_TYPE_VAR or LIR_OPERAND_TYPE_ADDR, actual %d",
+    error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_VAR or LIR_OPERAND_ADDR, actual %d",
                operand->type);
     return NULL;
 }
@@ -30,7 +30,7 @@ lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t typ
     addr_operand->type_base = type_base;
 
     lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_ADDR;
+    operand->type = LIR_OPERAND_ADDR;
     operand->value = addr_operand;
     return operand;
 }
@@ -46,7 +46,7 @@ lir_op *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...)
         params_operand->list[params_operand->count++] = param;
     }
     va_end(args);
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAM, params_operand);
     return lir_op_new(LIR_OPCODE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
@@ -61,7 +61,7 @@ lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...)
         params_operand->list[params_operand->count++] = param;
     }
     va_end(args);
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAM, params_operand);
     return lir_op_new(LIR_OPCODE_BUILTIN_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
@@ -76,7 +76,7 @@ lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
         params_operand->list[params_operand->count++] = param;
     }
     va_end(args);
-    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_ACTUAL_PARAM, params_operand);
+    lir_operand *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAM, params_operand);
     return lir_op_new(LIR_OPCODE_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
@@ -92,7 +92,7 @@ lir_operand *lir_new_temp_var_operand(closure_t *c, type_t type) {
     lir_var_decl *local = lir_new_var_decl(c, unique_ident, type);
     list_push(c->var_decls, local);
 
-    return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, unique_ident));
+    return LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, unique_ident));
 }
 
 lir_operand *lir_new_label_operand(char *ident, bool is_local) {
@@ -101,7 +101,7 @@ lir_operand *lir_new_label_operand(char *ident, bool is_local) {
     label->is_local = is_local;
 
     lir_operand *operand = NEW(lir_operand);
-    operand->type = LIR_OPERAND_TYPE_SYMBOL_LABEL;
+    operand->type = LIR_OPERAND_SYMBOL_LABEL;
     operand->value = label;
     return operand;
 }
@@ -124,20 +124,20 @@ lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
 
 lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
     // 变量 copy,避免寄存器分配时相互粘连
-    if (first != NULL && first->type == LIR_OPERAND_TYPE_VAR) {
+    if (first != NULL && first->type == LIR_OPERAND_VAR) {
         lir_operand_var *operand_var = first->value;
-        first = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, DEEP_COPY(lir_operand_var, operand_var));
+        first = LIR_NEW_OPERAND(LIR_OPERAND_VAR, DEEP_COPY(lir_operand_var, operand_var));
     }
 
-    if (second != NULL && second->type == LIR_OPERAND_TYPE_VAR) {
+    if (second != NULL && second->type == LIR_OPERAND_VAR) {
         lir_operand_var *operand_var = second->value;
-        second = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, DEEP_COPY(lir_operand_var, operand_var));
+        second = LIR_NEW_OPERAND(LIR_OPERAND_VAR, DEEP_COPY(lir_operand_var, operand_var));
     }
 
-    if (result != NULL && result->type == LIR_OPERAND_TYPE_VAR) {
+    if (result != NULL && result->type == LIR_OPERAND_VAR) {
         lir_operand_var *operand_var = result->value;
 
-        result = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, DEEP_COPY(lir_operand_var, operand_var));
+        result = LIR_NEW_OPERAND(LIR_OPERAND_VAR, DEEP_COPY(lir_operand_var, operand_var));
     }
 
     lir_op *op = NEW(lir_op);
@@ -221,7 +221,7 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
         slice_push(phi_body, LIR_NEW_VAR_OPERAND(var->ident));
     }
 
-    operand->type = LIR_OPERAND_TYPE_PHI_BODY;
+    operand->type = LIR_OPERAND_PHI;
     operand->value = phi_body;
     return operand;
 }
@@ -262,22 +262,22 @@ lir_operand *lir_new_empty_operand() {
 }
 
 type_base_t lir_operand_type_base(lir_operand *operand) {
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         lir_operand_var *var = operand->value;
         return var->type_base;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_ADDR) {
+    if (operand->type == LIR_OPERAND_ADDR) {
         lir_operand_addr *addr = operand->value;
         return addr->type_base;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_SYMBOL_VAR) {
+    if (operand->type == LIR_OPERAND_SYMBOL_VAR) {
         lir_operand_symbol_var *s = operand->value;
         return s->type;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_IMM) {
+    if (operand->type == LIR_OPERAND_IMM) {
         lir_operand_immediate *imm = operand->value;
         return imm->type;
     }
@@ -295,17 +295,17 @@ slice_t *lir_vars_by_operand(lir_operand *operand) {
         return result;
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_VAR) {
+    if (operand->type == LIR_OPERAND_VAR) {
         slice_push(result, operand->value);
     }
 
-    if (operand->type == LIR_OPERAND_TYPE_ACTUAL_PARAM) {
+    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
         lir_operand_actual_param *operands = operand->value;
         for (int i = 0; i < operands->count; ++i) {
             lir_operand *o = operands->list[i];
-            assert(o->type != LIR_OPERAND_TYPE_VAR && "ACTUAL_PARAM nesting is not allowed");
+            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
 
-            if (o->type == LIR_OPERAND_TYPE_VAR) {
+            if (o->type == LIR_OPERAND_VAR) {
                 slice_push(result, o->value);
             }
         }

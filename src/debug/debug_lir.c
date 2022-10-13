@@ -18,25 +18,25 @@ string lir_operand_to_string(lir_operand *operand) {
     }
 
     switch (operand->type) {
-        case LIR_OPERAND_TYPE_SYMBOL_LABEL: {
+        case LIR_OPERAND_SYMBOL_LABEL: {
             return lir_operand_label_to_string((lir_operand_symbol_label *) operand->value);
         }
-        case LIR_OPERAND_TYPE_SYMBOL_VAR: {
+        case LIR_OPERAND_SYMBOL_VAR: {
             return lir_operand_symbol_to_string((lir_operand_symbol_var *) operand->value);
         }
-        case LIR_OPERAND_TYPE_VAR: {
+        case LIR_OPERAND_VAR: {
             return lir_operand_var_to_string((lir_operand_var *) operand->value);
         }
-        case LIR_OPERAND_TYPE_IMM: {
+        case LIR_OPERAND_IMM: {
             return lir_operand_imm_to_string((lir_operand_immediate *) operand->value);
         }
-        case LIR_OPERAND_TYPE_ADDR: {
+        case LIR_OPERAND_ADDR: {
             return lir_operand_addr_to_string((lir_operand_addr *) operand->value);
         }
-        case LIR_OPERAND_TYPE_ACTUAL_PARAM: {
+        case LIR_OPERAND_ACTUAL_PARAM: {
             return lir_operand_actual_param_to_string((lir_operand_actual_param *) operand->value);
         }
-        case LIR_OPERAND_TYPE_PHI_BODY: {
+        case LIR_OPERAND_PHI: {
             return lir_operand_phi_body_to_string(operand->value);
         }
         default: {
