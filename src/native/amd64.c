@@ -457,43 +457,8 @@ reg_t *amd64_native_next_reg(uint8_t used[2], uint8_t size) {
 }
 
 
-/**
- * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
- * 返回下一个可用的寄存器或者内存地址
- * 但是这样就需要占用 rbp 偏移，怎么做？
- * 每个函数定义的最开始已经使用 sub n => rsp, 已经申请了栈空间 [0 ~ n]
- * 后续函数中调用其他函数所使用的栈空间都是在 [n ~ 无限] 中, 直接通过 push 操作即可
- * 但是需要注意 push 的顺序，最后的参数先 push (也就是指令反向 merge)
- * 如果返回了 NULL 就说明没有可用的寄存器啦，加一条 push 就行了
- * @param count
- * @param size
- * @return
- */
-reg_t *amd64_native_fn_next_reg_target(uint8_t used[2], type_base_t base) {
-    uint8_t size = type_base_sizeof(base);
-    if (base == TYPE_FLOAT) { // TODO 更多 float 类型, float 虽然栈大小为 8byte, 但是使用的寄存器确是 16byte 的
-        size = OWORD;
-    }
 
-    uint8_t used_index = 0; // 8bit ~ 64bit
-    if (size > QWORD) {
-        used_index = 1;
-    }
-    uint8_t count = used[used_index]++;
-    uint8_t reg_index_list[] = {7, 6, 2, 1, 8, 9};
-    // 通用寄存器 (0~5 = 6 个)
-    if (size <= QWORD && count <= 5) {
-        uint8_t reg_index = reg_index_list[count];
-        return (reg_t *) register_find(reg_index, size);
-    }
 
-    // 浮点寄存器(0~7 = 8 个)
-    if (size > QWORD && count <= 7) {
-        return (reg_t *) register_find(count, size);
-    }
-
-    return NULL;
-}
 
 /**
  *
@@ -504,19 +469,19 @@ reg_t *amd64_native_fn_next_reg_target(uint8_t used[2], type_base_t base) {
 slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     slice_t *insts = slice_new();
     // 计算堆栈信息(倒序 )
-    list_node *current = list_last(c->local_var_decls); // rear 为 empty 占位
+    list_node *current = list_last(c->var_decls); // rear 为 empty 占位
     while (current != NULL) {
         lir_var_decl *var = current->value;
         // 局部变量不需要考虑什么最小值的问题，直接网上涨就好了
         uint8_t size = type_base_sizeof(var->type.base);
-        c->stack_length += size;
-        *var->stack_offset = -(c->stack_length); // rbp-n, 所以这里取负数
+        c->stack_slot += size;
+        *var->stack_offset = -(c->stack_slot); // rbp-n, 所以这里取负数
 
         current = current->prev;
     }
 
     // 一次堆栈对齐,对齐后再继续分配栈空间，分配完成后需要进行二次栈对齐。
-    c->stack_length = memory_align(c->stack_length, 16);
+    c->stack_slot = memory_align(c->stack_slot, 16);
 
     // 部分形参需要占用一部分栈空间(amd64 架构下统一使用 8byte)， 按顺序使用堆栈即可
     // 还有一部分 push
@@ -532,8 +497,8 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
         if (reg != NULL) {
             // param 分配了寄存器
             // rbp-x
-            c->stack_length += QWORD;
-            *var->stack_offset = -(c->stack_length); // 栈底，负数
+            c->stack_slot += QWORD;
+            *var->stack_offset = -(c->stack_slot); // 栈底，负数
         } else {
             // rbp+x
             *var->stack_offset = stack_param_offset; // 正数
@@ -544,11 +509,11 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op) {
     }
 
     // 二次对齐
-    c->stack_length = memory_align(c->stack_length, 16);
+    c->stack_slot = memory_align(c->stack_slot, 16);
 
     slice_push(insts, ASM_INST("push", { REG(rbp) }));
     slice_push(insts, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
-    slice_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_length) }));
+    slice_push(insts, ASM_INST("sub", { REG(rsp), UINT32(c->stack_slot) }));
 
     // 形参入栈
     slice_append(insts, amd64_native_fn_formal_params(c));

@@ -37,7 +37,7 @@ typedef struct interval_t {
 
     lir_operand_var *var; // var 中存储着 stack slot
 
-    int16_t *stack_slot;
+    int *stack_slot;
     bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
     struct interval_t *reg_hint;
@@ -140,8 +140,10 @@ int interval_next_intersection(interval_t *current, interval_t *select);
  */
 int interval_next_use_position(interval_t *i, int after_position);
 
-void interval_spill_slot(closure_t *c, interval_t *i);
+void interval_spill_stack(closure_t *c, interval_t *i);
 
 use_pos_t *interval_must_reg_pos(interval_t *i);
+
+void resolve_data_flow(closure_t *c);
 
 #endif

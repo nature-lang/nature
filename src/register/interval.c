@@ -4,6 +4,10 @@
 #include "utils/helper.h"
 #include "assert.h"
 
+// TODO 遍历所有指令进行对应 id 的插入
+static void interval_insert_mov(closure_t *c, int id, interval_t *src_i, interval_t *dst_i) {
+}
+
 static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
     if (operand->type == LIR_OPERAND_TYPE_VAR) {
         lir_operand_var *var = operand->value;
@@ -362,12 +366,12 @@ interval_t *interval_new(closure_t *c) {
     i->ranges = list_new();
     i->use_positions = list_new();
     i->children = list_new();
-    i->stack_slot = NEW(int16_t);
+    i->stack_slot = NEW(int);
     *i->stack_slot = -1;
     i->spilled = false;
     i->fixed = false;
     i->parent = NULL;
-    i->index = c->interval_offset++; // 基于 closure_t 做自增 id 即可
+    i->index = c->interval_count++; // 基于 closure_t 做自增 id 即可
     return i;
 }
 
@@ -490,23 +494,38 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(i->first_range->from < position);
 
     interval_t *child = interval_new(c);
+    lir_operand_var *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
+    child->var = var;
 
     interval_t *parent = i;
     if (i->parent != NULL) {
         parent = i->parent;
     }
+    child->parent = parent;
+    child->reg_hint = parent;
+    if (i->fixed) {
+        child->fixed = parent->fixed;
+        child->assigned = parent->assigned;
+    }
+    child->alloc_type = parent->alloc_type;
+    child->stack_slot = parent->stack_slot;
+    table_set(c->interval_table, var->ident, child);
+
+    // mov id = position - 1
+    interval_insert_mov(c, position - 1, i, child);
 
     // 将 child 加入 parent 的 children 中,
     // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
     LIST_FOR(parent->children) {
         interval_t *current = LIST_VALUE();
+        // TODO parent children is empty
         if (current->index == i->index) {
             list_insert_after(parent->children, LIST_NODE(), child);
             break;
         }
     }
 
-    // 切割 range
+    // 切割 range, TODO first_range.from must == first use position
     LIST_FOR(i->ranges) {
         interval_range_t *range = LIST_VALUE();
         if (!in_range(range, position)) {
@@ -544,14 +563,6 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         break;
     }
 
-    child->var = parent->var;
-    child->alloc_type = parent->alloc_type;
-    if (parent->fixed) {
-        child->fixed = parent->fixed;
-        child->assigned = parent->assigned;
-    }
-    child->stack_slot = parent->stack_slot;
-    child->reg_hint = parent;
 
     return child;
 }
@@ -561,7 +572,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
  * 所有 slit_child 都溢出到同一个堆栈插槽（存储在_canonical_spill_slot中）
  * @param i
  */
-void interval_spill_slot(closure_t *c, interval_t *i) {
+void interval_spill_stack(closure_t *c, interval_t *i) {
     assert(i->stack_slot);
 
     i->assigned = 0;
@@ -569,7 +580,9 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     if (*i->stack_slot != -1) {
         return;
     }
-    // 根据 closure stack offset 分配堆栈插槽
+    // 根据 closure stack offset 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
+    *i->stack_slot = c->stack_slot;
+    c->stack_slot += type_base_sizeof(i->var->type_base);
 }
 
 /**

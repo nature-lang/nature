@@ -193,7 +193,7 @@ list *compiler_stmt(closure_t *c, ast_stmt *stmt) {
 list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
     list *operations = list_new();
     lir_var_decl *local = lir_new_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
-    list_push(c->local_var_decls, local);
+    list_push(c->var_decls, local);
 
     lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
     lir_operand *src = lir_new_empty_operand();
@@ -230,7 +230,7 @@ list *compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
  */
 list *compiler_var_decl(closure_t *c, ast_var_decl *var_decl) {
     lir_var_decl *local = lir_new_var_decl(c, var_decl->ident, var_decl->type);
-    list_push(c->local_var_decls, local);
+    list_push(c->var_decls, local);
     return list_new();
 }
 

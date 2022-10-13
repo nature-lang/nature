@@ -82,6 +82,7 @@ typedef enum {
     LIR_OPERAND_TYPE_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_TYPE_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
     LIR_OPERAND_TYPE_REG,
+    LIR_OPERAND_TYPE_STACK,
     LIR_OPERAND_TYPE_PHI_BODY,
     LIR_OPERAND_TYPE_FORMAL_PARAM,
     LIR_OPERAND_TYPE_ACTUAL_PARAM,
@@ -137,7 +138,7 @@ typedef struct lir_operand {
 typedef struct {
     string ident;
     type_t type; // 原始类型存储(包含指针深度等数据)
-    int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
+//    int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
 } lir_var_decl;
 
 /**
@@ -146,8 +147,7 @@ typedef struct {
 typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
-    uint8_t reg_index; // reg list index, 寄存器分配, 及时是同一个变量,也会有时在寄存器中,有时在内存中
-    uint16_t stack_slot; // 从 0 开始增长的栈位置。
+//    uint8_t reg_index; // reg list index, 寄存器分配, 及时是同一个变量,也会有时在寄存器中,有时在内存中
     lir_var_decl *decl; // local 如果为 nil 就是外部符号引用
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
     bool indirect_addr; // &a 对变量进行解引用操作
@@ -217,7 +217,7 @@ typedef struct lir_op {
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
     lir_operand *result; // 参数3
-    int id; // 编号
+    int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 } lir_op;
 
 typedef struct {
@@ -280,7 +280,7 @@ typedef struct closure_t {
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]
     slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
     table *interval_table; // key 包括 fixed register as 和 variable.ident
-    int interval_offset; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
+    int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
     string name;
@@ -289,12 +289,11 @@ typedef struct closure_t {
     struct closure_t *parent;
     list *operations; // 指令列表
 
-    table *local_var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
-    list *local_var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
-    list *formal_params; // 依旧为了堆栈分配
+    table *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
+    list *var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
+    list *formal_params; // 也是为了堆栈分配
 
-    uint stack_length; // 栈长度, byte, 等于局部变量的长度
-    uint stack_slot_offset; // 初始值为 0，用于寄存器 slot 分配
+    int stack_slot; // 初始值为 0，用于寄存器 slot 分配
 } closure_t;
 
 lir_operand *set_indirect_addr(lir_operand *operand);

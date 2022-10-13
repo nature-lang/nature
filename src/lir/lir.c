@@ -90,7 +90,7 @@ lir_operand *lir_new_temp_var_operand(closure_t *c, type_t type) {
 
     symbol_set_temp_ident(unique_ident, type);
     lir_var_decl *local = lir_new_var_decl(c, unique_ident, type);
-    list_push(c->local_var_decls, local);
+    list_push(c->var_decls, local);
 
     return LIR_NEW_OPERAND(LIR_OPERAND_TYPE_VAR, lir_new_var_operand(c, unique_ident));
 }
@@ -167,13 +167,13 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
 
     new->interval_table = table_new();
 
-    new->local_var_decl_table = table_new();
-    new->local_var_decls = list_new();
+    new->var_decl_table = table_new();
+    new->var_decls = list_new();
     new->formal_params = list_new();
-    new->stack_length = 0;
-    new->stack_slot_offset = 0;
+//    new->stack_length = 0;
+    new->stack_slot = 0;
 
-    new->interval_offset = alloc_reg_count() + 1;
+    new->interval_count = alloc_reg_count() + 1;
 
     return new;
 }
@@ -230,10 +230,10 @@ lir_operand_var *lir_new_var_operand(closure_t *c, char *ident) {
     lir_operand_var *var = NEW(lir_operand_var);
     var->ident = ident;
     var->old = ident;
-    var->reg_index = 0;
+//    var->reg_index = 0;
 
     // 1. 读取符号信息
-    lir_var_decl *local = table_get(c->local_var_decl_table, ident);
+    lir_var_decl *local = table_get(c->var_decl_table, ident);
     var->decl = local;
     var->type_base = local->type.base;
 
@@ -247,13 +247,11 @@ lir_operand_var *lir_new_var_operand(closure_t *c, char *ident) {
  * @return
  */
 lir_var_decl *lir_new_var_decl(closure_t *c, char *ident, type_t type) {
-    lir_var_decl *local = NEW(lir_var_decl);
-    local->type = type;
-    local->stack_offset = NEW(uint16_t);
-    *local->stack_offset = 0;
-    local->ident = ident;
-    table_set(c->local_var_decl_table, ident, local);
-    return local;
+    lir_var_decl *var = NEW(lir_var_decl);
+    var->type = type;
+    var->ident = ident;
+    table_set(c->var_decl_table, ident, var);
+    return var;
 }
 
 lir_operand *lir_new_empty_operand() {
