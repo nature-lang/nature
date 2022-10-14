@@ -4,22 +4,47 @@
 #include "utils/helper.h"
 #include "assert.h"
 
-static void interval_insert_mov(closure_t *c, int id, interval_t *src_i, interval_t *dst_i) {
+static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to) {
+    if (to->spilled) {
+        return false;
+    }
+
+    if (block_regs[to->assigned] == 0) {
+        return false;
+    }
+
+    if (block_regs[to->assigned] == 1 && to->assigned == from->assigned) {
+        return false;
+    }
+
+    return true;
+}
+
+static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i) {
+    LIST_FOR(block->operations) {
+        lir_op *op = LIST_VALUE();
+        if (op->id < id) {
+            continue;
+        }
+
+        // last->id < id < op->id
+        lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
+        lir_operand *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
+        lir_op *mov_op = lir_op_move(dst, src);
+        list_insert_before(block->operations, LIST_NODE(), mov_op);
+        return;
+    }
+}
+
+static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *block = SLICE_VALUE();
-        LIST_FOR(block->operations) {
-            lir_op *op = LIST_VALUE();
-            if (op->id < id) {
-                continue;
-            }
-
-            // last->id < id < op->id
-            lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
-            lir_operand *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
-            lir_op *mov_op = lir_op_move(dst, src);
-            list_insert_before(block->operations, LIST_NODE(), mov_op);
-            return;
+        // TODO insert_id 具体在什么位置？
+        if (block->first_op->id > insert_id || block->last_op->id < insert_id) {
+            continue;
         }
+
+        block_insert_mov(block, insert_id, src_i, dst_i);
     }
 }
 
@@ -527,20 +552,23 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     table_set(c->interval_table, var->ident, child);
 
     // mov id = position - 1
-    interval_insert_mov(c, position - 1, i, child);
+    closure_insert_mov(c, position - 1, i, child);
 
     // 将 child 加入 parent 的 children 中,
     // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
-    LIST_FOR(parent->children) {
-        interval_t *current = LIST_VALUE();
-        // TODO parent children is empty
-        if (current->index == i->index) {
-            list_insert_after(parent->children, LIST_NODE(), child);
-            break;
+    if (list_empty(parent->children)) {
+        list_push(parent->children, child);
+    } else {
+        LIST_FOR(parent->children) {
+            interval_t *current = LIST_VALUE();
+            if (current->index == i->index) {
+                list_insert_after(parent->children, LIST_NODE(), child);
+                break;
+            }
         }
     }
 
-    // 切割 range, TODO first_range.from must == first use position
+    // 切割 range, TODO first_range.from must == first def position?
     LIST_FOR(i->ranges) {
         interval_range_t *range = LIST_VALUE();
         if (!in_range(range, position)) {
@@ -552,17 +580,17 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         // tips: position 必定不等于 range->to, 因为 to 是 excluded
         if (position == range->from) {
             child->ranges = list_split(i->ranges, LIST_NODE());
-            break;
+        } else {
+            interval_range_t *new_range = NEW(interval_range_t);
+            new_range->from = position;
+            new_range->to = range->to;
+            range->to = position;
+
+            // 将 new_range 插入到 ranges 中
+            list_insert_after(i->ranges, LIST_NODE(), new_range);
+            child->ranges = list_split(i->ranges, LIST_NODE());
         }
 
-        interval_range_t *new_range = NEW(interval_range_t);
-        new_range->from = position;
-        new_range->to = range->to;
-        range->to = position;
-
-        // 将 new_range 插入到 ranges 中
-        list_insert_after(i->ranges, LIST_NODE(), new_range);
-        child->ranges = list_split(i->ranges, LIST_NODE());
         break;
     }
 
@@ -617,10 +645,20 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
 
 
 void resolve_data_flow(closure_t *c) {
+    // TODO check if block is empty (only label and branch)
+
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *from = SLICE_VALUE();
         for (int i = 0; i < from->succs->count; ++i) {
             basic_block_t *to = from->succs->take[i];
+
+            resolver_t r = {
+                    .from_list = slice_new(),
+                    .to_list = slice_new(),
+                    .insert_block = NULL,
+                    .insert_id = 0,
+            };
+
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
             for (int j = 0; j < to->live_in->count; ++j) {
                 lir_operand_var *var = to->live_in->take[j];
@@ -633,12 +671,92 @@ void resolve_data_flow(closure_t *c) {
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
                 // 因此需要 link from and to interval
                 if (from_interval != to_interval) {
-                    // TODO add_mapping
+                    slice_push(r.from_list, from_interval);
+                    slice_push(r.to_list, to_interval);
                 }
             }
 
             // 对一条边的处理完毕，可能涉及多个寄存器，stack, 也有可能一个寄存器被多次操作,所以需要处理覆盖问题
             // 同一条边上的所有 resolve 操作只插入在同一块中，要么是在 from、要么是在 to。 tips: 所有的 critical edge 都已经被处理了
+            resolve_find_insert_pos(&r, from, to);
+
+            // 按顺序插入 move
+            resolve_mappings(c, &r);
         }
     }
+}
+
+interval_t *interval_child_at(interval_t *i, int op_id) {
+    if (list_empty(i->children)) {
+        return i;
+    }
+
+    if (i->first_range->from <= op_id && i->last_range->to > op_id) {
+        return i;
+    }
+
+
+    LIST_FOR(i->children) {
+        interval_t *child = LIST_VALUE();
+        if (child->first_range->from <= op_id && child->last_range->to > op_id) {
+            return child;
+        }
+    }
+
+    assert(false && "op_id not in interval");
+}
+
+/**
+ * 可能存在类似下面这样的冲突，此时无论先操作哪个移动指令都会造成 overwrite
+ * mov rax -> rcx
+ * mov rcx -> rax
+ * 修改为
+ * mov rax -> stack
+ * mov stack -> rcx
+ * mov rcx -> rax
+ * @param c
+ * @param r
+ */
+void resolve_mappings(closure_t *c, resolver_t *r) {
+    // block all from interval, value 保持被引用的次数
+    int8_t block_regs[UINT8_MAX] = {0};
+    SLICE_FOR(r->from_list, interval_t) {
+        interval_t *i = SLICE_VALUE();
+        if (i->assigned) {
+            block_regs[i->assigned] += 1;
+        }
+    }
+
+    int spill_candidate = -1;
+    while (r->from_list > 0) {
+        bool processed = false;
+        for (int i = 0; i < r->from_list->count; ++i) {
+            interval_t *from = r->from_list->take[i];
+            interval_t *to = r->to_list->take[i];
+
+            if (resolve_blocked(block_regs, from, to)) {
+                // this interval cannot be processed now because target is not free
+                // it starts in a register, so it is a possible candidate for spilling
+                spill_candidate = i;
+                continue;
+            }
+
+            block_insert_mov(r->insert_block, r->insert_id, from, to);
+
+            if (from->assigned) {
+                block_regs[from->assigned] -= 1;
+            }
+
+            slice_remove(r->from_list, i);
+            slice_remove(r->to_list, i);
+
+            processed = true;
+        }
+
+        // 已经卡死了，那进行再多次尝试也是没有意义的
+        if (!processed) {
+
+        }
+    }
+
 }

@@ -47,6 +47,14 @@ typedef struct interval_t {
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
+
+typedef struct {
+    slice_t *from_list;
+    slice_t *to_list;
+    basic_block_t *insert_block;
+    int insert_id;
+} resolver_t;
+
 /**
  * 标记循环路线和每个基本块是否处于循环中，以及循环的深度
  * @param c
@@ -147,5 +155,9 @@ interval_t *interval_child_at(interval_t *i, int op_id);
 use_pos_t *interval_must_reg_pos(interval_t *i);
 
 void resolve_data_flow(closure_t *c);
+
+interval_t *resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to);
+
+void resolve_mappings(closure_t *c, resolver_t *r);
 
 #endif
