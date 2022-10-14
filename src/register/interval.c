@@ -4,6 +4,32 @@
 #include "utils/helper.h"
 #include "assert.h"
 
+static interval_t *interval_new_child(closure_t *c, interval_t *i) {
+    interval_t *child = interval_new(c);
+    interval_t *parent = i;
+    if (parent->parent) {
+        parent = parent->parent;
+    }
+
+    if (i->var) {
+        lir_operand_var *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
+        child->var = var;
+        table_set(c->interval_table, var->ident, child);
+    } else {
+        assert(parent->fixed);
+        child->fixed = parent->fixed;
+        child->assigned = parent->assigned;
+        table_set(c->interval_table, alloc_regs[child->assigned]->name, child);
+    }
+
+    child->parent = parent;
+    child->reg_hint = parent;
+    child->alloc_type = parent->alloc_type;
+    child->stack_slot = parent->stack_slot;
+
+    return child;
+}
+
 static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to) {
     if (to->spilled) {
         return false;
@@ -533,29 +559,17 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(i->last_range->to < position);
     assert(i->first_range->from < position);
 
-    interval_t *child = interval_new(c);
-    lir_operand_var *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
-    child->var = var;
-
-    interval_t *parent = i;
-    if (i->parent != NULL) {
-        parent = i->parent;
-    }
-    child->parent = parent;
-    child->reg_hint = parent;
-    if (i->fixed) {
-        child->fixed = parent->fixed;
-        child->assigned = parent->assigned;
-    }
-    child->alloc_type = parent->alloc_type;
-    child->stack_slot = parent->stack_slot;
-    table_set(c->interval_table, var->ident, child);
+    interval_t *child = interval_new_child(c, i);
 
     // mov id = position - 1
     closure_insert_mov(c, position - 1, i, child);
 
     // 将 child 加入 parent 的 children 中,
     // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
+    interval_t *parent = i;
+    if (parent->parent) {
+        parent = parent->parent;
+    }
     if (list_empty(parent->children)) {
         list_push(parent->children, child);
     } else {
@@ -615,7 +629,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
  * 所有 slit_child 都溢出到同一个堆栈插槽（存储在_canonical_spill_slot中）
  * @param i
  */
-void interval_spill_stack(closure_t *c, interval_t *i) {
+void interval_spill_slot(closure_t *c, interval_t *i) {
     assert(i->stack_slot);
 
     i->assigned = 0;
@@ -645,8 +659,6 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
 
 
 void resolve_data_flow(closure_t *c) {
-    // TODO check if block is empty (only label and branch)
-
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *from = SLICE_VALUE();
         for (int i = 0; i < from->succs->count; ++i) {
@@ -663,8 +675,12 @@ void resolve_data_flow(closure_t *c) {
             for (int j = 0; j < to->live_in->count; ++j) {
                 lir_operand_var *var = to->live_in->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
+
                 // 判断是否在 form->to edge 最终的 interval
                 interval_t *from_interval = interval_child_at(parent_interval, from->last_op->id);
+
+
+
                 interval_t *to_interval = interval_child_at(parent_interval, to->first_op->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
@@ -718,6 +734,10 @@ interval_t *interval_child_at(interval_t *i, int op_id) {
  * @param r
  */
 void resolve_mappings(closure_t *c, resolver_t *r) {
+    if (r->from_list->count == 0) {
+        return;
+    }
+
     // block all from interval, value 保持被引用的次数
     int8_t block_regs[UINT8_MAX] = {0};
     SLICE_FOR(r->from_list, interval_t) {
@@ -755,8 +775,41 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
 
         // 已经卡死了，那进行再多次尝试也是没有意义的
         if (!processed) {
+            assert(spill_candidate != -1 && "cannot resolve mappings");
+            interval_t *from = r->from_list->take[spill_candidate];
+            interval_t *spill_child = interval_new_child(c, from);
+            interval_add_range(c, spill_child, 1, 2);
+            interval_spill_slot(c, spill_child);
 
+            // insert mov
+            block_insert_mov(r->insert_block, r->insert_id, from, spill_child);
+
+            // from update
+            r->from_list->take[spill_candidate] = spill_child;
+
+            // unlock interval reg
+            block_regs[from->assigned] -= 1;
         }
     }
 
+}
+
+void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to) {
+    if (from->succs->count <= 1) {
+        // from only one succ
+        // insert before branch
+        r->insert_block = from;
+
+        lir_op *last_op = from->last_op;
+        if (lir_op_is_branch(last_op)) {
+            // insert before last op
+            r->insert_id = last_op->id - 1;
+        } else {
+            r->insert_id = last_op->id + 1;
+        }
+
+    } else {
+        r->insert_block = to;
+        r->insert_id = from->first_op->id - 1;
+    }
 }

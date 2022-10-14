@@ -148,7 +148,7 @@ int interval_next_intersection(interval_t *current, interval_t *select);
  */
 int interval_next_use_position(interval_t *i, int after_position);
 
-void interval_spill_stack(closure_t *c, interval_t *i);
+void interval_spill_slot(closure_t *c, interval_t *i);
 
 interval_t *interval_child_at(interval_t *i, int op_id);
 
@@ -156,7 +156,7 @@ use_pos_t *interval_must_reg_pos(interval_t *i);
 
 void resolve_data_flow(closure_t *c);
 
-interval_t *resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to);
+void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to);
 
 void resolve_mappings(closure_t *c, resolver_t *r);
 

@@ -338,7 +338,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     if (use_pos[alloc_id] < first_use) {
         //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
         // assign spill slot to current
-        interval_spill_stack(NULL, a->current);
+        interval_spill_slot(NULL, a->current);
 
         // 一旦 current spill 到了内存中，则后续就再也不会处理了
         // 所以 current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
@@ -428,6 +428,6 @@ void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) 
     }
 
     // child to slot
-    interval_spill_stack(c, child);
+    interval_spill_slot(c, child);
 }
 
