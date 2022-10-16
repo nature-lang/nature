@@ -36,7 +36,7 @@ string lir_operand_to_string(lir_operand *operand) {
         case LIR_OPERAND_ACTUAL_PARAM: {
             return lir_operand_actual_param_to_string((lir_operand_actual_param *) operand->value);
         }
-        case LIR_OPERAND_PHI: {
+        case LIR_OPERAND_PHI_BODY: {
             return lir_operand_phi_body_to_string(operand->value);
         }
         default: {

@@ -1,4 +1,5 @@
 #include "interval.h"
+#include "src/ssa.h"
 #include "utils/list.h"
 #include "utils/stack.h"
 #include "utils/helper.h"
@@ -185,8 +186,8 @@ void interval_loop_detection(closure_t *c) {
     list *work_list = list_new();
     list_push(work_list, c->entry);
 
-    lir_basic_blocks loop_headers = {.count = 0};
-    lir_basic_blocks loop_ends = {.count = 0};
+    slice_t *loop_headers = slice_new();
+    slice_t *loop_ends = slice_new();
 
     // 1. 探测出循环头与循环尾部
     while (!list_empty(work_list)) {
@@ -205,12 +206,12 @@ void interval_loop_detection(closure_t *c) {
                 // 当前 succ 是 loop_headers, loop_headers 的 tree_high 为 loop_index
                 succ->loop.index = succ->loop.tree_high;
                 succ->loop.index_list[succ->loop.depth++] = succ->loop.tree_high;
-                loop_headers.list[loop_headers.count++] = succ;
+                slice_push(loop_headers, succ);
 
                 // 当前 block 是 loop_ends, loop_ends, index = loop_headers.index
                 block->loop.index = succ->loop.tree_high;
                 block->loop.index_list[block->loop.depth++] = succ->loop.tree_high;
-                loop_ends.list[loop_ends.count++] = block;
+                slice_push(loop_ends, block);
                 continue;
             }
 
@@ -226,8 +227,8 @@ void interval_loop_detection(closure_t *c) {
     }
 
     // 2. 标号, 这里有一个严肃的问题，如果一个节点有两个前驱时，也能够被标号吗？如果是普通结构不考虑 goto 的情况下，则不会初选这种 cfg
-    for (int i = 0; i < loop_ends.count; ++i) {
-        basic_block_t *end = loop_ends.list[i];
+    for (int i = 0; i < loop_ends->count; ++i) {
+        basic_block_t *end = loop_ends->take[i];
         list_push(work_list, end);
         table *exist_table = table_new();
         table_set(exist_table, itoa(end->label_index), end);
@@ -672,15 +673,15 @@ void resolve_data_flow(closure_t *c) {
             };
 
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
+            // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live_in
+            // live_in not contain phi def interval
             for (int j = 0; j < to->live_in->count; ++j) {
                 lir_operand_var *var = to->live_in->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
+                assert(parent_interval);
 
                 // 判断是否在 form->to edge 最终的 interval
                 interval_t *from_interval = interval_child_at(parent_interval, from->last_op->id);
-
-
-
                 interval_t *to_interval = interval_child_at(parent_interval, to->first_op->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
@@ -691,6 +692,32 @@ void resolve_data_flow(closure_t *c) {
                     slice_push(r.to_list, to_interval);
                 }
             }
+
+            // phi def interval(label op -> phi op -> ... -> phi op -> other op)
+            list_node *current = list_first(to->operations)->succ;
+            while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+                lir_op *op = OP(current);
+                //  to phi.inputOf(pred def) will is from interval
+                // TODO ssa body constant handle
+                lir_operand_var *var = ssa_phi_body_of(op->first->value, to->preds, from);
+                interval_t *temp_interval = table_get(c->interval_table, var->ident);
+                assert(temp_interval);
+                interval_t *from_interval = interval_child_at(temp_interval, from->last_op->id);
+
+                lir_operand_var *def = op->result->value; // result must assign reg
+                temp_interval = table_get(c->interval_table, def->ident);
+                assert(temp_interval);
+                interval_t *to_interval = interval_child_at(temp_interval, to->first_op->id);
+                // 因为 from 和 interval 是相连接的 edge,
+                // 如果from_interval != to_interval(指针对比即可)
+                // 则说明在其他 edge 上对 interval 进行了 spilt/reload
+                // 因此需要 link from and to interval
+                if (from_interval != to_interval) {
+                    slice_push(r.from_list, from_interval);
+                    slice_push(r.to_list, to_interval);
+                }
+            }
+
 
             // 对一条边的处理完毕，可能涉及多个寄存器，stack, 也有可能一个寄存器被多次操作,所以需要处理覆盖问题
             // 同一条边上的所有 resolve 操作只插入在同一块中，要么是在 from、要么是在 to。 tips: 所有的 critical edge 都已经被处理了
@@ -723,6 +750,9 @@ interval_t *interval_child_at(interval_t *i, int op_id) {
 }
 
 /**
+ * 由于 ssa resolve 的存在，所以存在从 interval A(stack A) 移动到 interval B(stackB)
+ * 但是大多数寄存器不支持从 stack 移动到 stack，所以必须给 phi def 添加一个寄存器，也就是 use_pos kind = MUST
+ *
  * 可能存在类似下面这样的冲突，此时无论先操作哪个移动指令都会造成 overwrite
  * mov rax -> rcx
  * mov rcx -> rax

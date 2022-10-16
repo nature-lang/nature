@@ -221,7 +221,7 @@ lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
         slice_push(phi_body, LIR_NEW_VAR_OPERAND(var->ident));
     }
 
-    operand->type = LIR_OPERAND_PHI;
+    operand->type = LIR_OPERAND_PHI_BODY;
     operand->value = phi_body;
     return operand;
 }
@@ -289,7 +289,7 @@ uint8_t lir_operand_sizeof(lir_operand *operand) {
     return type_base_sizeof(lir_operand_type_base(operand));
 }
 
-slice_t *lir_vars_by_operand(lir_operand *operand) {
+slice_t *lir_operand_vars(lir_operand *operand) {
     slice_t *result = slice_new();
     if (!operand) {
         return result;

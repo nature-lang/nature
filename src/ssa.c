@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "ssa.h"
 
@@ -345,11 +346,11 @@ void ssa_use_def(closure_t *c) {
             lir_op *op = LIST_VALUE();
 
             // first param (use)
-            slice_t *vars = lir_vars_by_operand(op->first);
+            slice_t *vars = lir_operand_vars(op->first);
             OPERAND_VAR_USE(vars)
 
             // second param 可能包含 actual param
-            vars = lir_vars_by_operand(op->second);
+            vars = lir_operand_vars(op->second);
             OPERAND_VAR_USE(vars)
 
             // def
@@ -480,7 +481,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
             continue;
         }
 
-        slice_t *vars = lir_vars_by_operand(op->first);
+        slice_t *vars = lir_operand_vars(op->first);
         if (vars->count > 0) {
             SLICE_FOR(vars, lir_operand_var) {
                 lir_operand_var *var = SLICE_VALUE();
@@ -490,7 +491,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
             }
         }
 
-        vars = lir_vars_by_operand(op->second);
+        vars = lir_operand_vars(op->second);
         if (vars->count > 0) {
             SLICE_FOR(vars, lir_operand_var) {
                 lir_operand_var *var = SLICE_VALUE();
@@ -509,22 +510,25 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
         current = current->succ;
     }
 
+    // phi body 编号
     // 遍历当前块的 cfg 后继为 phi body 编号, 前序遍历，默认也会从左往右遍历的，应该会满足的吧！
     // 最后是否所有的 phi_body 中的每一个值都会被命名引用，是否有遗漏？
     // 不会，如果 A->B->D / A->C->D / A -> F -> E -> D
     // 假设在 D 是 A 和 E 的支配边界，
     // 当且仅当 x = live_in(D) 时
     // D 中变量 x = phi(x of pred-B, x of pred-C，x of pred-E)
-    // 当计算到 B 时，即使变量，没有在 b 中定义，只要函数的作用域还在，在 stack 中也一定能找到的变量重命名，无非是同名而已！！！
+    // 当计算到 B 时，即使变量，没有在 B 中定义，只要函数的作用域还在，在 stack 中也一定能找到的变量重命名，无非是同名而已！！！
+    // phi body 生成时是根据 block->pred count 生成的，block->pred-N 的索引 等于对应的 phi_body 的索引
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->operations->front->succ;
         list_node *succ_node = succ_block->operations->front->succ;
-        while (succ_node->value != NULL && ((lir_op *) succ_node->value)->code == LIR_OPCODE_PHI) {
-            lir_op *succ_op = succ_node->value;
+        while (succ_node->value != NULL && OP(succ_node)->code == LIR_OPCODE_PHI) {
+            lir_op *succ_op = OP(succ_node);
             slice_t *phi_body = succ_op->first->value;
-            lir_operand_var *var = phi_body->take[phi_body->count++];
+            // block 位于 succ 的 phi_body 的具体位置
+            lir_operand_var *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
             var_number_stack *stack = table_get(stack_table, var->ident);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
@@ -628,6 +632,20 @@ bool ssa_var_belong(lir_operand_var *var, slice_t *vars) {
     }
 
     return false;
+}
+
+lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide) {
+    int index = -1;
+    for (int i = 0; i < preds->count; ++i) {
+        basic_block_t *p = preds->take[i];
+        if (p == guide) {
+            index = i;
+        }
+    }
+    assert(index >= 0 && "preds not contain guide");
+    assert(phi_body->count > index);
+
+    return phi_body->take[index];
 }
 
 

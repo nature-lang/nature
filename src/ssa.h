@@ -42,9 +42,9 @@ void ssa_use_def(closure_t *c);
 
 void ssa_live(closure_t *c);
 
-slice_t * ssa_calc_live_out(closure_t *c, basic_block_t *block);
+slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block);
 
-slice_t * ssa_calc_live_in(closure_t *c, basic_block_t *block);
+slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block);
 
 bool ssa_live_changed(slice_t *old, slice_t *new);
 
@@ -65,5 +65,7 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block);
 bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom);
 
 bool ssa_var_belong(lir_operand_var *var, slice_t *vars);
+
+lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide);
 
 #endif //NATURE_SRC_SSA_H_
