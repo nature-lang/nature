@@ -189,42 +189,47 @@ static bool in_range(interval_range_t *range, int position) {
  * @param c
  */
 void interval_loop_detection(closure_t *c) {
-    c->entry->loop.visited = true;
-    c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
     list *work_list = list_new();
     list_push(work_list, c->entry);
+    c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
 
     slice_t *loop_headers = slice_new();
     slice_t *loop_ends = slice_new();
+    int8_t loop_count = 0;
 
-    // 1. 探测出循环头与循环尾部
+    // 1. 探测出循环头与循环尾部(主要是尾部)
     while (!list_empty(work_list)) {
-        basic_block_t *block = list_pop(work_list);
+        basic_block_t *current = list_pop(work_list);
+        c->entry->loop.visited = true;
+        c->entry->loop.active = true;
 
         // 是否会出现 succ 的 flag 是 visited?
         // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
         // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
         slice_t *forward_succs = slice_new();
         slice_t *backward_succs = slice_new();
-        for (int i = 0; i < block->succs->count; ++i) {
-            basic_block_t *succ = block->succs->take[i];
-            succ->loop.tree_high = block->loop.tree_high + 1;
+        for (int i = 0; i < current->succs->count; ++i) {
+            basic_block_t *succ = current->succs->take[i];
+            succ->loop.tree_high = current->loop.tree_high + 1; // 广度遍历中的 tree_high
 
             // 如果发现循环, backward branches
             if (succ->loop.active) {
-                // 当前 succ 是 loop_headers, loop_headers 的 tree_high 为 loop_index
-                succ->loop.header = true;
-                succ->loop.index = succ->loop.tree_high;
-                succ->loop.index_list[succ->loop.depth++] = succ->loop.tree_high;
-                slice_push(loop_headers, succ);
+                if (!succ->loop.header) {
+                    // 当前 succ 是 loop_headers, loop_headers 的 tree_high 为 loop_index
+                    succ->loop.header = true;
+                    succ->loop.index = loop_count++;
+//                    succ->loop.index_list[succ->loop.depth++] = succ->loop.index; //
+                    slice_push(loop_headers, succ);
+                }
 
-                // 当前 block 是 loop_ends, loop_ends, index = loop_headers.index
-                block->loop.index = succ->loop.tree_high; // TODO 此时配置的 index 不准？可能不是最深的 index
-                block->loop.index_list[block->loop.depth++] = succ->loop.tree_high;
-                block->loop.end = true;
-                slice_push(loop_ends, block);
 
-                slice_push(backward_succs, succ);
+                // 当前 current 是 loop_ends, loop_ends, index = loop_headers.index
+                current->loop.index = succ->loop.index;
+//                current->loop.index_list[current->loop.depth++] = succ->loop.index;
+                current->loop.end = true;
+                slice_push(loop_ends, current);
+
+                current->backward_succ = succ; // current is loop end, succ is loop header
                 continue;
             }
 
@@ -233,10 +238,9 @@ void interval_loop_detection(closure_t *c) {
             succ->loop.visited = true;
         }
 
-        block->forward_succs = forward_succs;
-        block->backward_succs = backward_succs;
-        // 所有 succ 都处理完毕，添加 active 标志
-        block->loop.active = true;
+        current->forward_succs = forward_succs;
+        // 所有 succ 都处理完毕，清除 active 标志
+        current->loop.active = false;
     }
 
     /**
@@ -250,26 +254,29 @@ void interval_loop_detection(closure_t *c) {
         table_set(handled, itoa(end->label_index), end);
 
         while (!list_empty(work_list)) {
-            basic_block_t *block = list_pop(work_list);
+            basic_block_t *current = list_pop(work_list);
 
-            // TODO break?
-            if (block != end && block->loop.index == end->loop.index) {
+            // value: index
+            current->loop.index_list[current->loop.depth++] = end->loop.index;
+
+
+            // loop header 不进行 preds 计算
+            if (current == end->backward_succ) {
+                // current is loop header
                 continue;
             }
 
-            // 标号 key: depth, value: index
-            block->loop.index_list[block->loop.depth++] = end->loop.index;
-
-            // 基于 preds 向后遍历，找到该循环的所有 block
-            for (int k = 0; k < block->preds->count; ++k) {
-                basic_block_t *pred = block->preds->take[k];
+            // 基于 preds 向后遍历，找到该循环的所有 current
+            for (int k = 0; k < current->preds->count; ++k) {
+                basic_block_t *pred = current->preds->take[k];
 
                 // 判断是否已经入过队(标号)
                 if (table_exist(handled, itoa(pred->label_index))) {
                     continue;
                 }
+
                 list_push(work_list, pred);
-                table_set(handled, itoa(block->label_index), block);
+                table_set(handled, itoa(current->label_index), current);
             }
         }
     }

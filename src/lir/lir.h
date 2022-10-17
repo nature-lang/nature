@@ -251,7 +251,7 @@ typedef struct basic_block_t {
     slice_t *preds;
     slice_t *succs;
     slice_t *forward_succs; // 当前块正向的 succ 列表
-    slice_t *backward_succs; // 向后移动 succ 列表
+    struct basic_block_t *backward_succ; // loop end
     uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
     slice_t *use;
