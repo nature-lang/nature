@@ -156,7 +156,7 @@ void build(char *build_entry) {
     symbol_ident_table_init();
     var_unique_count = 0;
 
-    table *module_table = table_new();
+    table_t *module_table = table_new();
     slice_t *module_list = slice_new();
     module_t *root = module_front_build(source_path, true);
     slice_push(module_list, root);

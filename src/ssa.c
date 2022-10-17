@@ -216,7 +216,7 @@ void ssa_add_phi(closure_t *c) {
                 // add phi (x1, x2, x3) => x
                 lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, LIR_NEW_VAR_OPERAND(var->ident));
                 lir_operand *first_param = lir_new_phi_body(var, df_block->preds->count);
-                lir_op *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
+                lir_op_t *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
 
 
                 // insert to list(可能只有一个 label )
@@ -232,7 +232,7 @@ void ssa_add_phi(closure_t *c) {
  */
 slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
     slice_t *live_out = slice_new();
-    table *exist_var = table_new(); // basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ = block->succs->take[i];
@@ -256,7 +256,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
  */
 slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     slice_t *live_in = slice_new();
-    table *exist_var = table_new(); // basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     SLICE_FOR(block->use, lir_operand_var) {
         lir_operand_var *var = SLICE_VALUE();
@@ -296,7 +296,7 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     if (old->count != new->count) {
         return true;
     }
-    table *var_count = table_new();
+    table_t *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
         string ident = ((lir_operand_var *) old->take[i])->ident;
         table_set(var_count, ident, old->take[i]);
@@ -331,19 +331,19 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
  */
 void ssa_use_def(closure_t *c) {
     // 可能出现 B0 处未定义，但是直接使用,也需要计入到符号表中
-    table *exist_var = table_new();
+    table_t *exist_var = table_new();
 
     for (int label = 0; label < c->blocks->count; ++label) {
         slice_t *use = slice_new();
         slice_t *def = slice_new();
 
-        table *exist_use = table_new();
-        table *exist_def = table_new();
+        table_t *exist_use = table_new();
+        table_t *exist_def = table_new();
 
         basic_block_t *block = c->blocks->take[label];
 
         LIST_FOR(block->operations) {
-            lir_op *op = LIST_VALUE();
+            lir_op_t *op = LIST_VALUE();
 
             // first param (use)
             slice_t *vars = lir_operand_vars(op->first);
@@ -354,8 +354,8 @@ void ssa_use_def(closure_t *c) {
             OPERAND_VAR_USE(vars)
 
             // def
-            if (op->result != NULL && op->result->type == LIR_OPERAND_VAR) {
-                lir_operand_var *var = (lir_operand_var *) op->result->value;
+            if (op->output != NULL && op->output->type == LIR_OPERAND_VAR) {
+                lir_operand_var *var = (lir_operand_var *) op->output->value;
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
                     table_set(exist_use, var->ident, var);
@@ -434,8 +434,8 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
 // 前序遍历各个基本块
 void ssa_rename(closure_t *c) {
-    table *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
-    table *stack_table = table_new(); // use 使用，判断使用的变量的名称
+    table_t *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
+    table_t *stack_table = table_new(); // use 使用，判断使用的变量的名称
 
     // 遍历所有名字变量,进行初始化
     SLICE_FOR(c->globals, lir_operand_var) {
@@ -463,19 +463,19 @@ void ssa_rename(closure_t *c) {
     }
 }
 
-void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stack_table) {
+void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
     // skip label code
 //    lir_op *current_op = block->operations->front->succ;
     list_node *current = block->operations->front->succ;
 
     // 当前块内的先命名
     while (current->value != NULL) {
-        lir_op *op = current->value;
+        lir_op_t *op = current->value;
         // phi body 由当前块的前驱进行编号
         if (op->code == LIR_OPCODE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_operand_var *) op->result->value, var_number_table,
+            uint8_t number = ssa_new_var_number((lir_operand_var *) op->output->value, var_number_table,
                                                 stack_table);
-            ssa_rename_var((lir_operand_var *) op->result->value, number);
+            ssa_rename_var((lir_operand_var *) op->output->value, number);
 
             current = current->succ;
             continue;
@@ -501,8 +501,8 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
             }
         }
 
-        if (op->result != NULL && op->result->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = (lir_operand_var *) op->result->value;
+        if (op->output != NULL && op->output->type == LIR_OPERAND_VAR) {
+            lir_operand_var *var = (lir_operand_var *) op->output->value;
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
         }
@@ -525,7 +525,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
 //        lir_op *succ_op = succ_block->operations->front->succ;
         list_node *succ_node = succ_block->operations->front->succ;
         while (succ_node->value != NULL && OP(succ_node)->code == LIR_OPCODE_PHI) {
-            lir_op *succ_op = OP(succ_node);
+            lir_op_t *succ_op = OP(succ_node);
             slice_t *phi_body = succ_op->first->value;
             // block 位于 succ 的 phi_body 的具体位置
             lir_operand_var *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
@@ -548,9 +548,9 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
     // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
     list_node *current_node = block->operations->front->succ;
     while (current_node->value != NULL) {
-        lir_op *current_op = current_node->value;
-        if (current_op->result != NULL && current_op->result->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = (lir_operand_var *) current_op->result->value;
+        lir_op_t *current_op = current_node->value;
+        if (current_op->output != NULL && current_op->output->type == LIR_OPERAND_VAR) {
+            lir_operand_var *var = (lir_operand_var *) current_op->output->value;
 
             // pop stack
             var_number_stack *stack = table_get(stack_table, var->old);
@@ -567,7 +567,7 @@ void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stac
  * @param stack_table
  * @return
  */
-uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table *stack_table) {
+uint8_t ssa_new_var_number(lir_operand_var *var, table_t *var_number_table, table_t *stack_table) {
     uint8_t *value = table_get(var_number_table, var->old);
     var_number_stack *stack = table_get(stack_table, var->old);
 
@@ -611,9 +611,9 @@ bool ssa_is_idom(slice_t *dom, basic_block_t *await) {
  */
 bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
     list_node *current = block->operations->front->succ;
-    while (current->value != NULL && ((lir_op *) current->value)->code == LIR_OPCODE_PHI) {
-        lir_op *op = current->value;
-        lir_operand_var *phi_var = op->result->value;
+    while (current->value != NULL && ((lir_op_t *) current->value)->code == LIR_OPCODE_PHI) {
+        lir_op_t *op = current->value;
+        lir_operand_var *phi_var = op->output->value;
         if (strcmp(phi_var->ident, var->ident) == 0) {
             return true;
         }
@@ -646,6 +646,30 @@ lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_
     assert(phi_body->count > index);
 
     return phi_body->take[index];
+}
+
+void live_remove(table_t *t, slice_t *lives, lir_operand_var *var) {
+    if (!table_exist(t, var->ident)) {
+        return;
+    }
+
+    for (int i = 0; i < lives->count; ++i) {
+        lir_operand_var *item = lives->take[i];
+        if (str_equal(item->ident, var->ident)) {
+            slice_remove(lives, i);
+            table_delete(t, var->ident);
+            break;
+        }
+    }
+}
+
+void live_add(table_t *t, slice_t *lives, lir_operand_var *var) {
+    if (table_exist(t, var->ident)) {
+        return;
+    }
+
+    slice_push(lives, var);
+    table_set(t, var->ident, var);
 }
 
 

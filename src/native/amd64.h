@@ -8,13 +8,13 @@
 #include <stdio.h>
 #include <math.h>
 
-typedef slice_t *(*amd64_native_fn)(closure_t *c, lir_op *op);
+typedef slice_t *(*amd64_native_fn)(closure_t *c, lir_op_t *op);
 
 slice_t *amd64_native_fn_formal_params(closure_t *c);
 
-slice_t *amd64_native_fn_begin(closure_t *c, lir_op *op);
+slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_fn_end(closure_t *c, lir_op *op);
+slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op);
 
 slice_t *amd64_native_closure(closure_t *c);
 
@@ -26,25 +26,25 @@ slice_t *amd64_native_block(closure_t *c, basic_block_t *block);
  * @param op
  * @return
  */
-slice_t *amd64_native_op(closure_t *c, lir_op *op);
+slice_t *amd64_native_op(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_label(closure_t *c, lir_op *op);
+slice_t *amd64_native_label(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_call(closure_t *c, lir_op *op);
+slice_t *amd64_native_call(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_return(closure_t *c, lir_op *op);
+slice_t *amd64_native_return(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_bal(closure_t *c, lir_op *op);
+slice_t *amd64_native_bal(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_cmp_goto(closure_t *c, lir_op *op);
+slice_t *amd64_native_cmp_goto(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_add(closure_t *c, lir_op *op);
+slice_t *amd64_native_add(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_sgt(closure_t *c, lir_op *op);
+slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_mov(closure_t *c, lir_op *op);
+slice_t *amd64_native_mov(closure_t *c, lir_op_t *op);
 
-slice_t *amd64_native_lea(closure_t *c, lir_op *op);
+slice_t *amd64_native_lea(closure_t *c, lir_op_t *op);
 
 
 // 返回下一个可用的寄存器(属于一条指令的 fixed_reg)

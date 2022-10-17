@@ -3,7 +3,7 @@
 
 #include "utils/table.h"
 
-table *env_table;
+table_t *env_table;
 
 void env_new(char *env_name, int capacity);
 

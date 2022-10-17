@@ -2,18 +2,18 @@
 #include "helper.h"
 #include "stdlib.h"
 
-void table_init(table *t) {
+void table_init(table_t *t) {
     t->count = 0;
     t->capacity = 0;
     t->entries = NULL;
 }
 
-void table_free(table *t) {
+void table_free(table_t *t) {
     void *_ = realloc(t, 0);
     table_init(t);
 }
 
-void *table_get(table *t, string key) {
+void *table_get(table_t *t, string key) {
     if (t->count == 0) {
         return NULL;
     }
@@ -26,7 +26,7 @@ void *table_get(table *t, string key) {
     return entry->value;
 }
 
-bool table_set(table *t, char *key, void *value) {
+bool table_set(table_t *t, char *key, void *value) {
     if (t->count + 1 > t->capacity * TABLE_MAX_LOAD) {
         int capacity = GROW_CAPACITY(t->capacity);
         table_adjust(t, capacity);
@@ -45,7 +45,7 @@ bool table_set(table *t, char *key, void *value) {
     return is_new_key;
 }
 
-void table_adjust(table *t, int capacity) {
+void table_adjust(table_t *t, int capacity) {
     // 创建一个新的 entries 并初始化
     table_entry *entries = (table_entry *) malloc(sizeof(table_entry) * capacity);
     for (int i = 0; i < capacity; ++i) {
@@ -124,13 +124,13 @@ uint32_t hash_string(const string key) {
     return hash;
 }
 
-table *table_new() {
-    table *t = malloc(sizeof(table));
+table_t *table_new() {
+    table_t *t = malloc(sizeof(table_t));
     table_init(t);
     return t;
 }
 
-bool table_exist(table *t, char *key) {
+bool table_exist(table_t *t, char *key) {
     if (t->count == 0) {
         return false;
     }

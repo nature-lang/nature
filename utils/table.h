@@ -15,25 +15,25 @@ typedef struct {
     int count;
     int capacity;
     table_entry *entries;
-} table;
+} table_t;
 
-table *table_new();
+table_t *table_new();
 
-void table_init(table *t);
+void table_init(table_t *t);
 
-void table_free(table *t);
+void table_free(table_t *t);
 
-bool table_exist(table *t, string key);
+bool table_exist(table_t *t, string key);
 
-void *table_get(table *t, string key);
+void *table_get(table_t *t, string key);
 
-bool table_set(table *t, string key, void *value);
+bool table_set(table_t *t, string key, void *value);
 
-bool table_delete(table *t, string key);
+bool table_delete(table_t *t, string key);
 
 table_entry *table_find_entry(table_entry *entries, int capacity, string key);
 
-void table_adjust(table *t, int capacity);
+void table_adjust(table_t *t, int capacity);
 
 uint32_t hash_string(const string key);
 

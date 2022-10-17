@@ -39,7 +39,7 @@
 // GC 相关函数
 #define RUNTIME_CALL_GC_NEW "gc_new"
 
-#define OP(_node) ((lir_op*)_node)
+#define OP(_node) ((lir_op_t*)_node)
 
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
@@ -218,22 +218,25 @@ typedef struct lir_op {
     lir_op_type code;
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
-    lir_operand *result; // 参数3
+    lir_operand *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
-} lir_op;
+} lir_op_t;
 
+/**
+ * 遍历期间，block 第一次被访问时打上 visited 标识
+ * 当 block 的所有 succs 被遍历后，该块同时被标记为 active
+ * visited 在 iteration 期间不会被清除,而 active 标志则会在处理完所有后继后清除？
+ */
 typedef struct {
-    uint8_t count;
-    struct basic_block_t *list[UINT8_MAX];
-} lir_basic_blocks;
-
-typedef struct {
-    uint8_t flag;
+    bool visited;
+    bool active;
+    bool header;
+    bool end;
     uint8_t tree_high;
-    uint8_t index_list[UINT8_MAX];
-    uint8_t index;
-    uint8_t depth;
-} loop_detection;
+    uint8_t index_list[UINT8_MAX]; // key(depth): value(loop index)
+    int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in innermost(最深的) loop
+    uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
+} loop_t;
 
 typedef struct basic_block_t {
     string name;
@@ -241,13 +244,14 @@ typedef struct basic_block_t {
 
     // op point
 //    list_node *phi; // fist_node 即可
-    lir_op *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
-    lir_op *last_op; // last_node 即可
+    lir_op_t *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+    lir_op_t *last_op; // last_node 即可
     list *operations;
 
     slice_t *preds;
     slice_t *succs;
-    slice_t *forward_succs;
+    slice_t *forward_succs; // 当前块正向的 succ 列表
+    slice_t *backward_succs; // 向后移动 succ 列表
     uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
 
     slice_t *use;
@@ -260,7 +264,7 @@ typedef struct basic_block_t {
     struct basic_block_t *idom; // 当前块的最近支配者
 
     // loop detection
-    loop_detection loop;
+    loop_t loop;
 } basic_block_t;
 
 /**
@@ -281,7 +285,7 @@ typedef struct closure_t {
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]
     slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
-    table *interval_table; // key 包括 fixed register as 和 variable.ident
+    table_t *interval_table; // key 包括 fixed register as 和 variable.ident
     int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
@@ -291,11 +295,13 @@ typedef struct closure_t {
     struct closure_t *parent;
     list *operations; // 指令列表
 
-    table *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
+    table_t *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
     list *var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
     list *formal_params; // 也是为了堆栈分配
 
     int stack_slot; // 初始值为 0，用于寄存器 slot 分配
+
+    // TODO loop blocks
 } closure_t;
 
 lir_operand *set_indirect_addr(lir_operand *operand);
@@ -338,28 +344,28 @@ lir_operand *lir_new_label_operand(string ident, bool is_local);
 
 lir_operand_actual_param *lir_new_actual_param();
 
-lir_op *lir_op_label(string name, bool is_local);
+lir_op_t *lir_op_label(string name, bool is_local);
 
-lir_op *lir_op_unique_label(string name);
+lir_op_t *lir_op_unique_label(string name);
 
-lir_op *lir_op_bal(lir_operand *label);
+lir_op_t *lir_op_bal(lir_operand *label);
 
 //lir_op *lir_new_push(lir_operand *operand);
-lir_op *lir_op_move(lir_operand *dst, lir_operand *src);
+lir_op_t *lir_op_move(lir_operand *dst, lir_operand *src);
 
-lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
+lir_op_t *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
 
-lir_op *lir_op_builtin_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_builtin_call(string name, lir_operand *result, int arg_count, ...);
 
-lir_op *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...);
 
-lir_op *lir_op_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_call(string name, lir_operand *result, int arg_count, ...);
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label);
 
-bool lir_op_is_branch(lir_op *op);
+bool lir_op_is_branch(lir_op_t *op);
 
-bool lir_op_is_call(lir_op *op);
+bool lir_op_is_call(lir_op_t *op);
 
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配

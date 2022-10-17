@@ -184,7 +184,7 @@ typedef struct {
 typedef struct {
     amd64_insts_t insts; // data 数据段，最终的叶子节点才会有该数据
     string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
-    table *succs;
+    table_t *succs;
 } amd64_opcode_tree_node_t;
 
 typedef struct {

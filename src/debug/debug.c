@@ -150,12 +150,12 @@ void debug_stmt(string type, ast_stmt stmt) {
     printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
 }
 
-void debug_lir(int line, lir_op *op) {
+void debug_lir(int line, lir_op_t *op) {
     printf("[DEBUG] LIR %d:\t", line);
     if (op->code == LIR_OPCODE_LABEL) {
         printf(
                 "%s:\n",
-                lir_operand_to_string(op->result)
+                lir_operand_to_string(op->output)
         );
         return;
     }
@@ -164,7 +164,7 @@ void debug_lir(int line, lir_op *op) {
             lir_op_type_to_debug[op->code],
             lir_operand_to_string(op->first),
             lir_operand_to_string(op->second),
-            lir_operand_to_string(op->result)
+            lir_operand_to_string(op->output)
     );
     printf("\n");
 }
@@ -198,13 +198,13 @@ void debug_basic_block(basic_block_t *block) {
 
     list_node *current = block->operations->front;
     while (current->value != NULL) {
-        lir_op *op = current->value;
+        lir_op_t *op = current->value;
         printf(
                 "\t\t%s\t%s , %s => %s\n",
                 lir_op_type_to_debug[op->code],
                 lir_operand_to_string(op->first),
                 lir_operand_to_string(op->second),
-                lir_operand_to_string(op->result)
+                lir_operand_to_string(op->output)
         );
         current = current->succ;
     }

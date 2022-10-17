@@ -35,7 +35,7 @@ lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t typ
     return operand;
 }
 
-lir_op *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
+lir_op_t *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...) {
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
 
@@ -50,7 +50,7 @@ lir_op *lir_op_runtime_call(char *name, lir_operand *result, int arg_count, ...)
     return lir_op_new(LIR_OPCODE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
-lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
+lir_op_t *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...) {
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
 
@@ -65,7 +65,7 @@ lir_op *lir_op_builtin_call(char *name, lir_operand *result, int arg_count, ...)
     return lir_op_new(LIR_OPCODE_BUILTIN_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
-lir_op *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
+lir_op_t *lir_op_call(char *name, lir_operand *result, int arg_count, ...) {
     lir_operand_actual_param *params_operand = malloc(sizeof(lir_operand_actual_param));
     params_operand->count = 0;
 
@@ -106,23 +106,23 @@ lir_operand *lir_new_label_operand(char *ident, bool is_local) {
     return operand;
 }
 
-lir_op *lir_op_label(char *ident, bool is_local) {
+lir_op_t *lir_op_label(char *ident, bool is_local) {
     return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_new_label_operand(ident, is_local));
 }
 
-lir_op *lir_op_unique_label(char *ident) {
+lir_op_t *lir_op_unique_label(char *ident) {
     return lir_op_label(LIR_UNIQUE_NAME(ident), true);
 }
 
-lir_op *lir_op_bal(lir_operand *label) {
+lir_op_t *lir_op_bal(lir_operand *label) {
     return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, label);
 }
 
-lir_op *lir_op_move(lir_operand *dst, lir_operand *src) {
+lir_op_t *lir_op_move(lir_operand *dst, lir_operand *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
 
-lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
+lir_op_t *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
     // 变量 copy,避免寄存器分配时相互粘连
     if (first != NULL && first->type == LIR_OPERAND_VAR) {
         lir_operand_var *operand_var = first->value;
@@ -140,11 +140,11 @@ lir_op *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, li
         result = LIR_NEW_OPERAND(LIR_OPERAND_VAR, DEEP_COPY(lir_operand_var, operand_var));
     }
 
-    lir_op *op = NEW(lir_op);
+    lir_op_t *op = NEW(lir_op_t);
     op->code = type;
     op->first = first;
     op->second = second;
-    op->result = result;
+    op->output = result;
 
 #ifdef DEBUG_COMPILER_LIR
     debug_lir(lir_line, op);
@@ -197,9 +197,12 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block->df = slice_new();
     basic_block->be_idom = slice_new();
     basic_block->loop.tree_high = 0;
-    basic_block->loop.index = 0;
+    basic_block->loop.index = -1;
     basic_block->loop.depth = 0;
-    basic_block->loop.flag = 0;
+    basic_block->loop.visited = false;
+    basic_block->loop.active = false;
+    basic_block->loop.header = false;
+    basic_block->loop.end = false;
 
     return basic_block;
 }
@@ -314,7 +317,7 @@ slice_t *lir_operand_vars(lir_operand *operand) {
     return result;
 }
 
-bool lir_op_is_branch(lir_op *op) {
+bool lir_op_is_branch(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ) {
         return true;
     }
@@ -322,7 +325,7 @@ bool lir_op_is_branch(lir_op *op) {
     return false;
 }
 
-bool lir_op_is_call(lir_op *op) {
+bool lir_op_is_call(lir_op_t *op) {
     if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RUNTIME_CALL) {
         return true;
     }

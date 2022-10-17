@@ -54,9 +54,9 @@ void ssa_add_phi(closure_t *c);
 
 void ssa_rename(closure_t *c);
 
-void ssa_rename_basic(basic_block_t *block, table *var_number_table, table *stack_table);
+void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *stack_table);
 
-uint8_t ssa_new_var_number(lir_operand_var *var, table *var_number_table, table *stack_table);
+uint8_t ssa_new_var_number(lir_operand_var *var, table_t *var_number_table, table_t *stack_table);
 
 void ssa_rename_var(lir_operand_var *var, uint8_t number);
 
@@ -67,5 +67,9 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom);
 bool ssa_var_belong(lir_operand_var *var, slice_t *vars);
 
 lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide);
+
+void live_add(table_t *t, slice_t *lives, lir_operand_var *var);
+
+void live_remove(table_t *t, slice_t *lives, lir_operand_var *var);
 
 #endif //NATURE_SRC_SSA_H_

@@ -250,7 +250,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         set_pos(free_pos, select->assigned, 0);
     }
 
-
+    // ssa 表单中不会因为 redefine 产生 lifetime hole，只会由于 if-else block 产生少量的 hole
     LIST_FOR(a->inactive) {
         interval_t *select = LIST_VALUE();
         int pos = interval_next_intersection(a->current, select);

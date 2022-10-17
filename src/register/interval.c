@@ -5,6 +5,7 @@
 #include "utils/helper.h"
 #include "assert.h"
 
+
 static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     interval_t *child = interval_new(c);
     interval_t *parent = i;
@@ -49,7 +50,7 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 
 static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i) {
     LIST_FOR(block->operations) {
-        lir_op *op = LIST_VALUE();
+        lir_op_t *op = LIST_VALUE();
         if (op->id < id) {
             continue;
         }
@@ -57,7 +58,7 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         // last->id < id < op->id
         lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
         lir_operand *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
-        lir_op *mov_op = lir_op_move(dst, src);
+        lir_op_t *mov_op = lir_op_move(dst, src);
         list_insert_before(block->operations, LIST_NODE(), mov_op);
         return;
     }
@@ -130,11 +131,12 @@ static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
     return result;
 }
 
-static slice_t *op_output_intervals(closure_t *c, lir_op *op) {
-    return operand_intervals(c, op->result);
+static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
+    // output 总是存储在 result 中
+    return operand_intervals(c, op->output);
 }
 
-static slice_t *op_input_intervals(closure_t *c, lir_op *op) {
+static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
     slice_t *result = operand_intervals(c, op->first);
     slice_t *temp = operand_intervals(c, op->second);
 
@@ -152,7 +154,7 @@ static slice_t *op_input_intervals(closure_t *c, lir_op *op) {
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, interval_t *i) {
+static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) {
     return USE_KIND_MUST;
 }
 
@@ -163,7 +165,7 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op *op, interval_t *i) {
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_input(closure_t *c, lir_op *op, interval_t *i) {
+static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
     return USE_KIND_SHOULD;
 }
 
@@ -180,8 +182,14 @@ static bool in_range(interval_range_t *range, int position) {
 // 假如使用广度优先遍历，编号按照广度优先的层级来编号,则可以方便的计算出树的高度,顶层 为 0，然后依次递增
 // 使用树的高度来标记 loop_index，如果一个块被标记了两个 index ,则 index 大的为内嵌循环
 // 当前层 index 等于父节点 + 1
+/**
+ * 1. 循环块的访问非常密集，所以在进行 flatten 时，将循环块排在一起，且中间不插入非循环的块
+ * 2. 嵌套的定义: 一个 loop 的 header 在另外一个循环中,loop header 支配着循环内的所有 block，
+ *    如果 loop header A 支配 loop header B，则 A 和 B 是嵌套循环
+ * @param c
+ */
 void interval_loop_detection(closure_t *c) {
-    c->entry->loop.flag = LOOP_DETECTION_FLAG_VISITED;
+    c->entry->loop.visited = true;
     c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
     list *work_list = list_new();
     list_push(work_list, c->entry);
@@ -197,65 +205,76 @@ void interval_loop_detection(closure_t *c) {
         // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
         // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
         slice_t *forward_succs = slice_new();
+        slice_t *backward_succs = slice_new();
         for (int i = 0; i < block->succs->count; ++i) {
             basic_block_t *succ = block->succs->take[i];
             succ->loop.tree_high = block->loop.tree_high + 1;
 
             // 如果发现循环, backward branches
-            if (succ->loop.flag == LOOP_DETECTION_FLAG_ACTIVE) {
+            if (succ->loop.active) {
                 // 当前 succ 是 loop_headers, loop_headers 的 tree_high 为 loop_index
+                succ->loop.header = true;
                 succ->loop.index = succ->loop.tree_high;
                 succ->loop.index_list[succ->loop.depth++] = succ->loop.tree_high;
                 slice_push(loop_headers, succ);
 
                 // 当前 block 是 loop_ends, loop_ends, index = loop_headers.index
-                block->loop.index = succ->loop.tree_high;
+                block->loop.index = succ->loop.tree_high; // TODO 此时配置的 index 不准？可能不是最深的 index
                 block->loop.index_list[block->loop.depth++] = succ->loop.tree_high;
+                block->loop.end = true;
                 slice_push(loop_ends, block);
+
+                slice_push(backward_succs, succ);
                 continue;
             }
 
             slice_push(forward_succs, succ);
-            succ->incoming_forward_count++; // 前驱中正向进我的数量
-            succ->loop.flag = LOOP_DETECTION_FLAG_VISITED;
+            succ->incoming_forward_count++; // 前驱中正向进入 succ 的数量
+            succ->loop.visited = true;
         }
 
-        // 添加正向数据流
         block->forward_succs = forward_succs;
-        // 变更 flag
-        block->loop.flag = LOOP_DETECTION_FLAG_ACTIVE;
+        block->backward_succs = backward_succs;
+        // 所有 succ 都处理完毕，添加 active 标志
+        block->loop.active = true;
     }
 
-    // 2. 标号, 这里有一个严肃的问题，如果一个节点有两个前驱时，也能够被标号吗？如果是普通结构不考虑 goto 的情况下，则不会初选这种 cfg
+    /**
+     * 2. 标号,计算一个循环包含的所有块
+     * 这里有一个严肃的问题，如果一个节点有两个前驱时，也能够被标号吗？如果是普通结构不考虑 goto 的情况下，则不会出现这种 cfg
+     */
     for (int i = 0; i < loop_ends->count; ++i) {
         basic_block_t *end = loop_ends->take[i];
         list_push(work_list, end);
-        table *exist_table = table_new();
-        table_set(exist_table, itoa(end->label_index), end);
+        table_t *handled = table_new();
+        table_set(handled, itoa(end->label_index), end);
 
         while (!list_empty(work_list)) {
             basic_block_t *block = list_pop(work_list);
-            if (block->label_index != end->label_index && block->loop.index == end->loop.index) {
+
+            // TODO break?
+            if (block != end && block->loop.index == end->loop.index) {
                 continue;
             }
-            // 标号
+
+            // 标号 key: depth, value: index
             block->loop.index_list[block->loop.depth++] = end->loop.index;
 
+            // 基于 preds 向后遍历，找到该循环的所有 block
             for (int k = 0; k < block->preds->count; ++k) {
                 basic_block_t *pred = block->preds->take[k];
 
                 // 判断是否已经入过队(标号)
-                if (table_exist(exist_table, itoa(pred->label_index))) {
+                if (table_exist(handled, itoa(pred->label_index))) {
                     continue;
                 }
-                table_set(exist_table, itoa(block->label_index), block);
                 list_push(work_list, pred);
+                table_set(handled, itoa(block->label_index), block);
             }
         }
-        table_free(exist_table);
     }
 
-    // 3. 遍历所有 basic_block ,通过 loop.index_list 确定 index
+    // 3. 遍历所有 basic_block ,通过 loop.index_list 确定 innermost index
     for (int label = 0; label < c->blocks->count; ++label) {
         basic_block_t *block = c->blocks->take[label];
         if (block->loop.index != 0) {
@@ -327,7 +346,7 @@ void interval_mark_number(closure_t *c) {
         list_node *current = list_first(block->operations);
 
         while (current->value != NULL) {
-            lir_op *op = current->value;
+            lir_op_t *op = current->value;
             if (op->code == LIR_OPCODE_PHI) {
                 current = current->succ;
                 continue;
@@ -341,7 +360,7 @@ void interval_mark_number(closure_t *c) {
 }
 
 void interval_build(closure_t *c) {
-    // physical registers
+    // new_interval for all physical registers
     for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
         reg_t *reg = alloc_regs[alloc_id];
         interval_t *interval = interval_new(c);
@@ -351,7 +370,7 @@ void interval_build(closure_t *c) {
         table_set(c->interval_table, reg->name, interval_new(c));
     }
 
-    // virtual registers
+    // new interval for all virtual registers in closure
     c->interval_table = table_new();
     for (int i = 0; i < c->globals->count; ++i) {
         lir_operand_var *var = c->globals->take[i];
@@ -364,13 +383,37 @@ void interval_build(closure_t *c) {
     // 倒序遍历顺序基本块基本块
     for (int i = c->order_blocks->count - 1; i >= 0; --i) {
         basic_block_t *block = c->order_blocks->take[i];
-        lir_op *first_op = list_first(block->operations)->value;
-        int block_from = first_op->id;
-        int block_to = first_op->id + 2;
+        slice_t *live_in = slice_new();
 
-        // 遍历所有的 live_out,直接添加最长间隔,后面会逐渐缩减该间隔
-        // 只包含虚拟寄存器
-        for (int k = 0; k < block->live_out->count; ++k) {
+        // 1. calc live in = union of successor.liveIn for each successor of b
+        table_t *union_vars = table_new();
+        for (int j = 0; j < block->succs->count; ++j) {
+            basic_block_t *succ = block->succs->take[j];
+            for (int k = 0; k < succ->live_in->count; ++k) {
+                lir_operand_var *var = succ->live_in->take[k];
+                live_add(union_vars, live_in, var);
+            }
+        }
+
+        // 2. phi function phi of successors of b do
+        for (int j = 0; j < block->succs->count; ++j) {
+            basic_block_t *succ_block = block->succs->take[j];
+            list_node *current = list_first(succ_block->operations)->succ;
+            while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+                lir_op_t *op = OP(current);
+                lir_operand_var *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
+                live_add(union_vars, live_in, var);
+
+                current = current->succ;
+            }
+        }
+
+
+        int block_from = OP(list_first(block->operations)->value)->id;
+        int block_to = OP(list_first(block->operations)->value)->id + 2; // whether add 2?
+
+        // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
+        for (int k = 0; k < live_in->count; ++k) {
             interval_add_range(c, block->live_out->take[k], block_from, block_to);
         }
 
@@ -378,8 +421,9 @@ void interval_build(closure_t *c) {
         list_node *current = list_last(block->operations);
         while (current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
-            lir_op *op = current->value;
+            lir_op_t *op = current->value;
 
+            // fixed all phy reg in call
             if (lir_op_is_call(op)) {
                 // traverse all register
                 for (int j = 0; j < alloc_reg_count(); ++j) {
@@ -392,20 +436,25 @@ void interval_build(closure_t *c) {
                 }
             }
 
+            // add reg hint for move
             if (op->code == LIR_OPCODE_MOVE) {
                 interval_t *src_interval = operand_interval(c, op->first);
-                interval_t *dst_interval = operand_interval(c, op->result);
+                interval_t *dst_interval = operand_interval(c, op->output);
                 if (src_interval != NULL && dst_interval != NULL) {
                     dst_interval->reg_hint = src_interval;
                 }
             }
 
+            // TODO add reg hint for phi, but phi a lot of input var?
+
+            // interval by output params, so it contain opcode phi
             slice_t *intervals = op_output_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
                 if (interval->fixed) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
+                    live_remove(union_vars, live_in, interval->var);
                     interval->first_range->from = op->id;
                 }
 
@@ -419,12 +468,26 @@ void interval_build(closure_t *c) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
                     interval_add_range(c, interval, block_from, op->id);
+                    live_add(union_vars, live_in, interval->var);
                 }
                 interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
             }
 
             current = current->prev;
         }
+
+        // live in 中不能包含 phi output
+        current = list_first(block->operations)->succ;
+        while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+            lir_op_t *op = OP(current);
+
+            lir_operand_var *var = op->output->value;
+            live_remove(union_vars, live_in, var);
+            current = current->succ;
+        }
+
+        // TODO handle loop header add range
+
     }
 }
 
@@ -696,7 +759,7 @@ void resolve_data_flow(closure_t *c) {
             // phi def interval(label op -> phi op -> ... -> phi op -> other op)
             list_node *current = list_first(to->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
-                lir_op *op = OP(current);
+                lir_op_t *op = OP(current);
                 //  to phi.inputOf(pred def) will is from interval
                 // TODO ssa body constant handle
                 lir_operand_var *var = ssa_phi_body_of(op->first->value, to->preds, from);
@@ -704,7 +767,7 @@ void resolve_data_flow(closure_t *c) {
                 assert(temp_interval);
                 interval_t *from_interval = interval_child_at(temp_interval, from->last_op->id);
 
-                lir_operand_var *def = op->result->value; // result must assign reg
+                lir_operand_var *def = op->output->value; // result must assign reg
                 temp_interval = table_get(c->interval_table, def->ident);
                 assert(temp_interval);
                 interval_t *to_interval = interval_child_at(temp_interval, to->first_op->id);
@@ -716,6 +779,8 @@ void resolve_data_flow(closure_t *c) {
                     slice_push(r.from_list, from_interval);
                     slice_push(r.to_list, to_interval);
                 }
+
+                current = current->succ;
             }
 
 
@@ -830,7 +895,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         // insert before branch
         r->insert_block = from;
 
-        lir_op *last_op = from->last_op;
+        lir_op_t *last_op = from->last_op;
         if (lir_op_is_branch(last_op)) {
             // insert before last op
             r->insert_id = last_op->id - 1;

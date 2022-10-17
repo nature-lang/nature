@@ -559,7 +559,7 @@ void *elf_section_data_add_ptr(section_t *section, uint64_t size) {
 uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
 
     section_t *s = ctx->symtab_section;
-    table *symbol_table = ctx->symtab_hash;
+    table_t *symbol_table = ctx->symtab_hash;
     uint sym_bind = ELF64_ST_BIND(sym->st_info);
     uint sym_type = ELF64_ST_TYPE(sym->st_info);
     uint8_t sym_visible = ELF64_ST_VISIBILITY(sym->st_other);
@@ -646,7 +646,7 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
     return sym_index;
 }
 
-uint64_t elf_put_sym(section_t *symtab_section, table *symtab_hash, Elf64_Sym *sym, char *name) {
+uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym *sym, char *name) {
     Elf64_Sym *new_sym = elf_section_data_add_ptr(symtab_section, sizeof(Elf64_Sym));
     uint64_t name_offset = 0;
     if (name && name[0]) {

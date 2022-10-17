@@ -22,7 +22,7 @@ list *amd64_formal_params_lower(closure_t *c) {
             source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
         }
 
-        lir_op *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
+        lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
         list_push(operations, op);
     }
     return operations;
@@ -166,7 +166,7 @@ void amd64_operations_lower(closure_t *c) {
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *block = SLICE_VALUE();
         LIST_FOR(block->operations) {
-            lir_op *op = LIST_VALUE();
+            lir_op_t *op = LIST_VALUE();
 
             // if op is fn begin, will set formal param
             // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
@@ -183,21 +183,21 @@ void amd64_operations_lower(closure_t *c) {
                 }
             }
 
-            if (op->code == LIR_OPCODE_RETURN && op->result != NULL) {
+            if (op->code == LIR_OPCODE_RETURN && op->output != NULL) {
                 // 1.1 return 指令需要将返回值放到 rax 中
                 lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
-                lir_op *before = lir_op_move(reg_operand, op->result);
-                op->result = reg_operand;
+                lir_op_t *before = lir_op_move(reg_operand, op->output);
+                op->output = reg_operand;
                 list_insert_before(block->operations, LIST_VALUE(), before);
             }
 
             // div 被输数，除数 = 商
             if (op->code == LIR_OPCODE_DIV) {
                 lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
-                lir_op *before = lir_op_move(reg_operand, op->first);
-                lir_op *after = lir_op_move(op->result, reg_operand);
+                lir_op_t *before = lir_op_move(reg_operand, op->first);
+                lir_op_t *after = lir_op_move(op->output, reg_operand);
                 op->first = reg_operand;
-                op->result = reg_operand;
+                op->output = reg_operand;
                 list_insert_before(block->operations, LIST_VALUE(), before);
                 list_insert_after(block->operations, LIST_VALUE(), after);
             }
