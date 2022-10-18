@@ -29,7 +29,7 @@ void *table_get(table_t *t, string key);
 
 bool table_set(table_t *t, string key, void *value);
 
-bool table_delete(table_t *t, string key);
+void table_delete(table_t *t, string key);
 
 table_entry *table_find_entry(table_entry *entries, int capacity, string key);
 

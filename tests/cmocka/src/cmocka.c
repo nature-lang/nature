@@ -1329,7 +1329,7 @@ static int memory_equal_display_error(const char* const a, const char* const b,
         const char r = b[i];
         if (l != r) {
             if (differences < 16) {
-                cm_print_error("difference at offset %" PRIdS " 0x%02x 0x%02x\n",
+                cm_print_error("difference at slot %" PRIdS " 0x%02x 0x%02x\n",
                                i, l, r);
             }
             differences ++;

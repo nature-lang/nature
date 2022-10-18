@@ -6,7 +6,7 @@
 #include "utils/helper.h"
 #include "stdio.h"
 
-lir_op_type ast_expr_operator_to_lir_op[] = {
+lir_opcode ast_expr_operator_to_lir_op[] = {
         [AST_EXPR_OPERATOR_ADD] = LIR_OPCODE_ADD,
         [AST_EXPR_OPERATOR_SUB] = LIR_OPCODE_SUB,
         [AST_EXPR_OPERATOR_MUL] = LIR_OPCODE_MUL,
@@ -299,7 +299,7 @@ list *compiler_expr(closure_t *c, ast_expr expr, lir_operand *target) {
 list *compiler_binary(closure_t *c, ast_expr expr, lir_operand *result_target) {
     ast_binary_expr *binary_expr = expr.expr;
 
-    lir_op_type type = ast_expr_operator_to_lir_op[binary_expr->operator];
+    lir_opcode type = ast_expr_operator_to_lir_op[binary_expr->operator];
 
     lir_operand *left_target = lir_new_empty_operand();
     lir_operand *right_target = lir_new_empty_operand();
@@ -348,7 +348,7 @@ list *compiler_unary(closure_t *c, ast_expr expr, lir_operand *result_target) {
         var->indirect_addr = true;
     }
 
-    lir_op_type type = ast_expr_operator_to_lir_op[unary_expr->operator];
+    lir_opcode type = ast_expr_operator_to_lir_op[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, result_target);
 
     list_push(operations, unary);
@@ -367,9 +367,11 @@ list *compiler_if(closure_t *c, ast_if_stmt *if_stmt) {
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
-        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target, end_label_operand);
+        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target,
+                              lir_copy_label_operand(end_label_operand));
     } else {
-        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target, alternate_label_operand);
+        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target,
+                              lir_copy_label_operand(alternate_label_operand));
     }
     list_push(operations, cmp_goto);
     list_push(operations, lir_op_unique_label(CONTINUE_IDENT));
@@ -613,7 +615,7 @@ list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand *target) {
     lir_operand *key_target = lir_new_empty_operand();
     list_append(operations, compiler_expr(c, ast->key, key_target));
 
-    // runtime get offset by temp var runtime.map_offset(base, "key")
+    // runtime get slot by temp var runtime.map_offset(base, "key")
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_MAP_VALUE,
             target,
@@ -711,7 +713,7 @@ list *compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
             LIR_OPCODE_BEQ,
             LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0),
             count_target,
-            end_for_label->output);
+            lir_copy_label_operand(end_for_label->output));
     list_push(operations, cmp_goto);
 
     // 添加 label
@@ -764,7 +766,7 @@ list *compiler_while(closure_t *c, ast_while_stmt *ast) {
             LIR_OPCODE_BEQ,
             LIR_NEW_IMMEDIATE_OPERAND(TYPE_BOOL, bool_value, false),
             condition_target,
-            end_while_operand);
+            lir_copy_label_operand(end_while_operand));
     list_push(operations, cmp_goto);
     list_push(operations, lir_op_unique_label(CONTINUE_IDENT));
 
@@ -793,7 +795,7 @@ list *compiler_return(closure_t *c, ast_return_stmt *ast) {
 }
 
 /**
- * mov [base+offset,n] => target
+ * mov [base+slot,n] => target
  * bar().baz
  * @param c
  * @param ast
@@ -975,7 +977,8 @@ list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) 
         lir_operand *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value,
                                                                  ast_param_expr.type.base);
 
-        lir_op_t *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param, origin_param_target);
+        lir_op_t *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param,
+                                           origin_param_target);
         // 包裹 code
         list_push(operations, op);
 

@@ -62,7 +62,7 @@ typedef struct {
  */
 typedef struct section_t {
     // Elf64_Shdr 原始字段继承
-    uint sh_name; // 段名称，段表字符串表 offset ~ \0
+    uint sh_name; // 段名称，段表字符串表 slot ~ \0
     uint sh_type; // 段类型，
     uint sh_flags;
     uint sh_info;

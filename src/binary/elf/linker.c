@@ -487,7 +487,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
             // convert section index
             sym->st_shndx = local->section->sh_index;
-            // sm->offset 是 section' data 合并到全局 section 时的起始地址，所以 st_value 自然要加上这个起始地址
+            // sm->slot 是 section' data 合并到全局 section 时的起始地址，所以 st_value 自然要加上这个起始地址
             sym->st_value += local->offset;
         }
 

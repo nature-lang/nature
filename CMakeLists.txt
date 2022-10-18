@@ -24,10 +24,11 @@ set(SRC_BINARY
 
 
 set(SRC_NATIVE
+        #        ${SRC_DIR}/native/amd64.c
+        #        ${SRC_DIR}/native/amd64.h
         ${SRC_DIR}/native/native.h
-        ${SRC_DIR}/native/native.c
-        ${SRC_DIR}/native/amd64.c
-        ${SRC_DIR}/native/amd64.h)
+        ${SRC_DIR}/native/native.c)
+
 
 set(SRC_SYNTAX
         ${SRC_DIR}/syntax/scanner.h
@@ -101,8 +102,7 @@ set(SRC
         ${SRC_DIR}/register/interval.h
         ${SRC_DIR}/register/interval.c
         ${SRC_DIR}/register/linearscan.h
-        ${SRC_DIR}/register/linearscan.c
-        )
+        ${SRC_DIR}/register/linearscan.c)
 
 set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/gc.h

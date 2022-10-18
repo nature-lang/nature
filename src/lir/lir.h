@@ -125,7 +125,7 @@ typedef enum {
     LIR_OPCODE_LABEL,
     LIR_OPCODE_FN_BEGIN, // 无操作数
     LIR_OPCODE_FN_END, // 无操作数
-} lir_op_type;
+} lir_opcode;
 
 typedef struct lir_operand {
     lir_operand_type type;
@@ -160,7 +160,7 @@ typedef struct {
  * 也就是 stack 是向下增长，但是存储数据是从低地址往搞地址存储
  */
 typedef struct {
-    int offset;
+    int slot;
     int size;
 } lir_operand_stack;
 
@@ -215,7 +215,7 @@ typedef struct {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-    lir_op_type code;
+    lir_opcode code;
     lir_operand *first; // 参数1
     lir_operand *second; // 参数2
     lir_operand *output; // 参数3
@@ -232,8 +232,6 @@ typedef struct {
     bool active;
     bool header;
     bool end;
-    uint8_t tree_high;
-
     bool index_map[INT8_MAX]; // 默认都是 false
     int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in innermost(最深的) loop
     uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
@@ -352,12 +350,14 @@ lir_op_t *lir_op_label(string name, bool is_local);
 
 lir_op_t *lir_op_unique_label(string name);
 
+lir_operand *lir_copy_label_operand(lir_operand *label_operand);
+
 lir_op_t *lir_op_bal(lir_operand *label);
 
 //lir_op *lir_new_push(lir_operand *operand);
 lir_op_t *lir_op_move(lir_operand *dst, lir_operand *src);
 
-lir_op_t *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result);
+lir_op_t *lir_op_new(lir_opcode code, lir_operand *first, lir_operand *second, lir_operand *result);
 
 lir_op_t *lir_op_builtin_call(string name, lir_operand *result, int arg_count, ...);
 
@@ -379,5 +379,9 @@ bool lir_op_is_call(lir_op_t *op);
 slice_t *lir_operand_vars(lir_operand *operand);
 
 bool lir_operand_equal(lir_operand *a, lir_operand *b);
+
+slice_t *lir_operand_nests(lir_operand *operand, uint64_t flag);
+
+slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag);
 
 #endif //NATURE_SRC_LIR_H_

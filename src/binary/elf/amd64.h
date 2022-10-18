@@ -21,7 +21,7 @@ typedef struct {
     amd64_operand_t *rel_operand; // 引用自 asm_inst
     bool may_need_reduce; // jmp 指令可以从 rel32 优化为 rel8
     uint8_t reduce_count; // jmp rel32 => jmp rel8 导致的指令的长度的变化差值
-    uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 offset 变更，则响应的符号的 value 同样需要变更
+    uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则响应的符号的 value 同样需要变更
     Elf64_Rela *elf_rel;
 } amd64_build_temp_t;
 

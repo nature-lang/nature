@@ -154,6 +154,6 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
 void resolve_mappings(closure_t *c, resolver_t *r);
 
-slice_t *op_vars(closure_t *c, lir_op_t *op);
+slice_t *op_operands(lir_op_t *op, uint64_t flag);
 
 #endif

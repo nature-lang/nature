@@ -9,6 +9,18 @@ slice_t *slice_new() {
     return s;
 }
 
+void slice_insert(slice_t *s, int index, void *value) {
+    if (s->count == s->capacity) {
+        s->capacity *= 2;
+        s->take = realloc(s->take, sizeof(void *) * s->capacity);
+    }
+    for (int i = s->count; i > index; --i) {
+        s->take[i] = s->take[i - 1];
+    }
+    s->take[index] = value;
+    s->count++;
+}
+
 void slice_push(slice_t *s, void *value) {
     if (s->capacity <= s->count) {
         s->capacity = s->capacity * 2;

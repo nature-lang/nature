@@ -96,7 +96,7 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
                 return tombstone != NULL ? tombstone : entry;
             }
 
-            // key = NULL, value 不为 NULL 表示这是一个被已经被删除的节点
+            // key = NULL, value 不为 NULL 表示这是一个被已经被删除的节点,被放置了 tombstone 在次数
             // 所以不只能停止遍历，继续进行开放寻址
             if (tombstone == NULL) {
                 tombstone = entry;
@@ -142,6 +142,27 @@ bool table_exist(table_t *t, char *key) {
 
     return true;
 }
+
+/**
+ * 由于使用了开放寻址法，所以不能直接清空 entries，而是需要需要删除的 value 置为 NULL 和 empty 区分开来
+ * @param t
+ * @param key
+ */
+void table_delete(table_t *t, char *key) {
+    if (t->count == 0) {
+        return;
+    }
+
+    table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+    if (entry->key == NULL) {
+        return;
+    }
+
+    entry->key = NULL;
+    entry->value = (void *) true;
+    t->count--;
+}
+
 
 
 

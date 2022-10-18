@@ -114,15 +114,20 @@ lir_op_t *lir_op_unique_label(char *ident) {
     return lir_op_label(LIR_UNIQUE_NAME(ident), true);
 }
 
+lir_operand *lir_copy_label_operand(lir_operand *label_operand) {
+    lir_operand_symbol_label *label = label_operand->value;
+    return lir_new_label_operand(label->ident, label->is_local);
+}
+
 lir_op_t *lir_op_bal(lir_operand *label) {
-    return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, label);
+    return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, lir_copy_label_operand(label));
 }
 
 lir_op_t *lir_op_move(lir_operand *dst, lir_operand *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
 
-lir_op_t *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, lir_operand *result) {
+lir_op_t *lir_op_new(lir_opcode code, lir_operand *first, lir_operand *second, lir_operand *result) {
     // 变量 copy,避免寄存器分配时相互粘连
     if (first != NULL && first->type == LIR_OPERAND_VAR) {
         lir_operand_var *operand_var = first->value;
@@ -141,7 +146,7 @@ lir_op_t *lir_op_new(lir_op_type type, lir_operand *first, lir_operand *second, 
     }
 
     lir_op_t *op = NEW(lir_op_t);
-    op->code = type;
+    op->code = code;
     op->first = first;
     op->second = second;
     op->output = result;
@@ -162,8 +167,8 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->entry = NULL;
     new->globals = slice_new();
     new->fixed_regs = slice_new(); // reg_t
-    new->blocks = slice_new(); // lir_basic_block
-//    new->order_blocks = slice_new(); // lir_basic_block
+    new->blocks = slice_new(); // basic_block_t
+//    new->order_blocks = slice_new(); // basic_block_t
 
     new->interval_table = table_new();
 
@@ -197,8 +202,8 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block->dom = slice_new();
     basic_block->df = slice_new();
     basic_block->be_idom = slice_new();
-    basic_block->loop.tree_high = 0;
     basic_block->loop.index = -1;
+    memset(basic_block->loop.index_map, 0, sizeof(basic_block->loop.index_map));
     basic_block->loop.depth = 0;
     basic_block->loop.visited = false;
     basic_block->loop.active = false;
@@ -293,26 +298,20 @@ uint8_t lir_operand_sizeof(lir_operand *operand) {
     return type_base_sizeof(lir_operand_type_base(operand));
 }
 
+/**
+ * 读取 operand 中包含的所有 var， 并返回 lir_operand_var slice
+ * @param operand
+ * @return
+ */
 slice_t *lir_operand_vars(lir_operand *operand) {
     slice_t *result = slice_new();
     if (!operand) {
         return result;
     }
-
-    if (operand->type == LIR_OPERAND_VAR) {
-        slice_push(result, operand->value);
-    }
-
-    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
-        lir_operand_actual_param *operands = operand->value;
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand *o = operands->list[i];
-            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
-
-            if (o->type == LIR_OPERAND_VAR) {
-                slice_push(result, o->value);
-            }
-        }
+    slice_t *operands = lir_operand_nests(operand, FLAG(LIR_OPERAND_VAR));
+    SLICE_FOR(operands) {
+        lir_operand *o = SLICE_VALUE(operands);
+        slice_push(result, o->value);
     }
 
     return result;
@@ -346,8 +345,55 @@ bool lir_operand_equal(lir_operand *a, lir_operand *b) {
     if (a->type == LIR_OPERAND_STACK) {
         lir_operand_stack *stack_a = a->value;
         lir_operand_stack *stack_b = b->value;
-        return stack_a->offset == stack_b->offset;
+        return stack_a->slot == stack_b->slot;
     }
 
     return false;
+}
+
+
+/**
+ * 返回 lir_operand，需要自己根据实际情况解析
+ * @param c
+ * @param operand
+ * @param has_reg
+ * @return
+ */
+slice_t *lir_operand_nests(lir_operand *operand, uint64_t flag) {
+    slice_t *result = slice_new();
+    if (!operand) {
+        return result;
+    }
+    if (flag & FLAG(LIR_OPERAND_VAR) && operand->type == LIR_OPERAND_VAR) {
+        slice_push(result, operand);
+    }
+    if (flag & FLAG(LIR_OPERAND_REG) && operand->type == LIR_OPERAND_REG) {
+        slice_push(result, operand);
+    }
+
+    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
+        lir_operand_actual_param *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand *o = operands->list[i];
+            assert(o->type != LIR_OPERAND_ACTUAL_PARAM && "ACTUAL_PARAM nesting is not allowed");
+
+            if (flag & FLAG(LIR_OPERAND_VAR) && o->type == LIR_OPERAND_VAR) {
+                slice_push(result, o);
+            }
+
+            if (flag & FLAG(LIR_OPERAND_REG) && o->type == LIR_OPERAND_REG) {
+                slice_push(result, o);
+            }
+        }
+    }
+
+    return result;
+}
+
+slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag) {
+    slice_t *result = lir_operand_nests(op->output, flag);
+    slice_append(result, lir_operand_nests(op->first, flag));
+    slice_append(result, lir_operand_nests(op->second, flag));
+
+    return result;
 }

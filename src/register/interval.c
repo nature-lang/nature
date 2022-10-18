@@ -196,8 +196,8 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
 }
 
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
-    SLICE_FOR(c->blocks, basic_block_t) {
-        basic_block_t *block = SLICE_VALUE();
+    SLICE_FOR(c->blocks) {
+        basic_block_t *block = SLICE_VALUE(c->blocks);
         // TODO insert_id 具体在什么位置？
         if (OP(block->first_op->value)->id > insert_id || OP(block->last_op->value)->id < insert_id) {
             continue;
@@ -224,90 +224,49 @@ static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
     return NULL;
 }
 
-static slice_t *operand_vars(closure_t *c, lir_operand *operand) {
-    slice_t *result = slice_new();
-    if (!operand) {
-        return result;
-    }
-
-    if (operand->type == LIR_OPERAND_VAR) {
-        slice_push(result, operand);
-    }
-
-    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
-        lir_operand_actual_param *operands = operand->value;
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand *o = operands->list[i];
-            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
-
-            if (o->type == LIR_OPERAND_VAR) {
-                slice_push(result, o);
-            }
-        }
-    }
-
-    return result;
-}
-
-slice_t *op_vars(closure_t *c, lir_op_t *op) {
-    slice_t *result = operand_vars(c, op->output);
-    slice_append(result, operand_vars(c, op->first));
-    slice_append(result, operand_vars(c, op->second));
-
-    return result;
-}
-
-static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
-    slice_t *result = slice_new();
-    if (!operand) {
-        return result;
-    }
-
-    if (operand->type == LIR_OPERAND_VAR) {
-        lir_operand_var *var = operand->value;
-        interval_t *interval = table_get(c->interval_table, var->ident);
-        assert(interval);
-        slice_push(result, interval);
-    }
-
-    if (operand->type == LIR_OPERAND_REG) {
-        reg_t *reg = operand->value;
-        interval_t *interval = table_get(c->interval_table, reg->name);
-        assert(interval);
-        slice_push(result, interval);
-    }
-
-    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
-        lir_operand_actual_param *operands = operand->value;
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand *o = operands->list[i];
-            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
-
-            if (o->type == LIR_OPERAND_VAR) {
-                lir_operand_var *var = o->value;
-                interval_t *interval = table_get(c->interval_table, var->ident);
-                assert(interval);
-                slice_push(result, interval);
-            }
-        }
-    }
-
-    return result;
-}
-
 static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
+    slice_t *result = slice_new();
     // output 总是存储在 result 中
-    return operand_intervals(c, op->output);
+    slice_t *operands = lir_operand_nests(op->output, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    SLICE_FOR(operands) {
+        lir_operand *operand = SLICE_VALUE(operands);
+        if (operand->type == LIR_OPERAND_VAR) {
+            lir_operand_var *var = operand->value;
+            interval_t *interval = table_get(c->interval_table, var->ident);
+            assert(interval);
+            slice_push(result, interval);
+        }
+        if (operand->type == LIR_OPERAND_REG) {
+            reg_t *reg = operand->value;
+            interval_t *interval = table_get(c->interval_table, reg->name);
+            assert(interval);
+            slice_push(result, interval);
+        }
+    }
+
+    return result;
 }
 
 static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
-    slice_t *result = operand_intervals(c, op->first);
-    slice_t *temp = operand_intervals(c, op->second);
-
-    SLICE_FOR(temp, interval_t) {
-        slice_push(result, SLICE_VALUE());
+    slice_t *result = slice_new();
+    slice_t *operands = lir_operand_nests(op->first, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_append(operands, lir_operand_nests(op->second, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG)));
+    // 解析 interval
+    SLICE_FOR(operands) {
+        lir_operand *operand = SLICE_VALUE(operands);
+        if (operand->type == LIR_OPERAND_VAR) {
+            lir_operand_var *var = operand->value;
+            interval_t *interval = table_get(c->interval_table, var->ident);
+            assert(interval);
+            slice_push(result, interval);
+        }
+        if (operand->type == LIR_OPERAND_REG) {
+            reg_t *reg = operand->value;
+            interval_t *interval = table_get(c->interval_table, reg->name);
+            assert(interval);
+            slice_push(result, interval);
+        }
     }
-
     return result;
 }
 
@@ -364,6 +323,8 @@ void interval_block_order(closure_t *c) {
     slice_t *order_blocks = slice_new();
     stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
+
+    loop_detect(c);
 
     while (!stack_empty(work_list)) {
         basic_block_t *block = stack_pop(work_list);
@@ -454,7 +415,7 @@ void interval_build(closure_t *c) {
 
 
         int block_from = OP(list_first(block->operations)->value)->id;
-        int block_to = block->last_op->id + 2; // whether add 2?
+        int block_to = OP(block->last_op->value)->id + 2; // whether add 2?
 
         // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
         for (int k = 0; k < live_in->count; ++k) {
@@ -542,7 +503,7 @@ void interval_build(closure_t *c) {
                 for (int k = 0; k < live_in->count; ++k) {
                     lir_operand_var *var = live_in->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
-                    interval_add_range(c, interval, block_from, end->last_op->id + 2);
+                    interval_add_range(c, interval, block_from, OP(end->last_op->value)->id + 2);
                 }
             }
         }
@@ -760,7 +721,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     if (*i->stack_slot != -1) {
         return;
     }
-    // 根据 closure stack offset 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
+    // 根据 closure stack slot 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
     *i->stack_slot = c->stack_slot;
     c->stack_slot += type_base_sizeof(i->var->type_base);
 }
@@ -782,8 +743,8 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
 
 
 void resolve_data_flow(closure_t *c) {
-    SLICE_FOR(c->blocks, basic_block_t) {
-        basic_block_t *from = SLICE_VALUE();
+    SLICE_FOR(c->blocks) {
+        basic_block_t *from = SLICE_VALUE(c->blocks);
         for (int i = 0; i < from->succs->count; ++i) {
             basic_block_t *to = from->succs->take[i];
 
@@ -894,8 +855,8 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
 
     // block all from interval, value 保持被引用的次数
     int8_t block_regs[UINT8_MAX] = {0};
-    SLICE_FOR(r->from_list, interval_t) {
-        interval_t *i = SLICE_VALUE();
+    SLICE_FOR(r->from_list) {
+        interval_t *i = SLICE_VALUE(r->from_list);
         if (i->assigned) {
             block_regs[i->assigned] += 1;
         }
@@ -954,7 +915,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         // insert before branch
         r->insert_block = from;
 
-        lir_op_t *last_op = from->last_op;
+        lir_op_t *last_op = from->last_op->value;
         if (lir_op_is_branch(last_op)) {
             // insert before last op
             r->insert_id = last_op->id - 1;

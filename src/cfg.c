@@ -93,8 +93,8 @@ void cfg(closure_t *c) {
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
     // call 调到别的 closure_t 去了，不在当前 closure_t cfg 构造的考虑范围
 
-    SLICE_FOR(c->blocks, basic_block_t) {
-        current_block = SLICE_VALUE();
+    SLICE_FOR(c->blocks) {
+        current_block = SLICE_VALUE(c->blocks);
         // 最后一个指令块的结尾指令不是 branch 分支
         lir_op_t *last_op = list_last(current_block->operations)->value;
         if (last_op->code != LIR_OPCODE_BAL) {
@@ -116,6 +116,10 @@ void cfg(closure_t *c) {
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
+
+        // 添加 first_op(label 之后的第一个 op) 和 last_op
+        current_block->first_op = list_first(current_block->operations)->succ;
+        current_block->last_op = list_last(current_block->operations);
     }
 
     broken_critical_edges(c);
@@ -125,8 +129,8 @@ void cfg(closure_t *c) {
 }
 
 void broken_critical_edges(closure_t *c) {
-    SLICE_FOR(c->blocks, basic_block_t) {
-        basic_block_t *b = SLICE_VALUE();
+    SLICE_FOR(c->blocks) {
+        basic_block_t *b = SLICE_VALUE(c->blocks);
         for (int i = 0; i < b->preds->count; ++i) {
             basic_block_t *p = b->preds->take[i];
             if (b->preds->count > 1 && p->succs->count > 1) {
@@ -135,14 +139,18 @@ void broken_critical_edges(closure_t *c) {
                 lir_operand *label_operand = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_new_label_operand(b->name, true));
 
-                basic_block_t *new_block = lir_new_basic_block(label_operand->value, c->blocks->count);
+                lir_operand_symbol_label *symbol_label = label_operand->value;
+                basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
+//                slice_insert(c->blocks, b->id, new_block);
                 slice_push(c->blocks, new_block);
+                // 添加指令
                 list_push(new_block->operations, label_op);
                 list_push(new_block->operations, bal_op);
 
                 // cfg 关系调整
                 slice_push(new_block->succs, b);
                 slice_push(b->preds, new_block);
+
                 slice_push(new_block->preds, p);
                 slice_push(p->succs, new_block);
                 // 从 p->succs 中删除 b, 从 b 的 preds 中删除 p
@@ -158,7 +166,24 @@ void broken_critical_edges(closure_t *c) {
                         break;
                     }
                 }
+
+                // 跳转指令调整  p -> b 改成 p -> new_block -> b
+                assert(OP(p->last_op->value)->code == LIR_OPCODE_BAL);
+                symbol_label = OP(p->last_op->value)->output->value;
+                if (symbol_label->ident == b->name) {
+                    // change to new_block
+                    symbol_label->ident = new_block->name;
+                }
+
+                if (lir_op_is_branch(p->last_op->prev->value)) {
+                    symbol_label = OP(p->last_op->prev->value)->output->value;
+                    if (symbol_label->ident == b->name) {
+                        symbol_label->ident = new_block->name;
+                    }
+                }
+
             }
         }
     }
+
 }

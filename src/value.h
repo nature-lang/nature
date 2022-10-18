@@ -14,6 +14,8 @@
 
 #define NEW(type) malloc(sizeof(type))
 
+#define FLAG(value) (1 << value)
+
 #define IN_INT8(value) \
   ((value) < INT8_MAX && (value) > INT8_MIN)
 

@@ -43,7 +43,7 @@ void ssa_dom(closure_t *c) {
 
     // 初始化其他 dom 为所有节点的集合 {B0,B1,B2,B3..}
     for (int i = 1; i < c->blocks->count; ++i) {
-        slice_t *other = slice_new(); // lir_basic_block
+        slice_t *other = slice_new(); // basic_block_t
 
         // Dom[i] = N
         for (int k = 0; k < c->blocks->count; ++k) {
@@ -119,7 +119,7 @@ void ssa_idom(closure_t *c) {
 void ssa_df(closure_t *c) {
     // 初始化空集为默认行为，不需要特别声明
 //  for (int label = 0; label < c->blocks.count; ++label) {
-//    lir_basic_blocks df = {.count = 0};
+//    basic_block_ts df = {.count = 0};
 //    c->blocks.list[label]->df = df;
 //  }
 
@@ -258,8 +258,8 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     slice_t *live_in = slice_new();
     table_t *exist_var = table_new(); // basic var ident
 
-    SLICE_FOR(block->use, lir_operand_var) {
-        lir_operand_var *var = SLICE_VALUE();
+    SLICE_FOR(block->use) {
+        lir_operand_var *var = SLICE_VALUE(block->use);
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
@@ -268,8 +268,8 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
         table_set(exist_var, var->ident, var);
     }
 
-    SLICE_FOR(block->live_out, lir_operand_var) {
-        lir_operand_var *var = SLICE_VALUE();
+    SLICE_FOR(block->live_out) {
+        lir_operand_var *var = SLICE_VALUE(block->live_out);
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
@@ -347,7 +347,21 @@ void ssa_use_def(closure_t *c) {
 
             // first param (use)
             slice_t *vars = lir_operand_vars(op->first);
-            OPERAND_VAR_USE(vars)
+            if (vars->count > 0) {
+                for (int _i = 0; _i < (vars)->count; ++_i) {
+                    lir_operand_var *var = vars->take[_i];
+                    bool is_def = ssa_var_belong(var, def);
+                    if (!is_def && !table_exist(exist_use, var->ident)) {
+                        slice_push(use, var);
+                        table_set(exist_use, var->ident, var);
+                    }
+                    if (!table_exist(exist_var, var->ident)) {
+                        slice_push(c->globals, var);
+                        table_set(exist_var, var->ident, var);
+                    }
+                }
+            }
+//            OPERAND_VAR_USE(vars)
 
             // second param 可能包含 actual param
             vars = lir_operand_vars(op->second);
@@ -438,8 +452,8 @@ void ssa_rename(closure_t *c) {
     table_t *stack_table = table_new(); // use 使用，判断使用的变量的名称
 
     // 遍历所有名字变量,进行初始化
-    SLICE_FOR(c->globals, lir_operand_var) {
-        lir_operand_var *var = SLICE_VALUE();
+    SLICE_FOR(c->globals) {
+        lir_operand_var *var = SLICE_VALUE(c->globals);
         uint8_t *number = NEW(uint8_t);
         *number = 0;
 
@@ -454,8 +468,8 @@ void ssa_rename(closure_t *c) {
     ssa_rename_basic(c->entry, var_number_table, stack_table);
 
     // 释放 NEW 的变量
-    SLICE_FOR(c->globals, lir_operand_var) {
-        lir_operand_var *var = SLICE_VALUE();
+    SLICE_FOR(c->globals) {
+        lir_operand_var *var = SLICE_VALUE(c->globals);
         uint8_t *number = table_get(var_number_table, var->old);
         var_number_stack *stack = table_get(stack_table, var->old);
         free(number);
@@ -483,8 +497,8 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
 
         slice_t *vars = lir_operand_vars(op->first);
         if (vars->count > 0) {
-            SLICE_FOR(vars, lir_operand_var) {
-                lir_operand_var *var = SLICE_VALUE();
+            SLICE_FOR(vars) {
+                lir_operand_var *var = SLICE_VALUE(vars);
                 var_number_stack *stack = table_get(stack_table, var->old);
                 uint8_t number = stack->numbers[stack->count - 1];
                 ssa_rename_var(var, number);
@@ -493,8 +507,8 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
 
         vars = lir_operand_vars(op->second);
         if (vars->count > 0) {
-            SLICE_FOR(vars, lir_operand_var) {
-                lir_operand_var *var = SLICE_VALUE();
+            SLICE_FOR(vars) {
+                lir_operand_var *var = SLICE_VALUE(vars);
                 var_number_stack *stack = table_get(stack_table, var->old);
                 uint8_t number = stack->numbers[stack->count - 1];
                 ssa_rename_var(var, number);
@@ -625,8 +639,9 @@ bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
 }
 
 bool ssa_var_belong(lir_operand_var *var, slice_t *vars) {
-    SLICE_FOR(vars, lir_operand_var) {
-        if (strcmp((SLICE_VALUE())->ident, var->ident) == 0) {
+    SLICE_FOR(vars) {
+        lir_operand_var *item = SLICE_VALUE(vars);
+        if (strcmp(item->ident, var->ident) == 0) {
             return true;
         }
     }

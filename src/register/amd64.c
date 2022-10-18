@@ -17,7 +17,7 @@ list *amd64_formal_params_lower(closure_t *c) {
         } else {
             lir_operand_stack *stack = NEW(lir_operand_stack);
             stack->size = QWORD; // 使用了 push 指令进栈，所以固定 QWORD(float 也是 8字节，只是不直接使用 push)
-            stack->offset = stack_param_offset;
+            stack->slot = stack_param_offset;
             stack_param_offset += QWORD;
             source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
         }
@@ -163,8 +163,8 @@ void amd64_reg_init() {
  */
 void amd64_operations_lower(closure_t *c) {
     // 按基本块遍历所有指令
-    SLICE_FOR(c->blocks, basic_block_t) {
-        basic_block_t *block = SLICE_VALUE();
+    SLICE_FOR(c->blocks) {
+        basic_block_t *block = SLICE_VALUE(c->blocks);
         LIST_FOR(block->operations) {
             lir_op_t *op = LIST_VALUE();
 
@@ -233,12 +233,12 @@ reg_t *amd64_fn_param_next_reg(uint8_t *used, type_base_t base) {
     // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
     if (size <= QWORD && count <= 5) {
         uint8_t reg_index = int_param_indexes[count];
-        return (reg_t *) register_find(reg_index, size);
+        return (reg_t *) reg_find(reg_index, size);
     }
 
     // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
     if (size > QWORD && count <= 7) {
-        return (reg_t *) register_find(count, size);
+        return (reg_t *) reg_find(count, size);
     }
 
     return NULL;

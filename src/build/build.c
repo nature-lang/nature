@@ -51,8 +51,8 @@ void cross_native(module_t *m) {
     for (int i = 0; i < m->compiler_closures->count; ++i) {
         closure_t *c = m->compiler_closures->take[i];
         if (BUILD_ARCH == ARCH_AMD64) {
-            slice_t *operands = amd64_native_closure(c);
-            slice_append(m->operations, operands);
+//            slice_t *operands = amd64_native_closure(c);
+//            slice_append(m->operations, operands);
         }
     }
 

@@ -2,15 +2,25 @@
 #include <assert.h>
 
 /**
- * TODO 如果是寄存器，则可以根据 var 实际的 size 选择合适的寄存器
- * @param operand_of_var
+ * @param operand
  * @param i
  */
-static void var_replace(lir_operand *operand_of_var, interval_t *i) {
+static void var_replace(lir_operand *operand, interval_t *i) {
+    lir_operand_var *var = operand->value;
     if (i->spilled) {
-        // TODO change to stack slot
+        lir_operand_stack *stack = NEW(lir_operand_stack);
+        stack->slot = *i->stack_slot;
+        stack->size = type_base_sizeof(var->type_base);
+        operand->type = LIR_OPERAND_STACK;
+        operand->value = stack;
     } else {
-        // TODO change to physical register
+        reg_t *reg = alloc_regs[i->assigned];
+        uint8_t index = reg->index;
+        uint8_t size = type_base_sizeof(var->type_base);
+        reg = reg_find(index, size);
+        assert(reg);
+        operand->type = LIR_OPERAND_REG;
+        operand->value = reg;
     }
 }
 
@@ -460,7 +470,7 @@ void replace_virtual_register(closure_t *c) {
         list_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *vars = op_vars(c, op);
+            slice_t *vars = lir_op_nest_operands(op, FLAG(LIR_OPERAND_VAR));
             for (int j = 0; j < vars->count; ++j) {
                 lir_operand *operand = vars->take[j];
                 lir_operand_var *var = operand->value;

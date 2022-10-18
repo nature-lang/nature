@@ -6,8 +6,8 @@
 
 #define OPERAND_VAR_USE(_vars) \
     if (vars->count > 0) {\
-        SLICE_FOR(vars, lir_operand_var) {\
-            lir_operand_var *var = SLICE_VALUE();\
+        SLICE_FOR(vars) {\
+            lir_operand_var *var = SLICE_VALUE(vars);\
             bool is_def = ssa_var_belong(var, def);\
             if (!is_def && !table_exist(exist_use, var->ident)) {\
             slice_push(use, var);\

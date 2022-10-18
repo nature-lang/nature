@@ -8,7 +8,7 @@
 /**
  * operations to basic block
  * 按顺序遍历指令集
- * new lir_basic_block
+ * new basic_block_t
  */
 void cfg(closure_t *c);
 

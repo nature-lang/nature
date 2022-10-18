@@ -8,8 +8,6 @@
  * NUMBER_OPERATIONS
  *
  * // create intervals with live ranges
- * COMPUTE_LOCAL_LIVE_SETS
- * COMPUTE_GLOBAL_LIVE_SETS
  * BUILD_INTERVALS
  *
  * // allocate registers
@@ -25,6 +23,17 @@
  * @param c
  */
 void linear_scan(closure_t *c) {
+    // loop detect
+    interval_block_order(c);
 
+    interval_mark_number(c);
+
+    interval_build(c);
+
+    allocate_walk(c);
+
+    resolve_data_flow(c);
+
+    replace_virtual_register(c);
 }
 

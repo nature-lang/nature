@@ -7,7 +7,7 @@ static string reg_table_key(uint8_t index, uint8_t size) {
     return itoa(int_key);
 }
 
-reg_t *register_find(uint8_t index, uint8_t size) {
+reg_t *reg_find(uint8_t index, uint8_t size) {
     return table_get(reg_table, reg_table_key(index, size));
 }
 

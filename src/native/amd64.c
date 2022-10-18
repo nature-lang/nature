@@ -29,23 +29,23 @@ static amd64_operand_t *amd64_native_operand_var_transform(lir_operand_var *var,
     if (force_size > 0) {
         size = force_size;
     }
-    if (var->reg_index > 0) {
-        // 如果是 bool 类型
-        reg_t *reg = register_find(var->reg_index, size);
-        return REG(reg);
-    }
+//    if (var->reg_index > 0) {
+//        // 如果是 bool 类型
+//        reg_t *reg = reg_find(var->reg_index, size);
+//        return REG(reg);
+//    }
+//
+//    if (var->decl->stack_offset != 0) {
+//        return DISP_REG(rbp, *var->decl->stack_offset, size);
+//    }
 
-    if (var->decl->stack_offset != 0) {
-        return DISP_REG(rbp, *var->decl->stack_offset, size);
-    }
-
-    error_exit("[amd64_native_var_operand] var %d not reg_index or stack offset", var->ident);
+    error_exit("[amd64_native_var_operand] var %d not reg_index or stack slot", var->ident);
 }
 
 amd64_operation_t *amd64_native_empty_reg(reg_t *reg) {
     // TODO ah/bh/ch/dh 不能这么清理
 
-    reg_t *r = (reg_t *) register_find(reg->index, QWORD);
+    reg_t *r = (reg_t *) reg_find(reg->index, QWORD);
     if (r == NULL) {
         error_exit("[amd64_native_empty_reg] reg not found, index: %d, size: %d", reg->index, QWORD);
     }
@@ -373,14 +373,14 @@ slice_t *amd64_native_operand_transform(lir_operand *operand,
         lir_operand_var *base_var = v->base->value;
 
         // rbp 存储了 base,
-        if (base_var->decl->stack_offset == 0) {
-            error_exit("[amd64_lir_to_asm_operand]  var cannot stack_frame_offset in var %s", base_var->ident);
-        }
+//        if (base_var->decl->stack_offset == 0) {
+//            error_exit("[amd64_lir_to_asm_operand]  var cannot stack_frame_offset in var %s", base_var->ident);
+//        }
         // 需要占用一个临时寄存器
         reg_t *reg = amd64_native_next_reg(used, QWORD);
 
-        // 如果设置了 indirect_addr, 则编译成 [rxx+offset]
-        // 否则应该编译成 ADD  rxx -> offset, asm_operand 配置成 rxx
+        // 如果设置了 indirect_addr, 则编译成 [rxx+slot]
+        // 否则应该编译成 ADD  rxx -> slot, asm_operand 配置成 rxx
         if (v->indirect_addr) {
             amd64_operand_t *base_addr_operand = amd64_native_operand_var_transform(base_var, 0);
             // 生成 mov 指令（asm_mov）
@@ -449,15 +449,12 @@ reg_t *amd64_native_next_reg(uint8_t used[2], uint8_t size) {
     }
     uint8_t count = used[used_index]++;
 
-    reg_t *r = (reg_t *) register_find(count, size);
+    reg_t *r = (reg_t *) reg_find(count, size);
     if (r == NULL) {
-        error_exit("[register_find] not found, count: %d, size: %d", count, size);
+        error_exit("[reg_find] not found, count: %d, size: %d", count, size);
     }
     return r;
 }
-
-
-
 
 
 /**
@@ -475,7 +472,7 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
         // 局部变量不需要考虑什么最小值的问题，直接网上涨就好了
         uint8_t size = type_base_sizeof(var->type.base);
         c->stack_slot += size;
-        *var->stack_offset = -(c->stack_slot); // rbp-n, 所以这里取负数
+//        *var->stack_offset = -(c->stack_slot); // rbp-n, 所以这里取负数
 
         current = current->prev;
     }
@@ -493,17 +490,17 @@ slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
         lir_var_decl *var = current->value;
 
         // 第一步就是将参数从寄存器分配到 stack 中，所以必须为形参分配一个 stack slot 才能做 mov
-        reg_t *reg = amd64_native_fn_next_reg_target(used, var->type.base);
-        if (reg != NULL) {
-            // param 分配了寄存器
-            // rbp-x
-            c->stack_slot += QWORD;
-            *var->stack_offset = -(c->stack_slot); // 栈底，负数
-        } else {
-            // rbp+x
-            *var->stack_offset = stack_param_offset; // 正数
-            stack_param_offset += QWORD;
-        }
+//        reg_t *reg = amd64_native_fn_next_reg_target(used, var->type.base);
+//        if (reg != NULL) {
+//            // param 分配了寄存器
+//            // rbp-x
+//            c->stack_slot += QWORD;
+////            *var->stack_offset = -(c->stack_slot); // 栈底，负数
+//        } else {
+//            // rbp+x
+////            *var->stack_offset = stack_param_offset; // 正数
+//            stack_param_offset += QWORD;
+//        }
 
         current = current->succ;
     }
@@ -547,8 +544,8 @@ slice_t *amd64_native_fn_formal_params(closure_t *c) {
         }
 
         // 直接使用 var 转换
-        amd64_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->type.base));
-        slice_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
+//        amd64_operand_t *target = DISP_REG(rbp, *var_decl->stack_offset, type_base_sizeof(var_decl->type.base));
+//        slice_push(insts, ASM_INST("mov", { target, REG(source_reg) }));
 
         current = current->succ;
     }
@@ -560,7 +557,7 @@ slice_t *amd64_native_closure(closure_t *c) {
 
     // 遍历 block
     for (int i = 0; i < c->blocks->count; ++i) {
-        lir_basic_block *block = c->blocks->take[i];
+        basic_block_t *block = c->blocks->take[i];
         slice_append(insts, amd64_native_block(c, block));
     }
 
@@ -568,7 +565,7 @@ slice_t *amd64_native_closure(closure_t *c) {
 }
 
 
-slice_t *amd64_native_block(closure_t *c, lir_basic_block *block) {
+slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
     slice_t *insts = slice_new();
     list_node *current = block->operations->front;
     while (current->value != NULL) {

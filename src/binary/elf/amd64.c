@@ -11,7 +11,7 @@
  * call 0x0(%rip) // ff 15 00 00 00 00
  * call rel32 // e8 00 00 00 00
  * jmp rel32 // e9 00 00 00 00
- * 其中偏移是从第四个字符开始, offset 从 0 开始算，所以使用 + 3, 但是不同指令需要不同对待
+ * 其中偏移是从第四个字符开始, slot 从 0 开始算，所以使用 + 3, 但是不同指令需要不同对待
  * @param operation
  * @return
  */
@@ -226,7 +226,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
         temp_section_offset += temp->data_count;
     }
 
-    // 更新 section offset
+    // 更新 section slot
     *section_offset = temp_section_offset;
 }
 
@@ -403,11 +403,11 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
             add32le(ptr, val - ctx->got->sh_addr);
             break;
         case R_X86_64_GOT32:
-            /* we load the got offset */
+            /* we load the got slot */
             add32le(ptr, elf_get_sym_attr(ctx, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOT64:
-            /* we load the got offset */
+            /* we load the got slot */
             add64le(ptr, elf_get_sym_attr(ctx, sym_index, 0)->got_offset);
             break;
         case R_X86_64_GOTOFF64:
@@ -500,7 +500,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
 
     slice_t *build_temps = slice_new();
 
-    uint64_t section_offset = 0; // text section offset
+    uint64_t section_offset = 0; // text section slot
     // 一次遍历
     for (int i = 0; i < operations->count; ++i) {
         amd64_operation_t *operation = operations->take[i];
@@ -563,7 +563,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                 // 其他指令引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip) 让重定位阶段去找改符号进行重定位即可
                 // 完全不用考虑是标签符号还是数据符号
                 // 添加到重定位表(.rela.text)
-                // 根据指令计算 offset 重定位 rip offset
+                // 根据指令计算 slot 重定位 rip slot
                 uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
                 if (sym_index == 0) {
                     Elf64_Sym sym = {

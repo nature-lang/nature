@@ -71,8 +71,8 @@ typedef struct
   Elf32_Half	e_machine;		/* Architecture */
   Elf32_Word	e_version;		/* Object file version */
   Elf32_Addr	e_entry;		/* Entry point virtual address */
-  Elf32_Off	e_phoff;		/* Program header table file offset */
-  Elf32_Off	e_shoff;		/* Section header table file offset */
+  Elf32_Off	e_phoff;		/* Program header table file slot */
+  Elf32_Off	e_shoff;		/* Section header table file slot */
   Elf32_Word	e_flags;		/* Processor-specific flags */
   Elf32_Half	e_ehsize;		/* ELF header size in bytes */
   Elf32_Half	e_phentsize;		/* Program header table entry size */
@@ -89,8 +89,8 @@ typedef struct
   Elf64_Half	e_machine;		/* Architecture */
   Elf64_Word	e_version;		/* Object file version */
   Elf64_Addr	e_entry;		/* Entry point virtual address */
-  Elf64_Off	e_phoff;		/* Program header table file offset */
-  Elf64_Off	e_shoff;		/* Section header table file offset */
+  Elf64_Off	e_phoff;		/* Program header table file slot */
+  Elf64_Off	e_shoff;		/* Section header table file slot */
   Elf64_Word	e_flags;		/* Processor-specific flags */
   Elf64_Half	e_ehsize;		/* ELF header size in bytes */
   Elf64_Half	e_phentsize;		/* Program header table entry size */
@@ -388,7 +388,7 @@ typedef struct
   Elf32_Word	sh_type;		/* Section code */
   Elf32_Word	sh_flags;		/* Section flags */
   Elf32_Addr	sh_addr;		/* Section virtual addr at execution */
-  Elf32_Off	sh_offset;		/* Section file offset */
+  Elf32_Off	sh_offset;		/* Section file slot */
   Elf32_Word	sh_size;		/* Section size in bytes */
   Elf32_Word	sh_link;		/* Link to another section */
   Elf32_Word	sh_info;		/* Additional section information */
@@ -402,7 +402,7 @@ typedef struct
   Elf64_Word	sh_type;		/* Section code */
   Elf64_Xword	sh_flags;		/* Section flags */
   Elf64_Addr	sh_addr;		/* Section virtual addr at execution */
-  Elf64_Off	sh_offset;		/* Section file offset */
+  Elf64_Off	sh_offset;		/* Section file slot */
   Elf64_Xword	sh_size;		/* Section size in bytes */
   Elf64_Word	sh_link;		/* Link to another section */
   Elf64_Word	sh_info;		/* Additional section information */
@@ -679,7 +679,7 @@ typedef struct
 typedef struct
 {
   Elf32_Word	p_type;			/* Segment code */
-  Elf32_Off	p_offset;		/* Segment file offset */
+  Elf32_Off	p_offset;		/* Segment file slot */
   Elf32_Addr	p_vaddr;		/* Segment virtual address */
   Elf32_Addr	p_paddr;		/* Segment physical address */
   Elf32_Word	p_filesz;		/* Segment size in file */
@@ -692,7 +692,7 @@ typedef struct
 {
   Elf64_Word	p_type;			/* Segment code */
   Elf64_Word	p_flags;		/* Segment flags */
-  Elf64_Off	p_offset;		/* Segment file offset */
+  Elf64_Off	p_offset;		/* Segment file slot */
   Elf64_Addr	p_vaddr;		/* Segment virtual address */
   Elf64_Addr	p_paddr;		/* Segment physical address */
   Elf64_Xword	p_filesz;		/* Segment size in file */
@@ -1103,7 +1103,7 @@ typedef struct
   Elf32_Word	vna_hash;		/* Hash value of dependency name */
   Elf32_Half	vna_flags;		/* Dependency specific information */
   Elf32_Half	vna_other;		/* Unused */
-  Elf32_Word	vna_name;		/* Dependency name string offset */
+  Elf32_Word	vna_name;		/* Dependency name string slot */
   Elf32_Word	vna_next;		/* Offset in bytes to next vernaux
 					   entry */
 } Elf32_Vernaux;
@@ -1113,7 +1113,7 @@ typedef struct
   Elf64_Word	vna_hash;		/* Hash value of dependency name */
   Elf64_Half	vna_flags;		/* Dependency specific information */
   Elf64_Half	vna_other;		/* Unused */
-  Elf64_Word	vna_name;		/* Dependency name string offset */
+  Elf64_Word	vna_name;		/* Dependency name string slot */
   Elf64_Word	vna_next;		/* Offset in bytes to next vernaux
 					   entry */
 } Elf64_Vernaux;
@@ -1284,7 +1284,7 @@ typedef struct
 {
   Elf32_Xword m_value;		/* Symbol value.  */
   Elf32_Word m_info;		/* Size and index.  */
-  Elf32_Word m_poffset;		/* Symbol offset.  */
+  Elf32_Word m_poffset;		/* Symbol slot.  */
   Elf32_Half m_repeat;		/* Repeat count.  */
   Elf32_Half m_stride;		/* Stride info.  */
 } Elf32_Move;
@@ -1293,7 +1293,7 @@ typedef struct
 {
   Elf64_Xword m_value;		/* Symbol value.  */
   Elf64_Xword m_info;		/* Size and index.  */
-  Elf64_Xword m_poffset;	/* Symbol offset.  */
+  Elf64_Xword m_poffset;	/* Symbol slot.  */
   Elf64_Half m_repeat;		/* Repeat count.  */
   Elf64_Half m_stride;		/* Stride info.  */
 } Elf64_Move;
@@ -1325,40 +1325,40 @@ typedef struct
 #define R_68K_GOT32	7		/* 32 bit PC relative GOT entry */
 #define R_68K_GOT16	8		/* 16 bit PC relative GOT entry */
 #define R_68K_GOT8	9		/* 8 bit PC relative GOT entry */
-#define R_68K_GOT32O	10		/* 32 bit GOT offset */
-#define R_68K_GOT16O	11		/* 16 bit GOT offset */
-#define R_68K_GOT8O	12		/* 8 bit GOT offset */
+#define R_68K_GOT32O	10		/* 32 bit GOT slot */
+#define R_68K_GOT16O	11		/* 16 bit GOT slot */
+#define R_68K_GOT8O	12		/* 8 bit GOT slot */
 #define R_68K_PLT32	13		/* 32 bit PC relative PLT address */
 #define R_68K_PLT16	14		/* 16 bit PC relative PLT address */
 #define R_68K_PLT8	15		/* 8 bit PC relative PLT address */
-#define R_68K_PLT32O	16		/* 32 bit PLT offset */
-#define R_68K_PLT16O	17		/* 16 bit PLT offset */
-#define R_68K_PLT8O	18		/* 8 bit PLT offset */
+#define R_68K_PLT32O	16		/* 32 bit PLT slot */
+#define R_68K_PLT16O	17		/* 16 bit PLT slot */
+#define R_68K_PLT8O	18		/* 8 bit PLT slot */
 #define R_68K_COPY	19		/* Copy symbol at runtime */
 #define R_68K_GLOB_DAT	20		/* Create GOT entry */
 #define R_68K_JMP_SLOT	21		/* Create PLT entry */
 #define R_68K_RELATIVE	22		/* Adjust by program base */
-#define R_68K_TLS_GD32      25          /* 32 bit GOT offset for GD */
-#define R_68K_TLS_GD16      26          /* 16 bit GOT offset for GD */
-#define R_68K_TLS_GD8       27          /* 8 bit GOT offset for GD */
-#define R_68K_TLS_LDM32     28          /* 32 bit GOT offset for LDM */
-#define R_68K_TLS_LDM16     29          /* 16 bit GOT offset for LDM */
-#define R_68K_TLS_LDM8      30          /* 8 bit GOT offset for LDM */
-#define R_68K_TLS_LDO32     31          /* 32 bit module-relative offset */
-#define R_68K_TLS_LDO16     32          /* 16 bit module-relative offset */
-#define R_68K_TLS_LDO8      33          /* 8 bit module-relative offset */
-#define R_68K_TLS_IE32      34          /* 32 bit GOT offset for IE */
-#define R_68K_TLS_IE16      35          /* 16 bit GOT offset for IE */
-#define R_68K_TLS_IE8       36          /* 8 bit GOT offset for IE */
-#define R_68K_TLS_LE32      37          /* 32 bit offset relative to
+#define R_68K_TLS_GD32      25          /* 32 bit GOT slot for GD */
+#define R_68K_TLS_GD16      26          /* 16 bit GOT slot for GD */
+#define R_68K_TLS_GD8       27          /* 8 bit GOT slot for GD */
+#define R_68K_TLS_LDM32     28          /* 32 bit GOT slot for LDM */
+#define R_68K_TLS_LDM16     29          /* 16 bit GOT slot for LDM */
+#define R_68K_TLS_LDM8      30          /* 8 bit GOT slot for LDM */
+#define R_68K_TLS_LDO32     31          /* 32 bit module-relative slot */
+#define R_68K_TLS_LDO16     32          /* 16 bit module-relative slot */
+#define R_68K_TLS_LDO8      33          /* 8 bit module-relative slot */
+#define R_68K_TLS_IE32      34          /* 32 bit GOT slot for IE */
+#define R_68K_TLS_IE16      35          /* 16 bit GOT slot for IE */
+#define R_68K_TLS_IE8       36          /* 8 bit GOT slot for IE */
+#define R_68K_TLS_LE32      37          /* 32 bit slot relative to
 					   static TLS block */
-#define R_68K_TLS_LE16      38          /* 16 bit offset relative to
+#define R_68K_TLS_LE16      38          /* 16 bit slot relative to
 					   static TLS block */
-#define R_68K_TLS_LE8       39          /* 8 bit offset relative to
+#define R_68K_TLS_LE8       39          /* 8 bit slot relative to
 					   static TLS block */
 #define R_68K_TLS_DTPMOD32  40          /* 32 bit module number */
-#define R_68K_TLS_DTPREL32  41          /* 32 bit module-relative offset */
-#define R_68K_TLS_TPREL32   42          /* 32 bit TP-relative offset */
+#define R_68K_TLS_DTPREL32  41          /* 32 bit module-relative slot */
+#define R_68K_TLS_TPREL32   42          /* 32 bit TP-relative slot */
 /* Keep this the last entry.  */
 #define R_68K_NUM	43
 
@@ -1375,14 +1375,14 @@ typedef struct
 #define R_386_GLOB_DAT	   6		/* Create GOT entry */
 #define R_386_JMP_SLOT	   7		/* Create PLT entry */
 #define R_386_RELATIVE	   8		/* Adjust by program base */
-#define R_386_GOTOFF	   9		/* 32 bit offset to GOT */
-#define R_386_GOTPC	   10		/* 32 bit PC relative offset to GOT */
+#define R_386_GOTOFF	   9		/* 32 bit slot to GOT */
+#define R_386_GOTPC	   10		/* 32 bit PC relative slot to GOT */
 #define R_386_32PLT	   11
 #define R_386_TLS_TPOFF	   14		/* Offset in static TLS block */
 #define R_386_TLS_IE	   15		/* Address of GOT entry for static TLS
-					   block offset */
+					   block slot */
 #define R_386_TLS_GOTIE	   16		/* GOT entry for static TLS block
-					   offset */
+					   slot */
 #define R_386_TLS_LE	   17		/* Offset relative to static TLS
 					   block */
 #define R_386_TLS_GD	   18		/* Direct 32 bit for GNU version of
@@ -1408,21 +1408,21 @@ typedef struct
 #define R_386_TLS_LDM_POP  31		/* Tag for popl in LDM TLS code */
 #define R_386_TLS_LDO_32   32		/* Offset relative to TLS block */
 #define R_386_TLS_IE_32	   33		/* GOT entry for negated static TLS
-					   block offset */
-#define R_386_TLS_LE_32	   34		/* Negated offset relative to static
+					   block slot */
+#define R_386_TLS_LE_32	   34		/* Negated slot relative to static
 					   TLS block */
 #define R_386_TLS_DTPMOD32 35		/* ID of module containing symbol */
 #define R_386_TLS_DTPOFF32 36		/* Offset in TLS block */
-#define R_386_TLS_TPOFF32  37		/* Negated offset in static TLS block */
+#define R_386_TLS_TPOFF32  37		/* Negated slot in static TLS block */
 #define R_386_SIZE32	   38 		/* 32-bit symbol size */
-#define R_386_TLS_GOTDESC  39		/* GOT offset for TLS descriptor.  */
+#define R_386_TLS_GOTDESC  39		/* GOT slot for TLS descriptor.  */
 #define R_386_TLS_DESC_CALL 40		/* Marker of call through TLS
 					   descriptor for
 					   relaxation.  */
 #define R_386_TLS_DESC     41		/* TLS descriptor containing
 					   pointer to code and to
 					   argument, returning the TLS
-					   offset for the symbol.  */
+					   slot for the symbol.  */
 #define R_386_IRELATIVE	   42		/* Adjust indirectly by program base */
 #define R_386_GOT32X	   43		/* Load from 32 bit GOT entry,
 					   relaxable. */
@@ -1796,18 +1796,18 @@ typedef struct
 #define R_MIPS_RELGOT		36
 #define R_MIPS_JALR		37
 #define R_MIPS_TLS_DTPMOD32	38	/* Module number 32 bit */
-#define R_MIPS_TLS_DTPREL32	39	/* Module-relative offset 32 bit */
+#define R_MIPS_TLS_DTPREL32	39	/* Module-relative slot 32 bit */
 #define R_MIPS_TLS_DTPMOD64	40	/* Module number 64 bit */
-#define R_MIPS_TLS_DTPREL64	41	/* Module-relative offset 64 bit */
-#define R_MIPS_TLS_GD		42	/* 16 bit GOT offset for GD */
-#define R_MIPS_TLS_LDM		43	/* 16 bit GOT offset for LDM */
-#define R_MIPS_TLS_DTPREL_HI16	44	/* Module-relative offset, high 16 bits */
-#define R_MIPS_TLS_DTPREL_LO16	45	/* Module-relative offset, low 16 bits */
-#define R_MIPS_TLS_GOTTPREL	46	/* 16 bit GOT offset for IE */
-#define R_MIPS_TLS_TPREL32	47	/* TP-relative offset, 32 bit */
-#define R_MIPS_TLS_TPREL64	48	/* TP-relative offset, 64 bit */
-#define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative offset, high 16 bits */
-#define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative offset, low 16 bits */
+#define R_MIPS_TLS_DTPREL64	41	/* Module-relative slot 64 bit */
+#define R_MIPS_TLS_GD		42	/* 16 bit GOT slot for GD */
+#define R_MIPS_TLS_LDM		43	/* 16 bit GOT slot for LDM */
+#define R_MIPS_TLS_DTPREL_HI16	44	/* Module-relative slot, high 16 bits */
+#define R_MIPS_TLS_DTPREL_LO16	45	/* Module-relative slot, low 16 bits */
+#define R_MIPS_TLS_GOTTPREL	46	/* 16 bit GOT slot for IE */
+#define R_MIPS_TLS_TPREL32	47	/* TP-relative slot, 32 bit */
+#define R_MIPS_TLS_TPREL64	48	/* TP-relative slot, 64 bit */
+#define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative slot, high 16 bits */
+#define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative slot, low 16 bits */
 #define R_MIPS_GLOB_DAT		51
 #define R_MIPS_COPY		126
 #define R_MIPS_JUMP_SLOT        127
@@ -1886,7 +1886,7 @@ typedef struct
    value.  */
 #define DT_MIPS_RWPLT        0x70000034
 /* An alternative description of the classic MIPS RLD_MAP that is usable
-   in a PIE as it stores a relative offset from the address of the tag
+   in a PIE as it stores a relative slot from the address of the tag
    rather than an absolute address.  */
 #define DT_MIPS_RLD_MAP_REL  0x70000035
 /* GNU-style hash table with xlat.  */
@@ -2186,12 +2186,12 @@ enum
 #define R_PARISC_TLS_LDM21L	237	/* LD module 21-bit left.  */
 #define R_PARISC_TLS_LDM14R	238	/* LD module 14-bit right.  */
 #define R_PARISC_TLS_LDMCALL	239	/* LD module call to __t_g_a.  */
-#define R_PARISC_TLS_LDO21L	240	/* LD offset 21-bit left.  */
-#define R_PARISC_TLS_LDO14R	241	/* LD offset 14-bit right.  */
+#define R_PARISC_TLS_LDO21L	240	/* LD slot 21-bit left.  */
+#define R_PARISC_TLS_LDO14R	241	/* LD slot 14-bit right.  */
 #define R_PARISC_TLS_DTPMOD32	242	/* DTP module 32-bit.  */
 #define R_PARISC_TLS_DTPMOD64	243	/* DTP module 64-bit.  */
-#define R_PARISC_TLS_DTPOFF32	244	/* DTP offset 32-bit.  */
-#define R_PARISC_TLS_DTPOFF64	245	/* DTP offset 32-bit.  */
+#define R_PARISC_TLS_DTPOFF32	244	/* DTP slot 32-bit.  */
+#define R_PARISC_TLS_DTPOFF64	245	/* DTP slot 32-bit.  */
 #define R_PARISC_TLS_LE21L	R_PARISC_TPREL21L
 #define R_PARISC_TLS_LE14R	R_PARISC_TPREL14R
 #define R_PARISC_TLS_IE21L	R_PARISC_LTOFF_TP21L
@@ -2396,14 +2396,14 @@ enum
 #define R_PPC_EMB_SDAI16	106
 #define R_PPC_EMB_SDA2I16	107
 #define R_PPC_EMB_SDA2REL	108
-#define R_PPC_EMB_SDA21		109	/* 16 bit offset in SDA */
+#define R_PPC_EMB_SDA21		109	/* 16 bit slot in SDA */
 #define R_PPC_EMB_MRKREF	110
 #define R_PPC_EMB_RELSEC16	111
 #define R_PPC_EMB_RELST_LO	112
 #define R_PPC_EMB_RELST_HI	113
 #define R_PPC_EMB_RELST_HA	114
 #define R_PPC_EMB_BIT_FLD	115
-#define R_PPC_EMB_RELSDA	116	/* 16 bit relative offset in SDA */
+#define R_PPC_EMB_RELSDA	116	/* 16 bit relative slot in SDA */
 
 /* Diab tool relocations.  */
 #define R_PPC_DIAB_SDA21_LO	180	/* like EMB_SDA21, but native 16 bit */
@@ -2664,8 +2664,8 @@ enum
 #define R_AARCH64_P32_JUMP_SLOT		182	/* Create PLT entry.  */
 #define R_AARCH64_P32_RELATIVE		183	/* Adjust by program base.  */
 #define R_AARCH64_P32_TLS_DTPMOD	184	/* Module number, 32 bit.  */
-#define R_AARCH64_P32_TLS_DTPREL	185	/* Module-relative offset, 32 bit.  */
-#define R_AARCH64_P32_TLS_TPREL		186	/* TP-relative offset, 32 bit.  */
+#define R_AARCH64_P32_TLS_DTPREL	185	/* Module-relative slot, 32 bit.  */
+#define R_AARCH64_P32_TLS_TPREL		186	/* TP-relative slot, 32 bit.  */
 #define R_AARCH64_P32_TLSDESC		187	/* TLS Descriptor.  */
 #define R_AARCH64_P32_IRELATIVE		188	/* STT_GNU_IFUNC relocation. */
 
@@ -2788,8 +2788,8 @@ enum
 #define R_AARCH64_JUMP_SLOT    1026	/* Create PLT entry.  */
 #define R_AARCH64_RELATIVE     1027	/* Adjust by program base.  */
 #define R_AARCH64_TLS_DTPMOD   1028	/* Module number, 64 bit.  */
-#define R_AARCH64_TLS_DTPREL   1029	/* Module-relative offset, 64 bit.  */
-#define R_AARCH64_TLS_TPREL    1030	/* TP-relative offset, 64 bit.  */
+#define R_AARCH64_TLS_DTPREL   1029	/* Module-relative slot, 64 bit.  */
+#define R_AARCH64_TLS_TPREL    1030	/* TP-relative slot, 64 bit.  */
 #define R_AARCH64_TLSDESC      1031	/* TLS Descriptor.  */
 #define R_AARCH64_IRELATIVE	1032	/* STT_GNU_IFUNC relocation.  */
 
@@ -2829,8 +2829,8 @@ enum
 #define R_ARM_GLOB_DAT		21	/* Create GOT entry */
 #define R_ARM_JUMP_SLOT		22	/* Create PLT entry */
 #define R_ARM_RELATIVE		23	/* Adjust by program base */
-#define R_ARM_GOTOFF		24	/* 32 bit offset to GOT */
-#define R_ARM_GOTPC		25	/* 32 bit PC relative offset to GOT */
+#define R_ARM_GOTOFF		24	/* 32 bit slot to GOT */
+#define R_ARM_GOTPC		25	/* 32 bit PC relative slot to GOT */
 #define R_ARM_GOT32		26	/* 32 bit GOT entry */
 #define R_ARM_PLT32		27	/* Deprecated, 32 bit PLT address.  */
 #define R_ARM_CALL		28	/* PC relative 24 bit (BL, BLX).  */
@@ -2939,11 +2939,11 @@ enum
 					   thread local data */
 #define R_ARM_TLS_LDM32		105	/* PC-rel 32 bit for local dynamic
 					   thread local data */
-#define R_ARM_TLS_LDO32		106	/* 32 bit offset relative to TLS
+#define R_ARM_TLS_LDO32		106	/* 32 bit slot relative to TLS
 					   block */
 #define R_ARM_TLS_IE32		107	/* PC-rel 32 bit for GOT entry of
-					   static TLS block offset */
-#define R_ARM_TLS_LE32		108	/* 32 bit offset relative to static
+					   static TLS block slot */
+#define R_ARM_TLS_LE32		108	/* 32 bit slot relative to static
 					   TLS block */
 #define R_ARM_TLS_LDO12		109	/* 12 bit relative to TLS
 					   block (LDR, STR).  */
@@ -2979,8 +2979,8 @@ enum
 #define R_CKCORE_COPY               10	/* 32 bit adjust by program base    */
 #define R_CKCORE_GLOB_DAT           11	/* off between got and sym (S)      */
 #define R_CKCORE_JUMP_SLOT          12	/* PLT entry (S) */
-#define R_CKCORE_GOTOFF             13	/* offset to GOT (S + A - GOT)      */
-#define R_CKCORE_GOTPC              14	/* PC offset to GOT (GOT + A - P)   */
+#define R_CKCORE_GOTOFF             13	/* slot to GOT (S + A - GOT)      */
+#define R_CKCORE_GOTPC              14	/* PC slot to GOT (GOT + A - P)   */
 #define R_CKCORE_GOT32              15	/* 32 bit GOT entry (G) */
 #define R_CKCORE_PLT32              16	/* 32 bit PLT entry (G) */
 #define R_CKCORE_ADDRGOT            17	/* GOT entry in GLOB_DAT (GOT + G)  */
@@ -3023,7 +3023,7 @@ enum
 #define R_CKCORE_GOT_IMM18BY4       48	/* disp (G >> 2) */
 #define R_CKCORE_PLT_IMM18BY4       49	/* disp (G >> 2) */
 #define R_CKCORE_PCREL_IMM7BY4      50	/* disp ((S+A-P) >>2) & 0x7f */
-#define R_CKCORE_TLS_LE32           51	/* 32 bit offset to TLS block */
+#define R_CKCORE_TLS_LE32           51	/* 32 bit slot to TLS block */
 #define R_CKCORE_TLS_IE32           52
 #define R_CKCORE_TLS_GD32           53
 #define R_CKCORE_TLS_LDM32          54
@@ -3236,16 +3236,16 @@ enum
 #define R_390_16		3	/* Direct 16 bit.  */
 #define R_390_32		4	/* Direct 32 bit.  */
 #define R_390_PC32		5	/* PC relative 32 bit.	*/
-#define R_390_GOT12		6	/* 12 bit GOT offset.  */
-#define R_390_GOT32		7	/* 32 bit GOT offset.  */
+#define R_390_GOT12		6	/* 12 bit GOT slot.  */
+#define R_390_GOT32		7	/* 32 bit GOT slot.  */
 #define R_390_PLT32		8	/* 32 bit PC relative PLT address.  */
 #define R_390_COPY		9	/* Copy symbol at runtime.  */
 #define R_390_GLOB_DAT		10	/* Create GOT entry.  */
 #define R_390_JMP_SLOT		11	/* Create PLT entry.  */
 #define R_390_RELATIVE		12	/* Adjust by program base.  */
-#define R_390_GOTOFF32		13	/* 32 bit offset to GOT.	 */
-#define R_390_GOTPC		14	/* 32 bit PC relative offset to GOT.  */
-#define R_390_GOT16		15	/* 16 bit GOT offset.  */
+#define R_390_GOTOFF32		13	/* 32 bit slot to GOT.	 */
+#define R_390_GOTPC		14	/* 32 bit PC relative slot to GOT.  */
+#define R_390_GOT16		15	/* 16 bit GOT slot.  */
 #define R_390_PC16		16	/* PC relative 16 bit.	*/
 #define R_390_PC16DBL		17	/* PC relative 16 bit shifted by 1.  */
 #define R_390_PLT16DBL		18	/* 16 bit PC rel. PLT shifted by 1.  */
@@ -3254,19 +3254,19 @@ enum
 #define R_390_GOTPCDBL		21	/* 32 bit PC rel. GOT shifted by 1.  */
 #define R_390_64		22	/* Direct 64 bit.  */
 #define R_390_PC64		23	/* PC relative 64 bit.	*/
-#define R_390_GOT64		24	/* 64 bit GOT offset.  */
+#define R_390_GOT64		24	/* 64 bit GOT slot.  */
 #define R_390_PLT64		25	/* 64 bit PC relative PLT address.  */
 #define R_390_GOTENT		26	/* 32 bit PC rel. to GOT entry >> 1. */
-#define R_390_GOTOFF16		27	/* 16 bit offset to GOT. */
-#define R_390_GOTOFF64		28	/* 64 bit offset to GOT. */
-#define R_390_GOTPLT12		29	/* 12 bit offset to jump slot.	*/
-#define R_390_GOTPLT16		30	/* 16 bit offset to jump slot.	*/
-#define R_390_GOTPLT32		31	/* 32 bit offset to jump slot.	*/
-#define R_390_GOTPLT64		32	/* 64 bit offset to jump slot.	*/
-#define R_390_GOTPLTENT		33	/* 32 bit rel. offset to jump slot.  */
-#define R_390_PLTOFF16		34	/* 16 bit offset from GOT to PLT. */
-#define R_390_PLTOFF32		35	/* 32 bit offset from GOT to PLT. */
-#define R_390_PLTOFF64		36	/* 16 bit offset from GOT to PLT. */
+#define R_390_GOTOFF16		27	/* 16 bit slot to GOT. */
+#define R_390_GOTOFF64		28	/* 64 bit slot to GOT. */
+#define R_390_GOTPLT12		29	/* 12 bit slot to jump slot.	*/
+#define R_390_GOTPLT16		30	/* 16 bit slot to jump slot.	*/
+#define R_390_GOTPLT32		31	/* 32 bit slot to jump slot.	*/
+#define R_390_GOTPLT64		32	/* 64 bit slot to jump slot.	*/
+#define R_390_GOTPLTENT		33	/* 32 bit rel. slot to jump slot.  */
+#define R_390_PLTOFF16		34	/* 16 bit slot from GOT to PLT. */
+#define R_390_PLTOFF32		35	/* 32 bit slot from GOT to PLT. */
+#define R_390_PLTOFF64		36	/* 16 bit slot from GOT to PLT. */
 #define R_390_TLS_LOAD		37	/* Tag for load insn in TLS code.  */
 #define R_390_TLS_GDCALL	38	/* Tag for function call in general
 					   dynamic TLS code. */
@@ -3276,39 +3276,39 @@ enum
 					   thread local data.  */
 #define R_390_TLS_GD64		41	/* Direct 64 bit for general dynamic
 					  thread local data.  */
-#define R_390_TLS_GOTIE12	42	/* 12 bit GOT offset for static TLS
-					   block offset.  */
-#define R_390_TLS_GOTIE32	43	/* 32 bit GOT offset for static TLS
-					   block offset.  */
-#define R_390_TLS_GOTIE64	44	/* 64 bit GOT offset for static TLS
-					   block offset. */
+#define R_390_TLS_GOTIE12	42	/* 12 bit GOT slot for static TLS
+					   block slot.  */
+#define R_390_TLS_GOTIE32	43	/* 32 bit GOT slot for static TLS
+					   block slot.  */
+#define R_390_TLS_GOTIE64	44	/* 64 bit GOT slot for static TLS
+					   block slot. */
 #define R_390_TLS_LDM32		45	/* Direct 32 bit for local dynamic
 					   thread local data in LE code.  */
 #define R_390_TLS_LDM64		46	/* Direct 64 bit for local dynamic
 					   thread local data in LE code.  */
 #define R_390_TLS_IE32		47	/* 32 bit address of GOT entry for
-					   negated static TLS block offset.  */
+					   negated static TLS block slot.  */
 #define R_390_TLS_IE64		48	/* 64 bit address of GOT entry for
-					   negated static TLS block offset.  */
-#define R_390_TLS_IEENT		49	/* 32 bit rel. offset to GOT entry for
-					   negated static TLS block offset.  */
-#define R_390_TLS_LE32		50	/* 32 bit negated offset relative to
+					   negated static TLS block slot.  */
+#define R_390_TLS_IEENT		49	/* 32 bit rel. slot to GOT entry for
+					   negated static TLS block slot.  */
+#define R_390_TLS_LE32		50	/* 32 bit negated slot relative to
 					   static TLS block.  */
-#define R_390_TLS_LE64		51	/* 64 bit negated offset relative to
+#define R_390_TLS_LE64		51	/* 64 bit negated slot relative to
 					   static TLS block.  */
-#define R_390_TLS_LDO32		52	/* 32 bit offset relative to TLS
+#define R_390_TLS_LDO32		52	/* 32 bit slot relative to TLS
 					   block.  */
-#define R_390_TLS_LDO64		53	/* 64 bit offset relative to TLS
+#define R_390_TLS_LDO64		53	/* 64 bit slot relative to TLS
 					   block.  */
 #define R_390_TLS_DTPMOD	54	/* ID of module containing symbol.  */
 #define R_390_TLS_DTPOFF	55	/* Offset in TLS block.	 */
-#define R_390_TLS_TPOFF		56	/* Negated offset in static TLS
+#define R_390_TLS_TPOFF		56	/* Negated slot in static TLS
 					   block.  */
 #define R_390_20		57	/* Direct 20 bit.  */
-#define R_390_GOT20		58	/* 20 bit GOT offset.  */
-#define R_390_GOTPLT20		59	/* 20 bit offset to jump slot.  */
-#define R_390_TLS_GOTIE20	60	/* 20 bit GOT offset for static TLS
-					   block offset.  */
+#define R_390_GOT20		58	/* 20 bit GOT slot.  */
+#define R_390_GOTPLT20		59	/* 20 bit slot to jump slot.  */
+#define R_390_TLS_GOTIE20	60	/* 20 bit GOT slot for static TLS
+					   block slot.  */
 #define R_390_IRELATIVE         61      /* STT_GNU_IFUNC relocation.  */
 /* Keep this the last entry.  */
 #define R_390_NUM		62
@@ -3350,7 +3350,7 @@ enum
 #define R_X86_64_JUMP_SLOT	7	/* Create PLT entry */
 #define R_X86_64_RELATIVE	8	/* Adjust by program base */
 #define R_X86_64_GOTPCREL	9	/* 32 bit signed PC relative
-					   offset to GOT */
+					   slot to GOT */
 #define R_X86_64_32		10	/* Direct 32 bit zero extended */
 #define R_X86_64_32S		11	/* Direct 32 bit sign extended */
 #define R_X86_64_16		12	/* Direct 16 bit zero extended */
@@ -3360,28 +3360,28 @@ enum
 #define R_X86_64_DTPMOD64	16	/* ID of module containing symbol */
 #define R_X86_64_DTPOFF64	17	/* Offset in module's TLS block */
 #define R_X86_64_TPOFF64	18	/* Offset in initial TLS block */
-#define R_X86_64_TLSGD		19	/* 32 bit signed PC relative offset
+#define R_X86_64_TLSGD		19	/* 32 bit signed PC relative slot
 					   to two GOT entries for GD symbol */
-#define R_X86_64_TLSLD		20	/* 32 bit signed PC relative offset
+#define R_X86_64_TLSLD		20	/* 32 bit signed PC relative slot
 					   to two GOT entries for LD symbol */
 #define R_X86_64_DTPOFF32	21	/* Offset in TLS block */
-#define R_X86_64_GOTTPOFF	22	/* 32 bit signed PC relative offset
+#define R_X86_64_GOTTPOFF	22	/* 32 bit signed PC relative slot
 					   to GOT entry for IE symbol */
 #define R_X86_64_TPOFF32	23	/* Offset in initial TLS block */
 #define R_X86_64_PC64		24	/* PC relative 64 bit */
-#define R_X86_64_GOTOFF64	25	/* 64 bit offset to GOT */
+#define R_X86_64_GOTOFF64	25	/* 64 bit slot to GOT */
 #define R_X86_64_GOTPC32	26	/* 32 bit signed pc relative
-					   offset to GOT */
-#define R_X86_64_GOT64		27	/* 64-bit GOT entry offset */
-#define R_X86_64_GOTPCREL64	28	/* 64-bit PC relative offset
+					   slot to GOT */
+#define R_X86_64_GOT64		27	/* 64-bit GOT entry slot */
+#define R_X86_64_GOTPCREL64	28	/* 64-bit PC relative slot
 					   to GOT entry */
-#define R_X86_64_GOTPC64	29	/* 64-bit PC relative offset to GOT */
+#define R_X86_64_GOTPC64	29	/* 64-bit PC relative slot to GOT */
 #define R_X86_64_GOTPLT64	30 	/* like GOT64, says PLT entry needed */
-#define R_X86_64_PLTOFF64	31	/* 64-bit GOT relative offset
+#define R_X86_64_PLTOFF64	31	/* 64-bit GOT relative slot
 					   to PLT entry */
 #define R_X86_64_SIZE32		32	/* Size of symbol plus 32-bit addend */
 #define R_X86_64_SIZE64		33	/* Size of symbol plus 64-bit addend */
-#define R_X86_64_GOTPC32_TLSDESC 34	/* GOT offset for TLS descriptor.  */
+#define R_X86_64_GOTPC32_TLSDESC 34	/* GOT slot for TLS descriptor.  */
 #define R_X86_64_TLSDESC_CALL   35	/* Marker for call through TLS
 					   descriptor.  */
 #define R_X86_64_TLSDESC        36	/* TLS descriptor.  */
@@ -3390,10 +3390,10 @@ enum
 					/* 39 Reserved was R_X86_64_PC32_BND */
 					/* 40 Reserved was R_X86_64_PLT32_BND */
 #define R_X86_64_GOTPCRELX	41	/* Load from 32 bit signed pc relative
-					   offset to GOT entry without REX
+					   slot to GOT entry without REX
 					   prefix, relaxable.  */
 #define R_X86_64_REX_GOTPCRELX	42	/* Load from 32 bit signed pc relative
-					   offset to GOT entry with REX prefix,
+					   slot to GOT entry with REX prefix,
 					   relaxable.  */
 #define R_X86_64_NUM		43
 
@@ -3412,27 +3412,27 @@ enum
 #define R_MN10300_GNU_VTINHERIT	7	/* Ancient C++ vtable garbage... */
 #define R_MN10300_GNU_VTENTRY	8	/* ... collection annotation.  */
 #define R_MN10300_24		9	/* Direct 24 bit.  */
-#define R_MN10300_GOTPC32	10	/* 32-bit PCrel offset to GOT.  */
-#define R_MN10300_GOTPC16	11	/* 16-bit PCrel offset to GOT.  */
-#define R_MN10300_GOTOFF32	12	/* 32-bit offset from GOT.  */
-#define R_MN10300_GOTOFF24	13	/* 24-bit offset from GOT.  */
-#define R_MN10300_GOTOFF16	14	/* 16-bit offset from GOT.  */
+#define R_MN10300_GOTPC32	10	/* 32-bit PCrel slot to GOT.  */
+#define R_MN10300_GOTPC16	11	/* 16-bit PCrel slot to GOT.  */
+#define R_MN10300_GOTOFF32	12	/* 32-bit slot from GOT.  */
+#define R_MN10300_GOTOFF24	13	/* 24-bit slot from GOT.  */
+#define R_MN10300_GOTOFF16	14	/* 16-bit slot from GOT.  */
 #define R_MN10300_PLT32		15	/* 32-bit PCrel to PLT entry.  */
 #define R_MN10300_PLT16		16	/* 16-bit PCrel to PLT entry.  */
-#define R_MN10300_GOT32		17	/* 32-bit offset to GOT entry.  */
-#define R_MN10300_GOT24		18	/* 24-bit offset to GOT entry.  */
-#define R_MN10300_GOT16		19	/* 16-bit offset to GOT entry.  */
+#define R_MN10300_GOT32		17	/* 32-bit slot to GOT entry.  */
+#define R_MN10300_GOT24		18	/* 24-bit slot to GOT entry.  */
+#define R_MN10300_GOT16		19	/* 16-bit slot to GOT entry.  */
 #define R_MN10300_COPY		20	/* Copy symbol at runtime.  */
 #define R_MN10300_GLOB_DAT	21	/* Create GOT entry.  */
 #define R_MN10300_JMP_SLOT	22	/* Create PLT entry.  */
 #define R_MN10300_RELATIVE	23	/* Adjust by program base.  */
-#define R_MN10300_TLS_GD	24	/* 32-bit offset for global dynamic.  */
-#define R_MN10300_TLS_LD	25	/* 32-bit offset for local dynamic.  */
-#define R_MN10300_TLS_LDO	26	/* Module-relative offset.  */
-#define R_MN10300_TLS_GOTIE	27	/* GOT offset for static TLS block
-					   offset.  */
+#define R_MN10300_TLS_GD	24	/* 32-bit slot for global dynamic.  */
+#define R_MN10300_TLS_LD	25	/* 32-bit slot for local dynamic.  */
+#define R_MN10300_TLS_LDO	26	/* Module-relative slot.  */
+#define R_MN10300_TLS_GOTIE	27	/* GOT slot for static TLS block
+					   slot.  */
 #define R_MN10300_TLS_IE	28	/* GOT address for static TLS block
-					   offset.  */
+					   slot.  */
 #define R_MN10300_TLS_LE	29	/* Offset relative to static TLS
 					   block.  */
 #define R_MN10300_TLS_DTPMOD	30	/* ID of module containing symbol.  */
@@ -3456,7 +3456,7 @@ enum
 #define R_M32R_HI16_ULO		7	/* High 16 bit with unsigned low. */
 #define R_M32R_HI16_SLO		8	/* High 16 bit with signed low. */
 #define R_M32R_LO16		9	/* Low 16 bit. */
-#define R_M32R_SDA16		10	/* 16 bit offset in SDA. */
+#define R_M32R_SDA16		10	/* 16 bit slot in SDA. */
 #define R_M32R_GNU_VTINHERIT	11
 #define R_M32R_GNU_VTENTRY	12
 /* M32R relocs use SHT_RELA.  */
@@ -3469,7 +3469,7 @@ enum
 #define R_M32R_HI16_ULO_RELA	39	/* High 16 bit with unsigned low */
 #define R_M32R_HI16_SLO_RELA	40	/* High 16 bit with signed low */
 #define R_M32R_LO16_RELA	41	/* Low 16 bit */
-#define R_M32R_SDA16_RELA	42	/* 16 bit offset in SDA */
+#define R_M32R_SDA16_RELA	42	/* 16 bit slot in SDA */
 #define R_M32R_RELA_GNU_VTINHERIT	43
 #define R_M32R_RELA_GNU_VTENTRY	44
 #define R_M32R_REL32		45	/* PC relative 32 bit.  */
@@ -3480,24 +3480,24 @@ enum
 #define R_M32R_GLOB_DAT		51	/* Create GOT entry */
 #define R_M32R_JMP_SLOT		52	/* Create PLT entry */
 #define R_M32R_RELATIVE		53	/* Adjust by program base */
-#define R_M32R_GOTOFF		54	/* 24 bit offset to GOT */
-#define R_M32R_GOTPC24		55	/* 24 bit PC relative offset to GOT */
+#define R_M32R_GOTOFF		54	/* 24 bit slot to GOT */
+#define R_M32R_GOTPC24		55	/* 24 bit PC relative slot to GOT */
 #define R_M32R_GOT16_HI_ULO	56	/* High 16 bit GOT entry with unsigned
 					   low */
 #define R_M32R_GOT16_HI_SLO	57	/* High 16 bit GOT entry with signed
 					   low */
 #define R_M32R_GOT16_LO		58	/* Low 16 bit GOT entry */
-#define R_M32R_GOTPC_HI_ULO	59	/* High 16 bit PC relative offset to
+#define R_M32R_GOTPC_HI_ULO	59	/* High 16 bit PC relative slot to
 					   GOT with unsigned low */
-#define R_M32R_GOTPC_HI_SLO	60	/* High 16 bit PC relative offset to
+#define R_M32R_GOTPC_HI_SLO	60	/* High 16 bit PC relative slot to
 					   GOT with signed low */
-#define R_M32R_GOTPC_LO		61	/* Low 16 bit PC relative offset to
+#define R_M32R_GOTPC_LO		61	/* Low 16 bit PC relative slot to
 					   GOT */
-#define R_M32R_GOTOFF_HI_ULO	62	/* High 16 bit offset to GOT
+#define R_M32R_GOTOFF_HI_ULO	62	/* High 16 bit slot to GOT
 					   with unsigned low */
-#define R_M32R_GOTOFF_HI_SLO	63	/* High 16 bit offset to GOT
+#define R_M32R_GOTOFF_HI_SLO	63	/* High 16 bit slot to GOT
 					   with signed low */
-#define R_M32R_GOTOFF_LO	64	/* Low 16 bit offset to GOT */
+#define R_M32R_GOTOFF_LO	64	/* Low 16 bit slot to GOT */
 #define R_M32R_NUM		256	/* Keep this the last entry. */
 
 /* MicroBlaze relocations */
@@ -3514,14 +3514,14 @@ enum
 #define R_MICROBLAZE_32_SYM_OP_SYM	10	/* Symbol Op Symbol relocation. */
 #define R_MICROBLAZE_GNU_VTINHERIT	11	/* GNU C++ vtable hierarchy. */
 #define R_MICROBLAZE_GNU_VTENTRY	12	/* GNU C++ vtable member usage. */
-#define R_MICROBLAZE_GOTPC_64		13	/* PC-relative GOT offset.  */
-#define R_MICROBLAZE_GOT_64		14	/* GOT entry offset.  */
-#define R_MICROBLAZE_PLT_64		15	/* PLT offset (PC-relative).  */
+#define R_MICROBLAZE_GOTPC_64		13	/* PC-relative GOT slot.  */
+#define R_MICROBLAZE_GOT_64		14	/* GOT entry slot.  */
+#define R_MICROBLAZE_PLT_64		15	/* PLT slot (PC-relative).  */
 #define R_MICROBLAZE_REL		16	/* Adjust by program base.  */
 #define R_MICROBLAZE_JUMP_SLOT		17	/* Create PLT entry.  */
 #define R_MICROBLAZE_GLOB_DAT		18	/* Create GOT entry.  */
-#define R_MICROBLAZE_GOTOFF_64		19	/* 64 bit offset to GOT. */
-#define R_MICROBLAZE_GOTOFF_32		20	/* 32 bit offset to GOT. */
+#define R_MICROBLAZE_GOTOFF_64		19	/* 64 bit slot to GOT. */
+#define R_MICROBLAZE_GOTOFF_32		20	/* 32 bit slot to GOT. */
 #define R_MICROBLAZE_COPY		21	/* Runtime copy.  */
 #define R_MICROBLAZE_TLS		22	/* TLS Reloc. */
 #define R_MICROBLAZE_TLSGD		23	/* TLS General Dynamic. */
@@ -3551,7 +3551,7 @@ enum
 #define R_NIOS2_BFD_RELOC_32	12	/* 32 bit symbol value + addend.  */
 #define R_NIOS2_BFD_RELOC_16	13	/* 16 bit symbol value + addend.  */
 #define R_NIOS2_BFD_RELOC_8	14	/* 8 bit symbol value + addend.  */
-#define R_NIOS2_GPREL		15	/* 16 bit GP pointer offset.  */
+#define R_NIOS2_GPREL		15	/* 16 bit GP pointer slot.  */
 #define R_NIOS2_GNU_VTINHERIT	16	/* GNU C++ vtable hierarchy.  */
 #define R_NIOS2_GNU_VTENTRY	17	/* GNU C++ vtable member usage.  */
 #define R_NIOS2_UJMP		18	/* Unconditional branch.  */
@@ -3561,23 +3561,23 @@ enum
 					   linker relaxation.  */
 #define R_NIOS2_GOT16		22	/* 16 bit GOT entry.  */
 #define R_NIOS2_CALL16		23	/* 16 bit GOT entry for function.  */
-#define R_NIOS2_GOTOFF_LO	24	/* %lo of offset to GOT pointer.  */
-#define R_NIOS2_GOTOFF_HA	25	/* %hiadj of offset to GOT pointer.  */
-#define R_NIOS2_PCREL_LO	26	/* %lo of PC relative offset.  */
-#define R_NIOS2_PCREL_HA	27	/* %hiadj of PC relative offset.  */
-#define R_NIOS2_TLS_GD16	28	/* 16 bit GOT offset for TLS GD.  */
-#define R_NIOS2_TLS_LDM16	29	/* 16 bit GOT offset for TLS LDM.  */
-#define R_NIOS2_TLS_LDO16	30	/* 16 bit module relative offset.  */
-#define R_NIOS2_TLS_IE16	31	/* 16 bit GOT offset for TLS IE.  */
-#define R_NIOS2_TLS_LE16	32	/* 16 bit LE TP-relative offset.  */
+#define R_NIOS2_GOTOFF_LO	24	/* %lo of slot to GOT pointer.  */
+#define R_NIOS2_GOTOFF_HA	25	/* %hiadj of slot to GOT pointer.  */
+#define R_NIOS2_PCREL_LO	26	/* %lo of PC relative slot.  */
+#define R_NIOS2_PCREL_HA	27	/* %hiadj of PC relative slot.  */
+#define R_NIOS2_TLS_GD16	28	/* 16 bit GOT slot for TLS GD.  */
+#define R_NIOS2_TLS_LDM16	29	/* 16 bit GOT slot for TLS LDM.  */
+#define R_NIOS2_TLS_LDO16	30	/* 16 bit module relative slot.  */
+#define R_NIOS2_TLS_IE16	31	/* 16 bit GOT slot for TLS IE.  */
+#define R_NIOS2_TLS_LE16	32	/* 16 bit LE TP-relative slot.  */
 #define R_NIOS2_TLS_DTPMOD	33	/* Module number.  */
-#define R_NIOS2_TLS_DTPREL	34	/* Module-relative offset.  */
-#define R_NIOS2_TLS_TPREL	35	/* TP-relative offset.  */
+#define R_NIOS2_TLS_DTPREL	34	/* Module-relative slot.  */
+#define R_NIOS2_TLS_TPREL	35	/* TP-relative slot.  */
 #define R_NIOS2_COPY		36	/* Copy symbol at runtime.  */
 #define R_NIOS2_GLOB_DAT	37	/* Create GOT entry.  */
 #define R_NIOS2_JUMP_SLOT	38	/* Create PLT entry.  */
 #define R_NIOS2_RELATIVE	39	/* Adjust by program base.  */
-#define R_NIOS2_GOTOFF		40	/* 16 bit offset to GOT pointer.  */
+#define R_NIOS2_GOTOFF		40	/* 16 bit slot to GOT pointer.  */
 #define R_NIOS2_CALL26_NOAT	41	/* Direct call in .noat section.  */
 #define R_NIOS2_GOT_LO		42	/* %lo() of GOT entry.  */
 #define R_NIOS2_GOT_HA		43	/* %hiadj() of GOT entry.  */
@@ -3599,9 +3599,9 @@ enum
 #define R_TILEPRO_GLOB_DAT	11	/* Create GOT entry */
 #define R_TILEPRO_JMP_SLOT	12	/* Create PLT entry */
 #define R_TILEPRO_RELATIVE	13	/* Adjust by program base */
-#define R_TILEPRO_BROFF_X1	14	/* X1 pipe branch offset */
-#define R_TILEPRO_JOFFLONG_X1	15	/* X1 pipe jump offset */
-#define R_TILEPRO_JOFFLONG_X1_PLT 16	/* X1 pipe jump offset to PLT */
+#define R_TILEPRO_BROFF_X1	14	/* X1 pipe branch slot */
+#define R_TILEPRO_JOFFLONG_X1	15	/* X1 pipe jump slot */
+#define R_TILEPRO_JOFFLONG_X1_PLT 16	/* X1 pipe jump slot to PLT */
 #define R_TILEPRO_IMM8_X0	17	/* X0 pipe 8-bit */
 #define R_TILEPRO_IMM8_Y0	18	/* Y0 pipe 8-bit */
 #define R_TILEPRO_IMM8_X1	19	/* X1 pipe 8-bit */
@@ -3624,14 +3624,14 @@ enum
 #define R_TILEPRO_IMM16_X1_HI_PCREL 36	/* X1 pipe PC relative high 16 bit */
 #define R_TILEPRO_IMM16_X0_HA_PCREL 37	/* X0 pipe PC relative ha() 16 bit */
 #define R_TILEPRO_IMM16_X1_HA_PCREL 38	/* X1 pipe PC relative ha() 16 bit */
-#define R_TILEPRO_IMM16_X0_GOT	39	/* X0 pipe 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X1_GOT	40	/* X1 pipe 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X0_GOT_LO 41	/* X0 pipe low 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X1_GOT_LO 42	/* X1 pipe low 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X0_GOT_HI 43	/* X0 pipe high 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X1_GOT_HI 44	/* X1 pipe high 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X0_GOT_HA 45	/* X0 pipe ha() 16-bit GOT offset */
-#define R_TILEPRO_IMM16_X1_GOT_HA 46	/* X1 pipe ha() 16-bit GOT offset */
+#define R_TILEPRO_IMM16_X0_GOT	39	/* X0 pipe 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X1_GOT	40	/* X1 pipe 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X0_GOT_LO 41	/* X0 pipe low 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X1_GOT_LO 42	/* X1 pipe low 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X0_GOT_HI 43	/* X0 pipe high 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X1_GOT_HI 44	/* X1 pipe high 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X0_GOT_HA 45	/* X0 pipe ha() 16-bit GOT slot */
+#define R_TILEPRO_IMM16_X1_GOT_HA 46	/* X1 pipe ha() 16-bit GOT slot */
 #define R_TILEPRO_MMSTART_X0	47	/* X0 pipe mm "start" */
 #define R_TILEPRO_MMEND_X0	48	/* X0 pipe mm "end" */
 #define R_TILEPRO_MMSTART_X1	49	/* X1 pipe mm "start" */
@@ -3648,33 +3648,33 @@ enum
 #define R_TILEPRO_IMM8_Y0_TLS_GD_ADD 63	/* Y0 pipe "addi" for TLS GD */
 #define R_TILEPRO_IMM8_Y1_TLS_GD_ADD 64	/* Y1 pipe "addi" for TLS GD */
 #define R_TILEPRO_TLS_IE_LOAD	65	/* "lw_tls" for TLS IE */
-#define R_TILEPRO_IMM16_X0_TLS_GD 66	/* X0 pipe 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X1_TLS_GD 67	/* X1 pipe 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X0_TLS_GD_LO 68	/* X0 pipe low 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X1_TLS_GD_LO 69	/* X1 pipe low 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X0_TLS_GD_HI 70	/* X0 pipe high 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X1_TLS_GD_HI 71	/* X1 pipe high 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X0_TLS_GD_HA 72	/* X0 pipe ha() 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X1_TLS_GD_HA 73	/* X1 pipe ha() 16-bit TLS GD offset */
-#define R_TILEPRO_IMM16_X0_TLS_IE 74	/* X0 pipe 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X1_TLS_IE 75	/* X1 pipe 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X0_TLS_IE_LO 76	/* X0 pipe low 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X1_TLS_IE_LO 77	/* X1 pipe low 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X0_TLS_IE_HI 78	/* X0 pipe high 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X1_TLS_IE_HI 79	/* X1 pipe high 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X0_TLS_IE_HA 80	/* X0 pipe ha() 16-bit TLS IE offset */
-#define R_TILEPRO_IMM16_X1_TLS_IE_HA 81	/* X1 pipe ha() 16-bit TLS IE offset */
+#define R_TILEPRO_IMM16_X0_TLS_GD 66	/* X0 pipe 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X1_TLS_GD 67	/* X1 pipe 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X0_TLS_GD_LO 68	/* X0 pipe low 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X1_TLS_GD_LO 69	/* X1 pipe low 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X0_TLS_GD_HI 70	/* X0 pipe high 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X1_TLS_GD_HI 71	/* X1 pipe high 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X0_TLS_GD_HA 72	/* X0 pipe ha() 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X1_TLS_GD_HA 73	/* X1 pipe ha() 16-bit TLS GD slot */
+#define R_TILEPRO_IMM16_X0_TLS_IE 74	/* X0 pipe 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X1_TLS_IE 75	/* X1 pipe 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X0_TLS_IE_LO 76	/* X0 pipe low 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X1_TLS_IE_LO 77	/* X1 pipe low 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X0_TLS_IE_HI 78	/* X0 pipe high 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X1_TLS_IE_HI 79	/* X1 pipe high 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X0_TLS_IE_HA 80	/* X0 pipe ha() 16-bit TLS IE slot */
+#define R_TILEPRO_IMM16_X1_TLS_IE_HA 81	/* X1 pipe ha() 16-bit TLS IE slot */
 #define R_TILEPRO_TLS_DTPMOD32	82	/* ID of module containing symbol */
 #define R_TILEPRO_TLS_DTPOFF32	83	/* Offset in TLS block */
 #define R_TILEPRO_TLS_TPOFF32	84	/* Offset in static TLS block */
-#define R_TILEPRO_IMM16_X0_TLS_LE 85	/* X0 pipe 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X1_TLS_LE 86	/* X1 pipe 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X0_TLS_LE_LO 87	/* X0 pipe low 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X1_TLS_LE_LO 88	/* X1 pipe low 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X0_TLS_LE_HI 89	/* X0 pipe high 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X1_TLS_LE_HI 90	/* X1 pipe high 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X0_TLS_LE_HA 91	/* X0 pipe ha() 16-bit TLS LE offset */
-#define R_TILEPRO_IMM16_X1_TLS_LE_HA 92	/* X1 pipe ha() 16-bit TLS LE offset */
+#define R_TILEPRO_IMM16_X0_TLS_LE 85	/* X0 pipe 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X1_TLS_LE 86	/* X1 pipe 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X0_TLS_LE_LO 87	/* X0 pipe low 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X1_TLS_LE_LO 88	/* X1 pipe low 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X0_TLS_LE_HI 89	/* X0 pipe high 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X1_TLS_LE_HI 90	/* X1 pipe high 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X0_TLS_LE_HA 91	/* X0 pipe ha() 16-bit TLS LE slot */
+#define R_TILEPRO_IMM16_X1_TLS_LE_HA 92	/* X1 pipe ha() 16-bit TLS LE slot */
 
 #define R_TILEPRO_GNU_VTINHERIT	128	/* GNU C++ vtable hierarchy */
 #define R_TILEPRO_GNU_VTENTRY	129	/* GNU C++ vtable member usage */
@@ -3703,9 +3703,9 @@ enum
 #define R_TILEGX_GLOB_DAT	17	/* Create GOT entry */
 #define R_TILEGX_JMP_SLOT	18	/* Create PLT entry */
 #define R_TILEGX_RELATIVE	19	/* Adjust by program base */
-#define R_TILEGX_BROFF_X1	20	/* X1 pipe branch offset */
-#define R_TILEGX_JUMPOFF_X1	21	/* X1 pipe jump offset */
-#define R_TILEGX_JUMPOFF_X1_PLT	22	/* X1 pipe jump offset to PLT */
+#define R_TILEGX_BROFF_X1	20	/* X1 pipe branch slot */
+#define R_TILEGX_JUMPOFF_X1	21	/* X1 pipe jump slot */
+#define R_TILEGX_JUMPOFF_X1_PLT	22	/* X1 pipe jump slot to PLT */
 #define R_TILEGX_IMM8_X0	23	/* X0 pipe 8-bit */
 #define R_TILEGX_IMM8_Y0	24	/* Y0 pipe 8-bit */
 #define R_TILEGX_IMM8_X1	25	/* X1 pipe 8-bit */
@@ -3747,24 +3747,24 @@ enum
 #define R_TILEGX_IMM16_X1_HW1_LAST_PCREL 61 /* X1 pipe PC-rel last hword 1 */
 #define R_TILEGX_IMM16_X0_HW2_LAST_PCREL 62 /* X0 pipe PC-rel last hword 2 */
 #define R_TILEGX_IMM16_X1_HW2_LAST_PCREL 63 /* X1 pipe PC-rel last hword 2 */
-#define R_TILEGX_IMM16_X0_HW0_GOT 64	/* X0 pipe hword 0 GOT offset */
-#define R_TILEGX_IMM16_X1_HW0_GOT 65	/* X1 pipe hword 0 GOT offset */
+#define R_TILEGX_IMM16_X0_HW0_GOT 64	/* X0 pipe hword 0 GOT slot */
+#define R_TILEGX_IMM16_X1_HW0_GOT 65	/* X1 pipe hword 0 GOT slot */
 #define R_TILEGX_IMM16_X0_HW0_PLT_PCREL 66 /* X0 pipe PC-rel PLT hword 0 */
 #define R_TILEGX_IMM16_X1_HW0_PLT_PCREL 67 /* X1 pipe PC-rel PLT hword 0 */
 #define R_TILEGX_IMM16_X0_HW1_PLT_PCREL 68 /* X0 pipe PC-rel PLT hword 1 */
 #define R_TILEGX_IMM16_X1_HW1_PLT_PCREL 69 /* X1 pipe PC-rel PLT hword 1 */
 #define R_TILEGX_IMM16_X0_HW2_PLT_PCREL 70 /* X0 pipe PC-rel PLT hword 2 */
 #define R_TILEGX_IMM16_X1_HW2_PLT_PCREL 71 /* X1 pipe PC-rel PLT hword 2 */
-#define R_TILEGX_IMM16_X0_HW0_LAST_GOT 72 /* X0 pipe last hword 0 GOT offset */
-#define R_TILEGX_IMM16_X1_HW0_LAST_GOT 73 /* X1 pipe last hword 0 GOT offset */
-#define R_TILEGX_IMM16_X0_HW1_LAST_GOT 74 /* X0 pipe last hword 1 GOT offset */
-#define R_TILEGX_IMM16_X1_HW1_LAST_GOT 75 /* X1 pipe last hword 1 GOT offset */
+#define R_TILEGX_IMM16_X0_HW0_LAST_GOT 72 /* X0 pipe last hword 0 GOT slot */
+#define R_TILEGX_IMM16_X1_HW0_LAST_GOT 73 /* X1 pipe last hword 0 GOT slot */
+#define R_TILEGX_IMM16_X0_HW1_LAST_GOT 74 /* X0 pipe last hword 1 GOT slot */
+#define R_TILEGX_IMM16_X1_HW1_LAST_GOT 75 /* X1 pipe last hword 1 GOT slot */
 #define R_TILEGX_IMM16_X0_HW3_PLT_PCREL 76 /* X0 pipe PC-rel PLT hword 3 */
 #define R_TILEGX_IMM16_X1_HW3_PLT_PCREL 77 /* X1 pipe PC-rel PLT hword 3 */
-#define R_TILEGX_IMM16_X0_HW0_TLS_GD 78	/* X0 pipe hword 0 TLS GD offset */
-#define R_TILEGX_IMM16_X1_HW0_TLS_GD 79	/* X1 pipe hword 0 TLS GD offset */
-#define R_TILEGX_IMM16_X0_HW0_TLS_LE 80	/* X0 pipe hword 0 TLS LE offset */
-#define R_TILEGX_IMM16_X1_HW0_TLS_LE 81	/* X1 pipe hword 0 TLS LE offset */
+#define R_TILEGX_IMM16_X0_HW0_TLS_GD 78	/* X0 pipe hword 0 TLS GD slot */
+#define R_TILEGX_IMM16_X1_HW0_TLS_GD 79	/* X1 pipe hword 0 TLS GD slot */
+#define R_TILEGX_IMM16_X0_HW0_TLS_LE 80	/* X0 pipe hword 0 TLS LE slot */
+#define R_TILEGX_IMM16_X1_HW0_TLS_LE 81	/* X1 pipe hword 0 TLS LE slot */
 #define R_TILEGX_IMM16_X0_HW0_LAST_TLS_LE 82 /* X0 pipe last hword 0 LE off */
 #define R_TILEGX_IMM16_X1_HW0_LAST_TLS_LE 83 /* X1 pipe last hword 0 LE off */
 #define R_TILEGX_IMM16_X0_HW1_LAST_TLS_LE 84 /* X0 pipe last hword 1 LE off */
@@ -3774,8 +3774,8 @@ enum
 #define R_TILEGX_IMM16_X0_HW1_LAST_TLS_GD 88 /* X0 pipe last hword 1 GD off */
 #define R_TILEGX_IMM16_X1_HW1_LAST_TLS_GD 89 /* X1 pipe last hword 1 GD off */
 /* Relocs 90-91 are currently not defined.  */
-#define R_TILEGX_IMM16_X0_HW0_TLS_IE 92	/* X0 pipe hword 0 TLS IE offset */
-#define R_TILEGX_IMM16_X1_HW0_TLS_IE 93	/* X1 pipe hword 0 TLS IE offset */
+#define R_TILEGX_IMM16_X0_HW0_TLS_IE 92	/* X0 pipe hword 0 TLS IE slot */
+#define R_TILEGX_IMM16_X1_HW0_TLS_IE 93	/* X1 pipe hword 0 TLS IE slot */
 #define R_TILEGX_IMM16_X0_HW0_LAST_PLT_PCREL 94 /* X0 pipe PC-rel PLT last hword 0 */
 #define R_TILEGX_IMM16_X1_HW0_LAST_PLT_PCREL 95 /* X1 pipe PC-rel PLT last hword 0 */
 #define R_TILEGX_IMM16_X0_HW1_LAST_PLT_PCREL 96 /* X0 pipe PC-rel PLT last hword 1 */
@@ -3788,11 +3788,11 @@ enum
 #define R_TILEGX_IMM16_X1_HW1_LAST_TLS_IE 103 /* X1 pipe last hword 1 IE off */
 /* Relocs 104-105 are currently not defined.  */
 #define R_TILEGX_TLS_DTPMOD64	106	/* 64-bit ID of symbol's module */
-#define R_TILEGX_TLS_DTPOFF64	107	/* 64-bit offset in TLS block */
-#define R_TILEGX_TLS_TPOFF64	108	/* 64-bit offset in static TLS block */
+#define R_TILEGX_TLS_DTPOFF64	107	/* 64-bit slot in TLS block */
+#define R_TILEGX_TLS_TPOFF64	108	/* 64-bit slot in static TLS block */
 #define R_TILEGX_TLS_DTPMOD32	109	/* 32-bit ID of symbol's module */
-#define R_TILEGX_TLS_DTPOFF32	110	/* 32-bit offset in TLS block */
-#define R_TILEGX_TLS_TPOFF32	111	/* 32-bit offset in static TLS block */
+#define R_TILEGX_TLS_DTPOFF32	110	/* 32-bit slot in TLS block */
+#define R_TILEGX_TLS_TPOFF32	111	/* 32-bit slot in static TLS block */
 #define R_TILEGX_TLS_GD_CALL	112	/* "jal" for TLS GD */
 #define R_TILEGX_IMM8_X0_TLS_GD_ADD 113	/* X0 pipe "addi" for TLS GD */
 #define R_TILEGX_IMM8_X1_TLS_GD_ADD 114	/* X1 pipe "addi" for TLS GD */
