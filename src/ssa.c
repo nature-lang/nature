@@ -92,7 +92,7 @@ void ssa_idom(closure_t *c) {
         slice_t *dom = block->dom;
         // 最近支配者不能是自身
         for (int i = dom->count - 1; i >= 0; --i) {
-            if (((basic_block_t *) dom->take[i])->label_index == block->label_index) {
+            if (((basic_block_t *) dom->take[i])->id == block->id) {
                 continue;
             }
 
@@ -137,7 +137,7 @@ void ssa_df(closure_t *c) {
             // 是否存在 idom[current_block] != pred, 但是 dom[current_block] = pred?
             // 不可能， 因为是从 current_block->pred->idom(pred)
             // pred 和 idom(pred) 之间如果存在节点支配 current,那么其一定会支配 current->pred，则其就是 idom(pred)
-            while (runner->label_index != current_block->idom->label_index) {
+            while (runner->id != current_block->idom->id) {
                 slice_push(runner->df, current_block);
 
                 // 向上查找
@@ -387,7 +387,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
     }
 
     for (int i = 0; i < old_dom->count; ++i) {
-        if (((basic_block_t *) old_dom->take[i])->label_index != ((basic_block_t *) new_dom->take[i])->label_index) {
+        if (((basic_block_t *) old_dom->take[i])->id != ((basic_block_t *) new_dom->take[i])->id) {
             return true;
         }
     }
@@ -417,14 +417,14 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
         // 遍历 pred_dom 为 label 计数
         for (int k = 0; k < pred_dom->count; ++k) {
-            block_label_count[((basic_block_t *) pred_dom->take[k])->label_index]++;
+            block_label_count[((basic_block_t *) pred_dom->take[k])->id]++;
         }
     }
 
     // 如果 block 的count 和 preds_count 的数量一致则表示该基本块支配了所有的前驱
     // dom 严格按照 label 从小到大排序, 且 block 自身一定是支配自身的
     for (int label = 0; label < c->blocks->count; ++label) {
-        if (block_label_count[label] == block->preds->count || label == block->label_index) {
+        if (block_label_count[label] == block->preds->count || label == block->id) {
             slice_push(dom, c->blocks->take[label]);
         }
     }
@@ -591,12 +591,12 @@ void ssa_rename_var(lir_operand_var *var, uint8_t number) {
 bool ssa_is_idom(slice_t *dom, basic_block_t *await) {
     for (int i = 0; i < dom->count; ++i) {
         basic_block_t *item = dom->take[i];
-        if (item->label_index == await->label_index) {
+        if (item->id == await->id) {
             continue;
         }
 
         // 判断是否包含
-        if (!lir_blocks_contains(item->dom, await->label_index)) {
+        if (!lir_blocks_contains(item->dom, await->id)) {
             return false;
         }
     }

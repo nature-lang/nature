@@ -163,7 +163,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->globals = slice_new();
     new->fixed_regs = slice_new(); // reg_t
     new->blocks = slice_new(); // lir_basic_block
-    new->order_blocks = slice_new(); // lir_basic_block
+//    new->order_blocks = slice_new(); // lir_basic_block
 
     new->interval_table = table_new();
 
@@ -172,6 +172,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->formal_params = list_new();
 //    new->stack_length = 0;
     new->stack_slot = 0;
+    new->loop_count = 0;
 
     new->interval_count = alloc_reg_count() + 1;
 
@@ -181,7 +182,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
 basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block_t *basic_block = NEW(basic_block_t);
     basic_block->name = name;
-    basic_block->label_index = label_index;
+    basic_block->id = label_index;
 
     basic_block->operations = list_new();
     basic_block->preds = slice_new();
@@ -209,7 +210,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label) {
     for (int i = 0; i < blocks->count; ++i) {
-        if (((basic_block_t *) blocks->take[i])->label_index == label) {
+        if (((basic_block_t *) blocks->take[i])->id == label) {
             return true;
         }
     }
@@ -329,5 +330,24 @@ bool lir_op_is_call(lir_op_t *op) {
     if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RUNTIME_CALL) {
         return true;
     }
+    return false;
+}
+
+bool lir_operand_equal(lir_operand *a, lir_operand *b) {
+    if (a->type != b->type) {
+        return false;
+    }
+    if (a->type == LIR_OPERAND_REG) {
+        reg_t *reg_a = a->value;
+        reg_t *reg_b = b->value;
+        return reg_a->index == reg_b->index;
+    }
+
+    if (a->type == LIR_OPERAND_STACK) {
+        lir_operand_stack *stack_a = a->value;
+        lir_operand_stack *stack_b = b->value;
+        return stack_a->offset == stack_b->offset;
+    }
+
     return false;
 }

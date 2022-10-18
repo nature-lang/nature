@@ -39,6 +39,8 @@ list *list_split(list *l, list_node *node);
 
 void list_append(list *dst, list *src); // src 追加到 dst 中
 
+void list_remove(list *l, list_node *node);
+
 list_node *list_new_node();
 
 bool list_empty(list *l);

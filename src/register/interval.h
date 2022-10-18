@@ -56,12 +56,6 @@ typedef struct {
 } resolver_t;
 
 /**
- * 标记循环路线和每个基本块是否处于循环中，以及循环的深度
- * @param c
- */
-void interval_loop_detection(closure_t *c);
-
-/**
  * 根据块的权重（loop.depth） 对所有基本块进行排序插入到 closure_t->order_blocks 中
  * 权重越大越靠前
  * @param c
@@ -159,5 +153,7 @@ void resolve_data_flow(closure_t *c);
 void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to);
 
 void resolve_mappings(closure_t *c, resolver_t *r);
+
+slice_t *op_vars(closure_t *c, lir_op_t *op);
 
 #endif

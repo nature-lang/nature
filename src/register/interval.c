@@ -6,6 +6,137 @@
 #include "assert.h"
 
 
+/**
+ * 深度优先(右侧优先) 遍历，并标记 loop index/header
+ * 深度优先有前序和后续遍历，此时采取后续遍历的方式来为 loop header 标号，
+ * 这样可以保证所有的子循环都标号完毕后才标号当前 block
+ */
+static void loop_header_detect(closure_t *c, basic_block_t *current, basic_block_t *parent) {
+    // 探测到循环，current is loop header,parent is loop end
+    // current 可能被多个 loop ends 进入,所以这里不能收集 loop headers
+    if (current->loop.active) {
+        assert(current->loop.visited);
+        assert(parent);
+
+        current->loop.header = true;
+        parent->loop.end = false;
+
+        parent->backward_succ = current;
+
+        assert(parent->succs->count == 1 && parent->succs->take[0] == current && "critical edge must broken");
+
+        slice_push(current->loop_ends, parent);
+        slice_push(c->loop_ends, parent); // 一个 header 可能对应多个 end
+        return;
+    }
+
+    // increment count of incoming forward branches parent -> current is forward
+    current->incoming_forward_count += 1;
+    if (parent) {
+        slice_push(parent->forward_succs, current);
+    }
+
+    if (current->loop.visited) {
+        return;
+    }
+
+    // num block++
+    current->loop.visited = true;
+    current->loop.active = true;
+
+    for (int i = current->succs->count - 1; i >= 0; --i) {
+        basic_block_t *succ = current->succs->take[i];
+        loop_header_detect(c, succ, current);
+    }
+
+    current->loop.active = false;
+
+    // 后序操作(此时 current 可能在某次 backward succ 中作为 loop header 打上了标记)
+    // 深度优先遍历加上 visited 机制，保证一个节点只会被 iteration
+    if (current->loop.header) {
+        assert(current->loop.index == -1);
+        // 所有的内循环已经处理完毕了，所以外循环的编号总是大于内循环
+        current->loop.index = c->loop_count++;
+        slice_push(c->loop_headers, current);
+    }
+}
+
+/**
+ * 遍历所有 loop ends，找到这个 loop 下的所有 block 即可。
+ * 如果一个 block 被多个 loop 经过，则 block index_list 的 key 就是 loop_index, value 就是是否被改 loop 穿过
+ */
+static void loop_mark(closure_t *c) {
+    list *work_list = list_new();
+
+    for (int i = 0; i < c->loop_ends->count; ++i) {
+        basic_block_t *end = c->loop_ends->take[i];
+
+        assert(end->succs->count == 1 && "critical edge must broken");
+
+        basic_block_t *header = end->succs->take[0];
+        assert(header->loop.header);
+        assert(header->loop.index >= 0);
+        int8_t loop_index = header->loop.index;
+
+        list_push(work_list, end);
+        end->loop.index_map[loop_index] = true;
+
+        do {
+            basic_block_t *current = list_pop(work_list);
+
+            assert(current->loop.index_map[loop_index]);
+
+            if (current == header) {
+                continue;
+            }
+
+            // end -> preds -> preds -> header 之间的所有 block 都属于当前 index
+            for (int j = 0; j < current->preds->count; ++j) {
+                basic_block_t *pred = current->preds->take[j];
+                if (pred->loop.index_map[loop_index]) {
+                    // 已经配置过了，直接跳过
+                    continue;
+                }
+
+                list_push(work_list, pred);
+                pred->loop.index_map[loop_index] = true;
+            }
+
+        } while (!list_empty(work_list));
+    }
+}
+
+/**
+ * 遍历所有 block 分配 index 和 depth
+ * @param c
+ */
+static void loop_assign_depth(closure_t *c) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        assert(block->loop.depth == 0);
+        int max_depth = 0;
+        int8_t min_index = -1;
+        for (int j = c->loop_count - 1; j >= 0; --j) {
+            if (!block->loop.index_map[j]) {
+                continue;
+            }
+
+            // block 在 loop j 中
+            max_depth++;
+            min_index = j;
+        }
+
+        block->loop.index = min_index;
+        block->loop.depth = max_depth;
+    }
+}
+
+static void loop_detect(closure_t *c) {
+    loop_header_detect(c, c->entry, NULL);
+    loop_mark(c);
+    loop_assign_depth(c);
+}
+
 static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     interval_t *child = interval_new(c);
     interval_t *parent = i;
@@ -68,7 +199,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
     SLICE_FOR(c->blocks, basic_block_t) {
         basic_block_t *block = SLICE_VALUE();
         // TODO insert_id 具体在什么位置？
-        if (block->first_op->id > insert_id || block->last_op->id < insert_id) {
+        if (OP(block->first_op->value)->id > insert_id || OP(block->last_op->value)->id < insert_id) {
             continue;
         }
 
@@ -91,6 +222,39 @@ static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
     }
 
     return NULL;
+}
+
+static slice_t *operand_vars(closure_t *c, lir_operand *operand) {
+    slice_t *result = slice_new();
+    if (!operand) {
+        return result;
+    }
+
+    if (operand->type == LIR_OPERAND_VAR) {
+        slice_push(result, operand);
+    }
+
+    if (operand->type == LIR_OPERAND_ACTUAL_PARAM) {
+        lir_operand_actual_param *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand *o = operands->list[i];
+            assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
+
+            if (o->type == LIR_OPERAND_VAR) {
+                slice_push(result, o);
+            }
+        }
+    }
+
+    return result;
+}
+
+slice_t *op_vars(closure_t *c, lir_op_t *op) {
+    slice_t *result = operand_vars(c, op->output);
+    slice_append(result, operand_vars(c, op->first));
+    slice_append(result, operand_vars(c, op->second));
+
+    return result;
 }
 
 static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
@@ -120,7 +284,7 @@ static slice_t *operand_intervals(closure_t *c, lir_operand *operand) {
             assert(o->type != LIR_OPERAND_VAR && "ACTUAL_PARAM nesting is not allowed");
 
             if (o->type == LIR_OPERAND_VAR) {
-                lir_operand_var *var = operand->value;
+                lir_operand_var *var = o->value;
                 interval_t *interval = table_get(c->interval_table, var->ident);
                 assert(interval);
                 slice_push(result, interval);
@@ -173,138 +337,8 @@ static bool in_range(interval_range_t *range, int position) {
     return range->from <= position && position < range->to;
 }
 
-// 每个块需要存储什么数据？
-// loop flag
-// loop index,只存储最内层的循环的 index
-// loop depth
-// 每个块的前向和后向分支 count
-// 当且仅当循环块的开头
-// 假如使用广度优先遍历，编号按照广度优先的层级来编号,则可以方便的计算出树的高度,顶层 为 0，然后依次递增
-// 使用树的高度来标记 loop_index，如果一个块被标记了两个 index ,则 index 大的为内嵌循环
-// 当前层 index 等于父节点 + 1
-/**
- * 1. 循环块的访问非常密集，所以在进行 flatten 时，将循环块排在一起，且中间不插入非循环的块
- * 2. 嵌套的定义: 一个 loop 的 header 在另外一个循环中,loop header 支配着循环内的所有 block，
- *    如果 loop header A 支配 loop header B，则 A 和 B 是嵌套循环
- * @param c
- */
-void interval_loop_detection(closure_t *c) {
-    list *work_list = list_new();
-    list_push(work_list, c->entry);
-    c->entry->loop.tree_high = 1; // 从 1 开始标号，避免出现 0 = 0 的判断
-
-    slice_t *loop_headers = slice_new();
-    slice_t *loop_ends = slice_new();
-    int8_t loop_count = 0;
-
-    // 1. 探测出循环头与循环尾部(主要是尾部)
-    while (!list_empty(work_list)) {
-        basic_block_t *current = list_pop(work_list);
-        c->entry->loop.visited = true;
-        c->entry->loop.active = true;
-
-        // 是否会出现 succ 的 flag 是 visited?
-        // 如果当前块是 visited,则当前块的正向后继一定是 null, 当前块的反向后继一定是 active,不可能是 visited
-        // 因为一个块的所有后继都进入到 work_list 之后，才会进行下一次 work_list 提取操作
-        slice_t *forward_succs = slice_new();
-        slice_t *backward_succs = slice_new();
-        for (int i = 0; i < current->succs->count; ++i) {
-            basic_block_t *succ = current->succs->take[i];
-            succ->loop.tree_high = current->loop.tree_high + 1; // 广度遍历中的 tree_high
-
-            // 如果发现循环, backward branches
-            if (succ->loop.active) {
-                if (!succ->loop.header) {
-                    // 当前 succ 是 loop_headers, loop_headers 的 tree_high 为 loop_index
-                    succ->loop.header = true;
-                    succ->loop.index = loop_count++;
-//                    succ->loop.index_list[succ->loop.depth++] = succ->loop.index; //
-                    slice_push(loop_headers, succ);
-                }
-
-
-                // 当前 current 是 loop_ends, loop_ends, index = loop_headers.index
-                current->loop.index = succ->loop.index;
-//                current->loop.index_list[current->loop.depth++] = succ->loop.index;
-                current->loop.end = true;
-                slice_push(loop_ends, current);
-
-                current->backward_succ = succ; // current is loop end, succ is loop header
-                continue;
-            }
-
-            slice_push(forward_succs, succ);
-            succ->incoming_forward_count++; // 前驱中正向进入 succ 的数量
-            succ->loop.visited = true;
-        }
-
-        current->forward_succs = forward_succs;
-        // 所有 succ 都处理完毕，清除 active 标志
-        current->loop.active = false;
-    }
-
-    /**
-     * 2. 标号,计算一个循环包含的所有块
-     * 这里有一个严肃的问题，如果一个节点有两个前驱时，也能够被标号吗？如果是普通结构不考虑 goto 的情况下，则不会出现这种 cfg
-     */
-    for (int i = 0; i < loop_ends->count; ++i) {
-        basic_block_t *end = loop_ends->take[i];
-        list_push(work_list, end);
-        table_t *handled = table_new();
-        table_set(handled, itoa(end->label_index), end);
-
-        while (!list_empty(work_list)) {
-            basic_block_t *current = list_pop(work_list);
-
-            // value: index
-            current->loop.index_list[current->loop.depth++] = end->loop.index;
-
-
-            // loop header 不进行 preds 计算
-            if (current == end->backward_succ) {
-                // current is loop header
-                continue;
-            }
-
-            // 基于 preds 向后遍历，找到该循环的所有 current
-            for (int k = 0; k < current->preds->count; ++k) {
-                basic_block_t *pred = current->preds->take[k];
-
-                // 判断是否已经入过队(标号)
-                if (table_exist(handled, itoa(pred->label_index))) {
-                    continue;
-                }
-
-                list_push(work_list, pred);
-                table_set(handled, itoa(current->label_index), current);
-            }
-        }
-    }
-
-    // 3. 遍历所有 basic_block ,通过 loop.index_list 确定 innermost index
-    for (int label = 0; label < c->blocks->count; ++label) {
-        basic_block_t *block = c->blocks->take[label];
-        if (block->loop.index != 0) {
-            continue;
-        }
-        if (block->loop.depth == 0) {
-            continue;
-        }
-
-        // 值越大，树高越低
-        uint8_t index = 0;
-        for (int i = 0; i < block->loop.depth; ++i) {
-            if (block->loop.index_list[i] > index) {
-                index = block->loop.index_list[i];
-            }
-        }
-
-        block->loop.index = index;
-    }
-}
-
-// 大值在栈顶被优先处理
-static void interval_insert_to_stack_by_depth(stack_t *work_list, basic_block_t *block) {
+// 大值在栈顶被优先处理 block_to_stack
+static void block_to_stack(stack_t *work_list, basic_block_t *block) {
     // next->next->next
     stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
     while (p->next != NULL && ((basic_block_t *) p->next->value)->loop.depth > block->loop.depth) {
@@ -327,12 +361,13 @@ static void interval_insert_to_stack_by_depth(stack_t *work_list, basic_block_t 
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
 void interval_block_order(closure_t *c) {
+    slice_t *order_blocks = slice_new();
     stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
 
     while (!stack_empty(work_list)) {
         basic_block_t *block = stack_pop(work_list);
-        slice_push(c->order_blocks, block);
+        slice_push(order_blocks, block);
 
         // 需要计算每一个块的正向前驱的数量
         for (int i = 0; i < block->forward_succs->count; ++i) {
@@ -340,16 +375,18 @@ void interval_block_order(closure_t *c) {
             succ->incoming_forward_count--;
             if (succ->incoming_forward_count == 0) {
                 // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
-                interval_insert_to_stack_by_depth(work_list, succ);
+                block_to_stack(work_list, succ);
             }
         }
     }
+
+    c->blocks = order_blocks;
 }
 
 void interval_mark_number(closure_t *c) {
     int next_id = 0;
-    for (int i = 0; i < c->order_blocks->count; ++i) {
-        basic_block_t *block = c->order_blocks->take[i];
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
         list_node *current = list_first(block->operations);
 
         while (current->value != NULL) {
@@ -388,8 +425,8 @@ void interval_build(closure_t *c) {
     }
 
     // 倒序遍历顺序基本块基本块
-    for (int i = c->order_blocks->count - 1; i >= 0; --i) {
-        basic_block_t *block = c->order_blocks->take[i];
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
+        basic_block_t *block = c->blocks->take[i];
         slice_t *live_in = slice_new();
 
         // 1. calc live in = union of successor.liveIn for each successor of b
@@ -417,11 +454,13 @@ void interval_build(closure_t *c) {
 
 
         int block_from = OP(list_first(block->operations)->value)->id;
-        int block_to = OP(list_first(block->operations)->value)->id + 2; // whether add 2?
+        int block_to = block->last_op->id + 2; // whether add 2?
 
         // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
         for (int k = 0; k < live_in->count; ++k) {
-            interval_add_range(c, block->live_out->take[k], block_from, block_to);
+            lir_operand_var *var = live_in->take[k];
+            interval_t *interval = table_get(c->interval_table, var->ident);
+            interval_add_range(c, interval, block_from, block_to);
         }
 
         // 倒序遍历所有块指令
@@ -493,8 +532,21 @@ void interval_build(closure_t *c) {
             current = current->succ;
         }
 
-        // TODO handle loop header add range
-
+        /**
+         * 由于采取了倒序遍历的方式，loop end 已经被遍历过了，但是 header 却还没有被处理。
+         */
+        if (block->loop.header) {
+            // 一个 loop 可能有多个 loop end? 那就都搞
+            for (int j = 0; j < block->loop_ends->count; ++j) {
+                basic_block_t *end = block->loop_ends->take[j];
+                for (int k = 0; k < live_in->count; ++k) {
+                    lir_operand_var *var = live_in->take[k];
+                    interval_t *interval = table_get(c->interval_table, var->ident);
+                    interval_add_range(c, interval, block_from, end->last_op->id + 2);
+                }
+            }
+        }
+        block->live_in = live_in;
     }
 }
 
@@ -751,8 +803,8 @@ void resolve_data_flow(closure_t *c) {
                 assert(parent_interval);
 
                 // 判断是否在 form->to edge 最终的 interval
-                interval_t *from_interval = interval_child_at(parent_interval, from->last_op->id);
-                interval_t *to_interval = interval_child_at(parent_interval, to->first_op->id);
+                interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op->value)->id);
+                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op->value)->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -772,12 +824,12 @@ void resolve_data_flow(closure_t *c) {
                 lir_operand_var *var = ssa_phi_body_of(op->first->value, to->preds, from);
                 interval_t *temp_interval = table_get(c->interval_table, var->ident);
                 assert(temp_interval);
-                interval_t *from_interval = interval_child_at(temp_interval, from->last_op->id);
+                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op->value)->id);
 
                 lir_operand_var *def = op->output->value; // result must assign reg
                 temp_interval = table_get(c->interval_table, def->ident);
                 assert(temp_interval);
-                interval_t *to_interval = interval_child_at(temp_interval, to->first_op->id);
+                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op->value)->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -912,6 +964,6 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
     } else {
         r->insert_block = to;
-        r->insert_id = from->first_op->id - 1;
+        r->insert_id = OP(from->first_op->value)->id - 1;
     }
 }

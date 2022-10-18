@@ -233,19 +233,20 @@ typedef struct {
     bool header;
     bool end;
     uint8_t tree_high;
-    uint8_t index_list[UINT8_MAX]; // key(depth): value(loop index)
+
+    bool index_map[INT8_MAX]; // 默认都是 false
     int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in innermost(最深的) loop
     uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
 } loop_t;
 
 typedef struct basic_block_t {
+    uint8_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
     string name;
-    uint8_t label_index; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
 
     // op point
 //    list_node *phi; // fist_node 即可
-    lir_op_t *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
-    lir_op_t *last_op; // last_node 即可
+    list_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+    list_node *last_op; // last_node 即可
     list *operations;
 
     slice_t *preds;
@@ -253,6 +254,7 @@ typedef struct basic_block_t {
     slice_t *forward_succs; // 当前块正向的 succ 列表
     struct basic_block_t *backward_succ; // loop end
     uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
+    slice_t *loop_ends; // 仅 loop header 有这个值
 
     slice_t *use;
     slice_t *def;
@@ -284,7 +286,6 @@ typedef struct closure_t {
     slice_t *blocks; // 根据解析顺序得到
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]
-    slice_t *order_blocks; // 寄存器分配前根据权重进行重新排序
     table_t *interval_table; // key 包括 fixed register as 和 variable.ident
     int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
@@ -301,7 +302,10 @@ typedef struct closure_t {
 
     int stack_slot; // 初始值为 0，用于寄存器 slot 分配
 
-    // TODO loop blocks
+    // loop collect
+    int8_t loop_count;
+    slice_t *loop_headers;
+    slice_t *loop_ends;
 } closure_t;
 
 lir_operand *set_indirect_addr(lir_operand *operand);
@@ -373,5 +377,7 @@ bool lir_op_is_call(lir_op_t *op);
  * @return
  */
 slice_t *lir_operand_vars(lir_operand *operand);
+
+bool lir_operand_equal(lir_operand *a, lir_operand *b);
 
 #endif //NATURE_SRC_LIR_H_

@@ -1,4 +1,18 @@
 #include "allocate.h"
+#include <assert.h>
+
+/**
+ * TODO 如果是寄存器，则可以根据 var 实际的 size 选择合适的寄存器
+ * @param operand_of_var
+ * @param i
+ */
+static void var_replace(lir_operand *operand_of_var, interval_t *i) {
+    if (i->spilled) {
+        // TODO change to stack slot
+    } else {
+        // TODO change to physical register
+    }
+}
 
 /**
  * 在 free 中找到一个尽量空闲的寄存器分配给 current, 优先考虑 register hint 分配的寄存器
@@ -15,21 +29,24 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
         hint_reg = current->reg_hint->assigned;
     }
 
-    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+    for (
+            int alloc_id = 0;
+            alloc_id < alloc_reg_count();
+            ++alloc_id) {
         if (free_pos[alloc_id] > current->last_range->to) {
-            // 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
-            // 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
-            // 直接使用 hint reg
+// 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
+// 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
+// 直接使用 hint reg
             if (full_reg != 0 && full_reg == hint_reg) {
                 continue;
             }
 
-            // 挑选空闲时间最长的寄存器
+// 挑选空闲时间最长的寄存器
             if (free_pos[alloc_id] > free_pos[full_reg]) {
                 full_reg = alloc_id;
             }
         } else if (free_pos[alloc_id] > current->first_range->from + 1) {
-            // alloc_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
+// alloc_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
             if (part_reg != 0 && part_reg == hint_reg) {
                 continue;
             }
@@ -40,11 +57,13 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
     }
 
     if (full_reg > 0) {
-        return full_reg;
+        return
+                full_reg;
     }
 
     if (part_reg > 0) {
-        return part_reg;
+        return
+                part_reg;
     }
 
     return 0;
@@ -429,5 +448,37 @@ void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) 
 
     // child to slot
     interval_spill_slot(c, child);
+}
+
+/**
+ * 虚拟寄存器替换成 stack slot 和 physical register
+ * @param c
+ */
+void replace_virtual_register(closure_t *c) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        list_node *current = block->first_op;
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
+            slice_t *vars = op_vars(c, op);
+            for (int j = 0; j < vars->count; ++j) {
+                lir_operand *operand = vars->take[j];
+                lir_operand_var *var = operand->value;
+                interval_t *parent = table_get(c->interval_table, var->ident);
+                assert(parent);
+                interval_t *interval = interval_child_at(parent, op->id);
+
+                var_replace(operand, interval);
+            }
+
+            if (op->code == LIR_OPCODE_MOVE) {
+                if (lir_operand_equal(op->first, op->output)) {
+                    list_remove(block->operations, current);
+                }
+            }
+
+            current = current->succ;
+        }
+    }
 }
 

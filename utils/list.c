@@ -174,3 +174,23 @@ void list_insert_before(list *l, list_node *succ, void *value) {
 
     l->count++;
 }
+
+void list_remove(list *l, list_node *node) {
+    if (node == NULL) {
+        return;
+    }
+
+    if (node == l->front) {
+        list_pop(l);
+        return;
+    }
+
+    list_node *prev = node->prev;
+    list_node *succ = node->succ;
+
+    prev->succ = succ;
+    succ->prev = prev;
+
+    l->count--;
+    free(node);
+}
