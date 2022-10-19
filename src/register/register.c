@@ -39,7 +39,7 @@ reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, int8_t 
     reg->size = size;
     reg->alloc_id = alloc_id; // 默认为 -1，表示不可分配
 
-    if (alloc_id > 0) {
+    if (alloc_id != -1) {
         alloc_regs[alloc_id] = reg;
     }
 

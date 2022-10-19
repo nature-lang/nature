@@ -257,7 +257,7 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
         if (operand->type == LIR_OPERAND_VAR) {
             lir_operand_var *var = operand->value;
             interval_t *interval = table_get(c->interval_table, var->ident);
-            assert(interval);
+            assert(interval && "interval not register in table");
             slice_push(result, interval);
         }
         if (operand->type == LIR_OPERAND_REG) {
@@ -297,7 +297,7 @@ static bool in_range(interval_range_t *range, int position) {
 }
 
 // 大值在栈顶被优先处理 block_to_stack
-static void block_to_stack(stack_t *work_list, basic_block_t *block) {
+static void block_to_depth_stack(stack_t *work_list, basic_block_t *block) {
     // next->next->next
     stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
     while (p->next != NULL && ((basic_block_t *) p->next->value)->loop.depth > block->loop.depth) {
@@ -305,14 +305,15 @@ static void block_to_stack(stack_t *work_list, basic_block_t *block) {
     }
 
     // p->next == NULL 或者 p->next 小于等于 当前 block
-    // p = 3 block = 2  p_next = 2
-    stack_node *last_node = p->next;
+    // block 插入到 p = 3 -> new = 2 ->  p->next = 2
+    stack_node *next_node = p->next;
     // 初始化一个 node
-    stack_node *await_node = stack_new_node(block);
-    p->next = await_node;
+    stack_node *new_node = stack_new_node(block);
+    p->next = new_node;
+    work_list->count++;
 
-    if (last_node != NULL) {
-        await_node->next = last_node;
+    if (next_node != NULL) {
+        new_node->next = next_node;
     }
 }
 
@@ -320,11 +321,11 @@ static void block_to_stack(stack_t *work_list, basic_block_t *block) {
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
 void interval_block_order(closure_t *c) {
+    loop_detect(c);
+
     slice_t *order_blocks = slice_new();
     stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
-
-    loop_detect(c);
 
     while (!stack_empty(work_list)) {
         basic_block_t *block = stack_pop(work_list);
@@ -334,9 +335,10 @@ void interval_block_order(closure_t *c) {
         for (int i = 0; i < block->forward_succs->count; ++i) {
             basic_block_t *succ = block->forward_succs->take[i];
             succ->incoming_forward_count--;
+            // 如果一个块的正向进入的节点已经处理完毕了，则将当前块压入到栈中
             if (succ->incoming_forward_count == 0) {
                 // sort into work_list by loop.depth, 权重越大越靠前，越先出栈
-                block_to_stack(work_list, succ);
+                block_to_depth_stack(work_list, succ);
             }
         }
     }
@@ -426,7 +428,7 @@ void interval_build(closure_t *c) {
 
         // 倒序遍历所有块指令
         list_node *current = list_last(block->operations);
-        while (current->value != NULL) {
+        while (current != NULL && current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op_t *op = current->value;
 
@@ -471,6 +473,7 @@ void interval_build(closure_t *c) {
             intervals = op_input_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
+                assert(interval);
                 if (interval->fixed) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
@@ -565,6 +568,16 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
  */
 void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
     assert(from < to);
+
+    if (list_empty(i->ranges)) {
+        interval_range_t *range = NEW(interval_range_t);
+        range->from = from;
+        range->to = to;
+        list_push(i->ranges, range);
+        i->first_range = range;
+        i->last_range = range;
+        return;
+    }
 
     if (i->first_range->from <= to) {
         // form 选小的， to 选大的

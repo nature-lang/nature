@@ -6,6 +6,7 @@
 #include "src/ssa.h"
 #include "utils/helper.h"
 #include "src/debug/debug.h"
+#include "src/register/linearscan.h"
 #include "src/build/config.h"
 #include "src/register/interval.h"
 #include "src/register/allocate.h"
@@ -34,7 +35,7 @@ static void test_basic() {
 
     char *work_dir = file_join(buf, "stubs");
     chdir(work_dir);
-    char *source_path = file_join(buf, "stubs/1666156212_ssa.n");
+    char *source_path = file_join(buf, "stubs/1666156232_reg_alloc.n");
 
     env_init();
     config_init();
@@ -52,6 +53,9 @@ static void test_basic() {
     symbol_ident_table_init();
     var_unique_count = 0;
     lir_line = 0;
+
+    // 初始化寄存器列表
+    reg_init();
 
     module_t *m = module_front_build(source_path, true);
     m->compiler_closures = slice_new();
@@ -78,9 +82,15 @@ static void test_basic() {
         // 构造 ssa
         ssa(c);
 
-        // 构造 interval
+        // 寄存器分配
+//        linear_scan(c);
+
 
 #ifdef DEBUG_CFG
+        for (int i = 0; i < c->globals->count; ++i) {
+            lir_operand_var *var = c->globals->take[i];
+            printf("%s\n", var->ident);
+        }
         debug_cfg(c);
 #endif
     }

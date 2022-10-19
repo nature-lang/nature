@@ -21,13 +21,13 @@ void *stack_pop(stack_t *s) {
     if (stack_empty(s)) {
         return NULL;
     }
-    void *v = s->top->next;
+    void *value = s->top->next->value;
 
     s->top = s->top->next;
     s->top->value = NULL;
     s->count--;
 
-    return v;
+    return value;
 }
 
 bool stack_empty(stack_t *s) {
@@ -37,6 +37,6 @@ bool stack_empty(stack_t *s) {
 stack_node *stack_new_node(void *value) {
     stack_node *n = malloc(sizeof(stack_node));
     n->next = NULL;
-    n->value = NULL;
+    n->value = value;
     return n;
 }

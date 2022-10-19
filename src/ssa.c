@@ -6,6 +6,25 @@
 #include "ssa.h"
 
 /**
+ * ssa rename after collect all renamed var
+ * @param c
+ */
+static void recollect_globals(closure_t *c) {
+    slice_t *globals = slice_new();
+    // 遍历所有基本块和操作，提取所有的 output var
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        LIST_FOR(block->operations) {
+            lir_op_t *op = LIST_VALUE();
+            lir_operand_vars(op->output);
+        }
+        // TODO 形参处理,形参是否需要 ssa ?
+    }
+
+    c->globals = globals;
+}
+
+/**
  * @param c
  */
 void ssa(closure_t *c) {
@@ -451,7 +470,7 @@ void ssa_rename(closure_t *c) {
     table_t *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
     table_t *stack_table = table_new(); // use 使用，判断使用的变量的名称
 
-    // 遍历所有名字变量,进行初始化
+    // 遍历所有变量,进行初始化
     SLICE_FOR(c->globals) {
         lir_operand_var *var = SLICE_VALUE(c->globals);
         uint8_t *number = NEW(uint8_t);
@@ -464,7 +483,7 @@ void ssa_rename(closure_t *c) {
         table_set(stack_table, var->old, stack);
     }
 
-    // 从根开始更名
+    // 从根开始更名(rename 就相当于创建了一个新的变量)
     ssa_rename_basic(c->entry, var_number_table, stack_table);
 
     // 释放 NEW 的变量
@@ -537,17 +556,19 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->operations->front->succ;
-        list_node *succ_node = succ_block->operations->front->succ;
-        while (succ_node->value != NULL && OP(succ_node)->code == LIR_OPCODE_PHI) {
-            lir_op_t *succ_op = OP(succ_node);
-            slice_t *phi_body = succ_op->first->value;
+        list_node *op_node = list_first(succ_block->operations)->succ; // front is label
+        while (op_node->value != NULL && OP(op_node->value)->code == LIR_OPCODE_PHI) {
+            lir_op_t *op = OP(op_node->value);
+            slice_t *phi_body = op->first->value;
             // block 位于 succ 的 phi_body 的具体位置
             lir_operand_var *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
             var_number_stack *stack = table_get(stack_table, var->ident);
+            assert(stack);
+
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
 
-            succ_node = succ_node->succ;
+            op_node = op_node->succ;
         }
     }
 

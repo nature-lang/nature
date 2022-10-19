@@ -280,7 +280,6 @@ typedef struct basic_block_t {
  */
 typedef struct closure_t {
     slice_t *globals; // closure_t 中定义的变量列表, 用于 ssa 构建, 以及寄存器分配时的 interval 也是基于次
-    slice_t *fixed_regs; // 作为临时寄存器使用到的寄存器
     slice_t *blocks; // 根据解析顺序得到
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]

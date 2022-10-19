@@ -95,8 +95,13 @@ void cfg(closure_t *c) {
 
     SLICE_FOR(c->blocks) {
         current_block = SLICE_VALUE(c->blocks);
+
+        // 添加 first_op(label 之后的第一个 op) 和 last_op
+        current_block->first_op = list_first(current_block->operations)->succ;
+        current_block->last_op = list_last(current_block->operations);
+
         // 最后一个指令块的结尾指令不是 branch 分支
-        lir_op_t *last_op = list_last(current_block->operations)->value;
+        lir_op_t *last_op = current_block->last_op->value;
         if (last_op->code != LIR_OPCODE_BAL) {
             continue;
         }
@@ -116,10 +121,6 @@ void cfg(closure_t *c) {
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
-
-        // 添加 first_op(label 之后的第一个 op) 和 last_op
-        current_block->first_op = list_first(current_block->operations)->succ;
-        current_block->last_op = list_last(current_block->operations);
     }
 
     broken_critical_edges(c);

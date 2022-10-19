@@ -166,7 +166,6 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->operations = NULL;
     new->entry = NULL;
     new->globals = slice_new();
-    new->fixed_regs = slice_new(); // reg_t
     new->blocks = slice_new(); // basic_block_t
 //    new->order_blocks = slice_new(); // basic_block_t
 
@@ -178,6 +177,8 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
 //    new->stack_length = 0;
     new->stack_slot = 0;
     new->loop_count = 0;
+    new->loop_ends = slice_new();
+    new->loop_headers = slice_new();
 
     new->interval_count = alloc_reg_count() + 1;
 
@@ -197,6 +198,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block->incoming_forward_count = 0;
     basic_block->use = slice_new();
     basic_block->def = slice_new();
+    basic_block->loop_ends = slice_new();
     basic_block->live_in = slice_new();
     basic_block->live_out = slice_new();
     basic_block->dom = slice_new();
