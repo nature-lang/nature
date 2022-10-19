@@ -2,23 +2,22 @@
 #include "src/type.h"
 #include "utils/slice.h"
 
-list *amd64_formal_params_lower(closure_t *c) {
+static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     list *operations = list_new();
     uint8_t used[2] = {0};
-    // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间
-    int16_t stack_param_offset = 16;
-    LIST_FOR(c->formal_params) {
-        lir_var_decl *var_decl = LIST_VALUE();
+    // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
+    int16_t stack_param_slot = 16;
+    SLICE_FOR(formal_params) {
+        lir_operand_var *var = SLICE_VALUE(formal_params);
         lir_operand *source = NULL;
-        lir_operand_var *var = lir_new_var_operand(c, var_decl->ident);
         reg_t *reg = amd64_fn_param_next_reg(used, var->type_base);
         if (reg) {
             source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
         } else {
             lir_operand_stack *stack = NEW(lir_operand_stack);
             stack->size = QWORD; // 使用了 push 指令进栈，所以固定 QWORD(float 也是 8字节，只是不直接使用 push)
-            stack->slot = stack_param_offset;
-            stack_param_offset += QWORD;
+            stack->slot = stack_param_slot;
+            stack_param_slot += QWORD;
             source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
         }
 
@@ -161,7 +160,7 @@ void amd64_reg_init() {
  * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
  * @param c
  */
-void amd64_operations_lower(closure_t *c) {
+void amd64_lir_lower(closure_t *c) {
     // 按基本块遍历所有指令
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
@@ -170,17 +169,19 @@ void amd64_operations_lower(closure_t *c) {
 
             // if op is fn begin, will set formal param
             // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
-            if (op->code == LIR_OPCODE_FN_BEGIN) {
+            if (op->code == LIR_OPCODE_FN_PARAM) {
                 // fn begin
                 // mov rsi -> formal param 1
                 // mov rdi -> formal param 2
                 // ....
-                list *temps = amd64_formal_params_lower(c);
+                list *temps = amd64_formal_params_lower(c, op->output->value);
                 list_node *current = temps->front;
                 while (current->value != NULL) {
-                    list_insert_after(block->operations, LIST_NODE(), current->value);
+                    list_insert_before(block->operations, LIST_NODE(), current->value);
                     current = current->succ;
                 }
+                list_remove(block->operations, LIST_NODE());
+                continue;
             }
 
             if (op->code == LIR_OPCODE_RETURN && op->output != NULL) {
@@ -189,6 +190,7 @@ void amd64_operations_lower(closure_t *c) {
                 lir_op_t *before = lir_op_move(reg_operand, op->output);
                 op->output = reg_operand;
                 list_insert_before(block->operations, LIST_VALUE(), before);
+                continue;
             }
 
             // div 被输数，除数 = 商
@@ -200,6 +202,7 @@ void amd64_operations_lower(closure_t *c) {
                 op->output = reg_operand;
                 list_insert_before(block->operations, LIST_VALUE(), before);
                 list_insert_after(block->operations, LIST_VALUE(), after);
+                continue;
             }
         }
     }

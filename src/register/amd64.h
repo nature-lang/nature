@@ -134,7 +134,7 @@ reg_t *zmm15;
 
 void amd64_reg_init();
 
-void amd64_operations_lower(closure_t *c);
+void amd64_lir_lower(closure_t *c);
 
 reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_base_t base);
 

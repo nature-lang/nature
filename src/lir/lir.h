@@ -86,8 +86,8 @@ typedef enum {
     LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
     LIR_OPERAND_STACK,
     LIR_OPERAND_PHI_BODY,
-    LIR_OPERAND_FORMAL_PARAM,
-    LIR_OPERAND_ACTUAL_PARAM,
+    LIR_OPERAND_FORMAL_PARAMS,
+    LIR_OPERAND_ACTUAL_PARAMS,
     LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_ADDR,
@@ -123,6 +123,7 @@ typedef enum {
     LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OPCODE_LABEL,
+    LIR_OPCODE_FN_PARAM, // 形参 OP, formal param in output
     LIR_OPCODE_FN_BEGIN, // 无操作数
     LIR_OPCODE_FN_END, // 无操作数
 } lir_opcode;
@@ -131,10 +132,6 @@ typedef struct lir_operand {
     lir_operand_type type;
     void *value;
 } lir_operand;
-
-//typedef struct {
-//  string ident;
-//} lir_operand_reg;
 
 // 变量的定义点
 typedef struct {
@@ -190,17 +187,6 @@ typedef struct {
     };
     type_base_t type;
 } lir_operand_immediate;
-
-typedef struct {
-    slice_t *vars;
-    uint8_t count;
-} lir_operand_formal_param;
-
-typedef struct {
-    lir_operand *list[UINT8_MAX];
-    uint8_t count;
-} lir_operand_actual_param;
-
 
 /**
  * 四元组
@@ -295,7 +281,7 @@ typedef struct closure_t {
 
     table_t *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
     list *var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
-    list *formal_params; // 也是为了堆栈分配
+    slice_t *formal_params; // 也是为了堆栈分配
 
     int stack_slot; // 初始值为 0，用于寄存器 slot 分配
 
@@ -342,8 +328,6 @@ lir_operand *lir_new_empty_operand();
 lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t type_base);
 
 lir_operand *lir_new_label_operand(string ident, bool is_local);
-
-lir_operand_actual_param *lir_new_actual_param();
 
 lir_op_t *lir_op_label(string name, bool is_local);
 

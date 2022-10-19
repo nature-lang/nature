@@ -19,7 +19,7 @@ string lir_operand_imm_to_string(lir_operand_immediate *immediate);
 
 string lir_operand_addr_to_string(lir_operand_addr *operand_addr);
 
-string lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param);
+string lir_operand_actual_param_to_string(slice_t *actual_param);
 
 string lir_operand_phi_body_to_string(slice_t *phi_body);
 

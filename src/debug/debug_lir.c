@@ -33,8 +33,8 @@ string lir_operand_to_string(lir_operand *operand) {
         case LIR_OPERAND_ADDR: {
             return lir_operand_addr_to_string((lir_operand_addr *) operand->value);
         }
-        case LIR_OPERAND_ACTUAL_PARAM: {
-            return lir_operand_actual_param_to_string((lir_operand_actual_param *) operand->value);
+        case LIR_OPERAND_ACTUAL_PARAMS: {
+            return lir_operand_actual_param_to_string((slice_t *) operand->value);
         }
         case LIR_OPERAND_PHI_BODY: {
             return lir_operand_phi_body_to_string(operand->value);
@@ -137,11 +137,11 @@ char *lir_operand_addr_to_string(lir_operand_addr *operand_addr) {
     return buf;
 }
 
-char *lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param) {
+char *lir_operand_actual_param_to_string(slice_t *actual_param) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string params = malloc(sizeof(char) * DEBUG_STR_COUNT);
     for (int i = 0; i < actual_param->count; ++i) {
-        string src = lir_operand_to_string(actual_param->list[i]);
+        string src = lir_operand_to_string(actual_param->take[i]);
         strcat(params, src);
         free(src);
 
