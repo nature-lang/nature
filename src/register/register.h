@@ -20,7 +20,7 @@ typedef struct {
     uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
     reg_type_e type; // 寄存器类型
     uint8_t size;
-    int8_t alloc_id; // 寄存器分配期间的 id，能通过 id 进行唯一检索
+    uint8_t alloc_id; // 寄存器分配期间的 id，能通过 id 进行唯一检索
 } reg_t; // 做类型转换
 
 reg_t *alloc_regs[UINT8_MAX];
@@ -40,7 +40,7 @@ reg_t *reg_find(uint8_t index, uint8_t size);
  */
 void reg_init();
 
-reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, int8_t alloc_id);
+reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t alloc_id);
 
 reg_type_e type_base_trans(type_base_t t);
 

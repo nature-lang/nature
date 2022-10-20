@@ -1,10 +1,21 @@
 #include "interval.h"
 #include "src/ssa.h"
-#include "utils/list.h"
 #include "utils/stack.h"
-#include "utils/helper.h"
 #include "assert.h"
+#include "src/debug/debug.h"
 
+
+static bool interval_need_move(interval_t *from, interval_t *to) {
+    if (from->assigned && to->assigned && from->assigned == to->assigned) {
+        return false;
+    }
+
+    if (from->spilled && to->spilled && from->stack_slot == to->stack_slot) {
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * 深度优先(右侧优先) 遍历，并标记 loop index/header
@@ -351,10 +362,13 @@ void interval_mark_number(closure_t *c) {
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
         list_node *current = list_first(block->operations);
+        lir_op_t *label_op = current->value;
+        assert(label_op->code == LIR_OPCODE_LABEL);
 
         while (current->value != NULL) {
             lir_op_t *op = current->value;
             if (op->code == LIR_OPCODE_PHI) {
+                op->id = label_op->id;
                 current = current->succ;
                 continue;
             }
@@ -368,7 +382,7 @@ void interval_mark_number(closure_t *c) {
 
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
-    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
         reg_t *reg = alloc_regs[alloc_id];
         interval_t *interval = interval_new(c);
         interval->fixed = true;
@@ -393,12 +407,12 @@ void interval_build(closure_t *c) {
         slice_t *live_in = slice_new();
 
         // 1. calc live in = union of successor.liveIn for each successor of b
-        table_t *union_vars = table_new();
+        table_t *exist_vars = table_new();
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
             for (int k = 0; k < succ->live_in->count; ++k) {
                 lir_operand_var *var = succ->live_in->take[k];
-                live_add(union_vars, live_in, var);
+                live_add(exist_vars, live_in, var);
             }
         }
 
@@ -409,7 +423,7 @@ void interval_build(closure_t *c) {
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
                 lir_op_t *op = OP(current);
                 lir_operand_var *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
-                live_add(union_vars, live_in, var);
+                live_add(exist_vars, live_in, var);
 
                 current = current->succ;
             }
@@ -435,7 +449,7 @@ void interval_build(closure_t *c) {
             // fixed all phy reg in call
             if (lir_op_is_call(op)) {
                 // traverse all register
-                for (int j = 0; j < alloc_reg_count(); ++j) {
+                for (int j = 1; j < alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
                     if (interval != NULL) {
@@ -463,7 +477,7 @@ void interval_build(closure_t *c) {
                 if (interval->fixed) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
-                    live_remove(union_vars, live_in, interval->var);
+                    live_remove(exist_vars, live_in, interval->var);
                     interval->first_range->from = op->id;
                 }
 
@@ -478,7 +492,7 @@ void interval_build(closure_t *c) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
                     interval_add_range(c, interval, block_from, op->id);
-                    live_add(union_vars, live_in, interval->var);
+                    live_add(exist_vars, live_in, interval->var);
                 }
                 interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
             }
@@ -492,7 +506,7 @@ void interval_build(closure_t *c) {
             lir_op_t *op = OP(current);
 
             lir_operand_var *var = op->output->value;
-            live_remove(union_vars, live_in, var);
+            live_remove(exist_vars, live_in, var);
             current = current->succ;
         }
 
@@ -614,21 +628,17 @@ void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e 
     use_pos_t *new_pos = NEW(use_pos_t);
     new_pos->kind = kind;
     new_pos->value = position;
+    if (list_empty(pos_list)) {
+        list_push(pos_list, new_pos);
+        return;
+    }
 
     list_node *current = list_first(pos_list);
-    while (current->value != NULL) {
-        use_pos_t *current_pos = current->value;
-        // 找到一个大于当前位置的节点
-        if (current_pos->value > new_pos->value) {
-            // 当前位置一旦大于 await
-            // 就表示 current->prev < await < current
-            // 或者 await < current, 也就是 current 就是第一个元素
-            list_insert_after(pos_list, current->prev, new_pos);
-            return;
-        }
-
+    while (current->value != NULL && ((use_pos_t *) current->value)->value < position) {
         current = current->succ;
     }
+
+    list_insert_before(pos_list, current, new_pos);
 }
 
 
@@ -653,7 +663,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
  * @param position
  */
 interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
-    assert(i->last_range->to < position);
+    assert(i->last_range->to > position);
     assert(i->first_range->from < position);
 
     interval_t *child = interval_new_child(c, i);
@@ -808,7 +818,7 @@ void resolve_data_flow(closure_t *c) {
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
                 // 因此需要 link from and to interval
-                if (from_interval != to_interval) {
+                if (interval_need_move(from_interval, to_interval)) {
                     slice_push(r.from_list, from_interval);
                     slice_push(r.to_list, to_interval);
                 }
@@ -866,8 +876,9 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
         return;
     }
 
-    // block all from interval, value 保持被引用的次数
+    // block all from interval, value 表示被 input 引用的次数, 0 表示为被引用
     int8_t block_regs[UINT8_MAX] = {0};
+
     SLICE_FOR(r->from_list) {
         interval_t *i = SLICE_VALUE(r->from_list);
         if (i->assigned) {
@@ -876,11 +887,12 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
     }
 
     int spill_candidate = -1;
-    while (r->from_list > 0) {
+    while (r->from_list->count > 0) {
         bool processed = false;
         for (int i = 0; i < r->from_list->count; ++i) {
             interval_t *from = r->from_list->take[i];
             interval_t *to = r->to_list->take[i];
+            assert(!(from->spilled && to->spilled) && "cannot move stack to stack");
 
             if (resolve_blocked(block_regs, from, to)) {
                 // this interval cannot be processed now because target is not free

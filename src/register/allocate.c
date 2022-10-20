@@ -39,7 +39,7 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
         hint_reg = current->reg_hint->assigned;
     }
 
-    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
         if (free_pos[alloc_id] > current->last_range->to) {
             // 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
             // 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
@@ -89,7 +89,7 @@ static uint8_t find_block_reg(interval_t *current, uint8_t *use_pos, uint8_t *bl
         hint_reg = current->reg_hint->assigned;
     }
 
-    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
         if (use_pos[alloc_id] <= current->first_range->from + 1) {
             continue;
         }
@@ -164,8 +164,8 @@ static void handle_inactive(allocate_t *a) {
     }
 }
 
-static void set_pos(int list[UINT8_MAX], uint8_t index, int position) {
-    if (position > list[index]) {
+static void set_pos(int *list, uint8_t index, int position) {
+    if (list[index] != -1 && position < list[index]) {
         return;
     }
 
@@ -209,38 +209,42 @@ list *unhandled_new(closure_t *c) {
     // 遍历所有变量,根据 interval from 进行排序
     for (int i = 0; i < c->globals->count; ++i) {
         interval_t *item = table_get(c->interval_table, ((lir_operand_var *) c->globals->take[i])->ident);
-        if (item == NULL) {
-            continue;
-        }
-        to_unhandled(unhandled, item);
+
+        assert(item);
+
+        sort_to_unhandled(unhandled, item);
     }
     // 遍历所有固定寄存器生成 fixed_interval
-    for (int i = 0; i < alloc_reg_count(); ++i) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
         interval_t *item = table_get(c->interval_table, reg->name);
         if (item == NULL) {
             continue;
         }
-        to_unhandled(unhandled, item);
+        sort_to_unhandled(unhandled, item);
     }
 
     return unhandled;
 }
 
 /**
- * 将 to 根据 LIST_VALUE 的 from 字段排序，值越小越靠前
+ * 将 to 根据 interval 的 from 字段排序，值越小越靠前
+ * i1 < i2 < i3 < to < i4 < i5
  * @param unhandled
  * @param to
  */
-void to_unhandled(list *unhandled, interval_t *to) {
-    LIST_FOR(unhandled) {
-        interval_t *i = LIST_VALUE();
-        // 当 i->from 大于 to->from 时，将 to 插入到 i 前面
-        if (i->first_range->from > to->first_range->from) {
-            list_insert_before(unhandled, LIST_NODE(), to);
-            return;
-        }
+void sort_to_unhandled(list *unhandled, interval_t *to) {
+    if (unhandled->count == 0) {
+        list_push(unhandled, to);
+        return;
     }
+
+    list_node *current = list_first(unhandled);
+    while (current->value != NULL && ((interval_t *) current->value)->first_range->from < to->first_range->from) {
+        current = current->succ;
+    }
+    //  to < current, 将 to 插入到 current 前面
+    list_insert_before(unhandled, current, to);
 }
 
 static uint8_t max_pos_index(const int list[UINT8_MAX]) {
@@ -261,13 +265,15 @@ static uint8_t max_pos_index(const int list[UINT8_MAX]) {
  * @return
  */
 bool allocate_free_reg(closure_t *c, allocate_t *a) {
-    int free_pos[UINT8_MAX] = {0};
-    for (int i = 0; i < alloc_reg_count(); ++i) {
+    int free_pos[UINT8_MAX];
+    memset(free_pos, -1, sizeof(free_pos));
+
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
         if (a->current->alloc_type != reg->type) { // already set 0
             continue;
         }
-        set_pos(free_pos, i, UINT32_MAX);
+        set_pos(free_pos, i, INT32_MAX);
     }
 
     // active(已经分配到了 reg) interval 不予分配，所以 pos 设置为 0
@@ -297,7 +303,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
 
         // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
         interval_t *child = interval_split_at(c, a->current, optimal_position);
-        to_unhandled(a->unhandled, child);
+        sort_to_unhandled(a->unhandled, child);
 
         // 为当前 interval 分配寄存器
         a->current->assigned = alloc_id;
@@ -311,12 +317,15 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // key is physical register index, value is position
     int use_pos[UINT8_MAX] = {0}; // use_pos 一定小于等于 block_pos
     int block_pos[UINT8_MAX] = {0}; // 设置 block pos 的同时需要隐式设置 use pos
-    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
+    memset(use_pos, -1, sizeof(use_pos));
+    memset(use_pos, -1, sizeof(use_pos));
+
+    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
         reg_t *reg = alloc_regs[alloc_id];
         if (a->current->alloc_type != reg->type) {
             continue;
         }
-        SET_BLOCK_POS(alloc_id, UINT32_MAX);
+        SET_BLOCK_POS(alloc_id, INT32_MAX);
     }
 
     int first_use = a->current->first_range->from;
@@ -364,7 +373,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     if (use_pos[alloc_id] < first_use) {
         //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
         // assign spill slot to current
-        interval_spill_slot(NULL, a->current);
+        interval_spill_slot(c, a->current);
 
         // 一旦 current spill 到了内存中，则后续就再也不会处理了
         // 所以 current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
@@ -373,7 +382,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         if (must_pos) {
             int split_pos = interval_find_optimal_split_pos(c, a->current, must_pos->value);
             interval_t *child = interval_split_at(c, a->current, split_pos);
-            to_unhandled(a->unhandled, child);
+            sort_to_unhandled(a->unhandled, child);
         }
     } else if (block_pos[alloc_id] > a->current->last_range->to) {
         // 一般都会进入到这一条件中
@@ -427,7 +436,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // split current at block_pos
         int split_current_pos = interval_find_optimal_split_pos(c, a->current, block_pos[alloc_id]);
         interval_t *child = interval_split_at(c, a->current, split_current_pos);
-        to_unhandled(a->unhandled, child);
+        sort_to_unhandled(a->unhandled, child);
         return true;
     }
 

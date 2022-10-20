@@ -154,7 +154,7 @@ void list_insert_before(list *l, list_node *succ, void *value) {
         return;
     }
 
-    if (succ == NULL) {
+    if (succ == NULL || succ->prev == NULL) {
         // 直接插入到头部之前
         await->succ = l->front;
         l->front->prev = await;

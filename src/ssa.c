@@ -238,8 +238,8 @@ void ssa_add_phi(closure_t *c) {
                 }
 
                 // add phi (x1, x2, x3) => x
-                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, LIR_NEW_VAR_OPERAND(var->ident));
-                lir_operand *first_param = lir_new_phi_body(var, df_block->preds->count);
+                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, var->ident));
+                lir_operand *first_param = lir_new_phi_body(c, var, df_block->preds->count);
                 lir_op_t *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
 
 
@@ -698,10 +698,10 @@ void live_remove(table_t *t, slice_t *lives, lir_operand_var *var) {
         lir_operand_var *item = lives->take[i];
         if (str_equal(item->ident, var->ident)) {
             slice_remove(lives, i);
-            table_delete(t, var->ident);
             break;
         }
     }
+    table_delete(t, var->ident);
 }
 
 void live_add(table_t *t, slice_t *lives, lir_operand_var *var) {

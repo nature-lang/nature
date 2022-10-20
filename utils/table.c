@@ -160,7 +160,6 @@ void table_delete(table_t *t, char *key) {
 
     entry->key = NULL;
     entry->value = (void *) true;
-    t->count--;
 }
 
 

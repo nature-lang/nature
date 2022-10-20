@@ -25,10 +25,7 @@
  * @param c
  */
 void linear_scan(closure_t *c) {
-    // loop detect
     interval_block_order(c);
-
-    debug_closure(c);
 
     interval_mark_number(c);
 

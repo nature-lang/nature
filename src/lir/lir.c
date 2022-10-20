@@ -221,12 +221,12 @@ bool lir_blocks_contains(slice_t *blocks, uint8_t label) {
     return false;
 }
 
-lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count) {
+lir_operand *lir_new_phi_body(closure_t *c, lir_operand_var *var, uint8_t count) {
     lir_operand *operand = NEW(lir_operand);
 
     slice_t *phi_body = slice_new();
     for (int i = 0; i < count; ++i) {
-        slice_push(phi_body, LIR_NEW_VAR_OPERAND(var->ident));
+        slice_push(phi_body, lir_new_var_operand(c, var->ident));
     }
 
     operand->type = LIR_OPERAND_PHI_BODY;

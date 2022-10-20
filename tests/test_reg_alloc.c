@@ -7,9 +7,6 @@
 #include "utils/helper.h"
 #include "src/debug/debug.h"
 #include "src/register/linearscan.h"
-#include "src/build/config.h"
-#include "src/register/interval.h"
-#include "src/register/allocate.h"
 
 #include <stdio.h>
 #include <unistd.h>

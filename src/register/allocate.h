@@ -39,7 +39,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  * @param to
  * @param unhandled
  */
-void to_unhandled(list *unhandled, interval_t *to);
+void sort_to_unhandled(list *unhandled, interval_t *to);
 
 /**
  * 根据 interval 列表 初始化 unhandled 列表

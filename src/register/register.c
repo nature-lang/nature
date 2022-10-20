@@ -31,15 +31,15 @@ uint8_t alloc_reg_count() {
 }
 
 
-reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, int8_t alloc_id) {
+reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t alloc_id) {
     reg_t *reg = NEW(reg_t);
     reg->name = name;
     reg->index = index;
     reg->type = type;
     reg->size = size;
-    reg->alloc_id = alloc_id; // 默认为 -1，表示不可分配
+    reg->alloc_id = alloc_id; // 0 表示未分配
 
-    if (alloc_id != -1) {
+    if (alloc_id > 0) {
         alloc_regs[alloc_id] = reg;
     }
 

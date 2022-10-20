@@ -60,15 +60,6 @@
   _operand;                                   \
 })
 
-#define LIR_NEW_VAR_OPERAND(_ident) \
-({                                 \
-  lir_operand_var *_var = NEW(lir_operand_var); \
-  _var->old = _ident;    \
-  _var->ident = _ident;             \
-  _var;                                   \
-})
-
-
 #define LIR_UNIQUE_NAME(_ident) \
 ({                                 \
    char *temp_name = malloc(strlen(_ident) + sizeof(int) + 2); \
@@ -293,7 +284,7 @@ typedef struct closure_t {
 
 lir_operand *set_indirect_addr(lir_operand *operand);
 
-lir_operand *lir_new_phi_body(lir_operand_var *var, uint8_t count);
+lir_operand *lir_new_phi_body(closure_t *c, lir_operand_var *var, uint8_t count);
 
 basic_block_t *lir_new_basic_block(char *name, uint8_t label_index);
 
