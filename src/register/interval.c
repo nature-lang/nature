@@ -199,7 +199,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
         // TODO insert_id 具体在什么位置？
-        if (OP(block->first_op->value)->id > insert_id || OP(block->last_op->value)->id < insert_id) {
+        if (OP(block->first_op)->id > insert_id || OP(block->last_op)->id < insert_id) {
             continue;
         }
 
@@ -416,8 +416,8 @@ void interval_build(closure_t *c) {
         }
 
 
-        int block_from = OP(list_first(block->operations)->value)->id;
-        int block_to = OP(block->last_op->value)->id + 2; // whether add 2?
+        int block_from = OP(list_first(block->operations))->id;
+        int block_to = OP(block->last_op)->id + 2; // whether add 2?
 
         // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
         for (int k = 0; k < live_in->count; ++k) {
@@ -506,7 +506,7 @@ void interval_build(closure_t *c) {
                 for (int k = 0; k < live_in->count; ++k) {
                     lir_operand_var *var = live_in->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
-                    interval_add_range(c, interval, block_from, OP(end->last_op->value)->id + 2);
+                    interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
                 }
             }
         }
@@ -777,8 +777,8 @@ void resolve_data_flow(closure_t *c) {
                 assert(parent_interval);
 
                 // 判断是否在 form->to edge 最终的 interval
-                interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op->value)->id);
-                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op->value)->id);
+                interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id);
+                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -798,12 +798,12 @@ void resolve_data_flow(closure_t *c) {
                 lir_operand_var *var = ssa_phi_body_of(op->first->value, to->preds, from);
                 interval_t *temp_interval = table_get(c->interval_table, var->ident);
                 assert(temp_interval);
-                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op->value)->id);
+                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op)->id);
 
                 lir_operand_var *def = op->output->value; // result must assign reg
                 temp_interval = table_get(c->interval_table, def->ident);
                 assert(temp_interval);
-                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op->value)->id);
+                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op)->id);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -938,6 +938,6 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
     } else {
         r->insert_block = to;
-        r->insert_id = OP(from->first_op->value)->id - 1;
+        r->insert_id = OP(from->first_op)->id - 1;
     }
 }

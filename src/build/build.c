@@ -233,7 +233,7 @@ void build(char *build_entry) {
             // 构造 ssa
             ssa(c);
 #ifdef DEBUG_CFG
-            debug_cfg(c);
+            debug_closure(c);
 #endif
         }
     }

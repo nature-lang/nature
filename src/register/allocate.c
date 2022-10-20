@@ -39,24 +39,21 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
         hint_reg = current->reg_hint->assigned;
     }
 
-    for (
-            int alloc_id = 0;
-            alloc_id < alloc_reg_count();
-            ++alloc_id) {
+    for (int alloc_id = 0; alloc_id < alloc_reg_count(); ++alloc_id) {
         if (free_pos[alloc_id] > current->last_range->to) {
-// 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
-// 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
-// 直接使用 hint reg
+            // 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
+            // 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
+            // 直接使用 hint reg
             if (full_reg != 0 && full_reg == hint_reg) {
                 continue;
             }
 
-// 挑选空闲时间最长的寄存器
+            // 挑选空闲时间最长的寄存器
             if (free_pos[alloc_id] > free_pos[full_reg]) {
                 full_reg = alloc_id;
             }
         } else if (free_pos[alloc_id] > current->first_range->from + 1) {
-// alloc_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
+            // alloc_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
             if (part_reg != 0 && part_reg == hint_reg) {
                 continue;
             }

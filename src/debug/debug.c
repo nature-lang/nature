@@ -125,6 +125,7 @@ string lir_op_type_to_debug[] = {
         [LIR_OPCODE_RETURN]="RET   ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
+        [LIR_OPCODE_FN_PARAM] = "FN_PARAM",
         [LIR_OPCODE_FN_END] = "FN_END",
 };
 
@@ -173,7 +174,12 @@ void debug_lir(int line, lir_op_t *op) {
  * 遍历展示 blocks
  * @param c
  */
-void debug_cfg(closure_t *c) {
+void debug_closure(closure_t *c) {
+//    printf("globals ----------------------------------------------------------------------------\n");
+//    for (int i = 0; i < c->globals->count; ++i) {
+//        lir_operand_var *var = c->globals->take[i];
+//        printf("%s\n", var->ident);
+//    }
     printf("closure_t: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];

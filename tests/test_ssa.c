@@ -81,7 +81,7 @@ static void test_basic() {
         // 构造 interval
 
 #ifdef DEBUG_CFG
-        debug_cfg(c);
+        debug_closure(c);
 #endif
     }
 }

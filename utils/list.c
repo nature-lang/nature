@@ -192,5 +192,5 @@ void list_remove(list *l, list_node *node) {
     succ->prev = prev;
 
     l->count--;
-    free(node);
+//    free(node); // 不能释放，会导致引用关系丢失
 }

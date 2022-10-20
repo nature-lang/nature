@@ -32,7 +32,7 @@ void debug_stmt(string type, ast_stmt stmt);
 
 void debug_lir(int lir_line, lir_op_t *op);
 
-void debug_cfg(closure_t *c);
+void debug_closure(closure_t *c);
 
 void debug_basic_block(basic_block_t *block);
 

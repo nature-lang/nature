@@ -16,9 +16,11 @@ static void recollect_globals(closure_t *c) {
         basic_block_t *block = c->blocks->take[i];
         LIST_FOR(block->operations) {
             lir_op_t *op = LIST_VALUE();
-            lir_operand_vars(op->output);
+            slice_t *vars = lir_operand_vars(op->output);
+            if (vars->count > 0) {
+                slice_append(globals, vars);
+            }
         }
-        // TODO 形参处理,形参是否需要 ssa ?
     }
 
     c->globals = globals;
@@ -42,6 +44,9 @@ void ssa(closure_t *c) {
     ssa_add_phi(c);
     // rename
     ssa_rename(c);
+
+    // ssa rename 后从新收集 var output
+    recollect_globals(c);
 }
 
 /**
@@ -557,8 +562,8 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->operations->front->succ;
         list_node *op_node = list_first(succ_block->operations)->succ; // front is label
-        while (op_node->value != NULL && OP(op_node->value)->code == LIR_OPCODE_PHI) {
-            lir_op_t *op = OP(op_node->value);
+        while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
+            lir_op_t *op = OP(op_node);
             slice_t *phi_body = op->first->value;
             // block 位于 succ 的 phi_body 的具体位置
             lir_operand_var *var = ssa_phi_body_of(phi_body, succ_block->preds, block);

@@ -39,7 +39,7 @@
 // GC 相关函数
 #define RUNTIME_CALL_GC_NEW "gc_new"
 
-#define OP(_node) ((lir_op_t*)_node)
+#define OP(_node) ((lir_op_t*)_node->value)
 
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \

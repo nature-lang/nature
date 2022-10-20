@@ -36,6 +36,9 @@ string lir_operand_to_string(lir_operand *operand) {
         case LIR_OPERAND_ACTUAL_PARAMS: {
             return lir_operand_actual_param_to_string((slice_t *) operand->value);
         }
+        case LIR_OPERAND_FORMAL_PARAMS: {
+            return lir_operand_formal_param_to_string((slice_t *) operand->value);
+        }
         case LIR_OPERAND_PHI_BODY: {
             return lir_operand_phi_body_to_string(operand->value);
         }
@@ -136,6 +139,25 @@ char *lir_operand_addr_to_string(lir_operand_addr *operand_addr) {
             lir_operand_to_string(operand_addr->base), operand_addr->offset, type_string);
     return buf;
 }
+
+char *lir_operand_formal_param_to_string(slice_t *formal_params) {
+    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string params = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    for (int i = 0; i < formal_params->count; ++i) {
+        string src = lir_operand_var_to_string(formal_params->take[i]);
+        strcat(params, src);
+        free(src);
+        if (i < formal_params->count - 1) {
+            strcat(params, ",");
+        }
+    }
+
+    sprintf(buf, "FORMALS(%s)", params);
+    free(params);
+
+    return buf;
+}
+
 
 char *lir_operand_actual_param_to_string(slice_t *actual_param) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);

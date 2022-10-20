@@ -96,12 +96,8 @@ void cfg(closure_t *c) {
     SLICE_FOR(c->blocks) {
         current_block = SLICE_VALUE(c->blocks);
 
-        // 添加 first_op(label 之后的第一个 op) 和 last_op
-        current_block->first_op = list_first(current_block->operations)->succ;
-        current_block->last_op = list_last(current_block->operations);
-
         // 最后一个指令块的结尾指令不是 branch 分支
-        lir_op_t *last_op = current_block->last_op->value;
+        lir_op_t *last_op = list_last(current_block->operations)->value;
         if (last_op->code != LIR_OPCODE_BAL) {
             continue;
         }
@@ -124,6 +120,15 @@ void cfg(closure_t *c) {
     }
 
     broken_critical_edges(c);
+
+    // 维护 first 和 last_op 关系，后面一旦插入了 phi op,就不好定位了
+    SLICE_FOR(c->blocks) {
+        current_block = SLICE_VALUE(c->blocks);
+        // 添加 first_op(label 之后的第一个 op) 和 last_op
+        current_block->first_op = list_first(current_block->operations)->succ;
+        current_block->last_op = list_last(current_block->operations);
+    }
+
 
     // 添加入口块
     c->entry = c->blocks->take[0];
@@ -169,15 +174,16 @@ void broken_critical_edges(closure_t *c) {
                 }
 
                 // 跳转指令调整  p -> b 改成 p -> new_block -> b
-                assert(OP(p->last_op->value)->code == LIR_OPCODE_BAL);
-                symbol_label = OP(p->last_op->value)->output->value;
+                list_node *last = list_last(p->operations);
+                assert(OP(last)->code == LIR_OPCODE_BAL);
+                symbol_label = OP(last)->output->value;
                 if (symbol_label->ident == b->name) {
                     // change to new_block
                     symbol_label->ident = new_block->name;
                 }
 
-                if (lir_op_is_branch(p->last_op->prev->value)) {
-                    symbol_label = OP(p->last_op->prev->value)->output->value;
+                if (lir_op_is_branch(last->prev->value)) {
+                    symbol_label = OP(last->prev)->output->value;
                     if (symbol_label->ident == b->name) {
                         symbol_label->ident = new_block->name;
                     }

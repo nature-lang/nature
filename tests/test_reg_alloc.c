@@ -82,17 +82,11 @@ static void test_basic() {
         // 构造 ssa
         ssa(c);
 
+        // 寄存器分配前置操作
+        lir_lower(c);
+
         // 寄存器分配
-//        linear_scan(c);
-
-
-#ifdef DEBUG_CFG
-        for (int i = 0; i < c->globals->count; ++i) {
-            lir_operand_var *var = c->globals->take[i];
-            printf("%s\n", var->ident);
-        }
-        debug_cfg(c);
-#endif
+        linear_scan(c);
     }
 }
 

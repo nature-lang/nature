@@ -1,6 +1,7 @@
 #include "amd64.h"
 #include "src/type.h"
 #include "utils/slice.h"
+#include <stdio.h>
 
 static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     list *operations = list_new();
@@ -164,9 +165,8 @@ void amd64_lir_lower(closure_t *c) {
     // 按基本块遍历所有指令
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
-        LIST_FOR(block->operations) {
-            lir_op_t *op = LIST_VALUE();
-
+        for (list_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
+            lir_op_t *op = node->value;
             // if op is fn begin, will set formal param
             // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
             if (op->code == LIR_OPCODE_FN_PARAM) {
@@ -180,7 +180,8 @@ void amd64_lir_lower(closure_t *c) {
                     list_insert_before(block->operations, LIST_NODE(), current->value);
                     current = current->succ;
                 }
-                list_remove(block->operations, LIST_NODE());
+
+                list_remove(block->operations, node);
                 continue;
             }
 
