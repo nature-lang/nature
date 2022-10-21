@@ -6,6 +6,20 @@
 #include "utils/helper.h"
 #include "src/semantic/analysis.h"
 
+// STACK[12]
+static char *lir_operand_stack_to_string(lir_operand_stack *stack) {
+    char *str = (char *) malloc(sizeof(char) * 100);
+    sprintf(str, "STACK[%d]", stack->slot);
+    return str;
+}
+
+// REG[rax]
+static char *lir_operand_reg_to_string(reg_t *reg) {
+    char *str = (char *) malloc(sizeof(char) * 100);
+    sprintf(str, "REG[%s]", reg->name);
+    return str;
+}
+
 static char *lir_operand_symbol_to_string(lir_operand_symbol_var *ptr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
@@ -21,8 +35,14 @@ string lir_operand_to_string(lir_operand *operand) {
         case LIR_OPERAND_SYMBOL_LABEL: {
             return lir_operand_label_to_string((lir_operand_symbol_label *) operand->value);
         }
-        case LIR_OPERAND_SYMBOL_VAR: {
+        case LIR_OPERAND_SYMBOL_VAR: { // 外部符号引用
             return lir_operand_symbol_to_string((lir_operand_symbol_var *) operand->value);
+        }
+        case LIR_OPERAND_STACK: {
+            return lir_operand_stack_to_string((lir_operand_stack *) operand->value);
+        }
+        case LIR_OPERAND_REG: {
+            return lir_operand_reg_to_string((reg_t *) operand->value);
         }
         case LIR_OPERAND_VAR: {
             return lir_operand_var_to_string((lir_operand_var *) operand->value);
@@ -195,4 +215,3 @@ char *lir_operand_phi_body_to_string(slice_t *phi_body) {
 
     return buf;
 }
-

@@ -31,46 +31,44 @@ static void var_replace(lir_operand *operand, interval_t *i) {
  * @param free_pos
  * @return
  */
-static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
-    uint8_t full_reg = 0; // 直接分配不用 split
-    uint8_t part_reg = 0; // 需要 split current to unhandled
-    uint8_t hint_reg = 0; // register hint 对应的 interval 分配的 reg
+static uint8_t find_free_reg(interval_t *current, int *free_pos) {
+    uint8_t full_reg_id = 0; // 直接分配不用 split
+    uint8_t part_reg_id = 0; // 需要 split current to unhandled
+    uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
     if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
-        hint_reg = current->reg_hint->assigned;
+        hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
-        if (free_pos[alloc_id] > current->last_range->to) {
-            // 寄存器 alloc_id 足够空闲，可以直接分配给 current，不需要任何 spilt
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
+        if (free_pos[reg_id] > current->last_range->to) {
+            // 寄存器 reg_id 足够空闲，可以直接分配给 current，不需要任何 spilt
             // 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
             // 直接使用 hint reg
-            if (full_reg != 0 && full_reg == hint_reg) {
+            if (full_reg_id != 0 && full_reg_id == hint_reg_id) {
                 continue;
             }
 
             // 挑选空闲时间最长的寄存器
-            if (free_pos[alloc_id] > free_pos[full_reg]) {
-                full_reg = alloc_id;
+            if (full_reg_id == 0 || free_pos[reg_id] > free_pos[full_reg_id]) {
+                full_reg_id = reg_id;
             }
-        } else if (free_pos[alloc_id] > current->first_range->from + 1) {
-            // alloc_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
-            if (part_reg != 0 && part_reg == hint_reg) {
+        } else if (free_pos[reg_id] > current->first_range->from + 1) {
+            // reg_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
+            if (part_reg_id != 0 && part_reg_id == hint_reg_id) {
                 continue;
             }
-            if (free_pos[alloc_id] > free_pos[part_reg]) {
-                part_reg = alloc_id;
+            if (part_reg_id == 0 || free_pos[reg_id] > free_pos[part_reg_id]) {
+                part_reg_id = reg_id;
             }
         }
     }
 
-    if (full_reg > 0) {
-        return
-                full_reg;
+    if (full_reg_id > 0) {
+        return full_reg_id;
     }
 
-    if (part_reg > 0) {
-        return
-                part_reg;
+    if (part_reg_id > 0) {
+        return part_reg_id;
     }
 
     return 0;
@@ -82,29 +80,29 @@ static uint8_t find_free_reg(interval_t *current, uint8_t *free_pos) {
  * @param free_pos
  * @return
  */
-static uint8_t find_block_reg(interval_t *current, uint8_t *use_pos, uint8_t *block_pos) {
-    uint8_t max_reg = 0; // 直接分配不用 split
-    uint8_t hint_reg = 0; // register hint 对应的 interval 分配的 reg
+static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos) {
+    uint8_t max_reg_id = 0; // 直接分配不用 split
+    uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
     if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
-        hint_reg = current->reg_hint->assigned;
+        hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
-        if (use_pos[alloc_id] <= current->first_range->from + 1) {
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
+        if (use_pos[reg_id] <= current->first_range->from + 1) {
             continue;
         }
 
         // 优先选择 hint reg
-        if (max_reg != 0 && max_reg == hint_reg) {
+        if (max_reg_id != 0 && max_reg_id == hint_reg_id) {
             continue;
         }
 
-        if (use_pos[alloc_id] > use_pos[max_reg]) {
-            max_reg = alloc_id;
+        if (max_reg_id == 0 || use_pos[reg_id] > use_pos[max_reg_id]) {
+            max_reg_id = reg_id;
         }
     }
 
-    return max_reg;
+    return max_reg_id;
 }
 
 
@@ -165,7 +163,7 @@ static void handle_inactive(allocate_t *a) {
 }
 
 static void set_pos(int *list, uint8_t index, int position) {
-    if (list[index] != -1 && position < list[index]) {
+    if (list[index] != -1 && position > list[index]) {
         return;
     }
 
@@ -218,9 +216,12 @@ list *unhandled_new(closure_t *c) {
     for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
         interval_t *item = table_get(c->interval_table, reg->name);
-        if (item == NULL) {
+        assert(item && "physic reg interval not found");
+        // 如果一个物理寄存器从未被使用过,就没有 ranges, 所以也不需要写入到 unhandled 中进行处理
+        if (item->first_range == NULL) {
             continue;
         }
+        // free_pos = int_max
         sort_to_unhandled(unhandled, item);
     }
 
@@ -290,28 +291,36 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         set_pos(free_pos, select->assigned, pos);
     }
 
-    // 找到权重最大的寄存器寄存器进行分配
-    uint8_t alloc_id = find_free_reg(a->current, free_pos);
-    // 没有可用的寄存器用于分配
-    if (alloc_id == 0) {
+    // 找到空闲时间最长的寄存器,返回空闲直接最长的寄存器的 id
+    uint8_t reg_id = find_free_reg(a->current, free_pos);
+    if (!reg_id || free_pos[reg_id] == 0) {
+        // 最长空闲的寄存器也不空闲
         return false;
     }
 
-    a->current->assigned = alloc_id;
-    if (free_pos[alloc_id] < a->current->last_range->to) {
-        int optimal_position = interval_find_optimal_split_pos(c, a->current, free_pos[alloc_id]);
+    a->current->assigned = reg_id;
+
+    // 有空闲的寄存器，但是空闲时间不够,需要 split current
+    if (free_pos[reg_id] < a->current->last_range->to) {
+        int optimal_position = interval_find_optimal_split_pos(c, a->current, free_pos[reg_id]);
 
         // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
         interval_t *child = interval_split_at(c, a->current, optimal_position);
         sort_to_unhandled(a->unhandled, child);
 
         // 为当前 interval 分配寄存器
-        a->current->assigned = alloc_id;
+        a->current->assigned = reg_id;
     }
 
     return true;
 }
 
+/**
+
+ * @param c
+ * @param a
+ * @return
+ */
 bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // 用于判断寄存器的空闲时间
     // key is physical register index, value is position
@@ -320,15 +329,15 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     memset(use_pos, -1, sizeof(use_pos));
     memset(use_pos, -1, sizeof(use_pos));
 
-    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
-        reg_t *reg = alloc_regs[alloc_id];
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
+        reg_t *reg = alloc_regs[reg_id];
         if (a->current->alloc_type != reg->type) {
             continue;
         }
-        SET_BLOCK_POS(alloc_id, INT32_MAX);
+        SET_BLOCK_POS(reg_id, INT32_MAX);
     }
 
-    int first_use = a->current->first_range->from;
+    int first_from = a->current->first_range->from;
 
     // 遍历固定寄存器(active)
     LIST_FOR(a->active) {
@@ -340,7 +349,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         } else {
             // 找一个大于 current first use_position 的位置(可以为0，0 表示没找到)
             // 查找 active interval 的下一个使用位置,用来判断其空闲时长
-            int pos = interval_next_use_position(select, first_use);
+            int pos = interval_next_use_position(select, first_from);
             SET_USE_POS(select->assigned, pos);
         }
     }
@@ -361,53 +370,52 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
             // 但是一旦到了 pos 位置，current 必须 split at and spill child
             SET_BLOCK_POS(select->assigned, pos);
         } else {
-            pos = interval_next_use_position(select, first_use);
+            pos = interval_next_use_position(select, first_from);
             SET_USE_POS(select->assigned, pos);
         }
     }
 
 
-    // max use pos 表示空闲时间最长的寄存器
-    uint8_t alloc_id = find_block_reg(a->current, use_pos, block_pos);
+    // max use pos 表示空闲时间最长的寄存器(必定会有一个大于 0 的值, 因为寄存器从 1 开始算的)
+    uint8_t reg_id = find_block_reg(a->current, use_pos, block_pos);
 
-    if (use_pos[alloc_id] < first_use) {
+    use_pos_t *first_use = first_use_pos(a->current, 0);
+    if (!reg_id || use_pos[reg_id] < first_use->value) {
+        //  a->current,range 为 4 ~ 18, 且 4 是 mov output first use pos, 所以必须占用一个寄存器, 此时是否会进入到 use_pos[reg_id] < first_use ？
+        //  假设所有的寄存器都被 active interval 占用， use_pos 记录的是 first_use + 1(指令之间的间隔是 2) 之后的使用位置(还在 active 就表示至少还有一个使用位置)
+        //  则不可能出现，所有的 use_pos min <  first_use + 1, 必定是 use pos min(下一条指令) > first_use + 1, 即使 ip = 6 指令是 call, 同样如此
+        //  并不影响 id = 4 的位置拿一个寄存器来用。 call 指令并不会添加 use_pos, 只是添加了 range, 此时所有的物理寄存器被 block，
+        if (first_use->kind == USE_KIND_MUST && first_use->value == first_from) {
+            assert(false && "cannot spill and spilt current, use_pos collect exception");
+        }
+
         //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
         // assign spill slot to current
-        interval_spill_slot(c, a->current);
-
-        // 一旦 current spill 到了内存中，则后续就再也不会处理了
-        // 所以 current 已经是 spill 了，但如果 current 存在某个 use pos 必须使用分配寄存器,
-        // 则需要将 current 重新分配到寄存器，这称为 reload, 在需要 reload 之前，将 interval spilt
-        use_pos_t *must_pos = interval_must_reg_pos(a->current);
-        if (must_pos) {
-            int split_pos = interval_find_optimal_split_pos(c, a->current, must_pos->value);
-            interval_t *child = interval_split_at(c, a->current, split_pos);
-            sort_to_unhandled(a->unhandled, child);
-        }
-    } else if (block_pos[alloc_id] > a->current->last_range->to) {
+        spill_interval(c, a, a->current, 0);
+    } else if (block_pos[reg_id] > a->current->last_range->to) {
         // 一般都会进入到这一条件中
-        // alloc_id 对应的寄存器的空闲时间 大于 current.first_use
-        // 甚至大于 current->last_range->to，所以优先溢出 alloc_id 对应都 interval
+        // reg_id 对应的寄存器的空闲时间 大于 current.first_use
+        // 甚至大于 current->last_range->to，所以优先溢出 reg_id 对应都 interval
         // 所有和 current intersecting 的 interval 都需要在 current start 之前 split 并且 spill 到内存中
         // 当然，如果 child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
         LIST_FOR(a->active) {
             interval_t *i = LIST_VALUE();
-            if (i->assigned != alloc_id) {
+            if (i->assigned != reg_id) {
                 continue;
             }
-            // first_use 表示必须在 first_use 之前 spill, 否则会影响 current 使用 alloc_id
-            spill_interval(c, a, i, first_use);
+            // first_use 表示必须在 first_use 之前 spill, 否则会影响 current 使用 reg_id
+            spill_interval(c, a, i, first_from);
         }
         LIST_FOR(a->inactive) {
             interval_t *i = LIST_VALUE();
-            if (i->assigned != alloc_id) {
+            if (i->assigned != reg_id) {
                 continue;
             }
-            spill_interval(c, a, i, first_use);
+            spill_interval(c, a, i, first_from);
         }
 
         // assign register reg to interval current
-        a->current->assigned = alloc_id;
+        a->current->assigned = reg_id;
         return true;
     } else {
         // 1. current.first_use < use_pos < current.last_use
@@ -417,24 +425,24 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // split and spill interval active/inactive intervals for reg
         LIST_FOR(a->active) {
             interval_t *i = LIST_VALUE();
-            if (i->assigned != alloc_id) {
+            if (i->assigned != reg_id) {
                 continue;
             }
-            spill_interval(c, a, i, first_use);
+            spill_interval(c, a, i, first_from);
         }
         LIST_FOR(a->inactive) {
             interval_t *i = LIST_VALUE();
-            if (i->assigned != alloc_id) {
+            if (i->assigned != reg_id) {
                 continue;
             }
-            spill_interval(c, a, i, first_use);
+            spill_interval(c, a, i, first_from);
         }
 
         // assign register reg to interval current
-        a->current->assigned = alloc_id;
+        a->current->assigned = reg_id;
 
         // split current at block_pos
-        int split_current_pos = interval_find_optimal_split_pos(c, a->current, block_pos[alloc_id]);
+        int split_current_pos = interval_find_optimal_split_pos(c, a->current, block_pos[reg_id]);
         interval_t *child = interval_split_at(c, a->current, split_current_pos);
         sort_to_unhandled(a->unhandled, child);
         return true;
@@ -452,14 +460,19 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
  * @return
  */
 void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) {
-    // spill current before current first use position
-    int split_pos = interval_find_optimal_split_pos(c, i, before_pos);
-    interval_t *child = interval_split_at(c, i, split_pos);
+    int split_pos;
+    interval_t *child = i;
+    if (before_pos > 0) {
+        // spill current before current first use position
+        split_pos = interval_find_optimal_split_pos(c, i, before_pos);
+        child = interval_split_at(c, i, split_pos);
+    }
+
     use_pos_t *must_pos = interval_must_reg_pos(child);
     if (must_pos) {
         split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
         interval_t *unhandled = interval_split_at(c, child, split_pos);
-        list_push(a->unhandled, unhandled);
+        sort_to_unhandled(a->unhandled, unhandled);
     }
 
     // child to slot
@@ -492,6 +505,14 @@ void replace_virtual_register(closure_t *c) {
                     list_remove(block->operations, current);
                 }
             }
+
+            current = current->succ;
+        }
+
+        // remove phi op
+        current = list_first(block->operations)->succ;
+        while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+            list_remove(block->operations, current);
 
             current = current->succ;
         }

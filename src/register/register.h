@@ -40,7 +40,7 @@ reg_t *reg_find(uint8_t index, uint8_t size);
  */
 void reg_init();
 
-reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t alloc_id);
+reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t reg_id);
 
 reg_type_e type_base_trans(type_base_t t);
 

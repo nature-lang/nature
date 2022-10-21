@@ -200,13 +200,20 @@ void debug_closure(closure_t *c) {
  */
 void debug_basic_block(basic_block_t *block) {
     // block as, ops, succ, pred
-    printf("block: %s\n", block->name);
+    printf("block: %s\t\t", block->name);
+    if (block->loop.index != -1) {
+        printf("%s", block->loop.header ? "loop_header|" : "");
+        printf("%s", block->loop.end ? "loop_end|" : "");
+        printf("loop:i-%d/d-%d", block->loop.index, block->loop.depth);
+    }
+    printf("\n");
 
     list_node *current = block->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         printf(
-                "\t\t%s\t%s , %s => %s\n",
+                "%d\t\t%s\t%s , %s => %s\n",
+                op->id,
                 lir_op_type_to_debug[op->code],
                 lir_operand_to_string(op->first),
                 lir_operand_to_string(op->second),
@@ -222,6 +229,11 @@ void debug_basic_block(basic_block_t *block) {
     printf("\n\t\tsucc:");
     for (int i = 0; i < block->succs->count; ++i) {
         printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
+    }
+    printf("\n\t\tlive_in:");
+    for (int i = 0; i < block->live_in->count; ++i) {
+        lir_operand_var *var = block->live_in->take[i];
+        printf("%s\t", var->ident);
     }
 
     printf("\n\n\n");

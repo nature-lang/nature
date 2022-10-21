@@ -29,6 +29,8 @@ void linear_scan(closure_t *c) {
 
     interval_mark_number(c);
 
+//    debug_closure(c);
+
     interval_build(c);
 
     allocate_walk(c);
@@ -36,6 +38,8 @@ void linear_scan(closure_t *c) {
     resolve_data_flow(c);
 
     replace_virtual_register(c);
+
+    debug_closure(c);
 }
 
 void lir_lower(closure_t *c) {

@@ -5,11 +5,6 @@
 #include "utils/list.h"
 
 typedef enum {
-    LOOP_DETECTION_FLAG_VISITED = 1,
-    LOOP_DETECTION_FLAG_ACTIVE,
-} loop_detection_flag;
-
-typedef enum {
     USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
     USE_KIND_SHOULD = 1, // 尽量分配寄存器，但不强制
     USE_KIND_MUST = 2, // 必须分配寄存器
@@ -31,7 +26,7 @@ typedef struct interval_t {
     interval_range_t *first_range;
     interval_range_t *last_range;
     list *ranges;
-    list *use_positions; // 存储 use_position 列表
+    list *use_pos_list; // 存储 use_position 列表
     struct interval_t *parent;
     list *children; // 动态数组
 
@@ -154,6 +149,6 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
 void resolve_mappings(closure_t *c, resolver_t *r);
 
-slice_t *op_operands(lir_op_t *op, uint64_t flag);
+use_pos_t *first_use_pos(interval_t *i, use_kind_e kind);
 
 #endif

@@ -30,7 +30,7 @@ static void loop_header_detect(closure_t *c, basic_block_t *current, basic_block
         assert(parent);
 
         current->loop.header = true;
-        parent->loop.end = false;
+        parent->loop.end = true;
 
         parent->backward_succ = current;
 
@@ -382,17 +382,17 @@ void interval_mark_number(closure_t *c) {
 
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
-    for (int alloc_id = 1; alloc_id < alloc_reg_count(); ++alloc_id) {
-        reg_t *reg = alloc_regs[alloc_id];
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
+        reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = interval_new(c);
+        interval->index = reg_id;
         interval->fixed = true;
-        interval->assigned = alloc_id;
+        interval->assigned = reg_id;
         interval->alloc_type = reg->type;
-        table_set(c->interval_table, reg->name, interval_new(c));
+        table_set(c->interval_table, reg->name, interval);
     }
 
     // new interval for all virtual registers in closure
-    c->interval_table = table_new();
     for (int i = 0; i < c->globals->count; ++i) {
         lir_operand_var *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
@@ -471,6 +471,8 @@ void interval_build(closure_t *c) {
             // TODO add reg hint for phi, but phi a lot of input var?
 
             // interval by output params, so it contain opcode phi
+            // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
+            // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
             slice_t *intervals = op_output_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
@@ -478,7 +480,11 @@ void interval_build(closure_t *c) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
                     live_remove(exist_vars, live_in, interval->var);
-                    interval->first_range->from = op->id;
+                    if (interval->first_range == NULL) {
+                        interval_add_range(c, interval, op->id, op->id + 1);
+                    } else {
+                        interval->first_range->from = op->id;
+                    }
                 }
 
                 interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
@@ -514,7 +520,6 @@ void interval_build(closure_t *c) {
          * 由于采取了倒序遍历的方式，loop end 已经被遍历过了，但是 header 却还没有被处理。
          */
         if (block->loop.header) {
-            // 一个 loop 可能有多个 loop end? 那就都搞
             for (int j = 0; j < block->loop_ends->count; ++j) {
                 basic_block_t *end = block->loop_ends->take[j];
                 for (int k = 0; k < live_in->count; ++k) {
@@ -530,8 +535,9 @@ void interval_build(closure_t *c) {
 
 interval_t *interval_new(closure_t *c) {
     interval_t *i = malloc(sizeof(interval_t));
+    memset(i, 0, sizeof(interval_t));
     i->ranges = list_new();
-    i->use_positions = list_new();
+    i->use_pos_list = list_new();
     i->children = list_new();
     i->stack_slot = NEW(int);
     *i->stack_slot = -1;
@@ -623,7 +629,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
  * @param kind
  */
 void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind) {
-    list *pos_list = i->use_positions;
+    list *pos_list = i->use_pos_list;
 
     use_pos_t *new_pos = NEW(use_pos_t);
     new_pos->kind = kind;
@@ -643,7 +649,7 @@ void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e 
 
 
 int interval_next_use_position(interval_t *i, int after_position) {
-    list *pos_list = i->use_positions;
+    list *pos_list = i->use_pos_list;
 
     LIST_FOR(pos_list) {
         use_pos_t *current_pos = LIST_VALUE();
@@ -663,8 +669,8 @@ int interval_next_use_position(interval_t *i, int after_position) {
  * @param position
  */
 interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
-    assert(i->last_range->to > position);
-    assert(i->first_range->from < position);
+    assert(position < i->last_range->to);
+    assert(position >= i->first_range->from);
 
     interval_t *child = interval_new_child(c, i);
 
@@ -716,14 +722,14 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     }
 
     // 划分 position
-    LIST_FOR(i->use_positions) {
+    LIST_FOR(i->use_pos_list) {
         use_pos_t *pos = LIST_VALUE();
         if (pos->value < position) {
             continue;
         }
 
         // pos->value >= position, pos 和其之后的 pos 都需要加入到 new child 中
-        child->use_positions = list_split(i->use_positions, LIST_NODE());
+        child->use_pos_list = list_split(i->use_pos_list, LIST_NODE());
         break;
     }
 
@@ -755,7 +761,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
  * @return
  */
 use_pos_t *interval_must_reg_pos(interval_t *i) {
-    LIST_FOR(i->use_positions) {
+    LIST_FOR(i->use_pos_list) {
         use_pos_t *pos = LIST_VALUE();
         if (pos->kind == USE_KIND_MUST) {
             return pos;
@@ -793,7 +799,7 @@ void resolve_data_flow(closure_t *c) {
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
                 // 因此需要 link from and to interval
-                if (from_interval != to_interval) {
+                if (interval_need_move(from_interval, to_interval)) {
                     slice_push(r.from_list, from_interval);
                     slice_push(r.to_list, to_interval);
                 }
@@ -814,10 +820,7 @@ void resolve_data_flow(closure_t *c) {
                 temp_interval = table_get(c->interval_table, def->ident);
                 assert(temp_interval);
                 interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op)->id);
-                // 因为 from 和 interval 是相连接的 edge,
-                // 如果from_interval != to_interval(指针对比即可)
-                // 则说明在其他 edge 上对 interval 进行了 spilt/reload
-                // 因此需要 link from and to interval
+
                 if (interval_need_move(from_interval, to_interval)) {
                     slice_push(r.from_list, from_interval);
                     slice_push(r.to_list, to_interval);
@@ -952,4 +955,21 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         r->insert_block = to;
         r->insert_id = OP(from->first_op)->id - 1;
     }
+}
+
+use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
+    assert(i->use_pos_list->count > 0);
+
+    if (!kind) {
+        return list_first(i->use_pos_list)->value;
+    }
+
+    LIST_FOR(i->use_pos_list) {
+        use_pos_t *pos = LIST_VALUE();
+        if (pos->kind == kind) {
+            return pos;
+        }
+    }
+
+    assert(false && "no use pos found");
 }
