@@ -3,6 +3,7 @@
 
 string type_to_string[] = {
         [TYPE_STRING] = "string",
+        [TYPE_STRING_RAW] = "string_RAW",
         [TYPE_BOOL] = "bool",
         [TYPE_FLOAT] = "float",
         [TYPE_INT] = "int",

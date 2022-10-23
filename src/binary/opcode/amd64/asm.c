@@ -1,8 +1,8 @@
 #include "asm.h"
 
-amd64_operand_t *amd64_asm_symbol_operand(amd64_operation_t asm_inst) {
+asm_operand_t *amd64_asm_symbol_operand(asm_operation_t asm_inst) {
     for (int i = 0; i < asm_inst.count; ++i) {
-        amd64_operand_t *operand = asm_inst.operands[i];
+        asm_operand_t *operand = asm_inst.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
             return operand;
         }
@@ -10,7 +10,7 @@ amd64_operand_t *amd64_asm_symbol_operand(amd64_operation_t asm_inst) {
     return NULL;
 }
 
-amd64_operand_t *asm_match_int_operand(int64_t n) {
+asm_operand_t *asm_match_int_operand(int64_t n) {
     // 正负数处理
     if (n >= INT8_MIN && n <= INT8_MAX) {
         return UINT8(n);

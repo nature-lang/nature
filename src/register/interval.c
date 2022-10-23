@@ -156,7 +156,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_operand_var *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
+        lir_var_t *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
         child->var = var;
         table_set(c->interval_table, var->ident, child);
     } else {
@@ -198,9 +198,10 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         }
 
         // last->id < id < op->id
-        lir_operand *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
-        lir_operand *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
+        lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
+        lir_operand_t *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
         lir_op_t *mov_op = lir_op_move(dst, src);
+        mov_op->id = id;
         list_insert_before(block->operations, LIST_NODE(), mov_op);
         return;
     }
@@ -218,9 +219,9 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
     }
 }
 
-static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
+static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     if (operand->type == LIR_OPERAND_VAR) {
-        lir_operand_var *var = operand->value;
+        lir_var_t *var = operand->value;
         interval_t *interval = table_get(c->interval_table, var->ident);
         assert(interval);
         return interval;
@@ -238,11 +239,11 @@ static interval_t *operand_interval(closure_t *c, lir_operand *operand) {
 static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
     slice_t *result = slice_new();
     // output 总是存储在 result 中
-    slice_t *operands = lir_operand_nests(op->output, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_t *operands = lir_nest_operands(op->output, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     SLICE_FOR(operands) {
-        lir_operand *operand = SLICE_VALUE(operands);
+        lir_operand_t *operand = SLICE_VALUE(operands);
         if (operand->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = operand->value;
+            lir_var_t *var = operand->value;
             interval_t *interval = table_get(c->interval_table, var->ident);
             assert(interval);
             slice_push(result, interval);
@@ -260,13 +261,13 @@ static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
 
 static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
     slice_t *result = slice_new();
-    slice_t *operands = lir_operand_nests(op->first, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
-    slice_append(operands, lir_operand_nests(op->second, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG)));
+    slice_t *operands = lir_nest_operands(op->first, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_append(operands, lir_nest_operands(op->second, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG)));
     // 解析 interval
     SLICE_FOR(operands) {
-        lir_operand *operand = SLICE_VALUE(operands);
+        lir_operand_t *operand = SLICE_VALUE(operands);
         if (operand->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = operand->value;
+            lir_var_t *var = operand->value;
             interval_t *interval = table_get(c->interval_table, var->ident);
             assert(interval && "interval not register in table");
             slice_push(result, interval);
@@ -289,6 +290,10 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
  * @return
  */
 static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) {
+    if (lir_op_contain_cmp(op)) {
+        return USE_KIND_SHOULD;
+    }
+
     return USE_KIND_MUST;
 }
 
@@ -300,6 +305,9 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @return
  */
 static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
+    if (lir_op_contain_cmp(op) && i->var->flag & FLAG(VAR_FLAG_FIRST)) {
+        return USE_KIND_MUST;
+    }
     return USE_KIND_SHOULD;
 }
 
@@ -394,7 +402,7 @@ void interval_build(closure_t *c) {
 
     // new interval for all virtual registers in closure
     for (int i = 0; i < c->globals->count; ++i) {
-        lir_operand_var *var = c->globals->take[i];
+        lir_var_t *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
         interval->alloc_type = type_base_trans(var->type_base);
@@ -411,7 +419,7 @@ void interval_build(closure_t *c) {
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
             for (int k = 0; k < succ->live_in->count; ++k) {
-                lir_operand_var *var = succ->live_in->take[k];
+                lir_var_t *var = succ->live_in->take[k];
                 live_add(exist_vars, live_in, var);
             }
         }
@@ -422,7 +430,7 @@ void interval_build(closure_t *c) {
             list_node *current = list_first(succ_block->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
                 lir_op_t *op = OP(current);
-                lir_operand_var *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
+                lir_var_t *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
                 live_add(exist_vars, live_in, var);
 
                 current = current->succ;
@@ -435,7 +443,7 @@ void interval_build(closure_t *c) {
 
         // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
         for (int k = 0; k < live_in->count; ++k) {
-            lir_operand_var *var = live_in->take[k];
+            lir_var_t *var = live_in->take[k];
             interval_t *interval = table_get(c->interval_table, var->ident);
             interval_add_range(c, interval, block_from, block_to);
         }
@@ -511,7 +519,7 @@ void interval_build(closure_t *c) {
         while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(current);
 
-            lir_operand_var *var = op->output->value;
+            lir_var_t *var = op->output->value;
             live_remove(exist_vars, live_in, var);
             current = current->succ;
         }
@@ -523,7 +531,7 @@ void interval_build(closure_t *c) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
                 basic_block_t *end = block->loop_ends->take[j];
                 for (int k = 0; k < live_in->count; ++k) {
-                    lir_operand_var *var = live_in->take[k];
+                    lir_var_t *var = live_in->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
                     interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
                 }
@@ -708,18 +716,26 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         if (position == range->from) {
             child->ranges = list_split(i->ranges, LIST_NODE());
         } else {
+            // new range for child
             interval_range_t *new_range = NEW(interval_range_t);
             new_range->from = position;
             new_range->to = range->to;
-            range->to = position;
+
+
+            range->to = position; // 截短
 
             // 将 new_range 插入到 ranges 中
             list_insert_after(i->ranges, LIST_NODE(), new_range);
-            child->ranges = list_split(i->ranges, LIST_NODE());
+
+            child->ranges = list_split(i->ranges, LIST_NODE()->succ);
         }
 
+        child->first_range = list_first(child->ranges)->value;
+        child->last_range = list_last(child->ranges)->value;
         break;
     }
+
+
 
     // 划分 position
     LIST_FOR(i->use_pos_list) {
@@ -747,12 +763,12 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     i->assigned = 0;
     i->spilled = true;
-    if (*i->stack_slot != -1) {
+    if (*i->stack_slot != 0) { // 已经分配了 slot 了
         return;
     }
     // 根据 closure stack slot 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
+    c->stack_slot -= type_base_sizeof(i->var->type_base);
     *i->stack_slot = c->stack_slot;
-    c->stack_slot += type_base_sizeof(i->var->type_base);
 }
 
 /**
@@ -788,13 +804,13 @@ void resolve_data_flow(closure_t *c) {
             // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live_in
             // live_in not contain phi def interval
             for (int j = 0; j < to->live_in->count; ++j) {
-                lir_operand_var *var = to->live_in->take[j];
+                lir_var_t *var = to->live_in->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
                 assert(parent_interval);
 
-                // 判断是否在 form->to edge 最终的 interval
-                interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id);
-                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id);
+                // 判断是否在 form->to edge 最终的 interval TODO last_op + 1?
+                interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id + 1, false);
+                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id, false);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -811,15 +827,15 @@ void resolve_data_flow(closure_t *c) {
                 lir_op_t *op = OP(current);
                 //  to phi.inputOf(pred def) will is from interval
                 // TODO ssa body constant handle
-                lir_operand_var *var = ssa_phi_body_of(op->first->value, to->preds, from);
+                lir_var_t *var = ssa_phi_body_of(op->first->value, to->preds, from);
                 interval_t *temp_interval = table_get(c->interval_table, var->ident);
                 assert(temp_interval);
-                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op)->id);
+                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op)->id, false);
 
-                lir_operand_var *def = op->output->value; // result must assign reg
+                lir_var_t *def = op->output->value; // result must assign reg
                 temp_interval = table_get(c->interval_table, def->ident);
                 assert(temp_interval);
-                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op)->id);
+                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op)->id, false);
 
                 if (interval_need_move(from_interval, to_interval)) {
                     slice_push(r.from_list, from_interval);
@@ -840,7 +856,16 @@ void resolve_data_flow(closure_t *c) {
     }
 }
 
-interval_t *interval_child_at(interval_t *i, int op_id) {
+/**
+ * 如果是 input 则 使用 op_id < last_range->to+1
+ * output 则不用
+ * @param i
+ * @param op_id
+ * @return
+ */
+interval_t *interval_child_at(interval_t *i, int op_id, bool is_input) {
+    assert(op_id >= 0 && "invalid op_id (method can not be called for spill moves)");
+
     if (list_empty(i->children)) {
         return i;
     }
@@ -850,9 +875,10 @@ interval_t *interval_child_at(interval_t *i, int op_id) {
     }
 
 
+    int last_to_offset = is_input ? 1 : 0;
     LIST_FOR(i->children) {
         interval_t *child = LIST_VALUE();
-        if (child->first_range->from <= op_id && child->last_range->to > op_id) {
+        if (child->first_range->from <= op_id && (child->last_range->to + last_to_offset) > op_id) {
             return child;
         }
     }

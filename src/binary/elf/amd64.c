@@ -15,7 +15,7 @@
  * @param operation
  * @return
  */
-uint64_t operation_rip_offset(amd64_operation_t *operation) {
+uint64_t operation_rip_offset(asm_operation_t *operation) {
     if (str_equal(operation->name, "mov")) {
         // rip 相对寻址
         return 3;
@@ -39,7 +39,7 @@ uint64_t operation_rip_offset(amd64_operation_t *operation) {
     return 0;
 }
 
-static uint8_t jmp_rewrite_rel8_reduce_count(amd64_operation_t *operation) {
+static uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) {
     if (operation->name[0] != 'j') {
         return 0;
     }
@@ -53,7 +53,7 @@ static uint8_t jmp_rewrite_rel8_reduce_count(amd64_operation_t *operation) {
     return 6 - 2;
 }
 
-static uint8_t jmp_operation_count(amd64_operation_t *operation, uint8_t size) {
+static uint8_t jmp_operation_count(asm_operation_t *operation, uint8_t size) {
     if (operation->name[0] != 'j') {
         error_exit("[linux_elf_amd64_jmp_inst_count] operation: %s not jmp or jcc:", operation->name);
     }
@@ -81,7 +81,7 @@ static bool is_jmp_op(char *name) {
  * @param operand
  * @param rel_diff
  */
-static void amd64_rewrite_rel_symbol(amd64_operation_t *operation, amd64_operand_t *operand, int rel_diff) {
+static void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *operand, int rel_diff) {
     if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
         // 已经确定了指令长度，不能在随意修正了
         if (rel_diff == 0) {
@@ -93,11 +93,11 @@ static void amd64_rewrite_rel_symbol(amd64_operation_t *operation, amd64_operand
             if (!is_call_op(operation->name)) {
                 data_count = jmp_operation_count(operation, DWORD);
             }
-            asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
+            asm_uint32_t *v = NEW(asm_uint32_t);
             v->value = (uint32_t) (rel_diff - data_count);
             operand->value = v;
         } else {
-            asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
+            asm_uint8_t *v = NEW(asm_uint8_t);
             v->value = (uint8_t) (rel_diff - 2); // -2 表示去掉当前指令的差值
             operand->value = v;
         }
@@ -115,7 +115,7 @@ static void amd64_rewrite_rel_symbol(amd64_operation_t *operation, amd64_operand
 
         operand->type = ASM_OPERAND_TYPE_UINT32;
         operand->size = DWORD;
-        asm_operand_uint32_t *v = NEW(asm_operand_uint32_t);
+        asm_uint32_t *v = NEW(asm_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
             v->value = (uint32_t) (rel_diff - data_count); // -5 表示去掉当前指令的差值
@@ -127,23 +127,23 @@ static void amd64_rewrite_rel_symbol(amd64_operation_t *operation, amd64_operand
     // jmp 指令
     operand->type = ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
-    asm_operand_uint8_t *v = NEW(asm_operand_uint8_t);
+    asm_uint8_t *v = NEW(asm_uint8_t);
     v->value = (uint8_t) (rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
     operand->value = v;
 }
 
-static void amd64_rewrite_rip_symbol(amd64_operand_t *operand) {
+static void amd64_rewrite_rip_symbol(asm_operand_t *operand) {
     operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
     operand->size = QWORD;
-    asm_operand_rip_relative_t *r = NEW(asm_operand_rip_relative_t);
+    asm_rip_relative_t *r = NEW(asm_rip_relative_t);
     r->disp = 0;
     operand->value = r;
 }
 
 
-static amd64_operand_t *has_symbol_operand(amd64_operation_t *operation) {
+static asm_operand_t *has_symbol_operand(asm_operation_t *operation) {
     for (int i = 0; i < operation->count; ++i) {
-        amd64_operand_t *operand = operation->operands[i];
+        asm_operand_t *operand = operation->operands[i];
         if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
             return operand;
         }
@@ -152,7 +152,7 @@ static amd64_operand_t *has_symbol_operand(amd64_operation_t *operation) {
 }
 
 
-static amd64_build_temp_t *build_temp_new(amd64_operation_t *operation) {
+static amd64_build_temp_t *build_temp_new(asm_operation_t *operation) {
     amd64_build_temp_t *temp = NEW(amd64_build_temp_t);
     temp->data = NULL;
     temp->data_count = 0;
@@ -168,7 +168,7 @@ static amd64_build_temp_t *build_temp_new(amd64_operation_t *operation) {
 }
 
 static void amd64_rewrite_rel32_to_rel8(amd64_build_temp_t *temp) {
-    asm_operand_uint8_t *operand = NEW(asm_operand_uint8_t);
+    asm_uint8_t *operand = NEW(asm_uint8_t);
     operand->value = 0; // 仅占位即可
     temp->operation->count = 1;
     temp->operation->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
@@ -503,7 +503,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
     uint64_t section_offset = 0; // text section slot
     // 一次遍历
     for (int i = 0; i < operations->count; ++i) {
-        amd64_operation_t *operation = operations->take[i];
+        asm_operation_t *operation = operations->take[i];
         amd64_build_temp_t *temp = build_temp_new(operation);
         slice_push(build_temps, temp);
 
@@ -512,7 +512,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
         // 定义符号
         if (str_equal(operation->name, "label")) {
             // 解析符号值，并添加到符号表
-            amd64_operand_symbol_t *s = operation->operands[0]->value;
+            asm_symbol_t *s = operation->operands[0]->value;
             // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
             // 一旦发现定义点,就需要反推
             amd64_confirm_rel(ctx->symtab_section, build_temps, &section_offset, s->name);
@@ -531,12 +531,12 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
             continue;
         }
 
-        amd64_operand_t *rel_operand = has_symbol_operand(operation);
+        asm_operand_t *rel_operand = has_symbol_operand(operation);
         if (rel_operand != NULL) {
             // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
             // 1. 数据符号引用(直接改写成 0x0(rip))
             // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位)
-            amd64_operand_symbol_t *symbol_operand = rel_operand->value;
+            asm_symbol_t *symbol_operand = rel_operand->value;
             // 判断是否为标签符号引用, 比如 call symbol call
             if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
                 // 标签符号

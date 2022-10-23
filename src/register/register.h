@@ -18,8 +18,8 @@ typedef enum {
 typedef struct {
     string name;
     uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
-    reg_type_e type; // 寄存器类型
-    uint8_t size;
+    uint8_t size; // 实际的位宽, 对应 intel 手册
+    reg_type_e type; // 寄存器类型, float and int
     uint8_t alloc_id; // 寄存器分配期间的 id，能通过 id 进行唯一检索
 } reg_t; // 做类型转换
 
@@ -27,13 +27,17 @@ reg_t *alloc_regs[UINT8_MAX];
 
 uint8_t alloc_reg_count();
 
+string reg_table_key(uint8_t index, uint8_t size);
+
 /**
- * 导向具体架构的 reg_find
+ * 导向具体架构的 reg_select
  * @param index
- * @param size
+ * @param base
  * @return
  */
-reg_t *reg_find(uint8_t index, uint8_t size);
+reg_t *reg_select(uint8_t index, type_base_t base);
+
+reg_t *reg_find(uint8_t index, size_t size);
 
 /**
  * 注册相应架构的寄存器到 reg_table 和 regs 中

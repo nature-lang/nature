@@ -43,10 +43,10 @@
 
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
-   lir_operand_immediate *imm_operand = malloc(sizeof(lir_operand_immediate)); \
+   lir_imm_t *imm_operand = malloc(sizeof(lir_imm_t)); \
    imm_operand->type = operand_type; \
    imm_operand->key = val; \
-   lir_operand *operand = malloc(sizeof(lir_operand)); \
+   lir_operand_t *operand = malloc(sizeof(lir_operand_t)); \
    operand->type = LIR_OPERAND_IMM; \
    operand->value = imm_operand;              \
    operand; \
@@ -54,7 +54,7 @@
 
 #define LIR_NEW_OPERAND(_type, _value) \
 ({                                 \
-  lir_operand *_operand = NEW(lir_operand); \
+  lir_operand_t *_operand = NEW(lir_operand_t); \
   _operand->type = _type;           \
   _operand->value = _value;    \
   _operand;                                   \
@@ -71,6 +71,12 @@ int var_unique_count;
 int lir_line;
 
 typedef enum {
+    VAR_FLAG_OUTPUT,
+    VAR_FLAG_FIRST,
+    VAR_FLAG_SECOND,
+} lir_var_flag_e;
+
+typedef enum {
     LIR_OPERAND_NULL,
     LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_REG,
@@ -82,7 +88,7 @@ typedef enum {
     LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_ADDR,
-} lir_operand_type;
+} lir_operand_e;
 
 typedef enum {
     LIR_OPCODE_ADD = 1,
@@ -107,8 +113,8 @@ typedef enum {
     LIR_OPCODE_MOVE,
     LIR_OPCODE_BEQ, // branch if eq a,b
     LIR_OPCODE_BAL, // branch always
-    LIR_OPCODE_PUSH,
-    LIR_OPCODE_POP,
+    LIR_OPCODE_PUSH, // first
+    LIR_OPCODE_POP, // output
     LIR_OPCODE_CALL, // 复合指令，位置在 second
     LIR_OPCODE_RUNTIME_CALL,
     LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
@@ -117,19 +123,19 @@ typedef enum {
     LIR_OPCODE_FN_PARAM, // 形参 OP, formal param in output
     LIR_OPCODE_FN_BEGIN, // 无操作数
     LIR_OPCODE_FN_END, // 无操作数
-} lir_opcode;
+} lir_opcode_e;
 
-typedef struct lir_operand {
-    lir_operand_type type;
+typedef struct {
+    lir_operand_e type;
     void *value;
-} lir_operand;
+} lir_operand_t;
 
 // 变量的定义点
 typedef struct {
     string ident;
     type_t type; // 原始类型存储(包含指针深度等数据)
 //    int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
-} lir_var_decl;
+} lir_var_decl_t;
 
 /**
  * 存放在寄存器或者内存中, var a = 1
@@ -138,10 +144,11 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
 //    uint8_t reg_index; // reg list index, 寄存器分配, 及时是同一个变量,也会有时在寄存器中,有时在内存中
-    lir_var_decl *decl; // local 如果为 nil 就是外部符号引用
+    lir_var_decl_t *decl; // local 如果为 nil 就是外部符号引用
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
     bool indirect_addr; // &a 对变量进行解引用操作
-} lir_operand_var;
+    uint8_t flag;
+} lir_var_t;
 
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
@@ -150,24 +157,24 @@ typedef struct {
 typedef struct {
     int slot;
     int size;
-} lir_operand_stack;
+} lir_stack_t;
 
 typedef struct {
-    lir_operand *base;
+    lir_operand_t *base;
     int offset; // 偏移量是可以计算出来的, 默认为 0
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size
     bool indirect_addr;
-} lir_operand_addr;
+} lir_addr_t;
 
 typedef struct {
     char *ident;
     bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
-} lir_operand_symbol_label;
+} lir_symbol_label_t;
 
 typedef struct {
     string ident;
     type_base_t type;
-} lir_operand_symbol_var; // 外部符号引用, 外部符号引用
+} lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
     union {
@@ -177,7 +184,7 @@ typedef struct {
         string string_value; // 8bit
     };
     type_base_t type;
-} lir_operand_immediate;
+} lir_imm_t;
 
 /**
  * 四元组
@@ -192,10 +199,10 @@ typedef struct {
  * label: 同样也是使用 first_param
  */
 typedef struct lir_op {
-    lir_opcode code;
-    lir_operand *first; // 参数1
-    lir_operand *second; // 参数2
-    lir_operand *output; // 参数3
+    lir_opcode_e code;
+    lir_operand_t *first; // 参数1
+    lir_operand_t *second; // 参数2
+    lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 } lir_op_t;
 
@@ -280,11 +287,14 @@ typedef struct closure_t {
     int8_t loop_count;
     slice_t *loop_headers;
     slice_t *loop_ends;
+
+    // native asm operations
+    slice_t *asm_operations;
 } closure_t;
 
-lir_operand *set_indirect_addr(lir_operand *operand);
+lir_operand_t *set_indirect_addr(lir_operand_t *operand);
 
-lir_operand *lir_new_phi_body(closure_t *c, lir_operand_var *var, uint8_t count);
+lir_operand_t *lir_new_phi_body(closure_t *c, lir_var_t *var, uint8_t count);
 
 basic_block_t *lir_new_basic_block(char *name, uint8_t label_index);
 
@@ -298,7 +308,7 @@ closure_t *lir_new_closure(ast_closure_t *ast);
  * @param type
  * @return
  */
-lir_operand_var *lir_new_var_operand(closure_t *c, string ident);
+lir_var_t *lir_new_var_operand(closure_t *c, string ident);
 
 /**
  * 符号定义
@@ -306,38 +316,38 @@ lir_operand_var *lir_new_var_operand(closure_t *c, string ident);
  * @param ident
  * @param type
  */
-lir_var_decl *lir_new_var_decl(closure_t *c, string ident, type_t type);
+lir_var_decl_t *lir_new_var_decl(closure_t *c, string ident, type_t type);
 
-type_base_t lir_operand_type_base(lir_operand *operand);
+type_base_t lir_operand_type_base(lir_operand_t *operand);
 
-uint8_t lir_operand_sizeof(lir_operand *operand);
+uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
-lir_operand *lir_new_temp_var_operand(closure_t *c, type_t type);
+lir_operand_t *lir_new_temp_var_operand(closure_t *c, type_t type);
 
-lir_operand *lir_new_empty_operand();
+lir_operand_t *lir_new_empty_operand();
 
-lir_operand *lir_new_addr_operand(lir_operand *base, int offset, type_base_t type_base);
+lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base);
 
-lir_operand *lir_new_label_operand(string ident, bool is_local);
+lir_operand_t *lir_new_label_operand(string ident, bool is_local);
 
 lir_op_t *lir_op_label(string name, bool is_local);
 
 lir_op_t *lir_op_unique_label(string name);
 
-lir_operand *lir_copy_label_operand(lir_operand *label_operand);
+lir_operand_t *lir_copy_label_operand(lir_operand_t *label_operand);
 
-lir_op_t *lir_op_bal(lir_operand *label);
+lir_op_t *lir_op_bal(lir_operand_t *label);
 
 //lir_op *lir_new_push(lir_operand *operand);
-lir_op_t *lir_op_move(lir_operand *dst, lir_operand *src);
+lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src);
 
-lir_op_t *lir_op_new(lir_opcode code, lir_operand *first, lir_operand *second, lir_operand *result);
+lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result);
 
-lir_op_t *lir_op_builtin_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_builtin_call(string name, lir_operand_t *result, int arg_count, ...);
 
-lir_op_t *lir_op_runtime_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_runtime_call(string name, lir_operand_t *result, int arg_count, ...);
 
-lir_op_t *lir_op_call(string name, lir_operand *result, int arg_count, ...);
+lir_op_t *lir_op_call(string name, lir_operand_t *result, int arg_count, ...);
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label);
 
@@ -345,17 +355,25 @@ bool lir_op_is_branch(lir_op_t *op);
 
 bool lir_op_is_call(lir_op_t *op);
 
+bool lir_op_contain_cmp(lir_op_t *op);
+
+bool lir_op_is_branch_cmp(lir_op_t *op);
+
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配
  * @param operand
  * @return
  */
-slice_t *lir_operand_vars(lir_operand *operand);
+slice_t *lir_operand_vars(lir_operand_t *operand);
 
-bool lir_operand_equal(lir_operand *a, lir_operand *b);
+bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b);
 
-slice_t *lir_operand_nests(lir_operand *operand, uint64_t flag);
+slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag);
 
-slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag);
+slice_t *lir_input_operands(lir_op_t *op, uint64_t flag);
+
+slice_t *lir_output_operands(lir_op_t *op, uint64_t flag);
+
+void lir_init();
 
 #endif //NATURE_SRC_LIR_H_

@@ -5,10 +5,10 @@
  * @param operand
  * @param i
  */
-static void var_replace(lir_operand *operand, interval_t *i) {
-    lir_operand_var *var = operand->value;
+static void var_replace(lir_operand_t *operand, interval_t *i) {
+    lir_var_t *var = operand->value;
     if (i->spilled) {
-        lir_operand_stack *stack = NEW(lir_operand_stack);
+        lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = *i->stack_slot;
         stack->size = type_base_sizeof(var->type_base);
         operand->type = LIR_OPERAND_STACK;
@@ -16,9 +16,9 @@ static void var_replace(lir_operand *operand, interval_t *i) {
     } else {
         reg_t *reg = alloc_regs[i->assigned];
         uint8_t index = reg->index;
-        uint8_t size = type_base_sizeof(var->type_base);
-        reg = reg_find(index, size);
+        reg = reg_select(index, var->type_base);
         assert(reg);
+
         operand->type = LIR_OPERAND_REG;
         operand->value = reg;
     }
@@ -32,43 +32,36 @@ static void var_replace(lir_operand *operand, interval_t *i) {
  * @return
  */
 static uint8_t find_free_reg(interval_t *current, int *free_pos) {
-    uint8_t full_reg_id = 0; // 直接分配不用 split
-    uint8_t part_reg_id = 0; // 需要 split current to unhandled
+    uint8_t min_full_reg_id = 0; // 直接分配不用 split
+    uint8_t max_part_reg_id = 0; // 需要 split current to unhandled
     uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
     if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
         hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
-        if (free_pos[reg_id] > current->last_range->to) {
-            // 寄存器 reg_id 足够空闲，可以直接分配给 current，不需要任何 spilt
-            // 不过还是进行一下最优挑选, 要么是 hint_reg, 要么是空闲时间最长
-            // 直接使用 hint reg
-            if (full_reg_id != 0 && full_reg_id == hint_reg_id) {
-                continue;
+    for (int i = 1; i < alloc_reg_count(); ++i) {
+        if (free_pos[i] > current->last_range->to) {
+            // 如果有多个寄存器比较空闲，则优先考虑 hint
+            // 否则优先考虑 free 时间最小的寄存器，从而可以充分利用寄存器
+            if (min_full_reg_id == 0 || i == hint_reg_id ||
+                (min_full_reg_id != hint_reg_id && free_pos[i] < free_pos[min_full_reg_id])) {
+                min_full_reg_id = i;
             }
-
-            // 挑选空闲时间最长的寄存器
-            if (full_reg_id == 0 || free_pos[reg_id] > free_pos[full_reg_id]) {
-                full_reg_id = reg_id;
-            }
-        } else if (free_pos[reg_id] > current->first_range->from + 1) {
-            // reg_id 当前处于空闲状态，但是空闲时间不够长，需要进行 split current
-            if (part_reg_id != 0 && part_reg_id == hint_reg_id) {
-                continue;
-            }
-            if (part_reg_id == 0 || free_pos[reg_id] > free_pos[part_reg_id]) {
-                part_reg_id = reg_id;
+        } else if (free_pos[i] > current->first_range->from + 1) {
+            // 如果有多个寄存器可以借给 current 使用一段时间，则优先考虑能够借用时间最长的寄存器(free[i] 最大的)
+            if (max_part_reg_id == 0 || i == hint_reg_id ||
+                (max_part_reg_id != hint_reg_id && free_pos[i] > free_pos[max_part_reg_id])) {
+                max_part_reg_id = i;
             }
         }
     }
 
-    if (full_reg_id > 0) {
-        return full_reg_id;
+    if (min_full_reg_id > 0) {
+        return min_full_reg_id;
     }
 
-    if (part_reg_id > 0) {
-        return part_reg_id;
+    if (max_part_reg_id > 0) {
+        return max_part_reg_id;
     }
 
     return 0;
@@ -87,18 +80,14 @@ static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos)
         hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
-        if (use_pos[reg_id] <= current->first_range->from + 1) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
+        if (use_pos[i] <= current->first_range->from + 1) {
             continue;
         }
 
-        // 优先选择 hint reg
-        if (max_reg_id != 0 && max_reg_id == hint_reg_id) {
-            continue;
-        }
-
-        if (max_reg_id == 0 || use_pos[reg_id] > use_pos[max_reg_id]) {
-            max_reg_id = reg_id;
+        if (max_reg_id == 0 || i == hint_reg_id ||
+            (max_reg_id != hint_reg_id && use_pos[i] > use_pos[max_reg_id])) {
+            max_reg_id = i;
         }
     }
 
@@ -179,6 +168,7 @@ void allocate_walk(closure_t *c) {
 
     while (a->unhandled->count != 0) {
         a->current = (interval_t *) list_pop(a->unhandled);
+
         // handle active
         handle_active(a);
         // handle inactive
@@ -206,22 +196,10 @@ list *unhandled_new(closure_t *c) {
     list *unhandled = list_new();
     // 遍历所有变量,根据 interval from 进行排序
     for (int i = 0; i < c->globals->count; ++i) {
-        interval_t *item = table_get(c->interval_table, ((lir_operand_var *) c->globals->take[i])->ident);
+        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->globals->take[i])->ident);
 
         assert(item);
 
-        sort_to_unhandled(unhandled, item);
-    }
-    // 遍历所有固定寄存器生成 fixed_interval
-    for (int i = 1; i < alloc_reg_count(); ++i) {
-        reg_t *reg = alloc_regs[i];
-        interval_t *item = table_get(c->interval_table, reg->name);
-        assert(item && "physic reg interval not found");
-        // 如果一个物理寄存器从未被使用过,就没有 ranges, 所以也不需要写入到 unhandled 中进行处理
-        if (item->first_range == NULL) {
-            continue;
-        }
-        // free_pos = int_max
         sort_to_unhandled(unhandled, item);
     }
 
@@ -327,7 +305,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     int use_pos[UINT8_MAX] = {0}; // use_pos 一定小于等于 block_pos
     int block_pos[UINT8_MAX] = {0}; // 设置 block pos 的同时需要隐式设置 use pos
     memset(use_pos, -1, sizeof(use_pos));
-    memset(use_pos, -1, sizeof(use_pos));
+    memset(block_pos, -1, sizeof(block_pos));
 
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
@@ -489,16 +467,28 @@ void replace_virtual_register(closure_t *c) {
         list_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *vars = lir_op_nest_operands(op, FLAG(LIR_OPERAND_VAR));
+            slice_t *vars = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
             for (int j = 0; j < vars->count; ++j) {
-                lir_operand *operand = vars->take[j];
-                lir_operand_var *var = operand->value;
+                lir_operand_t *operand = vars->take[j];
+                lir_var_t *var = operand->value;
                 interval_t *parent = table_get(c->interval_table, var->ident);
                 assert(parent);
-                interval_t *interval = interval_child_at(parent, op->id);
+                interval_t *interval = interval_child_at(parent, op->id, true);
 
                 var_replace(operand, interval);
             }
+
+            vars = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
+            for (int j = 0; j < vars->count; ++j) {
+                lir_operand_t *operand = vars->take[j];
+                lir_var_t *var = operand->value;
+                interval_t *parent = table_get(c->interval_table, var->ident);
+                assert(parent);
+                interval_t *interval = interval_child_at(parent, op->id, false);
+
+                var_replace(operand, interval);
+            }
+
 
             if (op->code == LIR_OPCODE_MOVE) {
                 if (lir_operand_equal(op->first, op->output)) {

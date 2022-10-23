@@ -7,7 +7,7 @@
 #define OPERAND_VAR_USE(_vars) \
     if (vars->count > 0) {\
         SLICE_FOR(vars) {\
-            lir_operand_var *var = SLICE_VALUE(vars);\
+            lir_var_t*var = SLICE_VALUE(vars);\
             bool is_def = ssa_var_belong(var, def);\
             if (!is_def && !table_exist(exist_use, var->ident)) {\
             slice_push(use, var);\
@@ -48,7 +48,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block);
 
 bool ssa_live_changed(slice_t *old, slice_t *new);
 
-bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block);
+bool ssa_phi_defined(lir_var_t *var, basic_block_t *block);
 
 void ssa_add_phi(closure_t *c);
 
@@ -56,20 +56,20 @@ void ssa_rename(closure_t *c);
 
 void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *stack_table);
 
-uint8_t ssa_new_var_number(lir_operand_var *var, table_t *var_number_table, table_t *stack_table);
+uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *stack_table);
 
-void ssa_rename_var(lir_operand_var *var, uint8_t number);
+void ssa_rename_var(lir_var_t *var, uint8_t number);
 
 slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block);
 
 bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom);
 
-bool ssa_var_belong(lir_operand_var *var, slice_t *vars);
+bool ssa_var_belong(lir_var_t *var, slice_t *vars);
 
-lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide);
+lir_var_t *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide);
 
-void live_add(table_t *t, slice_t *lives, lir_operand_var *var);
+void live_add(table_t *t, slice_t *lives, lir_var_t *var);
 
-void live_remove(table_t *t, slice_t *lives, lir_operand_var *var);
+void live_remove(table_t *t, slice_t *lives, lir_var_t *var);
 
 #endif //NATURE_SRC_SSA_H_

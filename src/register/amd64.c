@@ -3,31 +3,6 @@
 #include "utils/slice.h"
 #include <stdio.h>
 
-static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
-    list *operations = list_new();
-    uint8_t used[2] = {0};
-    // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
-    int16_t stack_param_slot = 16;
-    SLICE_FOR(formal_params) {
-        lir_operand_var *var = SLICE_VALUE(formal_params);
-        lir_operand *source = NULL;
-        reg_t *reg = amd64_fn_param_next_reg(used, var->type_base);
-        if (reg) {
-            source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
-        } else {
-            lir_operand_stack *stack = NEW(lir_operand_stack);
-            stack->size = QWORD; // 使用了 push 指令进栈，所以固定 QWORD(float 也是 8字节，只是不直接使用 push)
-            stack->slot = stack_param_slot;
-            stack_param_slot += QWORD;
-            source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
-        }
-
-        lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
-        list_push(operations, op);
-    }
-    return operations;
-}
-
 
 void amd64_reg_init() {
     rax = reg_new("rax", 0, REG_TYPE_INT, QWORD, 1);
@@ -156,58 +131,16 @@ void amd64_reg_init() {
     zmm15 = reg_new("zmm15", 15, REG_TYPE_FLOAT, ZWORD, 0);
 }
 
-/**
- * operations operations 目前属于一个更加抽象的层次，不利于寄存器分配，所以进行更加本土化的处理
- * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
- * @param c
- */
-void amd64_lir_lower(closure_t *c) {
-    // 按基本块遍历所有指令
-    SLICE_FOR(c->blocks) {
-        basic_block_t *block = SLICE_VALUE(c->blocks);
-        for (list_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
-            lir_op_t *op = node->value;
-            // if op is fn begin, will set formal param
-            // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
-            if (op->code == LIR_OPCODE_FN_PARAM) {
-                // fn begin
-                // mov rsi -> formal param 1
-                // mov rdi -> formal param 2
-                // ....
-                list *temps = amd64_formal_params_lower(c, op->output->value);
-                list_node *current = temps->front;
-                while (current->value != NULL) {
-                    list_insert_before(block->operations, LIST_NODE(), current->value);
-                    current = current->succ;
-                }
-
-                list_remove(block->operations, node);
-                continue;
-            }
-
-            if (op->code == LIR_OPCODE_RETURN && op->output != NULL) {
-                // 1.1 return 指令需要将返回值放到 rax 中
-                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
-                lir_op_t *before = lir_op_move(reg_operand, op->output);
-                op->output = reg_operand;
-                list_insert_before(block->operations, LIST_VALUE(), before);
-                continue;
-            }
-
-            // div 被输数，除数 = 商
-            if (op->code == LIR_OPCODE_DIV) {
-                lir_operand *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
-                lir_op_t *before = lir_op_move(reg_operand, op->first);
-                lir_op_t *after = lir_op_move(op->output, reg_operand);
-                op->first = reg_operand;
-                op->output = reg_operand;
-                list_insert_before(block->operations, LIST_VALUE(), before);
-                list_insert_after(block->operations, LIST_VALUE(), after);
-                continue;
-            }
-        }
+reg_t *amd64_reg_select(uint8_t index, type_base_t base) {
+    uint8_t select_size = type_base_sizeof(base);
+    reg_type_e reg_type = type_base_trans(base);
+    if (reg_type == REG_TYPE_FLOAT) {
+        select_size = OWORD; // 固定使用 xmm0 ~ xmm15
     }
+
+    return reg_find(index, select_size);
 }
+
 
 /**
  * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
@@ -223,26 +156,22 @@ void amd64_lir_lower(closure_t *c) {
  */
 reg_t *amd64_fn_param_next_reg(uint8_t *used, type_base_t base) {
     uint8_t size = type_base_sizeof(base);
-    // TODO 更多 float 类型, float 虽然栈大小为 8byte, 但是使用的寄存器确是 16byte 的
-    if (base == TYPE_FLOAT) {
-        size = OWORD;
-    }
-
-    uint8_t used_index = 0; // 8bit ~ 64bit
-    if (size > QWORD) {
+    reg_type_e reg_type = type_base_trans(base);
+    uint8_t used_index = 0;
+    if (reg_type == REG_TYPE_FLOAT) {
         used_index = 1;
     }
-    uint8_t count = used[used_index]++;
+    uint8_t index = used[used_index]++;
     uint8_t int_param_indexes[] = {7, 6, 2, 1, 8, 9};
     // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
-    if (size <= QWORD && count <= 5) {
-        uint8_t reg_index = int_param_indexes[count];
-        return (reg_t *) reg_find(reg_index, size);
+    if (reg_type == REG_TYPE_INT && index <= 5) {
+        uint8_t reg_index = int_param_indexes[index];
+        return (reg_t *) reg_select(reg_index, size);
     }
 
     // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
-    if (size > QWORD && count <= 7) {
-        return (reg_t *) reg_find(count, size);
+    if (reg_type == REG_TYPE_FLOAT && index <= 7) {
+        return (reg_t *) reg_select(index, size);
     }
 
     return NULL;

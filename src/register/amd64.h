@@ -1,5 +1,5 @@
-#ifndef NATURE_AMD64_H
-#define NATURE_AMD64_H
+#ifndef NATURE_REGISTER_AMD64_H
+#define NATURE_REGISTER_AMD64_H
 
 #include "register.h"
 #include "src/lir/lir.h"
@@ -131,10 +131,14 @@ reg_t *zmm15;
 #define AMD64_ALLOC_INT_REG_COUNT 14;
 #define AMD64_ALLOC_FLOAT_REG_COUNT 16;
 #define AMD64_ALLOC_REG_COUNT 14+16;
+#define ALIGN_SIZE 16
 
 void amd64_reg_init();
 
-void amd64_lir_lower(closure_t *c);
+/**
+ * index 对应寄存器的 index， 不过同一个 index 会对应多个 register
+ */
+reg_t *amd64_reg_select(uint8_t index, type_base_t base);
 
 reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_base_t base);
 

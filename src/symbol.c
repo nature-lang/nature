@@ -1,7 +1,7 @@
 #include "symbol.h"
 #include "utils/helper.h"
 
-void symbol_ident_table_init() {
+void symbol_init() {
     symbol_table = table_new();
 
     symbol_table_set("print", SYMBOL_TYPE_FN, NULL, false);

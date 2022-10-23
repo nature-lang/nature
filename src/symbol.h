@@ -33,7 +33,7 @@ symbol_t *symbol_table_get(string ident);
 
 void symbol_set_temp_ident(string unique_ident, type_t type);
 
-void symbol_ident_table_init();
+void symbol_init();
 
 bool is_print_symbol(char *ident);
 

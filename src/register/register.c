@@ -1,13 +1,22 @@
 #include "register.h"
 #include "utils/helper.h"
 #include "amd64.h"
+#include <assert.h>
 
-static string reg_table_key(uint8_t index, uint8_t size) {
+string reg_table_key(uint8_t index, uint8_t size) {
     uint16_t int_key = ((uint16_t) index << 8) | size;
     return itoa(int_key);
 }
 
-reg_t *reg_find(uint8_t index, uint8_t size) {
+reg_t *reg_select(uint8_t index, type_base_t base) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_reg_select(index, base);
+    }
+
+    assert(false && "not support arch");
+}
+
+reg_t *reg_find(uint8_t index, size_t size) {
     return table_get(reg_table, reg_table_key(index, size));
 }
 
@@ -27,7 +36,8 @@ uint8_t alloc_reg_count() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_ALLOC_REG_COUNT;
     }
-    return 0;
+
+    assert(false && "not support arch");
 }
 
 

@@ -75,7 +75,7 @@ char *file_read(char *path) {
     return buffer;
 }
 
-uint64_t memory_align(uint64_t n, uint8_t align) {
+int memory_align(int n, uint8_t align) {
     return (n + align - 1) & (~(align - 1));
 }
 

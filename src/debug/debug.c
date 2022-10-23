@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "debug.h"
-#include "debug_lir.h"
+#include "lir.h"
+#include "asm.h"
 
 int current_parser_line = 0;
 
@@ -98,7 +99,7 @@ string token_type_to_debug[] = {
         [TOKEN_RETURN]="TOKEN_RETURN"
 };
 
-string lir_op_type_to_debug[] = {
+string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD]="ADD  ",
         [LIR_OPCODE_SUB]="SUB  ",
         [LIR_OPCODE_MUL]="MUL  ",
@@ -151,36 +152,12 @@ void debug_stmt(string type, ast_stmt stmt) {
     printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
 }
 
-void debug_lir(int line, lir_op_t *op) {
-    printf("[DEBUG] LIR %d:\t", line);
-    if (op->code == LIR_OPCODE_LABEL) {
-        printf(
-                "%s:\n",
-                lir_operand_to_string(op->output)
-        );
-        return;
-    }
-    printf(
-            "\t\t%s\t\t%s , %s -> %s",
-            lir_op_type_to_debug[op->code],
-            lir_operand_to_string(op->first),
-            lir_operand_to_string(op->second),
-            lir_operand_to_string(op->output)
-    );
-    printf("\n");
-}
-
 /**
  * 遍历展示 blocks
  * @param c
  */
-void debug_closure(closure_t *c) {
-//    printf("globals ----------------------------------------------------------------------------\n");
-//    for (int i = 0; i < c->globals->count; ++i) {
-//        lir_operand_var *var = c->globals->take[i];
-//        printf("%s\n", var->ident);
-//    }
-    printf("closure_t: %s------------------------------------------------------------------------\n", c->name);
+void debug_lir(closure_t *c) {
+    printf("lir: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);
@@ -211,14 +188,27 @@ void debug_basic_block(basic_block_t *block) {
     list_node *current = block->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
-        printf(
-                "%d\t\t%s\t%s , %s => %s\n",
-                op->id,
-                lir_op_type_to_debug[op->code],
-                lir_operand_to_string(op->first),
-                lir_operand_to_string(op->second),
-                lir_operand_to_string(op->output)
-        );
+        printf("%d", op->id);
+        printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+
+        // first
+        if (op->first) {
+            printf("%s", lir_operand_to_string(op->first));
+        }
+        if (op->second) {
+            if (op->first) {
+                printf(",");
+            }
+            printf(", %s", lir_operand_to_string(op->second));
+        }
+        if (op->output) {
+            if (op->first) {
+                printf(" -> ");
+            }
+            printf("%s", lir_operand_to_string(op->output));
+        }
+        printf("\n");
+
         current = current->succ;
     }
 
@@ -232,9 +222,16 @@ void debug_basic_block(basic_block_t *block) {
     }
     printf("\n\t\tlive_in:");
     for (int i = 0; i < block->live_in->count; ++i) {
-        lir_operand_var *var = block->live_in->take[i];
+        lir_var_t *var = block->live_in->take[i];
         printf("%s\t", var->ident);
     }
 
     printf("\n\n\n");
+}
+
+void debug_asm(closure_t *c) {
+    printf("asm: %s------------------------------------------------------------------------\n", c->name);
+    for (int i = 0; i < c->asm_operations->count; ++i) {
+        asm_op_to_string(c->asm_operations->take[i]);
+    }
 }

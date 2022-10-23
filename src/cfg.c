@@ -56,7 +56,7 @@ void cfg(closure_t *c) {
         lir_op_t *op = LIST_VALUE();
         if (op->code == LIR_OPCODE_LABEL) {
             // 遇到 label， 开启一个新的 basic block
-            lir_operand_symbol_label *operand_label = op->output->value;
+            lir_symbol_label_t *operand_label = op->output->value;
 
             // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
             basic_block_t *new_block = lir_new_basic_block(operand_label->ident, c->blocks->count);
@@ -102,7 +102,7 @@ void cfg(closure_t *c) {
             continue;
         }
 
-        char *name = ((lir_operand_symbol_label *) last_op->output->value)->ident;
+        char *name = ((lir_symbol_label_t *) last_op->output->value)->ident;
         basic_block_t *target_block = (basic_block_t *) table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
@@ -112,7 +112,7 @@ void cfg(closure_t *c) {
         if (!lir_op_is_branch(second_last_op)) {
             continue;
         }
-        name = ((lir_operand_symbol_label *) second_last_op->output->value)->ident;
+        name = ((lir_symbol_label_t *) second_last_op->output->value)->ident;
         target_block = (basic_block_t *) table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
@@ -142,10 +142,10 @@ void broken_critical_edges(closure_t *c) {
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal operations)
                 lir_op_t *label_op = lir_op_unique_label(TEMP_LABEL);
-                lir_operand *label_operand = label_op->output;
+                lir_operand_t *label_operand = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_new_label_operand(b->name, true));
 
-                lir_operand_symbol_label *symbol_label = label_operand->value;
+                lir_symbol_label_t *symbol_label = label_operand->value;
                 basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
 //                slice_insert(c->blocks, b->id, new_block);
                 slice_push(c->blocks, new_block);

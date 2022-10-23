@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define DEEP_COPY(_type, src) ({ \
+#define COPY_NEW(_type, src) ({ \
     _type *dst = malloc(sizeof(_type)); \
     memcpy(dst, src, sizeof(_type));    \
     dst;                               \
@@ -27,7 +27,7 @@ char *str_replace(char *orig, char *rep, char *with);
 
 char *file_read(char *path);
 
-uint64_t memory_align(uint64_t n, uint8_t align);
+int memory_align(int n, uint8_t align);
 
 bool file_exists(char *path);
 

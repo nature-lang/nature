@@ -16,9 +16,9 @@ typedef struct {
     uint8_t *data;
     uint8_t data_count;
     uint64_t *offset; // 指令的其实位置
-    amd64_operation_t *operation; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
+    asm_operation_t *operation; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
     string rel_symbol; // 使用的符号
-    amd64_operand_t *rel_operand; // 引用自 asm_inst
+    asm_operand_t *rel_operand; // 引用自 asm_inst
     bool may_need_reduce; // jmp 指令可以从 rel32 优化为 rel8
     uint8_t reduce_count; // jmp rel32 => jmp rel8 导致的指令的长度的变化差值
     uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则响应的符号的 value 同样需要变更

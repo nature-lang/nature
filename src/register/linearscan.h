@@ -3,8 +3,6 @@
 
 #include "src/lir/lir.h"
 
-void lir_lower(closure_t *c);
-
 void linear_scan(closure_t *c);
 
 #endif //NATURE_LINEARSCAN_H

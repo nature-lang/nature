@@ -223,7 +223,7 @@ void ssa_add_phi(closure_t *c) {
         slice_t *df = basic_block->df;
 
         for (int i = 0; i < def->count; ++i) {
-            lir_operand_var *var = def->take[i];
+            lir_var_t *var = def->take[i];
 
             for (int k = 0; k < df->count; ++k) {
                 basic_block_t *df_block = df->take[k];
@@ -238,8 +238,8 @@ void ssa_add_phi(closure_t *c) {
                 }
 
                 // add phi (x1, x2, x3) => x
-                lir_operand *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, var->ident));
-                lir_operand *first_param = lir_new_phi_body(c, var, df_block->preds->count);
+                lir_operand_t *result_param = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, var->ident));
+                lir_operand_t *first_param = lir_new_phi_body(c, var, df_block->preds->count);
                 lir_op_t *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
 
 
@@ -263,7 +263,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
 
         // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
         for (int k = 0; k < succ->live_in->count; ++k) {
-            lir_operand_var *var = succ->live_in->take[k];
+            lir_var_t *var = succ->live_in->take[k];
             if (table_exist(exist_var, var->ident)) {
                 continue;
             }
@@ -283,7 +283,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     table_t *exist_var = table_new(); // basic var ident
 
     SLICE_FOR(block->use) {
-        lir_operand_var *var = SLICE_VALUE(block->use);
+        lir_var_t *var = SLICE_VALUE(block->use);
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
@@ -293,7 +293,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     }
 
     SLICE_FOR(block->live_out) {
-        lir_operand_var *var = SLICE_VALUE(block->live_out);
+        lir_var_t *var = SLICE_VALUE(block->live_out);
         if (table_exist(exist_var, var->ident)) {
             continue;
         }
@@ -322,14 +322,14 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     }
     table_t *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
-        string ident = ((lir_operand_var *) old->take[i])->ident;
+        string ident = ((lir_var_t *) old->take[i])->ident;
         table_set(var_count, ident, old->take[i]);
     }
 
     // double count 判断同一个变量出现的次数,因为可能出现 new.count > old.count 的情况
     uint8_t double_count = 0;
     for (int i = 0; i < new->count; ++i) {
-        string ident = ((lir_operand_var *) new->take[i])->ident;
+        string ident = ((lir_var_t *) new->take[i])->ident;
         void *has = table_get(var_count, ident);
         if (has == NULL) {
 //            table_free(var_count);
@@ -373,7 +373,7 @@ void ssa_use_def(closure_t *c) {
             slice_t *vars = lir_operand_vars(op->first);
             if (vars->count > 0) {
                 for (int _i = 0; _i < (vars)->count; ++_i) {
-                    lir_operand_var *var = vars->take[_i];
+                    lir_var_t *var = vars->take[_i];
                     bool is_def = ssa_var_belong(var, def);
                     if (!is_def && !table_exist(exist_use, var->ident)) {
                         slice_push(use, var);
@@ -393,7 +393,7 @@ void ssa_use_def(closure_t *c) {
 
             // def
             if (op->output != NULL && op->output->type == LIR_OPERAND_VAR) {
-                lir_operand_var *var = (lir_operand_var *) op->output->value;
+                lir_var_t *var = (lir_var_t *) op->output->value;
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
                     table_set(exist_use, var->ident, var);
@@ -477,7 +477,7 @@ void ssa_rename(closure_t *c) {
 
     // 遍历所有变量,进行初始化
     SLICE_FOR(c->globals) {
-        lir_operand_var *var = SLICE_VALUE(c->globals);
+        lir_var_t *var = SLICE_VALUE(c->globals);
         uint8_t *number = NEW(uint8_t);
         *number = 0;
 
@@ -493,7 +493,7 @@ void ssa_rename(closure_t *c) {
 
     // 释放 NEW 的变量
     SLICE_FOR(c->globals) {
-        lir_operand_var *var = SLICE_VALUE(c->globals);
+        lir_var_t *var = SLICE_VALUE(c->globals);
         uint8_t *number = table_get(var_number_table, var->old);
         var_number_stack *stack = table_get(stack_table, var->old);
         free(number);
@@ -511,36 +511,33 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
         lir_op_t *op = current->value;
         // phi body 由当前块的前驱进行编号
         if (op->code == LIR_OPCODE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_operand_var *) op->output->value, var_number_table,
+            uint8_t number = ssa_new_var_number((lir_var_t *) op->output->value, var_number_table,
                                                 stack_table);
-            ssa_rename_var((lir_operand_var *) op->output->value, number);
+            ssa_rename_var((lir_var_t *) op->output->value, number);
 
             current = current->succ;
             continue;
         }
 
         slice_t *vars = lir_operand_vars(op->first);
-        if (vars->count > 0) {
-            SLICE_FOR(vars) {
-                lir_operand_var *var = SLICE_VALUE(vars);
-                var_number_stack *stack = table_get(stack_table, var->old);
-                uint8_t number = stack->numbers[stack->count - 1];
-                ssa_rename_var(var, number);
-            }
+        SLICE_FOR(vars) {
+            lir_var_t *var = SLICE_VALUE(vars);
+            var_number_stack *stack = table_get(stack_table, var->old);
+            uint8_t number = stack->numbers[stack->count - 1];
+            ssa_rename_var(var, number);
         }
 
         vars = lir_operand_vars(op->second);
-        if (vars->count > 0) {
-            SLICE_FOR(vars) {
-                lir_operand_var *var = SLICE_VALUE(vars);
-                var_number_stack *stack = table_get(stack_table, var->old);
-                uint8_t number = stack->numbers[stack->count - 1];
-                ssa_rename_var(var, number);
-            }
+        SLICE_FOR(vars) {
+            lir_var_t *var = SLICE_VALUE(vars);
+            var_number_stack *stack = table_get(stack_table, var->old);
+            uint8_t number = stack->numbers[stack->count - 1];
+            ssa_rename_var(var, number);
         }
 
-        if (op->output != NULL && op->output->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = (lir_operand_var *) op->output->value;
+        vars = lir_operand_vars(op->output);
+        SLICE_FOR(vars) {
+            lir_var_t *var = SLICE_VALUE(vars);
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
         }
@@ -566,7 +563,7 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
             lir_op_t *op = OP(op_node);
             slice_t *phi_body = op->first->value;
             // block 位于 succ 的 phi_body 的具体位置
-            lir_operand_var *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
+            lir_var_t *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
             var_number_stack *stack = table_get(stack_table, var->ident);
             assert(stack);
 
@@ -590,7 +587,7 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
     while (current_node->value != NULL) {
         lir_op_t *current_op = current_node->value;
         if (current_op->output != NULL && current_op->output->type == LIR_OPERAND_VAR) {
-            lir_operand_var *var = (lir_operand_var *) current_op->output->value;
+            lir_var_t *var = (lir_var_t *) current_op->output->value;
 
             // pop stack
             var_number_stack *stack = table_get(stack_table, var->old);
@@ -607,7 +604,7 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
  * @param stack_table
  * @return
  */
-uint8_t ssa_new_var_number(lir_operand_var *var, table_t *var_number_table, table_t *stack_table) {
+uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *stack_table) {
     uint8_t *value = table_get(var_number_table, var->old);
     var_number_stack *stack = table_get(stack_table, var->old);
 
@@ -620,7 +617,7 @@ uint8_t ssa_new_var_number(lir_operand_var *var, table_t *var_number_table, tabl
     return result;
 }
 
-void ssa_rename_var(lir_operand_var *var, uint8_t number) {
+void ssa_rename_var(lir_var_t *var, uint8_t number) {
     // 1: '\0'
     // 2: '_12'
     char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
@@ -649,11 +646,11 @@ bool ssa_is_idom(slice_t *dom, basic_block_t *await) {
  * @param block
  * @return
  */
-bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
+bool ssa_phi_defined(lir_var_t *var, basic_block_t *block) {
     list_node *current = block->operations->front->succ;
     while (current->value != NULL && ((lir_op_t *) current->value)->code == LIR_OPCODE_PHI) {
         lir_op_t *op = current->value;
-        lir_operand_var *phi_var = op->output->value;
+        lir_var_t *phi_var = op->output->value;
         if (strcmp(phi_var->ident, var->ident) == 0) {
             return true;
         }
@@ -664,9 +661,9 @@ bool ssa_phi_defined(lir_operand_var *var, basic_block_t *block) {
     return false;
 }
 
-bool ssa_var_belong(lir_operand_var *var, slice_t *vars) {
+bool ssa_var_belong(lir_var_t *var, slice_t *vars) {
     SLICE_FOR(vars) {
-        lir_operand_var *item = SLICE_VALUE(vars);
+        lir_var_t *item = SLICE_VALUE(vars);
         if (strcmp(item->ident, var->ident) == 0) {
             return true;
         }
@@ -675,7 +672,7 @@ bool ssa_var_belong(lir_operand_var *var, slice_t *vars) {
     return false;
 }
 
-lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide) {
+lir_var_t *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_t *guide) {
     int index = -1;
     for (int i = 0; i < preds->count; ++i) {
         basic_block_t *p = preds->take[i];
@@ -689,13 +686,13 @@ lir_operand_var *ssa_phi_body_of(slice_t *phi_body, slice_t *preds, basic_block_
     return phi_body->take[index];
 }
 
-void live_remove(table_t *t, slice_t *lives, lir_operand_var *var) {
+void live_remove(table_t *t, slice_t *lives, lir_var_t *var) {
     if (!table_exist(t, var->ident)) {
         return;
     }
 
     for (int i = 0; i < lives->count; ++i) {
-        lir_operand_var *item = lives->take[i];
+        lir_var_t *item = lives->take[i];
         if (str_equal(item->ident, var->ident)) {
             slice_remove(lives, i);
             break;
@@ -704,7 +701,7 @@ void live_remove(table_t *t, slice_t *lives, lir_operand_var *var) {
     table_delete(t, var->ident);
 }
 
-void live_add(table_t *t, slice_t *lives, lir_operand_var *var) {
+void live_add(table_t *t, slice_t *lives, lir_var_t *var) {
     if (table_exist(t, var->ident)) {
         return;
     }

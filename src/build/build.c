@@ -153,7 +153,7 @@ void build(char *build_entry) {
     printf("source_path: %s\n", source_path);
 
     // 初始化全局符号表
-    symbol_ident_table_init();
+    symbol_init();
     var_unique_count = 0;
 
     table_t *module_table = table_new();
@@ -233,7 +233,7 @@ void build(char *build_entry) {
             // 构造 ssa
             ssa(c);
 #ifdef DEBUG_CFG
-            debug_closure(c);
+            debug_lir(c);
 #endif
         }
     }

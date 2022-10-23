@@ -24,8 +24,8 @@ set(SRC_BINARY
 
 
 set(SRC_NATIVE
-        #        ${SRC_DIR}/native/amd64.c
-        #        ${SRC_DIR}/native/amd64.h
+        ${SRC_DIR}/native/amd64.c
+        ${SRC_DIR}/native/amd64.h
         ${SRC_DIR}/native/native.h
         ${SRC_DIR}/native/native.c)
 
@@ -48,8 +48,10 @@ set(SRC_SEMANTIC
 set(SRC_DEBUG
         ${SRC_DIR}/debug/debug.c
         ${SRC_DIR}/debug/debug.h
-        ${SRC_DIR}/debug/debug_lir.c
-        ${SRC_DIR}/debug/debug_lir.h)
+        ${SRC_DIR}/debug/asm.h
+        ${SRC_DIR}/debug/asm.c
+        ${SRC_DIR}/debug/lir.c
+        ${SRC_DIR}/debug/lir.h)
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/slice.c
@@ -93,6 +95,10 @@ set(SRC
         ${SRC_DIR}/build/config.c
         ${SRC_DIR}/build/build.h
         ${SRC_DIR}/build/build.c
+        ${SRC_DIR}/lower/lower.h
+        ${SRC_DIR}/lower/lower.c
+        ${SRC_DIR}/lower/amd64.h
+        ${SRC_DIR}/lower/amd64.c
         ${SRC_DIR}/register/amd64.h
         ${SRC_DIR}/register/amd64.c
         ${SRC_DIR}/register/register.h

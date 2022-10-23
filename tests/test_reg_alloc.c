@@ -7,6 +7,8 @@
 #include "utils/helper.h"
 #include "src/debug/debug.h"
 #include "src/register/linearscan.h"
+#include "src/native/native.h"
+#include "src/lower/lower.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -32,6 +34,7 @@ static void test_basic() {
 
     char *work_dir = file_join(buf, "stubs");
     chdir(work_dir);
+
     char *source_path = file_join(buf, "stubs/1666156232_reg_alloc.n");
 
     env_init();
@@ -47,12 +50,13 @@ static void test_basic() {
     printf("source_path: %s\n", source_path);
 
     // 初始化全局符号表
-    symbol_ident_table_init();
-    var_unique_count = 0;
-    lir_line = 0;
-
+    symbol_init();
+    // lir init
+    lir_init();
     // 初始化寄存器列表
     reg_init();
+    // 初始化 native
+    native_init();
 
     module_t *m = module_front_build(source_path, true);
     m->compiler_closures = slice_new();
@@ -72,18 +76,20 @@ static void test_basic() {
         slice_append_free(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
     }
 
-    // 构造 cfg, 并转成目标架构编码
     for (int j = 0; j < m->compiler_closures->count; ++j) {
         closure_t *c = m->compiler_closures->take[j];
+        // 构造 cfg
         cfg(c);
         // 构造 ssa
         ssa(c);
 
-        // 寄存器分配前置操作
-        lir_lower(c);
+        lower(c);
 
         // 寄存器分配
         linear_scan(c);
+
+        // native
+//        native(c);
     }
 }
 

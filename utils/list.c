@@ -1,4 +1,5 @@
 #include "list.h"
+#include <assert.h>
 
 static uint16_t list_count(list *l) {
     uint16_t count = 0;
@@ -71,17 +72,19 @@ bool list_empty(list *l) {
  * @return
  */
 list *list_split(list *l, list_node *node) {
-    list *new_list = list_new();
+    assert(l->count > 1);
+    assert(node);
 
-    if (node == NULL) {
-        return new_list;
-    }
+    list *new_list = list_new();
 
     new_list->front = node;
     new_list->rear = l->rear;
     new_list->count = list_count(new_list);
 
-    // 第一部分截断
+    if (node == l->front) {
+        return new_list;
+    }
+    // 原 rear 截断(list 的结尾是 empty)
     list_node *rear_empty = list_new_node();
     list_node *last = node->prev;
     rear_empty->prev = last;
@@ -165,10 +168,9 @@ void list_insert_before(list *l, list_node *succ, void *value) {
         list_node *prev = succ->prev;
 
         prev->succ = await;
-
         await->prev = prev;
-        await->succ = succ;
 
+        await->succ = succ;
         succ->prev = await;
     }
 
