@@ -66,3 +66,11 @@ reg_type_e type_base_trans(type_base_t t) {
     return REG_TYPE_INT;
 }
 
+reg_t *covert_alloc_reg(reg_t *reg) {
+    if (reg->type == REG_TYPE_FLOAT) {
+        return reg_find(reg->index, OWORD);
+    }
+
+    return reg_find(reg->index, QWORD);
+}
+

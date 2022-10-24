@@ -12,7 +12,7 @@
     (ast_var_decl*) local_ident->decl; \
 })
 
-table_t *symbol_table; // analysis_local_ident
+table_t *symbol_table; // analysis_local_ident_t
 
 typedef enum {
     SYMBOL_TYPE_VAR,

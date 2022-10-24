@@ -5,7 +5,7 @@
 #include "src/debug/debug.h"
 
 /**
- * // order blocks and operations (including loop detection)
+ * // order blocks and asm_operations (including loop detection)
  * COMPUTE_BLOCK_ORDER
  * NUMBER_OPERATIONS
  *

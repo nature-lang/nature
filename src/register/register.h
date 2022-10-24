@@ -39,6 +39,8 @@ reg_t *reg_select(uint8_t index, type_base_t base);
 
 reg_t *reg_find(uint8_t index, size_t size);
 
+reg_t *covert_alloc_reg(reg_t *reg);
+
 /**
  * 注册相应架构的寄存器到 reg_table 和 regs 中
  */

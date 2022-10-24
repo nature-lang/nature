@@ -1,6 +1,15 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
 
+static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
+    list *operations = list_new();
+    uint8_t used[2] = {0};
+    for (int i = 0; i < actual_params->count; ++i) {
+        lir_operand_t *param_operand = actual_params->take[i];
+        // TODO 为 param 选择合适的寄存器或者堆栈填入
+    }
+}
+
 static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     list *operations = list_new();
     uint8_t used[2] = {0};
@@ -46,6 +55,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 imm_operand->value = var_operand->value;
                 list_insert_before(block->operations, node, temp);
             }
+        }
+
+        if (lir_op_is_call(op)) {
+            // lower call actual params
+
         }
 
         // if op is fn begin, will set formal param
@@ -121,7 +135,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 }
 
 /**
- * operations operations 目前属于一个更加抽象的层次，不利于寄存器分配，所以进行更加本土化的处理
+ * asm_operations asm_operations 目前属于一个更加抽象的层次，不利于寄存器分配，所以进行更加本土化的处理
  * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
  * @param c
  */

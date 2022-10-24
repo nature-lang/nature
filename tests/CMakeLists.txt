@@ -25,15 +25,14 @@ target_link_libraries(test_reg_alloc cmocka)
 add_test(test_reg_alloc test_reg_alloc)
 
 # build stubs
-set(STUB_FILES 1666156078_hello 1666156088_sum)
+set(STUB_FILES 20221025_01_hello 20221025_02_sum)
 foreach (STUB_FILE ${STUB_FILES})
-    set(TEST_FILE test_${STUB_FILE})
-    add_executable(${TEST_FILE} ${TEST_FILE}.c ${BUILD_SOURCE_FILES})
-    target_link_libraries(${TEST_FILE} cmocka)
-    add_test(NAME ${TEST_FILE} COMMAND ${TEST_FILE}
+    add_executable(${STUB_FILE} ${STUB_FILE}.c ${BUILD_SOURCE_FILES})
+    target_link_libraries(${STUB_FILE} cmocka)
+    add_test(NAME ${STUB_FILE} COMMAND ${STUB_FILE}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
-    set_property(TEST ${TEST_FILE} PROPERTY ENVIRONMENT "FORCE_OUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/tmp/main;ENTRY_FILE=${STUB_FILE}.n")
-    message("register ${TEST_FILE} success")
+    set_property(TEST ${STUB_FILE} PROPERTY ENVIRONMENT "FORCE_OUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/tmp/main;ENTRY_FILE=${STUB_FILE}.n")
+    message("register ${STUB_FILE} success")
 endforeach ()
 
 # build stub dir

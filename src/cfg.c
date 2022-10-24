@@ -140,7 +140,7 @@ void broken_critical_edges(closure_t *c) {
         for (int i = 0; i < b->preds->count; ++i) {
             basic_block_t *p = b->preds->take[i];
             if (b->preds->count > 1 && p->succs->count > 1) {
-                // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal operations)
+                // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
                 lir_op_t *label_op = lir_op_unique_label(TEMP_LABEL);
                 lir_operand_t *label_operand = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_new_label_operand(b->name, true));

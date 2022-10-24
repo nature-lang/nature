@@ -55,10 +55,8 @@ static void test_basic() {
     lir_init();
     // 初始化寄存器列表
     reg_init();
-    // 初始化 native
-    native_init();
 
-    module_t *m = module_front_build(source_path, true);
+    module_t *m = module_build(source_path, true);
     m->closures = slice_new();
     // 全局符号的定义也需要推导以下原始类型
     for (int j = 0; j < m->symbols->count; ++j) {

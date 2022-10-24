@@ -199,9 +199,9 @@ void debug_basic_block(basic_block_t *block) {
         }
         if (op->second) {
             if (op->first) {
-                printf(",");
+                printf(", ");
             }
-            printf(", %s", lir_operand_to_string(op->second));
+            printf("%s", lir_operand_to_string(op->second));
         }
         if (op->output) {
             if (op->first) {

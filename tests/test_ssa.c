@@ -53,7 +53,7 @@ static void test_basic() {
     var_unique_count = 0;
     lir_line = 0;
 
-    module_t *m = module_front_build(source_path, true);
+    module_t *m = module_build(source_path, true);
     m->closures = slice_new();
     // 全局符号的定义也需要推导以下原始类型
     for (int j = 0; j < m->symbols->count; ++j) {

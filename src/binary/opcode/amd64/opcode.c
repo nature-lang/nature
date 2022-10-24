@@ -2,6 +2,7 @@
 #include "string.h"
 #include "utils/error.h"
 #include "utils/helper.h"
+#include <assert.h>
 
 inst_t movsq = {
         "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
@@ -802,24 +803,21 @@ static bool has_rex_extension(opcode_ext *list) {
 
 inst_t *opcode_select(asm_operation_t opcode) {
     amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, opcode.name);
-    if (current == NULL) {
-        error_exit("cannot identify asm opcode %s ", opcode.name);
-        return NULL;
-    }
+    assert(current != NULL && dsprintf("cannot identify asm opcode %s ", opcode.name));
 
     // 这里仅使用了大小匹配，但是对于 r8 和 rm8 存在一些特殊情况需要处理
     // 比如 ah 寄存器对应的操作码必须包含扩展 rex
-    bool has64Reg = false;
-    bool hasHighEightReg = false;
+    bool has64_reg = false;
+    bool has_high_eight_reg = false;
 
     for (int i = 0; i < opcode.count; ++i) {
         asm_operand_t *operand = opcode.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REG) {
             if (is_high_eight_reg(operand->value)) {
-                hasHighEightReg = true;
+                has_high_eight_reg = true;
             }
             if (is_64_reg(operand->value)) {
-                has64Reg = true;
+                has64_reg = true;
             }
 
         }
@@ -829,10 +827,7 @@ inst_t *opcode_select(asm_operation_t opcode) {
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
-        if (!exists) {
-            error_exit("[opcode_select]cannot identify asm opcode %s with operand index: %d", opcode.name, i);
-            return NULL;
-        }
+        assert(exists && dsprintf("cannot identify asm opcode %s with operand index: %d", opcode.name, i));
         current = table_get(current->succs, key);
     }
 
@@ -844,11 +839,11 @@ inst_t *opcode_select(asm_operation_t opcode) {
     };
     for (int i = 0; i < temps.count; ++i) {
         inst_t *inst = temps.list[i];
-        if (has64Reg && !has_64_extension(inst->extensions)) {
+        if (has64_reg && !has_64_extension(inst->extensions)) {
             continue;
         }
 
-        if (hasHighEightReg && has_rex_extension(inst->extensions)) {
+        if (has_high_eight_reg && has_rex_extension(inst->extensions)) {
             continue;
         }
 
@@ -859,8 +854,8 @@ inst_t *opcode_select(asm_operation_t opcode) {
                    opcode.name,
                    opcode.operands[0]->size,
                    opcode.operands[1]->size,
-                   has64Reg,
-                   hasHighEightReg);
+                   has64_reg,
+                   has_high_eight_reg);
     }
 
     opcode_sort_insts(&insts);
@@ -1466,6 +1461,8 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
 }
 
 uint8_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *count) {
+    assert(opcode_tree_root);
+
     *count = 0;
     uint8_t *data = malloc(sizeof(uint8_t) * 30);
 

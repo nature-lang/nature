@@ -5,7 +5,7 @@
 #include "src/debug/debug.h"
 #include <string.h>
 
-//parser_cursor path->p_cursor;
+//parser_cursor_t path->p_cursor;
 
 ast_expr_operator token_to_ast_expr_operator[] = {
         [TOKEN_PLUS] = AST_EXPR_OPERATOR_ADD,

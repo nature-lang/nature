@@ -6,7 +6,7 @@
 #define LIR_BLOCKS_PUSH(_list, item) (_list)->list[(_list)->count++] = (item)
 
 /**
- * operations to basic block
+ * asm_operations to basic block
  * 按顺序遍历指令集
  * new basic_block_t
  */

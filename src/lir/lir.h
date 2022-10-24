@@ -6,6 +6,7 @@
 #include "src/value.h"
 #include "src/ast.h"
 #include "utils/table.h"
+#include "src/structs.h"
 #include "src/register/register.h"
 
 #define TEMP_IDENT "t"
@@ -205,93 +206,6 @@ typedef struct lir_op {
     lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 } lir_op_t;
-
-/**
- * 遍历期间，block 第一次被访问时打上 visited 标识
- * 当 block 的所有 succs 被遍历后，该块同时被标记为 active
- * visited 在 iteration 期间不会被清除,而 active 标志则会在处理完所有后继后清除？
- */
-typedef struct {
-    bool visited;
-    bool active;
-    bool header;
-    bool end;
-    bool index_map[INT8_MAX]; // 默认都是 false
-    int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in innermost(最深的) loop
-    uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
-} loop_t;
-
-typedef struct basic_block_t {
-    uint8_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
-    string name;
-
-    // op point
-//    list_node *phi; // fist_node 即可
-    list_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
-    list_node *last_op; // last_node 即可
-    list *operations;
-
-    slice_t *preds;
-    slice_t *succs;
-    slice_t *forward_succs; // 当前块正向的 succ 列表
-    struct basic_block_t *backward_succ; // loop end
-    uint8_t incoming_forward_count; // 正向进入到该节点的节点数量
-    slice_t *loop_ends; // 仅 loop header 有这个值
-
-    slice_t *use;
-    slice_t *def;
-    slice_t *live_out;
-    slice_t *live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *dom; // 当前块被哪些基本块支配
-    slice_t *df;
-    slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
-    struct basic_block_t *idom; // 当前块的最近支配者
-
-    // loop detection
-    loop_t loop;
-} basic_block_t;
-
-/**
- * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
- * 形参有一条专门的指令 lir_formal_param 编译这条指令的时候处理形参即可
- * lir_formal_param 在寄存器分配阶段已经分配了合适的 stack or reg, 所以依次遍历处理即可
- * 如果函数的返回值大于 8 个字节，则需要引用传递返回, ABI 规定形参 1 为引用返回地址
- * 假如形参和所有局部变量占用的总长为 N Byte, 那么 -n(rbp) 处存储的就是最后一个形参的位置(向上存储)
- * 所以还是需要 closure_t 增加一个字段记录大值地址响应值, 从而可以正常返回
- *
- * 2. closure_t 可以能定义在文件中的全局函数，也可能是定义在结构体中的局部函数，在类型推导阶段是有能力识别到函数的左值
- * 是一个变量，还是结构体的元素
- */
-typedef struct closure_t {
-    slice_t *globals; // closure_t 中定义的变量列表, 用于 ssa 构建, 以及寄存器分配时的 interval 也是基于次
-    slice_t *blocks; // 根据解析顺序得到
-
-    basic_block_t *entry; // 基本块入口, 指向 blocks[0]
-    table_t *interval_table; // key 包括 fixed register as 和 variable.ident
-    int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
-
-    // 定义环境
-    string name;
-    string end_label; // 结束地址
-    string env_name;
-    struct closure_t *parent;
-    list *operations; // 指令列表
-
-    table_t *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
-    list *var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
-    slice_t *formal_params; // 也是为了堆栈分配
-
-    int stack_slot; // 初始值为 0，用于寄存器 slot 分配
-
-    // loop collect
-    int8_t loop_count;
-    slice_t *loop_headers;
-    slice_t *loop_ends;
-
-    // native asm operations
-    slice_t *asm_operations; // asm_operation_t
-    slice_t *asm_var_decls; // native_var_decl_t
-} closure_t;
 
 lir_operand_t *set_indirect_addr(lir_operand_t *operand);
 

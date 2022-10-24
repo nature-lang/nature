@@ -6,8 +6,3 @@ void native(closure_t *c) {
         amd64_native(c);
     }
 }
-
-void native_init() {
-    asm_var_decls = slice_new();
-    native_decl_unique_count = 0;
-}

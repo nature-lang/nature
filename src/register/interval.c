@@ -250,6 +250,8 @@ static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
         }
         if (operand->type == LIR_OPERAND_REG) {
             reg_t *reg = operand->value;
+            reg = covert_alloc_reg(reg);
+
             interval_t *interval = table_get(c->interval_table, reg->name);
             assert(interval);
             slice_push(result, interval);

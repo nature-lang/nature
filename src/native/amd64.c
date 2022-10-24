@@ -6,6 +6,7 @@
 #include "utils/helper.h"
 #include "src/symbol.h"
 #include "src/native/native.h"
+#include "src/debug/debug.h"
 #include <assert.h>
 
 /**
@@ -31,7 +32,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         lir_imm_t *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(通常用于 .data 段)
-            char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
+            char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
@@ -41,7 +42,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
             // asm_copy
             return SYMBOL(unique_name, false);
         } else if (v->type == TYPE_FLOAT) {
-            char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
+            char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = unique_name;
             decl->size = QWORD;
@@ -88,12 +89,12 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
 //        if (v->indirect_addr) {
 //            amd64_operand_t *base_addr_operand = amd64_native_operand_var_transform(base_var, 0);
 //            // 生成 mov 指令（asm_mov）
-//            slice_push(operations, ASM_INST("mov", { REG(reg), base_addr_operand }));
+//            slice_push(asm_operations, ASM_INST("mov", { REG(reg), base_addr_operand }));
 //
 //            amd64_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->type_base));
 //            ASM_OPERAND_COPY(asm_operand, temp);
 //        } else {
-//            slice_push(operations, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
+//            slice_push(asm_operations, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
 //            ASM_OPERAND_COPY(asm_operand, REG(reg));
 //        }
 
@@ -249,6 +250,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
         asm_operand_t *source = lir_operand_transform(c, temp_operations, param_operand);
 
         // param reg select , if source not float, source and target size must match
+        // TODO param operand maybe stack/reg/imm ...
         reg_t *target_reg = amd64_fn_param_next_reg(params_used, lir_operand_type_base(param_operand));
         if (target_reg) {
             // 如果 reg 的 size < 8, 则 mov 操作无法填满整个寄存器，会造成其中有脏数据残留,需要主动清理一次
@@ -259,7 +261,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 
             slice_push(temp_operations, ASM_INST("mov", { REG(target_reg), source }));
         } else {
-            // actual to stack, gen lir push that native push and append operations to temp_operations
+            // actual to stack, gen lir push that native push and append asm_operations to temp_operations
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
             slice_append(temp_operations, amd64_native_op(c, push_op));
             push_length += QWORD; // push 指令的大小为 8 bit，并不区分 push byte/word/dword/qword 啥的，统一就是 qword
@@ -435,13 +437,11 @@ slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
 
 
 void amd64_native(closure_t *c) {
-    slice_t *operations = slice_new();
+    assert(c->module);
 
     // 遍历 block
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
-        slice_append(operations, amd64_native_block(c, block));
+        slice_append(c->asm_operations, amd64_native_block(c, block));
     }
-
-    c->asm_operations = operations;
 }

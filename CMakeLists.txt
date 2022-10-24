@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD 11)
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
 set(SRC_BINARY
+        ${SRC_DIR}/binary/opcode/opcode.h
         ${SRC_DIR}/binary/opcode/amd64/asm.c
         ${SRC_DIR}/binary/opcode/amd64/asm.h
         ${SRC_DIR}/binary/opcode/amd64/opcode.c
@@ -74,6 +75,7 @@ set(CMD
         ${PROJECT_SOURCE_DIR}/cmd/build.c)
 
 set(SRC
+        ${SRC_DIR}/structs.h
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c
         ${SRC_DIR}/value.h

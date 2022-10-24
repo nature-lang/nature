@@ -13,12 +13,16 @@
 #include "src/binary/elf/amd64.h"
 #include "src/binary/elf/output.h"
 #include "src/ssa.h"
+#include "src/lower/lower.h"
+#include "src/register/linearscan.h"
+#include "src/binary/opcode/opcode.h"
 #include "utils/error.h"
 #include "config.h"
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <assert.h>
 
 /**
  * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
@@ -34,67 +38,33 @@ static char *lib_file_path(char *file) {
 }
 
 /**
- * @param m
- * @return  m->opcodes
- */
-void cross_native(module_t *m) {
-    asm_var_decls = slice_new();
-    m->operations = slice_new();
-
-    // pre
-    reg_init();
-    if (BUILD_ARCH == ARCH_AMD64) {
-        amd64_opcode_init();
-    }
-
-    // native by closure_t
-    for (int i = 0; i < m->closures->count; ++i) {
-        closure_t *c = m->closures->take[i];
-        if (BUILD_ARCH == ARCH_AMD64) {
-//            slice_t *operands = amd64_native_closure(c);
-//            slice_append(m->operations, operands);
-        }
-    }
-
-    // post
-    slice_append(m->var_decls, asm_var_decls);
-
-    return;
-    ERROR:
-    error_exit("[cross_native] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
-}
-
-/**
  * 汇编器目前只支持 linux elf amd64
  * @param m
  */
-void build_assembler(module_t *m) {
+static void assembler(module_t *m) {
     if (BUILD_OS == OS_LINUX) {
         char *object_file_name = str_connect(m->module_unique_name, ".n.o");
         str_replace_char(object_file_name, '/', '.');
 
         char *output = file_join(TEMP_DIR, object_file_name);
         elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
-        linkable_object_format(ctx, m->operations, m->var_decls);
+        linkable_object_format(ctx, m->asm_operations, m->asm_var_decls);
         elf_output(ctx);
 
         // 完整输出路径
         printf(" --> assembler: %s\n", output);
         m->object_file = output;
-    } else {
-        goto ERROR;
+        return;
     }
 
-    return;
-    ERROR:
-    error_exit("[build_assembler] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
+    assert(false && dsprintf("unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH));
 }
 
 /**
  * modules module_list
  * @param module_list
  */
-void build_linker(slice_t *module_list) {
+static void linker(slice_t *module_list) {
     // 检测是否生成
     int fd;
     char *output = file_join(TEMP_DIR, LINKER_OUTPUT);
@@ -123,7 +93,7 @@ void build_linker(slice_t *module_list) {
 
     elf_output(ctx);
     if (!file_exists(output)) {
-        error_exit("[build_linker] linker failed");
+        error_exit("[linker] linker failed");
     }
 
     char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
@@ -141,11 +111,16 @@ void build_linker(slice_t *module_list) {
  * @param build_entry
  */
 void build(char *build_entry) {
+    assert(strlen(build_entry) > 2 && "build entry exception");
+
+    // 全局 init
     env_init();
     config_init();
+    symbol_init();
+    reg_init();
+    opcode_init();
 
     string source_path = file_join(WORK_DIR, build_entry);
-
     printf("NATURE_ROOT: %s\n", NATURE_ROOT);
     printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
     printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
@@ -157,50 +132,36 @@ void build(char *build_entry) {
     printf("build_entry: %s\n", build_entry);
     printf("source_path: %s\n", source_path);
 
-    // init
-    symbol_init();  // 全局符号表初始化
-    lir_init();
-    reg_init();
-    native_init();
 
     table_t *module_table = table_new();
-    slice_t *module_list = slice_new();
-    module_t *root = module_front_build(source_path, true);
-    slice_push(module_list, root);
+    slice_t *modules = slice_new();
+    module_t *root = module_build(source_path, true);
+    slice_push(modules, root);
 
-    slice_t *work_list = slice_new();
-    slice_push(work_list, root);
+    list *work_list = list_new();
+    list_push(work_list, root);
     // 图遍历构造一组 path
     while (work_list->count > 0) {
-        slice_t *temp_list = slice_new(); // 下一层级暂存
-        for (int i = 0; i < work_list->count; ++i) {
-            module_t *m = work_list->take[i];
-            for (int j = 0; j < m->imports->count; ++j) {
-                ast_import *import = m->imports->take[j];
-                bool exist = table_exist(module_table, import->full_path);
-                if (exist) {
-                    continue;
-                }
-
-                module_t *new_m = module_front_build(import->full_path, false);
-                slice_push(temp_list, new_m);
-                slice_push(module_list, new_m);
-                table_set(module_table, import->full_path, new_m);
+        module_t *m = list_pop(work_list);;
+        for (int j = 0; j < m->imports->count; ++j) {
+            ast_import *import = m->imports->take[j];
+            if (table_exist(module_table, import->full_path)) {
+                continue;
             }
+
+            module_t *new_module = module_build(import->full_path, false);
+            list_push(work_list, new_module);
+            slice_push(modules, new_module);
+            table_set(module_table, import->full_path, new_module);
         }
-        work_list = temp_list;
     }
 
-    // TODO 暂时只支持单进程，因为多个文件共享了全局的数据
-    // 全局维度初始化
-
-    // root module stmt add call all module init
+    // root module stmt add call all module init for all module tree
     ast_closure_t *root_ast_closure = root->ast_closures->take[0];
-    for (int i = 1; i < module_list->count; ++i) {
-        module_t *m = module_list->take[i];
-        if (m->call_init_stmt == NULL) {
-            error_exit("[build] module %s not found init fn stmt", m->module_unique_name);
-        }
+    for (int i = 1; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        assert(m->call_init_stmt != NULL && dsprintf("module %s not found init fn stmt", m->module_unique_name));
+
         slice_t *temp = slice_new();
         slice_push(temp, m->call_init_stmt);
         slice_append_free(temp, root_ast_closure->function->body);
@@ -208,13 +169,9 @@ void build(char *build_entry) {
     }
 
     // infer + compiler
-    for (int i = 0; i < module_list->count; ++i) {
-        module_t *m = module_list->take[i];
-
-
-        var_unique_count = 0;
-        lir_line = 0;
-        m->closures = slice_new();
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        lir_init();
 
         // 全局符号的定义也需要推导以下原始类型
         for (int j = 0; j < m->symbols->count; ++j) {
@@ -226,32 +183,40 @@ void build(char *build_entry) {
         }
 
         for (int j = 0; j < m->ast_closures->count; ++j) {
-            ast_closure_t *closure = m->ast_closures->take[j];
+            ast_closure_t *ast_closure = m->ast_closures->take[j];
             // 类型推断
-            infer(closure);
+            infer(ast_closure);
             // 编译
-            slice_append_free(m->closures, compiler(closure)); // 都写入到 compiler_closure 中了
+            slice_append_free(m->closures, compiler(ast_closure)); // 都写入到 compiler_closure 中了
         }
 
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
+            c->module = m;
+
             cfg(c);
+
             // 构造 ssa
             ssa(c);
 
+            lower(c);
+
+            linear_scan(c);
+
+            debug_lir(c);
 
             native(c);
+
+            debug_asm(c);
         }
     }
 
-    // native + assembler
-    for (int i = 0; i < module_list->count; ++i) {
-        module_t *m = module_list->take[i];
-        // 首次初始化符号定义
-        m->var_decls = slice_new();
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
 
         // symbol to var_decl(架构无关), assembler 会使用 var_decl
+        // 由全局符号产生
         for (int j = 0; j < m->symbols->count; ++j) {
             symbol_t *s = m->symbols->take[j];
             if (s->type != SYMBOL_TYPE_VAR) {
@@ -262,13 +227,19 @@ void build(char *build_entry) {
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
             decl->value = NULL; // TODO 如果是立即数可以直接赋值
-            slice_push(m->var_decls, decl);
+            slice_push(m->asm_var_decls, decl);
         }
 
-        cross_native(m);
-        build_assembler(m);
+        // 合并 closure 中的临时 var_decl
+        for (int j = 0; j < m->closures->count; ++j) {
+            closure_t *c = m->closures->take[j];
+            slice_append(m->asm_var_decls, c->asm_var_decls);
+            slice_append(m->asm_operations, c->asm_operations);
+        }
+
+        assembler(m);
     }
 
     // 链接
-    build_linker(module_list);
+    linker(modules);
 }

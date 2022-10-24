@@ -31,9 +31,9 @@ void analysis_main(module_t *m, slice_t *stmt_list);
  */
 void analysis_module(module_t *m, slice_t *stmt_list);
 
-analysis_function *analysis_current_init(module_t *m, analysis_local_scope *scope, string fn_name);
+analysis_function_t *analysis_current_init(module_t *m, analysis_local_scope_t *scope, string fn_name);
 
-analysis_local_scope *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope *parent);
+analysis_local_scope_t *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope_t *parent);
 
 // 变量 hash_string 表
 void analysis_function_begin(module_t *m);
@@ -46,7 +46,7 @@ void analysis_var_decl(module_t *m, ast_var_decl *stmt);
 
 void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt);
 
-ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope *scope);
+ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope_t *scope);
 
 void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn);
 
@@ -62,15 +62,15 @@ void analysis_ident(module_t *m, ast_expr *expr);
 
 void analysis_type(module_t *m, type_t *type);
 
-int8_t analysis_resolve_free(analysis_function *current, string*ident);
+int8_t analysis_resolve_free(analysis_function_t *current, string*ident);
 
-uint8_t analysis_push_free(analysis_function *f, bool is_local, int8_t index, string ident);
+uint8_t analysis_push_free(analysis_function_t *f, bool is_local, int8_t index, string ident);
 
 void analysis_call(module_t *m, ast_call *call);
 
 void analysis_assign(module_t *m, ast_assign_stmt *assign);
 
-string analysis_resolve_type(module_t *m, analysis_function *current, string ident);
+string analysis_resolve_type(module_t *m, analysis_function_t *current, string ident);
 
 void analysis_if(module_t *m, ast_if_stmt *stmt);
 
@@ -94,7 +94,7 @@ void analysis_new_list(module_t *m, ast_new_list *expr);
 
 bool analysis_redeclare_check(module_t *m, string ident);
 
-analysis_local_ident *analysis_new_local(module_t *m, symbol_type type, void *decl, string ident);
+analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *decl, string ident);
 
 string analysis_unique_ident(string name);
 

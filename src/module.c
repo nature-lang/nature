@@ -7,8 +7,8 @@
 #include "src/semantic/analysis.h"
 #include "src/build/config.h"
 #include <string.h>
+#include <assert.h>
 
-// TODO
 static char *module_full_path(char *path, char *name) {
     char *full_path = str_connect(path, MODULE_SUFFIX);
     // 判断文件是否存在 (import "foo/bar" bar is file)
@@ -60,19 +60,22 @@ char *ident_with_module_unique_name(string unique_name, char *ident) {
     return temp;
 }
 
-module_t *module_front_build(char *source_path, bool entry) {
+module_t *module_build(char *source_path, bool entry) {
     module_t *m = NEW(module_t);
     m->imports = slice_new();
     m->import_table = table_new();
     m->symbols = slice_new();
     m->ast_closures = slice_new();
     m->call_init_stmt = NULL;
-
     m->source_path = source_path;
+    m->closures = slice_new();
+    // native 字段初始化
+    m->asm_var_decls = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
+    m->asm_operations = slice_new();
+    m->asm_temp_var_decl_count = 0;
 
-    if (!file_exists(source_path)) {
-        error_exit("[module_front_build] file %s not found", source_path);
-    }
+    assert(file_exists(source_path) && dsprintf("file %s not found", source_path));
+
     m->source = file_read(source_path);
     char *temp = strrchr(source_path, '/');
     m->source_dir = rtrim(source_path, strlen(temp));
