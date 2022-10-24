@@ -16,7 +16,7 @@
  * @param used_regs
  * @return
  */
-static asm_operand_t *lir_operand_transform(slice_t *operations, lir_operand_t *operand) {
+static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, lir_operand_t *operand) {
     if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         return REG(reg);
@@ -32,22 +32,22 @@ static asm_operand_t *lir_operand_transform(slice_t *operations, lir_operand_t *
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(通常用于 .data 段)
             char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
-            native_var_decl_t *decl = NEW(native_var_decl_t);
+            asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = unique_name;
             decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
             decl->value = (uint8_t *) v->string_value;
-            slice_push(native_var_decls, decl);
+            slice_push(c->asm_var_decls, decl);
 
             // asm_copy
             return SYMBOL(unique_name, false);
         } else if (v->type == TYPE_FLOAT) {
             char *unique_name = NATIVE_VAR_DECL_UNIQUE_NAME();
-            native_var_decl_t *decl = NEW(native_var_decl_t);
+            asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = unique_name;
             decl->size = QWORD;
             decl->value = (uint8_t *) &v->float_value; // float to uint8
 //            decl->code = ASM_VAR_DECL_TYPE_FLOAT;
-            slice_push(native_var_decls, decl);
+            slice_push(c->asm_var_decls, decl);
 
             return SYMBOL(unique_name, false);
         } else if (v->type == TYPE_INT) {
@@ -136,8 +136,8 @@ static slice_t *native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
     slice_push(operations, ASM_INST("mov", { result, first }));
     return operations;
 }
@@ -173,7 +173,7 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     assert(op->output->type == LIR_OPERAND_SYMBOL_LABEL);
 
     slice_t *operations = slice_new();
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
     slice_push(operations, ASM_INST("jmp", { result }));
     return operations;
 }
@@ -191,9 +191,9 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 参数转换
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
-    asm_operand_t *second = lir_operand_transform(operations, op->second);
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
 
     slice_push(operations, ASM_INST("mov", { result, first }));
     slice_push(operations, ASM_INST("add", { result, second }));
@@ -231,7 +231,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     }
 
     // first is fn label or addr
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
 
     // 2. 参数处理  lir_ope code->second;
     assert(op->second->type == LIR_OPERAND_ACTUAL_PARAMS);
@@ -246,7 +246,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
         slice_t *temp_operations = slice_new();
 
         // 如果是 bool, source 存在 1byte, 但是不影响寄存器选择或者堆栈分配，寄存器和堆栈在 amd64 位下都是统一 8byte
-        asm_operand_t *source = lir_operand_transform(temp_operations, param_operand);
+        asm_operand_t *source = lir_operand_transform(c, temp_operations, param_operand);
 
         // param reg select , if source not float, source and target size must match
         reg_t *target_reg = amd64_fn_param_next_reg(params_used, lir_operand_type_base(param_operand));
@@ -294,9 +294,9 @@ static slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op) {
     assert(op->first->type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
-    asm_operand_t *second = lir_operand_transform(operations, op->second);
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
     assert(result->size == BYTE);
 
     // bool = int64 > int64
@@ -363,9 +363,9 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
 
     slice_t *operations = slice_new();
 
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
 
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
 
     slice_push(operations, ASM_INST("lea", { result, first }));
     return operations;
@@ -384,11 +384,11 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 比较 first 是否等于 second，如果相等就跳转到 result label
-    asm_operand_t *first = lir_operand_transform(operations, op->first);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
 
-    asm_operand_t *second = lir_operand_transform(operations, op->second);
+    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
 
-    asm_operand_t *result = lir_operand_transform(operations, op->output);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
 
     // cmp 指令比较
     slice_push(operations, ASM_INST("cmp", { first, second }));

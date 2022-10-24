@@ -1,15 +1,17 @@
 #ifndef NATURE_BUILD_ENV_H
 #define NATURE_BUILD_ENV_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define ARCH_AMD64 1
 #define OS_LINUX 1
-
-#include "stdint.h"
 
 uint8_t BUILD_OS; // linux
 uint8_t BUILD_ARCH; // amd64
 char *NATURE_ROOT; // nature root
 char *BUILD_OUTPUT; // default is main
+char *FORCE_OUTPUT; // test 使用，指定编译路径输出文件
 
 char *WORK_DIR; // 执行 shell 命令所在的目录
 char *BASE_NS; // 最后一级目录的名称，也可以自定义

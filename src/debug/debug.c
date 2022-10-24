@@ -162,6 +162,8 @@ void debug_lir(closure_t *c) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);
     }
+
+    printf("\n\n\n");
 }
 
 /**
@@ -225,8 +227,6 @@ void debug_basic_block(basic_block_t *block) {
         lir_var_t *var = block->live_in->take[i];
         printf("%s\t", var->ident);
     }
-
-    printf("\n\n\n");
 }
 
 void debug_asm(closure_t *c) {

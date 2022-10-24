@@ -39,7 +39,7 @@
 
 #define REG(_reg) ({ \
      asm_operand_t *reg_operand = NEW(asm_operand_t); \
-     reg_operand->type = ASM_OPERAND_TYPE_REGISTER;  \
+     reg_operand->type = ASM_OPERAND_TYPE_REG;  \
      reg_operand->size = _reg->size;\
      reg_operand->value = _reg;    \
      reg_operand;\
@@ -56,7 +56,7 @@
 #define SYMBOL(_name, _is_local) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
-     asm_operand_symbol_t *_symbol = NEW(asm_symbol_t); \
+     asm_symbol_t *_symbol = NEW(asm_symbol_t); \
      _symbol->name = _name;    \
      _symbol->is_local = _is_local;    \
      _operand->size = 0;\
@@ -68,8 +68,8 @@
 
 #define DISP_REG(_reg, _disp, _size) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_DISP_REGISTER;  \
-     asm_operand_disp_register_t *_disp_reg = NEW(asm_disp_reg_t); \
+     _operand->type = ASM_OPERAND_TYPE_DISP_REG;  \
+     asm_disp_reg_t *_disp_reg = NEW(asm_disp_reg_t); \
      _disp_reg->reg = (reg_t*)(_reg);    \
      _disp_reg->disp = _disp;    \
      _operand->size = _size; \
@@ -79,7 +79,7 @@
 
 #define INDIRECT_REG(_reg, _size) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_INDIRECT_REGISTER;  \
+     _operand->type = ASM_OPERAND_TYPE_INDIRECT_REG;  \
      asm_operand_indirect_register_t *_indirect = NEW(asm_indirect_reg_t); \
      _indirect->reg = (reg_t*)(_reg);    \
      _operand->size = _size;\
@@ -89,7 +89,7 @@
 
 #define SIB_REG(_base, _index, _scale) ({ \
      asm_operand_t *operand = NEW(asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_SIB_REGISTER;  \
+     operand->type = ASM_OPERAND_TYPE_SIB_REG;  \
      asm_sib_register_t *_sib = NEW(asm_sib_reg_t); \
      _sib->base = _base;\
      _sib->index = _index;\
@@ -179,6 +179,7 @@ typedef struct {
     double value;
 } asm_float64_t;
 
+// TODO offset?
 typedef struct {
     reg_t *base; // 决定了宽度
     reg_t *index;

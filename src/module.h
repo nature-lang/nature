@@ -132,7 +132,7 @@ typedef struct {
     slice_t *ast_closures; // 全局的或者非全局的都在这里了
 
     // compiler 阶段得到
-    slice_t *compiler_closures; // 包含 lir
+    slice_t *closures; // 包含 lir
 
     // native -> opcodes
     slice_t *operations; // 和架构相关

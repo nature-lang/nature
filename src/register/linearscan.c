@@ -36,6 +36,4 @@ void linear_scan(closure_t *c) {
     resolve_data_flow(c);
 
     replace_virtual_register(c);
-
-    debug_lir(c);
 }

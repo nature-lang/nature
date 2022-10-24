@@ -8,6 +8,6 @@ void native(closure_t *c) {
 }
 
 void native_init() {
-    native_var_decls = slice_new();
+    asm_var_decls = slice_new();
     native_decl_unique_count = 0;
 }

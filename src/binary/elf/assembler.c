@@ -5,7 +5,7 @@
 void var_decl_encodings(elf_context *ctx, slice_t *var_decls) {
     // 将全局变量定义写入到数据段与符号表
     for (int i = 0; i < var_decls->count; ++i) {
-        native_var_decl_t *var_decl = var_decls->take[i];
+        asm_var_decl_t *var_decl = var_decls->take[i];
         // 写入到数据段
         uint64_t offset = elf_put_data(ctx->data_section, var_decl->value, var_decl->size);
 

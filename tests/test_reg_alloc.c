@@ -59,7 +59,7 @@ static void test_basic() {
     native_init();
 
     module_t *m = module_front_build(source_path, true);
-    m->compiler_closures = slice_new();
+    m->closures = slice_new();
     // 全局符号的定义也需要推导以下原始类型
     for (int j = 0; j < m->symbols->count; ++j) {
         symbol_t *s = m->symbols->take[j];
@@ -73,11 +73,11 @@ static void test_basic() {
         // 类型推断
         infer(closure);
         // 编译
-        slice_append_free(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
+        slice_append_free(m->closures, compiler(closure)); // 都写入到 compiler_closure 中了
     }
 
-    for (int j = 0; j < m->compiler_closures->count; ++j) {
-        closure_t *c = m->compiler_closures->take[j];
+    for (int j = 0; j < m->closures->count; ++j) {
+        closure_t *c = m->closures->take[j];
         // 构造 cfg
         cfg(c);
         // 构造 ssa
@@ -88,8 +88,12 @@ static void test_basic() {
         // 寄存器分配
         linear_scan(c);
 
+        debug_lir(c);
+
         // native
-//        native(c);
+        native(c);
+
+        debug_asm(c);
     }
 }
 

@@ -38,7 +38,7 @@ static char *lib_file_path(char *file) {
  * @return  m->opcodes
  */
 void cross_native(module_t *m) {
-    native_var_decls = slice_new();
+    asm_var_decls = slice_new();
     m->operations = slice_new();
 
     // pre
@@ -48,8 +48,8 @@ void cross_native(module_t *m) {
     }
 
     // native by closure_t
-    for (int i = 0; i < m->compiler_closures->count; ++i) {
-        closure_t *c = m->compiler_closures->take[i];
+    for (int i = 0; i < m->closures->count; ++i) {
+        closure_t *c = m->closures->take[i];
         if (BUILD_ARCH == ARCH_AMD64) {
 //            slice_t *operands = amd64_native_closure(c);
 //            slice_append(m->operations, operands);
@@ -57,7 +57,7 @@ void cross_native(module_t *m) {
     }
 
     // post
-    slice_append(m->var_decls, native_var_decls);
+    slice_append(m->var_decls, asm_var_decls);
 
     return;
     ERROR:
@@ -125,7 +125,11 @@ void build_linker(slice_t *module_list) {
     if (!file_exists(output)) {
         error_exit("[build_linker] linker failed");
     }
+
     char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
+    if (FORCE_OUTPUT) {
+        dst_path = FORCE_OUTPUT;
+    }
     copy(dst_path, output, 0755);
     printf("linker output--> %s\n", output);
     printf("build output--> %s\n", dst_path);
@@ -138,23 +142,26 @@ void build_linker(slice_t *module_list) {
  */
 void build(char *build_entry) {
     env_init();
-    // 获取当前 pwd
     config_init();
+
     string source_path = file_join(WORK_DIR, build_entry);
 
     printf("NATURE_ROOT: %s\n", NATURE_ROOT);
     printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
     printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
     printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT);
+    printf("FORCE_OUTPUT: %s\n", FORCE_OUTPUT);
     printf("WORK_DIR: %s\n", WORK_DIR);
     printf("BASE_NS: %s\n", BASE_NS);
     printf("TERM_DIR: %s\n", TEMP_DIR);
     printf("build_entry: %s\n", build_entry);
     printf("source_path: %s\n", source_path);
 
-    // 初始化全局符号表
-    symbol_init();
-    var_unique_count = 0;
+    // init
+    symbol_init();  // 全局符号表初始化
+    lir_init();
+    reg_init();
+    native_init();
 
     table_t *module_table = table_new();
     slice_t *module_list = slice_new();
@@ -207,7 +214,7 @@ void build(char *build_entry) {
 
         var_unique_count = 0;
         lir_line = 0;
-        m->compiler_closures = slice_new();
+        m->closures = slice_new();
 
         // 全局符号的定义也需要推导以下原始类型
         for (int j = 0; j < m->symbols->count; ++j) {
@@ -223,18 +230,18 @@ void build(char *build_entry) {
             // 类型推断
             infer(closure);
             // 编译
-            slice_append_free(m->compiler_closures, compiler(closure)); // 都写入到 compiler_closure 中了
+            slice_append_free(m->closures, compiler(closure)); // 都写入到 compiler_closure 中了
         }
 
         // 构造 cfg, 并转成目标架构编码
-        for (int j = 0; j < m->compiler_closures->count; ++j) {
-            closure_t *c = m->compiler_closures->take[j];
+        for (int j = 0; j < m->closures->count; ++j) {
+            closure_t *c = m->closures->take[j];
             cfg(c);
             // 构造 ssa
             ssa(c);
-#ifdef DEBUG_CFG
-            debug_lir(c);
-#endif
+
+
+            native(c);
         }
     }
 
@@ -251,7 +258,7 @@ void build(char *build_entry) {
                 continue;
             }
             ast_var_decl *var_decl = s->decl;
-            native_var_decl_t *decl = NEW(native_var_decl_t);
+            asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);
             decl->value = NULL; // TODO 如果是立即数可以直接赋值

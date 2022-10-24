@@ -153,6 +153,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->parent = NULL;
     new->operations = NULL;
     new->asm_operations = slice_new();
+    new->asm_var_decls = slice_new();
     new->entry = NULL;
     new->globals = slice_new();
     new->blocks = slice_new(); // basic_block_t

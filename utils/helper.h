@@ -4,6 +4,8 @@
 #include "src/value.h"
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #define COPY_NEW(_type, src) ({ \
     _type *dst = malloc(sizeof(_type)); \
@@ -83,6 +85,16 @@ static inline void *mallocz(size_t size) {
         memset(ptr, 0, size);
     }
     return ptr;
+}
+
+static inline char *dsprintf(char *format, ...) {
+    char *buf = malloc(1000);
+    va_list args;
+    va_start(args, format);
+    int count = vsprintf(buf, format, args);
+    va_end(args);
+
+    return realloc(buf, count);
 }
 
 #endif //NATURE_SRC_LIB_HELPER_H_

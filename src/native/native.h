@@ -10,9 +10,9 @@ typedef struct {
     char *name; // 符号名称
     size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
     uint8_t *value; // 符号值
-} native_var_decl_t;
+} asm_var_decl_t;
 
-slice_t *native_var_decls; // 服务于 .data 和 symbol 段
+slice_t *asm_var_decls; // 服务于 .data 和 symbol 段
 
 int native_decl_unique_count;
 

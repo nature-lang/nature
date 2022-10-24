@@ -289,7 +289,8 @@ typedef struct closure_t {
     slice_t *loop_ends;
 
     // native asm operations
-    slice_t *asm_operations;
+    slice_t *asm_operations; // asm_operation_t
+    slice_t *asm_var_decls; // native_var_decl_t
 } closure_t;
 
 lir_operand_t *set_indirect_addr(lir_operand_t *operand);

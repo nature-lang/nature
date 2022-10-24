@@ -43,6 +43,8 @@ void env_init() {
     if (root != NULL) {
         NATURE_ROOT = root;
     }
+
+    FORCE_OUTPUT = getenv("FORCE_OUTPUT");
 }
 
 char *parser_base_ns(char *dir) {

@@ -124,15 +124,9 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/type/array.h
         ${PROJECT_SOURCE_DIR}/runtime/type/array.c)
 
-add_executable(nature main.c
-        ${SRC}
-        ${UTILS}
-        ${CMD}
-        ${SRC_NATIVE}
-        ${SRC_SEMANTIC}
-        ${SRC_DEBUG}
-        ${SRC_SYNTAX}
-        ${SRC_BINARY})
+set(BUILD_SOURCE_FILES ${SRC} ${CMD} ${UTILS} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_NATIVE} ${SRC_BINARY})
+
+add_executable(nature main.c ${BUILD_SOURCE_FILES})
 
 target_link_libraries(nature m) # 链接数学计算库
 set_target_properties(nature PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/debug/bin)
