@@ -1,7 +1,7 @@
 cmake-build-debug/
 cmake-build-debug-vm/
 cmake-build-debug-vm-nature/
-debug/
+/debug/
 release/
 tmp/
 .idea
