@@ -251,6 +251,8 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 
         // param reg select , if source not float, source and target size must match
         // TODO param operand maybe stack/reg/imm ...
+        // reg not size used? rax,xmm0...? next 选择应该影响才对？
+        // TODO 已经不知道如何选择寄存器了。。。此处不应该在进行寄存器分配了？
         reg_t *target_reg = amd64_fn_param_next_reg(params_used, lir_operand_type_base(param_operand));
         if (target_reg) {
             // 如果 reg 的 size < 8, 则 mov 操作无法填满整个寄存器，会造成其中有脏数据残留,需要主动清理一次

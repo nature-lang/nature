@@ -8,6 +8,12 @@ string reg_table_key(uint8_t index, uint8_t size) {
     return itoa(int_key);
 }
 
+/**
+ * 根据类型选择合适的寄存器
+ * @param index
+ * @param base
+ * @return
+ */
 reg_t *reg_select(uint8_t index, type_base_t base) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_reg_select(index, base);

@@ -264,14 +264,11 @@ lir_operand_t *lir_new_empty_operand() {
 }
 
 type_base_t lir_operand_type_base(lir_operand_t *operand) {
+    assert(operand->type != LIR_OPERAND_REG);
+
     if (operand->type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
         return var->type_base;
-    }
-
-    if (operand->type == LIR_OPERAND_REG) {
-        reg_t *reg = operand->value;
-        // ?? reg
     }
 
     if (operand->type == LIR_OPERAND_ADDR) {

@@ -117,7 +117,7 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
     }
 
     list_push(operations, lir_op_new(
-            LIR_OPCODE_FN_PARAM, NULL, NULL,
+            LIR_OPCODE_FN_FORMAL_PARAM, NULL, NULL,
             LIR_NEW_OPERAND(LIR_OPERAND_FORMAL_PARAMS, c->formal_params)));
 
     // 编译 body

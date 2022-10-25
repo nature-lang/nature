@@ -121,7 +121,7 @@ typedef enum {
     LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OPCODE_LABEL,
-    LIR_OPCODE_FN_PARAM, // 形参 OP, formal param in output
+    LIR_OPCODE_FN_FORMAL_PARAM, // 形参 OP, formal param in output
     LIR_OPCODE_FN_BEGIN, // 无操作数
     LIR_OPCODE_FN_END, // 无操作数
 } lir_opcode_e;

@@ -62,6 +62,7 @@ void amd64_reg_init() {
     dh = reg_new("dh", 6, REG_TYPE_INT, BYTE, 0);
     bh = reg_new("bh", 7, REG_TYPE_INT, BYTE, 0);
 
+    // al 是低 8 字节，ah 是高 8 字节
     al = reg_new("al", 0, REG_TYPE_INT, BYTE, 0);
     cl = reg_new("cl", 1, REG_TYPE_INT, BYTE, 0);
     dl = reg_new("dl", 2, REG_TYPE_INT, BYTE, 0);
@@ -143,6 +144,7 @@ reg_t *amd64_reg_select(uint8_t index, type_base_t base) {
 
 
 /**
+ * TODO 选择 fit reg 还是大 reg?
  * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
  * 返回下一个可用的寄存器或者内存地址
  * 但是这样就需要占用 rbp 偏移，怎么做？
@@ -155,7 +157,6 @@ reg_t *amd64_reg_select(uint8_t index, type_base_t base) {
  * @return
  */
 reg_t *amd64_fn_param_next_reg(uint8_t *used, type_base_t base) {
-    uint8_t size = type_base_sizeof(base);
     reg_type_e reg_type = type_base_trans(base);
     uint8_t used_index = 0;
     if (reg_type == REG_TYPE_FLOAT) {
@@ -166,12 +167,12 @@ reg_t *amd64_fn_param_next_reg(uint8_t *used, type_base_t base) {
     // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
     if (reg_type == REG_TYPE_INT && index <= 5) {
         uint8_t reg_index = int_param_indexes[index];
-        return (reg_t *) reg_select(reg_index, size);
+        return (reg_t *) reg_select(reg_index, base);
     }
 
     // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
     if (reg_type == REG_TYPE_FLOAT && index <= 7) {
-        return (reg_t *) reg_select(index, size);
+        return (reg_t *) reg_select(index, base);
     }
 
     return NULL;

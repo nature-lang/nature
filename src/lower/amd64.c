@@ -1,15 +1,29 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
 
+// mov var -> eax
+// TODO 一下子多个这么多 mov 是否会影响寄存器分配？本来到了 call 也是要溢出所有寄存器的
 static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     list *operations = list_new();
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
         lir_operand_t *param_operand = actual_params->take[i];
-        // TODO 为 param 选择合适的寄存器或者堆栈填入
+        type_base_t type_base = lir_operand_type_base(param_operand);
+        reg_t *reg = amd64_fn_param_next_reg(used, type_base);
+        if (reg) {
+            source =
+        } else {
+
+        }
     }
 }
 
+/**
+ * 寄存器选择进行了 fit 匹配
+ * @param c
+ * @param formal_params
+ * @return
+ */
 static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     list *operations = list_new();
     uint8_t used[2] = {0};
@@ -23,16 +37,20 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
             source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
         } else {
             lir_stack_t *stack = NEW(lir_stack_t);
-            stack->size = QWORD; // 使用了 push 指令进栈，所以固定 QWORD(float 也是 8字节，只是不直接使用 push)
+            // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
+            stack->size = type_base_sizeof(var->type_base);
             stack->slot = stack_param_slot;
-            stack_param_slot += QWORD; // 8byte 会造成 stack_slot algin exception
+
+            // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了
+            // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
+            stack_param_slot += QWORD; // 固定 8 bit， 不过 8byte 会造成 stack_slot align exception
+
             source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
         }
 
         lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
         list_push(operations, op);
     }
-    // 是否需要 stack slot 16byte 对齐 ? 不用，caller 会处理好
 
     return operations;
 }
@@ -64,7 +82,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         // if op is fn begin, will set formal param
         // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
-        if (op->code == LIR_OPCODE_FN_PARAM) {
+        if (op->code == LIR_OPCODE_FN_FORMAL_PARAM) {
             // fn begin
             // mov rsi -> formal param 1
             // mov rdi -> formal param 2

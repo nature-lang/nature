@@ -126,7 +126,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_RETURN]="RET   ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
-        [LIR_OPCODE_FN_PARAM] = "FN_PARAM",
+        [LIR_OPCODE_FN_FORMAL_PARAM] = "FN_PARAM",
         [LIR_OPCODE_FN_END] = "FN_END",
 };
 
