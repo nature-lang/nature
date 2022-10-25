@@ -180,6 +180,7 @@ typedef struct {
 typedef struct {
     union {
         uint64_t int_value; // 8bit, 负数使用补码存储
+        // TODO 扩充更多的类型
         double float_value; // 8bit = c.double
         bool bool_value; // 1bit
         string string_value; // 8bit

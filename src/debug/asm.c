@@ -73,6 +73,7 @@ void asm_op_to_string(asm_operation_t *op) {
                asm_operand_to_string(op->operands[1]),
                asm_operand_to_string(op->operands[0])
         );
+    } else if (op->count == 0) {
     } else {
         printf("not support");
     }

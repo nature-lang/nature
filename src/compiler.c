@@ -431,6 +431,7 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target) {
         slice_push(params_operand, param_target);
     }
 
+
     lir_operand_t *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
 
     // return target

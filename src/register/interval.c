@@ -203,6 +203,10 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         lir_op_t *mov_op = lir_op_move(dst, src);
         mov_op->id = id;
         list_insert_before(block->operations, LIST_NODE(), mov_op);
+
+        if (block->first_op == LIST_NODE()) {
+            block->first_op = LIST_NODE()->prev;
+        }
         return;
     }
 }
@@ -227,8 +231,10 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
         return interval;
     }
     if (operand->type == LIR_OPERAND_REG) {
-        reg_t *reg = operand->value;
+        reg_t *reg = covert_alloc_reg(operand->value);
+
         interval_t *interval = table_get(c->interval_table, reg->name);
+
         assert(interval);
         return interval;
     }
@@ -249,8 +255,7 @@ static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
             slice_push(result, interval);
         }
         if (operand->type == LIR_OPERAND_REG) {
-            reg_t *reg = operand->value;
-            reg = covert_alloc_reg(reg);
+            reg_t *reg = covert_alloc_reg(operand->value);
 
             interval_t *interval = table_get(c->interval_table, reg->name);
             assert(interval);
@@ -275,7 +280,7 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
             slice_push(result, interval);
         }
         if (operand->type == LIR_OPERAND_REG) {
-            reg_t *reg = operand->value;
+            reg_t *reg = covert_alloc_reg(operand->value);
             interval_t *interval = table_get(c->interval_table, reg->name);
             assert(interval);
             slice_push(result, interval);
@@ -307,8 +312,18 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @return
  */
 static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
-    if (lir_op_contain_cmp(op) && i->var->flag & FLAG(VAR_FLAG_FIRST)) {
-        return USE_KIND_MUST;
+    if (lir_op_contain_cmp(op)) {
+        assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR)
+               && "cmp must have var");
+
+        if (i->var->flag & FLAG(VAR_FLAG_FIRST)) {
+            return USE_KIND_MUST;
+        }
+
+        if (i->var->flag & FLAG(VAR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
+            // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
+            return USE_KIND_MUST;
+        }
     }
     return USE_KIND_SHOULD;
 }

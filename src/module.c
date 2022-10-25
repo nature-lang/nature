@@ -74,7 +74,7 @@ module_t *module_build(char *source_path, bool entry) {
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
 
-    assert(file_exists(source_path) && dsprintf("file %s not found", source_path));
+    assert(file_exists(source_path) && "source file not found");
 
     m->source = file_read(source_path);
     char *temp = strrchr(source_path, '/');

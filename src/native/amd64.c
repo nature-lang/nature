@@ -225,60 +225,12 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    if (op->output != NULL) {
-        assert(op->output->type == LIR_OPERAND_REG);
-        reg_t *reg = op->output->value;
-        assert(reg->index == 0); // rax or xmm0 index == 0
-    }
-
     // first is fn label or addr
     asm_operand_t *first = lir_operand_transform(c, operations, op->first);
 
     // 2. 参数处理  lir_ope code->second;
-    assert(op->second->type == LIR_OPERAND_ACTUAL_PARAMS);
-
-    slice_t *params = op->second->value;
-    slice_t *param_operations = slice_new();
-    // 计算 push 总长度，进行栈对齐(一次 push 是 8byte, 但是堆栈对其需要 16byte， 所以需要做对齐)
-    int push_length = 0;
-    uint8_t params_used[2] = {0};
-    for (int i = 0; i < params->count; ++i) {
-        lir_operand_t *param_operand = params->take[i];
-        slice_t *temp_operations = slice_new();
-
-        // 如果是 bool, source 存在 1byte, 但是不影响寄存器选择或者堆栈分配，寄存器和堆栈在 amd64 位下都是统一 8byte
-        asm_operand_t *source = lir_operand_transform(c, temp_operations, param_operand);
-
-        // param reg select , if source not float, source and target size must match
-        // TODO param operand maybe stack/reg/imm ...
-        // reg not size used? rax,xmm0...? next 选择应该影响才对？
-        // TODO 已经不知道如何选择寄存器了。。。此处不应该在进行寄存器分配了？
-        reg_t *target_reg = amd64_fn_param_next_reg(params_used, lir_operand_type_base(param_operand));
-        if (target_reg) {
-            // 如果 reg 的 size < 8, 则 mov 操作无法填满整个寄存器，会造成其中有脏数据残留,需要主动清理一次
-            // 或者统一选择 8bit 寄存器存入(汇编器阶段不太支持这个操作，所以这里暂时选择主动清理一次)
-            if (target_reg->size < QWORD) {
-                slice_push(temp_operations, reg_cleanup(target_reg));
-            }
-
-            slice_push(temp_operations, ASM_INST("mov", { REG(target_reg), source }));
-        } else {
-            // actual to stack, gen lir push that native push and append asm_operations to temp_operations
-            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
-            slice_append(temp_operations, amd64_native_op(c, push_op));
-            push_length += QWORD; // push 指令的大小为 8 bit，并不区分 push byte/word/dword/qword 啥的，统一就是 qword
-        }
-        slice_append(temp_operations, param_operations);
-        param_operations = temp_operations;
-    }
-
-    // 栈 16byte 对齐(主要是为了兼容 sse 寄存器)
-    uint64_t diff_length = memory_align(push_length, 16) - push_length;
-    if (diff_length > 0) {
-        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT8(diff_length) }));
-    }
-
-    slice_append(operations, param_operations);
+    assert(((slice_t *) op->second->value)->count == 0);
+    // lower 阶段已经处理过了
 
     // TODO 调用变长参数函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长参数函数？
     if (first->type == ASM_OPERAND_TYPE_SYMBOL &&
@@ -290,6 +242,12 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     slice_push(operations, ASM_INST("call", { first }));
 
     // 4. 响应处理(取出响应值传递给 result), result 已经固定分配了 rax/xmm0 寄存器,所以 move result to rax 不是必要的
+    if (op->output != NULL) {
+        assert(op->output->type == LIR_OPERAND_REG);
+        reg_t *reg = op->output->value;
+        assert(reg->index == 0); // rax or xmm0 index == 0
+    }
+
     return operations;
 }
 
@@ -334,7 +292,9 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
 
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
-    slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(c->stack_slot) }));
+    if (c->stack_slot != 0) {
+        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(c->stack_slot) }));
+    }
 
     return operations;
 }
@@ -383,7 +343,7 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
     assert(op->output->type == LIR_OPERAND_SYMBOL_LABEL);
-    assert(op->first->type == LIR_OPERAND_REG);
+    assert(op->first->type == LIR_OPERAND_REG || op->second->type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 

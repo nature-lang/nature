@@ -359,6 +359,8 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 
     use_pos_t *first_use = first_use_pos(a->current, 0);
     if (!reg_id || use_pos[reg_id] < first_use->value) {
+        // 此处最典型的应用就是 current 被 call fixed interval 阻塞，需要溢出自身
+
         //  a->current,range 为 4 ~ 18, 且 4 是 mov output first use pos, 所以必须占用一个寄存器, 此时是否会进入到 use_pos[reg_id] < first_use ？
         //  假设所有的寄存器都被 active interval 占用， use_pos 记录的是 first_use + 1(指令之间的间隔是 2) 之后的使用位置(还在 active 就表示至少还有一个使用位置)
         //  则不可能出现，所有的 use_pos min <  first_use + 1, 必定是 use pos min(下一条指令) > first_use + 1, 即使 ip = 6 指令是 call, 同样如此

@@ -2,20 +2,39 @@
 #include "src/register/amd64.h"
 
 // mov var -> eax
-// TODO 一下子多个这么多 mov 是否会影响寄存器分配？本来到了 call 也是要溢出所有寄存器的
 static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     list *operations = list_new();
+    int push_length = 0;
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
         lir_operand_t *param_operand = actual_params->take[i];
         type_base_t type_base = lir_operand_type_base(param_operand);
         reg_t *reg = amd64_fn_param_next_reg(used, type_base);
+        lir_operand_t *target = NULL;
         if (reg) {
-            source =
+            target = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
+            lir_op_t *op = lir_op_move(target, param_operand);
+            list_push(operations, op);
         } else {
-
+            // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
+            // 不过 call 之前需要保证 rsp 16 byte 对齐
+            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
+            list_push(operations, push_op);
+            push_length += QWORD;
         }
     }
+    // 由于使用了 push 指令操作了堆栈，可能导致堆栈不对齐，所以需要操作一下堆栈对齐
+    uint64_t diff_length = memory_align(push_length, 16) - push_length;
+
+    if (diff_length > 0) {
+        lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
+                                         LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
+                                         LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, diff_length),
+                                         LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
+        list_push(operations, binary_op);
+    }
+
+    return operations;
 }
 
 /**
@@ -28,7 +47,7 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     list *operations = list_new();
     uint8_t used[2] = {0};
     // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
-    int16_t stack_param_slot = 16;
+    int16_t stack_param_slot = 16; // ret addr + push rsp
     SLICE_FOR(formal_params) {
         lir_var_t *var = SLICE_VALUE(formal_params);
         lir_operand_t *source = NULL;
@@ -75,9 +94,16 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             }
         }
 
-        if (lir_op_is_call(op)) {
+        if (lir_op_is_call(op) && op->second->value != NULL) {
             // lower call actual params
-
+            list *temps = amd64_actual_params_lower(c, op->second->value);
+            list_node *current = temps->front;
+            while (current->value != NULL) {
+                list_insert_before(block->operations, LIST_NODE(), current->value);
+                current = current->succ;
+            }
+            op->second->value = slice_new();
+            continue;
         }
 
         // if op is fn begin, will set formal param

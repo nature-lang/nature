@@ -1,1 +1,8 @@
-string a1 = "hello world"
+int sum(int a, int b, int c) {
+    return a + b + c
+}
+
+int foo = 1
+int bar = 2
+int car = 3
+int wa = sum(foo, bar, 4)

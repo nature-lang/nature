@@ -32,10 +32,10 @@ static void test_basic() {
     char buf[256];
     getcwd(buf, 256);
 
-    char *work_dir = file_join(buf, "stubs");
+    char *work_dir = buf;
     chdir(work_dir);
 
-    char *source_path = file_join(buf, "stubs/1666156232_reg_alloc.n");
+    char *source_path = file_join(work_dir, "20221025_11_reg_alloc.n");
 
     env_init();
     config_init();
@@ -76,6 +76,8 @@ static void test_basic() {
 
     for (int j = 0; j < m->closures->count; ++j) {
         closure_t *c = m->closures->take[j];
+        c->module = m;
+
         // 构造 cfg
         cfg(c);
         // 构造 ssa
