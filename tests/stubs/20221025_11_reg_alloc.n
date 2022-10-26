@@ -6,3 +6,4 @@ int foo = 1
 int bar = 2
 int car = 3
 int wa = sum(foo, bar, 4)
+int ha = bar + 1

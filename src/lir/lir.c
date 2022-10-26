@@ -7,6 +7,31 @@
 #include "src/semantic/analysis.h"
 #include "utils/error.h"
 
+// 目前仅支持 var 的 copy
+lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
+    if (!operand) {
+        return NULL;
+    }
+
+    lir_operand_t *new_operand = NEW(lir_operand_t);
+    new_operand->type = operand->type;
+    new_operand->value = operand->value;
+
+    if (new_operand->type == LIR_OPERAND_VAR) {
+        lir_var_t *var = new_operand->value;
+        lir_var_t *new_var = NEW(lir_var_t);
+        new_var->ident = var->ident;
+        new_var->old = var->old;
+        new_var->type_base = var->type_base;
+        new_var->flag = var->flag;
+        new_var->decl = var->decl;
+        new_var->indirect_addr = var->indirect_addr;
+        new_operand->value = new_var;
+        return new_operand;
+    }
+    return new_operand;
+}
+
 lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
     if (operand->type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
@@ -126,16 +151,13 @@ lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
 lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
-    op->first = first ? COPY_NEW(lir_operand_t, first) : NULL;
-    op->second = second ? COPY_NEW(lir_operand_t, second) : NULL;
-    op->output = result ? COPY_NEW(lir_operand_t, result) : NULL;
+    op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
+    op->second = lir_operand_copy(second);
+    op->output = lir_operand_copy(result);
 
     if (op->first && op->first->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->first->value;
-        var->flag |= FLAG(VAR_FLAG_FIRST);
-    }
-    if (op->second && op->second->type == LIR_OPERAND_VAR) {
-        lir_var_t *var = op->second->value;
+
         var->flag |= FLAG(VAR_FLAG_SECOND);
     }
     if (op->output && op->output->type == LIR_OPERAND_VAR) {

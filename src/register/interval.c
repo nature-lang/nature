@@ -501,6 +501,7 @@ void interval_build(closure_t *c) {
             slice_t *intervals = op_output_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
+                // TODO fixed interval 和 interval 应该进行一直的处理
                 if (interval->fixed) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
@@ -565,7 +566,7 @@ interval_t *interval_new(closure_t *c) {
     i->use_pos_list = list_new();
     i->children = list_new();
     i->stack_slot = NEW(int);
-    *i->stack_slot = -1;
+    *i->stack_slot = 0;
     i->spilled = false;
     i->fixed = false;
     i->parent = NULL;
@@ -595,7 +596,7 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
         position++;
     }
 
-    return position;
+    return 0;
 }
 
 // 在 before 前挑选一个最佳的位置进行 split

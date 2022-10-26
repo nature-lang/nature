@@ -41,12 +41,6 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  */
 void sort_to_unhandled(list *unhandled, interval_t *to);
 
-/**
- * 根据 interval 列表 初始化 unhandled 列表
- * 采用链表结构是因为跟方便排序插入，有序遍历
- * @return
- */
-list *unhandled_new(closure_t *c);
 
 void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos);
 

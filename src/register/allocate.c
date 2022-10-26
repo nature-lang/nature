@@ -2,6 +2,51 @@
 #include <assert.h>
 
 /**
+ * 根据 interval 列表 初始化 unhandled 列表
+ * 采用链表结构是因为跟方便排序插入，有序遍历
+ * @return
+ */
+static list *unhandled_new(closure_t *c) {
+    list *unhandled = list_new();
+    // 遍历所有变量,根据 interval from 进行排序
+    for (int i = 0; i < c->globals->count; ++i) {
+        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->globals->take[i])->ident);
+
+        assert(item);
+
+        sort_to_unhandled(unhandled, item);
+    }
+
+    return unhandled;
+}
+
+/**
+ * 所有的 fixed interval 在初始化时加入到 inactive 中,后续计算相交时都是使用 inactive 计算的
+ * @return
+ */
+static list *inactive_new(closure_t *c) {
+    list *inactive = list_new();
+
+    // 遍历所有固定寄存器生成 fixed_interval
+    for (int i = 1; i < alloc_reg_count(); ++i) {
+        reg_t *reg = alloc_regs[i];
+        interval_t *item = table_get(c->interval_table, reg->name);
+        assert(item && "physic reg interval not found");
+
+        // 如果一个物理寄存器从未被使用过,就没有 ranges
+        // 所以也不需要写入到 inactive 中进行处理
+        if (item->first_range == NULL) {
+            continue;
+        }
+
+        // free_pos = int_max
+        list_push(inactive, item);
+    }
+
+    return inactive;
+}
+
+/**
  * @param operand
  * @param i
  */
@@ -164,7 +209,7 @@ void allocate_walk(closure_t *c) {
     a->unhandled = unhandled_new(c);
     a->handled = list_new();
     a->active = list_new();
-    a->inactive = list_new();
+    a->inactive = inactive_new(c);
 
     while (a->unhandled->count != 0) {
         a->current = (interval_t *) list_pop(a->unhandled);
@@ -173,6 +218,12 @@ void allocate_walk(closure_t *c) {
         handle_active(a);
         // handle inactive
         handle_inactive(a);
+
+        // 固定间隔直接加入到 active 中就行了。
+        if (a->current->fixed) {
+            list_push(a->active, a->current);
+            continue;
+        }
 
         // 尝试为 current 分配寄存器
         bool allocated = allocate_free_reg(c, a);
@@ -190,20 +241,6 @@ void allocate_walk(closure_t *c) {
         // 分不到寄存器，只能 spill 了， spill 的 interval 放到 handled 中，再也不会被 traverse 了
         list_push(a->handled, a->current);
     }
-}
-
-list *unhandled_new(closure_t *c) {
-    list *unhandled = list_new();
-    // 遍历所有变量,根据 interval from 进行排序
-    for (int i = 0; i < c->globals->count; ++i) {
-        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->globals->take[i])->ident);
-
-        assert(item);
-
-        sort_to_unhandled(unhandled, item);
-    }
-
-    return unhandled;
 }
 
 /**
@@ -265,9 +302,13 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     LIST_FOR(a->inactive) {
         interval_t *select = LIST_VALUE();
         int pos = interval_next_intersection(a->current, select);
+        if (pos == 0) {
+            continue;
+        }
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
     }
+
 
     // 找到空闲时间最长的寄存器,返回空闲直接最长的寄存器的 id
     uint8_t reg_id = find_free_reg(a->current, free_pos);
@@ -285,9 +326,6 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
         interval_t *child = interval_split_at(c, a->current, optimal_position);
         sort_to_unhandled(a->unhandled, child);
-
-        // 为当前 interval 分配寄存器
-        a->current->assigned = reg_id;
     }
 
     return true;
@@ -317,7 +355,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 
     int first_from = a->current->first_range->from;
 
-    // 遍历固定寄存器(active)
+    // 遍历固定寄存器(active) TODO 固定间隔也进不来呀？
     LIST_FOR(a->active) {
         interval_t *select = LIST_VALUE();
         // 固定间隔本身就是 short range 了，但如果还在 current pos is active,so will set that block and use to 0
@@ -338,7 +376,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     LIST_FOR(a->inactive) {
         interval_t *select = LIST_VALUE();
         pos = interval_next_intersection(a->current, select);
-        if (pos >= a->current->last_range->to) {
+        if (pos == 0) {
             continue;
         }
 

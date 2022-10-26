@@ -42,6 +42,18 @@
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
+#define LIR_COPY_VAR_OPERAND(_original) \
+({                                 \
+  lir_operand_var *_var = NEW(lir_operand_var); \
+  _var->ident = (_original)->ident; \
+  _var->old = (_original)->old;    \
+  _var->reg_id = (_original)->reg_id; \
+  _var->decl = (_original)->decl; \
+  _var->infer_size_type = (_original)->infer_size_type; \
+  _var->indirect_addr = (_original)->indirect_addr; \
+  _var;                                   \
+})
+
 #define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
 ({                                               \
    lir_imm_t *imm_operand = malloc(sizeof(lir_imm_t)); \

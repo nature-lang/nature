@@ -123,7 +123,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_CALL]="CALL  ",
         [LIR_OPCODE_BUILTIN_CALL]="B_CALL",
         [LIR_OPCODE_RUNTIME_CALL]="R_CALL",
-        [LIR_OPCODE_RETURN]="RET   ",
+        [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_FORMAL_PARAM] = "FN_PARAM",
@@ -227,6 +227,7 @@ void debug_basic_block(basic_block_t *block) {
         lir_var_t *var = block->live_in->take[i];
         printf("%s\t", var->ident);
     }
+    printf("\n");
 }
 
 void debug_asm(closure_t *c) {

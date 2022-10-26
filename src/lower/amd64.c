@@ -103,6 +103,25 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 current = current->succ;
             }
             op->second->value = slice_new();
+
+            /**
+             * call test -> var
+             * ↓
+             * call test -> rax/xmm0
+             * mov rax/xmm0 -> var
+             */
+            if (op->output != NULL) {
+                lir_operand_t *reg_operand;
+                if (lir_operand_type_base(op->output) == TYPE_FLOAT) {
+                    reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, xmm0);
+                } else {
+                    reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
+                }
+                lir_op_t *temp = lir_op_move(op->output, reg_operand);
+                op->output = reg_operand;
+                list_insert_after(block->operations, node, temp);
+            }
+
             continue;
         }
 
@@ -130,39 +149,21 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
          * mov var -> rax/xmm0
          * return rax/xmm0
          */
-        if (op->code == LIR_OPCODE_RETURN && op->output != NULL) {
+        if (op->code == LIR_OPCODE_RETURN && op->first != NULL) {
             // 1.1 return 指令需要将返回值放到 rax 中
             lir_operand_t *reg_operand;
-            if (lir_operand_type_base(op->output) == TYPE_FLOAT) {
+            if (lir_operand_type_base(op->first) == TYPE_FLOAT) {
                 reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, xmm0);
             } else {
                 reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
             }
 
-            lir_op_t *temp = lir_op_move(reg_operand, op->output);
-            op->output = reg_operand;
+            lir_op_t *temp = lir_op_move(reg_operand, op->first);
+            op->first = reg_operand;
             list_insert_before(block->operations, node, temp);
             continue;
         }
 
-        /**
-         * call test -> var
-         * ↓
-         * call test -> rax/xmm0
-         * mov rax/xmm0 -> var
-         */
-        if (lir_op_is_call(op) && op->output != NULL) {
-            lir_operand_t *reg_operand;
-            if (lir_operand_type_base(op->output) == TYPE_FLOAT) {
-                reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, xmm0);
-            } else {
-                reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
-            }
-            lir_op_t *temp = lir_op_move(op->output, reg_operand);
-            op->output = reg_operand;
-            list_insert_after(block->operations, node, temp);
-            continue;
-        }
 
         // div 被输数，除数 = 商
         if (op->code == LIR_OPCODE_DIV) {

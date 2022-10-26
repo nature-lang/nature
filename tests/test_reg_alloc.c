@@ -80,6 +80,7 @@ static void test_basic() {
 
         // 构造 cfg
         cfg(c);
+
         // 构造 ssa
         ssa(c);
 
@@ -91,9 +92,9 @@ static void test_basic() {
         debug_lir(c);
 
         // native
-        native(c);
+//        native(c);
 
-        debug_asm(c);
+//        debug_asm(c);
     }
 }
 
