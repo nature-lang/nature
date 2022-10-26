@@ -302,6 +302,8 @@ slice_t *lir_input_operands(lir_op_t *op, uint64_t flag);
 
 slice_t *lir_output_operands(lir_op_t *op, uint64_t flag);
 
+slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag);
+
 void lir_init();
 
 #endif //NATURE_SRC_LIR_H_

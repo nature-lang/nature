@@ -422,6 +422,13 @@ slice_t *lir_output_operands(lir_op_t *op, uint64_t flag) {
     return lir_nest_operands(op->output, flag);
 }
 
+slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag) {
+    slice_t *result = lir_nest_operands(op->output, flag);
+    slice_append(result, lir_nest_operands(op->first, flag));
+    slice_append(result, lir_nest_operands(op->second, flag));
+
+    return result;
+}
 bool lir_op_contain_cmp(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BEQ ||
         op->code == LIR_OPCODE_SGT ||

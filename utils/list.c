@@ -44,7 +44,7 @@ void *list_pop(list *l) {
     l->front = temp->succ;
     l->front->prev = NULL;
     l->count--;
-    free(temp);
+//    free(temp);
 
     return value;
 }

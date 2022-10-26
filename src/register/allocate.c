@@ -141,21 +141,17 @@ static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos)
 
 
 static void handle_active(allocate_t *a) {
+    // output position
     int position = a->current->first_range->from;
-    list_node *active_curr = a->active->front;
-    list_node *active_prev = NULL;
-    while (active_curr->value != NULL) {
-        interval_t *select = (interval_t *) active_curr->value;
-        bool is_expired = select->last_range->to < position;
-        bool is_covers = interval_is_covers(select, position);
+    list_node *current = a->active->front;
+    while (current->value != NULL) {
+        interval_t *select = (interval_t *) current->value;
+        bool is_expired = interval_expired(select, position, false);
+        bool is_covers = interval_covered(select, position, false);
 
         if (!is_covers || is_expired) {
-            if (active_prev == NULL) {
-                a->active->front = active_curr->succ;
-            } else {
-                active_prev->succ = active_curr->succ;
-            }
-            a->active->count--;
+            list_remove(a->active, current);
+
             if (is_expired) {
                 list_push(a->handled, select);
             } else {
@@ -163,27 +159,20 @@ static void handle_active(allocate_t *a) {
             }
         }
 
-        active_prev = active_curr;
-        active_curr = active_curr->succ;
+        current = current->succ;
     }
 }
 
 static void handle_inactive(allocate_t *a) {
     int position = a->current->first_range->from;
-    list_node *inactive_curr = a->inactive->front;
-    list_node *inactive_prev = NULL;
-    while (inactive_curr->value != NULL) {
-        interval_t *select = (interval_t *) inactive_curr->value;
-        bool is_expired = select->last_range->to < position;
-        bool is_covers = interval_is_covers(select, position);
+    list_node *current = a->inactive->front;
+    while (current->value != NULL) {
+        interval_t *select = (interval_t *) current->value;
+        bool is_expired = interval_expired(select, position, false);
+        bool is_covers = interval_covered(select, position, false);
 
         if (is_covers || is_expired) {
-            if (inactive_prev == NULL) {
-                a->inactive->front = inactive_curr->succ;
-            } else {
-                inactive_prev->succ = inactive_curr->succ;
-            }
-            a->inactive->count--;
+            list_remove(a->inactive, current);
             if (is_expired) {
                 list_push(a->handled, select);
             } else {
@@ -191,8 +180,7 @@ static void handle_inactive(allocate_t *a) {
             }
         }
 
-        inactive_prev = inactive_curr;
-        inactive_curr = inactive_curr->succ;
+        current = current->succ;
     }
 }
 
@@ -218,12 +206,6 @@ void allocate_walk(closure_t *c) {
         handle_active(a);
         // handle inactive
         handle_inactive(a);
-
-        // 固定间隔直接加入到 active 中就行了。
-        if (a->current->fixed) {
-            list_push(a->active, a->current);
-            continue;
-        }
 
         // 尝试为 current 分配寄存器
         bool allocated = allocate_free_reg(c, a);
@@ -507,28 +489,19 @@ void replace_virtual_register(closure_t *c) {
         list_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *vars = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
+            slice_t *vars = lir_op_nest_operands(op, FLAG(LIR_OPERAND_VAR));
+
             for (int j = 0; j < vars->count; ++j) {
                 lir_operand_t *operand = vars->take[j];
                 lir_var_t *var = operand->value;
                 interval_t *parent = table_get(c->interval_table, var->ident);
                 assert(parent);
-                interval_t *interval = interval_child_at(parent, op->id, true);
+                bool is_input = !(var->flag & FLAG(VAR_FLAG_OUTPUT));
+
+                interval_t *interval = interval_child_at(parent, op->id, is_input);
 
                 var_replace(operand, interval);
             }
-
-            vars = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
-            for (int j = 0; j < vars->count; ++j) {
-                lir_operand_t *operand = vars->take[j];
-                lir_var_t *var = operand->value;
-                interval_t *parent = table_get(c->interval_table, var->ident);
-                assert(parent);
-                interval_t *interval = interval_child_at(parent, op->id, false);
-
-                var_replace(operand, interval);
-            }
-
 
             if (op->code == LIR_OPCODE_MOVE) {
                 if (lir_operand_equal(op->first, op->output)) {

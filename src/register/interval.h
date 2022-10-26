@@ -109,13 +109,26 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position);
  */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before);
 
+bool range_covered(interval_range_t *r, int position, bool is_input);
+
+
+bool interval_expired(interval_t *i, int position, bool is_input);
+
 /**
  * interval 的 range 是否包含了 position
  * @param i
  * @param position
  * @return
  */
-bool interval_is_covers(interval_t *i, int position);
+bool interval_covered(interval_t *i, int position, bool is_input);
+
+/**
+ * interval 的 range 是否包含了 position
+ * @param i
+ * @param position
+ * @return
+ */
+bool interval_covered(interval_t *i, int position, bool is_input);
 
 /**
  * 寻找 current 和 select 的第一个相交点

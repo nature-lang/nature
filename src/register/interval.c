@@ -501,32 +501,30 @@ void interval_build(closure_t *c) {
             slice_t *intervals = op_output_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
-                // TODO fixed interval 和 interval 应该进行一直的处理
-                if (interval->fixed) {
+
+                // first range 为 null,表示仅定义，未使用
+                if (interval->first_range == NULL) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
-                    live_remove(exist_vars, live_in, interval->var);
-                    if (interval->first_range == NULL) {
-                        interval_add_range(c, interval, op->id, op->id + 1);
-                    } else {
-                        interval->first_range->from = op->id;
-                    }
+                    interval->first_range->from = op->id;
                 }
 
-                interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
+                if (!interval->fixed) {
+                    live_remove(exist_vars, live_in, interval->var);
+                    interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
+                }
             }
 
             intervals = op_input_intervals(c, op);
             for (int j = 0; j < intervals->count; ++j) {
                 interval_t *interval = intervals->take[j];
                 assert(interval);
-                if (interval->fixed) {
-                    interval_add_range(c, interval, op->id, op->id + 1);
-                } else {
-                    interval_add_range(c, interval, block_from, op->id);
+                interval_add_range(c, interval, block_from, op->id);
+
+                if (!interval->fixed) {
                     live_add(exist_vars, live_in, interval->var);
+                    interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
                 }
-                interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
             }
 
             current = current->prev;
@@ -574,23 +572,46 @@ interval_t *interval_new(closure_t *c) {
     return i;
 }
 
-bool interval_is_covers(interval_t *i, int position) {
+bool range_covered(interval_range_t *range, int position, bool is_input) {
+    if (is_input) {
+        position -= 1;
+    }
+
+    // range to 不包含在 range 里面
+    if (range->from <= position && position < range->to) {
+        return true;
+    }
+    return false;
+}
+
+bool interval_expired(interval_t *i, int position, bool is_input) {
+    if (is_input) {
+        position -= 1;
+    }
+
+    int last_to = i->last_range->to; // interval < last_to
+    // 由于 interval < last_to, 所以 position == last_to 时，interval 已经开始 expired 了
+    return position >= last_to;
+}
+
+
+bool interval_covered(interval_t *i, int position, bool is_input) {
     list_node *current = list_first(i->ranges);
     while (current->value != NULL) {
         interval_range_t *range = current->value;
-        if (range->from <= position && range->to >= position) {
+        if (range_covered(range, position, is_input)) {
             return true;
         }
 
         current = current->succ;
     }
-    return 0;
+    return false;
 }
 
 int interval_next_intersection(interval_t *current, interval_t *select) {
     int position = current->first_range->from; // first_from 指向 range 的开头
     while (position < current->last_range->to) {
-        if (interval_is_covers(current, position) && interval_is_covers(select, position)) {
+        if (interval_covered(current, position, false) && interval_covered(select, position, false)) {
             return position;
         }
         position++;
@@ -894,9 +915,11 @@ interval_t *interval_child_at(interval_t *i, int op_id, bool is_input) {
 
 
     int last_to_offset = is_input ? 1 : 0;
+    // i->var 在不同的指令处可能作为 input 也可能作为 output
+    // 甚至在同一条指令处即作为 input，又作为 output， 比如 20: v1 + 1 -> v2
     LIST_FOR(i->children) {
         interval_t *child = LIST_VALUE();
-        if (child->first_range->from <= op_id && (child->last_range->to + last_to_offset) > op_id) {
+        if (child->first_range->from <= op_id && op_id < (child->last_range->to + last_to_offset)) {
             return child;
         }
     }
