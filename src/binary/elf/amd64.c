@@ -4,6 +4,7 @@
 #include "utils/helper.h"
 #include "utils/error.h"
 #include "string.h"
+#include <assert.h>
 
 /**
  * mov 0x0(%rip),%rsi  // 48 8b 35 00 00 00 00，return 3
@@ -35,8 +36,7 @@ uint64_t operation_rip_offset(asm_operation_t *operation) {
         return 1;
     }
 
-    error_exit("[operation_rip_offset] cannot ident operation: %s", operation->name);
-    return 0;
+    assert(false && "cannot ident operation");
 }
 
 static uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) {
@@ -188,7 +188,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
     uint8_t reduce_count = 0;
 
     // 从尾部开始查找,
-    for (i = build_temps->count - 1; i > 0; --i) {
+    for (i = build_temps->count - 2; i > 0; --i) {
         temp = build_temps->take[i];
         // 直到总指令长度超过 128 就可以结束查找
         if ((*section_offset - reduce_count - *temp->offset) > 128) {
@@ -534,8 +534,8 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
         asm_operand_t *rel_operand = has_symbol_operand(operation);
         if (rel_operand != NULL) {
             // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
-            // 1. 数据符号引用(直接改写成 0x0(rip))
-            // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位)
+            // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
+            // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位),都是在 .text section 内，所以可以使用 jmp 相对寻址, 连接器不会破坏同一个段内的位置
             asm_symbol_t *symbol_operand = rel_operand->value;
             // 判断是否为标签符号引用, 比如 call symbol call
             if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
@@ -559,7 +559,6 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                     }
                 }
             } else {
-                // TODO 可以通过读取全局符号表判断符号是 fn 还是 var
                 // 其他指令引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip) 让重定位阶段去找改符号进行重定位即可
                 // 完全不用考虑是标签符号还是数据符号
                 // 添加到重定位表(.rela.text)
@@ -576,7 +575,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                     sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
                 }
 
-                uint64_t rel_offset = *temp->offset += operation_rip_offset(operation);
+                uint64_t rel_offset = *temp->offset + operation_rip_offset(operation);
                 temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                                  rel_offset, R_X86_64_PC32, (int) sym_index, -4);
 
@@ -608,9 +607,13 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                     .st_other = 0,
                     .st_value = 0,
             };
+            // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
+            //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
             sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, temp->rel_symbol);
         }
 
+        // sym->st_value 表示符号定义的位置，基于符号所在的 section(.section)
+        // 如果是数据符号就是 .data 段的偏移，如果是函数符号就是 .text 段的偏移
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
             int rel_diff = sym->st_value - *temp->offset;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include "helper.h"
 #include "error.h"
@@ -104,10 +105,10 @@ char *get_work_dir() {
 void *copy(char *dst, char *src, uint mode) {
     FILE *src_fd, *dst_fd;
     src_fd = fopen(src, "rb");
-    if (src_fd == NULL) {
-        error_exit("[copy] src %s not found", src);
-    }
+    assert(src_fd && "open src file failed");
     dst_fd = fopen(dst, "wb");
+    assert(dst_fd && "open dst file failed");
+
     fchmod(fileno(dst_fd), mode);
 
     char buf[1024] = {0};

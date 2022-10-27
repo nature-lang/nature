@@ -123,10 +123,10 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_CALL]="CALL  ",
         [LIR_OPCODE_BUILTIN_CALL]="B_CALL",
         [LIR_OPCODE_RUNTIME_CALL]="R_CALL",
+        [LIR_OPCODE_CLR] ="CLR    ",
         [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
-        [LIR_OPCODE_FN_FORMAL_PARAM] = "FN_PARAM",
         [LIR_OPCODE_FN_END] = "FN_END",
 };
 
@@ -233,6 +233,6 @@ void debug_basic_block(basic_block_t *block) {
 void debug_asm(closure_t *c) {
     printf("asm: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
-        asm_op_to_string(c->asm_operations->take[i]);
+        asm_op_to_string(i, c->asm_operations->take[i]);
     }
 }

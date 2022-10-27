@@ -25,6 +25,10 @@ target_link_libraries(test_reg_alloc cmocka)
 add_test(NAME test_reg_alloc COMMAND test_reg_alloc
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
 
+# 创建测试临时目录
+message("will make dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp")
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
+
 # build stubs
 set(STUB_FILES 20221025_01_hello 20221025_02_sum)
 foreach (STUB_FILE ${STUB_FILES})

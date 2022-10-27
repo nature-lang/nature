@@ -44,7 +44,8 @@ inst_t je_rel32 = {
 };
 
 
-inst_t sub_imm32_rm64 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+// sum imm32 -> rm64
+inst_t sub_rm64_imm32 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
@@ -52,7 +53,7 @@ inst_t sub_imm32_rm64 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5,
 };
 
 
-inst_t add_imm32_rm64 = {"add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+inst_t add_rm64_imm32 = {"add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
@@ -400,9 +401,9 @@ void amd64_opcode_init() {
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
     opcode_tree_build(&pop_rm64);
-    opcode_tree_build(&sub_imm32_rm64);
+    opcode_tree_build(&sub_rm64_imm32);
     opcode_tree_build(&sub_imm8_rm64);
-    opcode_tree_build(&add_imm32_rm64);
+    opcode_tree_build(&add_rm64_imm32);
     opcode_tree_build(&add_imm8_rm64);
     opcode_tree_build(&add_r64_rm64);
     opcode_tree_build(&add_rm64_r64);
@@ -827,7 +828,7 @@ inst_t *opcode_select(asm_operation_t opcode) {
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
-        assert(exists && dsprintf("cannot identify asm opcode %s with operand index: %d", opcode.name, i));
+        assert(exists && "cannot identify asm opcode with operand");
         current = table_get(current->succs, key);
     }
 

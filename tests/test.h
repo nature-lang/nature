@@ -15,6 +15,8 @@
 static inline int stub_setup(void **state) {
     // 从环境变量中读取 build entry
     char *entry = getenv("ENTRY_FILE");
+    assert(entry && "entry file is null");
+
     build(entry);
 
     return 0;

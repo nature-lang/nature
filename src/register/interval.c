@@ -256,10 +256,12 @@ static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
         }
         if (operand->type == LIR_OPERAND_REG) {
             reg_t *reg = covert_alloc_reg(operand->value);
-
-            interval_t *interval = table_get(c->interval_table, reg->name);
-            assert(interval);
-            slice_push(result, interval);
+            if (reg->alloc_id) {
+                // rsp/rbp 就忽略吧
+                interval_t *interval = table_get(c->interval_table, reg->name);
+                assert(interval);
+                slice_push(result, interval);
+            }
         }
     }
 
@@ -281,9 +283,11 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
         }
         if (operand->type == LIR_OPERAND_REG) {
             reg_t *reg = covert_alloc_reg(operand->value);
-            interval_t *interval = table_get(c->interval_table, reg->name);
-            assert(interval);
-            slice_push(result, interval);
+            if (reg->alloc_id) {
+                interval_t *interval = table_get(c->interval_table, reg->name);
+                assert(interval);
+                slice_push(result, interval);
+            }
         }
     }
     return result;

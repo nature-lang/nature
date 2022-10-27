@@ -92,9 +92,9 @@ static void test_basic() {
         debug_lir(c);
 
         // native
-//        native(c);
+        native(c);
 
-//        debug_asm(c);
+        debug_asm(c);
     }
 }
 

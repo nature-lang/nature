@@ -100,7 +100,6 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
     list *operations = list_new();
     // 添加 label 和 fn begin 入口
     list_push(operations, lir_op_label(ast_closure->function->name, false));
-    list_push(operations, lir_op_new(LIR_OPCODE_FN_BEGIN, NULL, NULL, NULL));
 
     // 直接改写 target 而不是使用一个 move 操作
     if (target != NULL) {
@@ -116,9 +115,9 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
         slice_push(c->formal_params, var);
     }
 
-    list_push(operations, lir_op_new(
-            LIR_OPCODE_FN_FORMAL_PARAM, NULL, NULL,
-            LIR_NEW_OPERAND(LIR_OPERAND_FORMAL_PARAMS, c->formal_params)));
+    list_push(operations, lir_op_new(LIR_OPCODE_FN_BEGIN, NULL, NULL,
+                                     LIR_NEW_OPERAND(LIR_OPERAND_FORMAL_PARAMS, c->formal_params)));
+
 
     // 编译 body
     list *await = compiler_block(c, ast_closure->function->body);
@@ -885,7 +884,8 @@ list *compiler_literal(closure_t *c, ast_literal *literal, lir_operand_t *target
             target->value = temp->value;
 
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
-            lir_operand_t *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, literal->value);
+            lir_operand_t *imm_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value,
+                                                                          literal->value);
             lir_operand_t *imm_len_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(literal->value));
             lir_op_t *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_STRING_NEW,
@@ -957,6 +957,13 @@ list *compiler_ident(closure_t *c, ast_ident *ident, lir_operand_t *target) {
     return list_new();
 }
 
+/**
+ * builtin 做的太糙了，需要可变参数设计支持一下
+ * @param c
+ * @param call
+ * @param print_suffix
+ * @return
+ */
 list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) {
     list *operations = list_new();
     slice_t *params_operand = slice_new();
@@ -978,7 +985,8 @@ list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) 
         lir_operand_t *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value,
                                                                    ast_param_expr.type.base);
 
-        lir_op_t *op = lir_op_builtin_call("builtin_new_operand", param_target, 2, data_type_param,
+        lir_op_t *op = lir_op_builtin_call("builtin_new_operand", param_target,
+                                           2, data_type_param,
                                            origin_param_target);
         // 包裹 code
         list_push(operations, op);

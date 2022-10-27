@@ -59,7 +59,8 @@ static string asm_operand_to_string(asm_operand_t *operand) {
 }
 
 // mov a -> b
-void asm_op_to_string(asm_operation_t *op) {
+void asm_op_to_string(int i, asm_operation_t *op) {
+    printf("%d \t", i);
     if (str_equal(op->name, "label")) {
         printf("%s  ", op->name);
     } else {
@@ -75,7 +76,7 @@ void asm_op_to_string(asm_operation_t *op) {
         );
     } else if (op->count == 0) {
     } else {
-        printf("not support");
+        printf("not_support");
     }
 
     printf("\n");

@@ -52,7 +52,7 @@ typedef struct {
     string ident;
 } analysis_free_ident_t;
 
-typedef struct analysis_local_scope {
+typedef struct analysis_local_scope_t {
     struct analysis_local_scope_t *parent;
     analysis_local_ident_t *idents[UINT8_MAX];
     uint8_t count;

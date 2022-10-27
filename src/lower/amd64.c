@@ -12,8 +12,14 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
         reg_t *reg = amd64_fn_param_next_reg(used, type_base);
         lir_operand_t *target = NULL;
         if (reg) {
-            target = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
-            lir_op_t *op = lir_op_move(target, param_operand);
+            // empty reg
+            if (reg->size < QWORD) {
+                list_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
+                                                 LIR_NEW_OPERAND(LIR_OPERAND_REG, covert_alloc_reg(reg))));
+            }
+
+            lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_REG, reg), param_operand);
+
             list_push(operations, op);
         } else {
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
@@ -26,6 +32,7 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     // 由于使用了 push 指令操作了堆栈，可能导致堆栈不对齐，所以需要操作一下堆栈对齐
     uint64_t diff_length = memory_align(push_length, 16) - push_length;
 
+    // sub rsp - 1 = rsp
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
@@ -58,7 +65,7 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
             lir_stack_t *stack = NEW(lir_stack_t);
             // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
             stack->size = type_base_sizeof(var->type_base);
-            stack->slot = stack_param_slot;
+            stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
 
             // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了
             // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
@@ -127,7 +134,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         // if op is fn begin, will set formal param
         // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
-        if (op->code == LIR_OPCODE_FN_FORMAL_PARAM) {
+        if (op->code == LIR_OPCODE_FN_BEGIN) {
             // fn begin
             // mov rsi -> formal param 1
             // mov rdi -> formal param 2
@@ -135,11 +142,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             list *temps = amd64_formal_params_lower(c, op->output->value);
             list_node *current = temps->front;
             while (current->value != NULL) {
-                list_insert_before(block->operations, LIST_NODE(), current->value);
+                list_insert_after(block->operations, LIST_NODE(), current->value);
                 current = current->succ;
             }
+            op->output->value = slice_new();
 
-            list_remove(block->operations, node);
             continue;
         }
 

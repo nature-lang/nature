@@ -25,7 +25,8 @@
 
 // ASM_INST("mov", { to, from });
 #define ASM_INST(_name, ...) ({\
-  asm_operation_t *_inst = NEW(asm_operation_t);\
+  asm_operation_t *_inst = NEW(asm_operation_t); \
+  memset(_inst, 0, sizeof(asm_operation_t)); \
   _inst->name = _name;\
   asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
   for (int _i = 0; _i < 4; ++_i) {\

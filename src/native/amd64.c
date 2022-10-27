@@ -9,6 +9,32 @@
 #include "src/debug/debug.h"
 #include <assert.h>
 
+static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
+    if (a->type != b->type) {
+        return false;
+    }
+    if (a->size != b->size) {
+        return false;
+    }
+
+    if (a->type == ASM_OPERAND_TYPE_REG) {
+        reg_t *reg_a = a->value;
+        reg_t *reg_b = b->value;
+        return str_equal(reg_a->name, reg_b->name);
+    }
+
+    return false;
+}
+
+static void asm_mov(slice_t *operations, asm_operand_t *dst, asm_operand_t *src) {
+    if (asm_operand_equal(dst, src)) {
+        return;
+    }
+
+    asm_operation_t *operation = ASM_INST("mov", { dst, src });
+    slice_push(operations, operation);
+}
+
 /**
  * lir_operand 中不能直接转换为 asm_operand 的参数
  * type_string/lir_operand_memory
@@ -134,12 +160,12 @@ static asm_operation_t *reg_cleanup(reg_t *reg) {
  * @return
  */
 static slice_t *native_mov(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_REG);
+    assert(op->output->type == LIR_OPERAND_REG || op->first->type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
-
     asm_operand_t *first = lir_operand_transform(c, operations, op->first);
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
-    slice_push(operations, ASM_INST("mov", { result, first }));
+    asm_operand_t *output = lir_operand_transform(c, operations, op->output);
+
+    asm_mov(operations, output, first);
     return operations;
 }
 
@@ -167,6 +193,8 @@ static slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
 
 static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    slice_push(operations, ASM_INST("push", { first }));
     return operations;
 }
 
@@ -179,6 +207,23 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+/**
+ * -0x18(%rbp) = indirect addr
+ * @param op
+ * @param count
+ * @return
+ */
+static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
+    assert(op->output->type == LIR_OPERAND_REG);
+
+    slice_t *operations = slice_new();
+
+    // 参数转换
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    slice_push(operations, ASM_INST("xor", { result, result }));
+
+    return operations;
+}
 
 /**
  * -0x18(%rbp) = indirect addr
@@ -196,8 +241,33 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     asm_operand_t *second = lir_operand_transform(c, operations, op->second);
     asm_operand_t *result = lir_operand_transform(c, operations, op->output);
 
-    slice_push(operations, ASM_INST("mov", { result, first }));
+    asm_mov(operations, result, first);
     slice_push(operations, ASM_INST("add", { result, second }));
+
+    return operations;
+}
+
+/**
+ * // sub rax, 1 -> rsp
+ * // ↓
+ * // mov rax -> rsp
+ * // sub 1 -> rsp
+ * @param op
+ * @param count
+ * @return
+ */
+static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
+    assert(op->output->type == LIR_OPERAND_REG);
+
+    slice_t *operations = slice_new();
+
+    // 参数转换
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+
+    asm_mov(operations, result, first);
+    slice_push(operations, ASM_INST("sub", { result, second }));
 
     return operations;
 }
@@ -293,7 +363,7 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
     if (c->stack_slot != 0) {
-        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(c->stack_slot) }));
+        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(stack_slot) }));
     }
 
     return operations;
@@ -363,7 +433,9 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
 
 
 amd64_native_fn amd64_native_table[] = {
+        [LIR_OPCODE_CLR] = amd64_native_clr,
         [LIR_OPCODE_ADD] = amd64_native_add,
+        [LIR_OPCODE_SUB] = amd64_native_sub,
         [LIR_OPCODE_CALL] = amd64_native_call,
         [LIR_OPCODE_BUILTIN_CALL] = amd64_native_call,
         [LIR_OPCODE_RUNTIME_CALL] = amd64_native_call,
