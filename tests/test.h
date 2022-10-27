@@ -13,6 +13,10 @@
 
 
 static inline int stub_setup(void **state) {
+    char* nature_root = getenv("NATURE_ROOT");
+    assert(nature_root != NULL);
+
+
     // 从环境变量中读取 build entry
     char *entry = getenv("ENTRY_FILE");
     assert(entry && "entry file is null");

@@ -621,7 +621,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
             temp->data = amd64_operation_encoding(*temp->operation, &temp->data_count);
         } else {
             // 外部符号添加重定位信息
-            uint64_t rel_offset = *temp->offset += operation_rip_offset(temp->operation);
+            uint64_t rel_offset = *temp->offset + operation_rip_offset(temp->operation);
             temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                              rel_offset, R_X86_64_PC32, (int) sym_index, -4);
         }

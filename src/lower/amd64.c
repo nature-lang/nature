@@ -4,6 +4,7 @@
 // mov var -> eax
 static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     list *operations = list_new();
+    list *push_operations = list_new();
     int push_length = 0;
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
@@ -25,7 +26,7 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
-            list_push(operations, push_op);
+            list_push(push_operations, push_op);
             push_length += QWORD;
         }
     }
@@ -33,12 +34,20 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     uint64_t diff_length = memory_align(push_length, 16) - push_length;
 
     // sub rsp - 1 = rsp
+    // 先 sub 再 push, 保证 rsp 16 byte 对齐
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
                                          LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, diff_length),
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
-        list_push(operations, binary_op);
+        list_push(push_operations, binary_op);
+    }
+
+    // 倒序 push operations 追加到 operations 中
+    list_node *current = list_last(push_operations);
+    while (current && current->value) {
+        list_push(operations, current->value);
+        current = current->prev;
     }
 
     return operations;

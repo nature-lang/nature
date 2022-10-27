@@ -4,12 +4,11 @@
 #include "utils/error.h"
 #include "amd64.h"
 #include "arch.h"
-#include "output.h"
-#include "src/build/config.h"
 
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 static uint64_t get_be(const uint8_t *b, int n) {
     uint64_t ret = 0;
@@ -339,16 +338,14 @@ static sym_attr_t *put_got_entry(elf_context *ctx, int relocate_type, uint64_t s
 }
 
 void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
+    assert(fd >= 0);
+
     lseek(fd, file_offset, SEEK_SET);
     Elf64_Ehdr ehdr; // 清 0
     Elf64_Shdr *shdr;
     ssize_t read_size = full_read(fd, &ehdr, sizeof(ehdr));
-    if (read_size != sizeof(ehdr)) {
-        error_exit("[elf_load_object_file] size: %d not equal sizeof(ehdr)", read_size);
-    }
-    if (ehdr.e_type != ET_REL) {
-        error_exit("[elf_load_object_file] ehdr.e_type not rel file");
-    }
+    assert(read_size == sizeof(ehdr) && "read elf header failed");
+    assert(ehdr.e_type == ET_REL && "not a relocatable file");
 
     // read section header table
     Elf64_Shdr *shdr_list = elf_file_load_data(fd, file_offset + ehdr.e_shoff, sizeof(*shdr) * ehdr.e_shnum);

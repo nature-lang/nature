@@ -2,12 +2,17 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <assert.h>
+#include "utils/assertf.h"
 
 static char sprint_buf[1024];
 
-static void builtin_print_operand(int arg_count, builtin_operand_t **operands) {
+static void builtin_print_operands(int arg_count, builtin_operand_t **operands) {
     for (int i = 0; i < arg_count; ++i) {
         builtin_operand_t *operand = operands[i];
+        assertf(operand, "operand is null with index %d", i);
+        assertf(operand->type < 100, "operand type is invalid");
+
         if (operand->type == TYPE_STRING) {
             string_t *s = operand->point_value;
             write(STDOUT_FILENO, string_addr(s), string_length(s));
@@ -31,7 +36,8 @@ static void builtin_print_operand(int arg_count, builtin_operand_t **operands) {
             write(STDOUT_FILENO, raw, strlen(raw));
             continue;
         }
-        printf("operand code err, actual: %d\n", operand->type);
+
+        assert(false && "unsupported type");
     }
 }
 
@@ -44,7 +50,7 @@ void builtin_print(int arg_count, ...) {
     }
     va_end(args);
 
-    builtin_print_operand(arg_count, operands);
+    builtin_print_operands(arg_count, operands);
 }
 
 void builtin_println(int arg_count, ...) {
@@ -56,11 +62,13 @@ void builtin_println(int arg_count, ...) {
     }
     va_end(args);
 
-    builtin_print_operand(arg_count, operands);
+    builtin_print_operands(arg_count, operands);
     write(STDOUT_FILENO, "\n", 1);
 }
 
 builtin_operand_t *builtin_new_operand(type_base_t type, void *value) {
+    assert(type < 100 && "type is invalid");
+    assert(value && "value is null");
     builtin_operand_t *operand = malloc(sizeof(builtin_operand_t));
     operand->type = type;
     operand->point_value = value;

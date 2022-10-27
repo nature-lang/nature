@@ -55,6 +55,7 @@ set(SRC_DEBUG
         ${SRC_DIR}/debug/lir.h)
 
 set(UTILS
+        ${PROJECT_SOURCE_DIR}/utils/assertf.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c
