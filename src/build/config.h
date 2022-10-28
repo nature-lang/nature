@@ -10,8 +10,9 @@
 uint8_t BUILD_OS; // linux
 uint8_t BUILD_ARCH; // amd64
 char *NATURE_ROOT; // nature root
-char *BUILD_OUTPUT; // default is main
-char *FORCE_OUTPUT; // test 使用，指定编译路径输出文件
+char *BUILD_OUTPUT_NAME; // default is main
+char *BUILD_OUTPUT_DIR; // default is work_dir test 使用，指定编译路径输出文件
+char *BUILD_OUTPUT; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
 char *WORK_DIR; // 执行 shell 命令所在的目录
 char *BASE_NS; // 最后一级目录的名称，也可以自定义

@@ -10,10 +10,14 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "src/build/build.h"
+#include "utils/exec.h"
 
+static inline char *exec_output() {
+    return exec(BUILD_OUTPUT_DIR, BUILD_OUTPUT, slice_new());
+}
 
 static inline int stub_setup(void **state) {
-    char* nature_root = getenv("NATURE_ROOT");
+    char *nature_root = getenv("NATURE_ROOT");
     assert(nature_root != NULL);
 
 

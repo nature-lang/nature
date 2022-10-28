@@ -96,13 +96,9 @@ static void linker(slice_t *module_list) {
         error_exit("[linker] linker failed");
     }
 
-    char *dst_path = file_join(WORK_DIR, BUILD_OUTPUT);
-    if (FORCE_OUTPUT) {
-        dst_path = FORCE_OUTPUT;
-    }
-    copy(dst_path, output, 0755);
+    copy(BUILD_OUTPUT, output, 0755);
     printf("linker output--> %s\n", output);
-    printf("build output--> %s\n", dst_path);
+    printf("build output--> %s\n", BUILD_OUTPUT);
 }
 
 /**
@@ -124,8 +120,9 @@ void build(char *build_entry) {
     printf("NATURE_ROOT: %s\n", NATURE_ROOT);
     printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
     printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
+    printf("BUILD_OUTPUT_NAME: %s\n", BUILD_OUTPUT_NAME);
+    printf("BUILD_OUTPUT_DIR: %s\n", BUILD_OUTPUT_DIR);
     printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT);
-    printf("FORCE_OUTPUT: %s\n", FORCE_OUTPUT);
     printf("WORK_DIR: %s\n", WORK_DIR);
     printf("BASE_NS: %s\n", BASE_NS);
     printf("TERM_DIR: %s\n", TEMP_DIR);

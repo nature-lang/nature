@@ -157,6 +157,7 @@ void debug_stmt(string type, ast_stmt stmt) {
  * @param c
  */
 void debug_lir(closure_t *c) {
+#ifdef DEBUG_LIR
     printf("lir: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
@@ -164,6 +165,7 @@ void debug_lir(closure_t *c) {
     }
 
     printf("\n\n\n");
+#endif
 }
 
 /**
@@ -231,8 +233,10 @@ void debug_basic_block(basic_block_t *block) {
 }
 
 void debug_asm(closure_t *c) {
+#ifdef DEBUG_LIR
     printf("asm: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
         asm_op_to_string(i, c->asm_operations->take[i]);
     }
+#endif
 }

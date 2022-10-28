@@ -42,7 +42,7 @@ static void test_basic() {
     printf("NATURE_ROOT: %s\n", NATURE_ROOT);
     printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
     printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
-    printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT);
+    printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT_NAME);
     printf("WORK_DIR: %s\n", WORK_DIR);
     printf("BASE_NS: %s\n", BASE_NS);
     printf("TERM_DIR: %s\n", TEMP_DIR);

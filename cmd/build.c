@@ -25,7 +25,7 @@ void cmd_build_arg(int argc, char **argv) {
     while ((c = getopt(argc, argv, "o:")) != -1) {
         switch (c) {
             case 'o':
-                BUILD_OUTPUT = optarg;
+                BUILD_OUTPUT_NAME = optarg;
                 break;
         }
     }

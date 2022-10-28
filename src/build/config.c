@@ -6,7 +6,7 @@
 
 uint8_t BUILD_OS = OS_LINUX; // BUILD_OS/ BUILD_ARCH / BUILD_OUTPUT/NATURE_ROOT
 uint8_t BUILD_ARCH = ARCH_AMD64;
-char *BUILD_OUTPUT = "main";
+char *BUILD_OUTPUT_NAME = "main";
 char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default root
 
 static char *temp_dir() {
@@ -44,7 +44,7 @@ void env_init() {
         NATURE_ROOT = root;
     }
 
-    FORCE_OUTPUT = getenv("FORCE_OUTPUT");
+    BUILD_OUTPUT_DIR = getenv("BUILD_OUTPUT_DIR");
 }
 
 char *parser_base_ns(char *dir) {
@@ -62,6 +62,10 @@ void config_init() {
     WORK_DIR = get_work_dir();
     BASE_NS = parser_base_ns(WORK_DIR);
     TEMP_DIR = temp_dir();
+    if (!BUILD_OUTPUT_DIR) {
+        BUILD_OUTPUT_DIR = WORK_DIR;
+    }
+    BUILD_OUTPUT = file_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME);
 }
 
 char *os_to_string(uint8_t os) {
