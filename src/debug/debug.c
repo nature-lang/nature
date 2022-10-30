@@ -164,7 +164,7 @@ void debug_lir(closure_t *c) {
         debug_basic_block(basic_block);
     }
 
-    printf("\n\n\n");
+    fflush(stdout);
 #endif
 }
 
@@ -229,14 +229,15 @@ void debug_basic_block(basic_block_t *block) {
         lir_var_t *var = block->live_in->take[i];
         printf("%s\t", var->ident);
     }
-    printf("\n");
+    printf("\n\n\n");
 }
 
 void debug_asm(closure_t *c) {
-#ifdef DEBUG_LIR
+#ifdef DEBUG_ASM
     printf("asm: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
         asm_op_to_string(i, c->asm_operations->take[i]);
     }
+    fflush(stdout);
 #endif
 }

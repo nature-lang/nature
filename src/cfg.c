@@ -121,15 +121,6 @@ void cfg(closure_t *c) {
 
     broken_critical_edges(c);
 
-    // 维护 first 和 last_op 关系，后面一旦插入了 phi op,就不好定位了
-    SLICE_FOR(c->blocks) {
-        current_block = SLICE_VALUE(c->blocks);
-        // 添加 first_op(label 之后的第一个 op) 和 last_op
-        current_block->first_op = list_first(current_block->operations)->succ;
-        current_block->last_op = list_last(current_block->operations);
-    }
-
-
     // 添加入口块
     c->entry = c->blocks->take[0];
 }
@@ -192,5 +183,4 @@ void broken_critical_edges(closure_t *c) {
             }
         }
     }
-
 }

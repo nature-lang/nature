@@ -90,8 +90,8 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     return operations;
 }
 
-static void amd64_lower_block(closure_t *c, basic_block_t *block) {
-// handle opcode
+void amd64_lower_block(closure_t *c, basic_block_t *block) {
+    // handle opcode
     for (list_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
         lir_op_t *op = node->value;
 
@@ -180,7 +180,6 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-
         // div 被输数，除数 = 商
         if (op->code == LIR_OPCODE_DIV) {
             lir_operand_t *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
@@ -188,22 +187,33 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             lir_op_t *after = lir_op_move(op->output, reg_operand);
             op->first = reg_operand;
             op->output = reg_operand;
-            list_insert_before(block->operations, LIST_VALUE(), before);
-            list_insert_after(block->operations, LIST_VALUE(), after);
+            list_insert_before(block->operations, node, before);
+            list_insert_after(block->operations, node, after);
             continue;
         }
+
+        // amd64 的 add imm -> rax 相当于 add imm,rax -> rax
+        // cmp imm -> rax 同理。所以 output 部分不能是 imm 操作数, 且必须要有一个寄存器参与计算
+        // 对于 lir 指令，例如 bea first,second => label 进行比较时，将 first 放到 asm 的 result 部分
+        // second 放到 asm 的 input 部分。 所以 result 不能为 imm, 也就是 beq 指令的 first 部分不能为 imm
+        // tips: 不能随便调换 first 和 second 的顺序，会导致 asm cmp 指令对比异常
+        if (lir_op_contain_cmp(op)) {
+            // first is native target, cannot imm, so in case swap first and second
+            if (op->first->type == LIR_OPERAND_IMM) {
+                lir_imm_t *imm = op->first->value;
+                // 添加 temp var 中转
+                lir_operand_t *temp = lir_new_temp_var_operand(c, type_new_base(imm->type));
+                slice_push(c->globals, temp->value);
+                lir_op_t *move = lir_op_move(temp, op->first);
+
+                op->first = temp;
+                list_insert_before(block->operations, node, move);
+                continue;
+            }
+        }
     }
+
+    // realloc first op
 }
 
-/**
- * asm_operations asm_operations 目前属于一个更加抽象的层次，不利于寄存器分配，所以进行更加本土化的处理
- * 1. 部分指令需要 fixed register, 比如 return,div,shl,shr 等
- * @param c
- */
-void amd64_lower(closure_t *c) {
-    // 按基本块遍历所有指令
-    SLICE_FOR(c->blocks) {
-        basic_block_t *block = SLICE_VALUE(c->blocks);
-        amd64_lower_block(c, block);
-    }
-}
+

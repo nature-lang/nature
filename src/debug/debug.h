@@ -18,9 +18,9 @@
 
 //#define DEBUG_COMPILER
 
-//#define DEBUG_COMPILER_LIR
+//#define DEBUG_LIR
 
-#define DEBUG_CFG
+//#define DEBUG_CFG
 
 void debug_scanner(token *t);
 

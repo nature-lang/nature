@@ -117,14 +117,12 @@ void analysis_var_decl(module_t *m, ast_var_decl *stmt) {
 }
 
 void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
+    analysis_expr(m, &stmt->expr);
+
     analysis_redeclare_check(m, stmt->var_decl->ident);
-
     analysis_type(m, &stmt->var_decl->type);
-
     analysis_local_ident_t *local = analysis_new_local(m, SYMBOL_TYPE_VAR, stmt->var_decl, stmt->var_decl->ident);
     stmt->var_decl->ident = local->unique_ident;
-
-    analysis_expr(m, &stmt->expr);
 }
 
 type_t analysis_function_to_type(ast_new_fn *function_decl) {
@@ -287,7 +285,7 @@ analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *
 
     // 添加 locals
     analysis_local_scope_t *current_scope = m->analysis_current->current_scope;
-    current_scope->idents[current_scope->count++] = local;
+    slice_push(current_scope->idents, local);
 
     // 添加到全局符号表
     symbol_table_set(local->unique_ident, type, decl, true);
@@ -363,8 +361,8 @@ void analysis_ident(module_t *m, ast_expr *expr) {
     // 在当前函数作用域中查找变量定义
     analysis_local_scope_t *current_scope = m->analysis_current->current_scope;
     while (current_scope != NULL) {
-        for (int i = 0; i < current_scope->count; ++i) {
-            analysis_local_ident_t *local = current_scope->idents[i];
+        for (int i = 0; i < current_scope->idents->count; ++i) {
+            analysis_local_ident_t *local = current_scope->idents->take[i];
             if (strcmp(ident->literal, local->ident) == 0) {
                 // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
                 expr->expr = ast_new_ident(local->unique_ident);
@@ -395,9 +393,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    error_ident_not_found(expr->line, ident->literal);
-    exit(0);
-
+    assertf(false, "ident not found line: %d, identifier '%s' undeclared \n", expr->line, ident->literal);
 }
 
 /**
@@ -412,12 +408,12 @@ int8_t analysis_resolve_free(analysis_function_t *current, string*ident) {
     }
 
     analysis_local_scope_t *scope = current->parent->current_scope;
-    for (int i = 0; i < scope->count; ++i) {
-        analysis_local_ident_t *local = scope->idents[i];
+    for (int i = 0; i < scope->idents->count; ++i) {
+        analysis_local_ident_t *local = scope->idents->take[i];
 
         // 在父级作用域找到对应的 ident
         if (strcmp(*ident, local->ident) == 0) {
-            scope->idents[i]->is_capture = true; // 被下级作用域引用
+            local->is_capture = true;
             *ident = local->unique_ident;
             return (int8_t) analysis_push_free(current, true, (int8_t) i, *ident);
         }
@@ -582,8 +578,8 @@ void analysis_type_decl(module_t *m, ast_type_decl_stmt *stmt) {
 char *analysis_resolve_type(module_t *m, analysis_function_t *current, string ident) {
     analysis_local_scope_t *current_scope = current->current_scope;
     while (current_scope != NULL) {
-        for (int i = 0; i < current_scope->count; ++i) {
-            analysis_local_ident_t *local = current_scope->idents[i];
+        for (int i = 0; i < current_scope->idents->count; ++i) {
+            analysis_local_ident_t *local = current_scope->idents->take[i];
             if (strcmp(ident, local->ident) == 0) {
                 return local->unique_ident;
             }
@@ -618,8 +614,8 @@ uint8_t analysis_push_free(analysis_function_t *current, bool is_local, int8_t i
  */
 bool analysis_redeclare_check(module_t *m, char *ident) {
     analysis_local_scope_t *current_scope = m->analysis_current->current_scope;
-    for (int i = 0; i < current_scope->count; ++i) {
-        analysis_local_ident_t *local = current_scope->idents[i];
+    for (int i = 0; i < current_scope->idents->count; ++i) {
+        analysis_local_ident_t *local = current_scope->idents->take[i];
         if (strcmp(ident, local->ident) == 0) {
             error_redeclare_ident(m->analysis_line, ident);
             return false;
@@ -666,7 +662,7 @@ analysis_function_t *analysis_current_init(module_t *m, analysis_local_scope_t *
 
 analysis_local_scope_t *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope_t *parent) {
     analysis_local_scope_t *new = malloc(sizeof(analysis_local_scope_t));
-    new->count = 0;
+    new->idents = slice_new();
     new->scope_depth = scope_depth;
     new->parent = parent;
     return new;

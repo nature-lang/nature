@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_HELPER_H_
 
 #include "src/value.h"
+#include "utils/assertf.h"
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>

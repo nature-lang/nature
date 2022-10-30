@@ -54,8 +54,8 @@ typedef struct {
 
 typedef struct analysis_local_scope_t {
     struct analysis_local_scope_t *parent;
-    analysis_local_ident_t *idents[UINT8_MAX];
-    uint8_t count;
+    slice_t *idents; // analysis_local_ident_t*
+
     uint8_t scope_depth;
 } analysis_local_scope_t;
 
@@ -182,7 +182,8 @@ typedef struct basic_block_t {
     slice_t *use;
     slice_t *def;
     slice_t *live_out;
-    slice_t *live_in; // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
+    slice_t *live_in; // ssa 阶段计算的精确 live in 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
+    slice_t *live; // reg alloc 阶段计算
     slice_t *dom; // 当前块被哪些基本块支配
     slice_t *df;
     slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树

@@ -68,7 +68,7 @@ void builtin_println(int arg_count, ...) {
 
 builtin_operand_t *builtin_new_operand(type_base_t type, void *value) {
     assert(type < 100 && "type is invalid");
-    assert(value && "value is null");
+//    assert(value && "value is null"); // if value == 0, value == NULL
     builtin_operand_t *operand = malloc(sizeof(builtin_operand_t));
     operand->type = type;
     operand->point_value = value;

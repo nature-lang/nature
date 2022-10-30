@@ -139,8 +139,8 @@ typedef struct {
 } ast_assign_stmt;
 
 typedef struct {
-    ast_var_decl *var_decl;
-    ast_expr expr;
+    ast_var_decl *var_decl; // 左值
+    ast_expr expr; // 右值
 } ast_var_decl_assign_stmt;
 
 typedef struct {

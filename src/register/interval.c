@@ -369,6 +369,8 @@ void interval_block_order(closure_t *c) {
 
     while (!stack_empty(work_list)) {
         basic_block_t *block = stack_pop(work_list);
+        assertf(block && block->first_op, "block or block->first_op is null");
+
         slice_push(order_blocks, block);
 
         // 需要计算每一个块的正向前驱的数量
@@ -433,15 +435,15 @@ void interval_build(closure_t *c) {
     // 倒序遍历顺序基本块基本块
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *block = c->blocks->take[i];
-        slice_t *live_in = slice_new();
+        slice_t *live = slice_new();
 
         // 1. calc live in = union of successor.liveIn for each successor of b
         table_t *exist_vars = table_new();
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
-            for (int k = 0; k < succ->live_in->count; ++k) {
-                lir_var_t *var = succ->live_in->take[k];
-                live_add(exist_vars, live_in, var);
+            for (int k = 0; k < succ->live->count; ++k) {
+                lir_var_t *var = succ->live->take[k];
+                live_add(exist_vars, live, var);
             }
         }
 
@@ -451,8 +453,9 @@ void interval_build(closure_t *c) {
             list_node *current = list_first(succ_block->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
                 lir_op_t *op = OP(current);
+                // TODO ssh_phi_body_of 有问题！
                 lir_var_t *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
-                live_add(exist_vars, live_in, var);
+                live_add(exist_vars, live, var);
 
                 current = current->succ;
             }
@@ -462,9 +465,9 @@ void interval_build(closure_t *c) {
         int block_from = OP(list_first(block->operations))->id;
         int block_to = OP(block->last_op)->id + 2; // whether add 2?
 
-        // live in add full range 遍历所有的 live_in(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
-        for (int k = 0; k < live_in->count; ++k) {
-            lir_var_t *var = live_in->take[k];
+        // live in add full range 遍历所有的 live(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
+        for (int k = 0; k < live->count; ++k) {
+            lir_var_t *var = live->take[k];
             interval_t *interval = table_get(c->interval_table, var->ident);
             interval_add_range(c, interval, block_from, block_to);
         }
@@ -514,7 +517,7 @@ void interval_build(closure_t *c) {
                 }
 
                 if (!interval->fixed) {
-                    live_remove(exist_vars, live_in, interval->var);
+                    live_remove(exist_vars, live, interval->var);
                     interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
                 }
             }
@@ -526,7 +529,7 @@ void interval_build(closure_t *c) {
                 interval_add_range(c, interval, block_from, op->id);
 
                 if (!interval->fixed) {
-                    live_add(exist_vars, live_in, interval->var);
+                    live_add(exist_vars, live, interval->var);
                     interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
                 }
             }
@@ -540,7 +543,7 @@ void interval_build(closure_t *c) {
             lir_op_t *op = OP(current);
 
             lir_var_t *var = op->output->value;
-            live_remove(exist_vars, live_in, var);
+            live_remove(exist_vars, live, var);
             current = current->succ;
         }
 
@@ -550,14 +553,14 @@ void interval_build(closure_t *c) {
         if (block->loop.header) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
                 basic_block_t *end = block->loop_ends->take[j];
-                for (int k = 0; k < live_in->count; ++k) {
-                    lir_var_t *var = live_in->take[k];
+                for (int k = 0; k < live->count; ++k) {
+                    lir_var_t *var = live->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
                     interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
                 }
             }
         }
-        block->live_in = live_in;
+        block->live = live;
     }
 }
 
@@ -844,10 +847,10 @@ void resolve_data_flow(closure_t *c) {
             };
 
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
-            // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live_in
-            // live_in not contain phi def interval
-            for (int j = 0; j < to->live_in->count; ++j) {
-                lir_var_t *var = to->live_in->take[j];
+            // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live
+            // live not contain phi def interval
+            for (int j = 0; j < to->live->count; ++j) {
+                lir_var_t *var = to->live->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
                 assert(parent_interval);
 

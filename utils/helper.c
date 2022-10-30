@@ -135,7 +135,7 @@ bool ends_with(char *str, char *suffix) {
 ssize_t full_read(int fd, void *buf, size_t count) {
     char *cursor = buf;
     size_t read_count = 0;
-    while (1) {
+    while (true) {
         // read 从文件中读取 n 个字符
         // 成功时返回读取到的字节数(为零表示读到文件描述符),  此返回值受文件剩余字节数限制.当返回值小
         // 于指定的字节数时 并不意味着错误;这可能是因为当前可读取的字节数小于指定的 字节数(比如已经接

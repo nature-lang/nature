@@ -220,6 +220,8 @@ typedef struct lir_op {
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 } lir_op_t;
 
+void lir_set_quick_op(basic_block_t *block);
+
 lir_operand_t *set_indirect_addr(lir_operand_t *operand);
 
 lir_operand_t *lir_new_phi_body(closure_t *c, lir_var_t *var, uint8_t count);
@@ -284,8 +286,6 @@ bool lir_op_is_branch(lir_op_t *op);
 bool lir_op_is_call(lir_op_t *op);
 
 bool lir_op_contain_cmp(lir_op_t *op);
-
-bool lir_op_is_branch_cmp(lir_op_t *op);
 
 /**
  * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配

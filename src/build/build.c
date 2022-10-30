@@ -157,7 +157,7 @@ void build(char *build_entry) {
     ast_closure_t *root_ast_closure = root->ast_closures->take[0];
     for (int i = 1; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assert(m->call_init_stmt != NULL && dsprintf("module %s not found init fn stmt", m->module_unique_name));
+        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->module_unique_name);
 
         slice_t *temp = slice_new();
         slice_push(temp, m->call_init_stmt);

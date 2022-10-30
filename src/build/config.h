@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define DEBUG_LIR
+#define DEBUG_ASM
+#define ASSERTF_DEF_ONCE
+
 #define ARCH_AMD64 1
 #define OS_LINUX 1
 

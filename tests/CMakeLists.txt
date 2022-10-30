@@ -30,7 +30,13 @@ message("will make dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 
 # build stubs
-set(STUB_FILES 20221025_01_hello 20221025_02_sum)
+set(STUB_FILES
+        20221025_01_hello
+        20221025_02_sum
+        20221025_03_call
+        20221025_04_if
+        20221025_05_while)
+
 foreach (STUB_FILE ${STUB_FILES})
     add_executable(${STUB_FILE} ${STUB_FILE}.c ${BUILD_SOURCE_FILES})
     target_link_libraries(${STUB_FILE} cmocka)

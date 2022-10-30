@@ -150,6 +150,7 @@ lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
 
 lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
+    memset(op, 0, sizeof(lir_op_t));
     op->code = code;
     op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
@@ -211,6 +212,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block->use = slice_new();
     basic_block->def = slice_new();
     basic_block->loop_ends = slice_new();
+    basic_block->live = slice_new();
     basic_block->live_in = slice_new();
     basic_block->live_out = slice_new();
     basic_block->dom = slice_new();
@@ -429,6 +431,7 @@ slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag) {
 
     return result;
 }
+
 bool lir_op_contain_cmp(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BEQ ||
         op->code == LIR_OPCODE_SGT ||
@@ -445,4 +448,19 @@ bool lir_op_contain_cmp(lir_op_t *op) {
 void lir_init() {
     var_unique_count = 0;
     lir_line = 0;
+}
+
+/**
+ * 已经经过了 ssa 的处理，才 first op 需要排除 label 和 phi
+ * @param block
+ */
+void lir_set_quick_op(basic_block_t *block) {
+    list_node *current = list_first(block->operations)->succ;
+    while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+        current = current->succ;
+    }
+    assert(current);
+    // current code not opcode phi
+    block->first_op = current;
+    block->last_op = list_last(block->operations);
 }
