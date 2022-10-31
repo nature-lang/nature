@@ -31,7 +31,8 @@ set(STUB_FILES
         20221025_02_sum
         20221025_03_call
         20221025_04_if
-        20221025_05_while)
+        20221025_05_while
+        20221025_06_closure)
 
 foreach (STUB_FILE ${STUB_FILES})
     add_executable(${STUB_FILE} ${STUB_FILE}.c ${BUILD_SOURCE_FILES})
