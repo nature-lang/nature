@@ -1,9 +1,0 @@
-int foo = 23
-int bar = 1
-if (bar > 0) {
-    foo = 26
-}
-
-int car = foo
-print("foo=", foo)
-print("car=", car)

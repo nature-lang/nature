@@ -749,7 +749,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         }
     }
 
-    // 切割 range, TODO first_range.from must == first def position?
+    // 切割 range
     LIST_FOR(i->ranges) {
         interval_range_t *range = LIST_VALUE();
         if (!in_range(range, position)) {
@@ -778,6 +778,8 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
 
         child->first_range = list_first(child->ranges)->value;
         child->last_range = list_last(child->ranges)->value;
+
+        i->last_range = list_last(i->ranges)->value;
         break;
     }
 
@@ -954,6 +956,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
     }
 
     // block all from interval, value 表示被 input 引用的次数, 0 表示为被引用
+    // 避免出现同一个寄存器的 output 覆盖 input
     int8_t block_regs[UINT8_MAX] = {0};
 
     SLICE_FOR(r->from_list) {
@@ -1027,7 +1030,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
     } else {
         r->insert_block = to;
-        r->insert_id = OP(from->first_op)->id - 1;
+        r->insert_id = OP(to->first_op)->id - 1;
     }
 }
 

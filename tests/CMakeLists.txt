@@ -16,10 +16,6 @@ add_executable(test_build test_build.c ${BUILD_SOURCE_FILES})
 target_link_libraries(test_build cmocka)
 add_test(test_build test_build)
 
-add_executable(test_ssa test_ssa.c ${BUILD_SOURCE_FILES})
-target_link_libraries(test_ssa cmocka)
-add_test(test_ssa test_ssa)
-
 add_executable(test_reg_alloc test_reg_alloc.c ${BUILD_SOURCE_FILES})
 target_link_libraries(test_reg_alloc cmocka)
 add_test(NAME test_reg_alloc COMMAND test_reg_alloc

@@ -3,4 +3,4 @@ while (20 > i) {
     println(i)
     i = i + 1
 }
-println("while end, i=", i)
+print("while end, i=", i)

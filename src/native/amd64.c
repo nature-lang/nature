@@ -160,6 +160,7 @@ static asm_operation_t *reg_cleanup(reg_t *reg) {
  * @return
  */
 static slice_t *native_mov(closure_t *c, lir_op_t *op) {
+    assert(op->output->type != LIR_OPERAND_VAR && op->first->type != LIR_OPERAND_VAR);
     assert(op->output->type == LIR_OPERAND_REG || op->first->type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
     asm_operand_t *first = lir_operand_transform(c, operations, op->first);
@@ -460,7 +461,7 @@ slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {
 
 slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
     slice_t *operations = slice_new();
-    list_node *current = block->operations->front;
+    list_node *current = list_first(block->operations);
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         slice_append(operations, amd64_native_op(c, op));
