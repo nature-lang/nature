@@ -29,7 +29,7 @@ slice_t *slice_new();
 
 void slice_insert(slice_t *s, int index, void *value);
 
-void slice_push(slice_t *s, void *value);
+int slice_push(slice_t *s, void *value);
 
 void slice_append(slice_t *dst, slice_t *src);
 

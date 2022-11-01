@@ -179,7 +179,9 @@ void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn) {
  * @return
  */
 ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope_t *scope) {
-    ast_closure_t *closure = malloc(sizeof(ast_closure_t));
+    ast_closure_t *closure = NEW(ast_closure_t);
+    closure->env_list = slice_new();
+
     analysis_type(m, &function_decl->return_type);
 
     // 初始化
@@ -207,26 +209,28 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
     closure->env_name = m->analysis_current->env_unique_name;
 
     // 构造 env
-    for (int i = 0; i < m->analysis_current->free_count; ++i) {
-        analysis_free_ident_t free_var = m->analysis_current->frees[i];
-        ast_expr *expr = &closure->env[i];
+    for (int i = 0; i < m->analysis_current->frees->count; ++i) {
+        analysis_free_ident_t *free_var = m->analysis_current->frees->take[i];
 
-        // 逃逸变量就在当前作用域中
-        if (free_var.is_local) {
+        ast_expr *expr = NEW(ast_expr);
+
+        // 调用函数中引用的逃逸变量就在当前作用域中
+        if (free_var->is_local) {
             // ast_ident 表达式
             expr->assert_type = AST_EXPR_IDENT;
-            expr->expr = ast_new_ident(free_var.ident);
+            expr->expr = ast_new_ident(free_var->ident);
         } else {
             // ast_env_index 表达式
             expr->assert_type = AST_EXPR_ACCESS_ENV;
             ast_access_env *access_env = malloc(sizeof(ast_access_env));
             access_env->env = ast_new_ident(m->analysis_current->parent->env_unique_name);
-            access_env->index = free_var.index;
-            access_env->unique_ident = free_var.ident;
+            access_env->index = free_var->env_index;
+            access_env->unique_ident = free_var->ident;
             expr->expr = access_env;
         }
+
+        slice_push(closure->env_list, expr);
     }
-    closure->env_count = m->analysis_current->free_count;
     closure->function = function_decl;
 
     // 延迟处理 contains_function_decl
@@ -375,7 +379,8 @@ void analysis_ident(module_t *m, ast_expr *expr) {
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
     int8_t free_var_index = analysis_resolve_free(m->analysis_current, &ident->literal);
     if (free_var_index != -1) {
-        // 外部作用域变量改写, 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
+        // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
+        // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ACCESS_ENV;
         ast_access_env *env_index = malloc(sizeof(ast_access_env));
         env_index->env = ast_new_ident(m->analysis_current->env_unique_name);
@@ -385,11 +390,11 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // with path 进行查找
+    // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号中查找
     char *global_ident = ident_with_module_unique_name(m->module_unique_name, ident->literal);
     symbol_t *s = table_get(symbol_table, global_ident);
     if (s != NULL) {
-        ident->literal = global_ident;
+        ident->literal = global_ident; // 完善访问名称
         return;
     }
 
@@ -415,13 +420,14 @@ int8_t analysis_resolve_free(analysis_function_t *current, string*ident) {
         if (strcmp(*ident, local->ident) == 0) {
             local->is_capture = true;
             *ident = local->unique_ident;
-            return (int8_t) analysis_push_free(current, true, (int8_t) i, *ident);
+            return (int8_t) analysis_push_free(current, true, i, *ident);
         }
     }
 
-    // 继续向上递归查询
+    // 一级 parent 没有找到，则继续向上 parent 递归查询
     int8_t parent_free_index = analysis_resolve_free(current->parent, ident);
     if (parent_free_index != -1) {
+        // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
         return (int8_t) analysis_push_free(current, false, parent_free_index, *ident);
     }
 
@@ -595,14 +601,21 @@ char *analysis_resolve_type(module_t *m, analysis_function_t *current, string id
     return analysis_resolve_type(m, current->parent, ident);
 }
 
-uint8_t analysis_push_free(analysis_function_t *current, bool is_local, int8_t index, string ident) {
-    analysis_free_ident_t free = {
-            .is_local = is_local,
-            .index = index,
-            .ident = ident,
-    };
-    uint8_t free_index = current->free_count++;
-    current->frees[free_index] = free;
+int analysis_push_free(analysis_function_t *current, bool is_local, int index, string ident) {
+    // if exists, return exists index
+    analysis_free_ident_t *free = table_get(current->free_table, ident);
+    if (free) {
+        return free->index;
+    }
+
+    // 新增 free
+    free = NEW(analysis_local_ident_t);
+    free->is_local = is_local;
+    free->env_index = index;
+    free->ident = ident;
+    int free_index = slice_push(current->frees, free);
+    free->index = free_index;
+    table_set(current->free_table, ident, free);
 
     return free_index;
 }
@@ -645,19 +658,18 @@ void analysis_function_end(module_t *m) {
 
 analysis_function_t *analysis_current_init(module_t *m, analysis_local_scope_t *scope, string fn_name) {
     analysis_function_t *new = malloc(sizeof(analysis_function_t));
-//  new->local_count = 0;
-    new->free_count = 0;
+    new->frees = slice_new();
+    new->free_table = table_new();
     new->scope_depth = 0;
     new->env_unique_name = str_connect(fn_name, "_env");
     new->contains_fn_count = 0;
     new->current_scope = scope;
 
-// 继承关系
+    // 继承关系
     new->parent = m->analysis_current;
     m->analysis_current = new;
 
-    return m->
-            analysis_current;
+    return m->analysis_current;
 }
 
 analysis_local_scope_t *analysis_new_local_scope(uint8_t scope_depth, analysis_local_scope_t *parent) {

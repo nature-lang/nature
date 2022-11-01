@@ -47,7 +47,7 @@ typedef struct {
     void *value; // ast_ident(type_decl_ident),ast_map_decl*....
     type_base_t base; // type_fn,type_int
     bool is_origin; // code a = int, code b = a，int is origin
-    uint8_t point; // 指针等级, 如果等于0 表示非指针
+    uint8_t point; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 point 等于 3
 } type_t;
 
 typedef struct {

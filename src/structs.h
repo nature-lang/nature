@@ -48,8 +48,9 @@ typedef struct {
  */
 typedef struct {
     bool is_local;
-    uint8_t index;
+    int env_index; // env_index
     string ident;
+    int index; // free in frees index
 } analysis_free_ident_t;
 
 typedef struct analysis_local_scope_t {
@@ -71,8 +72,9 @@ typedef struct analysis_function_t {
 //  uint8_t local_count;
 
     // wwh: 使用了当前作用域之外的变量
-    analysis_free_ident_t frees[UINT8_MAX];
-    uint8_t free_count;
+//    analysis_free_ident_t frees[UINT8_MAX];
+    slice_t *frees; // analysis_free_ident_t*
+    table_t *free_table; // analysis_free_ident_t*
 
     // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
     uint8_t scope_depth;

@@ -21,8 +21,8 @@ type_t infer_closure_decl(ast_closure_t *closure_decl) {
     }
 
     // env 表达式也有类型，需要还原
-    for (int i = 0; i < closure_decl->env_count; ++i) {
-        infer_expr(&closure_decl->env[i]);
+    for (int i = 0; i < closure_decl->env_list->count; ++i) {
+        infer_expr(closure_decl->env_list->take[i]);
     }
 
     infer_current_init(closure_decl);

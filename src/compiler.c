@@ -55,25 +55,25 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
 // 捕获逃逸变量，并放在形参1中,对应的实参需要填写啥吗？
     list *parent_list = list_new();
 
-    if (parent != NULL && ast_closure->env_count > 0) {
+    if (parent != NULL && ast_closure->env_list->count > 0) {
         // 处理 env ---------------
         // 1. make env_n by count
         lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, ast_closure->env_name);
-        lir_operand_t *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast_closure->env_count);
+        lir_operand_t *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast_closure->env_list->count);
         list_push(parent_list, lir_op_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
 
         // 2. for set ast_ident/ast_access_env to env n
-        for (int i = 0; i < ast_closure->env_count; ++i) {
-            ast_expr item_expr = ast_closure->env[i];
+        for (int i = 0; i < ast_closure->env_list->count; ++i) {
+            ast_expr *item_expr = ast_closure->env_list->take[i];
 
             lir_operand_t *expr_target = lir_new_empty_operand();
-            list_append(parent_list, compiler_expr(parent, item_expr, expr_target));
+            list_append(parent_list, compiler_expr(parent, *item_expr, expr_target));
             if (expr_target->type != LIR_OPERAND_VAR) {
                 error_exit("[compiler_closure] expr_target code not var, cannot use by env set");
             }
 
             // 1 表示指针深度为 1
-            lir_operand_t *env_point_target = lir_new_temp_var_operand(parent, type_new_point(item_expr.type, 1));
+            lir_operand_t *env_point_target = lir_new_temp_var_operand(parent, type_new_point(item_expr->type, 1));
             list_push(parent_list, lir_op_new(LIR_OPCODE_LEA, expr_target, NULL, env_point_target));
 
             lir_operand_t *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);

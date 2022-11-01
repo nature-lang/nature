@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "src/value.h"
 #include "utils/slice.h"
+#include "utils/table.h"
 #include "type.h"
 
 #define AST_BASE_TYPE_FALSE "false"
@@ -324,8 +325,8 @@ typedef struct {
 } ast_new_fn; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
-    ast_expr env[UINT8_MAX]; // env[n] 可以是 local var/或者是形参 param_env_2233[n]
-    uint8_t env_count;
+    slice_t *env_list; // ast_expr*
+
     string env_name; // 唯一标识，可以全局定位
     ast_new_fn *function;
 } ast_closure_t;

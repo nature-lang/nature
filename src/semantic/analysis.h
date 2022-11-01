@@ -64,7 +64,7 @@ void analysis_type(module_t *m, type_t *type);
 
 int8_t analysis_resolve_free(analysis_function_t *current, string*ident);
 
-uint8_t analysis_push_free(analysis_function_t *f, bool is_local, int8_t index, string ident);
+int analysis_push_free(analysis_function_t *current, bool is_local, int index, string ident);
 
 void analysis_call(module_t *m, ast_call *call);
 
