@@ -41,8 +41,10 @@ void list_append(list *dst, list *src); // src 追加到 dst 中
 
 void list_remove(list *l, list_node *node);
 
+void list_cleanup(list *l);
+
 list_node *list_new_node();
 
-bool list_empty(list *l);
+bool list_is_empty(list *l);
 
 #endif //NATURE_SRC_LIB_LIST_H_

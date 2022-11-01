@@ -57,7 +57,7 @@ list_node *list_new_node() {
     return node;
 }
 
-bool list_empty(list *l) {
+bool list_is_empty(list *l) {
     if (l->count == 0) {
         return true;
     }
@@ -72,7 +72,7 @@ bool list_empty(list *l) {
  * @return
  */
 list *list_split(list *l, list_node *node) {
-    assert(l->count > 1);
+    assert(l->count > 0);
     assert(node);
 
     list *new_list = list_new();
@@ -82,6 +82,7 @@ list *list_split(list *l, list_node *node) {
     new_list->count = list_count(new_list);
 
     if (node == l->front) {
+        list_cleanup(l);
         return new_list;
     }
     // 原 rear 截断(list 的结尾是 empty)
@@ -105,7 +106,7 @@ void list_append(list *dst, list *src) {
 }
 
 list_node *list_last(list *l) {
-    if (list_empty(l)) {
+    if (list_is_empty(l)) {
         return NULL;
     }
     return l->rear->prev;
@@ -175,6 +176,14 @@ void list_insert_before(list *l, list_node *succ, void *value) {
     }
 
     l->count++;
+}
+
+void list_cleanup(list *l) {
+    l->count = 0;
+
+    list_node *empty = list_new_node();
+    l->front = empty;
+    l->rear = empty;
 }
 
 void list_remove(list *l, list_node *node) {

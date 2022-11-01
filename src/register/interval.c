@@ -113,7 +113,7 @@ static void loop_mark(closure_t *c) {
                 pred->loop.index_map[loop_index] = true;
             }
 
-        } while (!list_empty(work_list));
+        } while (!list_is_empty(work_list));
     }
 }
 
@@ -643,7 +643,7 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
 void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
     assert(from < to);
 
-    if (list_empty(i->ranges)) {
+    if (list_is_empty(i->ranges)) {
         interval_range_t *range = NEW(interval_range_t);
         range->from = from;
         range->to = to;
@@ -688,7 +688,7 @@ void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e 
     use_pos_t *new_pos = NEW(use_pos_t);
     new_pos->kind = kind;
     new_pos->value = position;
-    if (list_empty(pos_list)) {
+    if (list_is_empty(pos_list)) {
         list_push(pos_list, new_pos);
         return;
     }
@@ -737,7 +737,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     if (parent->parent) {
         parent = parent->parent;
     }
-    if (list_empty(parent->children)) {
+    if (list_is_empty(parent->children)) {
         list_push(parent->children, child);
     } else {
         LIST_FOR(parent->children) {
@@ -914,7 +914,7 @@ void resolve_data_flow(closure_t *c) {
 interval_t *interval_child_at(interval_t *i, int op_id, bool is_input) {
     assert(op_id >= 0 && "invalid op_id (method can not be called for spill moves)");
 
-    if (list_empty(i->children)) {
+    if (list_is_empty(i->children)) {
         return i;
     }
 
