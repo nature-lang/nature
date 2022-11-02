@@ -918,12 +918,12 @@ interval_t *interval_child_at(interval_t *i, int op_id, bool is_input) {
         return i;
     }
 
-    if (i->first_range->from <= op_id && i->last_range->to > op_id) {
+    int last_to_offset = is_input ? 1 : 0;
+
+    if (i->first_range->from <= op_id && op_id < (i->last_range->to + last_to_offset)) {
         return i;
     }
 
-
-    int last_to_offset = is_input ? 1 : 0;
     // i->var 在不同的指令处可能作为 input 也可能作为 output
     // 甚至在同一条指令处即作为 input，又作为 output， 比如 20: v1 + 1 -> v2
     LIST_FOR(i->children) {

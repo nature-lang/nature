@@ -504,9 +504,9 @@ void replace_virtual_register(closure_t *c) {
             }
 
             if (op->code == LIR_OPCODE_MOVE) {
-                if (lir_operand_equal(op->first, op->output)) {
-                    list_remove(block->operations, current);
-                }
+//                if (lir_operand_equal(op->first, op->output)) {
+//                    list_remove(block->operations, current);
+//                }
             }
 
             current = current->succ;

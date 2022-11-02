@@ -355,6 +355,7 @@ bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     if (a->type != b->type) {
         return false;
     }
+
     if (a->type == LIR_OPERAND_REG) {
         reg_t *reg_a = a->value;
         reg_t *reg_b = b->value;

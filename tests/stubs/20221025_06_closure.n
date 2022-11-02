@@ -1,11 +1,3 @@
 int cash = 1000
-int save(int number) {
-    cash = cash + number
-}
-
-
-save(10)
-
-
-save(20)
+println("init, cash=", cash)
 
