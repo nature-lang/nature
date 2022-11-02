@@ -629,7 +629,7 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
 
 // 在 before 前挑选一个最佳的位置进行 split
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
-    return before;
+    return before - 1;
 }
 
 /**
@@ -729,7 +729,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     interval_t *child = interval_new_child(c, i);
 
     // mov id = position - 1
-    closure_insert_mov(c, position - 1, i, child);
+    closure_insert_mov(c, position, i, child);
 
     // 将 child 加入 parent 的 children 中,
     // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方

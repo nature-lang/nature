@@ -3,12 +3,9 @@ int save(int number) {
     cash = cash + number
 }
 
-println("init, cash=", cash)
 
 save(10)
 
-println("saved 10, cash=", cash)
 
 save(20)
 
-println("saved 20, cash=", cash)

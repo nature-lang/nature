@@ -1,5 +1,6 @@
 #include "env.h"
 #include "stdio.h"
+#include "utils/assertf.h"
 
 void env_new(char *env_name, int capacity) {
     if (env_table == NULL) {
@@ -12,28 +13,17 @@ void env_new(char *env_name, int capacity) {
 }
 
 void set_env(char *env_name, int index, void *value) {
-    if (env_table == NULL) {
-        printf("env table not init");
-        exit(1);
-    }
+    assertf(env_table, "env_table is null");
     void **items = table_get(env_table, env_name);
-    if (items == NULL) {
-        printf("env %s not found in table", env_name);
-        exit(1);
-    }
+    assertf(items, "env list %s not found int table", env_name);
     items[index] = value;
 }
 
 void *get_env(char *env_name, int index) {
-    if (env_table == NULL) {
-        printf("env table not init");
-        exit(1);
-    }
+    assertf(env_name, "env_name is null");
+    assertf(env_table, "env_table is null");
     void **items = table_get(env_table, env_name);
-    if (items == NULL) {
-        printf("env %s not found in table", env_name);
-        exit(1);
-    }
+    assertf(items, "env list %s not found int table", env_name);
 
     return items[index];
 }
