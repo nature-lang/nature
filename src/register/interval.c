@@ -214,7 +214,6 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
-        // TODO insert_id 具体在什么位置？
         if (OP(block->first_op)->id > insert_id || OP(block->last_op)->id < insert_id) {
             continue;
         }

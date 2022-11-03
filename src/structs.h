@@ -222,8 +222,6 @@ typedef struct closure_t {
     list *operations; // 指令列表
 
     table_t *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
-    list *var_decls; // 只为了堆栈分配(形参的需要单独处理，就别写进来了)
-    slice_t *formal_params; // 也是为了堆栈分配
 
     int stack_slot; // 初始值为 0，用于寄存器 slot 分配
 

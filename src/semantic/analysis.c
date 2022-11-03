@@ -38,7 +38,7 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             // 注册 function_decl_type + ident
             analysis_function_decl_ident(m, (ast_new_fn *) stmt->stmt);
 
-            // 函数体添加到 延迟处理
+            // 函数体添加到 延迟处理，从而可以 fn 引用当前环境的所有变量
             uint8_t count = m->analysis_current->contains_fn_count++;
             m->analysis_current->contains_fn_decl[count].stmt = stmt;
             m->analysis_current->contains_fn_decl[count].is_stmt = true;

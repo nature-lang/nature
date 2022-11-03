@@ -23,7 +23,8 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->ident = var->ident;
         new_var->old = var->old;
         new_var->type_base = var->type_base;
-        new_var->flag = var->flag;
+//        new_var->flag = var->flag;
+        new_var->flag = 0; // 每个参数位置的 flag 都是不同的
         new_var->decl = var->decl;
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
@@ -158,7 +159,10 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
 
     if (op->first && op->first->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->first->value;
-
+        var->flag |= FLAG(VAR_FLAG_FIRST);
+    }
+    if (op->second && op->second->type == LIR_OPERAND_VAR) {
+        lir_var_t *var = op->second->value;
         var->flag |= FLAG(VAR_FLAG_SECOND);
     }
     if (op->output && op->output->type == LIR_OPERAND_VAR) {
@@ -184,10 +188,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
 
     new->interval_table = table_new();
 
-    new->var_decl_table = table_new();
-    new->var_decls = list_new();
-    new->formal_params = slice_new();
-//    new->stack_length = 0;
+//    new->var_decl_table = table_new();
     new->stack_slot = 0;
     new->loop_count = 0;
     new->loop_ends = slice_new();
@@ -257,8 +258,10 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
     var->old = ident;
     var->flag = 0;
 
-    // 1. 读取符号信息
+    // 1. 读取符号信息 TODO 别从这里读了，直接去读全局符号表吧
     lir_var_decl_t *local = table_get(c->var_decl_table, ident);
+    assertf(local, "local variable %s not found", ident);
+
     var->decl = local;
     var->type_base = local->type.base;
 
@@ -275,7 +278,6 @@ lir_var_decl_t *lir_new_var_decl(closure_t *c, char *ident, type_t type) {
     lir_var_decl_t *var_decl = NEW(lir_var_decl_t);
     var_decl->type = type;
     var_decl->ident = ident;
-    list_push(c->var_decls, var_decl);
     table_set(c->var_decl_table, ident, var_decl);
     return var_decl;
 }

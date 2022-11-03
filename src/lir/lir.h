@@ -84,13 +84,13 @@ int var_unique_count;
 int lir_line;
 
 typedef enum {
-    VAR_FLAG_OUTPUT,
-    VAR_FLAG_FIRST,
+    VAR_FLAG_FIRST = 1,
     VAR_FLAG_SECOND,
+    VAR_FLAG_OUTPUT,
 } lir_var_flag_e;
 
 typedef enum {
-    LIR_OPERAND_NULL,
+    LIR_OPERAND_NULL = 0,
     LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_REG,
     LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
@@ -147,7 +147,6 @@ typedef struct {
 typedef struct {
     string ident;
     type_t type; // 原始类型存储(包含指针深度等数据)
-//    int16_t *stack_offset; // 可正可负, 对应 rbp-8 或者 rbp+8
 } lir_var_decl_t;
 
 /**

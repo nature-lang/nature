@@ -1,3 +1,15 @@
+int save(int number) {
+    cash = cash + number
+}
+
 int cash = 1000
+
 println("init, cash=", cash)
 
+save(10)
+
+println("saved 10, cash=", cash)
+
+save(20)
+
+println("saved 20, cash=", cash)

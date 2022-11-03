@@ -107,16 +107,17 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
         target->value = lir_new_var_operand(c, ast_closure->function->name);
     }
 
+    slice_t *formal_params = slice_new();
     for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
         ast_var_decl *param = ast_closure->function->formal_params[i];
         lir_var_decl_t *var_decl = lir_new_var_decl(c, param->ident, param->type);
         // var operand 依赖 var_decl 定义的变量
         lir_var_t *var = lir_new_var_operand(c, var_decl->ident);
-        slice_push(c->formal_params, var);
+        slice_push(formal_params, var);
     }
 
     list_push(operations, lir_op_new(LIR_OPCODE_FN_BEGIN, NULL, NULL,
-                                     LIR_NEW_OPERAND(LIR_OPERAND_FORMAL_PARAMS, c->formal_params)));
+                                     LIR_NEW_OPERAND(LIR_OPERAND_FORMAL_PARAMS, formal_params)));
 
 
     // 编译 body
