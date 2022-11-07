@@ -22,10 +22,10 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         lir_var_t *new_var = NEW(lir_var_t);
         new_var->ident = var->ident;
         new_var->old = var->old;
+        new_var->type = var->type;
         new_var->type_base = var->type_base;
 //        new_var->flag = var->flag;
         new_var->flag = 0; // 每个参数位置的 flag 都是不同的
-        new_var->decl = var->decl;
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
@@ -54,6 +54,7 @@ lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t
     addr_operand->base = base;
     addr_operand->offset = offset;
     addr_operand->type_base = type_base;
+    addr_operand->indirect_addr = false;
 
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->type = LIR_OPERAND_ADDR;
@@ -109,10 +110,9 @@ lir_op_t *lir_op_call(char *name, lir_operand_t *result, int arg_count, ...) {
  * @return
  */
 lir_operand_t *lir_new_temp_var_operand(closure_t *c, type_t type) {
-    string unique_ident = LIR_UNIQUE_NAME(TEMP_IDENT);
+    string unique_ident = analysis_unique_ident(c->module, TEMP_IDENT);
 
-    symbol_set_temp_ident(unique_ident, type);
-    lir_new_var_decl(c, unique_ident, type);
+    symbol_table_set_var(unique_ident, type);
 
     return LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, unique_ident));
 }
@@ -258,28 +258,11 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
     var->old = ident;
     var->flag = 0;
 
-    // 1. 读取符号信息 TODO 别从这里读了，直接去读全局符号表吧
-    lir_var_decl_t *local = table_get(c->var_decl_table, ident);
-    assertf(local, "local variable %s not found", ident);
-
-    var->decl = local;
-    var->type_base = local->type.base;
+    ast_var_decl *global_var = symbol_table_get_var(ident);
+    var->type = global_var->type;
+    var->type_base = global_var->type.base;
 
     return var;
-}
-
-/**
- * @param c
- * @param ident
- * @param type
- * @return
- */
-lir_var_decl_t *lir_new_var_decl(closure_t *c, char *ident, type_t type) {
-    lir_var_decl_t *var_decl = NEW(lir_var_decl_t);
-    var_decl->type = type;
-    var_decl->ident = ident;
-    table_set(c->var_decl_table, ident, var_decl);
-    return var_decl;
 }
 
 lir_operand_t *lir_new_empty_operand() {
@@ -319,25 +302,6 @@ uint8_t lir_operand_sizeof(lir_operand_t *operand) {
     return type_base_sizeof(lir_operand_type_base(operand));
 }
 
-/**
- * 读取 operand 中包含的所有 var， 并返回 lir_var_tslice
- * @param operand
- * @return
- */
-slice_t *lir_operand_vars(lir_operand_t *operand) {
-    slice_t *result = slice_new();
-    if (!operand) {
-        return result;
-    }
-    slice_t *operands = lir_nest_operands(operand, FLAG(LIR_OPERAND_VAR));
-    SLICE_FOR(operands) {
-        lir_operand_t *o = SLICE_VALUE(operands);
-        slice_push(result, o->value);
-    }
-
-    return result;
-}
-
 bool lir_op_is_branch(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ) {
         return true;
@@ -372,7 +336,6 @@ bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
 
     return false;
 }
-
 
 /**
  * 返回 lir_operand，需要自己根据实际情况解析
@@ -416,23 +379,44 @@ slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag) {
     return result;
 }
 
-slice_t *lir_input_operands(lir_op_t *op, uint64_t flag) {
-    slice_t *result = lir_nest_operands(op->first, flag);
-    slice_append(result, lir_nest_operands(op->second, flag));
-
-    return result;
-}
-
-slice_t *lir_output_operands(lir_op_t *op, uint64_t flag) {
-    return lir_nest_operands(op->output, flag);
-}
-
-slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag) {
+slice_t *lir_op_operands(lir_op_t *op, uint64_t flag) {
     slice_t *result = lir_nest_operands(op->output, flag);
     slice_append(result, lir_nest_operands(op->first, flag));
     slice_append(result, lir_nest_operands(op->second, flag));
 
     return result;
+}
+
+slice_t *lir_input_operands(lir_op_t *op, uint64_t flag) {
+    slice_t *result = lir_nest_operands(op->first, flag);
+    slice_append(result, lir_nest_operands(op->second, flag));
+    if (FLAG(LIR_OPERAND_VAR) & flag) {
+        // with indirect addr var in output
+        slice_t *operands = lir_nest_operands(op->output, FLAG(LIR_OPERAND_VAR));
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *o = operands->take[i];
+            lir_var_t *var = o->value;
+            if (var->indirect_addr) {
+                slice_push(result, o);
+            }
+        }
+    }
+
+    return result;
+}
+
+slice_t *lir_output_operands(lir_op_t *op, uint64_t flag) {
+    slice_t *operands = lir_nest_operands(op->output, flag);
+    if (FLAG(LIR_OPERAND_VAR) & flag) {
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *o = operands->take[i];
+            lir_var_t *var = o->value;
+            if (var->indirect_addr) {
+                slice_remove(operands, i);
+            }
+        }
+    }
+    return operands;
 }
 
 bool lir_op_contain_cmp(lir_op_t *op) {
@@ -467,3 +451,4 @@ void lir_set_quick_op(basic_block_t *block) {
     block->first_op = current;
     block->last_op = list_last(block->operations);
 }
+

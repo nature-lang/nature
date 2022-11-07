@@ -30,8 +30,9 @@ int compiler_line = 0;
  * @param ast
  * @return
  */
-slice_t *compiler(ast_closure_t *ast) {
+slice_t *compiler(module_t *m, ast_closure_t *ast) {
     compiler_closures = slice_new();
+    current_module = m;
     compiler_closure(NULL, ast, NULL);
     return compiler_closures;
 }
@@ -92,6 +93,7 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
 
     // new 一个新的 closure_t ---------------
     closure_t *c = lir_new_closure(ast_closure);
+    c->module = current_module;
     c->name = ast_closure->function->name; // analysis 阶段已经进行了唯一名称处理
     c->end_label = str_connect("end_", c->name);
     c->parent = parent;
@@ -110,9 +112,8 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
     slice_t *formal_params = slice_new();
     for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
         ast_var_decl *param = ast_closure->function->formal_params[i];
-        lir_var_decl_t *var_decl = lir_new_var_decl(c, param->ident, param->type);
         // var operand 依赖 var_decl 定义的变量
-        lir_var_t *var = lir_new_var_operand(c, var_decl->ident);
+        lir_var_t *var = lir_new_var_operand(c, param->ident);
         slice_push(formal_params, var);
     }
 
@@ -196,7 +197,6 @@ list *compiler_stmt(closure_t *c, ast_stmt *stmt) {
  */
 list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
     list *operations = list_new();
-    lir_var_decl_t *local = lir_new_var_decl(c, stmt->var_decl->ident, stmt->var_decl->type);
 
     lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
     lir_operand_t *src = lir_new_empty_operand();
@@ -208,6 +208,7 @@ list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
 }
 
 /**
+ * TODO 先编译右值，在编译左值，且左值需要一个单独的编译方法来处理。
  * a = 1 // left_target is lir_var_operand
  * a.b = 1 // left_target is lir_memory(base_address)
  * @param c
@@ -232,7 +233,6 @@ list *compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
  * @return
  */
 list *compiler_var_decl(closure_t *c, ast_var_decl *var_decl) {
-    lir_var_decl_t *local = lir_new_var_decl(c, var_decl->ident, var_decl->type);
     return list_new();
 }
 
@@ -459,12 +459,10 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target) {
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
 list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
-    if (target->type != LIR_OPERAND_VAR) {
-        error_exit("[compiler_access_env] target not var, actual %d", target->type);
-    }
+    assertf(target->type == LIR_OPERAND_VAR, "target not var, actual %d", target->type);
 
     lir_var_t *var = target->value;
-    var->decl->type.point = 1;
+//    var->type.point = 1; // TODO 这是为啥？
 
     ast_access_list *ast = expr.expr;
     // new tmp 是无类型的。
@@ -494,7 +492,7 @@ list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
             index_target
     );
 
-    var->indirect_addr = true;
+//    var->indirect_addr = true;
     list_push(operations, call_op);
 
     return operations;
@@ -556,19 +554,18 @@ list *compiler_new_array(closure_t *c, ast_expr expr, lir_operand_t *base_target
 }
 
 /**
- * 访问环境变量
  * 1. 根据 c->env_name 得到 base_target   call GET_ENV
+ * var a = b + 3 // 其中 b 是外部环境变量,需要改写成 GET_ENV
+ * b = 12 + c  // 类似这样对外部变量的重新赋值操作，此时 b 的访问直接改成了
  * @param c
  * @param ast
  * @param target
  * @return
  */
 list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand_t *target) {
-    ast_access_env *ast = expr.expr;
-    if (target->type != LIR_OPERAND_VAR) {
-        error_exit("[compiler_access_env] target not var, actual %d", target->type);
-    }
+    assertf(target->type == LIR_OPERAND_VAR, "target not var, type: %d", target->type);
 
+    ast_access_env *ast = expr.expr;
     list *operations = list_new();
     lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, c->env_name);
     lir_operand_t *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
@@ -585,11 +582,12 @@ list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand_t *target) {
 
     // 合理怀疑 target 为 empty var, 现在将返回值移动给他，并为其添加解引用标识，再继续观察解引用标识能否传递
     lir_var_t *var = target->value;
-    var->decl->type.point = 1;
+    var->type.point = 1;
 
     list_push(operations, call_op);
     list_push(operations, lir_op_new(LIR_OPCODE_MOVE, env_point_target, NULL, target));
 
+    // mov 操作一旦完成，后续所有访问都是通过接引用的方式来使用的?
     var->indirect_addr = true; // 添加解引用标识，推断后续的操作肯定需要这个标识
     return operations;
 }
@@ -606,7 +604,7 @@ list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand_t *target) {
  */
 list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand_t *target) {
     lir_var_t *operand_var = target->value;
-    symbol_set_temp_ident(operand_var->ident, type_new_base(TYPE_POINT));
+    symbol_table_set_var(operand_var->ident, type_new_base(TYPE_POINT));
 
     ast_access_map *ast = expr.expr;
     // compiler base address left_target
@@ -938,7 +936,7 @@ list *compiler_ident(closure_t *c, ast_ident *ident, lir_operand_t *target) {
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     }
     if (s->type == SYMBOL_TYPE_VAR) {
-        ast_var_decl *var = s->decl;
+        ast_var_decl *var = s->value;
         if (s->is_local) {
             target->type = LIR_OPERAND_VAR;
             target->value = lir_new_var_operand(c, ident->literal);

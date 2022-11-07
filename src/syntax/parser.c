@@ -932,7 +932,7 @@ ast_stmt *parser_import_stmt(module_t *m) {
     stmt->path = NULL;
     stmt->as = NULL;
     stmt->full_path = NULL;
-    stmt->module_unique_name = NULL;
+    stmt->module_ident = NULL;
 
     token *token = parser_advance(m);
     if (token->type != TOKEN_LITERAL_STRING) {

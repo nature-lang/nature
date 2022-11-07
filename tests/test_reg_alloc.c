@@ -64,14 +64,14 @@ static void test_basic() {
         if (s->type != SYMBOL_TYPE_VAR) {
             continue;
         }
-        infer_var_decl(s->decl); // 类型还原
+        infer_var_decl(s->value); // 类型还原
     }
     for (int j = 0; j < m->ast_closures->count; ++j) {
         ast_closure_t *closure = m->ast_closures->take[j];
         // 类型推断
         infer(closure);
         // 编译
-        slice_append_free(m->closures, compiler(closure)); // 都写入到 compiler_closure 中了
+        slice_append_free(m->closures, compiler(m, closure)); // 都写入到 compiler_closure 中了
     }
 
     for (int j = 0; j < m->closures->count; ++j) {

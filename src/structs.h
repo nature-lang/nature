@@ -106,7 +106,7 @@ typedef struct {
     char *source_path; // 文件完整路径(外面丢进来的)
     char *source_dir; // 文件所在目录,去掉 xxx.n
 //    string namespace; // is dir, 从 base_ns 算起的 source_dir
-    string module_unique_name; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
+    string ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
 
     bool entry; // 入口
 
@@ -220,8 +220,6 @@ typedef struct closure_t {
     string env_name;
     struct closure_t *parent;
     list *operations; // 指令列表
-
-    table_t *var_decl_table; // 主要是用于栈分配, 需要 hash 表查找(但是该结构不适合遍历), 形参和局部变量都在这里定义
 
     int stack_slot; // 初始值为 0，用于寄存器 slot 分配
 

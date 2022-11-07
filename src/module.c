@@ -47,15 +47,15 @@ void complete_import(char *importer_dir, ast_import *import) {
             import->as = module_name;
         }
         import->full_path = full_path;
-        import->module_unique_name = module_unique_name(full_path);
+        import->module_ident = module_unique_ident(full_path);
         return;
     }
 
     error_exit("[complete_import] only module_path-based(%s) imports are supported", BASE_NS);
 }
 
-char *ident_with_module_unique_name(string unique_name, char *ident) {
-    char *temp = str_connect(unique_name, ".");
+char *ident_with_module(char *module_ident, char *ident) {
+    char *temp = str_connect(module_ident, ".");
     temp = str_connect(temp, ident);
     return temp;
 }
@@ -80,7 +80,7 @@ module_t *module_build(char *source_path, bool entry) {
     char *temp = strrchr(source_path, '/');
     m->source_dir = rtrim(source_path, strlen(temp));
 //    m->namespace = strstr(m->source_dir, BASE_NS); // 总 BASE_NS 开始，截止到目录部分
-    m->module_unique_name = module_unique_name(source_path);
+    m->ident = module_unique_ident(source_path);
     m->entry = entry;
 
     // scanner
@@ -95,11 +95,14 @@ module_t *module_build(char *source_path, bool entry) {
     return m;
 }
 
-char *module_unique_name(char *full_path) {
+char *module_unique_ident(char *full_path) {
     char *result = str_replace(full_path, WORK_DIR, ""); // 从 BASE_NS 开始，截止到目录部分
 
     result = str_connect(BASE_NS, result);
     // 去掉结尾的 .n 部分
     result = rtrim(result, strlen(".n"));
+
+    // replace dot
+    result = str_replace(result, "/", ".");
     return result;
 }

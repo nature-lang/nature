@@ -43,7 +43,7 @@ static char *lib_file_path(char *file) {
  */
 static void assembler(module_t *m) {
     if (BUILD_OS == OS_LINUX) {
-        char *object_file_name = str_connect(m->module_unique_name, ".n.o");
+        char *object_file_name = str_connect(m->ident, ".n.o");
         str_replace_char(object_file_name, '/', '.');
 
         char *output = file_join(TEMP_DIR, object_file_name);
@@ -157,7 +157,7 @@ void build(char *build_entry) {
     ast_closure_t *root_ast_closure = root->ast_closures->take[0];
     for (int i = 1; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->module_unique_name);
+        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
 
         slice_t *temp = slice_new();
         slice_push(temp, m->call_init_stmt);
@@ -176,7 +176,7 @@ void build(char *build_entry) {
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
-            infer_var_decl(s->decl); // 类型还原
+            infer_var_decl(s->value); // 类型还原
         }
 
         for (int j = 0; j < m->ast_closures->count; ++j) {
@@ -184,13 +184,12 @@ void build(char *build_entry) {
             // 类型推断
             infer(ast_closure);
             // 编译
-            slice_append_free(m->closures, compiler(ast_closure)); // 都写入到 compiler_closure 中了
+            slice_append_free(m->closures, compiler(m, ast_closure)); // 都写入到 compiler_closure 中了
         }
 
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
-            c->module = m;
 
             cfg(c);
 
@@ -219,7 +218,7 @@ void build(char *build_entry) {
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
-            ast_var_decl *var_decl = s->decl;
+            ast_var_decl *var_decl = s->value;
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = s->ident;
             decl->size = type_base_sizeof(var_decl->type.base);

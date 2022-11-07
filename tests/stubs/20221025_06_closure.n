@@ -1,8 +1,8 @@
+int cash = 1000 // 如果 cash 分配到了寄存器就会导致引用失效？
+
 int save(int number) {
     cash = cash + number
 }
-
-int cash = 1000
 
 println("init, cash=", cash)
 

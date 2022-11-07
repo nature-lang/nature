@@ -156,7 +156,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = lir_new_temp_var_operand(c, i->var->decl->type)->value;
+        lir_var_t *var = lir_new_temp_var_operand(c, i->var->type)->value;
         child->var = var;
         table_set(c->interval_table, var->ident, child);
     } else {
@@ -244,7 +244,7 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
 static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
     slice_t *result = slice_new();
     // output 总是存储在 result 中
-    slice_t *operands = lir_nest_operands(op->output, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     SLICE_FOR(operands) {
         lir_operand_t *operand = SLICE_VALUE(operands);
         if (operand->type == LIR_OPERAND_VAR) {
@@ -269,7 +269,7 @@ static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
 
 static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
     slice_t *result = slice_new();
-    slice_t *operands = lir_nest_operands(op->first, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     slice_append(operands, lir_nest_operands(op->second, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG)));
     // 解析 interval
     SLICE_FOR(operands) {
@@ -300,6 +300,10 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
  * @return
  */
 static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) {
+    if (i->var->indirect_addr) {
+        return USE_KIND_MUST;
+    }
+
     if (lir_op_contain_cmp(op)) {
         return USE_KIND_SHOULD;
     }
@@ -308,6 +312,7 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
 }
 
 /**
+ * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
  * output 已经必须要有寄存器了, input 就无所谓了
  * @param c
  * @param op
@@ -315,6 +320,10 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @return
  */
 static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
+    if (i->var->indirect_addr) {
+        return USE_KIND_MUST;
+    }
+
     if (lir_op_contain_cmp(op)) {
         assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR)
                && "cmp must have var");
@@ -751,15 +760,22 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     // 切割 range
     LIST_FOR(i->ranges) {
         interval_range_t *range = LIST_VALUE();
-        if (!in_range(range, position)) {
+        if (position <= range->from) {
             continue;
         }
+
+        // position 大于 range->from, 此时有三种情况，
+        // pos == range->from
+        //  range->from < pos < range->to
+        //  range->to <= pos, pos 等于 range->to 就表示没有被 range 覆盖
 
         // 如果 position 在 range 的起始位置，则直接将 ranges list 的当前部分和剩余部分分给 child interval 即可
         // 否则 对 range 进行切割
         // tips: position 必定不等于 range->to, 因为 to 是 excluded
         if (position == range->from) {
             child->ranges = list_split(i->ranges, LIST_NODE());
+        } else if (position >= range->to) {
+            child->ranges = list_split(i->ranges, LIST_NODE()->succ);
         } else {
             // new range for child
             interval_range_t *new_range = NEW(interval_range_t);
@@ -778,11 +794,10 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         child->first_range = list_first(child->ranges)->value;
         child->last_range = list_last(child->ranges)->value;
 
+        i->first_range = list_first(i->ranges)->value;
         i->last_range = list_last(i->ranges)->value;
         break;
     }
-
-
 
     // 划分 position
     LIST_FOR(i->use_pos_list) {
@@ -1048,4 +1063,12 @@ use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
     }
 
     assert(false && "no use pos found");
+}
+
+bool is_input_var(lir_var_t *var) {
+    // indirect addr 表示使用变量中存储的地址,并不是给变量赋值
+    if ((var->flag & FLAG(VAR_FLAG_OUTPUT)) && !var->indirect_addr) {
+        return false;
+    }
+    return true;
 }

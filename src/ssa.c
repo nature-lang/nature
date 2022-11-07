@@ -16,9 +16,12 @@ static void recollect_globals(closure_t *c) {
         basic_block_t *block = c->blocks->take[i];
         LIST_FOR(block->operations) {
             lir_op_t *op = LIST_VALUE();
-            slice_t *vars = lir_operand_vars(op->output);
-            if (vars->count > 0) {
-                slice_append(globals, vars);
+            slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
+            for (int j = 0; j < operands->count; ++j) {
+                lir_operand_t *operand = operands->take[j];
+                lir_var_t *var = operand->value;
+
+                slice_push(globals, operand->value);
             }
         }
     }
@@ -370,30 +373,27 @@ void ssa_use_def(closure_t *c) {
             lir_op_t *op = LIST_VALUE();
 
             // first param (use)
-            slice_t *vars = lir_operand_vars(op->first);
-            if (vars->count > 0) {
-                for (int _i = 0; _i < (vars)->count; ++_i) {
-                    lir_var_t *var = vars->take[_i];
-                    bool is_def = ssa_var_belong(var, def);
-                    if (!is_def && !table_exist(exist_use, var->ident)) {
-                        slice_push(use, var);
-                        table_set(exist_use, var->ident, var);
-                    }
-                    if (!table_exist(exist_var, var->ident)) {
-                        slice_push(c->globals, var);
-                        table_set(exist_var, var->ident, var);
-                    }
+            slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
+            for (int i = 0; i < operands->count; ++i) {
+                lir_operand_t *operand = operands->take[i];
+                lir_var_t *var = operand->value;
+                bool is_def = ssa_var_belong(var, def);
+                if (!is_def && !table_exist(exist_use, var->ident)) {
+                    slice_push(use, var);
+                    table_set(exist_use, var->ident, var);
+                }
+                if (!table_exist(exist_var, var->ident)) {
+                    slice_push(c->globals, var);
+                    table_set(exist_var, var->ident, var);
                 }
             }
-//            OPERAND_VAR_USE(vars)
-
-            // second param 可能包含 actual param
-            vars = lir_operand_vars(op->second);
-            OPERAND_VAR_USE(vars)
 
             // def
-            if (op->output != NULL && op->output->type == LIR_OPERAND_VAR) {
-                lir_var_t *var = (lir_var_t *) op->output->value;
+            operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
+            for (int i = 0; i < operands->count; ++i) {
+                lir_operand_t *operand = operands->take[i];
+                lir_var_t *var = operand->value;
+
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
                     table_set(exist_use, var->ident, var);
@@ -489,7 +489,7 @@ void ssa_rename(closure_t *c) {
     }
 
     // 从根开始更名(rename 就相当于创建了一个新的变量)
-    ssa_rename_basic(c->entry, var_number_table, stack_table);
+    ssa_rename_block(c->entry, var_number_table, stack_table);
 
     // 释放 NEW 的变量
     SLICE_FOR(c->globals) {
@@ -501,7 +501,7 @@ void ssa_rename(closure_t *c) {
     }
 }
 
-void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
+void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
     // skip label code
 //    lir_op *current_op = block->asm_operations->front->succ;
     list_node *current = block->operations->front->succ;
@@ -519,25 +519,20 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
             continue;
         }
 
-        slice_t *vars = lir_operand_vars(op->first);
-        SLICE_FOR(vars) {
-            lir_var_t *var = SLICE_VALUE(vars);
+        slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *operand = operands->take[i];
+            lir_var_t *var = operand->value;
             var_number_stack *stack = table_get(stack_table, var->old);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
         }
 
-        vars = lir_operand_vars(op->second);
-        SLICE_FOR(vars) {
-            lir_var_t *var = SLICE_VALUE(vars);
-            var_number_stack *stack = table_get(stack_table, var->old);
-            uint8_t number = stack->numbers[stack->count - 1];
-            ssa_rename_var(var, number);
-        }
+        operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *operand = operands->take[i];
+            lir_var_t *var = operand->value;
 
-        vars = lir_operand_vars(op->output);
-        SLICE_FOR(vars) {
-            lir_var_t *var = SLICE_VALUE(vars);
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
         }
@@ -576,7 +571,7 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
 
     // 深度遍历-前序遍历,支配树可达所有节点
     for (int i = 0; i < block->be_idom->count; ++i) {
-        ssa_rename_basic(block->be_idom->take[i], var_number_table, stack_table);
+        ssa_rename_block(block->be_idom->take[i], var_number_table, stack_table);
     }
 
     // 子节点递归完毕需要回到父节点，然后去下一个兄弟节点
@@ -585,14 +580,19 @@ void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *
     // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
     list_node *current_node = block->operations->front->succ;
     while (current_node->value != NULL) {
-        lir_op_t *current_op = current_node->value;
-        if (current_op->output != NULL && current_op->output->type == LIR_OPERAND_VAR) {
-            lir_var_t *var = (lir_var_t *) current_op->output->value;
+        lir_op_t *op = current_node->value;
+        // output var
+        slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *operand = operands->take[i];
+            lir_var_t *var = operand->value;
 
             // pop stack
             var_number_stack *stack = table_get(stack_table, var->old);
+            assertf(stack, "var %s not found in stack table", var->old);
             stack->count--;
         }
+
         current_node = current_node->succ;
     }
 }

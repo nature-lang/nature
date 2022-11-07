@@ -1,6 +1,23 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
 
+static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_node *node) {
+    lir_op_t *op = node->value;
+    slice_t *imm_operands = lir_input_operands(op, FLAG(LIR_OPERAND_IMM));
+    for (int i = 0; i < imm_operands->count; ++i) {
+        lir_operand_t *imm_operand = imm_operands->take[i];
+        lir_imm_t *imm = imm_operand->value;
+        if (imm->type == TYPE_STRING_RAW) {
+            lir_operand_t *var_operand = lir_new_temp_var_operand(c, type_new_base(TYPE_STRING_RAW));
+            slice_push(c->globals, var_operand->value);
+            lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
+            imm_operand->type = var_operand->type;
+            imm_operand->value = var_operand->value;
+            list_insert_before(block->operations, node, temp);
+        }
+    }
+}
+
 // mov var -> eax
 static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     list *operations = list_new();
@@ -96,19 +113,9 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         lir_op_t *op = node->value;
 
         // 处理 imm string operands
-        slice_t *imm_operands = lir_input_operands(op, FLAG(LIR_OPERAND_IMM));
-        for (int i = 0; i < imm_operands->count; ++i) {
-            lir_operand_t *imm_operand = imm_operands->take[i];
-            lir_imm_t *imm = imm_operand->value;
-            if (imm->type == TYPE_STRING_RAW) {
-                lir_operand_t *var_operand = lir_new_temp_var_operand(c, type_new_base(TYPE_STRING_RAW));
-                slice_push(c->globals, var_operand->value);
-                lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
-                imm_operand->type = var_operand->type;
-                imm_operand->value = var_operand->value;
-                list_insert_before(block->operations, node, temp);
-            }
-        }
+        amd64_lower_imm_operand(c, block, node);
+
+        // TODO lower indirect addr
 
         if (lir_op_is_call(op) && op->second->value != NULL) {
             // lower call actual params

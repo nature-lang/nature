@@ -96,7 +96,7 @@ bool analysis_redeclare_check(module_t *m, string ident);
 
 analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *decl, string ident);
 
-string analysis_unique_ident(string name);
+char *analysis_unique_ident(module_t *m, char *name);
 
 void analysis_begin_scope(module_t *m);
 

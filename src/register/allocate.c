@@ -489,21 +489,21 @@ void replace_virtual_register(closure_t *c) {
         list_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *vars = lir_op_nest_operands(op, FLAG(LIR_OPERAND_VAR));
+            slice_t *vars = lir_op_operands(op, FLAG(LIR_OPERAND_VAR));
 
             for (int j = 0; j < vars->count; ++j) {
                 lir_operand_t *operand = vars->take[j];
                 lir_var_t *var = operand->value;
                 interval_t *parent = table_get(c->interval_table, var->ident);
                 assert(parent);
-                bool is_input = !(var->flag & FLAG(VAR_FLAG_OUTPUT));
 
-                interval_t *interval = interval_child_at(parent, op->id, is_input);
+                interval_t *interval = interval_child_at(parent, op->id, is_input_var(var));
 
                 var_replace(operand, interval);
             }
 
             if (op->code == LIR_OPCODE_MOVE) {
+                // TODO 恢复
 //                if (lir_operand_equal(op->first, op->output)) {
 //                    list_remove(block->operations, current);
 //                }

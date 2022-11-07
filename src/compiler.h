@@ -8,8 +8,9 @@
 #include "utils/slice.h"
 
 slice_t *compiler_closures;
+module_t *current_module;
 
-slice_t *compiler(ast_closure_t *ast);
+slice_t *compiler(module_t *m, ast_closure_t *ast);
 
 list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operand_t *target);
 

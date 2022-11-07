@@ -54,7 +54,7 @@ void ssa_add_phi(closure_t *c);
 
 void ssa_rename(closure_t *c);
 
-void ssa_rename_basic(basic_block_t *block, table_t *var_number_table, table_t *stack_table);
+void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *stack_table);
 
 uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *stack_table);
 

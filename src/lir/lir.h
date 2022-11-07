@@ -80,7 +80,7 @@
    temp_name;                                   \
 })
 
-int var_unique_count;
+int var_unique_count; // TODO 一旦多文件编译，就会有问题
 int lir_line;
 
 typedef enum {
@@ -155,11 +155,13 @@ typedef struct {
 typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
-//    uint8_t reg_index; // reg list index, 寄存器分配, 及时是同一个变量,也会有时在寄存器中,有时在内存中
-    lir_var_decl_t *decl; // local 如果为 nil 就是外部符号引用
-    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
-    bool indirect_addr; // &a 对变量进行解引用操作
+
     uint8_t flag;
+    type_t type;
+    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
+
+    uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
+    bool indirect_addr; // &a 对变量进行解引用操作, 当变量为指针时才允许为 tre
 } lir_var_t;
 
 /**
@@ -171,11 +173,15 @@ typedef struct {
     int size;
 } lir_stack_t;
 
+/**
+ * 如果是地址之间的移动操作直接使用 var 即可，indirect_addr_t 对应 native 中的 indirect_addr
+ * var t1 = [] =>  call new_array -> t1
+ * t1[0] = 24 => mov 24 -> indirect_addr(t1, 0)
+ */
 typedef struct {
-    lir_operand_t *base;
-    int offset; // 偏移量是可以计算出来的, 默认为 0
+    lir_operand_t *base; // compiler 完成后为 var, alloc reg 后为 reg
+    int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size
-    bool indirect_addr;
 } lir_addr_t;
 
 typedef struct {
@@ -239,14 +245,6 @@ closure_t *lir_new_closure(ast_closure_t *ast);
  */
 lir_var_t *lir_new_var_operand(closure_t *c, string ident);
 
-/**
- * 符号定义
- * 定义一个 local var operand
- * @param ident
- * @param type
- */
-lir_var_decl_t *lir_new_var_decl(closure_t *c, string ident, type_t type);
-
 type_base_t lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
@@ -286,13 +284,6 @@ bool lir_op_is_call(lir_op_t *op);
 
 bool lir_op_contain_cmp(lir_op_t *op);
 
-/**
- * 从 operand 中提取 vars 列表，用于 ssa operand var 改写, 以及寄存器分配
- * @param operand
- * @return
- */
-slice_t *lir_operand_vars(lir_operand_t *operand);
-
 bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b);
 
 slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag);
@@ -301,7 +292,7 @@ slice_t *lir_input_operands(lir_op_t *op, uint64_t flag);
 
 slice_t *lir_output_operands(lir_op_t *op, uint64_t flag);
 
-slice_t *lir_op_nest_operands(lir_op_t *op, uint64_t flag);
+slice_t *lir_op_operands(lir_op_t *op, uint64_t flag);
 
 void lir_init();
 

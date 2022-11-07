@@ -164,4 +164,6 @@ void resolve_mappings(closure_t *c, resolver_t *r);
 
 use_pos_t *first_use_pos(interval_t *i, use_kind_e kind);
 
+bool is_input_var(lir_var_t *var);
+
 #endif

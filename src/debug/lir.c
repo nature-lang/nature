@@ -91,9 +91,9 @@ char *lir_var_to_string(lir_var_t *var) {
     int len;
 
 //    stack_frame_offset = *var->local->stack_frame_offset;
-    if (var->decl) {
-        type_string = type_to_string[var->decl->type.base];
-        for (int i = 0; i < var->decl->type.point; ++i) {
+    if (var->type.base > 0) {
+        type_string = type_to_string[var->type.base];
+        for (int i = 0; i < var->type.point; ++i) {
             type_string = str_connect(type_string, "*");
         }
     }

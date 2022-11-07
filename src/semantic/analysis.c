@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "utils/helper.h"
 #include "analysis.h"
@@ -145,17 +146,13 @@ void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn) {
     if (!str_equal(new_fn->name, MAIN_FN_NAME)) {
         if (strlen(new_fn->name) == 0) {
             // 如果没有函数名称，则添加匿名函数名称
-            new_fn->name = analysis_unique_ident(ANONYMOUS_FN_NAME);
+            new_fn->name = analysis_unique_ident(m, ANONYMOUS_FN_NAME);
         }
 
         analysis_redeclare_check(m, new_fn->name);
 
         // 函数名称改写
-        analysis_local_ident_t *local = analysis_new_local(
-                m,
-                SYMBOL_TYPE_FN,
-                new_fn,
-                new_fn->name);
+        analysis_local_ident_t *local = analysis_new_local(m, SYMBOL_TYPE_FN, new_fn, new_fn->name);
 
         new_fn->name = local->unique_ident;
     }
@@ -271,6 +268,7 @@ void analysis_end_scope(module_t *m) {
 }
 
 /**
+ * TODO 不同 module 直接有同名的 ident 怎么处理？
  * code 可能还是 var 等待推导,但是基础信息已经填充完毕了
  * @param type
  * @param ident
@@ -278,7 +276,7 @@ void analysis_end_scope(module_t *m) {
  */
 analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *decl, string ident) {
     // unique ident
-    string unique_ident = analysis_unique_ident(ident);
+    string unique_ident = analysis_unique_ident(m, ident);
 
     analysis_local_ident_t *local = malloc(sizeof(analysis_local_ident_t));
     local->ident = ident;
@@ -391,7 +389,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
     }
 
     // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号中查找
-    char *global_ident = ident_with_module_unique_name(m->module_unique_name, ident->literal);
+    char *global_ident = ident_with_module(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, global_ident);
     if (s != NULL) {
         ident->literal = global_ident; // 完善访问名称
@@ -506,7 +504,7 @@ void analysis_select_property(module_t *m, ast_expr *expr) {
     }
 
     // 改写成 symtab_hash 中的名字
-    char *unique_ident = ident_with_module_unique_name(import->module_unique_name, select->property);
+    char *unique_ident = ident_with_module(import->module_ident, select->property);
     expr->assert_type = AST_EXPR_IDENT;
     expr->expr = ast_new_ident(unique_ident);
 }
@@ -642,8 +640,9 @@ bool analysis_redeclare_check(module_t *m, char *ident) {
  * @param name
  * @return
  */
-char *analysis_unique_ident(char *name) {
-    return LIR_UNIQUE_NAME(name);
+char *analysis_unique_ident(module_t *m, char *name) {
+    char *unique_name = LIR_UNIQUE_NAME(name);
+    return ident_with_module(m->ident, unique_name);
 }
 
 void analysis_function_begin(module_t *m) {
@@ -680,6 +679,11 @@ analysis_local_scope_t *analysis_new_local_scope(uint8_t scope_depth, analysis_l
     return new;
 }
 
+/**
+ * 多个模块的解析
+ * @param m
+ * @param stmt_list
+ */
 void analysis_module(module_t *m, slice_t *stmt_list) {
     // init
     m->analysis_line = 0;
@@ -703,14 +707,15 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     slice_t *var_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
 
+    // 跳过 import 语句开始计算
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->type == AST_VAR_DECL) {
             ast_var_decl *var_decl = stmt->stmt;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_VAR;
-            s->ident = ident_with_module_unique_name(m->module_unique_name, var_decl->ident);
-            s->decl = var_decl;
+            s->ident = ident_with_module(m->ident, var_decl->ident);
+            s->value = var_decl;
             s->is_local = false;
             slice_push(m->symbols, s);
             table_set(symbol_table, s->ident, s);
@@ -722,8 +727,8 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             ast_var_decl *var_decl = var_decl_assign->var_decl;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_VAR;
-            s->ident = ident_with_module_unique_name(m->module_unique_name, var_decl->ident);
-            s->decl = var_decl;
+            s->ident = ident_with_module(m->ident, var_decl->ident);
+            s->value = var_decl;
             s->is_local = false;
             slice_push(m->symbols, s);
             table_set(symbol_table, s->ident, s);
@@ -746,8 +751,8 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             ast_type_decl_stmt *type_decl = stmt->stmt;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_CUSTOM;
-            s->ident = ident_with_module_unique_name(m->module_unique_name, type_decl->ident);
-            s->decl = type_decl;
+            s->ident = ident_with_module(m->ident, type_decl->ident);
+            s->value = type_decl;
             s->is_local = false;
             slice_push(m->symbols, s);
             table_set(symbol_table, s->ident, s);
@@ -756,12 +761,12 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->type == AST_NEW_FN) {
             ast_new_fn *new_fn = stmt->stmt;
-            new_fn->name = ident_with_module_unique_name(m->module_unique_name, new_fn->name); // 全局函数改名
+            new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_FN;
             s->ident = new_fn->name;
-            s->decl = new_fn;
+            s->value = new_fn;
             s->is_local = false;
             slice_push(m->symbols, s);
             table_set(symbol_table, s->ident, s);
@@ -769,12 +774,12 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        error_exit("[analysis_module] stmt.code not allow, must var_decl/new_fn/type_decl");
+        assert(false && "[analysis_module] stmt.code not allow, must var_decl/new_fn/type_decl");
     }
 
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
-    fn_init->name = ident_with_module_unique_name(m->module_unique_name, INIT_FN_NAME);
+    fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
     fn_init->return_type = type_new_base(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
@@ -783,7 +788,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     symbol_t *s = NEW(symbol_t);
     s->type = SYMBOL_TYPE_FN;
     s->ident = fn_init->name;
-    s->decl = fn_init;
+    s->value = fn_init;
     s->is_local = false;
     slice_push(m->symbols, s);
     table_set(symbol_table, s->ident, s);

@@ -19,6 +19,5 @@ void lower(closure_t *c) {
         }
 
         lir_set_quick_op(block);
-        // TODO realloc global
     }
 }

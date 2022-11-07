@@ -37,7 +37,7 @@ bool is_print_symbol(char *ident) {
 }
 
 // compiler 阶段临时生成的数据
-void symbol_set_temp_ident(char *unique_ident, type_t type) {
+void symbol_table_set_var(char *unique_ident, type_t type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;
     var_decl->ident = unique_ident;
@@ -50,13 +50,21 @@ void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local)
     symbol_t *s = NEW(symbol_t);
     s->ident = ident;
     s->type = type;
-    s->decl = decl;
+    s->value = decl;
     s->is_local = is_local;
     table_set(symbol_table, ident, s);
 }
 
 symbol_t *symbol_table_get(char *ident) {
     return table_get(symbol_table, ident);
+}
+
+ast_var_decl *symbol_table_get_var(char *ident) {
+    symbol_t *s = table_get(symbol_table, ident);
+    if (!s) {
+        assertf(false, "symbol_table_get_var: symbol not found: %s", ident);
+    }
+    return s->value;
 }
 
 

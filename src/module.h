@@ -10,7 +10,7 @@
 #define MODULE_SUFFIX ".n"
 
 // module_path + path + ident
-char *ident_with_module_unique_name(string unique_name, char *ident);
+char *ident_with_module(char *module_ident, char *ident);
 
 /**
  * @param importer_dir importer 所在的目录, 用来计算相对路径引入
@@ -28,6 +28,6 @@ module_t *module_build(string source_path, bool entry);
  * @param full_path
  * @return
  */
-char *module_unique_name(string full_path);
+char *module_unique_ident(string full_path);
 
 #endif //NATURE_MODULE_H

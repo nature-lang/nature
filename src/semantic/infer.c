@@ -239,13 +239,13 @@ type_t infer_ident(string unique_ident) {
 
     if (symbol->type == SYMBOL_TYPE_VAR) {
         // 类型还原，并回写到 local_ident TODO 跨文件能还原吗？
-        ast_var_decl *var_decl = symbol->decl;
+        ast_var_decl *var_decl = symbol->value;
         var_decl->type = infer_type(var_decl->type);
         return var_decl->type;
     }
 
     if (symbol->type == SYMBOL_TYPE_FN) {
-        ast_new_fn *new_fn = symbol->decl;
+        ast_new_fn *new_fn = symbol->value;
         return infer_type(analysis_function_to_type(new_fn));
     }
 
@@ -830,7 +830,7 @@ type_t infer_type_decl_ident(ast_ident *ident) {
         error_printf(infer_line, "'%s' is not a code", symbol->ident);
     }
 
-    ast_type_decl_stmt *type_decl_stmt = symbol->decl;
+    ast_type_decl_stmt *type_decl_stmt = symbol->value;
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->code 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了

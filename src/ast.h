@@ -178,7 +178,7 @@ typedef struct {
 
     // 计算得出
     string full_path; // 绝对完整的文件路径
-    string module_unique_name; // 在符号表中的名称前缀,基于 full_path 计算出来
+    string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来
 } ast_import;
 
 typedef struct {
@@ -293,7 +293,6 @@ typedef struct {
     type_t value_type; // 类型推导截断冗余
 } ast_new_map;
 
-// 改写后是否需要添加类型系统支持？需要，不然怎么过类型推导
 typedef struct {
     ast_ident *env;
     uint8_t index;
