@@ -38,9 +38,8 @@ lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
         lir_var_t *var = operand->value;
         var->indirect_addr = true;
         return operand;
-    } else if (operand->type == LIR_OPERAND_ADDR) {
-        lir_addr_t *addr = operand->value;
-        addr->indirect_addr = true;
+    } else if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
         return operand;
     }
 
@@ -50,14 +49,13 @@ lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
 }
 
 lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base) {
-    lir_addr_t *addr_operand = malloc(sizeof(lir_addr_t));
+    lir_indirect_addr_t *addr_operand = malloc(sizeof(lir_indirect_addr_t));
     addr_operand->base = base;
     addr_operand->offset = offset;
     addr_operand->type_base = type_base;
-    addr_operand->indirect_addr = false;
 
     lir_operand_t *operand = NEW(lir_operand_t);
-    operand->type = LIR_OPERAND_ADDR;
+    operand->type = LIR_OPERAND_INDIRECT_ADDR;
     operand->value = addr_operand;
     return operand;
 }
@@ -109,7 +107,7 @@ lir_op_t *lir_op_call(char *name, lir_operand_t *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand_t *lir_new_temp_var_operand(closure_t *c, type_t type) {
+lir_operand_t *lir_temp_var_operand(closure_t *c, type_t type) {
     string unique_ident = analysis_unique_ident(c->module, TEMP_IDENT);
 
     symbol_table_set_var(unique_ident, type);
@@ -160,6 +158,8 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
     if (op->first && op->first->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->first->value;
         var->flag |= FLAG(VAR_FLAG_FIRST);
+        // TODO calc var flag
+
     }
     if (op->second && op->second->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->second->value;
@@ -168,6 +168,9 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
     if (op->output && op->output->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->output->value;
         var->flag |= FLAG(VAR_FLAG_OUTPUT);
+        if (var->indirect_addr) {
+            var->flag |= FLAG(VAR_FLAG_USE);
+        }
     }
 
     return op;
@@ -265,7 +268,7 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
     return var;
 }
 
-lir_operand_t *lir_new_empty_operand() {
+lir_operand_t *lir_new_target_operand() {
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->type = 0;
     operand->value = NULL;
@@ -280,8 +283,8 @@ type_base_t lir_operand_type_base(lir_operand_t *operand) {
         return var->type_base;
     }
 
-    if (operand->type == LIR_OPERAND_ADDR) {
-        lir_addr_t *addr = operand->value;
+    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
         return addr->type_base;
     }
 
@@ -353,6 +356,13 @@ slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag) {
         slice_push(result, operand);
     }
 
+    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        if (FLAG(addr->base->type) & flag) {
+            slice_push(result, addr->base);
+        }
+    }
+
     if (operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
         slice_t *operands = operand->value;
         for (int i = 0; i < operands->count; ++i) {
@@ -387,6 +397,12 @@ slice_t *lir_op_operands(lir_op_t *op, uint64_t flag) {
     return result;
 }
 
+/**
+ * var 特指 use var
+ * @param op
+ * @param flag
+ * @return
+ */
 slice_t *lir_input_operands(lir_op_t *op, uint64_t flag) {
     slice_t *result = lir_nest_operands(op->first, flag);
     slice_append(result, lir_nest_operands(op->second, flag));
@@ -405,17 +421,14 @@ slice_t *lir_input_operands(lir_op_t *op, uint64_t flag) {
     return result;
 }
 
+/**
+ * var 特指 def var
+ * @param op
+ * @param flag
+ * @return
+ */
 slice_t *lir_output_operands(lir_op_t *op, uint64_t flag) {
     slice_t *operands = lir_nest_operands(op->output, flag);
-    if (FLAG(LIR_OPERAND_VAR) & flag) {
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *o = operands->take[i];
-            lir_var_t *var = o->value;
-            if (var->indirect_addr) {
-                slice_remove(operands, i);
-            }
-        }
-    }
     return operands;
 }
 

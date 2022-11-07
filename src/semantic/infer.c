@@ -48,7 +48,7 @@ void infer_block(slice_t *block) {
 }
 
 void infer_stmt(ast_stmt *stmt) {
-    switch (stmt->type) {
+    switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             infer_var_decl((ast_var_decl *) stmt->stmt);
             break;
@@ -143,7 +143,7 @@ type_t infer_expr(ast_expr *expr) {
             type = infer_literal((ast_literal *) expr->expr);
             break;
         }
-        case AST_EXPR_ACCESS_ENV: {
+        case AST_EXPR_ENV_VALUE: {
             type = infer_access_env((ast_access_env *) expr->expr);
             break;
         }
@@ -410,14 +410,14 @@ type_t infer_access(ast_expr *expr) {
                          type_to_string[key_type.base]);
         }
 
-        ast_access_list *access_list = malloc(sizeof(ast_access_map));
+        ast_array_value_t *access_list = malloc(sizeof(ast_access_map));
         ast_array_decl *list_decl = left_type.value;
 
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
         access_list->type = list_decl->ast_type;
-        expr->assert_type = AST_EXPR_ACCESS_LIST;
+        expr->assert_type = AST_EXPR_ARRAY_VALUE;
         expr->expr = access_list;
 
         result = list_decl->ast_type;

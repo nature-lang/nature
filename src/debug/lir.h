@@ -17,7 +17,7 @@ string lir_var_to_string(lir_var_t *var);
 
 string lir_imm_to_string(lir_imm_t *immediate);
 
-string lir_addr_to_string(lir_addr_t *operand_addr);
+string lir_addr_to_string(lir_indirect_addr_t *operand_addr);
 
 string lir_formal_param_to_string(slice_t *formal_params);
 

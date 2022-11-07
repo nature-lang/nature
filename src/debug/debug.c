@@ -11,12 +11,12 @@ string ast_stmt_expr_type_to_debug[] = {
         [AST_EXPR_UNARY]="AST_EXPR_TYPE_UNARY",
         [AST_EXPR_IDENT]="AST_EXPR_TYPE_IDENT",
         [AST_EXPR_SELECT_PROPERTY]="AST_EXPR_TYPE_ACCESS_STRUCT",
-        [AST_EXPR_ACCESS_ENV]="AST_EXPR_TYPE_ENV_INDEX",
+        [AST_EXPR_ENV_VALUE]="AST_EXPR_TYPE_ENV_INDEX",
         [AST_EXPR_ACCESS]="AST_EXPR_TYPE_ACCESS",
         [AST_EXPR_SELECT]="AST_EXPR_TYPE_SELECT",
         [AST_EXPR_ACCESS_MAP]="AST_EXPR_TYPE_ACCESS_MAP",
         [AST_EXPR_NEW_MAP]="AST_EXPR_TYPE_NEW_MAP",
-        [AST_EXPR_ACCESS_LIST]="AST_EXPR_TYPE_ACCESS_LIST",
+        [AST_EXPR_ARRAY_VALUE]="AST_EXPR_TYPE_ACCESS_LIST",
         [AST_EXPR_NEW_ARRAY]="AST_EXPR_TYPE_NEW_LIST",
 //    [AST_EXPR_TYPE_LIST_DECL]="AST_EXPR_TYPE_LIST_DECL",
         [AST_VAR_DECL]="AST_VAR_DECL",
@@ -149,7 +149,7 @@ void debug_scanner(token *t) {
 }
 
 void debug_stmt(string type, ast_stmt stmt) {
-    printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.type]);
+    printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.assert_type]);
 }
 
 /**

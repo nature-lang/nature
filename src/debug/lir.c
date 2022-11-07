@@ -50,8 +50,8 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_IMM: {
             return lir_imm_to_string((lir_imm_t *) operand->value);
         }
-        case LIR_OPERAND_ADDR: {
-            return lir_addr_to_string((lir_addr_t *) operand->value);
+        case LIR_OPERAND_INDIRECT_ADDR: {
+            return lir_addr_to_string((lir_indirect_addr_t *) operand->value);
         }
         case LIR_OPERAND_ACTUAL_PARAMS: {
             return lir_actual_param_to_string((slice_t *) operand->value);
@@ -147,7 +147,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
     return buf;
 }
 
-char *lir_addr_to_string(lir_addr_t *operand_addr) {
+char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string indirect_addr_str = "";
     if (operand_addr->indirect_addr) {

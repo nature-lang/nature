@@ -8,7 +8,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
         if (imm->type == TYPE_STRING_RAW) {
-            lir_operand_t *var_operand = lir_new_temp_var_operand(c, type_new_base(TYPE_STRING_RAW));
+            lir_operand_t *var_operand = lir_temp_var_operand(c, type_new_base(TYPE_STRING_RAW));
             slice_push(c->globals, var_operand->value);
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
             imm_operand->type = var_operand->type;
@@ -209,7 +209,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             if (op->first->type == LIR_OPERAND_IMM) {
                 lir_imm_t *imm = op->first->value;
                 // 添加 temp var 中转
-                lir_operand_t *temp = lir_new_temp_var_operand(c, type_new_base(imm->type));
+                lir_operand_t *temp = lir_temp_var_operand(c, type_new_base(imm->type));
                 slice_push(c->globals, temp->value);
                 lir_op_t *move = lir_op_move(temp, op->first);
 

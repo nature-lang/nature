@@ -31,7 +31,7 @@
 
 #define RUNTIME_CALL_ENV_NEW "env_new"
 #define RUNTIME_CALL_SET_ENV "set_env"
-#define RUNTIME_CALL_GET_ENV "get_env"
+#define RUNTIME_CALL_GET_ENV "get_env" // TODO env_value
 
 #define RUNTIME_CALL_STRING_NEW "string_new"
 #define RUNTIME_CALL_STRING_ADDR "string_addr"
@@ -87,6 +87,8 @@ typedef enum {
     VAR_FLAG_FIRST = 1,
     VAR_FLAG_SECOND,
     VAR_FLAG_OUTPUT,
+    VAR_FLAG_USE,
+    VAR_FLAG_DEF,
 } lir_var_flag_e;
 
 typedef enum {
@@ -100,7 +102,7 @@ typedef enum {
     LIR_OPERAND_ACTUAL_PARAMS,
     LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_IMM,
-    LIR_OPERAND_ADDR,
+    LIR_OPERAND_INDIRECT_ADDR,
 } lir_operand_e;
 
 typedef enum {
@@ -156,7 +158,7 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
 
-    uint8_t flag;
+    lir_var_flag_e flag;
     type_t type;
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
 
@@ -181,8 +183,8 @@ typedef struct {
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var, alloc reg 后为 reg
     int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size
-} lir_addr_t;
+    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+} lir_indirect_addr_t;
 
 typedef struct {
     char *ident;
@@ -249,9 +251,9 @@ type_base_t lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
-lir_operand_t *lir_new_temp_var_operand(closure_t *c, type_t type);
+lir_operand_t *lir_temp_var_operand(closure_t *c, type_t type);
 
-lir_operand_t *lir_new_empty_operand();
+lir_operand_t *lir_new_target_operand();
 
 lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base);
 
@@ -293,6 +295,10 @@ slice_t *lir_input_operands(lir_op_t *op, uint64_t flag);
 slice_t *lir_output_operands(lir_op_t *op, uint64_t flag);
 
 slice_t *lir_op_operands(lir_op_t *op, uint64_t flag);
+
+// flag 约定了 var 的类型是 def 还是 use
+// 如果想取出所有，直接 def | use 即可
+slice_t *lir_var_operands(lir_op_t *op, uint64_t flag);
 
 void lir_init();
 

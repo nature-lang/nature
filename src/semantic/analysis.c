@@ -22,7 +22,7 @@ void analysis_block(module_t *m, slice_t *block) {
 }
 
 void analysis_stmt(module_t *m, ast_stmt *stmt) {
-    switch (stmt->type) {
+    switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             analysis_var_decl(m, (ast_var_decl *) stmt->stmt);
             break;
@@ -218,7 +218,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
             expr->expr = ast_new_ident(free_var->ident);
         } else {
             // ast_env_index 表达式
-            expr->assert_type = AST_EXPR_ACCESS_ENV;
+            expr->assert_type = AST_EXPR_ENV_VALUE;
             ast_access_env *access_env = malloc(sizeof(ast_access_env));
             access_env->env = ast_new_ident(m->analysis_current->parent->env_unique_name);
             access_env->index = free_var->env_index;
@@ -237,7 +237,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
             // 函数注册到符号表已经在函数定义点注册过了
             ast_closure_t *closure_decl = analysis_new_fn(m, stmt->stmt,
                                                           m->analysis_current->contains_fn_decl[i].scope);
-            stmt->type = AST_NEW_CLOSURE;
+            stmt->assert_type = AST_NEW_CLOSURE;
             stmt->stmt = closure_decl;
         } else {
             ast_expr *expr = m->analysis_current->contains_fn_decl[i].expr;
@@ -379,7 +379,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
     if (free_var_index != -1) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
-        expr->assert_type = AST_EXPR_ACCESS_ENV;
+        expr->assert_type = AST_EXPR_ENV_VALUE;
         ast_access_env *env_index = malloc(sizeof(ast_access_env));
         env_index->env = ast_new_ident(m->analysis_current->env_unique_name);
         env_index->index = free_var_index;
@@ -690,7 +690,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     int import_end_index = 0;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
-        if (stmt->type != AST_STMT_IMPORT) {
+        if (stmt->assert_type != AST_STMT_IMPORT) {
             import_end_index = i;
             break;
         }
@@ -710,7 +710,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 跳过 import 语句开始计算
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
-        if (stmt->type == AST_VAR_DECL) {
+        if (stmt->assert_type == AST_VAR_DECL) {
             ast_var_decl *var_decl = stmt->stmt;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_VAR;
@@ -722,7 +722,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        if (stmt->type == AST_STMT_VAR_DECL_ASSIGN) {
+        if (stmt->assert_type == AST_STMT_VAR_DECL_ASSIGN) {
             ast_var_decl_assign_stmt *var_decl_assign = stmt->stmt;
             ast_var_decl *var_decl = var_decl_assign->var_decl;
             symbol_t *s = NEW(symbol_t);
@@ -742,12 +742,12 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 //                    .code = var_decl->code,
             };
             assign->right = var_decl_assign->expr;
-            temp_stmt->type = AST_STMT_ASSIGN;
+            temp_stmt->assert_type = AST_STMT_ASSIGN;
             temp_stmt->stmt = assign;
             slice_push(var_assign_list, temp_stmt);
             continue;
         }
-        if (stmt->type == AST_STMT_TYPE_DECL) {
+        if (stmt->assert_type == AST_STMT_TYPE_DECL) {
             ast_type_decl_stmt *type_decl = stmt->stmt;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_CUSTOM;
@@ -759,7 +759,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        if (stmt->type == AST_NEW_FN) {
+        if (stmt->assert_type == AST_NEW_FN) {
             ast_new_fn *new_fn = stmt->stmt;
             new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
@@ -802,7 +802,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             .expr = ast_new_ident(s->ident),
     };
     call->actual_param_count = 0;
-    temp_stmt->type = AST_CALL;
+    temp_stmt->assert_type = AST_CALL;
     temp_stmt->stmt = call;
     m->call_init_stmt = temp_stmt;
 
@@ -824,7 +824,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     int import_end_index = 0;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
-        if (stmt->type != AST_STMT_IMPORT) {
+        if (stmt->assert_type != AST_STMT_IMPORT) {
             import_end_index = i;
             break;
         }

@@ -96,8 +96,8 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
     }
 
     // string_t/map_t/array_t
-    if (operand->type == LIR_OPERAND_ADDR) {
-        lir_addr_t *v = operand->value;
+    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *v = operand->value;
         // base 类型必须为 var
         assert(false && "not support"); // ?? fix reg or use must reg?
 

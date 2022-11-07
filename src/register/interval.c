@@ -156,7 +156,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = lir_new_temp_var_operand(c, i->var->type)->value;
+        lir_var_t *var = lir_temp_var_operand(c, i->var->type)->value;
         child->var = var;
         table_set(c->interval_table, var->ident, child);
     } else {
@@ -320,18 +320,16 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @return
  */
 static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
-    if (i->var->indirect_addr) {
-        return USE_KIND_MUST;
-    }
-
+    // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
+    // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
     if (lir_op_contain_cmp(op)) {
-        assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR)
-               && "cmp must have var");
+        assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR) && "cmp must have var");
 
         if (i->var->flag & FLAG(VAR_FLAG_FIRST)) {
             return USE_KIND_MUST;
         }
 
+        // second 只能是在 first 非 var 的期刊下才能分配寄存器
         if (i->var->flag & FLAG(VAR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
             return USE_KIND_MUST;

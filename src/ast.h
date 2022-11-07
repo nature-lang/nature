@@ -23,9 +23,9 @@ typedef enum {
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
     AST_EXPR_SELECT_PROPERTY,
-    AST_EXPR_ACCESS_ENV,
     AST_EXPR_ACCESS_MAP,
-    AST_EXPR_ACCESS_LIST,
+    AST_EXPR_ENV_VALUE,
+    AST_EXPR_ARRAY_VALUE,
 
     AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
     AST_EXPR_NEW_ARRAY, // [1, 2, 3]
@@ -81,7 +81,7 @@ string ast_expr_operator_to_string[100];
 
 typedef struct {
     int line; // 行号
-    ast_stmt_expr_type type; // 声明语句类型
+    ast_stmt_expr_type assert_type; // 声明语句类型
     void *stmt;
 } ast_stmt;
 
@@ -238,10 +238,10 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    type_t type; // list的类型
+    type_t type; // value 的类型吧？
     ast_expr left;
     ast_expr index;
-} ast_access_list;
+} ast_array_value_t;
 
 typedef struct {
     type_t key_type;

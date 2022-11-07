@@ -48,7 +48,7 @@ list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand_t *target);
 
 list *compiler_new_map(closure_t *c, ast_expr expr, lir_operand_t *base_target);
 
-list *compiler_access_env(closure_t *c, ast_expr expr, lir_operand_t *target);
+list *compiler_env_value(closure_t *c, ast_expr expr, lir_operand_t *target);
 
 list *compiler_new_struct(closure_t *c, ast_expr expr, lir_operand_t *base_target);
 
