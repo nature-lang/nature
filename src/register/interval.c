@@ -247,9 +247,11 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) {
+static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
-        return USE_KIND_SHOULD;
+        if (var->flag & FLAG(VR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
+            return USE_KIND_SHOULD;
+        }
     }
 
     return USE_KIND_MUST;
@@ -263,24 +265,27 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
-    // TODO interval 中的 var 是定义时的 var， 现在需要的是当前 operand !
-
+static use_kind_e use_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
     // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
     // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
-    if (lir_op_contain_cmp(op)) {
-        assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR) && "cmp must have var");
+    if (lir_op_contain_cmp(op)) { // cmp indirect addr
+        assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR) &&
+               "cmp must have var, var can allocate registers");
 
-        // TODO 这里关 i 什么事？？
-        if (i->var->flag & FLAG(VR_FLAG_FIRST)) {
+        if (var->flag & FLAG(VR_FLAG_FIRST)) {
             return USE_KIND_MUST;
         }
 
         // second 只能是在 first 非 var 的期刊下才能分配寄存器
-        if (i->var->flag & FLAG(VR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
+        if (var->flag & FLAG(VR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
             return USE_KIND_MUST;
         }
+    }
+
+    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
+    if (var->flag & FLAG(VR_FLAG_INDIRECT_ADDR_BASE)) {
+        return USE_KIND_MUST;
     }
 
     return USE_KIND_SHOULD;
@@ -441,7 +446,6 @@ void interval_build(closure_t *c) {
                     interval_t *interval = table_get(c->interval_table, reg->name);
                     if (interval != NULL) {
                         interval_add_range(c, interval, op->id, op->id + 1);
-                        interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
                     }
                 }
             }
@@ -474,8 +478,9 @@ void interval_build(closure_t *c) {
                 }
 
                 if (!interval->fixed) {
+                    assertf(operand->type == LIR_OPERAND_VAR, "only var can be live");
                     live_remove(exist_vars, live, interval->var);
-                    interval_add_use_pos(c, interval, op->id, use_kind_of_output(c, op, interval));
+                    interval_add_use_pos(c, interval, op->id, use_kind_of_def(c, op, operand->value));
                 }
             }
 
@@ -488,10 +493,9 @@ void interval_build(closure_t *c) {
                 interval_add_range(c, interval, block_from, op->id);
 
                 if (!interval->fixed) {
+                    assertf(operand->type == LIR_OPERAND_VAR, "only var can be live");
                     live_add(exist_vars, live, interval->var);
-
-                    // TODO 如果 interval 不是 fixed， 则 operand 必定是
-                    interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
+                    interval_add_use_pos(c, interval, op->id, use_kind_of_def(c, op, operand->value));
                 }
             }
 
