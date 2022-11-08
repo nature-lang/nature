@@ -7,6 +7,114 @@
 #include "src/semantic/analysis.h"
 #include "utils/error.h"
 
+static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
+    slice_t *result = slice_new();
+    if (!operand) {
+        return result;
+    }
+
+    if (flag & FLAG(operand->type)) {
+        slice_push(result, operand);
+    }
+
+    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        if (FLAG(addr->base->type) & flag) {
+            slice_push(result, addr->base);
+        }
+        return result;
+    }
+
+    if (operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
+        slice_t *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *o = operands->take[i];
+            assert(o->type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
+
+            if (FLAG(o->type) & flag) {
+                slice_push(result, o);
+            }
+        }
+        return result;
+    }
+
+    if (flag & FLAG(LIR_OPERAND_VAR) && operand->type == LIR_OPERAND_FORMAL_PARAMS) {
+        slice_t *formal_params = operand->value;
+        for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
+            lir_var_t *var = formal_params->take[i];
+            slice_push(result, LIR_NEW_OPERAND(LIR_OPERAND_VAR, var));
+        }
+    }
+
+    // TODO phi body handle, phi body are var or imm
+
+    return result;
+}
+
+
+static void set_operand_flag(lir_operand_t *operand, bool is_output) {
+    if (!operand) {
+        return;
+    }
+
+    if (operand->type == LIR_OPERAND_VAR) {
+        // 仅 output 且 indirect_addr = false 才配置 def
+        lir_var_t *var = operand->value;
+        if (is_output) {
+            var->flag |= FLAG(VR_FLAG_DEF);
+        } else {
+            var->flag |= FLAG(VR_FLAG_USE);
+        }
+
+        return;
+    }
+
+    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        if (addr->base->type == LIR_OPERAND_VAR) {
+            lir_var_t *var = addr->base->value;
+            var->flag |= FLAG(VR_FLAG_USE);
+            var->flag |= FLAG(VR_FLAG_INDIRECT_ADDR_BASE);
+        }
+        return;
+    }
+
+
+    if (operand->type == LIR_OPERAND_REG) {
+        reg_t *reg = operand->value;
+        if (is_output) {
+            reg->flag |= FLAG(VR_FLAG_DEF);
+        } else {
+            reg->flag |= FLAG(VR_FLAG_USE);
+        }
+        return;
+    }
+
+    if (operand->type == LIR_OPERAND_FORMAL_PARAMS) {
+        slice_t *formal_params = operand->value;
+        for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
+            lir_var_t *var = formal_params->take[i];
+            var->flag |= FLAG(VR_FLAG_DEF);
+        }
+        return;
+    }
+
+    // 剩下的都是 use 直接提取出来即可
+    slice_t *operands = extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    for (int i = 0; i < operands->count; ++i) {
+        lir_operand_t *o = operands->take[i];
+        set_operand_flag(o, false); // 符合嵌入的全部定义成 USE
+    }
+}
+
+static slice_t *op_extract_operands(lir_op_t *op, uint64_t operand_flag) {
+    slice_t *result = extract_operands(op->output, operand_flag);
+    slice_append(result, extract_operands(op->first, operand_flag));
+    slice_append(result, extract_operands(op->second, operand_flag));
+
+    return result;
+}
+
 // 目前仅支持 var 的 copy
 lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
     if (!operand) {
@@ -24,8 +132,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->old = var->old;
         new_var->type = var->type;
         new_var->type_base = var->type_base;
-//        new_var->flag = var->flag;
-        new_var->flag = 0; // 每个参数位置的 flag 都是不同的
+        new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
@@ -149,7 +256,6 @@ lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
 
 lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
-    memset(op, 0, sizeof(lir_op_t));
     op->code = code;
     op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
@@ -157,21 +263,22 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
 
     if (op->first && op->first->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->first->value;
-        var->flag |= FLAG(VAR_FLAG_FIRST);
-        // TODO calc var flag
-
+        var->flag |= FLAG(VR_FLAG_FIRST);
     }
+
     if (op->second && op->second->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->second->value;
-        var->flag |= FLAG(VAR_FLAG_SECOND);
+        var->flag |= FLAG(VR_FLAG_SECOND);
     }
+
     if (op->output && op->output->type == LIR_OPERAND_VAR) {
         lir_var_t *var = op->output->value;
-        var->flag |= FLAG(VAR_FLAG_OUTPUT);
-        if (var->indirect_addr) {
-            var->flag |= FLAG(VAR_FLAG_USE);
-        }
+        var->flag |= FLAG(VR_FLAG_OUTPUT);
     }
+
+    set_operand_flag(op->first, false);
+    set_operand_flag(op->second, false);
+    set_operand_flag(op->output, true);
 
     return op;
 }
@@ -264,6 +371,7 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
     ast_var_decl *global_var = symbol_table_get_var(ident);
     var->type = global_var->type;
     var->type_base = global_var->type.base;
+    var->flag |= type_base_trans_alloc(global_var->type.base);
 
     return var;
 }
@@ -340,98 +448,6 @@ bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     return false;
 }
 
-/**
- * 返回 lir_operand，需要自己根据实际情况解析
- * @param c
- * @param operand
- * @param has_reg
- * @return
- */
-slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag) {
-    slice_t *result = slice_new();
-    if (!operand) {
-        return result;
-    }
-    if (flag & FLAG(operand->type)) {
-        slice_push(result, operand);
-    }
-
-    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr = operand->value;
-        if (FLAG(addr->base->type) & flag) {
-            slice_push(result, addr->base);
-        }
-    }
-
-    if (operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
-        slice_t *operands = operand->value;
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *o = operands->take[i];
-            assert(o->type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
-
-            if (flag & FLAG(o->type)) {
-                slice_push(result, o);
-            }
-        }
-    }
-
-    // formal params only type lir_operand_var
-    if (flag & FLAG(LIR_OPERAND_VAR) && operand->type == LIR_OPERAND_FORMAL_PARAMS) {
-        slice_t *formal_params = operand->value;
-        for (int i = 0; i < formal_params->count; ++i) {
-            lir_var_t *var = formal_params->take[i];
-            slice_push(result, LIR_NEW_OPERAND(LIR_OPERAND_VAR, var));
-        }
-    }
-
-    // TODO phi body handle, phi body are var or imm
-
-    return result;
-}
-
-slice_t *lir_op_operands(lir_op_t *op, uint64_t flag) {
-    slice_t *result = lir_nest_operands(op->output, flag);
-    slice_append(result, lir_nest_operands(op->first, flag));
-    slice_append(result, lir_nest_operands(op->second, flag));
-
-    return result;
-}
-
-/**
- * var 特指 use var
- * @param op
- * @param flag
- * @return
- */
-slice_t *lir_input_operands(lir_op_t *op, uint64_t flag) {
-    slice_t *result = lir_nest_operands(op->first, flag);
-    slice_append(result, lir_nest_operands(op->second, flag));
-    if (FLAG(LIR_OPERAND_VAR) & flag) {
-        // with indirect addr var in output
-        slice_t *operands = lir_nest_operands(op->output, FLAG(LIR_OPERAND_VAR));
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *o = operands->take[i];
-            lir_var_t *var = o->value;
-            if (var->indirect_addr) {
-                slice_push(result, o);
-            }
-        }
-    }
-
-    return result;
-}
-
-/**
- * var 特指 def var
- * @param op
- * @param flag
- * @return
- */
-slice_t *lir_output_operands(lir_op_t *op, uint64_t flag) {
-    slice_t *operands = lir_nest_operands(op->output, flag);
-    return operands;
-}
-
 bool lir_op_contain_cmp(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BEQ ||
         op->code == LIR_OPCODE_SGT ||
@@ -465,3 +481,43 @@ void lir_set_quick_op(basic_block_t *block) {
     block->last_op = list_last(block->operations);
 }
 
+slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {
+    slice_t *temps = op_extract_operands(op, operand_flag);
+    slice_t *results = slice_new();
+    for (int i = 0; i < temps->count; ++i) {
+        lir_operand_t *operand = temps->take[i];
+        assertf(FLAG(operand->type) & operand_flag, "operand type is not and operand flag");
+
+        // 只有 var 或者 reg 现需要进行 vr 校验
+        if (operand->type == LIR_OPERAND_VAR) {
+            lir_var_t *var = operand->value;
+            // def or use
+            if (!(var->flag & vr_flag)) {
+                continue;
+            }
+        } else if (operand->type == LIR_OPERAND_REG) {
+            reg_t *reg = operand->value;
+            if (!(reg->flag & vr_flag)) {
+                continue;
+            }
+        }
+
+        if (extract_value) {
+            slice_push(results, operand->value);
+        } else {
+            slice_push(results, operand);
+        }
+    }
+
+    return results;
+}
+
+
+/**
+ * @param op
+ * @param vr_flag  use or def
+ * @return
+ */
+slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
+    return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
+}

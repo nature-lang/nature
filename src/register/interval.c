@@ -231,65 +231,13 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     }
     if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = covert_alloc_reg(operand->value);
-
+        // TODO reg->alloc_id
         interval_t *interval = table_get(c->interval_table, reg->name);
-
         assert(interval);
         return interval;
     }
 
     return NULL;
-}
-
-static slice_t *op_output_intervals(closure_t *c, lir_op_t *op) {
-    slice_t *result = slice_new();
-    // output 总是存储在 result 中
-    slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
-    SLICE_FOR(operands) {
-        lir_operand_t *operand = SLICE_VALUE(operands);
-        if (operand->type == LIR_OPERAND_VAR) {
-            lir_var_t *var = operand->value;
-            interval_t *interval = table_get(c->interval_table, var->ident);
-            assert(interval);
-            slice_push(result, interval);
-        }
-        if (operand->type == LIR_OPERAND_REG) {
-            reg_t *reg = covert_alloc_reg(operand->value);
-            if (reg->alloc_id) {
-                // rsp/rbp 就忽略吧
-                interval_t *interval = table_get(c->interval_table, reg->name);
-                assert(interval);
-                slice_push(result, interval);
-            }
-        }
-    }
-
-    return result;
-}
-
-static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
-    slice_t *result = slice_new();
-    slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
-    slice_append(operands, lir_nest_operands(op->second, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG)));
-    // 解析 interval
-    SLICE_FOR(operands) {
-        lir_operand_t *operand = SLICE_VALUE(operands);
-        if (operand->type == LIR_OPERAND_VAR) {
-            lir_var_t *var = operand->value;
-            interval_t *interval = table_get(c->interval_table, var->ident);
-            assert(interval && "interval not register in table");
-            slice_push(result, interval);
-        }
-        if (operand->type == LIR_OPERAND_REG) {
-            reg_t *reg = covert_alloc_reg(operand->value);
-            if (reg->alloc_id) {
-                interval_t *interval = table_get(c->interval_table, reg->name);
-                assert(interval);
-                slice_push(result, interval);
-            }
-        }
-    }
-    return result;
 }
 
 /**
@@ -300,10 +248,6 @@ static slice_t *op_input_intervals(closure_t *c, lir_op_t *op) {
  * @return
  */
 static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) {
-    if (i->var->indirect_addr) {
-        return USE_KIND_MUST;
-    }
-
     if (lir_op_contain_cmp(op)) {
         return USE_KIND_SHOULD;
     }
@@ -320,21 +264,25 @@ static use_kind_e use_kind_of_output(closure_t *c, lir_op_t *op, interval_t *i) 
  * @return
  */
 static use_kind_e use_kind_of_input(closure_t *c, lir_op_t *op, interval_t *i) {
+    // TODO interval 中的 var 是定义时的 var， 现在需要的是当前 operand !
+
     // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
     // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
     if (lir_op_contain_cmp(op)) {
         assert((op->first->type == LIR_OPERAND_VAR || op->second->type == LIR_OPERAND_VAR) && "cmp must have var");
 
-        if (i->var->flag & FLAG(VAR_FLAG_FIRST)) {
+        // TODO 这里关 i 什么事？？
+        if (i->var->flag & FLAG(VR_FLAG_FIRST)) {
             return USE_KIND_MUST;
         }
 
         // second 只能是在 first 非 var 的期刊下才能分配寄存器
-        if (i->var->flag & FLAG(VAR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
+        if (i->var->flag & FLAG(VR_FLAG_SECOND) && op->first->type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
             return USE_KIND_MUST;
         }
     }
+
     return USE_KIND_SHOULD;
 }
 
@@ -425,7 +373,8 @@ void interval_build(closure_t *c) {
         interval->index = reg_id;
         interval->fixed = true;
         interval->assigned = reg_id;
-        interval->alloc_type = reg->type;
+        assertf(reg->flag & (FLAG(VR_FLAG_ALLOC_FLOAT) | FLAG(VR_FLAG_ALLOC_INT)), "reg must be alloc float or int");
+        interval->alloc_type = reg->flag & FLAG(VR_FLAG_ALLOC_FLOAT) ? VR_FLAG_ALLOC_FLOAT : VR_FLAG_ALLOC_INT;
         table_set(c->interval_table, reg->name, interval);
     }
 
@@ -434,7 +383,7 @@ void interval_build(closure_t *c) {
         lir_var_t *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->alloc_type = type_base_trans(var->type_base);
+        interval->alloc_type = type_base_trans_alloc(var->type_base);
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -511,9 +460,11 @@ void interval_build(closure_t *c) {
             // interval by output params, so it contain opcode phi
             // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
-            slice_t *intervals = op_output_intervals(c, op);
-            for (int j = 0; j < intervals->count; ++j) {
-                interval_t *interval = intervals->take[j];
+            slice_t *def_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                    FLAG(VR_FLAG_DEF), false);
+            for (int j = 0; j < def_operands->count; ++j) {
+                lir_operand_t *operand = def_operands->take[j];
+                interval_t *interval = operand_interval(c, operand);
 
                 // first range 为 null,表示仅定义，未使用
                 if (interval->first_range == NULL) {
@@ -528,14 +479,18 @@ void interval_build(closure_t *c) {
                 }
             }
 
-            intervals = op_input_intervals(c, op);
-            for (int j = 0; j < intervals->count; ++j) {
-                interval_t *interval = intervals->take[j];
-                assert(interval);
+
+            slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                    FLAG(VR_FLAG_USE), false);
+            for (int j = 0; j < use_operands->count; ++j) {
+                lir_operand_t *operand = use_operands->take[j];
+                interval_t *interval = operand_interval(c, operand);
                 interval_add_range(c, interval, block_from, op->id);
 
                 if (!interval->fixed) {
                     live_add(exist_vars, live, interval->var);
+
+                    // TODO 如果 interval 不是 fixed， 则 operand 必定是
                     interval_add_use_pos(c, interval, op->id, use_kind_of_input(c, op, interval));
                 }
             }
@@ -923,14 +878,14 @@ void resolve_data_flow(closure_t *c) {
  * @param op_id
  * @return
  */
-interval_t *interval_child_at(interval_t *i, int op_id, bool is_input) {
+interval_t *interval_child_at(interval_t *i, int op_id, bool is_use) {
     assert(op_id >= 0 && "invalid op_id (method can not be called for spill moves)");
 
     if (list_is_empty(i->children)) {
         return i;
     }
 
-    int last_to_offset = is_input ? 1 : 0;
+    int last_to_offset = is_use ? 1 : 0;
 
     if (i->first_range->from <= op_id && op_id < (i->last_range->to + last_to_offset)) {
         return i;
@@ -1061,12 +1016,4 @@ use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
     }
 
     assert(false && "no use pos found");
-}
-
-bool is_input_var(lir_var_t *var) {
-    // indirect addr 表示使用变量中存储的地址,并不是给变量赋值
-    if ((var->flag & FLAG(VAR_FLAG_OUTPUT)) && !var->indirect_addr) {
-        return false;
-    }
-    return true;
 }

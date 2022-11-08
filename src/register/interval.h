@@ -38,7 +38,7 @@ typedef struct interval_t {
     struct interval_t *reg_hint;
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
-    reg_type_e alloc_type; // 分配的寄存器的类型
+    vr_flag_e alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
@@ -152,7 +152,7 @@ int interval_next_use_position(interval_t *i, int after_position);
 
 void interval_spill_slot(closure_t *c, interval_t *i);
 
-interval_t *interval_child_at(interval_t *i, int op_id, bool is_input);
+interval_t *interval_child_at(interval_t *i, int op_id, bool is_use);
 
 use_pos_t *interval_must_reg_pos(interval_t *i);
 
@@ -163,7 +163,5 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 void resolve_mappings(closure_t *c, resolver_t *r);
 
 use_pos_t *first_use_pos(interval_t *i, use_kind_e kind);
-
-bool is_input_var(lir_var_t *var);
 
 #endif

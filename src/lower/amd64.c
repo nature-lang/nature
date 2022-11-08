@@ -3,7 +3,7 @@
 
 static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_node *node) {
     lir_op_t *op = node->value;
-    slice_t *imm_operands = lir_input_operands(op, FLAG(LIR_OPERAND_IMM));
+    slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;

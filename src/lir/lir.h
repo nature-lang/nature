@@ -31,7 +31,7 @@
 
 #define RUNTIME_CALL_ENV_NEW "env_new"
 #define RUNTIME_CALL_SET_ENV "set_env"
-#define RUNTIME_CALL_GET_ENV "get_env" // TODO env_value
+#define RUNTIME_CALL_ENV_VALUE "env_value"
 
 #define RUNTIME_CALL_STRING_NEW "string_new"
 #define RUNTIME_CALL_STRING_ADDR "string_addr"
@@ -84,14 +84,6 @@ int var_unique_count; // TODO 一旦多文件编译，就会有问题
 int lir_line;
 
 typedef enum {
-    VAR_FLAG_FIRST = 1,
-    VAR_FLAG_SECOND,
-    VAR_FLAG_OUTPUT,
-    VAR_FLAG_USE,
-    VAR_FLAG_DEF,
-} lir_var_flag_e;
-
-typedef enum {
     LIR_OPERAND_NULL = 0,
     LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_REG,
@@ -136,7 +128,7 @@ typedef enum {
     LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OPCODE_LABEL,
-    LIR_OPCODE_FN_BEGIN, // 无操作数
+    LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
     LIR_OPCODE_FN_END, // 无操作数
 } lir_opcode_e;
 
@@ -158,12 +150,12 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
 
-    lir_var_flag_e flag;
+    flag_t flag;
     type_t type;
     type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
 
     uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
-    bool indirect_addr; // &a 对变量进行解引用操作, 当变量为指针时才允许为 tre
+    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
 } lir_var_t;
 
 /**
@@ -288,17 +280,11 @@ bool lir_op_contain_cmp(lir_op_t *op);
 
 bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b);
 
-slice_t *lir_nest_operands(lir_operand_t *operand, uint64_t flag);
-
-slice_t *lir_input_operands(lir_op_t *op, uint64_t flag);
-
-slice_t *lir_output_operands(lir_op_t *op, uint64_t flag);
-
-slice_t *lir_op_operands(lir_op_t *op, uint64_t flag);
+slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value);
 
 // flag 约定了 var 的类型是 def 还是 use
-// 如果想取出所有，直接 def | use 即可
-slice_t *lir_var_operands(lir_op_t *op, uint64_t flag);
+// 如果想取出所有，直接 def | use 即可, output 或者 true 或者 false 没法直接决定是 use 还是 def
+slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag);
 
 void lir_init();
 

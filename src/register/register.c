@@ -47,11 +47,11 @@ uint8_t alloc_reg_count() {
 }
 
 
-reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t reg_id) {
+reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, uint8_t reg_id) {
     reg_t *reg = NEW(reg_t);
     reg->name = name;
     reg->index = index;
-    reg->type = type;
+    reg->flag |= FLAG(alloc_type);
     reg->size = size;
     reg->alloc_id = reg_id; // 0 表示未分配
 
@@ -64,16 +64,16 @@ reg_t *reg_new(char *name, uint8_t index, reg_type_e type, uint8_t size, uint8_t
     return reg;
 }
 
-reg_type_e type_base_trans(type_base_t t) {
+vr_flag_e type_base_trans_alloc(type_base_t t) {
     if (t == TYPE_FLOAT) {
-        return REG_TYPE_FLOAT;
+        return VR_FLAG_ALLOC_FLOAT;
     }
 
-    return REG_TYPE_INT;
+    return VR_FLAG_ALLOC_INT;
 }
 
 reg_t *covert_alloc_reg(reg_t *reg) {
-    if (reg->type == REG_TYPE_FLOAT) {
+    if (reg->flag & FLAG(VR_FLAG_ALLOC_FLOAT)) {
         return reg_find(reg->index, OWORD);
     }
 

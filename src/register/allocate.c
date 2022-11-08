@@ -268,7 +268,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
-        if (a->current->alloc_type != reg->type) { // already set 0
+        if (!(FLAG(a->current->alloc_type) & reg->flag)) { // already set 0
             continue;
         }
         set_pos(free_pos, i, INT32_MAX);
@@ -329,7 +329,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
-        if (a->current->alloc_type != reg->type) {
+        if (!(FLAG(a->current->alloc_type) & reg->flag)) {
             continue;
         }
         SET_BLOCK_POS(reg_id, INT32_MAX);
@@ -489,24 +489,24 @@ void replace_virtual_register(closure_t *c) {
         list_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *vars = lir_op_operands(op, FLAG(LIR_OPERAND_VAR));
+            slice_t *var_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(VR_FLAG_DEF) | FLAG(VR_FLAG_USE),
+                                                    false);
 
-            for (int j = 0; j < vars->count; ++j) {
-                lir_operand_t *operand = vars->take[j];
+            for (int j = 0; j < var_operands->count; ++j) {
+                lir_operand_t *operand = var_operands->take[j];
                 lir_var_t *var = operand->value;
                 interval_t *parent = table_get(c->interval_table, var->ident);
                 assert(parent);
 
-                interval_t *interval = interval_child_at(parent, op->id, is_input_var(var));
+                interval_t *interval = interval_child_at(parent, op->id, var->flag & FLAG(VR_FLAG_USE));
 
                 var_replace(operand, interval);
             }
 
             if (op->code == LIR_OPCODE_MOVE) {
-                // TODO 恢复
-//                if (lir_operand_equal(op->first, op->output)) {
-//                    list_remove(block->operations, current);
-//                }
+                if (lir_operand_equal(op->first, op->output)) {
+                    list_remove(block->operations, current);
+                }
             }
 
             current = current->succ;

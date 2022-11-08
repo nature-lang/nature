@@ -4,15 +4,26 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define FIXED_ARRAY_COUNT 1000
 #define string char *
 #define STRING_EOF '\0'
 
+
+static inline void *mallocz(size_t size) {
+    void *ptr;
+    ptr = malloc(size);
+    if (size) {
+        memset(ptr, 0, size);
+    }
+    return ptr;
+}
+
 #define GROW_CAPACITY(capacity) \
   ((capacity) < 8 ? 8 : (capacity)*2)
 
-#define NEW(type) malloc(sizeof(type))
+#define NEW(type) mallocz(sizeof(type))
 
 #define FLAG(value) (1 << value)
 

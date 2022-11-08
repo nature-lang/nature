@@ -47,7 +47,7 @@ slice_t *compiler(module_t *m, ast_closure_t *ast) {
  * 顶层 closure_t 不需要再次捕获外部变量
  * call make_env
  * call set_env => a target
- * call get_env => t1 target
+ * call env_value => t1 target
  * @param parent
  * @param ast_closure
  * @return
@@ -588,7 +588,7 @@ list *compiler_env_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
     // target 通常就是一个 temp_var
     lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(expr.type, 1));
     lir_op_t *call_op = lir_op_runtime_call(
-            RUNTIME_CALL_GET_ENV,
+            RUNTIME_CALL_ENV_VALUE,
             value_point,
             2,
             env_name_param,

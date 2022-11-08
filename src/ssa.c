@@ -16,12 +16,10 @@ static void recollect_globals(closure_t *c) {
         basic_block_t *block = c->blocks->take[i];
         LIST_FOR(block->operations) {
             lir_op_t *op = LIST_VALUE();
-            slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
-            for (int j = 0; j < operands->count; ++j) {
-                lir_operand_t *operand = operands->take[j];
-                lir_var_t *var = operand->value;
-
-                slice_push(globals, operand->value);
+            slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+            for (int j = 0; j < vars->count; ++j) {
+                lir_var_t *var = vars->take[j];
+                slice_push(globals, var);
             }
         }
     }
@@ -373,10 +371,9 @@ void ssa_use_def(closure_t *c) {
             lir_op_t *op = LIST_VALUE();
 
             // first param (use)
-            slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
-            for (int i = 0; i < operands->count; ++i) {
-                lir_operand_t *operand = operands->take[i];
-                lir_var_t *var = operand->value;
+            slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_USE));
+            for (int i = 0; i < vars->count; ++i) {
+                lir_var_t *var = vars->take[i];
                 bool is_def = ssa_var_belong(var, def);
                 if (!is_def && !table_exist(exist_use, var->ident)) {
                     slice_push(use, var);
@@ -389,11 +386,9 @@ void ssa_use_def(closure_t *c) {
             }
 
             // def
-            operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
-            for (int i = 0; i < operands->count; ++i) {
-                lir_operand_t *operand = operands->take[i];
-                lir_var_t *var = operand->value;
-
+            vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+            for (int i = 0; i < vars->count; ++i) {
+                lir_var_t *var = vars->take[i];
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
                     table_set(exist_use, var->ident, var);
@@ -519,20 +514,18 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
             continue;
         }
 
-        slice_t *operands = lir_input_operands(op, FLAG(LIR_OPERAND_VAR));
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *operand = operands->take[i];
-            lir_var_t *var = operand->value;
+        // use
+        slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_USE));
+        for (int i = 0; i < vars->count; ++i) {
+            lir_var_t *var = vars->take[i];
             var_number_stack *stack = table_get(stack_table, var->old);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
         }
 
-        operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *operand = operands->take[i];
-            lir_var_t *var = operand->value;
-
+        vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+        for (int i = 0; i < vars->count; ++i) {
+            lir_var_t *var = vars->take[i];
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
         }
@@ -582,10 +575,9 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
     while (current_node->value != NULL) {
         lir_op_t *op = current_node->value;
         // output var
-        slice_t *operands = lir_output_operands(op, FLAG(LIR_OPERAND_VAR));
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *operand = operands->take[i];
-            lir_var_t *var = operand->value;
+        slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+        for (int i = 0; i < vars->count; ++i) {
+            lir_var_t *var = vars->take[i];
 
             // pop stack
             var_number_stack *stack = table_get(stack_table, var->old);

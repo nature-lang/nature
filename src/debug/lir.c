@@ -150,13 +150,12 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
 char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string indirect_addr_str = "";
-    if (operand_addr->indirect_addr) {
-        indirect_addr_str = "*";
-    }
     string type_string = type_to_string[operand_addr->type_base];
-    sprintf(buf, "%sADDR[%s:%u:%s]",
+    sprintf(buf, "%sI_ADDR[%s:%u:%s]",
             indirect_addr_str,
-            lir_operand_to_string(operand_addr->base), operand_addr->offset, type_string);
+            lir_operand_to_string(operand_addr->base),
+            operand_addr->offset,
+            type_string);
     return buf;
 }
 

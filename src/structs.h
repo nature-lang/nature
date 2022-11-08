@@ -8,6 +8,18 @@
 #include "utils/slice.h"
 #include "symbol.h"
 
+typedef uint64_t flag_t;
+
+typedef enum {
+    VR_FLAG_FIRST = 1,
+    VR_FLAG_SECOND,
+    VR_FLAG_OUTPUT,
+    VR_FLAG_ALLOC_INT,
+    VR_FLAG_ALLOC_FLOAT,
+    VR_FLAG_USE,
+    VR_FLAG_DEF,
+    VR_FLAG_INDIRECT_ADDR_BASE,
+} vr_flag_e;
 
 typedef struct {
     char *source;

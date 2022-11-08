@@ -19,7 +19,7 @@ void set_env(char *env_name, int index, void *value) {
     items[index] = value;
 }
 
-void *get_env(char *env_name, int index) {
+void *env_value(char *env_name, int index) {
     assertf(env_name, "env_name is null");
     assertf(env_table, "env_table is null");
     void **items = table_get(env_table, env_name);
