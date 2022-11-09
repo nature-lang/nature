@@ -970,11 +970,10 @@ bool parser_is_simple_type(module_t *m) {
 
 token *parser_must(module_t *m, token_type expect) {
     token *t = m->p_cursor.current->value;
-    if (t->type != expect) {
-        error_printf(parser_line(m), "parser error: expect '%s' token actual '%s' token",
-                     token_type_to_string[expect],
-                     token_type_to_string[t->type]);
-    }
+    assertf(t->type == expect, "line: %d, parser error: expect '%s' token actual '%s' token",
+            parser_line(m),
+            token_type_to_string[expect],
+            token_type_to_string[t->type]);
 
     parser_advance(m);
     return t;
@@ -1082,7 +1081,7 @@ bool parser_must_stmt_end(module_t *m) {
         return true;
     }
 
-    error_printf(parser_line(m), "except ; or } in stmt end");
+    assertf(false, "line: %d, except ; or } in stmt end", parser_line(m));
     return false;
 }
 

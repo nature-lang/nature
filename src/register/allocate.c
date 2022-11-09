@@ -192,6 +192,53 @@ static void set_pos(int *list, uint8_t index, int position) {
     list[index] = position;
 }
 
+
+/**
+ * 在 before_pos 之前需要将 i 在一个合适的位置 split 一个 child，并将 child spilt spill 到内存中
+ * 由于 spill 的部分后续不会在 handle，所以如果包含 use_position kind 则需要再次 spilt 丢出去
+ * @param c
+ * @param i
+ * @param before_pos
+ * @return
+ */
+static void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) {
+    int split_pos;
+    interval_t *child = i;
+    if (before_pos > 0) {
+        // spill current before current first use position
+        split_pos = interval_find_optimal_split_pos(c, i, before_pos);
+        child = interval_split_at(c, i, split_pos);
+    }
+
+    use_pos_t *must_pos = interval_must_reg_pos(child);
+    if (must_pos) {
+        split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
+        interval_t *unhandled = interval_split_at(c, child, split_pos);
+        sort_to_unhandled(a->unhandled, unhandled);
+    }
+
+    // child to slot
+    interval_spill_slot(c, child);
+}
+
+/**
+ * @param c
+ * @param a
+ * @param i
+ * @param assigned_reg
+ */
+static void assign_interval(closure_t *c, allocate_t *a, interval_t *i, uint8_t assigned) {
+    assertf(assigned > 0, "assign reg id must > 0");
+    i->assigned = assigned; // i 已经争取到了寄存器 assigned,
+    use_pos_t *stack_pos = interval_must_stack_pos(i);
+    if (!stack_pos) {
+        return;
+    }
+
+    // spill current before current first use position
+    spill_interval(c, a, i, stack_pos->value);
+}
+
 void allocate_walk(closure_t *c) {
     allocate_t *a = malloc(sizeof(allocate_t));
     a->unhandled = unhandled_new(c);
@@ -206,6 +253,13 @@ void allocate_walk(closure_t *c) {
         handle_active(a);
         // handle inactive
         handle_inactive(a);
+
+        use_pos_t *first_use = first_use_pos(a->current, 0);
+        if (first_use->kind == USE_KIND_NOT) {
+            spill_interval(c, a, a->current, 0);
+            list_push(a->handled, a->current);
+            continue;
+        }
 
         // 尝试为 current 分配寄存器
         bool allocated = allocate_free_reg(c, a);
@@ -299,17 +353,16 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         return false;
     }
 
-    a->current->assigned = reg_id;
-
     // 有空闲的寄存器，但是空闲时间不够,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
         int optimal_position = interval_find_optimal_split_pos(c, a->current, free_pos[reg_id]);
 
-        // 从最佳位置切割 interval, 切割后的 interval 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
+        // 从最佳位置切割 interval 得到 child, child 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
         interval_t *child = interval_split_at(c, a->current, optimal_position);
         sort_to_unhandled(a->unhandled, child);
     }
 
+    assign_interval(c, a, a->current, reg_id);
     return true;
 }
 
@@ -373,7 +426,6 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         }
     }
 
-
     // max use pos 表示空闲时间最长的寄存器(必定会有一个大于 0 的值, 因为寄存器从 1 开始算的)
     uint8_t reg_id = find_block_reg(a->current, use_pos, block_pos);
 
@@ -394,8 +446,8 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         spill_interval(c, a, a->current, 0);
     } else if (block_pos[reg_id] > a->current->last_range->to) {
         // 一般都会进入到这一条件中
-        // reg_id 对应的寄存器的空闲时间 大于 current.first_use
-        // 甚至大于 current->last_range->to，所以优先溢出 reg_id 对应都 interval
+        // reg_id 对应的寄存器的空闲时间 大于 current.first_use 但是小于 current->last_range->to
+        // 不过 block_use[reg_id] 则是大于 current->last_range->to，所以可以将整个寄存器直接分配给 current， 不用考虑 block 的问题
         // 所有和 current intersecting 的 interval 都需要在 current start 之前 split 并且 spill 到内存中
         // 当然，如果 child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
         LIST_FOR(a->active) {
@@ -415,7 +467,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         }
 
         // assign register reg to interval current
-        a->current->assigned = reg_id;
+        assign_interval(c, a, a->current, reg_id);
         return true;
     } else {
         // 1. current.first_use < use_pos < current.last_use
@@ -438,45 +490,17 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
             spill_interval(c, a, i, first_from);
         }
 
-        // assign register reg to interval current
-        a->current->assigned = reg_id;
-
-        // split current at block_pos
+        // split current at block_pos(block pos 必须强制溢出)
         int split_current_pos = interval_find_optimal_split_pos(c, a->current, block_pos[reg_id]);
         interval_t *child = interval_split_at(c, a->current, split_current_pos);
         sort_to_unhandled(a->unhandled, child);
+
+        // assign register reg to interval current
+        assign_interval(c, a, a->current, reg_id);
         return true;
     }
 
     return false;
-}
-
-/**
- * 在 before_pos 之前需要切割出一个合适的位置，并 spilt spill 到内存中
- * 由于 spill 的部分后续不会在 handle，所以如果包含 use_position kind 则需要再次 spilt 丢出去
- * @param c
- * @param i
- * @param before_pos
- * @return
- */
-void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) {
-    int split_pos;
-    interval_t *child = i;
-    if (before_pos > 0) {
-        // spill current before current first use position
-        split_pos = interval_find_optimal_split_pos(c, i, before_pos);
-        child = interval_split_at(c, i, split_pos);
-    }
-
-    use_pos_t *must_pos = interval_must_reg_pos(child);
-    if (must_pos) {
-        split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
-        interval_t *unhandled = interval_split_at(c, child, split_pos);
-        sort_to_unhandled(a->unhandled, unhandled);
-    }
-
-    // child to slot
-    interval_spill_slot(c, child);
 }
 
 /**

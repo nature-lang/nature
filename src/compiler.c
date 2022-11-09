@@ -617,7 +617,7 @@ list *compiler_env_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
  */
 list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand_t *target) {
     lir_var_t *operand_var = target->value;
-    symbol_table_set_var(operand_var->ident, type_new_base(TYPE_POINT));
+    symbol_table_set_var(operand_var->ident, type_new_by_base(TYPE_POINT));
 
     ast_access_map *ast = expr.expr;
     // compiler base address left_target
@@ -677,7 +677,7 @@ list *compiler_new_map(closure_t *c, ast_expr expr, lir_operand_t *base_target) 
         list_append(operations, compiler_expr(c, key_expr, key_target));
         list_append(operations, compiler_expr(c, value_expr, value_target));
 
-        lir_operand_t *refer_target = lir_temp_var_operand(c, type_new_base(TYPE_POINT));
+        lir_operand_t *refer_target = lir_temp_var_operand(c, type_new_by_base(TYPE_POINT));
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_MAP_VALUE,
                 refer_target,
@@ -711,7 +711,7 @@ list *compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
     lir_operand_t *base_target = lir_new_target_operand();
     list *operations = compiler_expr(c, ast->iterate, base_target);
 
-    lir_operand_t *count_target = lir_temp_var_operand(c, type_new_base(TYPE_INT)); // ?? 这个值特么存在哪里，我现在不可知呀？
+    lir_operand_t *count_target = lir_temp_var_operand(c, type_new_by_base(TYPE_INT)); // ?? 这个值特么存在哪里，我现在不可知呀？
     list_push(operations, lir_op_runtime_call(
             RUNTIME_CALL_ITERATE_COUNT,
             count_target,
@@ -891,7 +891,7 @@ list *compiler_literal(closure_t *c, ast_literal *literal, lir_operand_t *target
     list *operations = list_new();
     switch (literal->type) {
         case TYPE_STRING: {
-            lir_operand_t *temp = lir_temp_var_operand(c, type_new_base(TYPE_STRING));
+            lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(TYPE_STRING));
             target->type = temp->type;
             target->value = temp->value;
 
@@ -993,7 +993,7 @@ list *compiler_builtin_print(closure_t *c, ast_call *call, string print_suffix) 
             imm->type = TYPE_INT64; // int 默认都使用了 mov asm uint 32 处理。但是这里确实需要 64 位处理。
         }
 
-        lir_operand_t *param_target = lir_temp_var_operand(c, type_new_base(TYPE_POINT));
+        lir_operand_t *param_target = lir_temp_var_operand(c, type_new_by_base(TYPE_POINT));
         lir_operand_t *data_type_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value,
                                                                    ast_param_expr.type.base);
 

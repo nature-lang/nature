@@ -41,9 +41,6 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  */
 void sort_to_unhandled(list *unhandled, interval_t *to);
 
-
-void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos);
-
 void replace_virtual_register(closure_t *c);
 
 #endif //NATURE_SRC_REGISTER_ALLOCATE_H_

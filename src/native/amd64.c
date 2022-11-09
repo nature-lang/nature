@@ -221,33 +221,48 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     asm_operand_t *second = lir_operand_transform(c, operations, op->second);
     asm_operand_t *result = lir_operand_transform(c, operations, op->output);
 
+    // 如果 first is reg, 则有
+    // add second -> first
+    // mov first -> result
+    // 例如: rax + rcx = rax
+    // add rcx -> rax, mov ra-> rax
+    // 例如：rcx + rax = rax
+    // add rax -> rcx, mov rcx -> rax
+    // 完全不用考虑寄存器覆盖的问题
+    slice_push(operations, ASM_INST("add", { first, second }));
     asm_mov(operations, result, first);
-    slice_push(operations, ASM_INST("add", { result, second }));
 
     return operations;
 }
 
 /**
- * // sub rax, 1 -> rsp
+ * // sub rax, 1 -> rcx
  * // ↓
- * // mov rax -> rsp
- * // sub 1 -> rsp
+ * // mov rax -> rcx
+ * // sub 1 -> rcx = sub rcx - 1 -> rcx
  * @param op
  * @param count
  * @return
  */
 static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_REG);
+    assert(op->first->type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
     // 参数转换
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
-    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *first = lir_operand_transform(c, operations, op->first); // rcx
+    asm_operand_t *second = lir_operand_transform(c, operations, op->second); // rax
+    asm_operand_t *result = lir_operand_transform(c, operations, op->output); // rax
 
+
+    // 在 first 是 reg 的前提下，则有
+    // sub second -> first, 此时结果存储在 first, 且 first 为寄存器, mov first -> result 即可
+    // 原始： rcx - rax = rax
+    // sub rax -> rcx, mov rcx -> rax
+    // 原始: rax - rcx = rax
+    // sub rcx -> rax, mov rax -> rax
+    slice_push(operations, ASM_INST("sub", { first, second }));
     asm_mov(operations, result, first);
-    slice_push(operations, ASM_INST("sub", { result, second }));
 
     return operations;
 }

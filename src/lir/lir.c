@@ -15,6 +15,7 @@ static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
 
     if (flag & FLAG(operand->type)) {
         slice_push(result, operand);
+        return result;
     }
 
     if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
@@ -52,7 +53,7 @@ static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
 }
 
 
-static void set_operand_flag(lir_operand_t *operand, bool is_output) {
+void set_operand_flag(lir_operand_t *operand) {
     if (!operand) {
         return;
     }
@@ -60,7 +61,8 @@ static void set_operand_flag(lir_operand_t *operand, bool is_output) {
     if (operand->type == LIR_OPERAND_VAR) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
-        if (is_output) {
+        var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
+        if (operand->pos == VR_FLAG_OUTPUT) {
             var->flag |= FLAG(VR_FLAG_DEF);
         } else {
             var->flag |= FLAG(VR_FLAG_USE);
@@ -82,7 +84,7 @@ static void set_operand_flag(lir_operand_t *operand, bool is_output) {
 
     if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
-        if (is_output) {
+        if (operand->pos == VR_FLAG_OUTPUT) {
             reg->flag |= FLAG(VR_FLAG_DEF);
         } else {
             reg->flag |= FLAG(VR_FLAG_USE);
@@ -103,7 +105,7 @@ static void set_operand_flag(lir_operand_t *operand, bool is_output) {
     slice_t *operands = extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
-        set_operand_flag(o, false); // 符合嵌入的全部定义成 USE
+        set_operand_flag(o); // 符合嵌入的全部定义成 USE
     }
 }
 
@@ -254,6 +256,13 @@ lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
 
+lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t pos) {
+    lir_operand_t *temp = lir_operand_copy(operand);
+    temp->pos = pos;
+    set_operand_flag(temp);
+    return temp;
+}
+
 lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
@@ -261,24 +270,13 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
-    if (op->first && op->first->type == LIR_OPERAND_VAR) {
-        lir_var_t *var = op->first->value;
-        var->flag |= FLAG(VR_FLAG_FIRST);
-    }
+    op->first && (op->first->pos = VR_FLAG_FIRST);
+    op->second && (op->second->pos = VR_FLAG_SECOND);
+    op->output && (op->output->pos = VR_FLAG_OUTPUT);
 
-    if (op->second && op->second->type == LIR_OPERAND_VAR) {
-        lir_var_t *var = op->second->value;
-        var->flag |= FLAG(VR_FLAG_SECOND);
-    }
-
-    if (op->output && op->output->type == LIR_OPERAND_VAR) {
-        lir_var_t *var = op->output->value;
-        var->flag |= FLAG(VR_FLAG_OUTPUT);
-    }
-
-    set_operand_flag(op->first, false);
-    set_operand_flag(op->second, false);
-    set_operand_flag(op->output, true);
+    set_operand_flag(op->first);
+    set_operand_flag(op->second);
+    set_operand_flag(op->output);
 
     return op;
 }
@@ -460,6 +458,16 @@ bool lir_op_contain_cmp(lir_op_t *op) {
     }
     return false;
 }
+
+
+bool lir_op_is_arithmetic(lir_op_t *op) {
+    if (op->code == LIR_OPCODE_ADD ||
+        op->code == LIR_OPCODE_SUB) {
+        return true;
+    }
+    return false;
+}
+
 
 void lir_init() {
     var_unique_count = 0;

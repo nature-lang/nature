@@ -40,7 +40,7 @@ uint8_t type_base_sizeof(type_base_t t) {
     }
 }
 
-type_t type_new_base(type_base_t type) {
+type_t type_new_by_base(type_base_t type) {
     type_t result = {
             .is_origin = true,
             .value = NULL,
@@ -64,9 +64,9 @@ type_t type_runtime_array_push() {
     result.is_origin = true;
 
     type_fn_t *fn = NEW(type_fn_t);
-    fn->return_type = type_new_base(TYPE_BUILTIN_ANY);
+    fn->return_type = type_new_by_base(TYPE_BUILTIN_ANY);
     fn->formal_param_count = 1;
-    fn->formal_param_types[0] = type_new_base(TYPE_BUILTIN_ANY);
+    fn->formal_param_types[0] = type_new_by_base(TYPE_BUILTIN_ANY);
 
     result.value = fn;
     result.point = 0;

@@ -8,12 +8,15 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
         if (imm->type == TYPE_STRING_RAW) {
-            lir_operand_t *var_operand = lir_temp_var_operand(c, type_new_base(TYPE_STRING_RAW));
+            lir_operand_t *var_operand = lir_temp_var_operand(c, type_new_by_base(TYPE_STRING_RAW));
             slice_push(c->globals, var_operand->value);
+
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
-            imm_operand->type = var_operand->type;
-            imm_operand->value = var_operand->value;
             list_insert_before(block->operations, node, temp);
+
+            lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
+            imm_operand->type = temp_operand->type;
+            imm_operand->value = temp_operand->value;
         }
     }
 }
@@ -140,9 +143,8 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 } else {
                     reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
                 }
-                lir_op_t *temp = lir_op_move(op->output, reg_operand);
-                op->output = reg_operand;
-                list_insert_after(block->operations, node, temp);
+                list_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
+                op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
             }
 
             continue;
@@ -181,9 +183,8 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
             }
 
-            lir_op_t *temp = lir_op_move(reg_operand, op->first);
-            op->first = reg_operand;
-            list_insert_before(block->operations, node, temp);
+            list_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
+            op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
             continue;
         }
 
@@ -192,10 +193,12 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             lir_operand_t *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
             lir_op_t *before = lir_op_move(reg_operand, op->first);
             lir_op_t *after = lir_op_move(op->output, reg_operand);
-            op->first = reg_operand;
-            op->output = reg_operand;
+
             list_insert_before(block->operations, node, before);
             list_insert_after(block->operations, node, after);
+
+            op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
+            op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
             continue;
         }
 
@@ -209,12 +212,26 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             if (op->first->type == LIR_OPERAND_IMM) {
                 lir_imm_t *imm = op->first->value;
                 // 添加 temp var 中转
-                lir_operand_t *temp = lir_temp_var_operand(c, type_new_base(imm->type));
+                lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(imm->type));
                 slice_push(c->globals, temp->value);
                 lir_op_t *move = lir_op_move(temp, op->first);
-
-                op->first = temp;
                 list_insert_before(block->operations, node, move);
+
+                op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
+                continue;
+            }
+        }
+
+        if (lir_op_is_arithmetic(op)) {
+            // first must var for assign reg
+            if (op->first->type != LIR_OPERAND_VAR) {
+                type_base_t base = lir_operand_type_base(op->first);
+                lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(base));
+                slice_push(c->globals, temp->value);
+                list_insert_before(block->operations, node, lir_op_move(temp, op->first));
+
+                op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
+
                 continue;
             }
         }

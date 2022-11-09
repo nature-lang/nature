@@ -85,7 +85,6 @@ string lir_label_to_string(lir_symbol_label_t *label) {
  * @return
  */
 char *lir_var_to_string(lir_var_t *var) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
 //    int stack_frame_offset = 0;
     char *type_string = "";
     int len;
@@ -103,9 +102,7 @@ char *lir_var_to_string(lir_var_t *var) {
     if (var->indirect_addr) {
         indirect_addr = "*";
     }
-    len = sprintf(buf, "%sVAR[%s|%s]", indirect_addr, ident, type_string);
-
-    return realloc(buf, len);
+    return dsprintf("%sVAR[%s|%s]", indirect_addr, ident, type_string);
 }
 
 char *lir_imm_to_string(lir_imm_t *immediate) {

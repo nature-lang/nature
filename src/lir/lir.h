@@ -135,6 +135,7 @@ typedef enum {
 typedef struct {
     lir_operand_e type;
     void *value;
+    uint8_t pos; // TODO 指令位置
 } lir_operand_t;
 
 // 变量的定义点
@@ -278,7 +279,13 @@ bool lir_op_is_call(lir_op_t *op);
 
 bool lir_op_contain_cmp(lir_op_t *op);
 
+bool lir_op_is_arithmetic(lir_op_t *op);
+
 bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b);
+
+void set_operand_flag(lir_operand_t *operand);
+
+lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t pos);
 
 slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value);
 

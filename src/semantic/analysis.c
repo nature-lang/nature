@@ -780,7 +780,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
     fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
-    fn_init->return_type = type_new_base(TYPE_VOID);
+    fn_init->return_type = type_new_by_base(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
 
@@ -844,7 +844,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
     new_fn->name = MAIN_FN_NAME;
     new_fn->body = slice_new();
-    new_fn->return_type = type_new_base(TYPE_VOID);
+    new_fn->return_type = type_new_by_base(TYPE_VOID);
     new_fn->formal_param_count = 0;
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(new_fn->body, stmt_list->take[i]);

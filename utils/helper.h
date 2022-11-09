@@ -81,13 +81,13 @@ static inline void add64le(unsigned char *p, int64_t x) {
 
 
 static inline char *dsprintf(char *format, ...) {
-    char *buf = malloc(1000);
+    char *buf = mallocz(2000);
     va_list args;
     va_start(args, format);
     int count = vsprintf(buf, format, args);
     va_end(args);
 
-    return realloc(buf, count);
+    return realloc(buf, count + 1);
 }
 
 #endif //NATURE_SRC_LIB_HELPER_H_

@@ -231,7 +231,10 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     }
     if (operand->type == LIR_OPERAND_REG) {
         reg_t *reg = covert_alloc_reg(operand->value);
-        // TODO reg->alloc_id
+        if (!reg->alloc_id) {
+            return NULL;
+        }
+
         interval_t *interval = table_get(c->interval_table, reg->name);
         assert(interval);
         return interval;
@@ -253,11 +256,15 @@ static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
             return USE_KIND_SHOULD;
         }
     }
+    if (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB) {
+        return USE_KIND_SHOULD;
+    }
 
     return USE_KIND_MUST;
 }
 
 /**
+ * TODO 这里的 use_kind 应该是要按 arch 适配的
  * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
  * output 已经必须要有寄存器了, input 就无所谓了
  * @param c
@@ -266,6 +273,17 @@ static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
  * @return
  */
 static use_kind_e use_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    if (op->code == LIR_OPCODE_LEA && var->flag & FLAG(VR_FLAG_FIRST)) {
+        return USE_KIND_NOT;
+    }
+
+    if (lir_op_is_arithmetic(op)) {
+        assertf(op->first->type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
+        if (var->flag & FLAG(VR_FLAG_FIRST)) {
+            return USE_KIND_MUST;
+        }
+    }
+
     // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
     // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
     if (lir_op_contain_cmp(op)) { // cmp indirect addr
@@ -469,6 +487,9 @@ void interval_build(closure_t *c) {
             for (int j = 0; j < def_operands->count; ++j) {
                 lir_operand_t *operand = def_operands->take[j];
                 interval_t *interval = operand_interval(c, operand);
+                if (!interval) {
+                    continue;
+                }
 
                 // first range 为 null,表示仅定义，未使用
                 if (interval->first_range == NULL) {
@@ -490,12 +511,16 @@ void interval_build(closure_t *c) {
             for (int j = 0; j < use_operands->count; ++j) {
                 lir_operand_t *operand = use_operands->take[j];
                 interval_t *interval = operand_interval(c, operand);
+                if (!interval) {
+                    continue;
+                }
+
                 interval_add_range(c, interval, block_from, op->id);
 
                 if (!interval->fixed) {
                     assertf(operand->type == LIR_OPERAND_VAR, "only var can be live");
                     live_add(exist_vars, live, interval->var);
-                    interval_add_use_pos(c, interval, op->id, use_kind_of_def(c, op, operand->value));
+                    interval_add_use_pos(c, interval, op->id, use_kind_of_use(c, op, operand->value));
                 }
             }
 
@@ -799,6 +824,20 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
     LIST_FOR(i->use_pos_list) {
         use_pos_t *pos = LIST_VALUE();
         if (pos->kind == USE_KIND_MUST) {
+            return pos;
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @param i
+ * @return
+ */
+use_pos_t *interval_must_stack_pos(interval_t *i) {
+    LIST_FOR(i->use_pos_list) {
+        use_pos_t *pos = LIST_VALUE();
+        if (pos->kind == USE_KIND_NOT) {
             return pos;
         }
     }

@@ -192,7 +192,7 @@ type_t infer_binary(ast_binary_expr *expr) {
         case AST_EXPR_OPERATOR_GTE:
         case AST_EXPR_OPERATOR_EQ_EQ:
         case AST_EXPR_OPERATOR_NOT_EQ: {
-            return type_new_base(TYPE_BOOL);
+            return type_new_by_base(TYPE_BOOL);
         }
         default: {
             error_exit("unknown operator code");
@@ -264,7 +264,7 @@ type_t infer_new_array(ast_new_list *new_list) {
             .base = TYPE_ARRAY,
     };
     ast_array_decl *decl = malloc(sizeof(ast_array_decl));
-    decl->ast_type = type_new_base(TYPE_UNKNOWN); // unknown 可以适配任何类型
+    decl->ast_type = type_new_by_base(TYPE_UNKNOWN); // unknown 可以适配任何类型
     decl->count = new_list->count;
 
     for (int i = 0; i < new_list->count; ++i) {
@@ -275,7 +275,7 @@ type_t infer_new_array(ast_new_list *new_list) {
         } else {
             if (!infer_compare_type(item_type, decl->ast_type)) {
                 // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                decl->ast_type = type_new_base(TYPE_ANY);
+                decl->ast_type = type_new_by_base(TYPE_ANY);
                 break;
             }
         }
@@ -297,8 +297,8 @@ type_t infer_new_map(ast_new_map *new_map) {
             .base = TYPE_MAP,
     };
     ast_map_decl *map_decl = NEW(ast_map_decl);
-    map_decl->key_type = type_new_base(TYPE_UNKNOWN);
-    map_decl->value_type = type_new_base(TYPE_UNKNOWN);
+    map_decl->key_type = type_new_by_base(TYPE_UNKNOWN);
+    map_decl->value_type = type_new_by_base(TYPE_UNKNOWN);
     for (int i = 0; i < new_map->count; ++i) {
         type_t key_type = infer_expr(&new_map->values[i].key);
         type_t value_type = infer_expr(&new_map->values[i].value);
@@ -308,7 +308,7 @@ type_t infer_new_map(ast_new_map *new_map) {
             map_decl->key_type = key_type;
         } else {
             if (!infer_compare_type(key_type, map_decl->key_type)) {
-                map_decl->key_type = type_new_base(TYPE_ANY);
+                map_decl->key_type = type_new_by_base(TYPE_ANY);
                 break;
             }
         }
@@ -318,7 +318,7 @@ type_t infer_new_map(ast_new_map *new_map) {
             map_decl->value_type = value_type;
         } else {
             if (!infer_compare_type(value_type, map_decl->value_type)) {
-                map_decl->value_type = type_new_base(TYPE_ANY);
+                map_decl->value_type = type_new_by_base(TYPE_ANY);
                 break;
             }
         }
@@ -476,7 +476,7 @@ type_t infer_call(ast_call *call) {
     if (call->left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = call->left.expr;
         if (is_print_symbol(ident->literal)) {
-            return type_new_base(TYPE_FN);
+            return type_new_by_base(TYPE_FN);
         }
     }
 
@@ -606,7 +606,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
         value_decl->type = map_decl->value_type;
     } else {
         ast_array_decl *list_decl = iterate_type.value;
-        key_decl->type = type_new_base(TYPE_INT);
+        key_decl->type = type_new_by_base(TYPE_INT);
         value_decl->type = list_decl->ast_type;
 
     }
@@ -619,7 +619,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {
-    type_t return_type = type_new_base(TYPE_VOID);
+    type_t return_type = type_new_by_base(TYPE_VOID);
     if (stmt->expr != NULL) {
         return_type = infer_expr(stmt->expr);
     }
@@ -874,7 +874,7 @@ void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
 }
 
 type_t infer_literal(ast_literal *literal) {
-    return type_new_base(literal->type);
+    return type_new_by_base(literal->type);
 }
 
 /**

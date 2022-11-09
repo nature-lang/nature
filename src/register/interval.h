@@ -6,8 +6,9 @@
 
 typedef enum {
     USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
-    USE_KIND_SHOULD = 1, // 尽量分配寄存器，但不强制
+    USE_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
     USE_KIND_MUST = 2, // 必须分配寄存器
+    USE_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
 } use_kind_e;
 
 typedef struct {
@@ -155,6 +156,8 @@ void interval_spill_slot(closure_t *c, interval_t *i);
 interval_t *interval_child_at(interval_t *i, int op_id, bool is_use);
 
 use_pos_t *interval_must_reg_pos(interval_t *i);
+
+use_pos_t *interval_must_stack_pos(interval_t *i);
 
 void resolve_data_flow(closure_t *c);
 
