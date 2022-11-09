@@ -828,7 +828,7 @@ inst_t *opcode_select(asm_operation_t opcode) {
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
-        assert(exists && "cannot identify asm opcode with operand");
+        assertf(exists, "cannot identify asm opcode %s with operand %d", opcode.name, i);
         current = table_get(current->succs, key);
     }
 

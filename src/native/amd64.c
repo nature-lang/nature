@@ -98,39 +98,18 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
     // string_t/map_t/array_t
     if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *v = operand->value;
-        // base 类型必须为 var
-        assert(false && "not support"); // ?? fix reg or use must reg?
+        lir_operand_t *base = v->base;
+        assertf(base->type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
-//        lir_var_t*base_var = v->base->value;
-
-        // rbp 存储了 base,
-//        if (base_var->decl->stack_offset == 0) {
-//            error_exit("[amd64_lir_to_asm_operand]  var cannot stack_frame_offset in var %s", base_var->ident);
-//        }
-        // 需要占用一个临时寄存器
-//        reg_t *reg = amd64_native_next_reg(used, QWORD);
-//
-//        // 如果设置了 indirect_addr, 则编译成 [rxx+slot]
-//        // 否则应该编译成 ADD  rxx -> slot, asm_operand 配置成 rxx
-//        if (v->indirect_addr) {
-//            amd64_operand_t *base_addr_operand = amd64_native_operand_var_transform(base_var, 0);
-//            // 生成 mov 指令（asm_mov）
-//            slice_push(asm_operations, ASM_INST("mov", { REG(reg), base_addr_operand }));
-//
-//            amd64_operand_t *temp = DISP_REG(reg, v->offset, type_base_sizeof(v->type_base));
-//            ASM_OPERAND_COPY(asm_operand, temp);
-//        } else {
-//            slice_push(asm_operations, ASM_INST("add", { REG(reg), UINT32(v->offset) }));
-//            ASM_OPERAND_COPY(asm_operand, REG(reg));
-//        }
-
-//        return ;
+        reg_t *reg = base->value;
+        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type_base));
+        return asm_operand;
     }
 
     if (operand->type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *v = operand->value;
         asm_operand_t *asm_operand = SYMBOL(v->ident, false);
-        // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov
+        // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
         asm_operand->size = type_base_sizeof(v->type);
         return asm_operand;
     }

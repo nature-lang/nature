@@ -35,7 +35,7 @@ static string asm_operand_to_string(asm_operand_t *operand) {
             return dsprintf("[rip%d]", ((asm_rip_relative_t *) value)->disp);
         }
         case ASM_OPERAND_TYPE_INDIRECT_REG: {
-            return dsprintf("[%s]", ((reg_t *) value)->name);
+            return dsprintf("[%s]", ((asm_indirect_reg_t *) value)->reg->name);
         }
         case ASM_OPERAND_TYPE_SIB_REG: {
             // [base+index*scale+offset]

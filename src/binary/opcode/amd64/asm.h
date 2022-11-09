@@ -81,7 +81,7 @@
 #define INDIRECT_REG(_reg, _size) ({ \
      asm_operand_t *_operand = NEW(asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_INDIRECT_REG;  \
-     asm_operand_indirect_register_t *_indirect = NEW(asm_indirect_reg_t); \
+     asm_indirect_reg_t *_indirect = NEW(asm_indirect_reg_t); \
      _indirect->reg = (reg_t*)(_reg);    \
      _operand->size = _size;\
      _operand->value = _indirect;    \
