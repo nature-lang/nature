@@ -71,23 +71,23 @@ void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
+    if (operand->type == LIR_OPERAND_REG) {
+        reg_t *reg = operand->value;
+        reg->flag |= FLAG(operand->pos);
+        if (operand->pos == VR_FLAG_OUTPUT) {
+            reg->flag |= FLAG(VR_FLAG_DEF);
+        } else {
+            reg->flag |= FLAG(VR_FLAG_USE);
+        }
+        return;
+    }
+
     if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
         if (addr->base->type == LIR_OPERAND_VAR) {
             lir_var_t *var = addr->base->value;
             var->flag |= FLAG(VR_FLAG_USE);
             var->flag |= FLAG(VR_FLAG_INDIRECT_ADDR_BASE);
-        }
-        return;
-    }
-
-
-    if (operand->type == LIR_OPERAND_REG) {
-        reg_t *reg = operand->value;
-        if (operand->pos == VR_FLAG_OUTPUT) {
-            reg->flag |= FLAG(VR_FLAG_DEF);
-        } else {
-            reg->flag |= FLAG(VR_FLAG_USE);
         }
         return;
     }
@@ -139,6 +139,18 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_operand->value = new_var;
         return new_operand;
     }
+    if (new_operand->type == LIR_OPERAND_REG) {
+        reg_t *reg = new_operand->value;
+        reg_t *new_reg = NEW(reg_t);
+        new_reg->name = reg->name;
+        new_reg->index = reg->index;
+        new_reg->size = reg->size;
+        new_reg->alloc_id = reg->alloc_id;
+        new_reg->flag = 0;
+        new_operand->value = new_reg;
+        return new_operand;
+    }
+
     return new_operand;
 }
 

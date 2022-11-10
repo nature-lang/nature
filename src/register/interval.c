@@ -648,9 +648,22 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
         if (from < i->first_range->from) {
             i->first_range->from = from;
         }
-        if (to > i->last_range->to) {
-            i->last_range->to = to;
+        if (to > i->first_range->to) {
+            i->first_range->to = to;
+
+            // to 可能跨越了多个 range
+            list_node *current = list_first(i->ranges)->succ;
+            while (current->value && ((interval_range_t *) current->value)->from <= to) {
+                i->first_range->to = ((interval_range_t *) current->value)->to;
+                list_remove(i->ranges, current);
+
+                current = current->succ;
+            }
+            // 重新计算 last range
+            i->last_range = list_last(i->ranges)->value;
         }
+
+
     } else {
         // 不重叠,则 range 插入到 ranges 的最前面
         interval_range_t *range = NEW(interval_range_t);
