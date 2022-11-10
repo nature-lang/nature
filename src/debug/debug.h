@@ -6,6 +6,8 @@
 #include "src/syntax/token.h"
 #include "src/lir/lir.h"
 
+string lir_opcode_to_string[UINT8_MAX];
+
 #define DEBUG_STR_COUNT 1024
 
 //#define DEBUG_SCANNER

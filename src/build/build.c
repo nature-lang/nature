@@ -196,6 +196,8 @@ void build(char *build_entry) {
             // 构造 ssa
             ssa(c);
 
+            debug_lir(c);
+
             lower(c);
 
             linear_scan(c);

@@ -4,6 +4,7 @@
 #include <assert.h>
 
 #include "ssa.h"
+#include "src/debug/debug.h"
 
 /**
  * ssa rename after collect all renamed var

@@ -32,9 +32,7 @@ static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
             lir_operand_t *o = operands->take[i];
             assert(o->type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
 
-            if (FLAG(o->type) & flag) {
-                slice_push(result, o);
-            }
+            slice_append(result, extract_operands(o, flag));
         }
         return result;
     }
@@ -138,8 +136,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
-    }
-    if (new_operand->type == LIR_OPERAND_REG) {
+    } else if (new_operand->type == LIR_OPERAND_REG) {
         reg_t *reg = new_operand->value;
         reg_t *new_reg = NEW(reg_t);
         new_reg->name = reg->name;
@@ -148,6 +145,28 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_reg->alloc_id = reg->alloc_id;
         new_reg->flag = 0;
         new_operand->value = new_reg;
+        return new_operand;
+    }
+
+    if (new_operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = new_operand->value;
+        lir_indirect_addr_t *new_addr = NEW(lir_indirect_addr_t);
+        new_addr->base = lir_operand_copy(addr->base);
+        new_addr->offset = addr->offset;
+        new_addr->type_base = addr->type_base;
+        new_operand->value = new_addr;
+        return new_operand;
+    }
+
+    if (new_operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
+        slice_t *new_value = slice_new();
+
+        slice_t *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_operand_t *o = operands->take[i];
+            slice_push(new_value, lir_operand_copy(o));
+        }
+        new_operand->value = new_value;
         return new_operand;
     }
 

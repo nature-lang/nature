@@ -1,5 +1,5 @@
 // 自定义类型(不进行任何实质的操作)
-code people = struct {
+type people = struct {
     int a
     bool b
     int c

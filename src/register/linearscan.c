@@ -29,9 +29,9 @@ void linear_scan(closure_t *c) {
 
     interval_mark_number(c);
 
-    interval_build(c);
-
     debug_lir(c);
+
+    interval_build(c);
 
     allocate_walk(c);
 
