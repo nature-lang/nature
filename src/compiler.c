@@ -258,7 +258,6 @@ list *compiler_expr(closure_t *c, ast_expr expr, lir_operand_t *target) {
     if (expr.assert_type == AST_EXPR_ARRAY_VALUE || expr.assert_type == AST_EXPR_ENV_VALUE) {
         target->type = LIR_OPERAND_INDIRECT_ADDR;
         lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
-        memset(addr, 0, sizeof(lir_indirect_addr_t));
         target->value = addr;
 
 
@@ -493,7 +492,7 @@ list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
     lir_operand_t *index_target = lir_new_target_operand();
     list_append(operations, compiler_expr(c, ast->index, index_target));
 
-    lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(expr.type, 1));
+    lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(ast->type, 1));
     // 如果使用是没问题的，但是外部的值没法写入进去
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_VALUE,
@@ -508,7 +507,7 @@ list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand_t *target) {
     // set target
     lir_indirect_addr_t *addr = target->value;
     addr->base = value_point;
-    addr->type_base = expr.type.base; // 数组 item 的类型
+    addr->type_base = ast->type.base; // 数组 item 的类型
 
     return operations;
 }
@@ -549,20 +548,31 @@ list *compiler_new_array(closure_t *c, ast_expr expr, lir_operand_t *base_target
     // compiler_expr to access_list
     for (int i = 0; i < ast->count; ++i) {
         ast_expr item_expr = ast->values[i];
-        lir_operand_t *value_target = lir_new_target_operand();
-        list_append(operations, compiler_expr(c, item_expr, value_target));
+        lir_operand_t *src = lir_new_target_operand();
+        list_append(operations, compiler_expr(c, item_expr, src));
 
-        lir_operand_t *refer_target = lir_temp_var_operand(c, type_new_point(item_expr.type, 1));
+        // compiler left
+        lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(item_expr.type, 1));
         lir_operand_t *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_ARRAY_VALUE,
-                refer_target,
+                value_point,
                 2,
                 base_target,
                 index_target
         );
+
         list_push(operations, call_op);
-        list_push(operations, lir_op_move(set_indirect_addr(refer_target), value_target));
+
+        lir_operand_t *temp_target = lir_new_target_operand();
+        temp_target->type = LIR_OPERAND_INDIRECT_ADDR;
+        lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
+        temp_target->value = addr;
+        addr->base = value_point;
+        addr->type_base = item_expr.type.base;
+
+
+        list_push(operations, lir_op_move(temp_target, src));
     }
 
     return operations;

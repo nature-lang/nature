@@ -1,6 +1,13 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
 
+#define ASSIGN_VAR(_operand) \
+   type_base_t base = lir_operand_type_base(_operand); \
+   lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(base)); \
+   slice_push(c->globals, temp->value);                \
+   list_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
+   op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
+
 static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_node *node) {
     lir_op_t *op = node->value;
     slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
@@ -209,15 +216,8 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // tips: 不能随便调换 first 和 second 的顺序，会导致 asm cmp 指令对比异常
         if (lir_op_contain_cmp(op)) {
             // first is native target, cannot imm, so in case swap first and second
-            if (op->first->type == LIR_OPERAND_IMM) {
-                lir_imm_t *imm = op->first->value;
-                // 添加 temp var 中转
-                lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(imm->type));
-                slice_push(c->globals, temp->value);
-                lir_op_t *move = lir_op_move(temp, op->first);
-                list_insert_before(block->operations, node, move);
-
-                op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
+            if (op->first->type != LIR_OPERAND_VAR) {
+                ASSIGN_VAR(op->first);
                 continue;
             }
         }
@@ -225,16 +225,18 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_is_arithmetic(op)) {
             // first must var for assign reg
             if (op->first->type != LIR_OPERAND_VAR) {
-                type_base_t base = lir_operand_type_base(op->first);
-                lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(base));
-                slice_push(c->globals, temp->value);
-                list_insert_before(block->operations, node, lir_op_move(temp, op->first));
-
-                op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
-
+                ASSIGN_VAR(op->first);
                 continue;
             }
         }
+
+        if (op->code == LIR_OPCODE_MOVE) {
+            if (op->output->type != LIR_OPERAND_VAR) {
+                ASSIGN_VAR(op->output);
+                continue;
+            }
+        }
+
     }
 
     // realloc first op
