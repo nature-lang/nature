@@ -161,8 +161,8 @@ void build(char *build_entry) {
 
         slice_t *temp = slice_new();
         slice_push(temp, m->call_init_stmt);
-        slice_append_free(temp, root_ast_closure->function->body);
-        root_ast_closure->function->body = temp;
+        slice_append_free(temp, root_ast_closure->fn->body);
+        root_ast_closure->fn->body = temp;
     }
 
     // infer + compiler

@@ -320,6 +320,7 @@ typedef struct {
     type_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
+    bool rest_formal_param;
     slice_t *body; // ast_stmt* 函数体
 } ast_new_fn; // 既可以是 expression,也可以是 stmt
 
@@ -327,7 +328,7 @@ typedef struct {
     slice_t *env_list; // ast_expr*
 
     string env_name; // 唯一标识，可以全局定位
-    ast_new_fn *function;
+    ast_new_fn *fn;
 } ast_closure_t;
 
 //ast_block_stmt ast_new_block_stmt();

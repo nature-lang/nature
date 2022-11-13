@@ -48,7 +48,7 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt);
 
 ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope_t *scope);
 
-void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn);
+void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn);
 
 void analysis_stmt(module_t *m, ast_stmt *stmt);
 

@@ -36,7 +36,7 @@ token_type scanner_rest_ident_type(char *word,
                                    char *rest,
                                    int8_t type);
 
-token_type scanner_special_char_type(module_t *module);
+token_type scanner_special_char(module_t *m);
 
 char scanner_guard_advance(module_t *module); // guard 前进一个字符
 char *scanner_gen_word(module_t *module);

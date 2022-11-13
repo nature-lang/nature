@@ -12,7 +12,7 @@ void infer(ast_closure_t *closure_decl) {
 }
 
 type_t infer_closure_decl(ast_closure_t *closure_decl) {
-    ast_new_fn *function_decl = closure_decl->function;
+    ast_new_fn *function_decl = closure_decl->fn;
 
     // 类型还原
     function_decl->return_type = infer_type(function_decl->return_type);
@@ -492,6 +492,7 @@ type_t infer_call(ast_call *call) {
         error_printf(infer_line, "[infer_call] function param count not match");
         exit(0);
     }
+    // TODO 不该写这里怎么 check?
 
     // call param check
     for (int i = 0; i < type_fn->formal_param_count; ++i) {
@@ -624,7 +625,7 @@ void infer_return(ast_return_stmt *stmt) {
         return_type = infer_expr(stmt->expr);
     }
 
-    type_t expect_type = infer_current->closure_decl->function->return_type;
+    type_t expect_type = infer_current->closure_decl->fn->return_type;
     if (!infer_compare_type(expect_type, return_type)) {
         error_printf(infer_line, "return code(%s) error,expect '%s' code",
                      type_to_string[return_type.base],

@@ -1,0 +1,5 @@
+int sum(int a, int b, ...[string] rest) {
+    return a + b + rest[1]
+}
+
+sum(1, 2, 3, 4)

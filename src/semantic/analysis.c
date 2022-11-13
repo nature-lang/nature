@@ -37,7 +37,7 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
         }
         case AST_NEW_FN: {
             // 注册 function_decl_type + ident
-            analysis_function_decl_ident(m, (ast_new_fn *) stmt->stmt);
+            analysis_fn_decl_ident(m, (ast_new_fn *) stmt->stmt);
 
             // 函数体添加到 延迟处理，从而可以 fn 引用当前环境的所有变量
             uint8_t count = m->analysis_current->contains_fn_count++;
@@ -92,10 +92,10 @@ void analysis_assign(module_t *m, ast_assign_stmt *assign) {
 }
 
 void analysis_call(module_t *m, ast_call *call) {
-    // 函数地址改写
+    // 函数地址 unique 改写
     analysis_expr(m, &call->left);
 
-    // 实参改写
+    // 实参 unique 改写
     for (int i = 0; i < call->actual_param_count; ++i) {
         ast_expr *actual_param = &call->actual_params[i];
         analysis_expr(m, actual_param);
@@ -141,7 +141,7 @@ type_t analysis_function_to_type(ast_new_fn *function_decl) {
     return type;
 }
 
-void analysis_function_decl_ident(module_t *m, ast_new_fn *new_fn) {
+void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn) {
     // 仅 fun 再次定义 as 才需要再次添加到符号表
     if (!str_equal(new_fn->name, MAIN_FN_NAME)) {
         if (strlen(new_fn->name) == 0) {
@@ -228,7 +228,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
 
         slice_push(closure->env_list, expr);
     }
-    closure->function = function_decl;
+    closure->fn = function_decl;
 
     // 延迟处理 contains_function_decl
     for (int i = 0; i < m->analysis_current->contains_fn_count; ++i) {
@@ -336,7 +336,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             break;
         }
         case AST_NEW_FN: { // 右值
-            analysis_function_decl_ident(m, (ast_new_fn *) expr->expr);
+            analysis_fn_decl_ident(m, (ast_new_fn *) expr->expr);
 
             // 函数体添加到 延迟处理
             uint8_t count = m->analysis_current->contains_fn_count++;

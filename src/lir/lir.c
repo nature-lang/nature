@@ -314,7 +314,7 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
 
 closure_t *lir_new_closure(ast_closure_t *ast) {
     closure_t *new = NEW(closure_t);
-    new->name = ast->function->name;
+    new->name = ast->fn->name;
     new->env_name = ast->env_name;
     new->parent = NULL;
     new->operations = NULL;

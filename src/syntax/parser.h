@@ -60,7 +60,7 @@ ast_expr parser_access(module_t *m, ast_expr left);
 
 ast_expr parser_binary(module_t *m, ast_expr left);
 
-ast_expr parser_function_decl_expr(module_t *m, type_t type);
+ast_expr parser_fn_decl_expr(module_t *m, type_t type);
 
 ast_expr parser_new_struct(module_t *m, type_t type);
 
@@ -84,7 +84,7 @@ ast_stmt *parser_return_stmt(module_t *m);
 
 ast_stmt *parser_auto_infer_decl(module_t *m);
 
-ast_stmt *parser_var_or_function_decl(module_t *m);
+ast_stmt *parser_var_or_fn_decl(module_t *m);
 
 ast_stmt *parser_if_stmt(module_t *m);
 
@@ -96,13 +96,13 @@ ast_stmt *parser_type_decl_stmt(module_t *m);
 
 slice_t *parser_else_if(module_t *m);
 
-ast_new_fn *parser_function_decl(module_t *m, type_t type);
+ast_new_fn *parser_fn_decl(module_t *m, type_t type);
 
 ast_var_decl *parser_var_decl(module_t *m);
 
 void parser_actual_param(module_t *m, ast_call *call);
 
-void parser_formal_param(module_t *m, ast_new_fn *function_decl);
+void parser_formal_param(module_t *m, ast_new_fn *fn_decl);
 
 void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn);
 
@@ -145,7 +145,7 @@ token *parser_must(module_t *m, token_type t);
 
 bool parser_must_stmt_end(module_t *m);
 
-bool parser_is_function_decl(module_t *m, list_node *current);
+bool parser_is_fn_decl(module_t *m, list_node *current);
 
 void parser_cursor_init(module_t *m, list *token_list);
 

@@ -57,9 +57,9 @@ list *scanner(module_t *module) {
 
         // if current is 特殊字符
         if (!scanner_is_at_end(module)) {
-            int8_t special_type = scanner_special_char_type(module);
+            int8_t special_type = scanner_special_char(module);
             if (special_type == -1) { // 未识别的特殊符号
-                module->s_error.message = "scanner_special_char_type() not scanner_match";
+                module->s_error.message = "scanner_special_char() not scanner_match";
             } else {
                 list_push(list, token_new(special_type, scanner_gen_word(module), module->s_cursor.line));
                 continue;
@@ -92,8 +92,8 @@ char *scanner_ident_advance(module_t *module) {
     return scanner_gen_word(module);
 }
 
-token_type scanner_special_char_type(module_t *module) {
-    char c = scanner_guard_advance(module);
+token_type scanner_special_char(module_t *m) {
+    char c = scanner_guard_advance(m);
 
     switch (c) {
         case '(':
@@ -114,8 +114,6 @@ token_type scanner_special_char_type(module_t *module) {
             return TOKEN_SEMICOLON;
         case ',':
             return TOKEN_COMMA;
-        case '.':
-            return TOKEN_DOT;
         case '-':
             return TOKEN_MINUS;
         case '+':
@@ -124,18 +122,28 @@ token_type scanner_special_char_type(module_t *module) {
             return TOKEN_SLASH;
         case '*':
             return TOKEN_STAR;
+        case '.': {
+            if (scanner_match(m, '.')) {
+                // 下一个值必须也要是点，否则就报错
+                if (scanner_match(m, '.')) {
+                    return TOKEN_ELLIPSIS;
+                }
+                return -1;
+            }
+            return TOKEN_DOT;
+        }
         case '!':
-            return scanner_match(module, '=') ? TOKEN_NOT_EQUAL : TOKEN_NOT;
+            return scanner_match(m, '=') ? TOKEN_NOT_EQUAL : TOKEN_NOT;
         case '=':
-            return scanner_match(module, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
+            return scanner_match(m, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
         case '<':
-            return scanner_match(module, '=') ? TOKEN_LESS_EQUAL : TOKEN_LEFT_ANGLE;
+            return scanner_match(m, '=') ? TOKEN_LESS_EQUAL : TOKEN_LEFT_ANGLE;
         case '>':
-            return scanner_match(module, '=') ? TOKEN_GREATER_EQUAL : TOKEN_RIGHT_ANGLE;
+            return scanner_match(m, '=') ? TOKEN_GREATER_EQUAL : TOKEN_RIGHT_ANGLE;
         case '&':
-            return scanner_match(module, '&') ? TOKEN_AND_AND : TOKEN_AND;
+            return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
         case '|':
-            return scanner_match(module, '|') ? TOKEN_OR_OR : TOKEN_OR;
+            return scanner_match(m, '|') ? TOKEN_OR_OR : TOKEN_OR;
         default:
             return -1;
     }

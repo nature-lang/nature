@@ -94,24 +94,24 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
     // new 一个新的 closure_t ---------------
     closure_t *c = lir_new_closure(ast_closure);
     c->module = current_module;
-    c->name = ast_closure->function->name; // analysis 阶段已经进行了唯一名称处理
+    c->name = ast_closure->fn->name; // analysis 阶段已经进行了唯一名称处理
     c->end_label = str_connect("end_", c->name);
     c->parent = parent;
     slice_push(compiler_closures, c);
 
     list *operations = list_new();
     // 添加 label 和 fn begin 入口
-    list_push(operations, lir_op_label(ast_closure->function->name, false));
+    list_push(operations, lir_op_label(ast_closure->fn->name, false));
 
     // 直接改写 target 而不是使用一个 move 操作
     if (target != NULL) {
         target->type = LIR_OPERAND_VAR;
-        target->value = lir_new_var_operand(c, ast_closure->function->name);
+        target->value = lir_new_var_operand(c, ast_closure->fn->name);
     }
 
     slice_t *formal_params = slice_new();
-    for (int i = 0; i < ast_closure->function->formal_param_count; ++i) {
-        ast_var_decl *param = ast_closure->function->formal_params[i];
+    for (int i = 0; i < ast_closure->fn->formal_param_count; ++i) {
+        ast_var_decl *param = ast_closure->fn->formal_params[i];
         // var operand 依赖 var_decl 定义的变量
         lir_var_t *var = lir_new_var_operand(c, param->ident);
         slice_push(formal_params, var);
@@ -122,7 +122,7 @@ list *compiler_closure(closure_t *parent, ast_closure_t *ast_closure, lir_operan
 
 
     // 编译 body
-    list *await = compiler_block(c, ast_closure->function->body);
+    list *await = compiler_block(c, ast_closure->fn->body);
     list_append(operations, await);
 
     // 尾部添加结尾 label(basic_block)
