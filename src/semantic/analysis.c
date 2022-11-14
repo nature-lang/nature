@@ -126,13 +126,14 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
     stmt->var_decl->ident = local->unique_ident;
 }
 
-type_t analysis_function_to_type(ast_new_fn *function_decl) {
+type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     type_fn_t *fn_type = NEW(type_fn_t);
-    fn_type->return_type = function_decl->return_type;
-    for (int i = 0; i < function_decl->formal_param_count; ++i) {
-        fn_type->formal_param_types[i] = function_decl->formal_params[i]->type;
+    fn_type->return_type = fn_decl->return_type;
+    for (int i = 0; i < fn_decl->formal_param_count; ++i) {
+        fn_type->formal_param_types[i] = fn_decl->formal_params[i]->type;
     }
-    fn_type->formal_param_count = function_decl->formal_param_count;
+    fn_type->formal_param_count = fn_decl->formal_param_count;
+    fn_type->rest_param = fn_decl->rest_param;
     type_t type = {
             .is_origin = false,
             .base = TYPE_FN,
@@ -458,7 +459,7 @@ void analysis_type(module_t *m, type_t *type) {
 
     if (type->base == TYPE_ARRAY) {
         ast_array_decl *map_decl = type->value;
-        analysis_type(m, &map_decl->ast_type);
+        analysis_type(m, &map_decl->type);
         return;
     }
 

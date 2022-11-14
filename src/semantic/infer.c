@@ -5,7 +5,37 @@
 #include "analysis.h"
 #include "src/debug/debug.h"
 #include "utils/helper.h"
-#include <math.h>
+
+static type_t select_actual_param(ast_call *call, uint8_t index) {
+    if (index < call->actual_param_count) {
+        return call->actual_params[index].type;
+    }
+
+    assertf(call->spread_param, "select index out range");
+
+    // last actual param type must array
+    type_t last_param_type = call->actual_params[call->actual_param_count].type;
+    assertf(last_param_type.base == TYPE_ARRAY, "spread_param must array");
+    ast_array_decl *array_decl = last_param_type.value;
+    return array_decl->type;
+}
+
+static type_t select_formal_param(type_fn_t *type_fn, uint8_t index) {
+    if (index < type_fn->formal_param_count) {
+        return type_fn->formal_param_types[index];
+    }
+
+    // index >= type_fn->formal_param_count
+    assertf(type_fn->rest_param, "select index out range");
+    // last param must array
+    type_t last_param_type = type_fn->formal_param_types[type_fn->formal_param_count - 1];
+    assertf(last_param_type.base == TYPE_ARRAY, "rest param must array");
+
+    ast_array_decl *array_decl = last_param_type.value;
+
+    return array_decl->type;
+}
+
 
 void infer(ast_closure_t *closure_decl) {
     infer_line = 0;
@@ -27,7 +57,7 @@ type_t infer_closure_decl(ast_closure_t *closure_decl) {
     }
 
     infer_current_init(closure_decl);
-    type_t result = analysis_function_to_type(function_decl);
+    type_t result = analysis_fn_to_type(function_decl);
     result = infer_type(result);
 
     infer_block(function_decl->body);
@@ -234,24 +264,21 @@ type_t infer_unary(ast_unary_expr *expr) {
  */
 type_t infer_ident(string unique_ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
-    if (symbol == NULL) {
-        error_exit("[infer_ident] ident %s not found in symbol table", unique_ident);
-    }
+    assertf(symbol, "ident %s not found", unique_ident);
 
     if (symbol->type == SYMBOL_TYPE_VAR) {
-        // 类型还原，并回写到 local_ident TODO 跨文件能还原吗？
         ast_var_decl *var_decl = symbol->value;
-        var_decl->type = infer_type(var_decl->type);
+        var_decl->type = infer_type(var_decl->type); // 类型还原
         return var_decl->type;
     }
 
+    // 比如 print 和 println 都已经注册在了符号表中
     if (symbol->type == SYMBOL_TYPE_FN) {
         ast_new_fn *new_fn = symbol->value;
-        return infer_type(analysis_function_to_type(new_fn));
+        return infer_type(analysis_fn_to_type(new_fn));
     }
 
-    error_exit("ident code exception");
-    exit(0);
+    assertf(false, "symbol type not expect");
 }
 
 /**
@@ -265,18 +292,18 @@ type_t infer_new_array(ast_new_list *new_list) {
             .base = TYPE_ARRAY,
     };
     ast_array_decl *decl = malloc(sizeof(ast_array_decl));
-    decl->ast_type = type_new_by_base(TYPE_UNKNOWN); // unknown 可以适配任何类型
+    decl->type = type_new_by_base(TYPE_UNKNOWN); // unknown 可以适配任何类型
     decl->count = new_list->count;
 
     for (int i = 0; i < new_list->count; ++i) {
         type_t item_type = infer_expr(&new_list->values[i]);
-        if (decl->ast_type.base == TYPE_UNKNOWN) {
+        if (decl->type.base == TYPE_UNKNOWN) {
             // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
-            decl->ast_type = item_type;
+            decl->type = item_type;
         } else {
-            if (!infer_compare_type(item_type, decl->ast_type)) {
+            if (!infer_compare_type(item_type, decl->type)) {
                 // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                decl->ast_type = type_new_by_base(TYPE_ANY);
+                decl->type = type_new_by_base(TYPE_ANY);
                 break;
             }
         }
@@ -417,11 +444,11 @@ type_t infer_access(ast_expr *expr) {
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
-        access_list->type = list_decl->ast_type;
+        access_list->type = list_decl->type;
         expr->assert_type = AST_EXPR_ARRAY_VALUE;
         expr->expr = access_list;
 
-        result = list_decl->ast_type;
+        result = list_decl->type;
     } else {
         error_printf(infer_line, "expr code must map or list, cannot '%s'", type_to_string[left_type.base]);
         exit(0);
@@ -469,9 +496,8 @@ type_t infer_call(ast_call *call) {
     type_t result;
 
     // 实参类型推导与类型还原
-    type_t actual_types[call->actual_param_count];
     for (int i = 0; i < call->actual_param_count; ++i) {
-        actual_types[i] = infer_expr(&call->actual_params[i]);
+        infer_expr(&call->actual_params[i]);
     }
 
     // 左值符号推导
@@ -481,29 +507,20 @@ type_t infer_call(ast_call *call) {
     type_fn_t *type_fn = left_type.value;
 
     // 参数对比，由于存在 spread 和 rest 运算，所以不能直接根据参数数量左 assert
-    int count = 
+    uint8_t count = max(type_fn->formal_param_count, call->actual_param_count);
 
+    for (int i = 0; i < count; ++i) {
+        // first param from actual
+        type_t actual = select_actual_param(call, i);
+        // first param from formal
+        type_t formal = select_formal_param(type_fn, i);
 
-    if (type_fn->formal_param_count != call->actual_param_count) {
-        error_printf(infer_line, "[infer_call] function param count not match");
-        exit(0);
-    }
-    // TODO 不该写这里怎么 check?
-
-    // call param check
-    for (int i = 0; i < type_fn->formal_param_count; ++i) {
-        type_t t = type_fn->formal_param_types[i];
-        type_t actual_param_type = actual_types[i];
-        if (!infer_compare_type(t, actual_param_type)) {
-            error_printf(infer_line, "[infer_call] call param[%d] code error, expect '%s' code, actual '%s' code",
-                         i,
-                         type_to_string[t.base],
-                         type_to_string[actual_param_type.base]);
-        }
+        assertf(infer_compare_type(actual, formal),
+                "call param[%d] type error, expect '%s' type, actual '%s' type",
+                i, type_to_string[formal.base], type_to_string[actual.base]);
     }
 
-    result = type_fn->return_type;
-    return result;
+    return type_fn->return_type;
 }
 
 /**
@@ -604,7 +621,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
     } else {
         ast_array_decl *list_decl = iterate_type.value;
         key_decl->type = type_new_by_base(TYPE_INT);
-        value_decl->type = list_decl->ast_type;
+        value_decl->type = list_decl->type;
 
     }
 
@@ -685,15 +702,15 @@ bool infer_compare_type(type_t left, type_t right) {
     if (left.base == TYPE_ARRAY) {
         ast_array_decl *left_list_decl = left.value;
         ast_array_decl *right_list_decl = right.value;
-        if (right_list_decl->ast_type.base == TYPE_UNKNOWN) {
+        if (right_list_decl->type.base == TYPE_UNKNOWN) {
             // 但是这样在 compiler_array 时将完全不知道将右值初始化多大空间的 capacity
             // 但是其可以完全继承左值, 左值进入到该方法之前已经经过了类型推断，这里肯定不是 var 了
-            right_list_decl->ast_type = left_list_decl->ast_type;
+            right_list_decl->type = left_list_decl->type;
             right_list_decl->count = left_list_decl->count;
             return true;
         }
         // 类型不相同
-        if (!infer_compare_type(left_list_decl->ast_type, right_list_decl->ast_type)) {
+        if (!infer_compare_type(left_list_decl->type, right_list_decl->type)) {
             return false;
         }
 
@@ -801,8 +818,8 @@ type_t infer_type(type_t type) {
     }
 
     if (type.base == TYPE_ARRAY) {
-        ast_array_decl *list_decl = type.value;
-        list_decl->ast_type = infer_type(list_decl->ast_type);
+        ast_array_decl *array_decl = type.value;
+        array_decl->type = infer_type(array_decl->type);
         return type;
     }
 
@@ -887,7 +904,7 @@ bool infer_var_type_can_confirm(type_t right) {
     // var a = []  这样就完全不知道是个啥。。。
     if (right.base == TYPE_ARRAY) {
         ast_array_decl *list_decl = right.value;
-        if (list_decl->ast_type.base == TYPE_UNKNOWN) {
+        if (list_decl->type.base == TYPE_UNKNOWN) {
             return false;
         }
     }

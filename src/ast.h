@@ -270,7 +270,7 @@ typedef struct {
 
 // [int,5]
 typedef struct {
-    type_t ast_type;
+    type_t type; // 值类型
     uint64_t count; // 可选，初始化声明大小
 } ast_array_decl;
 

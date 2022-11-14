@@ -30,12 +30,12 @@ typedef enum {
 
     TYPE_UNKNOWN, // 未推断出类型之前的状态，比如数组, 又比如 var a; 此时 a 的类型就是 unknown
 
-    TYPE_BUILTIN_ANY, // runtime/builtin 函数推导时使用，能够接受或者赋值给任意 nature code
+    TYPE_BUILTIN_ANY, // runtime/builtin 函数推导时使用，能够接受或者赋值给任意 nature type
 
     TYPE_STRING,
     TYPE_STRING_RAW, // 不使用 string_t 封装一层
     TYPE_STRUCT, // ast_struct_decl
-    // 可以理解为自定义类型的关键字，在没有进行类型还原之前，它就是类型！ code foo = int, foo 就是 type_decl_ident
+    // 可以理解为自定义类型的关键字，在没有进行类型还原之前，它就是类型！ type foo = int, foo 就是 type_decl_ident
     TYPE_DECL_IDENT,
     TYPE_ARRAY,
     TYPE_MAP, // ast_map_decl
@@ -46,7 +46,7 @@ typedef enum {
 typedef struct {
     void *value; // ast_ident(type_decl_ident),ast_map_decl*....
     type_base_t base; // type_fn,type_int
-    bool is_origin; // code a = int, code b = a，int is origin
+    bool is_origin; // type a = int, type b = a，int is origin
     uint8_t point; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 point 等于 3
 } type_t;
 
@@ -54,6 +54,7 @@ typedef struct {
     type_t return_type; // 基础类型 + 动态类型
     type_t formal_param_types[UINT8_MAX];
     uint8_t formal_param_count;
+    bool rest_param;
 } type_fn_t;
 
 

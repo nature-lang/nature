@@ -102,6 +102,6 @@ void analysis_begin_scope(module_t *m);
 
 void analysis_end_scope(module_t *m);
 
-type_t analysis_function_to_type(ast_new_fn *function_decl);
+type_t analysis_fn_to_type(ast_new_fn *fn_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_

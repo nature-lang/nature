@@ -426,10 +426,10 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target) {
     lir_operand_t *base_target = lir_new_target_operand();
     list *operations = compiler_expr(c, call->left, base_target);
 
-    if (base_target->type == LIR_OPERAND_SYMBOL_LABEL &&
-        is_print_symbol(((lir_symbol_label_t *) base_target->value)->ident)) {
-        return compiler_builtin_print(c, call, ((lir_symbol_label_t *) base_target->value)->ident);
-    }
+//    if (base_target->type == LIR_OPERAND_SYMBOL_LABEL &&
+//        is_print_symbol(((lir_symbol_label_t *) base_target->value)->ident)) {
+//        return compiler_builtin_print(c, call, ((lir_symbol_label_t *) base_target->value)->ident);
+//    }
 
     slice_t *params_operand = slice_new();
 

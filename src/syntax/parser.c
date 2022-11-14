@@ -551,7 +551,7 @@ type_t parser_type(module_t *m) {
         ast_array_decl *type_array_decl = malloc(sizeof(ast_array_decl));
 //        parser_must(m, TOKEN_LEFT_SQUARE);
 
-        type_array_decl->ast_type = parser_type(m);
+        type_array_decl->type = parser_type(m);
 
         if (parser_consume(m, TOKEN_COMMA)) {
             token *token = parser_advance(m);

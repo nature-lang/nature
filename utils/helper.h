@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
 
 #define COPY_NEW(_type, src) ({ \
     _type *dst = malloc(sizeof(_type)); \
@@ -15,13 +16,6 @@
 })
 
 //void string_to_unique_list(string *list, string value);
-#define MAX(_a, _b) ({ \
-  if (_a > _b) {       \
-    return _a;                     \
-  }                    \
-  return _b; \
-})
-
 
 char *itoa(int n);
 
@@ -96,5 +90,13 @@ static inline char *dsprintf(char *format, ...) {
 
     return realloc(buf, count + 1);
 }
+
+static inline int max(int a, int b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
 
 #endif //NATURE_SRC_LIB_HELPER_H_
