@@ -120,6 +120,7 @@ typedef struct {
     ast_expr left;
     ast_expr actual_params[UINT8_MAX];
     uint8_t actual_param_count;
+    bool spread_param;
 } ast_call;
 
 // int a;
@@ -320,7 +321,7 @@ typedef struct {
     type_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
-    bool rest_formal_param;
+    bool rest_param;
     slice_t *body; // ast_stmt* 函数体
 } ast_new_fn; // 既可以是 expression,也可以是 stmt
 

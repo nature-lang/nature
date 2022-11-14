@@ -15,6 +15,13 @@
 })
 
 //void string_to_unique_list(string *list, string value);
+#define MAX(_a, _b) ({ \
+  if (_a > _b) {       \
+    return _a;                     \
+  }                    \
+  return _b; \
+})
+
 
 char *itoa(int n);
 

@@ -461,15 +461,17 @@ void parser_actual_param(module_t *m, ast_call *call) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
-        // 参数解析 call(1 + 1, param_a)
-        ast_expr first_param = parser_expr(m);
-        call->actual_params[0] = first_param;
-        call->actual_param_count = 1;
-
-        while (parser_consume(m, TOKEN_COMMA)) {
-            ast_expr rest_param = parser_expr(m);
-            call->actual_params[call->actual_param_count++] = rest_param;
-        }
+        do {
+            if (parser_consume(m, TOKEN_ELLIPSIS)) {
+                call->spread_param = true;
+            }
+            // 参数解析 call(1 + 1, param_a)
+            call->actual_params[call->actual_param_count++] = parser_expr(m);
+            if (call->spread_param) {
+                assertf(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
+                break;
+            }
+        } while (parser_consume(m, TOKEN_COMMA));
     }
 
     parser_must(m, TOKEN_RIGHT_PAREN);
@@ -509,26 +511,20 @@ void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn) {
 
 void parser_formal_param(module_t *m, ast_new_fn *fn_decl) {
     parser_must(m, TOKEN_LEFT_PAREN);
-
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
-        // formal parameter handle code + ident
-        fn_decl->formal_params[0] = parser_var_decl(m);
-        fn_decl->formal_param_count = 1;
-
-        int rest_index = 0;
-        while (parser_consume(m, TOKEN_COMMA)) { // 逗号分割参数
-            // int sum(int a, int b, ...[string] rest)
+        do {
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
-                fn_decl->rest_formal_param = true;
-                rest_index = fn_decl->formal_param_count;
+                fn_decl->rest_param = true;
             }
 
             uint8_t count = fn_decl->formal_param_count++;
             fn_decl->formal_params[count] = parser_var_decl(m);
 
-        }
-
-        assertf(rest_index == fn_decl->formal_param_count, "can only use '...' as the final argument in the list");
+            if (fn_decl->rest_param) {
+                assertf(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
+                break;
+            }
+        } while (parser_consume(m, TOKEN_COMMA));
     }
 
     parser_must(m, TOKEN_RIGHT_PAREN);

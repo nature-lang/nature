@@ -5,6 +5,7 @@
 #include "analysis.h"
 #include "src/debug/debug.h"
 #include "utils/helper.h"
+#include <math.h>
 
 void infer(ast_closure_t *closure_decl) {
     infer_line = 0;
@@ -467,27 +468,22 @@ type_t infer_select_property(ast_select_property *select_property) {
 type_t infer_call(ast_call *call) {
     type_t result;
 
-    // 实参推导
+    // 实参类型推导与类型还原
     type_t actual_types[call->actual_param_count];
     for (int i = 0; i < call->actual_param_count; ++i) {
         actual_types[i] = infer_expr(&call->actual_params[i]);
     }
 
-    if (call->left.assert_type == AST_EXPR_IDENT) {
-        ast_ident *ident = call->left.expr;
-        if (is_print_symbol(ident->literal)) {
-            return type_new_by_base(TYPE_FN);
-        }
-    }
-
-    // 左值符号推导(TODO 外部符号暂时偷懒没有进行具体的推导)
+    // 左值符号推导
     type_t left_type = infer_expr(&call->left);
-    if (left_type.base != TYPE_FN) {
-        error_printf(infer_line, "[infer_call]expression not function code(%s), cannot call",
-                     type_to_string[left_type.base]);
-    }
+    assertf(left_type.base == TYPE_FN, "left expr not fn, cannot call");
 
     type_fn_t *type_fn = left_type.value;
+
+    // 参数对比，由于存在 spread 和 rest 运算，所以不能直接根据参数数量左 assert
+    int count = 
+
+
     if (type_fn->formal_param_count != call->actual_param_count) {
         error_printf(infer_line, "[infer_call] function param count not match");
         exit(0);
