@@ -452,9 +452,12 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target) {
         bool is_rest = type_fn->rest_param && i == type_fn->formal_param_count - 1;
         if (is_rest) {
             // lir array_new(count, size) -> param_target
-            type_t last_param = type_fn->formal_param_types[type_fn->formal_param_count - 1];
-            ast_array_decl *array_decl = last_param.value;
+            type_t last_param_type = type_fn->formal_param_types[type_fn->formal_param_count - 1];
+            assertf(last_param_type.base == TYPE_ARRAY, "rest param must be array type");
+
+            ast_array_decl *array_decl = last_param_type.value;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
+            param_target = lir_temp_var_operand(c, last_param_type);
             lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0);
             lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
                                                                     (int) type_base_sizeof(array_decl->type.base));
@@ -512,22 +515,13 @@ list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target) {
             );
             list_push(operations, call_op);
 
-
             spread_index += 1;
+            slice_push(params_operand, param_target);
             continue;
         }
 
         // common
         list_concat(operations, compiler_expr(c, call->actual_params[i], param_target));
-    }
-
-    for (int i = 0; i < call->actual_param_count; ++i) {
-        ast_expr ast_param_expr = call->actual_params[i];
-        lir_operand_t *param_target = lir_new_target_operand();
-        list *param_list = compiler_expr(c, ast_param_expr, param_target);
-        list_concat(operations, param_list);
-
-        // 写入到 call 指令中
         slice_push(params_operand, param_target);
     }
 

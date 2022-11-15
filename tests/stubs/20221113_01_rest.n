@@ -1,5 +1,5 @@
-int sum(int a, int b, ...[string] rest) {
-    return a + b + rest[1]
+int sum(int a, int b, ...[int] rest) {
+    return a + b + rest[1] + rest[2]
 }
 
-sum(1, 2, 3, 4)
+sum(1, 2, 3, 4, 5)

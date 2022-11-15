@@ -63,7 +63,7 @@ string lir_operand_to_string(lir_operand_t *operand) {
             return lir_phi_body_to_string(operand->value);
         }
         default: {
-            return "UNKNOWN";
+            assertf(0, "unknown operand type: %d", operand->type);
         }
     }
 

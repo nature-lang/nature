@@ -7,33 +7,28 @@
 #include "utils/helper.h"
 
 static type_t select_actual_param(ast_call *call, uint8_t index) {
-    if (index < call->actual_param_count) {
-        return call->actual_params[index].type;
+    if (call->spread_param && index >= call->actual_param_count) {
+        // last actual param type must array
+        type_t last_param_type = call->actual_params[call->actual_param_count].type;
+        assertf(last_param_type.base == TYPE_ARRAY, "spread_param must array");
+        ast_array_decl *array_decl = last_param_type.value;
+        return array_decl->type;
     }
 
-    assertf(call->spread_param, "select index out range");
-
-    // last actual param type must array
-    type_t last_param_type = call->actual_params[call->actual_param_count].type;
-    assertf(last_param_type.base == TYPE_ARRAY, "spread_param must array");
-    ast_array_decl *array_decl = last_param_type.value;
-    return array_decl->type;
+    return call->actual_params[index].type;
 }
 
 static type_t select_formal_param(type_fn_t *type_fn, uint8_t index) {
-    if (index < type_fn->formal_param_count) {
-        return type_fn->formal_param_types[index];
+    if (type_fn->rest_param && index >= type_fn->formal_param_count - 1) {
+        type_t last_param_type = type_fn->formal_param_types[type_fn->formal_param_count - 1];
+        assertf(last_param_type.base == TYPE_ARRAY, "rest param must array");
+        ast_array_decl *array_decl = last_param_type.value;
+
+        return array_decl->type;
     }
 
-    // index >= type_fn->formal_param_count
-    assertf(type_fn->rest_param, "select index out range");
-    // last param must array
-    type_t last_param_type = type_fn->formal_param_types[type_fn->formal_param_count - 1];
-    assertf(last_param_type.base == TYPE_ARRAY, "rest param must array");
-
-    ast_array_decl *array_decl = last_param_type.value;
-
-    return array_decl->type;
+    assertf(index < type_fn->formal_param_count, "select index out range");
+    return type_fn->formal_param_types[index];
 }
 
 
