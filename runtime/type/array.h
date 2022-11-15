@@ -8,17 +8,17 @@
 typedef struct {
     int count;
     int capacity;
-    uint8_t item_size;
-    uint8_t *data;
+    int size; // item size, 单位 byte
+    void *data;
 } array_t;
 
-void *array_new(int count, uint8_t size);
+void *array_new(int count, int size);
 
-uint8_t *array_value(array_t *a, int index);
+void * array_value(array_t *a, int index);
 
 void array_push(array_t *a, void *value);
 
-array_t *array_concat(array_t *a, array_t *b);
+void array_concat(array_t *a, array_t *b);
 
 array_t *array_slice(array_t *a, int start, int end);
 
