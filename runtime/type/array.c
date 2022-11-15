@@ -7,6 +7,9 @@ void *array_new(int count, uint8_t size) {
     if (capacity < count) {
         capacity = count;
     }
+    if (capacity == 0) {
+        capacity = 8;
+    }
 
     array_t *a = malloc(sizeof(array_t));
     a->count = count; // 当前时间数组的容量,
@@ -26,4 +29,8 @@ uint8_t *array_value(array_t *a, int index) {
     uint8_t *p = a->data;
     p += a->item_size * index;
     return p;
+}
+
+void array_push(array_t *a, void *value) {
+    
 }

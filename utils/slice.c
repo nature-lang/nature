@@ -32,13 +32,13 @@ int slice_push(slice_t *s, void *value) {
     return s->count - 1; // index
 }
 
-void slice_append(slice_t *dst, slice_t *src) {
+void slice_concat(slice_t *dst, slice_t *src) {
     for (int i = 0; i < src->count; ++i) {
         slice_push(dst, src->take[i]);
     }
 }
 
-void slice_append_free(slice_t *dst, slice_t *src) {
+void slice_concat_free(slice_t *dst, slice_t *src) {
     for (int i = 0; i < src->count; ++i) {
         slice_push(dst, src->take[i]);
     }

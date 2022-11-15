@@ -32,7 +32,7 @@ static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
             lir_operand_t *o = operands->take[i];
             assert(o->type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
 
-            slice_append(result, extract_operands(o, flag));
+            slice_concat(result, extract_operands(o, flag));
         }
         return result;
     }
@@ -109,8 +109,8 @@ void set_operand_flag(lir_operand_t *operand) {
 
 static slice_t *op_extract_operands(lir_op_t *op, uint64_t operand_flag) {
     slice_t *result = extract_operands(op->output, operand_flag);
-    slice_append(result, extract_operands(op->first, operand_flag));
-    slice_append(result, extract_operands(op->second, operand_flag));
+    slice_concat(result, extract_operands(op->first, operand_flag));
+    slice_concat(result, extract_operands(op->second, operand_flag));
 
     return result;
 }

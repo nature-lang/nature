@@ -96,7 +96,7 @@ list *list_split(list *l, list_node *node) {
     return new_list;
 }
 
-void list_append(list *dst, list *src) {
+void list_concat(list *dst, list *src) {
     list_node *current = src->front;
     while (current->value != NULL) {
         void *v = current->value;

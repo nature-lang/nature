@@ -37,7 +37,7 @@ void list_insert_before(list *l, list_node *succ, void *value);
 
 list *list_split(list *l, list_node *node);
 
-void list_append(list *dst, list *src); // src 追加到 dst 中
+void list_concat(list *dst, list *src); // src 追加到 dst 中
 
 void list_remove(list *l, list_node *node);
 

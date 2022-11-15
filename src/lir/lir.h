@@ -21,6 +21,9 @@
 
 #define RUNTIME_CALL_ARRAY_NEW "array_new"
 #define RUNTIME_CALL_ARRAY_VALUE "array_value"
+#define RUNTIME_CALL_ARRAY_SPLIT "array_split"
+#define RUNTIME_CALL_ARRAY_PUSH "array_push"
+#define RUNTIME_CALL_ARRAY_CONCAT "array_concat"
 
 #define RUNTIME_CALL_MAP_NEW "map_new"
 #define RUNTIME_CALL_MAP_VALUE "map_value"

@@ -458,7 +458,7 @@ slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
     list_node *current = list_first(block->operations);
     while (current->value != NULL) {
         lir_op_t *op = current->value;
-        slice_append(operations, amd64_native_op(c, op));
+        slice_concat(operations, amd64_native_op(c, op));
         current = current->succ;
     }
     return operations;
@@ -471,6 +471,6 @@ void amd64_native(closure_t *c) {
     // 遍历 block
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
-        slice_append(c->asm_operations, amd64_native_block(c, block));
+        slice_concat(c->asm_operations, amd64_native_block(c, block));
     }
 }

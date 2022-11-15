@@ -16,4 +16,10 @@ void *array_new(int count, uint8_t size);
 
 uint8_t *array_value(array_t *a, int index);
 
+void array_push(array_t *a, void *value);
+
+array_t *array_concat(array_t *a, array_t *b);
+
+array_t *array_slice(array_t *a, int start, int end);
+
 #endif //NATURE_ARRAY_H

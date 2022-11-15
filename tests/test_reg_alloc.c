@@ -71,7 +71,7 @@ static void test_basic() {
         // 类型推断
         infer(closure);
         // 编译
-        slice_append_free(m->closures, compiler(m, closure)); // 都写入到 compiler_closure 中了
+        slice_concat_free(m->closures, compiler(m, closure)); // 都写入到 compiler_closure 中了
     }
 
     for (int j = 0; j < m->closures->count; ++j) {

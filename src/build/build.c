@@ -161,7 +161,7 @@ void build(char *build_entry) {
 
         slice_t *temp = slice_new();
         slice_push(temp, m->call_init_stmt);
-        slice_append_free(temp, root_ast_closure->fn->body);
+        slice_concat_free(temp, root_ast_closure->fn->body);
         root_ast_closure->fn->body = temp;
     }
 
@@ -184,7 +184,7 @@ void build(char *build_entry) {
             // 类型推断
             infer(ast_closure);
             // 编译
-            slice_append_free(m->closures, compiler(m, ast_closure)); // 都写入到 compiler_closure 中了
+            slice_concat_free(m->closures, compiler(m, ast_closure)); // 都写入到 compiler_closure 中了
         }
 
         // 构造 cfg, 并转成目标架构编码
@@ -231,8 +231,8 @@ void build(char *build_entry) {
         // 合并 closure 中的临时 var_decl
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
-            slice_append(m->asm_var_decls, c->asm_var_decls);
-            slice_append(m->asm_operations, c->asm_operations);
+            slice_concat(m->asm_var_decls, c->asm_var_decls);
+            slice_concat(m->asm_operations, c->asm_operations);
         }
 
         assembler(m);
