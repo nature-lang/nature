@@ -24,20 +24,20 @@ void analysis_block(module_t *m, slice_t *block) {
 void analysis_stmt(module_t *m, ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
-            analysis_var_decl(m, (ast_var_decl *) stmt->stmt);
+            analysis_var_decl(m, (ast_var_decl *) stmt->value);
             break;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            analysis_var_decl_assign(m, (ast_var_decl_assign_stmt *) stmt->stmt);
+            analysis_var_decl_assign(m, (ast_var_decl_assign_stmt *) stmt->value);
             break;
         }
         case AST_STMT_ASSIGN: {
-            analysis_assign(m, (ast_assign_stmt *) stmt->stmt);
+            analysis_assign(m, (ast_assign_stmt *) stmt->value);
             break;
         }
         case AST_NEW_FN: {
             // 注册 function_decl_type + ident
-            analysis_fn_decl_ident(m, (ast_new_fn *) stmt->stmt);
+            analysis_fn_decl_ident(m, (ast_new_fn *) stmt->value);
 
             // 函数体添加到 延迟处理，从而可以 fn 引用当前环境的所有变量
             uint8_t count = m->analysis_current->contains_fn_count++;
@@ -46,27 +46,27 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             break;
         }
         case AST_CALL: {
-            analysis_call(m, (ast_call *) stmt->stmt);
+            analysis_call(m, (ast_call *) stmt->value);
             break;
         }
         case AST_STMT_IF: {
-            analysis_if(m, (ast_if_stmt *) stmt->stmt);
+            analysis_if(m, (ast_if_stmt *) stmt->value);
             break;
         }
         case AST_STMT_WHILE: {
-            analysis_while(m, (ast_while_stmt *) stmt->stmt);
+            analysis_while(m, (ast_while_stmt *) stmt->value);
             break;
         }
         case AST_STMT_FOR_IN: {
-            analysis_for_in(m, (ast_for_in_stmt *) stmt->stmt);
+            analysis_for_in(m, (ast_for_in_stmt *) stmt->value);
             break;
         }
         case AST_STMT_RETURN: {
-            analysis_return(m, (ast_return_stmt *) stmt->stmt);
+            analysis_return(m, (ast_return_stmt *) stmt->value);
             break;
         }
         case AST_STMT_TYPE_DECL: {
-            analysis_type_decl(m, (ast_type_decl_stmt *) stmt->stmt);
+            analysis_type_decl(m, (ast_type_decl_stmt *) stmt->value);
             break;
         }
         default:
@@ -216,7 +216,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
         if (free_var->is_local) {
             // ast_ident 表达式
             expr->assert_type = AST_EXPR_IDENT;
-            expr->expr = ast_new_ident(free_var->ident);
+            expr->value = ast_new_ident(free_var->ident);
         } else {
             // ast_env_index 表达式
             expr->assert_type = AST_EXPR_ENV_VALUE;
@@ -224,7 +224,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
             access_env->env = ast_new_ident(m->analysis_current->parent->env_unique_name);
             access_env->index = free_var->env_index;
             access_env->unique_ident = free_var->ident;
-            expr->expr = access_env;
+            expr->value = access_env;
         }
 
         slice_push(closure->env_list, expr);
@@ -236,16 +236,16 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
         if (m->analysis_current->contains_fn_decl[i].is_stmt) {
             ast_stmt *stmt = m->analysis_current->contains_fn_decl[i].stmt;
             // 函数注册到符号表已经在函数定义点注册过了
-            ast_closure_t *closure_decl = analysis_new_fn(m, stmt->stmt,
+            ast_closure_t *closure_decl = analysis_new_fn(m, stmt->value,
                                                           m->analysis_current->contains_fn_decl[i].scope);
             stmt->assert_type = AST_NEW_CLOSURE;
-            stmt->stmt = closure_decl;
+            stmt->value = closure_decl;
         } else {
             ast_expr *expr = m->analysis_current->contains_fn_decl[i].expr;
-            ast_closure_t *closure_decl = analysis_new_fn(m, expr->expr,
+            ast_closure_t *closure_decl = analysis_new_fn(m, expr->value,
                                                           m->analysis_current->contains_fn_decl[i].scope);
             expr->assert_type = AST_NEW_CLOSURE;
-            expr->expr = closure_decl;
+            expr->value = closure_decl;
         };
     }
 
@@ -299,27 +299,27 @@ analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *
 void analysis_expr(module_t *m, ast_expr *expr) {
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
-            analysis_binary(m, (ast_binary_expr *) expr->expr);
+            analysis_binary(m, (ast_binary_expr *) expr->value);
             break;
         };
         case AST_EXPR_UNARY: {
-            analysis_unary(m, (ast_unary_expr *) expr->expr);
+            analysis_unary(m, (ast_unary_expr *) expr->value);
             break;
         };
         case AST_EXPR_NEW_STRUCT: {
-            analysis_new_struct(m, (ast_new_struct *) expr->expr);
+            analysis_new_struct(m, (ast_new_struct *) expr->value);
             break;
         }
         case AST_EXPR_NEW_MAP: {
-            analysis_new_map(m, (ast_new_map *) expr->expr);
+            analysis_new_map(m, (ast_new_map *) expr->value);
             break;
         }
         case AST_EXPR_NEW_ARRAY: {
-            analysis_new_list(m, (ast_new_list *) expr->expr);
+            analysis_new_list(m, (ast_new_list *) expr->value);
             break;
         }
         case AST_EXPR_ACCESS: {
-            analysis_access(m, (ast_access *) expr->expr);
+            analysis_access(m, (ast_access *) expr->value);
             break;
         };
         case AST_EXPR_SELECT_PROPERTY: {
@@ -333,11 +333,11 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             break;
         };
         case AST_CALL: {
-            analysis_call(m, (ast_call *) expr->expr);
+            analysis_call(m, (ast_call *) expr->value);
             break;
         }
         case AST_NEW_FN: { // 右值
-            analysis_fn_decl_ident(m, (ast_new_fn *) expr->expr);
+            analysis_fn_decl_ident(m, (ast_new_fn *) expr->value);
 
             // 函数体添加到 延迟处理
             uint8_t count = m->analysis_current->contains_fn_count++;
@@ -355,7 +355,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
  * @param expr
  */
 void analysis_ident(module_t *m, ast_expr *expr) {
-    ast_ident *ident = expr->expr;
+    ast_ident *ident = expr->value;
 
     if (is_print_symbol(ident->literal)) {
         return;
@@ -368,7 +368,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
             analysis_local_ident_t *local = current_scope->idents->take[i];
             if (strcmp(ident->literal, local->ident) == 0) {
                 // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
-                expr->expr = ast_new_ident(local->unique_ident);
+                expr->value = ast_new_ident(local->unique_ident);
                 return;
             }
         }
@@ -385,7 +385,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         env_index->env = ast_new_ident(m->analysis_current->env_unique_name);
         env_index->index = free_var_index;
         env_index->unique_ident = ident->literal;
-        expr->expr = env_index;
+        expr->value = env_index;
         return;
     }
 
@@ -492,12 +492,12 @@ void analysis_access(module_t *m, ast_access *access) {
  * struct_a.test
  */
 void analysis_select_property(module_t *m, ast_expr *expr) {
-    ast_select_property *select = expr->expr;
+    ast_select_property *select = expr->value;
     if (select->left.assert_type != AST_EXPR_IDENT) {
         analysis_expr(m, &select->left);
         return;
     }
-    ast_ident *ident = select->left.expr;
+    ast_ident *ident = select->left.value;
     ast_import *import = table_get(m->import_table, ident->literal);
     if (import == NULL) {
         analysis_expr(m, &select->left);
@@ -507,7 +507,7 @@ void analysis_select_property(module_t *m, ast_expr *expr) {
     // 改写成 symtab_hash 中的名字
     char *unique_ident = ident_with_module(import->module_ident, select->property);
     expr->assert_type = AST_EXPR_IDENT;
-    expr->expr = ast_new_ident(unique_ident);
+    expr->value = ast_new_ident(unique_ident);
 }
 
 void analysis_binary(module_t *m, ast_binary_expr *expr) {
@@ -696,7 +696,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             break;
         }
 
-        ast_import *import = stmt->stmt;
+        ast_import *import = stmt->value;
         complete_import(m->source_dir, import);
 
         // 简单处理
@@ -712,7 +712,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type == AST_VAR_DECL) {
-            ast_var_decl *var_decl = stmt->stmt;
+            ast_var_decl *var_decl = stmt->value;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_VAR;
             s->ident = ident_with_module(m->ident, var_decl->ident);
@@ -724,7 +724,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
         }
 
         if (stmt->assert_type == AST_STMT_VAR_DECL_ASSIGN) {
-            ast_var_decl_assign_stmt *var_decl_assign = stmt->stmt;
+            ast_var_decl_assign_stmt *var_decl_assign = stmt->value;
             ast_var_decl *var_decl = var_decl_assign->var_decl;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_VAR;
@@ -739,17 +739,17 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             ast_assign_stmt *assign = NEW(ast_assign_stmt);
             assign->left = (ast_expr) {
                     .assert_type = AST_EXPR_IDENT,
-                    .expr = ast_new_ident(var_decl->ident),
+                    .value = ast_new_ident(var_decl->ident),
 //                    .code = var_decl->code,
             };
             assign->right = var_decl_assign->expr;
             temp_stmt->assert_type = AST_STMT_ASSIGN;
-            temp_stmt->stmt = assign;
+            temp_stmt->value = assign;
             slice_push(var_assign_list, temp_stmt);
             continue;
         }
         if (stmt->assert_type == AST_STMT_TYPE_DECL) {
-            ast_type_decl_stmt *type_decl = stmt->stmt;
+            ast_type_decl_stmt *type_decl = stmt->value;
             symbol_t *s = NEW(symbol_t);
             s->type = SYMBOL_TYPE_CUSTOM;
             s->ident = ident_with_module(m->ident, type_decl->ident);
@@ -761,7 +761,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
         }
 
         if (stmt->assert_type == AST_NEW_FN) {
-            ast_new_fn *new_fn = stmt->stmt;
+            ast_new_fn *new_fn = stmt->value;
             new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
             symbol_t *s = NEW(symbol_t);
@@ -800,11 +800,11 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     ast_call *call = NEW(ast_call);
     call->left = (ast_expr) {
             .assert_type = AST_EXPR_IDENT,
-            .expr = ast_new_ident(s->ident),
+            .value = ast_new_ident(s->ident),
     };
     call->actual_param_count = 0;
     temp_stmt->assert_type = AST_CALL;
-    temp_stmt->stmt = call;
+    temp_stmt->value = call;
     m->call_init_stmt = temp_stmt;
 
     // 遍历 fn list
@@ -830,7 +830,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
             break;
         }
 
-        ast_import *import = stmt->stmt;
+        ast_import *import = stmt->value;
         complete_import(m->source_dir, import);
 
         // 简单处理

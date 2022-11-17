@@ -51,39 +51,39 @@ void infer_block(slice_t *block) {
 void infer_stmt(ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
-            infer_var_decl((ast_var_decl *) stmt->stmt);
+            infer_var_decl((ast_var_decl *) stmt->value);
             break;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            infer_var_decl_assign((ast_var_decl_assign_stmt *) stmt->stmt);
+            infer_var_decl_assign((ast_var_decl_assign_stmt *) stmt->value);
             break;
         }
         case AST_STMT_ASSIGN: {
-            infer_assign((ast_assign_stmt *) stmt->stmt);
+            infer_assign((ast_assign_stmt *) stmt->value);
             break;
         }
         case AST_NEW_CLOSURE: {
-            infer_closure_decl((ast_closure_t *) stmt->stmt);
+            infer_closure_decl((ast_closure_t *) stmt->value);
             break;
         }
         case AST_CALL: {
-            infer_call((ast_call *) stmt->stmt);
+            infer_call((ast_call *) stmt->value);
             break;
         }
         case AST_STMT_IF: {
-            infer_if((ast_if_stmt *) stmt->stmt);
+            infer_if((ast_if_stmt *) stmt->value);
             break;
         }
         case AST_STMT_WHILE: {
-            infer_while((ast_while_stmt *) stmt->stmt);
+            infer_while((ast_while_stmt *) stmt->value);
             break;
         }
         case AST_STMT_FOR_IN: {
-            infer_for_in((ast_for_in_stmt *) stmt->stmt);
+            infer_for_in((ast_for_in_stmt *) stmt->value);
             break;
         }
         case AST_STMT_RETURN: {
-            infer_return((ast_return_stmt *) stmt->stmt);
+            infer_return((ast_return_stmt *) stmt->value);
             break;
         }
         default:
@@ -100,27 +100,27 @@ type_t infer_expr(ast_expr *expr) {
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
-            type = infer_binary((ast_binary_expr *) expr->expr);
+            type = infer_binary((ast_binary_expr *) expr->value);
             break;
         }
         case AST_EXPR_UNARY: {
-            type = infer_unary((ast_unary_expr *) expr->expr);
+            type = infer_unary((ast_unary_expr *) expr->value);
             break;
         }
         case AST_EXPR_IDENT: {
-            type = infer_ident(((ast_ident *) expr->expr)->literal);
+            type = infer_ident(((ast_ident *) expr->value)->literal);
             break;
         }
         case AST_EXPR_NEW_ARRAY: {
-            type = infer_new_array((ast_new_list *) expr->expr);
+            type = infer_new_array((ast_new_list *) expr->value);
             break;
         }
         case AST_EXPR_NEW_MAP: {
-            type = infer_new_map((ast_new_map *) expr->expr);
+            type = infer_new_map((ast_new_map *) expr->value);
             break;
         }
         case AST_EXPR_NEW_STRUCT: {
-            type = infer_new_struct((ast_new_struct *) expr->expr);
+            type = infer_new_struct((ast_new_struct *) expr->value);
             break;
         }
         case AST_EXPR_ACCESS: {
@@ -129,23 +129,23 @@ type_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_SELECT_PROPERTY: {
-            type = infer_select_property((ast_select_property *) expr->expr);
+            type = infer_select_property((ast_select_property *) expr->value);
             break;
         }
         case AST_CALL: {
-            type = infer_call((ast_call *) expr->expr);
+            type = infer_call((ast_call *) expr->value);
             break;
         }
         case AST_NEW_CLOSURE: {
-            type = infer_closure_decl((ast_closure_t *) expr->expr);
+            type = infer_closure_decl((ast_closure_t *) expr->value);
             break;
         }
         case AST_EXPR_LITERAL: {
-            type = infer_literal((ast_literal *) expr->expr);
+            type = infer_literal((ast_literal *) expr->value);
             break;
         }
         case AST_EXPR_ENV_VALUE: {
-            type = infer_access_env((ast_access_env *) expr->expr);
+            type = infer_access_env((ast_access_env *) expr->value);
             break;
         }
         default: {
@@ -375,12 +375,12 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
  */
 type_t infer_access(ast_expr *expr) {
     type_t result;
-    ast_access *access = expr->expr;
+    ast_access *access = expr->value;
     type_t left_type = infer_expr(&access->left);
     type_t key_type = infer_expr(&access->key);
 
     if (left_type.base == TYPE_MAP) {
-        ast_access_map *access_map = malloc(sizeof(ast_access_map));
+        ast_map_value *access_map = malloc(sizeof(ast_map_value));
         ast_map_decl *map_decl = left_type.value;
 
         // 参数改写
@@ -391,7 +391,7 @@ type_t infer_access(ast_expr *expr) {
         access_map->key_type = map_decl->key_type;
         access_map->value_type = map_decl->value_type;
         expr->assert_type = AST_EXPR_ACCESS_MAP;
-        expr->expr = access_map;
+        expr->value = access_map;
 
 
         // 返回值
@@ -403,7 +403,7 @@ type_t infer_access(ast_expr *expr) {
                          type_to_string[key_type.base]);
         }
 
-        ast_array_value_t *access_list = malloc(sizeof(ast_access_map));
+        ast_array_value_t *access_list = malloc(sizeof(ast_map_value));
         ast_array_decl *list_decl = left_type.value;
 
         // 参数改写
@@ -411,7 +411,7 @@ type_t infer_access(ast_expr *expr) {
         access_list->index = access->key;
         access_list->type = list_decl->type;
         expr->assert_type = AST_EXPR_ARRAY_VALUE;
-        expr->expr = access_list;
+        expr->value = access_list;
 
         result = list_decl->type;
     } else {

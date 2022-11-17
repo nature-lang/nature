@@ -157,7 +157,7 @@ ast_stmt *parser_type_decl_stmt(module_t *m) {
     type_decl_stmt->type = parser_type(m); // int
 
     result->assert_type = AST_STMT_TYPE_DECL;
-    result->stmt = type_decl_stmt;
+    result->value = type_decl_stmt;
 
     return result;
 }
@@ -180,7 +180,7 @@ ast_stmt *parser_auto_infer_decl(module_t *m) {
     stmt->var_decl = var_decl;
 
     result->assert_type = AST_STMT_VAR_DECL_ASSIGN;
-    result->stmt = stmt;
+    result->value = stmt;
 
     return result;
 }
@@ -231,7 +231,7 @@ ast_stmt *parser_var_or_fn_decl(module_t *m) {
     // 声明时函数名称仅占用一个 token
     if (parser_is(m, TOKEN_LEFT_PAREN) || parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         result->assert_type = AST_NEW_FN;
-        result->stmt = parser_fn_decl(m, type);
+        result->value = parser_fn_decl(m, type);
         return result;
     }
 
@@ -246,7 +246,7 @@ ast_stmt *parser_var_or_fn_decl(module_t *m) {
         stmt->expr = parser_expr(m);
         stmt->var_decl = var_decl;
         result->assert_type = AST_STMT_VAR_DECL_ASSIGN;
-        result->stmt = stmt;
+        result->value = stmt;
         return result;
     }
 
@@ -255,7 +255,7 @@ ast_stmt *parser_var_or_fn_decl(module_t *m) {
     stmt->type = type;
     stmt->ident = ident_token->literal;
     result->assert_type = AST_VAR_DECL;
-    result->stmt = stmt;
+    result->value = stmt;
 
     return result;
 }
@@ -276,7 +276,7 @@ ast_expr parser_binary(module_t *m, ast_expr left) {
     binary_expr->right = right;
 
     result.assert_type = AST_EXPR_BINARY;
-    result.expr = binary_expr;
+    result.value = binary_expr;
 
 //  printf("code: %s\n", operator_token->literal);
 
@@ -306,7 +306,7 @@ ast_expr parser_unary(module_t *m) {
     unary_expr->operand = operand;
 
     result.assert_type = AST_EXPR_UNARY;
-    result.expr = unary_expr;
+    result.value = unary_expr;
 
     return result;
 }
@@ -330,7 +330,7 @@ ast_expr parser_literal(module_t *m) {
     literal_expr->value = literal_token->literal; // 具体数值
 
     result.assert_type = AST_EXPR_LITERAL;
-    result.expr = literal_expr;
+    result.value = literal_expr;
 
     return result;
 }
@@ -379,7 +379,7 @@ ast_expr parser_ident_expr(module_t *m) {
 
     // call() or other ident prefix expr
     result.assert_type = AST_EXPR_IDENT;
-    result.expr = ast_new_ident(ident_token->literal);
+    result.value = ast_new_ident(ident_token->literal);
 
     return result;
 }
@@ -400,7 +400,7 @@ ast_expr parser_access(module_t *m, ast_expr left) {
     access_expr->left = left;
     access_expr->key = key;
     result.assert_type = AST_EXPR_ACCESS;
-    result.expr = access_expr;
+    result.value = access_expr;
 
     return result;
 }
@@ -421,7 +421,7 @@ ast_expr parser_select_property(module_t *m, ast_expr left) {
     select_property_expr->property = property_token->literal;
 
     result.assert_type = AST_EXPR_SELECT_PROPERTY;
-    result.expr = select_property_expr;
+    result.value = select_property_expr;
 
     return result;
 }
@@ -436,7 +436,7 @@ ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
     parser_actual_param(m, call_stmt);
 
     result.assert_type = AST_CALL;
-    result.expr = call_stmt;
+    result.value = call_stmt;
     return result;
 }
 
@@ -698,7 +698,7 @@ ast_stmt *parser_if_stmt(module_t *m) {
     }
 
     result->assert_type = AST_STMT_IF;
-    result->stmt = if_stmt;
+    result->value = if_stmt;
 
     return result;
 }
@@ -751,7 +751,7 @@ ast_stmt *parser_for_stmt(module_t *m) {
     for_in_stmt->body = parser_block(m);
 
     result->assert_type = AST_STMT_FOR_IN;
-    result->stmt = for_in_stmt;
+    result->value = for_in_stmt;
 
     return result;
 }
@@ -764,7 +764,7 @@ ast_stmt *parser_while_stmt(module_t *m) {
     while_stmt->body = parser_block(m);
 
     result->assert_type = AST_STMT_WHILE;
-    result->stmt = while_stmt;
+    result->value = while_stmt;
 
     return result;
 }
@@ -786,7 +786,7 @@ ast_stmt *parser_assign(module_t *m, ast_expr left) {
     assign_stmt->right = parser_expr(m);
 
     result->assert_type = AST_STMT_ASSIGN;
-    result->stmt = assign_stmt;
+    result->value = assign_stmt;
 
     return result;
 }
@@ -855,7 +855,7 @@ ast_stmt *parser_ident_stmt(module_t *m) {
         }
         ast_stmt *stmt = parser_new_stmt();
         stmt->assert_type = AST_CALL;
-        stmt->stmt = left.expr;
+        stmt->value = left.value;
         return stmt;
     }
 
@@ -867,7 +867,7 @@ ast_stmt *parser_ident_stmt(module_t *m) {
 
         ast_stmt *stmt = parser_new_stmt();
         stmt->assert_type = AST_NEW_FN;
-        stmt->stmt = left.expr;
+        stmt->value = left.value;
         return stmt;
     }
 
@@ -879,7 +879,7 @@ ast_stmt *parser_ident_stmt(module_t *m) {
 ast_expr parser_fn_decl_expr(module_t *m, type_t type) {
     ast_expr result = parser_new_expr(m);
     result.assert_type = AST_NEW_FN;
-    result.expr = parser_fn_decl(m, type);
+    result.value = parser_fn_decl(m, type);
 
     return result;
 }
@@ -927,7 +927,7 @@ ast_stmt *parser_return_stmt(module_t *m) {
         memcpy(stmt->expr, &temp, sizeof(ast_expr));
     }
     result->assert_type = AST_STMT_RETURN;
-    result->stmt = stmt;
+    result->value = stmt;
 
     return result;
 }
@@ -955,7 +955,7 @@ ast_stmt *parser_import_stmt(module_t *m) {
         stmt->as = token->literal;
     }
     result->assert_type = AST_STMT_IMPORT;
-    result->stmt = stmt;
+    result->value = stmt;
 
     return result;
 }
@@ -1035,7 +1035,7 @@ ast_expr parser_new_list(module_t *m) {
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
     result.assert_type = AST_EXPR_NEW_ARRAY;
-    result.expr = expr;
+    result.value = expr;
 
     return result;
 }
@@ -1074,7 +1074,7 @@ ast_expr parser_new_map(module_t *m) {
     expr->capacity = expr->count;
 
     result.assert_type = AST_EXPR_NEW_MAP;
-    result.expr = expr;
+    result.value = expr;
 
     return result;
 }
@@ -1172,7 +1172,7 @@ ast_expr parser_new_struct(module_t *m, type_t type) {
     parser_must(m, TOKEN_RIGHT_CURLY);
 
     result.assert_type = AST_EXPR_NEW_STRUCT;
-    result.expr = new_struct;
+    result.value = new_struct;
     return result;
 }
 

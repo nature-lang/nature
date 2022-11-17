@@ -125,6 +125,10 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
     new_operand->assert_type = operand->assert_type;
     new_operand->value = operand->value;
 
+    if (new_operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
+        return lir_copy_label_operand(new_operand);
+    }
+
     if (new_operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = new_operand->value;
         lir_var_t *new_var = NEW(lir_var_t);
@@ -136,7 +140,9 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
-    } else if (new_operand->assert_type == LIR_OPERAND_REG) {
+    }
+
+    if (new_operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = new_operand->value;
         reg_t *new_reg = NEW(reg_t);
         new_reg->name = reg->name;
@@ -153,7 +159,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         lir_indirect_addr_t *new_addr = NEW(lir_indirect_addr_t);
         new_addr->base = lir_operand_copy(addr->base);
         new_addr->offset = addr->offset;
-        new_addr->type_base = addr->type_base;
+        new_addr->type = addr->type;
         new_operand->value = new_addr;
         return new_operand;
     }
@@ -188,16 +194,15 @@ lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
     return NULL;
 }
 
-lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base) {
-    lir_indirect_addr_t *addr_operand = malloc(sizeof(lir_indirect_addr_t));
-    addr_operand->base = base;
-    addr_operand->offset = offset;
-    addr_operand->type_base = type_base;
+lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, type_t type) {
+    assertf(base->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
 
-    lir_operand_t *operand = NEW(lir_operand_t);
-    operand->assert_type = LIR_OPERAND_INDIRECT_ADDR;
-    operand->value = addr_operand;
-    return operand;
+    lir_var_t *var = base->value;
+    lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
+    addr->base = base;
+    addr->type = var->type;
+    addr->offset = offset;
+    return LIR_NEW_OPERAND(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
 
 lir_op_t *lir_op_runtime_call(char *name, lir_operand_t *result, int arg_count, ...) {

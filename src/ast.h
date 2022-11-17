@@ -82,14 +82,14 @@ string ast_expr_operator_to_string[100];
 typedef struct {
     int line; // 行号
     ast_stmt_expr_type assert_type; // 声明语句类型
-    void *stmt;
+    void *value;
 } ast_stmt;
 
 typedef struct {
     int line;
     ast_stmt_expr_type assert_type; // 表达式类型
     type_t type;
-    void *expr;
+    void *value;
 } ast_expr;
 
 typedef struct {
@@ -250,7 +250,7 @@ typedef struct {
 
     ast_expr left;
     ast_expr key;
-} ast_access_map;
+} ast_map_value;
 
 typedef struct {
 //  string access_type; // map or list

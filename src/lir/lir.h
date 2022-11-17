@@ -255,7 +255,7 @@ lir_operand_t *lir_indirect_addr_operand(closure_t *c, lir_operand_t *value_poin
 
 lir_operand_t *lir_new_empty_operand();
 
-lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base);
+lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, type_t type);
 
 lir_operand_t *lir_new_label_operand(string ident, bool is_local);
 
