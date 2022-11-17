@@ -12,7 +12,7 @@ typedef struct {
     void *data;
 } array_t;
 
-void *array_new(int count, int size);
+array_t * array_new(int count, int size);
 
 void * array_value(array_t *a, int index);
 

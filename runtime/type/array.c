@@ -4,7 +4,7 @@
 #include <string.h>
 #include "utils/helper.h"
 
-void *array_new(int count, int size) {
+array_t * array_new(int count, int size) {
     int capacity = count;
     if (capacity < count) {
         capacity = count;

@@ -22,7 +22,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
             list_insert_before(block->operations, node, temp);
 
             lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-            imm_operand->type = temp_operand->type;
+            imm_operand->assert_type = temp_operand->assert_type;
             imm_operand->value = temp_operand->value;
         }
     }
@@ -216,7 +216,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // tips: 不能随便调换 first 和 second 的顺序，会导致 asm cmp 指令对比异常
         if (lir_op_contain_cmp(op)) {
             // first is native target, cannot imm, so in case swap first and second
-            if (op->first->type != LIR_OPERAND_VAR) {
+            if (op->first->assert_type != LIR_OPERAND_VAR) {
                 ASSIGN_VAR(op->first);
                 continue;
             }
@@ -224,14 +224,14 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (lir_op_is_arithmetic(op)) {
             // first must var for assign reg
-            if (op->first->type != LIR_OPERAND_VAR) {
+            if (op->first->assert_type != LIR_OPERAND_VAR) {
                 ASSIGN_VAR(op->first);
                 continue;
             }
         }
 
         if (op->code == LIR_OPCODE_MOVE) {
-            if (op->output->type != LIR_OPERAND_VAR) {
+            if (op->output->assert_type != LIR_OPERAND_VAR) {
                 ASSIGN_VAR(op->output);
                 continue;
             }

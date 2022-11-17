@@ -6,31 +6,6 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-static type_t select_actual_param(ast_call *call, uint8_t index) {
-    if (call->spread_param && index >= call->actual_param_count) {
-        // last actual param type must array
-        type_t last_param_type = call->actual_params[call->actual_param_count].type;
-        assertf(last_param_type.base == TYPE_ARRAY, "spread_param must array");
-        ast_array_decl *array_decl = last_param_type.value;
-        return array_decl->type;
-    }
-
-    return call->actual_params[index].type;
-}
-
-static type_t select_formal_param(type_fn_t *type_fn, uint8_t index) {
-    if (type_fn->rest_param && index >= type_fn->formal_param_count - 1) {
-        type_t last_param_type = type_fn->formal_param_types[type_fn->formal_param_count - 1];
-        assertf(last_param_type.base == TYPE_ARRAY, "rest param must array");
-        ast_array_decl *array_decl = last_param_type.value;
-
-        return array_decl->type;
-    }
-
-    assertf(index < type_fn->formal_param_count, "select index out range");
-    return type_fn->formal_param_types[index];
-}
-
 
 void infer(ast_closure_t *closure_decl) {
     infer_line = 0;
@@ -193,17 +168,12 @@ type_t infer_binary(ast_binary_expr *expr) {
     type_t left_type = infer_expr(&expr->left);
     type_t right_type = infer_expr(&expr->right);
 
-    if (left_type.base != TYPE_INT && left_type.base != TYPE_FLOAT) {
-        error_printf(infer_line, "invalid operation: %s, expr code must be int or float, cannot '%s' code",
-                     ast_expr_operator_to_string[expr->operator],
-                     type_to_string[left_type.base]);
-    }
-
-    if (right_type.base != TYPE_INT && right_type.base != TYPE_FLOAT) {
-        error_printf(infer_line, "invalid operation: %s,  expr code must be int or float, cannot '%s' code",
-                     ast_expr_operator_to_string[expr->operator],
-                     type_to_string[right_type.base]);
-    }
+    assertf(left_type.base == TYPE_INT || left_type.base == TYPE_FLOAT,
+            "invalid operation: %s, expr type must be int or float, cannot '%s' type",
+            ast_expr_operator_to_string[expr->operator],
+            type_to_string[right_type.base]);
+    assertf(right_type.base == left_type.base, "binary operations type not consistent， left: %s, right: %s",
+            type_to_string[right_type.base], type_to_string[right_type.base]);
 
     switch (expr->operator) {
         case AST_EXPR_OPERATOR_ADD:
@@ -235,7 +205,7 @@ type_t infer_binary(ast_binary_expr *expr) {
 type_t infer_unary(ast_unary_expr *expr) {
     type_t operand_type = infer_expr(&expr->operand);
     if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.base != TYPE_BOOL) {
-        error_exit("!expr, expr must be bool code");
+        error_exit("!expr, expr must be bool type");
     }
 
     if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.base != TYPE_INT
@@ -389,7 +359,7 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
 
         // expect code 并不允许为 var
         if (!infer_compare_type(actual_type, expect_type)) {
-            error_printf(infer_line, "property '%s' expect '%s' code, cannot assign '%s' code",
+            error_printf(infer_line, "property '%s' expect '%s' type, cannot assign '%s' type",
                          struct_property->key,
                          type_to_string[expect_type.base],
                          type_to_string[actual_type.base]);
@@ -429,7 +399,7 @@ type_t infer_access(ast_expr *expr) {
     } else if (left_type.base == TYPE_ARRAY) {
         if (key_type.base != TYPE_INT) {
             error_printf(infer_line,
-                         "access list error, index expr code must by int, cannot '%s'",
+                         "access list error, index expr type must by int, cannot '%s'",
                          type_to_string[key_type.base]);
         }
 
@@ -445,7 +415,7 @@ type_t infer_access(ast_expr *expr) {
 
         result = list_decl->type;
     } else {
-        error_printf(infer_line, "expr code must map or list, cannot '%s'", type_to_string[left_type.base]);
+        error_printf(infer_line, "expr type must map or list, cannot '%s'", type_to_string[left_type.base]);
         exit(0);
     };
 
@@ -547,10 +517,10 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     // 类型推断(不需要再比较类型是否一致)
     if (stmt->var_decl->type.base == TYPE_UNKNOWN) {
         if (!infer_var_type_can_confirm(expr_type)) {
-            error_printf(infer_line, "code inference error, right expr code is not clear");
+            error_printf(infer_line, "type inference error, right expr code is not clear");
             return;
         }
-        stmt->var_decl->type = expr_type;
+        stmt->var_decl->type = expr_type; // expr type is origin type
         return;
     }
 
@@ -558,9 +528,8 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     stmt->var_decl->type = infer_type(stmt->var_decl->type);
 
     // 判断类型是否一致 compare
-    if (!infer_compare_type(stmt->var_decl->type, expr_type)) {
-        error_type_not_match(infer_line);
-    }
+    assertf(infer_compare_type(stmt->var_decl->type, expr_type),
+            "line: %d, cannot assigned variables, because code inconsistency", infer_line);
 }
 
 /**

@@ -114,6 +114,7 @@ set(SRC
         ${SRC_DIR}/register/linearscan.c)
 
 set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/structs.h
         ${PROJECT_SOURCE_DIR}/runtime/gc.h
         ${PROJECT_SOURCE_DIR}/runtime/gc.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h

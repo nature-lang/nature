@@ -25,6 +25,8 @@
 #define RUNTIME_CALL_ARRAY_PUSH "array_push"
 #define RUNTIME_CALL_ARRAY_CONCAT "array_concat"
 
+#define RUNTIME_CALL_ANY_NEW "any_new"
+
 #define RUNTIME_CALL_MAP_NEW "map_new"
 #define RUNTIME_CALL_MAP_VALUE "map_value"
 #define RUNTIME_CALL_ITERATE_COUNT "iterate_count"
@@ -63,7 +65,7 @@
    imm_operand->type = operand_type; \
    imm_operand->key = val; \
    lir_operand_t *operand = malloc(sizeof(lir_operand_t)); \
-   operand->type = LIR_OPERAND_IMM; \
+   operand->assert_type = LIR_OPERAND_IMM; \
    operand->value = imm_operand;              \
    operand; \
 })
@@ -71,7 +73,7 @@
 #define LIR_NEW_OPERAND(_type, _value) \
 ({                                 \
   lir_operand_t *_operand = NEW(lir_operand_t); \
-  _operand->type = _type;           \
+  _operand->assert_type = _type;           \
   _operand->value = _value;    \
   _operand;                                   \
 })
@@ -136,9 +138,9 @@ typedef enum {
 } lir_opcode_e;
 
 typedef struct {
-    lir_operand_e type;
+    lir_operand_e assert_type;
     void *value;
-    uint8_t pos; // TODO 指令位置
+    uint8_t pos;
 } lir_operand_t;
 
 // 变量的定义点
@@ -179,7 +181,7 @@ typedef struct {
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var, alloc reg 后为 reg
     int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    type_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 typedef struct {
@@ -249,7 +251,9 @@ uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
 lir_operand_t *lir_temp_var_operand(closure_t *c, type_t type);
 
-lir_operand_t *lir_new_target_operand();
+lir_operand_t *lir_indirect_addr_operand(closure_t *c, lir_operand_t *value_point);
+
+lir_operand_t *lir_new_empty_operand();
 
 lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t type_base);
 

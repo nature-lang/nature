@@ -13,31 +13,31 @@ static slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
         return result;
     }
 
-    if (flag & FLAG(operand->type)) {
+    if (flag & FLAG(operand->assert_type)) {
         slice_push(result, operand);
         return result;
     }
 
-    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        if (FLAG(addr->base->type) & flag) {
+        if (FLAG(addr->base->assert_type) & flag) {
             slice_push(result, addr->base);
         }
         return result;
     }
 
-    if (operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
+    if (operand->assert_type == LIR_OPERAND_ACTUAL_PARAMS) {
         slice_t *operands = operand->value;
         for (int i = 0; i < operands->count; ++i) {
             lir_operand_t *o = operands->take[i];
-            assert(o->type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
+            assert(o->assert_type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
 
             slice_concat(result, extract_operands(o, flag));
         }
         return result;
     }
 
-    if (flag & FLAG(LIR_OPERAND_VAR) && operand->type == LIR_OPERAND_FORMAL_PARAMS) {
+    if (flag & FLAG(LIR_OPERAND_VAR) && operand->assert_type == LIR_OPERAND_FORMAL_PARAMS) {
         slice_t *formal_params = operand->value;
         for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
             lir_var_t *var = formal_params->take[i];
@@ -56,7 +56,7 @@ void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->type == LIR_OPERAND_VAR) {
+    if (operand->assert_type == LIR_OPERAND_VAR) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
         var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
@@ -69,7 +69,7 @@ void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->type == LIR_OPERAND_REG) {
+    if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         reg->flag |= FLAG(operand->pos);
         if (operand->pos == VR_FLAG_OUTPUT) {
@@ -80,9 +80,9 @@ void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        if (addr->base->type == LIR_OPERAND_VAR) {
+        if (addr->base->assert_type == LIR_OPERAND_VAR) {
             lir_var_t *var = addr->base->value;
             var->flag |= FLAG(VR_FLAG_USE);
             var->flag |= FLAG(VR_FLAG_INDIRECT_ADDR_BASE);
@@ -90,7 +90,7 @@ void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->type == LIR_OPERAND_FORMAL_PARAMS) {
+    if (operand->assert_type == LIR_OPERAND_FORMAL_PARAMS) {
         slice_t *formal_params = operand->value;
         for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
             lir_var_t *var = formal_params->take[i];
@@ -122,10 +122,10 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
     }
 
     lir_operand_t *new_operand = NEW(lir_operand_t);
-    new_operand->type = operand->type;
+    new_operand->assert_type = operand->assert_type;
     new_operand->value = operand->value;
 
-    if (new_operand->type == LIR_OPERAND_VAR) {
+    if (new_operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = new_operand->value;
         lir_var_t *new_var = NEW(lir_var_t);
         new_var->ident = var->ident;
@@ -136,7 +136,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
-    } else if (new_operand->type == LIR_OPERAND_REG) {
+    } else if (new_operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = new_operand->value;
         reg_t *new_reg = NEW(reg_t);
         new_reg->name = reg->name;
@@ -148,7 +148,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         return new_operand;
     }
 
-    if (new_operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (new_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = new_operand->value;
         lir_indirect_addr_t *new_addr = NEW(lir_indirect_addr_t);
         new_addr->base = lir_operand_copy(addr->base);
@@ -158,7 +158,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         return new_operand;
     }
 
-    if (new_operand->type == LIR_OPERAND_ACTUAL_PARAMS) {
+    if (new_operand->assert_type == LIR_OPERAND_ACTUAL_PARAMS) {
         slice_t *new_value = slice_new();
 
         slice_t *operands = operand->value;
@@ -174,17 +174,17 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
 }
 
 lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
-    if (operand->type == LIR_OPERAND_VAR) {
+    if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
         var->indirect_addr = true;
         return operand;
-    } else if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
         return operand;
     }
 
     error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_VAR or LIR_OPERAND_ADDR, actual %d",
-               operand->type);
+               operand->assert_type);
     return NULL;
 }
 
@@ -195,7 +195,7 @@ lir_operand_t *lir_new_addr_operand(lir_operand_t *base, int offset, type_base_t
     addr_operand->type_base = type_base;
 
     lir_operand_t *operand = NEW(lir_operand_t);
-    operand->type = LIR_OPERAND_INDIRECT_ADDR;
+    operand->assert_type = LIR_OPERAND_INDIRECT_ADDR;
     operand->value = addr_operand;
     return operand;
 }
@@ -261,7 +261,7 @@ lir_operand_t *lir_new_label_operand(char *ident, bool is_local) {
     label->is_local = is_local;
 
     lir_operand_t *operand = NEW(lir_operand_t);
-    operand->type = LIR_OPERAND_SYMBOL_LABEL;
+    operand->assert_type = LIR_OPERAND_SYMBOL_LABEL;
     operand->value = label;
     return operand;
 }
@@ -386,7 +386,7 @@ lir_operand_t *lir_new_phi_body(closure_t *c, lir_var_t *var, uint8_t count) {
         slice_push(phi_body, lir_new_var_operand(c, var->ident));
     }
 
-    operand->type = LIR_OPERAND_PHI_BODY;
+    operand->assert_type = LIR_OPERAND_PHI_BODY;
     operand->value = phi_body;
     return operand;
 }
@@ -405,32 +405,32 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
     return var;
 }
 
-lir_operand_t *lir_new_target_operand() {
+lir_operand_t *lir_new_empty_operand() {
     lir_operand_t *operand = NEW(lir_operand_t);
-    operand->type = 0;
+    operand->assert_type = 0;
     operand->value = NULL;
     return operand;
 }
 
 type_base_t lir_operand_type_base(lir_operand_t *operand) {
-    assert(operand->type != LIR_OPERAND_REG);
+    assert(operand->assert_type != LIR_OPERAND_REG);
 
-    if (operand->type == LIR_OPERAND_VAR) {
+    if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
         return var->type_base;
     }
 
-    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
         return addr->type_base;
     }
 
-    if (operand->type == LIR_OPERAND_SYMBOL_VAR) {
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *s = operand->value;
         return s->type;
     }
 
-    if (operand->type == LIR_OPERAND_IMM) {
+    if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         return imm->type;
     }
@@ -458,17 +458,17 @@ bool lir_op_is_call(lir_op_t *op) {
 }
 
 bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
-    if (a->type != b->type) {
+    if (a->assert_type != b->assert_type) {
         return false;
     }
 
-    if (a->type == LIR_OPERAND_REG) {
+    if (a->assert_type == LIR_OPERAND_REG) {
         reg_t *reg_a = a->value;
         reg_t *reg_b = b->value;
         return reg_a->index == reg_b->index;
     }
 
-    if (a->type == LIR_OPERAND_STACK) {
+    if (a->assert_type == LIR_OPERAND_STACK) {
         lir_stack_t *stack_a = a->value;
         lir_stack_t *stack_b = b->value;
         return stack_a->slot == stack_b->slot;
@@ -525,16 +525,16 @@ slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool
     slice_t *results = slice_new();
     for (int i = 0; i < temps->count; ++i) {
         lir_operand_t *operand = temps->take[i];
-        assertf(FLAG(operand->type) & operand_flag, "operand type is not and operand flag");
+        assertf(FLAG(operand->assert_type) & operand_flag, "operand type is not and operand flag");
 
         // 只有 var 或者 reg 现需要进行 vr 校验
-        if (operand->type == LIR_OPERAND_VAR) {
+        if (operand->assert_type == LIR_OPERAND_VAR) {
             lir_var_t *var = operand->value;
             // def or use
             if (!(var->flag & vr_flag)) {
                 continue;
             }
-        } else if (operand->type == LIR_OPERAND_REG) {
+        } else if (operand->assert_type == LIR_OPERAND_REG) {
             reg_t *reg = operand->value;
             if (!(reg->flag & vr_flag)) {
                 continue;
@@ -559,4 +559,14 @@ slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool
  */
 slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
+}
+
+lir_operand_t *lir_indirect_addr_operand(closure_t *c, lir_operand_t *value_point) {
+    assertf(value_point->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
+
+    lir_var_t *var = value_point->value;
+    lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
+    addr->base = value_point;
+    addr->type = var->type;
+    return LIR_NEW_OPERAND(LIR_OPERAND_INDIRECT_ADDR, addr);
 }

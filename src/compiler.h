@@ -30,11 +30,13 @@ list *compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt);
 
 list *compiler_assign(closure_t *c, ast_assign_stmt *stmt);
 
-list *compiler_array_value(closure_t *c, ast_expr expr, lir_operand_t *target);
+lir_operand_t *compiler_array_value(closure_t *c, list *operations, ast_expr expr);
 
 list *compiler_stmt(closure_t *c, ast_stmt *stmt);
 
-list *compiler_expr(closure_t *c, ast_expr expr, lir_operand_t *target);
+lir_operand_t *compiler_expr_with_convert(closure_t *c, list *operations, ast_expr expr, type_t target_type);
+
+lir_operand_t *compiler_expr(closure_t *c, list *operations, ast_expr expr);
 
 list *compiler_call(closure_t *c, ast_call *call, lir_operand_t *target);
 
@@ -44,9 +46,9 @@ list *compiler_return(closure_t *c, ast_return_stmt *ast);
 
 list *compiler_new_array(closure_t *c, ast_expr expr, lir_operand_t *base_target);
 
-list *compiler_access_map(closure_t *c, ast_expr expr, lir_operand_t *target);
+lir_operand_t *compiler_access_map(closure_t *c, list *operations, ast_expr expr);
 
-list *compiler_new_map(closure_t *c, ast_expr expr, lir_operand_t *base_target);
+lir_operand_t *compiler_new_map(closure_t *c, list *operations, ast_expr expr);
 
 list *compiler_env_value(closure_t *c, ast_expr expr, lir_operand_t *target);
 

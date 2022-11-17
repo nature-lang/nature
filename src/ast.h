@@ -340,4 +340,8 @@ int ast_struct_decl_size(ast_struct_decl *struct_decl);
 
 int ast_struct_offset(ast_struct_decl *struct_decl, string property);
 
+type_t select_actual_param(ast_call *call, uint8_t index);
+
+type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
+
 #endif //NATURE_SRC_AST_H_

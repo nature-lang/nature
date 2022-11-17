@@ -31,7 +31,7 @@ string lir_operand_to_string(lir_operand_t *operand) {
         return "_";
     }
 
-    switch (operand->type) {
+    switch (operand->assert_type) {
         case LIR_OPERAND_SYMBOL_LABEL: {
             return lir_label_to_string((lir_symbol_label_t *) operand->value);
         }
@@ -63,7 +63,7 @@ string lir_operand_to_string(lir_operand_t *operand) {
             return lir_phi_body_to_string(operand->value);
         }
         default: {
-            assertf(0, "unknown operand type: %d", operand->type);
+            assertf(0, "unknown operand type: %d", operand->assert_type);
         }
     }
 

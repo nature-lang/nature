@@ -44,17 +44,17 @@ static void asm_mov(slice_t *operations, asm_operand_t *dst, asm_operand_t *src)
  * @return
  */
 static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, lir_operand_t *operand) {
-    if (operand->type == LIR_OPERAND_REG) {
+    if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         return REG(reg);
     }
 
-    if (operand->type == LIR_OPERAND_STACK) {
+    if (operand->assert_type == LIR_OPERAND_STACK) {
         lir_stack_t *stack = operand->value;
         return DISP_REG(rbp, stack->slot, stack->size);
     }
 
-    if (operand->type == LIR_OPERAND_IMM) {
+    if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
         if (v->type == TYPE_STRING_RAW) {
             // 生成符号表(通常用于 .data 段)
@@ -96,17 +96,17 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
     }
 
     // string_t/map_t/array_t
-    if (operand->type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *v = operand->value;
         lir_operand_t *base = v->base;
-        assertf(base->type == LIR_OPERAND_REG, "indirect addr base must be reg");
+        assertf(base->assert_type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
         reg_t *reg = base->value;
         asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type_base));
         return asm_operand;
     }
 
-    if (operand->type == LIR_OPERAND_SYMBOL_VAR) {
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *v = operand->value;
         asm_operand_t *asm_operand = SYMBOL(v->ident, false);
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
@@ -114,7 +114,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         return asm_operand;
     }
 
-    if (operand->type == LIR_OPERAND_SYMBOL_LABEL) {
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
         lir_symbol_label_t *v = operand->value;
         return SYMBOL(v->ident, false);
     }
@@ -139,8 +139,8 @@ static asm_operation_t *reg_cleanup(reg_t *reg) {
  * @return
  */
 static slice_t *native_mov(closure_t *c, lir_op_t *op) {
-    assert(op->output->type != LIR_OPERAND_VAR && op->first->type != LIR_OPERAND_VAR);
-    assert(op->output->type == LIR_OPERAND_REG || op->first->type == LIR_OPERAND_REG);
+    assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
     asm_operand_t *first = lir_operand_transform(c, operations, op->first);
     asm_operand_t *output = lir_operand_transform(c, operations, op->output);
@@ -179,7 +179,7 @@ static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
 }
 
 static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_SYMBOL_LABEL);
+    assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
 
     slice_t *operations = slice_new();
     asm_operand_t *result = lir_operand_transform(c, operations, op->output);
@@ -194,7 +194,7 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
@@ -212,7 +212,7 @@ static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
@@ -245,7 +245,7 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
-    assert(op->first->type == LIR_OPERAND_REG);
+    assert(op->first->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
@@ -308,7 +308,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 
     // 4. 响应处理(取出响应值传递给 result), result 已经固定分配了 rax/xmm0 寄存器,所以 move result to rax 不是必要的
     if (op->output != NULL) {
-        assert(op->output->type == LIR_OPERAND_REG);
+        assert(op->output->assert_type == LIR_OPERAND_REG);
         reg_t *reg = op->output->value;
         assert(reg->index == 0); // rax or xmm0 index == 0
     }
@@ -318,7 +318,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 
 // lir GT foo,bar => result
 static slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op) {
-    assert(op->first->type == LIR_OPERAND_REG);
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
     asm_operand_t *first = lir_operand_transform(c, operations, op->first);
@@ -388,7 +388,7 @@ slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
@@ -407,8 +407,8 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
-    assert(op->output->type == LIR_OPERAND_SYMBOL_LABEL);
-    assert(op->first->type == LIR_OPERAND_REG || op->second->type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
+    assert(op->first->assert_type == LIR_OPERAND_REG || op->second->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
