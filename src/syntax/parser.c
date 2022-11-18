@@ -7,7 +7,7 @@
 
 //parser_cursor_t path->p_cursor;
 
-ast_expr_operator token_to_ast_expr_operator[] = {
+ast_expr_operator_e token_to_ast_expr_operator[] = {
         [TOKEN_PLUS] = AST_EXPR_OPERATOR_ADD,
         [TOKEN_MINUS] = AST_EXPR_OPERATOR_SUB,
         [TOKEN_STAR] = AST_EXPR_OPERATOR_MUL,
@@ -86,7 +86,7 @@ slice_t *parser(module_t *m, list *token_list) {
 
     slice_t *block_stmt = slice_new();
 
-    ast_stmt_expr_type stmt_type = -1;
+    ast_type_e stmt_type = -1;
 
     while (!parser_is(m, TOKEN_EOF)) {
 

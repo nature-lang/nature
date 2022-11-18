@@ -1,39 +1,13 @@
 #include "symbol.h"
+#include "builtin.h"
 #include "utils/helper.h"
 
 void symbol_init() {
     symbol_table = table_new();
 
-    symbol_table_set("print", SYMBOL_TYPE_FN, NULL, false);
-    symbol_table_set("println", SYMBOL_TYPE_FN, NULL, false);
-    symbol_table_set("debug_printf", SYMBOL_TYPE_FN, NULL, false);
-}
-
-// TODO 临时测试使用
-bool is_debug_symbol(char *ident) {
-    if (str_equal(ident, "print")) {
-        return true;
-    }
-    if (str_equal(ident, "println")) {
-        return true;
-    }
-    if (str_equal(ident, "debug_printf")) {
-        return true;
-    }
-    return false;
-}
-
-bool is_print_symbol(char *ident) {
-    if (str_equal(ident, "print")) {
-        return true;
-    }
-    if (str_equal(ident, "println")) {
-        return true;
-    }
-    if (str_equal(ident, "builtin_print")) {
-        return true;
-    }
-    return false;
+//    // built in fn init
+    symbol_table_set("print", SYMBOL_TYPE_FN, builtin_print(), false);
+    symbol_table_set("println", SYMBOL_TYPE_FN, builtin_println(), false);
 }
 
 // compiler 阶段临时生成的数据

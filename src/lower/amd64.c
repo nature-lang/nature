@@ -3,7 +3,7 @@
 
 #define ASSIGN_VAR(_operand) \
    type_base_t base = lir_operand_type_base(_operand); \
-   lir_operand_t *temp = lir_temp_var_operand(c, type_new_by_base(base)); \
+   lir_operand_t *temp = lir_temp_var_operand(c, type_base_new(base)); \
    slice_push(c->globals, temp->value);                \
    list_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
    op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
@@ -15,7 +15,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
         if (imm->type == TYPE_STRING_RAW) {
-            lir_operand_t *var_operand = lir_temp_var_operand(c, type_new_by_base(TYPE_STRING_RAW));
+            lir_operand_t *var_operand = lir_temp_var_operand(c, type_base_new(TYPE_STRING_RAW));
             slice_push(c->globals, var_operand->value);
 
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
@@ -94,13 +94,13 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
     SLICE_FOR(formal_params) {
         lir_var_t *var = SLICE_VALUE(formal_params);
         lir_operand_t *source = NULL;
-        reg_t *reg = amd64_fn_param_next_reg(used, var->type_base);
+        reg_t *reg = amd64_fn_param_next_reg(used, var->type.base);
         if (reg) {
             source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
         } else {
             lir_stack_t *stack = NEW(lir_stack_t);
             // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
-            stack->size = type_base_sizeof(var->type_base);
+            stack->size = type_base_sizeof(var->type.base);
             stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
 
             // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了

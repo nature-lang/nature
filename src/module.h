@@ -3,7 +3,7 @@
 
 #include "utils/list.h"
 #include "value.h"
-#include "symbol.h"
+#include "src/symbol/symbol.h"
 #include "src/lir/lir.h"
 #include "structs.h"
 

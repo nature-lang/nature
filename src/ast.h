@@ -50,7 +50,7 @@ typedef enum {
     AST_CALL,
     AST_NEW_FN,
     AST_NEW_CLOSURE,
-} ast_stmt_expr_type;
+} ast_type_e;
 
 typedef enum {
     AST_EXPR_OPERATOR_ADD,
@@ -68,7 +68,7 @@ typedef enum {
     AST_EXPR_OPERATOR_NOT, // unary !expr
     AST_EXPR_OPERATOR_NEG, // unary -expr
     AST_EXPR_OPERATOR_IA, // *解引用
-} ast_expr_operator;
+} ast_expr_operator_e;
 
 string ast_expr_operator_to_string[100];
 //
@@ -81,14 +81,15 @@ string ast_expr_operator_to_string[100];
 
 typedef struct {
     int line; // 行号
-    ast_stmt_expr_type assert_type; // 声明语句类型
+    ast_type_e assert_type; // 声明语句类型
     void *value;
 } ast_stmt;
 
 typedef struct {
     int line;
-    ast_stmt_expr_type assert_type; // 表达式类型
+    ast_type_e assert_type; // 表达式类型
     type_t type;
+    type_t target_type; // expr 作用目标的类型
     void *value;
 } ast_expr;
 
@@ -104,13 +105,13 @@ typedef struct {
 
 // 一元表达式
 typedef struct {
-    ast_expr_operator operator; // 取反，取绝对值, 解引用等
+    ast_expr_operator_e operator; // 取反，取绝对值, 解引用等
     ast_expr operand; // 操作对象
 } ast_unary_expr;
 
 // 二元表达式
 typedef struct {
-    ast_expr_operator operator; // +/-/*// 等 二元表达式
+    ast_expr_operator_e operator; // +/-/*// 等 二元表达式
     ast_expr right;
     ast_expr left;
 } ast_binary_expr;
@@ -298,7 +299,7 @@ typedef struct {
     ast_ident *env;
     uint8_t index;
     string unique_ident;
-} ast_access_env;
+} ast_env_value;
 
 //typedef struct {
 //  string as;
@@ -343,5 +344,7 @@ int ast_struct_offset(ast_struct_decl *struct_decl, string property);
 type_t select_actual_param(ast_call *call, uint8_t index);
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
+
+bool type_compare(type_t a, type_t b);
 
 #endif //NATURE_SRC_AST_H_

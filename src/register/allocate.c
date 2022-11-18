@@ -55,13 +55,13 @@ static void var_replace(lir_operand_t *operand, interval_t *i) {
     if (i->spilled) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = *i->stack_slot;
-        stack->size = type_base_sizeof(var->type_base);
+        stack->size = type_base_sizeof(var->type.base);
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
     } else {
         reg_t *reg = alloc_regs[i->assigned];
         uint8_t index = reg->index;
-        reg = reg_select(index, var->type_base);
+        reg = reg_select(index, var->type.base);
         assert(reg);
 
         operand->assert_type = LIR_OPERAND_REG;

@@ -2,7 +2,7 @@
 #include <string.h>
 #include "debug.h"
 #include "lir.h"
-#include "src/symbol.h"
+#include "src/symbol/symbol.h"
 #include "utils/helper.h"
 #include "src/semantic/analysis.h"
 
@@ -147,7 +147,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
 char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string indirect_addr_str = "";
-    string type_string = type_to_string[operand_addr->type_base];
+    string type_string = type_to_string[operand_addr->type.base];
     sprintf(buf, "%sI_ADDR[%s:%u:%s]",
             indirect_addr_str,
             lir_operand_to_string(operand_addr->base),

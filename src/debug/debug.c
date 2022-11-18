@@ -140,7 +140,7 @@ void debug_parser(int line, char *token) {
     fflush(stdout);
 }
 
-void debug_parser_stmt(ast_stmt_expr_type t) {
+void debug_parser_stmt(ast_type_e t) {
     printf("\n[DEBUG] PARSER stmt: %s\n", ast_stmt_expr_type_to_debug[t]);
 }
 

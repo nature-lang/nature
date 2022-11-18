@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "utils/list.h"
 #include "utils/slice.h"
-#include "symbol.h"
+#include "src/symbol/symbol.h"
 
 typedef uint64_t flag_t;
 

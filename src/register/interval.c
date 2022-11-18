@@ -406,7 +406,7 @@ void interval_build(closure_t *c) {
         lir_var_t *var = c->globals->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->alloc_type = type_base_trans_alloc(var->type_base);
+        interval->alloc_type = type_base_trans_alloc(var->type.base);
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -824,7 +824,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
         return;
     }
     // 根据 closure stack slot 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
-    c->stack_slot -= type_base_sizeof(i->var->type_base);
+    c->stack_slot -= type_base_sizeof(i->var->type.base);
     *i->stack_slot = c->stack_slot;
 }
 

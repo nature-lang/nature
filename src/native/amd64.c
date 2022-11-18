@@ -4,7 +4,7 @@
 #include "src/register/amd64.h"
 #include "utils/error.h"
 #include "utils/helper.h"
-#include "src/symbol.h"
+#include "src/symbol/symbol.h"
 #include "src/native/native.h"
 #include "src/debug/debug.h"
 #include <assert.h>
@@ -102,7 +102,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         assertf(base->assert_type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
         reg_t *reg = base->value;
-        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type_base));
+        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type.base));
         return asm_operand;
     }
 
@@ -297,11 +297,10 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     assert(((slice_t *) op->second->value)->count == 0);
     // lower 阶段已经处理过了
 
-    // TODO 调用变长参数函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长参数函数？
-    if (first->type == ASM_OPERAND_TYPE_SYMBOL &&
-        is_print_symbol(((asm_symbol_t *) first->value)->name)) {
-        slice_push(operations, ASM_INST("mov", { REG(rax), UINT32(0) }));
-    }
+//    // TODO 调用变长参数函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长参数函数？
+//    if (false)
+//        slice_push(operations, ASM_INST("mov", { REG(rax), UINT32(0) }));
+//    }
 
     // 3. 调用 call 指令(处理地址), 响应的结果在 rax 中
     slice_push(operations, ASM_INST("call", { first }));

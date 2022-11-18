@@ -135,7 +135,6 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->ident = var->ident;
         new_var->old = var->old;
         new_var->type = var->type;
-        new_var->type_base = var->type_base;
         new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
         new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
@@ -322,7 +321,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->name = ast->fn->name;
     new->env_name = ast->env_name;
     new->parent = NULL;
-    new->operations = NULL;
+    new->operations = list_new();
     new->asm_operations = slice_new();
     new->asm_var_decls = slice_new();
     new->entry = NULL;
@@ -404,7 +403,6 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
 
     ast_var_decl *global_var = symbol_table_get_var(ident);
     var->type = global_var->type;
-    var->type_base = global_var->type.base;
     var->flag |= type_base_trans_alloc(global_var->type.base);
 
     return var;
@@ -422,12 +420,12 @@ type_base_t lir_operand_type_base(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
-        return var->type_base;
+        return var->type.base;
     }
 
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        return addr->type_base;
+        return addr->type.base;
     }
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {

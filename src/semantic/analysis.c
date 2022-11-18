@@ -8,7 +8,7 @@
 #include "utils/error.h"
 #include "utils/table.h"
 #include "utils/slice.h"
-#include "src/symbol.h"
+#include "src/symbol/symbol.h"
 #include "src/debug/debug.h"
 
 void analysis_block(module_t *m, slice_t *block) {
@@ -220,7 +220,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
         } else {
             // ast_env_index 表达式
             expr->assert_type = AST_EXPR_ENV_VALUE;
-            ast_access_env *access_env = malloc(sizeof(ast_access_env));
+            ast_env_value *access_env = malloc(sizeof(ast_env_value));
             access_env->env = ast_new_ident(m->analysis_current->parent->env_unique_name);
             access_env->index = free_var->env_index;
             access_env->unique_ident = free_var->ident;
@@ -357,10 +357,6 @@ void analysis_expr(module_t *m, ast_expr *expr) {
 void analysis_ident(module_t *m, ast_expr *expr) {
     ast_ident *ident = expr->value;
 
-    if (is_print_symbol(ident->literal)) {
-        return;
-    }
-
     // 在当前函数作用域中查找变量定义
     analysis_local_scope_t *current_scope = m->analysis_current->current_scope;
     while (current_scope != NULL) {
@@ -381,7 +377,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_VALUE;
-        ast_access_env *env_index = malloc(sizeof(ast_access_env));
+        ast_env_value *env_index = malloc(sizeof(ast_env_value));
         env_index->env = ast_new_ident(m->analysis_current->env_unique_name);
         env_index->index = free_var_index;
         env_index->unique_ident = ident->literal;
@@ -389,9 +385,17 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号中查找
+    // 如果是 xxx.xxx 这样的访问方式在 selector property 中已经进行了处理, 但是有部分 builtin 的全局符号依旧需要在这里处理
+    symbol_t *s = table_get(symbol_table, ident->literal);
+    if (s != NULL) {
+        return;
+    }
+
+
+    // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号(当前 module 注册的符号都加上了前缀)中查找
+    // 所以这里要拼接前缀
     char *global_ident = ident_with_module(m->ident, ident->literal);
-    symbol_t *s = table_get(symbol_table, global_ident);
+    s = table_get(symbol_table, global_ident);
     if (s != NULL) {
         ident->literal = global_ident; // 完善访问名称
         return;
@@ -781,7 +785,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
     fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
-    fn_init->return_type = type_new_by_base(TYPE_VOID);
+    fn_init->return_type = type_base_new(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
 
@@ -845,7 +849,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
     new_fn->name = MAIN_FN_NAME;
     new_fn->body = slice_new();
-    new_fn->return_type = type_new_by_base(TYPE_VOID);
+    new_fn->return_type = type_base_new(TYPE_VOID);
     new_fn->formal_param_count = 0;
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(new_fn->body, stmt_list->take[i]);

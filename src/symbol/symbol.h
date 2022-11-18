@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include "src/value.h"
 #include "utils/table.h"
-#include "ast.h"
+#include "src/ast.h"
 
 #define SYMBOL_GET_VAR_DECL(ident) \
 ({                                   \
@@ -39,10 +39,5 @@ void symbol_table_set_var(string unique_ident, type_t type);
 ast_var_decl *symbol_table_get_var(string ident);
 
 void symbol_init();
-
-bool is_print_symbol(char *ident);
-
-//extern
-bool is_debug_symbol(string ident);
 
 #endif //NATURE_SRC_AST_SYMBOL_H_

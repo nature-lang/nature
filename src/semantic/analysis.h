@@ -2,7 +2,7 @@
 #define NATURE_SRC_AST_ANALYSIS_H_
 
 #include "src/ast.h"
-#include "src/symbol.h"
+#include "src/symbol/symbol.h"
 #include "src/module.h"
 
 #define MAIN_FN_NAME "main"

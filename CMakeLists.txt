@@ -80,8 +80,10 @@ set(SRC
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c
         ${SRC_DIR}/value.h
-        ${SRC_DIR}/symbol.h
-        ${SRC_DIR}/symbol.c
+        ${SRC_DIR}/symbol/symbol.h
+        ${SRC_DIR}/symbol/symbol.c
+        ${SRC_DIR}/symbol/builtin.h
+        ${SRC_DIR}/symbol/builtin.c
         ${SRC_DIR}/type.h
         ${SRC_DIR}/type.c
         ${SRC_DIR}/compiler.h
@@ -114,7 +116,6 @@ set(SRC
         ${SRC_DIR}/register/linearscan.c)
 
 set(RUNTIME_FILES
-        ${PROJECT_SOURCE_DIR}/runtime/structs.h
         ${PROJECT_SOURCE_DIR}/runtime/gc.h
         ${PROJECT_SOURCE_DIR}/runtime/gc.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h

@@ -64,10 +64,6 @@ uint8_t type_base_sizeof(type_base_t t);
 
 type_t type_new_point(type_t ast_type, uint8_t point);
 
-type_t type_new_by_base(type_base_t type);
-
-//type_t type_builtin_println();
-
-type_t type_runtime_array_push();
+type_t type_base_new(type_base_t type);
 
 #endif //NATURE_SRC_TYPE_H_

@@ -43,7 +43,7 @@
 #define RUNTIME_CALL_STRING_LENGTH "string_length"
 
 // GC 相关函数
-#define RUNTIME_CALL_GC_NEW "gc_new"
+#define RUNTIME_CALL_GC_MALLOC "gc_malloc"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
@@ -158,7 +158,6 @@ typedef struct {
 
     flag_t flag;
     type_t type;
-    type_base_t type_base;// lir 为了保证通用性，只能有类型，不能有 size, 该类型也决定了分配的寄存器的类型，已经 stack slot 的 size
 
     uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
     bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr

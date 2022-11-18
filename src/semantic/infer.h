@@ -39,7 +39,6 @@ void infer_for_in(ast_for_in_stmt *stmt);
 void infer_return(ast_return_stmt *stmt);
 //void infer_type_decl(ast_type_decl_stmt *stmt);
 
-
 type_t infer_expr(ast_expr *expr);
 
 type_t infer_binary(ast_binary_expr *expr);
@@ -58,7 +57,7 @@ type_t infer_new_struct(ast_new_struct *new_struct);
 
 type_t infer_access(ast_expr *expr);
 
-type_t infer_access_env(ast_access_env *expr);
+type_t infer_access_env(ast_env_value *expr);
 
 type_t infer_select_property(ast_select_property *select_property);
 
@@ -78,16 +77,6 @@ type_t infer_type_decl_ident(ast_ident *ident);
  * @return
  */
 type_t infer_struct_property_type(ast_struct_decl *struct_decl, string ident);
-
-/**
- * if (expr_type.category == TYPE_VAR && stmt->var_decl->code.category == TYPE_VAR) {
- *  error_exit(, "var code ambiguity");
- * }
- * @param left
- * @param right
- * @return
- */
-bool infer_compare_type(type_t left, type_t right);
 
 void infer_sort_struct_decl(ast_struct_decl *struct_decl);
 

@@ -9,7 +9,7 @@ string type_to_string[] = {
         [TYPE_INT] = "int",
         [TYPE_VOID] = "void",
         [TYPE_UNKNOWN] = "unknown",
-        [TYPE_BUILTIN_ANY] = "builtin_any",
+//        [TYPE_BUILTIN_ANY] = "builtin_any",
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_DECL_IDENT] = "decl", // char*
@@ -40,7 +40,7 @@ uint8_t type_base_sizeof(type_base_t t) {
     }
 }
 
-type_t type_new_by_base(type_base_t type) {
+type_t type_base_new(type_base_t type) {
     type_t result = {
             .is_origin = true,
             .value = NULL,
@@ -55,20 +55,5 @@ type_t type_new_point(type_t ast_type, uint8_t point) {
     result.base = ast_type.base;
     result.value = ast_type.value;
     result.point = point;
-    return result;
-}
-
-type_t type_runtime_array_push() {
-    type_t result;
-    result.base = TYPE_FN;
-    result.is_origin = true;
-
-    type_fn_t *fn = NEW(type_fn_t);
-    fn->return_type = type_new_by_base(TYPE_BUILTIN_ANY);
-    fn->formal_param_count = 1;
-    fn->formal_param_types[0] = type_new_by_base(TYPE_BUILTIN_ANY);
-
-    result.value = fn;
-    result.point = 0;
     return result;
 }
