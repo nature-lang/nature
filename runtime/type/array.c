@@ -4,15 +4,16 @@
 #include <string.h>
 #include "utils/helper.h"
 
-array_t *array_new(int capacity, int size) {
+array_t *array_new(int count, int size) {
     assertf(size <= 8, "size must be less than 8"); // 技术问题，目前只能实现长度为 8 的在栈中的动态数组
 
+    int capacity = count;
     if (capacity == 0) {
         capacity = 8;
     }
 
     array_t *a = malloc(sizeof(array_t));
-    a->count = 0; // 实际容量
+    a->count = count; // 实际的节点数量
     a->capacity = capacity; // 当前实际申请的内存空间
     a->size = size;
     a->data = calloc(capacity, size);

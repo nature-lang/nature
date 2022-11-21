@@ -2,4 +2,4 @@ int sum(int a, int b, ...[int] rest) {
     return a + b + rest[1] + rest[2]
 }
 
-sum(1, 2, 3, 4, 5)
+print(sum(1, 2, 3, 4, 5))
