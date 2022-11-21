@@ -145,7 +145,8 @@ typedef struct {
 } opcode_operand_t; // reg 64
 
 typedef struct {
-    char *name; // 指令名称
+    char *name; // 分组名称
+    char *opcode_text; // opcode 名称
     uint8_t prefix;
     uint8_t opcode[3];
     opcode_ext extensions[4];
@@ -260,6 +261,6 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
 
 void opcode_sort_insts(amd64_insts_t *insts);
 
-uint8_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *count);
+inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8_t *count);
 
 #endif //NATURE_SRC_ASSEMBLER_X86_64_OPCODE_H_

@@ -27,16 +27,22 @@ lir_opcode_e ast_expr_operator_transform[] = {
 
 
 static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr expr) {
-    assertf(expr.target_type.base == TYPE_ANY, "only support conversion to any target");
+    if (expr.target_type.base == TYPE_ANY) {
+        // any new 处理 float 时需要转换成 int64 处理
+        if (source->assert_type == LIR_OPERAND_IMM) {
+            lir_imm_t *imm = source->value;
+            imm->type = TYPE_INT64;
+        }
 
-    lir_operand_t *new_source = lir_temp_var_operand(c, expr.target_type);
-    // lir call type, value =>
-    list_push(c->operations, lir_op_runtime_call(RUNTIME_CALL_ANY_NEW,
-                                                 new_source, 2,
-                                                 LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value, expr.type.base),
-                                                 source));
+        lir_operand_t *new_source = lir_temp_var_operand(c, expr.target_type);
+        // lir call type, value =>
+        list_push(c->operations, lir_op_runtime_call(RUNTIME_CALL_ANY_NEW, new_source, 2,
+                                                     LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value, expr.type.base),
+                                                     source));
+        return new_source;
+    }
 
-    return new_source;
+    return source;
 }
 
 /**

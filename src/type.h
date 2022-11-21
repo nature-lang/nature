@@ -32,7 +32,7 @@ typedef enum {
 
     TYPE_BUILTIN_ANY, // runtime/builtin 函数推导时使用，能够接受或者赋值给任意 nature type
 
-    TYPE_STRING,
+    TYPE_STRING, // 13
     TYPE_STRING_RAW, // 不使用 string_t 封装一层
     TYPE_STRUCT, // ast_struct_decl
     // 可以理解为自定义类型的关键字，在没有进行类型还原之前，它就是类型！ type foo = int, foo 就是 type_decl_ident

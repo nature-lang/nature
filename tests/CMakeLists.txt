@@ -21,6 +21,12 @@ target_link_libraries(test_reg_alloc cmocka)
 add_test(NAME test_reg_alloc COMMAND test_reg_alloc
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
 
+add_executable(test_builtin_print test_builtin_print.c ${RUNTIME_FILES} ${BUILD_SOURCE_FILES})
+target_link_libraries(test_builtin_print cmocka)
+add_test(NAME test_builtin_print COMMAND test_builtin_print
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
+
+
 # 创建测试临时目录
 message("will make dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)

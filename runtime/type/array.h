@@ -9,12 +9,12 @@ typedef struct {
     int count;
     int capacity;
     int size; // item size, 单位 byte
-    void *data;
+    uint8_t *data; // void 类型的指针数组， sizeof(void) == 1
 } array_t;
 
-array_t * array_new(int count, int size);
+array_t *array_new(int capacity, int size);
 
-void * array_value(array_t *a, int index);
+void *array_value(array_t *a, int index);
 
 void array_push(array_t *a, void *value);
 

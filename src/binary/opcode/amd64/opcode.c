@@ -4,48 +4,43 @@
 #include "utils/helper.h"
 #include <assert.h>
 
-inst_t movsq = {
-        "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
-        {}
+inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
+                {}
 };
 
-inst_t call_rm64 = {"call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
+inst_t call_rm64 = {"call", "call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
                     {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
 };
 
-inst_t call_rel32 = {"call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD},
+inst_t call_rel32 = {"call", "call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD},
                      {
                              OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
                      }
 };
 
-inst_t jmp_rel8 = {
-        "jmp", 0, {0xEB}, {OPCODE_EXT_IMM_BYTE}, {
-                OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
-        }
+inst_t jmp_rel8 = {"jmp", "jmp", 0, {0xEB}, {OPCODE_EXT_IMM_BYTE}, {
+        OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
+}
 };
 
-inst_t jmp_rel32 = {
-        "jmp", 0, {0xE9}, {OPCODE_EXT_IMM_DWORD}, {
-                OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
-        }
+inst_t jmp_rel32 = {"jmp", "jmp", 0, {0xE9}, {OPCODE_EXT_IMM_DWORD}, {
+        OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
+}
 };
 
-inst_t je_rel8 = {
-        "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {
-                OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
-        }
+inst_t je_rel8 = {"je", "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {
+        OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
+}
 };
 
-inst_t je_rel32 = {
-        "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {
-                OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
-        }
+inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {
+        OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
+}
 };
 
 
 // sum imm32 -> rm64
-inst_t sub_rm64_imm32 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
@@ -53,7 +48,7 @@ inst_t sub_rm64_imm32 = {"sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5,
 };
 
 
-inst_t add_rm64_imm32 = {"add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
@@ -61,28 +56,28 @@ inst_t add_rm64_imm32 = {"add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0,
 };
 
 // intel 指令顺序
-inst_t add_r64_rm64 = {"add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
-inst_t add_rm64_r64 = {"add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
 };
 
-inst_t sub_imm8_rm64 = {"sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+inst_t sub_imm8_rm64 = {"sub", "sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                 {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                         }
 };
 
-inst_t add_imm8_rm64 = {"add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+inst_t add_imm8_rm64 = {"add", "add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                 {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
@@ -90,28 +85,28 @@ inst_t add_imm8_rm64 = {"add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, 
 };
 
 
-inst_t mov_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
+inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                      }
 };
 
-inst_t mov_rex_rm8_r8 = {"mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+inst_t mov_rex_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                          }
 };
 
-inst_t mov_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
+inst_t mov_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
                      }
 };
 
-inst_t mov_rex_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
@@ -119,42 +114,42 @@ inst_t mov_rex_r8_rm8 = {"mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
 };
 
 // 注册指令列表 asm operand
-inst_t mov_r16_rm16 = {"mov", 0x66, {0xB8}, {OPCODE_EXT_SLASHR},
+inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
-inst_t mov_imm32_r32 = {"mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
+inst_t mov_imm32_r32 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
                         {
                                 {OPERAND_TYPE_R32, ENCODING_TYPE_OPCODE_PLUS},
                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                         }
 };
 
-inst_t mov_rm64_imm32 = {"mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                          }
 };
 
-inst_t mov_r64_imm64 = {"mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD},
+inst_t mov_r64_imm64 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD},
                         {
                                 {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS},
                                 {OPERAND_TYPE_IMM64, ENCODING_TYPE_IMM}
                         }
 };
 
-inst_t mov_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+inst_t mov_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                        {
                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                        }
 };
 
-inst_t mov_rex_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+inst_t mov_rex_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                            {
                                    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                    {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
@@ -162,14 +157,14 @@ inst_t mov_rex_rm8_imm8 = {"mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0,
 };
 
 
-inst_t mov_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
+inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
                       {
                               {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                       }
 };
 
-inst_t mov_rex_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
+inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
                           {
                                   {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
                                   {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
@@ -178,21 +173,21 @@ inst_t mov_rex_r8_imm8 = {"mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE
 
 
 // intel 指令顺序
-inst_t mov_r64_rm64 = {"mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
-inst_t mov_r32_rm32 = {"mov", 0, {0x8B}, {OPCODE_EXT_SLASHR},
+inst_t mov_r32_rm32 = {"mov", "movsd", 0, {0x8B}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
-inst_t movsd_xmm1_xmm2 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
                                   {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
@@ -200,14 +195,14 @@ inst_t movsd_xmm1_xmm2 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
 };
 
 
-inst_t movsd_xmm1_m64 = {"mov", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                          }
 };
 
-inst_t movsd_xmm1m64_xmm2 = {"mov", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
@@ -215,14 +210,14 @@ inst_t movsd_xmm1m64_xmm2 = {"mov", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
 };
 
 
-inst_t mov_rm64_r64 = {"mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
 };
 
-inst_t mov_rm32_r32 = {"mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
+inst_t mov_rm32_r32 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
@@ -230,7 +225,7 @@ inst_t mov_rm32_r32 = {"mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
 };
 
 // intel 指令顺序
-inst_t xor_r64_rm64 = {"xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
@@ -238,76 +233,72 @@ inst_t xor_r64_rm64 = {"xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
 };
 
 // intel 指令顺序
-inst_t xor_rm64_r64 = {"xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
 };
 
-inst_t lea_r64_m = {"lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t lea_r64_m = {"lea", "lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                     {
                             {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                             {OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM},
                     }
 };
 
-inst_t syscall_inst = {"syscall_inst", 0, {0x0F, 0x05}, {}, {}};
+inst_t syscall_inst = {"syscall_inst", "syscall_inst", 0, {0x0F, 0x05}, {}, {}};
 
 // TODO 什么时候使用 near 什么时候使用 far?
-inst_t ret = {"ret", 0, {0xC3}, {}, {}};
+inst_t ret = {"ret", "ret", 0, {0xC3}, {}, {}};
 
-inst_t push_r64 = {
-        "push", 0, {0x50}, {},
-        {
-                {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
-        }
+inst_t push_r64 = {"push", "push", 0, {0x50}, {},
+                   {
+                           {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+                   }
 };
 
-inst_t push_rm64 = {
-        "push", 0, {0xFF}, {OPCODE_EXT_SLASH6},
-        {
-                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-        }
+inst_t push_rm64 = {"push", "push", 0, {0xFF}, {OPCODE_EXT_SLASH6},
+                    {
+                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                    }
 };
 
-inst_t pop_r64 = {
-        "pop", 0, {0x58}, {},
-        {
-                {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
-        }
+inst_t pop_r64 = {"pop", "pop", 0, {0x58}, {},
+                  {
+                          {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
+                  }
 };
 
-inst_t pop_rm64 = {
-        "pop", 0, {0x8F}, {OPCODE_EXT_SLASH0},
-        {
-                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-        }
+inst_t pop_rm64 = {"pop", "pop", 0, {0x8F}, {OPCODE_EXT_SLASH0},
+                   {
+                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                   }
 };
 
 // intel 指令顺序
-inst_t cmp_r64_rm64 = {"cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                        }
 };
 
-inst_t cmp_rm64_r64 = {"cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+inst_t cmp_rm64_r64 = {"cmp", "cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
 };
 
-inst_t cmp_rm8_r8 = {"cmp", 0, {0x38}, {OPCODE_EXT_SLASHR},
+inst_t cmp_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
                      }
 };
 
-inst_t cmp_r8_rm8 = {"cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
+inst_t cmp_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
@@ -315,35 +306,35 @@ inst_t cmp_r8_rm8 = {"cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
 };
 
 
-inst_t cmp_rm64_imm8 = {"cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
+inst_t cmp_rm64_imm8 = {"cmp", "cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                 {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                         }
 };
 
-inst_t cmp_rm8_imm8 = {"cmp", 0, {0x80}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
+inst_t cmp_rm8_imm8 = {"cmp", "cmp", 0, {0x80}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
                        {
                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                        }
 };
 
-inst_t cmp_rm64_imm32 = {"cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
+inst_t cmp_rm64_imm32 = {"cmp", "cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                          }
 };
 
-inst_t cmp_rax_imm32 = {"cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_DWORD},
+inst_t cmp_rax_imm32 = {"cmp", "cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_DWORD},
                         {
                                 {OPERAND_TYPE_RAX, ENCODING_TYPE_MODRM_RAX},
                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                         }
 };
 
-inst_t cmp_al_imm8 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
+inst_t cmp_al_imm8 = {"cmp", "cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
                       {
                               {OPERAND_TYPE_AL, ENCODING_TYPE_MODRM_AL},
                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
@@ -351,15 +342,13 @@ inst_t cmp_al_imm8 = {"cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
 };
 
 
-inst_t setg_rm8 = {
-        "setg", 0, {0x0F, 0x9F}, {}, {
-                OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
-        }
+inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
+}
 };
-inst_t setge_rm8 = {
-        "setge", 0, {0x0F, 0x9D}, {}, {
-                OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
-        }
+inst_t setge_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
+}
 };
 
 
@@ -1461,17 +1450,17 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
     }
 }
 
-uint8_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *count) {
+inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8_t *count) {
     assert(opcode_tree_root);
 
     *count = 0;
-    uint8_t *data = malloc(sizeof(uint8_t) * 30);
+//    uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
     inst_t *inst = opcode_select(operation);
     amd64_inst_format_t *format = opcode_fill(inst, operation);
     opcode_format_encoding(format, data, count);
-    void *_ = realloc(data, *count);
-    return data;
+    realloc(data, *count);
+    return inst;
 }
 
 

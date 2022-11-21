@@ -855,6 +855,15 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
         slice_push(new_fn->body, stmt_list->take[i]);
     }
 
+    // 符号表注册
+    symbol_t *s = NEW(symbol_t);
+    s->type = SYMBOL_TYPE_FN;
+    s->ident = MAIN_FN_NAME;
+    s->value = new_fn;
+    s->is_local = true;
+    slice_push(m->symbols, s);
+    table_set(symbol_table, s->ident, s);
+
     ast_closure_t *closure = analysis_new_fn(m, new_fn, NULL);
     slice_push(m->ast_closures, closure);
 }

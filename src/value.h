@@ -12,12 +12,13 @@
 
 
 static inline void *mallocz(size_t size) {
-    void *ptr;
-    ptr = malloc(size);
-    if (size) {
-        memset(ptr, 0, size);
-    }
-    return ptr;
+    return calloc(1, size);
+//    void *ptr;
+//    ptr = malloc(size);
+//    if (size) {
+//        memset(ptr, 0, size);
+//    }
+//    return ptr;
 }
 
 #define GROW_CAPACITY(capacity) \

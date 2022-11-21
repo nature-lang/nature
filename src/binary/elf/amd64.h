@@ -13,6 +13,7 @@
 #define AMD64_PTR_SIZE 8 // 单位 byte
 
 typedef struct {
+    inst_t *inst;
     uint8_t *data;
     uint8_t data_count;
     uint64_t *offset; // 指令的其实位置

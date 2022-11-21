@@ -4,20 +4,18 @@
 #include <string.h>
 #include "utils/helper.h"
 
-array_t * array_new(int count, int size) {
-    int capacity = count;
-    if (capacity < count) {
-        capacity = count;
-    }
+array_t *array_new(int capacity, int size) {
+    assertf(size <= 8, "size must be less than 8"); // 技术问题，目前只能实现长度为 8 的在栈中的动态数组
+
     if (capacity == 0) {
         capacity = 8;
     }
 
     array_t *a = malloc(sizeof(array_t));
-    a->count = count; // 当前时间数组的容量,
+    a->count = 0; // 实际容量
     a->capacity = capacity; // 当前实际申请的内存空间
     a->size = size;
-    a->data = malloc(capacity * size);
+    a->data = calloc(capacity, size);
     return a;
 }
 
@@ -33,6 +31,10 @@ void *array_value(array_t *a, int index) {
     return p;
 }
 
+/**
+ * @param a
+ * @param value
+ */
 void array_push(array_t *a, void *value) {
     if (a->capacity <= a->count) {
         a->capacity = a->capacity * 2;
@@ -40,9 +42,10 @@ void array_push(array_t *a, void *value) {
     }
 
     // 从 value 中读取 size 个字节，memset 到 a->data 中
-    void *p = a->data;
-    p += a->size * a->count;
-    memcpy(p, value, a->size);
+    uint8_t *p = a->data;
+    p += a->size * a->count; // p 此时一次只传输一个 byte
+    memcpy(p, &value, a->size);
+    a->count += 1;
 }
 
 // 连接两个数组的内容
