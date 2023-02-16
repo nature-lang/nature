@@ -87,9 +87,9 @@ typedef struct {
 
 typedef struct {
     int line;
-    ast_type_e assert_type; // 表达式类型
-    type_t type;
-    type_t target_type; // expr 作用目标的类型
+    ast_type_e assert_type; // 表达式断言
+    type_t type; // 表达式自身的类型
+    type_t target_type; // 表达式赋值的目标的 type
     void *value;
 } ast_expr;
 
