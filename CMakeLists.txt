@@ -68,6 +68,8 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/table.c
         ${PROJECT_SOURCE_DIR}/utils/helper.h
         ${PROJECT_SOURCE_DIR}/utils/helper.c
+        ${PROJECT_SOURCE_DIR}/utils/bitmap.h
+        ${PROJECT_SOURCE_DIR}/utils/bitmap.c
         ${PROJECT_SOURCE_DIR}/utils/exec.c
         ${PROJECT_SOURCE_DIR}/utils/exec.h)
 
@@ -122,6 +124,10 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/env.c
         ${PROJECT_SOURCE_DIR}/runtime/debug.h
         ${PROJECT_SOURCE_DIR}/runtime/debug.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.h
+        ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/any.h

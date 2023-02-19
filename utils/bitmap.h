@@ -7,7 +7,7 @@
 
 
 typedef struct {
-    int8_t *bits; // 每一个元素有 8 bit
+    uint8_t *bits; // 每一个元素有 8 bit
     int size; // 位图的大小, 单位 bit
 } bitmap_t;
 
