@@ -2,6 +2,7 @@
 #define NATURE_ALLOCATOR_H
 
 #include "utils/slice.h"
+#include "utils/list.h"
 #include "utils/helper.h"
 #include "utils/bitmap.h"
 
@@ -21,15 +22,16 @@ typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
     struct mspan_t *prev;
 
+    uint32_t sweepgen;
     void *start_addr; // mspan 的内存起始地址
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
 
     uint pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages 是不固定的
     uint obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定
 
-    // bitmap 结构
-    bitmap_t *alloc_bits; // 单位大小是 uint8
-    bitmap_t *gcmark_bits
+    // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
+    bitmap_t *alloc_bits;
+    bitmap_t *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 } mspan_t;
 
 /**
@@ -37,11 +39,18 @@ typedef struct mspan_t {
  * 物理机有几个线程就注册几个 mcache
  */
 typedef struct {
-    mspan_t *alloc[SPANCLASS_COUNT]; // 136 种 mspan
+    mspan_t *alloc[SPANCLASS_COUNT]; // 136 种 mspan,每种类型的 span 只会持有一个
+    uint32_t flush_gen; // sweepgen 缓存，避免重复进行 mache flush
 } mcache_t;
 
 typedef struct {
+    uint8_t spanclass;
 
+    list *partial_swept; // swept 表示是否被垃圾回收清扫
+    list *partial_unswept;
+
+    list *full_swept;
+    list *full_unswept; // full 表示已经没有空闲的 sapn 了
 } mcentral_t;
 
 
