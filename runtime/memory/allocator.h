@@ -12,6 +12,16 @@
  */
 #define SIZECLASS_COUNT 68
 
+#define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
+
+#define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个page
+
+#define ARENA_BITS_COUNT 2097152 // 1byte 可以索引 4个指针*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
+
+#define PAGE_ALLOC_CHUNK_L1 8192
+#define PAGE_ALLOC_CHUNK_L2 8192
+
+#define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
 
 /**
  * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
@@ -53,13 +63,54 @@ typedef struct {
     list *full_unswept; // full 表示已经没有空闲的 sapn 了
 } mcentral_t;
 
-
 typedef struct {
+    uint64_t blocks[8];
+} page_chunk_t; // page_chunk 现在占用 512bit
 
+
+typedef uint64_t page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
+/**
+ * 由于一个 chunk 是 512bit，能表示 4MB 的空间
+ * 48 位可用内存空间是 256T, 则需要 4GB 的 chunk 空间。
+ * 如果直接初始话一个 4GB 内存空间的数组，这无疑是非常浪费的。
+ * 数组元素的大小是 512bit, 所以如果是一维数组平铺需要 67108864 个元素
+ * 分成二维数组则是 一维和二维都是 2^13 = 8192 个元素
+ * page_alloc 是一个自增数据，所以数组的第二维度没有初始化时就是一个空指针数据
+ */
+typedef struct {
+    // 最底层 level 的数量等于当前 chunk 的数量
+    // 再往上每一级的数量等于下一级数量 / 8
+    slice_t *summary[PAGE_SUMMARY_LEVEL];
+
+    uint32_t chunk_count;
+    // 核心位图，标记自启动以来所有 page 的使用情况
+    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1]; // 通过 chunks = {0} 初始化，可以确保第二维度为 null
 } page_alloc_t;
 
-typedef struct {
+// arena meta
 
+typedef struct {
+    // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。
+    // 8bit 低四位用于标记这四个内存空间的类型(0: 指针， 1: 标量)。
+    // 高四位用于标记这四个内存空间是否需要被 gc 扫描？ (0: 终止，1: 扫描)
+    uint8_t bits[ARENA_BITS_COUNT];
+
+    // 可以通过 page_index 快速定位到 span
+    mspan_t *spans[ARENA_PAGES_COUNT];
+} heap_arena;
+
+typedef struct {
+    page_alloc_t pages;
+    heap_arena *arenas[ARENA_COUNT];
+    mcentral_t centrals[SPANCLASS_COUNT];
+
+    uint32_t sweepgen;
+    slice_t *spans; // 所有分配的 span 都会在这里被引用
+
+    struct {
+        void *base;
+        void *cursor;
+    } current_arena
 } mheap_t;
 
 #endif //NATURE_ALLOCTOR_H
