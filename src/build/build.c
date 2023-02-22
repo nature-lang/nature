@@ -49,6 +49,7 @@ static void assembler(module_t *m) {
         char *output = file_join(TEMP_DIR, object_file_name);
         elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
         linkable_object_format(ctx, m->asm_operations, m->asm_var_decls);
+        // 输出目标文件
         elf_output(ctx);
 
         // 完整输出路径
@@ -74,7 +75,7 @@ static void linker(slice_t *module_list) {
         module_t *m = module_list->take[i];
 
         fd = open(m->object_file, O_RDONLY | O_BINARY);
-        elf_load_object_file(ctx, fd, 0);
+        elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
 
     // crt1.o

@@ -91,11 +91,11 @@ typedef struct {
 
 typedef struct {
     // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。
-    // 8bit 低四位用于标记这四个内存空间的类型(0: 指针， 1: 标量)。
+    // 8bit 低四位用于标记这四个内存空间的类型(0: 指针， 1: 标量)。这是 gc 遍历所有对象的关键
     // 高四位用于标记这四个内存空间是否需要被 gc 扫描？ (0: 终止，1: 扫描)
     uint8_t bits[ARENA_BITS_COUNT];
 
-    // 可以通过 page_index 快速定位到 span
+    // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     mspan_t *spans[ARENA_PAGES_COUNT];
 } heap_arena;
 
@@ -112,5 +112,6 @@ typedef struct {
         void *cursor;
     } current_arena
 } mheap_t;
+
 
 #endif //NATURE_ALLOCTOR_H

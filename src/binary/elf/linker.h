@@ -82,7 +82,7 @@ typedef struct section_t {
     // 排序字段
     int actual_sh_index;
     int actual_sh_weight;
-    uint phdr_flags;
+    uint phdr_flags; // 第8位表示是否需要 PT_LOAD 装载到内存中
 
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 relocate 指向 .rela.text

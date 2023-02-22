@@ -223,6 +223,10 @@ static void layout_sections(elf_context *ctx) {
     ctx->file_offset = file_offset;
 }
 
+/**
+ * @param ctx
+ * @param is_obj 是否为可重定位目标文件 (.o) 只有目标文件需要 sh_size
+ */
 void alloc_section_names(elf_context *ctx, bool is_obj) {
     section_t *shstr_section;
     shstr_section = elf_new_section(ctx, ".shstrtab", SHT_STRTAB, 0);
