@@ -41,11 +41,11 @@ typedef enum {
     TYPE_MAP, // ast_map_decl
     TYPE_FN, // fn<int,void> ast_function_type_decl
     TYPE_POINT,
-} type_base_t;
+} type_kind_e;
 
 typedef struct {
     void *value; // ast_ident(type_decl_ident),ast_map_decl*....
-    type_base_t base; // type_fn,type_int
+    type_kind_e kind; // type_fn,type_int
     bool is_origin; // type a = int, type b = a，int is origin
     uint8_t point; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 point 等于 3
 } type_t;
@@ -60,10 +60,10 @@ typedef struct {
 
 string type_to_string[UINT8_MAX];
 
-uint8_t type_base_sizeof(type_base_t t);
+uint8_t type_base_sizeof(type_kind_e t);
 
 type_t type_new_point(type_t ast_type, uint8_t point);
 
-type_t type_base_new(type_base_t type);
+type_t type_base_new(type_kind_e type);
 
 #endif //NATURE_SRC_TYPE_H_

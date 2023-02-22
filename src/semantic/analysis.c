@@ -136,7 +136,7 @@ type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     fn_type->rest_param = fn_decl->rest_param;
     type_t type = {
             .is_origin = false,
-            .base = TYPE_FN,
+            .kind = TYPE_FN,
             .value = fn_type
     };
     return type;
@@ -446,7 +446,7 @@ void analysis_type(module_t *m, type_t *type) {
     // TODO 如果出现死循环，应该告警退出
     // code foo = int
     // 'foo' is type_decl_ident
-    if (type->base == TYPE_DECL_IDENT) {
+    if (type->kind == TYPE_DECL_IDENT) {
         // 向上查查查
         ast_ident *ident = type->value;
         string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
@@ -454,20 +454,20 @@ void analysis_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->base == TYPE_MAP) {
+    if (type->kind == TYPE_MAP) {
         ast_map_decl *map_decl = type->value;
         analysis_type(m, &map_decl->key_type);
         analysis_type(m, &map_decl->value_type);
         return;
     }
 
-    if (type->base == TYPE_ARRAY) {
+    if (type->kind == TYPE_ARRAY) {
         ast_array_decl *map_decl = type->value;
         analysis_type(m, &map_decl->type);
         return;
     }
 
-    if (type->base == TYPE_FN) {
+    if (type->kind == TYPE_FN) {
         type_fn_t *type_fn = type->value;
         analysis_type(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formal_param_count; ++i) {
@@ -476,7 +476,7 @@ void analysis_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->base == TYPE_STRUCT) {
+    if (type->kind == TYPE_STRUCT) {
         ast_struct_decl *struct_decl = type->value;
         for (int i = 0; i < struct_decl->count; ++i) {
             ast_struct_property item = struct_decl->list[i];

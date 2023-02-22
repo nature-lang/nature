@@ -224,7 +224,7 @@ void build(char *build_entry) {
             ast_var_decl *var_decl = s->value;
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = s->ident;
-            decl->size = type_base_sizeof(var_decl->type.base);
+            decl->size = type_base_sizeof(var_decl->type.kind);
             decl->value = NULL; // TODO 如果是立即数可以直接赋值
             slice_push(m->asm_var_decls, decl);
         }

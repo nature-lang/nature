@@ -132,7 +132,7 @@ typedef struct {
 
 // 值类型
 typedef struct {
-    type_base_t type;
+    type_kind_e type;
     string value;
 } ast_literal; // 标量值
 

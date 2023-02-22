@@ -20,7 +20,7 @@ ast_expr_operator_e token_to_ast_expr_operator[] = {
         [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
 };
 
-type_base_t token_to_type_category[] = {
+type_kind_e token_to_type_category[] = {
         // literal
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
@@ -350,7 +350,7 @@ ast_expr parser_ident_expr(module_t *m) {
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     type_t type_decl_ident = {
             .is_origin = false,
-            .base = TYPE_DECL_IDENT,
+            .kind = TYPE_DECL_IDENT,
             .value = ast_new_ident(ident_token->literal)
     };
 
@@ -542,7 +542,7 @@ type_t parser_type(module_t *m) {
     // int/float/bool/string/void/var/any
     if (parser_is_simple_type(m)) {
         token *type_token = parser_advance(m);
-        result.base = token_to_type_category[type_token->type];
+        result.kind = token_to_type_category[type_token->type];
         result.value = type_token->literal;
         return result;
     }
@@ -564,7 +564,7 @@ type_t parser_type(module_t *m) {
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
 
-        result.base = TYPE_ARRAY;
+        result.kind = TYPE_ARRAY;
         result.value = type_array_decl;
         return result;
     }
@@ -577,7 +577,7 @@ type_t parser_type(module_t *m) {
         type_map_decl->value_type = parser_type(m);
         parser_must(m, TOKEN_RIGHT_CURLY);
 
-        result.base = TYPE_MAP;
+        result.kind = TYPE_MAP;
         result.value = type_map_decl;
         return result;
     }
@@ -598,7 +598,7 @@ type_t parser_type(module_t *m) {
 
         parser_must(m, TOKEN_RIGHT_CURLY);
 
-        result.base = TYPE_STRUCT;
+        result.kind = TYPE_STRUCT;
         result.value = type_struct_decl;
         return result;
     }
@@ -610,7 +610,7 @@ type_t parser_type(module_t *m) {
         parser_type_function_formal_param(m, type_function);
         parser_must(m, TOKEN_RIGHT_ANGLE);
 
-        result.base = TYPE_FN;
+        result.kind = TYPE_FN;
         result.value = type_function;
         return result;
     }
@@ -621,7 +621,7 @@ type_t parser_type(module_t *m) {
 
     // 神奇的 ident
     token *type_token = parser_advance(m);
-    result.base = TYPE_DECL_IDENT;
+    result.kind = TYPE_DECL_IDENT;
     result.value = ast_new_ident(type_token->literal);
     return result;
 }

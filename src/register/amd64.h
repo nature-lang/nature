@@ -138,8 +138,8 @@ void amd64_reg_init();
 /**
  * index 对应寄存器的 index， 不过同一个 index 会对应多个 register
  */
-reg_t *amd64_reg_select(uint8_t index, type_base_t base);
+reg_t *amd64_reg_select(uint8_t index, type_kind_e base);
 
-reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_base_t base);
+reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_kind_e base);
 
 #endif //NATURE_AMD64_H

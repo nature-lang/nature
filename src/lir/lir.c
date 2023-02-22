@@ -403,7 +403,7 @@ lir_var_t *lir_new_var_operand(closure_t *c, char *ident) {
 
     ast_var_decl *global_var = symbol_table_get_var(ident);
     var->type = global_var->type;
-    var->flag |= type_base_trans_alloc(global_var->type.base);
+    var->flag |= type_base_trans_alloc(global_var->type.kind);
 
     return var;
 }
@@ -415,17 +415,17 @@ lir_operand_t *lir_new_empty_operand() {
     return operand;
 }
 
-type_base_t lir_operand_type_base(lir_operand_t *operand) {
+type_kind_e lir_operand_type_base(lir_operand_t *operand) {
     assert(operand->assert_type != LIR_OPERAND_REG);
 
     if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
-        return var->type.base;
+        return var->type.kind;
     }
 
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        return addr->type.base;
+        return addr->type.kind;
     }
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {

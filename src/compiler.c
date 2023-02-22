@@ -27,7 +27,7 @@ lir_opcode_e ast_expr_operator_transform[] = {
 
 
 static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr expr) {
-    if (expr.target_type.base == TYPE_ANY) {
+    if (expr.target_type.kind == TYPE_ANY) {
         // any new 处理 float 时需要转换成 int64 处理
         if (source->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = source->value;
@@ -37,7 +37,7 @@ static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr
         lir_operand_t *new_source = lir_temp_var_operand(c, expr.target_type);
         // lir call type, value =>
         list_push(c->operations, lir_op_runtime_call(RUNTIME_CALL_ANY_NEW, new_source, 2,
-                                                     LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value, expr.type.base),
+                                                     LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value, expr.type.kind),
                                                      source));
         return new_source;
     }
@@ -232,7 +232,7 @@ static void compiler_if(closure_t *c, ast_if_stmt *if_stmt) {
 static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     ast_call *call = expr.value;
     lir_operand_t *target = NULL;
-    if (expr.type.base != TYPE_NULL) {
+    if (expr.type.kind != TYPE_NULL) {
         target = lir_temp_var_operand(c, expr.type);
     }
 
@@ -259,14 +259,14 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
         if (is_rest) {
             // lir array_new(count, size) -> param_target
             type_t last_param_type = formal_fn->formal_param_types[formal_fn->formal_param_count - 1];
-            assertf(last_param_type.base == TYPE_ARRAY, "rest param must be array type");
+            assertf(last_param_type.kind == TYPE_ARRAY, "rest param must be array type");
 
             ast_array_decl *array_decl = last_param_type.value;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
             param_target = lir_temp_var_operand(c, last_param_type);
             lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0);
             lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                                    (int) type_base_sizeof(array_decl->type.base));
+                                                                    (int) type_base_sizeof(array_decl->type.kind));
             lir_op_t *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_ARRAY_NEW,
                     param_target, // param_target is array_t
@@ -469,7 +469,7 @@ static lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr) {
     ast_array_decl *array_decl = ast->ast_type.value;
     lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, array_decl->count);
     lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                            (int) type_base_sizeof(ast->ast_type.base));
+                                                            (int) type_base_sizeof(ast->ast_type.kind));
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_NEW,
             target,
@@ -576,8 +576,8 @@ static lir_operand_t *compiler_new_map(closure_t *c, ast_expr expr) {
     ast_new_map *ast = expr.value;
     lir_operand_t *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
     lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                            (int) type_base_sizeof(ast->key_type.base) +
-                                                            (int) type_base_sizeof(ast->value_type.base));
+                                                            (int) type_base_sizeof(ast->key_type.kind) +
+                                                            (int) type_base_sizeof(ast->value_type.kind));
 
     lir_operand_t *target = lir_temp_var_operand(c, expr.type);
     lir_op_t *call_op = lir_op_runtime_call(
@@ -737,7 +737,7 @@ static lir_operand_t *compiler_ident(closure_t *c, ast_expr expr) {
         } else {
             lir_symbol_var_t *symbol = NEW(lir_symbol_var_t);
             symbol->ident = ident->literal;
-            symbol->type = var->type.base;
+            symbol->type = var->type.kind;
             target->assert_type = LIR_OPERAND_SYMBOL_VAR;
             target->value = symbol;
         }
@@ -914,7 +914,7 @@ static lir_operand_t *compiler_expr(closure_t *c, ast_expr expr) {
 
     lir_operand_t *source = fn(c, expr);
 
-    if (expr.type.base != expr.target_type.base) {
+    if (expr.type.kind != expr.target_type.kind) {
         source = type_convert(c, source, expr);
     }
 

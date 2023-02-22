@@ -31,7 +31,7 @@ string reg_table_key(uint8_t index, uint8_t size);
  * @param base
  * @return
  */
-reg_t *reg_select(uint8_t index, type_base_t base);
+reg_t *reg_select(uint8_t index, type_kind_e base);
 
 reg_t *reg_find(uint8_t index, size_t size);
 
@@ -44,6 +44,6 @@ void reg_init();
 
 reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, uint8_t reg_id);
 
-vr_flag_e type_base_trans_alloc(type_base_t t);
+vr_flag_e type_base_trans_alloc(type_kind_e t);
 
 #endif //NATURE_SRC_REGISTER_REGISTER_H_

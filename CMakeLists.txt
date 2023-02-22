@@ -56,6 +56,8 @@ set(SRC_DEBUG
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
+        ${PROJECT_SOURCE_DIR}/utils/typedef.h
+        ${PROJECT_SOURCE_DIR}/utils/typedef.c
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c

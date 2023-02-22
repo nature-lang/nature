@@ -132,7 +132,7 @@ void amd64_reg_init() {
     zmm15 = reg_new("zmm15", 15, VR_FLAG_ALLOC_FLOAT, ZWORD, 0);
 }
 
-reg_t *amd64_reg_select(uint8_t index, type_base_t base) {
+reg_t *amd64_reg_select(uint8_t index, type_kind_e base) {
     uint8_t select_size = type_base_sizeof(base);
     uint8_t alloc_type = type_base_trans_alloc(base);
     if (alloc_type == VR_FLAG_ALLOC_FLOAT) {
@@ -156,7 +156,7 @@ reg_t *amd64_reg_select(uint8_t index, type_base_t base) {
  * @param size
  * @return
  */
-reg_t *amd64_fn_param_next_reg(uint8_t *used, type_base_t base) {
+reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind_e base) {
     uint8_t reg_type = type_base_trans_alloc(base);
     uint8_t used_index = 0;
     if (reg_type == VR_FLAG_ALLOC_FLOAT) {

@@ -190,7 +190,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_base_t type;
+    type_kind_e type;
 } lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
@@ -201,7 +201,7 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
-    type_base_t type;
+    type_kind_e type;
 } lir_imm_t;
 
 /**
@@ -244,7 +244,7 @@ closure_t *lir_new_closure(ast_closure_t *ast);
  */
 lir_var_t *lir_new_var_operand(closure_t *c, string ident);
 
-type_base_t lir_operand_type_base(lir_operand_t *operand);
+type_kind_e lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 

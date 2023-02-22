@@ -20,7 +20,7 @@ string type_to_string[] = {
         [TYPE_NULL] = "null",
 };
 
-uint8_t type_base_sizeof(type_base_t t) {
+uint8_t type_base_sizeof(type_kind_e t) {
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:
@@ -40,11 +40,11 @@ uint8_t type_base_sizeof(type_base_t t) {
     }
 }
 
-type_t type_base_new(type_base_t type) {
+type_t type_base_new(type_kind_e type) {
     type_t result = {
             .is_origin = true,
             .value = NULL,
-            .base = type
+            .kind = type
     };
     return result;
 }
@@ -52,7 +52,7 @@ type_t type_base_new(type_base_t type) {
 type_t type_new_point(type_t ast_type, uint8_t point) {
     type_t result;
     result.is_origin = ast_type.is_origin;
-    result.base = ast_type.base;
+    result.kind = ast_type.kind;
     result.value = ast_type.value;
     result.point = point;
     return result;

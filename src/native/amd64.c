@@ -102,7 +102,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         assertf(base->assert_type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
         reg_t *reg = base->value;
-        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type.base));
+        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type.kind));
         return asm_operand;
     }
 

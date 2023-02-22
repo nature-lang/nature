@@ -7,7 +7,7 @@
  * any 能够表达任意类型
  */
 typedef struct {
-    type_base_t type_base; // TODO 如果能够给定 type_t 则表达性会更好
+    type_kind_e type_base; // TODO 如果能够给定 type_t 则表达性会更好
     union {
         void *value;
         double float_value;
@@ -16,6 +16,6 @@ typedef struct {
     };
 } any_t;
 
-any_t *any_new(type_base_t base, void *value);
+any_t *any_new(type_kind_e base, void *value);
 
 #endif //NATURE_ANY_H
