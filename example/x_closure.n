@@ -14,5 +14,3 @@ var res = sort(bool _(int a, int b) {
 
 map{int:int} get_map(int a, int b) {
 }
-
-

@@ -138,7 +138,7 @@ static asm_operation_t *reg_cleanup(reg_t *reg) {
  * @param count
  * @return
  */
-static slice_t *native_mov(closure_t *c, lir_op_t *op) {
+static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
     assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
@@ -439,7 +439,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
         [LIR_OPCODE_SGT] = amd64_native_sgt,
-        [LIR_OPCODE_MOVE] = native_mov,
+        [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,

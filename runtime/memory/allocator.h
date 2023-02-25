@@ -118,7 +118,19 @@ typedef struct {
     } current_arena;
 } mheap_t;
 
+/**
+ * 分配入口
+ * @param size
+ * @param type
+ * @return
+ */
 void *runtime_malloc(uint size, typedef_t *type);
+
+/**
+ * gc 入口
+ * @return
+ */
+void *runtime_gc();
 
 // TODO 根据 size 计算出 67 个类中的一个
 static uint8_t calc_sizeclass(uint8_t size);
@@ -170,7 +182,7 @@ struct statvoid *large_malloc(uint size, typedef_t *type) {
     mspan_t *s = mheap_alloc(pages_count, spanclass);
     assertf(s != NULL, "out of memory");
 
-    // 将 span 推送到 full swept 中，这样才能进行垃圾回收
+    // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_full_swept_push(spanclass, s);
     s->obj_count = 1;
     return s->base;

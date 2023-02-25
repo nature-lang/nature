@@ -812,7 +812,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
 
 /**
  * spill slot，清空 assign
- * 所有 slit_child 都溢出到同一个堆栈插槽（存储在_canonical_spill_slot中）
+ * 所有 slit_child 本质上是一个 var, 所以都溢出到同一个 stack_slot（存储在_canonical_spill_slot中）
  * @param i
  */
 void interval_spill_slot(closure_t *c, interval_t *i) {
