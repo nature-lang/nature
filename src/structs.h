@@ -233,7 +233,7 @@ typedef struct closure_t {
     struct closure_t *parent;
     list *operations; // 指令列表
 
-    int stack_slot; // 初始值为 0，用于寄存器分配时的栈区 slot 分配
+    int stack_offset; // 初始值为 0，像下增长，用于寄存器分配时的栈区 slot 分配
 
     // loop collect
     int8_t loop_count;

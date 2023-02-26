@@ -2,7 +2,7 @@
 #define NATURE_TYPEDEF_H
 
 #include <stdlib.h>
-#include "bitmap.h"
+#include "utils/bitmap.h"
 #include "src/type.h"
 
 /**

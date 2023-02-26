@@ -56,8 +56,10 @@ set(SRC_DEBUG
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
-        ${PROJECT_SOURCE_DIR}/utils/typedef.h
-        ${PROJECT_SOURCE_DIR}/utils/typedef.c
+        ${PROJECT_SOURCE_DIR}/utils/links/typedef.h
+        ${PROJECT_SOURCE_DIR}/utils/links/typedef.c
+        ${PROJECT_SOURCE_DIR}/utils/links/fndef.c
+        ${PROJECT_SOURCE_DIR}/utils/links/fndef.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c
@@ -120,16 +122,18 @@ set(SRC
         ${SRC_DIR}/register/linearscan.c)
 
 set(RUNTIME_FILES
-        ${PROJECT_SOURCE_DIR}/runtime/gc.h
-        ${PROJECT_SOURCE_DIR}/runtime/gc.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h
         ${PROJECT_SOURCE_DIR}/runtime/env.c
         ${PROJECT_SOURCE_DIR}/runtime/debug.h
         ${PROJECT_SOURCE_DIR}/runtime/debug.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/memory.h
+        ${PROJECT_SOURCE_DIR}/runtime/memory/memory.c
         ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.h
         ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.h
         ${PROJECT_SOURCE_DIR}/runtime/memory/collector.c
-        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory/stack.h
+        ${PROJECT_SOURCE_DIR}/runtime/memory/stack.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/any.h

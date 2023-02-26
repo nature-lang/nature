@@ -824,8 +824,8 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
         return;
     }
     // 根据 closure stack slot 分配堆栈插槽,暂时不用考虑对其，直接从 0 开始分配即可
-    c->stack_slot -= type_base_sizeof(i->var->type.kind);
-    *i->stack_slot = c->stack_slot;
+    c->stack_offset += type_base_sizeof(i->var->type.kind);
+    *i->stack_slot = -c->stack_offset; // 取负数，一般栈都是高往低向下增长
 }
 
 /**

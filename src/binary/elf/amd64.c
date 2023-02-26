@@ -642,6 +642,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
     }
 
     // 代码段已经确定，生成 text 数据
+    // TODO set label st_size
     for (int i = 0; i < build_temps->count; ++i) {
         amd64_build_temp_t *temp = build_temps->take[i];
         elf_put_data(ctx->text_section, temp->data, temp->data_count);

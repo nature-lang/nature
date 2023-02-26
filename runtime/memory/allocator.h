@@ -5,7 +5,7 @@
 #include "utils/list.h"
 #include "utils/helper.h"
 #include "utils/bitmap.h"
-#include "utils/typedef.h"
+#include "utils/links/typedef.h"
 
 /**
  * sizeclass 一共有 68 种(其中 sizeclass = 0 用于大内存对象分配，在定义中的一共是 1 - 67 种)
@@ -126,12 +126,6 @@ typedef struct {
  */
 void *runtime_malloc(uint size, typedef_t *type);
 
-/**
- * gc 入口
- * @return
- */
-void *runtime_gc();
-
 // TODO 根据 size 计算出 67 个类中的一个
 static uint8_t calc_sizeclass(uint8_t size);
 
@@ -188,4 +182,4 @@ struct statvoid *large_malloc(uint size, typedef_t *type) {
     return s->base;
 }
 
-#endif //NATURE_ALLOCTOR_H
+#endif //NATURE_ALLOCATOR_H

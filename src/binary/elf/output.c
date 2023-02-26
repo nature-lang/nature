@@ -45,6 +45,7 @@ void elf_output(elf_context *ctx) {
     } else {
         // 仅可执行文件需要入口
         ehdr.e_type = ET_EXEC;
+        // 这里是符号的虚拟地址(虚拟内存中的地址)
         ehdr.e_entry = elf_get_sym_addr(ctx, "_start");
     }
 

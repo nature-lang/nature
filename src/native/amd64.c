@@ -351,12 +351,12 @@ static slice_t *amd64_native_label(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     // c->stack_slot 为负数值(spill 期间负数增长, 所以次数需要取 abs 进行操作)
-    int stack_slot = abs(c->stack_slot);
+    int stack_slot = abs(c->stack_offset);
     stack_slot = memory_align(stack_slot, ALIGN_SIZE);
 
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
-    if (c->stack_slot != 0) {
+    if (c->stack_offset != 0) {
         slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(stack_slot) }));
     }
 

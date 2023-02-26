@@ -146,7 +146,7 @@ static void layout_sections(elf_context *ctx) {
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
     addr_t s_align = elf_page_size();
     addr_t addr = elf_start_addr();
-    addr_t base = addr;
+    addr_t base = addr; // elf 文件的起始虚拟内存地址
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
     Elf64_Phdr *phdr;
@@ -1067,6 +1067,12 @@ section_t *elf_new_section(elf_context *ctx, char *name, uint sh_type, uint sh_f
     return s;
 }
 
+/**
+ * 符号可能是标签中的符号，也可能是
+ * @param ctx
+ * @param name
+ * @return 返回 symbol 的虚拟地址
+ */
 addr_t elf_get_sym_addr(elf_context *ctx, char *name) {
     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, name);
     if (sym_index == 0) {
