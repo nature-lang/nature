@@ -60,6 +60,8 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/links/typedef.c
         ${PROJECT_SOURCE_DIR}/utils/links/fndef.c
         ${PROJECT_SOURCE_DIR}/utils/links/fndef.h
+        ${PROJECT_SOURCE_DIR}/utils/links/symdef.c
+        ${PROJECT_SOURCE_DIR}/utils/links/symdef.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c
