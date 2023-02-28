@@ -2,7 +2,7 @@
 #define NATURE_SRC_LIB_STACK_H_
 
 #include <stdlib.h>
-#include "src/value.h"
+#include "value.h"
 
 typedef struct stack_node {
     void *value;

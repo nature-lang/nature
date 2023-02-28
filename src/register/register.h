@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_REGISTER_REGISTER_H_
 #define NATURE_SRC_REGISTER_REGISTER_H_
 
-#include "src/value.h"
+#include "utils/value.h"
 #include "src/structs.h"
 #include "utils/slice.h"
 #include "utils/table.h"

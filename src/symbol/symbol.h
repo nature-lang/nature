@@ -2,7 +2,7 @@
 #define NATURE_SRC_AST_SYMBOL_H_
 
 #include <stdlib.h>
-#include "src/value.h"
+#include "utils/value.h"
 #include "utils/table.h"
 #include "src/ast.h"
 

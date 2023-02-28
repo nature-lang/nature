@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "src/value.h"
+#include "value.h"
 
 // rear 为 empty node, 不会进入到循环中(一旦不满足条件，就会立即退出)
 #define LIST_FOR(_list) for (list_node *node = _list->front; node != _list->rear; node = node->succ)

@@ -12,9 +12,9 @@
 
 typedef struct {
     addr_t base; // 虚拟其实地址
-    uint64_t size; // 栈空间
     addr_t end; // 栈结束地址
-    addr_t frame; // BP register
+    uint64_t size; // 栈空间
+    addr_t frame; // BP register value，指向 local values 和 previous rbp value 之间, *ptr 取的值是 (ptr ~ ptr+8)
     addr_t top; // SP register
 } stack_t;
 

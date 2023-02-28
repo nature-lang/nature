@@ -2,7 +2,7 @@
 #define NATURE_SRC_SCANNER_H_
 
 #include "utils/list.h"
-#include "src/value.h"
+#include "utils/value.h"
 #include "src/syntax/token.h"
 #include "src/module.h"
 

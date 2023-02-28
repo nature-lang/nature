@@ -2,7 +2,7 @@
 #define NATURE_MODULE_H
 
 #include "utils/list.h"
-#include "value.h"
+#include "utils/value.h"
 #include "src/symbol/symbol.h"
 #include "src/lir/lir.h"
 #include "structs.h"

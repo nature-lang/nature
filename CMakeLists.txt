@@ -62,6 +62,7 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/links/fndef.h
         ${PROJECT_SOURCE_DIR}/utils/links/symdef.c
         ${PROJECT_SOURCE_DIR}/utils/links/symdef.h
+        ${PROJECT_SOURCE_DIR}/utils/value.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c
@@ -87,7 +88,6 @@ set(SRC
         ${SRC_DIR}/structs.h
         ${SRC_DIR}/ast.h
         ${SRC_DIR}/ast.c
-        ${SRC_DIR}/value.h
         ${SRC_DIR}/symbol/symbol.h
         ${SRC_DIR}/symbol/symbol.c
         ${SRC_DIR}/symbol/builtin.h

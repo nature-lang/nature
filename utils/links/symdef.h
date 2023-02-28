@@ -9,7 +9,7 @@
 // 以及符号的内容摘要
 typedef struct {
     uint size;
-    uint64_t addr;
+    addr_t addr;
     uint last_ptr_count;
     type_kind_e kind;
     bitmap_t *gc_bits;

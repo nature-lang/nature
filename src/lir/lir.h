@@ -3,7 +3,7 @@
 
 #include "utils/list.h"
 #include "utils/helper.h"
-#include "src/value.h"
+#include "utils/value.h"
 #include "src/ast.h"
 #include "utils/table.h"
 #include "src/structs.h"

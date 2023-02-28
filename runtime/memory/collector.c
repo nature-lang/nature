@@ -2,16 +2,22 @@
 
 #include "memory.h"
 
-stack_t
+static fndef_t find_fn(addr_t addr) {}
 
 static void scan_stack() {
     stack_t *stack = memory->user_stack;
 
-    // 感觉 top 确定一下当前所在函数
+    // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
+    // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
+    uint64_t return_addr = (uint64_t) fetch_addr_value(stack->frame + PTR_SIZE);
+    while (return_addr > 0) {
+        fndef_t fn = find_fn(return_addr);
+        addr_t frame = return_addr - fn.stack_offset;
+        // 判断从 return_addr - return_addr - fn->stack_offset
+        // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
+        // heap 中的任何对象都需要参与到三色标记
 
-    // 一直 return addr 在栈中的位置，现在需要取出其中存储的值
-    addr_t return_addr = *stack->frame;
-    // 这个 return_addr 是上一个
+    }
 }
 
 /**

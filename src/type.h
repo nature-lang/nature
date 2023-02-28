@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_TYPE_H_
 #define NATURE_SRC_TYPE_H_
 
-#include "value.h"
+#include "utils/value.h"
 
 #define INT_SIZE_BYTE  8; //  // 根据编译的目标平台不同，可以通过编译参数确定大小
 #define POINT_SIZE_BYTE  8;

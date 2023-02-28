@@ -1,7 +1,7 @@
 #ifndef NATURE_BUILD_H
 #define NATURE_BUILD_H
 
-#include "src/value.h"
+#include "utils/value.h"
 
 void cmd_build_arg(int argc, char *argv[]);
 

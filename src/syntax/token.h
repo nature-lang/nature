@@ -2,7 +2,7 @@
 #define NATURE_SRC_SYNTAX_TOKEN_H_
 
 #include <stdlib.h>
-#include "src/value.h"
+#include "utils/value.h"
 
 typedef enum {
     // SINGLE-CHARACTER TOKENS.

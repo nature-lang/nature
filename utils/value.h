@@ -10,6 +10,8 @@
 #define string char *
 #define STRING_EOF '\0'
 
+#define v_addr_t uint64_t
+#define addr_t uint64_t
 
 static inline void *mallocz(size_t size) {
     return calloc(1, size);
