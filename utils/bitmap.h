@@ -15,7 +15,7 @@ bitmap_t *bitmap_new(int size);
 
 bitmap_t *bitmap_set(bitmap_t *bitmap, int index);
 
-bool *bitmap_is(bitmap_t *bitmap, int index);
+bool *bitmap_get(bitmap_t *bitmap, int index);
 
 
 #endif //NATURE_BITMAP_H

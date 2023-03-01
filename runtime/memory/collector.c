@@ -12,9 +12,22 @@ static void scan_stack() {
     uint64_t return_addr = (uint64_t) fetch_addr_value(stack->frame + PTR_SIZE);
     while (return_addr > 0) {
         fndef_t fn = find_fn(return_addr);
-        addr_t frame = return_addr - fn.stack_offset;
-        // 判断从 return_addr - return_addr - fn->stack_offset
+        addr_t frame = return_addr + fn.stack_offset; // 栈向上增长，所以使用 +
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
+        // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
+        int cursor = return_addr;
+        int i = 0;
+        while (cursor < frame) {
+            bool is_ptr = bitmap_get(fn.gc_bits, i);
+            if (is_ptr) {
+                // 从栈中取出指针数据值(这是一个堆内存的地址,该地址需要参与三色标记)
+            }
+
+            i += 1;
+            cursor += 8;
+        }
+
+
         // heap 中的任何对象都需要参与到三色标记
 
     }
