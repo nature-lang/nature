@@ -46,22 +46,5 @@ var f = int (int a, int b) {
     return a + b
 }
 
-// 返回类型非常的突兀，让整体结构失去了连续性, 可以探索一些可能的方式,优化 fn 在表达式中的可读性
-// 同时需要兼顾类型的可读性
-var f = fn(int,int)->int {
-}
-
-var f = fn(int,int)int {
-}
-
-// 个人比较侵向于这一种
-var f = fn(int,int):int {
-}
-
-// 函数的声明为了一致性同样可以以这样的方式，类似于 php。
-fn test(int a, int a): int {}
-
-
-
 
 
