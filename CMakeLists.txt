@@ -124,18 +124,20 @@ set(SRC
         ${SRC_DIR}/register/linearscan.c)
 
 set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/runtime.h
+        ${PROJECT_SOURCE_DIR}/runtime/runtime.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h
         ${PROJECT_SOURCE_DIR}/runtime/env.c
         ${PROJECT_SOURCE_DIR}/runtime/debug.h
         ${PROJECT_SOURCE_DIR}/runtime/debug.c
-        ${PROJECT_SOURCE_DIR}/runtime/memory/memory.h
-        ${PROJECT_SOURCE_DIR}/runtime/memory/memory.c
-        ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.h
-        ${PROJECT_SOURCE_DIR}/runtime/memory/allocator.c
-        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.h
-        ${PROJECT_SOURCE_DIR}/runtime/memory/collector.c
-        ${PROJECT_SOURCE_DIR}/runtime/memory/stack.h
-        ${PROJECT_SOURCE_DIR}/runtime/memory/stack.c
+        ${PROJECT_SOURCE_DIR}/runtime/processor.h
+        ${PROJECT_SOURCE_DIR}/runtime/processor.c
+        ${PROJECT_SOURCE_DIR}/runtime/memory.h
+        ${PROJECT_SOURCE_DIR}/runtime/memory.c
+        ${PROJECT_SOURCE_DIR}/runtime/allocator.h
+        ${PROJECT_SOURCE_DIR}/runtime/allocator.c
+        ${PROJECT_SOURCE_DIR}/runtime/collector.h
+        ${PROJECT_SOURCE_DIR}/runtime/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/any.h

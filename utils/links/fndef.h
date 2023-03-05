@@ -7,7 +7,7 @@
 typedef struct {
     addr_t start; // text 虚拟地址起点
     addr_t end; // text 虚拟地址终点
-    int stack_offset; // 基于 frame 占用的栈的大小(更加需要的是对象) return addr -> previous rbp -> stack_offset
+    int stack_offset; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     bitmap_t *gc_bits; // 标记了栈
 } fndef_t;
 

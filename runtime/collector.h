@@ -2,13 +2,7 @@
 #define NATURE_COLLECTOR_H
 
 #include "utils/list.h"
-
-typedef struct {
-    /**
-     * mark root 会将所有的
-     */
-    list *grey_list;
-} collector_t;
+#include "memory.h"
 
 
 /**
@@ -16,5 +10,7 @@ typedef struct {
  * @return
  */
 void *runtime_gc();
+
+void sweep_mcentral(mheap_t *mheap);
 
 #endif //NATURE_COLLECTOR_H

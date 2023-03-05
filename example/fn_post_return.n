@@ -35,6 +35,11 @@ fn callback() fn(int):back {
 }
 
 
+// 函数类型声明方式 1
+fn(int,int):bool cmp
+
+// 函数类型声明方式 2
+
 
 
 

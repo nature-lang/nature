@@ -1,11 +1,24 @@
-#ifndef NATURE_ALLOCATOR_H
-#define NATURE_ALLOCATOR_H
+#ifndef NATURE_MEMORY_H
+#define NATURE_MEMORY_H
 
+#include <stdlib.h>
+#include <stdint.h>
+
+#include "utils/links/symdef.h"
+#include "utils/links/fndef.h"
+#include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/list.h"
-#include "utils/helper.h"
-#include "utils/bitmap.h"
-#include "utils/links/typedef.h"
+
+#define PTR_SIZE 8  // 单位 byte
+
+// gc 基于此进行全部符号的遍历
+extern int symdef_count;
+extern symdef_t *symdef_list;
+
+extern int fndef_count;
+extern fndef_t *fndef;
+
 
 /**
  * sizeclass 一共有 68 种(其中 sizeclass = 0 用于大内存对象分配，在定义中的一共是 1 - 67 种)
@@ -32,6 +45,16 @@
  * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
  */
 #define SPANCLASS_COUNT 136
+
+#define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+
+typedef struct {
+    addr_t base; // 虚拟起始地址
+    addr_t end; // 栈结束地址
+    uint64_t size; // 栈空间
+    addr_t frame_base; // BP register value，指向 local values 和 previous rbp value 之间, *ptr 取的值是 (ptr ~ ptr+8)
+    addr_t top; // SP register
+} stack_t;
 
 typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
@@ -74,6 +97,7 @@ typedef struct {
 
 
 typedef uint64_t page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
+
 /**
  * 由于一个 chunk 是 512bit，能表示 4MB 的空间
  * 48 位可用内存空间是 256T, 则需要 4GB 的 chunk 空间。
@@ -84,12 +108,12 @@ typedef uint64_t page_summary_t; // page alloc chunk 的摘要数据，组成 [s
  */
 typedef struct {
     // 最底层 level 的数量等于当前 chunk 的数量
-    // 再往上每一级的数量等于下一级数量 / 8
+    // 再往上每一级的数量等于下一级数量的 1/8
     slice_t *summary[PAGE_SUMMARY_LEVEL];
 
     uint32_t chunk_count;
     // 核心位图，标记自启动以来所有 page 的使用情况
-    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1]; // 通过 chunks = {0} 初始化，可以确保第二维度为 null
+    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1][PAGE_ALLOC_CHUNK_L2]; // 通过 chunks = {0} 初始化，可以确保第二维度为 null
 } page_alloc_t;
 
 // arena meta
@@ -104,82 +128,46 @@ typedef struct {
     mspan_t *spans[ARENA_PAGES_COUNT];
 } heap_arena;
 
+/**
+ * 从 0.75T 开始 hint,知道 126.75T
+ */
+typedef struct arena_hint_t {
+    addr_t addr; // mmap hint addr
+    bool last; //
+    struct arena_hint_t *next;
+} arena_hint_t;
+
+/**
+ * heap_arena 和 pages 是管理虚拟内存的两个视角
+ */
 typedef struct {
+    // 全局只有这一个 page alloc，所以所有通过 arena 划分出来的 page 都将被该 page alloc 结构管理
     page_alloc_t pages;
     heap_arena *arenas[ARENA_COUNT];
     mcentral_t centrals[SPANCLASS_COUNT];
-
     uint32_t sweepgen;
     slice_t *spans; // 所有分配的 span 都会在这里被引用
-
+    arena_hint_t *arena_hint;
     struct {
         void *base;
         void *cursor;
     } current_arena;
 } mheap_t;
 
-/**
- * 分配入口
- * @param size
- * @param type
- * @return
- */
-void *runtime_malloc(uint size, typedef_t *type);
+typedef struct {
+    mheap_t mheap;
+    list *grey_list;
+    uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
+} memory_t;
 
-// TODO 根据 size 计算出 67 个类中的一个
-static uint8_t calc_sizeclass(uint8_t size);
+memory_t *memory;
 
+void system_stack();
 
-// 7位sizeclass + 1位是否包含指针
-static uint8_t make_spanclass(uint8_t sizeclass, uint8_t has_ptr);
+void user_stack();
 
-// 从 spanclass 对应的 span 中找到一个 free 的 obj 并返回
-static void *mcache_alloc(uint8_t spanclass);
+void *fetch_addr_value(addr_t addr);
 
-static mspan_t *mheap_alloc(uint pages_count, uint8_t spanclass);
+void memory_init();
 
-static uint get_span_size(uint8_t sizeclass);
-
-// 设置 meta heap_arena 的 bits
-static void heap_arena_bits_set(void *addr, uint size, uint span_size, typedef_t *type);
-
-static void mcentral_full_swept_push(uint8_t spanclass, mspan_t *span);
-
-// 单位
-static void *std_malloc(uint size, typedef_t *type) {
-    bool has_ptr = type != NULL || type->last_ptr_count;
-    uint8_t sizeclass = calc_sizeclass(size);
-    uint8_t spanclass = make_spanclass(sizeclass, has_ptr);
-
-    uint span_size = get_span_size(sizeclass);
-
-    void *addr = mcache_alloc(spanclass);
-    if (has_ptr) {
-        // 对 heap arena bits 做标记
-        heap_arena_bits_set(addr, size, span_size, type);
-    }
-
-    return addr;
-}
-
-struct statvoid *large_malloc(uint size, typedef_t *type) {
-    bool has_ptr = type != NULL || type->last_ptr_count;
-    uint8_t spanclass = make_spanclass(0, has_ptr);
-
-    // 计算需要分配的 page count(向上取整)
-    uint pages_count = size / PAGE_SIZE;
-    if ((size & PAGE_MASK) != 0) {
-        pages_count += 1;
-    }
-
-    // 直接从堆中分配 span
-    mspan_t *s = mheap_alloc(pages_count, spanclass);
-    assertf(s != NULL, "out of memory");
-
-    // 将 span 推送到 full swept 中，这样才能被 sweept
-    mcentral_full_swept_push(spanclass, s);
-    s->obj_count = 1;
-    return s->base;
-}
-
-#endif //NATURE_ALLOCATOR_H
+#endif //NATURE_MEMORY_H
