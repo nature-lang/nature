@@ -56,6 +56,87 @@ static void *large_malloc(uint size, typedef_t *type) {
     return s->base;
 }
 
+/**
+ * TODO 未完成
+ * @return
+ */
+arena_hint_t *arena_hints_init() {
+    arena_hint_t *first = NEW(arena_hint_t);
+    first->addr = (uint64_t) ARENA_HINT_BASE;
+    first->last = false;
+    first->next = NULL;
+
+    arena_hint_t *prev = first;
+    for (int i = 1; i < ARENA_BITS_COUNT; i++) {
+//        arena_hint_t *item = NEW(arena_hint_t);
+//        item->addr = prev->
+    }
+
+    return first;
+}
+
+
+/**
+ * - 分配的大小是固定的，再 linux 64 中就是 64MB
+ * - 基于 hint 调用 mmap 申请一块内存(如果申请成功则更新 hint)
+ * - 更新 mheap.current_arena
+ * - 由于这是一个新的 arena,所以需要像 mheap.arenas 中添加数据，而不再是 null 了
+ * 但是不需要更新 mheap.arenas 相关的值,因为没有真正的开始触发分配逻辑
+ * 同样mheap.pages 同样也不需要更新，因为没有相关的值被更新
+ * @return
+ */
+arena_t *arena_new(mheap_t mheap) {
+    arena_hint_t *hint = mheap.arena_hints;
+
+    arena_t *arena = NEW(arena_t);
+    void *v = NULL;
+    while (true) {
+        v = memory_sys_alloc(hint->addr, ARENA_SIZE);
+        if (v == (void *) hint->addr) {
+            // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
+            hint->addr += ARENA_SIZE;
+            break;
+        }
+        // 释放刚刚申请的内存区域
+        memory_sys_free(v, ARENA_SIZE);
+
+        // 进行申请重试
+        assertf(!hint->last, "out of memory: arena hint use up");
+        hint = hint->next;
+    }
+
+    return arena;
+}
+
+
+void memory_init() {
+    // - 初始化 mheap
+    mheap_t mheap = {0}; // 所有的结构体，数组初始化为 0, 指针初始化为 null
+    mheap.spans = slice_new();
+    for (int i = 0; i < PAGE_SUMMARY_LEVEL; i++) {
+        mheap.pages.summary[i] = slice_new();
+    }
+
+    // - arena hint init
+    mheap.arena_hints = arena_hints_init();
+
+    // - first arena init
+    mheap.current_arena = arena_new(mheap);
+
+    // - 初始化 mcentral
+    for (int i = 0; i < SPANCLASS_COUNT; i++) {
+        mcentral_t item = mheap.centrals[i];
+        item.spanclass = i;
+        item.partial_swept = list_new();
+        item.partial_unswept = list_new();
+        item.full_swept = list_new();
+        item.full_unswept = list_new();
+    }
+
+
+    // - 初始化 mcache
+}
+
 
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针

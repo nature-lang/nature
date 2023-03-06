@@ -6,6 +6,7 @@
 #include "utils/helper.h"
 #include "utils/bitmap.h"
 #include "utils/links/typedef.h"
+#include "memory.h"
 
 /**
  * @param mheap
@@ -20,5 +21,10 @@ void flush_mcache();
  * @return
  */
 void *runtime_malloc(uint size, typedef_t *type);
+
+
+arena_t *arena_new(mheap_t mheap);
+
+arena_hint_t *arena_hints_init();
 
 #endif //NATURE_ALLOCATOR_H

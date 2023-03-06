@@ -26,6 +26,8 @@ extern fndef_t *fndef;
  */
 #define SIZECLASS_COUNT 68
 
+#define ARENA_SIZE 8126464 // arena 的大小，单位 byte
+
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
 #define PAGE_SIZE 8192 // 单位 byte
@@ -47,6 +49,7 @@ extern fndef_t *fndef;
 #define SPANCLASS_COUNT 136
 
 #define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
 
 typedef struct {
     addr_t base; // 虚拟起始地址
@@ -126,14 +129,15 @@ typedef struct {
 
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     mspan_t *spans[ARENA_PAGES_COUNT];
-} heap_arena;
+    addr_t base;
+} arena_t;
 
 /**
  * 从 0.75T 开始 hint,知道 126.75T
  */
 typedef struct arena_hint_t {
     addr_t addr; // mmap hint addr
-    bool last; //
+    bool last;
     struct arena_hint_t *next;
 } arena_hint_t;
 
@@ -143,15 +147,12 @@ typedef struct arena_hint_t {
 typedef struct {
     // 全局只有这一个 page alloc，所以所有通过 arena 划分出来的 page 都将被该 page alloc 结构管理
     page_alloc_t pages;
-    heap_arena *arenas[ARENA_COUNT];
+    arena_t *arenas[ARENA_COUNT];
     mcentral_t centrals[SPANCLASS_COUNT];
     uint32_t sweepgen;
     slice_t *spans; // 所有分配的 span 都会在这里被引用
-    arena_hint_t *arena_hint;
-    struct {
-        void *base;
-        void *cursor;
-    } current_arena;
+    arena_hint_t *arena_hints;
+    arena_t *current_arena;
 } mheap_t;
 
 typedef struct {
@@ -169,5 +170,20 @@ void user_stack();
 void *fetch_addr_value(addr_t addr);
 
 void memory_init();
+
+/**
+ * 基于 mmap
+ * @param hint_addr
+ * @return
+ */
+void *memory_sys_alloc(addr_t hint_addr, size_t size);
+
+
+/**
+ * 基于 unmap
+ * @param ptr
+ */
+void memory_sys_free(void *ptr, size_t size);
+
 
 #endif //NATURE_MEMORY_H
