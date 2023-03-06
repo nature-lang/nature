@@ -22,6 +22,7 @@ void flush_mcache();
  */
 void *runtime_malloc(uint size, typedef_t *type);
 
+mspan_t *mspan_new(addr_t base, uint pages_count);
 
 arena_t *arena_new(mheap_t mheap);
 

@@ -2,7 +2,6 @@
 #define NATURE_PROCESSOR_H
 
 #include "memory.h"
-#include "stack.h"
 #include "allocator.h"
 
 /**
@@ -15,14 +14,14 @@
 typedef struct processor_t {
     stack_t user_stack;
     stack_t system_stack;
-    mcache_t *mcache;
+    mcache_t mcache;
 } processor_t;
 
 uint processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
 processor_t *processor_list;
 
 // 第一版只有当前 process_main, 其值将在初始化时进行填充
-processor_t *processor_main;
+processor_t processor_main;
 
 // 第一版总是返回 processor_main
 processor_t processor_get();

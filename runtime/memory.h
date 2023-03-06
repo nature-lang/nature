@@ -51,6 +51,9 @@ extern fndef_t *fndef;
 #define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
 #define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
 
+#define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
+
+
 typedef struct {
     addr_t base; // 虚拟起始地址
     addr_t end; // 栈结束地址
@@ -63,12 +66,14 @@ typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
     struct mspan_t *prev;
 
-    uint32_t sweepgen;
-    void *base; // mspan 的内存起始地址
+    uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
+    addr_t base; // mspan 在 arena 中的起始位置
+    addr_t end;
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
 
     uint pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages 是不固定的
     uint obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1， 也就是一个 obj 占用一个 span
+    uint alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     bitmap_t *alloc_bits;
@@ -88,10 +93,10 @@ typedef struct {
     uint8_t spanclass;
 
     list *partial_swept; // swept 表示是否被垃圾回收清扫
-    list *partial_unswept;
-
     list *full_swept;
-    list *full_unswept; // full 表示已经没有空闲的 sapn 了
+
+//    list *partial_unswept; // TODO 开发多线程模式时再做支持
+//    list *full_unswept; // full 表示已经没有空闲的 sapn 了
 } mcentral_t;
 
 typedef struct {
@@ -102,12 +107,14 @@ typedef struct {
 typedef uint64_t page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
- * 由于一个 chunk 是 512bit，能表示 4MB 的空间
+ * 由于一个 chunk 是 512bit * page size(8kb)，能表示 4MB 的空间
  * 48 位可用内存空间是 256T, 则需要 4GB 的 chunk 空间。
  * 如果直接初始话一个 4GB 内存空间的数组，这无疑是非常浪费的。
  * 数组元素的大小是 512bit, 所以如果是一维数组平铺需要 67108864 个元素
  * 分成二维数组则是 一维和二维都是 2^13 = 8192 个元素
  * page_alloc 是一个自增数据，所以数组的第二维度没有初始化时就是一个空指针数据
+ *
+ * TODO 像 arena 中申请内存时的单位是 chunk 吗？ 一个 chunk
  */
 typedef struct {
     // 最底层 level 的数量等于当前 chunk 的数量
@@ -128,7 +135,7 @@ typedef struct {
     uint8_t bits[ARENA_BITS_COUNT];
 
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
-    mspan_t *spans[ARENA_PAGES_COUNT];
+    mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8k, 所以 pages 的数量是固定的
     addr_t base;
 } arena_t;
 
