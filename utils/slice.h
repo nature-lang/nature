@@ -27,6 +27,8 @@ typedef struct {
  */
 slice_t *slice_new();
 
+slice_t *slice_capacity_new(int capacity);
+
 void slice_insert(slice_t *s, int index, void *value);
 
 int slice_push(slice_t *s, void *value);

@@ -98,5 +98,12 @@ static inline int max(int a, int b) {
     return b;
 }
 
+/**
+ * 基于 mmap 申请一片可用且空闲的内存区域
+ * 避免因为使用 calloc 造成缺页中断导致的物理内存消耗
+ * @param size
+ * @return
+ */
+static void *mallocz_big(size_t size);
 
 #endif //NATURE_SRC_LIB_HELPER_H_

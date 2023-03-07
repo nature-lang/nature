@@ -49,7 +49,6 @@ extern fndef_t *fndef;
 
 #define PAGE_ALLOC_CHUNK_SIZE 512 // 单位 bit, 一个 chunk 的大小是 512bit
 
-#define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
 
 /**
  * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
@@ -58,6 +57,12 @@ extern fndef_t *fndef;
 
 #define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
 
+#define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
+#define PAGE_CHUNK_COUNT_L5  (256*1024*1024 / 4) // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
+#define PAGE_CHUNK_COUNT_L4  (PAGE_CHUNK_COUNT_L5 / 8)
+#define PAGE_CHUNK_COUNT_L3  (PAGE_CHUNK_COUNT_L4 / 8)
+#define PAGE_CHUNK_COUNT_L2  (PAGE_CHUNK_COUNT_L3 / 8)
+#define PAGE_CHUNK_COUNT_L1  (PAGE_CHUNK_COUNT_L2 / 8)
 
 typedef struct {
     addr_t base; // 虚拟起始地址
@@ -130,9 +135,15 @@ typedef struct {
 typedef struct {
     // 最底层 level 的数量等于当前 chunk 的数量 64487424 * 64bit =
     // 再往上每一级的数量等于下一级数量的 1/8
-    page_chunk_t *summary[PAGE_SUMMARY_LEVEL];
+    // 由于 arena 目前使用 128T, 所以 l5 chunk 的数量暂定为
+    // l5 = 33554432 个chunk
+    // l4 = 4194304
+    // l3 = 524288
+    // l2 = 65536
+    // l1 = 8192
+    page_summary_t *summary[PAGE_SUMMARY_LEVEL];
 
-    uint32_t chunk_count;
+    uint64_t chunk_count;
 
     // 核心位图，标记自启动以来所有 page 的使用情况
     // 通过 chunks = {0} 初始化，可以确保第二维度为 null
@@ -166,7 +177,7 @@ typedef struct arena_hint_t {
  */
 typedef struct {
     // 全局只有这一个 page alloc，所以所有通过 arena 划分出来的 page 都将被该 page alloc 结构管理
-    page_alloc_t pages;
+    page_alloc_t page_alloc;
     // arenas 在空间上是不连续的，尤其是前面部分都是 null, 为了能够快速遍历，需要一个可遍历的空间
     slice_t *arena_indexes; // arena index 列表
     arena_t *arenas[ARENA_COUNT];

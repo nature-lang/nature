@@ -10,6 +10,14 @@ slice_t *slice_new() {
     return s;
 }
 
+slice_t *slice_capacity_new(int capacity) {
+    slice_t *s = malloc(sizeof(slice_t));
+    s->count = 0;
+    s->take = malloc(sizeof(void *) * capacity);
+    s->capacity = capacity;
+    return s;
+}
+
 void slice_insert(slice_t *s, int index, void *value) {
     if (s->count == s->capacity) {
         s->capacity *= 2;
