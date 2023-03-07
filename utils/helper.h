@@ -31,7 +31,7 @@ char *str_replace(char *orig, char *rep, char *with);
 
 char *file_read(char *path);
 
-int memory_align(int n, uint8_t align);
+int64_t align(int64_t n, int64_t align);
 
 bool file_exists(char *path);
 

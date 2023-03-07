@@ -352,7 +352,7 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     // c->stack_slot 为负数值(spill 期间负数增长, 所以次数需要取 abs 进行操作)
     int stack_slot = abs(c->stack_offset);
-    stack_slot = memory_align(stack_slot, ALIGN_SIZE);
+    stack_slot = align(stack_slot, ALIGN_SIZE);
 
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针

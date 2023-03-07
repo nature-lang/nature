@@ -24,8 +24,6 @@ void *runtime_malloc(uint size, typedef_t *type);
 
 mspan_t *mspan_new(addr_t base, uint pages_count);
 
-arena_t *arena_new(mheap_t mheap);
-
 arena_hint_t *arena_hints_init();
 
 #endif //NATURE_ALLOCATOR_H

@@ -26,13 +26,14 @@ extern fndef_t *fndef;
  */
 #define SIZECLASS_COUNT 68
 
-#define ARENA_SIZE 8126464 // arena 的大小，单位 byte
+#define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
 #define PAGE_SIZE 8192 // 单位 byte
 
 #define PAGE_MASK (PAGE_SIZE - 1) // 0b1111111111111
+
 
 #define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个page
 
@@ -41,15 +42,19 @@ extern fndef_t *fndef;
 #define PAGE_ALLOC_CHUNK_L1 8192
 #define PAGE_ALLOC_CHUNK_L2 8192
 
+#define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
+
+#define ARENA_BASE_OFFSET ARENA_HINT_BASE
+
+#define PAGE_ALLOC_CHUNK_SIZE 512 // 单位 bit, 一个 chunk 的大小是 512bit
+
 #define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
 
 /**
  * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
  */
 #define SPANCLASS_COUNT 136
-
-#define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
-#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
 
 #define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
 
@@ -101,29 +106,37 @@ typedef struct {
 
 typedef struct {
     uint64_t blocks[8];
-} page_chunk_t; // page_chunk 现在占用 512bit
+} page_chunk_t; // page_chunk 现在占用 64 * 8 = 512bit
 
 
-typedef uint64_t page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
+typedef struct {
+    uint16_t start;
+    uint16_t end;
+    uint32_t max;
+} page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
+ * chunk 1bit 对应一个 page 是否被使用
+ *
  * 由于一个 chunk 是 512bit * page size(8kb)，能表示 4MB 的空间
- * 48 位可用内存空间是 256T, 则需要 4GB 的 chunk 空间。
+ * 48 位可用内存空间是 256T(34359738368 page),  则需要 4GB 的 chunk 空间。
  * 如果直接初始话一个 4GB 内存空间的数组，这无疑是非常浪费的。
- * 数组元素的大小是 512bit, 所以如果是一维数组平铺需要 67108864 个元素
+ * 数组元素的大小是 512bit, 所以如果是一维数组平铺需要 67108864 个 chunk 元素
  * 分成二维数组则是 一维和二维都是 2^13 = 8192 个元素
  * page_alloc 是一个自增数据，所以数组的第二维度没有初始化时就是一个空指针数据
- *
- * TODO 像 arena 中申请内存时的单位是 chunk 吗？ 一个 chunk
+ * level = 5 时一个有 67108864 个 chunk * 8byte = 512M, 5 级结构也需要 600M 的空间(但这是没有映射的虚拟内存空间)
+ * 这里的数据都是原数据，所以在初始化时就已经注册完成了
  */
 typedef struct {
-    // 最底层 level 的数量等于当前 chunk 的数量
+    // 最底层 level 的数量等于当前 chunk 的数量 64487424 * 64bit =
     // 再往上每一级的数量等于下一级数量的 1/8
-    slice_t *summary[PAGE_SUMMARY_LEVEL];
+    page_chunk_t *summary[PAGE_SUMMARY_LEVEL];
 
     uint32_t chunk_count;
+
     // 核心位图，标记自启动以来所有 page 的使用情况
-    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1][PAGE_ALLOC_CHUNK_L2]; // 通过 chunks = {0} 初始化，可以确保第二维度为 null
+    // 通过 chunks = {0} 初始化，可以确保第二维度为 null
+    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1];
 } page_alloc_t;
 
 // arena meta
@@ -154,12 +167,18 @@ typedef struct arena_hint_t {
 typedef struct {
     // 全局只有这一个 page alloc，所以所有通过 arena 划分出来的 page 都将被该 page alloc 结构管理
     page_alloc_t pages;
+    // arenas 在空间上是不连续的，尤其是前面部分都是 null, 为了能够快速遍历，需要一个可遍历的空间
+    slice_t *arena_indexes; // arena index 列表
     arena_t *arenas[ARENA_COUNT];
     mcentral_t centrals[SPANCLASS_COUNT];
     uint32_t sweepgen;
     slice_t *spans; // 所有分配的 span 都会在这里被引用
     arena_hint_t *arena_hints;
-    arena_t *current_arena;
+    // cursor ~ end 可能会跨越多个连续的 arena
+    struct {
+        addr_t cursor; // 指向未被使用的地址
+        addr_t end; // 指向本次申请的终点
+    } current_arena;
 } mheap_t;
 
 typedef struct {
@@ -183,8 +202,7 @@ void memory_init();
  * @param hint_addr
  * @return
  */
-void *memory_sys_alloc(addr_t hint_addr, size_t size);
-
+void *mheap_sys_alloc(mheap_t mheap, uint64_t *size);
 
 /**
  * 基于 unmap
