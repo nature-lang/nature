@@ -58,11 +58,13 @@ extern fndef_t *fndef;
 #define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
 
 #define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
-#define PAGE_CHUNK_COUNT_L5  (256*1024*1024 / 4) // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
-#define PAGE_CHUNK_COUNT_L4  (PAGE_CHUNK_COUNT_L5 / 8)
-#define PAGE_CHUNK_COUNT_L3  (PAGE_CHUNK_COUNT_L4 / 8)
-#define PAGE_CHUNK_COUNT_L2  (PAGE_CHUNK_COUNT_L3 / 8)
-#define PAGE_CHUNK_COUNT_L1  (PAGE_CHUNK_COUNT_L2 / 8)
+#define PAGE_SUMMARY_MERGE_COUNT 8 // 每个上级 summary 索引的数量
+#define PAGE_SUMMARY_COUNT_L5  (128*1024*1024 / 4) // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
+#define PAGE_SUMMARY_COUNT_L4  (PAGE_SUMMARY_COUNT_L5 / PAGE_SUMMARY_MERGE_COUNT)
+#define PAGE_SUMMARY_COUNT_L3  (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)
+#define PAGE_SUMMARY_COUNT_L2  (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)
+#define PAGE_SUMMARY_COUNT_L1  (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)
+
 
 typedef struct {
     addr_t base; // 虚拟起始地址
@@ -128,7 +130,7 @@ typedef struct {
  * 如果直接初始话一个 4GB 内存空间的数组，这无疑是非常浪费的。
  * 数组元素的大小是 512bit, 所以如果是一维数组平铺需要 67108864 个 chunk 元素
  * 分成二维数组则是 一维和二维都是 2^13 = 8192 个元素
- * page_alloc 是一个自增数据，所以数组的第二维度没有初始化时就是一个空指针数据
+ * page_alloc_find 是一个自增数据，所以数组的第二维度没有初始化时就是一个空指针数据
  * level = 5 时一个有 67108864 个 chunk * 8byte = 512M, 5 级结构也需要 600M 的空间(但这是没有映射的虚拟内存空间)
  * 这里的数据都是原数据，所以在初始化时就已经注册完成了
  */

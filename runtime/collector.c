@@ -28,7 +28,7 @@ static void scan_stack(memory_t *m) {
         addr_t cursor = frame_top;
         int i = 0;
         while (cursor < frame_base) {
-            bool is_ptr = bitmap_get(fn.gc_bits, i);
+            bool is_ptr = bitmap_test(fn.gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                 list_push(m->collector->grey_list, fetch_addr_value(cursor));
@@ -56,7 +56,7 @@ static void scan_symbols(memory_t *m) {
         addr_t cursor = s.addr;
         i = 0;
         while (cursor < (s.addr + s.size)) {
-            bool is_ptr = bitmap_get(s.gc_bits, i);
+            bool is_ptr = bitmap_test(s.gc_bits, i);
             if (is_ptr) {
                 list_push(m->collector->grey_list, fetch_addr_value(cursor));
             }

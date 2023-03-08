@@ -1,13 +1,14 @@
 #include "allocator.h"
 #include "processor.h"
 
-// 每一层中没一个 page_summary 能够表示管理的内存的大小
-static uint64_t page_summary_level_size[PAGE_SUMMARY_LEVEL] = {
-        PAGE_ALLOC_CHUNK_SIZE * PAGE_SIZE * 64,
-        PAGE_ALLOC_CHUNK_SIZE * PAGE_SIZE * 32,
-        PAGE_ALLOC_CHUNK_SIZE * PAGE_SIZE * 16,
-        PAGE_ALLOC_CHUNK_SIZE * PAGE_SIZE * 8,
-        PAGE_ALLOC_CHUNK_SIZE * PAGE_SIZE, // 一个 chunk 能够 map 的虚拟内存大小
+
+// radix tree 每一层级的 item 可以管理的 page 的数量
+static uint64_t page_summary_page_count[PAGE_SUMMARY_LEVEL] = {
+        PAGE_ALLOC_CHUNK_SIZE * 64,
+        PAGE_ALLOC_CHUNK_SIZE * 32,
+        PAGE_ALLOC_CHUNK_SIZE * 16,
+        PAGE_ALLOC_CHUNK_SIZE * 8,
+        PAGE_ALLOC_CHUNK_SIZE,
 };
 
 // TODO 根据 size 计算出 67 个类中的一个
@@ -25,13 +26,46 @@ static uint span_pages_count(uint8_t spanclass);
 
 static void *sys_mmap(addr_t hint_addr, uint64_t size);
 
-/**
- * 从 mheap page_alloc_t 中看看有没空闲的 pages_count 使用
- * @param pages_count
- * @return
- */
-static addr_t page_alloc(uint pages_count) {
+static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, uint64_t *start, uint64_t *end,
+                                    uint64_t pages_count) {
+    uint64_t find_start = 0;
+    uint64_t find_end = 0;
+    bool find = false;
+    // manager max pages
+    uint64_t max_pages_count = page_summary_page_count[level];
+    uint64_t find_max = 0;
+    for (uint64_t i = *start; i < *end; ++i) {
+        page_summary_t s = summaries[i];
+        find_max += s.start;
+        if (find_max >= pages_count) {
+            // 找到了
+            find = true;
+            find_end = i;
+            break;
+        }
+
+        if (s.max > find_max) {
+            find_max = s.max;
+            find_start = i;
+        }
+        if (find_max >= pages_count) {
+            // 找到了
+            find = true;
+            find_end = i;
+            break;
+        }
+
+        // 目前的空间都不满足条件，判断当前空间是否是完整空闲，非完整的空闲，必须要中断了
+        if (s.end != max_pages_count) {
+            find_start = i;
+            find_max = s.end;
+        }
+    }
+    *start = find_start;
+    *end = find_end;
+    return find;
 }
+
 
 static uint64_t arena_index(addr_t base);
 
@@ -39,9 +73,77 @@ static addr_t arena_base(uint64_t arena_index);
 
 static uint64_t chunk_index(addr_t base);
 
+static addr_t chunk_base(addr_t chunk_index);
+
 static uint64_t chunk_index_l1(uint64_t index);
 
 static uint64_t chunk_index_l2(uint64_t index);
+
+
+/**
+ * 从 mheap page_alloc_t 中查找连续空闲的 pages
+ * - level 1 查找,找不到就返回 0 (查找时需要综合考虑多个 block 联合的情况,尤其是一组空闲的 summary)
+ * - 最终会找到一组连续空闲的 chunks
+ * - 更新这一组 chunks 为 1， 并更新相关索引
+ * - 返回 chunks 的起始地址就行了
+ *
+ * summaries 可能会跨越多个 arena, 此时并不遵守连续性的事实？尤其是在计算更高级别的摘要时？
+ * chunk 和 summary 覆盖了从 0.75T ~ 128T之间的所有的内存，所以并不存在连续性的问题，在非 arena 申请的区域
+ * 其 summary [star=0,max=0,end=0] 并不会影响搜索 pages
+ * @param pages_count
+ * @return
+ */
+static addr_t page_alloc_find(uint pages_count) {
+    // 第一个 level 需要查找所有的元素
+    uint64_t start = 0;
+    uint64_t end = PAGE_SUMMARY_COUNT_L1;
+    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+
+    for (int level = 0; level < PAGE_SUMMARY_LEVEL; ++level) {
+        page_summary_t *summaries = page_alloc->summary[level];
+        bool found = summary_find_continuous(level, summaries, &start, &end, pages_count);
+        if (level == 0 && !found) {
+            return 0;
+        }
+        assertf(found, "level zero find, next level must found");
+    }
+    // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end 中的任意一个位置)
+    addr_t find_addr = 0;
+    if (start == end) {
+        // 从头到尾遍历找到可能的起点位置
+        uint64_t bit_start = 0;
+        uint64_t bit_end = 0;
+        // 一个 chunk 有 512 bit
+        page_chunk_t chunk = page_alloc->chunks[chunk_index_l1(start)][chunk_index_l2(start)];
+        for (int i = 0; i < PAGE_ALLOC_CHUNK_SIZE; i++) {
+            bool used = bitmap_unsafe_test((uint8_t *) chunk.blocks, i);
+            if (used) {
+                bit_start = 0;
+                bit_end = 0;
+            } else {
+                // 空闲
+                if (bit_start == 0) {
+                    bit_start = i;
+                }
+                bit_end = i;
+            }
+            // 1, 1
+            if ((bit_end + 1 - bit_start) >= pages_count) {
+                break;
+            }
+        }
+
+        // 计算 find_addr
+        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+    } else {
+        // 跨越多个块，其起点一定是 summary end
+        page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
+        page_summary_t start_summary = l5_summaries[start];
+        uint64_t bit_start = PAGE_ALLOC_CHUNK_SIZE + 1 - start_summary.end;
+        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+    }
+    return find_addr;
+}
 
 /**
  * start,max,end
@@ -49,6 +151,8 @@ static uint64_t chunk_index_l2(uint64_t index);
  * @return
  */
 static page_summary_t chunk_summarize(page_chunk_t chunk);
+
+static page_summary_t merge_summarize(page_summary_t summaries[PAGE_SUMMARY_MERGE_COUNT]);
 
 static void calc_page_summary_index(uint8_t level, addr_t base, addr_t end, uint64_t *base_index, uint64_t *end_index);
 
@@ -82,14 +186,28 @@ static void page_summary_update(addr_t base, uint64_t size) {
         uint64_t base_index = 0;
         uint64_t end_index = 0;
         calc_page_summary_index(level, base, end, &base_index, &end_index);
+        page_summary_t *current_summaries = page_alloc->summary[level];
+        page_summary_t *next_level_summaries = page_alloc->summary[level + 1];
         for (uint64_t i = base_index; i < end_index; ++i) {
             // 基于下一级别的 8 个 block, merge 出新的 summary 并赋值
+            uint64_t next_summary_start = i * 8;
+            uint64_t next_summary_end = next_summary_start + 8;
+            page_summary_t temp_summaries[PAGE_SUMMARY_MERGE_COUNT] = {0};
+            uint8_t temp_index = 0;
+            for (uint64_t j = next_summary_start; j < next_summary_end; j++) {
+                page_summary_t temp = next_level_summaries[j];
+                temp_summaries[temp_index] = temp;
+                temp_index += 1;
+            }
+
+            // calc summary
+            current_summaries[i] = merge_summarize(temp_summaries);
         }
     }
 }
 
 /**
- * 建立 mheap.page_alloc.chunks
+ * 建立 mheap.page_alloc_find.chunks
  * 记录一下最大的 index, 待会查找的时候能用到
  * @param base
  * @param size
@@ -107,6 +225,7 @@ static void page_alloc_grow(addr_t base, uint64_t size) {
         }
     }
 
+    // grow 的关键还是 summary 更新让 page_alloc_t 中可以找到连续可用的 pages
     // 由于从 arena 中申请了新的 pages,现在需要更新相关的索引
     page_summary_update(base, base + size);
 }
@@ -218,14 +337,14 @@ static void mheap_grow(uint pages_count) {
 static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
     // 因为有垃圾回收的存在，所以 page_alloc 中的某些部分存在空闲且连续的 pages
-    addr_t base = page_alloc(pages_count);
+    addr_t base = page_alloc_find(pages_count);
 
     if (base == 0) {
         // -  page_alloc_t 中没有找到可用的 pages,基于 current arena 对当前 page alloc 进行扩容(以 chunk 为单位)
         mheap_grow(pages_count);
 
         // - 经过上面的 grow 再次从 page_alloc 中拉取合适大小的 pages_count 并组成 span
-        base = page_alloc(pages_count);
+        base = page_alloc_find(pages_count);
     }
     assertf(base > 0, "out of memory: page alloc failed");
 
@@ -321,7 +440,7 @@ static void *mcache_alloc(uint8_t spanclass) {
     }
 
     for (int i = 0; i <= mspan->obj_count; i++) {
-        bool used = bitmap_get(mspan->alloc_bits, i);
+        bool used = bitmap_test(mspan->alloc_bits, i);
         if (used) {
             continue;
         }
@@ -399,11 +518,11 @@ arena_hint_t *arena_hints_init() {
 void memory_init() {
     // - 初始化 mheap
     mheap_t mheap = {0}; // 所有的结构体，数组初始化为 0, 指针初始化为 null
-    mheap.page_alloc.summary[4] = mallocz_big(PAGE_CHUNK_COUNT_L5 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[3] = mallocz_big(PAGE_CHUNK_COUNT_L4 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[2] = mallocz_big(PAGE_CHUNK_COUNT_L3 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[1] = mallocz_big(PAGE_CHUNK_COUNT_L2 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[0] = mallocz_big(PAGE_CHUNK_COUNT_L1 * sizeof(page_summary_t)); // 8192
+    mheap.page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
+    mheap.page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
+    mheap.page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
+    mheap.page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
+    mheap.page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t)); // 8192
 
     // - arena hint init
     mheap.arena_hints = arena_hints_init();
