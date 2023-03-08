@@ -9,6 +9,7 @@
 #include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/list.h"
+//#include "processor.h"
 
 #define PTR_SIZE 8  // 单位 byte
 
@@ -194,6 +195,20 @@ typedef struct {
     } current_arena;
 } mheap_t;
 
+
+/**
+ * linux 线程由自己的系统栈，多个线程就有多个 system stack
+ * 由于进入到 runtime 的大多数情况中都需要切换栈区，所以必须知道当前线程的栈区
+ * 如果 processor 是第一个线程，那么其 system_stack 和 linux main stack 相同,
+ * copy linux stack 时并不需要精准的范围，base 地址直接使用当前 rsp, end 地址使用自定义大小比如 64kb 就行了
+ * 关键是切换到 user stack 时记录下 rsp 和 rbp pointer
+ */
+typedef struct processor_t {
+    stack_t user_stack;
+    stack_t system_stack;
+    mcache_t mcache;
+} processor_t;
+
 typedef struct {
     mheap_t mheap;
     list *grey_list;
@@ -201,10 +216,6 @@ typedef struct {
 } memory_t;
 
 memory_t *memory;
-
-void system_stack();
-
-void user_stack();
 
 void *fetch_addr_value(addr_t addr);
 

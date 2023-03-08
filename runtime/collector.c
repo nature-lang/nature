@@ -31,7 +31,7 @@ static void scan_stack(memory_t *m) {
             bool is_ptr = bitmap_test(fn.gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-                list_push(m->collector->grey_list, fetch_addr_value(cursor));
+                list_push(m->grey_list, fetch_addr_value(cursor));
             }
 
             i += 1;
@@ -58,7 +58,7 @@ static void scan_symbols(memory_t *m) {
         while (cursor < (s.addr + s.size)) {
             bool is_ptr = bitmap_test(s.gc_bits, i);
             if (is_ptr) {
-                list_push(m->collector->grey_list, fetch_addr_value(cursor));
+                list_push(m->grey_list, fetch_addr_value(cursor));
             }
 
             cursor += PTR_SIZE;
@@ -69,7 +69,7 @@ static void scan_symbols(memory_t *m) {
 
 static void grey_list_work(memory_t *m) {
     list *temp_grep_list = list_new();
-    while (m->collector->grey_list->count > 0) {
+    while (m->grey_list->count > 0) {
         // 1. traverse all ptr
         // - pop ptr
         // - get mspan by ptr
@@ -106,7 +106,7 @@ void *runtime_gc() {
     // 2. 遍历 gc roots
     // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
     // - 初始化 gc 状态
-    assertf(list_is_empty(memory->collector->grey_list), "grey list not cleanup");
+    assertf(list_is_empty(memory->grey_list), "grey list not cleanup");
 
     // - 遍历 global symbol list,如果是 ptr 则将 ptr 指向的内存块进行分析，然后加入到 grey 队列
     scan_symbols(memory);
@@ -121,7 +121,7 @@ void *runtime_gc() {
     flush_mcache();
 
     // 5. sweep all span (iterate mcentral list)
-    sweep_mcentral(memory->mheap);
+    sweep_mcentral(&memory->mheap);
 
     // 6. 切换回 user stack TODO 切换回哪个 user stack
     user_stack(current);
