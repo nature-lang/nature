@@ -8,11 +8,6 @@
 #include "utils/links/typedef.h"
 #include "memory.h"
 
-/**
- * @param mheap
- * 遍历 processor_list 将所有的 mcache 中持有的 mspan 都 push 到对应的 mcentral 中
- */
-void flush_mcache();
 
 /**
  * 分配入口
@@ -20,7 +15,7 @@ void flush_mcache();
  * @param type
  * @return
  */
-void *runtime_malloc(uint size, typedef_t *type);
+addr_t runtime_malloc(uint size, typedef_t *type);
 
 mspan_t *mspan_new(addr_t base, uint pages_count, uint8_t spanclass);
 

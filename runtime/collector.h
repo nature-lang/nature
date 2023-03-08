@@ -9,8 +9,6 @@
  * gc 入口
  * @return
  */
-void *runtime_gc();
-
-void sweep_mcentral(mheap_t *mheap);
+void runtime_gc();
 
 #endif //NATURE_COLLECTOR_H

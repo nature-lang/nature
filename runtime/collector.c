@@ -58,7 +58,7 @@ static void scan_symbols(memory_t *m) {
         while (cursor < (s.addr + s.size)) {
             bool is_ptr = bitmap_test(s.gc_bits, i);
             if (is_ptr) {
-                list_push(m->grey_list, fetch_addr_value(cursor));
+                list_push(m->grey_list, (void *) fetch_addr_value(cursor));
             }
 
             cursor += PTR_SIZE;
@@ -67,19 +67,100 @@ static void scan_symbols(memory_t *m) {
     }
 }
 
+/**
+ * @param mheap
+ * 遍历 processor_list 将所有的 mcache 中持有的 mspan 都 push 到对应的 mcentral 中
+ */
+static void flush_mcache() {
+    for (int i = 0; i < processor_count; ++i) {
+        processor_t p = processor_list[i];
+        for (int j = 0; j < SPANCLASS_COUNT; ++j) {
+            mspan_t *span = p.mcache.alloc[j];
+            p.mcache.alloc[j] = 0;
+            mcentral_t mcentral = memory->mheap.centrals[span->spanclass];
+            uncache_span(mcentral, span);
+        }
+    }
+    DEBUGF("gc flush mcache successful")
+}
+
+
+static void black_obj(mspan_t *mspan, uint index) {
+    bitmap_set(mspan->gcmark_bits, index);
+}
+
+/**
+ * grey list 一旦处理完成，就表明所有正在使用的对象都已经变成了黑色
+ * 此时所有的白色对象就是垃圾对象，需要被清理
+ * @param m
+ */
 static void grey_list_work(memory_t *m) {
-    list *temp_grep_list = list_new();
+    list *temp_grey_list = list_new();
+    uint64_t obj_count = 0;
     while (m->grey_list->count > 0) {
         // 1. traverse all ptr
-        // - pop ptr
-        // - get mspan by ptr
-        // - get size by mspan
-        // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
-        // - The gc bits corresponding to obj are marked 1
+
+        LIST_FOR(temp_grey_list) {
+            obj_count++;
+            // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
+            addr_t addr = (addr_t) LIST_VALUE();
+            arena_t *arena = memory->mheap.arenas[arena_index(addr)];
+
+            // - get mspan by ptr
+            mspan_t *span = mspan_of(addr);
+
+            // 判断 span 是否被标量 span,标量 span 的 obj 都是标量，不需要进一步扫描，当前 obj 已经是最后一级
+            if (!spanclass_has_ptr(span->spanclass)) {
+                // addr ~ addr+size 空间内存储的是一个标量，不需要向下扫描了
+                continue;
+            }
+
+            // - get size by mspan
+            uint obj_size = span_obj_size(span->spanclass);
+
+            // - locate to the arena bits start
+            uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
+
+            // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
+            // ++i 此时按指针跨度增加
+            int count = 0;
+            for (addr_t i = addr; i < addr + obj_size; i += PTR_SIZE) {
+                int bit_index = (count / 4) * 8 + (count % 4);
+                bool is_ptr = bitmap_unsafe_test(bits_base, bit_index);
+                // TODO 判断是否已经被 grey 过，避免重复 grey
+                if (is_ptr) {
+                    // 如果是 ptr 则将其加入到 grey list 中
+                    list_push(temp_grey_list, (void *) i);
+                }
+            }
+
+            // - black: The gc bits corresponding to obj are marked 1
+            uint obj_index = (addr - span->base) / obj_size;
+            black_obj(span, obj_index);
+        }
 
         // 2. grey_list replace with temp_grep_list
+        m->grey_list = temp_grey_list;
     }
+    DEBUGF("gc grey list scan successful, scan obj count=%d", obj_count)
 }
+
+/**
+ *
+ *
+ * 遍历 所有 mcentral 的 full 和 partial 进行清理
+ * - 只有是被 span 持有的 page， 在 page_alloc 眼里就是被分配了出去，所以不需要对 chunk 进行修改什么的
+ * - 并不需要真的清理 obj, 只需要将 gc_bits 和 alloc_bits 调换一下位置，然后从新计算 alloc_count 即可
+ * - 当 gc 完成后 alloc_count = 0, 就需要考虑是否需要将该 span 归还到 mheap 中了
+ * - sweep 时 arena_t 的 bits 是否需要更新？
+ *   空闲的 obj 进行 alloc 时一定会进行 set bits, 所以所有忙碌的 obj 的 bits 一定是有效的。
+ *   空闲的 obj 的 bits 即使是脏的，三色标记时也一定无法标记到该 obj, 因为其不在引用链中
+ * @param mheap
+ */
+void sweep_mcentral(mheap_t *mheap) {
+
+}
+
 
 /**
  * 1. mark gcroot，虚拟栈扫描找到所有的 ptr, 全局对象扫描找到所有 ptr 类型的全局对象(依赖 linker 中的 symtab 数据，
@@ -95,7 +176,7 @@ static void grey_list_work(memory_t *m) {
  *
  * @return
  */
-void *runtime_gc() {
+void runtime_gc() {
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
     processor_t current = processor_get();
 
@@ -123,6 +204,6 @@ void *runtime_gc() {
     // 5. sweep all span (iterate mcentral list)
     sweep_mcentral(&memory->mheap);
 
-    // 6. 切换回 user stack TODO 切换回哪个 user stack
+    // 6. 切换回 user stack
     user_stack(current);
 }

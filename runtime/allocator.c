@@ -1,5 +1,6 @@
 #include "allocator.h"
 #include "processor.h"
+#include "memory.h"
 
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
@@ -19,8 +20,6 @@ static uint8_t make_spanclass(uint8_t sizeclass, uint8_t has_ptr);
 
 
 static uint8_t take_sizeclass(uint8_t spanclass);
-
-static uint span_obj_size(uint8_t spanclass);
 
 static uint span_pages_count(uint8_t spanclass);
 
@@ -65,11 +64,6 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
     *end = find_end;
     return find;
 }
-
-
-static uint64_t arena_index(addr_t base);
-
-static addr_t arena_base(uint64_t arena_index);
 
 static uint64_t chunk_index(addr_t base);
 
@@ -387,15 +381,15 @@ static mspan_t *cache_span(mcentral_t mcentral) {
 /**
  * 将 mspan 归还到 mcentral 队列中
  * @param mcentral
- * @param mspan
+ * @param span
  */
-static void uncache_span(mcentral_t mcentral, mspan_t *mspan) {
-    assertf(mspan->alloc_count == 0, "mspan alloc_count == 0");
+void uncache_span(mcentral_t mcentral, mspan_t *span) {
+    assertf(span->alloc_count == 0, "mspan alloc_count == 0");
 
-    if (mspan->obj_count - mspan->alloc_count > 0) {
-        list_push(mcentral.partial_swept, mspan);
+    if (span->obj_count - span->alloc_count > 0) {
+        list_push(mcentral.partial_swept, span);
     } else {
-        list_push(mcentral.full_swept, mspan);
+        list_push(mcentral.full_swept, span);
     }
 }
 
@@ -427,7 +421,7 @@ static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
  * @param spanclass
  * @return
  */
-static void *mcache_alloc(uint8_t spanclass) {
+static addr_t mcache_alloc(uint8_t spanclass) {
     processor_t p = processor_get();
     mcache_t mcache = p.mcache;
     mspan_t *mspan = mcache.alloc[spanclass];
@@ -449,25 +443,25 @@ static void *mcache_alloc(uint8_t spanclass) {
         // 标记该节点已经被使用
         bitmap_set(mspan->alloc_bits, i);
         mspan->alloc_count += 1;
-        return (void *) addr;
+        return addr;
     }
 }
 
 
 // 设置 meta heap_arena 的 bits
-static void heap_arena_bits_set(void *addr, uint size, uint obj_size, typedef_t *type);
+static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t *type);
 
 static void mcentral_full_swept_push(uint8_t spanclass, mspan_t *span);
 
 // 单位
-static void *std_malloc(uint size, typedef_t *type) {
+static addr_t std_malloc(uint size, typedef_t *type) {
     bool has_ptr = type != NULL || type->last_ptr_count;
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, has_ptr);
 
     uint obj_size = span_obj_size(spanclass);
 
-    void *addr = mcache_alloc(spanclass);
+    addr_t addr = mcache_alloc(spanclass);
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
         heap_arena_bits_set(addr, size, obj_size, type);
@@ -543,6 +537,17 @@ void memory_init() {
     }
 }
 
+mspan_t *mspan_of(uint64_t addr) {
+    // 根据 ptr 定位 arena, 找到具体的 page_index,
+    arena_t *arena = memory->mheap.arenas[arena_index(addr)];
+    assertf(arena, "not found arena by addr: %p", addr);
+    // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
+    uint64_t page_index = (addr - arena->base) / PAGE_SIZE;
+    mspan_t *span = arena->spans[page_index];
+    assertf(span, "not found span by page_index: %d", page_index);
+    return span;
+}
+
 
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
@@ -550,7 +555,7 @@ void memory_init() {
  * @param type
  * @return
  */
-void *runtime_malloc(uint size, typedef_t *type) {
+addr_t runtime_malloc(uint size, typedef_t *type) {
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return std_malloc(size, type);

@@ -9,6 +9,12 @@
 #include <stdarg.h>
 #include <assert.h>
 
+#ifdef DEBUGF
+#define DEBUGF(...) printf(__VA_ARGS__)
+#else
+#define DEBUGF(...)
+#endif
+
 #define COPY_NEW(_type, src) ({ \
     _type *dst = malloc(sizeof(_type)); \
     memcpy(dst, src, sizeof(_type));    \
