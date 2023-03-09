@@ -13,11 +13,15 @@ typedef struct {
 
 bitmap_t *bitmap_new(int size);
 
+void bitmap_free(bitmap_t *bitmap);
+
 bitmap_t *bitmap_set(bitmap_t *bitmap, int index);
 
 bitmap_t *bitmap_clear(bitmap_t *bitmap, int index);
 
 bool bitmap_test(bitmap_t *bitmap, int index);
+
+int bitmap_count(bitmap_t *bitmap);
 
 /**
  * uint32_t bits_index = nr / 8;
@@ -27,6 +31,10 @@ bool bitmap_test(bitmap_t *bitmap, int index);
  * @return
  */
 bool bitmap_unsafe_test(uint8_t *bits, int index);
+
+bool bitmap_unsafe_set(uint8_t *bits, int index);
+
+bool bitmap_unsafe_clear(uint8_t *bits, int index);
 
 
 #endif //NATURE_BITMAP_H

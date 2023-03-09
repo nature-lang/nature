@@ -5,11 +5,11 @@
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t page_summary_page_count[PAGE_SUMMARY_LEVEL] = {
-        PAGE_ALLOC_CHUNK_SIZE * 64,
-        PAGE_ALLOC_CHUNK_SIZE * 32,
-        PAGE_ALLOC_CHUNK_SIZE * 16,
-        PAGE_ALLOC_CHUNK_SIZE * 8,
-        PAGE_ALLOC_CHUNK_SIZE,
+        CHUNK_BITS_COUNT * 64,
+        CHUNK_BITS_COUNT * 32,
+        CHUNK_BITS_COUNT * 16,
+        CHUNK_BITS_COUNT * 8,
+        CHUNK_BITS_COUNT,
 };
 
 // TODO 根据 size 计算出 67 个类中的一个
@@ -22,8 +22,6 @@ static uint8_t make_spanclass(uint8_t sizeclass, uint8_t has_ptr);
 static uint8_t take_sizeclass(uint8_t spanclass);
 
 static uint span_pages_count(uint8_t spanclass);
-
-static void *sys_mmap(addr_t hint_addr, uint64_t size);
 
 static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, uint64_t *start, uint64_t *end,
                                     uint64_t pages_count) {
@@ -72,72 +70,6 @@ static addr_t chunk_base(addr_t chunk_index);
 static uint64_t chunk_index_l1(uint64_t index);
 
 static uint64_t chunk_index_l2(uint64_t index);
-
-
-/**
- * 从 mheap page_alloc_t 中查找连续空闲的 pages
- * - level 1 查找,找不到就返回 0 (查找时需要综合考虑多个 block 联合的情况,尤其是一组空闲的 summary)
- * - 最终会找到一组连续空闲的 chunks
- * - 更新这一组 chunks 为 1， 并更新相关索引
- * - 返回 chunks 的起始地址就行了
- *
- * summaries 可能会跨越多个 arena, 此时并不遵守连续性的事实？尤其是在计算更高级别的摘要时？
- * chunk 和 summary 覆盖了从 0.75T ~ 128T之间的所有的内存，所以并不存在连续性的问题，在非 arena 申请的区域
- * 其 summary [star=0,max=0,end=0] 并不会影响搜索 pages
- * @param pages_count
- * @return
- */
-static addr_t page_alloc_find(uint pages_count) {
-    // 第一个 level 需要查找所有的元素
-    uint64_t start = 0;
-    uint64_t end = PAGE_SUMMARY_COUNT_L1;
-    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
-
-    for (int level = 0; level < PAGE_SUMMARY_LEVEL; ++level) {
-        page_summary_t *summaries = page_alloc->summary[level];
-        bool found = summary_find_continuous(level, summaries, &start, &end, pages_count);
-        if (level == 0 && !found) {
-            return 0;
-        }
-        assertf(found, "level zero find, next level must found");
-    }
-    // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end 中的任意一个位置)
-    addr_t find_addr = 0;
-    if (start == end) {
-        // 从头到尾遍历找到可能的起点位置
-        uint64_t bit_start = 0;
-        uint64_t bit_end = 0;
-        // 一个 chunk 有 512 bit
-        page_chunk_t chunk = page_alloc->chunks[chunk_index_l1(start)][chunk_index_l2(start)];
-        for (int i = 0; i < PAGE_ALLOC_CHUNK_SIZE; i++) {
-            bool used = bitmap_unsafe_test((uint8_t *) chunk.blocks, i);
-            if (used) {
-                bit_start = 0;
-                bit_end = 0;
-            } else {
-                // 空闲
-                if (bit_start == 0) {
-                    bit_start = i;
-                }
-                bit_end = i;
-            }
-            // 1, 1
-            if ((bit_end + 1 - bit_start) >= pages_count) {
-                break;
-            }
-        }
-
-        // 计算 find_addr
-        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
-    } else {
-        // 跨越多个块，其起点一定是 summary end
-        page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
-        page_summary_t start_summary = l5_summaries[start];
-        uint64_t bit_start = PAGE_ALLOC_CHUNK_SIZE + 1 - start_summary.end;
-        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
-    }
-    return find_addr;
-}
 
 /**
  * start,max,end
@@ -201,6 +133,113 @@ static void page_summary_update(addr_t base, uint64_t size) {
 }
 
 /**
+ * TODO 越界问题
+ * @param base
+ * @param size
+ * @param v
+ */
+static void chunks_set(addr_t base, uint64_t size, bool v) {
+    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+    uint64_t end = base + size;
+    for (uint64_t index = chunk_index(base); index < chunk_index(end); index++) {
+        // 计算 chunk
+        page_chunk_t chunk = page_alloc->chunks[chunk_index_l1(index)][chunk_index_l2(index)];
+        uint64_t temp_base = chunk_base(index);
+        int bit_start = 0;
+        if (temp_base < base) {
+            bit_start = (base - temp_base) / PAGE_SIZE;
+        }
+        uint64_t temp_end = temp_base + (CHUNK_BITS_COUNT * PAGE_SIZE);
+        int bit_end = CHUNK_BITS_COUNT - 1;
+        if (temp_end > end) {
+            bit_end = ((end - temp_base) / PAGE_SIZE) - 1;
+        }
+
+        for (int i = bit_start; i <= bit_end; ++i) {
+            if (v) {
+                bitmap_set(chunk.blocks, i);
+            } else {
+                bitmap_clear(chunk.blocks, i);
+            };
+        }
+    }
+
+    // 更新 summary
+    page_summary_update(base, size);
+}
+
+/**
+ * 从 mheap page_alloc_t 中查找连续空闲的 pages
+ * - level 1 查找,找不到就返回 0 (查找时需要综合考虑多个 block 联合的情况,尤其是一组空闲的 summary)
+ * - 最终会找到一组连续空闲的 chunks
+ * - 更新这一组 chunks 为 1， 并更新相关索引
+ * - 返回 chunks 的起始地址就行了
+ *
+ * summaries 可能会跨越多个 arena, 此时并不遵守连续性的事实？尤其是在计算更高级别的摘要时？
+ * chunk 和 summary 覆盖了从 0.75T ~ 128T之间的所有的内存，所以并不存在连续性的问题，在非 arena 申请的区域
+ * 其 summary [star=0,max=0,end=0] 并不会影响搜索 pages
+ * @param pages_count
+ * @return
+ */
+static addr_t page_alloc_find(uint pages_count) {
+    // 第一个 level 需要查找所有的元素
+    uint64_t start = 0;
+    uint64_t end = PAGE_SUMMARY_COUNT_L1;
+    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+
+    for (int level = 0; level < PAGE_SUMMARY_LEVEL; ++level) {
+        page_summary_t *summaries = page_alloc->summary[level];
+        bool found = summary_find_continuous(level, summaries, &start, &end, pages_count);
+        if (level == 0 && !found) {
+            return 0;
+        }
+        assertf(found, "level zero find, next level must found");
+    }
+
+    // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end 中的任意一个位置)
+    addr_t find_addr = 0;
+    if (start == end) {
+        // 从头到尾遍历找到可能的起点位置
+        uint64_t bit_start = 0;
+        uint64_t bit_end = 0;
+        // 一个 chunk 有 512 bit
+        page_chunk_t chunk = page_alloc->chunks[chunk_index_l1(start)][chunk_index_l2(start)];
+        for (int i = 0; i < CHUNK_BITS_COUNT; i++) {
+            bool used = bitmap_unsafe_test((uint8_t *) chunk.blocks, i);
+            if (used) {
+                bit_start = 0;
+                bit_end = 0;
+            } else {
+                // 空闲
+                if (bit_start == 0) {
+                    bit_start = i;
+                }
+                bit_end = i;
+            }
+            // 1, 1
+            if ((bit_end + 1 - bit_start) >= pages_count) {
+                break;
+            }
+        }
+
+        // 计算 find_addr
+        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+
+        // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
+    } else {
+        // 跨越多个块，其起点一定是 summary end
+        page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
+        page_summary_t start_summary = l5_summaries[start];
+        uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
+        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+    }
+    assertf(find_addr % PAGE_SIZE == 0, "find addr=%p not align", find_addr);
+
+    return find_addr;
+}
+
+
+/**
  * 建立 mheap.page_alloc_find.chunks
  * 记录一下最大的 index, 待会查找的时候能用到
  * @param base
@@ -215,6 +254,11 @@ static void page_alloc_grow(addr_t base, uint64_t size) {
         // 计算 l1 可能为 null
         uint64_t l1 = chunk_index_l1(index);
         if (page_alloc->chunks[l1] == NULL) {
+            // 这里实际上分配了 8192 个 chunk, 且这些 chunk 都有默认值 0， 我们知道 0 表示对应的 arena page 空闲
+            // 但是实际上可能并不是这样，但是不用担心，我们只会更新从 base ~ base+size 对应的 summary
+            // 其他 summary 的值默认也为 0，而 summary 为 0 表示没有空闲的内存使用
+            // grow 本质是增加一些空闲的页面，而不需要修改 chunk 的 bit = 1
+            // 这个工作交给 page_alloc_find 去做
             page_alloc->chunks[l1] = mallocz(sizeof(page_chunk_t) * PAGE_ALLOC_CHUNK_L2);
         }
     }
@@ -241,7 +285,7 @@ void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
 
     void *v = NULL;
     while (true) {
-        v = sys_mmap(hint->addr, alloc_size);
+        v = sys_memory_map(hint->addr, alloc_size);
         if (v == (void *) hint->addr) {
             // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
             hint->addr += alloc_size;
@@ -289,13 +333,24 @@ static void mheap_set_spans(mspan_t *span) {
     }
 }
 
+static void mheap_clear_spans(mspan_t *span) {
+    // - 根据 span.base 定位 arena
+    arena_t *arena = take_arena(span->base);
+
+    uint page_index = (span->base - arena->base) / PAGE_SIZE;
+    for (int i = 0; i < span->pages_count; i++) {
+        arena->spans[page_index] = NULL;
+        page_index += 1;
+    }
+}
+
 /**
  * arena heap 增长 pages_count 长度,如果 current arena 没有足够的空间，将会申请 1 个或者 n个崭新的 arena
  * @param pages_count
  */
 static void mheap_grow(uint pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐
-    uint64_t size = align(pages_count, PAGE_ALLOC_CHUNK_SIZE) * PAGE_SIZE;
+    uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * PAGE_SIZE;
 
     addr_t cursor = memory->mheap.current_arena.cursor;
     addr_t end = memory->mheap.current_arena.end;
@@ -448,10 +503,30 @@ static addr_t mcache_alloc(uint8_t spanclass) {
 }
 
 
-// 设置 meta heap_arena 的 bits
-static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t *type);
+/**
+ * 设置 arena_t 的 bits 具体怎么设置可以参考 arenat_t 中的注释
+ * @param addr
+ * @param size
+ * @param obj_size
+ * @param type
+ */
+static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t *type) {
+    // 确定 arena bits base
+    arena_t *arena = memory->mheap.arenas[arena_index(addr)];
+    uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
 
-static void mcentral_full_swept_push(uint8_t spanclass, mspan_t *span);
+    int index = 0;
+    for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += PTR_SIZE) {
+        // 标记的是 ptr bit，(scan bit 暂时不做支持)
+        int bit_index = (index / 4) * 8 + (index % 4);
+
+        if (bitmap_test(type->gc_bits, index)) {
+            bitmap_unsafe_set(bits_base, bit_index); // 1 表示为指针
+        } else {
+            bitmap_unsafe_clear(bits_base, bit_index);
+        }
+    }
+}
 
 // 单位
 static addr_t std_malloc(uint size, typedef_t *type) {
@@ -485,12 +560,12 @@ static addr_t large_malloc(uint size, typedef_t *type) {
     assertf(s != NULL, "out of memory");
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
-    mcentral_full_swept_push(spanclass, s);
+    mcentral_t *central = &memory->mheap.centrals[spanclass];
+    list_push(central->full_swept, s);
     return s->base;
 }
 
 /**
- * TODO 未完成
  * @return
  */
 arena_hint_t *arena_hints_init() {
@@ -501,11 +576,37 @@ arena_hint_t *arena_hints_init() {
 
     arena_hint_t *prev = first;
     for (int i = 1; i < ARENA_HINT_COUNT; i++) {
-//        arena_hint_t *item = NEW(arena_hint_t);
-//        item->addr = prev->
+        arena_hint_t *item = NEW(arena_hint_t);
+        item->addr = prev->addr + ARENA_HINT_SIZE;
+        prev->next = item;
+        prev = item;
     }
-
+    prev->last = true;
     return first;
+}
+
+/**
+ * - 将 span 从 mcentral 中移除
+ * - mspan.base ~ mspan.end 所在的内存区域的 page 需要进行释放
+ * - 更新 arena_t 的 span
+ * - 能否在不 unmap 的情况下回收物理内存？
+ *   使用 madvise(addr, 50 * 1024 * 1024, MADV_REMOVE);
+ * @param mheap
+ * @param span
+ */
+void mheap_free_span(mheap_t *mheap, mspan_t *span) {
+    // 从 page_alloc 的视角清理 span 对应的内存页
+    // chunks bit = 0 表示空闲
+    chunks_set(span->base, span->pages_count * PAGE_SIZE, 0);
+
+    // 从 arena 视角清理 span
+    mheap_clear_spans(span);
+
+    // arena.bits 保存了当前 span 中的指针 bit, 当下一次当前内存被分配时会覆盖写入
+    // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
+
+    // 将物理内存归还给操作系统
+    sys_memory_remove(span->base, span->pages_count * PAGE_SIZE);
 }
 
 
@@ -537,7 +638,7 @@ void memory_init() {
     }
 }
 
-mspan_t *mspan_of(uint64_t addr) {
+mspan_t *span_of(uint64_t addr) {
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = memory->mheap.arenas[arena_index(addr)];
     assertf(arena, "not found arena by addr: %p", addr);

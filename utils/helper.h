@@ -110,6 +110,22 @@ static inline int max(int a, int b) {
  * @param size
  * @return
  */
-static void *mallocz_big(size_t size);
+void *mallocz_big(size_t size);
+
+/**
+ * 按提示的地址分配
+ * @param hint
+ * @param size
+ * @return
+ */
+void *sys_memory_map(addr_t hint, uint64_t size);
+
+/**
+ * 将内存归还给操作系统，但是不影响 map 映射
+ * memory advice
+ * @param addr
+ * @param size
+ */
+void sys_memory_remove(addr_t addr, uint64_t size);
 
 #endif //NATURE_SRC_LIB_HELPER_H_

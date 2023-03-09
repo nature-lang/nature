@@ -85,8 +85,8 @@ static void flush_mcache() {
 }
 
 
-static void black_obj(mspan_t *mspan, uint index) {
-    bitmap_set(mspan->gcmark_bits, index);
+static void mark_obj_black(mspan_t *span, uint index) {
+    bitmap_set(span->gcmark_bits, index);
 }
 
 /**
@@ -103,46 +103,84 @@ static void grey_list_work(memory_t *m) {
         LIST_FOR(temp_grey_list) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
-            addr_t addr = (addr_t) LIST_VALUE();
+            addr_t addr = (addr_t)LIST_VALUE();
             arena_t *arena = memory->mheap.arenas[arena_index(addr)];
 
-            // - get mspan by ptr
-            mspan_t *span = mspan_of(addr);
+            // get mspan by ptr
+            mspan_t *span = span_of(addr);
+            // get size by mspan
+            uint obj_size = span_obj_size(span->spanclass);
+            //  get span index
+            uint obj_index = (addr - span->base) / obj_size;
 
-            // 判断 span 是否被标量 span,标量 span 的 obj 都是标量，不需要进一步扫描，当前 obj 已经是最后一级
+            // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
+            if (bitmap_test(span->gcmark_bits, obj_index)) {
+                // already marks black
+                continue;
+            }
+
+            // - black: The gc bits corresponding to obj are marked 1
+            mark_obj_black(span, obj_index);
+
+            // 判断 span 是否需要扫描(如果标量的话就不需要扫描直接标记即可)
             if (!spanclass_has_ptr(span->spanclass)) {
                 // addr ~ addr+size 空间内存储的是一个标量，不需要向下扫描了
                 continue;
             }
 
-            // - get size by mspan
-            uint obj_size = span_obj_size(span->spanclass);
-
+            // - obj 中包含指针，需要进一步扫描
             // - locate to the arena bits start
             uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
 
+            // scan object
             // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
             // ++i 此时按指针跨度增加
-            int count = 0;
-            for (addr_t i = addr; i < addr + obj_size; i += PTR_SIZE) {
-                int bit_index = (count / 4) * 8 + (count % 4);
+            int index = 0;
+            for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += PTR_SIZE) {
+                int bit_index = (index / 4) * 8 + (index % 4);
+                index++;
+                // TODO arena_t bits 高地位标记了后续是否还有更多的指针，如果没有了，就可以直接停止了
                 bool is_ptr = bitmap_unsafe_test(bits_base, bit_index);
-                // TODO 判断是否已经被 grey 过，避免重复 grey
                 if (is_ptr) {
                     // 如果是 ptr 则将其加入到 grey list 中
-                    list_push(temp_grey_list, (void *) i);
+                    list_push(temp_grey_list, (void *) temp_addr);
                 }
             }
 
-            // - black: The gc bits corresponding to obj are marked 1
-            uint obj_index = (addr - span->base) / obj_size;
-            black_obj(span, obj_index);
         }
 
         // 2. grey_list replace with temp_grep_list
         m->grey_list = temp_grey_list;
     }
     DEBUGF("gc grey list scan successful, scan obj count=%d", obj_count)
+}
+
+/**
+ * 如果 span 清理完成后 alloc_count == 0 则将其归还给 heap
+ * @param span span 是否被释放，如果释放了需要将其从 list 中抹除
+ */
+static bool sweep_span(mcentral_t *central, mspan_t *span) {
+    bitmap_free(span->alloc_bits);
+    span->alloc_bits = span->gcmark_bits;
+    span->gcmark_bits = bitmap_new(span->obj_count);
+
+    // 重新计算 alloc_count
+    span->alloc_count = bitmap_count(span->alloc_bits);
+
+    if (span->alloc_count == 0) {
+        mheap_free_span(&memory->mheap, span);
+    } else if (span->alloc_count == span->obj_count) {
+        // full used
+        list_push(central->full_swept, span);
+    } else {
+        list_push(central->partial_swept, span);
+    }
+}
+
+static void free_mspan_meta(mspan_t *span) {
+    bitmap_free(span->alloc_bits);
+    bitmap_free(span->gcmark_bits);
+    free(span);
 }
 
 /**
@@ -157,8 +195,27 @@ static void grey_list_work(memory_t *m) {
  *   空闲的 obj 的 bits 即使是脏的，三色标记时也一定无法标记到该 obj, 因为其不在引用链中
  * @param mheap
  */
-void sweep_mcentral(mheap_t *mheap) {
+void mcentral_sweep(mheap_t *mheap) {
+    mcentral_t *centrals = mheap->centrals;
+    for (int i = 0; i < SPANCLASS_COUNT; ++i) {
+        mcentral_t *central = &mheap->centrals[i];
+        // 遍历 list 中的所有 span 进行清理, 如果 span 已经清理干净则其规划到 mehap 中
+        LIST_FOR(central->partial_swept) {
+            mspan_t *span = LIST_VALUE();
+            if (sweep_span(central, span)) {
+                list_remove(central->partial_swept, LIST_NODE());
+                free_mspan_meta(span);
+            }
+        }
 
+        LIST_FOR(central->full_swept) {
+            mspan_t *span = LIST_VALUE();
+            if (sweep_span(central, span)) {
+                list_remove(central->full_swept, LIST_NODE());
+                free_mspan_meta(span);
+            }
+        }
+    }
 }
 
 
@@ -194,7 +251,6 @@ void runtime_gc() {
     // - 遍历 user stack
     scan_stack(memory);
 
-
     // 3. handle grey list until empty, all mspan gc_bits marked
     grey_list_work(memory);
 
@@ -202,7 +258,7 @@ void runtime_gc() {
     flush_mcache();
 
     // 5. sweep all span (iterate mcentral list)
-    sweep_mcentral(&memory->mheap);
+    mcentral_sweep(&memory->mheap);
 
     // 6. 切换回 user stack
     user_stack(current);

@@ -43,12 +43,13 @@ extern fndef_t *fndef;
 #define PAGE_ALLOC_CHUNK_L1 8192
 #define PAGE_ALLOC_CHUNK_L2 8192
 
-#define ARENA_HINT_BASE  0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_BASE  824633720832 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_SIZE  1099511627776 // 1 << 40
 #define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
 
 #define ARENA_BASE_OFFSET ARENA_HINT_BASE
 
-#define PAGE_ALLOC_CHUNK_SIZE 512 // 单位 bit, 一个 chunk 的大小是 512bit
+#define CHUNK_BITS_COUNT 512 // 单位 bit, 一个 chunk 的大小是 512bit
 
 
 /**
@@ -159,6 +160,8 @@ typedef struct {
     // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。
     // 8bit 低四位用于标记这四个内存空间的类型(0: 标量 scalar， 1: 指针 pointer)。这是 gc 遍历所有对象的关键
     // 高四位用于标记这四个内存空间是否需要被 gc 扫描？ (0: dead，1: scan)
+    // 高四位标记了 4 个指针，如果其是 1 表示其后面还有指针需要扫描，0 表示 no more pointers in this object
+    // 当 obj 是一个大对象时这很有效
     uint8_t bits[ARENA_BITS_COUNT];
 
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
@@ -240,7 +243,7 @@ uint64_t arena_index(addr_t base);
 
 addr_t arena_base(uint64_t arena_index);
 
-mspan_t *mspan_of(addr_t addr);
+mspan_t *span_of(addr_t addr);
 
 uint span_obj_size(uint8_t spanclass);
 
@@ -248,14 +251,6 @@ bool spanclass_has_ptr(uint8_t spanclass);
 
 void uncache_span(mcentral_t mcentral, mspan_t *span);
 
-/**
- * mspan.base ~ mspan.end 所在的内存区域的 page 需要进行释放
- * - 更新 page_alloc_t chunks 然后更新 summary
- * - 更新 arena_t 的 span
- * - TODO 能否在不 unmap 的情况下回收物理内存
- * @param mheap
- * @param mspan
- */
-void mheap_free_span(mheap_t *mheap, mspan_t *mspan);
+void mheap_free_span(mheap_t *mheap, mspan_t *span);
 
 #endif //NATURE_MEMORY_H
