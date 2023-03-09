@@ -4,7 +4,26 @@
 #include "allocator.h"
 #include "processor.h"
 
-static fndef_t find_fn(addr_t addr) {}
+/**
+ * addr 是 .text 中的地址
+ * @param addr
+ * @return
+ */
+static fndef_t *find_fn(addr_t addr) {
+    for (int i = 0; i < fndef_count; ++i) {
+        fndef_t *fn = &fndef[i];
+        if (fn->start < addr && fn->end > addr) {
+            return fn;
+        }
+    }
+    return NULL;
+}
+
+static addr_t fetch_addr_value(addr_t addr) {
+    // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
+    addr_t *p = (addr_t *) addr;
+    return *p;
+}
 
 static void scan_stack(memory_t *m) {
     processor_t current = processor_get();
@@ -15,20 +34,20 @@ static void scan_stack(memory_t *m) {
     addr_t frame_base = stack.frame_base;
     while (true) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + PTR_SIZE);
-        fndef_t fn = find_fn(return_addr);
-        uint64_t stack_size = fn.stack_offset;
+        fndef_t *fn = find_fn(return_addr);
+        uint64_t stack_size = fn->stack_offset;
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
         addr_t frame_top = frame_base + PTR_SIZE * 2;
-        frame_base = frame_top + fn.stack_offset;
+        frame_base = frame_top + fn->stack_offset;
 
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
         // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
         addr_t cursor = frame_top;
         int i = 0;
         while (cursor < frame_base) {
-            bool is_ptr = bitmap_test(fn.gc_bits, i);
+            bool is_ptr = bitmap_test(fn->gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                 list_push(m->grey_list, fetch_addr_value(cursor));
@@ -85,7 +104,7 @@ static void flush_mcache() {
 }
 
 
-static void mark_obj_black(mspan_t *span, uint index) {
+static void mark_obj_black(mspan_t *span, int index) {
     bitmap_set(span->gcmark_bits, index);
 }
 

@@ -9,7 +9,7 @@
 #include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/list.h"
-//#include "processor.h"
+#include "sizeclass.h"
 
 #define PTR_SIZE 8  // 单位 byte
 
@@ -17,15 +17,13 @@
 extern int symdef_count;
 extern symdef_t *symdef_list;
 
+/**
+ * 连接器会将该数据传递给当前全局变量
+ * 想要获取 fn 在 text 中的位置非常的简单，只需要遍历 symtab 就能获取 fn 所在的 section 以及 offset and size 数据
+ */
 extern int fndef_count;
 extern fndef_t *fndef;
 
-
-/**
- * sizeclass 一共有 68 种(其中 sizeclass = 0 用于大内存对象分配，在定义中的一共是 1 - 67 种)
- * spanclass 相比于 sizeclass 多了 span 中的 obj 是否包含指针
- */
-#define SIZECLASS_COUNT 68
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
@@ -40,8 +38,7 @@ extern fndef_t *fndef;
 
 #define ARENA_BITS_COUNT 2097152 // 1byte = 8bit 可以索引 4*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
 
-#define PAGE_ALLOC_CHUNK_L1 8192
-#define PAGE_ALLOC_CHUNK_L2 8192
+#define PAGE_ALLOC_CHUNK_SPLIT 8192 // 每组 chunks 中的元素的数量
 
 #define ARENA_HINT_BASE  824633720832 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
 #define ARENA_HINT_SIZE  1099511627776 // 1 << 40
@@ -66,6 +63,18 @@ extern fndef_t *fndef;
 #define PAGE_SUMMARY_COUNT_L3  (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)
 #define PAGE_SUMMARY_COUNT_L2  (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)
 #define PAGE_SUMMARY_COUNT_L1  (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)
+
+// radix tree 每一层级的 item 可以管理的 page 的数量
+static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
+        CHUNK_BITS_COUNT * 64,
+        CHUNK_BITS_COUNT * 32,
+        CHUNK_BITS_COUNT * 16,
+        CHUNK_BITS_COUNT * 8,
+        CHUNK_BITS_COUNT,
+};
+
+
+static uint summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
 
 typedef struct {
@@ -151,7 +160,7 @@ typedef struct {
 
     // 核心位图，标记自启动以来所有 page 的使用情况
     // 通过 chunks = {0} 初始化，可以确保第二维度为 null
-    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_L1];
+    page_chunk_t *chunks[PAGE_ALLOC_CHUNK_SPLIT];
 } page_alloc_t;
 
 // arena meta
@@ -220,8 +229,6 @@ typedef struct {
 } memory_t;
 
 memory_t *memory;
-
-addr_t fetch_addr_value(addr_t addr);
 
 void memory_init();
 

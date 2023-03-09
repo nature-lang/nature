@@ -132,6 +132,7 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/debug.c
         ${PROJECT_SOURCE_DIR}/runtime/processor.h
         ${PROJECT_SOURCE_DIR}/runtime/processor.c
+        ${PROJECT_SOURCE_DIR}/runtime/sizeclass.h
         ${PROJECT_SOURCE_DIR}/runtime/memory.h
         ${PROJECT_SOURCE_DIR}/runtime/allocator.h
         ${PROJECT_SOURCE_DIR}/runtime/allocator.c
