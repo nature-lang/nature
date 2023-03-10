@@ -1,12 +1,25 @@
 #include "runtime.h"
+#include "processor.h"
 
 /**
  * crt start 的将入口导向到该函数
  */
 void runtime_main() {
-    // 1. 将系统参数传递给用户程序
+    // - processor 初始化(包括当前执行栈记录,用户栈生成)
+    processor_init();
 
-    // 2. processor 初始化(包括执行栈)
+    // TODO - 将系统参数传递给用户程序
 
     // 3. 堆内存管理初始化
+    memory_init();
+
+    // 4. 初始化 stack return addr 为 main
+    processor_t p = processor_get();
+
+    user_stack(p);
+
+    // to user main, 这里已经发出了指令跳转
+    call_user_main();
+
+    printf("hello world");
 }

@@ -23,6 +23,7 @@ extern symdef_t *symdef_list;
  */
 extern int fndef_count;
 extern fndef_t *fndef;
+extern addr_t fn_main_base;
 
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
@@ -76,7 +77,9 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
 
 static uint summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
-
+/**
+ * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
+ */
 typedef struct {
     addr_t base; // 虚拟起始地址
     addr_t end; // 栈结束地址
