@@ -17,8 +17,8 @@ static uint8_t calc_sizeclass(uint8_t size) {
 }
 
 // 7位sizeclass + 1位是否包含指针
-static uint8_t make_spanclass(uint8_t sizeclass, uint8_t has_ptr) {
-    return (sizeclass << 1) | has_ptr;
+static uint8_t make_spanclass(uint8_t sizeclass, uint8_t no_ptr) {
+    return (sizeclass << 1) | no_ptr;
 }
 
 static uint8_t take_sizeclass(uint8_t spanclass) {
@@ -117,7 +117,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint bit_start = 0;
     uint bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_unsafe_test(chunk.blocks, i);
+        bool used = bitmap_test(chunk.blocks, i);
         if (used) {
             // 重新开始计算
             bit_start = 0;
@@ -136,7 +136,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     }
     uint16_t start = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_unsafe_test(chunk.blocks, i);
+        bool used = bitmap_test(chunk.blocks, i);
         if (used) {
             break;
         }
@@ -145,7 +145,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t end = 0;
     for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_unsafe_test(chunk.blocks, i);
+        bool used = bitmap_test(chunk.blocks, i);
         if (used) {
             break;
         }
@@ -358,7 +358,7 @@ static addr_t page_alloc_find(uint pages_count) {
         // 一个 chunk 有 512 bit
         page_chunk_t *chunk = take_chunk(start);
         for (int i = 0; i < CHUNK_BITS_COUNT; i++) {
-            bool used = bitmap_unsafe_test((uint8_t *) chunk->blocks, i);
+            bool used = bitmap_test((uint8_t *) chunk->blocks, i);
             if (used) {
                 bit_start = 0;
                 bit_end = 0;
@@ -441,7 +441,7 @@ void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
 
     void *v = NULL;
     while (true) {
-        v = sys_memory_map(hint->addr, alloc_size);
+        v = sys_memory_map((void *) hint->addr, alloc_size);
         if (v == (void *) hint->addr) {
             // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
             hint->addr += alloc_size;
@@ -449,7 +449,7 @@ void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
         }
         // 分配失败
         // 释放刚刚申请的内存区域
-        memory_sys_free(v, alloc_size);
+        sys_memory_unmap(v, alloc_size);
 
         // 进行申请重试
         assertf(!hint->last, "out of memory: arena hint use up");
@@ -559,7 +559,7 @@ static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
 
     // - 新增的 span 需要在 arena 中建立 page -> span 的关联关系
     mspan_t *span = mspan_new(base, pages_count, spanclass);
-    mheap_set_spans(span);
+    mheap_set_spans(span); // 大内存申请时 span 同样放到了此处管理
 
     return span;
 }
@@ -636,11 +636,10 @@ static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
  * @param spanclass
  * @return
  */
-static addr_t mcache_alloc(uint8_t spanclass) {
+static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     processor_t p = processor_get();
     mcache_t mcache = p.mcache;
     mspan_t *mspan = mcache.alloc[spanclass];
-    uint64_t obj_size = span_obj_size(spanclass);
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
@@ -648,15 +647,17 @@ static addr_t mcache_alloc(uint8_t spanclass) {
         mspan = mcache_refill(mcache, spanclass);
     }
 
+    *span = mspan;
+
     for (int i = 0; i <= mspan->obj_count; i++) {
-        bool used = bitmap_test(mspan->alloc_bits, i);
+        bool used = bitmap_test(mspan->alloc_bits->bits, i);
         if (used) {
             continue;
         }
         // 找到了一个空闲的 obj,计算其
-        addr_t addr = mspan->base + i * obj_size;
+        addr_t addr = mspan->base + i * mspan->obj_size;
         // 标记该节点已经被使用
-        bitmap_set(mspan->alloc_bits, i);
+        bitmap_set(mspan->alloc_bits->bits, i);
         mspan->alloc_count += 1;
         return addr;
     }
@@ -683,34 +684,35 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         int bit_index = (index / 4) * 8 + (index % 4);
 
-        if (bitmap_test(type->gc_bits, index)) {
-            bitmap_unsafe_set(bits_base, bit_index); // 1 表示为指针
+        if (bitmap_test(type->gc_bits->bits, index)) {
+            bitmap_set(bits_base, bit_index); // 1 表示为指针
         } else {
-            bitmap_unsafe_clear(bits_base, bit_index);
+            bitmap_clear(bits_base, bit_index);
         }
     }
 }
 
 // 单位
 static addr_t std_malloc(uint size, typedef_t *type) {
-    bool has_ptr = type != NULL || type->last_ptr_count;
+    bool has_ptr = type != NULL && type->last_ptr_count;
+
     uint8_t sizeclass = calc_sizeclass(size);
-    uint8_t spanclass = make_spanclass(sizeclass, has_ptr);
+    uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
+    mspan_t *span;
+    addr_t addr = mcache_alloc(spanclass, &span);
+    assertf(span, "std_malloc notfound span");
 
-    uint obj_size = span_obj_size(spanclass);
-
-    addr_t addr = mcache_alloc(spanclass);
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
-        heap_arena_bits_set(addr, size, obj_size, type);
+        heap_arena_bits_set(addr, size, span->obj_size, type);
     }
 
     return addr;
 }
 
 static addr_t large_malloc(uint size, typedef_t *type) {
-    bool has_ptr = type != NULL || type->last_ptr_count;
-    uint8_t spanclass = make_spanclass(0, has_ptr);
+    bool no_ptr = type == NULL || type->last_ptr_count == 0;
+    uint8_t spanclass = make_spanclass(0, no_ptr);
 
     // 计算需要分配的 page count(向上取整)
     uint pages_count = size / PAGE_SIZE;
@@ -769,7 +771,7 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
 
     // 将物理内存归还给操作系统
-    sys_memory_remove(span->base, span->pages_count * PAGE_SIZE);
+    sys_memory_remove((void *) span->base, span->pages_count * PAGE_SIZE);
 }
 
 
@@ -814,6 +816,28 @@ mspan_t *span_of(uint64_t addr) {
     return span;
 }
 
+addr_t mstack_new(uint64_t size) {
+    void *base = mallocz(size);
+    return (addr_t) base;
+}
+
+/**
+ * 最后一位如果为 1 表示 no ptr, 0 表示 has ptr
+ * @param spanclass
+ * @return
+ */
+bool spanclass_has_ptr(uint8_t spanclass) {
+    return (spanclass & 1) == 0;
+}
+
+
+addr_t arena_base(uint64_t arena_index) {
+    return arena_index * ARENA_SIZE + ARENA_BASE_OFFSET;
+}
+
+uint64_t arena_index(uint64_t base) {
+    return (base - ARENA_BASE_OFFSET) / ARENA_SIZE;
+}
 
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
@@ -829,4 +853,23 @@ addr_t runtime_malloc(uint size, typedef_t *type) {
 
     // 2. 大型内存分配(大于>32KB)
     return large_malloc(size, type);
+}
+
+mspan_t *mspan_new(uint64_t base, uint pages_count, uint8_t spanclass) {
+    mspan_t *span = NEW(mspan_t);
+    span->spanclass = spanclass;
+    uint8_t sizeclass = take_sizeclass(spanclass);
+    if (spanclass == 0) {
+        span->obj_size = pages_count * PAGE_SIZE;
+    } else {
+        span->obj_size = class_obj_size[sizeclass];
+    }
+    span->base = base;
+    span->pages_count = pages_count;
+    span->obj_count = span->pages_count * PAGE_SIZE / span->obj_size;
+    span->end = span->base + (span->pages_count * PAGE_SIZE);
+
+    span->alloc_bits = bitmap_new((int) span->obj_count);
+    span->gcmark_bits = bitmap_new((int) span->obj_count);
+    return span;
 }

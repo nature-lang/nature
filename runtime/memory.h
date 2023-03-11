@@ -34,6 +34,7 @@ extern addr_t fn_main_base;
 
 #define PAGE_MASK (PAGE_SIZE - 1) // 0b1111111111111
 
+#define MSTACK_SIZE (8 * 1024 * 1024) // 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
 #define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个page
 
@@ -86,7 +87,7 @@ typedef struct {
     uint64_t size; // 栈空间
     addr_t frame_base; // BP register value，指向 local values 和 previous rbp value 之间, *ptr 取的值是 (ptr ~ ptr+8)
     addr_t top; // SP register
-} stack_t;
+} mstack_t;
 
 typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
@@ -99,6 +100,7 @@ typedef struct mspan_t {
 
     uint pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages 是不固定的
     uint obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1， 也就是一个 obj 占用一个 span
+    uint obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass 获取，但是不兼容大对象
     uint alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
@@ -220,8 +222,8 @@ typedef struct {
  * 关键是切换到 user stack 时记录下 rsp 和 rbp pointer
  */
 typedef struct processor_t {
-    stack_t user_stack;
-    stack_t system_stack;
+    mstack_t user_stack;
+    mstack_t system_stack;
     mcache_t mcache;
 } processor_t;
 
@@ -242,12 +244,6 @@ void memory_init();
  */
 void *mheap_sys_alloc(mheap_t mheap, uint64_t *size);
 
-/**
- * 基于 unmap
- * @param ptr
- */
-void memory_sys_free(void *ptr, size_t size);
-
 
 uint64_t arena_index(addr_t base);
 
@@ -255,12 +251,12 @@ addr_t arena_base(uint64_t arena_index);
 
 mspan_t *span_of(addr_t addr);
 
-uint span_obj_size(uint8_t spanclass);
-
 bool spanclass_has_ptr(uint8_t spanclass);
 
 void uncache_span(mcentral_t mcentral, mspan_t *span);
 
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
+
+addr_t mstack_new(uint64_t size);
 
 #endif //NATURE_MEMORY_H

@@ -9,7 +9,7 @@
 // 以及符号的内容摘要
 typedef struct {
     uint size;
-    addr_t addr; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
+    addr_t base; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
     uint last_ptr_count;
     type_kind_e kind;
     bitmap_t *gc_bits;

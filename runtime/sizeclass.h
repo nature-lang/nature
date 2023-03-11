@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 
-// class  bytes/obj  page bytes/span  objects count  tail waste  max waste  min align
+// class  bytes/obj  page bytes/span objects count  tail waste  max waste  min align
 //     1          8        8192     1024           0     87.50%          8
 //     2         16        8192      512           0     43.75%         16
 //     3         24        8192      341           8     29.24%          8

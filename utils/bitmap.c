@@ -1,5 +1,43 @@
-//
-// Created by weiwenhao on 2022/10/18.
-//
-
 #include "bitmap.h"
+#include "helper.h"
+
+bitmap_t *bitmap_new(int size) {
+    bitmap_t *b = NEW(bitmap_t);
+
+    b->bits = mallocz(size);
+    b->size = size;
+
+    return b;
+}
+
+void bitmap_free(bitmap_t *b) {
+    free(b->bits);
+    free(b);
+}
+
+void bitmap_set(uint8_t *bits, int index) {
+    // index & 7 等于 index % 8
+    bits[index / 8] |= 1 << (index & 7);
+}
+
+void bitmap_clear(uint8_t *bits, int index) {
+    // ~ 表示二进制取反
+    bits[index / 8] &= ~(1 << (index & 7));
+}
+
+bool bitmap_test(uint8_t *bits, int index) {
+    return bits[index / 8] & (1 << (index & 7)) ? true : false;
+}
+
+int bitmap_set_count(bitmap_t *b) {
+    int count = 0;
+    for (int i = 0; i < b->size; ++i) {
+        if (bitmap_test(b->bits, i)) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+

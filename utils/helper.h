@@ -113,12 +113,20 @@ static inline int max(int a, int b) {
 void *mallocz_big(size_t size);
 
 /**
- * 按提示的地址分配
+ * 按提示的地址分配 mmap(0x1065ff000, 10000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
  * @param hint
  * @param size
  * @return
  */
-void *sys_memory_map(addr_t hint, uint64_t size);
+void *sys_memory_map(void *hint, uint64_t size);
+
+/**
+ * 卸载 map
+ * @param hint
+ * @param size
+ * @return
+ */
+void sys_memory_unmap(void *base, uint64_t size);
 
 /**
  * 将内存归还给操作系统，但是不影响 map 映射
@@ -126,6 +134,6 @@ void *sys_memory_map(addr_t hint, uint64_t size);
  * @param addr
  * @param size
  */
-void sys_memory_remove(addr_t addr, uint64_t size);
+void sys_memory_remove(void *addr, uint64_t size);
 
 #endif //NATURE_SRC_LIB_HELPER_H_

@@ -12,7 +12,7 @@
 static fndef_t *find_fn(addr_t addr) {
     for (int i = 0; i < fndef_count; ++i) {
         fndef_t *fn = &fndef[i];
-        if (fn->start < addr && fn->end > addr) {
+        if (fn->base < addr && fn->end > addr) {
             return fn;
         }
     }
@@ -27,7 +27,7 @@ static addr_t fetch_addr_value(addr_t addr) {
 
 static void scan_stack(memory_t *m) {
     processor_t current = processor_get();
-    stack_t stack = current.user_stack;
+    mstack_t stack = current.user_stack;
 
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
@@ -47,7 +47,7 @@ static void scan_stack(memory_t *m) {
         addr_t cursor = frame_top;
         int i = 0;
         while (cursor < frame_base) {
-            bool is_ptr = bitmap_test(fn->gc_bits, i);
+            bool is_ptr = bitmap_test(fn->gc_bits->bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                 list_push(m->grey_list, fetch_addr_value(cursor));
@@ -72,10 +72,10 @@ static void scan_symbols(memory_t *m) {
         }
         // s 本身是存储在 .data section 的一段数据，但是其存储在 data 在数据是一个 heap ptr，该 ptr 需要加入到 grep list 中
         // 基于 s 对应的 gc bits 按 8bit 判断
-        addr_t cursor = s.addr;
+        addr_t cursor = s.base;
         i = 0;
-        while (cursor < (s.addr + s.size)) {
-            bool is_ptr = bitmap_test(s.gc_bits, i);
+        while (cursor < (s.base + s.size)) {
+            bool is_ptr = bitmap_test(s.gc_bits->bits, i);
             if (is_ptr) {
                 list_push(m->grey_list, (void *) fetch_addr_value(cursor));
             }
@@ -105,7 +105,7 @@ static void flush_mcache() {
 
 
 static void mark_obj_black(mspan_t *span, int index) {
-    bitmap_set(span->gcmark_bits, index);
+    bitmap_set(span->gcmark_bits->bits, index);
 }
 
 /**
@@ -122,18 +122,16 @@ static void grey_list_work(memory_t *m) {
         LIST_FOR(temp_grey_list) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
-            addr_t addr = (addr_t)LIST_VALUE();
+            addr_t addr = (addr_t) LIST_VALUE();
             arena_t *arena = memory->mheap.arenas[arena_index(addr)];
 
             // get mspan by ptr
             mspan_t *span = span_of(addr);
-            // get size by mspan
-            uint obj_size = span_obj_size(span->spanclass);
             //  get span index
-            uint obj_index = (addr - span->base) / obj_size;
+            uint obj_index = (addr - span->base) / span->obj_size;
 
             // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
-            if (bitmap_test(span->gcmark_bits, obj_index)) {
+            if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
                 // already marks black
                 continue;
             }
@@ -155,11 +153,11 @@ static void grey_list_work(memory_t *m) {
             // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
             // ++i 此时按指针跨度增加
             int index = 0;
-            for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += PTR_SIZE) {
+            for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += PTR_SIZE) {
                 int bit_index = (index / 4) * 8 + (index % 4);
                 index++;
                 // TODO arena_t bits 高地位标记了后续是否还有更多的指针，如果没有了，就可以直接停止了
-                bool is_ptr = bitmap_unsafe_test(bits_base, bit_index);
+                bool is_ptr = bitmap_test(bits_base, bit_index);
                 if (is_ptr) {
                     // 如果是 ptr 则将其加入到 grey list 中
                     list_push(temp_grey_list, (void *) temp_addr);
@@ -184,7 +182,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     span->gcmark_bits = bitmap_new(span->obj_count);
 
     // 重新计算 alloc_count
-    span->alloc_count = bitmap_count(span->alloc_bits);
+    span->alloc_count = bitmap_set_count(span->alloc_bits);
 
     if (span->alloc_count == 0) {
         mheap_free_span(&memory->mheap, span);

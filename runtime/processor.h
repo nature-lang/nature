@@ -4,7 +4,7 @@
 #include "memory.h"
 #include "allocator.h"
 
-#define P_MAIN_SYSTEM_STACK_SIZE (64 * 1024)
+#define MAIN_SYSTEM_STACK_SIZE (64 * 1024)
 
 uint processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
 processor_t *processor_list;
@@ -24,7 +24,7 @@ static addr_t get_stack_top() {
     return addr;
 }
 
-static void linux_amd64_store_stack(stack_t *stack) {
+static void linux_amd64_store_stack(mstack_t *stack) {
     // 暂存 rsp 的值
     asm("movq %%rsp, %[addr]"
             :  [addr] "=r"(stack->top)// output
@@ -38,8 +38,7 @@ static void linux_amd64_store_stack(stack_t *stack) {
     );
 }
 
-
-inline void linux_amd64_restore_stack(stack_t stack) {
+inline void linux_amd64_restore_stack(mstack_t stack) {
     // 修改 rsp 的值
     asm("movq %[addr], %%rsp"
             : // output
@@ -91,7 +90,6 @@ inline void linux_amd64_user_stack(processor_t p) {
 inline void user_stack(processor_t p) {
     linux_amd64_user_stack(p);
 }
-
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

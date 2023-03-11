@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include "helper.h"
-#include "error.h"
+#include <sys/mman.h>
 
 char *itoa(int n) {
     // 计算长度
@@ -204,4 +204,20 @@ char *str_replace(char *orig, char *rep, char *with) {
     }
     strcpy(tmp, orig);
     return result;
+}
+
+void *sys_memory_map(void *hint, uint64_t size) {
+    return mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+}
+
+void *mallocz_big(size_t size) {
+    return sys_memory_map(NULL, size);
+}
+
+void sys_memory_unmap(void *base, uint64_t size) {
+    munmap(base, size);
+}
+
+void sys_memory_remove(void *addr, uint64_t size) {
+    madvise(addr, size, MADV_REMOVE);
 }

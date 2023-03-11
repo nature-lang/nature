@@ -13,28 +13,19 @@ typedef struct {
 
 bitmap_t *bitmap_new(int size);
 
-void bitmap_free(bitmap_t *bitmap);
-
-bitmap_t *bitmap_set(bitmap_t *bitmap, int index);
-
-bitmap_t *bitmap_clear(bitmap_t *bitmap, int index);
-
-bool bitmap_test(bitmap_t *bitmap, int index);
-
-int bitmap_count(bitmap_t *bitmap);
+void bitmap_free(bitmap_t *b);
 
 /**
- * uint32_t bits_index = nr / 8;
- * uint8_t uint8_index = nr % 8;
+ * index 从 0 开始计数
  * @param bits
  * @param index
- * @return
  */
-bool bitmap_unsafe_test(uint8_t *bits, int index);
+void bitmap_set(uint8_t *bits, int index);
 
-bool bitmap_unsafe_set(uint8_t *bits, int index);
+void bitmap_clear(uint8_t *bits, int index);
 
-bool bitmap_unsafe_clear(uint8_t *bits, int index);
+bool bitmap_test(uint8_t *bits, int index);
 
+int bitmap_set_count(bitmap_t *b);
 
 #endif //NATURE_BITMAP_H
