@@ -12,14 +12,14 @@ typedef struct {
     uint8_t *data; // void 类型的指针数组， sizeof(void) == 1
 } array_t;
 
-array_t *array_new(int capacity, int size);
+type_array_t *array_new(int capacity, int size);
 
-void *array_value(array_t *a, int index);
+void *array_value(type_array_t *a, int index);
 
-void array_push(array_t *a, void *value);
+void array_push(type_array_t *a, void *value);
 
-void array_concat(array_t *a, array_t *b);
+void array_concat(type_array_t *a, type_array_t *b);
 
-array_t *array_slice(array_t *a, int start, int end);
+type_array_t *array_slice(type_array_t *a, int start, int end);
 
 #endif //NATURE_ARRAY_H

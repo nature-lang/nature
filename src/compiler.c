@@ -27,6 +27,7 @@ lir_opcode_e ast_expr_operator_transform[] = {
 
 
 static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr expr) {
+    // 待优化目前仅仅服务于 printf
     if (expr.target_type.kind == TYPE_ANY) {
         // any new 处理 float 时需要转换成 int64 处理
         if (source->assert_type == LIR_OPERAND_IMM) {
@@ -34,6 +35,7 @@ static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr
             imm->type = TYPE_INT64;
         }
 
+        // TODO var 存不下两个指针的数据!! 存下了又能如何，三个，四个指针大小的数据呢？
         lir_operand_t *new_source = lir_temp_var_operand(c, expr.target_type);
         // lir call type, value =>
         list_push(c->operations, lir_op_runtime_call(RUNTIME_CALL_ANY_NEW, new_source, 2,
@@ -251,14 +253,14 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     }
 
     uint8_t spread_index = 0;
-    for (int i = 0; i < formal_fn->formal_param_count; ++i) {
+    for (int i = 0; i < formal_fn->formals_count; ++i) {
         lir_operand_t *param_target = NULL;
 
         // rest
-        bool is_rest = formal_fn->rest_param && i == formal_fn->formal_param_count - 1;
+        bool is_rest = formal_fn->rest_param && i == formal_fn->formals_count - 1;
         if (is_rest) {
             // lir array_new(count, size) -> param_target
-            type_t last_param_type = formal_fn->formal_param_types[formal_fn->formal_param_count - 1];
+            type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
             assertf(last_param_type.kind == TYPE_ARRAY, "rest param must be array type");
 
             ast_array_decl *array_decl = last_param_type.value;
@@ -266,7 +268,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             param_target = lir_temp_var_operand(c, last_param_type);
             lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0);
             lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                                    (int) type_base_sizeof(array_decl->type.kind));
+                                                                    (int) type_kind_sizeof(array_decl->type.kind));
             lir_op_t *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_ARRAY_NEW,
                     param_target, // param_target is array_t
@@ -431,7 +433,7 @@ static lir_operand_t *compiler_array_value(closure_t *c, ast_expr expr) {
     // index 为偏移量, index 值是运行时得出的，所以没有办法在编译时计算出偏移size. 虽然通过 MUL 指令可以租到，不过这种事还是交给 runtime 吧
     lir_operand_t *index_target = compiler_expr(c, ast->index);
 
-    lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(expr.type, 1));
+    lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     // 如果使用是没问题的，但是外部的值没法写入进去
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_VALUE,
@@ -469,7 +471,7 @@ static lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr) {
     ast_array_decl *array_decl = ast->ast_type.value;
     lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, array_decl->count);
     lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                            (int) type_base_sizeof(ast->ast_type.kind));
+                                                            (int) type_kind_sizeof(ast->ast_type.kind));
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_NEW,
             target,
@@ -485,7 +487,7 @@ static lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr) {
         lir_operand_t *src = compiler_expr(c, item_expr);
 
         // assign
-        lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(item_expr.type, 1));
+        lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(item_expr.type, 1));
         lir_operand_t *index_target = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_ARRAY_VALUE,
@@ -514,10 +516,10 @@ static lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr) {
  */
 static lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr) {
     ast_env_value *ast = expr.value;
-    lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, c->env_name);
+    lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_RAW_STRING, string_value, c->env_name);
     lir_operand_t *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast->index);
     // target 通常就是一个 temp_var
-    lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(expr.type, 1));
+    lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ENV_VALUE,
             value_point,
@@ -552,7 +554,7 @@ static lir_operand_t *compiler_map_value(closure_t *c, ast_expr expr) {
     lir_operand_t *key_target = compiler_expr(c, ast->key);
 
     // runtime get slot by temp var runtime.map_offset(base, "key")
-    lir_operand_t *value_point = lir_temp_var_operand(c, type_new_point(expr.type, 1));
+    lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_MAP_VALUE,
             value_point,
@@ -576,8 +578,8 @@ static lir_operand_t *compiler_new_map(closure_t *c, ast_expr expr) {
     ast_new_map *ast = expr.value;
     lir_operand_t *capacity_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, (int) ast->capacity);
     lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                            (int) type_base_sizeof(ast->key_type.kind) +
-                                                            (int) type_base_sizeof(ast->value_type.kind));
+                                                            (int) type_kind_sizeof(ast->key_type.kind) +
+                                                            (int) type_kind_sizeof(ast->value_type.kind));
 
     lir_operand_t *target = lir_temp_var_operand(c, expr.type);
     lir_op_t *call_op = lir_op_runtime_call(
@@ -596,7 +598,7 @@ static lir_operand_t *compiler_new_map(closure_t *c, ast_expr expr) {
         lir_operand_t *key_target = compiler_expr(c, key_expr);
         lir_operand_t *value_target = compiler_expr(c, value_expr);
 
-        lir_operand_t *temp_point = lir_temp_var_operand(c, type_new_point(key_expr.type, 1));
+        lir_operand_t *temp_point = lir_temp_var_operand(c, type_with_point(key_expr.type, 1));
         call_op = lir_op_runtime_call(
                 RUNTIME_CALL_MAP_VALUE,
                 temp_point,
@@ -684,7 +686,7 @@ static lir_operand_t *compiler_literal(closure_t *c, ast_expr expr) {
         case TYPE_STRING: {
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
             lir_operand_t *target = lir_temp_var_operand(c, expr.type);
-            lir_operand_t *imm_c_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value,
+            lir_operand_t *imm_c_string_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_RAW_STRING, string_value,
                                                                             literal->value);
             lir_operand_t *imm_len_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, strlen(literal->value));
             lir_op_t *call_op = lir_op_runtime_call(
@@ -696,8 +698,8 @@ static lir_operand_t *compiler_literal(closure_t *c, ast_expr expr) {
             list_push(c->operations, call_op);
             return target;
         }
-        case TYPE_STRING_RAW: {
-            return LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, literal->value);
+        case TYPE_RAW_STRING: {
+            return LIR_NEW_IMMEDIATE_OPERAND(TYPE_RAW_STRING, string_value, literal->value);
         }
         case TYPE_INT: {
             return LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, atoi(literal->value));
@@ -770,7 +772,7 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
     if (parent && ast_closure->env_list->count > 0) {
         // 处理 env ---------------
         // 1. make env_n by count
-        lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_STRING_RAW, string_value, ast_closure->env_name);
+        lir_operand_t *env_name_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_RAW_STRING, string_value, ast_closure->env_name);
         lir_operand_t *capacity_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, ast_closure->env_list->count);
         list_push(parent->operations,
                   lir_op_runtime_call(RUNTIME_CALL_ENV_NEW, NULL, 2, env_name_param, capacity_param));
@@ -782,7 +784,7 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
             lir_operand_t *env_target = compiler_expr(parent, *env_expr);
             // TODO indirect addr 怎么处理？
             assertf(env_target->assert_type == LIR_OPERAND_VAR, "expr_target type not var, cannot use by env set");
-            lir_operand_t *env_point_target = lir_temp_var_operand(parent, type_new_point(env_expr->type, 1));
+            lir_operand_t *env_point_target = lir_temp_var_operand(parent, type_with_point(env_expr->type, 1));
             list_push(parent->operations, lir_op_new(LIR_OPCODE_LEA, env_target, NULL, env_point_target));
 
             lir_operand_t *env_index_param = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, i);

@@ -471,7 +471,7 @@ type_t infer_call(ast_call *call) {
     }
 
     // 参数对比，由于存在 spread 和 rest 运算，所以不能直接根据参数数量左 assert
-    uint8_t count = max(type_fn->formal_param_count, call->actual_param_count);
+    uint8_t count = max(type_fn->formals_count, call->actual_param_count);
 
     for (int i = 0; i < count; ++i) {
         // first param from actual
@@ -545,9 +545,9 @@ void infer_assign(ast_assign_stmt *stmt) {
 
 void infer_if(ast_if_stmt *stmt) {
     type_t condition_type = infer_expr(&stmt->condition);
-    assertf(type_compare(type_base_new(TYPE_BOOL), condition_type),
+    assertf(type_compare(type_by_kind(TYPE_BOOL), condition_type),
             "line: %d, if condition must bool type", infer_line);
-    set_expr_target(&stmt->condition, type_base_new(TYPE_BOOL));
+    set_expr_target(&stmt->condition, type_by_kind(TYPE_BOOL));
 
     infer_block(stmt->consequent);
     infer_block(stmt->alternate);
@@ -583,7 +583,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
         value_decl->type = map_decl->value_type;
     } else {
         ast_array_decl *list_decl = iterate_type.value;
-        key_decl->type = type_base_new(TYPE_INT);
+        key_decl->type = type_by_kind(TYPE_INT);
         value_decl->type = list_decl->type;
 
     }
@@ -596,7 +596,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {
-    type_t return_type = type_base_new(TYPE_VOID);
+    type_t return_type = type_by_kind(TYPE_VOID);
     if (stmt->expr != NULL) {
         return_type = infer_expr(stmt->expr);
     }
@@ -647,7 +647,7 @@ type_t infer_type(type_t type) {
     }
 
     // code foo = int, 'foo' is type_dec_ident
-    if (type.kind == TYPE_DECL_IDENT) {
+    if (type.kind == TYPE_DEF) {
         return infer_type_decl_ident((ast_ident *) type.value);
     }
 
@@ -667,8 +667,8 @@ type_t infer_type(type_t type) {
     if (type.kind == TYPE_FN) {
         type_fn_t *type_fn = type.value;
         type_fn->return_type = infer_type(type_fn->return_type);
-        for (int i = 0; i < type_fn->formal_param_count; ++i) {
-            type_fn->formal_param_types[i] = infer_type(type_fn->formal_param_types[i]);
+        for (int i = 0; i < type_fn->formals_count; ++i) {
+            type_fn->formals_types[i] = infer_type(type_fn->formals_types[i]);
         }
 
         return type;
@@ -729,7 +729,7 @@ void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
 }
 
 type_t infer_literal(ast_literal *literal) {
-    return type_base_new(literal->type);
+    return type_by_kind(literal->type);
 }
 
 /**

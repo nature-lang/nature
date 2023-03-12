@@ -133,7 +133,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
             len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
             break;
         }
-        case TYPE_STRING_RAW: {
+        case TYPE_RAW_STRING: {
             len = sprintf(buf, "IMM[%s:STRING_RAW]", immediate->string_value);
             break;
         }

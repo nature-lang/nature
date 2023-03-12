@@ -33,37 +33,38 @@ typedef enum {
     TYPE_BUILTIN_ANY, // runtime/builtin 函数推导时使用，能够接受或者赋值给任意 nature type
 
     TYPE_STRING, // 13
-    TYPE_STRING_RAW, // 不使用 string_t 封装一层
+    TYPE_RAW_STRING, // 不使用 string_t 封装一层
     TYPE_STRUCT, // ast_struct_decl
     // 可以理解为自定义类型的关键字，在没有进行类型还原之前，它就是类型！ type foo = int, foo 就是 type_decl_ident
-    TYPE_DECL_IDENT,
+    TYPE_DEF,
     TYPE_ARRAY,
     TYPE_MAP, // ast_map_decl
     TYPE_FN, // fn<int,void> ast_function_type_decl
-    TYPE_POINT,
-} type_kind_e;
+    TYPE_POINTER,
+} type_kind;
 
+// 这个有点像 any_t 结构了，但又不完全是
 typedef struct {
     void *value; // ast_ident(type_decl_ident),ast_map_decl*....
-    type_kind_e kind; // type_fn,type_int
+    type_kind kind; // type_fn,type_int
     bool is_origin; // type a = int, type b = a，int is origin
     uint8_t point; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 point 等于 3
 } type_t;
 
 typedef struct {
     type_t return_type; // 基础类型 + 动态类型
-    type_t formal_param_types[UINT8_MAX];
-    uint8_t formal_param_count;
+    type_t formals_types[UINT8_MAX];
+    uint8_t formals_count;
     bool rest_param;
 } type_fn_t;
 
 
 string type_to_string[UINT8_MAX];
 
-uint8_t type_base_sizeof(type_kind_e t);
+uint8_t type_kind_sizeof(type_kind t);
 
-type_t type_new_point(type_t ast_type, uint8_t point);
+type_t type_with_point(type_t t, uint8_t point);
 
-type_t type_base_new(type_kind_e type);
+type_t type_base_new(type_kind type);
 
 #endif //NATURE_SRC_TYPE_H_

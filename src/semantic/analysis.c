@@ -130,9 +130,9 @@ type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     type_fn_t *fn_type = NEW(type_fn_t);
     fn_type->return_type = fn_decl->return_type;
     for (int i = 0; i < fn_decl->formal_param_count; ++i) {
-        fn_type->formal_param_types[i] = fn_decl->formal_params[i]->type;
+        fn_type->formals_types[i] = fn_decl->formal_params[i]->type;
     }
-    fn_type->formal_param_count = fn_decl->formal_param_count;
+    fn_type->formals_count = fn_decl->formal_param_count;
     fn_type->rest_param = fn_decl->rest_param;
     type_t type = {
             .is_origin = false,
@@ -446,7 +446,7 @@ void analysis_type(module_t *m, type_t *type) {
     // TODO 如果出现死循环，应该告警退出
     // code foo = int
     // 'foo' is type_decl_ident
-    if (type->kind == TYPE_DECL_IDENT) {
+    if (type->kind == TYPE_DEF) {
         // 向上查查查
         ast_ident *ident = type->value;
         string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
@@ -470,8 +470,8 @@ void analysis_type(module_t *m, type_t *type) {
     if (type->kind == TYPE_FN) {
         type_fn_t *type_fn = type->value;
         analysis_type(m, &type_fn->return_type);
-        for (int i = 0; i < type_fn->formal_param_count; ++i) {
-            type_t t = type_fn->formal_param_types[i];
+        for (int i = 0; i < type_fn->formals_count; ++i) {
+            type_t t = type_fn->formals_types[i];
             analysis_type(m, &t);
         }
     }
@@ -785,7 +785,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
     fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
-    fn_init->return_type = type_base_new(TYPE_VOID);
+    fn_init->return_type = type_by_kind(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
 
@@ -849,7 +849,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
     new_fn->name = MAIN_FN_NAME;
     new_fn->body = slice_new();
-    new_fn->return_type = type_base_new(TYPE_VOID);
+    new_fn->return_type = type_by_kind(TYPE_VOID);
     new_fn->formal_param_count = 0;
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(new_fn->body, stmt_list->take[i]);

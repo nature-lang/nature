@@ -4,7 +4,7 @@
 #include <string.h>
 #include "utils/helper.h"
 
-array_t *array_new(int count, int size) {
+type_array_t *array_new(int count, int size) {
     assertf(size <= 8, "size must be less than 8"); // 技术问题，目前只能实现长度为 8 的在栈中的动态数组
 
     int capacity = count;
@@ -12,7 +12,7 @@ array_t *array_new(int count, int size) {
         capacity = 8;
     }
 
-    array_t *a = malloc(sizeof(array_t));
+    type_array_t *a = malloc(sizeof(type_array_t));
     a->count = count; // 实际的节点数量
     a->capacity = capacity; // 当前实际申请的内存空间
     a->size = size;
@@ -20,7 +20,7 @@ array_t *array_new(int count, int size) {
     return a;
 }
 
-void *array_value(array_t *a, int index) {
+void *array_value(type_array_t *a, int index) {
     // 判断是否越界
     if (index + 1 > a->count) {
         printf("index out of range [%d] with length %d\n", index, a->count);
@@ -36,7 +36,7 @@ void *array_value(array_t *a, int index) {
  * @param a
  * @param value
  */
-void array_push(array_t *a, void *value) {
+void array_push(type_array_t *a, void *value) {
     if (a->capacity <= a->count) {
         a->capacity = a->capacity * 2;
         a->data = realloc(a->data, a->size * a->capacity);
@@ -50,7 +50,7 @@ void array_push(array_t *a, void *value) {
 }
 
 // 连接两个数组的内容
-void array_concat(array_t *a, array_t *b) {
+void array_concat(type_array_t *a, type_array_t *b) {
     assertf(a->size == b->size, "array size not match");
     for (int i = 0; i < b->count; ++i) {
         array_push(a, array_value(b, i));
@@ -65,7 +65,7 @@ void array_concat(array_t *a, array_t *b) {
  * @param end
  * @return
  */
-array_t *array_slice(array_t *a, int start, int end) {
+type_array_t *array_slice(type_array_t *a, int start, int end) {
     if (start == -1) {
         start = 0;
     }
@@ -73,7 +73,7 @@ array_t *array_slice(array_t *a, int start, int end) {
         end = a->count - 1;
     }
 
-    array_t *b = array_new(end - start, a->size);
+    type_array_t *b = array_new(end - start, a->size);
 
     // 使用 memcpy 将 a->data 中的内容拷贝到 b->data 中
     void *p = array_value(a, start);

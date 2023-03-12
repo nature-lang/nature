@@ -554,7 +554,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                     int rel_diff = sym.st_value - section_offset;
                     amd64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
                 } else {
-                    // 引用了 label 符号，但是符号确不在符号表中
+                    // 引用了 label 符号，但是符号目前不在符号表中(可能在后续 text 中，也可以能不在，所以需要二次扫描才能确定,这里仅仅占位)
                     // 此时使用 rel32 占位，其中 jmp 指令后续可能需要替换 rel8
                     amd64_rewrite_rel_symbol(operation, rel_operand, 0);
                     temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
@@ -566,10 +566,11 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                     }
                 }
             } else {
-                // 其他指令引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip) 让重定位阶段去找改符号进行重定位即可
+                // 其他指令(可能是 mov 等,对数据段符号的引用)引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip),让重定位阶段去找改符号进行重定位即可
                 // 完全不用考虑是标签符号还是数据符号
                 // 添加到重定位表(.rela.text)
                 // 根据指令计算 slot 重定位 rip slot
+                // 这里先注册到符号表，让符号和和 symbol 关联
                 uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
                 if (sym_index == 0) {
                     Elf64_Sym sym = {
@@ -588,6 +589,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
                 temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
                 section_offset += temp->data_count;
 
+                // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
                 uint64_t rel_offset = *temp->offset + operation_rip_offset(temp->inst);
                 temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                                  rel_offset, R_X86_64_PC32, (int) sym_index, -4);

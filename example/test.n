@@ -15,6 +15,9 @@ var baz = struct_test {
 baz.car = int () {
 
 }
+baz.car = fn(): int {
+
+}
 
 var etc = struct {
 	int a
@@ -45,6 +48,9 @@ string car = "str"
 
 int call4() {
 
+}
+
+fn call4(): int {
 }
 
 var b11 = 3

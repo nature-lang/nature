@@ -1,7 +1,7 @@
 #ifndef NATURE_BUILTIN_H
 #define NATURE_BUILTIN_H
 
-#include "src/type.h"
+#include "utils/type.h"
 #include "src/ast.h"
 
 ast_new_fn *builtin_print();

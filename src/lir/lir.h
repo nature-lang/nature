@@ -143,12 +143,6 @@ typedef struct {
     uint8_t pos;
 } lir_operand_t;
 
-// 变量的定义点
-typedef struct {
-    string ident;
-    type_t type; // 原始类型存储(包含指针深度等数据)
-} lir_var_decl_t;
-
 /**
  * 存放在寄存器或者内存中, var a = 1
  */
@@ -190,7 +184,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_kind_e type;
+    type_kind type;
 } lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
@@ -201,7 +195,7 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
-    type_kind_e type;
+    type_kind type;
 } lir_imm_t;
 
 /**
@@ -244,7 +238,7 @@ closure_t *lir_new_closure(ast_closure_t *ast);
  */
 lir_var_t *lir_new_var_operand(closure_t *c, string ident);
 
-type_kind_e lir_operand_type_base(lir_operand_t *operand);
+type_kind lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 

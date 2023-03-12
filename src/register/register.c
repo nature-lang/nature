@@ -14,7 +14,7 @@ string reg_table_key(uint8_t index, uint8_t size) {
  * @param base
  * @return
  */
-reg_t *reg_select(uint8_t index, type_kind_e base) {
+reg_t *reg_select(uint8_t index, type_kind base) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_reg_select(index, base);
     }
@@ -64,7 +64,7 @@ reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, ui
     return reg;
 }
 
-vr_flag_e type_base_trans_alloc(type_kind_e t) {
+vr_flag_e type_base_trans_alloc(type_kind t) {
     if (t == TYPE_FLOAT) {
         return VR_FLAG_ALLOC_FLOAT;
     }

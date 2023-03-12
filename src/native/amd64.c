@@ -1,10 +1,5 @@
 #include "amd64.h"
-#include "src/type.h"
-#include "src/register/register.h"
 #include "src/register/amd64.h"
-#include "utils/error.h"
-#include "utils/helper.h"
-#include "src/symbol/symbol.h"
 #include "src/native/native.h"
 #include "src/debug/debug.h"
 #include <assert.h>
@@ -56,7 +51,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
-        if (v->type == TYPE_STRING_RAW) {
+        if (v->type == TYPE_RAW_STRING) {
             // 生成符号表(通常用于 .data 段)
             char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
@@ -102,7 +97,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         assertf(base->assert_type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
         reg_t *reg = base->value;
-        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_base_sizeof(v->type.kind));
+        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_kind_sizeof(v->type.kind));
         return asm_operand;
     }
 
@@ -110,7 +105,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         lir_symbol_var_t *v = operand->value;
         asm_operand_t *asm_operand = SYMBOL(v->ident, false);
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
-        asm_operand->size = type_base_sizeof(v->type);
+        asm_operand->size = type_kind_sizeof(v->type);
         return asm_operand;
     }
 

@@ -20,7 +20,7 @@ ast_expr_operator_e token_to_ast_expr_operator[] = {
         [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
 };
 
-type_kind_e token_to_type_category[] = {
+type_kind token_to_type_category[] = {
         // literal
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
@@ -345,12 +345,12 @@ ast_expr parser_ident_expr(module_t *m) {
     ast_expr result = parser_new_expr(m);
     token *ident_token = parser_advance(m);
 
-    // type ident 通常表示自定义类型，如 code foo = int, 其就是 foo 类型。
-    // 所以应该使用 type 保存这种类型。这种类型保存在 type 中，其 category 应该是什么呢？
+    // type ident 通常表示自定义类型，如 type foo = int, 其就是 foo 类型。
+    // 所以应该使用 type 保存这种类型。这种类型保存在 type 中，其 kind 应该是什么呢？
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     type_t type_decl_ident = {
             .is_origin = false,
-            .kind = TYPE_DECL_IDENT,
+            .kind = TYPE_DEF,
             .value = ast_new_ident(ident_token->literal)
     };
 
@@ -497,13 +497,13 @@ void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn) {
         var_decl->ident = "";
         var_decl->type = parser_type(m);
         // formal parameter handle code + ident
-        type_fn->formal_param_types[0] = parser_type(m);
-        type_fn->formal_param_count = 1;
+        type_fn->formals_types[0] = parser_type(m);
+        type_fn->formals_count = 1;
 
         while (parser_consume(m, TOKEN_COMMA)) {
-            uint8_t count = type_fn->formal_param_count++;
+            uint8_t count = type_fn->formals_count++;
             var_decl = malloc(sizeof(ast_var_decl));
-            type_fn->formal_param_types[count] = parser_type(m);
+            type_fn->formals_types[count] = parser_type(m);
         }
     }
     parser_must(m, TOKEN_RIGHT_PAREN);
@@ -621,7 +621,7 @@ type_t parser_type(module_t *m) {
 
     // 神奇的 ident
     token *type_token = parser_advance(m);
-    result.kind = TYPE_DECL_IDENT;
+    result.kind = TYPE_DEF;
     result.value = ast_new_ident(type_token->literal);
     return result;
 }

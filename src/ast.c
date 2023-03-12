@@ -28,7 +28,7 @@ int ast_struct_decl_size(ast_struct_decl *struct_decl) {
     int size = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
         ast_struct_property property = struct_decl->list[i];
-        size += type_base_sizeof(property.type.kind);
+        size += type_kind_sizeof(property.type.kind);
     }
     return size;
 }
@@ -46,7 +46,7 @@ int ast_struct_offset(ast_struct_decl *struct_decl, char *property) {
         if (str_equal(item.key, property)) {
             break;
         }
-        offset += type_base_sizeof(item.type.kind);
+        offset += type_kind_sizeof(item.type.kind);
     }
     return offset;
 }
@@ -65,16 +65,16 @@ type_t select_actual_param(ast_call *call, uint8_t index) {
 }
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
-    if (formal_fn->rest_param && index >= formal_fn->formal_param_count - 1) {
-        type_t last_param_type = formal_fn->formal_param_types[formal_fn->formal_param_count - 1];
+    if (formal_fn->rest_param && index >= formal_fn->formals_count - 1) {
+        type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
         assertf(last_param_type.kind == TYPE_ARRAY, "rest param must array");
         ast_array_decl *array_decl = last_param_type.value;
 
         return array_decl->type;
     }
 
-    assertf(index < formal_fn->formal_param_count, "select index out range");
-    return formal_fn->formal_param_types[index];
+    assertf(index < formal_fn->formals_count, "select index out range");
+    return formal_fn->formals_types[index];
 }
 
 
@@ -146,14 +146,14 @@ bool type_compare(type_t target, type_t source) {
             return false;
         }
 
-        if (left_type_fn->formal_param_count != right_type_fn->formal_param_count) {
+        if (left_type_fn->formals_count != right_type_fn->formals_count) {
             return false;
         }
 
-        for (int i = 0; i < left_type_fn->formal_param_count; ++i) {
+        for (int i = 0; i < left_type_fn->formals_count; ++i) {
             if (!type_compare(
-                    left_type_fn->formal_param_types[i],
-                    right_type_fn->formal_param_types[i]
+                    left_type_fn->formals_types[i],
+                    right_type_fn->formals_types[i]
             )) {
                 return false;
             }

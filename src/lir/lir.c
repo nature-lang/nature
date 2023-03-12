@@ -415,7 +415,7 @@ lir_operand_t *lir_new_empty_operand() {
     return operand;
 }
 
-type_kind_e lir_operand_type_base(lir_operand_t *operand) {
+type_kind lir_operand_type_base(lir_operand_t *operand) {
     assert(operand->assert_type != LIR_OPERAND_REG);
 
     if (operand->assert_type == LIR_OPERAND_VAR) {
@@ -442,7 +442,7 @@ type_kind_e lir_operand_type_base(lir_operand_t *operand) {
 }
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand) {
-    return type_base_sizeof(lir_operand_type_base(operand));
+    return type_kind_sizeof(lir_operand_type_base(operand));
 }
 
 bool lir_op_is_branch(lir_op_t *op) {

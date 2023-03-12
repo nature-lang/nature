@@ -55,7 +55,7 @@ static void var_replace(lir_operand_t *operand, interval_t *i) {
     if (i->spilled) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = *i->stack_slot;
-        stack->size = type_base_sizeof(var->type.kind);
+        stack->size = type_kind_sizeof(var->type.kind);
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
     } else {

@@ -7,7 +7,7 @@
  * @return
  */
 void *string_new(uint8_t *point, int length) {
-    string_t *s = malloc(sizeof(string_t));
+    type_string_t *s = NEW(type_string_t);
     s->content = malloc(sizeof(uint8_t) * length);
     memcpy(s->content, point, length);
     s->length = length;
@@ -15,10 +15,10 @@ void *string_new(uint8_t *point, int length) {
 }
 
 void *string_addr(void *point) {
-    string_t *s = point;
+    type_string_t *s = point;
     return s->content;
 }
 
 int string_length(void *point) {
-    return ((string_t *) point)->length;;
+    return ((type_string_t *) point)->length;;
 }
