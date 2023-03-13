@@ -99,10 +99,10 @@ char *lir_var_to_string(lir_var_t *var) {
 
     string ident = var->ident;
     string indirect_addr = "";
-    if (var->indirect_addr) {
-        indirect_addr = "*";
-    }
-    return dsprintf("%sVAR[%s|%s]", indirect_addr, ident, type_string);
+//    if (var->indirect_addr) {
+//        indirect_addr = "*";
+//    }
+    return dsprintf("VAR[%s|%s]", ident, type_string);
 }
 
 char *lir_imm_to_string(lir_imm_t *immediate) {

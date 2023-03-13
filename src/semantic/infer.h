@@ -49,7 +49,7 @@ type_t infer_ident(string unique_ident);
 
 type_t infer_literal(ast_literal *literal);
 
-type_t infer_new_array(ast_new_list *new_list);
+type_t infer_new_list(ast_new_list *new_list);
 
 type_t infer_new_map(ast_new_map *new_map);
 
@@ -70,7 +70,7 @@ type_t infer_call(ast_call *call);
  */
 type_t infer_type(type_t type);
 
-type_t infer_type_decl_ident(ast_ident *ident);
+type_t infer_type_def(typedecl_ident_t *def);
 
 /**
  * @param ident

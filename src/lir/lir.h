@@ -25,7 +25,7 @@
 #define RUNTIME_CALL_ARRAY_PUSH "array_push"
 #define RUNTIME_CALL_ARRAY_CONCAT "array_concat"
 
-#define RUNTIME_CALL_ANY_NEW "any_new"
+#define RUNTIME_CALL_TRANS_ANY "trans_any"
 
 #define RUNTIME_CALL_MAP_NEW "map_new"
 #define RUNTIME_CALL_MAP_VALUE "map_value"
@@ -145,6 +145,7 @@ typedef struct {
 
 /**
  * 存放在寄存器或者内存中, var a = 1
+ * TODO 目前仅支持
  */
 typedef struct {
     string ident; // ssa 后的新名称
@@ -153,8 +154,8 @@ typedef struct {
     flag_t flag;
     type_t type;
 
-    uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
-    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
+//    uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
+//    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
 } lir_var_t;
 
 /**
@@ -220,7 +221,7 @@ typedef struct lir_op {
 
 void lir_set_quick_op(basic_block_t *block);
 
-lir_operand_t *set_indirect_addr(lir_operand_t *operand);
+//lir_operand_t *set_indirect_addr(lir_operand_t *operand);
 
 lir_operand_t *lir_new_phi_body(closure_t *c, lir_var_t *var, uint8_t count);
 

@@ -326,7 +326,7 @@ ast_expr parser_literal(module_t *m) {
     ast_expr result = parser_new_expr(m);
     token *literal_token = parser_advance(m);
     ast_literal *literal_expr = malloc(sizeof(ast_literal));
-    literal_expr->type = token_to_type_category[literal_token->type];
+    literal_expr->kind = token_to_type_category[literal_token->type];
     literal_expr->value = literal_token->literal; // 具体数值
 
     result.assert_type = AST_EXPR_LITERAL;
@@ -336,7 +336,7 @@ ast_expr parser_literal(module_t *m) {
 }
 
 /**
- * 右值是 ident 开头的处理
+ * 右值以 ident 开头的表达式处理
  * ident is custom code or variable
  * ident 如果是 code 则需要特殊处理
  * @return
@@ -350,29 +350,28 @@ ast_expr parser_ident_expr(module_t *m) {
     // 在没有进行类型还原之前，可以使用 type_decl_ident 保存，具体的字符名称则保存在 .value 中即可
     type_t type_decl_ident = {
             .is_origin = false,
-            .kind = TYPE_DEF,
-            .value = ast_new_ident(ident_token->literal)
+            .kind = TYPE_IDENT,
+            .ident_decl = type_decl_ident_new(ident_token->literal)
     };
 
     /**
       * 请注意这里是实例化一个结构体,而不是声明一个结构体
-      * 声明 code person = struct{int a, int b}
+      * 声明 type person = struct{int a, int b}
       * 实例化
       * var a =  person {
       *              a = 1
       *              b = 2
       * }
-      * var a= struct {int a, int b} {b = 1, b = 2}
       **/
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
         return parser_new_struct(m, type_decl_ident);
     }
 
-    // foo_type a() {}
+    // foo_type a() {} // 同理记录即可
     if (parser_is(m, TOKEN_LITERAL_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return parser_fn_decl_expr(m, type_decl_ident);
     };
-    // code () {}
+    // type () {} // TODO 后面没有这种情况了，函数都以 fn 开头了
     if (parser_is(m, TOKEN_LEFT_PAREN) && parser_is_fn_decl(m, parser_next(m, 0))) {
         return parser_fn_decl_expr(m, type_decl_ident);
     }
@@ -489,7 +488,7 @@ ast_var_decl *parser_var_decl(module_t *m) {
     return var_decl;
 }
 
-void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn) {
+void parser_type_function_formal_param(module_t *m, typedecl_fn_t *type_fn) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
@@ -543,75 +542,73 @@ type_t parser_type(module_t *m) {
     if (parser_is_simple_type(m)) {
         token *type_token = parser_advance(m);
         result.kind = token_to_type_category[type_token->type];
-        result.value = type_token->literal;
+        result.value_decl = NULL;
         return result;
     }
 
+    // [int] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
-        ast_array_decl *type_array_decl = malloc(sizeof(ast_array_decl));
-//        parser_must(m, TOKEN_LEFT_SQUARE);
-
-        type_array_decl->type = parser_type(m);
+        typedecl_list_t *type_list_decl = NEW(typedecl_list_t);
+        type_list_decl->type = parser_type(m);
 
         if (parser_consume(m, TOKEN_COMMA)) {
             token *token = parser_advance(m);
             assertf(token->type == TOKEN_LITERAL_INT, "array count literal parser err, not int token, actual %d",
                     token->type);
 
-            int count = atoi(token->literal);
-            type_array_decl->count = count;
+//            int count = atoi(token->literal);
+//            type_list_decl->count = count; // TODO array 才有 count, 等下个版本再支持 array
         }
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
 
         result.kind = TYPE_ARRAY;
-        result.value = type_array_decl;
+        result.list_decl = type_list_decl;
         return result;
     }
 
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
-        ast_map_decl *type_map_decl = malloc(sizeof(ast_map_decl));
-//        parser_must(m, TOKEN_LEFT_CURLY);
-        type_map_decl->key_type = parser_type(m);
+        typedecl_map_t *map = NEW(typedecl_map_t);
+        map->key_type = parser_type(m);
         parser_must(m, TOKEN_COLON);
-        type_map_decl->value_type = parser_type(m);
+        map->value_type = parser_type(m);
         parser_must(m, TOKEN_RIGHT_CURLY);
 
         result.kind = TYPE_MAP;
-        result.value = type_map_decl;
+        result.map_decl = map;
         return result;
     }
 
     if (parser_consume(m, TOKEN_STRUCT)) {
-        ast_struct_decl *type_struct_decl = malloc(sizeof(ast_struct_decl));
+        typedecl_struct_t *type_struct_decl = NEW(typedecl_struct_t);
         type_struct_decl->count = 0;
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
             // default value
-            ast_struct_property item;
+            struct_property_t item;
             item.type = parser_type(m);
             item.key = parser_advance(m)->literal;
 
-            type_struct_decl->list[type_struct_decl->count++] = item;
+            type_struct_decl->properties[type_struct_decl->count++] = item;
             parser_must_stmt_end(m);
         }
 
         parser_must(m, TOKEN_RIGHT_CURLY);
 
         result.kind = TYPE_STRUCT;
-        result.value = type_struct_decl;
+        result.struct_decl = type_struct_decl;
         return result;
     }
 
     if (parser_consume(m, TOKEN_FUNCTION)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
-        type_fn_t *type_function = NEW(type_fn_t);
+        typedecl_fn_t *type_function = NEW(typedecl_fn_t);
         type_function->return_type = parser_type(m);
         parser_type_function_formal_param(m, type_function);
         parser_must(m, TOKEN_RIGHT_ANGLE);
 
         result.kind = TYPE_FN;
-        result.value = type_function;
+        result.fn_decl = type_function;
         return result;
     }
 
@@ -621,8 +618,8 @@ type_t parser_type(module_t *m) {
 
     // 神奇的 ident
     token *type_token = parser_advance(m);
-    result.kind = TYPE_DEF;
-    result.value = ast_new_ident(type_token->literal);
+    result.kind = TYPE_IDENT;
+    result.ident_decl = type_decl_ident_new(type_token->literal);
     return result;
 }
 
@@ -1157,7 +1154,7 @@ ast_expr parser_new_struct(module_t *m, type_t type) {
     ast_expr result;
     ast_new_struct *new_struct = malloc(sizeof(ast_new_struct));
     new_struct->count = 0;
-    new_struct->type = type;
+    new_struct->type = type; // struct 的类型就是上一个 type ident 类型，此时还不到类型还原的时候,暂时记录就行
 
     while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
         // ident 类型

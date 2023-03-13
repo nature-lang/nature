@@ -104,7 +104,7 @@ void parser_actual_param(module_t *m, ast_call *call);
 
 void parser_formal_param(module_t *m, ast_new_fn *fn_decl);
 
-void parser_type_function_formal_param(module_t *m, type_fn_t *type_fn);
+void parser_type_function_formal_param(module_t *m, typedecl_fn_t *type_fn);
 
 type_t parser_type(module_t *m);
 

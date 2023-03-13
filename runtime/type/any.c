@@ -1,4 +1,5 @@
 #include "any.h"
+#include "runtime/allocator.h"
 
 
 /**
@@ -9,13 +10,13 @@
  * @param value
  * @return
  */
-any_t *any_trans(uint rtype_index, void *value) {
+memory_any_t *trans_any(uint rtype_index, void *value) {
     // - 根据 rtype_index 找到对应的
-    reflect_type_t *type = find_rtype(rtype_index);
-    // TODO 是否应该在堆内存申请数据？如果需要其类型应该是 type_any_t 的 rtype 数据来申请
+    reflect_type_t *rtype = find_rtype(rtype_index);
+
     // any_t 在 rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    any_t *any = NEW(any_t);
-    any->type = type;
+    memory_any_t *any = runtime_malloc(sizeof(memory_any_t), rtype);
+    any->rtype = rtype;
     any->value = value;
 
     return any;

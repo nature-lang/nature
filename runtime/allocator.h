@@ -5,7 +5,6 @@
 #include "utils/list.h"
 #include "utils/helper.h"
 #include "utils/bitmap.h"
-#include "utils/links/typedef.h"
 #include "memory.h"
 
 
@@ -15,7 +14,7 @@
  * @param type
  * @return
  */
-addr_t runtime_malloc(uint size, typedef_t *type);
+addr_t runtime_malloc(uint size, reflect_type_t *type);
 
 mspan_t *mspan_new(addr_t base, uint pages_count, uint8_t spanclass);
 

@@ -136,7 +136,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->old = var->old;
         new_var->type = var->type;
         new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
-        new_var->indirect_addr = var->indirect_addr;
+//        new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
     }
@@ -178,20 +178,20 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
     return new_operand;
 }
 
-lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
-    if (operand->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var = operand->value;
-        var->indirect_addr = true;
-        return operand;
-    } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr = operand->value;
-        return operand;
-    }
-
-    error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_VAR or LIR_OPERAND_ADDR, actual %d",
-               operand->assert_type);
-    return NULL;
-}
+//lir_operand_t *set_indirect_addr(lir_operand_t *operand) {
+//    if (operand->assert_type == LIR_OPERAND_VAR) {
+//        lir_var_t *var = operand->value;
+//        var->indirect_addr = true;
+//        return operand;
+//    } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+//        lir_indirect_addr_t *addr = operand->value;
+//        return operand;
+//    }
+//
+//    error_exit("[set_indirect_addr] operand_type != LIR_OPERAND_VAR or LIR_OPERAND_ADDR, actual %d",
+//               operand->assert_type);
+//    return NULL;
+//}
 
 lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, type_t type) {
     assertf(base->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");

@@ -36,12 +36,15 @@ static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr
         }
 
         // TODO var 存不下两个指针的数据!! 存下了又能如何，三个，四个指针大小的数据呢？
-        lir_operand_t *new_source = lir_temp_var_operand(c, expr.target_type);
+        lir_operand_t *new_source_var = lir_temp_var_operand(c, expr.target_type);
+        // 基于 source 类型计算 rtype index
+        uint rtype_index = find_rtype_index(expr.type);
         // lir call type, value =>
-        list_push(c->operations, lir_op_runtime_call(RUNTIME_CALL_ANY_NEW, new_source, 2,
-                                                     LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT8, int_value, expr.type.kind),
-                                                     source));
-        return new_source;
+        list_push(c->operations,
+                  lir_op_runtime_call(RUNTIME_CALL_TRANS_ANY, new_source_var, 2,
+                                      LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, rtype_index), // arg1
+                                      source)); // arg2
+        return new_source_var;
     }
 
     return source;
@@ -244,7 +247,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     lir_operand_t *base_target = compiler_expr(c, call->left);
 
     slice_t *params_operand = slice_new();
-    type_fn_t *formal_fn = call->left.type.value;
+    typedecl_fn_t *formal_fn = call->left.type.fn_decl;
     // 预编译 spread operand, 避免每一次使用 spread 都编译一次
     lir_operand_t *spread_target = NULL;
     if (call->spread_param) {
@@ -263,12 +266,12 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
             assertf(last_param_type.kind == TYPE_ARRAY, "rest param must be array type");
 
-            ast_array_decl *array_decl = last_param_type.value;
+            typedecl_list_t *list_decl = last_param_type.list_decl;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
             param_target = lir_temp_var_operand(c, last_param_type);
             lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, 0);
             lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                                    (int) type_kind_sizeof(array_decl->type.kind));
+                                                                    (int) type_kind_sizeof(list_decl->type.kind));
             lir_op_t *call_op = lir_op_runtime_call(
                     RUNTIME_CALL_ARRAY_NEW,
                     param_target, // param_target is array_t
@@ -384,12 +387,14 @@ static lir_operand_t *compiler_unary(closure_t *c, ast_expr expr) {
     }
 
     if (unary_expr->operator == AST_EXPR_OPERATOR_IA) {
+        // TODO trans lir_indirect_addr_t
         // 如果 first 都不是指针，那就不给解引用直接报错，只有变量才能是指针类型
-        assertf(first->assert_type == LIR_OPERAND_VAR, "operator IA, but operand not var");
+//        assertf(first->assert_type == LIR_OPERAND_VAR, "operator IA, but operand not var");
+        assertf(false, "not support ia op");
         // 添加引用标识(var 维度，而不是变量维度,而不是 local_var_decl 维度)
-        lir_var_t *var = first->value;
-        var->indirect_addr = true;
-        return first;
+//        lir_var_t *var = first->value;
+//        var->indirect_addr = true;
+//        return first;
     }
 
     lir_opcode_e type = ast_expr_operator_transform[unary_expr->operator];
@@ -416,7 +421,7 @@ static lir_operand_t *compiler_unary(closure_t *c, ast_expr expr) {
  * 通过上面的示例可以确定在编译截断无法判断数组是否越界，需要延后到运行阶段，也就是 access_list 这里
  */
 static lir_operand_t *compiler_array_value(closure_t *c, ast_expr expr) {
-    ast_array_value_t *ast = expr.value;
+    ast_list_value_t *ast = expr.value;
     // new tmp 是无类型的。
     // left_target.code is list[int]
     // left_target.var = runtime.make_list(size)
@@ -468,10 +473,10 @@ static lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr) {
     lir_operand_t *target = lir_temp_var_operand(c, expr.type);
 
     // 类型，容量 runtime.make_list(capacity, size)
-    ast_array_decl *array_decl = ast->ast_type.value;
+    typedecl_array_t *array_decl = ast->type.array_decl;
     lir_operand_t *count_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, array_decl->count);
     lir_operand_t *size_operand = LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value,
-                                                            (int) type_kind_sizeof(ast->ast_type.kind));
+                                                            (int) type_kind_sizeof(ast->type.kind));
     lir_op_t *call_op = lir_op_runtime_call(
             RUNTIME_CALL_ARRAY_NEW,
             target,
@@ -652,7 +657,7 @@ static lir_operand_t *compiler_new_struct(closure_t *c, ast_expr expr) {
     ast_new_struct *ast = expr.value;
     lir_operand_t *target = lir_temp_var_operand(c, expr.type);
 
-    ast_struct_decl *struct_decl = ast->type.value;
+    typedecl_struct_t *struct_decl = ast->type.struct_decl;
     int size = ast_struct_decl_size(struct_decl);
 
     // new struct by runtime call, base_target
@@ -682,7 +687,7 @@ static lir_operand_t *compiler_new_struct(closure_t *c, ast_expr expr) {
 static lir_operand_t *compiler_literal(closure_t *c, ast_expr expr) {
     ast_literal *literal = expr.value;
 
-    switch (literal->type) {
+    switch (literal->kind) {
         case TYPE_STRING: {
             // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
             lir_operand_t *target = lir_temp_var_operand(c, expr.type);
@@ -896,7 +901,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
 compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = compiler_literal,
         [AST_EXPR_IDENT] = compiler_ident,
-        [AST_EXPR_ARRAY_VALUE] = compiler_array_value,
+        [AST_EXPR_LIST_VALUE] = compiler_array_value,
         [AST_EXPR_ENV_VALUE] = compiler_env_value,
         [AST_EXPR_BINARY] = compiler_binary,
         [AST_EXPR_UNARY] = compiler_unary,

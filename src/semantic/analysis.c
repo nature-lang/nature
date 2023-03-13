@@ -127,7 +127,7 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
 }
 
 type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
-    type_fn_t *fn_type = NEW(type_fn_t);
+    typedecl_fn_t *fn_type = NEW(typedecl_fn_t);
     fn_type->return_type = fn_decl->return_type;
     for (int i = 0; i < fn_decl->formal_param_count; ++i) {
         fn_type->formals_types[i] = fn_decl->formal_params[i]->type;
@@ -446,7 +446,7 @@ void analysis_type(module_t *m, type_t *type) {
     // TODO 如果出现死循环，应该告警退出
     // code foo = int
     // 'foo' is type_decl_ident
-    if (type->kind == TYPE_DEF) {
+    if (type->kind == TYPE_IDENT) {
         // 向上查查查
         ast_ident *ident = type->value;
         string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
@@ -462,13 +462,13 @@ void analysis_type(module_t *m, type_t *type) {
     }
 
     if (type->kind == TYPE_ARRAY) {
-        ast_array_decl *map_decl = type->value;
+        ast_list_decl *map_decl = type->value;
         analysis_type(m, &map_decl->type);
         return;
     }
 
     if (type->kind == TYPE_FN) {
-        type_fn_t *type_fn = type->value;
+        typedecl_fn_t *type_fn = type->value;
         analysis_type(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formals_count; ++i) {
             type_t t = type_fn->formals_types[i];

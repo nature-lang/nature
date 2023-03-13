@@ -7,7 +7,7 @@
 ast_new_fn *builtin_print() {
     // var_decl
 //    ast_var_decl  decl =
-    ast_array_decl *array_decl = NEW(ast_array_decl);
+    ast_list_decl *array_decl = NEW(ast_list_decl);
     array_decl->type = type_base_new(TYPE_ANY);
     ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
     var_decl->type = type_base_new(TYPE_ARRAY);

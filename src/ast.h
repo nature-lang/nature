@@ -5,7 +5,7 @@
 #include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/table.h"
-#include "type.h"
+#include "utils/type.h"
 
 #define AST_BASE_TYPE_FALSE "false"
 #define AST_BASE_TYPE_TRUE "true"
@@ -25,7 +25,7 @@ typedef enum {
     AST_EXPR_SELECT_PROPERTY,
     AST_EXPR_ACCESS_MAP,
     AST_EXPR_ENV_VALUE,
-    AST_EXPR_ARRAY_VALUE,
+    AST_EXPR_LIST_VALUE,
 
     AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
     AST_EXPR_NEW_ARRAY, // [1, 2, 3]
@@ -132,7 +132,7 @@ typedef struct {
 
 // 值类型
 typedef struct {
-    type_kind type;
+    type_kind kind;
     string value;
 } ast_literal; // 标量值
 
@@ -231,8 +231,8 @@ typedef struct {
     ast_expr left; // left is struct
     string property;
 
-    ast_struct_decl *struct_decl; // 指针引用
-    ast_struct_property *struct_property; // 指针引用
+    typedecl_struct_t *struct_decl; // 指针引用
+    struct_property_t *struct_property; // 指针引用
 } ast_select_property;
 
 /**
@@ -243,7 +243,7 @@ typedef struct {
     type_t type; // value 的类型吧？
     ast_expr left;
     ast_expr index;
-} ast_array_value_t;
+} ast_list_value_t;
 
 typedef struct {
     type_t key_type;
@@ -266,14 +266,14 @@ typedef struct {
 typedef struct {
     ast_expr values[UINT8_MAX]; // TODO dynamic
     uint64_t count; // count
-    type_t ast_type; // list的类型 (类型推导截断冗余)
+    type_t type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 
 // [int,5]
 typedef struct {
     type_t type; // 值类型
     uint64_t count; // 可选，初始化声明大小
-} ast_array_decl;
+} ast_list_decl;
 
 // map{int:int}
 typedef struct {
@@ -337,13 +337,13 @@ typedef struct {
 
 ast_ident *ast_new_ident(string literal);
 
-int ast_struct_decl_size(ast_struct_decl *struct_decl);
+int ast_struct_decl_size(typedecl_struct_t *struct_decl);
 
-int ast_struct_offset(ast_struct_decl *struct_decl, string property);
+int ast_struct_offset(typedecl_struct_t *struct_decl, string property);
 
 type_t select_actual_param(ast_call *call, uint8_t index);
 
-type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
+type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(type_t a, type_t b);
 

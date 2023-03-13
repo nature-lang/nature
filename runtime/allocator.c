@@ -1,6 +1,7 @@
 #include "allocator.h"
 #include "processor.h"
 #include "memory.h"
+#include "utils/type.h"
 
 
 static uint8_t calc_sizeclass(uint8_t size) {
@@ -674,7 +675,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param obj_size
  * @param type
  */
-static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t *type) {
+static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, reflect_type_t *type) {
     // 确定 arena bits base
     arena_t *arena = take_arena(addr);
     uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
@@ -684,7 +685,7 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         int bit_index = (index / 4) * 8 + (index % 4);
 
-        if (bitmap_test(type->gc_bits->bits, index)) {
+        if (bitmap_test(type->gc_bits, index)) {
             bitmap_set(bits_base, bit_index); // 1 表示为指针
         } else {
             bitmap_clear(bits_base, bit_index);
@@ -693,8 +694,8 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, typedef_t
 }
 
 // 单位
-static addr_t std_malloc(uint size, typedef_t *type) {
-    bool has_ptr = type != NULL && type->last_ptr_count;
+static addr_t std_malloc(uint size, reflect_type_t *type) {
+    bool has_ptr = type != NULL && type->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
@@ -710,8 +711,8 @@ static addr_t std_malloc(uint size, typedef_t *type) {
     return addr;
 }
 
-static addr_t large_malloc(uint size, typedef_t *type) {
-    bool no_ptr = type == NULL || type->last_ptr_count == 0;
+static addr_t large_malloc(uint size, reflect_type_t *type) {
+    bool no_ptr = type == NULL || type->last_ptr == 0;
     uint8_t spanclass = make_spanclass(0, no_ptr);
 
     // 计算需要分配的 page count(向上取整)
@@ -845,7 +846,7 @@ uint64_t arena_index(uint64_t base) {
  * @param type
  * @return
  */
-addr_t runtime_malloc(uint size, typedef_t *type) {
+addr_t runtime_malloc(uint size, reflect_type_t *type) {
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return std_malloc(size, type);

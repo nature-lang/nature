@@ -24,10 +24,10 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-int ast_struct_decl_size(ast_struct_decl *struct_decl) {
+int ast_struct_decl_size(typedecl_struct_t *struct_decl) {
     int size = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        ast_struct_property property = struct_decl->list[i];
+        struct_property_t property = struct_decl->properties[i];
         size += type_kind_sizeof(property.type.kind);
     }
     return size;
@@ -39,10 +39,10 @@ int ast_struct_decl_size(ast_struct_decl *struct_decl) {
  * @param property
  * @return
  */
-int ast_struct_offset(ast_struct_decl *struct_decl, char *property) {
+int ast_struct_offset(typedecl_struct_t *struct_decl, char *property) {
     int offset = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        ast_struct_property item = struct_decl->list[i];
+        struct_property_t item = struct_decl->properties[i];
         if (str_equal(item.key, property)) {
             break;
         }
@@ -57,18 +57,18 @@ type_t select_actual_param(ast_call *call, uint8_t index) {
         // last actual param type must array
         type_t last_param_type = call->actual_params[call->actual_param_count].type;
         assertf(last_param_type.kind == TYPE_ARRAY, "spread_param must array");
-        ast_array_decl *array_decl = last_param_type.value;
+        typedecl_array_t *array_decl = last_param_type.array_decl;
         return array_decl->type;
     }
 
     return call->actual_params[index].type;
 }
 
-type_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
+type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
     if (formal_fn->rest_param && index >= formal_fn->formals_count - 1) {
         type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
         assertf(last_param_type.kind == TYPE_ARRAY, "rest param must array");
-        ast_array_decl *array_decl = last_param_type.value;
+        typedecl_array_t *array_decl = last_param_type.array_decl;
 
         return array_decl->type;
     }
@@ -100,8 +100,8 @@ bool type_compare(type_t target, type_t source) {
     }
 
     if (target.kind == TYPE_MAP) {
-        ast_map_decl *left_map_decl = target.value;
-        ast_map_decl *right_map_decl = source.value;
+        typedecl_map_t *left_map_decl = target.map_decl;
+        typedecl_map_t *right_map_decl = source.map_decl;
 
         if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
             return false;
@@ -112,14 +112,13 @@ bool type_compare(type_t target, type_t source) {
         }
     }
 
-    if (target.kind == TYPE_ARRAY) {
-        ast_array_decl *left_list_decl = target.value;
-        ast_array_decl *right_list_decl = source.value;
+    if (target.kind == TYPE_LIST) {
+        typedecl_list_t *left_list_decl = target.list_decl;
+        struct typedecl_list_t *right_list_decl = source.list_decl;
         if (right_list_decl->type.kind == TYPE_UNKNOWN) {
             // 但是这样在 compiler_array 时将完全不知道将右值初始化多大空间的 capacity
             // 但是其可以完全继承左值, 左值进入到该方法之前已经经过了类型推断，这里肯定不是 var 了
             right_list_decl->type = left_list_decl->type;
-            right_list_decl->count = left_list_decl->count;
             return true;
         }
         // 类型不相同
@@ -127,21 +126,12 @@ bool type_compare(type_t target, type_t source) {
             return false;
         }
 
-        if (left_list_decl->count == 0) {
-            left_list_decl->count = right_list_decl->count;
-        }
-
-        if (left_list_decl->count < right_list_decl->count) {
-            return false;
-        }
-
-        right_list_decl->count = left_list_decl->count;
         return true;
     }
 
     if (target.kind == TYPE_FN) {
-        type_fn_t *left_type_fn = target.value;
-        type_fn_t *right_type_fn = source.value;
+        typedecl_fn_t *left_type_fn = target.fn_decl;
+        typedecl_fn_t *right_type_fn = source.fn_decl;
         if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
             return false;
         }
@@ -161,8 +151,8 @@ bool type_compare(type_t target, type_t source) {
     }
 
     if (target.kind == TYPE_STRUCT) {
-        ast_struct_decl *left_struct_decl = target.value;
-        ast_struct_decl *right_struct_decl = source.value;
+        typedecl_struct_t *left_struct_decl = target.struct_decl;
+        typedecl_struct_t *right_struct_decl = source.struct_decl;
         if (left_struct_decl->count != right_struct_decl->count) {
             return false;
         }
@@ -170,15 +160,15 @@ bool type_compare(type_t target, type_t source) {
         for (int i = 0; i < left_struct_decl->count; ++i) {
             // key 比较
             if (strcmp(
-                    left_struct_decl->list[i].key,
-                    right_struct_decl->list[i].key) != 0) {
+                    left_struct_decl->properties[i].key,
+                    right_struct_decl->properties[i].key) != 0) {
                 return false;
             }
 
             // code 比较
             if (!type_compare(
-                    left_struct_decl->list[i].type,
-                    right_struct_decl->list[i].type
+                    left_struct_decl->properties[i].type,
+                    right_struct_decl->properties[i].type
             )) {
                 return false;
             }
