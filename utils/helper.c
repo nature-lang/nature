@@ -6,15 +6,15 @@
 #include "helper.h"
 #include <sys/mman.h>
 
-char *itoa(int n) {
+char *itoa(int64_t n) {
     // 计算长度
-    int length = snprintf(NULL, 0, "%d", n);
+    int length = snprintf(NULL, 0, "%ld", n);
 
     // 初始化 buf
     char *str = malloc(length + 1);
 
     // 转换
-    snprintf(str, length + 1, "%d", n);
+    snprintf(str, length + 1, "%ld", n);
 
     return str;
 }

@@ -201,7 +201,7 @@ typedef struct {
 typedef struct {
     ast_struct_property list[UINT8_MAX];
     int8_t count;
-} ast_struct_decl; // 多个 property 组成一个
+} typedecl_struct_t; // 多个 property 组成一个
 
 /**
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，

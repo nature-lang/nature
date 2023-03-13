@@ -23,7 +23,7 @@
 
 //void string_to_unique_list(string *list, string value);
 
-char *itoa(int n);
+char *itoa(int64_t n);
 
 bool str_equal(string a, string b);
 
@@ -88,6 +88,16 @@ static inline void add64le(unsigned char *p, int64_t x) {
 
 
 static inline char *dsprintf(char *format, ...) {
+    char *buf = mallocz(2000);
+    va_list args;
+    va_start(args, format);
+    int count = vsprintf(buf, format, args);
+    va_end(args);
+
+    return realloc(buf, count + 1);
+}
+
+static inline char *fixed_sprintf(char *format, ...) {
     char *buf = mallocz(2000);
     va_list args;
     va_start(args, format);

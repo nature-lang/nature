@@ -61,7 +61,7 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/links/symdef.c
         ${PROJECT_SOURCE_DIR}/utils/links/symdef.h
         ${PROJECT_SOURCE_DIR}/utils/type.h
-        ${PROJECT_SOURCE_DIR}/utils/type.h
+        ${PROJECT_SOURCE_DIR}/utils/type.c
         ${PROJECT_SOURCE_DIR}/utils/value.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
@@ -92,8 +92,6 @@ set(SRC
         ${SRC_DIR}/symbol/symbol.c
         ${SRC_DIR}/symbol/builtin.h
         ${SRC_DIR}/symbol/builtin.c
-        ${SRC_DIR}/type.h
-        ${SRC_DIR}/type.c
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
         ${SRC_DIR}/lir/lir.h

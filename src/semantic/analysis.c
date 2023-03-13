@@ -477,7 +477,7 @@ void analysis_type(module_t *m, type_t *type) {
     }
 
     if (type->kind == TYPE_STRUCT) {
-        ast_struct_decl *struct_decl = type->value;
+        typedecl_struct_t *struct_decl = type->value;
         for (int i = 0; i < struct_decl->count; ++i) {
             ast_struct_property item = struct_decl->list[i];
             analysis_type(m, &item.type);

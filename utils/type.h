@@ -6,8 +6,8 @@
 #include "slice.h"
 #include "table.h"
 
-#define POINTER_SIZE 8; // 单位 byte
-#define INT_SIZE 8; // int 类型的占用的字节，随着平台的不同而不同
+#define POINTER_SIZE 8 // 单位 byte
+#define INT_SIZE 8 // int 类型的占用的字节，随着平台的不同而不同
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
@@ -69,10 +69,10 @@ static string type_to_string[] = {
 typedef struct {
     uint index; // 全局 index,在 linker 时 reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint size; // 类型占用的 size,和 gc_bits 联合起来使用
-    uint hash; // 做类型推断时能够快速判断出类型是否相等
+    uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     uint8_t kind; // 类型的种类
-    uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
+    byte *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 } reflect_type_t;
 
 
@@ -120,6 +120,7 @@ typedef struct type_t {
         typedecl_tuple_t *tuple_decl;
         typedecl_struct_t *struct_decl;
         typedecl_fn_t *fn_decl;
+        typedecl_any_t *any_decl;
         typedecl_ident_t *ident_decl;
         void *value_decl;
     };
@@ -133,13 +134,13 @@ typedef struct type_t {
 // 类型对应的数据在内存中的存储形式 --- start
 // 部分类型的数据(复合类型)只能在堆内存中存储
 typedef struct {
-    int capacity; // 预先申请的容量大小
-    int count; // 实际占用的位置的大小
     void *data; // 指向数组
+    uint64_t capacity; // 预先申请的容量大小
+    uint64_t count; // 实际占用的位置的大小
 } memory_list_t;
 
 typedef struct {
-    int count;
+    uint64_t count;
     byte *data;
 } memory_string_t;
 
@@ -193,8 +194,8 @@ struct typedecl_ident_t {
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct typedecl_array_t {
-    int size; // 存储在 mheap 中的数据，sizeof(element_type) * count, 其他的 type 就不用存了，编译时都知道了
-    int count;
+    uint64_t size; // 存储在 mheap 中的数据，sizeof(element_type) * count, 其他的 type 就不用存了，编译时都知道了
+    uint64_t count;
     type_t type;
 //    uint8_t *data; // 数组的值,这里的值同样是不会变的,即使其不会变，我们也无法知道其值是多少。所以这个 data 是毫无意义的
 };
@@ -270,42 +271,35 @@ struct typedecl_any_t {
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 reflect_type 中的 gc_bits 是否一致
-slice_t *rtypes;
+// TODO 先申请一个巨大的尺寸用着。等通用 dynamic list 结构开发吧。
+reflect_type_t rtypes[UINT16_MAX];
+uint64_t rtype_count;
 table_t *rtype_table; // 每当有一个新的类型产生，都会注册在该表中，值为 slice 的索引！
 
-reflect_type_t rtype(type_t t);
+reflect_type_t reflect_type(type_t t);
 
-reflect_type_t rtype_int(type_decl_int_t t);
-
-reflect_type_t rtype_float(type_decl_float_t t);
-
-reflect_type_t rtype_bool(type_decl_bool_t t);
-
-reflect_type_t rtype_string(typedecl_string_t t);
-
-reflect_type_t rtype_list(typedecl_list_t t);
-
-reflect_type_t rtype_array(typedecl_array_t t);
-
-reflect_type_t rtype_map(typedecl_map_t t);
-
-reflect_type_t rtype_set(typedecl_set_t t);
-
-reflect_type_t rtype_tuple(typedecl_tuple_t t);
-
-// 仅该类型和 array 类型会随着元素的个数变化而变化
-reflect_type_t rtype_struct(typedecl_struct_t t);
-
-reflect_type_t rtype_any(typedecl_any_t t);
 
 /**
- * 将 reflect_types 进行序列化
- * @param count
+ * 将 rtypes 填入到 rtypes 中并返回索引
+ * @param rtype
  * @return
  */
-uint8_t *rtypes_serialize(slice_t *reflect_types, uint64_t *count);
+uint64_t rtypes_push(reflect_type_t rtype);
 
-slice_t *rtypes_deserialize(uint8_t *data, uint64_t data_count);
+/**
+ * 将 reflect_types 进行序列化,
+ * @param count 入参时为 reflect_types 的个数，出参时是 byte 序列化后的数量
+ * @return
+ */
+byte *rtypes_serialize(reflect_type_t *reflect_types, uint64_t *count);
+
+/**
+ * 反序列化
+ * @param data
+ * @param count 入参时是 byte 的数量，出参时是 reflect_type 的数量
+ * @return
+ */
+reflect_type_t *rtypes_deserialize(byte *data, uint64_t *count);
 
 reflect_type_t *find_rtype(uint index);
 
@@ -317,6 +311,20 @@ uint find_rtype_index(type_t t);
  * @return
  */
 uint8_t type_kind_sizeof(type_kind t);
+
+/**
+ * 类型在内存中(stack,array,var,reg) 中占用的大小,单位 byte
+ * @param t
+ * @return
+ */
+uint16_t type_sizeof(type_t t);
+
+/**
+ * 类型是否是一个指针类型指向更加深层次的数据
+ * @param t
+ * @return
+ */
+bool type_need_gc(type_t t);
 
 type_t type_with_point(type_t t, uint8_t point);
 

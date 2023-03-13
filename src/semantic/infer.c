@@ -614,12 +614,13 @@ infer_closure *infer_current_init(ast_closure_t *closure_decl) {
 
 /**
  * struct 允许顺序不通，但是 key 和 code 需要相同，在还原时需要根据 key 进行排序
+ * 所有的类型数据都会经过该 fn 进行类型还原, 这里可以堆所有的 fn 进行 reflect 的计算以及注册
  * @param type
  * @return
  */
 type_t infer_type(type_t type) {
     if (type.is_origin) {
-        return type;
+        goto TYPE_ORIGIN;
     }
 
     type.is_origin = true;
@@ -627,7 +628,8 @@ type_t infer_type(type_t type) {
         || type.kind == TYPE_STRING
         || type.kind == TYPE_ANY
         || type.kind == TYPE_VOID) {
-        return type;
+        // 简单类型不需要再还原了
+        goto TYPE_ORIGIN;
     }
 
     if (type.kind == TYPE_STRUCT) {
@@ -639,25 +641,26 @@ type_t infer_type(type_t type) {
             struct_decl->properties[i].type = infer_type(struct_decl->properties[i].type);
         }
 
-        return type;
+        goto TYPE_ORIGIN;
     }
 
     // code foo = int, 'foo' is type_dec_ident
     if (type.kind == TYPE_IDENT) {
-        return infer_type_def(type.ident_decl);
+        type = infer_type_def(type.ident_decl);
+        goto TYPE_ORIGIN;
     }
 
     if (type.kind == TYPE_MAP) {
         typedecl_map_t *map_decl = type.map_decl;
         map_decl->key_type = infer_type(map_decl->key_type);
         map_decl->value_type = infer_type(map_decl->value_type);
-        return type;
+        goto TYPE_ORIGIN;
     }
 
     if (type.kind == TYPE_LIST) {
         typedecl_list_t *list_decl = type.list_decl;
         list_decl->type = infer_type(list_decl->type);
-        return type;
+        goto TYPE_ORIGIN;
     }
 
     if (type.kind == TYPE_FN) {
@@ -666,11 +669,14 @@ type_t infer_type(type_t type) {
         for (int i = 0; i < type_decl_fn->formals_count; ++i) {
             type_decl_fn->formals_types[i] = infer_type(type_decl_fn->formals_types[i]);
         }
-
-        return type;
+        goto TYPE_ORIGIN;
     }
 
     assertf(false, "cannot parser code %s", type_to_string[type.kind]);
+    TYPE_ORIGIN:
+    reflect_type(type);
+
+    return type;
 }
 
 type_t infer_type_def(typedecl_ident_t *def) {
@@ -695,7 +701,7 @@ type_t infer_type_def(typedecl_ident_t *def) {
  * @param ident
  * @return
  */
-type_t infer_struct_property_type(ast_struct_decl *struct_decl, char *ident) {
+type_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
     for (int i = 0; i < struct_decl->count; ++i) {
         if (strcmp(struct_decl->list[i].key, ident) == 0) {
             return struct_decl->list[i].type;
@@ -710,14 +716,14 @@ type_t infer_struct_property_type(ast_struct_decl *struct_decl, char *ident) {
  * 对 struct list 按照 key 进行排序,选择排序
  * @param struct_decl
  */
-void infer_sort_struct_decl(ast_struct_decl *struct_decl) {
+void infer_sort_struct_decl(typedecl_struct_t *struct_decl) {
     for (int i = 0; i < struct_decl->count; ++i) {
         for (int j = i + 1; j < struct_decl->count; ++j) {
-            if (strcmp(struct_decl->list[i].key, struct_decl->list[j].key) > 0) {
+            if (strcmp(struct_decl->properties[i].key, struct_decl->properties[j].key) > 0) {
                 // 交换
-                ast_struct_property temp = struct_decl->list[i];
-                struct_decl->list[i] = struct_decl->list[j];
-                struct_decl->list[j] = temp;
+                struct_property_t temp = struct_decl->properties[i];
+                struct_decl->properties[i] = struct_decl->properties[j];
+                struct_decl->properties[j] = temp;
             }
         }
     }
