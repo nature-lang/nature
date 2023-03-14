@@ -174,8 +174,56 @@ static reflect_type_t rtype_fn(typedecl_fn_t *t) {
     return rtype;
 }
 
-// 仅该类型和 array 类型会随着元素的个数变化而变化
-static reflect_type_t rtype_struct(typedecl_struct_t *t);
+/**
+ * hash = type_kind + property type hash
+ * @param t
+ * @return
+ */
+static reflect_type_t rtype_struct(typedecl_struct_t *t) {
+    char *str = itoa(TYPE_STRUCT);
+    uint offset = 0;
+    uint max = 0;
+    uint need_gc_count = 0;
+    uint16_t need_gc_offsets[UINT16_MAX] = {0};
+    // 记录需要 gc 的 property 的
+    for (int i = 0; i < t->count; ++i) {
+        struct_property_t property = t->properties[i];
+        uint16_t item_size = type_sizeof(property.type);
+        if (item_size > max) {
+            max = item_size;
+        }
+        // 按 offset 对齐
+        offset = align(offset, item_size);
+        // 计算 rtype
+        reflect_type_t rtype = reflect_type(property.type);
+        str = str_connect(str, itoa(rtype.hash));
+        bool need_gc = type_need_gc(property.type);
+        if (need_gc) {
+            need_gc_offsets[need_gc_count++] = offset;
+        }
+        offset += item_size;
+    }
+    uint size = align(offset, max);
+
+
+    reflect_type_t rtype = {
+            .size = size,
+            .hash = hash_string(str),
+            .kind = TYPE_STRUCT,
+            .gc_bits = NULL
+    };
+    if (need_gc_count) {
+        // 默认 size 8byte 对齐了
+        rtype.gc_bits = mallocz(size / POINTER_SIZE);
+        for (int i = 0; i < need_gc_count; ++i) {
+            uint16_t gc_offset = need_gc_offsets[i];
+            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
+        }
+        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
+    }
+
+    return rtype;
+}
 
 
 uint8_t type_kind_sizeof(type_kind t) {

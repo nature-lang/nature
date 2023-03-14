@@ -234,7 +234,7 @@ typedef struct {
 struct typedecl_struct_t {
     int size; // 占用的 mheap 的空间(按每个 property 对齐后的数据)
     int8_t count; // 属性的个数，用于遍历
-    struct_property_t *properties; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    struct_property_t properties[UINT16_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
 };
 
 /**

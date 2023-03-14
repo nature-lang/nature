@@ -703,8 +703,8 @@ type_t infer_type_def(typedecl_ident_t *def) {
  */
 type_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
     for (int i = 0; i < struct_decl->count; ++i) {
-        if (strcmp(struct_decl->list[i].key, ident) == 0) {
-            return struct_decl->list[i].type;
+        if (strcmp(struct_decl->properties[i].key, ident) == 0) {
+            return struct_decl->properties[i].type;
         }
     }
 
