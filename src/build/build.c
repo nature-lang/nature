@@ -90,6 +90,8 @@ static void linker(slice_t *module_list) {
     fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
+    // load rtype,fndef,symdef and add symbol
+
     executable_file_format(ctx);
 
     elf_output(ctx);
@@ -177,7 +179,7 @@ void build(char *build_entry) {
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
-            infer_var_decl(s->value); // 类型还原
+            infer_var_decl(s->ast_value); // 类型还原
         }
 
         for (int j = 0; j < m->ast_closures->count; ++j) {
@@ -221,7 +223,7 @@ void build(char *build_entry) {
             if (s->type != SYMBOL_TYPE_VAR) {
                 continue;
             }
-            ast_var_decl *var_decl = s->value;
+            ast_var_decl *var_decl = s->ast_value;
             asm_var_decl_t *decl = NEW(asm_var_decl_t);
             decl->name = s->ident;
             decl->size = type_kind_sizeof(var_decl->type.kind);

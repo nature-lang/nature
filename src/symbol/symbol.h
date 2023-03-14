@@ -6,31 +6,34 @@
 #include "utils/table.h"
 #include "src/ast.h"
 
-#define SYMBOL_GET_VAR_DECL(ident) \
-({                                   \
-    analysis_local_ident *local_ident = table_get(symbol_ident_table, ident); \
-    (ast_var_decl*) local_ident->decl; \
-})
+/**
+ * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
+ * 1. 模块名 + fn名称
+ * 2. 作用域不同时允许同名的符号(局部变量)，也进行唯一性处理
+ *
+ * 符号的来源有
+ * 1. 局部变量与全局变量
+ * 2. 函数
+ * 3. 自定义 type, 例如 type foo = int
+ */
+table_t *symbol_table;
 
-// 局部变量也会添加到全局符号表中，但是不同 closure 允许存在相同的变量名称，不同 module 则允许相同的 closure
-// 所以 symbol_ident_table 的 key 是 module_name + closure_name + ident
-// 如果是 closure 则就是 module_name + closure
-table_t *symbol_table; // analysis_local_ident_t
+slice_t *symbol_fn_list;
 
 typedef enum {
     SYMBOL_TYPE_VAR,
-    SYMBOL_TYPE_CUSTOM,
+    SYMBOL_TYPE_DECL,
     SYMBOL_TYPE_FN,
 } symbol_type;
 
 typedef struct {
-    string ident;
+    string ident; // 符号唯一标识
+    bool is_local; // 对应 elf 符号中的 global/local
     symbol_type type;
-    bool is_local; // 是否为本地符号
-    void *value; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
+    void *ast_value; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
 } symbol_t;
 
-void symbol_table_set(string ident, symbol_type type, void *decl, bool is_local);
+symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local);
 
 symbol_t *symbol_table_get(string ident);
 

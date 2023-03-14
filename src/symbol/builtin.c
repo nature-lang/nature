@@ -1,19 +1,20 @@
 #include "builtin.h"
 
 /**
+ * 注册到符号表中
  * void print(...[any] args)
  * @return
  */
 ast_new_fn *builtin_print() {
     // var_decl
-//    ast_var_decl  decl =
-    ast_list_decl *array_decl = NEW(ast_list_decl);
-    array_decl->type = type_base_new(TYPE_ANY);
-    ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
-    var_decl->type = type_base_new(TYPE_ARRAY);
+    typedecl_list_t *list_decl = NEW(typedecl_list_t);
+    list_decl->type = type_base_new(TYPE_ANY);
+
+    ast_var_decl *var_decl = NEW(ast_var_decl);
+    var_decl->type = type_base_new(TYPE_LIST);
     var_decl->type.is_origin = true;
-    var_decl->type.value = array_decl;
-    var_decl->ident = "args";
+    var_decl->type.list_decl = list_decl; // 第一个参数的类型
+    var_decl->ident = "args"; // 第一参数的名称
 
     ast_new_fn *fn = NEW(ast_new_fn);
     fn->name = "print";

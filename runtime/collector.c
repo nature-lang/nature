@@ -11,7 +11,7 @@
  */
 static fndef_t *find_fn(addr_t addr) {
     for (int i = 0; i < fndef_count; ++i) {
-        fndef_t *fn = &fndef[i];
+        fndef_t *fn = &fndef_list[i];
         if (fn->base < addr && fn->end > addr) {
             return fn;
         }
@@ -35,12 +35,11 @@ static void scan_stack(memory_t *m) {
     while (true) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + PTR_SIZE);
         fndef_t *fn = find_fn(return_addr);
-        uint64_t stack_size = fn->stack_offset;
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
         addr_t frame_top = frame_base + PTR_SIZE * 2;
-        frame_base = frame_top + fn->stack_offset;
+        frame_base = frame_top + fn->stack_size;
 
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
         // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
@@ -50,7 +49,7 @@ static void scan_stack(memory_t *m) {
             bool is_ptr = bitmap_test(fn->gc_bits->bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-                list_push(m->grey_list, fetch_addr_value(cursor));
+                list_push(m->grey_list, (void *) fetch_addr_value(cursor));
             }
 
             i += 1;
@@ -65,24 +64,13 @@ static void scan_stack(memory_t *m) {
 }
 
 static void scan_symbols(memory_t *m) {
-    for (int i = 0; i < symdef_count; ++i) {
-        symdef_t s = symdef_list[i];
-        if (s.last_ptr_count == 0) {
+    for (int i = 0; i < symdef_count_; ++i) {
+        symdef_t s = symdef_list_[i];
+        if (!s.need_gc) {
             continue;
         }
-        // s 本身是存储在 .data section 的一段数据，但是其存储在 data 在数据是一个 heap ptr，该 ptr 需要加入到 grep list 中
-        // 基于 s 对应的 gc bits 按 8bit 判断
-        addr_t cursor = s.base;
-        i = 0;
-        while (cursor < (s.base + s.size)) {
-            bool is_ptr = bitmap_test(s.gc_bits->bits, i);
-            if (is_ptr) {
-                list_push(m->grey_list, (void *) fetch_addr_value(cursor));
-            }
-
-            cursor += PTR_SIZE;
-            i += 1;
-        }
+        // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
+        list_push(m->grey_list, (void *) fetch_addr_value(s.base));
     }
 }
 

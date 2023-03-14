@@ -737,7 +737,7 @@ static lir_operand_t *compiler_ident(closure_t *c, ast_expr expr) {
         target->assert_type = LIR_OPERAND_SYMBOL_LABEL;
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
     } else if (s->type == SYMBOL_TYPE_VAR) {
-        ast_var_decl *var = s->value;
+        ast_var_decl *var = s->ast_value;
         if (s->is_local) {
             target->assert_type = LIR_OPERAND_VAR;
             target->value = lir_new_var_operand(c, ident->literal);

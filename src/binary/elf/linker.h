@@ -109,6 +109,10 @@ typedef struct {
 //    section_t *rodata_section;
     section_t *got;
     section_t *plt;
+    section_t *rtype_section;
+    section_t *fndef_section;
+    section_t *symdef_section;
+
 
     // 可执行文件构建字段
     Elf64_Phdr *phdr_list; // 程序头表
@@ -197,5 +201,7 @@ void sort_symbols(elf_context *ctx, section_t *s);
 elf_context *elf_context_new(char *output, uint8_t type);
 
 void alloc_section_names(elf_context *ctx, bool is_obj);
+
+void elf_load_fndef(elf_context *ctx);
 
 #endif //NATURE_LINKER_H

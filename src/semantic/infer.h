@@ -78,7 +78,7 @@ type_t infer_type_def(typedecl_ident_t *def);
  */
 type_t infer_struct_property_type(typedecl_struct_t *struct_decl, string ident);
 
-void infer_sort_struct_decl(typedecl_struct_t *struct_decl);
+//void infer_sort_struct_decl(typedecl_struct_t *struct_decl);
 
 bool infer_var_type_can_confirm(type_t right);
 

@@ -191,19 +191,6 @@ typedef struct {
 } ast_struct_property;
 
 /**
- * 使用了 code, key, size
- * struct {
- *    int a
- *    int b
- *    int c
- * }
- */
-typedef struct {
-    ast_struct_property list[UINT8_MAX];
-    int8_t count;
-} typedecl_struct_t; // 多个 property 组成一个
-
-/**
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，
  * 使用了 key, value
  * people {
@@ -232,7 +219,7 @@ typedef struct {
     string property;
 
     typedecl_struct_t *struct_decl; // 指针引用
-    struct_property_t *struct_property; // 指针引用
+    typedecl_struct_property_t *struct_property; // 指针引用
 } ast_select_property;
 
 /**
@@ -269,18 +256,6 @@ typedef struct {
     type_t type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 
-// [int,5]
-typedef struct {
-    type_t type; // 值类型
-    uint64_t count; // 可选，初始化声明大小
-} ast_list_decl;
-
-// map{int:int}
-typedef struct {
-    type_t key_type;
-    type_t value_type;
-} ast_map_decl;
-
 typedef struct {
     ast_expr key;
     ast_expr value;
@@ -307,14 +282,14 @@ typedef struct {
 //} ast_struct_stmt;
 
 /**
- * code my_int = int
- * code my_string =  string
- * code my_my_string =  my_string
- * code my = struct {}
+ * type my_int = int
+ * type my_string =  string
+ * type my_my_string =  my_string
+ * type my = struct {}
  */
 typedef struct {
-    string ident; // foo
-    type_t type; // int
+    string ident; // my_int (自定义的类型名称)
+    type_t type; // int (类型)
 } ast_type_decl_stmt;
 
 typedef struct {
@@ -324,6 +299,7 @@ typedef struct {
     uint8_t formal_param_count;
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
+    void *closure; // 全局 closure 冗余
 } ast_new_fn; // 既可以是 expression,也可以是 stmt
 
 typedef struct {

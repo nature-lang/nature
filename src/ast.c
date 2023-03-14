@@ -27,7 +27,7 @@ ast_ident *ast_new_ident(char *literal) {
 int ast_struct_decl_size(typedecl_struct_t *struct_decl) {
     int size = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        struct_property_t property = struct_decl->properties[i];
+        typedecl_struct_property_t property = struct_decl->properties[i];
         size += type_kind_sizeof(property.type.kind);
     }
     return size;
@@ -42,7 +42,7 @@ int ast_struct_decl_size(typedecl_struct_t *struct_decl) {
 int ast_struct_offset(typedecl_struct_t *struct_decl, char *property) {
     int offset = 0;
     for (int i = 0; i < struct_decl->count; ++i) {
-        struct_property_t item = struct_decl->properties[i];
+        typedecl_struct_property_t item = struct_decl->properties[i];
         if (str_equal(item.key, property)) {
             break;
         }

@@ -127,17 +127,17 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
 }
 
 type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
-    typedecl_fn_t *fn_type = NEW(typedecl_fn_t);
-    fn_type->return_type = fn_decl->return_type;
+    typedecl_fn_t *f = NEW(typedecl_fn_t);
+    f->return_type = fn_decl->return_type;
     for (int i = 0; i < fn_decl->formal_param_count; ++i) {
-        fn_type->formals_types[i] = fn_decl->formal_params[i]->type;
+        f->formals_types[i] = fn_decl->formal_params[i]->type;
     }
-    fn_type->formals_count = fn_decl->formal_param_count;
-    fn_type->rest_param = fn_decl->rest_param;
+    f->formals_count = fn_decl->formal_param_count;
+    f->rest_param = fn_decl->rest_param;
     type_t type = {
             .is_origin = false,
             .kind = TYPE_FN,
-            .value = fn_type
+            .fn_decl = f
     };
     return type;
 }
@@ -448,27 +448,27 @@ void analysis_type(module_t *m, type_t *type) {
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_IDENT) {
         // 向上查查查
-        ast_ident *ident = type->value;
+        typedecl_ident_t *ident = type->ident_decl;
         string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
         ident->literal = unique_name;
         return;
     }
 
     if (type->kind == TYPE_MAP) {
-        ast_map_decl *map_decl = type->value;
+        typedecl_map_t *map_decl = type->map_decl;
         analysis_type(m, &map_decl->key_type);
         analysis_type(m, &map_decl->value_type);
         return;
     }
 
-    if (type->kind == TYPE_ARRAY) {
-        ast_list_decl *map_decl = type->value;
-        analysis_type(m, &map_decl->type);
+    if (type->kind == TYPE_LIST) {
+        typedecl_list_t *list_decl = type->list_decl;
+        analysis_type(m, &list_decl->type);
         return;
     }
 
     if (type->kind == TYPE_FN) {
-        typedecl_fn_t *type_fn = type->value;
+        typedecl_fn_t *type_fn = type->fn_decl;
         analysis_type(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formals_count; ++i) {
             type_t t = type_fn->formals_types[i];
@@ -477,9 +477,9 @@ void analysis_type(module_t *m, type_t *type) {
     }
 
     if (type->kind == TYPE_STRUCT) {
-        typedecl_struct_t *struct_decl = type->value;
+        typedecl_struct_t *struct_decl = type->struct_decl;
         for (int i = 0; i < struct_decl->count; ++i) {
-            ast_struct_property item = struct_decl->list[i];
+            typedecl_struct_property_t item = struct_decl->properties[i];
             analysis_type(m, &item.type);
         }
     }
@@ -580,7 +580,7 @@ void analysis_type_decl(module_t *m, ast_type_decl_stmt *stmt) {
     analysis_redeclare_check(m, stmt->ident);
     analysis_type(m, &stmt->type);
 
-    analysis_local_ident_t *local = analysis_new_local(m, SYMBOL_TYPE_CUSTOM, stmt, stmt->ident);
+    analysis_local_ident_t *local = analysis_new_local(m, SYMBOL_TYPE_DECL, stmt, stmt->ident);
     stmt->ident = local->unique_ident;
 }
 
@@ -717,26 +717,20 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type == AST_VAR_DECL) {
             ast_var_decl *var_decl = stmt->value;
-            symbol_t *s = NEW(symbol_t);
-            s->type = SYMBOL_TYPE_VAR;
-            s->ident = ident_with_module(m->ident, var_decl->ident);
-            s->value = var_decl;
-            s->is_local = false;
+            char *ident = ident_with_module(m->ident, var_decl->ident);
+
+            symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_VAR, var_decl, false);
             slice_push(m->symbols, s);
-            table_set(symbol_table, s->ident, s);
             continue;
         }
 
         if (stmt->assert_type == AST_STMT_VAR_DECL_ASSIGN) {
             ast_var_decl_assign_stmt *var_decl_assign = stmt->value;
             ast_var_decl *var_decl = var_decl_assign->var_decl;
-            symbol_t *s = NEW(symbol_t);
-            s->type = SYMBOL_TYPE_VAR;
-            s->ident = ident_with_module(m->ident, var_decl->ident);
-            s->value = var_decl;
-            s->is_local = false;
+            char *ident = ident_with_module(m->ident, var_decl->ident);
+
+            symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_VAR, var_decl, false);
             slice_push(m->symbols, s);
-            table_set(symbol_table, s->ident, s);
 
             // 转换成 assign stmt，然后导入到 init 中
             ast_stmt *temp_stmt = NEW(ast_stmt);
@@ -754,13 +748,9 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
         }
         if (stmt->assert_type == AST_STMT_TYPE_DECL) {
             ast_type_decl_stmt *type_decl = stmt->value;
-            symbol_t *s = NEW(symbol_t);
-            s->type = SYMBOL_TYPE_CUSTOM;
-            s->ident = ident_with_module(m->ident, type_decl->ident);
-            s->value = type_decl;
-            s->is_local = false;
+            char *ident = ident_with_module(m->ident, type_decl->ident);
+            symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_DECL, type_decl, false);
             slice_push(m->symbols, s);
-            table_set(symbol_table, s->ident, s);
             continue;
         }
 
@@ -768,13 +758,8 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             ast_new_fn *new_fn = stmt->value;
             new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
-            symbol_t *s = NEW(symbol_t);
-            s->type = SYMBOL_TYPE_FN;
-            s->ident = new_fn->name;
-            s->value = new_fn;
-            s->is_local = false;
+            symbol_t *s = symbol_table_set(new_fn->name, SYMBOL_TYPE_FN, new_fn, false);
             slice_push(m->symbols, s);
-            table_set(symbol_table, s->ident, s);
             slice_push(fn_list, new_fn);
             continue;
         }
@@ -785,18 +770,13 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
     fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
-    fn_init->return_type = type_by_kind(TYPE_VOID);
+    fn_init->return_type = type_base_new(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
 
     // 加入到全局符号表，等着调用就好了
-    symbol_t *s = NEW(symbol_t);
-    s->type = SYMBOL_TYPE_FN;
-    s->ident = fn_init->name;
-    s->value = fn_init;
-    s->is_local = false;
+    symbol_t *s = symbol_table_set(fn_init->name, SYMBOL_TYPE_FN, fn_init, false);
     slice_push(m->symbols, s);
-    table_set(symbol_table, s->ident, s);
     slice_push(fn_list, fn_init);
 
     // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
@@ -804,7 +784,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     ast_call *call = NEW(ast_call);
     call->left = (ast_expr) {
             .assert_type = AST_EXPR_IDENT,
-            .value = ast_new_ident(s->ident),
+            .value = ast_new_ident(s->ident), // module.init
     };
     call->actual_param_count = 0;
     temp_stmt->assert_type = AST_CALL;
@@ -849,20 +829,15 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
     new_fn->name = MAIN_FN_NAME;
     new_fn->body = slice_new();
-    new_fn->return_type = type_by_kind(TYPE_VOID);
+    new_fn->return_type = type_base_new(TYPE_VOID);
     new_fn->formal_param_count = 0;
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(new_fn->body, stmt_list->take[i]);
     }
 
     // 符号表注册
-    symbol_t *s = NEW(symbol_t);
-    s->type = SYMBOL_TYPE_FN;
-    s->ident = MAIN_FN_NAME;
-    s->value = new_fn;
-    s->is_local = true;
+    symbol_t *s = symbol_table_set(MAIN_FN_NAME, SYMBOL_TYPE_FN, new_fn, true);
     slice_push(m->symbols, s);
-    table_set(symbol_table, s->ident, s);
 
     ast_closure_t *closure = analysis_new_fn(m, new_fn, NULL);
     slice_push(m->ast_closures, closure);

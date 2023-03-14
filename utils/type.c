@@ -187,7 +187,7 @@ static reflect_type_t rtype_struct(typedecl_struct_t *t) {
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 property 的
     for (int i = 0; i < t->count; ++i) {
-        struct_property_t property = t->properties[i];
+        typedecl_struct_property_t property = t->properties[i];
         uint16_t item_size = type_sizeof(property.type);
         if (item_size > max) {
             max = item_size;

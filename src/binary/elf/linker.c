@@ -4,6 +4,7 @@
 #include "utils/error.h"
 #include "amd64.h"
 #include "arch.h"
+#include "utils/links/fndef.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -353,6 +354,8 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
     // read section header table
     Elf64_Shdr *shdr_list = elf_file_load_data(fd, file_offset + ehdr.e_shoff, sizeof(*shdr) * ehdr.e_shnum);
+    // 当前 obj file 中的符号中的 sh_index 都是当前 obj 文件中的 index，需要这样一个 local_sections
+    // 充当当前 sh_index -> global sh_index 的映射
     local_section_t *local_sections = mallocz(sizeof(local_section_t) * ehdr.e_shnum);
 
     // 加载段表字符串表 e_shstrndx = Section header string table index
@@ -383,7 +386,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         strtab = elf_file_load_data(fd, file_offset + shdr->sh_offset, shdr->sh_size);
     }
 
-    // 段合并(按段名称合并，而不是段的类型, 其中不包含符号表，主要是对 data、text 段的合并)
+    // 遍历所有的段进行段合并(合并到 ctx 中)(按段名称合并，而不是段的类型, 其中不包含符号表，主要是对 data、text 段的合并)
     for (int sh_index = 1; sh_index < ehdr.e_shnum; ++sh_index) {
         // 跳过段表字符串表
         if (sh_index == ehdr.e_shstrndx) {
@@ -407,42 +410,42 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
         shdr = &shdr_list[sh_index];
         char *shdr_name = shstrtab + shdr->sh_name;
-        section_t *section;
+
+        section_t *global_section;
         // n * n 的遍历查找
         for (int i = 1; i < ctx->sections->count; ++i) {
-            section = SEC_TACK(i);
-            if (str_equal(section->name, shdr_name)) {
+            global_section = SEC_TACK(i);
+            if (str_equal(global_section->name, shdr_name)) {
                 // 在全局 sections 中找到了同名 section
                 goto FOUND;
             }
         }
-        // not found
-        section = elf_new_section(ctx, shdr_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
-        section->sh_addralign = shdr->sh_addralign;
-        section->sh_entsize = shdr->sh_entsize;
+        // not found in ctx->sections, will create new section
+        global_section = elf_new_section(ctx, shdr_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
+        global_section->sh_addralign = shdr->sh_addralign;
+        global_section->sh_entsize = shdr->sh_entsize;
         local_sections[sh_index].is_new = true;
         FOUND:
-        // 同名但是类型不相同
-        if (shdr->sh_type != section->sh_type) {
-            error_exit("[elf_load_object_file] sh %s code invalid", shdr_name);
-        }
+        // 在ctx 中找到了同名 section 但是段类型不相同
+        assertf(shdr->sh_type == global_section->sh_type, "[elf_load_object_file] sh %s code invalid", shdr_name);
+
         // align
-        section->data_count += -section->data_count & (shdr->sh_addralign - 1);
+        global_section->data_count += -global_section->data_count & (shdr->sh_addralign - 1);
         // local shdr > global section
-        if (shdr->sh_addralign > section->sh_addralign) {
-            section->sh_addralign = shdr->sh_addralign;
+        if (shdr->sh_addralign > global_section->sh_addralign) {
+            global_section->sh_addralign = shdr->sh_addralign;
         }
-        local_sections[sh_index].offset = section->data_count;
-        local_sections[sh_index].section = section;
+        local_sections[sh_index].offset = global_section->data_count;
+        local_sections[sh_index].section = global_section;
 
         // 将 local section 数据写入到全局 section 中
         uint64_t sh_size = shdr->sh_size;
         if (shdr->sh_type == SHT_NOBITS) { // 预留空间单没数据
-            section->data_count += sh_size;
+            global_section->data_count += sh_size;
         } else {
             unsigned char *ptr;
             lseek(fd, file_offset + shdr->sh_offset, SEEK_SET); // 移动 fd 指向的文件的偏移点
-            ptr = elf_section_data_add_ptr(section, sh_size);
+            ptr = elf_section_data_add_ptr(global_section, sh_size);
             full_read(fd, ptr, sh_size);
         };
     }
@@ -514,6 +517,8 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
             continue;
         }
 
+        // 找到当前 rel_section,当前 rela 中的 sym_index 和 apply offset 还在还是 local 的，需要改成 global
+
         // 应用 rel 的 section
         uint64_t apply_offset = local_sections[shdr->sh_info].offset;
         Elf64_Rela *rel;
@@ -522,9 +527,8 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
             uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
 
-            if (sym_index >= sym_count) {
-                error_exit("[elf_load_object_file] rel sym index exception");
-            }
+            assertf(sym_index < sym_count, "[elf_load_object_file] rel sym index exception");
+
 
             sym_index = symtab_index_map[sym_index];
             if (!sym_index /**&& code != R_RISCV_ALIGN && code != R_RISCV_RELAX **/) {
@@ -1208,6 +1212,9 @@ elf_context *elf_context_new(char *output, uint8_t type) {
     /* create standard sections */
     ctx->text_section = elf_new_section(ctx, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     ctx->data_section = elf_new_section(ctx, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->rtype_section = elf_new_section(ctx, ".rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->fndef_section = elf_new_section(ctx, ".fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->symdef_section = elf_new_section(ctx, ".symdef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
     ctx->bss_section = elf_new_section(ctx, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
 
@@ -1261,4 +1268,23 @@ Elf64_Sym *elf_find_sym(elf_context *ctx, char *name) {
         return NULL;
     }
     return &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+}
+
+/**
+ * @param ctx
+ */
+void elf_load_fndef(elf_context *ctx) {
+    assertf(symbol_fn_list->count > 0, "symbol fn empty");
+
+    fndef_t *fndef_list = mallocz(symbol_fn_list->count * sizeof(fndef_t));
+    // - 遍历全局符号表中的所有 fn 数据就行了
+    SLICE_FOR(symbol_fn_list) {
+        int index = _i;
+        symbol_t *s = SLICE_VALUE(symbol_fn_list);
+        fndef_t *f = &fndef_list[index];
+//        f->stack_size =
+    }
+
+
+    // - 然后在基于 symhash 找到其在 text 段中 start and end
 }

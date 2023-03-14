@@ -233,14 +233,14 @@ type_t infer_ident(string unique_ident) {
     assertf(symbol, "ident %s not found", unique_ident);
 
     if (symbol->type == SYMBOL_TYPE_VAR) {
-        ast_var_decl *var_decl = symbol->value;
+        ast_var_decl *var_decl = symbol->ast_value;
         var_decl->type = infer_type(var_decl->type); // 类型还原
         return var_decl->type;
     }
 
     // 比如 print 和 println 都已经注册在了符号表中
     if (symbol->type == SYMBOL_TYPE_FN) {
-        ast_new_fn *new_fn = symbol->value;
+        ast_new_fn *new_fn = symbol->ast_value;
         return infer_type(analysis_fn_to_type(new_fn));
     }
 
@@ -634,7 +634,7 @@ type_t infer_type(type_t type) {
 
     if (type.kind == TYPE_STRUCT) {
         typedecl_struct_t *struct_decl = type.struct_decl;
-        infer_sort_struct_decl(struct_decl); // 按照 key 排序
+//        infer_sort_struct_decl(struct_decl); // 按照 key 排序
 
         // 对 struct 的每个属性都进行还原
         for (int i = 0; i < struct_decl->count; ++i) {
@@ -681,12 +681,12 @@ type_t infer_type(type_t type) {
 
 type_t infer_type_def(typedecl_ident_t *def) {
     // 符号表找到相关类型
-    symbol_t *symbol = symbol_table_get(def->name);
-    if (symbol->type != SYMBOL_TYPE_CUSTOM) {
+    symbol_t *symbol = symbol_table_get(def->literal);
+    if (symbol->type != SYMBOL_TYPE_DECL) {
         error_printf(infer_line, "'%s' is not a code", symbol->ident);
     }
 
-    ast_type_decl_stmt *type_decl_stmt = symbol->value;
+    ast_type_decl_stmt *type_decl_stmt = symbol->ast_value;
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->code 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
@@ -713,21 +713,22 @@ type_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
 }
 
 /**
- * 对 struct list 按照 key 进行排序,选择排序
+ * ~~对 struct list 按照 key 进行排序,选择排序~~
+ * struct 暂时不支持调换顺序
  * @param struct_decl
  */
-void infer_sort_struct_decl(typedecl_struct_t *struct_decl) {
-    for (int i = 0; i < struct_decl->count; ++i) {
-        for (int j = i + 1; j < struct_decl->count; ++j) {
-            if (strcmp(struct_decl->properties[i].key, struct_decl->properties[j].key) > 0) {
-                // 交换
-                struct_property_t temp = struct_decl->properties[i];
-                struct_decl->properties[i] = struct_decl->properties[j];
-                struct_decl->properties[j] = temp;
-            }
-        }
-    }
-}
+//void infer_sort_struct_decl(typedecl_struct_t *struct_decl) {
+//    for (int i = 0; i < struct_decl->count; ++i) {
+//        for (int j = i + 1; j < struct_decl->count; ++j) {
+//            if (strcmp(struct_decl->properties[i].key, struct_decl->properties[j].key) > 0) {
+//                // 交换
+//                struct_property_t temp = struct_decl->properties[i];
+//                struct_decl->properties[i] = struct_decl->properties[j];
+//                struct_decl->properties[j] = temp;
+//            }
+//        }
+//    }
+//}
 
 type_t infer_literal(ast_literal *literal) {
     return type_base_new(literal->kind);

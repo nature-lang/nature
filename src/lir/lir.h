@@ -145,7 +145,6 @@ typedef struct {
 
 /**
  * 存放在寄存器或者内存中, var a = 1
- * TODO 目前仅支持
  */
 typedef struct {
     string ident; // ssa 后的新名称

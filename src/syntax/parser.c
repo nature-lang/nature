@@ -585,7 +585,7 @@ type_t parser_type(module_t *m) {
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
             // default value
-            struct_property_t item;
+            typedecl_struct_property_t item;
             item.type = parser_type(m);
             item.key = parser_advance(m)->literal;
 

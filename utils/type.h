@@ -84,7 +84,9 @@ typedef double type_decl_float_t;
 typedef uint8_t type_decl_bool_t;
 
 /**
- *  custom_type a = 1, 此时 a 的 type 是一个自定义的 type, 其可能是 struct，也
+ *  custom_type a = 1, 此时 custom_type 就是 ident 类型
+ *  custom_type 是一个自定义的 type, 其可能是 struct，也可能是 int 等等
+ *  但是在类型描述上来说，其就是一个 ident
  */
 typedef struct typedecl_ident_t typedecl_ident_t;
 
@@ -185,7 +187,7 @@ struct typedecl_string_t {
 };
 
 struct typedecl_ident_t {
-    string name; // 类型名称 type my_int = int
+    string literal; // 类型名称 type my_int = int
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -214,6 +216,9 @@ struct typedecl_list_t {
 //    void *data; // 引用的是一个 array 结构
 };
 
+/**
+ * map{int:int}
+ */
 struct typedecl_map_t {
     int size; // TODO 完全没考虑过怎么搞
     type_t key_type;
@@ -223,9 +228,9 @@ struct typedecl_map_t {
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     char *key;
-    int align_offset; // 对齐后起始地址
+//    int align_offset; // 对齐后起始地址,描述信息里面要这个也没啥用
     type_t type; // 这里存放的数据的大小是固定的吗？
-} struct_property_t;
+} typedecl_struct_property_t;
 
 // 比如 type_struct_t 结构，如何能够将其传递到运行时，一旦运行时知道了该结构，编译时就不用费劲心机的在 lir 中传递该数据了？
 // 可以通过连接器传递，但是其长度不规则,尤其是指针嵌套着指针的情况，所以将其序列化传递到 runtime 是很困难的事情
@@ -234,7 +239,7 @@ typedef struct {
 struct typedecl_struct_t {
     int size; // 占用的 mheap 的空间(按每个 property 对齐后的数据)
     int8_t count; // 属性的个数，用于遍历
-    struct_property_t properties[UINT16_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    typedecl_struct_property_t properties[UINT16_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
 };
 
 /**

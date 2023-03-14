@@ -332,13 +332,15 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->interval_table = table_new();
 
 //    new->var_decl_table = table_new();
-    new->stack_offset = 0;
+    new->stack_size = 0;
+    new->stack_vars = slice_new();
     new->loop_count = 0;
     new->loop_ends = slice_new();
     new->loop_headers = slice_new();
 
     new->interval_count = alloc_reg_count() + 1;
 
+    ast->fn->closure = new;
     return new;
 }
 
