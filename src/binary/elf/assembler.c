@@ -21,11 +21,13 @@ void var_decl_encodings(elf_context *ctx, slice_t *var_decls) {
     }
 }
 
-void linkable_object_format(elf_context *ctx, slice_t *opcodes, slice_t *var_decls) {
+void linkable_object_load_closure(elf_context *ctx, closure_t *c) {
     // 将全局变量写入到数据段或者符号表 (这里应该叫 global var)
-    var_decl_encodings(ctx, var_decls);
+    var_decl_encodings(ctx, c->asm_var_decls);
+
     // 代码段生成
-    opcode_encodings(ctx, opcodes);
+    c->text_count = opcode_encodings(ctx, c->asm_operations);
+
     alloc_section_names(ctx, 1);
     size_t file_offset = sizeof(Elf64_Ehdr);
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {

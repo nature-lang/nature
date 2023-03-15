@@ -144,7 +144,7 @@ type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
 
 void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn) {
     // 仅 fun 再次定义 as 才需要再次添加到符号表
-    if (!str_equal(new_fn->name, MAIN_FN_NAME)) {
+    if (!str_equal(new_fn->name, FN_MAIN_NAME)) {
         if (strlen(new_fn->name) == 0) {
             // 如果没有函数名称，则添加匿名函数名称
             new_fn->name = analysis_unique_ident(m, ANONYMOUS_FN_NAME);
@@ -769,7 +769,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
     // 添加 init fn
     ast_new_fn *fn_init = NEW(ast_new_fn);
-    fn_init->name = ident_with_module(m->ident, INIT_FN_NAME);
+    fn_init->name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_base_new(TYPE_VOID);
     fn_init->formal_param_count = 0;
     fn_init->body = var_assign_list;
@@ -827,7 +827,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
 
     // block 封装进 function,再封装到 closure_t 中
     ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
-    new_fn->name = MAIN_FN_NAME;
+    new_fn->name = FN_MAIN_NAME;
     new_fn->body = slice_new();
     new_fn->return_type = type_base_new(TYPE_VOID);
     new_fn->formal_param_count = 0;
@@ -836,7 +836,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     }
 
     // 符号表注册
-    symbol_t *s = symbol_table_set(MAIN_FN_NAME, SYMBOL_TYPE_FN, new_fn, true);
+    symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_TYPE_FN, new_fn, true);
     slice_push(m->symbols, s);
 
     ast_closure_t *closure = analysis_new_fn(m, new_fn, NULL);

@@ -16,7 +16,7 @@ uint64_t elf_start_addr();
 
 uint64_t elf_page_size();
 
-void opcode_encodings(elf_context *ctx, slice_t *opcodes);
+uint64_t opcode_encodings(elf_context *ctx, slice_t *opcodes);
 
 void relocate(elf_context *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
 

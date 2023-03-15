@@ -21,8 +21,8 @@ extern symdef_t *symdef_list_;
  * 连接器会将该数据传递给当前全局变量
  * 想要获取 fn 在 text 中的位置非常的简单，只需要遍历 symtab 就能获取 fn 所在的 section 以及 offset and size 数据
  */
-extern int fndef_count;
-extern fndef_t *fndef_list;
+extern int fndef_data_count; // 字节数
+extern fndef_t *fndef_data;
 extern addr_t fn_main_base;
 
 

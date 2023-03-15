@@ -325,7 +325,8 @@ uint8_t type_kind_sizeof(type_kind t);
 uint16_t type_sizeof(type_t t);
 
 /**
- * 类型是否是一个指针类型指向更加深层次的数据
+ * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
+ * 后续 nature 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
  * @param t
  * @return
  */

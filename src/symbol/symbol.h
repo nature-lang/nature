@@ -6,6 +6,10 @@
 #include "utils/table.h"
 #include "src/ast.h"
 
+#define FN_MAIN_NAME "main"
+#define FN_INIT_NAME "init"
+#define ENV_IDENT "env"
+
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称

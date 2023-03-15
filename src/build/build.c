@@ -48,7 +48,11 @@ static void assembler(module_t *m) {
 
         char *output = file_join(TEMP_DIR, object_file_name);
         elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
-        linkable_object_format(ctx, m->asm_operations, m->asm_var_decls);
+        // TODO 基于 closures asm_operations 进行 encoding
+        for (int i = 0; i < m->closures->count; ++i) {
+            closure_t *c = m->closures->take[i];
+            linkable_object_load_closure(ctx, c);
+        }
         // 输出目标文件
         elf_output(ctx);
 

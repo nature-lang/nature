@@ -39,6 +39,6 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, a
  * @param ctx
  * @param operations amd64_opcode_t
  */
-void amd64_operation_encodings(elf_context *ctx, slice_t *operations);
+uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations);
 
 #endif //NATURE_AMD64_H

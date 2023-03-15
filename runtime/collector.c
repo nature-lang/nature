@@ -10,8 +10,8 @@
  * @return
  */
 static fndef_t *find_fn(addr_t addr) {
-    for (int i = 0; i < fndef_count; ++i) {
-        fndef_t *fn = &fndef_list[i];
+    for (int i = 0; i < fndef_data_count; ++i) {
+        fndef_t *fn = &fndef_data[i];
         if (fn->base < addr && fn->end > addr) {
             return fn;
         }

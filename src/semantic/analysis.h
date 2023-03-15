@@ -5,9 +5,7 @@
 #include "src/symbol/symbol.h"
 #include "src/module.h"
 
-#define MAIN_FN_NAME "main"
-#define INIT_FN_NAME "init"
-#define ENV_IDENT "env"
+
 #define ANONYMOUS_FN_NAME "_"
 
 

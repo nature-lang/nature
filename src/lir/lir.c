@@ -322,6 +322,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->env_name = ast->env_name;
     new->parent = NULL;
     new->operations = list_new();
+    new->text_count = 0;
     new->asm_operations = slice_new();
     new->asm_var_decls = slice_new();
     new->entry = NULL;

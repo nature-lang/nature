@@ -3,6 +3,7 @@
 
 #include "linker.h"
 #include "utils/list.h"
+#include "src/structs.h"
 
 /**
  * 调用 opcode 生成汇编码二进制，以及构造代码段，可重定位段落等拼凑出 elf 文件的各个段落
@@ -12,7 +13,7 @@
  * - 编译变量
  * - 编译指令
  */
-void linkable_object_format(elf_context *ctx, slice_t *opcodes, slice_t *var_decls);
+void linkable_object_load_closure(elf_context *ctx, closure_t *c);
 
 
 /**

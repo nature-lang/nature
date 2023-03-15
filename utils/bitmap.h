@@ -8,7 +8,7 @@
 
 typedef struct {
     uint8_t *bits; // 每一个元素有 8 bit
-    int size; // 位图的大小, 单位 bit
+    uint64_t size; // 位图的大小, 单位 bit
 } bitmap_t;
 
 bitmap_t *bitmap_new(int size);
@@ -20,11 +20,11 @@ void bitmap_free(bitmap_t *b);
  * @param bits
  * @param index
  */
-void bitmap_set(uint8_t *bits, int index);
+void bitmap_set(uint8_t *bits, uint64_t index);
 
-void bitmap_clear(uint8_t *bits, int index);
+void bitmap_clear(uint8_t *bits, uint64_t index);
 
-bool bitmap_test(uint8_t *bits, int index);
+bool bitmap_test(uint8_t *bits, uint64_t index);
 
 int bitmap_set_count(bitmap_t *b);
 

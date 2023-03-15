@@ -169,7 +169,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
 
 uint64_t elf_put_str(section_t *s, char *str);
 
-uint64_t elf_put_data(section_t *s, uint8_t *data, uint8_t count);
+uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count);
 
 void elf_resolve_common_symbols(elf_context *ctx);
 
@@ -203,5 +203,7 @@ elf_context *elf_context_new(char *output, uint8_t type);
 void alloc_section_names(elf_context *ctx, bool is_obj);
 
 void elf_load_fndef(elf_context *ctx);
+
+void elf_put_global_symbol(elf_context *ctx, char *name, uint8_t *value, uint8_t value_size);
 
 #endif //NATURE_LINKER_H

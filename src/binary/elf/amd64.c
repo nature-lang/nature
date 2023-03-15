@@ -500,9 +500,9 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
     }
 }
 
-void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
+uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
     if (operations->count == 0) {
-        return;
+        return 0;
     }
 
     slice_t *build_temps = slice_new();
@@ -643,10 +643,12 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
 
     }
 
+    uint64_t count = 0;
     // 代码段已经确定，生成 text 数据
-    // TODO set label st_size
     for (int i = 0; i < build_temps->count; ++i) {
         amd64_build_temp_t *temp = build_temps->take[i];
         elf_put_data(ctx->text_section, temp->data, temp->data_count);
+        count += temp->data_count;
     }
+    return count;
 }

@@ -148,7 +148,7 @@ typedef struct {
     slice_t *ast_closures; // 全局的或者非全局的都在这里了
 
     // compiler 阶段得到
-    slice_t *closures; // 包含 lir
+    slice_t *closures; // 包含 lir, 无论是 local 还是 global 都会在这里进行注册
 
     // native -> opcodes
     int asm_temp_var_decl_count;
@@ -242,7 +242,8 @@ typedef struct closure_t {
     slice_t *loop_ends;
 
     // refer module
-    slice_t *asm_operations; // 和架构相关
+    uint64_t text_count; // asm_operations 编译完成后占用的 count
+    slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
     slice_t *asm_var_decls; // 和架构无关
     module_t *module;
 } closure_t;
