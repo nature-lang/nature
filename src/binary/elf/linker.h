@@ -202,8 +202,6 @@ elf_context *elf_context_new(char *output, uint8_t type);
 
 void alloc_section_names(elf_context *ctx, bool is_obj);
 
-void elf_load_fndef(elf_context *ctx);
-
-void elf_put_global_symbol(elf_context *ctx, char *name, uint8_t *value, uint8_t value_size);
+void *elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size);
 
 #endif //NATURE_LINKER_H

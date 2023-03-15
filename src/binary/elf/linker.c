@@ -2,15 +2,116 @@
 #include "elf.h"
 #include "utils/helper.h"
 #include "utils/error.h"
+#include "utils/links.h"
+#include "utils/type.h"
 #include "amd64.h"
 #include "arch.h"
-#include "utils/links/fndef.h"
 #include "src/lir/lir.h"
 
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+
+static void pre_handle_custom_links(elf_context *ctx) {
+    // - 数据预计算得到相关 size
+    pre_fndef_list();
+    pre_symdef_list();
+    // - 相关 sections sh_size 预填充
+    ctx->fndef_section->sh_size = fndefs_size;
+    ctx->symdef_section->sh_size = symdefs_size;
+
+    // - rtype 数据与 sym 无关，这里可以进行完全的填充处理
+    uint64_t count = rtype_count;
+    byte *data = rtypes_serialize(rtypes, &count);
+    elf_put_data(ctx->rtype_section, data, count);
+    ctx->rtype_section->sh_size = count;
+
+    // - 写入相关符号到符号表
+    //  fndef_data
+    Elf64_Sym fndef_data_sym = {
+            .st_shndx = ctx->fndef_section->sh_index,
+            .st_value = 0,
+            .st_size = ctx->fndef_section->sh_size,
+            .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+            .st_other = 0
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &fndef_data_sym, SYMBOL_FNDEF_DATA);
+    // 写入 count
+    elf_put_global_symbol(ctx, SYMBOL_FNDEF_SIZE, &ctx->fndef_section->sh_size, INT_SIZE);
+    // 目前还不知道具体的值，所以仅仅占位
+    int fn_main_base = 0;
+    fn_main_base_data_ptr = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
+
+    // link_symdefs
+    Elf64_Sym symdef_sym = {
+            .st_shndx = ctx->symdef_section->sh_index,
+            .st_value = 0,
+            .st_size = ctx->symdef_section->sh_size,
+            .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+            .st_other = 0
+    };
+
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &symdef_sym, SYMBOL_SYMDEF_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_SYMDEF_SIZE, &ctx->symdef_section->sh_size, INT_SIZE);
+
+    // rtype
+    Elf64_Sym rtype_sym = {
+            .st_shndx = ctx->rtype_section->sh_index,
+            .st_value = 0,
+            .st_size = ctx->rtype_section->sh_size,
+            .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+            .st_other = 0
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &rtype_sym, SYMBOL_RTYPE_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_RTYPE_SIZE, &ctx->rtype_section->sh_size, INT_SIZE);
+}
+
+/**
+ * 需要在 sym st_value 重定位到全局线性地址后才能进行数据完善
+ * @param ctx
+ */
+static void handle_custom_links(elf_context *ctx) {
+    // - 完善已经预处理的数据(引用的符号地址)
+    uint64_t fn_main_base = 0;
+    for (int i = 0; i < symbol_fn_list->count; ++i) {
+        symbol_t *symbol = symbol_fn_list->take[i];
+        ast_new_fn *fn = symbol->ast_value;
+        closure_t *c = fn->closure;
+        fndef_t *fndef = &fndefs[i];
+
+        uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, fn->name);
+        assertf(sym_index > 0, "fn %s notfound in symtab", fn->name);
+        Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+
+        fndef->base = sym.st_value;  // sym 已经进行过全局重定位
+        fndef->end = sym.st_value + c->text_count;
+        if (str_equal(fn->name, FN_MAIN_NAME)) {
+            fn_main_base = sym.st_value; // 一定是在 text section 的
+        }
+    }
+
+    for (int i = 0; i < symbol_var_list->count; ++i) {
+        symbol_t *symbol = symbol_fn_list->take[i];
+        symdef_t *symdef = &symdefs[i];
+
+        uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol->ident);
+        assertf(sym_index > 0, "var %s notfound in symtab", symbol->ident);
+        Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+        symdef->base = sym.st_value;
+    }
+    assertf(fn_main_base, "linker notfound main fn");
+
+    memmove(fn_main_base_data_ptr, &fn_main_base, INT_SIZE);
+
+    // - 填入相关数据进行序列化并写入到 elf_put_data -> s->data
+    uint64_t count = symbol_fn_list->count;
+    byte *data = fndefs_serialize(fndefs, &count);
+    elf_put_data(ctx->fndef_section, data, count);
+
+    count = symbol_var_list->count;
+    elf_put_data(ctx->symdef_section, symdefs, symdefs_size);
+}
 
 static uint64_t get_be(const uint8_t *b, int n) {
     uint64_t ret = 0;
@@ -140,6 +241,10 @@ static int sort_sections(elf_context *ctx) {
     return phdr_count;
 }
 
+/**
+ * 同类型段进行排序
+ * @param ctx
+ */
 static void layout_sections(elf_context *ctx) {
     int phdr_count = sort_sections(ctx);
     ctx->phdr_count = phdr_count;
@@ -250,7 +355,7 @@ static int set_section_sizes(elf_context *ctx) {
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *s = ctx->sections->take[sh_index];
         if (s->sh_flags & SHF_ALLOC) {
-            s->sh_size = s->data_count;
+            s->sh_size = s->data_count; // 直接使用 data_count 覆盖
         }
     }
     return 0;
@@ -682,11 +787,9 @@ uint64_t elf_put_str(section_t *s, char *str) {
 }
 
 uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
-    uint64_t offset = s->data_count;
-
     char *ptr = elf_section_data_add_ptr(s, count);
     memmove(ptr, data, count);
-    return offset;
+    return (uint64_t) ptr - (uint64_t) s->data;
 }
 
 
@@ -694,6 +797,7 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
  * - resolve common sym
  * - build got entries
  * - recalculate segment size
+ * - pre_handle custom links
  * - alloc section name
  * - layout sections
  * - relocate symbols
@@ -708,11 +812,15 @@ void executable_file_format(elf_context *ctx) {
 
     set_section_sizes(ctx);
 
+    pre_handle_custom_links(ctx);
+
     alloc_section_names(ctx, 0);
 
     layout_sections(ctx);
 
     elf_relocate_symbols(ctx, ctx->symtab_section);
+
+    handle_custom_links(ctx);
 
     elf_relocate_sections(ctx);
 
@@ -1201,8 +1309,7 @@ void elf_load_archive(elf_context *ctx, int fd) {
 }
 
 elf_context *elf_context_new(char *output, uint8_t type) {
-    elf_context *ctx = mallocz(sizeof(elf_context));
-
+    elf_context *ctx = NEW(elf_context);
 
     ctx->output = output;
     ctx->output_type = type;
@@ -1272,7 +1379,15 @@ Elf64_Sym *elf_find_sym(elf_context *ctx, char *name) {
 }
 
 
-void elf_put_global_symbol(elf_context *ctx, char *name, uint8_t *value, uint8_t value_size) {
+/**
+ * 返回了 data 存放数据的内存地址，可以基于该地址做数据覆盖
+ * @param ctx
+ * @param name
+ * @param value
+ * @param value_size
+ * @return
+ */
+void *elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size) {
     // 写入到数据段
     uint64_t offset = elf_put_data(ctx->data_section, value, value_size);
 
@@ -1285,65 +1400,7 @@ void elf_put_global_symbol(elf_context *ctx, char *name, uint8_t *value, uint8_t
             .st_value = offset, // 定义符号的位置，基于段的偏移
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
+
+    // 写入的内存地址其实地址
+    return ctx->data_section->data + offset;
 }
-
-/**
- * @param ctx
- */
-void elf_load_fndef(elf_context *ctx) {
-    assertf(symbol_fn_list->count > 0, "symbol fn empty");
-
-    fndef_t *fndef_list = mallocz(symbol_fn_list->count * sizeof(fndef_t));
-    addr_t fn_main_base;
-
-    // - 遍历全局符号表中的所有 fn 数据就行了
-    SLICE_FOR(symbol_fn_list) {
-        int index = _i;
-        symbol_t *s = SLICE_VALUE(symbol_fn_list);
-        ast_new_fn *fn = s->ast_value;
-        closure_t *c = fn->closure;
-
-        fndef_t *f = &fndef_list[index];
-        f->stack_size = align(c->stack_size, POINTER_SIZE);
-        f->gc_bits = mallocz(f->stack_size / 8);
-        uint64_t offset = 0;
-        for (int i = 0; i < c->stack_vars->count; ++i) {
-            lir_var_t *var = c->stack_vars->take[i];
-            offset = align(offset, type_sizeof(var->type)); // 按 size 对齐
-            bool need = type_need_gc(var->type);
-            if (need) {
-                bitmap_set(f->gc_bits, offset / POINTER_SIZE);
-            }
-        }
-        uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, fn->name);
-        assertf(sym_index > 0, "fn %s notfound in symtab", fn->name);
-        Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
-        f->base = sym.st_value;
-        f->end = sym.st_value + c->text_count;
-        if (str_equal(fn->name, FN_MAIN_NAME)) {
-            fn_main_base = sym.st_value; // 一定是在 text section 的
-        }
-    }
-    // fndef_list 序列化并写入 section 中
-    uint64_t count = symbol_fn_list->count;
-    byte *data = fndefs_serialize(fndef_list, &count);
-    elf_put_data(ctx->fndef_section, data, count);
-
-    // 将 fndef_list 和 fndef_count 写入到符号表(st_value = 0)
-    Elf64_Sym sym = {
-            .st_shndx = ctx->fndef_section->sh_index,
-            .st_value = 0,
-            .st_size = count,
-            .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-            .st_other = 0
-
-    };
-    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_LIST);
-
-    // 写入 count
-    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, (uint8_t *) count, INT_SIZE);
-
-    // 写入 fn main base addr
-    elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, (uint8_t *) fn_main_base, INT_SIZE);
-}
-

@@ -94,8 +94,6 @@ static void linker(slice_t *module_list) {
     fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
-    // load rtype,fndef,symdef and add symbol
-
     executable_file_format(ctx);
 
     elf_output(ctx);

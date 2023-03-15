@@ -291,21 +291,6 @@ reflect_type_t reflect_type(type_t t);
  */
 uint64_t rtypes_push(reflect_type_t rtype);
 
-/**
- * 将 reflect_types 进行序列化,
- * @param count 入参时为 reflect_types 的个数，出参时是 byte 序列化后的数量
- * @return
- */
-byte *rtypes_serialize(reflect_type_t *reflect_types, uint64_t *count);
-
-/**
- * 反序列化
- * @param data
- * @param count 入参时是 byte 的数量，出参时是 reflect_type 的数量
- * @return
- */
-reflect_type_t *rtypes_deserialize(byte *data, uint64_t *count);
-
 reflect_type_t *find_rtype(uint index);
 
 uint find_rtype_index(type_t t);

@@ -10,7 +10,7 @@
  * @return
  */
 static fndef_t *find_fn(addr_t addr) {
-    for (int i = 0; i < fndef_data_count; ++i) {
+    for (int i = 0; i < link_fndef_size; ++i) {
         fndef_t *fn = &fndef_data[i];
         if (fn->base < addr && fn->end > addr) {
             return fn;
@@ -33,12 +33,12 @@ static void scan_stack(memory_t *m) {
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
     addr_t frame_base = stack.frame_base;
     while (true) {
-        addr_t return_addr = (addr_t) fetch_addr_value(frame_base + PTR_SIZE);
+        addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
-        addr_t frame_top = frame_base + PTR_SIZE * 2;
+        addr_t frame_top = frame_base + POINTER_SIZE * 2;
         frame_base = frame_top + fn->stack_size;
 
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
@@ -46,7 +46,7 @@ static void scan_stack(memory_t *m) {
         addr_t cursor = frame_top;
         int i = 0;
         while (cursor < frame_base) {
-            bool is_ptr = bitmap_test(fn->gc_bits->bits, i);
+            bool is_ptr = bitmap_test(fn->gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                 list_push(m->grey_list, (void *) fetch_addr_value(cursor));
@@ -135,13 +135,13 @@ static void grey_list_work(memory_t *m) {
 
             // - obj 中包含指针，需要进一步扫描
             // - locate to the arena bits start
-            uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
+            uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
 
             // scan object
             // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
             // ++i 此时按指针跨度增加
             int index = 0;
-            for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += PTR_SIZE) {
+            for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += POINTER_SIZE) {
                 int bit_index = (index / 4) * 8 + (index % 4);
                 index++;
                 // TODO arena_t bits 高地位标记了后续是否还有更多的指针，如果没有了，就可以直接停止了

@@ -678,10 +678,10 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, reflect_type_t *type) {
     // 确定 arena bits base
     arena_t *arena = take_arena(addr);
-    uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * PTR_SIZE)];
+    uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
 
     int index = 0;
-    for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += PTR_SIZE) {
+    for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         int bit_index = (index / 4) * 8 + (index % 4);
 

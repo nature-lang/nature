@@ -5,6 +5,7 @@
 void symbol_init() {
     symbol_table = table_new();
     symbol_fn_list = slice_new();
+    symbol_var_list = slice_new();
 
 //    // built in fn init
     symbol_table_set("print", SYMBOL_TYPE_FN, builtin_print(), false);
@@ -21,7 +22,7 @@ void symbol_table_set_var(char *unique_ident, type_t type) {
     symbol_table_set(unique_ident, SYMBOL_TYPE_VAR, var_decl, true);
 }
 
-symbol_t * symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
+symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
     symbol_t *s = NEW(symbol_t);
     s->ident = ident;
     s->type = type;
@@ -31,6 +32,11 @@ symbol_t * symbol_table_set(string ident, symbol_type type, void *ast_value, boo
     if (type == SYMBOL_TYPE_FN) {
         slice_push(symbol_fn_list, s);
     }
+
+    if (type == SYMBOL_TYPE_VAR) {
+        slice_push(symbol_var_list, s);
+    }
+
     return s;
 }
 

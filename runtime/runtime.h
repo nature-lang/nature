@@ -14,7 +14,7 @@ inline void linux_amd64_call(addr_t addr) {
 }
 
 inline void call_user_main() {
-    return linux_amd64_call(fn_main_base);
+    return linux_amd64_call(link_fn_main_base);
 }
 
 void runtime_main();

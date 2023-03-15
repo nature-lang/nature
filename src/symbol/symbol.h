@@ -24,6 +24,8 @@ table_t *symbol_table;
 
 slice_t *symbol_fn_list;
 
+slice_t *symbol_var_list;
+
 typedef enum {
     SYMBOL_TYPE_VAR,
     SYMBOL_TYPE_DECL,

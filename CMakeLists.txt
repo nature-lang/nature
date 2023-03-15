@@ -56,10 +56,8 @@ set(SRC_DEBUG
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
-        ${PROJECT_SOURCE_DIR}/utils/links/fndef.c
-        ${PROJECT_SOURCE_DIR}/utils/links/fndef.h
-        ${PROJECT_SOURCE_DIR}/utils/links/symdef.c
-        ${PROJECT_SOURCE_DIR}/utils/links/symdef.h
+        ${PROJECT_SOURCE_DIR}/utils/links.c
+        ${PROJECT_SOURCE_DIR}/utils/links.h
         ${PROJECT_SOURCE_DIR}/utils/type.h
         ${PROJECT_SOURCE_DIR}/utils/type.c
         ${PROJECT_SOURCE_DIR}/utils/value.h
