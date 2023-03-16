@@ -17,7 +17,7 @@ int teardown(void **state) {
 }
 
 static void test_basic() {
-    char *output = "main";
+    char *output = BUILD_OUTPUT_NAME;
     // linker new
     elf_context *l = elf_context_new(output, OUTPUT_EXECUTABLE);
 

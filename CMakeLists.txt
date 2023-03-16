@@ -137,8 +137,7 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/any.h
-        ${PROJECT_SOURCE_DIR}/runtime/type/any.c
-        )
+        ${PROJECT_SOURCE_DIR}/runtime/type/any.c)
 
 set(BUILD_SOURCE_FILES ${SRC} ${CMD} ${UTILS} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_NATIVE} ${SRC_BINARY})
 

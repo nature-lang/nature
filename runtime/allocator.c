@@ -776,7 +776,7 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 }
 
 
-reflect_type_t *find_rtype(uint index) {
+reflect_type_t *runtime_find_rtype(uint index) {
     return &link_rtype_data[index];
 }
 

@@ -21,4 +21,8 @@ add_executable(test_bitmap test_bitmap.c ${UTILS})
 target_link_libraries(test_bitmap cmocka)
 add_test(test_bitmap test_bitmap)
 
+add_executable(test_memory test_memory.c ${UTILS} ${RUNTIME_FILES})
+target_link_libraries(test_memory cmocka)
+add_test(test_memory test_memory)
+
 # build stub dir

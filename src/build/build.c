@@ -82,7 +82,7 @@ static void linker(slice_t *module_list) {
         elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
 
-    // crt1.o
+    // crt1.o (包含入口 label _start, 其进行初始化后会调用 main label)
     fd = open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
     elf_load_object_file(ctx, fd, 0);
 
@@ -90,7 +90,7 @@ static void linker(slice_t *module_list) {
     fd = open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
-    // libc.a
+    // libc.a (runtime 依赖了 c 标准库)
     fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 

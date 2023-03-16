@@ -7,6 +7,8 @@
 # define O_BINARY 0
 #endif
 
+#define START_LABEL "_start"
+
 /**
  * 包含可重定位文件和可执行文件的输出
  */

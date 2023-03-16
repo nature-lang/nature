@@ -17,6 +17,6 @@ inline void call_user_main() {
     return linux_amd64_call(link_fn_main_base);
 }
 
-void runtime_main();
+int runtime_main();
 
 #endif //NATURE_RUNTIME_H

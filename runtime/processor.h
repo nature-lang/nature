@@ -100,8 +100,4 @@ processor_t processor_get();
 
 void processor_init();
 
-void system_stack(processor_t p);
-
-void user_stack(processor_t p);
-
 #endif //NATURE_PROCESSOR_H
