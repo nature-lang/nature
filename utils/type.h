@@ -279,6 +279,7 @@ struct typedecl_any_t {
 // TODO 先申请一个巨大的尺寸用着。等通用 dynamic list 结构开发吧。
 reflect_type_t rtypes[UINT16_MAX];
 uint64_t rtype_count;
+uint64_t rtype_size; // 序列化后的 size
 table_t *rtype_table; // 每当有一个新的类型产生，都会注册在该表中，值为 slice 的索引！
 
 reflect_type_t reflect_type(type_t t);
@@ -290,8 +291,6 @@ reflect_type_t reflect_type(type_t t);
  * @return
  */
 uint64_t rtypes_push(reflect_type_t rtype);
-
-reflect_type_t *find_rtype(uint index);
 
 uint find_rtype_index(type_t t);
 
@@ -312,6 +311,9 @@ uint16_t type_sizeof(type_t t);
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
  * 后续 nature 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
+ *
+ * stack 中存储的数据如果是一个指针，那么就需要 gc
+ * 一些符合对象默认就是指针也是需要 gc 的
  * @param t
  * @return
  */
@@ -323,6 +325,20 @@ type_t type_base_new(type_kind kind);
 
 type_t type_new(type_kind kind, void *value);
 
-typedecl_ident_t *type_decl_ident_new(string ident);
+typedecl_ident_t *type_decl_ident_new(string literal);
+
+/**
+ * size 对应的 gc_bits 占用的字节数量
+ * @param size
+ * @return
+ */
+uint64_t calc_gc_bits_size(uint64_t size);
+
+/**
+ * size 表示原始数据的程度，单位 byte
+ * @param size
+ * @return
+ */
+byte *malloc_gc_bits(uint64_t size);
 
 #endif //NATURE_TYPE_H

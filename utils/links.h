@@ -23,6 +23,7 @@ typedef struct {
 // ct = compile time
 symdef_t *symdefs;
 uint64_t symdefs_size;
+// 预处理时使用的临时数据
 fndef_t *fndefs;
 uint64_t fndefs_size; // 对 fndef 进行序列化后的 byte 数，主要是包含 gc_bits 的数量
 
@@ -31,35 +32,44 @@ void *fn_main_base_data_ptr; // 在 elf output 之前，都可以直接通过修
 
 // gc 基于此进行全部符号的遍历
 // 连接器传输到 runtime 中的符号数据
-#define SYMBOL_FNDEF_DATA  "link_fndef_data"
-#define SYMBOL_FNDEF_SIZE "link_fndef_size"
 #define SYMBOL_FN_MAIN_BASE "link_fn_main_base"
+
 #define SYMBOL_SYMDEF_SIZE  "link_symdef_size"
 #define SYMBOL_SYMDEF_DATA "link_symdef_data"
+
+#define SYMBOL_FNDEF_COUNT  "link_fndef_count"
+#define SYMBOL_FNDEF_SIZE "link_fndef_size"
+#define SYMBOL_FNDEF_DATA  "link_fndef_data"
+
+#define SYMBOL_RTYPE_COUNT "link_rtype_count"
+#define SYMBOL_RTYPE_SIZE "link_rtype_size"
 #define SYMBOL_RTYPE_DATA "link_rtype_data"
-#define SYMBOL_RTYPE_SIZE "link_symdef_size"
 
 
 extern addr_t link_fn_main_base;
 extern int link_symdef_size;
 extern symdef_t *link_symdef_data;
-extern int link_fndef_size;
-extern fndef_t *link_fndef_data;
+
+extern uint64_t link_fndef_count;
+extern uint64_t link_fndef_size;
+extern fndef_t *link_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+
+extern uint64_t link_rtype_count;
 extern uint64_t link_rtype_size;
 extern reflect_type_t *link_rtype_data;
 
 
 // 主要是需要处理 gc_bits 数据
-byte *fndefs_serialize(fndef_t *fndef, uint64_t *count);
+byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count);
 
-fndef_t *fndefs_deserialize(byte *data, uint64_t *count);
+void fndefs_deserialize();
 
 /**
  * 将 reflect_types 进行序列化,
  * @param count 入参时为 reflect_types 的个数，出参时是 byte 序列化后的数量
  * @return
  */
-byte *rtypes_serialize(reflect_type_t *reflect_types, uint64_t *count);
+byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count);
 
 /**
  * 反序列化
@@ -67,11 +77,13 @@ byte *rtypes_serialize(reflect_type_t *reflect_types, uint64_t *count);
  * @param count 入参时是 byte 的数量，出参时是 reflect_type 的数量
  * @return
  */
-reflect_type_t *rtypes_deserialize(byte *data, uint64_t *count);
+void rtypes_deserialize();
 
 void pre_fndef_list();
 
 void pre_symdef_list();
 
+
+reflect_type_t *runtime_find_rtype(uint index);
 
 #endif //NATURE_LINKS_H

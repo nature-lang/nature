@@ -10,8 +10,9 @@ static reflect_type_t rtype_base(type_kind kind) {
             .hash = hash,
             .last_ptr = 0,
             .kind = TYPE_BOOL,
-            .gc_bits = NULL,
     };
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+
     return rtype;
 }
 
@@ -39,7 +40,7 @@ static reflect_type_t rtype_string(typedecl_string_t *t) {
             .hash = hash,
             .last_ptr = 0,
             .kind = TYPE_STRING,
-            .gc_bits = NULL,
+            .gc_bits = malloc_gc_bits(t->count),
     };
     return rtype;
 }
@@ -62,7 +63,7 @@ static reflect_type_t rtype_list(typedecl_list_t *t) {
             .kind = TYPE_LIST,
     };
     // 计算 gc_bits
-    byte *gc_bits = mallocz(rtype.size / POINTER_SIZE);
+    byte *gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(gc_bits, 0);
     rtype.gc_bits = gc_bits;
 
@@ -86,16 +87,15 @@ static reflect_type_t rtype_array(typedecl_array_t *t) {
             .hash = hash,
             .kind = TYPE_ARRAY,
     };
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
     bool need_gc = type_need_gc(element_type);
     if (need_gc) {
         rtype.last_ptr = element_size * t->count;
 
         // need_gc 暗示了 8byte 对齐了
-        byte *gc_bis = mallocz(rtype.size / POINTER_SIZE);
         for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
-            bitmap_set(gc_bis, i);
+            bitmap_set(rtype.gc_bits, i);
         }
-        rtype.gc_bits = gc_bis;
     }
 
     return rtype;
@@ -145,7 +145,7 @@ static reflect_type_t rtype_any(typedecl_any_t *t) {
             .hash = hash,
             .kind = TYPE_ANY,
             .last_ptr = 0,
-            .gc_bits = NULL
+            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
     };
     return rtype;
 }
@@ -169,7 +169,7 @@ static reflect_type_t rtype_fn(typedecl_fn_t *t) {
             .hash = hash_string(str),
             .kind = TYPE_FN,
             .last_ptr = 0,
-            .gc_bits = NULL
+            .gc_bits = malloc_gc_bits(POINTER_SIZE)
     };
     return rtype;
 }
@@ -210,11 +210,10 @@ static reflect_type_t rtype_struct(typedecl_struct_t *t) {
             .size = size,
             .hash = hash_string(str),
             .kind = TYPE_STRUCT,
-            .gc_bits = NULL
+            .gc_bits = malloc_gc_bits(size)
     };
     if (need_gc_count) {
         // 默认 size 8byte 对齐了
-        rtype.gc_bits = mallocz(size / POINTER_SIZE);
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
             bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
@@ -326,10 +325,72 @@ reflect_type_t reflect_type(type_t t) {
         uint64_t index = rtypes_push(rtype);
         // 将 index 添加到 table
         table_set(rtype_table, itoa(rtype.hash), (void *) index);
-
         rtypes[index].index = index; // 索引反填
         rtype.index = index;
     }
 
     return rtype;
 }
+
+uint64_t calc_gc_bits_size(uint64_t size) {
+    size = align(size, POINTER_SIZE);
+
+    uint64_t gc_bits_size = size / POINTER_SIZE;
+
+    // 8bit  = 1byte, 再次对齐
+    gc_bits_size = align(gc_bits_size, 8);
+
+    return gc_bits_size;
+}
+
+byte *malloc_gc_bits(uint64_t size) {
+    uint64_t gc_bits_size = calc_gc_bits_size(size);
+    return mallocz(gc_bits_size);
+}
+
+typedecl_ident_t *type_decl_ident_new(char *literal) {
+    typedecl_ident_t *t = NEW(typedecl_ident_t);
+    t->literal = literal;
+    return t;
+}
+
+bool type_need_gc(type_t t) {
+    if (t.point == 0) {
+        return false;
+    }
+    if (t.kind == TYPE_BOOL ||
+        t.kind == TYPE_FLOAT ||
+        t.kind == TYPE_INT ||
+        t.kind == TYPE_INT8 ||
+        t.kind == TYPE_INT16 ||
+        t.kind == TYPE_INT32 ||
+        t.kind == TYPE_INT64) {
+        return false;
+    }
+
+    return true;
+}
+
+uint64_t rtypes_push(reflect_type_t rtype) {
+    uint64_t index = rtype_count++;
+    rtypes[index] = rtype;
+
+    rtype_size += sizeof(reflect_type_t);
+    rtype_size += calc_gc_bits_size(rtype.size);
+
+    return index;
+}
+
+/**
+ * compile time
+ * @param t
+ * @return
+ */
+uint find_rtype_index(type_t t) {
+    reflect_type_t rtype = reflect_type(t);
+    assertf(rtype.hash, "type reflect failed");
+    uint64_t index = table_get(rtype_table, itoa(rtype.hash));
+    assertf(index, "notfound index by rtype_table,hass=%d", rtype.hash);
+    return index;
+}
+

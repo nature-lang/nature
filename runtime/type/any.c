@@ -12,7 +12,7 @@
  */
 memory_any_t *trans_any(uint rtype_index, void *value) {
     // - 根据 rtype_index 找到对应的
-    reflect_type_t *rtype = find_rtype(rtype_index);
+    reflect_type_t *rtype = runtime_find_rtype(rtype_index);
 
     // any_t 在 rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     memory_any_t *any = runtime_malloc(sizeof(memory_any_t), rtype);

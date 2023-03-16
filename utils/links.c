@@ -19,9 +19,8 @@ void pre_fndef_list() {
 
         fndef_t *f = &fndefs[index];
         f->stack_size = align(c->stack_size, POINTER_SIZE);
-        uint64_t gc_bits_size = f->stack_size / POINTER_SIZE;
-        f->gc_bits = mallocz(gc_bits_size);
-        fndefs_size += gc_bits_size;
+        f->gc_bits = malloc_gc_bits(f->stack_size);
+        fndefs_size += calc_gc_bits_size(f->stack_size);
         uint64_t offset = 0;
         for (int i = 0; i < c->stack_vars->count; ++i) {
             lir_var_t *var = c->stack_vars->take[i];
@@ -48,4 +47,75 @@ void pre_symdef_list() {
         symdef->base = 0;
         symdef->size = 0;
     }
+}
+
+byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count) {
+    // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
+    byte *data = mallocz(fndefs_size);
+
+    byte *p = data;
+    // 首先将 fndef 移动到 data 中
+    uint64_t size = count * sizeof(fndef_t);
+    memmove(p, _fndefs, size);
+
+    // 移动 gc_bits
+    p = p + size; // byte 类型，所以按字节移动
+    for (int i = 0; i < count; ++i) {
+        fndef_t *f = &_fndefs[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
+        memmove(p, f->gc_bits, gc_bits_size);
+        p += gc_bits_size;
+    }
+
+    return data;
+}
+
+
+void fndefs_deserialize() {
+    byte *gc_bits_offset = ((byte *) link_fndef_data) + link_fndef_count * sizeof(fndef_t);
+    for (int i = 0; i < link_fndef_count; ++i) {
+        fndef_t *f = &link_fndef_data[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
+
+        f->gc_bits = gc_bits_offset;
+
+        gc_bits_offset += gc_bits_size;
+    }
+}
+
+byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count) {
+    // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
+    // 计算 reflect_type
+    byte *data = mallocz(rtype_size);
+
+    byte *p = data;
+    // 首先将 fndef 移动到 data 中
+    uint64_t size = count * sizeof(fndef_t);
+    memmove(p, _rtypes, size);
+
+    // 移动 gc_bits
+    p = p + size; // byte 类型，所以按字节移动
+    for (int i = 0; i < count; ++i) {
+        reflect_type_t *r = &_rtypes[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
+        memmove(p, r->gc_bits, gc_bits_size);
+        p += gc_bits_size;
+    }
+
+    return data;
+}
+
+void rtypes_deserialize() {
+    byte *gc_bits_offset = ((byte *) link_rtype_data) + link_rtype_count * sizeof(reflect_type_t);
+    for (int i = 0; i < link_rtype_count; ++i) {
+        reflect_type_t *r = &link_rtype_data[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
+
+        r->gc_bits = gc_bits_offset;
+        gc_bits_offset += gc_bits_size;
+    }
+}
+
+reflect_type_t *runtime_find_rtype(uint index) {
+    return &link_rtype_data[index];
 }

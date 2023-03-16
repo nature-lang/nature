@@ -22,10 +22,9 @@ static void pre_handle_custom_links(elf_context *ctx) {
     ctx->symdef_section->sh_size = symdefs_size;
 
     // - rtype 数据与 sym 无关，这里可以进行完全的填充处理
-    uint64_t count = rtype_count;
-    byte *data = rtypes_serialize(rtypes, &count);
-    elf_put_data(ctx->rtype_section, data, count);
-    ctx->rtype_section->sh_size = count;
+    byte *data = rtypes_serialize(rtypes, rtype_count);
+    elf_put_data(ctx->rtype_section, data, rtype_size);
+    ctx->rtype_section->sh_size = rtype_size;
 
     // - 写入相关符号到符号表
     //  fndef_data
@@ -39,6 +38,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &fndef_data_sym, SYMBOL_FNDEF_DATA);
     // 写入 count
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_SIZE, &ctx->fndef_section->sh_size, INT_SIZE);
+    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &symbol_fn_list->count, INT_SIZE);
     // 目前还不知道具体的值，所以仅仅占位
     int fn_main_base = 0;
     fn_main_base_data_ptr = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
@@ -65,6 +65,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &rtype_sym, SYMBOL_RTYPE_DATA);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_SIZE, &ctx->rtype_section->sh_size, INT_SIZE);
+    elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &rtype_count, INT_SIZE);
 }
 
 /**
@@ -105,11 +106,10 @@ static void handle_custom_links(elf_context *ctx) {
     memmove(fn_main_base_data_ptr, &fn_main_base, INT_SIZE);
 
     // - 填入相关数据进行序列化并写入到 elf_put_data -> s->data
-    uint64_t count = symbol_fn_list->count;
-    byte *data = fndefs_serialize(fndefs, &count);
-    elf_put_data(ctx->fndef_section, data, count);
+    byte *data = fndefs_serialize(fndefs, symbol_fn_list->count);
+    elf_put_data(ctx->fndef_section, data, fndefs_size);
 
-    count = symbol_var_list->count;
+    // 直接使用 symdefs 中的数据就行了,symdefs 就是一个指针，指向一片内存
     elf_put_data(ctx->symdef_section, symdefs, symdefs_size);
 }
 
