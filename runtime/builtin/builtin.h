@@ -2,7 +2,6 @@
 #define NATURE_SRC_LIR_NATIVE_BUILTIN_H_
 
 #include "utils/type.h"
-#include "runtime/type/array.h"
 
 void print(memory_list_t *args);
 

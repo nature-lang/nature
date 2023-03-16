@@ -9,11 +9,10 @@ void runtime_main() {
     processor_init();
 
     // TODO - 将系统参数传递给用户程序
-
-    // 3. 堆内存管理初始化
+    // - 堆内存管理初始化
     memory_init();
 
-    // 4. 初始化 stack return addr 为 main
+    // - 初始化 stack return addr 为 main
     processor_t p = processor_get();
 
     user_stack(p);

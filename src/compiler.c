@@ -843,8 +843,8 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_NEW_CLOSURE: {
             compiler_closure(c, (ast_expr) {
-                    .type = NULL,
-                    .target_type = NULL,
+//                    .type = NULL,
+//                    .target_type = NULL,
                     .line = stmt->line,
                     .value = stmt->value,
                     .assert_type = AST_NEW_CLOSURE
@@ -880,7 +880,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
                     .line = stmt->line,
                     .assert_type = stmt->assert_type,
                     .value = stmt->value,
-                    .type = NULL,
+//                    .type = NULL,
             };
             compiler_call(c, expr);
             return;
@@ -954,8 +954,8 @@ slice_t *compiler(module_t *m, ast_closure_t *ast) {
 
     // compiler
     compiler_closure(NULL, (ast_expr) {
-            .type = NULL,
-            .target_type = NULL,
+//            .type = NULL,
+//            .target_type = NULL,
             .assert_type = AST_NEW_CLOSURE,
             .value = ast,
     });

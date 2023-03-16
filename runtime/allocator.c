@@ -118,7 +118,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint bit_start = 0;
     uint bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test(chunk.blocks, i);
+        bool used = bitmap_test((byte *) chunk.blocks, i);
         if (used) {
             // 重新开始计算
             bit_start = 0;
@@ -137,7 +137,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     }
     uint16_t start = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test(chunk.blocks, i);
+        bool used = bitmap_test((byte *) chunk.blocks, i);
         if (used) {
             break;
         }
@@ -146,7 +146,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t end = 0;
     for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_test(chunk.blocks, i);
+        bool used = bitmap_test((byte *) chunk.blocks, i);
         if (used) {
             break;
         }
@@ -299,21 +299,21 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
         // 计算 chunk
         page_chunk_t chunk = page_alloc->chunks[chunk_index_l1(index)][chunk_index_l2(index)];
         uint64_t temp_base = chunk_base(index);
-        int bit_start = 0;
+        uint64_t bit_start = 0;
         if (temp_base < base) {
             bit_start = (base - temp_base) / PAGE_SIZE;
         }
         uint64_t temp_end = temp_base + (CHUNK_BITS_COUNT * PAGE_SIZE);
-        int bit_end = CHUNK_BITS_COUNT - 1;
+        uint64_t bit_end = CHUNK_BITS_COUNT - 1;
         if (temp_end > end) {
             bit_end = ((end - temp_base) / PAGE_SIZE) - 1;
         }
 
-        for (int i = bit_start; i <= bit_end; ++i) {
+        for (uint64_t i = bit_start; i <= bit_end; ++i) {
             if (v) {
-                bitmap_set(chunk.blocks, i);
+                bitmap_set((byte *) chunk.blocks, i);
             } else {
-                bitmap_clear(chunk.blocks, i);
+                bitmap_clear((byte *) chunk.blocks, i);
             };
         }
     }
@@ -776,6 +776,33 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 }
 
 
+reflect_type_t *find_rtype(uint index) {
+    return &link_rtype_data[index];
+}
+
+void fndefs_deserialize() {
+    byte *gc_bits_offset = ((byte *) link_fndef_data) + link_fndef_count * sizeof(fndef_t);
+    for (int i = 0; i < link_fndef_count; ++i) {
+        fndef_t *f = &link_fndef_data[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
+
+        f->gc_bits = gc_bits_offset;
+
+        gc_bits_offset += gc_bits_size;
+    }
+}
+
+void rtypes_deserialize() {
+    byte *gc_bits_offset = ((byte *) link_rtype_data) + link_rtype_count * sizeof(reflect_type_t);
+    for (int i = 0; i < link_rtype_count; ++i) {
+        reflect_type_t *r = &link_rtype_data[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
+
+        r->gc_bits = gc_bits_offset;
+        gc_bits_offset += gc_bits_size;
+    }
+}
+
 void memory_init() {
     // - 初始化 mheap
     mheap_t mheap = {0}; // 所有的结构体，数组初始化为 0, 指针初始化为 null
@@ -804,6 +831,10 @@ void memory_init() {
         item.full_swept = list_new();
 //        item.full_unswept = list_new();
     }
+
+    // links 数据反序列化，此时 link_fndef_data link_rtype_data 等数据可以正常使用
+    fndefs_deserialize();
+    rtypes_deserialize();
 }
 
 mspan_t *span_of(uint64_t addr) {

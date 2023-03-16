@@ -62,7 +62,7 @@ extern reflect_type_t *link_rtype_data;
 // 主要是需要处理 gc_bits 数据
 byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count);
 
-void fndefs_deserialize();
+//void fndefs_deserialize();
 
 /**
  * 将 reflect_types 进行序列化,
@@ -77,13 +77,12 @@ byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count);
  * @param count 入参时是 byte 的数量，出参时是 reflect_type 的数量
  * @return
  */
-void rtypes_deserialize();
+//void rtypes_deserialize();
 
 void pre_fndef_list();
 
 void pre_symdef_list();
 
-
-reflect_type_t *runtime_find_rtype(uint index);
+//reflect_type_t *runtime_find_rtype(uint index);
 
 #endif //NATURE_LINKS_H

@@ -70,19 +70,6 @@ byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count) {
     return data;
 }
 
-
-void fndefs_deserialize() {
-    byte *gc_bits_offset = ((byte *) link_fndef_data) + link_fndef_count * sizeof(fndef_t);
-    for (int i = 0; i < link_fndef_count; ++i) {
-        fndef_t *f = &link_fndef_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
-
-        f->gc_bits = gc_bits_offset;
-
-        gc_bits_offset += gc_bits_size;
-    }
-}
-
 byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count) {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     // 计算 reflect_type
@@ -103,19 +90,4 @@ byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count) {
     }
 
     return data;
-}
-
-void rtypes_deserialize() {
-    byte *gc_bits_offset = ((byte *) link_rtype_data) + link_rtype_count * sizeof(reflect_type_t);
-    for (int i = 0; i < link_rtype_count; ++i) {
-        reflect_type_t *r = &link_rtype_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
-
-        r->gc_bits = gc_bits_offset;
-        gc_bits_offset += gc_bits_size;
-    }
-}
-
-reflect_type_t *runtime_find_rtype(uint index) {
-    return &link_rtype_data[index];
 }

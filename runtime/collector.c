@@ -10,8 +10,8 @@
  * @return
  */
 static fndef_t *find_fn(addr_t addr) {
-    for (int i = 0; i < link_fndef_size; ++i) {
-        fndef_t *fn = &fndef_data[i];
+    for (int i = 0; i < link_fndef_count; ++i) {
+        fndef_t *fn = &link_fndef_data[i];
         if (fn->base < addr && fn->end > addr) {
             return fn;
         }
@@ -64,8 +64,9 @@ static void scan_stack(memory_t *m) {
 }
 
 static void scan_symbols(memory_t *m) {
-    for (int i = 0; i < symdef_count_; ++i) {
-        symdef_t s = symdef_list_[i];
+    uint64_t count = link_symdef_size / sizeof(symdef_t);
+    for (int i = 0; i < count; ++i) {
+        symdef_t s = link_symdef_data[i];
         if (!s.need_gc) {
             continue;
         }

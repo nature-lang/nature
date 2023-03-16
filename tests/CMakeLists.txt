@@ -19,6 +19,6 @@ add_test(test_build test_build)
 
 add_executable(test_bitmap test_bitmap.c ${UTILS})
 target_link_libraries(test_bitmap cmocka)
-add_test(test_bitmap test_bimap)
+add_test(test_bitmap test_bitmap)
 
 # build stub dir

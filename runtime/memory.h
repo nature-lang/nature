@@ -8,6 +8,7 @@
 #include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/list.h"
+#include "utils/bitmap.h"
 #include "sizeclass.h"
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
@@ -242,5 +243,11 @@ void uncache_span(mcentral_t mcentral, mspan_t *span);
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
 
 addr_t mstack_new(uint64_t size);
+
+void rtypes_deserialize();
+
+void fndefs_deserialize();
+
+reflect_type_t *find_rtype(uint index);
 
 #endif //NATURE_MEMORY_H

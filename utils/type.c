@@ -389,8 +389,7 @@ uint64_t rtypes_push(reflect_type_t rtype) {
 uint find_rtype_index(type_t t) {
     reflect_type_t rtype = reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
-    uint64_t index = table_get(rtype_table, itoa(rtype.hash));
+    uint64_t index = (uint64_t) table_get(rtype_table, itoa(rtype.hash));
     assertf(index, "notfound index by rtype_table,hass=%d", rtype.hash);
     return index;
 }
-

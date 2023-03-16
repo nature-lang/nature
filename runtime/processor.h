@@ -24,7 +24,7 @@ static addr_t get_stack_top() {
     return addr;
 }
 
-static void linux_amd64_store_stack(mstack_t *stack) {
+inline void linux_amd64_store_stack(mstack_t *stack) {
     // 暂存 rsp 的值
     asm("movq %%rsp, %[addr]"
             :  [addr] "=r"(stack->top)// output

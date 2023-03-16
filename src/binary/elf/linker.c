@@ -17,6 +17,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
     // - 数据预计算得到相关 size
     pre_fndef_list();
     pre_symdef_list();
+
     // - 相关 sections sh_size 预填充
     ctx->fndef_section->sh_size = fndefs_size;
     ctx->symdef_section->sh_size = symdefs_size;
@@ -110,7 +111,7 @@ static void handle_custom_links(elf_context *ctx) {
     elf_put_data(ctx->fndef_section, data, fndefs_size);
 
     // 直接使用 symdefs 中的数据就行了,symdefs 就是一个指针，指向一片内存
-    elf_put_data(ctx->symdef_section, symdefs, symdefs_size);
+    elf_put_data(ctx->symdef_section, (uint8_t *) symdefs, symdefs_size);
 }
 
 static uint64_t get_be(const uint8_t *b, int n) {
