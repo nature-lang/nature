@@ -738,7 +738,7 @@ static int symbol_names_match(const void *map_value, const void *symbol) {
 
 /*
  * Adds a value to the queue of values associated with the given hierarchy of
- * symbols.  It's assumed value is allocated from the heap.
+ * global_symbols.  It's assumed value is allocated from the heap.
  */
 static void add_symbol_value(ListNode * const symbol_map_head,
                              const char * const symbol_names[],
@@ -775,7 +775,7 @@ static void add_symbol_value(ListNode * const symbol_map_head,
 
 
 /*
- * Gets the next value associated with the given hierarchy of symbols.
+ * Gets the next value associated with the given hierarchy of global_symbols.
  * The value is returned as an output parameter with the function returning the
  * node's old refcount value if a value is found, 0 otherwise.  This means that
  * a return value of 1 indicates the node was just removed from the list.

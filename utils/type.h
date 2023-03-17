@@ -32,7 +32,7 @@ typedef enum {
     TYPE_INT64,
     // 复合类型
     TYPE_ANY,
-    TYPE_STRING,
+    TYPE_STRING, // 10
     TYPE_LIST,
     TYPE_ARRAY,
     TYPE_MAP,
@@ -111,10 +111,10 @@ typedef struct typedecl_any_t typedecl_any_t;
 // 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
 typedef struct type_t {
     union {
-        type_decl_int_t int_decl;
-        type_decl_float_t float_decl;
-        type_decl_bool_t bool_decl;
-        typedecl_string_t *string_decl;
+//        type_decl_int_t int_decl;
+//        type_decl_float_t float_decl;
+//        type_decl_bool_t bool_decl;
+//        typedecl_string_t *string_decl;
         typedecl_list_t *list_decl;
         typedecl_array_t *array_decl;
         typedecl_map_t *map_decl;
@@ -142,8 +142,8 @@ typedef struct {
 } memory_list_t;
 
 typedef struct {
-    uint64_t count;
     byte *data;
+    uint64_t count;
 } memory_string_t;
 
 typedef byte *memory_array_t; // 数组在内存中的变现形式就是 byte 列表
@@ -182,7 +182,7 @@ typedef struct {
  */
 struct typedecl_string_t {
     int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
-    int count; // 字符串的长度
+//    int count; // 字符串的长度(理论上也是可变的，和 list 的 count 一样，无法在类型声明阶段就明确,所以这个毫无意义！)
 //    void *data; // 这里引用了什么？是 type_array_t 元数据还是 type_array_t 存储在 heap 中的数据？
 };
 

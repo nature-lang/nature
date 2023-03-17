@@ -56,7 +56,7 @@ type_t select_actual_param(ast_call *call, uint8_t index) {
     if (call->spread_param && index >= call->actual_param_count) {
         // last actual param type must array
         type_t last_param_type = call->actual_params[call->actual_param_count].type;
-        assertf(last_param_type.kind == TYPE_ARRAY, "spread_param must array");
+        assertf(last_param_type.kind == TYPE_LIST, "spread_param must array");
         typedecl_array_t *array_decl = last_param_type.array_decl;
         return array_decl->type;
     }
@@ -67,7 +67,7 @@ type_t select_actual_param(ast_call *call, uint8_t index) {
 type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
     if (formal_fn->rest_param && index >= formal_fn->formals_count - 1) {
         type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
-        assertf(last_param_type.kind == TYPE_ARRAY, "rest param must array");
+        assertf(last_param_type.kind == TYPE_LIST, "rest param must array");
         typedecl_array_t *array_decl = last_param_type.array_decl;
 
         return array_decl->type;

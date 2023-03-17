@@ -2,6 +2,7 @@
 
 /**
  * 注册到符号表中
+ * TODO 未实现 closure 中的 stack_size 和 local_var 逻辑，gc 无法处理这样的 fn
  * void print(...[any] args)
  * @return
  */

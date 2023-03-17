@@ -1,10 +1,9 @@
 #include "runtime.h"
-#include "processor.h"
 
 /**
  * crt1.o _start -> main  -> user_main
  */
-int runtime_main() {
+void runtime_main() {
     // - processor 初始化(包括当前执行栈记录,用户栈生成)
     processor_init();
 

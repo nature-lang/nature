@@ -22,6 +22,9 @@ char *WORK_DIR; // 执行 shell 命令所在的目录
 char *BASE_NS; // 最后一级目录的名称，也可以自定义
 char *TEMP_DIR; // 链接临时目录
 
+char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+char *SOURCE_PATH; // /opt/test/main.n 的绝对路径
+
 #define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
 #define DARWIN_BUILD_TMP_DIR  ""
 

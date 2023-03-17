@@ -6,21 +6,16 @@
 #include "src/structs.h"
 
 /**
- * 调用 opcode 生成汇编码二进制，以及构造代码段，可重定位段落等拼凑出 elf 文件的各个段落
- * 最终经过 output 输出可重定位文件
- */
-/**
- * - 编译变量
  * - 编译指令
  */
-void linkable_object_load_closure(elf_context *ctx, closure_t *c);
+void object_load_operations(elf_context *ctx, closure_t *c);
 
 
 /**
  * 变量声明编码
  * @param ctx
- * @param var_decls
+ * @param asm_symbols
  */
-void var_decl_encodings(elf_context *ctx, slice_t *var_decls);
+void object_load_symbols(elf_context *ctx, slice_t *asm_symbols);
 
 #endif //NATURE_ASSEMBLER_H

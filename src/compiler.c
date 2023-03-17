@@ -264,7 +264,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
         if (is_rest) {
             // lir array_new(count, size) -> param_target
             type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
-            assertf(last_param_type.kind == TYPE_ARRAY, "rest param must be array type");
+            assertf(last_param_type.kind == TYPE_LIST, "rest param must be array type");
 
             typedecl_list_t *list_decl = last_param_type.list_decl;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中

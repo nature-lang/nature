@@ -562,7 +562,7 @@ type_t parser_type(module_t *m) {
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
 
-        result.kind = TYPE_ARRAY;
+        result.kind = TYPE_LIST;
         result.list_decl = type_list_decl;
         return result;
     }

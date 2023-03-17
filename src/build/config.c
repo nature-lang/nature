@@ -65,7 +65,7 @@ void config_init() {
     if (!BUILD_OUTPUT_DIR) {
         BUILD_OUTPUT_DIR = WORK_DIR;
     }
-    BUILD_OUTPUT = file_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME);
+    BUILD_OUTPUT = path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME);
 }
 
 char *os_to_string(uint8_t os) {

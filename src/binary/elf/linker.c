@@ -23,8 +23,9 @@ static void pre_handle_custom_links(elf_context *ctx) {
     ctx->symdef_section->sh_size = symdefs_size;
 
     // - rtype 数据与 sym 无关，这里可以进行完全的填充处理
-    byte *data = rtypes_serialize(rtypes, rtype_count);
-    elf_put_data(ctx->rtype_section, data, rtype_size);
+    byte *rtype_data = rtypes_serialize(rtypes, rtype_count);
+    elf_put_data(ctx->rtype_section, rtype_data, rtype_size);
+    ct_rtype_data = (reflect_type_t *) rtype_data;
     ctx->rtype_section->sh_size = rtype_size;
 
     // - 写入相关符号到符号表
@@ -38,8 +39,9 @@ static void pre_handle_custom_links(elf_context *ctx) {
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &fndef_data_sym, SYMBOL_FNDEF_DATA);
     // 写入 count
-    elf_put_global_symbol(ctx, SYMBOL_FNDEF_SIZE, &ctx->fndef_section->sh_size, INT_SIZE);
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &symbol_fn_list->count, INT_SIZE);
+    ct_fndef_count = symbol_fn_list->count;
+
     // 目前还不知道具体的值，所以仅仅占位
     int fn_main_base = 0;
     fn_main_base_data_ptr = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
@@ -55,6 +57,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
 
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &symdef_sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_SIZE, &ctx->symdef_section->sh_size, INT_SIZE);
+    ct_symdef_size = ctx->symdef_section->sh_size;
 
     // rtype
     Elf64_Sym rtype_sym = {
@@ -65,8 +68,8 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_other = 0
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &rtype_sym, SYMBOL_RTYPE_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_RTYPE_SIZE, &ctx->rtype_section->sh_size, INT_SIZE);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &rtype_count, INT_SIZE);
+    ct_rtype_count = rtype_count;
 }
 
 /**
@@ -94,9 +97,12 @@ static void handle_custom_links(elf_context *ctx) {
     }
 
     for (int i = 0; i < symbol_var_list->count; ++i) {
-        symbol_t *symbol = symbol_fn_list->take[i];
-        symdef_t *symdef = &symdefs[i];
+        symbol_t *symbol = symbol_var_list->take[i];
+        if (symbol->is_local) {
+            continue;
+        }
 
+        symdef_t *symdef = &symdefs[i];
         uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol->ident);
         assertf(sym_index > 0, "var %s notfound in symtab", symbol->ident);
         Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
@@ -106,12 +112,14 @@ static void handle_custom_links(elf_context *ctx) {
 
     memmove(fn_main_base_data_ptr, &fn_main_base, INT_SIZE);
 
-    // - 填入相关数据进行序列化并写入到 elf_put_data -> s->data
-    byte *data = fndefs_serialize(fndefs, symbol_fn_list->count);
-    elf_put_data(ctx->fndef_section, data, fndefs_size);
+    // - 填入相关数据进行序列化并写入到 elf_put_data -> s->fndef_data
+    byte *fndef_data = fndefs_serialize(fndefs, symbol_fn_list->count);
+    elf_put_data(ctx->fndef_section, fndef_data, fndefs_size);
+    ct_fndef_data = (fndef_t *) fndef_data;
 
     // 直接使用 symdefs 中的数据就行了,symdefs 就是一个指针，指向一片内存
     elf_put_data(ctx->symdef_section, (uint8_t *) symdefs, symdefs_size);
+    ct_symdef_data = symdefs;
 }
 
 static uint64_t get_be(const uint8_t *b, int n) {
@@ -789,7 +797,12 @@ uint64_t elf_put_str(section_t *s, char *str) {
 
 uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
     char *ptr = elf_section_data_add_ptr(s, count);
-    memmove(ptr, data, count);
+    // 如果 data 为 null, 则填入 0
+    if (data) {
+        memmove(ptr, data, count);
+    } else {
+        memset(ptr, 0, count);
+    }
     return (uint64_t) ptr - (uint64_t) s->data;
 }
 
@@ -801,7 +814,7 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
  * - pre_handle custom links
  * - alloc section name
  * - layout sections
- * - relocate symbols
+ * - relocate global_symbols
  * - relocate sections
  * - fill got
  * - output execute
@@ -984,14 +997,14 @@ void elf_relocate_symbols(elf_context *ctx, section_t *sym_section) {
                it */
             if (!strcmp(name, "_fp_hw"))
                 goto FOUND;
-            /* only weak symbols are accepted to be undefined. Their
+            /* only weak global_symbols are accepted to be undefined. Their
                value is zero */
             // 静态链接中只有弱符号允许未定义，他们的值固定位 0
             uint sym_bind = ELF64_ST_BIND(sym->st_info);
             if (sym_bind == STB_WEAK) {
                 sym->st_value = 0;
             } else {
-                error_exit("[elf_relocate_symbols] undefined symbol '%s'", name);
+                assertf(false, "undefined symbol '%s'", name);
             }
         } else if (sh_index < SHN_LORESERVE) {
             // 对于可重定位文件， st_value 保存了基于 section 的偏移
@@ -1327,7 +1340,7 @@ elf_context *elf_context_new(char *output, uint8_t type) {
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
     ctx->bss_section = elf_new_section(ctx, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
 
-    /* symbols are always generated for linking stage */
+    /* global_symbols are always generated for linking stage */
     ctx->symtab_section = elf_new_section(ctx, ".symtab", SHT_SYMTAB, 0);
     ctx->symtab_section->sh_entsize = sizeof(Elf64_Sym);
     section_t *strtab = elf_new_section(ctx, ".strtab", SHT_STRTAB, 0);

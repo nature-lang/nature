@@ -24,7 +24,7 @@ static addr_t get_stack_top() {
     return addr;
 }
 
-inline void linux_amd64_store_stack(mstack_t *stack) {
+static inline void linux_amd64_store_stack(mstack_t *stack) {
     // 暂存 rsp 的值
     asm("movq %%rsp, %[addr]"
             :  [addr] "=r"(stack->top)// output
@@ -38,7 +38,7 @@ inline void linux_amd64_store_stack(mstack_t *stack) {
     );
 }
 
-inline void linux_amd64_restore_stack(mstack_t stack) {
+static inline void linux_amd64_restore_stack(mstack_t stack) {
     // 修改 rsp 的值
     asm("movq %[addr], %%rsp"
             : // output
@@ -60,14 +60,14 @@ inline void linux_amd64_restore_stack(mstack_t stack) {
  *  但是需要注意的时，此处修改逻辑不能嵌套的太深，否则会造成多次回退，最终回不到想要的地方
  *  所以这里统一采用内联函数的方式实现,避免 ret 指令的调用导致栈异常
  */
-inline void linux_amd64_system_stack(processor_t p) {
+static inline void linux_amd64_system_stack(processor_t p) {
     // 暂存当前的 rsp 和 rbp 的值到 user_stack 中
     linux_amd64_store_stack(&p.user_stack);
 
     linux_amd64_restore_stack(p.system_stack);
 }
 
-inline void system_stack(processor_t p) {
+static inline void system_stack(processor_t p) {
     linux_amd64_system_stack(p);
 }
 
@@ -76,7 +76,7 @@ inline void system_stack(processor_t p) {
  * 切换到 user_stack
  * @param processor
  */
-inline void linux_amd64_user_stack(processor_t p) {
+static inline void linux_amd64_user_stack(processor_t p) {
     linux_amd64_restore_stack(p.user_stack);
 }
 
@@ -87,7 +87,7 @@ inline void linux_amd64_user_stack(processor_t p) {
  * 将会自动回到用户地址中，不需要再操作 rip 指针
  * @param processor
  */
-inline void user_stack(processor_t p) {
+static inline void user_stack(processor_t p) {
     linux_amd64_user_stack(p);
 }
 

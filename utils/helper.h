@@ -27,7 +27,7 @@ char *itoa(int64_t n);
 
 bool str_equal(string a, string b);
 
-char *file_join(char *dst, char *src);
+char *path_join(char *dst, char *src);
 
 char *str_connect(char *a, char *b);
 

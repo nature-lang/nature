@@ -610,7 +610,7 @@ typedef struct
 
 /* Symbol table indices are found in the hash buckets and chain table
    of a symbol hash table section.  This special index value indicates
-   the end of a chain, meaning no further symbols are found in that bucket.  */
+   the end of a chain, meaning no further global_symbols are found in that bucket.  */
 
 #define STN_UNDEF	0		/* End of a chain.  */
 
@@ -991,7 +991,7 @@ typedef struct
 #define	DF_1_NORELOC	0x00400000
 #define	DF_1_SYMINTPOSE	0x00800000	/* Object has individual interposers.  */
 #define	DF_1_GLOBAUDIT	0x01000000	/* Global auditing required.  */
-#define	DF_1_SINGLETON	0x02000000	/* Singleton symbols are used.  */
+#define	DF_1_SINGLETON	0x02000000	/* Singleton global_symbols are used.  */
 #define	DF_1_STUB	0x04000000
 #define	DF_1_PIE	0x08000000
 #define	DF_1_KMOD       0x10000000
@@ -1594,17 +1594,17 @@ typedef struct
 
 /* Special section indices.  */
 
-#define SHN_MIPS_ACOMMON	0xff00	/* Allocated common symbols.  */
-#define SHN_MIPS_TEXT		0xff01	/* Allocated test symbols.  */
-#define SHN_MIPS_DATA		0xff02	/* Allocated data symbols.  */
-#define SHN_MIPS_SCOMMON 	0xff03	/* Small common symbols.  */
-#define SHN_MIPS_SUNDEFINED	0xff04	/* Small undefined symbols.  */
+#define SHN_MIPS_ACOMMON	0xff00	/* Allocated common global_symbols.  */
+#define SHN_MIPS_TEXT		0xff01	/* Allocated test global_symbols.  */
+#define SHN_MIPS_DATA		0xff02	/* Allocated data global_symbols.  */
+#define SHN_MIPS_SCOMMON 	0xff03	/* Small common global_symbols.  */
+#define SHN_MIPS_SUNDEFINED	0xff04	/* Small undefined global_symbols.  */
 
 /* Legal values for sh_type field of Elf32_Shdr.  */
 
 #define SHT_MIPS_LIBLIST	0x70000000 /* Shared objects used in link.  */
 #define SHT_MIPS_MSYM		0x70000001
-#define SHT_MIPS_CONFLICT	0x70000002 /* Conflicting symbols.  */
+#define SHT_MIPS_CONFLICT	0x70000002 /* Conflicting global_symbols.  */
 #define SHT_MIPS_GPTAB		0x70000003 /* Global data area sizes.  */
 #define SHT_MIPS_UCODE		0x70000004 /* Reserved for SGI/MIPS compilers */
 #define SHT_MIPS_DEBUG		0x70000005 /* MIPS ECOFF debugging info.  */
@@ -1853,11 +1853,11 @@ typedef struct
 #define DT_MIPS_DELTA_RELOC  0x7000001b /* Delta relocations.  */
 #define DT_MIPS_DELTA_RELOC_NO 0x7000001c /* Number of entries in
 					     DT_MIPS_DELTA_RELOC.  */
-#define DT_MIPS_DELTA_SYM    0x7000001d /* Delta symbols that Delta
+#define DT_MIPS_DELTA_SYM    0x7000001d /* Delta global_symbols that Delta
 					   relocations refer to.  */
 #define DT_MIPS_DELTA_SYM_NO 0x7000001e /* Number of entries in
 					   DT_MIPS_DELTA_SYM.  */
-#define DT_MIPS_DELTA_CLASSSYM 0x70000020 /* Delta symbols that hold the
+#define DT_MIPS_DELTA_CLASSSYM 0x70000020 /* Delta global_symbols that hold the
 					     class declaration.  */
 #define DT_MIPS_DELTA_CLASSSYM_NO 0x70000021 /* Number of entries in
 						DT_MIPS_DELTA_CLASSSYM.  */
@@ -2065,7 +2065,7 @@ enum
 /* Additional section indeces.  */
 
 #define SHN_PARISC_ANSI_COMMON	0xff00	   /* Section for tenatively declared
-					      symbols in ANSI C.  */
+					      global_symbols in ANSI C.  */
 #define SHN_PARISC_HUGE_COMMON	0xff01	   /* Common blocks in huge model.  */
 
 /* Legal values for sh_type field of Elf32_Shdr.  */

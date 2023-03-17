@@ -31,7 +31,7 @@ char *str_connect(char *dst, char *src) {
     return buf;
 }
 
-char *file_join(char *dst, char *src) {
+char *path_join(char *dst, char *src) {
     dst = str_connect(dst, "/");
     dst = str_connect(dst, src);
     return dst;

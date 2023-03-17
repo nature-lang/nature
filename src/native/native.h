@@ -10,8 +10,7 @@ typedef struct {
     char *name; // 符号名称
     size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
     uint8_t *value; // 符号值
-    // TODO 是否为全局符号
-} asm_var_decl_t;
+} asm_global_symbol_t;
 
 #define ASM_VAR_DECL_PREFIX "v"
 #define ASM_VAR_DECL_UNIQUE_NAME(_module) \

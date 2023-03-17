@@ -2,29 +2,26 @@
 #include "arch.h"
 #include "src/native/native.h"
 
-void var_decl_encodings(elf_context *ctx, slice_t *var_decls) {
+void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
     // 将全局变量定义写入到数据段与符号表
-    for (int i = 0; i < var_decls->count; ++i) {
-        asm_var_decl_t *var_decl = var_decls->take[i];
+    for (int i = 0; i < asm_symbols->count; ++i) {
+        asm_global_symbol_t *symbol = asm_symbols->take[i];
         // 写入到数据段
-        uint64_t offset = elf_put_data(ctx->data_section, var_decl->value, var_decl->size);
+        uint64_t offset = elf_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
         Elf64_Sym sym = {
-                .st_size = var_decl->size,
+                .st_size = symbol->size,
                 .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
                 .st_other = 0,
                 .st_shndx = ctx->data_section->sh_index, // 定义符号的段
                 .st_value = offset, // 定义符号的位置，基于段的偏移
         };
-        elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, var_decl->name);
+        elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol->name);
     }
 }
 
-void linkable_object_load_closure(elf_context *ctx, closure_t *c) {
-    // 将全局变量写入到数据段或者符号表 (这里应该叫 global var)
-    var_decl_encodings(ctx, c->asm_var_decls);
-
+void object_load_operations(elf_context *ctx, closure_t *c) {
     // 代码段生成
     c->text_count = opcode_encodings(ctx, c->asm_operations);
 

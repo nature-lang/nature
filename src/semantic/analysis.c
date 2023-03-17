@@ -720,7 +720,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             char *ident = ident_with_module(m->ident, var_decl->ident);
 
             symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_VAR, var_decl, false);
-            slice_push(m->symbols, s);
+            slice_push(m->global_symbols, s);
             continue;
         }
 
@@ -730,7 +730,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             char *ident = ident_with_module(m->ident, var_decl->ident);
 
             symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_VAR, var_decl, false);
-            slice_push(m->symbols, s);
+            slice_push(m->global_symbols, s);
 
             // 转换成 assign stmt，然后导入到 init 中
             ast_stmt *temp_stmt = NEW(ast_stmt);
@@ -750,7 +750,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             ast_type_decl_stmt *type_decl = stmt->value;
             char *ident = ident_with_module(m->ident, type_decl->ident);
             symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_DECL, type_decl, false);
-            slice_push(m->symbols, s);
+            slice_push(m->global_symbols, s);
             continue;
         }
 
@@ -759,7 +759,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
             symbol_t *s = symbol_table_set(new_fn->name, SYMBOL_TYPE_FN, new_fn, false);
-            slice_push(m->symbols, s);
+            slice_push(m->global_symbols, s);
             slice_push(fn_list, new_fn);
             continue;
         }
@@ -776,7 +776,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
     // 加入到全局符号表，等着调用就好了
     symbol_t *s = symbol_table_set(fn_init->name, SYMBOL_TYPE_FN, fn_init, false);
-    slice_push(m->symbols, s);
+    slice_push(m->global_symbols, s);
     slice_push(fn_list, fn_init);
 
     // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
@@ -837,7 +837,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
 
     // 符号表注册
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_TYPE_FN, new_fn, true);
-    slice_push(m->symbols, s);
+    slice_push(m->global_symbols, s);
 
     ast_closure_t *closure = analysis_new_fn(m, new_fn, NULL);
     slice_push(m->ast_closures, closure);

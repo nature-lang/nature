@@ -6,7 +6,7 @@
 #include "utils/table.h"
 #include "src/ast.h"
 
-#define FN_MAIN_NAME "user_main"
+#define FN_MAIN_NAME "main"
 #define FN_INIT_NAME "init"
 #define ENV_IDENT "env"
 

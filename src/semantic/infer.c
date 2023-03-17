@@ -564,11 +564,9 @@ void infer_while(ast_while_stmt *stmt) {
 void infer_for_in(ast_for_in_stmt *stmt) {
     // 经过 infer_expr 的类型一定是已经被还原过的
     type_t iterate_type = infer_expr(&stmt->iterate);
-    if (iterate_type.kind != TYPE_MAP && iterate_type.kind != TYPE_ARRAY) {
-        error_printf(infer_line,
-                     "for in iterate code must be map/list, actual:(%s)",
-                     type_to_string[iterate_type.kind]);
-    }
+
+    assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
+            "for in iterate code must be map/list, actual=%s", type_to_string[iterate_type.kind]);
 
     // 类型推断
     ast_var_decl *key_decl = stmt->gen_key;
@@ -672,7 +670,7 @@ type_t infer_type(type_t type) {
         goto TYPE_ORIGIN;
     }
 
-    assertf(false, "cannot parser code %s", type_to_string[type.kind]);
+    assertf(false, "cannot parser type %s", type_to_string[type.kind]);
     TYPE_ORIGIN:
     reflect_type(type);
 
@@ -745,7 +743,7 @@ bool infer_var_type_can_confirm(type_t right) {
     }
 
     // var a = []  这样就完全不知道是个啥。。。
-    if (right.kind == TYPE_ARRAY) {
+    if (right.kind == TYPE_LIST) {
         typedecl_list_t *list_decl = right.list_decl;
         if (list_decl->type.kind == TYPE_UNKNOWN) {
             return false;

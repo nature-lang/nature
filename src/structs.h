@@ -136,13 +136,13 @@ typedef struct {
     // call init stmt
     ast_stmt *call_init_stmt;  // analysis 阶段写入
 
-    // TODO asm_var_decls to init closures? 这样就只需要 compiler closures 就行了
-    // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_var_decls(symbol)/closure_decls
+    // TODO asm_global_symbols to init closures? 这样就只需要 compiler closures 就行了
+    // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_global_symbols(symbol)/closure_decls
     slice_t *imports; // import_t, 图遍历 imports
     table_t *import_table; // 使用处做符号改写使用
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
-    slice_t *symbols; // symbol_t, 这里只存储全局符号
+    slice_t *global_symbols; // symbol_t, 这里只存储全局符号
 
     // infer 阶段得到
     slice_t *ast_closures; // 全局的或者非全局的都在这里了
@@ -153,7 +153,7 @@ typedef struct {
     // native -> opcodes
     int asm_temp_var_decl_count;
     slice_t *asm_operations; // 和架构相关
-    slice_t *asm_var_decls; // 和架构无关
+    slice_t *asm_global_symbols; // 和架构无关
 
     // elf target.o
     uint64_t elf_count;
@@ -244,7 +244,7 @@ typedef struct closure_t {
     // refer module
     uint64_t text_count; // asm_operations 编译完成后占用的 count
     slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
-    slice_t *asm_var_decls; // 和架构无关
+    slice_t *asm_symbols;
     module_t *module;
 } closure_t;
 

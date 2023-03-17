@@ -324,7 +324,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->operations = list_new();
     new->text_count = 0;
     new->asm_operations = slice_new();
-    new->asm_var_decls = slice_new();
+    new->asm_symbols = slice_new();
     new->entry = NULL;
     new->globals = slice_new();
     new->blocks = slice_new(); // basic_block_t

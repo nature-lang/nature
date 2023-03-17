@@ -16,15 +16,15 @@ static reflect_type_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static reflect_type_t rtype_int(type_decl_int_t t) {
+static reflect_type_t rtype_int() {
     return rtype_base(TYPE_INT);
 }
 
-static reflect_type_t rtype_float(type_decl_float_t t) {
+static reflect_type_t rtype_float() {
     return rtype_base(TYPE_FLOAT);
 }
 
-static reflect_type_t rtype_bool(type_decl_bool_t t) {
+static reflect_type_t rtype_bool() {
     return rtype_base(TYPE_BOOL);
 }
 
@@ -33,15 +33,18 @@ static reflect_type_t rtype_bool(type_decl_bool_t t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_string(typedecl_string_t *t) {
+static reflect_type_t rtype_string() {
     uint32_t hash = hash_string(itoa(TYPE_STRING));
     reflect_type_t rtype = {
-            .size = t->count,  // count 表示字符串的程度，单位已经是 byte 了
+            .size = sizeof(memory_string_t), // 存储在  // count 表示字符串的程度，单位已经是 byte 了
             .hash = hash,
             .last_ptr = 0,
             .kind = TYPE_STRING,
-            .gc_bits = malloc_gc_bits(t->count),
     };
+
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
+
     return rtype;
 }
 
@@ -63,9 +66,8 @@ static reflect_type_t rtype_list(typedecl_list_t *t) {
             .kind = TYPE_LIST,
     };
     // 计算 gc_bits
-    byte *gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(gc_bits, 0);
-    rtype.gc_bits = gc_bits;
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
 
     return rtype;
 }
@@ -278,19 +280,19 @@ type_t type_new(type_kind kind, void *value) {
 }
 
 reflect_type_t reflect_type(type_t t) {
-    reflect_type_t rtype;
+    reflect_type_t rtype = {0};
     switch (t.kind) {
         case TYPE_INT:
-            rtype = rtype_int(t.int_decl);
+            rtype = rtype_int();
             break;
         case TYPE_FLOAT:
-            rtype = rtype_float(t.float_decl);
+            rtype = rtype_float();
             break;
         case TYPE_BOOL:
-            rtype = rtype_bool(t.bool_decl);
+            rtype = rtype_bool();
             break;
         case TYPE_STRING:
-            rtype = rtype_string(t.string_decl);
+            rtype = rtype_string();
             break;
         case TYPE_LIST:
             rtype = rtype_list(t.list_decl);
@@ -317,7 +319,8 @@ reflect_type_t reflect_type(type_t t) {
             rtype = rtype_any(t.any_decl);
             break;
         default:
-            assertf(false, "cannot reflect type kind=%d", t.kind);
+            return rtype; // rtype rtype
+//            assertf(false, "cannot reflect type kind=%d", t.kind);
     }
 
     if (!table_exist(rtype_table, itoa(rtype.hash))) {

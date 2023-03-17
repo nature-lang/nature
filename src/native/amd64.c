@@ -54,22 +54,22 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         if (v->type == TYPE_RAW_STRING) {
             // 生成符号表(通常用于 .data 段)
             char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
-            asm_var_decl_t *decl = NEW(asm_var_decl_t);
-            decl->name = unique_name;
-            decl->size = strlen(v->string_value) + 1; // + 1 表示 \0
-            decl->value = (uint8_t *) v->string_value;
-            slice_push(c->asm_var_decls, decl);
+            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+            symbol->name = unique_name;
+            symbol->size = strlen(v->string_value) + 1; // + 1 表示 \0
+            symbol->value = (uint8_t *) v->string_value;
+            slice_push(c->asm_symbols, symbol);
 
             // asm_copy
             return SYMBOL(unique_name, false);
         } else if (v->type == TYPE_FLOAT) {
             char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
-            asm_var_decl_t *decl = NEW(asm_var_decl_t);
-            decl->name = unique_name;
-            decl->size = QWORD;
-            decl->value = (uint8_t *) &v->float_value; // float to uint8
-//            decl->code = ASM_VAR_DECL_TYPE_FLOAT;
-            slice_push(c->asm_var_decls, decl);
+            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+            symbol->name = unique_name;
+            symbol->size = QWORD;
+            symbol->value = (uint8_t *) &v->float_value; // float to uint8
+//            symbol->code = ASM_VAR_DECL_TYPE_FLOAT;
+            slice_push(c->asm_symbols, symbol);
 
             return SYMBOL(unique_name, false);
         } else if (v->type == TYPE_INT) {

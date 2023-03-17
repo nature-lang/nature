@@ -20,7 +20,7 @@ int teardown(void **state) {
 static void test_basic() {
     char buf[256];
     getcwd(buf, 256);
-    char *work_dir = file_join(buf, "stubs/build");
+    char *work_dir = path_join(buf, "stubs/build");
     chdir(work_dir);
 
     // TODO 根据环境变量动态选择
