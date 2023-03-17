@@ -77,7 +77,7 @@ static void loop_header_detect(closure_t *c, basic_block_t *current, basic_block
  * 如果一个 block 被多个 loop 经过，则 block index_list 的 key 就是 loop_index, value 就是是否被改 loop 穿过
  */
 static void loop_mark(closure_t *c) {
-    list *work_list = list_new();
+    linked_t *work_list = linked_new();
 
     for (int i = 0; i < c->loop_ends->count; ++i) {
         basic_block_t *end = c->loop_ends->take[i];
@@ -89,11 +89,11 @@ static void loop_mark(closure_t *c) {
         assert(header->loop.index >= 0);
         int8_t loop_index = header->loop.index;
 
-        list_push(work_list, end);
+        linked_push(work_list, end);
         end->loop.index_map[loop_index] = true;
 
         do {
-            basic_block_t *current = list_pop(work_list);
+            basic_block_t *current = linked_pop(work_list);
 
             assert(current->loop.index_map[loop_index]);
 
@@ -109,11 +109,11 @@ static void loop_mark(closure_t *c) {
                     continue;
                 }
 
-                list_push(work_list, pred);
+                linked_push(work_list, pred);
                 pred->loop.index_map[loop_index] = true;
             }
 
-        } while (!list_is_empty(work_list));
+        } while (!linked_empty(work_list));
     }
 }
 
@@ -191,8 +191,8 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 }
 
 static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i) {
-    LIST_FOR(block->operations) {
-        lir_op_t *op = LIST_VALUE();
+    LINKED_FOR(block->operations) {
+        lir_op_t *op = LINKED_VALUE();
         if (op->id < id) {
             continue;
         }
@@ -202,10 +202,10 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         lir_operand_t *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
         lir_op_t *mov_op = lir_op_move(dst, src);
         mov_op->id = id;
-        list_insert_before(block->operations, LIST_NODE(), mov_op);
+        linked_insert_before(block->operations, LINKED_NODE(), mov_op);
 
-        if (block->first_op == LIST_NODE()) {
-            block->first_op = LIST_NODE()->prev;
+        if (block->first_op == LINKED_NODE()) {
+            block->first_op = LINKED_NODE()->prev;
         }
         return;
     }
@@ -369,7 +369,7 @@ void interval_mark_number(closure_t *c) {
     int next_id = 0;
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
-        list_node *current = list_first(block->operations);
+        linked_node *current = linked_first(block->operations);
         lir_op_t *label_op = current->value;
         assert(label_op->code == LIR_OPCODE_LABEL);
 
@@ -428,7 +428,7 @@ void interval_build(closure_t *c) {
         // 2. phi function phi of successors of b do
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ_block = block->succs->take[j];
-            list_node *current = list_first(succ_block->operations)->succ;
+            linked_node *current = linked_first(succ_block->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
                 lir_op_t *op = OP(current);
                 // TODO ssh_phi_body_of 有问题！
@@ -440,7 +440,7 @@ void interval_build(closure_t *c) {
         }
 
 
-        int block_from = OP(list_first(block->operations))->id;
+        int block_from = OP(linked_first(block->operations))->id;
         int block_to = OP(block->last_op)->id + 2; // whether add 2?
 
         // live in add full range 遍历所有的 live(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
@@ -451,7 +451,7 @@ void interval_build(closure_t *c) {
         }
 
         // 倒序遍历所有块指令
-        list_node *current = list_last(block->operations);
+        linked_node *current = linked_last(block->operations);
         while (current != NULL && current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op_t *op = current->value;
@@ -528,7 +528,7 @@ void interval_build(closure_t *c) {
         }
 
         // live in 中不能包含 phi output
-        current = list_first(block->operations)->succ;
+        current = linked_first(block->operations)->succ;
         while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(current);
 
@@ -557,9 +557,9 @@ void interval_build(closure_t *c) {
 interval_t *interval_new(closure_t *c) {
     interval_t *i = malloc(sizeof(interval_t));
     memset(i, 0, sizeof(interval_t));
-    i->ranges = list_new();
-    i->use_pos_list = list_new();
-    i->children = list_new();
+    i->ranges = linked_new();
+    i->use_pos_list = linked_new();
+    i->children = linked_new();
     i->stack_slot = NEW(int);
     *i->stack_slot = 0;
     i->spilled = false;
@@ -593,7 +593,7 @@ bool interval_expired(interval_t *i, int position, bool is_input) {
 
 
 bool interval_covered(interval_t *i, int position, bool is_input) {
-    list_node *current = list_first(i->ranges);
+    linked_node *current = linked_first(i->ranges);
     while (current->value != NULL) {
         interval_range_t *range = current->value;
         if (range_covered(range, position, is_input)) {
@@ -633,11 +633,11 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
 void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
     assert(from < to);
 
-    if (list_is_empty(i->ranges)) {
+    if (linked_empty(i->ranges)) {
         interval_range_t *range = NEW(interval_range_t);
         range->from = from;
         range->to = to;
-        list_push(i->ranges, range);
+        linked_push(i->ranges, range);
         i->first_range = range;
         i->last_range = range;
         return;
@@ -652,15 +652,15 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
             i->first_range->to = to;
 
             // to 可能跨越了多个 range
-            list_node *current = list_first(i->ranges)->succ;
+            linked_node *current = linked_first(i->ranges)->succ;
             while (current->value && ((interval_range_t *) current->value)->from <= to) {
                 i->first_range->to = ((interval_range_t *) current->value)->to;
-                list_remove(i->ranges, current);
+                linked_remove(i->ranges, current);
 
                 current = current->succ;
             }
             // 重新计算 last range
-            i->last_range = list_last(i->ranges)->value;
+            i->last_range = linked_last(i->ranges)->value;
         }
 
 
@@ -670,7 +670,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
         range->from = from;
         range->to = to;
 
-        list_insert_before(i->ranges, NULL, range);
+        linked_insert_before(i->ranges, NULL, range);
         i->first_range = range;
         if (i->ranges->count == 1) {
             i->last_range = range;
@@ -686,30 +686,30 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
  * @param kind
  */
 void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind) {
-    list *pos_list = i->use_pos_list;
+    linked_t *pos_list = i->use_pos_list;
 
     use_pos_t *new_pos = NEW(use_pos_t);
     new_pos->kind = kind;
     new_pos->value = position;
-    if (list_is_empty(pos_list)) {
-        list_push(pos_list, new_pos);
+    if (linked_empty(pos_list)) {
+        linked_push(pos_list, new_pos);
         return;
     }
 
-    list_node *current = list_first(pos_list);
+    linked_node *current = linked_first(pos_list);
     while (current->value != NULL && ((use_pos_t *) current->value)->value < position) {
         current = current->succ;
     }
 
-    list_insert_before(pos_list, current, new_pos);
+    linked_insert_before(pos_list, current, new_pos);
 }
 
 
 int interval_next_use_position(interval_t *i, int after_position) {
-    list *pos_list = i->use_pos_list;
+    linked_t *pos_list = i->use_pos_list;
 
-    LIST_FOR(pos_list) {
-        use_pos_t *current_pos = LIST_VALUE();
+    LINKED_FOR(pos_list) {
+        use_pos_t *current_pos = LINKED_VALUE();
         if (current_pos->value > after_position) {
             return current_pos->value;
         }
@@ -740,21 +740,21 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     if (parent->parent) {
         parent = parent->parent;
     }
-    if (list_is_empty(parent->children)) {
-        list_push(parent->children, child);
+    if (linked_empty(parent->children)) {
+        linked_push(parent->children, child);
     } else {
-        LIST_FOR(parent->children) {
-            interval_t *current = LIST_VALUE();
+        LINKED_FOR(parent->children) {
+            interval_t *current = LINKED_VALUE();
             if (current->index == i->index) {
-                list_insert_after(parent->children, LIST_NODE(), child);
+                linked_insert_after(parent->children, LINKED_NODE(), child);
                 break;
             }
         }
     }
 
     // 切割 range
-    LIST_FOR(i->ranges) {
-        interval_range_t *range = LIST_VALUE();
+    LINKED_FOR(i->ranges) {
+        interval_range_t *range = LINKED_VALUE();
         if (position <= range->from) {
             continue;
         }
@@ -768,9 +768,9 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         // 否则 对 range 进行切割
         // tips: position 必定不等于 range->to, 因为 to 是 excluded
         if (position == range->from) {
-            child->ranges = list_split(i->ranges, LIST_NODE());
+            child->ranges = linked_split(i->ranges, LINKED_NODE());
         } else if (position >= range->to) {
-            child->ranges = list_split(i->ranges, LIST_NODE()->succ);
+            child->ranges = linked_split(i->ranges, LINKED_NODE()->succ);
         } else {
             // new range for child
             interval_range_t *new_range = NEW(interval_range_t);
@@ -781,28 +781,28 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
             range->to = position; // 截短
 
             // 将 new_range 插入到 ranges 中
-            list_insert_after(i->ranges, LIST_NODE(), new_range);
+            linked_insert_after(i->ranges, LINKED_NODE(), new_range);
 
-            child->ranges = list_split(i->ranges, LIST_NODE()->succ);
+            child->ranges = linked_split(i->ranges, LINKED_NODE()->succ);
         }
 
-        child->first_range = list_first(child->ranges)->value;
-        child->last_range = list_last(child->ranges)->value;
+        child->first_range = linked_first(child->ranges)->value;
+        child->last_range = linked_last(child->ranges)->value;
 
-        i->first_range = list_first(i->ranges)->value;
-        i->last_range = list_last(i->ranges)->value;
+        i->first_range = linked_first(i->ranges)->value;
+        i->last_range = linked_last(i->ranges)->value;
         break;
     }
 
     // 划分 position
-    LIST_FOR(i->use_pos_list) {
-        use_pos_t *pos = LIST_VALUE();
+    LINKED_FOR(i->use_pos_list) {
+        use_pos_t *pos = LINKED_VALUE();
         if (pos->value < position) {
             continue;
         }
 
         // pos->value >= position, pos 和其之后的 pos 都需要加入到 new child 中
-        child->use_pos_list = list_split(i->use_pos_list, LIST_NODE());
+        child->use_pos_list = linked_split(i->use_pos_list, LINKED_NODE());
         break;
     }
 
@@ -836,8 +836,8 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
  * @return
  */
 use_pos_t *interval_must_reg_pos(interval_t *i) {
-    LIST_FOR(i->use_pos_list) {
-        use_pos_t *pos = LIST_VALUE();
+    LINKED_FOR(i->use_pos_list) {
+        use_pos_t *pos = LINKED_VALUE();
         if (pos->kind == USE_KIND_MUST) {
             return pos;
         }
@@ -850,8 +850,8 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
  * @return
  */
 use_pos_t *interval_must_stack_pos(interval_t *i) {
-    LIST_FOR(i->use_pos_list) {
-        use_pos_t *pos = LIST_VALUE();
+    LINKED_FOR(i->use_pos_list) {
+        use_pos_t *pos = LINKED_VALUE();
         if (pos->kind == USE_KIND_NOT) {
             return pos;
         }
@@ -895,7 +895,7 @@ void resolve_data_flow(closure_t *c) {
             }
 
             // phi def interval(label op -> phi op -> ... -> phi op -> other op)
-            list_node *current = list_first(to->operations)->succ;
+            linked_node *current = linked_first(to->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
                 lir_op_t *op = OP(current);
                 //  to phi.inputOf(pred def) will is from interval
@@ -939,7 +939,7 @@ void resolve_data_flow(closure_t *c) {
 interval_t *interval_child_at(interval_t *i, int op_id, bool is_use) {
     assert(op_id >= 0 && "invalid op_id (method can not be called for spill moves)");
 
-    if (list_is_empty(i->children)) {
+    if (linked_empty(i->children)) {
         return i;
     }
 
@@ -951,8 +951,8 @@ interval_t *interval_child_at(interval_t *i, int op_id, bool is_use) {
 
     // i->var 在不同的指令处可能作为 input 也可能作为 output
     // 甚至在同一条指令处即作为 input，又作为 output， 比如 20: v1 + 1 -> v2
-    LIST_FOR(i->children) {
-        interval_t *child = LIST_VALUE();
+    LINKED_FOR(i->children) {
+        interval_t *child = LINKED_VALUE();
         if (child->first_range->from <= op_id && op_id < (child->last_range->to + last_to_offset)) {
             return child;
         }
@@ -1063,11 +1063,11 @@ use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
     assert(i->use_pos_list->count > 0);
 
     if (!kind) {
-        return list_first(i->use_pos_list)->value;
+        return linked_first(i->use_pos_list)->value;
     }
 
-    LIST_FOR(i->use_pos_list) {
-        use_pos_t *pos = LIST_VALUE();
+    LINKED_FOR(i->use_pos_list) {
+        use_pos_t *pos = LINKED_VALUE();
         if (pos->kind == kind) {
             return pos;
         }

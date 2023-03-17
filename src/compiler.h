@@ -1,10 +1,10 @@
 #ifndef NATURE_SRC_COMPILER_H_
 #define NATURE_SRC_COMPILER_H_
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "ast.h"
 #include "src/lir/lir.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/slice.h"
 
 slice_t *compiler_closures;
@@ -42,9 +42,9 @@ static lir_operand_t *compiler_expr(closure_t *c, ast_expr expr);
 
 //lir_operand_t *compiler_call(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_new_array(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_new_list(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_array_value(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_list_value(closure_t *c, ast_expr expr);
 
 //lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr);
 

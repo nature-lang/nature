@@ -28,9 +28,9 @@ typedef enum {
     AST_EXPR_LIST_VALUE,
 
     AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
-    AST_EXPR_NEW_ARRAY, // [1, 2, 3]
-    AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
+    AST_EXPR_NEW_LIST, // [1, 2, 3]
     AST_EXPR_NEW_STRUCT, // person {a = 1; b = 2}
+    AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
 
     // 抽象复合类型
     AST_EXPR_ACCESS,
@@ -251,8 +251,8 @@ typedef struct {
 
 // [1,a.b, call()]
 typedef struct {
-    ast_expr values[UINT8_MAX]; // TODO dynamic
-    uint64_t count; // count
+    ast_expr values[UINT8_MAX]; // TODO 这里写死 uint8_max 可太小了,改成动态数组吧
+    uint64_t count; // TODO list 没有数量,数组才有数量
     type_t type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 

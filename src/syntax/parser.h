@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_SYNTAX_PARSER_H_
 #define NATURE_SRC_SYNTAX_PARSER_H_
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/slice.h"
 #include "src/ast.h"
 #include "token.h"
@@ -38,7 +38,7 @@ typedef struct {
  */
 parser_rule *parser_get_rule(token_type type);
 
-slice_t *parser(module_t *m, list *token_list);
+slice_t *parser(module_t *m, linked_t *token_list);
 
 ast_expr parser_expr(module_t *m);
 
@@ -129,7 +129,7 @@ bool parser_is(module_t *m, token_type t);
 
 bool parser_next_is(module_t *m, int step, token_type t);
 
-list_node *parser_next(module_t *m, int step);
+linked_node *parser_next(module_t *m, int step);
 
 /**
  * 兼容 void
@@ -145,9 +145,9 @@ token *parser_must(module_t *m, token_type t);
 
 bool parser_must_stmt_end(module_t *m);
 
-bool parser_is_fn_decl(module_t *m, list_node *current);
+bool parser_is_fn_decl(module_t *m, linked_node *current);
 
-void parser_cursor_init(module_t *m, list *token_list);
+void parser_cursor_init(module_t *m, linked_t *token_list);
 
 ast_stmt *parser_new_stmt();
 

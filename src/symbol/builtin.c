@@ -9,7 +9,7 @@
 ast_new_fn *builtin_print() {
     // var_decl
     typedecl_list_t *list_decl = NEW(typedecl_list_t);
-    list_decl->type = type_base_new(TYPE_ANY);
+    list_decl->element_type = type_base_new(TYPE_ANY);
 
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type_base_new(TYPE_LIST);

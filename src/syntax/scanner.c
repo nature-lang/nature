@@ -8,19 +8,19 @@
  * 符号表使用什么结构来存储, 链表结构
  * @param chars
  */
-list *scanner(module_t *module) {
+linked_t *scanner(module_t *module) {
     // init scanner
     scanner_cursor_init(module);
     scanner_error_init(module);
 
-    list *list = list_new();
+    linked_t *list = linked_new();
 
     while (true) {
         scanner_skip_space(module);
 
         if (module->s_cursor.has_newline && scanner_is_at_stmt_end(module)) {
             // push token TOKEN_STMT_EOF
-            list_push(list, token_new(TOKEN_STMT_EOF, ";", module->s_cursor.line - 1));
+            linked_push(list, token_new(TOKEN_STMT_EOF, ";", module->s_cursor.line - 1));
         }
 
         // reset by guard
@@ -31,7 +31,7 @@ list *scanner(module_t *module) {
             char *word = scanner_ident_advance(module);
 
             token *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
-            list_push(list, t);
+            linked_push(list, t);
             continue;
         }
 
@@ -44,14 +44,14 @@ list *scanner(module_t *module) {
                 type = TOKEN_LITERAL_INT;
             }
 
-            list_push(list, token_new(type, word, module->s_cursor.line));
+            linked_push(list, token_new(type, word, module->s_cursor.line));
             continue;
         }
 
         // 字符串扫描
         if (scanner_is_string(module, *module->s_cursor.current)) {
             char *str = scanner_string_advance(module, *module->s_cursor.current);
-            list_push(list, token_new(TOKEN_LITERAL_STRING, str, module->s_cursor.line));
+            linked_push(list, token_new(TOKEN_LITERAL_STRING, str, module->s_cursor.line));
             continue;
         }
 
@@ -61,7 +61,7 @@ list *scanner(module_t *module) {
             if (special_type == -1) { // 未识别的特殊符号
                 module->s_error.message = "scanner_special_char() not scanner_match";
             } else {
-                list_push(list, token_new(special_type, scanner_gen_word(module), module->s_cursor.line));
+                linked_push(list, token_new(special_type, scanner_gen_word(module), module->s_cursor.line));
                 continue;
             }
         }
@@ -77,7 +77,7 @@ list *scanner(module_t *module) {
         }
     }
 
-    list_push(list, token_new(TOKEN_EOF, "EOF", module->s_cursor.line));
+    linked_push(list, token_new(TOKEN_EOF, "EOF", module->s_cursor.line));
 
     return list;
 }

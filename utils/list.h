@@ -1,50 +1,35 @@
-#ifndef NATURE_SRC_LIB_LIST_H_
-#define NATURE_SRC_LIB_LIST_H_
+#ifndef NATURE_UTILS_LIST_H
+#define NATURE_UTILS_LIST_H
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "value.h"
 
-// rear 为 empty node, 不会进入到循环中(一旦不满足条件，就会立即退出)
-#define LIST_FOR(_list) for (list_node *node = _list->front; node != _list->rear; node = node->succ)
-
-#define LIST_VALUE() (node->value)
-#define LIST_NODE() (node)
-
-typedef struct list_node {
-    void *value;
-    struct list_node *succ;
-    struct list_node *prev;
-} list_node;
+typedef struct {
+    uint64_t element_size; // 元素的大小
+    uint64_t count; // 元素的数量
+    uint64_t capacity; // 预申请的数量
+    void *take; // 申请的内存区域
+} list_t;
 
 /**
- * 队列或者说链表结构
+ * 和 slice 不同， list 中的元素数量是可以超过指针大小的
+ * @return
  */
-typedef struct {
-    list_node *front; // 头部
-    list_node *rear; // 尾部
-    uint16_t count; // 队列中的元素个数
-} list;
+list_t *list_new();
 
-list *list_new(); // 空队列， 初始化时，head,tail = NULL
-void *list_pop(list *l); // 头出队列
-list_node *list_first(list *l); // 最后一个可用元素，绝非空元素
-list_node *list_last(list *l); // 最后一个可用元素，绝非空元素
-void list_push(list *l, void *value); // 尾入队列
-void list_insert_after(list *l, list_node *prev, void *value);
+/**
+ * 示例
+ * uint64 a = 233;
+ * list_push(list, &a) // 将栈中存储的值，按 element_size 进行 copy
+ * 依赖 memmove 移动内存数据
+ * 如果超长则使用 realloc 扩容 take 区域,realloc 会自动移动过去
+ * @param l
+ * @param value
+ */
+void list_push(list_t *l, void *value);
 
-void list_insert_before(list *l, list_node *succ, void *value);
+// list 一般没有 pop 的说法
+//void list_pop(list_t *l, void *value);
+void list_remove(list_t *l, uint64_t index);
 
-list *list_split(list *l, list_node *node);
-
-void list_concat(list *dst, list *src); // src 追加到 dst 中
-
-void list_remove(list *l, list_node *node);
-
-void list_cleanup(list *l);
-
-list_node *list_new_node();
-
-bool list_is_empty(list *l);
-
-#endif //NATURE_SRC_LIB_LIST_H_
+#endif //NATURE_LIST_H

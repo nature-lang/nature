@@ -1,7 +1,7 @@
 #ifndef NATURE_COLLECTOR_H
 #define NATURE_COLLECTOR_H
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "memory.h"
 
 

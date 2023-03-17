@@ -580,9 +580,9 @@ static mspan_t *mcentral_grow(mcentral_t mcentral) {
  */
 static mspan_t *cache_span(mcentral_t mcentral) {
     mspan_t *span = NULL;
-    if (!list_is_empty(mcentral.partial_swept)) {
+    if (!linked_empty(mcentral.partial_swept)) {
         // partial 是空的，表示当前 mcentral 中已经没有任何可以使用的 mspan 了，需要去 mheap 中申请咯
-        span = list_pop(mcentral.partial_swept);
+        span = linked_pop(mcentral.partial_swept);
         goto HAVE_SPAN;
     }
 
@@ -603,9 +603,9 @@ void uncache_span(mcentral_t mcentral, mspan_t *span) {
     assertf(span->alloc_count == 0, "mspan alloc_count == 0");
 
     if (span->obj_count - span->alloc_count > 0) {
-        list_push(mcentral.partial_swept, span);
+        linked_push(mcentral.partial_swept, span);
     } else {
-        list_push(mcentral.full_swept, span);
+        linked_push(mcentral.full_swept, span);
     }
 }
 
@@ -727,7 +727,7 @@ static addr_t large_malloc(uint size, reflect_type_t *type) {
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_t *central = &memory->mheap.centrals[spanclass];
-    list_push(central->full_swept, s);
+    linked_push(central->full_swept, s);
     return s->base;
 }
 
@@ -777,13 +777,13 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 
 
 reflect_type_t *runtime_find_rtype(uint index) {
-    return &link_rtype_data[index];
+    return &rt_rtype_data[index];
 }
 
 void fndefs_deserialize() {
-    byte *gc_bits_offset = ((byte *) link_fndef_data) + link_fndef_count * sizeof(fndef_t);
-    for (int i = 0; i < link_fndef_count; ++i) {
-        fndef_t *f = &link_fndef_data[i];
+    byte *gc_bits_offset = ((byte *) rt_fndef_data) + rt_fndef_count * sizeof(fndef_t);
+    for (int i = 0; i < rt_fndef_count; ++i) {
+        fndef_t *f = &rt_fndef_data[i];
         uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
 
         f->gc_bits = gc_bits_offset;
@@ -793,9 +793,9 @@ void fndefs_deserialize() {
 }
 
 void rtypes_deserialize() {
-    byte *gc_bits_offset = ((byte *) link_rtype_data) + link_rtype_count * sizeof(reflect_type_t);
-    for (int i = 0; i < link_rtype_count; ++i) {
-        reflect_type_t *r = &link_rtype_data[i];
+    byte *gc_bits_offset = ((byte *) rt_rtype_data) + rt_rtype_count * sizeof(reflect_type_t);
+    for (int i = 0; i < rt_rtype_count; ++i) {
+        reflect_type_t *r = &rt_rtype_data[i];
         uint64_t gc_bits_size = calc_gc_bits_size(r->size);
 
         r->gc_bits = gc_bits_offset;
@@ -826,13 +826,13 @@ void memory_init() {
     for (int i = 0; i < SPANCLASS_COUNT; i++) {
         mcentral_t item = mheap.centrals[i];
         item.spanclass = i;
-        item.partial_swept = list_new();
-//        item.partial_unswept = list_new();
-        item.full_swept = list_new();
-//        item.full_unswept = list_new();
+        item.partial_swept = linked_new();
+//        item.partial_unswept = linked_new();
+        item.full_swept = linked_new();
+//        item.full_unswept = linked_new();
     }
 
-    // links 数据反序列化，此时 link_fndef_data link_rtype_data 等数据可以正常使用
+    // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
     fndefs_deserialize();
     rtypes_deserialize();
 }

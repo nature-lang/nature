@@ -6,8 +6,8 @@
  * 采用链表结构是因为跟方便排序插入，有序遍历
  * @return
  */
-static list *unhandled_new(closure_t *c) {
-    list *unhandled = list_new();
+static linked_t *unhandled_new(closure_t *c) {
+    linked_t *unhandled = linked_new();
     // 遍历所有变量,根据 interval from 进行排序
     for (int i = 0; i < c->globals->count; ++i) {
         interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->globals->take[i])->ident);
@@ -24,8 +24,8 @@ static list *unhandled_new(closure_t *c) {
  * 所有的 fixed interval 在初始化时加入到 inactive 中,后续计算相交时都是使用 inactive 计算的
  * @return
  */
-static list *inactive_new(closure_t *c) {
-    list *inactive = list_new();
+static linked_t *inactive_new(closure_t *c) {
+    linked_t *inactive = linked_new();
 
     // 遍历所有固定寄存器生成 fixed_interval
     for (int i = 1; i < alloc_reg_count(); ++i) {
@@ -40,7 +40,7 @@ static list *inactive_new(closure_t *c) {
         }
 
         // free_pos = int_max
-        list_push(inactive, item);
+        linked_push(inactive, item);
     }
 
     return inactive;
@@ -143,19 +143,19 @@ static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos)
 static void handle_active(allocate_t *a) {
     // output position
     int position = a->current->first_range->from;
-    list_node *current = a->active->front;
+    linked_node *current = a->active->front;
     while (current->value != NULL) {
         interval_t *select = (interval_t *) current->value;
         bool is_expired = interval_expired(select, position, false);
         bool is_covers = interval_covered(select, position, false);
 
         if (!is_covers || is_expired) {
-            list_remove(a->active, current);
+            linked_remove(a->active, current);
 
             if (is_expired) {
-                list_push(a->handled, select);
+                linked_push(a->handled, select);
             } else {
-                list_push(a->inactive, select);
+                linked_push(a->inactive, select);
             }
         }
 
@@ -165,18 +165,18 @@ static void handle_active(allocate_t *a) {
 
 static void handle_inactive(allocate_t *a) {
     int position = a->current->first_range->from;
-    list_node *current = a->inactive->front;
+    linked_node *current = a->inactive->front;
     while (current->value != NULL) {
         interval_t *select = (interval_t *) current->value;
         bool is_expired = interval_expired(select, position, false);
         bool is_covers = interval_covered(select, position, false);
 
         if (is_covers || is_expired) {
-            list_remove(a->inactive, current);
+            linked_remove(a->inactive, current);
             if (is_expired) {
-                list_push(a->handled, select);
+                linked_push(a->handled, select);
             } else {
-                list_push(a->active, select);
+                linked_push(a->active, select);
             }
         }
 
@@ -242,12 +242,12 @@ static void assign_interval(closure_t *c, allocate_t *a, interval_t *i, uint8_t 
 void allocate_walk(closure_t *c) {
     allocate_t *a = malloc(sizeof(allocate_t));
     a->unhandled = unhandled_new(c);
-    a->handled = list_new();
-    a->active = list_new();
+    a->handled = linked_new();
+    a->active = linked_new();
     a->inactive = inactive_new(c);
 
     while (a->unhandled->count != 0) {
-        a->current = (interval_t *) list_pop(a->unhandled);
+        a->current = (interval_t *) linked_pop(a->unhandled);
 
         // handle active
         handle_active(a);
@@ -257,25 +257,25 @@ void allocate_walk(closure_t *c) {
         use_pos_t *first_use = first_use_pos(a->current, 0);
         if (first_use->kind == USE_KIND_NOT) {
             spill_interval(c, a, a->current, 0);
-            list_push(a->handled, a->current);
+            linked_push(a->handled, a->current);
             continue;
         }
 
         // 尝试为 current 分配寄存器
         bool allocated = allocate_free_reg(c, a);
         if (allocated) {
-            list_push(a->active, a->current);
+            linked_push(a->active, a->current);
             continue;
         }
 
         allocated = allocate_block_reg(c, a);
         if (allocated) {
-            list_push(a->active, a->current);
+            linked_push(a->active, a->current);
             continue;
         }
 
         // 分不到寄存器，只能 spill 了， spill 的 interval 放到 handled 中，再也不会被 traverse 了
-        list_push(a->handled, a->current);
+        linked_push(a->handled, a->current);
     }
 }
 
@@ -285,18 +285,18 @@ void allocate_walk(closure_t *c) {
  * @param unhandled
  * @param to
  */
-void sort_to_unhandled(list *unhandled, interval_t *to) {
+void sort_to_unhandled(linked_t *unhandled, interval_t *to) {
     if (unhandled->count == 0) {
-        list_push(unhandled, to);
+        linked_push(unhandled, to);
         return;
     }
 
-    list_node *current = list_first(unhandled);
+    linked_node *current = linked_first(unhandled);
     while (current->value != NULL && ((interval_t *) current->value)->first_range->from < to->first_range->from) {
         current = current->succ;
     }
     //  to < current, 将 to 插入到 current 前面
-    list_insert_before(unhandled, current, to);
+    linked_insert_before(unhandled, current, to);
 }
 
 static uint8_t max_pos_index(const int list[UINT8_MAX]) {
@@ -329,14 +329,14 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     }
 
     // active(已经分配到了 reg) interval 不予分配，所以 pos 设置为 0
-    LIST_FOR(a->active) {
-        interval_t *select = LIST_VALUE();
+    LINKED_FOR(a->active) {
+        interval_t *select = LINKED_VALUE();
         set_pos(free_pos, select->assigned, 0);
     }
 
     // ssa 表单中不会因为 redefine 产生 lifetime hole，只会由于 if-else block 产生少量的 hole
-    LIST_FOR(a->inactive) {
-        interval_t *select = LIST_VALUE();
+    LINKED_FOR(a->inactive) {
+        interval_t *select = LINKED_VALUE();
         int pos = interval_next_intersection(a->current, select);
         if (pos == 0) {
             continue;
@@ -391,8 +391,8 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     int first_from = a->current->first_range->from;
 
     // 遍历固定寄存器(active) TODO 固定间隔也进不来呀？
-    LIST_FOR(a->active) {
-        interval_t *select = LIST_VALUE();
+    LINKED_FOR(a->active) {
+        interval_t *select = LINKED_VALUE();
         // 固定间隔本身就是 short range 了，但如果还在 current pos is active,so will set that block and use to 0
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
@@ -408,8 +408,8 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // 遍历非固定寄存器(active intersect current)
     // 如果 lifetime hole 没有和 current intersect 在 allocate free 的时候已经用完了
     int pos;
-    LIST_FOR(a->inactive) {
-        interval_t *select = LIST_VALUE();
+    LINKED_FOR(a->inactive) {
+        interval_t *select = LINKED_VALUE();
         pos = interval_next_intersection(a->current, select);
         if (pos == 0) {
             continue;
@@ -450,16 +450,16 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // 不过 block_use[reg_id] 则是大于 current->last_range->to，所以可以将整个寄存器直接分配给 current， 不用考虑 block 的问题
         // 所有和 current intersecting 的 interval 都需要在 current start 之前 split 并且 spill 到内存中
         // 当然，如果 child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
-        LIST_FOR(a->active) {
-            interval_t *i = LIST_VALUE();
+        LINKED_FOR(a->active) {
+            interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
             // first_use 表示必须在 first_use 之前 spill, 否则会影响 current 使用 reg_id
             spill_interval(c, a, i, first_from);
         }
-        LIST_FOR(a->inactive) {
-            interval_t *i = LIST_VALUE();
+        LINKED_FOR(a->inactive) {
+            interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
@@ -475,15 +475,15 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // 虽然 first use pos < reg_index 对应的 interval 的使用位置，但是
         // current start ~ end 之间被 block_pos 所截断，所以必须 split  current in block pos 之前, child in to unhandled list
         // split and spill interval active/inactive intervals for reg
-        LIST_FOR(a->active) {
-            interval_t *i = LIST_VALUE();
+        LINKED_FOR(a->active) {
+            interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
             spill_interval(c, a, i, first_from);
         }
-        LIST_FOR(a->inactive) {
-            interval_t *i = LIST_VALUE();
+        LINKED_FOR(a->inactive) {
+            interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
@@ -510,7 +510,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 void replace_virtual_register(closure_t *c) {
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
-        list_node *current = block->first_op;
+        linked_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
             slice_t *var_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(VR_FLAG_DEF) | FLAG(VR_FLAG_USE),
@@ -529,7 +529,7 @@ void replace_virtual_register(closure_t *c) {
 
             if (op->code == LIR_OPCODE_MOVE) {
                 if (lir_operand_equal(op->first, op->output)) {
-                    list_remove(block->operations, current);
+                    linked_remove(block->operations, current);
                 }
             }
 
@@ -537,9 +537,9 @@ void replace_virtual_register(closure_t *c) {
         }
 
         // remove phi op
-        current = list_first(block->operations)->succ;
+        current = linked_first(block->operations)->succ;
         while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
-            list_remove(block->operations, current);
+            linked_remove(block->operations, current);
 
             current = current->succ;
         }

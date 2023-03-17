@@ -1,12 +1,12 @@
 #ifndef NATURE_SRC_SCANNER_H_
 #define NATURE_SRC_SCANNER_H_
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/value.h"
 #include "src/syntax/token.h"
 #include "src/module.h"
 
-list *scanner(module_t *module);
+linked_t *scanner(module_t *module);
 
 void scanner_cursor_init(module_t *module);
 

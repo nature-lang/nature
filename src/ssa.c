@@ -15,8 +15,8 @@ static void recollect_globals(closure_t *c) {
     // 遍历所有基本块和操作，提取所有的 output var
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
-        LIST_FOR(block->operations) {
-            lir_op_t *op = LIST_VALUE();
+        LINKED_FOR(block->operations) {
+            lir_op_t *op = LINKED_VALUE();
             slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
             for (int j = 0; j < vars->count; ++j) {
                 lir_var_t *var = vars->take[j];
@@ -246,8 +246,8 @@ void ssa_add_phi(closure_t *c) {
 
 
                 // insert to list(可能只有一个 label )
-                list_node *label_node = df_block->operations->front;
-                list_insert_after(df_block->operations, label_node, phi_op);
+                linked_node *label_node = df_block->operations->front;
+                linked_insert_after(df_block->operations, label_node, phi_op);
             }
         }
     }
@@ -368,8 +368,8 @@ void ssa_use_def(closure_t *c) {
 
         basic_block_t *block = c->blocks->take[label];
 
-        LIST_FOR(block->operations) {
-            lir_op_t *op = LIST_VALUE();
+        LINKED_FOR(block->operations) {
+            lir_op_t *op = LINKED_VALUE();
 
             // first param (use)
             slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_USE));
@@ -500,7 +500,7 @@ void ssa_rename(closure_t *c) {
 void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
     // skip label code
 //    lir_op *current_op = block->asm_operations->front->succ;
-    list_node *current = block->operations->front->succ;
+    linked_node *current = block->operations->front->succ;
 
     // 当前块内的先命名
     while (current->value != NULL) {
@@ -547,7 +547,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
 //        lir_op *succ_op = succ_block->asm_operations->front->succ;
-        list_node *op_node = list_first(succ_block->operations)->succ; // front is label
+        linked_node *op_node = linked_first(succ_block->operations)->succ; // front is label
         while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(op_node);
             slice_t *phi_body = op->first->value;
@@ -572,7 +572,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
     // 此时如果父节点定义了 x (1), 在左子节点重新定义 了 x (2), 如果在右子节点有 b = x + 1, 然后又有 x = c + 2
     // 此时 stack[x].top = 2;  但实际上右子节点使用的是 x1, 所以此时需要探出在左子节点定义的所有变量的 stack 空间。
     // 右子节点则由 b_1 = x_1 + 1, 而对于 x = c + 2, 则应该是 x_3 = c_1 + 2, 所以 counter 计数不能减少
-    list_node *current_node = block->operations->front->succ;
+    linked_node *current_node = block->operations->front->succ;
     while (current_node->value != NULL) {
         lir_op_t *op = current_node->value;
         // output var
@@ -640,7 +640,7 @@ bool ssa_is_idom(slice_t *dom, basic_block_t *await) {
  * @return
  */
 bool ssa_phi_defined(lir_var_t *var, basic_block_t *block) {
-    list_node *current = block->operations->front->succ;
+    linked_node *current = block->operations->front->succ;
     while (current->value != NULL && ((lir_op_t *) current->value)->code == LIR_OPCODE_PHI) {
         lir_op_t *op = current->value;
         lir_var_t *phi_var = op->output->value;

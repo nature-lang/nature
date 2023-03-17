@@ -114,7 +114,7 @@ type_t infer_expr(ast_expr *expr) {
             type = infer_ident(((ast_ident *) expr->value)->literal);
             break;
         }
-        case AST_EXPR_NEW_ARRAY: {
+        case AST_EXPR_NEW_LIST: {
             type = infer_new_list((ast_new_list *) expr->value);
             break;
         }
@@ -258,18 +258,18 @@ type_t infer_new_list(ast_new_list *new_list) {
             .kind = TYPE_LIST,
     };
     typedecl_list_t *decl = NEW(typedecl_list_t);
-    decl->type = type_base_new(TYPE_UNKNOWN); // unknown 可以适配任何类型
+    decl->element_type = type_base_new(TYPE_UNKNOWN); // unknown 可以适配任何类型
 //    decl->count = new_list->count; // TODO 暂时不支持定义数量, 如果有数量那定义的应该是数组了
 
     for (int i = 0; i < new_list->count; ++i) {
         type_t item_type = infer_expr(&new_list->values[i]);
-        if (decl->type.kind == TYPE_UNKNOWN) {
+        if (decl->element_type.kind == TYPE_UNKNOWN) {
             // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
-            decl->type = item_type;
+            decl->element_type = item_type;
         } else {
-            if (!type_compare(item_type, decl->type)) {
+            if (!type_compare(item_type, decl->element_type)) {
                 // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                decl->type = type_base_new(TYPE_ANY);
+                decl->element_type = type_base_new(TYPE_ANY);
                 break;
             }
         }
@@ -406,11 +406,11 @@ type_t infer_access(ast_expr *expr) {
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
-        access_list->type = list_decl->type;
+        access_list->type = list_decl->element_type;
         expr->assert_type = AST_EXPR_LIST_VALUE;
         expr->value = access_list;
 
-        result = list_decl->type;
+        result = list_decl->element_type;
     } else {
         assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line, type_to_string[left_type.kind]);
     };
@@ -578,7 +578,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
     } else {
         typedecl_list_t *list_decl = iterate_type.list_decl;
         key_decl->type = type_base_new(TYPE_INT);
-        value_decl->type = list_decl->type;
+        value_decl->type = list_decl->element_type;
 
     }
 
@@ -657,7 +657,7 @@ type_t infer_type(type_t type) {
 
     if (type.kind == TYPE_LIST) {
         typedecl_list_t *list_decl = type.list_decl;
-        list_decl->type = infer_type(list_decl->type);
+        list_decl->element_type = infer_type(list_decl->element_type);
         goto TYPE_ORIGIN;
     }
 
@@ -745,7 +745,7 @@ bool infer_var_type_can_confirm(type_t right) {
     // var a = []  这样就完全不知道是个啥。。。
     if (right.kind == TYPE_LIST) {
         typedecl_list_t *list_decl = right.list_decl;
-        if (list_decl->type.kind == TYPE_UNKNOWN) {
+        if (list_decl->element_type.kind == TYPE_UNKNOWN) {
             return false;
         }
     }

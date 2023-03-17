@@ -2,7 +2,7 @@
 #define NATURE_SRC_REGISTER_INTERVAL_H_
 
 #include "src/lir/lir.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 
 typedef enum {
     USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
@@ -26,10 +26,10 @@ typedef struct interval_t {
     int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
     interval_range_t *first_range;
     interval_range_t *last_range;
-    list *ranges;
-    list *use_pos_list; // 存储 use_position 列表
+    linked_t *ranges;
+    linked_t *use_pos_list; // 存储 use_position 列表
     struct interval_t *parent;
-    list *children; // 动态数组
+    linked_t *children; // 动态数组
 
     lir_var_t *var; // var 中存储着 stack slot
 

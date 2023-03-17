@@ -10,8 +10,8 @@
  * @return
  */
 static fndef_t *find_fn(addr_t addr) {
-    for (int i = 0; i < link_fndef_count; ++i) {
-        fndef_t *fn = &link_fndef_data[i];
+    for (int i = 0; i < rt_fndef_count; ++i) {
+        fndef_t *fn = &rt_fndef_data[i];
         if (fn->base < addr && fn->end > addr) {
             return fn;
         }
@@ -49,7 +49,7 @@ static void scan_stack(memory_t *m) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-                list_push(m->grey_list, (void *) fetch_addr_value(cursor));
+                linked_push(m->grey_list, (void *) fetch_addr_value(cursor));
             }
 
             i += 1;
@@ -64,14 +64,14 @@ static void scan_stack(memory_t *m) {
 }
 
 static void scan_symbols(memory_t *m) {
-    uint64_t count = link_symdef_size / sizeof(symdef_t);
+    uint64_t count = rt_symdef_size / sizeof(symdef_t);
     for (int i = 0; i < count; ++i) {
-        symdef_t s = link_symdef_data[i];
+        symdef_t s = rt_symdef_data[i];
         if (!s.need_gc) {
             continue;
         }
         // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
-        list_push(m->grey_list, (void *) fetch_addr_value(s.base));
+        linked_push(m->grey_list, (void *) fetch_addr_value(s.base));
     }
 }
 
@@ -103,15 +103,15 @@ static void mark_obj_black(mspan_t *span, int index) {
  * @param m
  */
 static void grey_list_work(memory_t *m) {
-    list *temp_grey_list = list_new();
+    linked_t *temp_grey_list = linked_new();
     uint64_t obj_count = 0;
     while (m->grey_list->count > 0) {
         // 1. traverse all ptr
 
-        LIST_FOR(temp_grey_list) {
+        LINKED_FOR(temp_grey_list) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
-            addr_t addr = (addr_t) LIST_VALUE();
+            addr_t addr = (addr_t) LINKED_VALUE();
             arena_t *arena = memory->mheap.arenas[arena_index(addr)];
 
             // get mspan by ptr
@@ -149,7 +149,7 @@ static void grey_list_work(memory_t *m) {
                 bool is_ptr = bitmap_test(bits_base, bit_index);
                 if (is_ptr) {
                     // 如果是 ptr 则将其加入到 grey list 中
-                    list_push(temp_grey_list, (void *) temp_addr);
+                    linked_push(temp_grey_list, (void *) temp_addr);
                 }
             }
 
@@ -177,9 +177,9 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
         mheap_free_span(&memory->mheap, span);
     } else if (span->alloc_count == span->obj_count) {
         // full used
-        list_push(central->full_swept, span);
+        linked_push(central->full_swept, span);
     } else {
-        list_push(central->partial_swept, span);
+        linked_push(central->partial_swept, span);
     }
 }
 
@@ -206,18 +206,18 @@ void mcentral_sweep(mheap_t *mheap) {
     for (int i = 0; i < SPANCLASS_COUNT; ++i) {
         mcentral_t *central = &mheap->centrals[i];
         // 遍历 list 中的所有 span 进行清理, 如果 span 已经清理干净则其规划到 mehap 中
-        LIST_FOR(central->partial_swept) {
-            mspan_t *span = LIST_VALUE();
+        LINKED_FOR(central->partial_swept) {
+            mspan_t *span = LINKED_VALUE();
             if (sweep_span(central, span)) {
-                list_remove(central->partial_swept, LIST_NODE());
+                linked_remove(central->partial_swept, LINKED_NODE());
                 free_mspan_meta(span);
             }
         }
 
-        LIST_FOR(central->full_swept) {
-            mspan_t *span = LIST_VALUE();
+        LINKED_FOR(central->full_swept) {
+            mspan_t *span = LINKED_VALUE();
             if (sweep_span(central, span)) {
-                list_remove(central->full_swept, LIST_NODE());
+                linked_remove(central->full_swept, LINKED_NODE());
                 free_mspan_meta(span);
             }
         }
@@ -250,7 +250,7 @@ void runtime_gc() {
     // 2. 遍历 gc roots
     // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
     // - 初始化 gc 状态
-    assertf(list_is_empty(memory->grey_list), "grey list not cleanup");
+    assertf(linked_empty(memory->grey_list), "grey list not cleanup");
 
     // - 遍历 global symbol list,如果是 ptr 则将 ptr 指向的内存块进行分析，然后加入到 grey 队列
     scan_symbols(memory);

@@ -56,6 +56,8 @@ set(SRC_DEBUG
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
+        ${PROJECT_SOURCE_DIR}/utils/list.c
+        ${PROJECT_SOURCE_DIR}/utils/list.h
         ${PROJECT_SOURCE_DIR}/utils/links.c
         ${PROJECT_SOURCE_DIR}/utils/links.h
         ${PROJECT_SOURCE_DIR}/utils/type.h
@@ -67,8 +69,8 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/stack.h
         ${PROJECT_SOURCE_DIR}/utils/error.c
         ${PROJECT_SOURCE_DIR}/utils/error.h
-        ${PROJECT_SOURCE_DIR}/utils/list.h
-        ${PROJECT_SOURCE_DIR}/utils/list.c
+        ${PROJECT_SOURCE_DIR}/utils/linked.h
+        ${PROJECT_SOURCE_DIR}/utils/linked.c
         ${PROJECT_SOURCE_DIR}/utils/table.h
         ${PROJECT_SOURCE_DIR}/utils/table.c
         ${PROJECT_SOURCE_DIR}/utils/helper.h
@@ -136,6 +138,8 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/list.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/list.c
         ${PROJECT_SOURCE_DIR}/runtime/type/any.h
         ${PROJECT_SOURCE_DIR}/runtime/type/any.c)
 

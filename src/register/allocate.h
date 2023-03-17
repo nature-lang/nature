@@ -2,7 +2,7 @@
 #define NATURE_SRC_REGISTER_ALLOCATE_H_
 
 #include "utils/slice.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "interval.h"
 
 #define SET_USE_POS(_index, _pos) \
@@ -13,10 +13,10 @@
     set_pos(use_pos, _index, _pos);
 
 typedef struct {
-    list *unhandled;
-    list *handled;
-    list *active;
-    list *inactive;
+    linked_t *unhandled;
+    linked_t *handled;
+    linked_t *active;
+    linked_t *inactive;
     interval_t *current; // 正在分配的寄存器
 } allocate_t;
 
@@ -39,7 +39,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  * @param to
  * @param unhandled
  */
-void sort_to_unhandled(list *unhandled, interval_t *to);
+void sort_to_unhandled(linked_t *unhandled, interval_t *to);
 
 void replace_virtual_register(closure_t *c);
 

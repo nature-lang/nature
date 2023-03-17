@@ -177,11 +177,11 @@ slice_t *build_modules() {
     module_t *root = module_build(SOURCE_PATH, true);
     slice_push(modules, root);
 
-    list *work_list = list_new();
-    list_push(work_list, root);
+    linked_t *work_list = linked_new();
+    linked_push(work_list, root);
     // 图遍历构造一组 path
     while (work_list->count > 0) {
-        module_t *m = list_pop(work_list);;
+        module_t *m = linked_pop(work_list);;
         for (int j = 0; j < m->imports->count; ++j) {
             ast_import *import = m->imports->take[j];
             if (table_exist(module_table, import->full_path)) {
@@ -189,7 +189,7 @@ slice_t *build_modules() {
             }
 
             module_t *new_module = module_build(import->full_path, false);
-            list_push(work_list, new_module);
+            linked_push(work_list, new_module);
             slice_push(modules, new_module);
             table_set(module_table, import->full_path, new_module);
         }

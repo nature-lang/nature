@@ -5,10 +5,10 @@
    type_kind base = lir_operand_type_base(_operand); \
    lir_operand_t *temp = lir_temp_var_operand(c, type_base_new(base)); \
    slice_push(c->globals, temp->value);                \
-   list_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
+   linked_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
    op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
 
-static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_node *node) {
+static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_node *node) {
     lir_op_t *op = node->value;
     slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
     for (int i = 0; i < imm_operands->count; ++i) {
@@ -19,7 +19,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
             slice_push(c->globals, var_operand->value);
 
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
-            list_insert_before(block->operations, node, temp);
+            linked_insert_before(block->operations, node, temp);
 
             lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
             imm_operand->assert_type = temp_operand->assert_type;
@@ -29,9 +29,9 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, list_nod
 }
 
 // mov var -> eax
-static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
-    list *operations = list_new();
-    list *push_operations = list_new();
+static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
+    linked_t *operations = linked_new();
+    linked_t *push_operations = linked_new();
     int push_length = 0;
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
@@ -42,18 +42,18 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
         if (reg) {
             // empty reg
             if (reg->size < QWORD) {
-                list_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
-                                                 LIR_NEW_OPERAND(LIR_OPERAND_REG, covert_alloc_reg(reg))));
+                linked_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
+                                                   LIR_NEW_OPERAND(LIR_OPERAND_REG, covert_alloc_reg(reg))));
             }
 
             lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_REG, reg), param_operand);
 
-            list_push(operations, op);
+            linked_push(operations, op);
         } else {
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
-            list_push(push_operations, push_op);
+            linked_push(push_operations, push_op);
             push_length += QWORD;
         }
     }
@@ -65,15 +65,15 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
-                                         LIR_NEW_IMMEDIATE_OPERAND(TYPE_INT, int_value, diff_length),
+                                         LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, diff_length),
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
-        list_push(push_operations, binary_op);
+        linked_push(push_operations, binary_op);
     }
 
     // 倒序 push operations 追加到 operations 中
-    list_node *current = list_last(push_operations);
+    linked_node *current = linked_last(push_operations);
     while (current && current->value) {
-        list_push(operations, current->value);
+        linked_push(operations, current->value);
         current = current->prev;
     }
 
@@ -86,8 +86,8 @@ static list *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
  * @param formal_params
  * @return
  */
-static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
-    list *operations = list_new();
+static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
+    linked_t *operations = linked_new();
     uint8_t used[2] = {0};
     // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
     int16_t stack_param_slot = 16; // ret addr + push rsp
@@ -111,7 +111,7 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
         }
 
         lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
-        list_push(operations, op);
+        linked_push(operations, op);
     }
 
     return operations;
@@ -119,7 +119,7 @@ static list *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
 
 void amd64_lower_block(closure_t *c, basic_block_t *block) {
     // handle opcode
-    for (list_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
+    for (linked_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
         lir_op_t *op = node->value;
 
         // 处理 imm string operands
@@ -129,10 +129,10 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (lir_op_is_call(op) && op->second->value != NULL) {
             // lower call actual params
-            list *temps = amd64_actual_params_lower(c, op->second->value);
-            list_node *current = temps->front;
+            linked_t *temps = amd64_actual_params_lower(c, op->second->value);
+            linked_node *current = temps->front;
             while (current->value != NULL) {
-                list_insert_before(block->operations, LIST_NODE(), current->value);
+                linked_insert_before(block->operations, LINKED_NODE(), current->value);
                 current = current->succ;
             }
             op->second->value = slice_new();
@@ -150,7 +150,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 } else {
                     reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
                 }
-                list_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
+                linked_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
                 op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
             }
 
@@ -164,10 +164,10 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // mov rsi -> formal param 1
             // mov rdi -> formal param 2
             // ....
-            list *temps = amd64_formal_params_lower(c, op->output->value);
-            list_node *current = temps->front;
+            linked_t *temps = amd64_formal_params_lower(c, op->output->value);
+            linked_node *current = temps->front;
             while (current->value != NULL) {
-                list_insert_after(block->operations, LIST_NODE(), current->value);
+                linked_insert_after(block->operations, LINKED_NODE(), current->value);
                 current = current->succ;
             }
             op->output->value = slice_new();
@@ -190,7 +190,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
             }
 
-            list_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
+            linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
             op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
             continue;
         }
@@ -201,8 +201,8 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             lir_op_t *before = lir_op_move(reg_operand, op->first);
             lir_op_t *after = lir_op_move(op->output, reg_operand);
 
-            list_insert_before(block->operations, node, before);
-            list_insert_after(block->operations, node, after);
+            linked_insert_before(block->operations, node, before);
+            linked_insert_after(block->operations, node, after);
 
             op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
             op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);

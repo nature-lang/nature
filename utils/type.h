@@ -206,12 +206,12 @@ struct typedecl_array_t {
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
 // 反而更好处理？
 struct typedecl_list_t {
-    int size; // 存储在 mheap 中的数据,count + cap + data, element_type 就不用存了，编译时确定之后就不会变了
+//    int size; // 存储在 mheap 中的数据,count + cap + data, element_type 就不用存了，编译时确定之后就不会变了
     // 描述 list 类型是只需要一个 type, 比如 [int] !,且越界等行为在 compiler 都是无法判断的
     // 所以 count,capacity 都是没有意义的数据！
 //    int capacity; // 预先申请的容量大小
 //    int count; // 实际占用的位置的大小
-    type_t type;
+    type_t element_type;
     // 类型描述信息根本就不能有值这个东西出现
 //    void *data; // 引用的是一个 array 结构
 };

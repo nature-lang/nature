@@ -90,7 +90,8 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
         assert(false && "code immediate not expected");
     }
 
-    // string_t/map_t/array_t
+    // mov $1, %rax 是将 $1 写入到 rax 寄存器
+    // mov $1, (%rax)  // rax 中必须存储一个合法的虚拟地址，将 $1 写入到 rax 存储的地址处，最常用的地方就是 rbp 栈栈中的使用
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *v = operand->value;
         lir_operand_t *base = v->base;
@@ -427,7 +428,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_SUB] = amd64_native_sub,
         [LIR_OPCODE_CALL] = amd64_native_call,
         [LIR_OPCODE_BUILTIN_CALL] = amd64_native_call,
-        [LIR_OPCODE_RUNTIME_CALL] = amd64_native_call,
+        [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
         [LIR_OPCODE_PUSH] = amd64_native_push,
         [LIR_OPCODE_RETURN] = amd64_native_return,
@@ -449,7 +450,7 @@ slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {
 
 slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
     slice_t *operations = slice_new();
-    list_node *current = list_first(block->operations);
+    linked_node *current = linked_first(block->operations);
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         slice_concat(operations, amd64_native_op(c, op));

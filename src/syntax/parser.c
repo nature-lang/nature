@@ -81,7 +81,7 @@ parser_rule rules[] = {
         [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
-slice_t *parser(module_t *m, list *token_list) {
+slice_t *parser(module_t *m, linked_t *token_list) {
     parser_cursor_init(m, token_list);
 
     slice_t *block_stmt = slice_new();
@@ -548,8 +548,8 @@ type_t parser_type(module_t *m) {
 
     // [int] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
-        typedecl_list_t *type_list_decl = NEW(typedecl_list_t);
-        type_list_decl->type = parser_type(m);
+        typedecl_list_t *list_decl = NEW(typedecl_list_t);
+        list_decl->element_type = parser_type(m);
 
         if (parser_consume(m, TOKEN_COMMA)) {
             token *token = parser_advance(m);
@@ -557,13 +557,13 @@ type_t parser_type(module_t *m) {
                     token->type);
 
 //            int count = atoi(token->literal);
-//            type_list_decl->count = count; // TODO array 才有 count, 等下个版本再支持 array
+//            list_decl->count = count; // TODO array 才有 count, 等下个版本再支持 array
         }
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
 
         result.kind = TYPE_LIST;
-        result.list_decl = type_list_decl;
+        result.list_decl = list_decl;
         return result;
     }
 
@@ -788,8 +788,8 @@ ast_stmt *parser_assign(module_t *m, ast_expr left) {
     return result;
 }
 
-void parser_cursor_init(module_t *module, list *token_list) {
-    list_node *first = token_list->front;
+void parser_cursor_init(module_t *module, linked_t *token_list) {
+    linked_node *first = token_list->front;
     module->p_cursor.current = first;
 }
 
@@ -984,7 +984,7 @@ token *parser_must(module_t *m, token_type expect) {
 }
 
 bool parser_next_is(module_t *m, int step, token_type expect) {
-    list_node *current = m->p_cursor.current;
+    linked_node *current = m->p_cursor.current;
 
     while (step > 0) {
         if (current->succ == NULL) {
@@ -998,8 +998,8 @@ bool parser_next_is(module_t *m, int step, token_type expect) {
     return t->type == expect;
 }
 
-list_node *parser_next(module_t *m, int step) {
-    list_node *current = m->p_cursor.current;
+linked_node *parser_next(module_t *m, int step) {
+    linked_node *current = m->p_cursor.current;
 
     while (step > 0) {
         if (current->succ == NULL) {
@@ -1031,7 +1031,7 @@ ast_expr parser_new_list(module_t *m) {
     }
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
-    result.assert_type = AST_EXPR_NEW_ARRAY;
+    result.assert_type = AST_EXPR_NEW_LIST;
     result.value = expr;
 
     return result;
@@ -1094,7 +1094,7 @@ bool parser_must_stmt_end(module_t *m) {
  * (int a, custom b, map[a], list[c], fn<d>){
  * @return
  */
-bool parser_is_fn_decl(module_t *m, list_node *current) {
+bool parser_is_fn_decl(module_t *m, linked_node *current) {
     token *t = current->value;
     if (t->type != TOKEN_LEFT_PAREN) {
         error_exit("parser_is_fn_decl param must be TOKEN_LEFT_PAREN");

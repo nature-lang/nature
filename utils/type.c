@@ -54,7 +54,7 @@ static reflect_type_t rtype_string() {
  * @return
  */
 static reflect_type_t rtype_list(typedecl_list_t *t) {
-    type_t element_type = t->type;
+    type_t element_type = t->element_type;
     reflect_type_t element_rtype = reflect_type(element_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);

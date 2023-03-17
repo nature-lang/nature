@@ -314,7 +314,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             analysis_new_map(m, (ast_new_map *) expr->value);
             break;
         }
-        case AST_EXPR_NEW_ARRAY: {
+        case AST_EXPR_NEW_LIST: {
             analysis_new_list(m, (ast_new_list *) expr->value);
             break;
         }
@@ -463,7 +463,7 @@ void analysis_type(module_t *m, type_t *type) {
 
     if (type->kind == TYPE_LIST) {
         typedecl_list_t *list_decl = type->list_decl;
-        analysis_type(m, &list_decl->type);
+        analysis_type(m, &list_decl->element_type);
         return;
     }
 

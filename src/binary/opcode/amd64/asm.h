@@ -3,7 +3,7 @@
 
 #include <string.h>
 #include "utils/value.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "src/register/register.h"
 
 // 指令字符宽度

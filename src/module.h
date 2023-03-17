@@ -1,7 +1,7 @@
 #ifndef NATURE_MODULE_H
 #define NATURE_MODULE_H
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/value.h"
 #include "src/symbol/symbol.h"
 #include "src/lir/lir.h"

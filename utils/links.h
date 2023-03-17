@@ -32,30 +32,30 @@ void *fn_main_base_data_ptr; // 在 elf output 之前，都可以直接通过修
 
 // gc 基于此进行全部符号的遍历
 // 连接器传输到 runtime 中的符号数据
-#define SYMBOL_FN_MAIN_BASE "link_fn_main_base"
+#define SYMBOL_FN_MAIN_BASE "rt_fn_main_base"
 
-#define SYMBOL_SYMDEF_SIZE  "link_symdef_size"
-#define SYMBOL_SYMDEF_DATA "link_symdef_data"
+#define SYMBOL_SYMDEF_SIZE  "rt_symdef_size"
+#define SYMBOL_SYMDEF_DATA "rt_symdef_data"
 
-#define SYMBOL_FNDEF_COUNT  "link_fndef_count"
+#define SYMBOL_FNDEF_COUNT  "rt_fndef_count"
 //#define SYMBOL_FNDEF_SIZE "link_fndef_size"
-#define SYMBOL_FNDEF_DATA  "link_fndef_data"
+#define SYMBOL_FNDEF_DATA  "rt_fndef_data"
 
-#define SYMBOL_RTYPE_COUNT "link_rtype_count"
+#define SYMBOL_RTYPE_COUNT "rt_rtype_count"
 //#define SYMBOL_RTYPE_SIZE "link_rtype_size"
-#define SYMBOL_RTYPE_DATA "link_rtype_data"
+#define SYMBOL_RTYPE_DATA "rt_rtype_data"
 
 
-extern addr_t link_fn_main_base;
+extern addr_t rt_fn_main_base;
 
-extern uint64_t link_symdef_size;
-extern symdef_t *link_symdef_data;
+extern uint64_t rt_symdef_size;
+extern symdef_t *rt_symdef_data;
 
-extern uint64_t link_fndef_count;
-extern fndef_t *link_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+extern uint64_t rt_fndef_count;
+extern fndef_t *rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
 
-extern uint64_t link_rtype_count;
-extern reflect_type_t *link_rtype_data;
+extern uint64_t rt_rtype_count;
+extern reflect_type_t *rt_rtype_data;
 
 
 // 编译时备份 -- 为了测试

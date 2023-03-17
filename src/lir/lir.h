@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_LIR_H_
 #define NATURE_SRC_LIR_H_
 
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/helper.h"
 #include "utils/value.h"
 #include "src/ast.h"
@@ -19,31 +19,34 @@
 #define END_IF_IDENT "end_if"
 #define ALTERNATE_IF_IDENT "alternate_if"
 
-#define RUNTIME_CALL_ARRAY_NEW "array_new"
-#define RUNTIME_CALL_ARRAY_VALUE "array_value"
-#define RUNTIME_CALL_ARRAY_SPLIT "array_split"
-#define RUNTIME_CALL_ARRAY_PUSH "array_push"
-#define RUNTIME_CALL_ARRAY_CONCAT "array_concat"
+// RT = runtime
+// CT = compile time
+#define RT_CALL_LIST_NEW "linked_new"
+#define RT_CALL_LIST_VALUE "list_value"
+#define RT_CALL_LIST_SPLIT "list_split"
+#define RT_CALL_LIST_LENGTH "list_length"
+#define RT_CALL_LIST_PUSH "list_push"
+#define RT_CALL_LIST_CONCAT "linked_concat"
 
-#define RUNTIME_CALL_TRANS_ANY "trans_any"
+#define RT_CALL_TRANS_ANY "trans_any"
 
-#define RUNTIME_CALL_MAP_NEW "map_new"
-#define RUNTIME_CALL_MAP_VALUE "map_value"
-#define RUNTIME_CALL_ITERATE_COUNT "iterate_count"
+#define RT_CALL_MAP_NEW "map_new"
+#define RT_CALL_MAP_VALUE "map_value"
+#define RT_CALL_ITERATE_COUNT "iterate_count"
 
-#define RUNTIME_CALL_ITERATE_GEN_KEY "iterate_gen_key"
-#define RUNTIME_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
+#define RT_CALL_ITERATE_GEN_KEY "iterate_gen_key"
+#define RT_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
-#define RUNTIME_CALL_ENV_NEW "env_new"
-#define RUNTIME_CALL_SET_ENV "set_env"
-#define RUNTIME_CALL_ENV_VALUE "env_value"
+#define RT_CALL_ENV_NEW "env_new"
+#define RT_CALL_SET_ENV "set_env"
+#define RT_CALL_ENV_VALUE "env_value"
 
-#define RUNTIME_CALL_STRING_NEW "string_new"
-#define RUNTIME_CALL_STRING_ADDR "string_addr"
-#define RUNTIME_CALL_STRING_LENGTH "string_length"
+#define RT_CALL_STRING_NEW "string_new"
+#define RT_CALL_STRING_ADDR "string_addr"
+#define RT_CALL_STRING_LENGTH "string_length"
 
 // GC 相关函数
-#define RUNTIME_CALL_GC_MALLOC "gc_malloc"
+#define RT_CALL_GC_MALLOC "gc_malloc"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
@@ -59,7 +62,7 @@
   _var;                                   \
 })
 
-#define LIR_NEW_IMMEDIATE_OPERAND(operand_type, key, val) \
+#define LIR_NEW_IMM_OPERAND(operand_type, key, val) \
 ({                                               \
    lir_imm_t *imm_operand = malloc(sizeof(lir_imm_t)); \
    imm_operand->type = operand_type; \
@@ -129,19 +132,14 @@ typedef enum {
     LIR_OPCODE_PUSH, // first
     LIR_OPCODE_POP, // output
     LIR_OPCODE_CALL, // 复合指令，位置在 second
-    LIR_OPCODE_RUNTIME_CALL,
+    LIR_OPCODE_RT_CALL,
     LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OPCODE_LABEL,
     LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
     LIR_OPCODE_FN_END, // 无操作数
 } lir_opcode_e;
-
-typedef struct {
-    lir_operand_e assert_type;
-    void *value;
-    uint8_t pos;
-} lir_operand_t;
+typedef struct lir_operand_t lir_operand_t;
 
 /**
  * 存放在寄存器或者内存中, var a = 1
@@ -190,13 +188,28 @@ typedef struct {
 typedef struct {
     union {
         uint64_t int_value; // 8bit, 负数使用补码存储
-        // TODO 扩充更多的类型
         double float_value; // 8bit = c.double
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
     type_kind type;
 } lir_imm_t;
+
+
+struct lir_operand_t {
+    lir_operand_e assert_type;
+    // TODO 统一替换成 union
+    union {
+        lir_var_t var;
+        lir_stack_t stack;
+        lir_indirect_addr_t indirect_addr;
+        lir_symbol_label_t symbol_label;
+        lir_symbol_var_t symbol_var;
+        lir_imm_t imm;
+        void *value;
+    };
+    vr_flag_e pos; // 在 opcode 中的位置信息
+};
 
 /**
  * 四元组
@@ -267,7 +280,7 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
 
 lir_op_t *lir_op_builtin_call(string name, lir_operand_t *result, int arg_count, ...);
 
-lir_op_t *lir_op_runtime_call(string name, lir_operand_t *result, int arg_count, ...);
+lir_op_t *lir_op_rt_call(string name, lir_operand_t *result, int arg_count, ...);
 
 lir_op_t *lir_op_call(string name, lir_operand_t *result, int arg_count, ...);
 

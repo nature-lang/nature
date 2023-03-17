@@ -49,11 +49,11 @@ void cfg(closure_t *c) {
 
     // 1.根据 label(if/else/while 等都会产生 label) 分块,仅考虑顺序块关联关系
     basic_block_t *current_block = NULL; // 第一次 traverse 时还没有任何 block
-    lir_op_t *label_op = list_first(c->operations)->value;
+    lir_op_t *label_op = linked_first(c->operations)->value;
     assert(label_op->code == LIR_OPCODE_LABEL && "first op must be label");
 
-    LIST_FOR(c->operations) {
-        lir_op_t *op = LIST_VALUE();
+    LINKED_FOR(c->operations) {
+        lir_op_t *op = LINKED_VALUE();
         if (op->code == LIR_OPCODE_LABEL) {
             // 遇到 label， 开启一个新的 basic block
             lir_symbol_label_t *operand_label = op->output->value;
@@ -66,10 +66,10 @@ void cfg(closure_t *c) {
             // 3. 建立顺序关联关系 (由于顺序遍历 code, 所以只能建立顺序关系)
             if (current_block != NULL) {
                 // 存在 new_block, current_block 必须已 BAL 指令结尾跳转到 new_block
-                lir_op_t *last_op = list_last(current_block->operations)->value;
+                lir_op_t *last_op = linked_last(current_block->operations)->value;
                 if (last_op->code != LIR_OPCODE_BAL) {
                     lir_op_t *temp_op = lir_op_bal(lir_new_label_operand(new_block->name, true));
-                    list_push(current_block->operations, temp_op);
+                    linked_push(current_block->operations, temp_op);
                 }
             }
 
@@ -77,17 +77,17 @@ void cfg(closure_t *c) {
             current_block = new_block;
         }
 
-        if (lir_op_is_branch(op) && LIST_NODE()->succ != NULL) {
+        if (lir_op_is_branch(op) && LINKED_NODE()->succ != NULL) {
             // 如果下一条指令不是 LABEL，则使用主动添加 temp label
-            lir_op_t *next_op = LIST_NODE()->succ->value;
+            lir_op_t *next_op = LINKED_NODE()->succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
                 lir_op_t *temp_label = lir_op_unique_label(TEMP_LABEL);
-                list_insert_after(c->operations, LIST_NODE(), temp_label);
+                linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }
 
         // 值 copy
-        list_push(current_block->operations, op);
+        linked_push(current_block->operations, op);
     }
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
@@ -97,7 +97,7 @@ void cfg(closure_t *c) {
         current_block = SLICE_VALUE(c->blocks);
 
         // 最后一个指令块的结尾指令不是 branch 分支
-        lir_op_t *last_op = list_last(current_block->operations)->value;
+        lir_op_t *last_op = linked_last(current_block->operations)->value;
         if (last_op->code != LIR_OPCODE_BAL) {
             continue;
         }
@@ -108,7 +108,7 @@ void cfg(closure_t *c) {
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
 
-        lir_op_t *second_last_op = list_last(current_block->operations)->prev->value;
+        lir_op_t *second_last_op = linked_last(current_block->operations)->prev->value;
         if (!lir_op_is_branch(second_last_op)) {
             continue;
         }
@@ -141,8 +141,8 @@ void broken_critical_edges(closure_t *c) {
 //                slice_insert(c->blocks, b->id, new_block);
                 slice_push(c->blocks, new_block);
                 // 添加指令
-                list_push(new_block->operations, label_op);
-                list_push(new_block->operations, bal_op);
+                linked_push(new_block->operations, label_op);
+                linked_push(new_block->operations, bal_op);
 
                 // cfg 关系调整
                 slice_push(new_block->succs, b);
@@ -165,7 +165,7 @@ void broken_critical_edges(closure_t *c) {
                 }
 
                 // 跳转指令调整  p -> b 改成 p -> new_block -> b
-                list_node *last = list_last(p->operations);
+                linked_node *last = linked_last(p->operations);
                 assert(OP(last)->code == LIR_OPCODE_BAL);
                 symbol_label = OP(last)->output->value;
                 if (symbol_label->ident == b->name) {

@@ -204,7 +204,7 @@ lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset,
     return LIR_NEW_OPERAND(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
 
-lir_op_t *lir_op_runtime_call(char *name, lir_operand_t *result, int arg_count, ...) {
+lir_op_t *lir_op_rt_call(char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *params_operand = slice_new();
 
     va_list args;
@@ -215,7 +215,7 @@ lir_op_t *lir_op_runtime_call(char *name, lir_operand_t *result, int arg_count, 
     }
     va_end(args);
     lir_operand_t *call_params_operand = LIR_NEW_OPERAND(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
-    return lir_op_new(LIR_OPCODE_RUNTIME_CALL, lir_new_label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_RT_CALL, lir_new_label_operand(name, false), call_params_operand, result);
 }
 
 lir_op_t *lir_op_builtin_call(char *name, lir_operand_t *result, int arg_count, ...) {
@@ -321,7 +321,7 @@ closure_t *lir_new_closure(ast_closure_t *ast) {
     new->name = ast->fn->name;
     new->env_name = ast->env_name;
     new->parent = NULL;
-    new->operations = list_new();
+    new->operations = linked_new();
     new->text_count = 0;
     new->asm_operations = slice_new();
     new->asm_symbols = slice_new();
@@ -350,7 +350,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
     basic_block->name = name;
     basic_block->id = label_index;
 
-    basic_block->operations = list_new();
+    basic_block->operations = linked_new();
     basic_block->preds = slice_new();
     basic_block->succs = slice_new();
 
@@ -457,7 +457,7 @@ bool lir_op_is_branch(lir_op_t *op) {
 }
 
 bool lir_op_is_call(lir_op_t *op) {
-    if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RUNTIME_CALL) {
+    if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RT_CALL) {
         return true;
     }
     return false;
@@ -516,14 +516,14 @@ void lir_init() {
  * @param block
  */
 void lir_set_quick_op(basic_block_t *block) {
-    list_node *current = list_first(block->operations)->succ;
+    linked_node *current = linked_first(block->operations)->succ;
     while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
         current = current->succ;
     }
     assert(current);
     // current code not opcode phi
     block->first_op = current;
-    block->last_op = list_last(block->operations);
+    block->last_op = linked_last(block->operations);
 }
 
 slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {

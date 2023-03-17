@@ -17,7 +17,7 @@ string ast_stmt_expr_type_to_debug[] = {
         [AST_EXPR_ACCESS_MAP]="AST_EXPR_TYPE_ACCESS_MAP",
         [AST_EXPR_NEW_MAP]="AST_EXPR_TYPE_NEW_MAP",
         [AST_EXPR_LIST_VALUE]="AST_EXPR_TYPE_ACCESS_LIST",
-        [AST_EXPR_NEW_ARRAY]="AST_EXPR_TYPE_NEW_LIST",
+        [AST_EXPR_NEW_LIST]="AST_EXPR_TYPE_NEW_LIST",
 //    [AST_EXPR_TYPE_LIST_DECL]="AST_EXPR_TYPE_LIST_DECL",
         [AST_VAR_DECL]="AST_VAR_DECL",
         [AST_STMT_VAR_DECL_ASSIGN]="AST_STMT_VAR_DECL_ASSIGN",
@@ -122,7 +122,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_POP]="POP   ",
         [LIR_OPCODE_CALL]="CALL  ",
         [LIR_OPCODE_BUILTIN_CALL]="B_CALL",
-        [LIR_OPCODE_RUNTIME_CALL]="R_CALL",
+        [LIR_OPCODE_RT_CALL]="R_CALL",
         [LIR_OPCODE_CLR] ="CLR    ",
         [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
@@ -189,7 +189,7 @@ void debug_basic_block(basic_block_t *block) {
     }
     printf("\n");
 
-    list_node *current = block->operations->front;
+    linked_node *current = block->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         printf("%d", op->id);

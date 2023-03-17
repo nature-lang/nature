@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
 
@@ -40,7 +40,7 @@ typedef struct {
 
 
 typedef struct {
-    list_node *current;
+    linked_node *current;
 } parser_cursor_t;
 
 typedef struct {
@@ -124,7 +124,7 @@ typedef struct {
 
     scanner_cursor_t s_cursor;
     scanner_error_t s_error;
-    list *token_list; // scanner 结果
+    linked_t *token_list; // scanner 结果
 
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
@@ -181,10 +181,10 @@ typedef struct basic_block_t {
     string name;
 
     // op point
-//    list_node *phi; // fist_node 即可
-    list_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
-    list_node *last_op; // last_node 即可
-    list *operations;
+//    linked_node *phi; // fist_node 即可
+    linked_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+    linked_node *last_op; // last_node 即可
+    linked_t *operations;
 
     slice_t *preds;
     slice_t *succs;
@@ -231,7 +231,7 @@ typedef struct closure_t {
     string end_label; // 结束地址
     string env_name;
     struct closure_t *parent;
-    list *operations; // 指令列表
+    linked_t *operations; // 指令列表
 
     int64_t stack_size; // 初始值为 0，像下增长，用于寄存器分配时的栈区 slot 分配
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t

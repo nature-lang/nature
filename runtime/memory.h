@@ -7,7 +7,7 @@
 #include "utils/links.h"
 #include "utils/value.h"
 #include "utils/slice.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/bitmap.h"
 #include "sizeclass.h"
 
@@ -105,8 +105,8 @@ typedef struct {
 typedef struct {
     uint8_t spanclass;
 
-    list *partial_swept; // swept 表示是否被垃圾回收清扫
-    list *full_swept;
+    linked_t *partial_swept; // swept 表示是否被垃圾回收清扫
+    linked_t *full_swept;
 
 //    list *partial_unswept; // TODO 开发多线程模式时再做支持
 //    list *full_unswept; // full 表示已经没有空闲的 sapn 了
@@ -214,7 +214,7 @@ typedef struct processor_t {
 
 typedef struct {
     mheap_t mheap;
-    list *grey_list;
+    linked_t *grey_list;
     uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
 } memory_t;
 

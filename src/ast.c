@@ -115,14 +115,14 @@ bool type_compare(type_t target, type_t source) {
     if (target.kind == TYPE_LIST) {
         typedecl_list_t *left_list_decl = target.list_decl;
         struct typedecl_list_t *right_list_decl = source.list_decl;
-        if (right_list_decl->type.kind == TYPE_UNKNOWN) {
+        if (right_list_decl->element_type.kind == TYPE_UNKNOWN) {
             // 但是这样在 compiler_array 时将完全不知道将右值初始化多大空间的 capacity
             // 但是其可以完全继承左值, 左值进入到该方法之前已经经过了类型推断，这里肯定不是 var 了
-            right_list_decl->type = left_list_decl->type;
+            right_list_decl->element_type = left_list_decl->element_type;
             return true;
         }
         // 类型不相同
-        if (!type_compare(left_list_decl->type, right_list_decl->type)) {
+        if (!type_compare(left_list_decl->element_type, right_list_decl->element_type)) {
             return false;
         }
 

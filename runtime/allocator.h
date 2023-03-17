@@ -2,7 +2,7 @@
 #define NATURE_ALLOCATOR_H
 
 #include "utils/slice.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "utils/helper.h"
 #include "utils/bitmap.h"
 #include "memory.h"

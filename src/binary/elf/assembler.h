@@ -2,7 +2,7 @@
 #define NATURE_ASSEMBLER_H
 
 #include "linker.h"
-#include "utils/list.h"
+#include "utils/linked.h"
 #include "src/structs.h"
 
 /**
