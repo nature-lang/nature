@@ -37,7 +37,7 @@ static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr
 
         // TODO var 存不下两个指针的数据!! 存下了又能如何，三个，四个指针大小的数据呢？
         lir_operand_t *new_source_var = lir_temp_var_operand(c, expr.target_type);
-        // 基于 source 类型计算 rtype index
+        // 基于 source 类型计算 element_rtype index
         uint rtype_index = find_rtype_index(expr.type);
         // lir call type, value =>
         linked_push(c->operations,
@@ -294,7 +294,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
                         linked_push(c->operations, call_op);
 
                         // spread 被分割了一部分，所以需要对剩余的 temp target 进行 array_slice 切割
-                        call_op = lir_op_rt_call(RT_CALL_LIST_SPLIT,
+                        call_op = lir_op_rt_call(RT_CALL_LIST_SPLICE,
                                                  spread_target, // 切割后的结果保存回 spread_target
                                                  3,
                                                  spread_target,
@@ -303,13 +303,19 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
 
                         linked_push(c->operations, call_op);
                     }
+                    // 此方法不会改变现有数组，而是生成一个新的数组
                     linked_push(c->operations,
-                                lir_op_rt_call(RT_CALL_LIST_CONCAT, NULL, 2, rest_param_target, spread_target));
+                                lir_op_rt_call(RT_CALL_LIST_CONCAT, rest_param_target, 2, rest_param_target,
+                                               spread_target));
 
                 } else {
                     lir_operand_t *temp_target = compiler_expr(c, call->actual_params[j]);
-                    linked_push(c->operations, lir_op_rt_call(RT_CALL_LIST_PUSH,
-                                                              NULL, 2, rest_param_target, temp_target));
+                    linked_push(c->operations,
+                                lir_op_rt_call(RT_CALL_LIST_PUSH,
+                                               NULL,
+                                               2,
+                                               rest_param_target,
+                                               temp_target));
                 }
             }
 

@@ -27,6 +27,7 @@ typedef enum {
     TYPE_FLOAT, // 默认 8BIT = DOUBLE
     TYPE_INT, // 默认 8BIT
     TYPE_INT8,
+    TYPE_BYTE, // 字节类型？
     TYPE_INT16,
     TYPE_INT32,
     TYPE_INT64,
@@ -65,15 +66,16 @@ static string type_to_string[] = {
         [TYPE_NULL] = "null",
 };
 
+// reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
-    uint index; // 全局 index,在 linker 时 reflect_type 的顺序会被打乱，需要靠 index 进行复原
+    uint index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint size; // 类型占用的 size,和 gc_bits 联合起来使用
     uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     uint8_t kind; // 类型的种类
     byte *gc_bits; // 类型 bit 数据(按 uint8 对齐)
-} reflect_type_t;
+} rtype_t;
 
 
 // 类型描述信息 start
@@ -135,15 +137,19 @@ typedef struct type_t {
 
 // 类型对应的数据在内存中的存储形式 --- start
 // 部分类型的数据(复合类型)只能在堆内存中存储
+
 typedef struct {
-    void *data; // 指向数组
+    byte *array_data;
+    // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
+    // 内存优化时可以优化掉这个参数
+    uint64_t element_rtype_index;
     uint64_t capacity; // 预先申请的容量大小
-    uint64_t count; // 实际占用的位置的大小
+    uint64_t length; // 实际占用的位置的大小
 } memory_list_t;
 
 typedef struct {
-    byte *data;
-    uint64_t count;
+    byte *array_data;
+    uint64_t length;
 } memory_string_t;
 
 typedef byte *memory_array_t; // 数组在内存中的变现形式就是 byte 列表
@@ -159,7 +165,7 @@ typedef struct {
 } memory_fn_t; // 就占用一个指针大小
 
 typedef struct {
-    reflect_type_t *rtype;
+    rtype_t *rtype;
     union {
         void *value;
         double float_value;
@@ -181,7 +187,7 @@ typedef struct {
  * 并且也不知道数据是如何如何存储在内存中
  */
 struct typedecl_string_t {
-    int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
+//    int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
 //    int count; // 字符串的长度(理论上也是可变的，和 list 的 count 一样，无法在类型声明阶段就明确,所以这个毫无意义！)
 //    void *data; // 这里引用了什么？是 type_array_t 元数据还是 type_array_t 存储在 heap 中的数据？
 };
@@ -196,10 +202,9 @@ struct typedecl_ident_t {
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct typedecl_array_t {
-    uint64_t size; // 存储在 mheap 中的数据，sizeof(element_type) * count, 其他的 type 就不用存了，编译时都知道了
-    uint64_t count;
-    type_t type;
-//    uint8_t *data; // 数组的值,这里的值同样是不会变的,即使其不会变，我们也无法知道其值是多少。所以这个 data 是毫无意义的
+    uint64_t length;
+    type_t element_type;
+    rtype_t element_rtype;
 };
 
 // list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
@@ -266,31 +271,34 @@ struct typedecl_fn_t {
  * 但是给定 void* value,能够知道其内存中存储了什么东西！
  */
 struct typedecl_any_t {
-    uint size; // 16byte,一部分存储原始值，一部分存储 rtype 数据！
-    // rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
-//    reflect_type_t *rtype; // 这样的话 new any_t 太麻烦了
+    uint size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
+    // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
+//    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
 //    uint rtype_index; // 这样定位更快
 //    void *value;
 };
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
-// 区分是否是同一种类型，就看 reflect_type 中的 gc_bits 是否一致
+// 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
 // TODO 先申请一个巨大的尺寸用着。等通用 dynamic list 结构开发吧。
-reflect_type_t rtypes[UINT16_MAX];
+rtype_t rtypes[UINT16_MAX];
 uint64_t rtype_count;
 uint64_t rtype_size; // 序列化后的 size
 table_t *rtype_table; // 每当有一个新的类型产生，都会注册在该表中，值为 slice 的索引！
 
-reflect_type_t reflect_type(type_t t);
+rtype_t reflect_type(type_t t);
 
+rtype_t ct_reflect_type(type_t t);
+
+rtype_t rt_reflect_type(type_t t);
 
 /**
  * 将 rtypes 填入到 rtypes 中并返回索引
  * @param rtype
  * @return
  */
-uint64_t rtypes_push(reflect_type_t rtype);
+uint64_t rtypes_push(rtype_t rtype);
 
 uint find_rtype_index(type_t t);
 

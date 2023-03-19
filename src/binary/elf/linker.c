@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+/**
+ * @param ctx
+ */
 static void pre_handle_custom_links(elf_context *ctx) {
     // - 数据预计算得到相关 size
     pre_fndef_list();
@@ -22,10 +25,10 @@ static void pre_handle_custom_links(elf_context *ctx) {
     ctx->fndef_section->sh_size = fndefs_size;
     ctx->symdef_section->sh_size = symdefs_size;
 
-    // - rtype 数据与 sym 无关，这里可以进行完全的填充处理
+    // - element_rtype 数据与 sym 无关，这里可以进行完全的填充处理
     byte *rtype_data = rtypes_serialize(rtypes, rtype_count);
     elf_put_data(ctx->rtype_section, rtype_data, rtype_size);
-    ct_rtype_data = (reflect_type_t *) rtype_data;
+    ct_rtype_data = (rtype_t *) rtype_data;
     ctx->rtype_section->sh_size = rtype_size;
 
     // - 写入相关符号到符号表
@@ -37,14 +40,14 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
             .st_other = 0
     };
-    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &fndef_data_sym, SYMBOL_FNDEF_DATA);
+    elf_set_sym(ctx, &fndef_data_sym, SYMBOL_FNDEF_DATA);
     // 写入 count
-    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &symbol_fn_list->count, INT_SIZE);
+    elf_set_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &symbol_fn_list->count, INT_SIZE);
     ct_fndef_count = symbol_fn_list->count;
 
     // 目前还不知道具体的值，所以仅仅占位
     int fn_main_base = 0;
-    fn_main_base_data_ptr = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
+    fn_main_base_data_ptr = elf_set_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
 
     // link_symdefs
     Elf64_Sym symdef_sym = {
@@ -55,11 +58,11 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_other = 0
     };
 
-    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &symdef_sym, SYMBOL_SYMDEF_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_SYMDEF_SIZE, &ctx->symdef_section->sh_size, INT_SIZE);
+    elf_set_sym(ctx, &symdef_sym, SYMBOL_SYMDEF_DATA);
+    elf_set_global_symbol(ctx, SYMBOL_SYMDEF_SIZE, &ctx->symdef_section->sh_size, INT_SIZE);
     ct_symdef_size = ctx->symdef_section->sh_size;
 
-    // rtype
+    // element_rtype
     Elf64_Sym rtype_sym = {
             .st_shndx = ctx->rtype_section->sh_index,
             .st_value = 0,
@@ -67,8 +70,8 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_info  = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
             .st_other = 0
     };
-    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &rtype_sym, SYMBOL_RTYPE_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &rtype_count, INT_SIZE);
+    elf_set_sym(ctx, &rtype_sym, SYMBOL_RTYPE_DATA);
+    elf_set_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &rtype_count, INT_SIZE);
     ct_rtype_count = rtype_count;
 }
 
@@ -1334,7 +1337,7 @@ elf_context *elf_context_new(char *output, uint8_t type) {
     /* create standard sections */
     ctx->text_section = elf_new_section(ctx, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     ctx->data_section = elf_new_section(ctx, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
-    ctx->rtype_section = elf_new_section(ctx, ".rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->rtype_section = elf_new_section(ctx, ".element_rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->fndef_section = elf_new_section(ctx, ".fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->symdef_section = elf_new_section(ctx, ".symdef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
@@ -1401,7 +1404,7 @@ Elf64_Sym *elf_find_sym(elf_context *ctx, char *name) {
  * @param value_size
  * @return
  */
-void *elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size) {
+void *elf_set_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size) {
     // 写入到数据段
     uint64_t offset = elf_put_data(ctx->data_section, value, value_size);
 
@@ -1413,7 +1416,7 @@ void *elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_t v
             .st_shndx = ctx->data_section->sh_index, // 定义符号的段
             .st_value = offset, // 定义符号的位置，基于段的偏移
     };
-    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
+    elf_set_sym(ctx, &sym, name);
 
     // 写入的内存地址其实地址
     return ctx->data_section->data + offset;

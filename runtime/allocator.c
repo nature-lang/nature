@@ -675,7 +675,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param obj_size
  * @param type
  */
-static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, reflect_type_t *type) {
+static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, rtype_t *type) {
     // 确定 arena bits base
     arena_t *arena = take_arena(addr);
     uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
@@ -694,7 +694,7 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, reflect_t
 }
 
 // 单位
-static addr_t std_malloc(uint size, reflect_type_t *type) {
+static addr_t std_malloc(uint size, rtype_t *type) {
     bool has_ptr = type != NULL && type->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
@@ -711,7 +711,7 @@ static addr_t std_malloc(uint size, reflect_type_t *type) {
     return addr;
 }
 
-static addr_t large_malloc(uint size, reflect_type_t *type) {
+static addr_t large_malloc(uint size, rtype_t *type) {
     bool no_ptr = type == NULL || type->last_ptr == 0;
     uint8_t spanclass = make_spanclass(0, no_ptr);
 
@@ -775,11 +775,6 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     sys_memory_remove((void *) span->base, span->pages_count * PAGE_SIZE);
 }
 
-
-reflect_type_t *runtime_find_rtype(uint index) {
-    return &rt_rtype_data[index];
-}
-
 void fndefs_deserialize() {
     byte *gc_bits_offset = ((byte *) rt_fndef_data) + rt_fndef_count * sizeof(fndef_t);
     for (int i = 0; i < rt_fndef_count; ++i) {
@@ -793,9 +788,9 @@ void fndefs_deserialize() {
 }
 
 void rtypes_deserialize() {
-    byte *gc_bits_offset = ((byte *) rt_rtype_data) + rt_rtype_count * sizeof(reflect_type_t);
+    byte *gc_bits_offset = ((byte *) rt_rtype_data) + rt_rtype_count * sizeof(rtype_t);
     for (int i = 0; i < rt_rtype_count; ++i) {
-        reflect_type_t *r = &rt_rtype_data[i];
+        rtype_t *r = &rt_rtype_data[i];
         uint64_t gc_bits_size = calc_gc_bits_size(r->size);
 
         r->gc_bits = gc_bits_offset;
@@ -874,10 +869,10 @@ uint64_t arena_index(uint64_t base) {
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
  * @param size
- * @param type
+ * @param type 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
  * @return
  */
-addr_t runtime_malloc(uint size, reflect_type_t *type) {
+addr_t runtime_malloc(uint size, rtype_t *type) {
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return std_malloc(size, type);
@@ -904,4 +899,8 @@ mspan_t *mspan_new(uint64_t base, uint pages_count, uint8_t spanclass) {
     span->alloc_bits = bitmap_new((int) span->obj_count);
     span->gcmark_bits = bitmap_new((int) span->obj_count);
     return span;
+}
+
+rtype_t *rt_find_rtype(uint64_t index) {
+    return &rt_rtype_data[index];
 }

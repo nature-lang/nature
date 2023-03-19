@@ -4,15 +4,9 @@
 #include "utils/type.h"
 #include <stdint.h>
 
-#define LIST_INIT_CAPACITY 8
+#define LIST_DEFAULT_CAPACITY 8
 
-/**
- * count = 0
- * capacity = 8
- * @param element_size
- * @return
- */
-memory_list_t *list_new(uint64_t element_size);
+memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint64_t capacity);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -22,8 +16,18 @@ memory_list_t *list_new(uint64_t element_size);
  */
 void *list_value(memory_list_t *l, uint64_t index);
 
+/**
+ * @param l
+ * @return
+ */
+uint64_t list_length(memory_list_t *l);
 
-uint64_t list_count(memory_list_t *l);
+/**
+ * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中
+ * @param l
+ * @param value
+ */
+void list_push(memory_list_t *l, void *ref);
 
 /**
  * slice 不会修改原数组
@@ -34,6 +38,14 @@ uint64_t list_count(memory_list_t *l);
  * @param end
  * @return 返回切片后的数据
  */
-memory_list_t *list_slice(memory_list_t *l, int start, int end);
+memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start, uint64_t end);
+
+/**
+ * 合并 a 和 b 两个 list 到一个新的 list 中
+ * @param a
+ * @param b
+ * @return
+ */
+memory_list_t *list_concat(uint64_t rtype_index, memory_list_t *a, memory_list_t *b);
 
 #endif //NATURE_LIST_H

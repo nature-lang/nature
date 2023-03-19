@@ -14,7 +14,7 @@ static void print_arg(memory_any_t *arg) {
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
         memory_string_t *s = arg->value; // 字符串的内存视角
-        write(STDOUT_FILENO, s->data, s->count);
+        write(STDOUT_FILENO, s->array_data, s->length);
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT) {
@@ -42,9 +42,10 @@ static void print_arg(memory_any_t *arg) {
 void print(memory_list_t *args) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
-    memory_any_t **p = args->data; // 把 data 中存储的值赋值给 p
-    for (int i = 0; i < args->count; ++i) {
-        memory_any_t *any = p[i]; // 读取 p 中的第一个值，其是一个指针地址, 指向的内容就是 memory_any_t
+    addr_t *p = (addr_t *) args->array_data; // 把 data 中存储的值赋值给 p
+    for (int i = 0; i < args->length; ++i) {
+        // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
+        memory_any_t *any = (memory_any_t *) p[i];
 
         print_arg(any);
     }

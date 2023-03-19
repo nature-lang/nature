@@ -55,7 +55,7 @@ extern uint64_t rt_fndef_count;
 extern fndef_t *rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
 
 extern uint64_t rt_rtype_count;
-extern reflect_type_t *rt_rtype_data;
+extern rtype_t *rt_rtype_data;
 
 
 // 编译时备份 -- 为了测试
@@ -66,7 +66,7 @@ uint64_t ct_fndef_count;
 fndef_t *ct_fndef_data; // 仅需要修复一下 gc_bits 数据即可
 
 uint64_t ct_rtype_count;
-reflect_type_t *ct_rtype_data;
+rtype_t *ct_rtype_data;
 
 // 主要是需要处理 gc_bits 数据
 byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count);
@@ -78,12 +78,12 @@ byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count);
  * @param count 入参时为 reflect_types 的个数，出参时是 byte 序列化后的数量
  * @return
  */
-byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count);
+byte *rtypes_serialize(rtype_t *_rtypes, uint64_t count);
 
 /**
  * 反序列化
  * @param data
- * @param count 入参时是 byte 的数量，出参时是 reflect_type 的数量
+ * @param count 入参时是 byte 的数量，出参时是 ct_reflect_type 的数量
  * @return
  */
 //void rtypes_deserialize();
@@ -91,7 +91,5 @@ byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count);
 void pre_fndef_list();
 
 void pre_symdef_list();
-
-//reflect_type_t *runtime_find_rtype(uint index);
 
 #endif //NATURE_LINKS_H

@@ -11,7 +11,7 @@ uint64_t rt_fndef_count;
 fndef_t *rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
 
 uint64_t rt_rtype_count;
-reflect_type_t *rt_rtype_data;
+rtype_t *rt_rtype_data;
 
 char *build_entry = "main.n";
 
@@ -37,8 +37,24 @@ int teardown(void **state) {
     return 0;
 }
 
+/**
+ * "test_gc.main.inc_0"
+ * "test_gc.main.local_list_1"
+ * "test_gc.main.a_2"
+ * "test_gc.foo.person"
+ * "test_gc.foo.global_i"
+ * "test_gc.foo.global_b"
+ * "test_gc.foo.global_s"
+ */
 static void test_allocator() {
-    // 尝试分配一个 list 结构的数据,相关 rtype 已经写入到 rt_rtype_data 中了
+    // rt_type_data 中啥数据都有了，尝试分配一个 list 结构的数据(list_new)
+    symbol_t *s = symbol_table_get("test_gc.main.local_list_1");
+    ast_var_decl *var = s->ast_value;
+    assert_int_equal(var->type.kind, TYPE_LIST);
+
+    rtype_t rtype = ct_reflect_type(var->type);
+
+
     printf("hello\n");
 }
 

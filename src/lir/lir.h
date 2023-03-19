@@ -23,7 +23,7 @@
 // CT = compile time
 #define RT_CALL_LIST_NEW "linked_new"
 #define RT_CALL_LIST_VALUE "list_value"
-#define RT_CALL_LIST_SPLIT "list_split"
+#define RT_CALL_LIST_SPLICE "list_slice"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
@@ -42,8 +42,6 @@
 #define RT_CALL_ENV_VALUE "env_value"
 
 #define RT_CALL_STRING_NEW "string_new"
-#define RT_CALL_STRING_ADDR "string_addr"
-#define RT_CALL_STRING_LENGTH "string_length"
 
 // GC 相关函数
 #define RT_CALL_GC_MALLOC "gc_malloc"

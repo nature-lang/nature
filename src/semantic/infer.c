@@ -672,7 +672,7 @@ type_t infer_type(type_t type) {
 
     assertf(false, "cannot parser type %s", type_to_string[type.kind]);
     TYPE_ORIGIN:
-    reflect_type(type);
+    ct_reflect_type(type);
 
     return type;
 }

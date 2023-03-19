@@ -3,9 +3,9 @@
 #include "helper.h"
 #include "bitmap.h"
 
-static reflect_type_t rtype_base(type_kind kind) {
+static rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
-    reflect_type_t rtype = {
+    rtype_t rtype = {
             .size = type_kind_sizeof(kind),  // 单位 byte
             .hash = hash,
             .last_ptr = 0,
@@ -16,15 +16,19 @@ static reflect_type_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static reflect_type_t rtype_int() {
+static rtype_t rtype_byte() {
+    return rtype_base(TYPE_BYTE);
+}
+
+static rtype_t rtype_int() {
     return rtype_base(TYPE_INT);
 }
 
-static reflect_type_t rtype_float() {
+static rtype_t rtype_float() {
     return rtype_base(TYPE_FLOAT);
 }
 
-static reflect_type_t rtype_bool() {
+static rtype_t rtype_bool() {
     return rtype_base(TYPE_BOOL);
 }
 
@@ -33,10 +37,10 @@ static reflect_type_t rtype_bool() {
  * @param t
  * @return
  */
-static reflect_type_t rtype_string() {
+static rtype_t rtype_string() {
     uint32_t hash = hash_string(itoa(TYPE_STRING));
-    reflect_type_t rtype = {
-            .size = sizeof(memory_string_t), // 存储在  // count 表示字符串的程度，单位已经是 byte 了
+    rtype_t rtype = {
+            .size = sizeof(memory_string_t),
             .hash = hash,
             .last_ptr = 0,
             .kind = TYPE_STRING,
@@ -53,13 +57,13 @@ static reflect_type_t rtype_string() {
  * @param t
  * @return
  */
-static reflect_type_t rtype_list(typedecl_list_t *t) {
+static rtype_t rtype_list(typedecl_list_t *t) {
     type_t element_type = t->element_type;
-    reflect_type_t element_rtype = reflect_type(element_type);
+    rtype_t element_rtype = reflect_type(element_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);
     uint32_t hash = hash_string(str);
-    reflect_type_t rtype = {
+    rtype_t rtype = {
             .size =  sizeof(memory_list_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
@@ -77,22 +81,21 @@ static reflect_type_t rtype_list(typedecl_list_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_array(typedecl_array_t *t) {
-    type_t element_type = t->type;
-    reflect_type_t element_rtype = reflect_type(element_type);
-    uint64_t element_size = type_sizeof(element_type);
+static rtype_t rtype_array(typedecl_array_t *t) {
+    rtype_t element_rtype = t->element_rtype;
+    uint64_t element_size = element_rtype.size;
 
-    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->count, element_rtype.hash);
+    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
     uint32_t hash = hash_string(str);
-    reflect_type_t rtype = {
-            .size = element_size * t->count,
+    rtype_t rtype = {
+            .size = element_size * t->length,
             .hash = hash,
             .kind = TYPE_ARRAY,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bool need_gc = type_need_gc(element_type);
+    bool need_gc = element_rtype.last_ptr > 0; // element 包含指针数据
     if (need_gc) {
-        rtype.last_ptr = element_size * t->count;
+        rtype.last_ptr = element_size * t->length;
 
         // need_gc 暗示了 8byte 对齐了
         for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
@@ -108,8 +111,8 @@ static reflect_type_t rtype_array(typedecl_array_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_map(typedecl_map_t *t) {
-    reflect_type_t rtype = {};
+static rtype_t rtype_map(typedecl_map_t *t) {
+    rtype_t rtype = {};
     return rtype;
 }
 
@@ -118,8 +121,8 @@ static reflect_type_t rtype_map(typedecl_map_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_set(typedecl_set_t *t) {
-    reflect_type_t rtype = {};
+static rtype_t rtype_set(typedecl_set_t *t) {
+    rtype_t rtype = {};
     return rtype;
 }
 
@@ -128,22 +131,22 @@ static reflect_type_t rtype_set(typedecl_set_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_tuple(typedecl_tuple_t *t) {
-    reflect_type_t rtype = {};
+static rtype_t rtype_tuple(typedecl_tuple_t *t) {
+    rtype_t rtype = {};
     return rtype;
 }
 
 /**
- * rtype any 真的需要实现吗？
+ * element_rtype any 真的需要实现吗？
  * hash = type_kind
  * @param t
  * @return
  */
-static reflect_type_t rtype_any(typedecl_any_t *t) {
+static rtype_t rtype_any(typedecl_any_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_ANY));
 
-    reflect_type_t rtype = {
-            .size = POINTER_SIZE * 2, // rtype + value(并不知道 value 的类型)
+    rtype_t rtype = {
+            .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = hash,
             .kind = TYPE_ANY,
             .last_ptr = 0,
@@ -158,15 +161,15 @@ static reflect_type_t rtype_any(typedecl_any_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_fn(typedecl_fn_t *t) {
+static rtype_t rtype_fn(typedecl_fn_t *t) {
     char *str = itoa(TYPE_FN);
-    reflect_type_t return_rtype = reflect_type(t->return_type);
+    rtype_t return_rtype = ct_reflect_type(t->return_type);
     str = str_connect(str, itoa(return_rtype.hash));
     for (int i = 0; i < t->formals_count; ++i) {
-        reflect_type_t formal_type = reflect_type(t->formals_types[i]);
+        rtype_t formal_type = ct_reflect_type(t->formals_types[i]);
         str = str_connect(str, itoa(formal_type.hash));
     }
-    reflect_type_t rtype = {
+    rtype_t rtype = {
             .size = POINTER_SIZE,
             .hash = hash_string(str),
             .kind = TYPE_FN,
@@ -181,7 +184,7 @@ static reflect_type_t rtype_fn(typedecl_fn_t *t) {
  * @param t
  * @return
  */
-static reflect_type_t rtype_struct(typedecl_struct_t *t) {
+static rtype_t rtype_struct(typedecl_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
     uint offset = 0;
     uint max = 0;
@@ -196,8 +199,8 @@ static reflect_type_t rtype_struct(typedecl_struct_t *t) {
         }
         // 按 offset 对齐
         offset = align(offset, item_size);
-        // 计算 rtype
-        reflect_type_t rtype = reflect_type(property.type);
+        // 计算 element_rtype
+        rtype_t rtype = ct_reflect_type(property.type);
         str = str_connect(str, itoa(rtype.hash));
         bool need_gc = type_need_gc(property.type);
         if (need_gc) {
@@ -208,7 +211,7 @@ static reflect_type_t rtype_struct(typedecl_struct_t *t) {
     uint size = align(offset, max);
 
 
-    reflect_type_t rtype = {
+    rtype_t rtype = {
             .size = size,
             .hash = hash_string(str),
             .kind = TYPE_STRUCT,
@@ -231,6 +234,7 @@ uint8_t type_kind_sizeof(type_kind t) {
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:
+        case TYPE_BYTE:
             return 1;
         case TYPE_INT16:
             return 2;
@@ -279,8 +283,13 @@ type_t type_new(type_kind kind, void *value) {
     return result;
 }
 
-reflect_type_t reflect_type(type_t t) {
-    reflect_type_t rtype = {0};
+/**
+ * 仅做 reflect, 不写入任何 table 中
+ * @param t
+ * @return
+ */
+rtype_t reflect_type(type_t t) {
+    rtype_t rtype = {0};
     switch (t.kind) {
         case TYPE_INT:
             rtype = rtype_int();
@@ -290,6 +299,9 @@ reflect_type_t reflect_type(type_t t) {
             break;
         case TYPE_BOOL:
             rtype = rtype_bool();
+            break;
+        case TYPE_BYTE:
+            rtype = rtype_byte();
             break;
         case TYPE_STRING:
             rtype = rtype_string();
@@ -319,19 +331,34 @@ reflect_type_t reflect_type(type_t t) {
             rtype = rtype_any(t.any_decl);
             break;
         default:
-            return rtype; // rtype rtype
+            return rtype; // element_rtype element_rtype
 //            assertf(false, "cannot reflect type kind=%d", t.kind);
     }
+    return rtype;
+}
 
-    if (!table_exist(rtype_table, itoa(rtype.hash))) {
-        // 添加到 rtypes 并得到 index(rtype 是值传递并 copy)
+rtype_t ct_reflect_type(type_t t) {
+    rtype_t rtype = reflect_type(t);
+    uint64_t rtype_index = (uint64_t) table_get(rtype_table, itoa(rtype.hash));
+    if (rtype_index == 0) {
+        // 添加到 rtypes 并得到 index(element_rtype 是值传递并 copy)
         uint64_t index = rtypes_push(rtype);
         // 将 index 添加到 table
         table_set(rtype_table, itoa(rtype.hash), (void *) index);
         rtypes[index].index = index; // 索引反填
         rtype.index = index;
+    } else {
+        rtype.index = rtype_index;
     }
 
+    return rtype;
+}
+
+
+rtype_t rt_reflect_type(type_t t) {
+    rtype_t rtype = reflect_type(t);
+
+    // TODO 应该在 runtime 中实现，且写入到 rt reflect_type 中
     return rtype;
 }
 
@@ -374,11 +401,11 @@ bool type_need_gc(type_t t) {
     return true;
 }
 
-uint64_t rtypes_push(reflect_type_t rtype) {
+uint64_t rtypes_push(rtype_t rtype) {
     uint64_t index = rtype_count++;
     rtypes[index] = rtype;
 
-    rtype_size += sizeof(reflect_type_t);
+    rtype_size += sizeof(rtype_t);
     rtype_size += calc_gc_bits_size(rtype.size);
 
     return index;
@@ -390,7 +417,7 @@ uint64_t rtypes_push(reflect_type_t rtype) {
  * @return
  */
 uint find_rtype_index(type_t t) {
-    reflect_type_t rtype = reflect_type(t);
+    rtype_t rtype = ct_reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
     uint64_t index = (uint64_t) table_get(rtype_table, itoa(rtype.hash));
     assertf(index, "notfound index by rtype_table,hass=%d", rtype.hash);

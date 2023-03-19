@@ -70,9 +70,9 @@ byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count) {
     return data;
 }
 
-byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count) {
+byte *rtypes_serialize(rtype_t *_rtypes, uint64_t count) {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
-    // 计算 reflect_type
+    // 计算 ct_reflect_type
     byte *data = mallocz(rtype_size);
 
     byte *p = data;
@@ -83,7 +83,7 @@ byte *rtypes_serialize(reflect_type_t *_rtypes, uint64_t count) {
     // 移动 gc_bits
     p = p + size; // byte 类型，所以按字节移动
     for (int i = 0; i < count; ++i) {
-        reflect_type_t *r = &_rtypes[i];
+        rtype_t *r = &_rtypes[i];
         uint64_t gc_bits_size = calc_gc_bits_size(r->size);
         memmove(p, r->gc_bits, gc_bits_size);
         p += gc_bits_size;
