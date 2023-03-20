@@ -75,8 +75,8 @@ typedef struct {
 } mstack_t;
 
 typedef struct mspan_t {
-    struct mspan_t *next; // mspan 是双向链表
-    struct mspan_t *prev;
+//    struct mspan_t *next; // mspan 是双向链表
+//    struct mspan_t *prev;
 
     uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
     addr_t base; // mspan 在 arena 中的起始位置
@@ -146,7 +146,7 @@ typedef struct {
     // l1 = 8192
     page_summary_t *summary[PAGE_SUMMARY_LEVEL];
 
-    uint64_t chunk_count;
+//    uint64_t chunk_count;
 
     // 核心位图，标记自启动以来所有 page 的使用情况
     // 通过 chunks = {0} 初始化，可以确保第二维度为 null

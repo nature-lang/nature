@@ -53,7 +53,7 @@ int teardown(void **state) {
  * "test_gc.foo.global_b"
  * "test_gc.foo.global_s"
  */
-static void test_allocator_list() {
+static void test_gc_basic() {
     // - 找到 stubs 中的 list 对应的 rtype
     symbol_t *s = symbol_table_get("test_gc.main.local_list_1");
     ast_var_decl *var = s->ast_value;
@@ -64,12 +64,19 @@ static void test_allocator_list() {
     // - 调用 list_new 初始化需要的数据
     memory_list_t *l = list_new(rtype.index, element_rtype.index, 0);
 
+    assert_int_equal((addr_t) l->array_data, (addr_t) 0xc000000000);
+    assert_int_equal((addr_t) l, (addr_t) 0xc000002000);
+
+    // TODO 将申请的 l 加入到全局符号表中,从而可以被 gc mark root 标记到
+
+    // TODO list push 从而触发 new 新的 array
+
     printf("hello\n");
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_allocator_list),
+            cmocka_unit_test(test_gc_basic),
     };
     return cmocka_run_group_tests(tests, setup, teardown);
 }
