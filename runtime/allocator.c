@@ -36,7 +36,8 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
     uint64_t find_start = 0;
     uint64_t find_end = 0;
     bool find = false;
-    // manager max pages
+
+    // 当前 level 下每一个 summary 管理的 pages 的总量，这决定了当前 level 下的 start/max/min 都是小于等于该值的
     uint64_t max_pages_count = summary_page_count[level];
     uint64_t find_max = 0;
     for (uint64_t i = *start; i < *end; ++i) {
@@ -104,28 +105,29 @@ static uint64_t chunk_index_l2(uint64_t index) {
  * @return
  */
 static page_chunk_t *take_chunk(addr_t base) {
-    return &memory->mheap.page_alloc.chunks[chunk_index_l1(base)][chunk_index_l2(base)];
+    return &memory->mheap->page_alloc.chunks[chunk_index_l1(base)][chunk_index_l2(base)];
 }
 
 
 /**
+ * l5 级别的 summary 是直接对 chunk 进行的 summary
  * start,max,end
  * @param chunk
  * @return
  */
 static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint32_t max = 0;
-    uint bit_start = 0;
+    uint bit_start = -1;
     uint bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
         bool used = bitmap_test((byte *) chunk.blocks, i);
         if (used) {
             // 重新开始计算
-            bit_start = 0;
+            bit_start = -1;
             bit_end = 0;
         } else {
             // 空闲
-            if (bit_start == 0) {
+            if (bit_start == -1) {
                 bit_start = i;
             }
             bit_end = i;
@@ -242,10 +244,10 @@ calc_page_summary_index(uint8_t level, addr_t start, addr_t end, uint64_t *start
  * @param end
  */
 static void page_summary_update(addr_t base, uint64_t size) {
-    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+    page_alloc_t *page_alloc = &memory->mheap->page_alloc;
     page_summary_t *last_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
 
-    // 维护 chunks 数据
+    // 维护 chunks summary 数据
     for (uint64_t index = chunk_index(base); index < chunk_index(base + size); index++) {
         // 计算 l1 可能为 null
         page_chunk_t *l1_chunks = page_alloc->chunks[chunk_index_l1(index)];
@@ -290,10 +292,10 @@ static void page_summary_update(addr_t base, uint64_t size) {
  * TODO 可能有越界问题,debug 时需要特别关注
  * @param base
  * @param size
- * @param v
+ * @param v 1 表示 page使用中， 0 表示 page 空闲
  */
 static void chunks_set(addr_t base, uint64_t size, bool v) {
-    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+    page_alloc_t *page_alloc = &memory->mheap->page_alloc;
     uint64_t end = base + size;
     for (uint64_t index = chunk_index(base); index < chunk_index(end); index++) {
         // 计算 chunk
@@ -338,8 +340,8 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
 static addr_t page_alloc_find(uint pages_count) {
     // 第一个 level 需要查找所有的元素
     uint64_t start = 0;
-    uint64_t end = PAGE_SUMMARY_COUNT_L1;
-    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+    uint64_t end = PAGE_SUMMARY_COUNT_L1; // l1 有 8192 个元素
+    page_alloc_t *page_alloc = &memory->mheap->page_alloc;
 
     for (int level = 0; level < PAGE_SUMMARY_LEVEL; ++level) {
         page_summary_t *summaries = page_alloc->summary[level];
@@ -404,7 +406,7 @@ static addr_t page_alloc_find(uint pages_count) {
  * @return
  */
 static void page_alloc_grow(addr_t base, uint64_t size) {
-    page_alloc_t *page_alloc = &memory->mheap.page_alloc;
+    page_alloc_t *page_alloc = &memory->mheap->page_alloc;
 
     // 维护 chunks 数据
     for (uint64_t index = chunk_index(base); index < chunk_index(base + size); index++) {
@@ -420,9 +422,9 @@ static void page_alloc_grow(addr_t base, uint64_t size) {
         }
     }
 
-    // grow 的关键还是 summary 更新让 page_alloc_t 中可以找到连续可用的 pages
-    // 由于从 arena 中申请了新的 pages,现在需要更新相关的索引
-    page_summary_update(base, base + size);
+    // grow 增长的内存相当于增长了内存的区域的内存是空闲且干净的，所以 chunks 的值不需要更新，默认就是 0
+    // 只需要进行相关的 l5~l1 的 summary 更新，他们将不再是 0 了。
+    page_summary_update(base, size);
 }
 
 /**
@@ -434,8 +436,8 @@ static void page_alloc_grow(addr_t base, uint64_t size) {
  * 同样mheap.pages 同样也不需要更新，因为没有相关的值被更新
  * @return
  */
-void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
-    arena_hint_t *hint = mheap.arena_hints;
+void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
+    arena_hint_t *hint = mheap->arena_hints;
 
     // size 对齐
     uint64_t alloc_size = align((int64_t) *size, ARENA_SIZE);
@@ -461,8 +463,8 @@ void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
     for (uint64_t i = arena_index((uint64_t) v); i <= arena_index((uint64_t) v + alloc_size - 1); ++i) {
         arena_t *arena = NEW(arena_t);
         arena->base = arena_base(i);
-        mheap.arenas[i] = arena;
-        slice_push(mheap.arena_indexes, (void *) i);
+        mheap->arenas[i] = arena;
+        slice_push(mheap->arena_indexes, (void *) i);
     }
 
     *size = alloc_size;
@@ -475,7 +477,7 @@ void *mheap_sys_alloc(mheap_t mheap, uint64_t *size) {
  * @return
  */
 static arena_t *take_arena(addr_t base) {
-    return memory->mheap.arenas[arena_index(base)];
+    return memory->mheap->arenas[arena_index(base)];
 }
 
 
@@ -510,12 +512,12 @@ static void mheap_clear_spans(mspan_t *span) {
  * @param pages_count
  */
 static void mheap_grow(uint pages_count) {
-    // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐
+    // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
     uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * PAGE_SIZE;
 
-    addr_t cursor = memory->mheap.current_arena.cursor;
-    addr_t end = memory->mheap.current_arena.end;
-    assertf(end > cursor, "mheap not hold arena failed");
+    addr_t cursor = memory->mheap->current_arena.cursor;
+    addr_t end = memory->mheap->current_arena.end;
+    assertf(end >= cursor, "mheap not hold arena failed"); // 首次初始化时 end == cursor == 0
 
     if (end - cursor < size) {
         // cursor 没有足够的空间，需要重新申请一个新的空间
@@ -534,9 +536,9 @@ static void mheap_grow(uint pages_count) {
     // 基于 current_arena 进行 pages 的分配,分配的 pages 需要被 page_alloc 索引
     page_alloc_grow(cursor, size);
 
-    // 更新 current arena
-    memory->mheap.current_arena.cursor = cursor + size;
-    memory->mheap.current_arena.end = cursor + end;
+    // 更新 current arena (cursor 需要忽略掉已经申请了 size 的部分,其在上面已经进行了 grow 咯)
+    memory->mheap->current_arena.cursor = cursor + size;
+    memory->mheap->current_arena.end = cursor + end;
 }
 
 /**
@@ -546,7 +548,7 @@ static void mheap_grow(uint pages_count) {
  */
 static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
-    // 因为有垃圾回收的存在，所以 page_alloc 中的某些部分存在空闲且连续的 pages
+    // 因为有垃圾回收的存在，所以 page_alloc 中的历史上的某些部分存在空闲且连续的 pages
     addr_t base = page_alloc_find(pages_count);
 
     if (base == 0) {
@@ -619,7 +621,7 @@ void uncache_span(mcentral_t mcentral, mspan_t *span) {
  */
 static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
     mspan_t *mspan = mcache.alloc[spanclass];
-    mcentral_t mcentral = memory->mheap.centrals[spanclass];
+    mcentral_t mcentral = memory->mheap->centrals[spanclass];
 
     if (mspan) {
         // mspan to mcentral
@@ -694,8 +696,8 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, rtype_t *
 }
 
 // 单位
-static addr_t std_malloc(uint size, rtype_t *type) {
-    bool has_ptr = type != NULL && type->last_ptr;
+static addr_t std_malloc(uint size, rtype_t *rtype) {
+    bool has_ptr = rtype != NULL && rtype->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
@@ -705,14 +707,14 @@ static addr_t std_malloc(uint size, rtype_t *type) {
 
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
-        heap_arena_bits_set(addr, size, span->obj_size, type);
+        heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
     return addr;
 }
 
-static addr_t large_malloc(uint size, rtype_t *type) {
-    bool no_ptr = type == NULL || type->last_ptr == 0;
+static addr_t large_malloc(uint size, rtype_t *rtype) {
+    bool no_ptr = rtype == NULL || rtype->last_ptr == 0;
     uint8_t spanclass = make_spanclass(0, no_ptr);
 
     // 计算需要分配的 page count(向上取整)
@@ -726,7 +728,7 @@ static addr_t large_malloc(uint size, rtype_t *type) {
     assertf(s != NULL, "out of memory");
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
-    mcentral_t *central = &memory->mheap.centrals[spanclass];
+    mcentral_t *central = &memory->mheap->centrals[spanclass];
     linked_push(central->full_swept, s);
     return s->base;
 }
@@ -800,36 +802,41 @@ void rtypes_deserialize() {
 
 void memory_init() {
     // - 初始化 mheap
-    mheap_t mheap = {0}; // 所有的结构体，数组初始化为 0, 指针初始化为 null
-    mheap.page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
-    mheap.page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t)); // 8192
+    mheap_t *mheap = mallocz_big(sizeof(mheap_t)); // 所有的结构体，数组初始化为 0, 指针初始化为 null
+    mheap->page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t)); // 8192
 
     // - arena hint init
-    mheap.arena_hints = arena_hints_init();
+    mheap->arena_hints = arena_hints_init();
 
     // - arena index init
-    mheap.arena_indexes = slice_new();
+    mheap->arena_indexes = slice_new();
+    mheap->spans = slice_new();
 
     // new current arena
-    mheap.current_arena.cursor = 0;
-    mheap.current_arena.end = 0;
+    mheap->current_arena.cursor = 0;
+    mheap->current_arena.end = 0;
 
     // - 初始化 mcentral
     for (int i = 0; i < SPANCLASS_COUNT; i++) {
-        mcentral_t item = mheap.centrals[i];
-        item.spanclass = i;
-        item.partial_swept = linked_new();
+        mcentral_t *item = &mheap->centrals[i];
+        item->spanclass = i;
+        item->partial_swept = linked_new();
 //        item.partial_unswept = linked_new();
-        item.full_swept = linked_new();
+        item->full_swept = linked_new();
 //        item.full_unswept = linked_new();
     }
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
     fndefs_deserialize();
     rtypes_deserialize();
+
+    memory = NEW(memory_t);
+    memory->grey_list = linked_new();
+    memory->mheap = mheap;
 }
 
 mspan_t *span_of(uint64_t addr) {

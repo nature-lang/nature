@@ -29,6 +29,7 @@ void processor_init() {
 }
 
 processor_t processor_get() {
+    assertf(processor_count > 0, "processor not init");
     processor_t result = processor_list[0];
     return result;
 }

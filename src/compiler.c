@@ -269,13 +269,20 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             typedecl_list_t *list_decl = last_param_type.list_decl;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
             rest_param_target = lir_temp_var_operand(c, last_param_type);
-            lir_operand_t *element_size_operand = LIR_NEW_IMM_OPERAND(TYPE_INT, int_value,
-                                                                      (int) type_sizeof(list_decl->element_type));
+
+            lir_operand_t *rtype_index = LIR_NEW_IMM_OPERAND(
+                    TYPE_INT, int_value, find_rtype_index(last_param_type));
+            lir_operand_t *element_rtype_index = LIR_NEW_IMM_OPERAND(
+                    TYPE_INT, int_value, find_rtype_index(list_decl->element_type));
+            lir_operand_t *capacity = LIR_NEW_IMM_OPERAND(
+                    TYPE_INT, int_value, 0);
             lir_op_t *call_op = lir_op_rt_call(
                     RT_CALL_LIST_NEW,
                     rest_param_target, // rest_param_target is array_t
-                    1,
-                    element_size_operand
+                    3,
+                    rtype_index,
+                    element_rtype_index,
+                    capacity
             );
             linked_push(c->operations, call_op);
 
@@ -284,19 +291,26 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             for (int j = i; j < call->actual_param_count; ++j) {
                 bool is_spread = call->spread_param && j == call->actual_param_count - 1;
                 if (is_spread) {
+                    lir_var_t *spared_target_var = spread_target->value;
+                    lir_operand_t *spread_rtype_index = LIR_NEW_IMM_OPERAND(
+                            TYPE_INT, int_value, find_rtype_index(spared_target_var->type));
+
                     // spread 已经预编译过了
                     if (spread_index > 0) {
                         lir_operand_t *length_target = lir_temp_var_operand(c, type_base_new(TYPE_INT));
-                        call_op = lir_op_rt_call(RT_CALL_LIST_LENGTH,
-                                                 spread_target,
-                                                 1,
-                                                 length_target);
-                        linked_push(c->operations, call_op);
+
+
+                        linked_push(c->operations, lir_op_rt_call(RT_CALL_LIST_LENGTH,
+                                                                  length_target,
+                                                                  1,
+                                                                  spread_target));
+
 
                         // spread 被分割了一部分，所以需要对剩余的 temp target 进行 array_slice 切割
                         call_op = lir_op_rt_call(RT_CALL_LIST_SPLICE,
                                                  spread_target, // 切割后的结果保存回 spread_target
                                                  3,
+                                                 spread_rtype_index,
                                                  spread_target,
                                                  LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, spread_index),
                                                  length_target);
@@ -304,18 +318,31 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
                         linked_push(c->operations, call_op);
                     }
                     // 此方法不会改变现有数组，而是生成一个新的数组
-                    linked_push(c->operations,
-                                lir_op_rt_call(RT_CALL_LIST_CONCAT, rest_param_target, 2, rest_param_target,
-                                               spread_target));
+                    linked_push(c->operations, lir_op_rt_call(
+                            RT_CALL_LIST_CONCAT,
+                            rest_param_target,
+                            3,
+                            spread_rtype_index,
+                            rest_param_target,
+                            spread_target));
 
                 } else {
-                    lir_operand_t *temp_target = compiler_expr(c, call->actual_params[j]);
+                    lir_operand_t *expr_target = compiler_expr(c, call->actual_params[j]);
+
+                    lir_operand_t *ref_target = lir_temp_var_operand(c,
+                                                                     type_with_point(call->actual_params[j].type, 1));
+                    lir_operand_t *actual_param_target = compiler_expr(c, call->actual_params[j]);
+                    // 使用 lea 加载地址
+                    linked_push(c->operations,
+                                lir_op_new(LIR_OPCODE_LEA, actual_param_target, NULL, ref_target));
+
+
                     linked_push(c->operations,
                                 lir_op_rt_call(RT_CALL_LIST_PUSH,
                                                NULL,
                                                2,
                                                rest_param_target,
-                                               temp_target));
+                                               ref_target));
                 }
             }
 
@@ -487,16 +514,21 @@ static lir_operand_t *compiler_new_list(closure_t *c, ast_expr expr) {
     lir_operand_t *base_target = lir_temp_var_operand(c, expr.type);
 
     typedecl_list_t *list_decl = ast->type.list_decl;
-    // 类型，容量 runtime.linked_new()
-    lir_operand_t *element_size_operand = LIR_NEW_IMM_OPERAND(TYPE_INT,
-                                                              int_value,
-                                                              (int) type_sizeof(list_decl->element_type));
+    // call list_new
+    lir_operand_t *rtype_index = LIR_NEW_IMM_OPERAND(
+            TYPE_INT, int_value, find_rtype_index(ast->type));
+    lir_operand_t *element_rtype_index = LIR_NEW_IMM_OPERAND(
+            TYPE_INT, int_value, find_rtype_index(list_decl->element_type));
+    lir_operand_t *capacity = LIR_NEW_IMM_OPERAND(
+            TYPE_INT, int_value, 0);
     // 传递 list element type size 或者自己计算出来也行
     lir_op_t *call_op = lir_op_rt_call(
             RT_CALL_LIST_NEW,
             base_target,
             1,
-            element_size_operand
+            rtype_index,
+            element_rtype_index,
+            capacity
     );
     linked_push(c->operations, call_op);
 
@@ -804,7 +836,6 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
             ast_expr *env_expr = ast_closure->env_list->take[i];
             // env_value(indirect_addr operand) or ident(var operand)
             lir_operand_t *env_target = compiler_expr(parent, *env_expr);
-            // TODO indirect addr 怎么处理？
             assertf(env_target->assert_type == LIR_OPERAND_VAR, "expr_target type not var, cannot use by env set");
             lir_operand_t *env_point_target = lir_temp_var_operand(parent, type_with_point(env_expr->type, 1));
             linked_push(parent->operations, lir_op_new(LIR_OPCODE_LEA, env_target, NULL, env_point_target));

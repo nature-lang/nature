@@ -1,6 +1,8 @@
 #include "test.h"
 #include <stdio.h>
 #include "utils/links.h"
+#include "runtime/type/list.h"
+#include "runtime/processor.h"
 
 addr_t rt_fn_main_base;
 
@@ -29,6 +31,11 @@ int setup(void **state) {
     rt_rtype_count = ct_rtype_count;
     rt_rtype_data = ct_rtype_data;
 
+    // runtime init
+    processor_init();
+
+    memory_init();
+
     return 0;
 }
 
@@ -46,21 +53,23 @@ int teardown(void **state) {
  * "test_gc.foo.global_b"
  * "test_gc.foo.global_s"
  */
-static void test_allocator() {
-    // rt_type_data 中啥数据都有了，尝试分配一个 list 结构的数据(list_new)
+static void test_allocator_list() {
+    // - 找到 stubs 中的 list 对应的 rtype
     symbol_t *s = symbol_table_get("test_gc.main.local_list_1");
     ast_var_decl *var = s->ast_value;
     assert_int_equal(var->type.kind, TYPE_LIST);
-
     rtype_t rtype = ct_reflect_type(var->type);
+    rtype_t element_rtype = ct_reflect_type(var->type.list_decl->element_type);
 
+    // - 调用 list_new 初始化需要的数据
+    memory_list_t *l = list_new(rtype.index, element_rtype.index, 0);
 
     printf("hello\n");
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_allocator),
+            cmocka_unit_test(test_allocator_list),
     };
     return cmocka_run_group_tests(tests, setup, teardown);
 }

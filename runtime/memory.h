@@ -213,7 +213,7 @@ typedef struct processor_t {
 } processor_t;
 
 typedef struct {
-    mheap_t mheap;
+    mheap_t *mheap;
     linked_t *grey_list;
     uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
 } memory_t;
@@ -227,7 +227,7 @@ void memory_init();
  * @param hint_addr
  * @return
  */
-void *mheap_sys_alloc(mheap_t mheap, uint64_t *size);
+void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size);
 
 
 uint64_t arena_index(addr_t base);

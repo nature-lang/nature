@@ -174,6 +174,12 @@ typedef struct {
 } lir_indirect_addr_t;
 
 typedef struct {
+//    lir_operand_t *base; // 只允许是 [indirect_addrt_t?]
+    lir_indirect_addr_t *base; //
+    type_t type;
+} lir_lea_addr_t; // 读取 base 所在的地址
+
+typedef struct {
     char *ident;
     bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
 } lir_symbol_label_t;

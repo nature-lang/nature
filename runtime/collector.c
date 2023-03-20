@@ -85,7 +85,7 @@ static void flush_mcache() {
         for (int j = 0; j < SPANCLASS_COUNT; ++j) {
             mspan_t *span = p.mcache.alloc[j];
             p.mcache.alloc[j] = 0;
-            mcentral_t mcentral = memory->mheap.centrals[span->spanclass];
+            mcentral_t mcentral = memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
     }
@@ -112,7 +112,7 @@ static void grey_list_work(memory_t *m) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
             addr_t addr = (addr_t) LINKED_VALUE();
-            arena_t *arena = memory->mheap.arenas[arena_index(addr)];
+            arena_t *arena = memory->mheap->arenas[arena_index(addr)];
 
             // get mspan by ptr
             mspan_t *span = span_of(addr);

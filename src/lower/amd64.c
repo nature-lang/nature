@@ -126,6 +126,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         amd64_lower_imm_operand(c, block, node);
 
         // TODO lower indirect addr
+        // TODO lower lea op
 
         if (lir_op_is_call(op) && op->second->value != NULL) {
             // lower call actual params

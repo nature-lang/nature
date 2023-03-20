@@ -14,7 +14,7 @@ processor_t *processor_list;
  * @return
  */
 static addr_t get_stack_top() {
-    uint64_t addr;
+    uint64_t addr = 0;
     // 暂存 rsp 的值
     asm("movq %%rsp, %[addr]"
             :  [addr] "=r"(addr)// output

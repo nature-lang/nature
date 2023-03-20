@@ -18,6 +18,7 @@ void lower(closure_t *c) {
             assert(false && "not support arch");
         }
 
+        // 设置 block 的首尾 op
         lir_set_quick_op(block);
     }
 }

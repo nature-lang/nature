@@ -73,7 +73,7 @@ typedef struct {
     uint size; // 类型占用的 size,和 gc_bits 联合起来使用
     uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
-    uint8_t kind; // 类型的种类
+    type_kind kind; // 类型的种类
     byte *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 } rtype_t;
 
