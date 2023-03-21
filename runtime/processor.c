@@ -5,15 +5,10 @@
  */
 static void processor_main_init(processor_t *p) {
     // 初始化系统栈
-    mstack_t *s = &p->system_stack;
-    s->size = MAIN_SYSTEM_STACK_SIZE;
-    s->base = get_stack_top();
-    s->end = s->base - s->size;
-    // rbp 是一条线，其没有值,内存访问时是从低地址到高地址
-    // 所以 *rbp 访问的是 rbp ~ rbp + 8 这个范围内的值
-    s->frame_base = s->base - 16;
-    s->top = s->base - 1024;
+    system_stack_init(p);
 
+    // 初始化用户栈
+    mstack_t *s = &p->system_stack;
     s = &p->user_stack;
     s->size = MSTACK_SIZE;
     s->base = mstack_new(s->size);
@@ -28,8 +23,8 @@ void processor_init() {
     processor_main_init(&processor_list[0]);
 }
 
-processor_t processor_get() {
+processor_t *processor_get() {
     assertf(processor_count > 0, "processor not init");
-    processor_t result = processor_list[0];
+    processor_t *result = &processor_list[0];
     return result;
 }

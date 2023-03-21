@@ -12,11 +12,11 @@ void runtime_main() {
     memory_init();
 
     // - 初始化 stack return addr 为 main
-    processor_t p = processor_get();
+    processor_t *p = processor_get();
 
-    user_stack(p);
-
-    // to user main, 这里已经发出了指令跳转
+    USER_STACK(p);
+    // 切换 user stack 后必须立刻进行跳转指令或者 ret 指令
+    // to user main, 这里发出了指令跳转
     call_user_main();
 
     printf("hello world");

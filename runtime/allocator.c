@@ -124,11 +124,10 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
         if (used) {
             // 重新开始计算
             bit_start = i + 1;
-            bit_end = i + 1;
-        } else {
-            bit_end = i;
+            continue;
         }
 
+        bit_end = i;
         if ((bit_end + 1 - bit_start) > max) {
             max = (bit_end + 1 - bit_start);
         }
@@ -368,10 +367,10 @@ static addr_t page_alloc_find(uint pages_count) {
             bool used = bitmap_test((uint8_t *) chunk->blocks, i);
             if (used) {
                 bit_start = i + 1;
-                bit_end = i + 1;
-            } else {
-                bit_end = i;
+                continue;
             }
+
+            bit_end = i;
             // 1, 1
             if ((bit_end + 1 - bit_start) >= pages_count) {
                 break;
@@ -641,8 +640,8 @@ static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
  * @return
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
-    processor_t p = processor_get();
-    mcache_t mcache = p.mcache;
+    processor_t *p = processor_get();
+    mcache_t mcache = p->mcache;
     mspan_t *mspan = mcache.alloc[spanclass];
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配

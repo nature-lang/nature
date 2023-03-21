@@ -3,6 +3,7 @@
 #include "utils/links.h"
 #include "runtime/type/list.h"
 #include "runtime/processor.h"
+#include "runtime/collector.h"
 
 addr_t rt_fn_main_base;
 
@@ -73,12 +74,33 @@ static void test_gc_basic() {
     *data_size_addr = (addr_t) l; // 将 l 的指存储到 data_size_addr 中
 
     // 随便找一个 symdef，将 指注册进去，从而至少能够触发 global symbol 维度的 gc
-    symdef_t symdef = rt_symdef_data[0];
-    symdef.need_gc = type_need_gc(var->type);
-    symdef.size = type_sizeof(var->type);
-    symdef.base = (addr_t) data_size_addr;
+    symdef_t *symdef = &rt_symdef_data[0];
+    symdef->need_gc = type_need_gc(var->type);
+    symdef->size = type_sizeof(var->type); // 特殊标记
+    symdef->base = (addr_t) data_size_addr;
 
-    // TODO list push 从而触发 new 新的 array
+    // 测试读取 data 中的地址
+    uint64_t *addr = (void *) 0xc159c9;
+    printf("%p", addr);
+    printf("%lu", *addr);
+    return;
+
+    int a = 23;
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+    list_push(l, &a);
+
+    // 重新初始化 system_stack, 让 gc 完成后还能回来到此处
+
+
+    // - 触发 gc
+    runtime_gc();
 
     printf("hello\n");
 }

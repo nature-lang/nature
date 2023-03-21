@@ -14,7 +14,7 @@ static inline void linux_amd64_call(addr_t addr) {
 }
 
 static inline void call_user_main() {
-    return linux_amd64_call(rt_fn_main_base);
+    linux_amd64_call(rt_fn_main_base);
 }
 
 void runtime_main();

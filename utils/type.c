@@ -9,7 +9,7 @@ static rtype_t rtype_base(type_kind kind) {
             .size = type_kind_sizeof(kind),  // 单位 byte
             .hash = hash,
             .last_ptr = 0,
-            .kind = TYPE_BOOL,
+            .kind = kind,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
 
