@@ -147,7 +147,7 @@ typedef struct {
     string old; // ssa 之前的名称
 
     flag_t flag;
-    type_t type;
+    typedecl_t type;
 
 //    uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
 //    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
@@ -170,13 +170,13 @@ typedef struct {
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var, alloc reg 后为 reg
     int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    typedecl_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 typedef struct {
 //    lir_operand_t *base; // 只允许是 [indirect_addrt_t?]
     lir_indirect_addr_t *base; //
-    type_t type;
+    typedecl_t type;
 } lir_lea_addr_t; // 读取 base 所在的地址
 
 typedef struct {
@@ -259,13 +259,13 @@ type_kind lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
-lir_operand_t *lir_temp_var_operand(closure_t *c, type_t type);
+lir_operand_t *lir_temp_var_operand(closure_t *c, typedecl_t type);
 
 lir_operand_t *lir_indirect_addr_operand(closure_t *c, lir_operand_t *value_point);
 
 lir_operand_t *lir_new_empty_operand();
 
-lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, type_t type);
+lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, typedecl_t type);
 
 lir_operand_t *lir_new_label_operand(string ident, bool is_local);
 

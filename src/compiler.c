@@ -263,7 +263,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
         bool is_rest = formal_fn->rest_param && i == formal_fn->formals_count - 1;
         if (is_rest) {
             // lir array_new(count, size) -> rest_param_target
-            type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
+            typedecl_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
             assertf(last_param_type.kind == TYPE_LIST, "rest param must be list type");
 
             typedecl_list_t *list_decl = last_param_type.list_decl;
@@ -329,10 +329,12 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
                 } else {
                     lir_operand_t *expr_target = compiler_expr(c, call->actual_params[j]);
 
+
+                    lir_operand_t *actual_param_target = compiler_expr(c, call->actual_params[j]);
+
                     lir_operand_t *ref_target = lir_temp_var_operand(c,
                                                                      type_with_point(call->actual_params[j].type, 1));
-                    lir_operand_t *actual_param_target = compiler_expr(c, call->actual_params[j]);
-                    // 使用 lea 加载地址
+                    // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
                     linked_push(c->operations,
                                 lir_op_new(LIR_OPCODE_LEA, actual_param_target, NULL, ref_target));
 

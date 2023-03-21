@@ -8,8 +8,8 @@
  * 基于 symbol fn 生成基础的 fn list
  */
 void pre_fndef_list() {
-    fndefs_size = symbol_fn_list->count * sizeof(fndef_t);
-    fndefs = mallocz(fndefs_size);
+    ct_fndefs_size = symbol_fn_list->count * sizeof(fndef_t);
+    ct_fndefs = mallocz(ct_fndefs_size);
     // - 遍历全局符号表中的所有 fn 数据就行了
     SLICE_FOR(symbol_fn_list) {
         int index = _i;
@@ -17,10 +17,10 @@ void pre_fndef_list() {
         ast_new_fn *fn = s->ast_value;
         closure_t *c = fn->closure;
 
-        fndef_t *f = &fndefs[index];
+        fndef_t *f = &ct_fndefs[index];
         f->stack_size = align(c->stack_size, POINTER_SIZE);
         f->gc_bits = malloc_gc_bits(f->stack_size);
-        fndefs_size += calc_gc_bits_size(f->stack_size);
+        ct_fndefs_size += calc_gc_bits_size(f->stack_size);
         uint64_t offset = 0;
         for (int i = 0; i < c->stack_vars->count; ++i) {
             lir_var_t *var = c->stack_vars->take[i];
@@ -36,22 +36,22 @@ void pre_fndef_list() {
 }
 
 void pre_symdef_list() {
-    symdefs_size = symbol_var_list->count * sizeof(symdef_t);
-    symdefs = mallocz(symdefs_size);
+    ct_symdefs_size = symbol_var_list->count * sizeof(symdef_t);
+    ct_symdefs = mallocz(ct_symdefs_size);
     SLICE_FOR(symbol_var_list) {
         int index = _i;
         symbol_t *s = SLICE_VALUE(symbol_var_list);
         ast_var_decl *var_decl = s->ast_value;
-        symdef_t *symdef = &symdefs[index];
+        symdef_t *symdef = &ct_symdefs[index];
         symdef->need_gc = type_need_gc(var_decl->type);
+        symdef->size = type_sizeof(var_decl->type); // 符号的大小
         symdef->base = 0;
-        symdef->size = 0;
     }
 }
 
 byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count) {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
-    byte *data = mallocz(fndefs_size);
+    byte *data = mallocz(ct_fndefs_size);
 
     byte *p = data;
     // 首先将 fndef 移动到 data 中
@@ -73,7 +73,7 @@ byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count) {
 byte *rtypes_serialize(rtype_t *_rtypes, uint64_t count) {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     // 计算 ct_reflect_type
-    byte *data = mallocz(rtype_size);
+    byte *data = mallocz(ct_rtype_size);
 
     byte *p = data;
     // 首先将 fndef 移动到 data 中

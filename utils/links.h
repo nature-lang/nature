@@ -21,11 +21,11 @@ typedef struct {
 } fndef_t;
 
 // ct = compile time
-symdef_t *symdefs;
-uint64_t symdefs_size;
+symdef_t *ct_symdefs;
+uint64_t ct_symdefs_size;
 // 预处理时使用的临时数据
-fndef_t *fndefs;
-uint64_t fndefs_size; // 对 fndef 进行序列化后的 byte 数，主要是包含 gc_bits 的数量
+fndef_t *ct_fndefs;
+uint64_t ct_fndefs_size; // 对 fndef 进行序列化后的 byte 数，主要是包含 gc_bits 的数量
 
 void *fn_main_base_data_ptr; // 在 elf output 之前，都可以直接通过修改到 data_section->data 中的数据
 
@@ -59,14 +59,14 @@ extern rtype_t *rt_rtype_data;
 
 
 // 编译时备份 -- 为了测试
-uint64_t ct_symdef_size;
-symdef_t *ct_symdef_data;
+uint64_t ct_symdef_size_;
+symdef_t *ct_symdef_data_;
 
-uint64_t ct_fndef_count;
-fndef_t *ct_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+uint64_t ct_fndef_count_;
+fndef_t *ct_fndef_data_; // 仅需要修复一下 gc_bits 数据即可
 
-uint64_t ct_rtype_count;
-rtype_t *ct_rtype_data;
+uint64_t ct_rtype_count_;
+rtype_t *ct_rtype_data_;
 
 // 主要是需要处理 gc_bits 数据
 byte *fndefs_serialize(fndef_t *_fndefs, uint64_t count);

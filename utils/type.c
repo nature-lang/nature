@@ -58,7 +58,7 @@ static rtype_t rtype_string() {
  * @return
  */
 static rtype_t rtype_list(typedecl_list_t *t) {
-    type_t element_type = t->element_type;
+    typedecl_t element_type = t->element_type;
     rtype_t element_rtype = reflect_type(element_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);
@@ -230,6 +230,7 @@ static rtype_t rtype_struct(typedecl_struct_t *t) {
 }
 
 
+// TODO 功能上和 type in_heap 有一定的冲突
 uint8_t type_kind_sizeof(type_kind t) {
     switch (t) {
         case TYPE_BOOL:
@@ -253,30 +254,32 @@ uint8_t type_kind_sizeof(type_kind t) {
  * @param t
  * @return
  */
-uint16_t type_sizeof(type_t t) {
+uint16_t type_sizeof(typedecl_t t) {
     return type_kind_sizeof(t.kind);
 }
 
 
-type_t type_with_point(type_t t, uint8_t point) {
-    type_t result;
+typedecl_t type_with_point(typedecl_t t, uint8_t point) {
+    typedecl_t result;
     result.is_origin = t.is_origin;
     result.point = point;
     return result;
 }
 
-type_t type_base_new(type_kind kind) {
-    type_t result = {
+typedecl_t type_base_new(type_kind kind) {
+    typedecl_t result = {
             .is_origin = true,
             .kind = kind,
             .value_decl = 0,
     };
 
+    result.in_heap = type_default_in_heap(result);
+
     return result;
 }
 
-type_t type_new(type_kind kind, void *value) {
-    type_t result = {
+typedecl_t type_new(type_kind kind, void *value) {
+    typedecl_t result = {
             .kind = kind,
             .value_decl = value
     };
@@ -288,8 +291,10 @@ type_t type_new(type_kind kind, void *value) {
  * @param t
  * @return
  */
-rtype_t reflect_type(type_t t) {
+rtype_t reflect_type(typedecl_t t) {
     rtype_t rtype = {0};
+    rtype.in_heap = t.in_heap;
+
     switch (t.kind) {
         case TYPE_INT:
             rtype = rtype_int();
@@ -337,15 +342,15 @@ rtype_t reflect_type(type_t t) {
     return rtype;
 }
 
-rtype_t ct_reflect_type(type_t t) {
+rtype_t ct_reflect_type(typedecl_t t) {
     rtype_t rtype = reflect_type(t);
-    uint64_t rtype_index = (uint64_t) table_get(rtype_table, itoa(rtype.hash));
+    uint64_t rtype_index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
     if (rtype_index == 0) {
-        // 添加到 rtypes 并得到 index(element_rtype 是值传递并 copy)
+        // 添加到 ct_rtypes 并得到 index(element_rtype 是值传递并 copy)
         uint64_t index = rtypes_push(rtype);
         // 将 index 添加到 table
-        table_set(rtype_table, itoa(rtype.hash), (void *) index);
-        rtypes[index].index = index; // 索引反填
+        table_set(ct_rtype_table, itoa(rtype.hash), (void *) index);
+        ct_rtypes[index].index = index; // 索引反填
         rtype.index = index;
     } else {
         rtype.index = rtype_index;
@@ -355,7 +360,7 @@ rtype_t ct_reflect_type(type_t t) {
 }
 
 
-rtype_t rt_reflect_type(type_t t) {
+rtype_t rt_reflect_type(typedecl_t t) {
     rtype_t rtype = reflect_type(t);
 
     // TODO 应该在 runtime 中实现，且写入到 rt reflect_type 中
@@ -378,35 +383,25 @@ byte *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-typedecl_ident_t *type_decl_ident_new(char *literal) {
+typedecl_ident_t *typedecl_ident_new(char *literal) {
     typedecl_ident_t *t = NEW(typedecl_ident_t);
     t->literal = literal;
     return t;
 }
 
-bool type_need_gc(type_t t) {
-    if (t.point == 0) {
-        return false;
+bool type_need_gc(typedecl_t t) {
+    if (t.in_heap) {
+        return true;
     }
-    if (t.kind == TYPE_BOOL ||
-        t.kind == TYPE_FLOAT ||
-        t.kind == TYPE_INT ||
-        t.kind == TYPE_INT8 ||
-        t.kind == TYPE_INT16 ||
-        t.kind == TYPE_INT32 ||
-        t.kind == TYPE_INT64) {
-        return false;
-    }
-
-    return true;
+    return false;
 }
 
 uint64_t rtypes_push(rtype_t rtype) {
-    uint64_t index = rtype_count++;
-    rtypes[index] = rtype;
+    uint64_t index = ct_rtype_count++;
+    ct_rtypes[index] = rtype;
 
-    rtype_size += sizeof(rtype_t);
-    rtype_size += calc_gc_bits_size(rtype.size);
+    ct_rtype_size += sizeof(rtype_t);
+    ct_rtype_size += calc_gc_bits_size(rtype.size);
 
     return index;
 }
@@ -416,10 +411,47 @@ uint64_t rtypes_push(rtype_t rtype) {
  * @param t
  * @return
  */
-uint find_rtype_index(type_t t) {
+uint find_rtype_index(typedecl_t t) {
     rtype_t rtype = ct_reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
-    uint64_t index = (uint64_t) table_get(rtype_table, itoa(rtype.hash));
-    assertf(index, "notfound index by rtype_table,hass=%d", rtype.hash);
+    uint64_t index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
+    assertf(index, "notfound index by ct_rtype_table,hass=%d", rtype.hash);
     return index;
+}
+
+/**
+ * 一般标量类型其值默认会存储在 stack 中
+ * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
+ * 可以通过 kind 进行判断。
+ * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
+ * @param typedecl
+ * @return
+ */
+bool type_default_in_heap(typedecl_t typedecl) {
+    if (typedecl.kind == TYPE_ANY ||
+        typedecl.kind == TYPE_STRING ||
+        typedecl.kind == TYPE_LIST ||
+        typedecl.kind == TYPE_ARRAY ||
+        typedecl.kind == TYPE_MAP ||
+        typedecl.kind == TYPE_SET ||
+        typedecl.kind == TYPE_TUPLE ||
+        typedecl.kind == TYPE_STRUCT ||
+        typedecl.kind == TYPE_FN) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
+ * 如果类型没有存储在堆中，则其在堆外占用的大小是就是类型本身的大小，如果类型存储在堆中，其在堆外存储的是指向堆的指针
+ * 占用 POINTER_SIZE 大小
+ * @param rtype
+ * @return
+ */
+uint64_t rtype_heap_outside_size(rtype_t *rtype) {
+    if (rtype->in_heap) {
+        return POINTER_SIZE;
+    }
+    return rtype->size;
 }

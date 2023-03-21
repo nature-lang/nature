@@ -52,10 +52,10 @@ int ast_struct_offset(typedecl_struct_t *struct_decl, char *property) {
 }
 
 
-type_t select_actual_param(ast_call *call, uint8_t index) {
+typedecl_t select_actual_param(ast_call *call, uint8_t index) {
     if (call->spread_param && index >= call->actual_param_count) {
         // last actual param type must array
-        type_t last_param_type = call->actual_params[call->actual_param_count].type;
+        typedecl_t last_param_type = call->actual_params[call->actual_param_count].type;
         assertf(last_param_type.kind == TYPE_LIST, "spread param must list");
         typedecl_list_t *list_decl = last_param_type.list_decl;
         return list_decl->element_type;
@@ -64,9 +64,9 @@ type_t select_actual_param(ast_call *call, uint8_t index) {
     return call->actual_params[index].type;
 }
 
-type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
+typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
     if (formal_fn->rest_param && index >= formal_fn->formals_count - 1) {
-        type_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
+        typedecl_t last_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
         assertf(last_param_type.kind == TYPE_LIST, "rest param must list");
         typedecl_list_t *list_decl = last_param_type.list_decl;
 
@@ -85,7 +85,7 @@ type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
  * @param source
  * @return
  */
-bool type_compare(type_t target, type_t source) {
+bool type_compare(typedecl_t target, typedecl_t source) {
     assertf(target.is_origin && source.is_origin, "code not origin, left: '%s', right: '%s'",
             type_to_string[target.kind],
             type_to_string[source.kind]);

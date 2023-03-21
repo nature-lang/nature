@@ -193,7 +193,7 @@ lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
 //    return NULL;
 //}
 
-lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, type_t type) {
+lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, typedecl_t type) {
     assertf(base->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
 
     lir_var_t *var = base->value;
@@ -251,7 +251,7 @@ lir_op_t *lir_op_call(char *name, lir_operand_t *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand_t *lir_temp_var_operand(closure_t *c, type_t type) {
+lir_operand_t *lir_temp_var_operand(closure_t *c, typedecl_t type) {
     string unique_ident = analysis_unique_ident(c->module, TEMP_IDENT);
 
     symbol_table_set_var(unique_ident, type);

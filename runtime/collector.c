@@ -63,13 +63,15 @@ static void scan_stack(memory_t *m) {
     }
 }
 
-static void scan_symbols(memory_t *m) {
+static void scan_symdefs(memory_t *m) {
     uint64_t count = rt_symdef_size / sizeof(symdef_t);
     for (int i = 0; i < count; ++i) {
         symdef_t s = rt_symdef_data[i];
         if (!s.need_gc) {
             continue;
         }
+        // TODO 如果 size 超过了 8byte？就不兼容了, 虽然目前不会超过 8byte
+        assertf(s.size <= 8, "temp do not support symbol size > 8byte");
         // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
         linked_push(m->grey_list, (void *) fetch_addr_value(s.base));
     }
@@ -253,7 +255,7 @@ void runtime_gc() {
     assertf(linked_empty(memory->grey_list), "grey list not cleanup");
 
     // - 遍历 global symbol list,如果是 ptr 则将 ptr 指向的内存块进行分析，然后加入到 grey 队列
-    scan_symbols(memory);
+    scan_symdefs(memory);
     // - 遍历 user stack
     scan_stack(memory);
 

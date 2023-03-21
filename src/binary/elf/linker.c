@@ -22,14 +22,14 @@ static void pre_handle_custom_links(elf_context *ctx) {
     pre_symdef_list();
 
     // - 相关 sections sh_size 预填充
-    ctx->fndef_section->sh_size = fndefs_size;
-    ctx->symdef_section->sh_size = symdefs_size;
+    ctx->fndef_section->sh_size = ct_fndefs_size;
+    ctx->symdef_section->sh_size = ct_symdefs_size;
 
     // - element_rtype 数据与 sym 无关，这里可以进行完全的填充处理
-    byte *rtype_data = rtypes_serialize(rtypes, rtype_count);
-    elf_put_data(ctx->rtype_section, rtype_data, rtype_size);
-    ct_rtype_data = (rtype_t *) rtype_data;
-    ctx->rtype_section->sh_size = rtype_size;
+    byte *rtype_data = rtypes_serialize(ct_rtypes, ct_rtype_count);
+    elf_put_data(ctx->rtype_section, rtype_data, ct_rtype_size);
+    ct_rtype_data_ = (rtype_t *) rtype_data;
+    ctx->rtype_section->sh_size = ct_rtype_size;
 
     // - 写入相关符号到符号表
     //  fndef_data
@@ -43,7 +43,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
     elf_set_sym(ctx, &fndef_data_sym, SYMBOL_FNDEF_DATA);
     // 写入 count
     elf_set_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &symbol_fn_list->count, INT_SIZE);
-    ct_fndef_count = symbol_fn_list->count;
+    ct_fndef_count_ = symbol_fn_list->count;
 
     // 目前还不知道具体的值，所以仅仅占位
     int fn_main_base = 0;
@@ -60,7 +60,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
 
     elf_set_sym(ctx, &symdef_sym, SYMBOL_SYMDEF_DATA);
     elf_set_global_symbol(ctx, SYMBOL_SYMDEF_SIZE, &ctx->symdef_section->sh_size, INT_SIZE);
-    ct_symdef_size = ctx->symdef_section->sh_size;
+    ct_symdef_size_ = ctx->symdef_section->sh_size;
 
     // element_rtype
     Elf64_Sym rtype_sym = {
@@ -71,8 +71,8 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_other = 0
     };
     elf_set_sym(ctx, &rtype_sym, SYMBOL_RTYPE_DATA);
-    elf_set_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &rtype_count, INT_SIZE);
-    ct_rtype_count = rtype_count;
+    elf_set_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, INT_SIZE);
+    ct_rtype_count_ = ct_rtype_count;
 }
 
 /**
@@ -86,7 +86,7 @@ static void handle_custom_links(elf_context *ctx) {
         symbol_t *symbol = symbol_fn_list->take[i];
         ast_new_fn *fn = symbol->ast_value;
         closure_t *c = fn->closure;
-        fndef_t *fndef = &fndefs[i];
+        fndef_t *fndef = &ct_fndefs[i];
 
         uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, fn->name);
         assertf(sym_index > 0, "fn %s notfound in symtab", fn->name);
@@ -105,7 +105,7 @@ static void handle_custom_links(elf_context *ctx) {
             continue;
         }
 
-        symdef_t *symdef = &symdefs[i];
+        symdef_t *symdef = &ct_symdefs[i];
         uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol->ident);
         assertf(sym_index > 0, "var %s notfound in symtab", symbol->ident);
         Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
@@ -116,13 +116,13 @@ static void handle_custom_links(elf_context *ctx) {
     memmove(fn_main_base_data_ptr, &fn_main_base, INT_SIZE);
 
     // - 填入相关数据进行序列化并写入到 elf_put_data -> s->fndef_data
-    byte *fndef_data = fndefs_serialize(fndefs, symbol_fn_list->count);
-    elf_put_data(ctx->fndef_section, fndef_data, fndefs_size);
-    ct_fndef_data = (fndef_t *) fndef_data;
+    byte *fndef_data = fndefs_serialize(ct_fndefs, symbol_fn_list->count);
+    elf_put_data(ctx->fndef_section, fndef_data, ct_fndefs_size);
+    ct_fndef_data_ = (fndef_t *) fndef_data;
 
-    // 直接使用 symdefs 中的数据就行了,symdefs 就是一个指针，指向一片内存
-    elf_put_data(ctx->symdef_section, (uint8_t *) symdefs, symdefs_size);
-    ct_symdef_data = symdefs;
+    // 直接使用 ct_symdefs 中的数据就行了,ct_symdefs 就是一个指针，指向一片内存
+    elf_put_data(ctx->symdef_section, (uint8_t *) ct_symdefs, ct_symdefs_size);
+    ct_symdef_data_ = ct_symdefs;
 }
 
 static uint64_t get_be(const uint8_t *b, int n) {

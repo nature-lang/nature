@@ -88,8 +88,8 @@ typedef struct {
 typedef struct {
     int line;
     ast_type_e assert_type; // 表达式断言
-    type_t type; // 表达式自身的类型
-    type_t target_type; // 表达式赋值的目标的 type
+    typedecl_t type; // 表达式自身的类型
+    typedecl_t target_type; // 表达式赋值的目标的 type
     void *value;
 } ast_expr;
 
@@ -127,7 +127,7 @@ typedef struct {
 // int a;
 typedef struct {
     string ident;
-    type_t type; // type 已经决定了 size
+    typedecl_t type; // type 已经决定了 size
 } ast_var_decl;
 
 // 值类型
@@ -184,7 +184,7 @@ typedef struct {
 } ast_import;
 
 typedef struct {
-    type_t type;
+    typedecl_t type;
     string key;
     ast_expr value;
     uint8_t size; // byte
@@ -200,7 +200,7 @@ typedef struct {
  * }
  */
 typedef struct {
-    type_t type; // 为什么这里声明的是一个类型而不是 ident?
+    typedecl_t type; // 为什么这里声明的是一个类型而不是 ident?
     ast_struct_property list[UINT8_MAX];
     int8_t count;
 } ast_new_struct;
@@ -227,14 +227,14 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    type_t type; // value 的类型吧？
+    typedecl_t type; // value 的类型吧？
     ast_expr left;
     ast_expr index;
 } ast_list_value_t;
 
 typedef struct {
-    type_t key_type;
-    type_t value_type;
+    typedecl_t key_type;
+    typedecl_t value_type;
 
     ast_expr left;
     ast_expr key;
@@ -253,7 +253,7 @@ typedef struct {
 typedef struct {
     ast_expr values[UINT8_MAX]; // TODO 这里写死 uint8_max 可太小了,改成动态数组吧
     uint64_t count; // TODO list 没有数量,数组才有数量
-    type_t type; // list的类型 (类型推导截断冗余)
+    typedecl_t type; // list的类型 (类型推导截断冗余)
 } ast_new_list;
 
 typedef struct {
@@ -266,8 +266,8 @@ typedef struct {
     ast_map_item values[UINT8_MAX];
     uint64_t count; // 默认初始化的数量
     uint64_t capacity; // 初始容量
-    type_t key_type; // 类型推导截断冗余
-    type_t value_type; // 类型推导截断冗余
+    typedecl_t key_type; // 类型推导截断冗余
+    typedecl_t value_type; // 类型推导截断冗余
 } ast_new_map;
 
 typedef struct {
@@ -289,12 +289,12 @@ typedef struct {
  */
 typedef struct {
     string ident; // my_int (自定义的类型名称)
-    type_t type; // int (类型)
+    typedecl_t type; // int (类型)
 } ast_type_decl_stmt;
 
 typedef struct {
     string name;
-    type_t return_type; // 基础类型 + 动态类型
+    typedecl_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
     uint8_t formal_param_count;
     bool rest_param;
@@ -317,10 +317,10 @@ int ast_struct_decl_size(typedecl_struct_t *struct_decl);
 
 int ast_struct_offset(typedecl_struct_t *struct_decl, string property);
 
-type_t select_actual_param(ast_call *call, uint8_t index);
+typedecl_t select_actual_param(ast_call *call, uint8_t index);
 
-type_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
+typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
 
-bool type_compare(type_t a, type_t b);
+bool type_compare(typedecl_t a, typedecl_t b);
 
 #endif //NATURE_SRC_AST_H_

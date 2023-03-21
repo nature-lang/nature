@@ -23,7 +23,7 @@ void symbol_init() {
 }
 
 // compiler 阶段临时生成的数据
-void symbol_table_set_var(char *unique_ident, type_t type) {
+void symbol_table_set_var(char *unique_ident, typedecl_t type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;
     var_decl->ident = unique_ident;

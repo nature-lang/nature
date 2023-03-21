@@ -126,7 +126,7 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
     stmt->var_decl->ident = local->unique_ident;
 }
 
-type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
+typedecl_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     typedecl_fn_t *f = NEW(typedecl_fn_t);
     f->return_type = fn_decl->return_type;
     for (int i = 0; i < fn_decl->formal_param_count; ++i) {
@@ -134,7 +134,7 @@ type_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     }
     f->formals_count = fn_decl->formal_param_count;
     f->rest_param = fn_decl->rest_param;
-    type_t type = {
+    typedecl_t type = {
             .is_origin = false,
             .kind = TYPE_FN,
             .fn_decl = f
@@ -441,7 +441,7 @@ int8_t analysis_resolve_free(analysis_function_t *current, string*ident) {
  * 类型的处理较为简单，不需要做将其引用的环境封闭。直接定位唯一名称即可
  * @param type
  */
-void analysis_type(module_t *m, type_t *type) {
+void analysis_type(module_t *m, typedecl_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // TODO 如果出现死循环，应该告警退出
     // code foo = int
@@ -471,7 +471,7 @@ void analysis_type(module_t *m, type_t *type) {
         typedecl_fn_t *type_fn = type->fn_decl;
         analysis_type(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formals_count; ++i) {
-            type_t t = type_fn->formals_types[i];
+            typedecl_t t = type_fn->formals_types[i];
             analysis_type(m, &t);
         }
     }

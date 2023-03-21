@@ -6,7 +6,7 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-static void set_expr_target(ast_expr *expr, type_t target_type) {
+static void set_expr_target(ast_expr *expr, typedecl_t target_type) {
     expr->target_type = target_type;
 }
 
@@ -15,7 +15,7 @@ void infer(ast_closure_t *closure_decl) {
     infer_closure_decl(closure_decl);
 }
 
-type_t infer_closure_decl(ast_closure_t *closure_decl) {
+typedecl_t infer_closure_decl(ast_closure_t *closure_decl) {
     ast_new_fn *function_decl = closure_decl->fn;
 
     // 类型还原
@@ -30,7 +30,7 @@ type_t infer_closure_decl(ast_closure_t *closure_decl) {
     }
 
     infer_current_init(closure_decl);
-    type_t result = analysis_fn_to_type(function_decl);
+    typedecl_t result = analysis_fn_to_type(function_decl);
     result = infer_type(result);
 
     infer_block(function_decl->body);
@@ -99,8 +99,8 @@ void infer_stmt(ast_stmt *stmt) {
  * @param expr
  * @return
  */
-type_t infer_expr(ast_expr *expr) {
-    type_t type;
+typedecl_t infer_expr(ast_expr *expr) {
+    typedecl_t type;
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
             type = infer_binary((ast_binary_expr *) expr->value);
@@ -164,10 +164,10 @@ type_t infer_expr(ast_expr *expr) {
  * @param expr
  * @return
  */
-type_t infer_binary(ast_binary_expr *expr) {
+typedecl_t infer_binary(ast_binary_expr *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    type_t left_type = infer_expr(&expr->left);
-    type_t right_type = infer_expr(&expr->right);
+    typedecl_t left_type = infer_expr(&expr->left);
+    typedecl_t right_type = infer_expr(&expr->right);
 
     assertf(left_type.kind == TYPE_INT || left_type.kind == TYPE_FLOAT,
             "invalid operation: %s, expr type must be int or float, cannot '%s' type",
@@ -203,8 +203,8 @@ type_t infer_binary(ast_binary_expr *expr) {
  * @param expr
  * @return
  */
-type_t infer_unary(ast_unary_expr *expr) {
-    type_t operand_type = infer_expr(&expr->operand);
+typedecl_t infer_unary(ast_unary_expr *expr) {
+    typedecl_t operand_type = infer_expr(&expr->operand);
     if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.kind != TYPE_BOOL) {
         error_exit("!expr, expr must be bool type");
     }
@@ -228,7 +228,7 @@ type_t infer_unary(ast_unary_expr *expr) {
  * @param expr
  * @return
  */
-type_t infer_ident(string unique_ident) {
+typedecl_t infer_ident(string unique_ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
     assertf(symbol, "ident %s not found", unique_ident);
 
@@ -252,8 +252,8 @@ type_t infer_ident(string unique_ident) {
  * @param new_list
  * @return 
  */
-type_t infer_new_list(ast_new_list *new_list) {
-    type_t result = {
+typedecl_t infer_new_list(ast_new_list *new_list) {
+    typedecl_t result = {
             .is_origin = true,
             .kind = TYPE_LIST,
     };
@@ -262,7 +262,7 @@ type_t infer_new_list(ast_new_list *new_list) {
 //    decl->count = new_list->count; // TODO 暂时不支持定义数量, 如果有数量那定义的应该是数组了
 
     for (int i = 0; i < new_list->count; ++i) {
-        type_t item_type = infer_expr(&new_list->values[i]);
+        typedecl_t item_type = infer_expr(&new_list->values[i]);
         if (decl->element_type.kind == TYPE_UNKNOWN) {
             // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
             decl->element_type = item_type;
@@ -285,8 +285,8 @@ type_t infer_new_list(ast_new_list *new_list) {
  * @param new_map
  * @return
  */
-type_t infer_new_map(ast_new_map *new_map) {
-    type_t result = {
+typedecl_t infer_new_map(ast_new_map *new_map) {
+    typedecl_t result = {
             .is_origin = true,
             .kind = TYPE_MAP,
     };
@@ -294,8 +294,8 @@ type_t infer_new_map(ast_new_map *new_map) {
     map_decl->key_type = type_base_new(TYPE_UNKNOWN);
     map_decl->value_type = type_base_new(TYPE_UNKNOWN);
     for (int i = 0; i < new_map->count; ++i) {
-        type_t key_type = infer_expr(&new_map->values[i].key);
-        type_t value_type = infer_expr(&new_map->values[i].value);
+        typedecl_t key_type = infer_expr(&new_map->values[i].key);
+        typedecl_t value_type = infer_expr(&new_map->values[i].value);
 
         // key
         if (map_decl->key_type.kind == TYPE_UNKNOWN) {
@@ -340,7 +340,7 @@ type_t infer_new_map(ast_new_map *new_map) {
  * @param new_struct
  * @return
  */
-type_t infer_new_struct(ast_new_struct *new_struct) {
+typedecl_t infer_new_struct(ast_new_struct *new_struct) {
     // 类型还原, struct ident 一定会被还原回 struct 原始结构
     // 如果本身已经是 struct 结构，那么期中的 struct property code 也会被还原成原始类型
     new_struct->type = infer_type(new_struct->type);
@@ -355,8 +355,8 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
         ast_struct_property *struct_property = &new_struct->list[i];
 
         // struct_decl 已经是被还原过的类型了
-        type_t expect_type = infer_struct_property_type(struct_decl, struct_property->key);
-        type_t actual_type = infer_expr(&struct_property->value);
+        typedecl_t expect_type = infer_struct_property_type(struct_decl, struct_property->key);
+        typedecl_t actual_type = infer_expr(&struct_property->value);
 
         // expect code 并不允许为 var
         assertf(type_compare(actual_type, expect_type),
@@ -374,11 +374,11 @@ type_t infer_new_struct(ast_new_struct *new_struct) {
  * @param expr
  * @return
  */
-type_t infer_access(ast_expr *expr) {
-    type_t result;
+typedecl_t infer_access(ast_expr *expr) {
+    typedecl_t result;
     ast_access *access = expr->value;
-    type_t left_type = infer_expr(&access->left);
-    type_t key_type = infer_expr(&access->key);
+    typedecl_t left_type = infer_expr(&access->left);
+    typedecl_t key_type = infer_expr(&access->key);
 
     if (left_type.kind == TYPE_MAP) {
         ast_map_value *access_map = malloc(sizeof(ast_map_value));
@@ -425,9 +425,9 @@ type_t infer_access(ast_expr *expr) {
  * @param select_property
  * @return
  */
-type_t infer_select_property(ast_select_property *select_property) {
+typedecl_t infer_select_property(ast_select_property *select_property) {
     infer_expr(&select_property->left);
-    type_t left_type = select_property->left.type;
+    typedecl_t left_type = select_property->left.type;
     assertf(left_type.kind == TYPE_STRUCT, "[infer_select_property]expr not struct, cannot select property");
 
     typedecl_struct_t *struct_decl = left_type.struct_decl;
@@ -451,12 +451,12 @@ type_t infer_select_property(ast_select_property *select_property) {
  * @param call
  * @return
  */
-type_t infer_call(ast_call *call) {
-    type_t result;
+typedecl_t infer_call(ast_call *call) {
+    typedecl_t result;
 
 
     // 左值符号推导
-    type_t left_type = infer_expr(&call->left);
+    typedecl_t left_type = infer_expr(&call->left);
     assertf(left_type.kind == TYPE_FN, "left expr not fn, cannot call");
 
     typedecl_fn_t *type_fn = left_type.fn_decl;
@@ -471,9 +471,9 @@ type_t infer_call(ast_call *call) {
 
     for (int i = 0; i < count; ++i) {
         // first param from actual
-        type_t actual = select_actual_param(call, i);
+        typedecl_t actual = select_actual_param(call, i);
         // first param from formal
-        type_t formal = select_formal_param(type_fn, i);
+        typedecl_t formal = select_formal_param(type_fn, i);
         assertf(type_compare(formal, actual), "call param[%d] type error, expect '%s' type, actual '%s' type", i,
                 type_to_string[formal.kind], type_to_string[actual.kind]);
 
@@ -494,7 +494,7 @@ type_t infer_call(ast_call *call) {
  */
 void infer_var_decl(ast_var_decl *var_decl) {
     var_decl->type = infer_type(var_decl->type);
-    type_t type = var_decl->type;
+    typedecl_t type = var_decl->type;
     if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL) {
         error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.kind]);
     }
@@ -511,7 +511,7 @@ void infer_var_decl(ast_var_decl *var_decl) {
  * var h = call();
  */
 void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
-    type_t expr_type = infer_expr(&stmt->expr);
+    typedecl_t expr_type = infer_expr(&stmt->expr);
 
     // 类型推断(不需要再比较类型是否一致)
     if (stmt->var_decl->type.kind == TYPE_UNKNOWN) {
@@ -532,15 +532,15 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
  * @param stmt
  */
 void infer_assign(ast_assign_stmt *stmt) {
-    type_t target_type = infer_expr(&stmt->left);
-    type_t source_type = infer_expr(&stmt->right);
+    typedecl_t target_type = infer_expr(&stmt->left);
+    typedecl_t source_type = infer_expr(&stmt->right);
 
     assertf(type_compare(target_type, source_type), "line: %d, type inconsistency", infer_line);
     set_expr_target(&stmt->right, stmt->left.type);
 }
 
 void infer_if(ast_if_stmt *stmt) {
-    type_t condition_type = infer_expr(&stmt->condition);
+    typedecl_t condition_type = infer_expr(&stmt->condition);
     assertf(type_compare(type_base_new(TYPE_BOOL), condition_type),
             "line: %d, if condition must bool type", infer_line);
     set_expr_target(&stmt->condition, type_base_new(TYPE_BOOL));
@@ -550,7 +550,7 @@ void infer_if(ast_if_stmt *stmt) {
 }
 
 void infer_while(ast_while_stmt *stmt) {
-    type_t condition_type = infer_expr(&stmt->condition);
+    typedecl_t condition_type = infer_expr(&stmt->condition);
     if (condition_type.kind != TYPE_BOOL) {
         error_exit("while stmt condition must bool");
     }
@@ -563,7 +563,7 @@ void infer_while(ast_while_stmt *stmt) {
  */
 void infer_for_in(ast_for_in_stmt *stmt) {
     // 经过 infer_expr 的类型一定是已经被还原过的
-    type_t iterate_type = infer_expr(&stmt->iterate);
+    typedecl_t iterate_type = infer_expr(&stmt->iterate);
 
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate code must be map/list, actual=%s", type_to_string[iterate_type.kind]);
@@ -590,12 +590,12 @@ void infer_for_in(ast_for_in_stmt *stmt) {
  * @param stmt
  */
 void infer_return(ast_return_stmt *stmt) {
-    type_t return_type = type_base_new(TYPE_VOID);
+    typedecl_t return_type = type_base_new(TYPE_VOID);
     if (stmt->expr != NULL) {
         return_type = infer_expr(stmt->expr);
     }
 
-    type_t expect_type = infer_current->closure_decl->fn->return_type;
+    typedecl_t expect_type = infer_current->closure_decl->fn->return_type;
     assertf(type_compare(expect_type, return_type), "line: %d, return code(%s) error,expect '%s' code", infer_line,
             type_to_string[return_type.kind],
             type_to_string[expect_type.kind]);
@@ -616,7 +616,7 @@ infer_closure *infer_current_init(ast_closure_t *closure_decl) {
  * @param type
  * @return
  */
-type_t infer_type(type_t type) {
+typedecl_t infer_type(typedecl_t type) {
     if (type.is_origin) {
         goto TYPE_ORIGIN;
     }
@@ -672,12 +672,15 @@ type_t infer_type(type_t type) {
 
     assertf(false, "cannot parser type %s", type_to_string[type.kind]);
     TYPE_ORIGIN:
+    // - 增加 is_heap 标识
+    type.in_heap = type_default_in_heap(type);
+
     ct_reflect_type(type);
 
     return type;
 }
 
-type_t infer_type_def(typedecl_ident_t *def) {
+typedecl_t infer_type_def(typedecl_ident_t *def) {
     // 符号表找到相关类型
     symbol_t *symbol = symbol_table_get(def->literal);
     if (symbol->type != SYMBOL_TYPE_DECL) {
@@ -688,7 +691,7 @@ type_t infer_type_def(typedecl_ident_t *def) {
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->code 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了
-    type_t origin_type = infer_type(type_decl_stmt->type);
+    typedecl_t origin_type = infer_type(type_decl_stmt->type);
 
     return origin_type;
 }
@@ -699,7 +702,7 @@ type_t infer_type_def(typedecl_ident_t *def) {
  * @param ident
  * @return
  */
-type_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
+typedecl_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
     for (int i = 0; i < struct_decl->count; ++i) {
         if (strcmp(struct_decl->properties[i].key, ident) == 0) {
             return struct_decl->properties[i].type;
@@ -728,7 +731,7 @@ type_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *ident) {
 //    }
 //}
 
-type_t infer_literal(ast_literal *literal) {
+typedecl_t infer_literal(ast_literal *literal) {
     return type_base_new(literal->kind);
 }
 
@@ -737,7 +740,7 @@ type_t infer_literal(ast_literal *literal) {
  * @param right
  * @return
  */
-bool infer_var_type_can_confirm(type_t right) {
+bool infer_var_type_can_confirm(typedecl_t right) {
     if (right.kind == TYPE_UNKNOWN) {
         return false;
     }
@@ -763,8 +766,8 @@ bool infer_var_type_can_confirm(type_t right) {
     return true;
 }
 
-type_t infer_access_env(ast_env_value *expr) {
-    type_t t = infer_ident(expr->unique_ident);
+typedecl_t infer_access_env(ast_env_value *expr) {
+    typedecl_t t = infer_ident(expr->unique_ident);
     return t;
 }
 

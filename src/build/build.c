@@ -120,8 +120,8 @@ void build_init(char *build_entry) {
     BUILD_ENTRY = build_entry;
     SOURCE_PATH = path_join(WORK_DIR, BUILD_ENTRY);
 
-    // type rtype_table
-    rtype_table = table_new();
+    // type ct_rtype_table
+    ct_rtype_table = table_new();
 }
 
 void build_config_print() {
