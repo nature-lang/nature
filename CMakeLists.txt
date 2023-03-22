@@ -56,8 +56,8 @@ set(SRC_DEBUG
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
-        ${PROJECT_SOURCE_DIR}/utils/list.c
-        ${PROJECT_SOURCE_DIR}/utils/list.h
+        ${PROJECT_SOURCE_DIR}/utils/ct_list.c
+        ${PROJECT_SOURCE_DIR}/utils/ct_list.h
         ${PROJECT_SOURCE_DIR}/utils/links.c
         ${PROJECT_SOURCE_DIR}/utils/links.h
         ${PROJECT_SOURCE_DIR}/utils/type.h

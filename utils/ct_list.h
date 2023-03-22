@@ -1,21 +1,24 @@
-#ifndef NATURE_UTILS_LIST_H
-#define NATURE_UTILS_LIST_H
+#ifndef NATURE_UTILS_CT_LIST_H
+#define NATURE_UTILS_CT_LIST_H
 
 #include <stdlib.h>
 #include <stdint.h>
+#include "utils/type.h"
+
+#define DEFAULT_LIST_CAPACITY 8
 
 typedef struct {
     uint64_t element_size; // 元素的大小
-    uint64_t count; // 元素的数量
+    uint64_t length; // 元素的数量
     uint64_t capacity; // 预申请的数量
-    void *take; // 申请的内存区域
+    byte *take; // 申请的内存区域
 } list_t;
 
 /**
  * 和 slice 不同， list 中的元素数量是可以超过指针大小的
  * @return
  */
-list_t *list_new();
+list_t *ct_list_new(uint64_t element_size);
 
 /**
  * 示例
@@ -26,10 +29,12 @@ list_t *list_new();
  * @param l
  * @param value
  */
-void list_push(list_t *l, void *value);
+void* ct_list_push(list_t *l, void *value);
+
+void *ct_list_value(list_t *l, uint64_t index);
 
 // list 一般没有 pop 的说法
 //void list_pop(list_t *l, void *value);
-void list_remove(list_t *l, uint64_t index);
+//void ct_list_remove(list_t *l, uint64_t index);
 
 #endif //NATURE_LIST_H

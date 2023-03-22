@@ -284,11 +284,6 @@ typedef struct {
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
-// TODO 先申请一个巨大的尺寸用着。等通用 dynamic list 结构开发吧。
-rtype_t ct_rtypes[UINT16_MAX];
-uint64_t ct_rtype_count;
-uint64_t ct_rtype_size; // 序列化后的 size
-table_t *ct_rtype_table; // 每当有一个新的类型产生，都会注册在该表中，值为 slice 的索引！
 
 rtype_t reflect_type(typedecl_t t);
 

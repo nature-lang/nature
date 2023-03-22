@@ -18,6 +18,7 @@
 #include "src/binary/opcode/opcode.h"
 #include "utils/error.h"
 #include "config.h"
+#include "utils/links.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -122,6 +123,10 @@ void build_init(char *build_entry) {
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
+    ct_rtype_list = ct_list_new(sizeof(rtype_t));
+    ct_rtype_data = NULL;
+    ct_rtype_count = 0;
+    ct_rtype_size = 0;
 }
 
 void build_config_print() {

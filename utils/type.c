@@ -2,6 +2,8 @@
 #include "assertf.h"
 #include "helper.h"
 #include "bitmap.h"
+#include "ct_list.h"
+#include "links.h"
 
 static rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
@@ -344,13 +346,16 @@ rtype_t reflect_type(typedecl_t t) {
 
 rtype_t ct_reflect_type(typedecl_t t) {
     rtype_t rtype = reflect_type(t);
+    if (!rtype.kind) {
+        return rtype;
+    }
+
     uint64_t rtype_index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
     if (rtype_index == 0) {
         // 添加到 ct_rtypes 并得到 index(element_rtype 是值传递并 copy)
         uint64_t index = rtypes_push(rtype);
         // 将 index 添加到 table
         table_set(ct_rtype_table, itoa(rtype.hash), (void *) index);
-        ct_rtypes[index].index = index; // 索引反填
         rtype.index = index;
     } else {
         rtype.index = rtype_index;
@@ -397,11 +402,14 @@ bool type_need_gc(typedecl_t t) {
 }
 
 uint64_t rtypes_push(rtype_t rtype) {
-    uint64_t index = ct_rtype_count++;
-    ct_rtypes[index] = rtype;
+    uint64_t index = ct_rtype_list->length;
+
+    rtype.index = index; // 索引反填
+    ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size);
+    ct_rtype_count += 1;
 
     return index;
 }

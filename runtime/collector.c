@@ -70,8 +70,7 @@ static void scan_stack(memory_t *m) {
 }
 
 static void scan_symdefs(memory_t *m) {
-    uint64_t count = rt_symdef_size / sizeof(symdef_t);
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_data[i];
         if (!s.need_gc) {
             continue;

@@ -790,8 +790,13 @@ void fndefs_deserialize() {
     }
 }
 
+/**
+ * 链接器已经将 rt_type_data 和 rt_type_count 赋值完毕，
+ * rt_type_data 应该直接可以使用,
+ * 接下来也只需要对 gc bits 进行重定位即可
+ */
 void rtypes_deserialize() {
-    byte *gc_bits_offset = ((byte *) rt_rtype_data) + rt_rtype_count * sizeof(rtype_t);
+    byte *gc_bits_offset = (byte *) (rt_rtype_data + rt_rtype_count);
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_data[i];
         uint64_t gc_bits_size = calc_gc_bits_size(r->size);
@@ -800,6 +805,11 @@ void rtypes_deserialize() {
         gc_bits_offset += gc_bits_size;
     }
 }
+
+void symdefs_deserialize() {
+    rt_symdef_data = rt_symdef_data;
+}
+
 
 void memory_init() {
     // - 初始化 mheap
@@ -833,6 +843,7 @@ void memory_init() {
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
     fndefs_deserialize();
+    symdefs_deserialize();
     rtypes_deserialize();
 
     memory = NEW(memory_t);

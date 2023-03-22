@@ -7,7 +7,7 @@
 
 addr_t rt_fn_main_base;
 
-uint64_t rt_symdef_size;
+uint64_t rt_symdef_count;
 symdef_t *rt_symdef_data;
 
 uint64_t rt_fndef_count;
@@ -25,12 +25,12 @@ int setup(void **state) {
     chdir(work_dir);
     build(build_entry);
 
-    rt_symdef_size = ct_symdef_size_;
-    rt_symdef_data = ct_symdef_data_;
-    rt_fndef_count = ct_fndef_count_;
-    rt_fndef_data = ct_fndef_data_;
-    rt_rtype_count = ct_rtype_count_;
-    rt_rtype_data = ct_rtype_data_;
+    rt_symdef_count = ct_symdef_count;
+    rt_symdef_data = (symdef_t *) ct_symdef_data;
+    rt_fndef_count = ct_fndef_count;
+    rt_fndef_data = (fndef_t *) ct_fndef_data;
+    rt_rtype_count = ct_rtype_count;
+    rt_rtype_data = (rtype_t *) ct_rtype_data;
 
     // runtime init
     processor_init();
@@ -80,7 +80,7 @@ static void _test_gc_basic() {
     symdef->size = type_sizeof(var->type); // 特殊标记
     symdef->base = (addr_t) data_size_addr;
     // 仅保留一个用于测试，太多的话，实际上当前 debug 是软链接，并不存在
-    rt_symdef_size = sizeof(symdef_t);
+    rt_symdef_count = sizeof(symdef_t);
 
     int a = 23;
     list_push(l, &a);
@@ -103,7 +103,6 @@ static void _test_gc_basic() {
 
 // 切换到用户栈
 static void test_gc_basic() {
-    return;
     processor_t *p = processor_get();
     USER_STACK(p); // 切换到用户栈
     _test_gc_basic();

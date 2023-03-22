@@ -248,6 +248,8 @@ void rtypes_deserialize();
 
 void fndefs_deserialize();
 
+void symdefs_deserialize();
+
 rtype_t *rt_find_rtype(uint64_t index);
 
 #endif //NATURE_MEMORY_H
