@@ -32,9 +32,15 @@ static void scan_stack(memory_t *m) {
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
     addr_t frame_base = stack.frame_base;
+    assertf(frame_base <= stack.base && frame_base > stack.end, "stack overflow");
+
     while (true) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
+        if (!fn) {
+            // TODO assertf
+            break;
+        }
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
@@ -56,8 +62,8 @@ static void scan_stack(memory_t *m) {
             cursor += 8;
         }
 
-        // 已经到达了栈底
-        if (frame_base == 0) {
+        // 已经到达了栈底(大值)
+        if (frame_base == stack.base) {
             break;
         }
     }
@@ -96,7 +102,7 @@ static void flush_mcache() {
 }
 
 
-static void mark_obj_black(mspan_t *span, int index) {
+static void mark_obj_black(mspan_t *span, uint64_t index) {
     bitmap_set(span->gcmark_bits->bits, index);
 }
 
@@ -106,12 +112,11 @@ static void mark_obj_black(mspan_t *span, int index) {
  * @param m
  */
 static void grey_list_work(memory_t *m) {
-    linked_t *temp_grey_list = linked_new();
     uint64_t obj_count = 0;
     while (m->grey_list->count > 0) {
         // 1. traverse all ptr
-
-        LINKED_FOR(temp_grey_list) {
+        linked_t *temp_grey_list = linked_new();
+        LINKED_FOR(m->grey_list) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
             addr_t addr = (addr_t) LINKED_VALUE();
@@ -120,7 +125,7 @@ static void grey_list_work(memory_t *m) {
             // get mspan by ptr
             mspan_t *span = span_of(addr);
             //  get span index
-            uint obj_index = (addr - span->base) / span->obj_size;
+            uint64_t obj_index = (addr - span->base) / span->obj_size;
 
             // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
             if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
@@ -131,13 +136,13 @@ static void grey_list_work(memory_t *m) {
             // - black: The gc bits corresponding to obj are marked 1
             mark_obj_black(span, obj_index);
 
-            // 判断 span 是否需要扫描(如果标量的话就不需要扫描直接标记即可)
+            // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
             if (!spanclass_has_ptr(span->spanclass)) {
                 // addr ~ addr+size 空间内存储的是一个标量，不需要向下扫描了
                 continue;
             }
 
-            // - obj 中包含指针，需要进一步扫描
+            // - obj 中包含一到多个指针，需要进一步扫描
             // - locate to the arena bits start
             uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
 
@@ -161,7 +166,7 @@ static void grey_list_work(memory_t *m) {
         // 2. grey_list replace with temp_grep_list
         m->grey_list = temp_grey_list;
     }
-    DEBUGF("gc grey list scan successful, scan obj count=%d", obj_count)
+    DEBUGF("gc grey list scan successful, scan obj count=%lu", obj_count)
 }
 
 /**
@@ -177,7 +182,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     span->alloc_count = bitmap_set_count(span->alloc_bits);
 
     if (span->alloc_count == 0) {
-        mheap_free_span(&memory->mheap, span);
+        mheap_free_span(memory->mheap, span);
     } else if (span->alloc_count == span->obj_count) {
         // full used
         linked_push(central->full_swept, span);

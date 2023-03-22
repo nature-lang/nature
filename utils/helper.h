@@ -9,8 +9,10 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#ifdef DEBUGF
-#define DEBUGF(...) printf(__VA_ARGS__)
+#define DEBUG 1
+
+#ifdef DEBUG
+#define DEBUGF(...) printf(__VA_ARGS__); fflush(stdout);
 #else
 #define DEBUGF(...)
 #endif

@@ -3,6 +3,17 @@
 
 #include "memory.h"
 #include "allocator.h"
+#include <stdio.h>
+
+#define DEBUG_STACK() { \
+    processor_t *p = processor_get(); \
+    mstack_t s = p->user_stack; \
+    DEBUGF("user_stack:  base=%lx, end=%lx, top=%lx, frame=%lx\n", s.base, s.end, s.top, s.frame_base); \
+    s = p->system_stack; \
+    DEBUGF("system_stack:  base=%lx, end=%lx, top=%lx, frame=%lx\n", s.base, s.end, s.top, s.frame_base); \
+    DEBUGF("actual:  top=%lx, frame=%lx\n", STACK_TOP(), STACK_FRAME_BASE()); \
+}                             \
+
 
 #define MAIN_SYSTEM_STACK_SIZE (64 * 1024)
 
@@ -18,6 +29,11 @@
 #define STACK_TOP() ({\
     uint64_t addr = 0; \
     __asm__ __volatile__("movq %%rsp, %[addr]" :  [addr] "=r"(addr) : ); \
+    addr;})           \
+
+#define STACK_FRAME_BASE() ({\
+    uint64_t addr = 0; \
+    __asm__ __volatile__("movq %%rbp, %[addr]" :  [addr] "=r"(addr) : ); \
     addr;})\
 
 #define SYSTEM_STACK(_p) \
@@ -25,7 +41,8 @@
     RESTORE_STACK(_p->system_stack)\
 
 #define USER_STACK(_p) \
-    RESTORE_STACK(_p->user_stack);\
+    RESTORE_STACK(_p->user_stack); \
+
 
 
 uint processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
@@ -53,5 +70,6 @@ static void system_stack_init(processor_t *p) {
 processor_t *processor_get();
 
 void processor_init();
+
 
 #endif //NATURE_PROCESSOR_H

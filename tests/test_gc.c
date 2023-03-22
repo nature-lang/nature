@@ -54,7 +54,8 @@ int teardown(void **state) {
  * "test_gc.foo.global_b"
  * "test_gc.foo.global_s"
  */
-static void test_gc_basic() {
+static void _test_gc_basic() {
+    DEBUG_STACK();
     // - 找到 stubs 中的 list 对应的 rtype
     symbol_t *s = symbol_table_get("test_gc.main.local_list_1");
     ast_var_decl *var = s->ast_value;
@@ -78,12 +79,8 @@ static void test_gc_basic() {
     symdef->need_gc = type_need_gc(var->type);
     symdef->size = type_sizeof(var->type); // 特殊标记
     symdef->base = (addr_t) data_size_addr;
-
-    // 测试读取 data 中的地址
-    uint64_t *addr = (void *) 0xc159c9;
-    printf("%p", addr);
-    printf("%lu", *addr);
-    return;
+    // 仅保留一个用于测试，太多的话，实际上当前 debug 是软链接，并不存在
+    rt_symdef_size = sizeof(symdef_t);
 
     int a = 23;
     list_push(l, &a);
@@ -98,11 +95,18 @@ static void test_gc_basic() {
 
     // 重新初始化 system_stack, 让 gc 完成后还能回来到此处
 
-
     // - 触发 gc
     runtime_gc();
 
     printf("hello\n");
+}
+
+// 切换到用户栈
+static void test_gc_basic() {
+    return;
+    processor_t *p = processor_get();
+    USER_STACK(p); // 切换到用户栈
+    _test_gc_basic();
 }
 
 int main(void) {

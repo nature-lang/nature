@@ -211,7 +211,7 @@ void *sys_memory_map(void *hint, uint64_t size) {
 }
 
 void *mallocz_big(size_t size) {
-    return sys_memory_map(NULL, size);
+    return sys_memory_map((void *) 0x4000000000, size);
 }
 
 void sys_memory_unmap(void *base, uint64_t size) {

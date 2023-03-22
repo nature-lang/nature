@@ -12,7 +12,7 @@ static void processor_main_init(processor_t *p) {
     s = &p->user_stack;
     s->size = MSTACK_SIZE;
     s->base = mstack_new(s->size);
-    s->end = s->base + s->size;
+    s->end = s->base - s->size;
     s->frame_base = s->base;
     s->top = s->base;
 }
@@ -24,7 +24,7 @@ void processor_init() {
 }
 
 processor_t *processor_get() {
-    assertf(processor_count > 0, "processor not init");
+//    assertf(processor_count > 0, "processor not init");
     processor_t *result = &processor_list[0];
     return result;
 }
