@@ -8,13 +8,12 @@ static void processor_main_init(processor_t *p) {
     system_stack_init(p);
 
     // 初始化用户栈
-    mstack_t *s = &p->system_stack;
-    s = &p->user_stack;
+    mstack_t *s = &p->user_stack;
     s->size = MSTACK_SIZE;
     s->base = mstack_new(s->size);
     s->end = s->base - s->size;
     s->frame_base = s->base;
-    s->top = s->base;
+    s->top = s->base - PAGE_SIZE;
 }
 
 void processor_init() {

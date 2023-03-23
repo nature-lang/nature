@@ -6,12 +6,13 @@
 #include <stdio.h>
 
 #define DEBUG_STACK() { \
-    processor_t *p = processor_get(); \
-    mstack_t s = p->user_stack; \
-    DEBUGF("user_stack:  base=%lx, end=%lx, top=%lx, frame=%lx\n", s.base, s.end, s.top, s.frame_base); \
-    s = p->system_stack; \
-    DEBUGF("system_stack:  base=%lx, end=%lx, top=%lx, frame=%lx\n", s.base, s.end, s.top, s.frame_base); \
-    DEBUGF("actual:  top=%lx, frame=%lx\n", STACK_TOP(), STACK_FRAME_BASE()); \
+    processor_t *_p = processor_get(); \
+    mstack_t _s = _p->user_stack;      \
+    DEBUGF("FN: %s", __func__);                   \
+    DEBUGF("user_stack:  base=%lx, end=%lx, top=%lx, frame=%lx", _s.base, _s.end, _s.top, _s.frame_base); \
+    _s = _p->system_stack; \
+    DEBUGF("system_stack:  base=%lx, end=%lx, top=%lx, frame=%lx", _s.base, _s.end, _s.top, _s.frame_base); \
+    DEBUGF("actual:  top=%lx, frame=%lx", STACK_TOP(), STACK_FRAME_BASE()); \
 }                             \
 
 
@@ -41,7 +42,7 @@
     RESTORE_STACK(_p->system_stack)\
 
 #define USER_STACK(_p) \
-    RESTORE_STACK(_p->user_stack); \
+    RESTORE_STACK(_p->user_stack) \
 
 
 

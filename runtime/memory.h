@@ -238,7 +238,7 @@ mspan_t *span_of(addr_t addr);
 
 bool spanclass_has_ptr(uint8_t spanclass);
 
-void uncache_span(mcentral_t mcentral, mspan_t *span);
+void uncache_span(mcentral_t *mcentral, mspan_t *span);
 
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
 

@@ -89,11 +89,14 @@ static void scan_symdefs(memory_t *m) {
  */
 static void flush_mcache() {
     for (int i = 0; i < processor_count; ++i) {
-        processor_t p = processor_list[i];
+        processor_t *p = &processor_list[i];
         for (int j = 0; j < SPANCLASS_COUNT; ++j) {
-            mspan_t *span = p.mcache.alloc[j];
-            p.mcache.alloc[j] = 0;
-            mcentral_t mcentral = memory->mheap->centrals[span->spanclass];
+            mspan_t *span = p->mcache.alloc[j];
+            if (!span) {
+                continue;
+            }
+            p->mcache.alloc[j] = NULL;
+            mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
     }
@@ -112,7 +115,7 @@ static void mark_obj_black(mspan_t *span, uint64_t index) {
  */
 static void grey_list_work(memory_t *m) {
     uint64_t obj_count = 0;
-    while (m->grey_list->count > 0) {
+    while (!linked_empty(m->grey_list)) {
         // 1. traverse all ptr
         linked_t *temp_grey_list = linked_new();
         LINKED_FOR(m->grey_list) {
@@ -156,38 +159,17 @@ static void grey_list_work(memory_t *m) {
                 bool is_ptr = bitmap_test(bits_base, bit_index);
                 if (is_ptr) {
                     // 如果是 ptr 则将其加入到 grey list 中
-                    linked_push(temp_grey_list, (void *) temp_addr);
+                    linked_push(temp_grey_list, (void *) fetch_addr_value(temp_addr));
                 }
             }
 
         }
 
         // 2. grey_list replace with temp_grep_list
+        linked_free(m->grey_list);
         m->grey_list = temp_grey_list;
     }
     DEBUGF("gc grey list scan successful, scan obj count=%lu", obj_count)
-}
-
-/**
- * 如果 span 清理完成后 alloc_count == 0 则将其归还给 heap
- * @param span span 是否被释放，如果释放了需要将其从 list 中抹除
- */
-static bool sweep_span(mcentral_t *central, mspan_t *span) {
-    bitmap_free(span->alloc_bits);
-    span->alloc_bits = span->gcmark_bits;
-    span->gcmark_bits = bitmap_new(span->obj_count);
-
-    // 重新计算 alloc_count
-    span->alloc_count = bitmap_set_count(span->alloc_bits);
-
-    if (span->alloc_count == 0) {
-        mheap_free_span(memory->mheap, span);
-    } else if (span->alloc_count == span->obj_count) {
-        // full used
-        linked_push(central->full_swept, span);
-    } else {
-        linked_push(central->partial_swept, span);
-    }
 }
 
 static void free_mspan_meta(mspan_t *span) {
@@ -197,8 +179,31 @@ static void free_mspan_meta(mspan_t *span) {
 }
 
 /**
- *
- *
+ * 如果 span 清理完成后 alloc_count == 0 则将其归还给 heap
+ * @param span span 是否被释放，如果释放了需要将其从 list 中抹除
+ */
+static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
+    bitmap_free(span->alloc_bits);
+    span->alloc_bits = span->gcmark_bits;
+    span->gcmark_bits = bitmap_new(span->obj_count);
+
+    // 重新计算 alloc_count
+    span->alloc_count = bitmap_set_count(span->alloc_bits);
+
+    if (span->alloc_count == 0) {
+        mheap_free_span(memory->mheap, span);
+        free_mspan_meta(span);
+        return;
+    }
+
+    if (span->alloc_count == span->obj_count) {
+        linked_push(full, span);
+    } else {
+        linked_push(partial, span);
+    }
+}
+
+/**
  * 遍历 所有 mcentral 的 full 和 partial 进行清理
  * - 只有是被 span 持有的 page， 在 page_alloc 眼里就是被分配了出去，所以不需要对 chunk 进行修改什么的
  * - 并不需要真的清理 obj, 只需要将 gc_bits 和 alloc_bits 调换一下位置，然后从新计算 alloc_count 即可
@@ -211,23 +216,31 @@ static void free_mspan_meta(mspan_t *span) {
 void mcentral_sweep(mheap_t *mheap) {
     mcentral_t *centrals = mheap->centrals;
     for (int i = 0; i < SPANCLASS_COUNT; ++i) {
-        mcentral_t *central = &mheap->centrals[i];
+        mcentral_t *central = &centrals[i];
+        if (linked_empty(central->partial_swept) && linked_empty(central->full_swept)) {
+            continue;
+        }
+
+        // new full and partial
+        linked_t *full_new = linked_new();
+        linked_t *partial_new = linked_new();
+
+        // 经过 sweep full -> part，或者直接清零规划给 mheap, 但是绝对不会从 part 到 full
+        LINKED_FOR(central->full_swept) {
+            mspan_t *span = LINKED_VALUE();
+            sweep_span(full_new, partial_new, span);
+        }
+
         // 遍历 list 中的所有 span 进行清理, 如果 span 已经清理干净则其规划到 mehap 中
         LINKED_FOR(central->partial_swept) {
             mspan_t *span = LINKED_VALUE();
-            if (sweep_span(central, span)) {
-                linked_remove(central->partial_swept, LINKED_NODE());
-                free_mspan_meta(span);
-            }
+            sweep_span(full_new, partial_new, span);
         }
 
-        LINKED_FOR(central->full_swept) {
-            mspan_t *span = LINKED_VALUE();
-            if (sweep_span(central, span)) {
-                linked_remove(central->full_swept, LINKED_NODE());
-                free_mspan_meta(span);
-            }
-        }
+        linked_free(central->full_swept);
+        linked_free(central->partial_swept);
+        central->full_swept = full_new;
+        central->partial_swept = partial_new;
     }
 }
 
@@ -257,7 +270,10 @@ static void _runtime_gc() {
     mcentral_sweep(memory->mheap);
 
     // 6. 切换回 user stack
-    USER_STACK(p);
+//    USER_STACK(p);
+
+    __asm__ __volatile__("movq %[addr], %%rsp"::[addr]"r"((p->user_stack).top));
+    __asm__ __volatile__("movq %[addr], %%rbp"::[addr]"r"((p->user_stack).frame_base));
 
     // 7. ret 指令
 }
@@ -281,6 +297,8 @@ void runtime_gc() {
 
     // 0. STW
     // 1. 切换到 system stack (这里切换之后，此时类似 current 等数据在当前 stack 中都是没有注册的，用不了。。)
+    DEBUG_STACK();
+
     SYSTEM_STACK(p);
 
     _runtime_gc();

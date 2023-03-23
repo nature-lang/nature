@@ -44,13 +44,30 @@ void *linked_pop(linked_t *l) {
     l->front = temp->succ;
     l->front->prev = NULL;
     l->count--;
-//    free(temp);
+
+    return value;
+}
+
+// 头部 pop value, 并清理 node
+void *linked_pop_free(linked_t *l) {
+    if (l->count == 0) {
+        return NULL; // null 表示队列为空
+    }
+
+    linked_node *node = l->front; // 推出头部节点
+    void *value = node->value;
+
+    l->front = node->succ;
+    l->front->prev = NULL;
+    l->count--;
+
+    free(node);
 
     return value;
 }
 
 linked_node *linked_new_node() {
-    linked_node *node = malloc(sizeof(linked_node));
+    linked_node *node = mallocz(sizeof(linked_node));
     node->value = NULL;
     node->succ = NULL;
     node->prev = NULL;
@@ -203,5 +220,21 @@ void linked_remove(linked_t *l, linked_node *node) {
     succ->prev = prev;
 
     l->count--;
-//    free(node); // 不能释放，会导致引用关系丢失
+}
+
+void linked_remove_free(linked_t *l, linked_node *node) {
+    linked_remove(l, node);
+    free(node);
+}
+
+
+void linked_free(linked_t *l) {
+    while (l->count > 0) {
+        linked_pop_free(l);
+    }
+    // 清理 empty_node
+    free(l->front);
+
+    // free my
+    free(l);
 }

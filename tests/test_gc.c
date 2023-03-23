@@ -79,8 +79,8 @@ static void _test_gc_basic() {
     symdef->need_gc = type_need_gc(var->type);
     symdef->size = type_sizeof(var->type); // 特殊标记
     symdef->base = (addr_t) data_size_addr;
-    // 仅保留一个用于测试，太多的话，实际上当前 debug 是软链接，并不存在
-    rt_symdef_count = sizeof(symdef_t);
+    // 仅保留一个 symdef 用于测试，太多的话，实际上当前 debug 是软链接，并不存在
+    rt_symdef_count = 1;
 
     int a = 23;
     list_push(l, &a);
@@ -104,6 +104,7 @@ static void _test_gc_basic() {
 // 切换到用户栈
 static void test_gc_basic() {
     processor_t *p = processor_get();
+    DEBUG_STACK();
     USER_STACK(p); // 切换到用户栈
     _test_gc_basic();
 }

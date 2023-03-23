@@ -567,12 +567,15 @@ static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
     return span;
 }
 
-static mspan_t *mcentral_grow(mcentral_t mcentral) {
+static void mcentral_grow(mcentral_t *mcentral) {
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
-    uint pages_count = span_pages_count(mcentral.spanclass);
+    uint pages_count = span_pages_count(mcentral->spanclass);
 
-    mspan_t *span = mheap_alloc_span(pages_count, mcentral.spanclass);
-    return span;
+    mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
+    assertf(span->alloc_count < span->obj_count, "heap alloc span alloc_count == 0");
+
+    // 插入到 mcentral 中
+    linked_push(mcentral->partial_swept, span);
 }
 
 /**
@@ -580,16 +583,18 @@ static mspan_t *mcentral_grow(mcentral_t mcentral) {
  * @param mcentral
  * @return
  */
-static mspan_t *cache_span(mcentral_t mcentral) {
+static mspan_t *cache_span(mcentral_t *mcentral) {
     mspan_t *span = NULL;
-    if (!linked_empty(mcentral.partial_swept)) {
+    if (!linked_empty(mcentral->partial_swept)) {
         // partial 是空的，表示当前 mcentral 中已经没有任何可以使用的 mspan 了，需要去 mheap 中申请咯
-        span = linked_pop(mcentral.partial_swept);
+        span = linked_pop_free(mcentral->partial_swept);
         goto HAVE_SPAN;
     }
 
     // 当前 mcentral 中已经没有可以使用的 mspan 需要走 grow 逻辑
-    span = mcentral_grow(mcentral);
+    mcentral_grow(mcentral);
+    assertf(!linked_empty(mcentral->partial_swept), "out of memory: mcentral grow failed");
+    span = linked_pop_free(mcentral->partial_swept);
 
     HAVE_SPAN:
     assertf(span && span->obj_count - span->alloc_count > 0, "span unavailable");
@@ -601,13 +606,13 @@ static mspan_t *cache_span(mcentral_t mcentral) {
  * @param mcentral
  * @param span
  */
-void uncache_span(mcentral_t mcentral, mspan_t *span) {
-    assertf(span->alloc_count == 0, "mspan alloc_count == 0");
+void uncache_span(mcentral_t *mcentral, mspan_t *span) {
+//    assertf(span->alloc_count == 0, "mspan alloc_count == 0");
 
     if (span->obj_count - span->alloc_count > 0) {
-        linked_push(mcentral.partial_swept, span);
+        linked_push(mcentral->partial_swept, span);
     } else {
-        linked_push(mcentral.full_swept, span);
+        linked_push(mcentral->full_swept, span);
     }
 }
 
@@ -619,9 +624,9 @@ void uncache_span(mcentral_t mcentral, mspan_t *span) {
  * @param spanclass
  * @return
  */
-static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
-    mspan_t *mspan = mcache.alloc[spanclass];
-    mcentral_t mcentral = memory->mheap->centrals[spanclass];
+static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
+    mspan_t *mspan = mcache->alloc[spanclass];
+    mcentral_t *mcentral = &memory->mheap->centrals[spanclass];
 
     if (mspan) {
         // mspan to mcentral
@@ -630,7 +635,7 @@ static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
 
     // cache
     mspan = cache_span(mcentral);
-    mcache.alloc[spanclass] = mspan;
+    mcache->alloc[spanclass] = mspan;
     return mspan;
 }
 
@@ -641,8 +646,8 @@ static mspan_t *mcache_refill(mcache_t mcache, uint64_t spanclass) {
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     processor_t *p = processor_get();
-    mcache_t mcache = p->mcache;
-    mspan_t *mspan = mcache.alloc[spanclass];
+    mcache_t *mcache = &p->mcache;
+    mspan_t *mspan = mcache->alloc[spanclass];
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
@@ -863,7 +868,9 @@ mspan_t *span_of(uint64_t addr) {
 }
 
 addr_t mstack_new(uint64_t size) {
-    void *base = mallocz(size);
+    // TODO 仅仅是为了方便调试，才指定了映地址
+    void *base = sys_memory_map((void *) 0x4000000000, size);
+
     return (addr_t) base;
 }
 

@@ -150,6 +150,7 @@ static void handle_active(allocate_t *a) {
         bool is_covers = interval_covered(select, position, false);
 
         if (!is_covers || is_expired) {
+            // TODO remove 了，current 就没有了，所以后面就不能再读取 succ
             linked_remove(a->active, current);
 
             if (is_expired) {

@@ -27,7 +27,11 @@ typedef struct {
 } linked_t;
 
 linked_t *linked_new(); // 空队列， 初始化时，head,tail = NULL
+
 void *linked_pop(linked_t *l); // 头出队列
+
+void *linked_pop_free(linked_t *l); // 头出队列
+
 linked_node *linked_first(linked_t *l); // 最后一个可用元素，绝非空元素
 linked_node *linked_last(linked_t *l); // 最后一个可用元素，绝非空元素
 void linked_push(linked_t *l, void *value); // 尾入队列
@@ -41,7 +45,11 @@ void linked_concat(linked_t *dst, linked_t *src); // src 追加到 dst 中
 
 void linked_remove(linked_t *l, linked_node *node);
 
+void linked_remove_free(linked_t *l, linked_node *node);
+
 void linked_cleanup(linked_t *l);
+
+void linked_free(linked_t *l);
 
 linked_node *linked_new_node();
 
