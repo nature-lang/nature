@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <ucontext.h>
+
 
 #include "utils/links.h"
 #include "utils/value.h"
@@ -67,12 +69,10 @@ static uint summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
  */
 typedef struct {
-    addr_t base; // 虚拟起始地址
-    addr_t end; // 栈结束地址
-    uint64_t size; // 栈空间
-    addr_t frame_base; // BP register value，指向 local values 和 previous rbp value 之间, *ptr 取的值是 (ptr ~ ptr+8)
-    addr_t top; // SP register
-} mstack_t;
+    addr_t stack_base; // 虚拟起始地址(按照内存申请的节奏来，这里依旧是低地址位置)
+    uint64_t stack_size; // 栈空间
+    ucontext_t ctx;
+} mmode_t;
 
 typedef struct mspan_t {
 //    struct mspan_t *next; // mspan 是双向链表
@@ -207,8 +207,9 @@ typedef struct {
  * 关键是切换到 user stack 时记录下 rsp 和 rbp pointer
  */
 typedef struct processor_t {
-    mstack_t user_stack;
-    mstack_t system_stack;
+    mmode_t temp_mode;
+    mmode_t user_mode;
+    mmode_t system_mode;
     mcache_t mcache;
 } processor_t;
 

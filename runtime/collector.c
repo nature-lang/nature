@@ -27,12 +27,15 @@ static addr_t fetch_addr_value(addr_t addr) {
 
 static void scan_stack(memory_t *m) {
     processor_t *p = processor_get();
-    mstack_t stack = p->user_stack;
+    mmode_t mode = p->user_mode;
 
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
-    addr_t frame_base = stack.frame_base;
-    assertf(frame_base <= stack.base && frame_base > stack.end, "stack overflow");
+
+    // TODO 已经有一次栈溢出了，所以必须找到 rbp 寄存器，才能确定第一个 return addr
+    // TODO 从 0 开始扫可行否？
+    addr_t frame_base = mode.ctx.uc_mcontext.fpregs;
+    assertf(frame_base >= mode.stack_base && frame_base < mode.stack_base + mode.stack_size, "stack overflow");
 
     while (true) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
@@ -269,13 +272,7 @@ static void _runtime_gc() {
     // 5. sweep all span (iterate mcentral list)
     mcentral_sweep(memory->mheap);
 
-    // 6. 切换回 user stack
-//    USER_STACK(p);
-
-    __asm__ __volatile__("movq %[addr], %%rsp"::[addr]"r"((p->user_stack).top));
-    __asm__ __volatile__("movq %[addr], %%rbp"::[addr]"r"((p->user_stack).frame_base));
-
-    // 7. ret 指令
+    // 执行完成会自动回退
 }
 
 /**
@@ -292,14 +289,13 @@ static void _runtime_gc() {
  * @return
  */
 void runtime_gc() {
-    // 获取当前线程, 其中保存了当前线程使用的虚拟栈
-    processor_t *p = processor_get();
-
-    // 0. STW
-    // 1. 切换到 system stack (这里切换之后，此时类似 current 等数据在当前 stack 中都是没有注册的，用不了。。)
     DEBUG_STACK();
 
-    SYSTEM_STACK(p);
+    // 获取当前线程, 其中保存了当前线程使用的虚拟栈
+    processor_t *p = processor_get();
+    MODE_CALL(p->temp_mode, _runtime_gc)
 
-    _runtime_gc();
+
+    DEBUG_STACK();
+    DEBUGF("runtime gc completed")
 }
