@@ -72,6 +72,9 @@ static void compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stm
 static void compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
     // 如果 left 是 var
     lir_operand_t *src = compiler_expr(c, stmt->right);
+
+    // TODO if stmt->left  a.b[12]
+
     lir_operand_t *dst = compiler_expr(c, stmt->left);
 
     linked_push(c->operations, lir_op_move(dst, src));
@@ -241,7 +244,6 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
         target = lir_temp_var_operand(c, expr.type);
     }
 
-    // call->left is debug ident
     // push 指令所有的物理寄存器入栈
     // 这里增加了无意义的堆栈和符号表,不符合简捷之道
     lir_operand_t *base_target = compiler_expr(c, call->left);

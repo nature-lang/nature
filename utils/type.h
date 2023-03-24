@@ -267,6 +267,14 @@ typedef double memory_float_t;
 typedef byte *memory_struct_t; // 长度不确定
 
 typedef struct {
+    byte *hash_data; // key 的 hash 表结构, 存储的值是 values 表的 index
+    byte *merged_data; // [ (key+value), (key, value) ....]
+    uint64_t key_index; // key rtype index
+    uint64_t length; // 实际的元素的数量
+    uint64_t capacity; // 当达到一定的负载后将会触发 rehash
+} memory_map_t;
+
+typedef struct {
     void *fn_data;
 } memory_fn_t; // 就占用一个指针大小
 

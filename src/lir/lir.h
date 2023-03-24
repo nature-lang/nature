@@ -31,9 +31,9 @@
 #define RT_CALL_TRANS_ANY "trans_any"
 
 #define RT_CALL_MAP_NEW "map_new"
-#define RT_CALL_MAP_VALUE "map_value"
-#define RT_CALL_ITERATE_COUNT "iterate_count"
+#define RT_CALL_MAP_VALUE "map_value" // key 不变的情况下修改 value 部分的值
 
+#define RT_CALL_ITERATE_COUNT "iterate_count"
 #define RT_CALL_ITERATE_GEN_KEY "iterate_gen_key"
 #define RT_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
