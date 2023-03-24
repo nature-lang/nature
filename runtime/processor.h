@@ -18,11 +18,11 @@
 #define DEBUG_STACK()  {\
     processor_t *_p = processor_get(); \
     mmode_t _s = _p->user_mode;      \
-    DEBUGF("FN: %s", __func__);                   \
+    DEBUGF("\nFN: %s", __func__);                   \
     DEBUGF("user_stack:  base=%lx, size=%lx, ctx_sp=%p", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp); \
-    _s = _p->system_mode; \
-    DEBUGF("user_stack:  base=%lx, size=%lx, ctx_sp=%p", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp); \
-    DEBUGF("actual:  top=%lx, frame=%lx", STACK_TOP(), STACK_FRAME_BASE());                                    \
+    _s = _p->temp_mode; \
+    DEBUGF("temp_stack:  base=%lx, size=%lx, ctx_sp=%p", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp); \
+    DEBUGF("actual:  top=%lx, frame=%lx\n", STACK_TOP(), STACK_FRAME_BASE());                                    \
 } \
 
 #define MODE_CALL(_new, _old, _fn) \

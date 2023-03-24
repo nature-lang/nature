@@ -716,6 +716,10 @@ static addr_t std_malloc(uint size, rtype_t *rtype) {
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
+    DEBUGF("malloc success, span->class=%d, span->base=0x%lx, addr=0x%lx",
+           span->spanclass,
+           span->base, addr)
+
     return addr;
 }
 

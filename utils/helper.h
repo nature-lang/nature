@@ -53,6 +53,12 @@ void *copy(char *dst, char *src, uint mode);
 
 ssize_t full_read(int fd, void *buf, size_t count);
 
+static inline addr_t fetch_addr_value(addr_t addr) {
+    // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
+    addr_t *p = (addr_t *) addr;
+    return *p;
+}
+
 static inline uint16_t read16le(unsigned char *p) {
     return p[0] | (uint16_t) p[1] << 8;
 }

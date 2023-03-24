@@ -98,6 +98,25 @@ static void _test_gc_basic() {
     // - 触发 gc
     runtime_gc();
 
+    // 再次创建一个 list, 占用 rt_symdef_data 2
+    // - 调用 list_new 初始化需要的数据
+    memory_list_t *l2 = list_new(rtype.index, element_rtype.index, 0);
+    assert_int_equal((addr_t) l2->array_data, (addr_t) 0xc000000000); // 由于 0xc000 被释放了，所以这里可以再次申请到该数据
+    assert_int_equal((addr_t) l2, (addr_t) 0xc000002020);
+
+    // 加入到 sym 中避免被清理
+    data_size_addr = mallocz(POINTER_SIZE);
+    *data_size_addr = (addr_t) l2; // 将 l 的指存储到 data_size_addr 中
+    symdef = &rt_symdef_data[1];
+    symdef->need_gc = type_need_gc(var->type);
+    symdef->size = type_sizeof(var->type); // 特殊标记
+    symdef->base = (addr_t) data_size_addr;
+    // 仅保留一个 symdef 用于测试，太多的话，实际上当前 debug 是软链接，并不存在
+    rt_symdef_count = 2;
+
+    // 再次触发 gc
+    runtime_gc();
+
     printf("hello\n");
 }
 
@@ -105,8 +124,8 @@ static void _test_gc_basic() {
 static void test_gc_basic() {
     processor_t *p = processor_get();
     DEBUG_STACK();
-    USER_STACK(p); // 切换到用户栈
-    _test_gc_basic();
+    // 切换到 user mode
+    MODE_CALL(p->user_mode, p->system_mode, _test_gc_basic)
 }
 
 int main(void) {

@@ -4,6 +4,21 @@
 #include "allocator.h"
 #include "processor.h"
 
+// TODO default linux_amd64
+#define LINUX_AMD64
+#ifdef LINUX_AMD64
+
+/**
+ * amd64 下，5 表示 rbp 寄存器的值，这里表示最后一次切换后，rbp 寄存器中的值
+ * @param mode
+ * @return
+ */
+static addr_t extract_frame_base(mmode_t mode) {
+    return mode.ctx.uc_mcontext.gregs[10];
+}
+
+#endif
+
 /**
  * addr 是 .text 中的地址
  * @param addr
@@ -19,12 +34,6 @@ static fndef_t *find_fn(addr_t addr) {
     return NULL;
 }
 
-static addr_t fetch_addr_value(addr_t addr) {
-    // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
-    addr_t *p = (addr_t *) addr;
-    return *p;
-}
-
 static void scan_stack(memory_t *m) {
     processor_t *p = processor_get();
     mmode_t mode = p->user_mode;
@@ -32,13 +41,11 @@ static void scan_stack(memory_t *m) {
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
 
-    // TODO 已经有一次栈溢出了，所以必须找到 rbp 寄存器，才能确定第一个 return addr
-    // TODO 从 0 开始扫可行否？
-    addr_t frame_base = mode.ctx.uc_mcontext.fpregs;
-    assertf(frame_base >= mode.stack_base && frame_base < mode.stack_base + mode.stack_size, "stack overflow");
+    addr_t stack_frame = extract_frame_base(mode); // 从大向小增长。
+    assertf(stack_frame >= mode.stack_base && stack_frame < mode.stack_base + mode.stack_size, "stack overflow");
 
     while (true) {
-        addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
+        addr_t return_addr = (addr_t) fetch_addr_value(stack_frame + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
         if (!fn) {
             // TODO assertf
@@ -47,14 +54,14 @@ static void scan_stack(memory_t *m) {
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
-        addr_t frame_top = frame_base + POINTER_SIZE * 2;
-        frame_base = frame_top + fn->stack_size;
+        addr_t frame_top = stack_frame + POINTER_SIZE * 2;
+        stack_frame = frame_top + fn->stack_size;
 
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
         // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
         addr_t cursor = frame_top;
         int i = 0;
-        while (cursor < frame_base) {
+        while (cursor < stack_frame) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
             if (is_ptr) {
                 // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
@@ -66,7 +73,7 @@ static void scan_stack(memory_t *m) {
         }
 
         // 已经到达了栈底(大值)
-        if (frame_base == stack.base) {
+        if (stack_frame >= mode.stack_base + mode.stack_size) {
             break;
         }
     }
@@ -194,6 +201,7 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
     span->alloc_count = bitmap_set_count(span->alloc_bits);
 
     if (span->alloc_count == 0) {
+        DEBUGF("span free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
         mheap_free_span(memory->mheap, span);
         free_mspan_meta(span);
         return;
@@ -251,7 +259,7 @@ void mcentral_sweep(mheap_t *mheap) {
  * @stack system
  */
 static void _runtime_gc() {
-    processor_t *p = processor_get();
+//    DEBUG_STACK();
 
     // 2. 遍历 gc roots
     // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
@@ -289,13 +297,12 @@ static void _runtime_gc() {
  * @return
  */
 void runtime_gc() {
-    DEBUG_STACK();
+//    DEBUG_STACK();
 
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
     processor_t *p = processor_get();
-    MODE_CALL(p->temp_mode, _runtime_gc)
+    MODE_CALL(p->temp_mode, p->user_mode, _runtime_gc)
 
-
-    DEBUG_STACK();
+//    DEBUG_STACK();
     DEBUGF("runtime gc completed")
 }

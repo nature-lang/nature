@@ -11,14 +11,14 @@ static void processor_main_init(processor_t *p) {
 
     mode = &p->user_mode;
     mode->stack_size = MSTACK_SIZE;
-    mode->stack_base = mstack_new(mode->stack_size);
+    mode->stack_base = (addr_t) sys_memory_map((void *) 0x4000000000, MSTACK_SIZE);
 //    mode->ctx.uc_stack.ss_size = MSTACK_SIZE;
 //    mode->ctx.uc_stack.ss_sp = (void *) mode->stack_base;
 
     // 临时栈
     mode = &p->temp_mode;
     mode->stack_size = MSTACK_SIZE;
-    mode->stack_base = mstack_new(mode->stack_size);
+    mode->stack_base = (addr_t) sys_memory_map((void *) 0x5000000000, MSTACK_SIZE);
 //    mode->ctx.uc_stack.ss_size = MSTACK_SIZE;
 //    mode->ctx.uc_stack.ss_sp = (void *) mode->stack_base;
 }
