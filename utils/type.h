@@ -267,9 +267,11 @@ typedef double memory_float_t;
 typedef byte *memory_struct_t; // 长度不确定
 
 typedef struct {
-    byte *hash_data; // key 的 hash 表结构, 存储的值是 values 表的 index
-    byte *merged_data; // [ (key+value), (key, value) ....]
+    uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
+    byte *key_data;
+    byte *value_data;
     uint64_t key_index; // key rtype index
+    uint64_t value_index;
     uint64_t length; // 实际的元素的数量
     uint64_t capacity; // 当达到一定的负载后将会触发 rehash
 } memory_map_t;
@@ -357,6 +359,6 @@ byte *malloc_gc_bits(uint64_t size);
 
 bool type_default_in_heap(typedecl_t typedecl);
 
-uint64_t rtype_heap_outside_size(rtype_t *rtype);
+uint64_t rtype_heap_out_size(rtype_t *rtype);
 
 #endif //NATURE_TYPE_H

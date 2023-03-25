@@ -7,7 +7,7 @@ void list_grow(memory_list_t *l) {
     l->capacity = l->capacity * 2;
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     memory_array_t new_array_data = array_new(element_rtype, l->capacity);
-    memmove(new_array_data, l->array_data, l->capacity * rtype_heap_outside_size(element_rtype));
+    memmove(new_array_data, l->array_data, l->capacity * rtype_heap_out_size(element_rtype));
     l->array_data = new_array_data;
 }
 
@@ -47,7 +47,7 @@ void *list_value(memory_list_t *l, uint64_t index) {
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     // 计算 offset
-    uint64_t offset = rtype_heap_outside_size(element_rtype) * index; // (size unit byte) * index
+    uint64_t offset = rtype_heap_out_size(element_rtype) * index; // (size unit byte) * index
     return l->array_data + offset;
 }
 
@@ -70,7 +70,7 @@ void list_push(memory_list_t *l, void *ref) {
     uint64_t index = l->length++;
     byte *value = list_value(l, index);
     // 内存移动操作
-    memmove(value, ref, rtype_heap_outside_size(element_type));
+    memmove(value, ref, rtype_heap_out_size(element_type));
 }
 
 memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start, uint64_t end) {
@@ -81,7 +81,7 @@ memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start
     void *src = list_value(l, start);
 
     // memmove
-    memmove(sliced_list->array_data, src, rtype_heap_outside_size(element_rtype) * capacity);
+    memmove(sliced_list->array_data, src, rtype_heap_out_size(element_rtype) * capacity);
     sliced_list->length = capacity;
 
     return sliced_list;
@@ -96,13 +96,13 @@ memory_list_t *list_concat(uint64_t rtype_index, memory_list_t *a, memory_list_t
     // 合并 a 到
     void *dst = list_value(concat_list, concat_list->length - 1);
     void *src = list_value(a, 0);
-    memmove(dst, src, a->length * rtype_heap_outside_size(element_rtype));
+    memmove(dst, src, a->length * rtype_heap_out_size(element_rtype));
     concat_list->length + a->length;
 
     // 合并 b
     dst = list_value(concat_list, concat_list->length - 1);
     src = list_value(b, 0);
-    memmove(dst, src, b->length * rtype_heap_outside_size(element_rtype));
+    memmove(dst, src, b->length * rtype_heap_out_size(element_rtype));
     concat_list->length += b->length;
 
     return concat_list;

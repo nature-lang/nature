@@ -19,6 +19,14 @@ char *itoa(int64_t n) {
     return str;
 }
 
+char *utoa(uint64_t n) {
+    int length = snprintf(NULL, 0, "%lu", n);
+    char *str = malloc(length + 1);
+    snprintf(str, length + 1, "%lu", n);
+
+    return str;
+}
+
 bool str_equal(char *a, char *b) {
     return strcmp(a, b) == 0;
 }

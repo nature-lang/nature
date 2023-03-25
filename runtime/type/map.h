@@ -9,4 +9,10 @@ memory_map_t *map_new(uint64_t rtype_index, uint64_t key_index, uint64_t value_i
 
 void *map_value(memory_map_t *m, void *ref);
 
+void map_grow(memory_map_t *m);
+
+void *map_set(memory_map_t *m, void *key_ref, void *value_ref);
+
+void *map_delete(memory_map_t *m, void *key_ref);
+
 #endif //NATURE_MAP_H

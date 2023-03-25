@@ -457,9 +457,10 @@ bool type_default_in_heap(typedecl_t typedecl) {
  * @param rtype
  * @return
  */
-uint64_t rtype_heap_outside_size(rtype_t *rtype) {
+uint64_t rtype_heap_out_size(rtype_t *rtype) {
     if (rtype->in_heap) {
         return POINTER_SIZE;
     }
     return rtype->size;
 }
+

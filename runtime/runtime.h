@@ -17,6 +17,10 @@ static inline void call_user_main() {
     linux_amd64_call(rt_fn_main_base);
 }
 
+
+char *ref_to_string_by_rtype(rtype_t *rtype, void *data_ref);
+
+
 void runtime_main();
 
 #endif //NATURE_RUNTIME_H

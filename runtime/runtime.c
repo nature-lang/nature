@@ -1,5 +1,36 @@
 #include "runtime.h"
 
+/**
+ * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
+ * 需要感觉 rtype 存放的具体位置综合判断
+ * @param rtype
+ * @param ref
+ * @return
+ */
+char *ref_to_string_by_rtype(rtype_t *rtype, void *data_ref) {
+    uint64_t data_size = rtype_heap_out_size(rtype);
+    if (rtype->kind == TYPE_INT ||
+        rtype->kind == TYPE_INT8) {
+        int64_t temp = 0;
+        memmove(&temp, data_ref, data_size);
+        return itoa(temp);
+    }
+
+    if (rtype->index == TYPE_STRING) {
+        memory_string_t *memory_string = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
+        char *str = (void *) runtime_malloc(memory_string->length + 1, NULL);
+        str[memory_string->length] = '\0';
+
+        memmove(str, memory_string->array_data, memory_string->length);
+        return str;
+    }
+
+    assertf(false, "not support");
+
+    return NULL;
+}
+
+
 extern void main();
 
 /**

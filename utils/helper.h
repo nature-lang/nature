@@ -27,6 +27,8 @@
 
 char *itoa(int64_t n);
 
+char *utoa(uint64_t n);
+
 bool str_equal(string a, string b);
 
 char *path_join(char *dst, char *src);
@@ -58,6 +60,29 @@ static inline addr_t fetch_addr_value(addr_t addr) {
     addr_t *p = (addr_t *) addr;
     return *p;
 }
+
+static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < size; ++i) {
+        hash ^= data[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
+
+static inline uint32_t hash_string(char *str) {
+    return hash_data(str, strlen(str));
+}
+
+static bool memory_empty(uint8_t *base, uint64_t size) {
+    for (int i = 0; i < size; ++i) {
+        if (*(base + i) != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 static inline uint16_t read16le(unsigned char *p) {
     return p[0] | (uint16_t) p[1] << 8;
