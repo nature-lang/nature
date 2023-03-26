@@ -65,7 +65,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
-                                         LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, diff_length),
+                                         IMM_OPERAND(TYPE_INT, int_value, diff_length),
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
         linked_push(push_operations, binary_op);
     }

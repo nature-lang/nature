@@ -42,13 +42,13 @@ static bool extract_data_index(uint64_t hash_value) {
 
 
 static uint64_t key_hash(rtype_t *rtype, void *key_ref) {
-    char *str = ref_to_string_by_rtype(rtype, key_ref);
+    char *str = rtype_value_str(rtype, key_ref);
     return hash_string(str);
 }
 
 static bool key_equal(rtype_t *rtype, void *actual, void *expect) {
-    char *actual_str = ref_to_string_by_rtype(rtype, actual);
-    char *expect_str = ref_to_string_by_rtype(rtype, expect);
+    char *actual_str = rtype_value_str(rtype, actual);
+    char *expect_str = rtype_value_str(rtype, expect);
     return str_equal(actual_str, expect_str);
 }
 

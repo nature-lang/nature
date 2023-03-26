@@ -291,6 +291,10 @@ lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
 
+lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
+    return lir_op_new(LIR_OPCODE_LEA, src, NULL, dst)
+}
+
 lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t pos) {
     lir_operand_t *temp = lir_operand_copy(operand);
     temp->pos = pos;

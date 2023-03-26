@@ -1,0 +1,28 @@
+// tuple
+
+// 初始化时必须完整赋值
+tuple(int, float) t = (1, 3.14)
+var t = (1, 3.14)
+
+// access
+int a = t[0];
+
+// 由于 () 初始化语法和其他语法冲突，所以可以省略 tuple 关键字
+(int, float) t = (1, 3.14)
+
+// 则函数返回 tuple 时声明
+fn test_tuple() (int, float) {
+    // 这里的 return 是赋值语法
+    int a = 1
+    float b = 2
+    return (a, b)
+}
+
+// 这是正常的赋值语法
+var foo = (a, b)
+var foo = test_tuple() // 此时 foo 的类型是 tuple
+
+// 快速赋值语法,只需要支持该语法，就自认支持了函数多返回值
+// 这里的 a 和 b 看起来像使用 a 和 b 变量。实际上又是声明，所以会有一点歧义
+var (a, b) = test_tuple() // v 暂且使用该版本进行一定的编码测试
+var a, b = test_tuple() // x 和 golang 一样，对多返回值进行进一步抽象

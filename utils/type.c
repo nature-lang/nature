@@ -334,7 +334,7 @@ uint16_t type_sizeof(typedecl_t t) {
 }
 
 
-typedecl_t type_with_point(typedecl_t t, uint8_t point) {
+typedecl_t type_pointof(typedecl_t t, uint8_t point) {
     typedecl_t result;
     result.is_origin = t.is_origin;
     result.point = point;

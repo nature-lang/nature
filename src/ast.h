@@ -22,16 +22,23 @@ typedef enum {
     AST_EXPR_BINARY,
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
-    AST_EXPR_SELECT_PROPERTY,
-    AST_EXPR_ACCESS_MAP,
+
+    AST_EXPR_MAP_ACCESS,
+    AST_EXPR_LIST_ACCESS,
+    AST_EXPR_TUPLE_ACCESS,
+    AST_EXPR_STRUCT_ACCESS,
+
     AST_EXPR_ENV_VALUE,
-    AST_EXPR_LIST_VALUE,
 
-    AST_EXPR_NEW_MAP, // {"a": 1, "b": 2}
-    AST_EXPR_NEW_LIST, // [1, 2, 3]
-    AST_EXPR_NEW_STRUCT, // person {a = 1; b = 2}
+    AST_EXPR_LIST_NEW, // [1, 2, 3]
+    AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
+    AST_EXPR_SET_NEW, // {1, 2, 3, 4}
+    AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
+    AST_EXPR_STRUCT_NEW, // person {a = 1; b = 2}
+
+
+
     AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
-
     // 抽象复合类型
     AST_EXPR_ACCESS,
     AST_EXPR_SELECT,
@@ -46,7 +53,6 @@ typedef enum {
     AST_STMT_FOR_IN,
     AST_STMT_WHILE,
     AST_STMT_TYPE_DECL,
-//  AST_STRUCT_DECL,
     AST_CALL,
     AST_NEW_FN,
     AST_NEW_CLOSURE,
@@ -120,7 +126,7 @@ typedef struct {
 typedef struct {
     ast_expr left;
     ast_expr actual_params[UINT8_MAX];
-    uint8_t actual_param_count;
+    uint8_t param_count;
     bool spread_param;
 } ast_call;
 
@@ -230,7 +236,7 @@ typedef struct {
     typedecl_t type; // value 的类型吧？
     ast_expr left;
     ast_expr index;
-} ast_list_value_t;
+} ast_list_access_t;
 
 typedef struct {
     typedecl_t key_type;
@@ -296,7 +302,7 @@ typedef struct {
     string name;
     typedecl_t return_type; // 基础类型 + 动态类型
     ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
-    uint8_t formal_param_count;
+    uint8_t param_count;
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余

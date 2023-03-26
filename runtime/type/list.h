@@ -14,7 +14,7 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
  * @param index
  * @return
  */
-void *list_access(memory_list_t *l, uint64_t index);
+void list_access(memory_list_t *l, uint64_t index, void *value_ref);
 
 void list_assign(memory_list_t *l, uint64_t index, void *ref);
 

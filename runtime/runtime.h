@@ -18,7 +18,7 @@ static inline void call_user_main() {
 }
 
 
-char *ref_to_string_by_rtype(rtype_t *rtype, void *data_ref);
+char *rtype_value_str(rtype_t *rtype, void *data_ref);
 
 
 void runtime_main();

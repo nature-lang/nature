@@ -42,13 +42,20 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
     return list_data;
 }
 
-void *list_access(memory_list_t *l, uint64_t index) {
+/**
+ * 其返回值在 value_ref 中， value_ref 是数组中存放的值，而不是存放的值的起始地址
+ * 考虑到未来可能会有超过 8byte 大小的值，操作 lir move 困难，所以在 runtime 中进行 move
+ * @param l
+ * @param index
+ * @param value_ref
+ */
+void list_access(memory_list_t *l, uint64_t index, void *value_ref) {
     assertf(index < l->length, "index out of range [%d] with length %d", l->length, index);
 
-    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
+    uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_index);
     // 计算 offset
-    uint64_t offset = rtype_heap_out_size(element_rtype) * index; // (size unit byte) * index
-    return l->array_data + offset;
+    uint64_t offset = element_size * index; // (size unit byte) * index
+    memmove(value_ref, l->array_data + offset, element_size);
 }
 
 /**
@@ -87,15 +94,23 @@ void list_push(memory_list_t *l, void *ref) {
     list_assign(l, index, ref);
 }
 
+/**
+ * 不影响原有的的 list，而是返回一个 slice 之后的新的 list
+ * @param rtype_index
+ * @param l
+ * @param start
+ * @param end
+ * @return
+ */
 memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start, uint64_t end) {
     uint64_t capacity = end - start;
-    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
+    uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_index);
     memory_list_t *sliced_list = list_new(rtype_index, l->element_rtype_index, capacity);
 
-    void *src = list_access(l, start);
+    void *src = l->array_data + start * element_size;
 
     // memmove
-    memmove(sliced_list->array_data, src, rtype_heap_out_size(element_rtype) * capacity);
+    memmove(sliced_list->array_data, src, element_size * capacity);
     sliced_list->length = capacity;
 
     return sliced_list;
@@ -103,21 +118,19 @@ memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start
 
 memory_list_t *list_concat(uint64_t rtype_index, memory_list_t *a, memory_list_t *b) {
     assertf(a->element_rtype_index == b->element_rtype_index, "The types of the two lists are different");
-    rtype_t *element_rtype = rt_find_rtype(a->element_rtype_index);
+    uint64_t element_size = rt_rtype_heap_out_size(a->element_rtype_index);
     uint64_t capacity = a->length + b->length;
-    memory_list_t *concat_list = list_new(rtype_index, a->element_rtype_index, capacity);
+    memory_list_t *merged = list_new(rtype_index, a->element_rtype_index, capacity);
 
-    // 合并 a 到
-    void *dst = list_access(concat_list, concat_list->length - 1);
-    void *src = list_access(a, 0);
-    memmove(dst, src, a->length * rtype_heap_out_size(element_rtype));
-    concat_list->length + a->length;
+    // 合并 a
+    void *dst = merged->array_data + (merged->length - 1 * element_size);
+    memmove(dst, a->array_data, a->length * element_size);
+    merged->length + a->length;
 
     // 合并 b
-    dst = list_access(concat_list, concat_list->length - 1);
-    src = list_access(b, 0);
-    memmove(dst, src, b->length * rtype_heap_out_size(element_rtype));
-    concat_list->length += b->length;
+    dst = merged->array_data + (merged->length - 1 * element_size);
+    memmove(dst, b->array_data, b->length * element_size);
+    merged->length + a->length;
 
-    return concat_list;
+    return merged;
 }

@@ -419,7 +419,7 @@ ast_expr parser_select_property(module_t *m, ast_expr left) {
     select_property_expr->left = left;
     select_property_expr->property = property_token->literal;
 
-    result.assert_type = AST_EXPR_SELECT_PROPERTY;
+    result.assert_type = AST_EXPR_STRUCT_ACCESS;
     result.value = select_property_expr;
 
     return result;
@@ -461,11 +461,12 @@ void parser_actual_param(module_t *m, ast_call *call) {
 
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
         do {
+            // call(...a)
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
                 call->spread_param = true;
             }
             // 参数解析 call(1 + 1, param_a)
-            call->actual_params[call->actual_param_count++] = parser_expr(m);
+            call->actual_params[call->param_count++] = parser_expr(m);
             if (call->spread_param) {
                 assertf(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
                 break;
@@ -518,7 +519,7 @@ void parser_formal_param(module_t *m, ast_new_fn *fn_decl) {
                 fn_decl->rest_param = true;
             }
 
-            uint8_t count = fn_decl->formal_param_count++;
+            uint8_t count = fn_decl->param_count++;
             fn_decl->formal_params[count] = parser_var_decl(m);
 
             if (fn_decl->rest_param) {
@@ -780,10 +781,8 @@ ast_stmt *parser_assign(module_t *m, ast_expr left) {
     ast_stmt *result = parser_new_stmt();
     ast_assign_stmt *assign_stmt = malloc(sizeof(ast_assign_stmt));
     assign_stmt->left = left;
-    // invalid: foo;
     parser_must(m, TOKEN_EQUAL);
     assign_stmt->right = parser_expr(m);
-
     result->assert_type = AST_STMT_ASSIGN;
     result->value = assign_stmt;
 
@@ -1033,7 +1032,7 @@ ast_expr parser_new_list(module_t *m) {
     }
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
-    result.assert_type = AST_EXPR_NEW_LIST;
+    result.assert_type = AST_EXPR_LIST_NEW;
     result.value = expr;
 
     return result;
@@ -1072,7 +1071,7 @@ ast_expr parser_new_map(module_t *m) {
     parser_must(m, TOKEN_RIGHT_CURLY);
     expr->capacity = expr->count;
 
-    result.assert_type = AST_EXPR_NEW_MAP;
+    result.assert_type = AST_EXPR_MAP_NEW;
     result.value = expr;
 
     return result;
@@ -1170,7 +1169,7 @@ ast_expr parser_new_struct(module_t *m, typedecl_t type) {
 
     parser_must(m, TOKEN_RIGHT_CURLY);
 
-    result.assert_type = AST_EXPR_NEW_STRUCT;
+    result.assert_type = AST_EXPR_STRUCT_NEW;
     result.value = new_struct;
     return result;
 }

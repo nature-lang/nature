@@ -21,7 +21,7 @@ ast_new_fn *builtin_print() {
     fn->name = "print";
     fn->return_type = type_base_new(TYPE_VOID);
     fn->rest_param = true;
-    fn->formal_param_count = 1;
+    fn->param_count = 1;
     fn->formal_params[0] = var_decl;
     return fn;
 }

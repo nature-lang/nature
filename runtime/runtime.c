@@ -7,7 +7,7 @@
  * @param ref
  * @return
  */
-char *ref_to_string_by_rtype(rtype_t *rtype, void *data_ref) {
+char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     uint64_t data_size = rtype_heap_out_size(rtype);
     if (rtype->kind == TYPE_INT ||
         rtype->kind == TYPE_INT8) {

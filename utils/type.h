@@ -358,7 +358,7 @@ uint16_t type_sizeof(typedecl_t t);
  */
 bool type_need_gc(typedecl_t t);
 
-typedecl_t type_with_point(typedecl_t t, uint8_t point);
+typedecl_t type_pointof(typedecl_t t, uint8_t point);
 
 typedecl_t type_base_new(type_kind kind);
 

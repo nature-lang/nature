@@ -21,7 +21,7 @@
 
 // RT = runtime
 // CT = compile time
-#define RT_CALL_LIST_NEW "linked_new"
+#define RT_CALL_LIST_NEW "list_new"
 #define RT_CALL_LIST_ACCESS "list_access"
 #define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SPLICE "list_slice"
@@ -76,7 +76,7 @@
   _var;                                   \
 })
 
-#define LIR_NEW_IMM_OPERAND(operand_type, key, val) \
+#define IMM_OPERAND(operand_type, key, val) \
 ({                                               \
    lir_imm_t *imm_operand = malloc(sizeof(lir_imm_t)); \
    imm_operand->type = operand_type; \
@@ -153,6 +153,7 @@ typedef enum {
     LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
     LIR_OPCODE_FN_END, // 无操作数
 } lir_opcode_e;
+
 typedef struct lir_operand_t lir_operand_t;
 
 /**
@@ -184,16 +185,15 @@ typedef struct {
  * t1[0] = 24 => mov 24 -> indirect_addr(t1, 0)
  */
 typedef struct {
-    lir_operand_t *base; // compiler 完成后为 var, alloc reg 后为 reg
+    lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
     int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
     typedecl_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
-typedef struct {
-//    lir_operand_t *base; // 只允许是 [indirect_addrt_t?]
-    lir_indirect_addr_t *base; //
-    typedecl_t type;
-} lir_lea_addr_t; // 读取 base 所在的地址
+//typedef struct {
+//    lir_operand_t *base; // 只允许是 [indirect_addr_t?]
+//    typedecl_t type;
+//} lir_lea_addr_t; // 读取 base 所在的地址
 
 typedef struct {
     char *ident;
@@ -295,6 +295,8 @@ lir_op_t *lir_op_bal(lir_operand_t *label);
 
 //lir_op *lir_new_push(lir_operand *operand);
 lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src);
+
+lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src);
 
 lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result);
 

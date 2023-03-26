@@ -44,9 +44,9 @@ int ast_struct_offset(typedecl_struct_t *struct_decl, char *property) {
 
 
 typedecl_t select_actual_param(ast_call *call, uint8_t index) {
-    if (call->spread_param && index >= call->actual_param_count) {
+    if (call->spread_param && index >= call->param_count) {
         // last actual param type must array
-        typedecl_t last_param_type = call->actual_params[call->actual_param_count].type;
+        typedecl_t last_param_type = call->actual_params[call->param_count].type;
         assertf(last_param_type.kind == TYPE_LIST, "spread param must list");
         typedecl_list_t *list_decl = last_param_type.list_decl;
         return list_decl->element_type;

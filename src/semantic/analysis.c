@@ -96,7 +96,7 @@ void analysis_call(module_t *m, ast_call *call) {
     analysis_expr(m, &call->left);
 
     // 实参 unique 改写
-    for (int i = 0; i < call->actual_param_count; ++i) {
+    for (int i = 0; i < call->param_count; ++i) {
         ast_expr *actual_param = &call->actual_params[i];
         analysis_expr(m, actual_param);
     }
@@ -129,10 +129,10 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
 typedecl_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     typedecl_fn_t *f = NEW(typedecl_fn_t);
     f->return_type = fn_decl->return_type;
-    for (int i = 0; i < fn_decl->formal_param_count; ++i) {
+    for (int i = 0; i < fn_decl->param_count; ++i) {
         f->formals_types[i] = fn_decl->formal_params[i]->type;
     }
-    f->formals_count = fn_decl->formal_param_count;
+    f->formals_count = fn_decl->param_count;
     f->rest_param = fn_decl->rest_param;
     typedecl_t type = {
             .is_origin = false,
@@ -188,7 +188,7 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
     analysis_function_begin(m);
 
     // 函数形参处理
-    for (int i = 0; i < function_decl->formal_param_count; ++i) {
+    for (int i = 0; i < function_decl->param_count; ++i) {
         ast_var_decl *param = function_decl->formal_params[i];
         // 注册
         analysis_local_ident_t *param_local = analysis_new_local(m, SYMBOL_TYPE_VAR, param, param->ident);
@@ -306,15 +306,15 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             analysis_unary(m, (ast_unary_expr *) expr->value);
             break;
         };
-        case AST_EXPR_NEW_STRUCT: {
+        case AST_EXPR_STRUCT_NEW: {
             analysis_new_struct(m, (ast_new_struct *) expr->value);
             break;
         }
-        case AST_EXPR_NEW_MAP: {
+        case AST_EXPR_MAP_NEW: {
             analysis_new_map(m, (ast_new_map *) expr->value);
             break;
         }
-        case AST_EXPR_NEW_LIST: {
+        case AST_EXPR_LIST_NEW: {
             analysis_new_list(m, (ast_new_list *) expr->value);
             break;
         }
@@ -322,7 +322,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             analysis_access(m, (ast_access *) expr->value);
             break;
         };
-        case AST_EXPR_SELECT_PROPERTY: {
+        case AST_EXPR_STRUCT_ACCESS: {
             // analysis 仅进行了变量重命名，此时作用域不明确，无法进行任何的表达式改写。
             analysis_select_property(m, expr);
             break;
@@ -771,7 +771,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     ast_new_fn *fn_init = NEW(ast_new_fn);
     fn_init->name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_base_new(TYPE_VOID);
-    fn_init->formal_param_count = 0;
+    fn_init->param_count = 0;
     fn_init->body = var_assign_list;
 
     // 加入到全局符号表，等着调用就好了
@@ -786,7 +786,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             .assert_type = AST_EXPR_IDENT,
             .value = ast_new_ident(s->ident), // module.init
     };
-    call->actual_param_count = 0;
+    call->param_count = 0;
     temp_stmt->assert_type = AST_CALL;
     temp_stmt->value = call;
     m->call_init_stmt = temp_stmt;
@@ -830,7 +830,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     new_fn->name = FN_MAIN_NAME;
     new_fn->body = slice_new();
     new_fn->return_type = type_base_new(TYPE_VOID);
-    new_fn->formal_param_count = 0;
+    new_fn->param_count = 0;
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(new_fn->body, stmt_list->take[i]);
     }

@@ -20,7 +20,7 @@ typedecl_t infer_closure_decl(ast_closure_t *closure_decl) {
 
     // 类型还原
     function_decl->return_type = infer_type(function_decl->return_type);
-    for (int i = 0; i < function_decl->formal_param_count; ++i) {
+    for (int i = 0; i < function_decl->param_count; ++i) {
         function_decl->formal_params[i]->type = infer_type(function_decl->formal_params[i]->type);
     }
 
@@ -114,15 +114,15 @@ typedecl_t infer_expr(ast_expr *expr) {
             type = infer_ident(((ast_ident *) expr->value)->literal);
             break;
         }
-        case AST_EXPR_NEW_LIST: {
+        case AST_EXPR_LIST_NEW: {
             type = infer_new_list((ast_new_list *) expr->value);
             break;
         }
-        case AST_EXPR_NEW_MAP: {
+        case AST_EXPR_MAP_NEW: {
             type = infer_new_map((ast_new_map *) expr->value);
             break;
         }
-        case AST_EXPR_NEW_STRUCT: {
+        case AST_EXPR_STRUCT_NEW: {
             type = infer_new_struct((ast_new_struct *) expr->value);
             break;
         }
@@ -131,7 +131,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             type = infer_access(expr);
             break;
         }
-        case AST_EXPR_SELECT_PROPERTY: {
+        case AST_EXPR_STRUCT_ACCESS: {
             type = infer_select_property((ast_select_property *) expr->value);
             break;
         }
@@ -391,7 +391,7 @@ typedecl_t infer_access(ast_expr *expr) {
         // access_map 冗余字段处理
         access_map->key_type = map_decl->key_type;
         access_map->value_type = map_decl->value_type;
-        expr->assert_type = AST_EXPR_ACCESS_MAP;
+        expr->assert_type = AST_EXPR_MAP_ACCESS;
         expr->value = access_map;
 
 
@@ -400,19 +400,20 @@ typedecl_t infer_access(ast_expr *expr) {
     } else if (left_type.kind == TYPE_LIST) {
         assertf(key_type.kind == TYPE_INT, "access list failed, index expr type must by int");
 
-        ast_list_value_t *access_list = NEW(ast_list_value_t);
+        ast_list_access_t *access_list = NEW(ast_list_access_t);
         typedecl_list_t *list_decl = left_type.list_decl;
 
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
         access_list->type = list_decl->element_type;
-        expr->assert_type = AST_EXPR_LIST_VALUE;
+        expr->assert_type = AST_EXPR_LIST_ACCESS;
         expr->value = access_list;
 
         result = list_decl->element_type;
     } else {
-        assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line, type_kind_string[left_type.kind]);
+        assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line,
+                type_kind_string[left_type.kind]);
     };
 
     return result;
@@ -462,12 +463,12 @@ typedecl_t infer_call(ast_call *call) {
     typedecl_fn_t *type_fn = left_type.fn_decl;
 
     // 实参类型推导与类型还原
-    for (int i = 0; i < call->actual_param_count; ++i) {
+    for (int i = 0; i < call->param_count; ++i) {
         infer_expr(&call->actual_params[i]);  // expr 类型还原，其中也包括 spread param
     }
 
     // 参数对比，由于存在 spread 和 rest 运算，所以不能直接根据参数数量左 assert
-    uint8_t count = max(type_fn->formals_count, call->actual_param_count);
+    uint8_t count = max(type_fn->formals_count, call->param_count);
 
     for (int i = 0; i < count; ++i) {
         // first param from actual
@@ -478,8 +479,8 @@ typedecl_t infer_call(ast_call *call) {
                 type_kind_string[formal.kind], type_kind_string[actual.kind]);
 
         // 如果 i < actual_param_count,则 actual_param 需要配置 target type
-        bool is_spread = call->spread_param && i == call->actual_param_count - 1;
-        if (i < call->actual_param_count && !is_spread) {
+        bool is_spread = call->spread_param && i == call->param_count - 1;
+        if (i < call->param_count && !is_spread) {
             set_expr_target(&call->actual_params[i], formal);
         }
     }
