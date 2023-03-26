@@ -253,4 +253,6 @@ void symdefs_deserialize();
 
 rtype_t *rt_find_rtype(uint64_t index);
 
+uint64_t rt_rtype_heap_out_size(uint64_t index);
+
 #endif //NATURE_MEMORY_H

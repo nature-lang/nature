@@ -384,7 +384,7 @@ ast_expr parser_ident_expr(module_t *m) {
 }
 
 /**
- * 暂时无法确定 foo 的类型是 list 还是 map
+ * 暂时无法确定 foo 的类型是 list 还是 map 还是 tuple
  * foo[expr]
  * @param left
  * @return

@@ -24,15 +24,6 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-int ast_struct_decl_size(typedecl_struct_t *struct_decl) {
-    int size = 0;
-    for (int i = 0; i < struct_decl->count; ++i) {
-        typedecl_struct_property_t property = struct_decl->properties[i];
-        size += type_kind_sizeof(property.type.kind);
-    }
-    return size;
-}
-
 /**
  * 默认 struct_decl 已经排序过了
  * @param struct_decl
@@ -87,8 +78,8 @@ typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index) {
  */
 bool type_compare(typedecl_t target, typedecl_t source) {
     assertf(target.is_origin && source.is_origin, "code not origin, left: '%s', right: '%s'",
-            type_to_string[target.kind],
-            type_to_string[source.kind]);
+            type_kind_string[target.kind],
+            type_kind_string[source.kind]);
     assertf(target.kind != TYPE_UNKNOWN && source.kind != TYPE_UNKNOWN, "type cnnot infer");
 
     if (target.kind == TYPE_ANY || source.kind == TYPE_ANY) {

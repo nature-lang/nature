@@ -49,7 +49,7 @@ typedef enum {
     TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
 } type_kind;
 
-static string type_to_string[] = {
+static string type_kind_string[] = {
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "string_RAW",
         [TYPE_BOOL] = "bool",
@@ -60,8 +60,10 @@ static string type_to_string[] = {
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_IDENT] = "decl", // char*
-        [TYPE_ARRAY] = "array",
-        [TYPE_MAP] = "map", // ast_map_decl
+        [TYPE_ARRAY] = "list",
+        [TYPE_MAP] = "map",
+        [TYPE_SET] = "set",
+        [TYPE_TUPLE] = "tuple",
         [TYPE_FN] = "fn",
         [TYPE_NULL] = "null",
 };
@@ -184,6 +186,13 @@ struct typedecl_array_t {
     rtype_t element_rtype;
 };
 
+/**
+ * map{int:int}
+ */
+struct typedecl_set_t {
+    typedecl_t key_type;
+};
+
 
 /**
  * map{int:int}
@@ -196,7 +205,6 @@ struct typedecl_map_t {
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     char *key;
-//    int align_offset; // 对齐后起始地址,描述信息里面要这个也没啥用
     typedecl_t type; // 这里存放的数据的大小是固定的吗？
 } typedecl_struct_property_t;
 
@@ -205,8 +213,13 @@ typedef struct {
 // golang 中的 gc_bits 也是不定长的数据，怎么传递？ map,slice 都还好说 可以在 runtime 里面生成
 // 那 struct 呢？
 struct typedecl_struct_t {
-    int8_t count; // 属性的个数，用于遍历
-    typedecl_struct_property_t properties[UINT16_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    uint8_t count;
+    typedecl_struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+};
+
+struct typedecl_tuple_t {
+    uint8_t count; // tuple 元素的个数
+    typedecl_t elements[UINT8_MAX];
 };
 
 /**
@@ -258,13 +271,15 @@ typedef struct {
     uint64_t length;
 } memory_string_t;
 
-typedef byte *memory_array_t; // 数组在内存中的变现形式就是 byte 列表
+typedef byte memory_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t memory_int_t;
 
 typedef double memory_float_t;
 
-typedef byte *memory_struct_t; // 长度不确定
+typedef byte memory_struct_t; // 长度不确定
+
+typedef byte memory_tuple_t; // 长度不确定
 
 typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
@@ -275,6 +290,14 @@ typedef struct {
     uint64_t length; // 实际的元素的数量
     uint64_t capacity; // 当达到一定的负载后将会触发 rehash
 } memory_map_t;
+
+typedef struct {
+    uint64_t *hash_table;
+    byte *key_data; // hash 冲突时进行检测使用
+    uint64_t key_index;
+    uint64_t length;
+    uint64_t capacity;
+} memory_set_t;
 
 typedef struct {
     void *fn_data;
@@ -308,7 +331,7 @@ rtype_t rt_reflect_type(typedecl_t t);
  */
 uint64_t rtypes_push(rtype_t rtype);
 
-uint find_rtype_index(typedecl_t t);
+uint ct_find_rtype_index(typedecl_t t);
 
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小

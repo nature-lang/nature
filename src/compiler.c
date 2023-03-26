@@ -38,7 +38,7 @@ static lir_operand_t *type_convert(closure_t *c, lir_operand_t *source, ast_expr
         // TODO var 存不下两个指针的数据!! 存下了又能如何，三个，四个指针大小的数据呢？
         lir_operand_t *new_source_var = lir_temp_var_operand(c, expr.target_type);
         // 基于 source 类型计算 element_rtype index
-        uint rtype_index = find_rtype_index(expr.type);
+        uint rtype_index = ct_find_rtype_index(expr.type);
         // lir call type, value =>
         linked_push(c->operations,
                     lir_op_rt_call(RT_CALL_TRANS_ANY, new_source_var, 2,
@@ -273,9 +273,9 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             rest_param_target = lir_temp_var_operand(c, last_param_type);
 
             lir_operand_t *rtype_index = LIR_NEW_IMM_OPERAND(
-                    TYPE_INT, int_value, find_rtype_index(last_param_type));
+                    TYPE_INT, int_value, ct_find_rtype_index(last_param_type));
             lir_operand_t *element_rtype_index = LIR_NEW_IMM_OPERAND(
-                    TYPE_INT, int_value, find_rtype_index(list_decl->element_type));
+                    TYPE_INT, int_value, ct_find_rtype_index(list_decl->element_type));
             lir_operand_t *capacity = LIR_NEW_IMM_OPERAND(
                     TYPE_INT, int_value, 0);
             lir_op_t *call_op = lir_op_rt_call(
@@ -295,7 +295,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
                 if (is_spread) {
                     lir_var_t *spared_target_var = spread_target->value;
                     lir_operand_t *spread_rtype_index = LIR_NEW_IMM_OPERAND(
-                            TYPE_INT, int_value, find_rtype_index(spared_target_var->type));
+                            TYPE_INT, int_value, ct_find_rtype_index(spared_target_var->type));
 
                     // spread 已经预编译过了
                     if (spread_index > 0) {
@@ -363,7 +363,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             // 首先编译 spread target, 然后基于 spread target 进行 array value 的操作
             // lir array value(spread_target, spread_index) -> rest_param_target
             lir_op_t *call_op = lir_op_rt_call(
-                    RT_CALL_LIST_VALUE,
+                    RT_CALL_LIST_ACCESS,
                     rest_param_target,
                     2,
                     spread_target,
@@ -486,7 +486,7 @@ static lir_operand_t *compiler_list_value(closure_t *c, ast_expr expr) {
     lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     // 如果使用是没问题的，但是外部的值没法写入进去
     lir_op_t *call_op = lir_op_rt_call(
-            RT_CALL_LIST_VALUE,
+            RT_CALL_LIST_ACCESS,
             value_point,
             2,
             base_target,
@@ -520,9 +520,9 @@ static lir_operand_t *compiler_new_list(closure_t *c, ast_expr expr) {
     typedecl_list_t *list_decl = ast->type.list_decl;
     // call list_new
     lir_operand_t *rtype_index = LIR_NEW_IMM_OPERAND(
-            TYPE_INT, int_value, find_rtype_index(ast->type));
+            TYPE_INT, int_value, ct_find_rtype_index(ast->type));
     lir_operand_t *element_rtype_index = LIR_NEW_IMM_OPERAND(
-            TYPE_INT, int_value, find_rtype_index(list_decl->element_type));
+            TYPE_INT, int_value, ct_find_rtype_index(list_decl->element_type));
     lir_operand_t *capacity = LIR_NEW_IMM_OPERAND(
             TYPE_INT, int_value, 0);
     // 传递 list element type size 或者自己计算出来也行
@@ -545,7 +545,7 @@ static lir_operand_t *compiler_new_list(closure_t *c, ast_expr expr) {
         lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(item_expr.type, 1));
         lir_operand_t *index_target = LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, i);
         call_op = lir_op_rt_call(
-                RT_CALL_LIST_VALUE,
+                RT_CALL_LIST_ACCESS,
                 value_point,
                 2,
                 base_target,
@@ -579,7 +579,7 @@ static lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr) {
     // target 通常就是一个 temp_var
     lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     lir_op_t *call_op = lir_op_rt_call(
-            RT_CALL_ENV_VALUE,
+            RT_CALL_ENV_ACCESS,
             value_point,
             2,
             env_name_param,
@@ -614,7 +614,7 @@ static lir_operand_t *compiler_map_value(closure_t *c, ast_expr expr) {
     // runtime get slot by temp var runtime.map_offset(base, "key")
     lir_operand_t *value_point = lir_temp_var_operand(c, type_with_point(expr.type, 1));
     lir_op_t *call_op = lir_op_rt_call(
-            RT_CALL_MAP_VALUE,
+            RT_CALL_MAP_ACCESS,
             value_point,
             2,
             base_target,
@@ -658,7 +658,7 @@ static lir_operand_t *compiler_new_map(closure_t *c, ast_expr expr) {
 
         lir_operand_t *temp_point = lir_temp_var_operand(c, type_with_point(key_expr.type, 1));
         call_op = lir_op_rt_call(
-                RT_CALL_MAP_VALUE,
+                RT_CALL_MAP_ACCESS,
                 temp_point,
                 2,
                 target, // map base
@@ -711,11 +711,13 @@ static lir_operand_t *compiler_new_struct(closure_t *c, ast_expr expr) {
     lir_operand_t *target = lir_temp_var_operand(c, expr.type);
 
     typedecl_struct_t *struct_decl = ast->type.struct_decl;
-    int size = ast_struct_decl_size(struct_decl);
 
     // new struct by runtime call, base_target
-    linked_push(c->operations, lir_op_rt_call(RT_CALL_GC_MALLOC,
-                                              target, 1, LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, size)));
+    uint64_t rtype_index = ct_find_rtype_index(ast->type);
+    linked_push(c->operations, lir_op_rt_call(RT_CALL_STRUCT_NEW,
+                                              target,
+                                              1,
+                                              LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, rtype_index)));
 
     // set init value
     for (int i = 0; i < ast->count; ++i) {
@@ -846,7 +848,7 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
 
             lir_operand_t *env_index_param = LIR_NEW_IMM_OPERAND(TYPE_INT, int_value, i);
             lir_op_t *call_op = lir_op_rt_call(
-                    RT_CALL_SET_ENV,
+                    RT_CALL_ENV_ASSIGN,
                     NULL,
                     3,
                     env_name_param,

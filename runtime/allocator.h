@@ -14,7 +14,7 @@
  * @param type
  * @return
  */
-addr_t runtime_malloc(uint size, rtype_t *type);
+void * runtime_malloc(uint size, rtype_t *type);
 
 mspan_t *mspan_new(addr_t base, uint pages_count, uint8_t spanclass);
 

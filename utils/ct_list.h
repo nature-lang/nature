@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "utils/type.h"
 
-#define DEFAULT_LIST_CAPACITY 8
+#define LIST_DEFAULT_CAPACITY 8
 
 typedef struct {
     uint64_t element_size; // 元素的大小

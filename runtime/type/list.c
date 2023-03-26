@@ -6,7 +6,7 @@
 void list_grow(memory_list_t *l) {
     l->capacity = l->capacity * 2;
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
-    memory_array_t new_array_data = array_new(element_rtype, l->capacity);
+    memory_array_t *new_array_data = array_new(element_rtype, l->capacity);
     memmove(new_array_data, l->array_data, l->capacity * rtype_heap_out_size(element_rtype));
     l->array_data = new_array_data;
 }
@@ -28,12 +28,12 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
     rtype_t *element_rtype = rt_find_rtype(element_rtype_index);
 
     // 创建 array data
-    memory_array_t array_data = array_new(element_rtype, capacity);
+    memory_array_t *array_data = array_new(element_rtype, capacity);
 
     // - 进行内存申请,申请回来一段内存是 memory_list_t 大小的内存, memory_list_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 list_data + 1 时会按照 sizeof(memory_list_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    memory_list_t *list_data = (memory_list_t *) runtime_malloc(list_rtype->size, list_rtype);
+    memory_list_t *list_data = runtime_malloc(list_rtype->size, list_rtype);
     list_data->capacity = capacity;
     list_data->length = 0;
     list_data->element_rtype_index = element_rtype->index;
@@ -42,13 +42,31 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
     return list_data;
 }
 
-void *list_value(memory_list_t *l, uint64_t index) {
-    assertf(index <= l->length - 1, "index out of range [%d] with length %d", l->length, index);
+void *list_access(memory_list_t *l, uint64_t index) {
+    assertf(index < l->length, "index out of range [%d] with length %d", l->length, index);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     // 计算 offset
     uint64_t offset = rtype_heap_out_size(element_rtype) * index; // (size unit byte) * index
     return l->array_data + offset;
+}
+
+/**
+ * index 必须在 length 范围内
+ * @param l
+ * @param index
+ * @param ref
+ * @return
+ */
+void list_assign(memory_list_t *l, uint64_t index, void *ref) {
+    assertf(index <= l->length - 1, "index out of range [%d] with length %d", l->length, index);
+
+    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
+    uint64_t element_size = rtype_heap_out_size(element_rtype);
+    // 计算 offset
+    uint64_t offset = rtype_heap_out_size(element_rtype) * index; // (size unit byte) * index
+    void *p = l->array_data + offset;
+    memmove(p, ref, element_size);
 }
 
 uint64_t list_length(memory_list_t *l) {
@@ -65,12 +83,8 @@ void list_push(memory_list_t *l, void *ref) {
         list_grow(l);
     }
 
-    rtype_t *element_type = rt_find_rtype(l->element_rtype_index);
-
     uint64_t index = l->length++;
-    byte *value = list_value(l, index);
-    // 内存移动操作
-    memmove(value, ref, rtype_heap_out_size(element_type));
+    list_assign(l, index, ref);
 }
 
 memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start, uint64_t end) {
@@ -78,7 +92,7 @@ memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     memory_list_t *sliced_list = list_new(rtype_index, l->element_rtype_index, capacity);
 
-    void *src = list_value(l, start);
+    void *src = list_access(l, start);
 
     // memmove
     memmove(sliced_list->array_data, src, rtype_heap_out_size(element_rtype) * capacity);
@@ -94,14 +108,14 @@ memory_list_t *list_concat(uint64_t rtype_index, memory_list_t *a, memory_list_t
     memory_list_t *concat_list = list_new(rtype_index, a->element_rtype_index, capacity);
 
     // 合并 a 到
-    void *dst = list_value(concat_list, concat_list->length - 1);
-    void *src = list_value(a, 0);
+    void *dst = list_access(concat_list, concat_list->length - 1);
+    void *src = list_access(a, 0);
     memmove(dst, src, a->length * rtype_heap_out_size(element_rtype));
     concat_list->length + a->length;
 
     // 合并 b
-    dst = list_value(concat_list, concat_list->length - 1);
-    src = list_value(b, 0);
+    dst = list_access(concat_list, concat_list->length - 1);
+    src = list_access(b, 0);
     memmove(dst, src, b->length * rtype_heap_out_size(element_rtype));
     concat_list->length += b->length;
 

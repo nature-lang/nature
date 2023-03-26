@@ -91,7 +91,7 @@ char *lir_var_to_string(lir_var_t *var) {
 
 //    stack_frame_offset = *var->local->stack_frame_offset;
     if (var->type.kind > 0) {
-        type_string = type_to_string[var->type.kind];
+        type_string = type_kind_string[var->type.kind];
         for (int i = 0; i < var->type.point; ++i) {
             type_string = str_connect(type_string, "*");
         }
@@ -147,7 +147,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
 char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     string indirect_addr_str = "";
-    string type_string = type_to_string[operand_addr->type.kind];
+    string type_string = type_kind_string[operand_addr->type.kind];
     sprintf(buf, "%sI_ADDR[%s:%u:%s]",
             indirect_addr_str,
             lir_operand_to_string(operand_addr->base),

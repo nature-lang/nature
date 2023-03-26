@@ -35,6 +35,4 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key);
 
 void table_adjust(table_t *t, int capacity);
 
-uint32_t hash_string(const string key);
-
 #endif //NATURE_SRC_LIB_TABLE_H_

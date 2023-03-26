@@ -2,6 +2,17 @@
 #include "helper.h"
 #include "stdlib.h"
 
+//static uint32_t table_hash_string(const string key) {
+//    uint32_t hash = 2166136261u;
+//    while (key != NULL && *key != '\0') {
+//        hash ^= *key;
+//        hash *= 16777619;
+//        ++key;
+//    }
+//
+//    return hash;
+//}
+
 void table_init(table_t *t) {
     t->count = 0;
     t->capacity = 0;
@@ -111,17 +122,6 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
         // 如果 index + 1 = capacity, 则 index = 0; 既从头开始
         index = (index + 1) % capacity;
     }
-}
-
-uint32_t hash_string(const string key) {
-    uint32_t hash = 2166136261u;
-    while (key != NULL && *key != '\0') {
-        hash ^= *key;
-        hash *= 16777619;
-        ++key;
-    }
-
-    return hash;
 }
 
 table_t *table_new() {

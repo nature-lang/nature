@@ -12,12 +12,12 @@ memory_string_t *string_new(void *raw_string, uint64_t length) {
     // byte 数组，先手动创建一个简单类型
     typedecl_t element_type = type_base_new(TYPE_BYTE);
     rtype_t element_rtype = reflect_type(element_type);
-    memory_array_t array_data = array_new(&element_rtype, length);
+    memory_array_t *array_data = array_new(&element_rtype, length);
 
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
     typedecl_t string_type = type_base_new(TYPE_STRING);
     rtype_t string_rtype = reflect_type(string_type);
-    memory_string_t *string_data = (memory_string_t *) runtime_malloc(string_rtype.size, &string_rtype);
+    memory_string_t *string_data = runtime_malloc(string_rtype.size, &string_rtype);
 
     string_data->length = length;
     string_data->array_data = array_data;

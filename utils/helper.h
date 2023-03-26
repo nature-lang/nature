@@ -71,6 +71,9 @@ static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
 }
 
 static inline uint32_t hash_string(char *str) {
+    if (str == NULL) {
+        return 0;
+    }
     return hash_data(str, strlen(str));
 }
 

@@ -132,6 +132,7 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/processor.c
         ${PROJECT_SOURCE_DIR}/runtime/sizeclass.h
         ${PROJECT_SOURCE_DIR}/runtime/memory.h
+        ${PROJECT_SOURCE_DIR}/runtime/memory.c
         ${PROJECT_SOURCE_DIR}/runtime/allocator.h
         ${PROJECT_SOURCE_DIR}/runtime/allocator.c
         ${PROJECT_SOURCE_DIR}/runtime/collector.h
@@ -142,6 +143,12 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/type/map.h
         ${PROJECT_SOURCE_DIR}/runtime/type/map.c
         ${PROJECT_SOURCE_DIR}/runtime/type/array.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/struct.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/struct.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/set.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/set.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/tuple.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/tuple.h
         ${PROJECT_SOURCE_DIR}/runtime/type/string.h
         ${PROJECT_SOURCE_DIR}/runtime/type/string.c
         ${PROJECT_SOURCE_DIR}/runtime/type/list.h

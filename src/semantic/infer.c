@@ -172,9 +172,9 @@ typedecl_t infer_binary(ast_binary_expr *expr) {
     assertf(left_type.kind == TYPE_INT || left_type.kind == TYPE_FLOAT,
             "invalid operation: %s, expr type must be int or float, cannot '%s' type",
             ast_expr_operator_to_string[expr->operator],
-            type_to_string[right_type.kind]);
+            type_kind_string[right_type.kind]);
     assertf(right_type.kind == left_type.kind, "binary operations type not consistent， left: %s, right: %s",
-            type_to_string[right_type.kind], type_to_string[right_type.kind]);
+            type_kind_string[right_type.kind], type_kind_string[right_type.kind]);
 
     switch (expr->operator) {
         case AST_EXPR_OPERATOR_ADD:
@@ -363,8 +363,8 @@ typedecl_t infer_new_struct(ast_new_struct *new_struct) {
                 "line: %d, property '%s' expect '%s' type, cannot assign '%s' type",
                 infer_line,
                 struct_property->key,
-                type_to_string[expect_type.kind],
-                type_to_string[actual_type.kind]);
+                type_kind_string[expect_type.kind],
+                type_kind_string[actual_type.kind]);
     }
 
     return new_struct->type;
@@ -412,7 +412,7 @@ typedecl_t infer_access(ast_expr *expr) {
 
         result = list_decl->element_type;
     } else {
-        assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line, type_to_string[left_type.kind]);
+        assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line, type_kind_string[left_type.kind]);
     };
 
     return result;
@@ -475,7 +475,7 @@ typedecl_t infer_call(ast_call *call) {
         // first param from formal
         typedecl_t formal = select_formal_param(type_fn, i);
         assertf(type_compare(formal, actual), "call param[%d] type error, expect '%s' type, actual '%s' type", i,
-                type_to_string[formal.kind], type_to_string[actual.kind]);
+                type_kind_string[formal.kind], type_kind_string[actual.kind]);
 
         // 如果 i < actual_param_count,则 actual_param 需要配置 target type
         bool is_spread = call->spread_param && i == call->actual_param_count - 1;
@@ -496,7 +496,7 @@ void infer_var_decl(ast_var_decl *var_decl) {
     var_decl->type = infer_type(var_decl->type);
     typedecl_t type = var_decl->type;
     if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL) {
-        error_printf(infer_line, "variable declarations cannot use '%s'", type_to_string[type.kind]);
+        error_printf(infer_line, "variable declarations cannot use '%s'", type_kind_string[type.kind]);
     }
 }
 
@@ -566,7 +566,7 @@ void infer_for_in(ast_for_in_stmt *stmt) {
     typedecl_t iterate_type = infer_expr(&stmt->iterate);
 
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
-            "for in iterate code must be map/list, actual=%s", type_to_string[iterate_type.kind]);
+            "for in iterate code must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
     // 类型推断
     ast_var_decl *key_decl = stmt->gen_key;
@@ -597,8 +597,8 @@ void infer_return(ast_return_stmt *stmt) {
 
     typedecl_t expect_type = infer_current->closure_decl->fn->return_type;
     assertf(type_compare(expect_type, return_type), "line: %d, return code(%s) error,expect '%s' code", infer_line,
-            type_to_string[return_type.kind],
-            type_to_string[expect_type.kind]);
+            type_kind_string[return_type.kind],
+            type_kind_string[expect_type.kind]);
 }
 
 infer_closure *infer_current_init(ast_closure_t *closure_decl) {
@@ -670,7 +670,7 @@ typedecl_t infer_type(typedecl_t type) {
         goto TYPE_ORIGIN;
     }
 
-    assertf(false, "cannot parser type %s", type_to_string[type.kind]);
+    assertf(false, "cannot parser type %s", type_kind_string[type.kind]);
     TYPE_ORIGIN:
     // - 增加 is_heap 标识
     type.in_heap = type_default_in_heap(type);

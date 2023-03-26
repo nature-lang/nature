@@ -55,10 +55,11 @@ array[any] = [
 	[]
 ]
 
-tuple(int, bool) = (1, true)
+tuple(int, bool) a = (1, true)
 
 // 带前缀(第一版如果不好编译的话就别省略了,直接通过类型判断数据结构还是挺方便的)
 // 但是 array 作为已经渊远留长的结构，且使用场景也比较多，所以必须省略前缀
+// tuple 由于是独享括号语法，因此也可以考虑在声明时省略 tuple 关键字
 [int] a = [1, 2, 3]
 [int, 2] a = [1, 2]
 tuple(int, bool) b = (1, true)

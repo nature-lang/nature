@@ -18,7 +18,7 @@ char *ref_to_string_by_rtype(rtype_t *rtype, void *data_ref) {
 
     if (rtype->index == TYPE_STRING) {
         memory_string_t *memory_string = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        char *str = (void *) runtime_malloc(memory_string->length + 1, NULL);
+        char *str = runtime_malloc(memory_string->length + 1, NULL);
         str[memory_string->length] = '\0';
 
         memmove(str, memory_string->array_data, memory_string->length);

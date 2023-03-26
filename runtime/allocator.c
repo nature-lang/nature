@@ -787,38 +787,6 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     sys_memory_remove((void *) span->base, span->pages_count * PAGE_SIZE);
 }
 
-void fndefs_deserialize() {
-    byte *gc_bits_offset = ((byte *) rt_fndef_data) + rt_fndef_count * sizeof(fndef_t);
-    for (int i = 0; i < rt_fndef_count; ++i) {
-        fndef_t *f = &rt_fndef_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
-
-        f->gc_bits = gc_bits_offset;
-
-        gc_bits_offset += gc_bits_size;
-    }
-}
-
-/**
- * 链接器已经将 rt_type_data 和 rt_type_count 赋值完毕，
- * rt_type_data 应该直接可以使用,
- * 接下来也只需要对 gc bits 进行重定位即可
- */
-void rtypes_deserialize() {
-    byte *gc_bits_offset = (byte *) (rt_rtype_data + rt_rtype_count);
-    for (int i = 0; i < rt_rtype_count; ++i) {
-        rtype_t *r = &rt_rtype_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
-
-        r->gc_bits = gc_bits_offset;
-        gc_bits_offset += gc_bits_size;
-    }
-}
-
-void symdefs_deserialize() {
-    rt_symdef_data = rt_symdef_data;
-}
-
 
 void memory_init() {
     // - 初始化 mheap
@@ -902,14 +870,14 @@ uint64_t arena_index(uint64_t base) {
  * @param type 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
  * @return
  */
-addr_t runtime_malloc(uint size, rtype_t *type) {
+void *runtime_malloc(uint size, rtype_t *type) {
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
-        return std_malloc(size, type);
+        return (void *) std_malloc(size, type);
     }
 
     // 2. 大型内存分配(大于>32KB)
-    return large_malloc(size, type);
+    return (void *) large_malloc(size, type);
 }
 
 mspan_t *mspan_new(uint64_t base, uint pages_count, uint8_t spanclass) {
@@ -931,6 +899,3 @@ mspan_t *mspan_new(uint64_t base, uint pages_count, uint8_t spanclass) {
     return span;
 }
 
-rtype_t *rt_find_rtype(uint64_t index) {
-    return &rt_rtype_data[index];
-}

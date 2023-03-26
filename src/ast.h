@@ -313,8 +313,6 @@ typedef struct {
 
 ast_ident *ast_new_ident(string literal);
 
-int ast_struct_decl_size(typedecl_struct_t *struct_decl);
-
 int ast_struct_offset(typedecl_struct_t *struct_decl, string property);
 
 typedecl_t select_actual_param(ast_call *call, uint8_t index);

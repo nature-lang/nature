@@ -22,29 +22,45 @@
 // RT = runtime
 // CT = compile time
 #define RT_CALL_LIST_NEW "linked_new"
-#define RT_CALL_LIST_VALUE "list_value"
+#define RT_CALL_LIST_ACCESS "list_access"
+#define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SPLICE "list_slice"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
-#define RT_CALL_TRANS_ANY "trans_any"
 
 #define RT_CALL_MAP_NEW "map_new"
-#define RT_CALL_MAP_VALUE "map_value" // key 不变的情况下修改 value 部分的值
+#define RT_CALL_MAP_ACCESS "map_access"
+#define RT_CALL_MAP_ASSIGN "map_assign"
+#define RT_CALL_MAP_DELETE "map_delete"
+
+#define RT_CALL_SET_NEW "set_new"
+#define RT_CALL_SET_ADD "set_add" // 往集合中添加元素
+#define RT_CALL_SET_CONTAINS "set_contains" // s.contain()
+#define RT_CALL_SET_DELETE "set_delete" // 将元素从 set 中移除
+
+#define RT_CALL_STRUCT_NEW "struct_new"
+//#define RT_CALL_STRUCT_ACCESS "struct_access"
+//#define RT_CALL_STRUCT_ASSIGN "struct_assign"
+
+// 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
+#define RT_CALL_TUPLE_NEW "tuple_new"
+#define RT_CALL_TUPLE_ASSIGN "tuple_assign"
+#define RT_CALL_TUPLE_ACCESS "tuple_access"
+
+
+#define RT_CALL_TRANS_ANY "trans_any"
 
 #define RT_CALL_ITERATE_COUNT "iterate_count"
 #define RT_CALL_ITERATE_GEN_KEY "iterate_gen_key"
 #define RT_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_SET_ENV "set_env"
-#define RT_CALL_ENV_VALUE "env_value"
+#define RT_CALL_ENV_ASSIGN "env_assign"
+#define RT_CALL_ENV_ACCESS "env_access"
 
 #define RT_CALL_STRING_NEW "string_new"
-
-// GC 相关函数
-#define RT_CALL_GC_MALLOC "gc_malloc"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
