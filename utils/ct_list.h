@@ -29,7 +29,7 @@ list_t *ct_list_new(uint64_t element_size);
  * @param l
  * @param value
  */
-void* ct_list_push(list_t *l, void *value);
+void *ct_list_push(list_t *l, void *value);
 
 void *ct_list_value(list_t *l, uint64_t index);
 

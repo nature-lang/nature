@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "slice.h"
 #include "table.h"
+#include "ct_list.h"
 
 #define POINTER_SIZE 8 // 单位 byte
 #define INT_SIZE 8 // int 类型的占用的字节，随着平台的不同而不同
@@ -187,7 +188,7 @@ struct typedecl_array_t {
 };
 
 /**
- * map{int:int}
+ * set{int}
  */
 struct typedecl_set_t {
     typedecl_t key_type;
@@ -217,9 +218,9 @@ struct typedecl_struct_t {
     typedecl_struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
 };
 
+// (int, int, float)
 struct typedecl_tuple_t {
-    uint8_t count; // tuple 元素的个数
-    typedecl_t elements[UINT8_MAX];
+    list_t *elements; // 由 typedecl_t 组成
 };
 
 /**

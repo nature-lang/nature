@@ -27,16 +27,16 @@ char *scanner_number_advance(module_t *module);
 
 char *scanner_string_advance(module_t *module, char c);
 
-token_type scanner_ident_type(char *word, int length);
+token_e scanner_ident_type(char *word, int length);
 
-token_type scanner_rest_ident_type(char *word,
-                                   int word_length,
-                                   int8_t rest_start,
-                                   int8_t rest_length,
-                                   char *rest,
-                                   int8_t type);
+token_e scanner_rest_ident_type(char *word,
+                                int word_length,
+                                int8_t rest_start,
+                                int8_t rest_length,
+                                char *rest,
+                                int8_t type);
 
-token_type scanner_special_char(module_t *m);
+token_e scanner_special_char(module_t *m);
 
 char scanner_guard_advance(module_t *module); // guard 前进一个字符
 char *scanner_gen_word(module_t *module);

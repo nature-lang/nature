@@ -19,7 +19,7 @@ linked_t *scanner(module_t *module) {
         scanner_skip_space(module);
 
         if (module->s_cursor.has_newline && scanner_is_at_stmt_end(module)) {
-            // push token TOKEN_STMT_EOF
+            // push token_t TOKEN_STMT_EOF
             linked_push(list, token_new(TOKEN_STMT_EOF, ";", module->s_cursor.line - 1));
         }
 
@@ -30,7 +30,7 @@ linked_t *scanner(module_t *module) {
         if (scanner_is_alpha(module, *module->s_cursor.current)) {
             char *word = scanner_ident_advance(module);
 
-            token *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
+            token_t *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
             linked_push(list, t);
             continue;
         }
@@ -92,7 +92,7 @@ char *scanner_ident_advance(module_t *module) {
     return scanner_gen_word(module);
 }
 
-token_type scanner_special_char(module_t *m) {
+token_e scanner_special_char(module_t *m) {
     char c = scanner_guard_advance(m);
 
     switch (c) {
@@ -292,7 +292,7 @@ char *scanner_number_advance(module_t *module) {
     return scanner_gen_word(module);
 }
 
-token_type scanner_ident_type(char *word, int length) {
+token_e scanner_ident_type(char *word, int length) {
     switch (word[0]) {
         case 'a': {
             if (length == 2 && word[1] == 's') {
@@ -318,7 +318,7 @@ token_type scanner_ident_type(char *word, int length) {
             if (length > 1) {
                 switch (word[1]) {
                     case 'n':
-                        return scanner_rest_ident_type(word, length, 2, 0, "n", TOKEN_FUNCTION);
+                        return scanner_rest_ident_type(word, length, 2, 0, "n", TOKEN_FN);
                     case 'a':
                         return scanner_rest_ident_type(word, length, 2, 3, "lse", TOKEN_FALSE);
                     case 'l':
@@ -347,13 +347,14 @@ token_type scanner_ident_type(char *word, int length) {
                 }
             }
         }
-//        case 'l':
-//            return scanner_rest_ident_type(word, length, 1, 3, "ist", TOKEN_ARRAY);
         case 'm':
             return scanner_rest_ident_type(word, length, 1, 2, "ap", TOKEN_MAP);
         case 'n':
             return scanner_rest_ident_type(word, length, 1, 3, "ull", TOKEN_NULL);
-        case 's': {
+        case 's': { // set, string,struct
+            if (word[1] == 'e') {
+                return scanner_rest_ident_type(word, length, 1, 2, "et", TOKEN_SET);
+            }
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
                 switch (word[3]) {
                     case 'i':
@@ -374,12 +375,7 @@ token_type scanner_ident_type(char *word, int length) {
             }
         }
         case 'v': {
-            switch (word[1]) {
-                case 'a':
-                    return scanner_rest_ident_type(word, length, 2, 1, "r", TOKEN_VAR);
-                case 'o':
-                    return scanner_rest_ident_type(word, length, 2, 2, "id", TOKEN_VOID);
-            }
+            return scanner_rest_ident_type(word, length, 1, 2, "ar", TOKEN_VAR);
         }
         case 'w':
             return scanner_rest_ident_type(word, length, 1, 4, "hile", TOKEN_WHILE);
@@ -411,12 +407,12 @@ char *scanner_gen_word(module_t *module) {
     return word;
 }
 
-token_type scanner_rest_ident_type(char *word,
-                                   int word_length,
-                                   int8_t rest_start,
-                                   int8_t rest_length,
-                                   char *rest,
-                                   int8_t type) {
+token_e scanner_rest_ident_type(char *word,
+                                int word_length,
+                                int8_t rest_start,
+                                int8_t rest_length,
+                                char *rest,
+                                int8_t type) {
     if (rest_start + rest_length == word_length &&
         memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;

@@ -171,7 +171,7 @@ typedecl_t infer_binary(ast_binary_expr *expr) {
 
     assertf(left_type.kind == TYPE_INT || left_type.kind == TYPE_FLOAT,
             "invalid operation: %s, expr type must be int or float, cannot '%s' type",
-            ast_expr_operator_to_string[expr->operator],
+            ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
     assertf(right_type.kind == left_type.kind, "binary operations type not consistent， left: %s, right: %s",
             type_kind_string[right_type.kind], type_kind_string[right_type.kind]);
@@ -319,8 +319,8 @@ typedecl_t infer_new_map(ast_map_new *new_map) {
     }
 
     // 冗余
-    new_map->key_type = map_decl->key_type;
-    new_map->value_type = map_decl->value_type;
+//    new_map->key_type = map_decl->key_type;
+//    new_map->value_type = map_decl->value_type;
 
     result.map_decl = map_decl;
 

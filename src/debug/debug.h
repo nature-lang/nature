@@ -24,7 +24,7 @@ string lir_opcode_to_string[UINT8_MAX];
 
 //#define DEBUG_CFG
 
-void debug_scanner(token *t);
+void debug_scanner(token_t *t);
 
 void debug_parser(int line, string token);
 

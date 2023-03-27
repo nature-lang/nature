@@ -92,7 +92,7 @@ string token_type_to_debug[] = {
         [TOKEN_INT]="TOKEN_INT",
         [TOKEN_ARRAY]="TOKEN_ARRAY",
         [TOKEN_MAP]="TOKEN_MAP",
-        [TOKEN_FUNCTION]="TOKEN_FUNCTION",
+        [TOKEN_FN]="TOKEN_FN",
         [TOKEN_VOID]="TOKEN_VOID",
         [TOKEN_IMPORT]="TOKEN_IMPORT",
         [TOKEN_AS]="TOKEN_AS",
@@ -144,7 +144,7 @@ void debug_parser_stmt(ast_type_e t) {
     printf("\n[DEBUG] PARSER stmt: %s\n", ast_stmt_expr_type_to_debug[t]);
 }
 
-void debug_scanner(token *t) {
+void debug_scanner(token_t *t) {
     printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_debug[t->type], t->literal);
 }
 

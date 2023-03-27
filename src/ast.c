@@ -1,23 +1,6 @@
 #include "ast.h"
 #include "utils/helper.h"
 
-string ast_expr_operator_to_string[100] = {
-        [AST_EXPR_OPERATOR_ADD] = "+",
-        [AST_EXPR_OPERATOR_SUB] = "-",
-        [AST_EXPR_OPERATOR_MUL] = "*",
-        [AST_EXPR_OPERATOR_DIV] = "/",
-
-        [AST_EXPR_OPERATOR_LT] = "<",
-        [AST_EXPR_OPERATOR_LTE] = "<=",
-        [AST_EXPR_OPERATOR_GT] = ">", // >
-        [AST_EXPR_OPERATOR_GTE] = ">=",  // >=
-        [AST_EXPR_OPERATOR_EQ_EQ] = "==", // ==
-        [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
-
-        [AST_EXPR_OPERATOR_NOT] = "!", // unary !expr
-        [AST_EXPR_OPERATOR_NEG] = "-", // unary -expr
-};
-
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = malloc(sizeof(ast_ident));
     ident->literal = literal;

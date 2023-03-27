@@ -262,21 +262,21 @@ static rtype_t rtype_tuple(typedecl_tuple_t *t) {
     uint need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 key 的
-    for (int i = 0; i < t->count; ++i) {
-        typedecl_t element_type = t->elements[i];
-        uint16_t item_size = type_sizeof(element_type);
+    for (uint64_t i = 0; i < t->elements->length; ++i) {
+        typedecl_t *element_type = ct_list_value(t->elements, i);
+        uint16_t item_size = type_sizeof(*element_type);
         if (item_size > max) {
             max = item_size;
         }
         // 按 offset 对齐
         offset = align(offset, item_size);
         // 计算 element_rtype
-        rtype_t rtype = ct_reflect_type(element_type);
+        rtype_t rtype = ct_reflect_type(*element_type);
         str = str_connect(str, itoa(rtype.hash));
 
         // 如果存在 heap 中就是需要 gc
         // TODO element_type size > 8 处理
-        bool need_gc = type_need_gc(element_type);
+        bool need_gc = type_need_gc(*element_type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
@@ -543,14 +543,13 @@ uint64_t rtype_heap_out_size(rtype_t *rtype) {
  * @param key
  * @return
  */
-uint64_t type_struct_offset(typedecl_struct_t *t, char *key, uint64_t *size) {
+uint64_t type_struct_offset(typedecl_struct_t *t, char *key) {
     uint64_t offset = 0;
     for (int i = 0; i < t->count; ++i) {
         typedecl_struct_property_t p = t->properties[i];
         uint64_t item_size = type_sizeof(p.type);
         offset = align(offset, item_size);
         if (str_equal(p.key, key)) {
-            *size = item_size;
             // found
             return offset;
         }

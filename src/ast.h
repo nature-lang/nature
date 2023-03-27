@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "utils/value.h"
 #include "utils/slice.h"
+#include "utils/ct_list.h"
 #include "utils/table.h"
 #include "utils/type.h"
 
@@ -76,7 +77,22 @@ typedef enum {
     AST_EXPR_OPERATOR_IA, // *解引用
 } ast_expr_operator_e;
 
-string ast_expr_operator_to_string[100];
+static string ast_expr_op_str[] = {
+        [AST_EXPR_OPERATOR_ADD] = "+",
+        [AST_EXPR_OPERATOR_SUB] = "-",
+        [AST_EXPR_OPERATOR_MUL] = "*",
+        [AST_EXPR_OPERATOR_DIV] = "/",
+
+        [AST_EXPR_OPERATOR_LT] = "<",
+        [AST_EXPR_OPERATOR_LTE] = "<=",
+        [AST_EXPR_OPERATOR_GT] = ">", // >
+        [AST_EXPR_OPERATOR_GTE] = ">=",  // >=
+        [AST_EXPR_OPERATOR_EQ_EQ] = "==", // ==
+        [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
+
+        [AST_EXPR_OPERATOR_NOT] = "!", // unary !expr
+        [AST_EXPR_OPERATOR_NEG] = "-", // unary -expr
+};
 //
 //typedef struct {
 //    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
@@ -271,9 +287,19 @@ typedef struct {
 typedef struct {
     ast_map_item values[UINT8_MAX];
     uint64_t count; // 默认初始化的数量
-    typedecl_t key_type; // 类型推导截断冗余
-    typedecl_t value_type; // 类型推导截断冗余
+//    typedecl_t key_type; // 类型推导截断冗余
+//    typedecl_t value_type; // 类型推导截断冗余
 } ast_map_new;
+
+// var s = {1, 2, 3, call(), xxx}
+typedef struct {
+    list_t *keys; // 值为 ast_expr
+} ast_set_new;
+
+// var s = (1, 2, 2.14, 1.15, true)
+typedef struct {
+    list_t *elements; // 值为 ast_expr
+} ast_tuple_new;
 
 typedef struct {
     ast_ident *env;

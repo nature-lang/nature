@@ -1,3 +1,7 @@
+// 1. import 后面的字符串是否要加双引号？
+// 2. import 后面的目录如何分词？
+// 3. import 需要支持哪几种类型？
+
 import "syscall_inst" // 系统调用, 命名空间 syscall_inst
 import "project/file" // 基于 main 进行的本地包引用, 命名空间 file
 import "project/bar" // 如果指定的是一个目录，默认则引用目录同名文件, root/bar/bar.n, 命名空间 bar
