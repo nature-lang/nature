@@ -232,8 +232,9 @@ struct typedecl_tuple_t {
  */
 struct typedecl_fn_t {
     typedecl_t return_type;
-    typedecl_t formals_types[UINT8_MAX];
-    uint8_t formals_count;
+//    typedecl_t formals_types[UINT8_MAX];
+//    uint8_t formals_count;
+    list_t formal_types; // typedecl_t
     bool rest_param;
 };
 

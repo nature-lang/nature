@@ -16,7 +16,7 @@ void infer(ast_closure_t *closure_decl) {
 }
 
 typedecl_t infer_closure_decl(ast_closure_t *closure_decl) {
-    ast_new_fn *function_decl = closure_decl->fn;
+    ast_fn_decl *function_decl = closure_decl->fn;
 
     // 类型还原
     function_decl->return_type = infer_type(function_decl->return_type);
@@ -65,7 +65,7 @@ void infer_stmt(ast_stmt *stmt) {
             infer_assign((ast_assign_stmt *) stmt->value);
             break;
         }
-        case AST_NEW_CLOSURE: {
+        case AST_CLOSURE_NEW: {
             infer_closure_decl((ast_closure_t *) stmt->value);
             break;
         }
@@ -123,7 +123,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_STRUCT_NEW: {
-            type = infer_new_struct((ast_new_struct *) expr->value);
+            type = infer_new_struct((ast_struct_new_t *) expr->value);
             break;
         }
         case AST_EXPR_ACCESS: {
@@ -139,7 +139,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             type = infer_call((ast_call *) expr->value);
             break;
         }
-        case AST_NEW_CLOSURE: {
+        case AST_CLOSURE_NEW: {
             type = infer_closure_decl((ast_closure_t *) expr->value);
             break;
         }
@@ -240,7 +240,7 @@ typedecl_t infer_ident(string unique_ident) {
 
     // 比如 print 和 println 都已经注册在了符号表中
     if (symbol->type == SYMBOL_TYPE_FN) {
-        ast_new_fn *new_fn = symbol->ast_value;
+        ast_fn_decl *new_fn = symbol->ast_value;
         return infer_type(analysis_fn_to_type(new_fn));
     }
 
@@ -340,7 +340,7 @@ typedecl_t infer_new_map(ast_map_new *new_map) {
  * @param new_struct
  * @return
  */
-typedecl_t infer_new_struct(ast_new_struct *new_struct) {
+typedecl_t infer_new_struct(ast_struct_new_t *new_struct) {
     // 类型还原, struct ident 一定会被还原回 struct 原始结构
     // 如果本身已经是 struct 结构，那么期中的 struct key code 也会被还原成原始类型
     new_struct->type = infer_type(new_struct->type);
@@ -685,7 +685,7 @@ typedecl_t infer_type_def(typedecl_ident_t *def) {
         error_printf(infer_line, "'%s' is not a code", symbol->ident);
     }
 
-    ast_type_decl_stmt *type_decl_stmt = symbol->ast_value;
+    ast_typedef_stmt *type_decl_stmt = symbol->ast_value;
 
     // type_decl_stmt->ident 为自定义类型名称
     // type_decl_stmt->code 为引用的原始类型 int,my_int,struct....， 此时如果只有一次引用的话，实际上已经还原回去了

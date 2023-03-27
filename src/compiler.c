@@ -744,7 +744,7 @@ static lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
-    ast_new_struct *ast = expr.value;
+    ast_struct_new_t *ast = expr.value;
     lir_operand_t *struct_target = temp_var_operand(c, expr.type);
 
     typedecl_t type = ast->type;
@@ -907,13 +907,13 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
 
 static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
     switch (stmt->assert_type) {
-        case AST_NEW_CLOSURE: {
+        case AST_CLOSURE_NEW: {
             compiler_closure(c, (ast_expr) {
 //                    .type = NULL,
 //                    .target_type = NULL,
                     .line = stmt->line,
                     .value = stmt->value,
-                    .assert_type = AST_NEW_CLOSURE
+                    .assert_type = AST_CLOSURE_NEW
             });
             return;
         }
@@ -955,7 +955,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             compiler_return(c, (ast_return_stmt *) stmt->value);
             return;
         }
-        case AST_STMT_TYPE_DECL: {
+        case AST_STMT_TYPEDEF: {
             return;
         }
         default: {
@@ -977,7 +977,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_MAP_NEW] = compiler_map_new,
         [AST_EXPR_STRUCT_ACCESS] = compiler_struct_access,
         [AST_EXPR_STRUCT_NEW] = compiler_struct_new,
-        [AST_NEW_CLOSURE] = compiler_closure
+        [AST_CLOSURE_NEW] = compiler_closure
 };
 
 
@@ -1022,7 +1022,7 @@ slice_t *compiler(module_t *m, ast_closure_t *ast) {
     compiler_closure(NULL, (ast_expr) {
 //            .type = NULL,
 //            .target_type = NULL,
-            .assert_type = AST_NEW_CLOSURE,
+            .assert_type = AST_CLOSURE_NEW,
             .value = ast,
     });
 

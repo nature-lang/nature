@@ -53,7 +53,7 @@ typedecl_t infer_new_list(ast_new_list *new_list);
 
 typedecl_t infer_new_map(ast_map_new *new_map);
 
-typedecl_t infer_new_struct(ast_new_struct *new_struct);
+typedecl_t infer_new_struct(ast_struct_new_t *new_struct);
 
 typedecl_t infer_access(ast_expr *expr);
 

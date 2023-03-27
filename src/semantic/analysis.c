@@ -35,9 +35,9 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             analysis_assign(m, (ast_assign_stmt *) stmt->value);
             break;
         }
-        case AST_NEW_FN: {
+        case AST_FN_DECL: {
             // 注册 function_decl_type + ident
-            analysis_fn_decl_ident(m, (ast_new_fn *) stmt->value);
+            analysis_fn_decl_ident(m, (ast_fn_decl *) stmt->value);
 
             // 函数体添加到 延迟处理，从而可以 fn 引用当前环境的所有变量
             uint8_t count = m->analysis_current->contains_fn_count++;
@@ -65,8 +65,8 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             analysis_return(m, (ast_return_stmt *) stmt->value);
             break;
         }
-        case AST_STMT_TYPE_DECL: {
-            analysis_type_decl(m, (ast_type_decl_stmt *) stmt->value);
+        case AST_STMT_TYPEDEF: {
+            analysis_type_decl(m, (ast_typedef_stmt *) stmt->value);
             break;
         }
         default:
@@ -126,7 +126,7 @@ void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
     stmt->var_decl->ident = local->unique_ident;
 }
 
-typedecl_t analysis_fn_to_type(ast_new_fn *fn_decl) {
+typedecl_t analysis_fn_to_type(ast_fn_decl *fn_decl) {
     typedecl_fn_t *f = NEW(typedecl_fn_t);
     f->return_type = fn_decl->return_type;
     for (int i = 0; i < fn_decl->param_count; ++i) {
@@ -142,7 +142,7 @@ typedecl_t analysis_fn_to_type(ast_new_fn *fn_decl) {
     return type;
 }
 
-void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn) {
+void analysis_fn_decl_ident(module_t *m, ast_fn_decl *new_fn) {
     // 仅 fun 再次定义 as 才需要再次添加到符号表
     if (!str_equal(new_fn->name, FN_MAIN_NAME)) {
         if (strlen(new_fn->name) == 0) {
@@ -176,7 +176,7 @@ void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn) {
  * @param function_decl
  * @return
  */
-ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope_t *scope) {
+ast_closure_t *analysis_new_fn(module_t *m, ast_fn_decl *function_decl, analysis_local_scope_t *scope) {
     ast_closure_t *closure = NEW(ast_closure_t);
     closure->env_list = slice_new();
 
@@ -238,13 +238,13 @@ ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_
             // 函数注册到符号表已经在函数定义点注册过了
             ast_closure_t *closure_decl = analysis_new_fn(m, stmt->value,
                                                           m->analysis_current->contains_fn_decl[i].scope);
-            stmt->assert_type = AST_NEW_CLOSURE;
+            stmt->assert_type = AST_CLOSURE_NEW;
             stmt->value = closure_decl;
         } else {
             ast_expr *expr = m->analysis_current->contains_fn_decl[i].expr;
             ast_closure_t *closure_decl = analysis_new_fn(m, expr->value,
                                                           m->analysis_current->contains_fn_decl[i].scope);
-            expr->assert_type = AST_NEW_CLOSURE;
+            expr->assert_type = AST_CLOSURE_NEW;
             expr->value = closure_decl;
         };
     }
@@ -307,7 +307,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             break;
         };
         case AST_EXPR_STRUCT_NEW: {
-            analysis_new_struct(m, (ast_new_struct *) expr->value);
+            analysis_new_struct(m, (ast_struct_new_t *) expr->value);
             break;
         }
         case AST_EXPR_MAP_NEW: {
@@ -336,8 +336,8 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             analysis_call(m, (ast_call *) expr->value);
             break;
         }
-        case AST_NEW_FN: { // 右值
-            analysis_fn_decl_ident(m, (ast_new_fn *) expr->value);
+        case AST_FN_DECL: { // 右值
+            analysis_fn_decl_ident(m, (ast_fn_decl *) expr->value);
 
             // 函数体添加到 延迟处理
             uint8_t count = m->analysis_current->contains_fn_count++;
@@ -529,7 +529,7 @@ void analysis_unary(module_t *m, ast_unary_expr *expr) {
  * }
  * @param expr
  */
-void analysis_new_struct(module_t *m, ast_new_struct *expr) {
+void analysis_new_struct(module_t *m, ast_struct_new_t *expr) {
     analysis_type(m, &expr->type);
 
     for (int i = 0; i < expr->count; ++i) {
@@ -576,7 +576,7 @@ void analysis_return(module_t *m, ast_return_stmt *stmt) {
 
 // unique as
 // code foo = int
-void analysis_type_decl(module_t *m, ast_type_decl_stmt *stmt) {
+void analysis_type_decl(module_t *m, ast_typedef_stmt *stmt) {
     analysis_redeclare_check(m, stmt->ident);
     analysis_type(m, &stmt->type);
 
@@ -746,16 +746,16 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
             slice_push(var_assign_list, temp_stmt);
             continue;
         }
-        if (stmt->assert_type == AST_STMT_TYPE_DECL) {
-            ast_type_decl_stmt *type_decl = stmt->value;
+        if (stmt->assert_type == AST_STMT_TYPEDEF) {
+            ast_typedef_stmt *type_decl = stmt->value;
             char *ident = ident_with_module(m->ident, type_decl->ident);
             symbol_t *s = symbol_table_set(ident, SYMBOL_TYPE_DECL, type_decl, false);
             slice_push(m->global_symbols, s);
             continue;
         }
 
-        if (stmt->assert_type == AST_NEW_FN) {
-            ast_new_fn *new_fn = stmt->value;
+        if (stmt->assert_type == AST_FN_DECL) {
+            ast_fn_decl *new_fn = stmt->value;
             new_fn->name = ident_with_module(m->ident, new_fn->name); // 全局函数改名
 
             symbol_t *s = symbol_table_set(new_fn->name, SYMBOL_TYPE_FN, new_fn, false);
@@ -768,7 +768,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
     }
 
     // 添加 init fn
-    ast_new_fn *fn_init = NEW(ast_new_fn);
+    ast_fn_decl *fn_init = NEW(ast_fn_decl);
     fn_init->name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_base_new(TYPE_VOID);
     fn_init->param_count = 0;
@@ -793,7 +793,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
 
     // 遍历 fn list
     for (int i = 0; i < fn_list->count; ++i) {
-        ast_new_fn *fn = fn_list->take[i];
+        ast_fn_decl *fn = fn_list->take[i];
         ast_closure_t *closure = analysis_new_fn(m, fn, NULL);
         slice_push(m->ast_closures, closure);
     }
@@ -826,7 +826,7 @@ void analysis_main(module_t *m, slice_t *stmt_list) {
     m->analysis_line = 0;
 
     // block 封装进 function,再封装到 closure_t 中
-    ast_new_fn *new_fn = malloc(sizeof(ast_new_fn));
+    ast_fn_decl *new_fn = malloc(sizeof(ast_fn_decl));
     new_fn->name = FN_MAIN_NAME;
     new_fn->body = slice_new();
     new_fn->return_type = type_base_new(TYPE_VOID);

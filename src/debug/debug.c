@@ -26,10 +26,10 @@ string ast_stmt_expr_type_to_debug[] = {
         [AST_STMT_IF]="AST_STMT_IF",
         [AST_STMT_FOR_IN]="AST_STMT_FOR_IN",
         [AST_STMT_WHILE]="AST_STMT_WHILE",
-        [AST_NEW_FN]="AST_FUNCTION_DECL",
+        [AST_FN_DECL]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
-        [AST_NEW_CLOSURE]="AST_CLOSURE_DECL",
-        [AST_STMT_TYPE_DECL]="AST_STMT_TYPE_DECL",
+        [AST_CLOSURE_NEW]="AST_CLOSURE_DECL",
+        [AST_STMT_TYPEDEF]="AST_STMT_TYPE_DECL",
 };
 
 string token_type_to_debug[] = {

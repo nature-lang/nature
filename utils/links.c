@@ -16,7 +16,7 @@ uint64_t pre_fndef_list() {
     SLICE_FOR(symbol_fn_list) {
         int index = _i;
         symbol_t *s = SLICE_VALUE(symbol_fn_list);
-        ast_new_fn *fn = s->ast_value;
+        ast_fn_decl *fn = s->ast_value;
         closure_t *c = fn->closure;
 
         fndef_t *f = &ct_fndef_list[index];

@@ -10,7 +10,7 @@
 
 typedef enum {
     PRECEDENCE_NULL, // 最低优先级
-    PRECEDENCE_ASSIGN, // 最低优先级
+    PRECEDENCE_ASSIGN,
     PRECEDENCE_OR,
     PRECEDENCE_AND,
     PRECEDENCE_EQUALITY,
@@ -18,8 +18,8 @@ typedef enum {
     PRECEDENCE_TERM,
     PRECEDENCE_FACTOR,
     PRECEDENCE_UNARY,
-    PRECEDENCE_CALL, // foo.bar foo["bar"] foo()
-    PRECEDENCE_PRIMARY,
+    PRECEDENCE_CALL, // foo.bar foo["bar"] foo() foo().foo.bar 这几个表达式都是同一优先级，应该从左往右依次运算
+    PRECEDENCE_PRIMARY, // 最高优先级
 } parser_precedence;
 
 typedef ast_expr (*parser_prefix_fn)(module_t *module);
@@ -38,11 +38,11 @@ static ast_stmt *parser_stmt(module_t *m);
 
 static ast_expr parser_expr(module_t *m);
 
-static typedecl_t parser_type(module_t *m);
+static typedecl_t parser_typedecl(module_t *m);
 
 static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
 
-static parser_rule *parser_get_rule(token_e type);
+static parser_rule *find_rule(token_e type);
 
 static ast_stmt *parser_if_stmt(module_t *m);
 ///**

@@ -1,5 +1,3 @@
-// 普通函数声明
-fn foo():int {}
 
 // 匿名函数声明
 // fn():int {}(), 暂时不支持普通函数生命使用匿名函数
@@ -8,4 +6,15 @@ fn foo():int {}
 fn():int f;
 
 // 函数类型声明包含 name
-// fn(int,int):int f // x 暂时不允许类型中包含名称
+// fn name(int,int):int f // x 暂时不允许类型中包含名称
+
+// 普通函数声明, 如果是 stmt 类型声明，则名称不允许为空
+fn foo():int {}
+
+// 在表达式中声明，或者参数等中声明时 fn name 允许省略
+var f = fn(int a, int b): int {}
+
+call(fn(int a, int b): int {
+    return a + b
+})
+

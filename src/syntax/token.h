@@ -30,7 +30,7 @@ typedef enum {
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
     TOKEN_FOR, TOKEN_IN, TOKEN_WHILE, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
-    TOKEN_ARRAY, TOKEN_MAP, TOKEN_SET, TOKEN_FN,
+    TOKEN_ARRAY, TOKEN_MAP, TOKEN_SET, TOKEN_TUPLE, TOKEN_FN,
     TOKEN_IMPORT, TOKEN_AS, TOKEN_RETURN,
     TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
@@ -88,9 +88,10 @@ static string token_str[] = {
         [TOKEN_FLOAT] = "float",
         [TOKEN_INT] = "int",
 
-        [TOKEN_ARRAY] = "list",
+//        [TOKEN_LIST] = "list",
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
+        [TOKEN_TUPLE] = "tup",
         [TOKEN_FN] = "fn",
         [TOKEN_RETURN] = "return",
 

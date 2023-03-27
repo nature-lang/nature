@@ -53,10 +53,10 @@ typedef enum {
     AST_STMT_IF,
     AST_STMT_FOR_IN,
     AST_STMT_WHILE,
-    AST_STMT_TYPE_DECL,
+    AST_STMT_TYPEDEF,
     AST_CALL,
-    AST_NEW_FN,
-    AST_NEW_CLOSURE,
+    AST_FN_DECL,
+    AST_CLOSURE_NEW,
 } ast_type_e;
 
 typedef enum {
@@ -223,9 +223,10 @@ typedef struct {
  */
 typedef struct {
     typedecl_t type; // 为什么这里声明的是一个类型而不是 ident?
-    ast_struct_property properties[UINT8_MAX];
-    uint8_t count;
-} ast_new_struct;
+//    ast_struct_property properties[UINT8_MAX];
+//    uint8_t count;
+    list_t *properties; // ast_struct_property
+} ast_struct_new_t;
 
 // 1. a.b
 // 2. a.c.b
@@ -321,23 +322,24 @@ typedef struct {
 typedef struct {
     string ident; // my_int (自定义的类型名称)
     typedecl_t type; // int (类型)
-} ast_type_decl_stmt;
+} ast_typedef_stmt;
 
 typedef struct {
-    string name;
+    char *name;
     typedecl_t return_type; // 基础类型 + 动态类型
-    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
-    uint8_t param_count;
+//    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
+//    uint8_t param_count;
+    list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
-} ast_new_fn; // 既可以是 expression,也可以是 stmt
+} ast_fn_decl; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
     slice_t *env_list; // ast_expr*
 
     string env_name; // 唯一标识，可以全局定位
-    ast_new_fn *fn;
+    ast_fn_decl *fn;
 } ast_closure_t;
 
 //ast_block_stmt ast_new_block_stmt();

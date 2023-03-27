@@ -365,6 +365,9 @@ token_e scanner_ident_type(char *word, int length) {
             }
         }
         case 't': {
+            if (word[1] == 'u') {
+                return scanner_rest_ident_type(word, length, 1, 2, "up", TOKEN_TUPLE);
+            }
             if (length > 3) {
                 switch (word[1]) {
                     case 'y' :

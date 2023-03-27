@@ -44,9 +44,9 @@ void analysis_var_decl(module_t *m, ast_var_decl *stmt);
 
 void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt);
 
-ast_closure_t *analysis_new_fn(module_t *m, ast_new_fn *function_decl, analysis_local_scope_t *scope);
+ast_closure_t *analysis_new_fn(module_t *m, ast_fn_decl *function_decl, analysis_local_scope_t *scope);
 
-void analysis_fn_decl_ident(module_t *m, ast_new_fn *new_fn);
+void analysis_fn_decl_ident(module_t *m, ast_fn_decl *new_fn);
 
 void analysis_stmt(module_t *m, ast_stmt *stmt);
 
@@ -78,13 +78,13 @@ void analysis_for_in(module_t *m, ast_for_in_stmt *stmt);
 
 void analysis_return(module_t *m, ast_return_stmt *stmt);
 
-void analysis_type_decl(module_t *m, ast_type_decl_stmt *stmt);
+void analysis_type_decl(module_t *m, ast_typedef_stmt *stmt);
 
 void analysis_access(module_t *m, ast_access *expr);
 
 void analysis_select_property(module_t *m, ast_expr *expr);
 
-void analysis_new_struct(module_t *m, ast_new_struct *expr);
+void analysis_new_struct(module_t *m, ast_struct_new_t *expr);
 
 void analysis_new_map(module_t *m, ast_map_new *expr);
 
@@ -100,6 +100,6 @@ void analysis_begin_scope(module_t *m);
 
 void analysis_end_scope(module_t *m);
 
-typedecl_t analysis_fn_to_type(ast_new_fn *fn_decl);
+typedecl_t analysis_fn_to_type(ast_fn_decl *fn_decl);
 
 #endif //NATURE_SRC_AST_ANALYSIS_H_

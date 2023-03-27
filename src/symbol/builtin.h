@@ -4,8 +4,8 @@
 #include "utils/type.h"
 #include "src/ast.h"
 
-ast_new_fn *builtin_print();
+ast_fn_decl *builtin_print();
 
-ast_new_fn *builtin_println();
+ast_fn_decl *builtin_println();
 
 #endif //NATURE_BUILTIN_H
