@@ -180,7 +180,7 @@ typedef struct basic_block_t {
     uint8_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
     string name;
 
-    // op point
+    // op pointer
 //    linked_node *phi; // fist_node 即可
     linked_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
     linked_node *last_op; // last_node 即可

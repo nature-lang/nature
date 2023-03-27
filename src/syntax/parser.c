@@ -415,12 +415,12 @@ ast_expr parser_select_property(module_t *m, ast_expr left) {
     parser_must(m, TOKEN_DOT);
 
     token *property_token = parser_must(m, TOKEN_LITERAL_IDENT);
-    ast_select_property *select_property_expr = malloc(sizeof(ast_select_property));
-    select_property_expr->left = left;
-    select_property_expr->property = property_token->literal;
+    ast_struct_access *struct_access_expr = NEW(ast_struct_access);
+    struct_access_expr->left = left;
+    struct_access_expr->key = property_token->literal;
 
     result.assert_type = AST_EXPR_STRUCT_ACCESS;
-    result.value = select_property_expr;
+    result.value = struct_access_expr;
 
     return result;
 }
@@ -428,7 +428,7 @@ ast_expr parser_select_property(module_t *m, ast_expr left) {
 ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
     ast_expr result = parser_new_expr(m);
 
-    ast_call *call_stmt = malloc(sizeof(ast_call));
+    ast_call *call_stmt = NEW(ast_call);
     call_stmt->left = left_expr;
 
     // param handle
@@ -1056,9 +1056,8 @@ static ast_map_item parser_map_item(module_t *m) {
  */
 ast_expr parser_new_map(module_t *m) {
     ast_expr result = parser_new_expr(m);
-    ast_new_map *expr = malloc(sizeof(ast_new_map));
+    ast_map_new *expr = malloc(sizeof(ast_map_new));
     expr->count = 0;
-    expr->capacity = 0;
 
     parser_must(m, TOKEN_LEFT_CURLY);
     if (!parser_is(m, TOKEN_RIGHT_CURLY)) {
@@ -1069,7 +1068,6 @@ ast_expr parser_new_map(module_t *m) {
     }
 
     parser_must(m, TOKEN_RIGHT_CURLY);
-    expr->capacity = expr->count;
 
     result.assert_type = AST_EXPR_MAP_NEW;
     result.value = expr;
@@ -1163,7 +1161,7 @@ ast_expr parser_new_struct(module_t *m, typedecl_t type) {
         item.key = parser_must(m, TOKEN_LITERAL_IDENT)->literal;
         parser_must(m, TOKEN_EQUAL);
         item.value = parser_expr(m);
-        new_struct->list[new_struct->count++] = item;
+        new_struct->properties[new_struct->count++] = item;
         parser_must_stmt_end(m);
     }
 

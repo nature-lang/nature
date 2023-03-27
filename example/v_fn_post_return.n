@@ -15,20 +15,20 @@ fn sum(int a, int a): int {
     return a + b
 }
 
-fn swap(int a, int b): tuple(int, int) {
+fn swap(int a, int b): (int, int) {
     return b, a
 }
 
 
 // 高级参数
-fn timer(fn(int,name):bool callback) {
+fn timer(fn(int):bool callback) {
     if (callback(24)) {
         println("hello world")
     }
 }
 
 // 直接回调
-fn callback() fn(int):back {
+fn callback(): fn(int):back {
     return fn(int a) {
         return a + 1
     }

@@ -170,7 +170,7 @@ ssize_t full_read(int fd, void *buf, size_t count) {
 
 char *str_replace(char *orig, char *rep, char *with) {
     char *result; // the return string
-    char *ins;    // the next insert point
+    char *ins;    // the next insert pointer
     char *tmp;    // varies
     int len_rep;  // length of rep (the string to remove)
     int len_with; // length of with (the string to replace rep with)

@@ -1,0 +1,22 @@
+// 定义
+type person = struct {
+	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法，但是这里的初始化就和奇怪，甚至不知道应该发生在什么时候?
+	int b
+	int c
+	// animal d = animal {}  // 第一版暂时不支持默认值
+	// [string] e = ["a", "b", "c", "d"] // 同上
+	struct {
+		int foo
+	} f
+}
+
+// 赋值
+var max = person {
+	a = 12
+	b = 1 + 1
+	c = call()
+}
+
+max.a = 11
+max.b = 2
+max.c = sum(1, 2)

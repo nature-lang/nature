@@ -82,7 +82,7 @@ string ast_expr_operator_to_string[100];
 //    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
 //    type_system code; // base_type, custom_type, function, list, map
 //    bool is_origin; // code a = int, code b = a，int is origin
-//    uint8_t point; // 指针等级, 如果等于0 表示非指针
+//    uint8_t pointer; // 指针等级, 如果等于0 表示非指针
 //} ast_type_t;
 
 typedef struct {
@@ -207,8 +207,8 @@ typedef struct {
  */
 typedef struct {
     typedecl_t type; // 为什么这里声明的是一个类型而不是 ident?
-    ast_struct_property list[UINT8_MAX];
-    int8_t count;
+    ast_struct_property properties[UINT8_MAX];
+    uint8_t count;
 } ast_new_struct;
 
 // 1. a.b
@@ -222,11 +222,11 @@ typedef struct {
 // code.b = 12; ??
 typedef struct {
     ast_expr left; // left is struct
-    string property;
+    string key;
 
-    typedecl_struct_t *struct_decl; // 指针引用
-    typedecl_struct_property_t *struct_property; // 指针引用
-} ast_select_property;
+// infer 推断后在这里冗余一份,计算 size 或者 type 的时候都比较方便
+    typedecl_struct_property_t property;
+} ast_struct_access;
 
 /**
  * 如何确定 left_type?
@@ -244,7 +244,7 @@ typedef struct {
 
     ast_expr left;
     ast_expr key;
-} ast_map_value;
+} ast_map_access;
 
 typedef struct {
 //  string access_type; // map or list
@@ -271,10 +271,9 @@ typedef struct {
 typedef struct {
     ast_map_item values[UINT8_MAX];
     uint64_t count; // 默认初始化的数量
-    uint64_t capacity; // 初始容量
     typedecl_t key_type; // 类型推导截断冗余
     typedecl_t value_type; // 类型推导截断冗余
-} ast_new_map;
+} ast_map_new;
 
 typedef struct {
     ast_ident *env;
@@ -318,8 +317,6 @@ typedef struct {
 //ast_block_stmt ast_new_block_stmt();
 
 ast_ident *ast_new_ident(string literal);
-
-int ast_struct_offset(typedecl_struct_t *struct_decl, string property);
 
 typedecl_t select_actual_param(ast_call *call, uint8_t index);
 

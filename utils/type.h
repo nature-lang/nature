@@ -51,7 +51,7 @@ typedef enum {
 
 static string type_kind_string[] = {
         [TYPE_STRING] = "string",
-        [TYPE_RAW_STRING] = "string_RAW",
+        [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
         [TYPE_FLOAT] = "float",
         [TYPE_INT] = "int",
@@ -73,7 +73,7 @@ static string type_kind_string[] = {
 typedef struct {
     uint64_t index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint64_t size; //  无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
-    uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是 point 数据
+    uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是 pointer 数据
     uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
@@ -134,7 +134,7 @@ typedef struct type_t {
     };
     type_kind kind;
     bool is_origin; // type a = int, type b = a，int is origin
-    uint8_t point; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 point 等于 3
+    uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } typedecl_t;
 
@@ -205,7 +205,7 @@ struct typedecl_map_t {
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     char *key;
-    typedecl_t type; // 这里存放的数据的大小是固定的吗？
+    typedecl_t type;
 } typedecl_struct_property_t;
 
 // 比如 type_struct_t 结构，如何能够将其传递到运行时，一旦运行时知道了该结构，编译时就不用费劲心机的在 lir 中传递该数据了？
@@ -358,7 +358,7 @@ uint16_t type_sizeof(typedecl_t t);
  */
 bool type_need_gc(typedecl_t t);
 
-typedecl_t type_pointof(typedecl_t t, uint8_t point);
+typedecl_t type_ptrof(typedecl_t t, uint8_t point);
 
 typedecl_t type_base_new(type_kind kind);
 
@@ -383,5 +383,7 @@ byte *malloc_gc_bits(uint64_t size);
 bool type_default_in_heap(typedecl_t typedecl);
 
 uint64_t rtype_heap_out_size(rtype_t *rtype);
+
+uint64_t type_struct_offset(typedecl_struct_t *t, char *key);
 
 #endif //NATURE_TYPE_H

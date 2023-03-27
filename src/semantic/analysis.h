@@ -86,7 +86,7 @@ void analysis_select_property(module_t *m, ast_expr *expr);
 
 void analysis_new_struct(module_t *m, ast_new_struct *expr);
 
-void analysis_new_map(module_t *m, ast_new_map *expr);
+void analysis_new_map(module_t *m, ast_map_new *expr);
 
 void analysis_new_list(module_t *m, ast_new_list *expr);
 

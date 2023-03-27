@@ -311,7 +311,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             break;
         }
         case AST_EXPR_MAP_NEW: {
-            analysis_new_map(m, (ast_new_map *) expr->value);
+            analysis_new_map(m, (ast_map_new *) expr->value);
             break;
         }
         case AST_EXPR_LIST_NEW: {
@@ -385,7 +385,7 @@ void analysis_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // 如果是 xxx.xxx 这样的访问方式在 selector property 中已经进行了处理, 但是有部分 builtin 的全局符号依旧需要在这里处理
+    // 如果是 xxx.xxx 这样的访问方式在 selector key 中已经进行了处理, 但是有部分 builtin 的全局符号依旧需要在这里处理
     symbol_t *s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
         return;
@@ -496,7 +496,7 @@ void analysis_access(module_t *m, ast_access *access) {
  * struct_a.test
  */
 void analysis_select_property(module_t *m, ast_expr *expr) {
-    ast_select_property *select = expr->value;
+    ast_struct_access *select = expr->value;
     if (select->left.assert_type != AST_EXPR_IDENT) {
         analysis_expr(m, &select->left);
         return;
@@ -509,7 +509,7 @@ void analysis_select_property(module_t *m, ast_expr *expr) {
     }
 
     // 改写成 symtab_hash 中的名字
-    char *unique_ident = ident_with_module(import->module_ident, select->property);
+    char *unique_ident = ident_with_module(import->module_ident, select->key);
     expr->assert_type = AST_EXPR_IDENT;
     expr->value = ast_new_ident(unique_ident);
 }
@@ -533,11 +533,11 @@ void analysis_new_struct(module_t *m, ast_new_struct *expr) {
     analysis_type(m, &expr->type);
 
     for (int i = 0; i < expr->count; ++i) {
-        analysis_expr(m, &expr->list[i].value);
+        analysis_expr(m, &expr->properties[i].value);
     }
 }
 
-void analysis_new_map(module_t *m, ast_new_map *expr) {
+void analysis_new_map(module_t *m, ast_map_new *expr) {
     for (int i = 0; i < expr->count; ++i) {
         analysis_expr(m, &expr->values[i].key);
         analysis_expr(m, &expr->values[i].value);

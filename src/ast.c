@@ -24,25 +24,6 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-/**
- * 默认 struct_decl 已经排序过了
- * @param struct_decl
- * @param property
- * @return
- */
-int ast_struct_offset(typedecl_struct_t *struct_decl, char *property) {
-    int offset = 0;
-    for (int i = 0; i < struct_decl->count; ++i) {
-        typedecl_struct_property_t item = struct_decl->properties[i];
-        if (str_equal(item.key, property)) {
-            break;
-        }
-        offset += type_kind_sizeof(item.type.kind);
-    }
-    return offset;
-}
-
-
 typedecl_t select_actual_param(ast_call *call, uint8_t index) {
     if (call->spread_param && index >= call->param_count) {
         // last actual param type must array

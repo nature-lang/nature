@@ -119,7 +119,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_MAP_NEW: {
-            type = infer_new_map((ast_new_map *) expr->value);
+            type = infer_new_map((ast_map_new *) expr->value);
             break;
         }
         case AST_EXPR_STRUCT_NEW: {
@@ -132,7 +132,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_STRUCT_ACCESS: {
-            type = infer_select_property((ast_select_property *) expr->value);
+            type = infer_struct_access((ast_struct_access *) expr->value);
             break;
         }
         case AST_CALL: {
@@ -285,7 +285,7 @@ typedecl_t infer_new_list(ast_new_list *new_list) {
  * @param new_map
  * @return
  */
-typedecl_t infer_new_map(ast_new_map *new_map) {
+typedecl_t infer_new_map(ast_map_new *new_map) {
     typedecl_t result = {
             .is_origin = true,
             .kind = TYPE_MAP,
@@ -342,7 +342,7 @@ typedecl_t infer_new_map(ast_new_map *new_map) {
  */
 typedecl_t infer_new_struct(ast_new_struct *new_struct) {
     // 类型还原, struct ident 一定会被还原回 struct 原始结构
-    // 如果本身已经是 struct 结构，那么期中的 struct property code 也会被还原成原始类型
+    // 如果本身已经是 struct 结构，那么期中的 struct key code 也会被还原成原始类型
     new_struct->type = infer_type(new_struct->type);
 
     if (new_struct->type.kind != TYPE_STRUCT) {
@@ -352,7 +352,7 @@ typedecl_t infer_new_struct(ast_new_struct *new_struct) {
     typedecl_struct_t *struct_decl = new_struct->type.struct_decl;
     // new_struct->count 小于等于 struct_decl->count, 允许 new_struct 期间不进行赋值
     for (int i = 0; i < new_struct->count; ++i) {
-        ast_struct_property *struct_property = &new_struct->list[i];
+        ast_struct_property *struct_property = &new_struct->properties[i];
 
         // struct_decl 已经是被还原过的类型了
         typedecl_t expect_type = infer_struct_property_type(struct_decl, struct_property->key);
@@ -360,7 +360,7 @@ typedecl_t infer_new_struct(ast_new_struct *new_struct) {
 
         // expect code 并不允许为 var
         assertf(type_compare(actual_type, expect_type),
-                "line: %d, property '%s' expect '%s' type, cannot assign '%s' type",
+                "line: %d, key '%s' expect '%s' type, cannot assign '%s' type",
                 infer_line,
                 struct_property->key,
                 type_kind_string[expect_type.kind],
@@ -381,7 +381,7 @@ typedecl_t infer_access(ast_expr *expr) {
     typedecl_t key_type = infer_expr(&access->key);
 
     if (left_type.kind == TYPE_MAP) {
-        ast_map_value *access_map = malloc(sizeof(ast_map_value));
+        ast_map_access *access_map = malloc(sizeof(ast_map_access));
         typedecl_map_t *map_decl = left_type.map_decl;
 
         // 参数改写
@@ -423,28 +423,25 @@ typedecl_t infer_access(ast_expr *expr) {
  * foo.bar
  * foo[1].bar
  * foo().bar
- * @param select_property
+ * @param struct_access
  * @return
  */
-typedecl_t infer_select_property(ast_select_property *select_property) {
-    infer_expr(&select_property->left);
-    typedecl_t left_type = select_property->left.type;
-    assertf(left_type.kind == TYPE_STRUCT, "[infer_select_property]expr not struct, cannot select property");
+typedecl_t infer_struct_access(ast_struct_access *struct_access) {
+    infer_expr(&struct_access->left);
+    typedecl_t left_type = struct_access->left.type;
+
+    assertf(left_type.kind == TYPE_STRUCT, "expr not struct, cannot access key");
 
     typedecl_struct_t *struct_decl = left_type.struct_decl;
-
-    // 冗余结构到 select 表达式，便于计算 size
-    select_property->struct_decl = struct_decl;
-
     for (int i = 0; i < struct_decl->count; ++i) {
-        if (strcmp(struct_decl->properties[i].key, select_property->property) == 0) {
-            select_property->struct_property = &struct_decl->properties[i];
-
+        if (str_equal(struct_decl->properties[i].key, struct_access->key)) {
+            struct_decl->properties[i].type = infer_type(struct_decl->properties[i].type);
+            struct_access->property = struct_decl->properties[i];
             return struct_decl->properties[i].type;
         }
     }
 
-    error_printf(infer_line, "cannot get struct property '%s'", select_property->property);
+    assertf(false, "cannot get struct key '%s'", struct_access->key);
     exit(0);
 }
 
@@ -710,7 +707,7 @@ typedecl_t infer_struct_property_type(typedecl_struct_t *struct_decl, char *iden
         }
     }
 
-    error_printf(infer_line, "not found struct property '%s'", ident);
+    error_printf(infer_line, "not found struct key '%s'", ident);
     exit(0);
 }
 

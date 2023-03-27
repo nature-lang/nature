@@ -92,7 +92,7 @@ char *lir_var_to_string(lir_var_t *var) {
 //    stack_frame_offset = *var->local->stack_frame_offset;
     if (var->type.kind > 0) {
         type_string = type_kind_string[var->type.kind];
-        for (int i = 0; i < var->type.point; ++i) {
+        for (int i = 0; i < var->type.pointer; ++i) {
             type_string = str_connect(type_string, "*");
         }
     }
@@ -108,7 +108,7 @@ char *lir_var_to_string(lir_var_t *var) {
 char *lir_imm_to_string(lir_imm_t *immediate) {
     string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
     int len;
-    switch (immediate->type) {
+    switch (immediate->kind) {
         case TYPE_BOOL: {
             string bool_str = "true";
             if (immediate->bool_value == false) {

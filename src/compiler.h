@@ -48,13 +48,13 @@ static lir_operand_t *compiler_expr(closure_t *c, ast_expr expr);
 
 //lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_map_value(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_map_access(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_new_map(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_map_new(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_select_property(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr);
 
-//lir_operand_t *compiler_new_struct(closure_t *c, ast_expr expr);
+//lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr);
 
 //lir_operand_t *compiler_literal(closure_t *c, ast_expr expr);
 

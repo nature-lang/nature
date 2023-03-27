@@ -62,6 +62,8 @@
 
 #define RT_CALL_STRING_NEW "string_new"
 
+#define RT_CALL_MEMORY_MOVE "memory_move"
+
 #define OP(_node) ((lir_op_t*)_node->value)
 
 #define LIR_COPY_VAR_OPERAND(_original) \
@@ -74,17 +76,6 @@
   _var->infer_size_type = (_original)->infer_size_type; \
   _var->indirect_addr = (_original)->indirect_addr; \
   _var;                                   \
-})
-
-#define IMM_OPERAND(operand_type, key, val) \
-({                                               \
-   lir_imm_t *imm_operand = malloc(sizeof(lir_imm_t)); \
-   imm_operand->type = operand_type; \
-   imm_operand->key = val; \
-   lir_operand_t *operand = malloc(sizeof(lir_operand_t)); \
-   operand->assert_type = LIR_OPERAND_IMM; \
-   operand->value = imm_operand;              \
-   operand; \
 })
 
 #define LIR_NEW_OPERAND(_type, _value) \
@@ -166,7 +157,7 @@ typedef struct {
     flag_t flag;
     typedecl_t type;
 
-//    uint8_t point; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 point 等于 3 TODO 暂时没有使用
+//    uint8_t pointer; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 pointer 等于 3 TODO 暂时没有使用
 //    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
 } lir_var_t;
 
@@ -186,7 +177,7 @@ typedef struct {
  */
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
-    int offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
+    uint64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
     typedecl_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
@@ -212,7 +203,7 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
-    type_kind type;
+    type_kind kind;
 } lir_imm_t;
 
 
@@ -251,6 +242,46 @@ typedef struct lir_op {
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 } lir_op_t;
 
+static inline lir_operand_t *int_operand(uint64_t val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_INT;
+    imm_operand->int_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
+static inline lir_operand_t *bool_operand(bool val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_BOOL;
+    imm_operand->bool_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
+static inline lir_operand_t *float_operand(double val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_FLOAT;
+    imm_operand->float_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
+static inline lir_operand_t *string_operand(char *str) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_RAW_STRING;
+    imm_operand->string_value = str;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
 void lir_set_quick_op(basic_block_t *block);
 
 //lir_operand_t *set_indirect_addr(lir_operand_t *operand);
@@ -275,13 +306,13 @@ type_kind lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
-lir_operand_t *lir_temp_var_operand(closure_t *c, typedecl_t type);
+lir_operand_t *temp_var_operand(closure_t *c, typedecl_t type);
 
-lir_operand_t *lir_indirect_addr_operand(closure_t *c, lir_operand_t *value_point);
+lir_operand_t *lir_var_ref_operand(closure_t *c, lir_operand_t *var);
+
+lir_operand_t *lir_indirect_addr_operand(lir_operand_t *var_operand, uint64_t offset);
 
 lir_operand_t *lir_new_empty_operand();
-
-lir_operand_t *lir_indirect_addr_offset_operand(lir_operand_t *base, int offset, typedecl_t type);
 
 lir_operand_t *lir_new_label_operand(string ident, bool is_local);
 
@@ -302,9 +333,9 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
 
 lir_op_t *lir_op_builtin_call(string name, lir_operand_t *result, int arg_count, ...);
 
-lir_op_t *lir_op_rt_call(string name, lir_operand_t *result, int arg_count, ...);
+lir_op_t *lir_rt_call(string name, lir_operand_t *result, int arg_count, ...);
 
-lir_op_t *lir_op_call(string name, lir_operand_t *result, int arg_count, ...);
+lir_op_t *lir_call(string name, lir_operand_t *result, int arg_count, ...);
 
 bool lir_blocks_contains(slice_t *blocks, uint8_t label);
 

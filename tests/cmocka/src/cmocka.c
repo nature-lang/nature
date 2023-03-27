@@ -164,7 +164,7 @@ typedef union {
 
 /* State of each test. */
 typedef struct TestState {
-    const ListNode *check_point; /* Check point of the test if there's a */
+    const ListNode *check_point; /* Check pointer of the test if there's a */
                                  /* setup function. */
     void *state;                 /* State associated with the test. */
 } TestState;
@@ -380,7 +380,7 @@ enum CMUnitTestStatus {
 };
 
 struct CMUnitTestState {
-    const ListNode *check_point; /* Check point of the test if there's a setup function. */
+    const ListNode *check_point; /* Check pointer of the test if there's a setup function. */
     const struct CMUnitTest *test; /* Point to array element in the tests we get passed */
     void *state; /* State associated with the test */
     const char *error_message; /* The error messages by the test */
@@ -2120,7 +2120,7 @@ static const ListNode* check_point_allocated_blocks(void) {
 }
 
 
-/* Display the blocks allocated after the specified check point.  This
+/* Display the blocks allocated after the specified check pointer.  This
  * function returns the number of blocks displayed. */
 static size_t display_allocated_blocks(const ListNode * const check_point) {
     const ListNode * const head = get_allocated_blocks_list();
@@ -2148,7 +2148,7 @@ static size_t display_allocated_blocks(const ListNode * const check_point) {
 }
 
 
-/* Free all blocks allocated after the specified check point. */
+/* Free all blocks allocated after the specified check pointer. */
 static void free_allocated_blocks(const ListNode * const check_point) {
     const ListNode * const head = get_allocated_blocks_list();
     const ListNode *node;
@@ -2169,7 +2169,7 @@ static void free_allocated_blocks(const ListNode * const check_point) {
 }
 
 
-/* Fail if any any blocks are allocated after the specified check point. */
+/* Fail if any any blocks are allocated after the specified check pointer. */
 static void fail_if_blocks_allocated(const ListNode * const check_point,
                                      const char * const test_name) {
     const size_t allocated_blocks = display_allocated_blocks(check_point);
@@ -2885,7 +2885,7 @@ static int cmocka_run_one_tests(struct CMUnitTestState *test_state)
 
     /* Run setup */
     if (test_state->test->setup_func != NULL) {
-        /* Setup the memory check point, it will be evaluated on teardown */
+        /* Setup the memory check pointer, it will be evaluated on teardown */
         test_state->check_point = check_point_allocated_blocks();
 
         rc = cmocka_run_one_test_or_fixture(test_state->test->name,
@@ -3220,7 +3220,7 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     int previous_test_failed = 0;
     /* Whether the previous setup failed. */
     int previous_setup_failed = 0;
-    /* Check point of the heap state. */
+    /* Check pointer of the heap state. */
     const ListNode * const check_point = check_point_allocated_blocks();
     /* Current test being executed. */
     size_t current_test = 0;
@@ -3383,7 +3383,7 @@ int _run_group_tests(const UnitTest * const tests, const size_t number_of_tests)
     size_t tests_executed = 0;
     /* Number of failed tests. */
     size_t total_failed = 0;
-    /* Check point of the heap state. */
+    /* Check pointer of the heap state. */
     const ListNode * const check_point = check_point_allocated_blocks();
     const char **failed_names = NULL;
     void **current_state = NULL;

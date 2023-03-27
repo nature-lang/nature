@@ -51,7 +51,7 @@ typedecl_t infer_literal(ast_literal *literal);
 
 typedecl_t infer_new_list(ast_new_list *new_list);
 
-typedecl_t infer_new_map(ast_new_map *new_map);
+typedecl_t infer_new_map(ast_map_new *new_map);
 
 typedecl_t infer_new_struct(ast_new_struct *new_struct);
 
@@ -59,7 +59,7 @@ typedecl_t infer_access(ast_expr *expr);
 
 typedecl_t infer_access_env(ast_env_value *expr);
 
-typedecl_t infer_select_property(ast_select_property *select_property);
+typedecl_t infer_struct_access(ast_struct_access *struct_access);
 
 typedecl_t infer_call(ast_call *call);
 

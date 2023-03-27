@@ -83,14 +83,14 @@ memory_map_t *map_new(uint64_t rtype_index, uint64_t key_index, uint64_t value_i
 /**
  * m["key"] = v
  * @param m
- * @param ref
- * @return
+ * @param key_ref
+ * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
-void *map_access(memory_map_t *m, void *ref) {
-    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, ref);
+bool map_access(memory_map_t *m, void *key_ref, void *value_ref) {
+    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
     if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
-        return NULL;
+        return false;
     }
 
     uint64_t data_index = get_data_index(m, hash_index);
@@ -98,10 +98,12 @@ void *map_access(memory_map_t *m, void *ref) {
     // 找到值所在中数组位置起始点并返回
     uint64_t value_size = rt_rtype_heap_out_size(m->value_index);
 
-    return m->value_data + value_size * data_index; // 单位字节
+    void *src = m->value_data + value_size * data_index; // 单位字节
+    memmove(value_ref, src, value_size);
+    return true;
 }
 
-void *map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
+void map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
     }

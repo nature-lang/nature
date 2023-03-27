@@ -200,7 +200,7 @@ static rtype_t rtype_fn(typedecl_fn_t *t) {
 }
 
 /**
- * hash = type_kind + property type hash
+ * hash = type_kind + key type hash
  * @param t
  * @return
  */
@@ -210,7 +210,7 @@ static rtype_t rtype_struct(typedecl_struct_t *t) {
     uint max = 0;
     uint need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
-    // 记录需要 gc 的 property 的
+    // 记录需要 gc 的 key 的
     for (int i = 0; i < t->count; ++i) {
         typedecl_struct_property_t property = t->properties[i];
         uint16_t item_size = type_sizeof(property.type);
@@ -261,7 +261,7 @@ static rtype_t rtype_tuple(typedecl_tuple_t *t) {
     uint max = 0;
     uint need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
-    // 记录需要 gc 的 property 的
+    // 记录需要 gc 的 key 的
     for (int i = 0; i < t->count; ++i) {
         typedecl_t element_type = t->elements[i];
         uint16_t item_size = type_sizeof(element_type);
@@ -334,10 +334,10 @@ uint16_t type_sizeof(typedecl_t t) {
 }
 
 
-typedecl_t type_pointof(typedecl_t t, uint8_t point) {
+typedecl_t type_ptrof(typedecl_t t, uint8_t point) {
     typedecl_t result;
     result.is_origin = t.is_origin;
-    result.point = point;
+    result.pointer = point;
     return result;
 }
 
@@ -535,6 +535,30 @@ uint64_t rtype_heap_out_size(rtype_t *rtype) {
         return POINTER_SIZE;
     }
     return rtype->size;
+}
+
+/**
+ * 需要按 key 对齐
+ * @param type
+ * @param key
+ * @return
+ */
+uint64_t type_struct_offset(typedecl_struct_t *t, char *key, uint64_t *size) {
+    uint64_t offset = 0;
+    for (int i = 0; i < t->count; ++i) {
+        typedecl_struct_property_t p = t->properties[i];
+        uint64_t item_size = type_sizeof(p.type);
+        offset = align(offset, item_size);
+        if (str_equal(p.key, key)) {
+            *size = item_size;
+            // found
+            return offset;
+        }
+        offset += item_size;
+    }
+
+    assertf(false, "key=%v not found in struct", key);
+    return 0;
 }
 
 

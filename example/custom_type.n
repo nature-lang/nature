@@ -66,7 +66,7 @@ tuple(int, bool) b = (1, true)
 map{string: any} c = {"a": 1, "b": true} // key 必须是简单类型，值则可以是复合类型？
 set{int} d = {1, 2, 3, 4} // 只支持简单类型？
 
-// 省略前缀
+// 省略前缀()
 [any] a = [1, 2, 3]
 (int, bool) b = (1, true)
 {string: any} c = {"a": 1, "b": true} // key 必须是简单类型，值则可以是复合类型？

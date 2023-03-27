@@ -51,7 +51,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
-        if (v->type == TYPE_RAW_STRING) {
+        if (v->kind == TYPE_RAW_STRING) {
             // 生成符号表(通常用于 .data 段)
             char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
@@ -62,7 +62,7 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
 
             // asm_copy
             return SYMBOL(unique_name, false);
-        } else if (v->type == TYPE_FLOAT) {
+        } else if (v->kind == TYPE_FLOAT) {
             char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = unique_name;
@@ -72,19 +72,19 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
             slice_push(c->asm_symbols, symbol);
 
             return SYMBOL(unique_name, false);
-        } else if (v->type == TYPE_INT) {
+        } else if (v->kind == TYPE_INT) {
             return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
-        } else if (v->type == TYPE_INT8) {
+        } else if (v->kind == TYPE_INT8) {
             return UINT8(v->int_value);
-        } else if (v->type == TYPE_INT16) {
+        } else if (v->kind == TYPE_INT16) {
             return UINT16(v->int_value);
-        } else if (v->type == TYPE_INT32) {
+        } else if (v->kind == TYPE_INT32) {
             return UINT32(v->int_value);
-        } else if (v->type == TYPE_INT64) {
+        } else if (v->kind == TYPE_INT64) {
             return UINT64(v->int_value);
-        } else if (v->type == TYPE_FLOAT) {
+        } else if (v->kind == TYPE_FLOAT) {
             return FLOAT32(v->float_value);
-        } else if (v->type == TYPE_BOOL) {
+        } else if (v->kind == TYPE_BOOL) {
             return UINT8(v->bool_value);
         }
         assert(false && "code immediate not expected");

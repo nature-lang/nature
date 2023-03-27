@@ -3,7 +3,7 @@
 
 #define ASSIGN_VAR(_operand) \
    type_kind base = lir_operand_type_base(_operand); \
-   lir_operand_t *temp = lir_temp_var_operand(c, type_base_new(base)); \
+   lir_operand_t *temp = temp_var_operand(c, type_base_new(base)); \
    slice_push(c->globals, temp->value);                \
    linked_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
    op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
@@ -14,8 +14,8 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
-        if (imm->type == TYPE_RAW_STRING) {
-            lir_operand_t *var_operand = lir_temp_var_operand(c, type_base_new(TYPE_RAW_STRING));
+        if (imm->kind == TYPE_RAW_STRING) {
+            lir_operand_t *var_operand = temp_var_operand(c, type_base_new(TYPE_RAW_STRING));
             slice_push(c->globals, var_operand->value);
 
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
@@ -65,7 +65,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
-                                         IMM_OPERAND(TYPE_INT, int_value, diff_length),
+                                         int_operand(diff_length),
                                          LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
         linked_push(push_operations, binary_op);
     }
