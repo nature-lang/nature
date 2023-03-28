@@ -28,7 +28,7 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             break;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            analysis_var_decl_assign(m, (ast_var_decl_assign_stmt *) stmt->value);
+            analysis_var_decl_assign(m, (ast_var_assign_stmt *) stmt->value);
             break;
         }
         case AST_STMT_ASSIGN: {
@@ -54,11 +54,11 @@ void analysis_stmt(module_t *m, ast_stmt *stmt) {
             break;
         }
         case AST_STMT_WHILE: {
-            analysis_while(m, (ast_while_stmt *) stmt->value);
+            analysis_while(m, (ast_for_cond_stmt *) stmt->value);
             break;
         }
-        case AST_STMT_FOR_IN: {
-            analysis_for_in(m, (ast_for_in_stmt *) stmt->value);
+        case AST_STMT_FOR_ITERATOR: {
+            analysis_for_in(m, (ast_for_iterator_stmt *) stmt->value);
             break;
         }
         case AST_STMT_RETURN: {
@@ -117,8 +117,8 @@ void analysis_var_decl(module_t *m, ast_var_decl *stmt) {
     stmt->ident = local->unique_ident;
 }
 
-void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt) {
-    analysis_expr(m, &stmt->expr);
+void analysis_var_decl_assign(module_t *m, ast_var_assign_stmt *stmt) {
+    analysis_expr(m, &stmt->right);
 
     analysis_redeclare_check(m, stmt->var_decl->ident);
     analysis_type(m, &stmt->var_decl->type);
@@ -315,7 +315,7 @@ void analysis_expr(module_t *m, ast_expr *expr) {
             break;
         }
         case AST_EXPR_LIST_NEW: {
-            analysis_new_list(m, (ast_new_list *) expr->value);
+            analysis_new_list(m, (ast_list_new *) expr->value);
             break;
         }
         case AST_EXPR_ACCESS: {
@@ -544,13 +544,13 @@ void analysis_new_map(module_t *m, ast_map_new *expr) {
     }
 }
 
-void analysis_new_list(module_t *m, ast_new_list *expr) {
+void analysis_new_list(module_t *m, ast_list_new *expr) {
     for (int i = 0; i < expr->count; ++i) {
         analysis_expr(m, &expr->values[i]);
     }
 }
 
-void analysis_while(module_t *m, ast_while_stmt *stmt) {
+void analysis_while(module_t *m, ast_for_cond_stmt *stmt) {
     analysis_expr(m, &stmt->condition);
 
     analysis_begin_scope(m);
@@ -558,12 +558,12 @@ void analysis_while(module_t *m, ast_while_stmt *stmt) {
     analysis_end_scope(m);
 }
 
-void analysis_for_in(module_t *m, ast_for_in_stmt *stmt) {
+void analysis_for_in(module_t *m, ast_for_iterator_stmt *stmt) {
     analysis_expr(m, &stmt->iterate);
 
     analysis_begin_scope(m);
-    analysis_var_decl(m, stmt->gen_key);
-    analysis_var_decl(m, stmt->gen_value);
+    analysis_var_decl(m, stmt->key);
+    analysis_var_decl(m, stmt->value);
     analysis_block(m, stmt->body);
     analysis_end_scope(m);
 }
@@ -725,7 +725,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
         }
 
         if (stmt->assert_type == AST_STMT_VAR_DECL_ASSIGN) {
-            ast_var_decl_assign_stmt *var_decl_assign = stmt->value;
+            ast_var_assign_stmt *var_decl_assign = stmt->value;
             ast_var_decl *var_decl = var_decl_assign->var_decl;
             char *ident = ident_with_module(m->ident, var_decl->ident);
 
@@ -740,7 +740,7 @@ void analysis_module(module_t *m, slice_t *stmt_list) {
                     .value = ast_new_ident(var_decl->ident),
 //                    .code = var_decl->code,
             };
-            assign->right = var_decl_assign->expr;
+            assign->right = var_decl_assign->right;
             temp_stmt->assert_type = AST_STMT_ASSIGN;
             temp_stmt->value = assign;
             slice_push(var_assign_list, temp_stmt);

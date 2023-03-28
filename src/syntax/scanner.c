@@ -301,30 +301,32 @@ token_e scanner_ident_type(char *word, int length) {
             if (length > 1) {
                 switch (word[1]) {
                     case 'n': {
-                        return scanner_rest_ident_type(word, length, 1, 2, "ny", TOKEN_ANY);
+                        return scanner_rest(word, length, 1, 2, "ny", TOKEN_ANY);
                     }
                     case 'r': {
-                        return scanner_rest_ident_type(word, length, 1, 3, "ray", TOKEN_ANY);
+                        return scanner_rest(word, length, 1, 3, "ray", TOKEN_ANY);
                     }
                 }
             }
 
         }
         case 'b':
-            return scanner_rest_ident_type(word, length, 1, 3, "ool", TOKEN_BOOL);
+            return scanner_rest(word, length, 1, 3, "ool", TOKEN_BOOL);
+        case 'c':
+            return scanner_rest(word, length, 1, 4, "atch", TOKEN_CATCH);
         case 'e':
-            return scanner_rest_ident_type(word, length, 1, 3, "lse", TOKEN_ELSE);
+            return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
             if (length > 1) {
                 switch (word[1]) {
                     case 'n':
-                        return scanner_rest_ident_type(word, length, 2, 0, "n", TOKEN_FN);
+                        return scanner_rest(word, length, 2, 0, "n", TOKEN_FN);
                     case 'a':
-                        return scanner_rest_ident_type(word, length, 2, 3, "lse", TOKEN_FALSE);
+                        return scanner_rest(word, length, 2, 3, "lse", TOKEN_FALSE);
                     case 'l':
-                        return scanner_rest_ident_type(word, length, 2, 3, "oat", TOKEN_FLOAT);
+                        return scanner_rest(word, length, 2, 3, "oat", TOKEN_FLOAT);
                     case 'o':
-                        return scanner_rest_ident_type(word, length, 2, 1, "r", TOKEN_FOR);
+                        return scanner_rest(word, length, 2, 1, "r", TOKEN_FOR);
                 }
             }
         }
@@ -341,53 +343,52 @@ token_e scanner_ident_type(char *word, int length) {
             if (length > 1) {
                 switch (word[1]) {
                     case 'n':
-                        return scanner_rest_ident_type(word, length, 2, 1, "t", TOKEN_INT);
+                        return scanner_rest(word, length, 2, 1, "t", TOKEN_INT);
                     case 'm':
-                        return scanner_rest_ident_type(word, length, 2, 4, "port", TOKEN_IMPORT);
+                        return scanner_rest(word, length, 2, 4, "port", TOKEN_IMPORT);
                 }
             }
         }
         case 'm':
-            return scanner_rest_ident_type(word, length, 1, 2, "ap", TOKEN_MAP);
+            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         case 'n':
-            return scanner_rest_ident_type(word, length, 1, 3, "ull", TOKEN_NULL);
+            return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
         case 's': { // set, string,struct
             if (word[1] == 'e') {
-                return scanner_rest_ident_type(word, length, 1, 2, "et", TOKEN_SET);
+                return scanner_rest(word, length, 1, 2, "et", TOKEN_SET);
             }
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
                 switch (word[3]) {
                     case 'i':
-                        return scanner_rest_ident_type(word, length, 4, 2, "ng", TOKEN_STRING);
+                        return scanner_rest(word, length, 4, 2, "ng", TOKEN_STRING);
                     case 'u':
-                        return scanner_rest_ident_type(word, length, 4, 2, "ct", TOKEN_STRUCT);
+                        return scanner_rest(word, length, 4, 2, "ct", TOKEN_STRUCT);
                 }
             }
         }
+            // tup/throw/type/true
         case 't': {
-            if (word[1] == 'u') {
-                return scanner_rest_ident_type(word, length, 1, 2, "up", TOKEN_TUPLE);
-            }
-            if (length > 3) {
+            if (length > 1) {
                 switch (word[1]) {
+                    case 'h':
+                        return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
+                    case 'u':
+                        return scanner_rest(word, length, 2, 1, "p", TOKEN_TUPLE);
                     case 'y' :
-                        return scanner_rest_ident_type(word, length, 2, 2, "pe", TOKEN_TYPE);
+                        return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
                     case 'r' :
-                        return scanner_rest_ident_type(word, length, 2, 2, "ue", TOKEN_TRUE);
+                        return scanner_rest(word, length, 2, 2, "ue", TOKEN_TRUE);
                 }
             }
         }
         case 'v': {
-            return scanner_rest_ident_type(word, length, 1, 2, "ar", TOKEN_VAR);
+            return scanner_rest(word, length, 1, 2, "ar", TOKEN_VAR);
         }
-        case 'w':
-            return scanner_rest_ident_type(word, length, 1, 4, "hile", TOKEN_WHILE);
         case 'r':
-            return scanner_rest_ident_type(word, length, 1, 5, "eturn", TOKEN_RETURN);
+            return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
     }
 
-    return
-            TOKEN_LITERAL_IDENT;
+    return TOKEN_IDENT;
 }
 
 char *scanner_string_advance(module_t *module, char c) {
@@ -410,17 +411,17 @@ char *scanner_gen_word(module_t *module) {
     return word;
 }
 
-token_e scanner_rest_ident_type(char *word,
-                                int word_length,
-                                int8_t rest_start,
-                                int8_t rest_length,
-                                char *rest,
-                                int8_t type) {
+token_e scanner_rest(char *word,
+                     int word_length,
+                     int8_t rest_start,
+                     int8_t rest_length,
+                     char *rest,
+                     int8_t type) {
     if (rest_start + rest_length == word_length &&
         memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;
     }
-    return TOKEN_LITERAL_IDENT;
+    return TOKEN_IDENT;
 }
 
 /**

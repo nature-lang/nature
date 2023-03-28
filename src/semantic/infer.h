@@ -26,15 +26,15 @@ typedecl_t infer_closure_decl(ast_closure_t *closure_decl);
 
 void infer_var_decl(ast_var_decl *var_decl);
 
-void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt);
+void infer_var_decl_assign(ast_var_assign_stmt *stmt);
 
 void infer_assign(ast_assign_stmt *stmt);
 
 void infer_if(ast_if_stmt *stmt);
 
-void infer_while(ast_while_stmt *stmt);
+void infer_while(ast_for_cond_stmt *stmt);
 
-void infer_for_in(ast_for_in_stmt *stmt);
+void infer_for_in(ast_for_iterator_stmt *stmt);
 
 void infer_return(ast_return_stmt *stmt);
 //void infer_type_decl(ast_type_decl_stmt *stmt);
@@ -49,7 +49,7 @@ typedecl_t infer_ident(string unique_ident);
 
 typedecl_t infer_literal(ast_literal *literal);
 
-typedecl_t infer_new_list(ast_new_list *new_list);
+typedecl_t infer_new_list(ast_list_new *new_list);
 
 typedecl_t infer_new_map(ast_map_new *new_map);
 

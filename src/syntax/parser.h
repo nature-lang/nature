@@ -65,7 +65,7 @@ static ast_stmt *parser_if_stmt(module_t *m);
 //
 //ast_expr parser_call_expr(module_t *m, ast_expr left_expr);
 //
-//ast_expr parser_select_property(module_t *m, ast_expr left);
+//ast_expr parser_struct_access(module_t *m, ast_expr left);
 //
 //ast_expr parser_access(module_t *m, ast_expr left);
 //

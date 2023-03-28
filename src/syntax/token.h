@@ -24,11 +24,12 @@ typedef enum {
     TOKEN_AND, TOKEN_AND_AND, TOKEN_OR, TOKEN_OR_OR,
 
     // LITERALS.
-    TOKEN_LITERAL_IDENT, TOKEN_LITERAL_STRING, TOKEN_LITERAL_FLOAT, TOKEN_LITERAL_INT,
+    TOKEN_IDENT, TOKEN_LITERAL_STRING, TOKEN_LITERAL_FLOAT, TOKEN_LITERAL_INT,
 
     // KEYWORDS.
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
-    TOKEN_FOR, TOKEN_IN, TOKEN_WHILE, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
+    TOKEN_THROW, TOKEN_CATCH,
+    TOKEN_FOR, TOKEN_IN, /*TOKEN_WHILE,*/ TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
     TOKEN_ARRAY, TOKEN_MAP, TOKEN_SET, TOKEN_TUPLE, TOKEN_FN,
     TOKEN_IMPORT, TOKEN_AS, TOKEN_RETURN,
@@ -63,7 +64,7 @@ static string token_str[] = {
         [TOKEN_OR] = "|",
         [TOKEN_OR_OR] = "||",
 
-        [TOKEN_LITERAL_IDENT] = "ident literal",
+        [TOKEN_IDENT] = "ident literal",
         [TOKEN_LITERAL_STRING] = "string literal",
         [TOKEN_LITERAL_FLOAT] = "float literal",
         [TOKEN_LITERAL_INT] = "int literal",
@@ -77,7 +78,6 @@ static string token_str[] = {
 
         [TOKEN_FOR] = "for",
         [TOKEN_IN] = "in",
-        [TOKEN_WHILE] = "while",
         [TOKEN_IF] = "if",
         [TOKEN_ELSE] = "else",
         [TOKEN_ELSE_IF] = "else if",

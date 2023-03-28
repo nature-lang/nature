@@ -135,8 +135,8 @@ static void compiler_ident_assign(closure_t *c, ast_assign_stmt *stmt) {
  * @param stmt
  * @return
  */
-static void compiler_var_decl_assign(closure_t *c, ast_var_decl_assign_stmt *stmt) {
-    lir_operand_t *src = compiler_expr(c, stmt->expr);
+static void compiler_var_decl_assign(closure_t *c, ast_var_assign_stmt *stmt) {
+    lir_operand_t *src = compiler_expr(c, stmt->right);
     lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
 
     linked_push(c->operations, lir_op_move(dst, src));
@@ -204,7 +204,7 @@ static linked_t *compiler_var_decl(closure_t *c, ast_var_decl *var_decl) {
  * @param for_in_stmt
  * @return
  */
-static void compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
+static void compiler_for_in(closure_t *c, ast_for_iterator_stmt *ast) {
     lir_operand_t *base_target = compiler_expr(c, ast->iterate);
 
     lir_operand_t *count_target = temp_var_operand(c, type_base_new(TYPE_INT));
@@ -231,8 +231,8 @@ static void compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
 
     // gen key
     // gen value
-    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->gen_key->ident));
-    lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->gen_value->ident));
+    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->key->ident));
+    lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->value->ident));
     linked_push(c->operations, lir_rt_call(
             RT_CALL_ITERATE_GEN_KEY,
             key_target,
@@ -261,7 +261,7 @@ static void compiler_for_in(closure_t *c, ast_for_in_stmt *ast) {
     linked_push(c->operations, end_for_label);
 }
 
-static void compiler_while(closure_t *c, ast_while_stmt *ast) {
+static void compiler_while(closure_t *c, ast_for_cond_stmt *ast) {
     lir_op_t *while_label = lir_op_unique_label(WHILE_IDENT);
     linked_push(c->operations, while_label);
     lir_operand_t *end_while_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_WHILE_IDENT), true);
@@ -569,7 +569,7 @@ static lir_operand_t *compiler_list_access(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_list_new(closure_t *c, ast_expr expr) {
-    ast_new_list *ast = expr.value;
+    ast_list_new *ast = expr.value;
 
     lir_operand_t *list_target = temp_var_operand(c, expr.type);
 
@@ -922,7 +922,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             return;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            compiler_var_decl_assign(c, (ast_var_decl_assign_stmt *) stmt->value);
+            compiler_var_decl_assign(c, (ast_var_assign_stmt *) stmt->value);
             return;
         }
         case AST_STMT_ASSIGN: {
@@ -933,12 +933,12 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             compiler_if(c, (ast_if_stmt *) stmt->value);
             return;
         }
-        case AST_STMT_FOR_IN: {
-            compiler_for_in(c, (ast_for_in_stmt *) stmt->value);
+        case AST_STMT_FOR_ITERATOR: {
+            compiler_for_in(c, (ast_for_iterator_stmt *) stmt->value);
             return;
         }
         case AST_STMT_WHILE: {
-            compiler_while(c, (ast_while_stmt *) stmt->value);
+            compiler_while(c, (ast_for_cond_stmt *) stmt->value);
             return;
         }
         case AST_CALL: {
@@ -983,7 +983,7 @@ compiler_expr_fn expr_fn_table[] = {
 
 static lir_operand_t *compiler_expr(closure_t *c, ast_expr expr) {
     compiler_expr_fn fn = expr_fn_table[expr.assert_type];
-    assertf(fn, "ast expr not support");
+    assertf(fn, "ast right not support");
 
     lir_operand_t *source = fn(c, expr);
 

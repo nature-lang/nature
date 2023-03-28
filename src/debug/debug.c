@@ -5,7 +5,7 @@
 
 int current_parser_line = 0;
 
-string ast_stmt_expr_type_to_debug[] = {
+string ast_type_to_str[] = {
         [AST_EXPR_LITERAL]="AST_EXPR_TYPE_LITERAL",
         [AST_EXPR_BINARY]="AST_EXPR_TYPE_BINARY",
         [AST_EXPR_UNARY]="AST_EXPR_TYPE_UNARY",
@@ -24,15 +24,14 @@ string ast_stmt_expr_type_to_debug[] = {
         [AST_STMT_ASSIGN]="AST_STMT_ASSIGN",
         [AST_STMT_RETURN]="AST_STMT_RETURN",
         [AST_STMT_IF]="AST_STMT_IF",
-        [AST_STMT_FOR_IN]="AST_STMT_FOR_IN",
-        [AST_STMT_WHILE]="AST_STMT_WHILE",
+        [AST_STMT_FOR_ITERATOR]="AST_STMT_FOR_ITERATOR",
         [AST_FN_DECL]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
         [AST_CLOSURE_NEW]="AST_CLOSURE_DECL",
         [AST_STMT_TYPEDEF]="AST_STMT_TYPE_DECL",
 };
 
-string token_type_to_debug[] = {
+string token_type_to_str[] = {
         [TOKEN_LEFT_PAREN]="TOKEN_LEFT_PAREN",
         [TOKEN_RIGHT_PAREN]="TOKEN_RIGHT_PAREN", // ()
         [TOKEN_LEFT_SQUARE]="TOKEN_LEFT_SQUARE",
@@ -67,7 +66,7 @@ string token_type_to_debug[] = {
         [TOKEN_OR_OR]="TOKEN_OR_OR",
 
         // LITERALS.
-        [TOKEN_LITERAL_IDENT]="TOKEN_LITERAL_IDENT",
+        [TOKEN_IDENT]="TOKEN_IDENT",
         [TOKEN_LITERAL_STRING]="TOKEN_LITERAL_STRING",
         [TOKEN_LITERAL_FLOAT]="TOKEN_LITERAL_FLOAT",
         [TOKEN_LITERAL_INT]="TOKEN_LITERAL_INT",
@@ -93,7 +92,6 @@ string token_type_to_debug[] = {
         [TOKEN_ARRAY]="TOKEN_ARRAY",
         [TOKEN_MAP]="TOKEN_MAP",
         [TOKEN_FN]="TOKEN_FN",
-        [TOKEN_VOID]="TOKEN_VOID",
         [TOKEN_IMPORT]="TOKEN_IMPORT",
         [TOKEN_AS]="TOKEN_AS",
         [TOKEN_RETURN]="TOKEN_RETURN"
@@ -141,15 +139,15 @@ void debug_parser(int line, char *token) {
 }
 
 void debug_parser_stmt(ast_type_e t) {
-    printf("\n[DEBUG] PARSER stmt: %s\n", ast_stmt_expr_type_to_debug[t]);
+    printf("\n[DEBUG] PARSER stmt: %s\n", ast_type_to_str[t]);
 }
 
 void debug_scanner(token_t *t) {
-    printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_debug[t->type], t->literal);
+    printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_str[t->type], t->literal);
 }
 
 void debug_stmt(string type, ast_stmt stmt) {
-    printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_stmt_expr_type_to_debug[stmt.assert_type]);
+    printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_type_to_str[stmt.assert_type]);
 }
 
 /**

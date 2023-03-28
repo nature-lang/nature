@@ -58,7 +58,7 @@ void infer_stmt(ast_stmt *stmt) {
             break;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            infer_var_decl_assign((ast_var_decl_assign_stmt *) stmt->value);
+            infer_var_decl_assign((ast_var_assign_stmt *) stmt->value);
             break;
         }
         case AST_STMT_ASSIGN: {
@@ -78,11 +78,11 @@ void infer_stmt(ast_stmt *stmt) {
             break;
         }
         case AST_STMT_WHILE: {
-            infer_while((ast_while_stmt *) stmt->value);
+            infer_while((ast_for_cond_stmt *) stmt->value);
             break;
         }
-        case AST_STMT_FOR_IN: {
-            infer_for_in((ast_for_in_stmt *) stmt->value);
+        case AST_STMT_FOR_ITERATOR: {
+            infer_for_in((ast_for_iterator_stmt *) stmt->value);
             break;
         }
         case AST_STMT_RETURN: {
@@ -115,7 +115,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             break;
         }
         case AST_EXPR_LIST_NEW: {
-            type = infer_new_list((ast_new_list *) expr->value);
+            type = infer_new_list((ast_list_new *) expr->value);
             break;
         }
         case AST_EXPR_MAP_NEW: {
@@ -152,7 +152,7 @@ typedecl_t infer_expr(ast_expr *expr) {
             break;
         }
         default: {
-            assertf(false, "unknown expr %v", expr->assert_type);
+            assertf(false, "unknown right %v", expr->assert_type);
         }
     }
 
@@ -170,7 +170,7 @@ typedecl_t infer_binary(ast_binary_expr *expr) {
     typedecl_t right_type = infer_expr(&expr->right);
 
     assertf(left_type.kind == TYPE_INT || left_type.kind == TYPE_FLOAT,
-            "invalid operation: %s, expr type must be int or float, cannot '%s' type",
+            "invalid operation: %s, right type must be int or float, cannot '%s' type",
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
     assertf(right_type.kind == left_type.kind, "binary operations type not consistent， left: %s, right: %s",
@@ -206,12 +206,12 @@ typedecl_t infer_binary(ast_binary_expr *expr) {
 typedecl_t infer_unary(ast_unary_expr *expr) {
     typedecl_t operand_type = infer_expr(&expr->operand);
     if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.kind != TYPE_BOOL) {
-        error_exit("!expr, expr must be bool type");
+        error_exit("!right, right must be bool type");
     }
 
     if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.kind != TYPE_INT
         && operand_type.kind != TYPE_FLOAT) {
-        error_exit("!expr, expr must be int or float");
+        error_exit("!right, right must be int or float");
     }
 
     return operand_type;
@@ -252,7 +252,7 @@ typedecl_t infer_ident(string unique_ident) {
  * @param new_list
  * @return 
  */
-typedecl_t infer_new_list(ast_new_list *new_list) {
+typedecl_t infer_new_list(ast_list_new *new_list) {
     typedecl_t result = {
             .is_origin = true,
             .kind = TYPE_LIST,
@@ -398,7 +398,7 @@ typedecl_t infer_access(ast_expr *expr) {
         // 返回值
         result = map_decl->value_type;
     } else if (left_type.kind == TYPE_LIST) {
-        assertf(key_type.kind == TYPE_INT, "access list failed, index expr type must by int");
+        assertf(key_type.kind == TYPE_INT, "access list failed, index right type must by int");
 
         ast_list_access_t *access_list = NEW(ast_list_access_t);
         typedecl_list_t *list_decl = left_type.list_decl;
@@ -412,7 +412,7 @@ typedecl_t infer_access(ast_expr *expr) {
 
         result = list_decl->element_type;
     } else {
-        assertf(false, "line: %d, expr type must map or list, cannot '%s'", infer_line,
+        assertf(false, "line: %d, right type must map or list, cannot '%s'", infer_line,
                 type_kind_string[left_type.kind]);
     };
 
@@ -430,7 +430,7 @@ typedecl_t infer_struct_access(ast_struct_access *struct_access) {
     infer_expr(&struct_access->left);
     typedecl_t left_type = struct_access->left.type;
 
-    assertf(left_type.kind == TYPE_STRUCT, "expr not struct, cannot access key");
+    assertf(left_type.kind == TYPE_STRUCT, "right not struct, cannot access key");
 
     typedecl_struct_t *struct_decl = left_type.struct_decl;
     for (int i = 0; i < struct_decl->count; ++i) {
@@ -455,13 +455,13 @@ typedecl_t infer_call(ast_call *call) {
 
     // 左值符号推导
     typedecl_t left_type = infer_expr(&call->left);
-    assertf(left_type.kind == TYPE_FN, "left expr not fn, cannot call");
+    assertf(left_type.kind == TYPE_FN, "left right not fn, cannot call");
 
     typedecl_fn_t *type_fn = left_type.fn_decl;
 
     // 实参类型推导与类型还原
     for (int i = 0; i < call->param_count; ++i) {
-        infer_expr(&call->actual_params[i]);  // expr 类型还原，其中也包括 spread param
+        infer_expr(&call->actual_params[i]);  // right 类型还原，其中也包括 spread param
     }
 
     // 参数对比，由于存在 spread 和 rest 运算，所以不能直接根据参数数量左 assert
@@ -508,13 +508,13 @@ void infer_var_decl(ast_var_decl *var_decl) {
  * var f = {"a": 1, "b": 2} // ?
  * var h = call();
  */
-void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
-    typedecl_t expr_type = infer_expr(&stmt->expr);
+void infer_var_decl_assign(ast_var_assign_stmt *stmt) {
+    typedecl_t expr_type = infer_expr(&stmt->right);
 
     // 类型推断(不需要再比较类型是否一致)
     if (stmt->var_decl->type.kind == TYPE_UNKNOWN) {
-        assertf(infer_var_type_can_confirm(expr_type), "type inference error, right expr code is not confirm");
-        stmt->var_decl->type = expr_type; // expr type is origin type
+        assertf(infer_var_type_can_confirm(expr_type), "type inference error, right right code is not confirm");
+        stmt->var_decl->type = expr_type; // right type is origin type
         return;
     }
 
@@ -523,7 +523,7 @@ void infer_var_decl_assign(ast_var_decl_assign_stmt *stmt) {
     // 判断类型是否一致 compare
     assertf(type_compare(stmt->var_decl->type, expr_type),
             "line: %d, cannot assigned variables, because code inconsistency", infer_line);
-    set_expr_target(&stmt->expr, stmt->var_decl->type);
+    set_expr_target(&stmt->right, stmt->var_decl->type);
 }
 
 /**
@@ -547,7 +547,7 @@ void infer_if(ast_if_stmt *stmt) {
     infer_block(stmt->alternate);
 }
 
-void infer_while(ast_while_stmt *stmt) {
+void infer_while(ast_for_cond_stmt *stmt) {
     typedecl_t condition_type = infer_expr(&stmt->condition);
     if (condition_type.kind != TYPE_BOOL) {
         error_exit("while stmt condition must bool");
@@ -559,7 +559,7 @@ void infer_while(ast_while_stmt *stmt) {
  * 仅 list 和 map 类型支持 iterate
  * @param stmt
  */
-void infer_for_in(ast_for_in_stmt *stmt) {
+void infer_for_in(ast_for_iterator_stmt *stmt) {
     // 经过 infer_expr 的类型一定是已经被还原过的
     typedecl_t iterate_type = infer_expr(&stmt->iterate);
 
@@ -567,8 +567,8 @@ void infer_for_in(ast_for_in_stmt *stmt) {
             "for in iterate code must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
     // 类型推断
-    ast_var_decl *key_decl = stmt->gen_key;
-    ast_var_decl *value_decl = stmt->gen_value;
+    ast_var_decl *key_decl = stmt->key;
+    ast_var_decl *value_decl = stmt->value;
     if (iterate_type.kind == TYPE_MAP) {
         typedecl_map_t *map_decl = iterate_type.map_decl;
         key_decl->type = map_decl->key_type;

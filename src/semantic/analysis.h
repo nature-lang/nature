@@ -42,7 +42,7 @@ void analysis_block(module_t *m, slice_t *block);
 
 void analysis_var_decl(module_t *m, ast_var_decl *stmt);
 
-void analysis_var_decl_assign(module_t *m, ast_var_decl_assign_stmt *stmt);
+void analysis_var_decl_assign(module_t *m, ast_var_assign_stmt *stmt);
 
 ast_closure_t *analysis_new_fn(module_t *m, ast_fn_decl *function_decl, analysis_local_scope_t *scope);
 
@@ -72,9 +72,9 @@ string analysis_resolve_type(module_t *m, analysis_function_t *current, string i
 
 void analysis_if(module_t *m, ast_if_stmt *stmt);
 
-void analysis_while(module_t *m, ast_while_stmt *stmt);
+void analysis_while(module_t *m, ast_for_cond_stmt *stmt);
 
-void analysis_for_in(module_t *m, ast_for_in_stmt *stmt);
+void analysis_for_in(module_t *m, ast_for_iterator_stmt *stmt);
 
 void analysis_return(module_t *m, ast_return_stmt *stmt);
 
@@ -88,7 +88,7 @@ void analysis_new_struct(module_t *m, ast_struct_new_t *expr);
 
 void analysis_new_map(module_t *m, ast_map_new *expr);
 
-void analysis_new_list(module_t *m, ast_new_list *expr);
+void analysis_new_list(module_t *m, ast_list_new *expr);
 
 bool analysis_redeclare_check(module_t *m, string ident);
 

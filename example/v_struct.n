@@ -10,12 +10,15 @@ type person = struct {
 	} f
 }
 
-// 赋值
+// 使用逗号分割
 var max = person {
-	a = 12
-	b = 1 + 1
-	c = call()
+	a = 12,
+	b = 1 + 1,
+	c = call(),
 }
+
+// 下个版本还要支持上不写 key 只写值
+var max = person{a=12, b=1+1, c = call()}
 
 max.a = 11
 max.b = 2

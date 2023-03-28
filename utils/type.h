@@ -45,7 +45,7 @@ typedef enum {
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
     TYPE_VOID, // 表示函数无返回值
-    TYPE_UNKNOWN, // 类型推断时没有推断出当前表达式的值
+    TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
 } type_kind;

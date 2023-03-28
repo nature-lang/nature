@@ -1,27 +1,5 @@
-// 方案 1
-//code foo = bar
-//code person = struct {
-//	int a,
-//	float b,
-//	bool c,
-//	struct {
-//		int d1
-//		int d2
-//	} d
-//}
-
-//person max = person {
-//	a: 12,
-//	b: 13
-//	d: d_struct {
-//		d1: 12,
-//		d2: 14
-//	}
-//}
-
-
 // 方案 2, 暂时不实现赋默认值,但是最终肯定是要实现的
-code person = struct {
+type person = struct {
 	int a = 1 // 仅限于literal 值,甚至不允许三元运算符等语法，但是这里的初始化就和奇怪，甚至不知道应该发生在什么时候?
 	int b
 	int c
@@ -34,9 +12,10 @@ code person = struct {
 	} f
 }
 
+// 赋值
 var max = person {
-	a = 12
-	b = 1 + 1
+	a = 12,
+	b = 1 + 1,
 	c = call()
 }
 

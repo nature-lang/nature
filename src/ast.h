@@ -32,11 +32,13 @@ typedef enum {
     AST_EXPR_ENV_VALUE,
 
     AST_EXPR_LIST_NEW, // [1, 2, 3]
+    AST_EXPR_CURLY_EMPTY, // 类型推断阶段再去判定对错,TYPE_UNKNOWN
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
     AST_EXPR_SET_NEW, // {1, 2, 3, 4}
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
+    AST_EXPR_TUPLE_DESTR, // (var_a, var_b)
     AST_EXPR_STRUCT_NEW, // person {a = 1; b = 2}
-
+    AST_EXPR_CATCH, // catch call()
 
 
     AST_EXPR_STRUCT_DECL, // struct {int a = 1; int b = 2}
@@ -51,8 +53,10 @@ typedef enum {
     AST_STMT_ASSIGN,
     AST_STMT_RETURN,
     AST_STMT_IF,
-    AST_STMT_FOR_IN,
-    AST_STMT_WHILE,
+    AST_STMT_THROW,
+    AST_STMT_FOR_ITERATOR,
+    AST_STMT_FOR_COND,
+    AST_STMT_FOR_TRADITION,
     AST_STMT_TYPEDEF,
     AST_CALL,
     AST_FN_DECL,
@@ -72,8 +76,8 @@ typedef enum {
     AST_EXPR_OPERATOR_EQ_EQ, // ==
     AST_EXPR_OPERATOR_NOT_EQ, // !=
 
-    AST_EXPR_OPERATOR_NOT, // unary !expr
-    AST_EXPR_OPERATOR_NEG, // unary -expr
+    AST_EXPR_OPERATOR_NOT, // unary !right
+    AST_EXPR_OPERATOR_NEG, // unary -right
     AST_EXPR_OPERATOR_IA, // *解引用
 } ast_expr_operator_e;
 
@@ -90,8 +94,8 @@ static string ast_expr_op_str[] = {
         [AST_EXPR_OPERATOR_EQ_EQ] = "==", // ==
         [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
 
-        [AST_EXPR_OPERATOR_NOT] = "!", // unary !expr
-        [AST_EXPR_OPERATOR_NEG] = "-", // unary -expr
+        [AST_EXPR_OPERATOR_NOT] = "!", // unary !right
+        [AST_EXPR_OPERATOR_NEG] = "-", // unary -right
 };
 //
 //typedef struct {
@@ -141,16 +145,11 @@ typedef struct {
 // 调用函数
 typedef struct {
     ast_expr left;
-    ast_expr actual_params[UINT8_MAX];
-    uint8_t param_count;
+//    ast_expr actual_params[UINT8_MAX];
+//    uint8_t param_count;
+    list_t *actual_params;// ast_expr
     bool spread_param;
 } ast_call;
-
-// int a;
-typedef struct {
-    string ident;
-    typedecl_t type; // type 已经决定了 size
-} ast_var_decl;
 
 // 值类型
 typedef struct {
@@ -163,10 +162,26 @@ typedef struct {
     ast_expr right;
 } ast_assign_stmt;
 
+// int a;
 typedef struct {
-    ast_var_decl *var_decl; // 左值
-    ast_expr expr; // 右值
-} ast_var_decl_assign_stmt;
+    string ident;
+    typedecl_t type; // type 已经决定了 size
+} ast_var_decl;
+
+typedef struct {
+    union {
+        ast_var_decl *var_decl; // 左值
+    };
+    ast_expr right; // 右值
+} ast_var_assign_stmt;
+
+// 基于 tuple 解构语法的变量快速赋值
+// var (a, b) = (1, 2)
+typedef struct {
+    typedecl_t type; // 只能是 var,也就是是 TYPE UNKOWN
+    slice_t *idents;
+    ast_expr right;
+} ast_var_tuple_destr_assign_stmt;
 
 typedef struct {
     ast_expr condition;
@@ -174,22 +189,48 @@ typedef struct {
     slice_t *alternate;
 } ast_if_stmt;
 
+/**
+ * for (true) {}
+ */
 typedef struct {
     ast_expr condition;
     slice_t *body;
-} ast_while_stmt;
+} ast_for_cond_stmt;
 
 /**
- * for (int key[, bool value] in list) {
- *
- * }
+ * throw "not found"
+ */
+typedef struct {
+    ast_expr error;
+} ast_throw_stmt;
+
+
+/**
+ * var (res, error) = catch call()
+ */
+typedef struct {
+    ast_call *call; // 必须接上 call
+} ast_catch;
+
+/**
+ * for (int i = 0; i < 100; i++) {}
+ */
+typedef struct {
+    ast_stmt *init;
+    ast_expr cond;
+    ast_stmt *update;
+    slice_t *body;
+} ast_for_tradition_stmt;
+
+/**
+ * for (key,value in list) {}
  */
 typedef struct {
     ast_expr iterate; // list, foo.list, bar[0]
-    ast_var_decl *gen_key; // 类型推导, code 可能是 int 或者 string
-    ast_var_decl *gen_value; // 类型推导
+    ast_var_decl *key; // 类型推导, type 可能是 int 或者 string
+    ast_var_decl *value; // 类型推导
     slice_t *body;
-} ast_for_in_stmt;
+} ast_for_iterator_stmt;
 
 typedef struct {
     ast_expr *expr;
@@ -216,13 +257,15 @@ typedef struct {
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，
  * 使用了 key, value
  * people {
- *    a = 1
- *    b = 2
+ *    a = 1,
+ *    b = 2,
  *    c = 3
  * }
  */
 typedef struct {
-    typedecl_t type; // 为什么这里声明的是一个类型而不是 ident?
+    // parser 阶段是 typedef ident
+    // infer 完成后是 typedecl_struct
+    typedecl_t type;
 //    ast_struct_property properties[UINT8_MAX];
 //    uint8_t count;
     list_t *properties; // ast_struct_property
@@ -241,7 +284,7 @@ typedef struct {
     ast_expr left; // left is struct
     string key;
 
-// infer 推断后在这里冗余一份,计算 size 或者 type 的时候都比较方便
+    // infer 时在这里冗余一份,计算 size 或者 type 的时候都比较方便
     typedecl_struct_property_t property;
 } ast_struct_access;
 
@@ -274,20 +317,18 @@ typedef struct {
 
 // [1,a.b, call()]
 typedef struct {
-    ast_expr values[UINT8_MAX]; // TODO 这里写死 uint8_max 可太小了,改成动态数组吧
-    uint64_t count; // TODO list 没有数量,数组才有数量
+    list_t *values; // ast_expr
     typedecl_t type; // list的类型 (类型推导截断冗余)
-} ast_new_list;
+} ast_list_new;
 
 typedef struct {
     ast_expr key;
     ast_expr value;
-} ast_map_item;
+} ast_map_element;
 
 // {key: value}
 typedef struct {
-    ast_map_item values[UINT8_MAX];
-    uint64_t count; // 默认初始化的数量
+    list_t *elements; // ast_map_element
 //    typedecl_t key_type; // 类型推导截断冗余
 //    typedecl_t value_type; // 类型推导截断冗余
 } ast_map_new;
@@ -301,6 +342,11 @@ typedef struct {
 typedef struct {
     list_t *elements; // 值为 ast_expr
 } ast_tuple_new;
+
+// (a, b) = (1, 2)
+typedef struct {
+    list_t *elements; // 值为 ast_expr
+} ast_tuple_destr; // destructuring
 
 typedef struct {
     ast_ident *env;
