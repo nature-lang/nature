@@ -106,7 +106,10 @@ typedef struct typedecl_map_t typedecl_map_t;
 
 typedef struct typedecl_set_t typedecl_set_t;
 
-typedef struct typedecl_tuple_t typedecl_tuple_t;
+// (int, int, float)
+typedef struct {
+    list_t *elements; //  typedecl_t
+} typedecl_tuple_t;
 
 typedef struct typedecl_struct_t typedecl_struct_t; // 目前只有 string
 
@@ -218,11 +221,6 @@ struct typedecl_struct_t {
     typedecl_struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
 };
 
-// (int, int, float)
-struct typedecl_tuple_t {
-    list_t *elements; // 由 typedecl_t 组成
-};
-
 /**
  * type_fn_t 是什么样的结构？怎么存储在堆内存中?
  * NO, fn 并不存储在堆中，而是存储在 .text section 中。
@@ -232,9 +230,7 @@ struct typedecl_tuple_t {
  */
 struct typedecl_fn_t {
     typedecl_t return_type;
-//    typedecl_t formals_types[UINT8_MAX];
-//    uint8_t formals_count;
-    list_t formal_types; // typedecl_t
+    list_t *formal_types; // typedecl_t
     bool rest_param;
 };
 

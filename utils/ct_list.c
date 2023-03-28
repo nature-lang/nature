@@ -7,11 +7,11 @@ void ct_list_grow(list_t *l) {
 }
 
 list_t *ct_list_new(uint64_t element_size) {
-    list_t *list = mallocz(sizeof(list_t));
+    list_t *list = malloc(sizeof(list_t));
     list->element_size = element_size;
     list->length = 0;
     list->capacity = LIST_DEFAULT_CAPACITY;
-    list->take = mallocz(list->capacity * element_size);
+    list->take = malloc(list->capacity * element_size);
 
     return list;
 }
@@ -23,7 +23,7 @@ void *ct_list_push(list_t *l, void *src) {
     }
 
     uint64_t index = l->length++;
-    byte *dst = ct_list_value(l, index);
+    uint8_t *dst = ct_list_value(l, index);
     memmove(dst, src, l->element_size);
     return dst;
 }

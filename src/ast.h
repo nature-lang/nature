@@ -50,6 +50,7 @@ typedef enum {
     // stmt
     AST_STMT_IMPORT,
     AST_STMT_VAR_DECL_ASSIGN,
+    AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_RETURN,
     AST_STMT_IF,
@@ -169,19 +170,16 @@ typedef struct {
 } ast_var_decl;
 
 typedef struct {
-    union {
-        ast_var_decl *var_decl; // 左值
-    };
+    ast_var_decl var_decl; // 左值
     ast_expr right; // 右值
 } ast_var_assign_stmt;
 
 // 基于 tuple 解构语法的变量快速赋值
 // var (a, b) = (1, 2)
 typedef struct {
-    typedecl_t type; // 只能是 var,也就是是 TYPE UNKOWN
-    slice_t *idents;
+    list_t *var_decls; // var_decl
     ast_expr right;
-} ast_var_tuple_destr_assign_stmt;
+} ast_var_tuple_destr_stmt;
 
 typedef struct {
     ast_expr condition;
@@ -227,8 +225,8 @@ typedef struct {
  */
 typedef struct {
     ast_expr iterate; // list, foo.list, bar[0]
-    ast_var_decl *key; // 类型推导, type 可能是 int 或者 string
-    ast_var_decl *value; // 类型推导
+    ast_var_decl key; // 类型推导, type 可能是 int 或者 string
+    ast_var_decl value; // 类型推导
     slice_t *body;
 } ast_for_iterator_stmt;
 
@@ -373,8 +371,6 @@ typedef struct {
 typedef struct {
     char *name;
     typedecl_t return_type; // 基础类型 + 动态类型
-//    ast_var_decl *formal_params[UINT8_MAX]; // 形参列表(约定第一个参数为 env)
-//    uint8_t param_count;
     list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
@@ -382,7 +378,8 @@ typedef struct {
 } ast_fn_decl; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
-    slice_t *env_list; // ast_expr*
+//    slice_t *env_list; // ast_expr*
+    list_t *env_list; // ast_expr
 
     string env_name; // 唯一标识，可以全局定位
     ast_fn_decl *fn;

@@ -50,7 +50,7 @@ typedef struct {
     string unique_ident; // 唯一名称
     int scope_depth;
     bool is_capture; // 是否被捕获(是否被下级引用)
-} analysis_local_ident_t;
+} local_ident_t;
 
 /**
  * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
@@ -63,28 +63,27 @@ typedef struct {
     int env_index; // env_index
     string ident;
     int index; // free in frees index
-} analysis_free_ident_t;
+} free_ident_t;
 
-typedef struct analysis_local_scope_t {
-    struct analysis_local_scope_t *parent;
+typedef struct local_scope_t {
+    struct local_scope_t *parent;
     slice_t *idents; // analysis_local_ident_t*
 
     uint8_t scope_depth;
-} analysis_local_scope_t;
+} local_scope_t;
 
 /**
  * 词法作用域
  */
-typedef struct analysis_function_t {
-    struct analysis_function_t *parent;
+typedef struct analysis_fn_t {
+    struct analysis_fn_t *parent;
 
-    analysis_local_scope_t *current_scope;
+    local_scope_t *current_scope;
 
 //  analysis_local_ident_t *locals[UINT8_MAX];
 //  uint8_t local_count;
 
-    // wwh: 使用了当前作用域之外的变量
-//    analysis_free_ident_t frees[UINT8_MAX];
+    // 使用了当前作用域之外的变量
     slice_t *frees; // analysis_free_ident_t*
     table_t *free_table; // analysis_free_ident_t*
 
@@ -98,7 +97,7 @@ typedef struct analysis_function_t {
     // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
     struct {
         // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-        analysis_local_scope_t *scope;
+        local_scope_t *scope;
         union {
             ast_stmt *stmt;
             ast_expr *expr;
@@ -106,7 +105,7 @@ typedef struct analysis_function_t {
         bool is_stmt;
     } contains_fn_decl[UINT8_MAX];
     uint8_t contains_fn_count;
-} analysis_function_t;
+} analysis_fn_t;
 
 /**
  * 可以理解为文件维度数据
@@ -130,7 +129,7 @@ typedef struct {
     slice_t *stmt_list;
 
     // analysis
-    analysis_function_t *analysis_current;
+    analysis_fn_t *analysis_current;
     int analysis_line;
 
     // call init stmt

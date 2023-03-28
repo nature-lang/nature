@@ -231,8 +231,8 @@ static void compiler_for_in(closure_t *c, ast_for_iterator_stmt *ast) {
 
     // gen key
     // gen value
-    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->key->ident));
-    lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->value->ident));
+    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->key.ident));
+    lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->value.ident));
     linked_push(c->operations, lir_rt_call(
             RT_CALL_ITERATE_GEN_KEY,
             key_target,

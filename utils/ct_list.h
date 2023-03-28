@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "utils/type.h"
 
 #define LIST_DEFAULT_CAPACITY 8
 
@@ -11,7 +10,7 @@ typedef struct {
     uint64_t element_size; // 元素的大小
     uint64_t length; // 元素的数量
     uint64_t capacity; // 预申请的数量
-    byte *take; // 申请的内存区域
+    uint8_t *take; // 申请的内存区域
 } list_t;
 
 /**
