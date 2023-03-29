@@ -36,7 +36,7 @@ typedef enum {
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
     AST_EXPR_SET_NEW, // {1, 2, 3, 4}
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
-    AST_EXPR_TUPLE_DESTR, // (var_a, var_b)
+    AST_EXPR_TUPLE_DESTR, // (var_a, var_b, (var_c, var_d))
     AST_EXPR_STRUCT_NEW, // person {a = 1; b = 2}
     AST_EXPR_CATCH, // catch call()
 
@@ -158,10 +158,22 @@ typedef struct {
     string value;
 } ast_literal; // 标量值
 
+// (xx, xx, xx)
 typedef struct {
-    ast_expr left; // a  或 foo.bar.car 或者 d[0]
+    // var 中, ast_expr 的 type 是  ast_var_decl 和 ast_tuple_destr
+    // assign 中 (a, b, (c.e, d[0])) = (1, 2) ast_expr 可能是所有 expr 类型，包括 ast_tuple_destr 自身
+    list_t *elements;  // ast_expr
+} ast_tuple_destr;
+
+typedef struct {
+    ast_expr left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)
     ast_expr right;
 } ast_assign_stmt;
+
+//// (a, b, (c.e, d[0])) = (1, 2)
+//typedef struct {
+//    list_t *elements; // 值为 ast_expr
+//} ast_tuple_destr_stmt; // destructuring
 
 // int a;
 typedef struct {
@@ -175,9 +187,9 @@ typedef struct {
 } ast_var_assign_stmt;
 
 // 基于 tuple 解构语法的变量快速赋值
-// var (a, b) = (1, 2)
+// var (a, b, (c, d)) = (1, 2)
 typedef struct {
-    list_t *var_decls; // var_decl
+    ast_tuple_destr *tuple_destr;
     ast_expr right;
 } ast_var_tuple_destr_stmt;
 
@@ -221,12 +233,13 @@ typedef struct {
 } ast_for_tradition_stmt;
 
 /**
- * for (key,value in list) {}
+ * for (key,value in list)
+ * for (key in list)
  */
 typedef struct {
     ast_expr iterate; // list, foo.list, bar[0]
     ast_var_decl key; // 类型推导, type 可能是 int 或者 string
-    ast_var_decl value; // 类型推导
+    ast_var_decl *value; // value 可选，可能为 null
     slice_t *body;
 } ast_for_iterator_stmt;
 
@@ -341,11 +354,6 @@ typedef struct {
     list_t *elements; // 值为 ast_expr
 } ast_tuple_new;
 
-// (a, b) = (1, 2)
-typedef struct {
-    list_t *elements; // 值为 ast_expr
-} ast_tuple_destr; // destructuring
-
 typedef struct {
     ast_ident *env;
     uint8_t index;
@@ -394,5 +402,7 @@ typedecl_t select_actual_param(ast_call *call, uint8_t index);
 typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(typedecl_t a, typedecl_t b);
+
+bool can_assign(ast_type_e t);
 
 #endif //NATURE_SRC_AST_H_

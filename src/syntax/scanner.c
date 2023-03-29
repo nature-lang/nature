@@ -372,8 +372,8 @@ token_e scanner_ident_type(char *word, int length) {
                 switch (word[1]) {
                     case 'h':
                         return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
-                    case 'u':
-                        return scanner_rest(word, length, 2, 1, "p", TOKEN_TUPLE);
+//                    case 'u':
+//                        return scanner_rest(word, length, 2, 1, "p", TOKEN_TUPLE);
                     case 'y' :
                         return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
                     case 'r' :

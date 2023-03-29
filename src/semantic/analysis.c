@@ -602,7 +602,7 @@ static void analysis_tuple_new(module_t *m, ast_tuple_new *expr) {
  * @param m
  * @param expr
  */
-static void analysis_tuple_destr(module_t *m, ast_tuple_destr *expr) {
+static void analysis_tuple_destr(module_t *m, ast_tuple_destr_stmt *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_expr *element = ct_list_value(expr->elements, i);
         analysis_expr(m, element);

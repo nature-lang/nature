@@ -132,3 +132,12 @@ bool type_compare(typedecl_t target, typedecl_t source) {
 
     return true;
 }
+
+bool can_assign(ast_type_e t) {
+    if (t == AST_EXPR_IDENT ||
+        t == AST_EXPR_ACCESS ||
+        t == AST_EXPR_STRUCT_ACCESS) {
+        return true;
+    }
+    return false;
+}

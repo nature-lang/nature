@@ -91,7 +91,7 @@ static string token_str[] = {
 //        [TOKEN_LIST] = "list",
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
-        [TOKEN_TUPLE] = "tup",
+//        [TOKEN_TUPLE] = "tup",
         [TOKEN_FN] = "fn",
         [TOKEN_RETURN] = "return",
 
