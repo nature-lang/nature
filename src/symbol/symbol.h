@@ -8,6 +8,7 @@
 
 #define FN_MAIN_NAME "main"
 #define FN_INIT_NAME "init"
+#define BUILTIN_ERRORT "errort"
 #define ENV_IDENT "env"
 
 /**

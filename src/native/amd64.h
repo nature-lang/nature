@@ -11,7 +11,7 @@
 typedef slice_t *(*amd64_native_fn)(closure_t *c, lir_op_t *op);
 
 /**
- * 分发入口, 基于 code->code 做选择(包含 label code)
+ * 分发入口, 基于 op->code 做选择(包含 label code)
  * @param c
  * @param op
  * @return

@@ -102,7 +102,7 @@ static string ast_expr_op_str[] = {
 //typedef struct {
 //    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
 //    type_system code; // base_type, custom_type, function, list, map
-//    bool is_origin; // code a = int, code b = a，int is origin
+//    bool is_origin; // type a = int, type b = a，int is origin
 //    uint8_t pointer; // 指针等级, 如果等于0 表示非指针
 //} ast_type_t;
 
@@ -395,7 +395,7 @@ typedecl_t select_actual_param(ast_call *call, uint8_t index);
 
 typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
 
-bool type_compare(typedecl_t a, typedecl_t b);
+bool type_compare(typedecl_t left, typedecl_t right);
 
 bool can_assign(ast_type_e t);
 

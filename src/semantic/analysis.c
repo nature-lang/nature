@@ -692,7 +692,7 @@ static void analysis_expr(module_t *m, ast_expr *expr) {
         case AST_CALL:
             return analysis_call(m, expr->value);
         case AST_FN_DECL: { // 右值
-            analysis_fn_decl_ident(m, (ast_fn_decl *) expr->value);
+            analysis_fn_decl_ident(m, expr->value);
 
             // 函数体添加到 延迟处理
             uint8_t count = m->analysis_current->contains_fn_count++;

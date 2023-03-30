@@ -1077,7 +1077,12 @@ static ast_expr parser_left_curly_expr(module_t *m) {
     // xxx a = {}
     parser_must(m, TOKEN_LEFT_CURLY);
     if (parser_consume(m, TOKEN_RIGHT_CURLY)) {
-        result.assert_type = AST_EXPR_CURLY_EMPTY;
+        // {} 默认是字典
+        ast_map_new *map_new = NEW(ast_map_new);
+        map_new->elements = ct_list_new(sizeof(ast_map_element));
+
+        result.assert_type = AST_EXPR_MAP_NEW;
+        result.value = map_new;
         return result;
     }
 

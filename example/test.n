@@ -1,7 +1,7 @@
 //import "src/redis" module_name local_redis // redis.set
 //import "github.com/weiwenhao/redis" module_name remote_redis // redis.set
 
-code struct_test = struct {
+type struct_test = struct {
 	fn<int()> car
 }
 
@@ -33,7 +33,7 @@ map{string:int} foo_44 = {
   'c-c':3
 }
 
-code custom1 = int
+type custom1 = int
 //custom1 testy() {
 //
 //}
@@ -71,7 +71,7 @@ int custom_call(int foo, int bar, fn<int()> c) {
 
 }
 
-code person = int
+type person = int
 var custom_type = 1
 custom_call(
 test,
@@ -100,7 +100,7 @@ int test_f1(int a) {}
 
 test_f1(call())
 
-code custom = int
+type custom = int
 
 var a1 = custom () {
 
@@ -184,7 +184,7 @@ map{string:int} foo_11 = {
   'c-c':3
 }
 
-code my_int_a = int
+type my_int_a = int
 
 float test25(int a) {
 	my_int_a foo = 24

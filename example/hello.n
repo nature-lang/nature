@@ -42,8 +42,8 @@ map{string:int} foo = {
 map<int,string> car = {}
 
 // 自定义类型
-code custom = int
-code custom_struct = struct {
+type custom = int
+type custom_struct = struct {
 	int i
 	bool b
 	[int] c

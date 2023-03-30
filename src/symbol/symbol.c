@@ -20,6 +20,8 @@ void symbol_init() {
 //    // built in fn init
     _symbol_table_set("print", SYMBOL_TYPE_FN, builtin_print(), false);
     _symbol_table_set("println", SYMBOL_TYPE_FN, builtin_println(), false);
+
+    // TODO errort
 }
 
 // compiler 阶段临时生成的数据
