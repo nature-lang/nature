@@ -1,41 +1,21 @@
-// 初始化时必须完整赋值
-var t = (1, 3.14)
+// def
+(int, string, float) tup = (1, "hello", true) // v 声明一个 tuple 并赋值 (不允许只声明不赋值)
+var tup = (1, "hello", true) // v
 
-// access
-int a = t[0];
+// destructuring
+var (a, b, c) = (1, "hello", true) // v 创建 a,b,c 变量
+var ((a, b), c) = ((1, "hello"), true) //  v， 左右需要保持数据格式一致
 
-// 由于 () 初始化语法没有和其他语法冲突，所以可以省略 tuple 关键字
-// (int, float) t = (1, 3.14) // x 不能省略了，和快速赋值语法冲突了,且语义不详
-// tuple(int, float) t = (1, 3.14) // x tuple 声明太长了。
-tup(int, float) t = (1, 3.14) // x tuple 声明太长了。和 map,set 一样使用 tup 关键字。
+int a // 变量声明不赋值，此时都有默认值的
+string b
+bool c
+(a, b, c) = (1, "hello", true) // v 修改 a,b,c 变量
 
+var list = [1, 2, 3]
+(list[0], b, c) = (1, "hello", true) // v
+(list[0], (b, c)) = (1, ("hello", true)) // v
 
-// 则函数返回 tuple 时声明
-fn test_tuple(): tup(int, float) {
-    // 这里的 return 是赋值语法
-    int a = 1
-    float b = 2
-    return (a, b)
-}
+(custom_t,(int, float),int, map{int: int}, fn(), float) a = ... // v, 支持，但是不推荐这么写，比较难和 destr 区分
 
-// 这是正常的赋值语法
-var foo = (a, b)
-var foo = test_tuple() // 此时 foo 的类型是 tuple
-
-// 快速赋值语法,只需要支持该语法，就自认支持了函数多返回值
-// 这里的 a 和 b 看起来像使用 a 和 b 变量。实际上又是声明，所以会有一点歧义
-var (a, b) = test_tuple() // v 暂且使用该版本进行一定的编码测试
-var a, b = test_tuple() // x 和 golang 一样，对多返回值进行进一步抽象
-
-// tup(int, int) (a, b) = test_tuple() // x 同下
-type hello = tuple(int, int)
-// hello (a, b) = test_tuple() // x 直观上非常难以区分这是 call 指令还是 tuple 赋值, 所以直接禁止掉这种快速赋值方法,必须通过 var 进行赋值
-// tup(int, int) a // x tuple 在 stmt 中必须立刻赋值，否则后续也没有二次赋值的机会了
-hello a = test_tuple() // v 快速赋值
-tup(int, int) a = (1, 2) // v 进行了快速赋值
-var (a, b) = (1, 2) // v 仅 var 模式下支持元素快速赋值
-(a, b) = (b, a) //  v 快速赋值
-(a, b.a) = (b, a) //  v 快速赋值
-// (custom_a, map{string:int}) a = (1, 2) // x 没有特别好的方案能够支持该语法，只能按找括号闭合的方式支持。
-tup(custom_a, map{string:int}) a = (1, 2) // 语义上更加清晰
-
+call (a, b) = (1, 2) // x 太难以阅读理解了，当前版本不做支持
+(custom_t, int, float) (a, b, c) = (1, 1, 1.1) // 既然上面的不做支持，那这个当前版本也不做支持，定义新的变量且使用了 destr 时，必须通过自动类型推导 var 关键字来实现。

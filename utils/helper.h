@@ -143,7 +143,7 @@ static inline char *fixed_sprintf(char *format, ...) {
     return realloc(buf, count + 1);
 }
 
-static inline int max(int a, int b) {
+static inline int64_t max(int64_t a, int64_t b) {
     if (a > b) {
         return a;
     }

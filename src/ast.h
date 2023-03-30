@@ -318,10 +318,6 @@ typedef struct {
 } ast_map_access;
 
 typedef struct {
-//  string access_type; // map or list
-//  string key_type;
-//  string value_type;
-
     ast_expr left;
     ast_expr key;
 } ast_access; // foo.bar[key()], bar[]
@@ -340,8 +336,6 @@ typedef struct {
 // {key: value}
 typedef struct {
     list_t *elements; // ast_map_element
-//    typedecl_t key_type; // 类型推导截断冗余
-//    typedecl_t value_type; // 类型推导截断冗余
 } ast_map_new;
 
 // var s = {1, 2, 3, call(), xxx}

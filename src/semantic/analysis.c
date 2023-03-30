@@ -240,35 +240,28 @@ static void analysis_var_decl_assign(module_t *m, ast_var_assign_stmt *stmt) {
     stmt->var_decl.ident = local->unique_ident;
 }
 
-static void analysis_var_tuple_destr(module_t *m, ast_var_tuple_destr_stmt *stmt) {
-    analysis_expr(m, &stmt->right);
-
-    for (int i = 0; i < stmt->var_decls->length; ++i) {
-        ast_var_decl *var_decl = ct_list_value(stmt->var_decls, i);
-        analysis_redeclare_check(m, var_decl->ident);
-        analysis_type(m, &var_decl->type);
-
-        // ident 改写成唯一标识
-        local_ident_t *local = analysis_new_local(m, SYMBOL_TYPE_VAR, var_decl, var_decl->ident);
-        var_decl->ident = local->unique_ident;
+static void analysis_var_tuple_destr(module_t *m, ast_tuple_destr *tuple_destr) {
+    for (int i = 0; i < tuple_destr->elements->length; ++i) {
+        ast_expr *expr = ct_list_value(tuple_destr->elements, i);
+        // 要么是 ast_var_decl 要么是 ast_tuple_destr
+        if (expr->assert_type == AST_VAR_DECL) {
+            analysis_var_decl(m, expr->value);
+        } else if (expr->assert_type == AST_STMT_VAR_TUPLE_DESTR) {
+            analysis_var_tuple_destr(m, expr->value);
+        } else {
+            assertf(false, "var tuple destr expr type exception");
+        }
     }
 }
 
-typedecl_t analysis_fn_to_type(ast_fn_decl *fn_decl) {
-    typedecl_fn_t *f = NEW(typedecl_fn_t);
-    f->formal_types = ct_list_new(sizeof(typedecl_t));
-    f->return_type = fn_decl->return_type;
-    for (int i = 0; i < fn_decl->formals->length; ++i) {
-        ast_var_decl *var_decl = ct_list_value(fn_decl->formals, i);
-        ct_list_push(f->formal_types, &var_decl->type);
-    }
-    f->rest_param = fn_decl->rest_param;
-    typedecl_t type = {
-            .is_origin = false,
-            .kind = TYPE_FN,
-            .fn_decl = f
-    };
-    return type;
+/**
+ * var (a, b, (c, d)) = xxxx
+ * @param m
+ * @param stmt
+ */
+static void analysis_var_tuple_destr_stmt(module_t *m, ast_var_tuple_destr_stmt *stmt) {
+    analysis_expr(m, &stmt->right);
+    analysis_var_tuple_destr(m, stmt->tuple_destr);
 }
 
 static void analysis_fn_decl_ident(module_t *m, ast_fn_decl *new_fn) {
@@ -598,13 +591,13 @@ static void analysis_tuple_new(module_t *m, ast_tuple_new *expr) {
 
 /**
  * tuple_destr = tuple_new
- * (a.b, a) = (1, 2)
+ * (a.b, a, (c, c.d)) = (1, 2)
  * @param m
  * @param expr
  */
-static void analysis_tuple_destr(module_t *m, ast_tuple_destr_stmt *expr) {
-    for (int i = 0; i < expr->elements->length; ++i) {
-        ast_expr *element = ct_list_value(expr->elements, i);
+static void analysis_tuple_destr(module_t *m, ast_tuple_destr *tuple) {
+    for (int i = 0; i < tuple->elements->length; ++i) {
+        ast_expr *element = ct_list_value(tuple->elements, i);
         analysis_expr(m, element);
     }
 }
@@ -721,7 +714,7 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt) {
         case AST_STMT_VAR_DECL_ASSIGN:
             return analysis_var_decl_assign(m, stmt->value);
         case AST_STMT_VAR_TUPLE_DESTR:
-            return analysis_var_tuple_destr(m, stmt->value);
+            return analysis_var_tuple_destr_stmt(m, stmt->value);
         case AST_STMT_ASSIGN:
             return analysis_assign(m, stmt->value);
         case AST_FN_DECL: {
