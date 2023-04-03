@@ -2,6 +2,12 @@
 (int, string, float) tup = (1, "hello", true) // v 声明一个 tuple 并赋值 (不允许只声明不赋值)
 var tup = (1, "hello", true) // v
 
+var first = tup[0] // v 元祖访问必须是 imm int, 不能是变量
+
+// var i = 0
+// var first = tup[i] // x 无法支持
+// tup[0] = 2 // x 元祖只能初始化时定义，不允许再 assign
+
 // destructuring
 var (a, b, c) = (1, "hello", true) // v 创建 a,b,c 变量
 var ((a, b), c) = ((1, "hello"), true) //  v， 左右需要保持数据格式一致

@@ -560,4 +560,23 @@ uint64_t type_struct_offset(typedecl_struct_t *t, char *key) {
     return 0;
 }
 
+uint64_t type_tuple_offset(typedecl_tuple_t *t, uint64_t index) {
+    uint64_t offset = 0;
+    for (int i = 0; i < t->elements->length; ++i) {
+        typedecl_t *typedecl = ct_list_value(t->elements, i);
+        uint64_t item_size = type_sizeof(*typedecl);
+        offset = align(offset, item_size);
+
+        if (i == index) {
+            // found
+            return offset;
+        }
+        offset += item_size;
+    }
+
+    return 0;
+}
+
+
+
 

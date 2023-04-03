@@ -12,10 +12,12 @@
 #define TEMP_IDENT "t"
 #define TEMP_LABEL "l"
 #define CONTINUE_IDENT "continue"
-#define WHILE_IDENT "while"
-#define END_WHILE_IDENT "end_while"
-#define FOR_IDENT "for"
-#define END_FOR_IDENT "end_for"
+#define FOR_COND_IDENT "for_cond"
+#define FOR_TRADITION_IDENT "for_tradition"
+#define FOR_TRADITION_END_IDENT "for_tradition_end"
+#define FOR_COND_END_IDENT "for_cond_end"
+#define FOR_ITERATOR_IDENT "for_iterator"
+#define FOR_END_ITERATOR_IDENT "end_for_iterator"
 #define END_IF_IDENT "end_if"
 #define ALTERNATE_IF_IDENT "alternate_if"
 
@@ -52,9 +54,12 @@
 
 #define RT_CALL_TRANS_ANY "trans_any"
 
-#define RT_CALL_ITERATE_COUNT "iterate_count"
-#define RT_CALL_ITERATE_GEN_KEY "iterate_gen_key"
-#define RT_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
+#define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
+#define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"
+
+//#define RT_CALL_ITERATE_COUNT "iterate_count"
+//#define RT_CALL_ITERATE_GEN_KEY "iterate_gen_key"
+//#define RT_CALL_ITERATE_GEN_VALUE "iterate_gen_value"
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_ASSIGN "env_assign"

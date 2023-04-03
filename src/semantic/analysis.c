@@ -663,34 +663,47 @@ static void analysis_type_decl(module_t *m, ast_typedef_stmt *stmt) {
 
 static void analysis_expr(module_t *m, ast_expr *expr) {
     switch (expr->assert_type) {
-        case AST_EXPR_BINARY:
+        case AST_EXPR_BINARY: {
             return analysis_binary(m, expr->value);
-        case AST_EXPR_UNARY:
+        }
+        case AST_EXPR_UNARY: {
             return analysis_unary(m, expr->value);
-        case AST_EXPR_CATCH:
+        }
+        case AST_EXPR_CATCH: {
             return analysis_catch(m, expr->value);
-        case AST_EXPR_STRUCT_NEW:
+        }
+        case AST_EXPR_STRUCT_NEW: {
             return analysis_struct_new(m, expr->value);
-        case AST_EXPR_MAP_NEW:
+        }
+        case AST_EXPR_MAP_NEW: {
             return analysis_map_new(m, expr->value);
-        case AST_EXPR_SET_NEW:
+        }
+        case AST_EXPR_SET_NEW: {
             return analysis_set_new(m, expr->value);
-        case AST_EXPR_TUPLE_NEW:
+        }
+        case AST_EXPR_TUPLE_NEW: {
             return analysis_tuple_new(m, expr->value);
-        case AST_EXPR_TUPLE_DESTR:
+        }
+        case AST_EXPR_TUPLE_DESTR: {
             return analysis_tuple_destr(m, expr->value);
-        case AST_EXPR_LIST_NEW:
+        }
+        case AST_EXPR_LIST_NEW: {
             return analysis_list_new(m, expr->value);
-        case AST_EXPR_ACCESS:
+        }
+        case AST_EXPR_ACCESS: {
             return analysis_access(m, expr->value);
-        case AST_EXPR_STRUCT_ACCESS:
+        }
+        case AST_EXPR_STRUCT_ACCESS: {
             // analysis 仅进行了变量重命名，此时作用域不明确，无法进行任何的表达式改写。
             return analysis_struct_access(m, expr);
-        case AST_EXPR_IDENT:
+        }
+        case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
             return analysis_ident(m, expr);
-        case AST_CALL:
+        }
+        case AST_CALL: {
             return analysis_call(m, expr->value);
+        }
         case AST_FN_DECL: { // 右值
             analysis_fn_decl_ident(m, expr->value);
 
@@ -709,14 +722,18 @@ static void analysis_expr(module_t *m, ast_expr *expr) {
 
 static void analysis_stmt(module_t *m, ast_stmt *stmt) {
     switch (stmt->assert_type) {
-        case AST_VAR_DECL:
+        case AST_VAR_DECL: {
             return analysis_var_decl(m, stmt->value);
-        case AST_STMT_VAR_DECL_ASSIGN:
+        }
+        case AST_STMT_VAR_DECL_ASSIGN: {
             return analysis_var_decl_assign(m, stmt->value);
-        case AST_STMT_VAR_TUPLE_DESTR:
+        }
+        case AST_STMT_VAR_TUPLE_DESTR: {
             return analysis_var_tuple_destr_stmt(m, stmt->value);
-        case AST_STMT_ASSIGN:
+        }
+        case AST_STMT_ASSIGN: {
             return analysis_assign(m, stmt->value);
+        }
         case AST_FN_DECL: {
             // 主要是 fn_name unique 处理
             analysis_fn_decl_ident(m, (ast_fn_decl *) stmt->value);
@@ -727,24 +744,33 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt) {
             m->analysis_current->contains_fn_decl[count].is_stmt = true;
             break;
         }
-        case AST_CALL:
+        case AST_CALL: {
             return analysis_call(m, stmt->value);
-        case AST_STMT_THROW:
+        }
+        case AST_STMT_THROW: {
             return analysis_throw(m, stmt->value);
-        case AST_STMT_IF:
+        }
+        case AST_STMT_IF: {
             return analysis_if(m, stmt->value);
-        case AST_STMT_FOR_COND:
+        }
+        case AST_STMT_FOR_COND: {
             return analysis_for_cond(m, stmt->value);
-        case AST_STMT_FOR_TRADITION:
+        }
+        case AST_STMT_FOR_TRADITION: {
             return analysis_for_tradition(m, stmt->value);
-        case AST_STMT_FOR_ITERATOR:
+        }
+        case AST_STMT_FOR_ITERATOR: {
             return analysis_for_iterator(m, stmt->value);
-        case AST_STMT_RETURN:
+        }
+        case AST_STMT_RETURN: {
             return analysis_return(m, stmt->value);
-        case AST_STMT_TYPEDEF:
+        }
+        case AST_STMT_TYPEDEF: {
             return analysis_type_decl(m, stmt->value);
-        default:
+        }
+        default: {
             return;
+        }
     }
 }
 

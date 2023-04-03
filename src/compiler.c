@@ -152,7 +152,7 @@ static void compiler_var_decl_assign(closure_t *c, ast_var_assign_stmt *stmt) {
 static void compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
     ast_expr left = stmt->left;
 
-    // list[0] = 1
+    // map assign list[0] = 1
     if (left.assert_type == AST_EXPR_LIST_ACCESS) {
         ast_list_access_t *list_access = stmt->left.value;
         lir_operand_t *list_target = compiler_expr(c, list_access->left);
@@ -160,12 +160,12 @@ static void compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
         return compiler_list_assign(c, list_target, index_target, stmt->right);
     }
 
-    // m["a"] = 2
+    // set assign m["a"] = 2
     if (left.assert_type == AST_EXPR_MAP_ACCESS) {
         return compiler_map_assign(c, stmt);
     }
 
-    // p.name = "wei"
+    // struct assign p.name = "wei"
     if (left.assert_type == AST_EXPR_STRUCT_ACCESS) {
         return compiler_struct_assign(c, stmt);
     }
@@ -176,6 +176,7 @@ static void compiler_assign(closure_t *c, ast_assign_stmt *stmt) {
     }
 
     // tuple[0] = 1 x 禁止这种操作
+    // set[0] = 1 x 同样进制这种操作，set 只能通过 add 来添加 key
     assertf(left.assert_type != AST_EXPR_TUPLE_ACCESS, "tuple dose not support item assign");
     assertf(false, "dose not support assign to %d", left.assert_type);
 }
@@ -191,95 +192,125 @@ static linked_t *compiler_var_decl(closure_t *c, ast_var_decl *var_decl) {
 
 
 /**
- * call get count => count
- * for:
+ * rt_call get count => count
+ * for_iterator:
  *  cmp_goto count == 0 to end for
- *  call get key => key
- *  call get value => value
+ *  rt_call get key => key
+ *  rt_call get value => value // 可选
  *  ....
  *  sub count, 1 => count
  *  goto for:
- * end_for:
+ * end_for_iterator:
  * @param c
  * @param for_in_stmt
  * @return
  */
-static void compiler_for_in(closure_t *c, ast_for_iterator_stmt *ast) {
-    lir_operand_t *base_target = compiler_expr(c, ast->iterate);
+static void compiler_for_iterator(closure_t *c, ast_for_iterator_stmt *ast) {
+    // map or list
+    lir_operand_t *iterator_target = compiler_expr(c, ast->iterate);
 
-    lir_operand_t *count_target = temp_var_operand(c, type_base_new(TYPE_INT));
-    linked_push(c->operations, lir_rt_call(
-            RT_CALL_ITERATE_COUNT,
-            count_target,
-            1,
-            base_target));
+//    lir_operand_t *length_target = temp_var_operand(c, type_base_new(TYPE_INT));
+    uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
+
+    lir_operand_t *cursor_operand = temp_var_operand(c, type_base_new(TYPE_INT));
+    linked_push(c->operations, lir_op_move(cursor_operand, int_operand(0)));
 
     // make label
-    lir_op_t *for_label = lir_op_unique_label(FOR_IDENT);
-    lir_op_t *end_for_label = lir_op_unique_label(END_FOR_IDENT);
-    linked_push(c->operations, for_label);
+    lir_op_t *for_start_label = lir_op_unique_label(FOR_ITERATOR_IDENT);
+    lir_op_t *for_end_label = lir_op_unique_label(FOR_END_ITERATOR_IDENT);
 
-    lir_op_t *cmp_goto = lir_op_new(
-            LIR_OPCODE_BEQ,
-            int_operand(0),
-            count_target,
-            lir_copy_label_operand(end_for_label->output));
-    linked_push(c->operations, cmp_goto);
+    // set label
+    linked_push(c->operations, for_start_label);
 
-    // 添加 label
+    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->key.ident));
+    linked_push(c->operations, lir_rt_call(
+            RT_CALL_ITERATE_NEXT_KEY, key_target, 3, iterator_target, rtype_index, cursor_operand));
+
+    // beq length == 0? for_end_label
+    lir_op_t *beq = lir_op_new(LIR_OPCODE_BEQ, int_operand(0),
+                               key_target, lir_copy_label_operand(for_end_label->output));
+    linked_push(c->operations, beq);
+
+    // 添加 continue label
     linked_push(c->operations, lir_op_unique_label(CONTINUE_IDENT));
 
-    // gen key
     // gen value
-    lir_operand_t *key_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->key.ident));
-    lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->value.ident));
-    linked_push(c->operations, lir_rt_call(
-            RT_CALL_ITERATE_GEN_KEY,
-            key_target,
-            1,
-            base_target));
-    linked_push(c->operations, lir_rt_call(
-            RT_CALL_ITERATE_GEN_VALUE,
-            value_target,
-            1,
-            base_target));
+    if (ast->value) {
+        lir_operand_t *value_target = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, ast->value->ident));
+        linked_push(c->operations, lir_rt_call(
+                RT_CALL_ITERATE_NEXT_VALUE, value_target, 3, iterator_target, rtype_index, cursor_operand));
 
+    }
     // block
     compiler_block(c, ast->body);
 
     // sub count, 1 => count
-    lir_op_t *sub_op = lir_op_new(
-            LIR_OPCODE_SUB,
-            count_target,
+    lir_op_t *add_op = lir_op_new(
+            LIR_OPCODE_ADD,
+            cursor_operand,
             int_operand(1),
-            count_target);
+            cursor_operand);
 
-    linked_push(c->operations, sub_op);
+    linked_push(c->operations, add_op);
 
-    // goto for
-    linked_push(c->operations, lir_op_bal(for_label->output));
-    linked_push(c->operations, end_for_label);
+    // goto for start
+    linked_push(c->operations, lir_op_bal(for_start_label->output));
+
+    linked_push(c->operations, for_end_label);
 }
 
-static void compiler_while(closure_t *c, ast_for_cond_stmt *ast) {
-    lir_op_t *while_label = lir_op_unique_label(WHILE_IDENT);
-    linked_push(c->operations, while_label);
-    lir_operand_t *end_while_operand = lir_new_label_operand(LIR_UNIQUE_NAME(END_WHILE_IDENT), true);
+
+/**
+ *
+ * @param c
+ * @param ast
+ */
+static void compiler_for_cond(closure_t *c, ast_for_cond_stmt *ast) {
+    lir_op_t *for_start = lir_op_unique_label(FOR_COND_IDENT);
+    linked_push(c->operations, for_start);
+    lir_operand_t *for_end_operand = lir_new_label_operand(LIR_UNIQUE_NAME(FOR_COND_END_IDENT), true);
 
     lir_operand_t *condition_target = compiler_expr(c, ast->condition);
-    lir_op_t *cmp_goto = lir_op_new(
-            LIR_OPCODE_BEQ,
-            bool_operand(false),
-            condition_target,
-            end_while_operand);
+    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
 
     linked_push(c->operations, cmp_goto);
     linked_push(c->operations, lir_op_unique_label(CONTINUE_IDENT));
     compiler_block(c, ast->body);
 
-    linked_push(c->operations, lir_op_bal(while_label->output));
+    // bal => goto
+    linked_push(c->operations, lir_op_bal(for_start->output));
 
-    linked_push(c->operations, lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, end_while_operand));
+    linked_push(c->operations, lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
+}
+
+static void compiler_for_tradition(closure_t *c, ast_for_tradition_stmt *ast) {
+    // init
+    compiler_stmt(c, ast->init);
+
+    lir_op_t *for_start = lir_op_unique_label(FOR_TRADITION_IDENT);
+    linked_push(c->operations, for_start);
+
+    lir_operand_t *for_end_operand = lir_new_label_operand(LIR_UNIQUE_NAME(FOR_TRADITION_END_IDENT), true);
+
+    // cond -> for_end
+    lir_operand_t *cond_target = compiler_expr(c, ast->cond);
+    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, for_end_operand);
+    linked_push(c->operations, cmp_goto);
+
+    // continue
+    linked_push(c->operations, lir_op_unique_label(CONTINUE_IDENT));
+
+    // block
+    compiler_block(c, ast->body);
+
+    // update
+    compiler_stmt(c, ast->update);
+
+    // bal for_start_label
+    linked_push(c->operations, lir_op_bal(for_start->output));
+
+    // label for_end
+    linked_push(c->operations, lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
 }
 
 static void compiler_return(closure_t *c, ast_return_stmt *ast) {
@@ -667,6 +698,41 @@ static lir_operand_t *compiler_map_access(closure_t *c, ast_expr expr) {
     return value_target;
 }
 
+
+/**
+ * @param c
+ * @param ast
+ * @param base_target
+ * @return
+ */
+static lir_operand_t *compiler_set_new(closure_t *c, ast_expr expr) {
+    ast_set_new *ast = expr.value;
+    typedecl_t typedecl = expr.type;
+
+    uint64_t rtype_index = ct_find_rtype_index(typedecl);
+    uint64_t key_index = ct_find_rtype_index(typedecl.map_decl->key_type);
+
+    lir_operand_t *set_target = temp_var_operand(c, expr.type);
+    lir_op_t *call_op = lir_rt_call(RT_CALL_SET_NEW, set_target,
+                                    2,
+                                    int_operand(rtype_index),
+                                    int_operand(key_index));
+    linked_push(c->operations, call_op);
+
+    // 默认值初始化 rt_call map_assign
+    for (int i = 0; i < ast->keys->length; ++i) {
+        ast_map_element *element = ct_list_value(ast->keys, i);
+        ast_expr key_expr = element->key;
+        lir_operand_t *key_ref = lir_var_ref_operand(c, compiler_expr(c, key_expr));
+
+
+        call_op = lir_rt_call(RT_CALL_SET_ADD, NULL, 2, set_target, key_ref);
+        linked_push(c->operations, call_op);
+    }
+
+    return set_target;
+}
+
 /**
  * @param c
  * @param ast
@@ -690,9 +756,10 @@ static lir_operand_t *compiler_map_new(closure_t *c, ast_expr expr) {
     linked_push(c->operations, call_op);
 
     // 默认值初始化 rt_call map_assign
-    for (int i = 0; i < ast->count; ++i) {
-        ast_expr key_expr = ast->values[i].key;
-        ast_expr value_expr = ast->values[i].value;
+    for (int i = 0; i < ast->elements->length; ++i) {
+        ast_map_element *element = ct_list_value(ast->elements, i);
+        ast_expr key_expr = element->key;
+        ast_expr value_expr = element->value;
         lir_operand_t *key_ref = lir_var_ref_operand(c, compiler_expr(c, key_expr));
         lir_operand_t *value_ref = lir_var_ref_operand(c, compiler_expr(c, value_expr));
 
@@ -730,6 +797,32 @@ static lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr) {
     return dst;
 }
 
+
+/**
+ * mov [base+slot,n] => target
+ * bar().baz
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+static lir_operand_t *compiler_tuple_access(closure_t *c, ast_expr expr) {
+    ast_tuple_access_t *ast = expr.value;
+
+    lir_operand_t *tuple_target = compiler_expr(c, ast->left);
+    typedecl_t t = ast->left.type;
+    uint64_t item_size = type_sizeof(ast->element_type);
+    uint64_t offset = type_tuple_offset(t.tuple_decl, ast->index);
+
+    lir_operand_t *dst = temp_var_operand(c, ast->element_type);
+    lir_operand_t *dst_ref = lir_var_ref_operand(c, dst);
+    lir_operand_t *src_ref = lir_indirect_addr_operand(tuple_target, offset);
+    linked_push(c->operations, lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
+                                           3, dst_ref, src_ref, int_operand(item_size)));
+
+    return dst;
+}
+
 /**
  * foo.bar = 1
  *
@@ -754,18 +847,18 @@ static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
     linked_push(c->operations, lir_rt_call(RT_CALL_STRUCT_NEW, struct_target,
                                            1, int_operand(rtype_index)));
 
-    // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以便宜量等值都需要在前端完成计算
+    // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
     uint64_t offset = 0;
-    for (int i = 0; i < ast->count; ++i) {
-        ast_struct_property struct_property = ast->properties[i];
+    for (int i = 0; i < ast->properties->length; ++i) {
+        ast_struct_property *struct_property = ct_list_value(ast->properties, i);
 
         // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
-        uint64_t item_size = type_sizeof(struct_property.type);
+        uint64_t item_size = type_sizeof(struct_property->type);
         offset = align((int64_t) offset, (int64_t) item_size);
 
         // offset(var) var must assign reg
         lir_operand_t *dst_ref = lir_indirect_addr_operand(struct_target, offset);
-        lir_operand_t *src_ref = lir_var_ref_operand(c, compiler_expr(c, struct_property.value));
+        lir_operand_t *src_ref = lir_var_ref_operand(c, compiler_expr(c, struct_property->value));
 
         // move by item size
         linked_push(c->operations, lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
@@ -774,6 +867,46 @@ static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
     }
 
     return struct_target;
+}
+
+
+/**
+ * var a = (1, a, 1.25)
+ * @param c
+ * @param ast
+ * @param target
+ * @return
+ */
+static lir_operand_t *compiler_tuple_new(closure_t *c, ast_expr expr) {
+    ast_tuple_new *ast = expr.value;
+
+    typedecl_t typedecl = expr.type;
+    uint64_t rtype_index = ct_find_rtype_index(typedecl);
+
+    lir_operand_t *tuple_target = temp_var_operand(c, expr.type);
+    linked_push(c->operations, lir_rt_call(RT_CALL_TUPLE_NEW, tuple_target,
+                                           1, int_operand(rtype_index)));
+
+    uint64_t offset = 0;
+    for (int i = 0; i < ast->elements->length; ++i) {
+
+        ast_expr *element = ct_list_value(ast->elements, i);
+
+        uint64_t item_size = type_sizeof(element->type);
+        // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
+        offset = align((int64_t) offset, (int64_t) item_size);
+
+        // offset(var) var must assign reg
+        lir_operand_t *dst_ref = lir_indirect_addr_operand(tuple_target, offset);
+        lir_operand_t *src_ref = lir_var_ref_operand(c, compiler_expr(c, *element));
+
+        // move by item size
+        linked_push(c->operations, lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
+                                               3, dst_ref, src_ref, int_operand(item_size)));
+        offset += item_size;
+    }
+
+    return tuple_target;
 }
 
 /**
@@ -909,8 +1042,6 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_CLOSURE_NEW: {
             compiler_closure(c, (ast_expr) {
-//                    .type = NULL,
-//                    .target_type = NULL,
                     .line = stmt->line,
                     .value = stmt->value,
                     .assert_type = AST_CLOSURE_NEW
@@ -918,28 +1049,26 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             return;
         }
         case AST_VAR_DECL: {
-            compiler_var_decl(c, (ast_var_decl *) stmt->value);
+            compiler_var_decl(c, stmt->value);
             return;
         }
         case AST_STMT_VAR_DECL_ASSIGN: {
-            compiler_var_decl_assign(c, (ast_var_assign_stmt *) stmt->value);
-            return;
+            return compiler_var_decl_assign(c, stmt->value);
         }
         case AST_STMT_ASSIGN: {
-            compiler_assign(c, (ast_assign_stmt *) stmt->value);
-            return;
+            return compiler_assign(c, stmt->value);
         }
         case AST_STMT_IF: {
-            compiler_if(c, (ast_if_stmt *) stmt->value);
-            return;
+            return compiler_if(c, stmt->value);
         }
         case AST_STMT_FOR_ITERATOR: {
-            compiler_for_in(c, (ast_for_iterator_stmt *) stmt->value);
-            return;
+            return compiler_for_iterator(c, stmt->value);
         }
-        case AST_STMT_WHILE: {
-            compiler_while(c, (ast_for_cond_stmt *) stmt->value);
-            return;
+        case AST_STMT_FOR_COND: {
+            return compiler_for_cond(c, stmt->value);
+        }
+        case AST_STMT_FOR_TRADITION: {
+            return compiler_for_tradition(c, stmt->value);
         }
         case AST_CALL: {
             ast_expr expr = {
@@ -952,8 +1081,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             return;
         }
         case AST_STMT_RETURN: {
-            compiler_return(c, (ast_return_stmt *) stmt->value);
-            return;
+            return compiler_return(c, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
             return;
@@ -967,16 +1095,18 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
 compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = compiler_literal,
         [AST_EXPR_IDENT] = compiler_ident,
-        [AST_EXPR_LIST_ACCESS] = compiler_list_access,
         [AST_EXPR_ENV_VALUE] = compiler_env_value,
         [AST_EXPR_BINARY] = compiler_binary,
         [AST_EXPR_UNARY] = compiler_unary,
         [AST_CALL] = compiler_call,
         [AST_EXPR_LIST_NEW] = compiler_list_new,
-        [AST_EXPR_MAP_ACCESS] = compiler_map_access,
+        [AST_EXPR_LIST_ACCESS] = compiler_list_access,
         [AST_EXPR_MAP_NEW] = compiler_map_new,
-        [AST_EXPR_STRUCT_ACCESS] = compiler_struct_access,
+        [AST_EXPR_MAP_ACCESS] = compiler_map_access,
         [AST_EXPR_STRUCT_NEW] = compiler_struct_new,
+        [AST_EXPR_STRUCT_ACCESS] = compiler_struct_access,
+        [AST_EXPR_TUPLE_NEW] = compiler_tuple_new,
+        [AST_EXPR_TUPLE_ACCESS] = compiler_tuple_access,
         [AST_CLOSURE_NEW] = compiler_closure
 };
 

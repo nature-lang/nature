@@ -155,7 +155,7 @@ typedef struct {
 // 值类型
 typedef struct {
     type_kind kind;
-    string value;
+    char *value;
 } ast_literal; // 标量值
 
 // (xx, xx, xx)
@@ -304,10 +304,16 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    typedecl_t type; // value 的类型吧？
+    typedecl_t element_type; // 访问的 value 的类型
     ast_expr left;
     ast_expr index;
 } ast_list_access_t;
+
+typedef struct {
+    typedecl_t element_type; // index 对应的 value 的 type
+    ast_expr left;
+    uint64_t index;
+} ast_tuple_access_t;
 
 typedef struct {
     typedecl_t key_type;

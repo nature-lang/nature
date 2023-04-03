@@ -384,4 +384,6 @@ uint64_t rtype_heap_out_size(rtype_t *rtype);
 
 uint64_t type_struct_offset(typedecl_struct_t *t, char *key);
 
+uint64_t type_tuple_offset(typedecl_tuple_t *t, uint64_t index);
+
 #endif //NATURE_TYPE_H

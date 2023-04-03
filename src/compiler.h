@@ -16,13 +16,15 @@ slice_t *compiler(module_t *m, ast_closure_t *ast);
 
 static void compiler_block(closure_t *c, slice_t *block);
 
+static void compiler_stmt(closure_t *c, ast_stmt *stmt);
+
 //list *compiler_var_decl(closure_t *c, ast_var_decl *var_decl);
 
 //list *compiler_if(closure_t *c, ast_if_stmt *if_stmt);
 
-//list *compiler_for_in(closure_t *c, ast_for_iterator_stmt *ast);
+//list *compiler_for_iterator(closure_t *c, ast_for_iterator_stmt *ast);
 
-//list *compiler_while(closure_t *c, ast_for_cond_stmt *ast);
+//list *compiler_for_cond(closure_t *c, ast_for_cond_stmt *ast);
 
 //list *compiler_var_decl_assign(closure_t *c, ast_var_assign_stmt *stmt);
 

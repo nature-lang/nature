@@ -383,11 +383,11 @@ static typedecl_t infer_struct_new(ast_struct_new_t *new_struct) {
 }
 
 /**
+ * a[b]  list/map/tuple 都将通过中括号的方式进行访问
  * @param expr
  * @return
  */
 static typedecl_t infer_access(ast_expr *expr) {
-    typedecl_t result;
     ast_access *access = expr->value;
     typedecl_t left_type = infer_expr(&access->left);
     typedecl_t key_type = infer_expr(&access->key);
@@ -408,9 +408,11 @@ static typedecl_t infer_access(ast_expr *expr) {
 
 
         // 返回值
-        result = map_decl->value_type;
-    } else if (left_type.kind == TYPE_LIST) {
-        assertf(key_type.kind == TYPE_INT, "access list failed, index right type must by int");
+        return map_decl->value_type;
+    }
+
+    if (left_type.kind == TYPE_LIST) {
+        assertf(key_type.kind == TYPE_INT, "access list failed, index type must by int");
 
         ast_list_access_t *access_list = NEW(ast_list_access_t);
         typedecl_list_t *list_decl = left_type.list_decl;
@@ -418,18 +420,40 @@ static typedecl_t infer_access(ast_expr *expr) {
         // 参数改写
         access_list->left = access->left;
         access_list->index = access->key;
-        access_list->type = list_decl->element_type;
+        access_list->element_type = list_decl->element_type;
         expr->assert_type = AST_EXPR_LIST_ACCESS;
         expr->value = access_list;
 
-        result = list_decl->element_type;
-    } else {
-        assertf(false, "line: %d, right type must map or list, cannot '%s'", infer_line,
-                type_kind_string[left_type.kind]);
-        exit(1);
-    };
+        return list_decl->element_type;
+    }
 
-    return result;
+    if (left_type.kind == TYPE_TUPLE) {
+        assertf(key_type.kind == TYPE_INT, "tuple index field type must int");
+        assertf(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
+        typedecl_tuple_t *tuple_decl = left_type.tuple_decl;
+
+        ast_literal *index_literal = access->key.value; // 读取 index 的值
+        assertf(index_literal->kind == TYPE_INT, "tuple index field must int immediate value");
+        uint64_t index = atoi(index_literal->value);
+
+        assertf(index < tuple_decl->elements->length, "tuple index field '%d' not in tuples", index);
+
+        // 返回值的类型, get tuple element.
+        typedecl_t *typedecl = ct_list_value(tuple_decl->elements, index);
+
+        ast_tuple_access_t *tuple_access = NEW(ast_tuple_access_t);
+        tuple_access->left = access->left;
+        tuple_access->index = index;
+        tuple_access->element_type = *typedecl;
+        expr->assert_type = AST_EXPR_TUPLE_ACCESS;
+        expr->value = tuple_access;
+
+        return *typedecl;
+    }
+
+    assertf(false, "line: %d, access left type must map/list/tuple, cannot '%s'", infer_line,
+            type_kind_string[left_type.kind]);
+    exit(1);
 }
 
 /**
@@ -807,14 +831,18 @@ static typedecl_t infer_tuple_new(ast_tuple_new *tuple_new) {
 
 static void infer_stmt(ast_stmt *stmt) {
     switch (stmt->assert_type) {
-        case AST_VAR_DECL:
+        case AST_VAR_DECL: {
             return infer_var_decl(stmt->value);
-        case AST_STMT_VAR_DECL_ASSIGN:
+        }
+        case AST_STMT_VAR_DECL_ASSIGN: {
             return infer_var_decl_assign(stmt->value);
-        case AST_STMT_VAR_TUPLE_DESTR:
+        }
+        case AST_STMT_VAR_TUPLE_DESTR: {
             return infer_var_tuple_destr_stmt(stmt->value);
-        case AST_STMT_ASSIGN:
+        }
+        case AST_STMT_ASSIGN: {
             return infer_assign(stmt->value);
+        }
         case AST_CLOSURE_NEW: {
             infer_closure_decl(stmt->value);
             break;
@@ -823,20 +851,27 @@ static void infer_stmt(ast_stmt *stmt) {
             infer_call(stmt->value);
             break;
         }
-        case AST_STMT_IF:
+        case AST_STMT_IF: {
             return infer_if(stmt->value);
-        case AST_STMT_FOR_COND:
+        }
+        case AST_STMT_FOR_COND: {
             return infer_for_cond_stmt(stmt->value);
-        case AST_STMT_FOR_ITERATOR:
+        }
+        case AST_STMT_FOR_ITERATOR: {
             return infer_for_iterator(stmt->value);
-        case AST_STMT_FOR_TRADITION:
+        }
+        case AST_STMT_FOR_TRADITION: {
             return infer_for_tradition(stmt->value);
-        case AST_STMT_THROW:
+        }
+        case AST_STMT_THROW: {
             return infer_throw(stmt->value);
-        case AST_STMT_RETURN:
+        }
+        case AST_STMT_RETURN: {
             return infer_return(stmt->value);
-        default:
+        }
+        default: {
             return;
+        }
     }
 }
 
