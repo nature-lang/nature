@@ -465,9 +465,15 @@ static typedecl_t infer_access(ast_expr *expr) {
  */
 static typedecl_t infer_struct_access(ast_struct_access *struct_access) {
     infer_expr(&struct_access->left);
+
+    // infer 完成后？
+    // TODO left 如果是 list 或者 map 或者 set 怎么处理？
+    // TODO if left_type.kind == LIST left_type = TYPE_STRUCT (list)
+
     typedecl_t left_type = struct_access->left.type;
 
-    assertf(left_type.kind == TYPE_STRUCT, "right not struct, cannot access key");
+
+    assertf(left_type.kind == TYPE_STRUCT, "left not struct, cannot access key");
 
     typedecl_struct_t *struct_decl = left_type.struct_decl;
     for (int i = 0; i < struct_decl->count; ++i) {

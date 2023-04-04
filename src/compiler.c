@@ -374,6 +374,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     if (expr.type.kind != TYPE_NULL) {
         target = temp_var_operand(c, expr.type);
     }
+    // TODO left 的类型决定了怎么 call, 如果是 struct access 则需要做特殊逻辑支持。
 
     // push 指令所有的物理寄存器入栈
     // 这里增加了无意义的堆栈和符号表,不符合简捷之道
@@ -795,6 +796,37 @@ static lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr) {
                                            3, dst_ref, src_ref, int_operand(item_size)));
 
     return dst;
+}
+
+/**
+ * expr = ast_call, but ast_call.left is struct access
+ * @param c
+ * @param expr
+ * @return
+ */
+static lir_operand_t *compiler_struct_access_call(closure_t *c, ast_expr expr) {
+    ast_struct_access *ast = expr.value;
+
+    // TODO 这里的 ast->left 的类型可能并不是 struct,expr 自身则是 var 或者 global symbol operand
+    lir_operand_t *left_target = compiler_expr(c, ast->left);
+
+    // if left_target == list,
+
+    // 现在 left 的类型可能是 struct 也有可能是 list 或者 map
+    // list 就算打死我我也不可能编译出一个 memory_struct_t 出来? 现在问题的关键是 var 中存储的是 memory_list_t
+    // 此时不能走基于 memory_struct_t 的 offset 方案读取 fn 的基础地址
+    // 那如何才能读取 list 的 push 或者 pop 或者 delete 等等属性呢?
+    // 假如做一层抽象,让 left_target == memory_struct_t(list),其他部分继续走
+    // 这需要服务端配合定义一个 typedecl_struct_t 名字叫 list, 并且写入到符号表中
+    // 由于该 list 没有进行过实际的 struct_new 操作,所以需要在 runtime_init 时进行相关的 struct_new?
+    // 通过固定的 rtype_index 找到 struct 并且 new 即可
+    // 在 runtime 中 init 回面临一个指针存储的问题.需要通过 rt_call 获得 list 的 typedecl_struct_t? 好像也没啥问题
+    // 至此 list 的 typedecl_struct_t 的 typedecl_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
+
+    // TODO left 的类型决定了怎么 call, 如果是 struct access 则需要做特殊逻辑支持。
+
+    // 假设 left 是
+    // rt_call list_push(left:memory_list_t, )
 }
 
 
