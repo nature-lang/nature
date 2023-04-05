@@ -21,7 +21,7 @@ void complete_import(string importer_dir, ast_import *import);
 
 char *parser_base_ns(char *dir);
 
-module_t *module_build(string source_path, bool entry);
+module_t *module_build(string source_path, module_type_t type);
 
 /**
  * 从 base_ns 开始，去掉结尾的 .n 部分

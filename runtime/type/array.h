@@ -5,11 +5,11 @@
 #include "runtime/allocator.h"
 
 static memory_array_t *array_new(rtype_t *element_rtype, uint64_t length) {
-    // - 创建一个 typedecl_array_t 结构
-    typedecl_t type_array = type_base_new(TYPE_ARRAY);
-    type_array.array_decl = NEW(typedecl_array_t);
-    type_array.array_decl->element_rtype = *element_rtype;
-    type_array.array_decl->length = length;
+    // - 创建一个 typeuse_array_t 结构
+    typeuse_t type_array = type_base_new(TYPE_ARRAY);
+    type_array.array = NEW(typeuse_array_t);
+    type_array.array->element_rtype = *element_rtype;
+    type_array.array->length = length;
 
     // - 将 type_array 转换成 rtype
     rtype_t rtype_array = reflect_type(type_array);

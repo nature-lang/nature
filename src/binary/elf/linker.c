@@ -75,7 +75,7 @@ static void handle_custom_links(elf_context *ctx) {
     uint64_t fn_main_base = 0;
     for (int i = 0; i < symbol_fn_list->count; ++i) {
         symbol_t *symbol = symbol_fn_list->take[i];
-        ast_fn_decl *fn = symbol->ast_value;
+        ast_fndef_t *fn = symbol->ast_value;
         closure_t *c = fn->closure;
         fndef_t *fndef = &ct_fndef_list[i];
 

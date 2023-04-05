@@ -38,7 +38,7 @@ static ast_stmt *parser_stmt(module_t *m);
 
 static ast_expr parser_expr(module_t *m);
 
-static typedecl_t parser_typedecl(module_t *m);
+static typeuse_t parser_typedecl(module_t *m);
 
 static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
 
@@ -71,9 +71,9 @@ static ast_stmt *parser_if_stmt(module_t *m);
 //
 //ast_expr parser_binary(module_t *m, ast_expr left);
 //
-//ast_expr parser_fn_decl_expr(module_t *m, typedecl_t type);
+//ast_expr parser_fn_decl_expr(module_t *m, typeuse_t type);
 //
-//ast_expr parser_new_struct(module_t *m, typedecl_t type);
+//ast_expr parser_new_struct(module_t *m, typeuse_t type);
 //
 //ast_expr parser_new_list(module_t *m);
 //
@@ -107,7 +107,7 @@ static ast_stmt *parser_if_stmt(module_t *m);
 //
 //slice_t *parser_else_if(module_t *m);
 //
-//ast_new_fn *parser_fn_decl(module_t *m, typedecl_t type);
+//ast_new_fn *parser_fn_decl(module_t *m, typeuse_t type);
 //
 //ast_var_decl *parser_var_decl(module_t *m);
 //
@@ -115,9 +115,9 @@ static ast_stmt *parser_if_stmt(module_t *m);
 //
 //void parser_formal_param(module_t *m, ast_new_fn *fn_decl);
 //
-//void parser_type_function_formal_param(module_t *m, typedecl_fn_t *type_fn);
+//void parser_type_function_formal_param(module_t *m, typeuse_fn_t *type_fn);
 //
-//typedecl_t parser_type(module_t *m);
+//typeuse_t parser_type(module_t *m);
 //
 ///**
 // * foo = 12

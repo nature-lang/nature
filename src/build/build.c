@@ -130,17 +130,17 @@ void build_init(char *build_entry) {
 }
 
 void build_config_print() {
-    printf("NATURE_ROOT: %s\n", NATURE_ROOT);
-    printf("BUILD_OS: %s\n", os_to_string(BUILD_OS));
-    printf("BUILD_ARCH: %s\n", arch_to_string(BUILD_ARCH));
-    printf("BUILD_OUTPUT_NAME: %s\n", BUILD_OUTPUT_NAME);
-    printf("BUILD_OUTPUT_DIR: %s\n", BUILD_OUTPUT_DIR);
-    printf("BUILD_OUTPUT: %s\n", BUILD_OUTPUT);
-    printf("WORK_DIR: %s\n", WORK_DIR);
-    printf("BASE_NS: %s\n", BASE_NS);
-    printf("TERM_DIR: %s\n", TEMP_DIR);
-    printf("BUILD_ENTRY: %s\n", BUILD_ENTRY);
-    printf("SOURCE_PATH: %s\n", SOURCE_PATH);
+    DEBUGF("NATURE_ROOT: %s", NATURE_ROOT);
+    DEBUGF("BUILD_OS: %s", os_to_string(BUILD_OS));
+    DEBUGF("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
+    DEBUGF("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
+    DEBUGF("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
+    DEBUGF("BUILD_OUTPUT: %s", BUILD_OUTPUT);
+    DEBUGF("WORK_DIR: %s", WORK_DIR);
+    DEBUGF("BASE_NS: %s", BASE_NS);
+    DEBUGF("TERM_DIR: %s", TEMP_DIR);
+    DEBUGF("BUILD_ENTRY: %s", BUILD_ENTRY);
+    DEBUGF("SOURCE_PATH: %s", SOURCE_PATH);
 }
 
 void build_assembler(slice_t *modules) {
@@ -151,7 +151,7 @@ void build_assembler(slice_t *modules) {
         // 由全局符号产生
         for (int j = 0; j < m->global_symbols->count; ++j) {
             symbol_t *s = m->global_symbols->take[j];
-            if (s->type != SYMBOL_TYPE_VAR) {
+            if (s->type != SYMBOL_VAR) {
                 continue;
             }
             ast_var_decl *var_decl = s->ast_value;
@@ -172,6 +172,13 @@ void build_assembler(slice_t *modules) {
 
         assembler_module(m);
     }
+}
+
+void build_builtin() {
+    // nature_root
+    char *source_path = path_join(NATURE_ROOT, "builtin/builtin.n");
+    // build 中包含 analysis 已经将相关 symbol 写入了, 无论是后续都 analysis 或者 infer 都能够使用
+    module_build(source_path, MODULE_TYPE_BUILTIN);
 }
 
 slice_t *build_modules() {
@@ -200,16 +207,16 @@ slice_t *build_modules() {
         }
     }
 
-    // root module stmt add call all module.init for all module tree
-    ast_closure_t *root_ast_closure = root->ast_closures->take[0];
+    // 将所有模块都 init 函数都注册到 root body 的最前面
+    ast_fndef_t *root_fndef = root->ast_fndefs->take[0];
     for (int i = 1; i < modules->count; ++i) {
         module_t *m = modules->take[i];
         assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
 
-        slice_t *temp = slice_new();
-        slice_push(temp, m->call_init_stmt);
-        slice_concat_free(temp, root_ast_closure->fn->body);
-        root_ast_closure->fn->body = temp;
+        slice_t *body = slice_new();
+        slice_push(body, m->call_init_stmt);
+        slice_concat_free(body, root_fndef->body);
+        root_fndef->body = body;
     }
 
     return modules;
@@ -224,19 +231,16 @@ void build_compiler(slice_t *modules) {
         // 全局符号的定义也需要推导以下原始类型
         for (int j = 0; j < m->global_symbols->count; ++j) {
             symbol_t *s = m->global_symbols->take[j];
-            if (s->type != SYMBOL_TYPE_VAR) {
+            if (s->type != SYMBOL_VAR) {
                 continue;
             }
             infer_var_decl(s->ast_value); // 类型还原
         }
 
-        for (int j = 0; j < m->ast_closures->count; ++j) {
-            ast_closure_t *ast_closure = m->ast_closures->take[j];
-            // 类型推断
-            infer(ast_closure);
-            // 编译
-            slice_concat_free(m->closures, compiler(m, ast_closure)); // 都写入到 compiler_closure 中了
-        }
+        infer(m);
+
+        compiler(m);
+
 
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
@@ -277,6 +281,8 @@ void build(char *build_entry) {
     build_config_print();
 
     // 前端处理
+    build_builtin();
+
     slice_t *modules = build_modules();
 
     // 编译

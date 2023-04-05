@@ -349,13 +349,13 @@ token_e scanner_ident_type(char *word, int length) {
                 }
             }
         }
-        case 'm':
-            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
+//        case 'm':
+//            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         case 'n':
             return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
-        case 's': { // set, string,struct
+        case 's': { // self,string,struct
             if (word[1] == 'e') {
-                return scanner_rest(word, length, 1, 2, "et", TOKEN_SET);
+                return scanner_rest(word, length, 2, 2, "lf", TOKEN_SELF);
             }
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
                 switch (word[3]) {

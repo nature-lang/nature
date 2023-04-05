@@ -1,0 +1,9 @@
+fn print(...[any] args) {}
+
+fn println(...[any] args) {}
+
+fn set(...[any] keys):{any} {}
+
+type errort = struct {
+    string msg
+}

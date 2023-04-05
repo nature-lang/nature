@@ -28,7 +28,7 @@ void debug_scanner(token_t *t);
 
 void debug_parser(int line, string token);
 
-void debug_parser_stmt(ast_type_e t);
+void debug_parser_stmt(ast_type_t t);
 
 void debug_stmt(string type, ast_stmt stmt);
 

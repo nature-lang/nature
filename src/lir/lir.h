@@ -160,7 +160,7 @@ typedef struct {
     string old; // ssa 之前的名称
 
     flag_t flag;
-    typedecl_t type;
+    typeuse_t type;
 
 //    uint8_t pointer; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 pointer 等于 3 TODO 暂时没有使用
 //    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
@@ -183,12 +183,12 @@ typedef struct {
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
     uint64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    typedecl_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    typeuse_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 //typedef struct {
 //    lir_operand_t *base; // 只允许是 [indirect_addr_t?]
-//    typedecl_t type;
+//    typeuse_t type;
 //} lir_lea_addr_t; // 读取 base 所在的地址
 
 typedef struct {
@@ -224,7 +224,7 @@ struct lir_operand_t {
         lir_imm_t imm;
         void *value;
     };
-    vr_flag_e pos; // 在 opcode 中的位置信息
+    vr_flag_t pos; // 在 opcode 中的位置信息
 };
 
 /**
@@ -297,7 +297,7 @@ basic_block_t *lir_new_basic_block(char *name, uint8_t label_index);
 
 //string lir_label_to_string(uint8_t label);
 
-closure_t *lir_new_closure(ast_closure_t *ast);
+closure_t *lir_closure_new(ast_closure_t *ast);
 
 /**
  * 符号使用
@@ -311,7 +311,7 @@ type_kind lir_operand_type_base(lir_operand_t *operand);
 
 uint8_t lir_operand_sizeof(lir_operand_t *operand);
 
-lir_operand_t *temp_var_operand(closure_t *c, typedecl_t type);
+lir_operand_t *temp_var_operand(closure_t *c, typeuse_t type);
 
 lir_operand_t *lir_var_ref_operand(closure_t *c, lir_operand_t *var);
 

@@ -57,17 +57,21 @@ void complete_import(char *importer_dir, ast_import *import) {
 }
 
 char *ident_with_module(char *module_ident, char *ident) {
+    if (str_equal(module_ident, "")) {
+        return ident;
+    }
+
     char *temp = str_connect(module_ident, ".");
     temp = str_connect(temp, ident);
     return temp;
 }
 
-module_t *module_build(char *source_path, bool entry) {
+module_t *module_build(char *source_path, module_type_t type) {
     module_t *m = NEW(module_t);
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
-    m->ast_closures = slice_new();
+    m->ast_fndefs = slice_new();
     m->call_init_stmt = NULL;
     m->source_path = source_path;
     m->closures = slice_new();
@@ -81,9 +85,10 @@ module_t *module_build(char *source_path, bool entry) {
     m->source = file_read(source_path);
     char *temp = strrchr(source_path, '/');
     m->source_dir = rtrim(source_path, strlen(temp));
-//    m->namespace = strstr(m->source_dir, BASE_NS); // 总 BASE_NS 开始，截止到目录部分
-    m->ident = module_unique_ident(source_path);
-    m->entry = entry;
+    if (type == MODULE_TYPE_IMPORTED) {
+        m->ident = module_unique_ident(source_path);
+    }
+    m->type = type;
 
     // scanner
     m->token_list = scanner(m);

@@ -47,7 +47,7 @@ uint8_t alloc_reg_count() {
 }
 
 
-reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, uint8_t reg_id) {
+reg_t *reg_new(char *name, uint8_t index, vr_flag_t alloc_type, uint8_t size, uint8_t reg_id) {
     reg_t *reg = NEW(reg_t);
     reg->name = name;
     reg->index = index;
@@ -64,7 +64,7 @@ reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, ui
     return reg;
 }
 
-vr_flag_e type_base_trans_alloc(type_kind t) {
+vr_flag_t type_base_trans_alloc(type_kind t) {
     if (t == TYPE_FLOAT) {
         return VR_FLAG_ALLOC_FLOAT;
     }

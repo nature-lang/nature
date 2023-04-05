@@ -42,8 +42,8 @@ reg_t *covert_alloc_reg(reg_t *reg);
  */
 void reg_init();
 
-reg_t *reg_new(char *name, uint8_t index, vr_flag_e alloc_type, uint8_t size, uint8_t reg_id);
+reg_t *reg_new(char *name, uint8_t index, vr_flag_t alloc_type, uint8_t size, uint8_t reg_id);
 
-vr_flag_e type_base_trans_alloc(type_kind t);
+vr_flag_t type_base_trans_alloc(type_kind t);
 
 #endif //NATURE_SRC_REGISTER_REGISTER_H_

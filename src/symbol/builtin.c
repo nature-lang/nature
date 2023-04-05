@@ -6,18 +6,18 @@
  * void print(...[any] args)
  * @return
  */
-ast_fn_decl *builtin_print() {
+ast_fndef_t *builtin_print() {
     // var_decl
-    typedecl_list_t *list_decl = NEW(typedecl_list_t);
+    typeuse_list_t *list_decl = NEW(typeuse_list_t);
     list_decl->element_type = type_base_new(TYPE_ANY);
 
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type_base_new(TYPE_LIST);
     var_decl->type.is_origin = true;
-    var_decl->type.list_decl = list_decl; // 第一个参数的类型
+    var_decl->type.list = list_decl; // 第一个参数的类型
     var_decl->ident = "args"; // 第一参数的名称
 
-    ast_fn_decl *fn = NEW(ast_fn_decl);
+    ast_fndef_t *fn = NEW(ast_fndef_t);
     fn->name = "print";
     fn->return_type = type_base_new(TYPE_VOID);
     fn->rest_param = true;
@@ -30,8 +30,8 @@ ast_fn_decl *builtin_print() {
  * void println(...[any] args)
  * @return
  */
-ast_fn_decl *builtin_println() {
-    ast_fn_decl *fn = builtin_print();
+ast_fndef_t *builtin_println() {
+    ast_fndef_t *fn = builtin_print();
     fn->name = "println";
     return fn;
 }

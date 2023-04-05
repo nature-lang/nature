@@ -57,11 +57,11 @@ static lir_operand_t *compiler_ident(closure_t *c, ast_expr expr) {
 
     symbol_t *s = symbol_table_get(ident->literal);
 
-    if (s->type == SYMBOL_TYPE_FN) {
+    if (s->type == SYMBOL_FN) {
         // label
         target->assert_type = LIR_OPERAND_SYMBOL_LABEL;
         target->value = lir_new_label_operand(s->ident, s->is_local)->value;
-    } else if (s->type == SYMBOL_TYPE_VAR) {
+    } else if (s->type == SYMBOL_VAR) {
         ast_var_decl *var = s->ast_value;
         if (s->is_local) {
             target->assert_type = LIR_OPERAND_VAR;
@@ -104,10 +104,10 @@ static void compiler_map_assign(closure_t *c, ast_assign_stmt *stmt) {
 }
 
 static void compiler_struct_assign(closure_t *c, ast_assign_stmt *stmt) {
-    ast_struct_access *struct_access = stmt->left.value;
-    typedecl_t struct_type = struct_access->left.type;
+    ast_select *struct_access = stmt->left.value;
+    typeuse_t struct_type = struct_access->left.type;
     lir_operand_t *struct_target = compiler_expr(c, struct_access->left);
-    uint64_t offset = type_struct_offset(struct_type.struct_decl, struct_access->key);
+    uint64_t offset = type_struct_offset(struct_type.struct_, struct_access->key);
     uint64_t item_size = type_sizeof(struct_access->property.type);
 
     lir_operand_t *dst_ref = lir_indirect_addr_operand(struct_target, offset);
@@ -135,7 +135,7 @@ static void compiler_ident_assign(closure_t *c, ast_assign_stmt *stmt) {
  * @param stmt
  * @return
  */
-static void compiler_var_decl_assign(closure_t *c, ast_var_assign_stmt *stmt) {
+static void compiler_var_decl_assign(closure_t *c, ast_var_def_stmt *stmt) {
     lir_operand_t *src = compiler_expr(c, stmt->right);
     lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
 
@@ -381,7 +381,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     lir_operand_t *base_target = compiler_expr(c, call->left);
 
     slice_t *call_actual_params = slice_new();
-    typedecl_fn_t *formal_fn = call->left.type.fn_decl;
+    typeuse_fn_t *formal_fn = call->left.type.fn;
     // 预编译 spread operand, 避免每一次使用 spread 都编译一次
     lir_operand_t *spread_list_target = NULL;
     if (call->spread_param) {
@@ -397,13 +397,13 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
         bool is_rest = formal_fn->rest_param && i == formal_fn->formals_count - 1;
         if (is_rest) {
             // lir array_new(count, size) -> rest_param_target
-            typedecl_t rest_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
+            typeuse_t rest_param_type = formal_fn->formals_types[formal_fn->formals_count - 1];
             assertf(rest_param_type.kind == TYPE_LIST, "rest param must be list type");
 
             uint64_t rest_param_rtype_index = ct_find_rtype_index(rest_param_type);
 
 
-            typedecl_list_t *list_decl = rest_param_type.list_decl;
+            typeuse_list_t *list_decl = rest_param_type.list;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
             rest_param_target = temp_var_operand(c, rest_param_type);
 
@@ -475,9 +475,9 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             // 需要不断的从 spread list 中提取值,并传递到 call_actual_params 中
 
             //  1. 读取 spread_target element type
-            typedecl_t t = call->actual_params[call->param_count - 1].type;
+            typeuse_t t = call->actual_params[call->param_count - 1].type;
 
-            lir_operand_t *temp = temp_var_operand(c, t.list_decl->element_type);
+            lir_operand_t *temp = temp_var_operand(c, t.list->element_type);
             // 读取 result 的指针地址，给到 access 进行写入
             lir_operand_t *temp_ref = lir_var_ref_operand(c, temp);
 
@@ -605,7 +605,7 @@ static lir_operand_t *compiler_list_new(closure_t *c, ast_expr expr) {
 
     lir_operand_t *list_target = temp_var_operand(c, expr.type);
 
-    typedecl_list_t *list_decl = ast->type.list_decl;
+    typeuse_list_t *list_decl = ast->type.list;
     // call list_new
     lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(ast->type));
 
@@ -677,11 +677,11 @@ static lir_operand_t *compiler_map_access(closure_t *c, ast_expr expr) {
 
     // compiler base address left_target
     lir_operand_t *map_target = compiler_expr(c, ast->left);
-    typedecl_t type_map_decl = ast->left.type;
+    typeuse_t type_map_decl = ast->left.type;
 
     // compiler key to temp var
     lir_operand_t *key_target_ref = lir_var_ref_operand(c, compiler_expr(c, ast->key));
-    lir_operand_t *value_target = temp_var_operand(c, type_map_decl.map_decl->value_type);
+    lir_operand_t *value_target = temp_var_operand(c, type_map_decl.map->value_type);
     lir_operand_t *value_target_ref = lir_var_ref_operand(c, value_target);
 
 
@@ -708,10 +708,10 @@ static lir_operand_t *compiler_map_access(closure_t *c, ast_expr expr) {
  */
 static lir_operand_t *compiler_set_new(closure_t *c, ast_expr expr) {
     ast_set_new *ast = expr.value;
-    typedecl_t typedecl = expr.type;
+    typeuse_t typedecl = expr.type;
 
     uint64_t rtype_index = ct_find_rtype_index(typedecl);
-    uint64_t key_index = ct_find_rtype_index(typedecl.map_decl->key_type);
+    uint64_t key_index = ct_find_rtype_index(typedecl.map->key_type);
 
     lir_operand_t *set_target = temp_var_operand(c, expr.type);
     lir_op_t *call_op = lir_rt_call(RT_CALL_SET_NEW, set_target,
@@ -742,11 +742,11 @@ static lir_operand_t *compiler_set_new(closure_t *c, ast_expr expr) {
  */
 static lir_operand_t *compiler_map_new(closure_t *c, ast_expr expr) {
     ast_map_new *ast = expr.value;
-    typedecl_t map_type = expr.type;
+    typeuse_t map_type = expr.type;
 
     uint64_t map_rtype_index = ct_find_rtype_index(map_type);
-    uint64_t key_index = ct_find_rtype_index(map_type.map_decl->key_type);
-    uint64_t value_index = ct_find_rtype_index(map_type.map_decl->value_type);
+    uint64_t key_index = ct_find_rtype_index(map_type.map->key_type);
+    uint64_t value_index = ct_find_rtype_index(map_type.map->value_type);
 
     lir_operand_t *map_target = temp_var_operand(c, expr.type);
     lir_op_t *call_op = lir_rt_call(RT_CALL_MAP_NEW, map_target,
@@ -781,12 +781,12 @@ static lir_operand_t *compiler_map_new(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr) {
-    ast_struct_access *ast = expr.value;
+    ast_select *ast = expr.value;
 
     lir_operand_t *struct_target = compiler_expr(c, ast->left);
-    typedecl_t t = ast->left.type;
+    typeuse_t t = ast->left.type;
     uint64_t item_size = type_sizeof(ast->property.type);
-    uint64_t offset = type_struct_offset(t.struct_decl, ast->key);
+    uint64_t offset = type_struct_offset(t.struct_, ast->key);
 
     lir_operand_t *dst = temp_var_operand(c, ast->property.type);
     lir_operand_t *dst_ref = lir_var_ref_operand(c, dst);
@@ -805,7 +805,7 @@ static lir_operand_t *compiler_struct_access(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_struct_access_call(closure_t *c, ast_expr expr) {
-    ast_struct_access *ast = expr.value;
+    ast_select *ast = expr.value;
 
     // TODO 这里的 ast->left 的类型可能并不是 struct,expr 自身则是 var 或者 global symbol operand
     lir_operand_t *left_target = compiler_expr(c, ast->left);
@@ -817,11 +817,11 @@ static lir_operand_t *compiler_struct_access_call(closure_t *c, ast_expr expr) {
     // 此时不能走基于 memory_struct_t 的 offset 方案读取 fn 的基础地址
     // 那如何才能读取 list 的 push 或者 pop 或者 delete 等等属性呢?
     // 假如做一层抽象,让 left_target == memory_struct_t(list),其他部分继续走
-    // 这需要服务端配合定义一个 typedecl_struct_t 名字叫 list, 并且写入到符号表中
+    // 这需要服务端配合定义一个 typeuse_struct_t 名字叫 list, 并且写入到符号表中
     // 由于该 list 没有进行过实际的 struct_new 操作,所以需要在 runtime_init 时进行相关的 struct_new?
     // 通过固定的 rtype_index 找到 struct 并且 new 即可
-    // 在 runtime 中 init 回面临一个指针存储的问题.需要通过 rt_call 获得 list 的 typedecl_struct_t? 好像也没啥问题
-    // 至此 list 的 typedecl_struct_t 的 typedecl_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
+    // 在 runtime 中 init 回面临一个指针存储的问题.需要通过 rt_call 获得 list 的 typeuse_struct_t? 好像也没啥问题
+    // 至此 list 的 typeuse_struct_t 的 typeuse_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
 
     // TODO left 的类型决定了怎么 call, 如果是 struct access 则需要做特殊逻辑支持。
 
@@ -842,9 +842,9 @@ static lir_operand_t *compiler_tuple_access(closure_t *c, ast_expr expr) {
     ast_tuple_access_t *ast = expr.value;
 
     lir_operand_t *tuple_target = compiler_expr(c, ast->left);
-    typedecl_t t = ast->left.type;
+    typeuse_t t = ast->left.type;
     uint64_t item_size = type_sizeof(ast->element_type);
-    uint64_t offset = type_tuple_offset(t.tuple_decl, ast->index);
+    uint64_t offset = type_tuple_offset(t.tuple, ast->index);
 
     lir_operand_t *dst = temp_var_operand(c, ast->element_type);
     lir_operand_t *dst_ref = lir_var_ref_operand(c, dst);
@@ -872,7 +872,7 @@ static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
     ast_struct_new_t *ast = expr.value;
     lir_operand_t *struct_target = temp_var_operand(c, expr.type);
 
-    typedecl_t type = ast->type;
+    typeuse_t type = ast->type;
 
     uint64_t rtype_index = ct_find_rtype_index(type);
 
@@ -912,7 +912,7 @@ static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
 static lir_operand_t *compiler_tuple_new(closure_t *c, ast_expr expr) {
     ast_tuple_new *ast = expr.value;
 
-    typedecl_t typedecl = expr.type;
+    typeuse_t typedecl = expr.type;
     uint64_t rtype_index = ct_find_rtype_index(typedecl);
 
     lir_operand_t *tuple_target = temp_var_operand(c, expr.type);
@@ -1038,11 +1038,11 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
     }
 
     // new 一个新的 closure_t ---------------
-    closure_t *c = lir_new_closure(ast_closure);
+    closure_t *c = lir_closure_new(ast_closure);
     c->module = current_module;
     c->name = ast_closure->fn->name; // analysis 阶段已经进行了唯一名称处理
     c->end_label = str_connect("end_", c->name);
-    c->parent = parent;
+//    c->parent = parent;
     slice_push(compiler_closures, c);
 
     // 添加 label 和 fn begin 入口
@@ -1072,11 +1072,11 @@ static lir_operand_t *compiler_closure(closure_t *parent, ast_expr expr) {
 
 static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
     switch (stmt->assert_type) {
-        case AST_CLOSURE_NEW: {
+        case AST_CLOSURE_DEF: {
             compiler_closure(c, (ast_expr) {
                     .line = stmt->line,
                     .value = stmt->value,
-                    .assert_type = AST_CLOSURE_NEW
+                    .assert_type = AST_CLOSURE_DEF
             });
             return;
         }
@@ -1084,7 +1084,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
             compiler_var_decl(c, stmt->value);
             return;
         }
-        case AST_STMT_VAR_DECL_ASSIGN: {
+        case AST_STMT_VAR_DEF: {
             return compiler_var_decl_assign(c, stmt->value);
         }
         case AST_STMT_ASSIGN: {
@@ -1127,7 +1127,7 @@ static void compiler_stmt(closure_t *c, ast_stmt *stmt) {
 compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = compiler_literal,
         [AST_EXPR_IDENT] = compiler_ident,
-        [AST_EXPR_ENV_VALUE] = compiler_env_value,
+        [AST_EXPR_ENV_ACCESS] = compiler_env_value,
         [AST_EXPR_BINARY] = compiler_binary,
         [AST_EXPR_UNARY] = compiler_unary,
         [AST_CALL] = compiler_call,
@@ -1139,7 +1139,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_STRUCT_ACCESS] = compiler_struct_access,
         [AST_EXPR_TUPLE_NEW] = compiler_tuple_new,
         [AST_EXPR_TUPLE_ACCESS] = compiler_tuple_access,
-        [AST_CLOSURE_NEW] = compiler_closure
+        [AST_CLOSURE_DEF] = compiler_closure
 };
 
 
@@ -1175,7 +1175,7 @@ static void compiler_block(closure_t *c, slice_t *block) {
  * @param ast
  * @return
  */
-slice_t *compiler(module_t *m, ast_closure_t *ast) {
+slice_t *compiler(module_t *m) {
     // init
     compiler_closures = slice_new();
     current_module = m;
@@ -1184,7 +1184,7 @@ slice_t *compiler(module_t *m, ast_closure_t *ast) {
     compiler_closure(NULL, (ast_expr) {
 //            .type = NULL,
 //            .target_type = NULL,
-            .assert_type = AST_CLOSURE_NEW,
+            .assert_type = AST_CLOSURE_DEF,
             .value = ast,
     });
 

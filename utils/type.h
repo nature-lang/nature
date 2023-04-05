@@ -48,6 +48,7 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
+    TYPE_SELF,
 } type_kind;
 
 static string type_kind_string[] = {
@@ -83,39 +84,39 @@ typedef struct {
 
 
 // 类型描述信息 start
-typedef int64_t typedecl_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
+typedef int64_t typeuse_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
 
-typedef double typedecl_float_t;
+typedef double typeuse_float_t;
 
-typedef uint8_t typedecl_bool_t;
+typedef uint8_t typeuse_bool_t;
 
 /**
  *  custom_type a = 1, 此时 custom_type 就是 ident 类型
  *  custom_type 是一个自定义的 type, 其可能是 struct，也可能是 int 等等
  *  但是在类型描述上来说，其就是一个 ident
  */
-typedef struct typedecl_ident_t typedecl_ident_t;
+typedef struct typeuse_ident_t typeuse_ident_t;
 
-typedef struct typedecl_string_t typedecl_string_t; // 类型不完全声明
+typedef struct typeuse_string_t typeuse_string_t; // 类型不完全声明
 
-typedef struct typedecl_list_t typedecl_list_t;
+typedef struct typeuse_list_t typeuse_list_t;
 
-typedef struct typedecl_array_t typedecl_array_t;
+typedef struct typeuse_array_t typeuse_array_t;
 
-typedef struct typedecl_map_t typedecl_map_t;
+typedef struct typeuse_map_t typeuse_map_t;
 
-typedef struct typedecl_set_t typedecl_set_t;
+typedef struct typeuse_set_t typeuse_set_t;
 
 // (int, int, float)
 typedef struct {
-    list_t *elements; //  typedecl_t
-} typedecl_tuple_t;
+    list_t *elements; //  typeuse_t
+} typeuse_tuple_t;
 
-typedef struct typedecl_struct_t typedecl_struct_t; // 目前只有 string
+typedef struct typeuse_struct_t typeuse_struct_t; // 目前只有 string
 
-typedef struct typedecl_fn_t typedecl_fn_t;
+typedef struct typeuse_fn_t typeuse_fn_t;
 
-typedef struct typedecl_any_t typedecl_any_t;
+typedef struct typeuse_any_t typeuse_any_t;
 
 
 // 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
@@ -124,35 +125,35 @@ typedef struct type_t {
 //        type_decl_int_t int_decl;
 //        type_decl_float_t float_decl;
 //        type_decl_bool_t bool_decl;
-//        typedecl_string_t *string_decl;
-        void *value_decl;
-        typedecl_list_t *list_decl;
-        typedecl_array_t *array_decl;
-        typedecl_map_t *map_decl;
-        typedecl_set_t *set_decl;
-        typedecl_tuple_t *tuple_decl;
-        typedecl_struct_t *struct_decl;
-        typedecl_fn_t *fn_decl;
-        typedecl_any_t *any_decl;
-        typedecl_ident_t *ident_decl;
+//        typeuse_string_t *string_decl;
+        void *value;
+        typeuse_list_t *list;
+        typeuse_array_t *array;
+        typeuse_map_t *map;
+        typeuse_set_t *set;
+        typeuse_tuple_t *tuple;
+        typeuse_struct_t *struct_;
+        typeuse_fn_t *fn;
+        typeuse_any_t *any;
+        typeuse_ident_t *ident;
     };
     type_kind kind;
     bool is_origin; // type a = int, type b = a，int is origin
     uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
-} typedecl_t;
+} typeuse_t;
 
 
 // list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
 // 反而更好处理？
-struct typedecl_list_t {
+struct typeuse_list_t {
 //    int size; // 存储在 mheap 中的数据,count + cap + data, element_type 就不用存了，编译时确定之后就不会变了
     // 描述 list 类型是只需要一个 type, 比如 [int] !,且越界等行为在 compiler 都是无法判断的
     // 所以 count,capacity 都是没有意义的数据！
 //    int capacity; // 预先申请的容量大小
 //    int count; // 实际占用的位置的大小
-    typedecl_t element_type;
+    typeuse_t element_type;
     // 类型描述信息根本就不能有值这个东西出现
 //    void *data; // 引用的是一个 array 结构
 };
@@ -169,13 +170,13 @@ struct typedecl_list_t {
  * 为什么要注释掉 data? 这仅仅是类型，不保存数据
  * 并且也不知道数据是如何如何存储在内存中
  */
-struct typedecl_string_t {
+struct typeuse_string_t {
 //    int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
 //    int count; // 字符串的长度(理论上也是可变的，和 list 的 count 一样，无法在类型声明阶段就明确,所以这个毫无意义！)
 //    void *data; // 这里引用了什么？是 type_array_t 元数据还是 type_array_t 存储在 heap 中的数据？
 };
 
-struct typedecl_ident_t {
+struct typeuse_ident_t {
     string literal; // 类型名称 type my_int = int
 };
 
@@ -184,41 +185,43 @@ struct typedecl_ident_t {
 // golang 中由于 struct 也是标量，所以其需要拆解 struct 才能填充元素是否为指针
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
-struct typedecl_array_t {
+struct typeuse_array_t {
     uint64_t length;
-    typedecl_t element_type;
+    typeuse_t element_type;
     rtype_t element_rtype;
 };
 
 /**
  * set{int}
  */
-struct typedecl_set_t {
-    typedecl_t key_type;
+struct typeuse_set_t {
+    typeuse_t key_type;
 };
 
 
 /**
  * map{int:int}
  */
-struct typedecl_map_t {
-    typedecl_t key_type;
-    typedecl_t value_type;
+struct typeuse_map_t {
+    typeuse_t key_type;
+    typeuse_t value_type;
 };
 
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     char *key;
-    typedecl_t type;
-} typedecl_struct_property_t;
+    typeuse_t type;
+    void *right; // ast_expr
+} struct_property_t;
 
 // 比如 type_struct_t 结构，如何能够将其传递到运行时，一旦运行时知道了该结构，编译时就不用费劲心机的在 lir 中传递该数据了？
 // 可以通过连接器传递，但是其长度不规则,尤其是指针嵌套着指针的情况，所以将其序列化传递到 runtime 是很困难的事情
 // golang 中的 gc_bits 也是不定长的数据，怎么传递？ map,slice 都还好说 可以在 runtime 里面生成
 // 那 struct 呢？
-struct typedecl_struct_t {
-    uint8_t count;
-    typedecl_struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+struct typeuse_struct_t {
+//    uint8_t count;
+//    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    list_t *properties;
 };
 
 /**
@@ -228,9 +231,9 @@ struct typedecl_struct_t {
  * 所以其 reflect size = 8 且 gc_bits = 1
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
-struct typedecl_fn_t {
-    typedecl_t return_type;
-    list_t *formal_types; // typedecl_t
+struct typeuse_fn_t {
+    typeuse_t return_type;
+    list_t *formal_types; // typeuse_t
     bool rest_param;
 };
 
@@ -242,7 +245,7 @@ struct typedecl_fn_t {
  * 同理，如果 type_any_t 是类型的话，那就不知道存储的是什么,所以必须删除 void* value!
  * 但是给定 void* value,能够知道其内存中存储了什么东西！
  */
-struct typedecl_any_t {
+struct typeuse_any_t {
 //    uint size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
     // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
 //    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
@@ -316,11 +319,11 @@ typedef struct {
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
 
-rtype_t reflect_type(typedecl_t t);
+rtype_t reflect_type(typeuse_t t);
 
-rtype_t ct_reflect_type(typedecl_t t);
+rtype_t ct_reflect_type(typeuse_t t);
 
-rtype_t rt_reflect_type(typedecl_t t);
+rtype_t rt_reflect_type(typeuse_t t);
 
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
@@ -329,7 +332,7 @@ rtype_t rt_reflect_type(typedecl_t t);
  */
 uint64_t rtypes_push(rtype_t rtype);
 
-uint ct_find_rtype_index(typedecl_t t);
+uint ct_find_rtype_index(typeuse_t t);
 
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小
@@ -343,7 +346,7 @@ uint8_t type_kind_sizeof(type_kind t);
  * @param t
  * @return
  */
-uint16_t type_sizeof(typedecl_t t);
+uint16_t type_sizeof(typeuse_t t);
 
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
@@ -354,15 +357,15 @@ uint16_t type_sizeof(typedecl_t t);
  * @param t
  * @return
  */
-bool type_need_gc(typedecl_t t);
+bool type_need_gc(typeuse_t t);
 
-typedecl_t type_ptrof(typedecl_t t, uint8_t point);
+typeuse_t type_ptrof(typeuse_t t, uint8_t point);
 
-typedecl_t type_base_new(type_kind kind);
+typeuse_t type_base_new(type_kind kind);
 
-typedecl_t type_new(type_kind kind, void *value);
+typeuse_t type_new(type_kind kind, void *value);
 
-typedecl_ident_t *typedecl_ident_new(string literal);
+typeuse_ident_t *typeuse_ident_new(string literal);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -378,12 +381,12 @@ uint64_t calc_gc_bits_size(uint64_t size);
  */
 byte *malloc_gc_bits(uint64_t size);
 
-bool type_default_in_heap(typedecl_t typedecl);
+bool type_default_in_heap(typeuse_t typedecl);
 
 uint64_t rtype_heap_out_size(rtype_t *rtype);
 
-uint64_t type_struct_offset(typedecl_struct_t *t, char *key);
+uint64_t type_struct_offset(typeuse_struct_t *t, char *key);
 
-uint64_t type_tuple_offset(typedecl_tuple_t *t, uint64_t index);
+uint64_t type_tuple_offset(typeuse_tuple_t *t, uint64_t index);
 
 #endif //NATURE_TYPE_H

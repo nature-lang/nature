@@ -8,15 +8,15 @@
 #include "utils/table.h"
 #include "utils/type.h"
 
-#define AST_BASE_TYPE_FALSE "false"
-#define AST_BASE_TYPE_TRUE "true"
-#define AST_BASE_TYPE_NULL "null"
-#define AST_VAR "var"
-
-typedef enum {
-    AST_COMPLEX_TYPE_CLOSURE,
-    AST_COMPLEX_TYPE_ENV,
-} ast_complex_type;
+//#define AST_BASE_TYPE_FALSE "false"
+//#define AST_BASE_TYPE_TRUE "true"
+//#define AST_BASE_TYPE_NULL "null"
+//#define AST_VAR "var"
+//
+//typedef enum {
+//    AST_COMPLEX_TYPE_CLOSURE,
+//    AST_COMPLEX_TYPE_ENV,
+//} ast_complex_type;
 
 typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
@@ -27,12 +27,12 @@ typedef enum {
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
-    AST_EXPR_STRUCT_ACCESS,
 
-    AST_EXPR_ENV_VALUE,
+    AST_EXPR_INSTANCE_SELECT, // new(struct) = instance
+
+    AST_EXPR_ENV_ACCESS,
 
     AST_EXPR_LIST_NEW, // [1, 2, 3]
-    AST_EXPR_CURLY_EMPTY, // 类型推断阶段再去判定对错,TYPE_UNKNOWN
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
     AST_EXPR_SET_NEW, // {1, 2, 3, 4}
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
@@ -49,7 +49,7 @@ typedef enum {
 
     // stmt
     AST_STMT_IMPORT,
-    AST_STMT_VAR_DECL_ASSIGN,
+    AST_STMT_VAR_DEF, // todo 这里应该是叫 var def
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_RETURN,
@@ -60,9 +60,9 @@ typedef enum {
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPEDEF,
     AST_CALL,
-    AST_FN_DECL,
-    AST_CLOSURE_NEW,
-} ast_type_e;
+    AST_FNDEF, // fn def (其包含 body)
+    AST_CLOSURE_DEF, // closure def
+} ast_type_t;
 
 typedef enum {
     AST_EXPR_OPERATOR_ADD,
@@ -80,7 +80,7 @@ typedef enum {
     AST_EXPR_OPERATOR_NOT, // unary !right
     AST_EXPR_OPERATOR_NEG, // unary -right
     AST_EXPR_OPERATOR_IA, // *解引用
-} ast_expr_operator_e;
+} ast_expr_operator_t;
 
 static string ast_expr_op_str[] = {
         [AST_EXPR_OPERATOR_ADD] = "+",
@@ -98,25 +98,18 @@ static string ast_expr_op_str[] = {
         [AST_EXPR_OPERATOR_NOT] = "!", // unary !right
         [AST_EXPR_OPERATOR_NEG] = "-", // unary -right
 };
-//
-//typedef struct {
-//    void *value; // ast_ident(type_decl_ident),ast_map_decl*....
-//    type_system code; // base_type, custom_type, function, list, map
-//    bool is_origin; // type a = int, type b = a，int is origin
-//    uint8_t pointer; // 指针等级, 如果等于0 表示非指针
-//} ast_type_t;
 
 typedef struct {
     int line; // 行号
-    ast_type_e assert_type; // 声明语句类型
+    ast_type_t assert_type; // 声明语句类型
     void *value;
 } ast_stmt;
 
 typedef struct {
     int line;
-    ast_type_e assert_type; // 表达式断言
-    typedecl_t type; // 表达式自身的类型
-    typedecl_t target_type; // 表达式赋值的目标的 type
+    ast_type_t assert_type; // 表达式断言
+    typeuse_t type; // 表达式自身的类型
+    typeuse_t target_type; // 表达式赋值的目标的 type
     void *value;
 } ast_expr;
 
@@ -132,13 +125,13 @@ typedef struct {
 
 // 一元表达式
 typedef struct {
-    ast_expr_operator_e operator; // 取反，取绝对值, 解引用等
+    ast_expr_operator_t operator; // 取反，取绝对值, 解引用等
     ast_expr operand; // 操作对象
 } ast_unary_expr;
 
 // 二元表达式
 typedef struct {
-    ast_expr_operator_e operator; // +/-/*// 等 二元表达式
+    ast_expr_operator_t operator; // +/-/*// 等 二元表达式
     ast_expr right;
     ast_expr left;
 } ast_binary_expr;
@@ -170,28 +163,26 @@ typedef struct {
     ast_expr right;
 } ast_assign_stmt;
 
-//// (a, b, (c.e, d[0])) = (1, 2)
-//typedef struct {
-//    list_t *elements; // 值为 ast_expr
-//} ast_tuple_destr_stmt; // destructuring
-
+// 仅仅包含了声明
 // int a;
 typedef struct {
     string ident;
-    typedecl_t type; // type 已经决定了 size
+    typeuse_t type; // type 已经决定了 size
 } ast_var_decl;
 
+// 包含了声明与赋值，所以统称为定义
 typedef struct {
     ast_var_decl var_decl; // 左值
     ast_expr right; // 右值
-} ast_var_assign_stmt;
+} ast_var_def_stmt;
 
 // 基于 tuple 解构语法的变量快速赋值
 // var (a, b, (c, d)) = (1, 2)
+// 通过 tuple destruct 快速定义变量
 typedef struct {
     ast_tuple_destr *tuple_destr;
     ast_expr right;
-} ast_var_tuple_destr_stmt;
+} ast_var_tuple_def_stmt;
 
 typedef struct {
     ast_expr condition;
@@ -258,7 +249,7 @@ typedef struct {
 } ast_import;
 
 typedef struct {
-    typedecl_t type;
+    typeuse_t type;
     string key;
     ast_expr value;
     uint8_t size; // byte
@@ -275,8 +266,8 @@ typedef struct {
  */
 typedef struct {
     // parser 阶段是 typedef ident
-    // infer 完成后是 typedecl_struct
-    typedecl_t type;
+    // infer 完成后是 typeuse_struct
+    typeuse_t type;
 //    ast_struct_property properties[UINT8_MAX];
 //    uint8_t count;
     list_t *properties; // ast_struct_property
@@ -287,37 +278,37 @@ typedef struct {
 // 3. a[1].b
 // 4. a().b
 // ...
-// 中间代码如何表示？a_2233.b = 12
 // a_233().b 左值可以编译成
 // call a_233;
-// code.b = 12; ??
+// type.b = 12; ??
+// module_name.test
 typedef struct {
     ast_expr left; // left is struct
     string key;
 
     // infer 时在这里冗余一份,计算 size 或者 type 的时候都比较方便
-    typedecl_struct_property_t property;
-} ast_struct_access;
+    struct_property_t property;
+} ast_select;
 
 /**
  * 如何确定 left_type?
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    typedecl_t element_type; // 访问的 value 的类型
+    typeuse_t element_type; // 访问的 value 的类型
     ast_expr left;
     ast_expr index;
 } ast_list_access_t;
 
 typedef struct {
-    typedecl_t element_type; // index 对应的 value 的 type
+    typeuse_t element_type; // index 对应的 value 的 type
     ast_expr left;
     uint64_t index;
 } ast_tuple_access_t;
 
 typedef struct {
-    typedecl_t key_type;
-    typedecl_t value_type;
+    typeuse_t key_type;
+    typeuse_t value_type;
 
     ast_expr left;
     ast_expr key;
@@ -331,7 +322,7 @@ typedef struct {
 // [1,a.b, call()]
 typedef struct {
     list_t *values; // ast_expr
-    typedecl_t type; // list的类型 (类型推导截断冗余)
+    typeuse_t type; // list的类型 (类型推导截断冗余)
 } ast_list_new;
 
 typedef struct {
@@ -373,36 +364,39 @@ typedef struct {
  */
 typedef struct {
     string ident; // my_int (自定义的类型名称)
-    typedecl_t type; // int (类型)
+    typeuse_t type; // int (类型)
 } ast_typedef_stmt;
 
+// 这里包含 body, 所以属于 def
 typedef struct {
     char *name;
-    typedecl_t return_type; // 基础类型 + 动态类型
+    typeuse_t return_type; // 基础类型 + 动态类型
     list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
-} ast_fn_decl; // 既可以是 expression,也可以是 stmt
+
+    list_t *envs; // ast_expr
+} ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 typedef struct {
 //    slice_t *env_list; // ast_expr*
     list_t *env_list; // ast_expr
 
     string env_name; // 唯一标识，可以全局定位
-    ast_fn_decl *fn;
+    ast_fndef_t *fn;
 } ast_closure_t;
 
 //ast_block_stmt ast_new_block_stmt();
 
 ast_ident *ast_new_ident(string literal);
 
-typedecl_t select_actual_param(ast_call *call, uint8_t index);
+typeuse_t select_actual_param(ast_call *call, uint8_t index);
 
-typedecl_t select_formal_param(typedecl_fn_t *formal_fn, uint8_t index);
+typeuse_t select_formal_param(typeuse_fn_t *formal_fn, uint8_t index);
 
-bool type_compare(typedecl_t left, typedecl_t right);
+bool type_compare(typeuse_t left, typeuse_t right);
 
-bool can_assign(ast_type_e t);
+bool can_assign(ast_type_t t);
 
 #endif //NATURE_SRC_AST_H_

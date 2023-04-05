@@ -39,7 +39,7 @@ void analysis(module_t *m, slice_t *stmt_list);
 //
 //analysis_local_ident_t *analysis_new_local(module_t *m, symbol_type type, void *decl, string ident);
 //
-//typedecl_t analysis_fn_to_type(ast_fn_decl *fn_decl);
+//typeuse_t analysis_fn_to_type(ast_fn_decl *fn_decl);
 //
 //string analysis_resolve_type(module_t *m, analysis_function_t *current, string ident);
 //
@@ -74,7 +74,7 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt);
 //
 //void analysis_ident(module_t *m, ast_expr *expr);
 //
-//void analysis_type(module_t *m, typedecl_t *type);
+//void analysis_type(module_t *m, typeuse_t *type);
 //
 //void analysis_call(module_t *m, ast_call *call);
 //

@@ -18,30 +18,30 @@ void symbol_init() {
     symbol_var_list = slice_new();
 
 //    // built in fn init
-    _symbol_table_set("print", SYMBOL_TYPE_FN, builtin_print(), false);
-    _symbol_table_set("println", SYMBOL_TYPE_FN, builtin_println(), false);
+    _symbol_table_set("print", SYMBOL_FN, builtin_print(), false);
+    _symbol_table_set("println", SYMBOL_FN, builtin_println(), false);
 
     // TODO errort
 }
 
 // compiler 阶段临时生成的数据
-void symbol_table_set_var(char *unique_ident, typedecl_t type) {
+void symbol_table_set_var(char *unique_ident, typeuse_t type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;
     var_decl->ident = unique_ident;
 
     // 添加到符号表中
-    symbol_table_set(unique_ident, SYMBOL_TYPE_VAR, var_decl, true);
+    symbol_table_set(unique_ident, SYMBOL_VAR, var_decl, true);
 }
 
 
 symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
     symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
-    if (type == SYMBOL_TYPE_FN) {
+    if (type == SYMBOL_FN) {
         slice_push(symbol_fn_list, s);
     }
 
-    if (type == SYMBOL_TYPE_VAR) {
+    if (type == SYMBOL_VAR) {
         slice_push(symbol_var_list, s);
     }
 

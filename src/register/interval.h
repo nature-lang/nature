@@ -39,7 +39,7 @@ typedef struct interval_t {
     struct interval_t *reg_hint;
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
-    vr_flag_e alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
+    vr_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 

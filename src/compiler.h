@@ -12,7 +12,7 @@ module_t *current_module;
 
 typedef lir_operand_t *(*compiler_expr_fn)(closure_t *c, ast_expr expr);
 
-slice_t *compiler(module_t *m, ast_closure_t *ast);
+slice_t *compiler(module_t *m);
 
 static void compiler_block(closure_t *c, slice_t *block);
 

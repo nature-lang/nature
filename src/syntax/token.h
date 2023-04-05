@@ -28,10 +28,11 @@ typedef enum {
 
     // KEYWORDS.
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
-    TOKEN_THROW, TOKEN_CATCH,
-    TOKEN_FOR, TOKEN_IN, /*TOKEN_WHILE,*/ TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
+    TOKEN_THROW, TOKEN_CATCH, TOKEN_SELF,
+    TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR, TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT,
-    TOKEN_ARRAY, TOKEN_MAP, TOKEN_SET, TOKEN_TUPLE, TOKEN_FN,
+//    TOKEN_MAP, TOKEN_SET,  TOKEN_WHILE, TOKEN_TUPLE, TOKEN_ARRAY,
+    TOKEN_FN,
     TOKEN_IMPORT, TOKEN_AS, TOKEN_RETURN,
     TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
@@ -71,9 +72,10 @@ static string token_str[] = {
 
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
-        [TOKEN_TYPE] = "code",
+        [TOKEN_TYPE] = "type",
         [TOKEN_NULL] = "null",
         [TOKEN_ANY] = "any",
+        [TOKEN_SELF] = "self",
         [TOKEN_STRUCT] = "struct",
 
         [TOKEN_FOR] = "for",
@@ -89,14 +91,16 @@ static string token_str[] = {
         [TOKEN_INT] = "int",
 
 //        [TOKEN_LIST] = "list",
-        [TOKEN_MAP] = "map",
-        [TOKEN_SET] = "set",
+//        [TOKEN_MAP] = "map",
+//        [TOKEN_SET] = "set",
 //        [TOKEN_TUPLE] = "tup",
         [TOKEN_FN] = "fn",
         [TOKEN_RETURN] = "return",
+        [TOKEN_CATCH] = "catch",
+        [TOKEN_THROW] = "throw",
 
         [TOKEN_IMPORT] = "import",
-        [TOKEN_AS] = "module_name",
+        [TOKEN_AS] = "as",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",

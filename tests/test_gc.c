@@ -61,7 +61,7 @@ static void _test_gc_basic() {
     ast_var_decl *var = s->ast_value;
     assert_int_equal(var->type.kind, TYPE_LIST);
     rtype_t rtype = ct_reflect_type(var->type);
-    rtype_t element_rtype = ct_reflect_type(var->type.list_decl->element_type);
+    rtype_t element_rtype = ct_reflect_type(var->type.list->element_type);
 
     // - 调用 list_new 初始化需要的数据
     memory_list_t *l = list_new(rtype.index, element_rtype.index, 0);

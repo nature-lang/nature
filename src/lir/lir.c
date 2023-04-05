@@ -225,7 +225,7 @@ lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {
  * @param type
  * @return
  */
-lir_operand_t *temp_var_operand(closure_t *c, typedecl_t type) {
+lir_operand_t *temp_var_operand(closure_t *c, typeuse_t type) {
     string unique_ident = analysis_unique_ident(c->module, TEMP_IDENT);
 
     symbol_table_set_var(unique_ident, type);
@@ -313,11 +313,11 @@ lir_op_t *lir_op_new(lir_opcode_e code, lir_operand_t *first, lir_operand_t *sec
     return op;
 }
 
-closure_t *lir_new_closure(ast_closure_t *ast) {
+closure_t *lir_closure_new(ast_closure_t *ast) {
     closure_t *new = NEW(closure_t);
     new->name = ast->fn->name;
     new->env_name = ast->env_name;
-    new->parent = NULL;
+//    new->parent = NULL;
     new->operations = linked_new();
     new->text_count = 0;
     new->asm_operations = slice_new();

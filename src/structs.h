@@ -19,7 +19,14 @@ typedef enum {
     VR_FLAG_USE,
     VR_FLAG_DEF,
     VR_FLAG_INDIRECT_ADDR_BASE,
-} vr_flag_e;
+} vr_flag_t;
+
+
+typedef enum {
+    MODULE_TYPE_MAIN = 1,
+    MODULE_TYPE_IMPORTED = 2,
+    MODULE_TYPE_BUILTIN = 3
+} module_type_t;
 
 typedef struct {
     char *source;
@@ -67,21 +74,28 @@ typedef struct {
 
 typedef struct local_scope_t {
     struct local_scope_t *parent;
-    slice_t *idents; // analysis_local_ident_t*
+    slice_t *idents; // local_ident_t*
 
     uint8_t scope_depth;
 } local_scope_t;
 
+// 函数定义在当前作用域仅加载 fn decl
+// 函数体的解析则延迟到当前作用域内的所有标识符都定义好后再做
+// 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
+typedef struct {
+    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
+    local_scope_t *scope;
+    ast_fndef_t *fndef;
+    bool is_stmt;
+} delay_fndef_t;
+
 /**
  * 词法作用域
  */
-typedef struct analysis_fn_t {
-    struct analysis_fn_t *parent;
+typedef struct analysis_fndef_t {
+    struct analysis_fndef_t *parent;
 
     local_scope_t *current_scope;
-
-//  analysis_local_ident_t *locals[UINT8_MAX];
-//  uint8_t local_count;
 
     // 使用了当前作用域之外的变量
     slice_t *frees; // analysis_free_ident_t*
@@ -90,22 +104,12 @@ typedef struct analysis_fn_t {
     // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
     uint8_t scope_depth;
 
-    // 便于值改写, 放心 env unique as 会注册到字符表的要用
-    string env_unique_name;
-
+    char *fn_name;
     // 函数定义在当前作用域仅加载 function as
     // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
-    struct {
-        // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-        local_scope_t *scope;
-        union {
-            ast_stmt *stmt;
-            ast_expr *expr;
-        };
-        bool is_stmt;
-    } contains_fn_decl[UINT8_MAX];
-    uint8_t contains_fn_count;
-} analysis_fn_t;
+    list_t *delay_fndefs;
+} analysis_fndef_t;
+
 
 /**
  * 可以理解为文件维度数据
@@ -119,7 +123,8 @@ typedef struct {
 //    string namespace; // is dir, 从 base_ns 算起的 source_dir
     string ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
 
-    bool entry; // 入口
+//    bool entry; // 入口
+    module_type_t type;
 
     scanner_cursor_t s_cursor;
     scanner_error_t s_error;
@@ -129,8 +134,12 @@ typedef struct {
     slice_t *stmt_list;
 
     // analysis
-    analysis_fn_t *analysis_current;
+    analysis_fndef_t *analysis_current;
     int analysis_line;
+
+    // infer
+    ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
+    int infer_line;
 
     // call init stmt
     ast_stmt *call_init_stmt;  // analysis 阶段写入
@@ -143,10 +152,11 @@ typedef struct {
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
 
-    // infer 阶段得到
+    // ast_closure
     slice_t *ast_closures; // 全局的或者非全局的都在这里了
+    slice_t *ast_fndefs; // 所有到 fndefs 都加入了进来，且没有做 parent 都关系处理
 
-    // compiler 阶段得到
+    // closure_t
     slice_t *closures; // 包含 lir, 无论是 local 还是 global 都会在这里进行注册
 
     // native -> opcodes
@@ -229,7 +239,7 @@ typedef struct closure_t {
     string name;
     string end_label; // 结束地址
     string env_name;
-    struct closure_t *parent;
+//    struct closure_t *parent;
     linked_t *operations; // 指令列表
 
     int64_t stack_size; // 初始值为 0，像下增长，用于寄存器分配时的栈区 slot 分配

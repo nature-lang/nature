@@ -10,24 +10,25 @@ string ast_type_to_str[] = {
         [AST_EXPR_BINARY]="AST_EXPR_TYPE_BINARY",
         [AST_EXPR_UNARY]="AST_EXPR_TYPE_UNARY",
         [AST_EXPR_IDENT]="AST_EXPR_TYPE_IDENT",
-        [AST_EXPR_STRUCT_ACCESS]="AST_EXPR_TYPE_ACCESS_STRUCT",
-        [AST_EXPR_ENV_VALUE]="AST_EXPR_TYPE_ENV_INDEX",
-        [AST_EXPR_ACCESS]="AST_EXPR_TYPE_ACCESS",
-        [AST_EXPR_SELECT]="AST_EXPR_TYPE_SELECT",
+        [AST_EXPR_INSTANCE_SELECT]="AST_EXPR_INSTANCE_ACCESS",
+//        [AST_EXPR_STRUCT_ACCESS]="AST_EXPR_TYPE_ACCESS_STRUCT",
+        [AST_EXPR_ENV_ACCESS]="AST_EXPR_ENV_VALUE",
+        [AST_EXPR_ACCESS]="AST_EXPR_ACCESS",
+        [AST_EXPR_SELECT]="AST_EXPR_SELECT",
         [AST_EXPR_MAP_ACCESS]="AST_EXPR_TYPE_ACCESS_MAP",
         [AST_EXPR_MAP_NEW]="AST_EXPR_TYPE_NEW_MAP",
         [AST_EXPR_LIST_ACCESS]="AST_EXPR_TYPE_ACCESS_LIST",
         [AST_EXPR_LIST_NEW]="AST_EXPR_TYPE_NEW_LIST",
 //    [AST_EXPR_TYPE_LIST_DECL]="AST_EXPR_TYPE_LIST_DECL",
         [AST_VAR_DECL]="AST_VAR_DECL",
-        [AST_STMT_VAR_DECL_ASSIGN]="AST_STMT_VAR_DECL_ASSIGN",
+        [AST_STMT_VAR_DEF]="AST_STMT_VAR_DECL_ASSIGN",
         [AST_STMT_ASSIGN]="AST_STMT_ASSIGN",
         [AST_STMT_RETURN]="AST_STMT_RETURN",
         [AST_STMT_IF]="AST_STMT_IF",
         [AST_STMT_FOR_ITERATOR]="AST_STMT_FOR_ITERATOR",
-        [AST_FN_DECL]="AST_FUNCTION_DECL",
+        [AST_FNDEF]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
-        [AST_CLOSURE_NEW]="AST_CLOSURE_DECL",
+        [AST_CLOSURE_DEF]="AST_CLOSURE_DECL",
         [AST_STMT_TYPEDEF]="AST_STMT_TYPE_DECL",
 };
 
@@ -80,7 +81,7 @@ string token_type_to_str[] = {
         [TOKEN_STRUCT]="TOKEN_STRUCT",
         [TOKEN_FOR]="TOKEN_FOR",
         [TOKEN_IN]="TOKEN_IN",
-        [TOKEN_WHILE]="TOKEN_WHILE",
+//        [TOKEN_WHILE]="TOKEN_WHILE",
         [TOKEN_IF]="TOKEN_IF",
         [TOKEN_ELSE]="TOKEN_ELSE",
         [TOKEN_ELSE_IF]="TOKEN_ELSE_IF",
@@ -89,8 +90,8 @@ string token_type_to_str[] = {
         [TOKEN_BOOL]="TOKEN_BOOL",
         [TOKEN_FLOAT]="TOKEN_FLOAT",
         [TOKEN_INT]="TOKEN_INT",
-        [TOKEN_ARRAY]="TOKEN_ARRAY",
-        [TOKEN_MAP]="TOKEN_MAP",
+//        [TOKEN_ARRAY]="TOKEN_ARRAY",
+//        [TOKEN_MAP]="TOKEN_MAP",
         [TOKEN_FN]="TOKEN_FN",
         [TOKEN_IMPORT]="TOKEN_IMPORT",
         [TOKEN_AS]="TOKEN_AS",
@@ -138,7 +139,7 @@ void debug_parser(int line, char *token) {
     fflush(stdout);
 }
 
-void debug_parser_stmt(ast_type_e t) {
+void debug_parser_stmt(ast_type_t t) {
     printf("\n[DEBUG] PARSER stmt: %s\n", ast_type_to_str[t]);
 }
 
