@@ -141,7 +141,7 @@ typedef struct {
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
     int infer_line;
     // infer 第一步就会将所有的 typedef ident 的右值进行 reduction, 完成之后将会在这里打上标记
-    bool reduction_ident_completed;
+    bool reduction_typedef;
 
     // call init stmt
     ast_stmt *call_init_stmt;  // analysis 阶段写入
@@ -154,9 +154,8 @@ typedef struct {
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
 
-    // ast_closure
-    slice_t *ast_closures; // 全局的或者非全局的都在这里了
-    slice_t *ast_fndefs; // 所有到 fndefs 都加入了进来，且没有做 parent 都关系处理
+    // ast_fndef
+    slice_t *ast_fndefs;
 
     // closure_t
     slice_t *closures; // 包含 lir, 无论是 local 还是 global 都会在这里进行注册

@@ -226,6 +226,7 @@ void build_compiler(slice_t *modules) {
     // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
+
         lir_init();
 
         // 全局符号的定义也需要推导以下原始类型
@@ -234,9 +235,10 @@ void build_compiler(slice_t *modules) {
             if (s->type != SYMBOL_VAR) {
                 continue;
             }
-            infer_var_decl(s->ast_value); // 类型还原
+            infer_var_decl(m, s->ast_value); // 类型还原
         }
 
+        // 类型推断
         infer(m);
 
         compiler(m);

@@ -59,7 +59,7 @@ static rtype_t rtype_string() {
  * @param t
  * @return
  */
-static rtype_t rtype_list(typeuse_list_t *t) {
+static rtype_t rtype_list(type_list_t *t) {
     rtype_t element_rtype = reflect_type(t->element_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);
@@ -82,7 +82,7 @@ static rtype_t rtype_list(typeuse_list_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_array(typeuse_array_t *t) {
+static rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = t->element_rtype;
     uint64_t element_size = element_rtype.size;
 
@@ -112,7 +112,7 @@ static rtype_t rtype_array(typeuse_array_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_map(typeuse_map_t *t) {
+static rtype_t rtype_map(type_map_t *t) {
     rtype_t key_rtype = reflect_type(t->key_type);
     rtype_t value_rtype = reflect_type(t->value_type);
 
@@ -137,7 +137,7 @@ static rtype_t rtype_map(typeuse_map_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_set(typeuse_set_t *t) {
+static rtype_t rtype_set(type_set_t *t) {
     rtype_t key_rtype = reflect_type(t->key_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_SET, key_rtype.hash);
@@ -162,7 +162,7 @@ static rtype_t rtype_set(typeuse_set_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_any(typeuse_any_t *t) {
+static rtype_t rtype_any(type_any_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_ANY));
 
     rtype_t rtype = {
@@ -181,7 +181,7 @@ static rtype_t rtype_any(typeuse_any_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_fn(typeuse_fn_t *t) {
+static rtype_t rtype_fn(type_fn_t *t) {
     char *str = itoa(TYPE_FN);
     rtype_t return_rtype = ct_reflect_type(t->return_type);
     str = str_connect(str, itoa(return_rtype.hash));
@@ -205,7 +205,7 @@ static rtype_t rtype_fn(typeuse_fn_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_struct(typeuse_struct_t *t) {
+static rtype_t rtype_struct(type_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
     uint offset = 0;
     uint max = 0;
@@ -255,7 +255,7 @@ static rtype_t rtype_struct(typeuse_struct_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_tuple(typeuse_tuple_t *t) {
+static rtype_t rtype_tuple(type_tuple_t *t) {
     char *str = itoa(TYPE_TUPLE);
     uint offset = 0;
     uint max = 0;
@@ -343,7 +343,7 @@ typeuse_t type_ptrof(typeuse_t t, uint8_t point) {
 
 typeuse_t type_base_new(type_kind kind) {
     typeuse_t result = {
-            .is_origin = true,
+            .status = REDUCTION_STATUS_DONE,
             .kind = kind,
             .value = 0,
     };
@@ -461,8 +461,8 @@ byte *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-typeuse_ident_t *typeuse_ident_new(char *literal) {
-    typeuse_ident_t *t = NEW(typeuse_ident_t);
+type_ident_t *typeuse_ident_new(char *literal) {
+    type_ident_t *t = NEW(type_ident_t);
     t->literal = literal;
     return t;
 }
@@ -543,10 +543,10 @@ uint64_t rtype_heap_out_size(rtype_t *rtype) {
  * @param key
  * @return
  */
-uint64_t type_struct_offset(typeuse_struct_t *t, char *key) {
+uint64_t type_struct_offset(type_struct_t *s, char *key) {
     uint64_t offset = 0;
-    for (int i = 0; i < t->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(t->properties, i);
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
         uint64_t item_size = type_sizeof(p->type);
         offset = align(offset, item_size);
         if (str_equal(p->key, key)) {
@@ -560,7 +560,18 @@ uint64_t type_struct_offset(typeuse_struct_t *t, char *key) {
     return 0;
 }
 
-uint64_t type_tuple_offset(typeuse_tuple_t *t, uint64_t index) {
+struct_property_t *type_struct_property(type_struct_t *s, char *key) {
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
+        if (str_equal(p->key, key)) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+
+uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     uint64_t offset = 0;
     for (int i = 0; i < t->elements->length; ++i) {
         typeuse_t *typedecl = ct_list_value(t->elements, i);

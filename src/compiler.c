@@ -95,7 +95,7 @@ static void compiler_list_assign(closure_t *c, lir_operand_t *list_target, lir_o
 }
 
 static void compiler_map_assign(closure_t *c, ast_assign_stmt *stmt) {
-    ast_map_access *map_access = stmt->left.value;
+    ast_map_access_t *map_access = stmt->left.value;
     lir_operand_t *map_target = compiler_expr(c, map_access->left);
     lir_operand_t *key_ref = lir_var_ref_operand(c, compiler_expr(c, map_access->key));
     lir_operand_t *value_ref = lir_var_ref_operand(c, compiler_expr(c, stmt->right));
@@ -381,7 +381,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
     lir_operand_t *base_target = compiler_expr(c, call->left);
 
     slice_t *call_actual_params = slice_new();
-    typeuse_fn_t *formal_fn = call->left.type.fn;
+    type_fn_t *formal_fn = call->left.type.fn;
     // 预编译 spread operand, 避免每一次使用 spread 都编译一次
     lir_operand_t *spread_list_target = NULL;
     if (call->spread_param) {
@@ -403,7 +403,7 @@ static lir_operand_t *compiler_call(closure_t *c, ast_expr expr) {
             uint64_t rest_param_rtype_index = ct_find_rtype_index(rest_param_type);
 
 
-            typeuse_list_t *list_decl = rest_param_type.list;
+            type_list_t *list_decl = rest_param_type.list;
             // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
             rest_param_target = temp_var_operand(c, rest_param_type);
 
@@ -605,7 +605,7 @@ static lir_operand_t *compiler_list_new(closure_t *c, ast_expr expr) {
 
     lir_operand_t *list_target = temp_var_operand(c, expr.type);
 
-    typeuse_list_t *list_decl = ast->type.list;
+    type_list_t *list_decl = ast->type.list;
     // call list_new
     lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(ast->type));
 
@@ -643,7 +643,7 @@ static lir_operand_t *compiler_list_new(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr) {
-    ast_env_value *ast = expr.value;
+    ast_env_access *ast = expr.value;
     lir_operand_t *env_name_param = string_operand(c->env_name);
     lir_operand_t *env_index_param = int_operand(ast->index);
     // target 通常就是一个 temp_var
@@ -672,7 +672,7 @@ static lir_operand_t *compiler_env_value(closure_t *c, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_map_access(closure_t *c, ast_expr expr) {
-    ast_map_access *ast = expr.value;
+    ast_map_access_t *ast = expr.value;
 
 
     // compiler base address left_target
@@ -882,7 +882,7 @@ static lir_operand_t *compiler_struct_new(closure_t *c, ast_expr expr) {
     // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
     uint64_t offset = 0;
     for (int i = 0; i < ast->properties->length; ++i) {
-        ast_struct_property *struct_property = ct_list_value(ast->properties, i);
+        struct_new_property *struct_property = ct_list_value(ast->properties, i);
 
         // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
         uint64_t item_size = type_sizeof(struct_property->type);

@@ -90,54 +90,54 @@ typedef struct {
 
 
 // 类型描述信息 start
-typedef int64_t typeuse_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
+typedef int64_t type_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
 
-typedef double typeuse_float_t;
+typedef double type_float_t;
 
-typedef uint8_t typeuse_bool_t;
+typedef uint8_t type_bool_t;
 
 /**
  *  custom_type a = 1, 此时 custom_type 就是 ident 类型
  *  custom_type 是一个自定义的 type, 其可能是 struct，也可能是 int 等等
  *  但是在类型描述上来说，其就是一个 ident
  */
-typedef struct typeuse_ident_t typeuse_ident_t;
+typedef struct type_ident_t type_ident_t;
 
-typedef struct typeuse_string_t typeuse_string_t; // 类型不完全声明
+typedef struct type_string_t type_string_t; // 类型不完全声明
 
-typedef struct typeuse_list_t typeuse_list_t;
+typedef struct type_list_t type_list_t;
 
-typedef struct typeuse_array_t typeuse_array_t;
+typedef struct type_array_t type_array_t;
 
-typedef struct typeuse_map_t typeuse_map_t;
+typedef struct type_map_t type_map_t;
 
-typedef struct typeuse_set_t typeuse_set_t;
+typedef struct type_set_t type_set_t;
 
 // (int, int, float)
 typedef struct {
     list_t *elements; //  typeuse_t
-} typeuse_tuple_t;
+} type_tuple_t;
 
-typedef struct typeuse_struct_t typeuse_struct_t; // 目前只有 string
+typedef struct type_struct_t type_struct_t; // 目前只有 string
 
-typedef struct typeuse_fn_t typeuse_fn_t;
+typedef struct type_fn_t type_fn_t;
 
-typedef struct typeuse_any_t typeuse_any_t;
+typedef struct type_any_t type_any_t;
 
 
 // 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
 typedef struct type_t {
     union {
         void *value;
-        typeuse_list_t *list;
-        typeuse_array_t *array;
-        typeuse_map_t *map;
-        typeuse_set_t *set;
-        typeuse_tuple_t *tuple;
-        typeuse_struct_t *struct_;
-        typeuse_fn_t *fn;
-        typeuse_any_t *any;
-        typeuse_ident_t *ident;
+        type_list_t *list;
+        type_array_t *array;
+        type_map_t *map;
+        type_set_t *set;
+        type_tuple_t *tuple;
+        type_struct_t *struct_;
+        type_fn_t *fn;
+        type_any_t *any;
+        type_ident_t *ident;
     };
     type_kind kind;
     reduction_status_t status;
@@ -148,7 +148,7 @@ typedef struct type_t {
 // list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
 // 反而更好处理？
-struct typeuse_list_t {
+struct type_list_t {
 //    int size; // 存储在 mheap 中的数据,count + cap + data, element_type 就不用存了，编译时确定之后就不会变了
     // 描述 list 类型是只需要一个 type, 比如 [int] !,且越界等行为在 compiler 都是无法判断的
     // 所以 count,capacity 都是没有意义的数据！
@@ -171,13 +171,13 @@ struct typeuse_list_t {
  * 为什么要注释掉 data? 这仅仅是类型，不保存数据
  * 并且也不知道数据是如何如何存储在内存中
  */
-struct typeuse_string_t {
+struct type_string_t {
 //    int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
 //    int count; // 字符串的长度(理论上也是可变的，和 list 的 count 一样，无法在类型声明阶段就明确,所以这个毫无意义！)
 //    void *data; // 这里引用了什么？是 type_array_t 元数据还是 type_array_t 存储在 heap 中的数据？
 };
 
-struct typeuse_ident_t {
+struct type_ident_t {
     string literal; // 类型名称 type my_int = int
 };
 
@@ -186,7 +186,7 @@ struct typeuse_ident_t {
 // golang 中由于 struct 也是标量，所以其需要拆解 struct 才能填充元素是否为指针
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
-struct typeuse_array_t {
+struct type_array_t {
     uint64_t length;
     typeuse_t element_type;
     rtype_t element_rtype;
@@ -195,7 +195,7 @@ struct typeuse_array_t {
 /**
  * set{int}
  */
-struct typeuse_set_t {
+struct type_set_t {
     typeuse_t key_type;
 };
 
@@ -203,15 +203,15 @@ struct typeuse_set_t {
 /**
  * map{int:int}
  */
-struct typeuse_map_t {
+struct type_map_t {
     typeuse_t key_type;
     typeuse_t value_type;
 };
 
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
-    char *key;
     typeuse_t type;
+    char *key;
     void *right; // ast_expr
 } struct_property_t;
 
@@ -219,7 +219,8 @@ typedef struct {
 // 可以通过连接器传递，但是其长度不规则,尤其是指针嵌套着指针的情况，所以将其序列化传递到 runtime 是很困难的事情
 // golang 中的 gc_bits 也是不定长的数据，怎么传递？ map,slice 都还好说 可以在 runtime 里面生成
 // 那 struct 呢？
-struct typeuse_struct_t {
+struct type_struct_t {
+    char *ident;
 //    uint8_t count;
 //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
     list_t *properties;
@@ -232,8 +233,8 @@ struct typeuse_struct_t {
  * 所以其 reflect size = 8 且 gc_bits = 1
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
-struct typeuse_fn_t {
-    typeuse_t *return_type; // 可能不存在
+struct type_fn_t {
+    typeuse_t return_type;
     list_t *formal_types; // typeuse_t
     bool rest_param;
 };
@@ -246,7 +247,7 @@ struct typeuse_fn_t {
  * 同理，如果 type_any_t 是类型的话，那就不知道存储的是什么,所以必须删除 void* value!
  * 但是给定 void* value,能够知道其内存中存储了什么东西！
  */
-struct typeuse_any_t {
+struct type_any_t {
 //    uint size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
     // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
 //    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
@@ -366,7 +367,7 @@ typeuse_t type_base_new(type_kind kind);
 
 typeuse_t type_new(type_kind kind, void *value);
 
-typeuse_ident_t *typeuse_ident_new(string literal);
+type_ident_t *typeuse_ident_new(string literal);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -386,9 +387,11 @@ bool type_default_in_heap(typeuse_t typedecl);
 
 uint64_t rtype_heap_out_size(rtype_t *rtype);
 
-uint64_t type_struct_offset(typeuse_struct_t *t, char *key);
+uint64_t type_struct_offset(type_struct_t *s, char *key);
 
-uint64_t type_tuple_offset(typeuse_tuple_t *t, uint64_t index);
+struct_property_t *type_struct_property(type_struct_t *s, char *key);
+
+uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 bool is_basic_type(typeuse_t t);
 

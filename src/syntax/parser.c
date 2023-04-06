@@ -193,9 +193,9 @@ static slice_t *parser_block(module_t *m) {
  * 兼容 var
  * @return
  */
-static typeuse_t parser_typedecl(module_t *m) {
+static typeuse_t parser_typeuse(module_t *m) {
     typeuse_t result = {
-            .is_origin = false
+            .status = REDUCTION_STATUS_UNDO
     };
 
     // int/float/bool/string/void/var/any/self
@@ -208,8 +208,8 @@ static typeuse_t parser_typedecl(module_t *m) {
 
     // [int] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
-        typeuse_list_t *list_decl = NEW(typeuse_list_t);
-        list_decl->element_type = parser_typedecl(m);
+        type_list_t *list_decl = NEW(type_list_t);
+        list_decl->element_type = parser_typeuse(m);
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
@@ -219,10 +219,10 @@ static typeuse_t parser_typedecl(module_t *m) {
 
     // (int, float)
     if (parser_consume(m, TOKEN_LEFT_PAREN)) {
-        typeuse_tuple_t *tuple = NEW(typeuse_tuple_t);
+        type_tuple_t *tuple = NEW(type_tuple_t);
         tuple->elements = ct_list_new(sizeof(typeuse_t));
         do {
-            typeuse_t t = parser_typedecl(m);
+            typeuse_t t = parser_typeuse(m);
             ct_list_push(tuple->elements, &t);
         } while (parser_consume(m, TOKEN_COMMA));
 
@@ -231,19 +231,19 @@ static typeuse_t parser_typedecl(module_t *m) {
 
     // {int:int} or {int}
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
-        typeuse_t key_type = parser_typedecl(m);
+        typeuse_t key_type = parser_typeuse(m);
         if (parser_consume(m, TOKEN_COLON)) {
             // map
-            typeuse_map_t *map = NEW(typeuse_map_t);
+            type_map_t *map = NEW(type_map_t);
             map->key_type = key_type;
-            map->value_type = parser_typedecl(m);
+            map->value_type = parser_typeuse(m);
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_MAP;
             result.map = map;
             return result;
         } else {
             // set
-            typeuse_set_t *set = NEW(typeuse_set_t);
+            type_set_t *set = NEW(type_set_t);
             parser_must(m, TOKEN_LEFT_CURLY);
             set->key_type = key_type;
             parser_must(m, TOKEN_RIGHT_CURLY);
@@ -258,13 +258,13 @@ static typeuse_t parser_typedecl(module_t *m) {
     //   int b
     // }
     if (parser_consume(m, TOKEN_STRUCT)) {
-        typeuse_struct_t *type_struct = NEW(typeuse_struct_t);
+        type_struct_t *type_struct = NEW(type_struct_t);
         type_struct->properties = ct_list_new(sizeof(struct_property_t));
         parser_must(m, TOKEN_LEFT_CURLY);
         while (parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item;
-            item.type = parser_typedecl(m);
+            item.type = parser_typeuse(m);
             item.key = parser_advance(m)->literal;
 
             ct_list_push(type_struct->properties, &item);
@@ -279,18 +279,18 @@ static typeuse_t parser_typedecl(module_t *m) {
     // fn(int, int):int f
     if (parser_consume(m, TOKEN_FN)) {
         parser_must(m, TOKEN_LEFT_PAREN);
-        typeuse_fn_t *typeuse_fn = NEW(typeuse_fn_t);
+        type_fn_t *typeuse_fn = NEW(type_fn_t);
         typeuse_fn->formal_types = ct_list_new(sizeof(typeuse_t));
         if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
             // 包含参数类型
             do {
-                typeuse_t t = parser_typedecl(m);
+                typeuse_t t = parser_typeuse(m);
                 ct_list_push(typeuse_fn->formal_types, &t);
             } while (parser_consume(m, TOKEN_COMMA));
         }
 
         parser_must(m, TOKEN_COLON);
-        typeuse_fn->return_type = parser_typedecl(m);
+        typeuse_fn->return_type = parser_typeuse(m);
         result.kind = TYPE_FN;
         result.fn = typeuse_fn;
         return result;
@@ -318,7 +318,7 @@ static ast_stmt *parser_typedef_stmt(module_t *m) {
     type_decl_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
     parser_must(m, TOKEN_EQUAL); // =
     // 类型解析
-    type_decl_stmt->type = parser_typedecl(m); // int
+    type_decl_stmt->type = parser_typeuse(m); // int
 
     result->assert_type = AST_STMT_TYPEDEF;
     result->value = type_decl_stmt;
@@ -327,7 +327,7 @@ static ast_stmt *parser_typedef_stmt(module_t *m) {
 }
 
 static ast_var_decl *parser_var_decl(module_t *m) {
-    typeuse_t var_type = parser_typedecl(m);
+    typeuse_t var_type = parser_typeuse(m);
 
     // 变量名称必须为 ident
     token_t *var_ident = parser_advance(m);
@@ -505,15 +505,17 @@ static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
 static ast_expr parser_struct_new(module_t *m, typeuse_t type) {
     ast_expr result;
     ast_struct_new_t *struct_new = NEW(ast_struct_new_t);
-    struct_new->properties = ct_list_new(sizeof(ast_struct_property));
+    struct_new->properties = ct_list_new(sizeof(struct_property_t));
 
     if (parser_consume(m, TOKEN_RIGHT_CURLY)) {
         do {
             // ident 类型
-            ast_struct_property item;
+            struct_property_t item;
             item.key = parser_must(m, TOKEN_IDENT)->literal;
             parser_must(m, TOKEN_EQUAL);
-            item.value = parser_expr(m);
+            item.right = NEW(ast_expr);
+            *((ast_expr *) item.right) = parser_expr(m);
+
             ct_list_push(struct_new->properties, &item);
         } while (parser_consume(m, TOKEN_COMMA));
     }
@@ -557,7 +559,7 @@ static ast_expr parser_ident_expr(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
         typeuse_t typeuse_ident = {
                 .kind = TYPE_IDENT,
-                .is_origin = false,
+                .status = REDUCTION_STATUS_UNDO,
                 .ident = typeuse_ident_new(ident_token->literal)
         };
         return parser_struct_new(m, typeuse_ident);
@@ -1125,7 +1127,7 @@ static ast_tuple_destr *parser_var_tuple_destr(module_t *m) {
  */
 static ast_stmt *parser_var_begin_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    typeuse_t typedecl = parser_typedecl(m);
+    typeuse_t typedecl = parser_typeuse(m);
 
     // var (a, b)
     if (parser_is(m, TOKEN_LEFT_PAREN)) {
@@ -1155,7 +1157,7 @@ static ast_stmt *parser_var_begin_stmt(module_t *m) {
 static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
     // 类型解析
-    typeuse_t typedecl = parser_typedecl(m);
+    typeuse_t typedecl = parser_typeuse(m);
     token_t *ident_token = parser_advance(m);
 
     // next param 不能是 (a, b) 这样的形式, 不支持
@@ -1197,7 +1199,7 @@ static ast_stmt *parser_fndef_stmt(module_t *m) {
     fn_decl->name = name_token->literal;
     parser_formals(m, fn_decl);
     parser_must(m, TOKEN_COLON);
-    fn_decl->return_type = parser_typedecl(m);
+    fn_decl->return_type = parser_typeuse(m);
     fn_decl->body = parser_block(m);
 
     result->assert_type = AST_FNDEF;

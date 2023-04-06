@@ -51,33 +51,33 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_IDENT) {
         // 向上查查查
-        typeuse_ident_t *ident = type->ident;
+        type_ident_t *ident = type->ident;
         string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
         ident->literal = unique_name;
         return;
     }
 
     if (type->kind == TYPE_MAP) {
-        typeuse_map_t *map_decl = type->map;
+        type_map_t *map_decl = type->map;
         analysis_typeuse(m, &map_decl->key_type);
         analysis_typeuse(m, &map_decl->value_type);
         return;
     }
 
     if (type->kind == TYPE_SET) {
-        typeuse_set_t *set = type->set;
+        type_set_t *set = type->set;
         analysis_typeuse(m, &set->key_type);
         return;
     }
 
     if (type->kind == TYPE_LIST) {
-        typeuse_list_t *list_decl = type->list;
+        type_list_t *list_decl = type->list;
         analysis_typeuse(m, &list_decl->element_type);
         return;
     }
 
     if (type->kind == TYPE_TUPLE) {
-        typeuse_tuple_t *tuple = type->tuple;
+        type_tuple_t *tuple = type->tuple;
         for (int i = 0; i < tuple->elements->length; ++i) {
             typeuse_t *element_type = ct_list_value(tuple->elements, i);
             analysis_typeuse(m, element_type);
@@ -86,7 +86,7 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
     }
 
     if (type->kind == TYPE_FN) {
-        typeuse_fn_t *type_fn = type->fn;
+        type_fn_t *type_fn = type->fn;
         analysis_typeuse(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formal_types->length; ++i) {
             typeuse_t *t = ct_list_value(type_fn->formal_types, i);
@@ -95,7 +95,7 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
     }
 
     if (type->kind == TYPE_STRUCT) {
-        typeuse_struct_t *struct_decl = type->struct_;
+        type_struct_t *struct_decl = type->struct_;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
             analysis_typeuse(m, &item->type);
@@ -245,7 +245,7 @@ static void analysis_vardef(module_t *m, ast_vardef_stmt *stmt) {
     analysis_expr(m, &stmt->right);
     analysis_redeclare_check(m, stmt->var_decl.ident);
     analysis_typeuse(m, &stmt->var_decl.type);
-   
+
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &stmt->var_decl, stmt->var_decl.ident);
     stmt->var_decl.ident = local->unique_ident;
 }
@@ -380,7 +380,7 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
         } else {
             // ast_env_index 表达式
             expr.assert_type = AST_EXPR_ENV_ACCESS;
-            ast_env_value *access_env = malloc(sizeof(ast_env_value));
+            ast_env_access *access_env = malloc(sizeof(ast_env_access));
             access_env->env = ast_new_ident(m->analysis_current->parent->fn_name);
             access_env->index = free_var->env_index;
             access_env->unique_ident = free_var->ident;
@@ -486,7 +486,7 @@ static void analysis_ident(module_t *m, ast_expr *expr) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;
-        ast_env_value *env_index = malloc(sizeof(ast_env_value));
+        ast_env_access *env_index = malloc(sizeof(ast_env_access));
         env_index->env = ast_new_ident(m->analysis_current->fn_name);
         env_index->index = free_var_index;
         env_index->unique_ident = ident->literal;
@@ -561,8 +561,8 @@ static void analysis_struct_new(module_t *m, ast_struct_new_t *expr) {
     analysis_typeuse(m, &expr->type);
 
     for (int i = 0; i < expr->properties->length; ++i) {
-        ast_struct_property *property = ct_list_value(expr->properties, i);
-        analysis_expr(m, &property->value);
+        struct_property_t *property = ct_list_value(expr->properties, i);
+        analysis_expr(m, property->right);
     }
 }
 

@@ -8,7 +8,7 @@
  */
 ast_fndef_t *builtin_print() {
     // var_decl
-    typeuse_list_t *list_decl = NEW(typeuse_list_t);
+    type_list_t *list_decl = NEW(type_list_t);
     list_decl->element_type = type_base_new(TYPE_ANY);
 
     ast_var_decl *var_decl = NEW(ast_var_decl);

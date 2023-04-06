@@ -29,6 +29,9 @@ typedef enum {
     AST_EXPR_TUPLE_ACCESS,
 
     AST_EXPR_INSTANCE_SELECT, // new(struct) = instance
+    AST_EXPR_LIST_SELECT, // [1, 2, 3].push(3)
+    AST_EXPR_MAP_SELECT, // [1, 2, 3].push(3)
+    AST_EXPR_SET_SELECT, // [1, 2, 3].push(3)
 
     AST_EXPR_ENV_ACCESS,
 
@@ -248,13 +251,6 @@ typedef struct {
     string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来
 } ast_import;
 
-typedef struct {
-    typeuse_t type;
-    string key;
-    ast_expr value;
-    uint8_t size; // byte
-} ast_struct_property;
-
 /**
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，
  * 使用了 key, value
@@ -268,9 +264,8 @@ typedef struct {
     // parser 阶段是 typedef ident
     // infer 完成后是 typeuse_struct
     typeuse_t type;
-//    ast_struct_property properties[UINT8_MAX];
-//    uint8_t count;
-    list_t *properties; // ast_struct_property
+
+    list_t *properties; // struct_property_t
 } ast_struct_new_t;
 
 // 1. a.b
@@ -285,10 +280,29 @@ typedef struct {
 typedef struct {
     ast_expr left; // left is struct
     string key;
-
-    // infer 时在这里冗余一份,计算 size 或者 type 的时候都比较方便
-    struct_property_t property;
 } ast_select;
+
+typedef struct {
+    ast_expr left;
+    string key;
+    struct_property_t *property; // 冗余方便计算
+} ast_instance_select_t;
+
+
+typedef struct {
+    ast_expr left;
+    string key;
+} ast_list_select_t;
+
+typedef struct {
+    ast_expr left;
+    string key;
+} ast_map_select_t;
+
+typedef struct {
+    ast_expr left;
+    string key;
+} ast_set_select_t;
 
 /**
  * 如何确定 left_type?
@@ -312,7 +326,7 @@ typedef struct {
 
     ast_expr left;
     ast_expr key;
-} ast_map_access;
+} ast_map_access_t;
 
 typedef struct {
     ast_expr left;
@@ -348,8 +362,8 @@ typedef struct {
 typedef struct {
     ast_ident *env;
     uint8_t index;
-    string unique_ident;
-} ast_env_value;
+    char *unique_ident;
+} ast_env_access;
 
 //typedef struct {
 //  string as;
@@ -370,7 +384,7 @@ typedef struct {
 // 这里包含 body, 所以属于 def
 typedef struct {
     char *name;
-    typeuse_t return_type; // 基础类型 + 动态类型
+    typeuse_t return_type;
     list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
@@ -396,7 +410,7 @@ ast_ident *ast_new_ident(string literal);
 
 typeuse_t select_actual_param(ast_call *call, uint8_t index);
 
-typeuse_t select_formal_param(typeuse_fn_t *formal_fn, uint8_t index);
+typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(typeuse_t left, typeuse_t right);
 
