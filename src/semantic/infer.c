@@ -619,7 +619,7 @@ static bool type_confirmed(typeuse_t t) {
  * var f = {"a": 1, "b": 2} // ?
  * var h = call();
  */
-static void infer_var_decl_assign(ast_var_def_stmt *stmt) {
+static void infer_var_decl_assign(ast_vardef_stmt *stmt) {
     typeuse_t expr_type = infer_expr(&stmt->right);
 
     // 开始类型推断, err 的类型大多数情况都是像这样推断出来的
@@ -746,7 +746,12 @@ static typeuse_t infer_access_env(ast_env_value *expr) {
 }
 
 
-static typeuse_t infer_closure_def(ast_closure_t *closure) {
+/**
+ * 不需要管 body, 只需要 infer 出 typeuse_t 就可以了
+ * @param closure
+ * @return
+ */
+static typeuse_t infer_fndef(ast_closure_t *closure) {
     ast_fndef_t *function_decl = closure->fn;
 
     // 类型还原
@@ -863,7 +868,7 @@ static void infer_stmt(ast_stmt *stmt) {
             return infer_assign(stmt->value);
         }
         case AST_CLOSURE_DEF: {
-            infer_closure_def(stmt->value);
+            infer_fndef(stmt->value);
             break;
         }
         case AST_CALL: {
@@ -955,10 +960,10 @@ typeuse_t infer_expr(ast_expr *expr) {
             type = infer_catch(expr->value);
             break;
         }
-        case AST_CLOSURE_DEF: {
+        case AST_FNDEF: {
             // TODO 没必要在进行 body 的 infer 了，其已经进行了 closure convert 了？
             // 这里只需要 infer_closure decl 就行了。
-            type = infer_closure_def(expr->value);
+            type = infer_fndef(expr->value);
             break;
         }
         case AST_EXPR_LITERAL: {
@@ -977,6 +982,146 @@ typeuse_t infer_expr(ast_expr *expr) {
 
     expr->type = type;
     return expr->type;
+}
+
+static typeuse_t reduction_struct(module_t *m, typeuse_t t) {
+    assertf(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_kind_string[t.kind]);
+
+    typeuse_struct_t *s = t.struct_;
+
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
+
+        if (p->type.kind == TYPE_UNKNOWN) {
+            p->type = reduction_typeuse(m, p->type);
+        }
+
+        if (p->right) {
+            // 推断右值表达式类型
+            typeuse_t right_type = infer_expr(p->right);
+            if (p->type.kind == TYPE_UNKNOWN) {
+                assertf(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
+                p->type = right_type;
+            } else {
+                assertf(type_compare(p->type, right_type), "struct property=%s, type inconsistency", p->key);
+            }
+        }
+
+        assertf(type_confirmed(p->type), "struct property=%s type cannot confirmed", p->key);
+        // 至此左值已经都是固定类型了, 如果存在 self 则 self 类型保持不变,self 不需要在这里处理
+    }
+
+    return t;
+}
+
+static typeuse_t reduction_complex_typeuse(module_t *m, typeuse_t t) {
+    if (t.kind == TYPE_LIST) {
+        typeuse_list_t *type_list = t.list;
+        type_list->element_type = reduction_typeuse(m, type_list->element_type);
+        return t;
+    }
+
+    if (t.kind == TYPE_MAP) {
+        t.map->key_type = reduction_typeuse(m, t.map->key_type);
+        t.map->value_type = reduction_typeuse(m, t.map->key_type);
+        return t;
+    }
+
+    if (t.kind == TYPE_SET) {
+        t.set->key_type = reduction_typeuse(m, t.set->key_type);
+        return t;
+    }
+
+    if (t.kind == TYPE_TUPLE) {
+        typeuse_tuple_t *tuple = t.tuple;
+        for (int i = 0; i < tuple->elements->length; ++i) {
+            typeuse_t *use = ct_list_value(tuple->elements, i);
+            *use = reduction_typeuse(m, *use);
+        }
+        return t;
+    }
+
+    // self 就 self 了,这里就不动 self 了,定义动时候也需要定义成 self!
+    // 不能随便动名字
+    if (t.kind == TYPE_FN) {
+        typeuse_fn_t *fn = t.fn;
+        // 可选的返回类型
+        if (fn->return_type) {
+            *fn->return_type = reduction_typeuse(m, *fn->return_type);
+        }
+        for (int i = 0; i < fn->formal_types->length; ++i) {
+            typeuse_t *formal_type = ct_list_value(fn->formal_types, i);
+            *formal_type = reduction_typeuse(m, *formal_type);
+        }
+
+        return t;
+    }
+
+    if (t.kind == TYPE_STRUCT) {
+        return reduction_struct(m, t);
+    }
+
+    assertf(false, "unknown type=%s", type_kind_string[t.kind]);
+    exit(1);
+}
+
+static typeuse_t reduction_typeuse_ident(module_t *m, typeuse_t t) {
+    typeuse_ident_t *ident = t.ident;
+    symbol_t *symbol = symbol_table_get(ident->literal);
+
+
+    assertf(symbol->type == SYMBOL_TYPEDEF, "'%s' is not a type", symbol->ident);
+    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
+
+    assertf(m->reduction_ident_completed && typedef_stmt->type.status == REDUCTION_STATUS_DONE,
+            "typedef stage exception, all typedef ident expr must done");
+
+    // 检查右值是否 reduce 完成
+    if (typedef_stmt->type.status == REDUCTION_STATUS_DONE) {
+        return typedef_stmt->type;
+    }
+
+    // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
+    // 此时直接将 ident 丢回去就可以了
+    if (typedef_stmt->type.status == REDUCTION_STATUS_DOING) {
+        return t;
+    }
+
+    typedef_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
+    return reduction_typeuse(m, t);
+}
+
+static typeuse_t reduction_typeuse(module_t *m, typeuse_t t) {
+    assertf(t.kind == TYPE_SELF, "cannot use type self everywhere except struct fn decl");
+
+    if (t.status == REDUCTION_STATUS_DONE) {
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_IDENT) {
+        t = reduction_typeuse_ident(m, t);
+        goto STATUS_DONE;
+    }
+
+    // 只有 typedef ident 才有中间状态的说法
+    if (is_basic_type(t)) {
+        goto STATUS_DONE;
+    }
+
+    // infer complex type
+    if (is_complex_type(t)) {
+        t = reduction_complex_typeuse(m, t);
+        goto STATUS_DONE;
+    }
+
+    assertf(false, "cannot parser type %s", type_kind_string[t.kind]);
+    STATUS_DONE:
+    t.status = REDUCTION_STATUS_DONE;
+    t.in_heap = type_default_in_heap(t);
+
+    // 计算 reflect type
+    ct_reflect_type(t);
+    return t;
 }
 
 

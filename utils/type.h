@@ -22,6 +22,12 @@
 typedef uint8_t byte;
 
 typedef enum {
+    REDUCTION_STATUS_UNDO = 1,
+    REDUCTION_STATUS_DOING = 1,
+    REDUCTION_STATUS_DONE = 1,
+} reduction_status_t;
+
+typedef enum {
     // 基础类型
     TYPE_NULL = 1,
     TYPE_BOOL,
@@ -122,10 +128,6 @@ typedef struct typeuse_any_t typeuse_any_t;
 // 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
 typedef struct type_t {
     union {
-//        type_decl_int_t int_decl;
-//        type_decl_float_t float_decl;
-//        type_decl_bool_t bool_decl;
-//        typeuse_string_t *string_decl;
         void *value;
         typeuse_list_t *list;
         typeuse_array_t *array;
@@ -138,11 +140,10 @@ typedef struct type_t {
         typeuse_ident_t *ident;
     };
     type_kind kind;
-    bool is_origin; // type a = int, type b = a，int is origin
+    reduction_status_t status;
     uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } typeuse_t;
-
 
 // list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
@@ -232,7 +233,7 @@ struct typeuse_struct_t {
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
 struct typeuse_fn_t {
-    typeuse_t return_type;
+    typeuse_t *return_type; // 可能不存在
     list_t *formal_types; // typeuse_t
     bool rest_param;
 };
@@ -388,5 +389,9 @@ uint64_t rtype_heap_out_size(rtype_t *rtype);
 uint64_t type_struct_offset(typeuse_struct_t *t, char *key);
 
 uint64_t type_tuple_offset(typeuse_tuple_t *t, uint64_t index);
+
+bool is_basic_type(typeuse_t t);
+
+bool is_complex_type(typeuse_t t);
 
 #endif //NATURE_TYPE_H

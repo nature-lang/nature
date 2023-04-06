@@ -1139,7 +1139,7 @@ static ast_stmt *parser_var_begin_stmt(module_t *m) {
     }
 
     // var a = 1 这样的标准情况
-    ast_var_def_stmt *var_assign = NEW(ast_var_def_stmt);
+    ast_vardef_stmt *var_assign = NEW(ast_vardef_stmt);
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
     var_assign->var_decl.type = typedecl;
     var_assign->var_decl.ident = ident_token->literal;
@@ -1167,7 +1167,7 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
 
     // var a = 1
     if (parser_consume(m, TOKEN_EQUAL)) {
-        ast_var_def_stmt *stmt = NEW(ast_var_def_stmt);
+        ast_vardef_stmt *stmt = NEW(ast_vardef_stmt);
         stmt->right = parser_expr(m);
         stmt->var_decl = *var_decl;
         result->assert_type = AST_STMT_VAR_DEF;

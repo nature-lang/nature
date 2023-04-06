@@ -578,5 +578,39 @@ uint64_t type_tuple_offset(typeuse_tuple_t *t, uint64_t index) {
 }
 
 
+/**
+ * 不需要进行类型还原的类型
+ * @param t
+ * @return
+ */
+bool is_basic_type(typeuse_t t) {
+    if (t.kind == TYPE_INT
+        || t.kind == TYPE_INT8
+        || t.kind == TYPE_INT16
+        || t.kind == TYPE_INT32
+        || t.kind == TYPE_INT64
+        || t.kind == TYPE_BYTE
+        || t.kind == TYPE_NULL
+        || t.kind == TYPE_BOOL
+        || t.kind == TYPE_FLOAT
+        || t.kind == TYPE_STRING
+        || t.kind == TYPE_ANY
+        || t.kind == TYPE_VOID) {
+        return true;
+    }
 
+    return false;
+}
 
+bool is_complex_type(typeuse_t t) {
+    if (t.kind == TYPE_STRUCT
+        || t.kind == TYPE_MAP
+        || t.kind == TYPE_LIST
+        || t.kind == TYPE_TUPLE
+        || t.kind == TYPE_SET
+        || t.kind == TYPE_FN) {
+        return true;
+    }
+
+    return false;
+}

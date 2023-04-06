@@ -13,6 +13,8 @@ static void infer_stmt(ast_stmt *stmt);
 
 void infer_var_decl(ast_var_decl *var_decl);
 
+static typeuse_t reduction_typeuse(module_t *m, typeuse_t t);
+
 /**
  * struct 允许顺序不通，但是 key 和 code 需要相同，在还原时需要根据 key 进行排序
  * @param type

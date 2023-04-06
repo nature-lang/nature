@@ -174,7 +174,7 @@ typedef struct {
 typedef struct {
     ast_var_decl var_decl; // 左值
     ast_expr right; // 右值
-} ast_var_def_stmt;
+} ast_vardef_stmt;
 
 // 基于 tuple 解构语法的变量快速赋值
 // var (a, b, (c, d)) = (1, 2)
@@ -377,6 +377,9 @@ typedef struct {
     void *closure; // 全局 closure 冗余
 
     list_t *envs; // ast_expr
+
+    // analysis stage, 当 fn 定义在 struct 中,用于记录 struct type
+    typeuse_t *self_struct;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 typedef struct {

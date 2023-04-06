@@ -135,7 +135,7 @@ static void compiler_ident_assign(closure_t *c, ast_assign_stmt *stmt) {
  * @param stmt
  * @return
  */
-static void compiler_var_decl_assign(closure_t *c, ast_var_def_stmt *stmt) {
+static void compiler_var_decl_assign(closure_t *c, ast_vardef_stmt *stmt) {
     lir_operand_t *src = compiler_expr(c, stmt->right);
     lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, lir_new_var_operand(c, stmt->var_decl->ident));
 

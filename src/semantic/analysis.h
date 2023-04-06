@@ -62,7 +62,7 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt);
 //
 //void analysis_var_decl(module_t *m, ast_var_decl *stmt);
 //
-//void analysis_var_decl_assign(module_t *m, ast_var_assign_stmt *stmt);
+//void analysis_vardef(module_t *m, ast_var_assign_stmt *stmt);
 //
 //void analysis_fn_decl_ident(module_t *m, ast_fn_decl *new_fn);
 //

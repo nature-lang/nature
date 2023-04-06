@@ -16,12 +16,7 @@ void symbol_init() {
     symbol_table = table_new();
     symbol_fn_list = slice_new();
     symbol_var_list = slice_new();
-
-//    // built in fn init
-    _symbol_table_set("print", SYMBOL_FN, builtin_print(), false);
-    _symbol_table_set("println", SYMBOL_FN, builtin_println(), false);
-
-    // TODO errort
+    symbol_typedef_list = slice_new();
 }
 
 // compiler 阶段临时生成的数据
@@ -43,6 +38,10 @@ symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool
 
     if (type == SYMBOL_VAR) {
         slice_push(symbol_var_list, s);
+    }
+
+    if (type == SYMBOL_TYPEDEF) {
+        slice_push(symbol_typedef_list, s);
     }
 
     return s;

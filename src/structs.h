@@ -140,6 +140,8 @@ typedef struct {
     // infer
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
     int infer_line;
+    // infer 第一步就会将所有的 typedef ident 的右值进行 reduction, 完成之后将会在这里打上标记
+    bool reduction_ident_completed;
 
     // call init stmt
     ast_stmt *call_init_stmt;  // analysis 阶段写入

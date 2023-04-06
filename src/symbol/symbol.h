@@ -27,6 +27,8 @@ slice_t *symbol_fn_list;
 
 slice_t *symbol_var_list;
 
+slice_t *symbol_typedef_list;
+
 typedef enum {
     SYMBOL_VAR,
     SYMBOL_TYPEDEF,

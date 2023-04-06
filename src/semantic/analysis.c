@@ -47,7 +47,6 @@ static char *analysis_resolve_type(module_t *m, analysis_fndef_t *current, strin
  */
 static void analysis_typeuse(module_t *m, typeuse_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
-    // TODO 如果出现死循环，应该告警退出
     // type foo = int
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_IDENT) {
@@ -101,7 +100,16 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
             analysis_typeuse(m, &item->type);
 
-            analysis_expr(m, item->right);
+            // 可选右值解析
+            if (item->right) {
+                ast_expr *expr = item->right;
+                if (expr->assert_type == AST_FNDEF) {
+                    ast_fndef_t *fndef = expr->value;
+                    fndef->self_struct = type;
+                }
+
+                analysis_expr(m, item->right);
+            }
         }
     }
 }
@@ -233,11 +241,11 @@ static void analysis_var_decl(module_t *m, ast_var_decl *var_decl) {
     var_decl->ident = local->unique_ident;
 }
 
-static void analysis_var_decl_assign(module_t *m, ast_var_def_stmt *stmt) {
+static void analysis_vardef(module_t *m, ast_vardef_stmt *stmt) {
     analysis_expr(m, &stmt->right);
-
     analysis_redeclare_check(m, stmt->var_decl.ident);
     analysis_typeuse(m, &stmt->var_decl.type);
+   
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &stmt->var_decl, stmt->var_decl.ident);
     stmt->var_decl.ident = local->unique_ident;
 }
@@ -333,18 +341,22 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
 
     // 初始化
     analysis_current_init(m, scope, fndef->name);
+
     // 开启一个新的 function 作用域
     analysis_function_begin(m);
 
     // 函数形参处理
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *param = ct_list_value(fndef->formals, i);
-        // 注册
-        local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
-        // 改写
-        param->ident = param_local->unique_ident;
 
+        // type 中引用了 typedef ident 到话,同样需要更新引用
         analysis_typeuse(m, &param->type);
+
+        // 注册(param->ident 此时已经随 param->type 一起写入到了 symbol 中)
+        local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
+
+        // 将 ast 中到 param->ident 进行改写
+        param->ident = param_local->unique_ident;
     }
 
     // 分析请求体 block, 其中进行了自由变量的捕获/改写和局部变量改写
@@ -717,7 +729,7 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt) {
             return analysis_var_decl(m, stmt->value);
         }
         case AST_STMT_VAR_DEF: {
-            return analysis_var_decl_assign(m, stmt->value);
+            return analysis_vardef(m, stmt->value);
         }
         case AST_STMT_VAR_TUPLE_DESTR: {
             return analysis_var_tuple_destr_stmt(m, stmt->value);
@@ -809,7 +821,7 @@ static void analysis_module(module_t *m, slice_t *stmt_list) {
         }
 
         if (stmt->assert_type == AST_STMT_VAR_DEF) {
-            ast_var_def_stmt *vardef = stmt->value;
+            ast_vardef_stmt *vardef = stmt->value;
             ast_var_decl *var_decl = &vardef->var_decl;
             char *ident = ident_with_module(m->ident, var_decl->ident);
 
