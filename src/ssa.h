@@ -2,7 +2,7 @@
 #define NATURE_SRC_SSA_H_
 
 #include "utils/table.h"
-#include "src/lir/lir.h"
+#include "lir.h"
 
 #define OPERAND_VAR_USE(_vars) \
     if (vars->count > 0) {\

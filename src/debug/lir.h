@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_DEBUG_LIR_H_
 #define NATURE_SRC_DEBUG_LIR_H_
 
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 /**
  * MOVE int[1],NULL => t1

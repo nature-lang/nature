@@ -623,16 +623,16 @@ static void parser_actual_param(module_t *m, ast_call *call) {
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
         do {
             // call(...a)
-            if (parser_consume(m, TOKEN_ELLIPSIS)) {
-                call->spread_param = true;
-            }
+//            if (parser_consume(m, TOKEN_ELLIPSIS)) {
+//                call->spread_param = true;
+//            }
             // 参数解析 call(1 + 1, param_a)
             ast_expr expr = parser_expr(m);
             ct_list_push(call->actual_params, &expr);
-            if (call->spread_param) {
-                assertf(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
-                break;
-            }
+//            if (call->spread_param) {
+//                assertf(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
+//                break;
+//            }
         } while (parser_consume(m, TOKEN_COMMA));
     }
 

@@ -28,7 +28,7 @@ typedef enum {
     AST_EXPR_LIST_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
 
-    AST_EXPR_INSTANCE_SELECT, // new(struct) = instance
+    AST_EXPR_STRUCT_SELECT,
     AST_EXPR_LIST_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_MAP_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_SET_SELECT, // [1, 2, 3].push(3)
@@ -142,8 +142,6 @@ typedef struct {
 // 调用函数
 typedef struct {
     ast_expr left;
-//    ast_expr actual_params[UINT8_MAX];
-//    uint8_t param_count;
     list_t *actual_params;// ast_expr
     bool spread_param;
 } ast_call;
@@ -360,7 +358,7 @@ typedef struct {
 } ast_tuple_new;
 
 typedef struct {
-    ast_ident *env;
+    char *fn_name;
     uint8_t index;
     char *unique_ident;
 } ast_env_access;
@@ -382,7 +380,7 @@ typedef struct {
 } ast_typedef_stmt;
 
 // 这里包含 body, 所以属于 def
-typedef struct {
+typedef struct ast_fndef_t {
     char *name;
     typeuse_t return_type;
     list_t *formals; // ast_var_decl
@@ -390,10 +388,13 @@ typedef struct {
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
 
-    list_t *envs; // ast_expr
+    // ast_expr, 由 parent closure 编译当前 fndef 时负责写入
+    list_t *parent_view_envs;
 
     // analysis stage, 当 fn 定义在 struct 中,用于记录 struct type
     typeuse_t *self_struct;
+
+    struct ast_fndef_t *parent;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 typedef struct {

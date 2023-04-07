@@ -97,7 +97,7 @@ typedef struct analysis_fndef_t {
 
     local_scope_t *current_scope;
 
-    // 使用了当前作用域之外的变量
+    // 使用了当前函数作用域之外的变量
     slice_t *frees; // analysis_free_ident_t*
     table_t *free_table; // analysis_free_ident_t*
 
@@ -130,6 +130,8 @@ typedef struct {
     scanner_error_t s_error;
     linked_t *token_list; // scanner 结果
 
+    int var_unique_count; // 同一个 module 下到所有变量都会通过该 ident 附加唯一标识
+
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
 
@@ -142,6 +144,10 @@ typedef struct {
     int infer_line;
     // infer 第一步就会将所有的 typedef ident 的右值进行 reduction, 完成之后将会在这里打上标记
     bool reduction_typedef;
+
+    // compiler
+    struct closure_t *compiler_current;
+    int compiler_line;
 
     // call init stmt
     ast_stmt *call_init_stmt;  // analysis 阶段写入
@@ -239,8 +245,6 @@ typedef struct closure_t {
     // 定义环境
     string name;
     string end_label; // 结束地址
-    string env_name;
-//    struct closure_t *parent;
     linked_t *operations; // 指令列表
 
     int64_t stack_size; // 初始值为 0，像下增长，用于寄存器分配时的栈区 slot 分配

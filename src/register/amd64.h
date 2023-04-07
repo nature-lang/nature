@@ -2,7 +2,7 @@
 #define NATURE_REGISTER_AMD64_H
 
 #include "register.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 reg_t *rax;
 reg_t *rcx;

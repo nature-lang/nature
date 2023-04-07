@@ -2,7 +2,7 @@
 
 #include "bitmap.h"
 #include "src/symbol/symbol.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 /**
  * 基于 symbol fn 生成基础的 fn list

@@ -56,26 +56,15 @@ void complete_import(char *importer_dir, ast_import *import) {
     assertf(false, "import grammar only support BASE_NS=%s start, actual=%s", BASE_NS, import->path);
 }
 
-char *ident_with_module(char *module_ident, char *ident) {
-    if (str_equal(module_ident, "")) {
-        return ident;
-    }
-
-    char *temp = str_connect(module_ident, ".");
-    temp = str_connect(temp, ident);
-    return temp;
-}
-
 module_t *module_build(char *source_path, module_type_t type) {
     module_t *m = NEW(module_t);
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
-    m->ast_fndefs = slice_new();
     m->call_init_stmt = NULL;
     m->source_path = source_path;
+    m->ast_fndefs = slice_new();
     m->closures = slice_new();
-    // native 字段初始化
     m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
@@ -102,14 +91,3 @@ module_t *module_build(char *source_path, module_type_t type) {
     return m;
 }
 
-char *module_unique_ident(char *full_path) {
-    char *result = str_replace(full_path, WORK_DIR, ""); // 从 BASE_NS 开始，截止到目录部分
-
-    result = str_connect(BASE_NS, result);
-    // 去掉结尾的 .n 部分
-    result = rtrim(result, strlen(".n"));
-
-    // replace dot
-    result = str_replace(result, "/", ".");
-    return result;
-}

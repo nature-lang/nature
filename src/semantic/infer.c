@@ -416,12 +416,12 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
         assertf(p, "type %s struct no property '%s'", type_struct->ident, select->key);
 
         // 改写
-        ast_instance_select_t *instance_select = NEW(ast_instance_select_t);
-        instance_select->left = select->left;
-        instance_select->key = select->key;
-        instance_select->property = p;
-        expr->assert_type = AST_EXPR_INSTANCE_SELECT;
-        expr->value = instance_select;
+        ast_instance_select_t *struct_select = NEW(ast_instance_select_t);
+        struct_select->left = select->left;
+        struct_select->key = select->key;
+        struct_select->property = p;
+        expr->assert_type = AST_EXPR_STRUCT_SELECT;
+        expr->value = struct_select;
 
         return p->type;
     }
@@ -476,12 +476,15 @@ static typeuse_t infer_call(module_t *m, ast_call *call) {
         assertf(type_compare(formal, actual), "call param[%d] type error, expect '%s' type, actual '%s' type", i,
                 type_kind_string[formal.kind], type_kind_string[actual.kind]);
 
+        ast_expr *expr = ct_list_value(call->actual_params, i);
+        set_expr_target(expr, formal);
+
         // 如果 i < actual_param_count,则 actual_param 需要配置 target type
-        bool is_spread = call->spread_param && i == call->actual_params->length - 1;
-        if (i < call->actual_params->length && !is_spread) {
-            ast_expr *expr = ct_list_value(call->actual_params, i);
-            set_expr_target(expr, formal);
-        }
+//        bool is_spread = call->spread_param && i == call->actual_params->length - 1;
+//        if (i < call->actual_params->length && !is_spread) {
+//            ast_expr *expr = ct_list_value(call->actual_params, i);
+//            set_expr_target(expr, formal);
+//        }
     }
 
     return type_fn->return_type;
@@ -1089,8 +1092,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     infer_fndef_decl(m, fndef);
 
     // env 表达式类型还原
-    for (int i = 0; i < fndef->envs->length; ++i) {
-        ast_expr *env_expr = ct_list_value(fndef->envs, i);
+    for (int i = 0; i < fndef->parent_view_envs->length; ++i) {
+        ast_expr *env_expr = ct_list_value(fndef->parent_view_envs, i);
         infer_expr(m, env_expr);
     }
 

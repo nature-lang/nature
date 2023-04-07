@@ -198,8 +198,8 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         }
 
         // last->id < id < op->id
-        lir_operand_t *dst = LIR_NEW_OPERAND(LIR_OPERAND_VAR, dst_i->var);
-        lir_operand_t *src = LIR_NEW_OPERAND(LIR_OPERAND_VAR, src_i->var);
+        lir_operand_t *dst = operand_new(LIR_OPERAND_VAR, dst_i->var);
+        lir_operand_t *src = operand_new(LIR_OPERAND_VAR, src_i->var);
         lir_op_t *mov_op = lir_op_move(dst, src);
         mov_op->id = id;
         linked_insert_before(block->operations, LINKED_NODE(), mov_op);

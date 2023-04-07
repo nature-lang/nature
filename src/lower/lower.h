@@ -1,7 +1,7 @@
 #ifndef NATURE_LOWER_H
 #define NATURE_LOWER_H
 
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 void lower(closure_t *c);
 

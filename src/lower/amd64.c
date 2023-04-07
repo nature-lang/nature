@@ -43,10 +43,10 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
             // empty reg
             if (reg->size < QWORD) {
                 linked_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
-                                                   LIR_NEW_OPERAND(LIR_OPERAND_REG, covert_alloc_reg(reg))));
+                                                   operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
             }
 
-            lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_REG, reg), param_operand);
+            lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
 
             linked_push(operations, op);
         } else {
@@ -64,9 +64,9 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
     // 先 sub 再 push, 保证 rsp 16 byte 对齐
     if (diff_length > 0) {
         lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
-                                         LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp),
+                                         operand_new(LIR_OPERAND_REG, rsp),
                                          int_operand(diff_length),
-                                         LIR_NEW_OPERAND(LIR_OPERAND_REG, rsp));
+                                         operand_new(LIR_OPERAND_REG, rsp));
         linked_push(push_operations, binary_op);
     }
 
@@ -96,7 +96,7 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
         lir_operand_t *source = NULL;
         reg_t *reg = amd64_fn_param_next_reg(used, var->type.kind);
         if (reg) {
-            source = LIR_NEW_OPERAND(LIR_OPERAND_REG, reg);
+            source = operand_new(LIR_OPERAND_REG, reg);
         } else {
             lir_stack_t *stack = NEW(lir_stack_t);
             // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
@@ -107,10 +107,10 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
             // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
             stack_param_slot += QWORD; // 固定 8 bit， 不过 8byte 会造成 stack_slot align exception
 
-            source = LIR_NEW_OPERAND(LIR_OPERAND_STACK, stack);
+            source = operand_new(LIR_OPERAND_STACK, stack);
         }
 
-        lir_op_t *op = lir_op_move(LIR_NEW_OPERAND(LIR_OPERAND_VAR, var), source);
+        lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_VAR, var), source);
         linked_push(operations, op);
     }
 
@@ -147,9 +147,9 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             if (op->output != NULL) {
                 lir_operand_t *reg_operand;
                 if (lir_operand_type_base(op->output) == TYPE_FLOAT) {
-                    reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, xmm0);
+                    reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
                 } else {
-                    reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
+                    reg_operand = operand_new(LIR_OPERAND_REG, rax);
                 }
                 linked_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
                 op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
@@ -186,9 +186,9 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // 1.1 return 指令需要将返回值放到 rax 中
             lir_operand_t *reg_operand;
             if (lir_operand_type_base(op->first) == TYPE_FLOAT) {
-                reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, xmm0);
+                reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
             } else {
-                reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
+                reg_operand = operand_new(LIR_OPERAND_REG, rax);
             }
 
             linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
@@ -198,7 +198,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         // div 被输数，除数 = 商
         if (op->code == LIR_OPCODE_DIV) {
-            lir_operand_t *reg_operand = LIR_NEW_OPERAND(LIR_OPERAND_REG, rax);
+            lir_operand_t *reg_operand = operand_new(LIR_OPERAND_REG, rax);
             lir_op_t *before = lir_op_move(reg_operand, op->first);
             lir_op_t *after = lir_op_move(op->output, reg_operand);
 

@@ -6,7 +6,7 @@
 #include "utils/type.h"
 #include "amd64.h"
 #include "arch.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 #include <unistd.h>
 #include <string.h>

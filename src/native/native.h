@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "utils/slice.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 typedef struct {
     char *name; // 符号名称

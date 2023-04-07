@@ -114,14 +114,14 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
     }
 }
 
-/**
- * @param name
- * @return
- */
-static char *analysis_unique_ident(module_t *m, char *name) {
-    char *unique_name = LIR_UNIQUE_NAME(name);
-    return ident_with_module(m->ident, unique_name);
-}
+///**
+// * @param name
+// * @return
+// */
+//static char *analysis_unique_ident(module_t *m, char *name) {
+//    char *unique_name = LIR_UNIQUE_NAME(name);
+//    return ident_with_module(m->ident, unique_name);
+//}
 
 /**
  * TODO 不同 module 直接有同名的 ident 怎么处理？
@@ -132,7 +132,7 @@ static char *analysis_unique_ident(module_t *m, char *name) {
  */
 local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string ident) {
     // unique ident
-    string unique_ident = analysis_unique_ident(m, ident);
+    string unique_ident = var_unique_ident(m, ident);
 
     local_ident_t *local = malloc(sizeof(local_ident_t));
     local->ident = ident;
@@ -278,8 +278,8 @@ static void analysis_fndef_name(module_t *m, ast_fndef_t *fndef) {
     // 仅 fun 再次定义 as 才需要再次添加到符号表
     if (!str_equal(fndef->name, FN_MAIN_NAME)) {
         if (strlen(fndef->name) == 0) {
-            // 如果没有函数名称，则添加匿名函数名称
-            fndef->name = analysis_unique_ident(m, ANONYMOUS_FN_NAME);
+            // 如果没有函数名称，则添加匿名函数名称(通过 module 唯一标识区分)
+            fndef->name = var_unique_ident(m, ANONYMOUS_FN_NAME);
         }
 
         analysis_redeclare_check(m, fndef->name);
@@ -335,7 +335,7 @@ static analysis_fndef_t *analysis_current_init(module_t *m, local_scope_t *scope
  * @return
  */
 static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope) {
-    fndef->envs = ct_list_new(sizeof(ast_expr));
+    fndef->parent_view_envs = ct_list_new(sizeof(ast_expr));
 
     analysis_typeuse(m, &fndef->return_type);
 
@@ -359,7 +359,7 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
         param->ident = param_local->unique_ident;
     }
 
-    // 分析请求体 block, 其中进行了自由变量的捕获/改写和局部变量改写
+    // 分析请求体 block, 其中进行了对外部变量的捕获并改写, 以及 local var 名称 unique
     analysis_block(m, fndef->body);
 
     // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
@@ -367,9 +367,13 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
     // current_function->env_unique_name = unique_var_ident(ENV_IDENT);
 //    closure->env_name = m->analysis_current->env_unique_name;
 
-    // 构造 env
+    // 构造 env (通过 analysis block, 当前 block 中引用的所有外部变量都被收集了起来)
     for (int i = 0; i < m->analysis_current->frees->count; ++i) {
+        // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
+        // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
         free_ident_t *free_var = m->analysis_current->frees->take[i];
+
+        // 封装成 ast_expr 更利于 compiler
         ast_expr expr;
 
         // 调用函数中引用的逃逸变量就在当前作用域中
@@ -378,16 +382,16 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
             expr.assert_type = AST_EXPR_IDENT;
             expr.value = ast_new_ident(free_var->ident);
         } else {
-            // ast_env_index 表达式
+            // ast_env_index 表达式, 这里时 parent 再次引用了 parent env 到意思
             expr.assert_type = AST_EXPR_ENV_ACCESS;
-            ast_env_access *access_env = malloc(sizeof(ast_env_access));
-            access_env->env = ast_new_ident(m->analysis_current->parent->fn_name);
-            access_env->index = free_var->env_index;
-            access_env->unique_ident = free_var->ident;
-            expr.value = access_env;
+            ast_env_access *env_access = NEW(ast_env_access);
+            env_access->fn_name = m->analysis_current->parent->fn_name;
+            env_access->index = free_var->env_index;
+            env_access->unique_ident = free_var->ident;
+            expr.value = env_access;
         }
 
-        ct_list_push(fndef->envs, &expr);
+        ct_list_push(fndef->parent_view_envs, &expr);
     }
 
     // 对当前 fndef 中对所有 sub fndef 进行 analysis
@@ -486,11 +490,12 @@ static void analysis_ident(module_t *m, ast_expr *expr) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;
-        ast_env_access *env_index = malloc(sizeof(ast_env_access));
-        env_index->env = ast_new_ident(m->analysis_current->fn_name);
-        env_index->index = free_var_index;
-        env_index->unique_ident = ident->literal;
-        expr->value = env_index;
+        ast_env_access *env_access = NEW(ast_env_access);
+        env_access->fn_name = m->analysis_current->fn_name;
+        env_access->index = free_var_index;
+        // 外部到 ident 可能已经修改了名字,这里进行冗于记录
+        env_access->unique_ident = ident->literal;
+        expr->value = env_access;
         return;
     }
 

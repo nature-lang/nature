@@ -68,7 +68,7 @@ void cfg(closure_t *c) {
                 // 存在 new_block, current_block 必须已 BAL 指令结尾跳转到 new_block
                 lir_op_t *last_op = linked_last(current_block->operations)->value;
                 if (last_op->code != LIR_OPCODE_BAL) {
-                    lir_op_t *temp_op = lir_op_bal(lir_new_label_operand(new_block->name, true));
+                    lir_op_t *temp_op = lir_op_bal(label_operand(new_block->name, true));
                     linked_push(current_block->operations, temp_op);
                 }
             }
@@ -134,7 +134,7 @@ void broken_critical_edges(closure_t *c) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
                 lir_op_t *label_op = lir_op_unique_label(TEMP_LABEL);
                 lir_operand_t *label_operand = label_op->output;
-                lir_op_t *bal_op = lir_op_bal(lir_new_label_operand(b->name, true));
+                lir_op_t *bal_op = lir_op_bal(label_operand(b->name, true));
 
                 lir_symbol_label_t *symbol_label = label_operand->value;
                 basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);

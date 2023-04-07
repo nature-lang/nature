@@ -4,7 +4,7 @@
 #include "utils/value.h"
 #include "src/ast.h"
 #include "src/syntax/token.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 string lir_opcode_to_string[UINT8_MAX];
 
