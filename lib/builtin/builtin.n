@@ -4,6 +4,7 @@ fn println(...[any] args) {}
 
 fn set(...[any] keys):{any} {}
 
+// 这里都 string 是 nature string 类型
 type errort = struct {
     string msg
 }

@@ -46,5 +46,11 @@ processor_t *processor_get();
 
 void processor_init();
 
+void processor_attach_errort(memory_struct_t *errort);
+
+memory_struct_t *processor_remove_errort();
+
+bool processor_has_errort();
+
 
 #endif //NATURE_PROCESSOR_H

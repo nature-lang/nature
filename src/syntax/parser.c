@@ -1053,9 +1053,11 @@ static ast_expr parser_catch_expr(module_t *m) {
     parser_must(m, TOKEN_CATCH);
 
     ast_expr call_expr = parser_expr(m);
+    assertf(call_expr.assert_type == AST_CALL, "the catch target must be call expr");
+
     ast_catch *catch = NEW(ast_catch);
     catch->call = call_expr.value;
-    assertf(call_expr.assert_type == AST_CALL, "the catch target must be call expr");
+    catch->call->catch = true;
 
     result.assert_type = AST_EXPR_CATCH;
     result.value = catch;

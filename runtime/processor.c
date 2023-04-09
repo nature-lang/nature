@@ -1,4 +1,5 @@
 #include "processor.h"
+#include "type/string.h"
 
 /**
  * 从 current rsp 中截取大概 64KB 作为 process main 的 system_stack, 起点直接从 rsp 开始算
@@ -33,4 +34,23 @@ processor_t *processor_get() {
 //    assertf(processor_count > 0, "processor not init");
     processor_t *result = &processor_list[0];
     return result;
+}
+
+// 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
+void processor_attach_errort(memory_struct_t *errort) {
+    processor_t *p = processor_get();
+    p->errort = errort;
+}
+
+memory_struct_t *processor_remove_errort() {
+    processor_t *p = processor_get();
+    memory_struct_t *errort = p->errort;
+    // 垃圾回收会清理 p->errort
+    p->errort = NULL;
+    return errort;
+}
+
+bool processor_has_errort() {
+    processor_t *p = processor_get();
+    return p->errort ? true : false;
 }

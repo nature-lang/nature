@@ -211,6 +211,7 @@ typedef struct processor_t {
     mmode_t user_mode;
     mmode_t system_mode;
     mcache_t mcache;
+    memory_struct_t *errort; // TODO 也需要参与垃圾回收,否则会造成 error 被清理
 } processor_t;
 
 typedef struct {

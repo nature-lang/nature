@@ -416,7 +416,7 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
         assertf(p, "type %s struct no property '%s'", type_struct->ident, select->key);
 
         // 改写
-        ast_instance_select_t *struct_select = NEW(ast_instance_select_t);
+        ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
         struct_select->left = select->left;
         struct_select->key = select->key;
         struct_select->property = p;
@@ -487,6 +487,7 @@ static typeuse_t infer_call(module_t *m, ast_call *call) {
 //        }
     }
 
+    call->return_type = type_fn->return_type;
     return type_fn->return_type;
 }
 
@@ -506,7 +507,7 @@ static typeuse_t infer_catch(module_t *m, ast_catch *catch) {
 
     typeuse_t errort = type_base_new(TYPE_IDENT);
     errort.ident = NEW(type_ident_t);
-    errort.ident->literal = BUILTIN_ERRORT;
+    errort.ident->literal = ERRORT_TYPE_IDENT;
     errort = reduction_type(m, errort);
 
     ct_list_push(t.tuple->elements, &errort);

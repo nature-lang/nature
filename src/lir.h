@@ -20,6 +20,9 @@
 #define FOR_END_ITERATOR_IDENT "end_for_iterator"
 #define END_IF_IDENT "end_if"
 #define ALTERNATE_IF_IDENT "alternate_if"
+#define ERRORT_TYPE_IDENT "errort"
+#define ERRORT_MSG_IDENT "msg"
+
 
 // RT = runtime
 // CT = compile time
@@ -62,6 +65,10 @@
 #define RT_CALL_STRING_NEW "string_new"
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
+
+#define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
+#define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
+#define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
@@ -306,8 +313,8 @@ static lir_operand_t *label_operand(char *ident, bool is_local) {
 }
 
 
-static inline lir_operand_t *lir_copy_label_operand(lir_operand_t *label_operand) {
-    lir_symbol_label_t *label = label_operand->value;
+static inline lir_operand_t *lir_copy_label_operand(lir_operand_t *l) {
+    lir_symbol_label_t *label = l->value;
     return label_operand(label->ident, label->is_local);
 }
 

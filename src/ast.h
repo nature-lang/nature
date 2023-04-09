@@ -141,6 +141,8 @@ typedef struct {
 
 // 调用函数
 typedef struct {
+    typeuse_t return_type; // call return type 冗余
+    bool catch; // 本次 call 是否被 catch
     ast_expr left;
     list_t *actual_params;// ast_expr
     bool spread_param;
@@ -284,7 +286,7 @@ typedef struct {
     ast_expr left;
     string key;
     struct_property_t *property; // 冗余方便计算
-} ast_instance_select_t;
+} ast_struct_select_t;
 
 
 typedef struct {
