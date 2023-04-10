@@ -334,10 +334,10 @@ uint16_t type_sizeof(typeuse_t t) {
 }
 
 
-typeuse_t type_ptrof(typeuse_t t, uint8_t point) {
+typeuse_t type_ptrof(typeuse_t t) {
     typeuse_t result;
-    result.is_origin = t.is_origin;
-    result.pointer = point;
+    result.status = t.status;
+    result.is_pointer = true;
     return result;
 }
 
@@ -556,7 +556,7 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
         offset += item_size;
     }
 
-    assertf(false, "key=%v not found in struct", key);
+    assertf(false, "key=%s not found in struct", key);
     return 0;
 }
 

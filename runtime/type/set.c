@@ -38,6 +38,8 @@ bool set_add(memory_set_t *m, void *key_ref) {
     }
     uint64_t key_size = rt_rtype_heap_out_size(m->key_index);
     memmove(m->key_data + key_size * key_index, key_ref, key_size);
+
+    return added;
 }
 
 /**

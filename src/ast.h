@@ -23,6 +23,7 @@ typedef enum {
     AST_EXPR_BINARY,
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
+    AST_EXPR_ADDR_OF,
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
@@ -126,6 +127,11 @@ typedef struct {
     string literal;
 } ast_ident;
 
+// 取表达式指针 &expr
+typedef struct {
+    ast_expr *expr;
+} ast_addr_of_t;
+
 // 一元表达式
 typedef struct {
     ast_expr_operator_t operator; // 取反，取绝对值, 解引用等
@@ -142,10 +148,10 @@ typedef struct {
 // 调用函数
 typedef struct {
     typeuse_t return_type; // call return type 冗余
-    bool catch; // 本次 call 是否被 catch
     ast_expr left;
     list_t *actual_params;// ast_expr
-    bool spread_param;
+    bool catch; // 本次 call 是否被 catch
+    bool spread;
 } ast_call;
 
 // 值类型
@@ -288,22 +294,6 @@ typedef struct {
     struct_property_t *property; // 冗余方便计算
 } ast_struct_select_t;
 
-
-typedef struct {
-    ast_expr left;
-    string key;
-} ast_list_select_t;
-
-typedef struct {
-    ast_expr left;
-    string key;
-} ast_map_select_t;
-
-typedef struct {
-    ast_expr left;
-    string key;
-} ast_set_select_t;
-
 /**
  * 如何确定 left_type?
  * optimize 表达式阶段生成该值，不行也要行！
@@ -407,9 +397,28 @@ typedef struct {
     ast_fndef_t *fn;
 } ast_closure_t;
 
-//ast_block_stmt ast_new_block_stmt();
 
-ast_ident *ast_new_ident(string literal);
+ast_ident *ast_new_ident(char *literal);
+
+static ast_expr *ast_ident_expr(char *literal) {
+    ast_expr *expr = NEW(ast_expr);
+    expr->assert_type = AST_EXPR_IDENT;
+    expr->value = ast_new_ident(literal);
+    return expr;
+}
+
+static ast_expr *ast_addr_of(ast_expr *target) {
+    ast_expr *result = NEW(ast_expr);
+
+    ast_addr_of_t *addr_of = NEW(ast_addr_of_t);
+    addr_of->expr = target;
+
+    result->assert_type = AST_EXPR_ADDR_OF;
+    result->value = addr_of;
+    result->type = type_ptrof(target->type);
+    return result;
+}
+
 
 typeuse_t select_actual_param(ast_call *call, uint8_t index);
 

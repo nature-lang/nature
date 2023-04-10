@@ -50,6 +50,12 @@ static lir_operand_t *type_convert(module_t *m, lir_operand_t *source, ast_expr 
 }
 
 
+/**
+ * TODO 如果使用了全局符号怎么办？
+ * @param m
+ * @param expr
+ * @return
+ */
 static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     ast_ident *ident = expr.value;
     lir_operand_t *target = lir_new_empty_operand();
@@ -79,6 +85,10 @@ static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     return target;
 }
 
+static lir_operand_t *compiler_addr_of(module_t *m, ast_expr expr) {
+    ast_addr_of_t *addr_of = expr.value;
+    return var_ref_operand(m, compiler_expr(m, *addr_of->expr));
+}
 
 static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_operand_t *index_target, ast_expr src) {
     // 取 value 栈指针,如果 value 不是 var， 会自动转换成 var
@@ -378,33 +388,21 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
         target = temp_var_operand(m, call->return_type);
     }
 
-    // TODO list_select()
-    bool pass_self = false;
-    if (call->left.assert_type == AST_EXPR_LIST_SELECT ||
-        call->left.assert_type == AST_EXPR_MAP_SELECT ||
-        call->left.assert_type == AST_EXPR_SET_SELECT) {
-        pass_self = true;
-    }
-
-    // TODO test.a() 判断是否需要 self
-    if (call->left.type.fn)
-
-
     // push 指令所有的物理寄存器入栈
     // 这里增加了无意义的堆栈和符号表,不符合简捷之道
     lir_operand_t *base_target = compiler_expr(m, call->left);
 
     slice_t *params = slice_new();
-
     type_fn_t *formal_fn = call->left.type.fn;
 
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < formal_fn->formal_types->length; ++i) {
         ast_expr *param_expr = ct_list_value(call->actual_params, i);
+
         lir_operand_t *param_operand = compiler_expr(m, *param_expr);
 
-        if (!formal_fn->rest_param || i < formal_fn->formal_types->length - 1) {
+        if (!formal_fn->rest || i < formal_fn->formal_types->length - 1) {
             slice_push(params, param_operand);
             continue;
         }
@@ -577,7 +575,7 @@ static lir_operand_t *compiler_env_access(module_t *m, ast_expr expr) {
     lir_operand_t *fn_name = string_operand(m->compiler_current->name);
     lir_operand_t *index = int_operand(ast->index);
     // target 通常就是一个 temp_var
-    lir_operand_t *value_point = temp_var_operand(m, type_ptrof(expr.type, 1));
+    lir_operand_t *value_point = temp_var_operand(m, type_ptrof(expr.type));
 
     lir_operand_t *result = temp_var_operand(m, expr.type);
     // 读取 result 的指针地址，给到 access 进行写入
@@ -1073,6 +1071,7 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt) {
 
 compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = compiler_literal,
+        [AST_EXPR_ADDR_OF] = compiler_addr_of,
         [AST_EXPR_IDENT] = compiler_ident,
         [AST_EXPR_ENV_ACCESS] = compiler_env_access,
         [AST_EXPR_BINARY] = compiler_binary,
@@ -1082,6 +1081,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_MAP_NEW] = compiler_map_new,
         [AST_EXPR_MAP_ACCESS] = compiler_map_access,
         [AST_EXPR_STRUCT_NEW] = compiler_struct_new,
+        [AST_EXPR_STRUCT_SELECT] = compiler_struct_select,
         [AST_EXPR_TUPLE_NEW] = compiler_tuple_new,
         [AST_EXPR_TUPLE_ACCESS] = compiler_tuple_access,
         [AST_CALL] = compiler_call,
@@ -1096,6 +1096,9 @@ static lir_operand_t *compiler_expr(module_t *m, ast_expr expr) {
     assertf(fn, "ast right not support");
 
     lir_operand_t *source = fn(m, expr);
+
+//    expr.target_type.kind
+//    expr.type.kind
 
     if (expr.type.kind != expr.target_type.kind) {
         source = type_convert(m, source, expr);

@@ -1300,7 +1300,7 @@ static ast_stmt *parser_stmt(module_t *m) {
         return parser_typedef_stmt(m);
     }
 
-    assertf(false, "line=%v, cannot parser stmt", parser_line(m));
+    assertf(false, "line=%d, cannot parser stmt", parser_line(m));
     exit(1);
 }
 

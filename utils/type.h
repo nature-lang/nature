@@ -142,6 +142,7 @@ typedef struct type_t {
     type_kind kind;
     reduction_status_t status;
     uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
+    bool is_pointer; // p<type>
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } typeuse_t;
 
@@ -236,8 +237,7 @@ struct type_struct_t {
 struct type_fn_t {
     typeuse_t return_type;
     list_t *formal_types; // typeuse_t
-    bool self; // 结构体 self 冗于
-    bool rest_param;
+    bool rest;
 };
 
 /**
@@ -362,7 +362,7 @@ uint16_t type_sizeof(typeuse_t t);
  */
 bool type_need_gc(typeuse_t t);
 
-typeuse_t type_ptrof(typeuse_t t, uint8_t point);
+typeuse_t type_ptrof(typeuse_t t);
 
 typeuse_t type_base_new(type_kind kind);
 

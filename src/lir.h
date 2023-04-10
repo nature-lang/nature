@@ -34,10 +34,21 @@
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
+#define LIST_PUSH_KEY "push"
+#define LIST_LENGTH_KEY "length"
+
+#define MAP_DELETE_KEY "delete"
+#define MAP_LENGTH_KEY "length"
+
+#define SET_CONTAINS_KEY "contains"
+#define SET_ADD_KEY "add"
+#define SET_DELETE_KEY "delete"
+
 
 #define RT_CALL_MAP_NEW "map_new"
 #define RT_CALL_MAP_ACCESS "map_access"
 #define RT_CALL_MAP_ASSIGN "map_assign"
+#define RT_CALL_MAP_LENGTH "map_length"
 #define RT_CALL_MAP_DELETE "map_delete"
 
 #define RT_CALL_SET_CALL_IDENT "set"
@@ -625,7 +636,7 @@ static lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand) {
     assertf(operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", operand->assert_type);
 
     lir_var_t *var = var_operand->value;
-    lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type, 1));
+    lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type));
     OP_PUSH(lir_op_lea(value_ref, operand));
     return value_ref;
 }

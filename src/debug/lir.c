@@ -92,9 +92,9 @@ char *lir_var_to_string(lir_var_t *var) {
 //    stack_frame_offset = *var->local->stack_frame_offset;
     if (var->type.kind > 0) {
         type_string = type_kind_string[var->type.kind];
-        for (int i = 0; i < var->type.pointer; ++i) {
-            type_string = str_connect(type_string, "*");
-        }
+//        for (int i = 0; i < var->type.pointer; ++i) {
+//            type_string = str_connect(type_string, "*");
+//        }
     }
 
     string ident = var->ident;

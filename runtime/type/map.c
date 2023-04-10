@@ -137,9 +137,13 @@ void map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
  * @param key_ref
  * @return
  */
-void *map_delete(memory_map_t *m, void *key_ref) {
+void map_delete(memory_map_t *m, void *key_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
     m->length--;
+}
+
+uint64_t map_length(memory_map_t *l) {
+    return l->length;
 }

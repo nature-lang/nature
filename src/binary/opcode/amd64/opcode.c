@@ -1155,7 +1155,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 format->vex_prefix->source = 15 - r->index; // two's complement
                 format->vex_prefix->r = r->index <= 7;
             } else {
-                error_exit("unsupported encoding %v", operand.encoding);
+                error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
             }
 
@@ -1198,7 +1198,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->rex_prefix->r = r->reg->index > 7;
                 }
             } else {
-                error_exit("unsupported encoding %v", operand.encoding);
+                error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
             }
 
@@ -1225,7 +1225,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->rex_prefix->r = r->reg->index > 7;
                 }
             } else {
-                error_exit("unsupported encoding %v", operand.encoding);
+                error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
             }
         } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
@@ -1315,7 +1315,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
       uint8_t temp[4];
       memcpy(temp, &i->value, sizeof(i->value));
     }*/ else {
-            error_exit("unsupported asm operand code %v", asm_operand->type);
+            error_exit("unsupported asm operand code %d", asm_operand->type);
             return NULL;
         }
 
