@@ -426,7 +426,13 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
         return p->type;
     }
 
+    // TODO xxx[x][x].xxx.push()
+
+
     // [1].push(2) / {1:2, 3:4}.length / {1, 2}.contains(12)
+    // TODO 这里不是 infer call, 不能这么写,应该返回一个有 struct!
+    // TODO 如果确实没有 struct, 那应该对 expr 改写，改写成 ident,且 ident 需要
+    // TODO 这里应该改写成 ident?
     if (left_type.kind == TYPE_LIST) {
         expr->assert_type = AST_EXPR_LIST_SELECT;
         return infer_list_select(m, expr->value);
@@ -447,11 +453,13 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
 }
 
 /**
- * TODO builtin call handle, example set()
  * @param call
  * @return
  */
 static typeuse_t infer_call(module_t *m, ast_call *call) {
+    // TODO call left 特殊类型时对推导, 比如是 list
+
+
     // 左值符号推导
     typeuse_t left_type = infer_expr(m, &call->left);
     assertf(left_type.kind == TYPE_FN, "cannot call non-fn");

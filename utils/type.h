@@ -236,6 +236,7 @@ struct type_struct_t {
 struct type_fn_t {
     typeuse_t return_type;
     list_t *formal_types; // typeuse_t
+    bool self; // 结构体 self 冗于
     bool rest_param;
 };
 

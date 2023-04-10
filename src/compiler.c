@@ -358,10 +358,9 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
     OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, end_label_operand));
 }
 
-
 /**
  * 1.0 函数参数使用 param var 存储,按约定从左到右(code.result 为 param, code.first 为实参)
- * 1.0.1 code.operand 模仿 phi body 弄成列表的形式！
+ * 1.1 code.operand 模仿 phi body 弄成列表的形式！
  * 2. 目前编译依旧使用 var，所以不需要考虑寄存器溢出
  * 3. 函数返回结果存储在 target 中
  *
@@ -380,19 +379,16 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     }
 
     // TODO list_select()
-    if (call->left.assert_type == AST_EXPR_LIST_SELECT) {
-
+    bool pass_self = false;
+    if (call->left.assert_type == AST_EXPR_LIST_SELECT ||
+        call->left.assert_type == AST_EXPR_MAP_SELECT ||
+        call->left.assert_type == AST_EXPR_SET_SELECT) {
+        pass_self = true;
     }
 
-    // TODO map_select()
-    if (call->left.assert_type == AST_EXPR_MAP_SELECT) {
+    // TODO test.a() 判断是否需要 self
+    if (call->left.type.fn)
 
-    }
-
-    // TODO set select
-    if (call->left.assert_type == AST_EXPR_MAP_SELECT) {
-
-    }
 
     // push 指令所有的物理寄存器入栈
     // 这里增加了无意义的堆栈和符号表,不符合简捷之道

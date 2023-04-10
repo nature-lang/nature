@@ -94,8 +94,7 @@ set(SRC
         ${SRC_DIR}/symbol/builtin.c
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
-        ${SRC_DIR}/lir/lir.h
-        ${SRC_DIR}/lir/lir.c
+        ${SRC_DIR}/lir.h
         ${SRC_DIR}/cfg.c
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h

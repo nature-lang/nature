@@ -40,6 +40,7 @@
 #define RT_CALL_MAP_ASSIGN "map_assign"
 #define RT_CALL_MAP_DELETE "map_delete"
 
+#define RT_CALL_SET_CALL_IDENT "set"
 #define RT_CALL_SET_NEW "set_new"
 #define RT_CALL_SET_ADD "set_add" // 往集合中添加元素
 #define RT_CALL_SET_CONTAINS "set_contains" // s.contain()
