@@ -31,6 +31,12 @@ linked_t *scanner(module_t *module) {
             char *word = scanner_ident_advance(module);
 
             token_t *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
+
+            // 如果是 p<
+            if (t->type == TOKEN_IDENT && str_equal(t->literal, "p")) {
+                //
+            }
+
             linked_push(list, t);
             continue;
         }
@@ -384,8 +390,9 @@ token_e scanner_ident_type(char *word, int length) {
         case 'v': {
             return scanner_rest(word, length, 1, 2, "ar", TOKEN_VAR);
         }
-        case 'r':
+        case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
+        }
     }
 
     return TOKEN_IDENT;
