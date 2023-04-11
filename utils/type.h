@@ -48,6 +48,8 @@ typedef enum {
     TYPE_TUPLE,
     TYPE_STRUCT,
     TYPE_FN,
+    TYPE_POINTER,
+
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
     TYPE_VOID, // 表示函数无返回值
@@ -73,6 +75,7 @@ static string type_kind_string[] = {
         [TYPE_SET] = "set",
         [TYPE_TUPLE] = "tuple",
         [TYPE_FN] = "fn",
+        [TYPE_POINTER] = "pointer", // p<type>
         [TYPE_NULL] = "null",
 };
 
@@ -107,6 +110,8 @@ typedef struct type_string_t type_string_t; // 类型不完全声明
 
 typedef struct type_list_t type_list_t;
 
+typedef struct type_pointer_t type_pointer_t;
+
 typedef struct type_array_t type_array_t;
 
 typedef struct type_map_t type_map_t;
@@ -138,11 +143,12 @@ typedef struct type_t {
         type_fn_t *fn;
         type_any_t *any;
         type_ident_t *ident;
+        type_pointer_t *pointer;
     };
     type_kind kind;
     reduction_status_t status;
-    uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
-    bool is_pointer; // p<type>
+//    uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
+//    bool is_pointer; // p<type>
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } typeuse_t;
 
@@ -150,14 +156,13 @@ typedef struct type_t {
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
 // 反而更好处理？
 struct type_list_t {
-//    int size; // 存储在 mheap 中的数据,count + cap + data, element_type 就不用存了，编译时确定之后就不会变了
-    // 描述 list 类型是只需要一个 type, 比如 [int] !,且越界等行为在 compiler 都是无法判断的
-    // 所以 count,capacity 都是没有意义的数据！
-//    int capacity; // 预先申请的容量大小
-//    int count; // 实际占用的位置的大小
     typeuse_t element_type;
     // 类型描述信息根本就不能有值这个东西出现
-//    void *data; // 引用的是一个 array 结构
+};
+
+// p<value_type>
+struct type_pointer_t {
+    typeuse_t value_type;
 };
 
 
@@ -173,9 +178,6 @@ struct type_list_t {
  * 并且也不知道数据是如何如何存储在内存中
  */
 struct type_string_t {
-//    int size; // 存储在 heap 中的数据的大小 count + ptr(data) 的长度
-//    int count; // 字符串的长度(理论上也是可变的，和 list 的 count 一样，无法在类型声明阶段就明确,所以这个毫无意义！)
-//    void *data; // 这里引用了什么？是 type_array_t 元数据还是 type_array_t 存储在 heap 中的数据？
 };
 
 struct type_ident_t {
@@ -269,6 +271,9 @@ typedef struct {
     uint64_t capacity; // 预先申请的容量大小
     uint64_t length; // 实际占用的位置的大小
 } memory_list_t;
+
+// 指针在 64位系统中占用的大小就是 8byte = 64bit
+typedef addr_t memory_pointer_t;
 
 typedef struct {
     byte *array_data;

@@ -34,6 +34,30 @@ static rtype_t rtype_bool() {
     return rtype_base(TYPE_BOOL);
 }
 
+
+/**
+ * hash = type_kind + element_type_hash
+ * @param t
+ * @return
+ */
+static rtype_t rtype_pointer(type_pointer_t *t) {
+    rtype_t value_rtype = reflect_type(t->value_type);
+
+    char *str = fixed_sprintf("%d_%lu", TYPE_POINTER, value_rtype.hash);
+    uint32_t hash = hash_string(str);
+    rtype_t rtype = {
+            .size =  sizeof(memory_pointer_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_POINTER,
+    };
+    // 计算 gc_bits
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
+
+    return rtype;
+}
+
 /**
  * hash = type_kind
  * @param t
@@ -337,7 +361,10 @@ uint16_t type_sizeof(typeuse_t t) {
 typeuse_t type_ptrof(typeuse_t t) {
     typeuse_t result;
     result.status = t.status;
-    result.is_pointer = true;
+
+    result.kind = TYPE_POINTER;
+    result.pointer = NEW(type_pointer_t);
+    result.pointer->value_type = t;
     return result;
 }
 
@@ -385,6 +412,9 @@ rtype_t reflect_type(typeuse_t t) {
             break;
         case TYPE_STRING:
             rtype = rtype_string();
+            break;
+        case TYPE_POINTER:
+            rtype = rtype_pointer(t.pointer);
             break;
         case TYPE_LIST:
             rtype = rtype_list(t.list);

@@ -33,8 +33,11 @@ linked_t *scanner(module_t *module) {
             token_t *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
 
             // 如果是 p<
-            if (t->type == TOKEN_IDENT && str_equal(t->literal, "p")) {
-                //
+            if (t->type == TOKEN_IDENT && str_equal(t->literal, "p") && *module->s_cursor.guard == '<') {
+                // advance
+                scanner_guard_advance(module);
+                t->type = TOKEN_P_ANGLE;
+                t->literal = "p<";
             }
 
             linked_push(list, t);
@@ -90,7 +93,8 @@ linked_t *scanner(module_t *module) {
 
 char *scanner_ident_advance(module_t *module) {
     // guard = current, 向前推进 guard,并累加 length
-    while ((scanner_is_alpha(module, *module->s_cursor.guard) || scanner_is_number(module, *module->s_cursor.guard))
+    while ((scanner_is_alpha(module, *module->s_cursor.guard) ||
+            scanner_is_number(module, *module->s_cursor.guard))
            && !scanner_is_at_end(module)) {
         scanner_guard_advance(module);
     }

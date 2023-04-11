@@ -71,7 +71,8 @@
 #define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_ENV_ASSIGN "env_assign"
+#define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
+#define RT_CALL_ENV_ASSIGN "env_assign_ref" // 更新 addr = envs[i], 更新 addr_t 中存储的值
 #define RT_CALL_ENV_ACCESS "env_access"
 
 #define RT_CALL_STRING_NEW "string_new"
@@ -118,8 +119,8 @@ typedef enum {
     LIR_OPCODE_NEG, // -取负数
 
     LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
-    LIR_OPCODE_LIA, // load indirect addr to reg ，将内存中的数据加载到寄存器中
-    LIR_OPCODE_SIA, // store reg to indirect addr，将寄存器中的数据存入内存
+//    LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
+//    LIR_OPCODE_SIA, // store reg(var) to indirect addr，将寄存器中的数据存入内存
 
     LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
     LIR_OPCODE_MOVE,

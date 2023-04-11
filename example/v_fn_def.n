@@ -12,9 +12,9 @@ fn():int f;
 fn foo():int {}
 
 // 在表达式中声明，或者参数等中声明时 fn name 允许省略
-var f = fn(int a, int b): int {}
+var f = fn(int a, int b):int {}
 
-call(fn(int a, int b): int {
+call(fn(int a, int b):int {
     return a + b
 })
 

@@ -161,12 +161,3 @@ bool type_compare(typeuse_t left, typeuse_t right) {
 
     return true;
 }
-
-bool can_assign(ast_type_t t) {
-    if (t == AST_EXPR_IDENT ||
-        t == AST_EXPR_ACCESS ||
-        t == AST_EXPR_SELECT) {
-        return true;
-    }
-    return false;
-}

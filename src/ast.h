@@ -24,6 +24,7 @@ typedef enum {
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
     AST_EXPR_ADDR_OF,
+    AST_EXPR_VALUE_OF,
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
@@ -131,6 +132,11 @@ typedef struct {
 typedef struct {
     ast_expr *expr;
 } ast_addr_of_t;
+
+// *expr
+typedef struct {
+    ast_expr *expr;
+} ast_value_of_t;
 
 // 一元表达式
 typedef struct {
@@ -419,6 +425,18 @@ static ast_expr *ast_addr_of(ast_expr *target) {
     return result;
 }
 
+static ast_expr *ast_value_of(ast_expr *target) {
+    ast_expr *result = NEW(ast_expr);
+
+    ast_value_of_t *value_of = NEW(ast_value_of_t);
+    value_of->expr = target;
+
+    result->assert_type = AST_EXPR_VALUE_OF;
+    result->value = value_of;
+    result->type = type_ptrof(target->type);
+    return result;
+}
+
 
 typeuse_t select_actual_param(ast_call *call, uint8_t index);
 
@@ -426,6 +444,18 @@ typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(typeuse_t left, typeuse_t right);
 
-bool can_assign(ast_type_t t);
+
+static bool can_assign(ast_type_t t) {
+    if (t == AST_EXPR_IDENT ||
+        t == AST_EXPR_ACCESS ||
+        t == AST_EXPR_SELECT ||
+        t == AST_EXPR_MAP_ACCESS ||
+        t == AST_EXPR_LIST_ACCESS ||
+        t == AST_EXPR_ENV_ACCESS ||
+        t == AST_EXPR_STRUCT_SELECT) {
+        return true;
+    }
+    return false;
+}
 
 #endif //NATURE_SRC_AST_H_

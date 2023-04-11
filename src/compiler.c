@@ -90,6 +90,16 @@ static lir_operand_t *compiler_addr_of(module_t *m, ast_expr expr) {
     return var_ref_operand(m, compiler_expr(m, *addr_of->expr));
 }
 
+// *expr ,expr 的 type 必须是 pointer
+static lir_operand_t *compiler_value_of(module_t *m, ast_expr expr) {
+    ast_value_of_t *value_of = expr.value;
+    assertf(value_of->expr->type.kind == TYPE_POINTER, "value of expr must pointer");
+    lir_operand_t *ptr_target = compiler_expr(m, *value_of->expr);
+
+    // 将改地址中的存储的数据取出来
+    return lir_indirect_addr_operand(ptr_target, 0);
+}
+
 static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_operand_t *index_target, ast_expr src) {
     // 取 value 栈指针,如果 value 不是 var， 会自动转换成 var
     lir_operand_t *value_ref = var_ref_operand(m, compiler_expr(m, src));
@@ -99,6 +109,16 @@ static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_op
     OP_PUSH(lir_rt_call(RT_CALL_LIST_ASSIGN, NULL,
                         3, list_target, index_target, value_ref));
 }
+
+/**
+ * TODO
+ * @param m
+ * @param stmt
+ */
+static void compiler_env_assign(module_t *m, ast_assign_stmt *stmt) {
+
+}
+
 
 static void compiler_map_assign(module_t *m, ast_assign_stmt *stmt) {
     ast_map_access_t *map_access = stmt->left.value;
@@ -136,22 +156,88 @@ static void compiler_ident_assign(module_t *m, ast_assign_stmt *stmt) {
     OP_PUSH(lir_op_move(dst, src));
 }
 
+
+// 将 tuple 按递归解析赋值给 tuple_destr 中声明的所有 var
+// 递归将导致优先从左侧进行展开
+static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operand_t *tuple_target) {
+    uint64_t offset = 0;
+    for (int i = 0; i < destr->elements->length; ++i) {
+        ast_expr *element = ct_list_value(destr->elements, i);
+        // tuple_operand 对应到当前 index 到值
+        uint64_t item_size = type_sizeof(element->type);
+        offset = align((int64_t) offset, (int64_t) item_size);
+
+        lir_operand_t *dst = temp_var_operand(m, element->type);
+        lir_operand_t *dst_ref = var_ref_operand(m, dst);
+        lir_operand_t *src_ref = lir_indirect_addr_operand(tuple_target, offset);
+        OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
+                            3, dst_ref, src_ref, int_operand(item_size)));
+        lir_operand_t *src = dst;
+
+        // dst 中已经存储了 tuple element compiler 后的值
+        if (element->assert_type == AST_VAR_DECL) {
+            ast_var_decl *var_decl = element->value;
+            dst = var_operand(m, var_decl->ident);
+            OP_PUSH(lir_op_move(dst, src));
+        } else if (can_assign(element->assert_type)) {
+            dst = compiler_expr(m, *element);
+            OP_PUSH(lir_op_move(dst, src));
+        } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
+            compiler_tuple_destr(m, element->value, src);
+        } else {
+            assertf(false, "var tuple destr must var/tuple_destr");
+        }
+        offset += item_size;
+    }
+}
+
+/**
+ * (a, b, (c[0], d.b)) = expr
+ * @param m
+ * @param stmt
+ */
+static void compiler_tuple_destr_stmt(module_t *m, ast_assign_stmt *stmt) {
+    ast_tuple_destr *destr = stmt->left.value;
+    lir_operand_t *tuple_target = compiler_expr(m, stmt->right);
+    compiler_tuple_destr(m, destr, tuple_target);
+}
+
+/**
+ * var (a, b, (c, d)) = expr
+ * @param m
+ * @param var_tuple_def
+ * @return
+ */
+static void compiler_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt *var_tuple_def) {
+    // 理论上只需要不停的 move 就行了
+    lir_operand_t *tuple_target = compiler_expr(m, var_tuple_def->right);
+    compiler_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target);
+}
+
 /**
  * 这里不包含如 var a = 1 这样的 assign
  * a = b + 1 + 3
  * @param stmt
  * @return
  */
-static void compiler_var_decl_assign(module_t *m, ast_vardef_stmt *stmt) {
+static void compiler_vardef(module_t *m, ast_vardef_stmt *stmt) {
     lir_operand_t *src = compiler_expr(m, stmt->right);
-    lir_operand_t *dst = operand_new(LIR_OPERAND_VAR, lir_var_new(m, stmt->var_decl.ident));
+    lir_operand_t *dst = var_operand(m, stmt->var_decl.ident);
 
     OP_PUSH(lir_op_move(dst, src));
 }
 
 /**
+ * (a.b, b, (c[0], d[1])) = call()
+ */
+static void compiler_tuple_destr() {
+
+}
+
+/**
  * a = 1 // left_target is lir_var_operand
  * a.b = 1 // left_target is lir_memory(base_address)
+ * (a, b, (a.b, b[0])) = expr
  * @param c
  * @param stmt
  * @return
@@ -172,15 +258,18 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
         return compiler_map_assign(m, stmt);
     }
 
-//    if (left.assert_type == AST_EXPR_ENV_ACCESS) {
-//        return compiler_env_assign();
-//    }
+    if (left.assert_type == AST_EXPR_ENV_ACCESS) {
+        return compiler_env_assign(m, stmt);
+    }
 
-    // instance assign p.name = "wei"
+    // struct assign p.name = "wei"
     if (left.assert_type == AST_EXPR_STRUCT_SELECT) {
         return compiler_struct_assign(m, stmt);
     }
 
+    if (left.assert_type == AST_EXPR_TUPLE_DESTR) {
+        return compiler_tuple_destr_stmt(m, stmt);
+    }
 
     // a = 1
     if (left.assert_type == AST_EXPR_IDENT) {
@@ -388,13 +477,11 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
         target = temp_var_operand(m, call->return_type);
     }
 
-    // push 指令所有的物理寄存器入栈
-    // 这里增加了无意义的堆栈和符号表,不符合简捷之道
+
     lir_operand_t *base_target = compiler_expr(m, call->left);
 
     slice_t *params = slice_new();
     type_fn_t *formal_fn = call->left.type.fn;
-
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < formal_fn->formal_types->length; ++i) {
@@ -562,6 +649,7 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
 }
 
 /**
+ * TODO 重构
  * 1. 根据 c->env_name 得到 base_target   call GET_ENV
  * var a = b + 3 // 其中 b 是外部环境变量,需要改写成 GET_ENV
  * b = 12 + c  // 类似这样对外部变量的重新赋值操作，此时 b 的访问直接改成了
@@ -743,7 +831,6 @@ static lir_operand_t *compiler_struct_access_call(module_t *m, ast_expr expr) {
     // 假设 left 是
     // rt_call list_push(left:memory_list_t, )
 }
-
 
 /**
  * mov [base+slot,n] => target
@@ -967,11 +1054,12 @@ static lir_operand_t *compiler_fndef(module_t *m, ast_expr expr) {
         lir_operand_t *capacity = int_operand(fndef->parent_view_envs->length);
         lir_operand_t *fn_name_operand = string_operand(fndef->name);
         // rt_call env_new(fndef->name, capacity)
-        OP_PUSH(lir_rt_call(RT_CALL_TUPLE_NEW, NULL, 2, fn_name_operand, capacity));
+        OP_PUSH(lir_rt_call(RT_CALL_ENV_NEW, NULL, 2, fn_name_operand, capacity));
 
         for (int i = 0; i < fndef->parent_view_envs->length; ++i) {
             ast_expr *item = ct_list_value(fndef->parent_view_envs, i);
 
+            // 此时更新了 envs 中的值
             lir_operand_t *ref = var_ref_operand(m, compiler_expr(m, *item));
             // rt_call env_assign(fndef->name, index_operand lir_operand)
             OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN, NULL, 3, fn_name_operand, int_operand(i), ref));
@@ -1020,10 +1108,13 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt) {
             return;
         }
         case AST_STMT_VAR_DEF: {
-            return compiler_var_decl_assign(m, stmt->value);
+            return compiler_vardef(m, stmt->value);
         }
         case AST_STMT_ASSIGN: {
             return compiler_assign(m, stmt->value);
+        }
+        case AST_STMT_VAR_TUPLE_DESTR: {
+            return compiler_var_tuple_def_stmt(m, stmt->value);
         }
         case AST_STMT_IF: {
             return compiler_if(m, stmt->value);
@@ -1084,6 +1175,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_STRUCT_SELECT] = compiler_struct_select,
         [AST_EXPR_TUPLE_NEW] = compiler_tuple_new,
         [AST_EXPR_TUPLE_ACCESS] = compiler_tuple_access,
+        [AST_EXPR_SET_NEW] = compiler_set_new,
         [AST_CALL] = compiler_call,
         [AST_FNDEF] = compiler_fndef,
         [AST_EXPR_CATCH] = compiler_catch,

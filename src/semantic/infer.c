@@ -911,7 +911,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, typeuse_t
             ast_var_decl *var_decl = expr->value;
             var_decl->type = *actual_type;
         } else {
-            assertf(expr->assert_type == AST_EXPR_TUPLE_DESTR, "tuple destr must var/tuple_destr");
+            assertf(expr->assert_type == AST_EXPR_TUPLE_DESTR, "var tuple destr must var/tuple_destr");
             infer_var_tuple_destr(m, expr->value, *actual_type);
         }
     }
