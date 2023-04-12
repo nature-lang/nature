@@ -156,7 +156,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = temp_var_operand(c, i->var->type)->value;
+        lir_var_t *var = temp_var_operand(c->module, i->var->type)->value;
         child->var = var;
         table_set(c->interval_table, var->ident, child);
     } else {

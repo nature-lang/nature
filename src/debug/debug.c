@@ -103,6 +103,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_SUB]="SUB  ",
         [LIR_OPCODE_MUL]="MUL  ",
         [LIR_OPCODE_DIV]="DIV  ",
+        [LIR_OPCODE_REM]="REM  ",
         [LIR_OPCODE_SLT]="SLT   ",
         [LIR_OPCODE_SLE]="SLE  ",
         [LIR_OPCODE_SGT]="SGT   ",

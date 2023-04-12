@@ -14,6 +14,7 @@ lir_opcode_t ast_expr_operator_transform[] = {
         [AST_EXPR_OPERATOR_SUB] = LIR_OPCODE_SUB,
         [AST_EXPR_OPERATOR_MUL] = LIR_OPCODE_MUL,
         [AST_EXPR_OPERATOR_DIV] = LIR_OPCODE_DIV,
+        [AST_EXPR_OPERATOR_REM] = LIR_OPCODE_REM,
 
         [AST_EXPR_OPERATOR_LT] = LIR_OPCODE_SLT,
         [AST_EXPR_OPERATOR_LTE] = LIR_OPCODE_SLE,
@@ -111,12 +112,19 @@ static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_op
 }
 
 /**
- * TODO
  * @param m
  * @param stmt
  */
 static void compiler_env_assign(module_t *m, ast_assign_stmt *stmt) {
+    ast_env_access *ast = stmt->left.value;
+    lir_operand_t *fn_name = string_operand(m->compiler_current->name);
+    lir_operand_t *index = int_operand(ast->index);
 
+    lir_operand_t *src_ref = var_ref_operand(m, compiler_expr(m, stmt->right));
+    uint64_t size = type_sizeof(stmt->right.type);
+
+    OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN_REF, NULL,
+                        4, fn_name, index, src_ref, int_operand(size)));
 }
 
 
@@ -225,13 +233,6 @@ static void compiler_vardef(module_t *m, ast_vardef_stmt *stmt) {
     lir_operand_t *dst = var_operand(m, stmt->var_decl.ident);
 
     OP_PUSH(lir_op_move(dst, src));
-}
-
-/**
- * (a.b, b, (c[0], d[1])) = call()
- */
-static void compiler_tuple_destr() {
-
 }
 
 /**
@@ -649,7 +650,6 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
 }
 
 /**
- * TODO 重构
  * 1. 根据 c->env_name 得到 base_target   call GET_ENV
  * var a = b + 3 // 其中 b 是外部环境变量,需要改写成 GET_ENV
  * b = 12 + c  // 类似这样对外部变量的重新赋值操作，此时 b 的访问直接改成了
@@ -662,14 +662,15 @@ static lir_operand_t *compiler_env_access(module_t *m, ast_expr expr) {
     ast_env_access *ast = expr.value;
     lir_operand_t *fn_name = string_operand(m->compiler_current->name);
     lir_operand_t *index = int_operand(ast->index);
-    // target 通常就是一个 temp_var
-    lir_operand_t *value_point = temp_var_operand(m, type_ptrof(expr.type));
 
     lir_operand_t *result = temp_var_operand(m, expr.type);
     // 读取 result 的指针地址，给到 access 进行写入
-    lir_operand_t *result_ref = var_ref_operand(m, result);
+    lir_operand_t *dst_ref = var_ref_operand(m, result);
 
-    OP_PUSH(lir_rt_call(RT_CALL_ENV_ACCESS, NULL, 3, fn_name, index, result_ref));
+    uint64_t size = type_sizeof(expr.type);
+
+    OP_PUSH(lir_rt_call(RT_CALL_ENV_ACCESS_REF, NULL,
+                        4, fn_name, index, dst_ref, int_operand(size)));
 
     return result;
 }
@@ -1061,6 +1062,7 @@ static lir_operand_t *compiler_fndef(module_t *m, ast_expr expr) {
 
             // 此时更新了 envs 中的值
             lir_operand_t *ref = var_ref_operand(m, compiler_expr(m, *item));
+
             // rt_call env_assign(fndef->name, index_operand lir_operand)
             OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN, NULL, 3, fn_name_operand, int_operand(i), ref));
         }

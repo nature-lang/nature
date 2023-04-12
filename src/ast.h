@@ -75,6 +75,8 @@ typedef enum {
     AST_EXPR_OPERATOR_MUL,
     AST_EXPR_OPERATOR_DIV,
 
+    AST_EXPR_OPERATOR_REM,
+
     AST_EXPR_OPERATOR_LT,
     AST_EXPR_OPERATOR_LTE,
     AST_EXPR_OPERATOR_GT, // >
@@ -92,6 +94,7 @@ static string ast_expr_op_str[] = {
         [AST_EXPR_OPERATOR_SUB] = "-",
         [AST_EXPR_OPERATOR_MUL] = "*",
         [AST_EXPR_OPERATOR_DIV] = "/",
+        [AST_EXPR_OPERATOR_REM] = "%",
 
         [AST_EXPR_OPERATOR_LT] = "<",
         [AST_EXPR_OPERATOR_LTE] = "<=",

@@ -1,12 +1,14 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
 
-#define ASSIGN_VAR(_operand) \
-   type_kind base = lir_operand_type_base(_operand); \
-   lir_operand_t *temp = temp_var_operand(c, type_base_new(base)); \
+#define CONVERT_TO_VAR(_operand, _flag) ({ \
+   type_kind base = operand_type_kind(_operand); \
+   lir_operand_t *temp = temp_var_operand(c->module, type_base_new(base)); \
    slice_push(c->globals, temp->value);                \
    linked_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
-   op->first = lir_reset_operand(temp, VR_FLAG_FIRST);
+   lir_reset_operand(temp, VR_FLAG_FIRST);      \
+})\
+
 
 static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_node *node) {
     lir_op_t *op = node->value;
@@ -15,7 +17,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
         if (imm->kind == TYPE_RAW_STRING) {
-            lir_operand_t *var_operand = temp_var_operand(c, type_base_new(TYPE_RAW_STRING));
+            lir_operand_t *var_operand = temp_var_operand(c->module, type_base_new(TYPE_RAW_STRING));
             slice_push(c->globals, var_operand->value);
 
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
@@ -36,7 +38,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
         lir_operand_t *param_operand = actual_params->take[i];
-        type_kind type_base = lir_operand_type_base(param_operand);
+        type_kind type_base = operand_type_kind(param_operand);
         reg_t *reg = amd64_fn_param_next_reg(used, type_base);
         lir_operand_t *target = NULL;
         if (reg) {
@@ -146,7 +148,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
              */
             if (op->output != NULL) {
                 lir_operand_t *reg_operand;
-                if (lir_operand_type_base(op->output) == TYPE_FLOAT) {
+                if (operand_type_kind(op->output) == TYPE_FLOAT) {
                     reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
                 } else {
                     reg_operand = operand_new(LIR_OPERAND_REG, rax);
@@ -185,7 +187,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (op->code == LIR_OPCODE_RETURN && op->first != NULL) {
             // 1.1 return 指令需要将返回值放到 rax 中
             lir_operand_t *reg_operand;
-            if (lir_operand_type_base(op->first) == TYPE_FLOAT) {
+            if (operand_type_kind(op->first) == TYPE_FLOAT) {
                 reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
             } else {
                 reg_operand = operand_new(LIR_OPERAND_REG, rax);
@@ -218,7 +220,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_contain_cmp(op)) {
             // first is native target, cannot imm, so in case swap first and second
             if (op->first->assert_type != LIR_OPERAND_VAR) {
-                ASSIGN_VAR(op->first);
+                op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
                 continue;
             }
         }
@@ -226,14 +228,15 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_is_arithmetic(op)) {
             // first must var for assign reg
             if (op->first->assert_type != LIR_OPERAND_VAR) {
-                ASSIGN_VAR(op->first);
+                op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
                 continue;
             }
         }
 
         if (op->code == LIR_OPCODE_MOVE) {
             if (op->output->assert_type != LIR_OPERAND_VAR) {
-                ASSIGN_VAR(op->output);
+                // 将 output 转换成 var
+                op->output = CONVERT_TO_VAR(op->output, VR_FLAG_OUTPUT);
                 continue;
             }
         }

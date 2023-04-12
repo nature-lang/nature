@@ -8,10 +8,11 @@
 //parser_cursor_t path->p_cursor;
 
 ast_expr_operator_t token_to_ast_op[] = {
-        [TOKEN_PLUS] = AST_EXPR_OPERATOR_ADD,
-        [TOKEN_MINUS] = AST_EXPR_OPERATOR_SUB,
-        [TOKEN_STAR] = AST_EXPR_OPERATOR_MUL,
-        [TOKEN_SLASH] = AST_EXPR_OPERATOR_DIV,
+        [TOKEN_PLUS] = AST_EXPR_OPERATOR_ADD, // +
+        [TOKEN_MINUS] = AST_EXPR_OPERATOR_SUB, // -
+        [TOKEN_STAR] = AST_EXPR_OPERATOR_MUL, // *
+        [TOKEN_SLASH] = AST_EXPR_OPERATOR_DIV, // /
+        [TOKEN_PERSON] = AST_EXPR_OPERATOR_REM, // /
         [TOKEN_EQUAL_EQUAL] = AST_EXPR_OPERATOR_EQ_EQ,
         [TOKEN_NOT_EQUAL] = AST_EXPR_OPERATOR_NOT_EQ,
         [TOKEN_GREATER_EQUAL] = AST_EXPR_OPERATOR_GTE,
@@ -371,11 +372,10 @@ static ast_expr parser_binary(module_t *m, ast_expr left) {
 
     token_t *operator_token = parser_advance(m);
 
-    // right right
     parser_precedence precedence = find_rule(operator_token->type)->infix_precedence;
     ast_expr right = parser_precedence_expr(m, precedence + 1);
 
-    ast_binary_expr *binary_expr = malloc(sizeof(ast_binary_expr));
+    ast_binary_expr *binary_expr = NEW(ast_binary_expr);
 
     binary_expr->operator = token_to_ast_op[operator_token->type];
     binary_expr->left = left;

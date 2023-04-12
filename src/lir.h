@@ -72,8 +72,8 @@
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
-#define RT_CALL_ENV_ASSIGN "env_assign_ref" // 更新 addr = envs[i], 更新 addr_t 中存储的值
-#define RT_CALL_ENV_ACCESS "env_access"
+#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"
+#define RT_CALL_ENV_ACCESS_REF "env_access_ref"
 
 #define RT_CALL_STRING_NEW "string_new"
 
@@ -545,6 +545,32 @@ static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_LEA, src, NULL, dst);
 }
 
+static type_kind operand_type_kind(lir_operand_t *operand) {
+    assert(operand->assert_type != LIR_OPERAND_REG);
+
+    if (operand->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *var = operand->value;
+        return var->type.kind;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        return addr->type.kind;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        lir_symbol_var_t *s = operand->value;
+        return s->type;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = operand->value;
+        return imm->kind;
+    }
+
+    return TYPE_UNKNOWN;
+}
+
 static inline lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t pos) {
     lir_operand_t *temp = lir_operand_copy(operand);
     temp->pos = pos;
@@ -721,35 +747,8 @@ static lir_operand_t *lir_new_phi_body(module_t *m, lir_var_t *var, uint8_t coun
     return operand;
 }
 
-
-static type_kind lir_operand_type_base(lir_operand_t *operand) {
-    assert(operand->assert_type != LIR_OPERAND_REG);
-
-    if (operand->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var = operand->value;
-        return var->type.kind;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr = operand->value;
-        return addr->type.kind;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        lir_symbol_var_t *s = operand->value;
-        return s->type;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_IMM) {
-        lir_imm_t *imm = operand->value;
-        return imm->kind;
-    }
-
-    return TYPE_UNKNOWN;
-}
-
 static uint8_t lir_operand_sizeof(lir_operand_t *operand) {
-    return type_kind_sizeof(lir_operand_type_base(operand));
+    return type_kind_sizeof(operand_type_kind(operand));
 }
 
 static bool lir_op_is_branch(lir_op_t *op) {
@@ -803,7 +802,10 @@ static bool lir_op_contain_cmp(lir_op_t *op) {
 
 static bool lir_op_is_arithmetic(lir_op_t *op) {
     if (op->code == LIR_OPCODE_ADD ||
-        op->code == LIR_OPCODE_SUB) {
+        op->code == LIR_OPCODE_SUB ||
+        op->code == LIR_OPCODE_MUL ||
+        op->code == LIR_OPCODE_DIV ||
+        op->code == LIR_OPCODE_REM) {
         return true;
     }
     return false;
@@ -859,6 +861,5 @@ static lir_operand_t *lir_indirect_addr_operand(lir_operand_t *var_operand, uint
     addr->offset = offset;
     return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
-
 
 #endif //NATURE_SRC_LIR_H_
