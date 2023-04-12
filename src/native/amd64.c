@@ -38,7 +38,7 @@ static void asm_mov(slice_t *operations, asm_operand_t *dst, asm_operand_t *src)
  * @param used_regs
  * @return
  */
-static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, lir_operand_t *operand) {
+static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         return REG(reg);
@@ -72,18 +72,20 @@ static asm_operand_t *lir_operand_transform(closure_t *c, slice_t *operations, l
             slice_push(c->asm_symbols, symbol);
 
             return SYMBOL(unique_name, false);
-        } else if (v->kind == TYPE_INT) {
+        } else if (v->kind == TYPE_INT || v->kind == TYPE_UINT) {
             return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
-        } else if (v->kind == TYPE_INT8) {
+        } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8) {
             return UINT8(v->int_value);
-        } else if (v->kind == TYPE_INT16) {
+        } else if (v->kind == TYPE_INT16 || v->kind == TYPE_UINT16) {
             return UINT16(v->int_value);
-        } else if (v->kind == TYPE_INT32) {
+        } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT64) {
             return UINT32(v->int_value);
-        } else if (v->kind == TYPE_INT64) {
+        } else if (v->kind == TYPE_INT64 || v->kind == TYPE_UINT64) {
             return UINT64(v->int_value);
-        } else if (v->kind == TYPE_FLOAT) {
+        } else if (v->kind == TYPE_FLOAT || v->kind == TYPE_FLOAT32) {
             return FLOAT32(v->float_value);
+        } else if (v->kind == TYPE_FLOAT64) {
+            return FLOAT64(v->float_value);
         } else if (v->kind == TYPE_BOOL) {
             return UINT8(v->bool_value);
         }
@@ -138,8 +140,8 @@ static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
     assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
-    asm_operand_t *output = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
+    asm_operand_t *output = lir_operand_trans(c, operations, op->output);
 
     asm_mov(operations, output, first);
     return operations;
@@ -169,7 +171,7 @@ static slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
 
 static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     slice_push(operations, ASM_INST("push", { first }));
     return operations;
 }
@@ -178,7 +180,7 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
 
     slice_t *operations = slice_new();
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
     slice_push(operations, ASM_INST("jmp", { result }));
     return operations;
 }
@@ -195,11 +197,56 @@ static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 参数转换
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
     slice_push(operations, ASM_INST("xor", { result, result }));
 
     return operations;
 }
+
+/**
+ * 经过 lower, 这里的指令是 div rax,operand -> rax
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+    assertf(op->first->assert_type == LIR_OPERAND_REG, "div op first must reg");
+    assertf(op->second->assert_type != LIR_OPERAND_IMM, "div op second cannot imm");
+    assertf(op->output->assert_type == LIR_OPERAND_REG, "div op output must reg");
+    reg_t *first_reg = op->first->value;
+    reg_t *output_reg = op->output->value;
+    assertf(first_reg->index == rax->index, "div op first reg must rax");
+    assertf(output_reg->index == rax->index, "div op output reg must rax");
+
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+
+    slice_push(operations, ASM_INST("idiv", { second }));
+    return operations;
+}
+
+/**
+ * 经过 lower, 这里的指令是 div rax,operand -> rax
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+    assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
+    assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
+    assertf(op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
+    reg_t *first_reg = op->first->value;
+    reg_t *output_reg = op->output->value;
+    assertf(first_reg->index == rax->index, "mul op first reg must rax");
+    assertf(output_reg->index == rax->index, "mul op output reg must rax");
+
+
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+    slice_push(operations, ASM_INST("imul", { second }));
+    return operations;
+}
+
 
 /**
  * -0x18(%rbp) = indirect addr
@@ -213,9 +260,9 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 参数转换
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
-    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
     // 如果 first is reg, 则有
     // add second -> first
@@ -246,9 +293,9 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 参数转换
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first); // rcx
-    asm_operand_t *second = lir_operand_transform(c, operations, op->second); // rax
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output); // rax
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first); // rcx
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second); // rax
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output); // rax
 
 
     // 在 first 是 reg 的前提下，则有
@@ -287,7 +334,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // first is fn label or addr
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
 
     // 2. 参数处理  lir_ope code->second;
     assert(((slice_t *) op->second->value)->count == 0);
@@ -316,9 +363,9 @@ static slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op) {
     assert(op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
-    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
     assert(result->size == BYTE);
 
     // bool = int64 > int64
@@ -387,9 +434,9 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
 
     slice_t *operations = slice_new();
 
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
 
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
     slice_push(operations, ASM_INST("lea", { result, first }));
     return operations;
@@ -408,11 +455,11 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 比较 first 是否等于 second，如果相等就跳转到 result label
-    asm_operand_t *first = lir_operand_transform(c, operations, op->first);
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
 
-    asm_operand_t *second = lir_operand_transform(c, operations, op->second);
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second);
 
-    asm_operand_t *result = lir_operand_transform(c, operations, op->output);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
     // cmp 指令比较
     slice_push(operations, ASM_INST("cmp", { first, second }));
@@ -426,6 +473,8 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_CLR] = amd64_native_clr,
         [LIR_OPCODE_ADD] = amd64_native_add,
         [LIR_OPCODE_SUB] = amd64_native_sub,
+        [LIR_OPCODE_DIV] = amd64_native_div,
+        [LIR_OPCODE_MUL] = amd64_native_mul,
         [LIR_OPCODE_CALL] = amd64_native_call,
         [LIR_OPCODE_BUILTIN_CALL] = amd64_native_call,
         [LIR_OPCODE_RT_CALL] = amd64_native_call,

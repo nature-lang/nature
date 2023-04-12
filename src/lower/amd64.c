@@ -3,7 +3,7 @@
 
 #define CONVERT_TO_VAR(_operand, _flag) ({ \
    type_kind base = operand_type_kind(_operand); \
-   lir_operand_t *temp = temp_var_operand(c->module, type_base_new(base)); \
+   lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(base)); \
    slice_push(c->globals, temp->value);                \
    linked_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
    lir_reset_operand(temp, VR_FLAG_FIRST);      \
@@ -17,7 +17,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
         if (imm->kind == TYPE_RAW_STRING) {
-            lir_operand_t *var_operand = temp_var_operand(c->module, type_base_new(TYPE_RAW_STRING));
+            lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
             slice_push(c->globals, var_operand->value);
 
             lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
@@ -120,7 +120,7 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
 }
 
 void amd64_lower_block(closure_t *c, basic_block_t *block) {
-    // handle opcode
+    // handle operations
     for (linked_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
         lir_op_t *op = node->value;
 
@@ -198,17 +198,36 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        // div 被输数，除数 = 商
-        if (op->code == LIR_OPCODE_DIV) {
-            lir_operand_t *reg_operand = operand_new(LIR_OPERAND_REG, rax);
-            lir_op_t *before = lir_op_move(reg_operand, op->first);
-            lir_op_t *after = lir_op_move(op->output, reg_operand);
+        // div 被输数，除数 -> 商
+        // DIV first,second -> output
+        // ↓
+        // mov first -> rax
+        // DIV rax, second -> rax  amd64: div divisor  其中 rax 存储商， rdx 存储余数
+        // mov rax -> output
+        if (op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM) {
+            lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
 
-            linked_insert_before(block->operations, node, before);
-            linked_insert_after(block->operations, node, after);
+            // second cannot imm?
+            if (op->second->assert_type != LIR_OPERAND_VAR) {
+                op->second = CONVERT_TO_VAR(op->second, VR_FLAG_SECOND);
+            }
 
-            op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
-            op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
+            // mov first -> rax
+            linked_insert_before(block->operations, node, lir_op_move(rax_operand, op->first));
+
+            // div rax, v2 -> rax
+            op->first = lir_reset_operand(rax_operand, VR_FLAG_FIRST);
+            op->output = lir_reset_operand(rax_operand, VR_FLAG_OUTPUT);
+
+            if (op->code == LIR_OPCODE_REM) {
+                op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
+                // mov rdx -> output
+                linked_insert_after(block->operations, node,
+                                    lir_op_move(op->output, operand_new(LIR_OPERAND_REG, rdx)));
+            } else {
+                // mov rax -> output
+                linked_insert_after(block->operations, node, lir_op_move(op->output, rax_operand));
+            }
             continue;
         }
 
@@ -225,7 +244,7 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
             }
         }
 
-        if (lir_op_is_arithmetic(op)) {
+        if (lir_op_term(op)) {
             // first must var for assign reg
             if (op->first->assert_type != LIR_OPERAND_VAR) {
                 op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
@@ -242,8 +261,6 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
     }
-
-    // realloc first op
 }
 
 

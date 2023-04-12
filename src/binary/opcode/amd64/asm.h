@@ -118,7 +118,7 @@
 #define INT8(_value) VALUE_OPERAND(asm_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
 #define INT32(_value) VALUE_OPERAND(asm_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
 #define FLOAT32(_value) VALUE_OPERAND(asm_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
-#define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, ASM_OPERAND_TYPE_FLOAt64, (_value), OWORD)
+#define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
     asm_operand_t *number_operand = malloc(sizeof(asm_operand_t));\

@@ -203,12 +203,12 @@ struct lir_operand_t {
     lir_operand_type_t assert_type;
     // TODO 统一替换成 union
     union {
-        lir_var_t var;
-        lir_stack_t stack;
-        lir_indirect_addr_t indirect_addr;
-        lir_symbol_label_t symbol_label;
-        lir_symbol_var_t symbol_var;
-        lir_imm_t imm;
+//        lir_var_t var;
+//        lir_stack_t stack;
+//        lir_indirect_addr_t indirect_addr;
+//        lir_symbol_label_t symbol_label;
+//        lir_symbol_var_t symbol_var;
+//        lir_imm_t imm;
         void *value;
     };
     vr_flag_t pos; // 在 opcode 中的位置信息
@@ -655,7 +655,7 @@ static lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         // 确保参数入栈
-        lir_operand_t *temp_operand = temp_var_operand(m, type_base_new(imm->kind));
+        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(imm->kind));
         OP_PUSH(lir_op_move(temp_operand, operand));
         var_operand = temp_operand;
     }
@@ -747,10 +747,6 @@ static lir_operand_t *lir_new_phi_body(module_t *m, lir_var_t *var, uint8_t coun
     return operand;
 }
 
-static uint8_t lir_operand_sizeof(lir_operand_t *operand) {
-    return type_kind_sizeof(operand_type_kind(operand));
-}
-
 static bool lir_op_is_branch(lir_op_t *op) {
     if (op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ) {
         return true;
@@ -800,12 +796,9 @@ static bool lir_op_contain_cmp(lir_op_t *op) {
 }
 
 
-static bool lir_op_is_arithmetic(lir_op_t *op) {
+static bool lir_op_term(lir_op_t *op) {
     if (op->code == LIR_OPCODE_ADD ||
-        op->code == LIR_OPCODE_SUB ||
-        op->code == LIR_OPCODE_MUL ||
-        op->code == LIR_OPCODE_DIV ||
-        op->code == LIR_OPCODE_REM) {
+        op->code == LIR_OPCODE_SUB) {
         return true;
     }
     return false;

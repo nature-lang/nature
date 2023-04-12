@@ -17,12 +17,12 @@ static void print_arg(memory_any_t *arg) {
         write(STDOUT_FILENO, s->array_data, s->length);
         return;
     }
-    if (arg->rtype->kind == TYPE_FLOAT) {
+    if (is_float(arg->rtype->kind)) {
         int n = sprintf(sprint_buf, "%.5f", arg->float_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
-    if (arg->rtype->kind == TYPE_INT) {
+    if (is_integer(arg->rtype->kind)) {
         int n = sprintf(sprint_buf, "%ld", arg->int_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;

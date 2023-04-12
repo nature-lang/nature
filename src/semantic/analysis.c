@@ -873,7 +873,7 @@ static void analysis_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_fndef_t *fn_init = NEW(ast_fndef_t);
     fn_init->name = ident_with_module(m->ident, FN_INIT_NAME);
-    fn_init->return_type = type_base_new(TYPE_VOID);
+    fn_init->return_type = type_basic_new(TYPE_VOID);
     fn_init->formals = ct_list_new(sizeof(ast_var_decl));
     fn_init->body = var_assign_list;
 
@@ -934,7 +934,7 @@ static void analysis_main(module_t *m, slice_t *stmt_list) {
     ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
     fndef->name = FN_MAIN_NAME;
     fndef->body = slice_new();
-    fndef->return_type = type_base_new(TYPE_VOID);
+    fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl));
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         slice_push(fndef->body, stmt_list->take[i]);

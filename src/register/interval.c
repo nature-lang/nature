@@ -277,7 +277,7 @@ static use_kind_e use_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
         return USE_KIND_NOT;
     }
 
-    if (lir_op_is_arithmetic(op)) {
+    if (lir_op_term(op)) {
         assertf(op->first->assert_type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
         if (var->flag & FLAG(VR_FLAG_FIRST)) {
             return USE_KIND_MUST;

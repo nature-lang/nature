@@ -22,8 +22,8 @@ static rtype_t rtype_byte() {
     return rtype_base(TYPE_BYTE);
 }
 
-static rtype_t rtype_int() {
-    return rtype_base(TYPE_INT);
+static rtype_t rtype_int(type_kind kind) {
+    return rtype_base(kind);
 }
 
 static rtype_t rtype_float() {
@@ -368,25 +368,6 @@ typeuse_t type_ptrof(typeuse_t t) {
     return result;
 }
 
-typeuse_t type_base_new(type_kind kind) {
-    typeuse_t result = {
-            .status = REDUCTION_STATUS_DONE,
-            .kind = kind,
-            .value = 0,
-    };
-
-    result.in_heap = type_default_in_heap(result);
-
-    return result;
-}
-
-typeuse_t type_new(type_kind kind, void *value) {
-    typeuse_t result = {
-            .kind = kind,
-            .value = value
-    };
-    return result;
-}
 
 /**
  * 仅做 reflect, 不写入任何 table 中
@@ -394,21 +375,10 @@ typeuse_t type_new(type_kind kind, void *value) {
  * @return
  */
 rtype_t reflect_type(typeuse_t t) {
-    rtype_t rtype = {0};
-    rtype.in_heap = t.in_heap;
-
+    rtype_t rtype;
     switch (t.kind) {
-        case TYPE_INT:
-            rtype = rtype_int();
-            break;
-        case TYPE_FLOAT:
-            rtype = rtype_float();
-            break;
         case TYPE_BOOL:
             rtype = rtype_bool();
-            break;
-        case TYPE_BYTE:
-            rtype = rtype_byte();
             break;
         case TYPE_STRING:
             rtype = rtype_string();
@@ -441,9 +411,14 @@ rtype_t reflect_type(typeuse_t t) {
             rtype = rtype_any(t.any);
             break;
         default:
-            return rtype; // element_rtype element_rtype
-//            assertf(false, "cannot reflect type kind=%d", t.kind);
+            if (is_integer(t.kind) || is_float(t.kind)) {
+                rtype = rtype_base(t.kind);
+            } else {
+                assertf(false, "cannot reflect type=%s", t.kind);
+                exit(0);
+            }
     }
+    rtype.in_heap = t.in_heap;
     return rtype;
 }
 
@@ -530,28 +505,6 @@ uint ct_find_rtype_index(typeuse_t t) {
     return index;
 }
 
-/**
- * 一般标量类型其值默认会存储在 stack 中
- * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
- * 可以通过 kind 进行判断。
- * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
- * @param typedecl
- * @return
- */
-bool type_default_in_heap(typeuse_t typedecl) {
-    if (typedecl.kind == TYPE_ANY ||
-        typedecl.kind == TYPE_STRING ||
-        typedecl.kind == TYPE_LIST ||
-        typedecl.kind == TYPE_ARRAY ||
-        typedecl.kind == TYPE_MAP ||
-        typedecl.kind == TYPE_SET ||
-        typedecl.kind == TYPE_TUPLE ||
-        typedecl.kind == TYPE_STRUCT ||
-        typedecl.kind == TYPE_FN) {
-        return true;
-    }
-    return false;
-}
 
 /**
  * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
@@ -616,42 +569,4 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     }
 
     return 0;
-}
-
-
-/**
- * 不需要进行类型还原的类型
- * @param t
- * @return
- */
-bool is_basic_type(typeuse_t t) {
-    if (t.kind == TYPE_INT
-        || t.kind == TYPE_INT8
-        || t.kind == TYPE_INT16
-        || t.kind == TYPE_INT32
-        || t.kind == TYPE_INT64
-        || t.kind == TYPE_BYTE
-        || t.kind == TYPE_NULL
-        || t.kind == TYPE_BOOL
-        || t.kind == TYPE_FLOAT
-        || t.kind == TYPE_STRING
-        || t.kind == TYPE_ANY
-        || t.kind == TYPE_VOID) {
-        return true;
-    }
-
-    return false;
-}
-
-bool is_complex_type(typeuse_t t) {
-    if (t.kind == TYPE_STRUCT
-        || t.kind == TYPE_MAP
-        || t.kind == TYPE_LIST
-        || t.kind == TYPE_TUPLE
-        || t.kind == TYPE_SET
-        || t.kind == TYPE_FN) {
-        return true;
-    }
-
-    return false;
 }

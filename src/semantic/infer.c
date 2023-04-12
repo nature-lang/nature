@@ -31,7 +31,7 @@ static typeuse_t infer_binary(module_t *m, ast_binary_expr *expr) {
     typeuse_t right_type = infer_expr(m, &expr->right);
 
     // 目前 binary 的两侧符号只支持 int 和 float， TODO string + string 支持
-    assertf(left_type.kind == TYPE_INT || left_type.kind == TYPE_FLOAT,
+    assertf(is_float(left_type.kind) || is_integer(left_type.kind),
             "invalid operation: %s, right type must be int or float, cannot '%s' type",
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
@@ -52,7 +52,7 @@ static typeuse_t infer_binary(module_t *m, ast_binary_expr *expr) {
         case AST_EXPR_OPERATOR_GTE:
         case AST_EXPR_OPERATOR_EQ_EQ:
         case AST_EXPR_OPERATOR_NOT_EQ: {
-            return type_base_new(TYPE_BOOL);
+            return type_basic_new(TYPE_BOOL);
         }
         default: {
             assertf(false, "unknown operator type");
@@ -75,8 +75,7 @@ static typeuse_t infer_unary(module_t *m, ast_unary_expr *expr) {
     }
 
     // -
-    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && operand_type.kind != TYPE_INT
-        && operand_type.kind != TYPE_FLOAT) {
+    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && !is_integer(operand_type.kind) && !is_float(operand_type.kind)) {
         assertf(false, "neg operand must applies to int or float type");
     }
 
@@ -120,11 +119,11 @@ static typeuse_t infer_ident(module_t *m, ast_ident *ident) {
  * @return 
  */
 static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new) {
-    typeuse_t result = type_base_new(TYPE_LIST);
+    typeuse_t result = type_basic_new(TYPE_LIST);
 
     type_list_t *type_list = NEW(type_list_t);
     // 初始化时类型未知
-    type_list->element_type = type_base_new(TYPE_UNKNOWN);
+    type_list->element_type = type_basic_new(TYPE_UNKNOWN);
 
     for (int i = 0; i < list_new->values->length; ++i) {
         ast_expr *item_expr = ct_list_value(list_new->values, i);
@@ -137,7 +136,7 @@ static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new) {
         } else {
             if (!type_compare(item_type, type_list->element_type)) {
                 // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                type_list->element_type = type_base_new(TYPE_ANY);
+                type_list->element_type = type_basic_new(TYPE_ANY);
                 break;
             }
         }
@@ -155,11 +154,11 @@ static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new) {
  * @return
  */
 static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
-    typeuse_t result = type_base_new(TYPE_MAP);
+    typeuse_t result = type_basic_new(TYPE_MAP);
 
     type_map_t *type_map = NEW(type_map_t);
-    type_map->key_type = type_base_new(TYPE_UNKNOWN);
-    type_map->value_type = type_base_new(TYPE_UNKNOWN);
+    type_map->key_type = type_basic_new(TYPE_UNKNOWN);
+    type_map->value_type = type_basic_new(TYPE_UNKNOWN);
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element *item = ct_list_value(map_new->elements, i);
         typeuse_t key_type = infer_expr(m, &item[i].key);
@@ -170,7 +169,7 @@ static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
             type_map->key_type = key_type;
         } else {
             if (!type_compare(key_type, type_map->key_type)) {
-                type_map->key_type = type_base_new(TYPE_ANY);
+                type_map->key_type = type_basic_new(TYPE_ANY);
                 break;
             }
         }
@@ -180,7 +179,7 @@ static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
             type_map->value_type = value_type;
         } else {
             if (!type_compare(value_type, type_map->value_type)) {
-                type_map->value_type = type_base_new(TYPE_ANY);
+                type_map->value_type = type_basic_new(TYPE_ANY);
                 break;
             }
         }
@@ -196,10 +195,10 @@ static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
  * @return
  */
 static typeuse_t infer_set_new(module_t *m, ast_set_new *set_new) {
-    typeuse_t result = type_base_new(TYPE_SET);
+    typeuse_t result = type_basic_new(TYPE_SET);
 
     type_set_t *set_decl = NEW(type_set_t);
-    set_decl->key_type = type_base_new(TYPE_UNKNOWN);
+    set_decl->key_type = type_basic_new(TYPE_UNKNOWN);
 
     for (int i = 0; i < set_new->keys->length; ++i) {
         ast_expr *expr = ct_list_value(set_new->keys, i);
@@ -209,7 +208,7 @@ static typeuse_t infer_set_new(module_t *m, ast_set_new *set_new) {
             set_decl->key_type = key_type;
         } else {
             if (!type_compare(key_type, set_decl->key_type)) {
-                set_decl->key_type = type_base_new(TYPE_ANY);
+                set_decl->key_type = type_basic_new(TYPE_ANY);
                 break;
             }
         }
@@ -413,7 +412,7 @@ static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
         infer_expr(m, &call->left); // 对 ident 进行推导计算出其类型
 
         // list_push() 返回 void
-        return type_base_new(TYPE_VOID);
+        return type_basic_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, LIST_LENGTH_KEY)) {
@@ -425,7 +424,7 @@ static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
         infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_INT);
+        return type_basic_new(TYPE_INT);
     }
 
 
@@ -459,7 +458,7 @@ static typeuse_t infer_map_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
         infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_VOID);
+        return type_basic_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, LIST_LENGTH_KEY)) {
@@ -470,7 +469,7 @@ static typeuse_t infer_map_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
         infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_INT);
+        return type_basic_new(TYPE_INT);
     }
 
     assertf(false, "map not field '%s'", s->key);
@@ -497,7 +496,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
         infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_VOID);
+        return type_basic_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, SET_ADD_KEY)) {
@@ -517,7 +516,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_SET_ADD);
         infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_BOOL);
+        return type_basic_new(TYPE_BOOL);
     }
 
     if (str_equal(s->key, SET_CONTAINS_KEY)) {
@@ -537,7 +536,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
         call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
         call->left.type = infer_expr(m, &call->left);
 
-        return type_base_new(TYPE_BOOL);
+        return type_basic_new(TYPE_BOOL);
     }
 
     assertf(false, "set not field '%s'", s->key);
@@ -656,14 +655,14 @@ static typeuse_t infer_call(module_t *m, ast_call *call) {
  * @return
  */
 static typeuse_t infer_catch(module_t *m, ast_catch *catch) {
-    typeuse_t t = type_base_new(TYPE_TUPLE);
+    typeuse_t t = type_basic_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(typeuse_t));
 
     typeuse_t return_type = infer_call(m, catch->call);
     ct_list_push(t.tuple->elements, &return_type);
 
-    typeuse_t errort = type_base_new(TYPE_IDENT);
+    typeuse_t errort = type_basic_new(TYPE_IDENT);
     errort.ident = NEW(type_ident_t);
     errort.ident->literal = ERRORT_TYPE_IDENT;
     errort = reduction_type(m, errort);
@@ -775,9 +774,9 @@ static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
 
 static void infer_if(module_t *m, ast_if_stmt *stmt) {
     typeuse_t condition_type = infer_expr(m, &stmt->condition);
-    assertf(type_compare(type_base_new(TYPE_BOOL), condition_type),
+    assertf(type_compare(type_basic_new(TYPE_BOOL), condition_type),
             "if condition must bool type");
-    set_expr_target(&stmt->condition, type_base_new(TYPE_BOOL));
+    set_expr_target(&stmt->condition, type_basic_new(TYPE_BOOL));
 
     infer_block(m, stmt->consequent);
     infer_block(m, stmt->alternate);
@@ -809,7 +808,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
         key_decl.type = map_decl->key_type;
     } else {
         // list
-        key_decl.type = type_base_new(TYPE_INT);
+        key_decl.type = type_basic_new(TYPE_INT);
     }
 
 
@@ -841,7 +840,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
  * @param stmt
  */
 static void infer_return(module_t *m, ast_return_stmt *stmt) {
-    typeuse_t return_type = type_base_new(TYPE_VOID);
+    typeuse_t return_type = type_basic_new(TYPE_VOID);
     if (stmt->expr != NULL) {
         return_type = infer_expr(m, stmt->expr);
     }
@@ -853,7 +852,7 @@ static void infer_return(module_t *m, ast_return_stmt *stmt) {
 }
 
 static typeuse_t infer_literal(module_t *m, ast_literal *literal) {
-    return type_base_new(literal->kind);
+    return type_basic_new(literal->kind);
 }
 
 static typeuse_t infer_env_access(module_t *m, ast_env_access *expr) {
@@ -875,7 +874,7 @@ static void infer_throw(module_t *m, ast_throw_stmt *throw_stmt) {
  * @return
  */
 static typeuse_t infer_tuple_destr(module_t *m, ast_tuple_destr *destr) {
-    typeuse_t t = type_base_new(TYPE_TUPLE);
+    typeuse_t t = type_basic_new(TYPE_TUPLE);
     type_tuple_t *tuple = NEW(type_tuple_t);
     tuple->elements = ct_list_new(sizeof(typeuse_t));
     for (int i = 0; i < destr->elements->length; ++i) {
@@ -924,7 +923,7 @@ static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt *stmt) {
 }
 
 static typeuse_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new) {
-    typeuse_t t = type_base_new(TYPE_TUPLE);
+    typeuse_t t = type_basic_new(TYPE_TUPLE);
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(typeuse_t));
     t.tuple = tuple_type;

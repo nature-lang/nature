@@ -85,6 +85,55 @@ inst_t add_imm8_rm64 = {"add", "add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_S
 };
 
 
+inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7},
+                   {
+                           {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                   }
+};
+inst_t idiv_rex_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7},
+                       {
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                       }
+};
+inst_t idiv_rm16 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7},
+                    {
+                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+inst_t idiv_rm32 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7},
+                    {
+                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+inst_t idiv_rm64 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7},
+                    {
+                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+
+
+inst_t imul_rm8 = {"imul", "imul", 0, {0xF6}, {OPCODE_EXT_SLASH5},
+                   {
+                           {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                   }
+};
+inst_t imul_rm16 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5},
+                    {
+                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+inst_t imul_rm32 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5},
+                    {
+                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5},
+                    {
+                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                    }
+};
+
+
 inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
@@ -396,6 +445,18 @@ void amd64_opcode_init() {
     opcode_tree_build(&add_imm8_rm64);
     opcode_tree_build(&add_r64_rm64);
     opcode_tree_build(&add_rm64_r64);
+    opcode_tree_build(&idiv_rm8);
+    opcode_tree_build(&idiv_rex_rm8);
+    opcode_tree_build(&idiv_rm16);
+    opcode_tree_build(&idiv_rm32);
+    opcode_tree_build(&idiv_rm64);
+
+    opcode_tree_build(&imul_rm8);
+    opcode_tree_build(&imul_rm16);
+    opcode_tree_build(&imul_rm32);
+    opcode_tree_build(&imul_rm64);
+
+
     opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rex_rm8_r8);
     opcode_tree_build(&mov_r8_rm8);
@@ -797,6 +858,7 @@ inst_t *opcode_select(asm_operation_t opcode) {
 
     // 这里仅使用了大小匹配，但是对于 r8 和 rm8 存在一些特殊情况需要处理
     // 比如 ah 寄存器对应的操作码必须包含扩展 rex
+    // 比如 ah 和 al 具有同一寄存器位置，只是在 64 位下的不同扩展而已
     bool has64_reg = false;
     bool has_high_eight_reg = false;
 

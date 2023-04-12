@@ -327,40 +327,43 @@ token_e scanner_ident_type(char *word, int length) {
         case 'e':
             return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
-            if (length > 1) {
-                switch (word[1]) {
-                    case 'n':
-                        return scanner_rest(word, length, 2, 0, "n", TOKEN_FN);
-                    case 'a':
-                        return scanner_rest(word, length, 2, 3, "lse", TOKEN_FALSE);
-                    case 'l':
-                        return scanner_rest(word, length, 2, 3, "oat", TOKEN_FLOAT);
-                    case 'o':
-                        return scanner_rest(word, length, 2, 1, "r", TOKEN_FOR);
-                }
+            switch (word[1]) {
+                case 'n':
+                    return scanner_rest(word, length, 2, 0, "n", TOKEN_FN);
+                case 'a':
+                    return scanner_rest(word, length, 2, 3, "lse", TOKEN_FALSE);
+                case 'l':
+                    return scanner_rest(word, length, 2, 3, "oat", TOKEN_FLOAT);
+                case '3':
+                    return scanner_rest(word, length, 2, 1, "2", TOKEN_F32);
+                case '6':
+                    return scanner_rest(word, length, 2, 1, "4", TOKEN_F64);
+                case 'o':
+                    return scanner_rest(word, length, 2, 1, "r", TOKEN_FOR);
             }
         }
         case 'i': {
-            if (length == 2) {
-                if (word[1] == 'n') {
-                    return TOKEN_IN;
-                }
-
-                if (word[1] == 'f') {
-                    return TOKEN_IF;
-                }
+            if (length == 2 && word[1] == 'n') {
+                return TOKEN_IN;
             }
-            if (length > 1) {
-                switch (word[1]) {
-                    case 'n':
-                        return scanner_rest(word, length, 2, 1, "t", TOKEN_INT);
-                    case 'm':
-                        return scanner_rest(word, length, 2, 4, "port", TOKEN_IMPORT);
-                }
+
+            switch (word[1]) {
+                case 'm':
+                    return scanner_rest(word, length, 2, 4, "port", TOKEN_IMPORT);
+                case 'f':
+                    return scanner_rest(word, length, 2, 0, "", TOKEN_IF);
+                case 'n':
+                    return scanner_rest(word, length, 2, 1, "t", TOKEN_INT);
+                case '8':
+                    return scanner_rest(word, length, 2, 0, "", TOKEN_I8);
+                case '1':
+                    return scanner_rest(word, length, 2, 1, "6", TOKEN_I16);
+                case '3':
+                    return scanner_rest(word, length, 2, 1, "2", TOKEN_I32);
+                case '6':
+                    return scanner_rest(word, length, 2, 1, "6", TOKEN_I64);
             }
         }
-//        case 'm':
-//            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         case 'n':
             return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
         case 's': { // self,string,struct
@@ -393,6 +396,20 @@ token_e scanner_ident_type(char *word, int length) {
         }
         case 'v': {
             return scanner_rest(word, length, 1, 2, "ar", TOKEN_VAR);
+        }
+        case 'u': {
+            switch (word[1]) {
+                case 'i':
+                    return scanner_rest(word, length, 2, 2, "nt", TOKEN_UINT);
+                case '8':
+                    return scanner_rest(word, length, 2, 0, "", TOKEN_U8);
+                case '1':
+                    return scanner_rest(word, length, 2, 1, "6", TOKEN_U16);
+                case '3':
+                    return scanner_rest(word, length, 2, 1, "2", TOKEN_U32);
+                case '6':
+                    return scanner_rest(word, length, 2, 1, "6", TOKEN_U64);
+            }
         }
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);

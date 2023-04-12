@@ -9,14 +9,13 @@
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     uint64_t data_size = rtype_heap_out_size(rtype);
-    if (rtype->kind == TYPE_INT ||
-        rtype->kind == TYPE_INT8) {
+    if (is_integer(rtype->kind) || is_float(rtype->kind)) {
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
         return itoa(temp);
     }
 
-    if (rtype->index == TYPE_STRING) {
+    if (rtype->kind == TYPE_STRING) {
         memory_string_t *memory_string = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
         char *str = runtime_malloc(memory_string->length + 1, NULL);
         str[memory_string->length] = '\0';

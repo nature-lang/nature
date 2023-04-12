@@ -31,13 +31,20 @@ typedef enum {
     // 基础类型
     TYPE_NULL = 1,
     TYPE_BOOL,
-    TYPE_FLOAT, // 默认 8BIT = DOUBLE
-    TYPE_INT, // 默认 8BIT
+    TYPE_FLOAT,
+    TYPE_FLOAT32,
+    TYPE_FLOAT64,
+    TYPE_BYTE,
     TYPE_INT8,
-    TYPE_BYTE, // 字节类型？
+    TYPE_UINT8,
     TYPE_INT16,
+    TYPE_UINT16,
     TYPE_INT32,
+    TYPE_UINT32,
+    TYPE_INT,
+    TYPE_UINT,
     TYPE_INT64,
+    TYPE_UINT64,
     // 复合类型
     TYPE_ANY,
     TYPE_STRING, // 10
@@ -64,7 +71,17 @@ static string type_kind_string[] = {
         [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
         [TYPE_FLOAT] = "float",
+        [TYPE_FLOAT32] = "f32",
+        [TYPE_FLOAT64] = "f64",
         [TYPE_INT] = "int",
+        [TYPE_INT8] = "i8",
+        [TYPE_INT16] = "i16",
+        [TYPE_INT32] = "i32",
+        [TYPE_INT64] = "i64",
+        [TYPE_UINT8] = "u8",
+        [TYPE_UINT16] = "u16",
+        [TYPE_UINT32] = "u32",
+        [TYPE_UINT64] = "u64",
         [TYPE_VOID] = "void",
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_ANY] = "any",
@@ -369,9 +386,49 @@ bool type_need_gc(typeuse_t t);
 
 typeuse_t type_ptrof(typeuse_t t);
 
-typeuse_t type_base_new(type_kind kind);
+/**
+ * 一般标量类型其值默认会存储在 stack 中
+ * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
+ * 可以通过 kind 进行判断。
+ * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
+ * @param typedecl
+ * @return
+ */
+static bool type_default_in_heap(typeuse_t typedecl) {
+    if (typedecl.kind == TYPE_ANY ||
+        typedecl.kind == TYPE_STRING ||
+        typedecl.kind == TYPE_LIST ||
+        typedecl.kind == TYPE_ARRAY ||
+        typedecl.kind == TYPE_MAP ||
+        typedecl.kind == TYPE_SET ||
+        typedecl.kind == TYPE_TUPLE ||
+        typedecl.kind == TYPE_STRUCT ||
+        typedecl.kind == TYPE_FN) {
+        return true;
+    }
+    return false;
+}
 
-typeuse_t type_new(type_kind kind, void *value);
+static typeuse_t type_basic_new(type_kind kind) {
+    typeuse_t result = {
+            .status = REDUCTION_STATUS_DONE,
+            .kind = kind,
+            .value = 0,
+    };
+
+    result.in_heap = type_default_in_heap(result);
+
+    return result;
+}
+
+static typeuse_t type_new(type_kind kind, void *value) {
+    typeuse_t result = {
+            .kind = kind,
+            .value = value
+    };
+    return result;
+}
+
 
 type_ident_t *typeuse_ident_new(string literal);
 
@@ -389,8 +446,6 @@ uint64_t calc_gc_bits_size(uint64_t size);
  */
 byte *malloc_gc_bits(uint64_t size);
 
-bool type_default_in_heap(typeuse_t typedecl);
-
 uint64_t rtype_heap_out_size(rtype_t *rtype);
 
 uint64_t type_struct_offset(type_struct_t *s, char *key);
@@ -399,8 +454,47 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
-bool is_basic_type(typeuse_t t);
 
-bool is_complex_type(typeuse_t t);
+static bool is_float(type_kind kind) {
+    return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
+}
+
+static bool is_integer(type_kind kind) {
+    return kind == TYPE_INT ||
+           kind == TYPE_INT8 ||
+           kind == TYPE_INT16 ||
+           kind == TYPE_INT32 ||
+           kind == TYPE_INT64 ||
+           kind == TYPE_UINT ||
+           kind == TYPE_UINT8 ||
+           kind == TYPE_UINT16 ||
+           kind == TYPE_UINT32 ||
+           kind == TYPE_UINT64;
+}
+
+/**
+ * 不需要进行类型还原的类型
+ * @param t
+ * @return
+ */
+static bool is_basic_type(typeuse_t t) {
+    return is_integer(t.kind) ||
+           is_float(t.kind) ||
+           t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
+           t.kind == TYPE_STRING ||
+           t.kind == TYPE_ANY ||
+           t.kind == TYPE_VOID;
+
+}
+
+static bool is_complex_type(typeuse_t t) {
+    return t.kind == TYPE_STRUCT
+           || t.kind == TYPE_MAP
+           || t.kind == TYPE_LIST
+           || t.kind == TYPE_TUPLE
+           || t.kind == TYPE_SET
+           || t.kind == TYPE_FN;
+}
 
 #endif //NATURE_TYPE_H

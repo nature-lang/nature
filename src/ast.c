@@ -51,7 +51,8 @@ typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
  * @return
  */
 bool type_compare(typeuse_t left, typeuse_t right) {
-    assertf(left.is_origin && right.is_origin, "type not origin, left: '%s', right: '%s'",
+    assertf(left.status == REDUCTION_STATUS_DONE && right.status == REDUCTION_STATUS_DONE,
+            "type not origin, left: '%s', right: '%s'",
             type_kind_string[left.kind],
             type_kind_string[right.kind]);
 
@@ -61,7 +62,11 @@ bool type_compare(typeuse_t left, typeuse_t right) {
         return true;
     }
 
-    if (left.kind != right.kind) {
+    if (is_integer(left.kind) != is_integer(right.kind)) {
+        return false;
+    } else if (is_float(left.kind) != is_float(right.kind)) {
+        return false;
+    } else if (left.kind != right.kind) {
         return false;
     }
 

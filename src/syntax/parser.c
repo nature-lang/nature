@@ -33,6 +33,15 @@ type_kind token_to_kind[] = {
         [TOKEN_BOOL] = TYPE_BOOL,
         [TOKEN_FLOAT] = TYPE_FLOAT,
         [TOKEN_INT] = TYPE_INT,
+        [TOKEN_I8] = TYPE_INT8,
+        [TOKEN_I16] = TYPE_INT16,
+        [TOKEN_I32] = TYPE_INT32,
+        [TOKEN_I64] = TYPE_INT64,
+        [TOKEN_UINT] = TYPE_UINT,
+        [TOKEN_U8] = TYPE_UINT8,
+        [TOKEN_U16] = TYPE_UINT16,
+        [TOKEN_U32] = TYPE_UINT32,
+        [TOKEN_U64] = TYPE_UINT64,
         [TOKEN_STRING] = TYPE_STRING,
         [TOKEN_NULL] = TYPE_NULL,
         [TOKEN_VAR] = TYPE_UNKNOWN,
@@ -825,12 +834,12 @@ static ast_stmt *parser_for_stmt(module_t *m) {
     // for (k,v in map) {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
         ast_for_iterator_stmt *for_iterator_stmt = NEW(ast_for_iterator_stmt);
-        for_iterator_stmt->key.type = type_base_new(TYPE_UNKNOWN);
+        for_iterator_stmt->key.type = type_basic_new(TYPE_UNKNOWN);
         for_iterator_stmt->key.ident = parser_must(m, TOKEN_IDENT)->literal;
 
         if (parser_consume(m, TOKEN_COMMA)) {
             for_iterator_stmt->value = NEW(ast_var_decl);
-            for_iterator_stmt->value->type = type_base_new(TYPE_UNKNOWN);
+            for_iterator_stmt->value->type = type_basic_new(TYPE_UNKNOWN);
             for_iterator_stmt->value->ident = parser_must(m, TOKEN_IDENT)->literal;
         }
 
@@ -1120,7 +1129,7 @@ static ast_tuple_destr *parser_var_tuple_destr(module_t *m) {
         } else {
             token_t *ident_token = parser_must(m, TOKEN_IDENT);
             ast_var_decl *var_decl = NEW(ast_var_decl);
-            var_decl->type = type_base_new(TYPE_UNKNOWN);
+            var_decl->type = type_basic_new(TYPE_UNKNOWN);
             var_decl->ident = ident_token->literal;
             expr.assert_type = AST_VAR_DECL;
             expr.value = var_decl;

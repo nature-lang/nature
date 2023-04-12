@@ -311,10 +311,10 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
     // map or list
     lir_operand_t *iterator_target = compiler_expr(m, ast->iterate);
 
-//    lir_operand_t *length_target = temp_var_operand(c, type_base_new(TYPE_INT));
+//    lir_operand_t *length_target = temp_var_operand(c, type_basic_new(TYPE_INT));
     uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
 
-    lir_operand_t *cursor_operand = temp_var_operand(m, type_base_new(TYPE_INT));
+    lir_operand_t *cursor_operand = temp_var_operand(m, type_basic_new(TYPE_INT));
     OP_PUSH(lir_op_move(cursor_operand, int_operand(0)));
 
     // make label
@@ -526,7 +526,7 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     OP_PUSH(call_op);
 
     // 判断 call 是否 throw 了 error 到
-    lir_operand_t *has_errort = temp_var_operand(m, type_base_new(TYPE_BOOL));
+    lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
     OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
 
     // 编译时判断是否有 catch 当前 call expr, 如果存在 catch,则无论如何都不进行 beq
@@ -1019,7 +1019,8 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
         case TYPE_RAW_STRING: {
             return string_operand(literal->value);
         }
-        case TYPE_INT: {
+        case  TYPE_INT: {
+            // literal 默认编译成 int 类型
             return int_operand(atoi(literal->value));
         }
         case TYPE_FLOAT: {
@@ -1083,7 +1084,7 @@ static void compiler_throw(module_t *m, ast_throw_stmt *stmt) {
     errort_struct->type = typedef_stmt->type;
     errort_struct->properties = ct_list_new(sizeof(struct_property_t));
     struct_property_t property = {
-            .type = type_base_new(TYPE_STRING),
+            .type = type_basic_new(TYPE_STRING),
             .key = ERRORT_MSG_IDENT,
             .right = &stmt->error,
     };
