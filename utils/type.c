@@ -18,9 +18,9 @@ static rtype_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static rtype_t rtype_byte() {
-    return rtype_base(TYPE_BYTE);
-}
+//static rtype_t rtype_byte() {
+//    return rtype_base(TYPE_BYTE);
+//}
 
 static rtype_t rtype_int(type_kind kind) {
     return rtype_base(kind);
@@ -334,7 +334,7 @@ uint8_t type_kind_sizeof(type_kind t) {
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:
-        case TYPE_BYTE:
+//        case TYPE_BYTE:
             return 1;
         case TYPE_INT16:
             return 2;

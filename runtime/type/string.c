@@ -10,7 +10,7 @@
  */
 memory_string_t *string_new(void *raw_string, uint64_t length) {
     // byte 数组，先手动创建一个简单类型
-    typeuse_t element_type = type_basic_new(TYPE_BYTE);
+    typeuse_t element_type = type_basic_new(TYPE_UINT8);
     rtype_t element_rtype = reflect_type(element_type);
     memory_array_t *array_data = array_new(&element_rtype, length);
 

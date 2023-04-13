@@ -28,29 +28,6 @@ lir_opcode_t ast_expr_operator_transform[] = {
 };
 
 
-static lir_operand_t *type_convert(module_t *m, lir_operand_t *source, ast_expr expr) {
-    // 待优化目前仅仅服务于 printf
-    if (expr.target_type.kind == TYPE_ANY) {
-        // any new 处理 float 时需要转换成 int64 处理
-        if (source->assert_type == LIR_OPERAND_IMM) {
-            lir_imm_t *imm = source->value;
-            imm->kind = TYPE_INT64;
-        }
-
-        lir_operand_t *new_source_var = temp_var_operand(m, expr.target_type);
-        // 基于 source 类型计算 element_rtype index
-        uint rtype_index = ct_find_rtype_index(expr.type);
-        // lir call type, value =>
-        OP_PUSH(lir_rt_call(RT_CALL_TRANS_ANY, new_source_var, 2,
-                            int_operand(rtype_index), // arg1
-                            source)); // arg2
-        return new_source_var;
-    }
-
-    return source;
-}
-
-
 /**
  * TODO 如果使用了全局符号怎么办？
  * @param m
@@ -1019,7 +996,7 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
         case TYPE_RAW_STRING: {
             return string_operand(literal->value);
         }
-        case  TYPE_INT: {
+        case TYPE_INT: {
             // literal 默认编译成 int 类型
             return int_operand(atoi(literal->value));
         }
@@ -1191,13 +1168,6 @@ static lir_operand_t *compiler_expr(module_t *m, ast_expr expr) {
     assertf(fn, "ast right not support");
 
     lir_operand_t *source = fn(m, expr);
-
-//    expr.target_type.kind
-//    expr.type.kind
-
-    if (expr.type.kind != expr.target_type.kind) {
-        source = type_convert(m, source, expr);
-    }
 
     return source;
 }

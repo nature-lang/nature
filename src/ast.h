@@ -2,6 +2,7 @@
 #define NATURE_SRC_AST_H_
 
 #include <stdlib.h>
+#include "utils/assertf.h"
 #include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/ct_list.h"
@@ -25,6 +26,7 @@ typedef enum {
     AST_EXPR_IDENT,
     AST_EXPR_ADDR_OF,
     AST_EXPR_VALUE_OF,
+    AST_EXPR_TYPE_CONVERT,
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
@@ -130,6 +132,11 @@ typedef struct {
 typedef struct {
     string literal;
 } ast_ident;
+
+typedef struct {
+    typeuse_t target_type; // 将表达式
+    ast_expr expr; // 将表达式转换成 target_type
+} ast_type_convert_t;
 
 // 取表达式指针 &expr
 typedef struct {
@@ -440,6 +447,25 @@ static ast_expr *ast_value_of(ast_expr *target) {
     return result;
 }
 
+/**
+ * 已经 infer 过了
+ * @param expr
+ * @param target_type
+ * @return
+ */
+static ast_expr ast_type_convert(ast_expr expr, typeuse_t target_type) {
+    assertf(target_type.status == REDUCTION_STATUS_DONE, "target type not reduction");
+    ast_expr *result = NEW(ast_expr);
+
+    ast_type_convert_t *convert = NEW(ast_type_convert_t);
+    convert->expr = expr;
+    convert->target_type = target_type;
+
+    result->assert_type = AST_EXPR_TYPE_CONVERT;
+    result->value = convert;
+    result->type = target_type;
+    return *result;
+}
 
 typeuse_t select_actual_param(ast_call *call, uint8_t index);
 

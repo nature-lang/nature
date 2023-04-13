@@ -21,31 +21,42 @@ static void infer_block(module_t *m, slice_t *block) {
     }
 }
 
+
 /**
  * @param expr
  * @return
  */
 static typeuse_t infer_binary(module_t *m, ast_binary_expr *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    typeuse_t left_type = infer_expr(m, &expr->left);
-    typeuse_t right_type = infer_expr(m, &expr->right);
+    typeuse_t left_type = infer_right_expr(m, &expr->left, type_basic_new(TYPE_UNKNOWN));
+    typeuse_t right_type = infer_right_expr(m, &expr->right, type_basic_new(TYPE_UNKNOWN));
 
-    // 目前 binary 的两侧符号只支持 int 和 float， TODO string + string 支持
+    // 目前 binary 的两侧符号只支持 int 和 float
     assertf(is_float(left_type.kind) || is_integer(left_type.kind),
             "invalid operation: %s, right type must be int or float, cannot '%s' type",
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
 
-    assertf(right_type.kind == left_type.kind, "binary operations type not consistent， left: %s, right: %s",
-            type_kind_string[right_type.kind], type_kind_string[right_type.kind]);
+    typeuse_t target_type = basic_type_select(left_type.kind, right_type.kind);
+
+    if (left_type.kind != target_type.kind) {
+        expr->left = ast_type_convert(expr->left, target_type);
+    }
+    if (right_type.kind != target_type.kind) {
+        expr->right = ast_type_convert(expr->right, target_type);
+    }
 
     switch (expr->operator) {
+        // 算术运算符
+        case AST_EXPR_OPERATOR_REM:
         case AST_EXPR_OPERATOR_ADD:
         case AST_EXPR_OPERATOR_SUB:
         case AST_EXPR_OPERATOR_MUL:
         case AST_EXPR_OPERATOR_DIV: {
-            return left_type;
+            return target_type;
         }
+
+            // 逻辑运算符
         case AST_EXPR_OPERATOR_LT:
         case AST_EXPR_OPERATOR_LTE:
         case AST_EXPR_OPERATOR_GT:
@@ -61,13 +72,17 @@ static typeuse_t infer_binary(module_t *m, ast_binary_expr *expr) {
     }
 }
 
+static typeuse_t infer_type_convert(module_t *m, ast_type_convert_t *convert) {
+    return reduction_type(m, convert->target_type);
+}
+
 /**
  * unary
  * @param expr
  * @return
  */
 static typeuse_t infer_unary(module_t *m, ast_unary_expr *expr) {
-    typeuse_t operand_type = infer_expr(m, &expr->operand);
+    typeuse_t operand_type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
 
     // !
     if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.kind != TYPE_BOOL) {
@@ -118,16 +133,21 @@ static typeuse_t infer_ident(module_t *m, ast_ident *ident) {
  * @param list_new
  * @return 
  */
-static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new) {
+static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new, typeuse_t target_type) {
     typeuse_t result = type_basic_new(TYPE_LIST);
 
     type_list_t *type_list = NEW(type_list_t);
     // 初始化时类型未知
     type_list->element_type = type_basic_new(TYPE_UNKNOWN);
 
+    typeuse_t element_target_type = type_basic_new(TYPE_UNKNOWN);
+    if (target_type.kind != TYPE_UNKNOWN) {
+        element_target_type = target_type.list->element_type;
+    }
+
     for (int i = 0; i < list_new->values->length; ++i) {
         ast_expr *item_expr = ct_list_value(list_new->values, i);
-        typeuse_t item_type = infer_expr(m, item_expr);
+        typeuse_t item_type = infer_right_expr(m, item_expr, element_target_type);
 
         // 无法根据 [...] 右值推断出具体的类型
         if (type_list->element_type.kind == TYPE_UNKNOWN) {
@@ -153,16 +173,25 @@ static typeuse_t infer_list_new(module_t *m, ast_list_new *list_new) {
  * @param map_new
  * @return
  */
-static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
+static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new, typeuse_t target_type) {
     typeuse_t result = type_basic_new(TYPE_MAP);
 
     type_map_t *type_map = NEW(type_map_t);
     type_map->key_type = type_basic_new(TYPE_UNKNOWN);
     type_map->value_type = type_basic_new(TYPE_UNKNOWN);
+
+
+    typeuse_t key_target_type = type_basic_new(TYPE_UNKNOWN);
+    typeuse_t value_target_type = type_basic_new(TYPE_UNKNOWN);
+    if (target_type.kind != TYPE_UNKNOWN) {
+        key_target_type = target_type.map->key_type;
+        value_target_type = target_type.map->value_type;
+    }
+
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element *item = ct_list_value(map_new->elements, i);
-        typeuse_t key_type = infer_expr(m, &item[i].key);
-        typeuse_t value_type = infer_expr(m, &item[i].value);
+        typeuse_t key_type = infer_right_expr(m, &item[i].key, key_target_type);
+        typeuse_t value_type = infer_right_expr(m, &item[i].value, value_target_type);
 
         // key
         if (type_map->key_type.kind == TYPE_UNKNOWN) {
@@ -194,15 +223,22 @@ static typeuse_t infer_map_new(module_t *m, ast_map_new *map_new) {
  * @param set_new
  * @return
  */
-static typeuse_t infer_set_new(module_t *m, ast_set_new *set_new) {
+static typeuse_t infer_set_new(module_t *m, ast_set_new *set_new, typeuse_t target_type) {
     typeuse_t result = type_basic_new(TYPE_SET);
 
     type_set_t *set_decl = NEW(type_set_t);
     set_decl->key_type = type_basic_new(TYPE_UNKNOWN);
 
+    // 右值如果有推荐的类型，则基于推荐类型做 infer, 此时可能会触发类型转换
+    typeuse_t key_target_type = type_basic_new(TYPE_UNKNOWN);
+    if (target_type.kind != TYPE_UNKNOWN) {
+        key_target_type = target_type.set->key_type;
+    }
+
     for (int i = 0; i < set_new->keys->length; ++i) {
         ast_expr *expr = ct_list_value(set_new->keys, i);
-        typeuse_t key_type = infer_expr(m, expr);
+
+        typeuse_t key_type = infer_right_expr(m, expr, key_target_type);
 
         if (set_decl->key_type.kind == TYPE_UNKNOWN) {
             set_decl->key_type = key_type;
@@ -246,14 +282,7 @@ static typeuse_t infer_struct_new(module_t *m, ast_struct_new_t *s) {
 
         // struct_decl 已经是被还原过的类型了
         typeuse_t expect_type = struct_property->type;
-        typeuse_t actual_type = infer_expr(m, struct_property->right);
-
-        // expect type 并不允许为 var
-        assertf(type_compare(actual_type, expect_type),
-                "key '%s' expect '%s' type, actual '%s' type",
-                struct_property->key,
-                type_kind_string[expect_type.kind],
-                type_kind_string[actual_type.kind]);
+        infer_right_expr(m, struct_property->right, expect_type);
     }
 
     return s->type;
@@ -266,8 +295,8 @@ static typeuse_t infer_struct_new(module_t *m, ast_struct_new_t *s) {
  */
 static typeuse_t infer_access(module_t *m, ast_expr *expr) {
     ast_access *access = expr->value;
-    typeuse_t left_type = infer_expr(m, &access->left);
-    typeuse_t key_type = infer_expr(m, &access->key);
+    typeuse_t left_type = infer_left_expr(m, &access->left);
+    typeuse_t key_type = infer_right_expr(m, &access->key, type_basic_new(TYPE_INT));
 
     // ast_access to ast_map_access
     if (left_type.kind == TYPE_MAP) {
@@ -347,7 +376,7 @@ static typeuse_t infer_access(module_t *m, ast_expr *expr) {
 static typeuse_t infer_select(module_t *m, ast_expr *expr) {
     ast_select *select = expr->value;
 
-    select->left.type = infer_expr(m, &select->left);
+    select->left.type = infer_left_expr(m, &select->left);
 
     typeuse_t left_type = select->left.type;
     // self_select -> instance_select
@@ -361,7 +390,7 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
 
     // ast_access to ast_struct_access
     if (left_type.kind == TYPE_STRUCT) {
-        // 经过上面对 infer_expr, 这里对 type 一定是 reduction 的
+        // 经过上面对 infer_right_expr, 这里对 type 一定是 reduction 的
         type_struct_t *type_struct = left_type.struct_;
         struct_property_t *p = type_struct_property(type_struct, select->key);
         assertf(p, "type %s struct no property '%s'", type_struct->ident, select->key);
@@ -391,16 +420,12 @@ static typeuse_t infer_select(module_t *m, ast_expr *expr) {
 static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
     ast_select *s = call->left.value;
     type_list_t *list_type = s->left.type.list; // 已经进行过类型推导了
+
     if (str_equal(s->key, LIST_PUSH_KEY)) {
         // push 对参数需要与 list element type 一致，否则抛出异常
         assertf(call->actual_params->length == 1, "list push param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_expr(m, expr);
-
-        assertf(type_compare(list_type->element_type, expr->type),
-                "list.push param type failed, expect=%s actual=%s",
-                type_kind_string[list_type->element_type.kind],
-                type_kind_string[expr->type.kind]);
+        infer_right_expr(m, expr, list_type->element_type);
 
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
         // 参数重写
@@ -409,7 +434,7 @@ static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
         ct_list_push(call->actual_params, ast_addr_of(expr)); // value expr
 
         call->left = *ast_ident_expr(RT_CALL_LIST_PUSH);
-        infer_expr(m, &call->left); // 对 ident 进行推导计算出其类型
+        infer_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
 
         // list_push() 返回 void
         return type_basic_new(TYPE_VOID);
@@ -422,7 +447,7 @@ static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
         ct_list_push(call->actual_params, &call->left); // list expr
 
         call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
-        infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_INT);
     }
@@ -444,19 +469,14 @@ static typeuse_t infer_map_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, MAP_DELETE_KEY)) {
         assertf(call->actual_params->length == 1, "map.delete param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_expr(m, expr);
-
-        assertf(type_compare(map_type->key_type, expr->type),
-                "map.delete param type failed, expect=%s actual=%s",
-                type_kind_string[map_type->key_type.kind],
-                type_kind_string[expr->type.kind]);
+        infer_right_expr(m, expr, map_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
         ct_list_push(call->actual_params, ast_addr_of(expr));
 
         call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
-        infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_VOID);
     }
@@ -467,7 +487,7 @@ static typeuse_t infer_map_select_call(module_t *m, ast_call *call) {
         ct_list_push(call->actual_params, &call->left);
 
         call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
-        infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_INT);
     }
@@ -482,19 +502,14 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_DELETE_KEY)) {
         assertf(call->actual_params->length == 1, "set.delete param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_expr(m, expr);
-
-        assertf(type_compare(set_type->key_type, expr->type),
-                "set.delete param type failed, expect=%s actual=%s",
-                type_kind_string[set_type->key_type.kind],
-                type_kind_string[expr->type.kind]);
+        infer_right_expr(m, expr, set_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
         ct_list_push(call->actual_params, ast_addr_of(expr));
 
         call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
-        infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_VOID);
     }
@@ -502,19 +517,14 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_ADD_KEY)) {
         assertf(call->actual_params->length == 1, "set.add param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_expr(m, expr);
-
-        assertf(type_compare(set_type->key_type, expr->type),
-                "set.add param type failed, expect=%s actual=%s",
-                type_kind_string[set_type->key_type.kind],
-                type_kind_string[expr->type.kind]);
+        infer_right_expr(m, expr, set_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
         ct_list_push(call->actual_params, ast_addr_of(expr));
 
         call->left = *ast_ident_expr(RT_CALL_SET_ADD);
-        infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_BOOL);
     }
@@ -522,19 +532,14 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_CONTAINS_KEY)) {
         assertf(call->actual_params->length == 1, "set.contains param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        expr->type = infer_expr(m, expr);
-
-        assertf(type_compare(set_type->key_type, expr->type),
-                "set.contains param type failed, expect=%s actual=%s",
-                type_kind_string[set_type->key_type.kind],
-                type_kind_string[expr->type.kind]);
+        infer_right_expr(m, expr, set_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
         ct_list_push(call->actual_params, ast_addr_of(expr));
 
         call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
-        call->left.type = infer_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
 
         return type_basic_new(TYPE_BOOL);
     }
@@ -543,28 +548,15 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
     exit(0);
 }
 
-static void infer_call_params(module_t *m, ast_call *call, type_fn_t *type_fn) {
-    // 实参类型推导与类型还原
-    for (int i = 0; i < call->actual_params->length; ++i) {
-        ast_expr *expr = ct_list_value(call->actual_params, i);
-        infer_expr(m, expr);  // right 类型还原，其中也包括 spread param
-    }
-
+static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量应该大于等于形参的数量
-    assertf(type_fn->formal_types->length >= call->actual_params->length, "call params count failed");
+    assertf(call->actual_params->length >= target_type_fn->formal_types->length, "call params count failed");
 
-    uint8_t count = call->actual_params->length;
-    for (int i = 0; i < count; ++i) {
-        // first param from actual
-        typeuse_t actual = select_actual_param(call, i);
-
+    for (int i = 0; i < call->actual_params->length; ++i) {
         // first param from formal
-        typeuse_t formal = select_formal_param(type_fn, i);
-        assertf(type_compare(formal, actual), "call param number=%d type error, expect '%s' type, actual '%s' type", i,
-                type_kind_string[formal.kind], type_kind_string[actual.kind]);
-
+        typeuse_t formal_target_Type = select_formal_param(target_type_fn, i);
         ast_expr *expr = ct_list_value(call->actual_params, i);
-        set_expr_target(expr, formal);
+        infer_right_expr(m, expr, formal_target_Type);
     }
 }
 
@@ -614,7 +606,7 @@ static typeuse_t infer_call(module_t *m, ast_call *call) {
     if (call->left.assert_type == AST_EXPR_SELECT) {
         ast_select *select = call->left.value;
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-        select->left.type = infer_expr(m, &select->left);
+        infer_left_expr(m, &select->left);
         type_kind select_left_kind = select->left.type.kind;
 
         if (select_left_kind == TYPE_LIST) {
@@ -638,7 +630,7 @@ static typeuse_t infer_call(module_t *m, ast_call *call) {
 
 
     // 左值符号推导
-    typeuse_t left_type = infer_expr(m, &call->left);
+    typeuse_t left_type = infer_left_expr(m, &call->left);
     assertf(left_type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = left_type.fn;
 
@@ -745,46 +737,36 @@ static bool type_confirmed(typeuse_t t) {
  * var h = call();
  */
 static void infer_vardef(module_t *m, ast_vardef_stmt *stmt) {
-    typeuse_t right_type = infer_expr(m, &stmt->right);
+    stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
 
-    // 开始类型推断, err 的类型大多数情况都是像这样推断出来的
+    typeuse_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
+
+    // 需要进行类型推断
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
         assertf(type_confirmed(right_type), "type inference error, right type not confirmed");
+
         stmt->var_decl.type = right_type;
         return;
     }
-
-    stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
-
-    // 判断类型是否一致 compare
-    assertf(type_compare(stmt->var_decl.type, right_type), "cannot assigned variables, because type inconsistency");
-    set_expr_target(&stmt->right, stmt->var_decl.type);
 }
 
 /**
  * @param stmt
  */
 static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
-    typeuse_t left_type = infer_expr(m, &stmt->left);
-    typeuse_t right_type = infer_expr(m, &stmt->right);
-
-    assertf(type_compare(left_type, right_type), "type inconsistency");
-    set_expr_target(&stmt->right, stmt->left.type);
+    typeuse_t left_type = infer_left_expr(m, &stmt->left);
+    infer_right_expr(m, &stmt->right, left_type);
 }
 
 static void infer_if(module_t *m, ast_if_stmt *stmt) {
-    typeuse_t condition_type = infer_expr(m, &stmt->condition);
-    assertf(type_compare(type_basic_new(TYPE_BOOL), condition_type),
-            "if condition must bool type");
-    set_expr_target(&stmt->condition, type_basic_new(TYPE_BOOL));
+    infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
     infer_block(m, stmt->consequent);
     infer_block(m, stmt->alternate);
 }
 
 static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt *stmt) {
-    typeuse_t cond_type = infer_expr(m, &stmt->condition);
-    assertf(cond_type.kind == TYPE_BOOL, "for stmt condition must bool");
+    infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
     infer_block(m, stmt->body);
 }
@@ -794,9 +776,8 @@ static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt *stmt) {
  * @param stmt
  */
 static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
-    // 经过 infer_expr 的类型一定是已经被还原过的
-    typeuse_t iterate_type = infer_expr(m, &stmt->iterate);
-
+    // 经过 infer_right_expr 的类型一定是已经被还原过的
+    typeuse_t iterate_type = infer_right_expr(m, &stmt->iterate, type_basic_new(TYPE_UNKNOWN));
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
@@ -829,8 +810,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
 
 static void infer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
     infer_stmt(m, stmt->init);
-    typeuse_t cond_type = infer_expr(m, &stmt->cond);
-    assertf(cond_type.kind == TYPE_BOOL, "for stmt condition must bool");
+    infer_right_expr(m, &stmt->cond, type_basic_new(TYPE_BOOL));
     infer_stmt(m, stmt->update);
     infer_block(m, stmt->body);
 }
@@ -840,15 +820,12 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
  * @param stmt
  */
 static void infer_return(module_t *m, ast_return_stmt *stmt) {
-    typeuse_t return_type = type_basic_new(TYPE_VOID);
-    if (stmt->expr != NULL) {
-        return_type = infer_expr(m, stmt->expr);
-    }
-
     typeuse_t expect_type = m->infer_current->return_type;
-    assertf(type_compare(expect_type, return_type), "expect return '%s' type,actual return type '%s'",
-            type_kind_string[return_type.kind],
-            type_kind_string[expect_type.kind]);
+    if (stmt->expr != NULL) {
+        infer_right_expr(m, stmt->expr, expect_type);
+    } else {
+        assertf(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_kind_string[expect_type.kind]);
+    }
 }
 
 static typeuse_t infer_literal(module_t *m, ast_literal *literal) {
@@ -863,8 +840,7 @@ static typeuse_t infer_env_access(module_t *m, ast_env_access *expr) {
 }
 
 static void infer_throw(module_t *m, ast_throw_stmt *throw_stmt) {
-    typeuse_t t = infer_expr(m, &throw_stmt->error);
-    assertf(t.kind == TYPE_STRING, "only support throw string");
+    infer_right_expr(m, &throw_stmt->error, type_basic_new(TYPE_STRING));
 }
 
 /**
@@ -875,12 +851,12 @@ static void infer_throw(module_t *m, ast_throw_stmt *throw_stmt) {
  */
 static typeuse_t infer_tuple_destr(module_t *m, ast_tuple_destr *destr) {
     typeuse_t t = type_basic_new(TYPE_TUPLE);
-    type_tuple_t *tuple = NEW(type_tuple_t);
-    tuple->elements = ct_list_new(sizeof(typeuse_t));
+    t.tuple = NEW(type_tuple_t);
+    t.tuple->elements = ct_list_new(sizeof(typeuse_t));
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr *expr = ct_list_value(destr->elements, i);
-        typeuse_t item_type = infer_expr(m, expr);
-        ct_list_push(tuple->elements, &item_type);
+        typeuse_t item_type = infer_left_expr(m, expr);
+        ct_list_push(t.tuple->elements, &item_type);
     }
 
     return t;
@@ -906,7 +882,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, typeuse_t
         assertf(type_confirmed(*actual_type), "tuple expr index=%d type unknown");
 
         if (expr->assert_type == AST_VAR_DECL) {
-            // 直接推到出具体类型
+            // 直接推到出具体类型并回写到 expr 的 var_decl 中
             ast_var_decl *var_decl = expr->value;
             var_decl->type = *actual_type;
         } else {
@@ -917,20 +893,33 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, typeuse_t
 }
 
 static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt *stmt) {
-    typeuse_t expr_type = infer_expr(m, &stmt->right);
+    // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
+    typeuse_t expr_type = infer_right_expr(m, &stmt->right, type_basic_new(TYPE_UNKNOWN));
 
     infer_var_tuple_destr(m, stmt->tuple_destr, expr_type);
 }
 
-static typeuse_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new) {
+
+/**
+ * @param m
+ * @param tuple_new
+ * @return
+ */
+static typeuse_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new, typeuse_t target_type) {
     typeuse_t t = type_basic_new(TYPE_TUPLE);
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(typeuse_t));
     t.tuple = tuple_type;
 
     for (int i = 0; i < tuple_new->elements->length; ++i) {
+        typeuse_t element_target = type_basic_new(TYPE_UNKNOWN);
+        if (target_type.kind == TYPE_TUPLE) {
+            typeuse_t *temp = ct_list_value(target_type.tuple->elements, i);
+            element_target = *temp;
+        }
+
         ast_expr *expr = ct_list_value(tuple_new->elements, i);
-        typeuse_t expr_type = infer_expr(m, expr);
+        typeuse_t expr_type = infer_right_expr(m, expr, element_target);
         ct_list_push(tuple_type->elements, &expr_type);
     }
 
@@ -985,13 +974,67 @@ static void infer_stmt(module_t *m, ast_stmt *stmt) {
 }
 
 /**
+ * 能作为左值的表达式有
+ * a = 1
+ * a[0] = 2
+ * a.b = 3
+ * @param m
+ * @param expr
+ * @return
+ */
+static typeuse_t infer_left_expr(module_t *m, ast_expr *expr) {
+    typeuse_t type;
+    switch (expr->assert_type) {
+        case AST_EXPR_IDENT: {
+            type = infer_ident(m, expr->value);
+            break;
+        }
+        case AST_EXPR_TUPLE_DESTR: {
+            type = infer_tuple_destr(m, expr->value);
+            break;
+        }
+        case AST_EXPR_ACCESS: {
+            // 这里需要做类型改写，确定具体的访问类型所以传递整个表达式
+            type = infer_access(m, expr);
+            break;
+        }
+        case AST_EXPR_SELECT: {
+            type = infer_select(m, expr);
+            break;
+        }
+        case AST_EXPR_ENV_ACCESS: {
+            type = infer_env_access(m, expr->value);
+            break;
+        }
+        case AST_CALL: {
+            type = infer_call(m, expr->value);
+            break;
+        }
+        default: {
+            assertf(false, "expr assert=%d cannot used in left", expr->assert_type);
+        }
+    }
+
+    expr->type = type;
+    return type;
+}
+
+/**
+ * 大部分表达式都有一个 target 目标，如果需要做 implicit 类型转换，则需要将 target type 给到当前 expr
+ * 如果 expr 没发转换成 target type, 则可以丢出类型不一致的报错
+ *
+ *  var a = 1 中 a 其实也是表达式 ast_ident, 其作为左值，原则上来说不需要作用目标
  * 表达式推断核心逻辑
  * @param expr
  * @return
  */
-static typeuse_t infer_expr(module_t *m, ast_expr *expr) {
+static typeuse_t infer_right_expr(module_t *m, ast_expr *expr, typeuse_t target_type) {
     typeuse_t type;
     switch (expr->assert_type) {
+        case AST_EXPR_TYPE_CONVERT: {
+            type = infer_type_convert(m, expr->value);
+            break;
+        }
         case AST_EXPR_BINARY: {
             type = infer_binary(m, expr->value);
             break;
@@ -1004,24 +1047,20 @@ static typeuse_t infer_expr(module_t *m, ast_expr *expr) {
             type = infer_ident(m, expr->value);
             break;
         }
-        case AST_EXPR_TUPLE_DESTR: {
-            type = infer_tuple_destr(m, expr->value);
-            break;
-        }
         case AST_EXPR_LIST_NEW: {
-            type = infer_list_new(m, expr->value);
+            type = infer_list_new(m, expr->value, target_type);
             break;
         }
         case AST_EXPR_MAP_NEW: {
-            type = infer_map_new(m, expr->value);
+            type = infer_map_new(m, expr->value, target_type);
             break;
         }
         case AST_EXPR_SET_NEW: {
-            type = infer_set_new(m, expr->value);
+            type = infer_set_new(m, expr->value, target_type);
             break;
         }
         case AST_EXPR_TUPLE_NEW: {
-            type = infer_tuple_new(m, expr->value);
+            type = infer_tuple_new(m, expr->value, target_type);
             break;
         }
         case AST_EXPR_STRUCT_NEW: {
@@ -1064,7 +1103,25 @@ static typeuse_t infer_expr(module_t *m, ast_expr *expr) {
     }
 
     // 这里已经对表达式 type 做了调整
+    target_type = reduction_type(m, target_type);
     expr->type = type;
+    expr->target_type = target_type;
+
+    // TYPE_UNKNOWN 表示需要进行类型推断
+    if (target_type.kind == TYPE_UNKNOWN) {
+        return expr->type;
+    }
+
+    // 从 var decl 则需要进行类型推断
+    if (is_number(target_type.kind) && expr->type.kind != target_type.kind) {
+        *expr = ast_type_convert(*expr, target_type);
+    }
+
+    if (target_type.kind == TYPE_ANY && expr->type.kind != TYPE_ANY) {
+        *expr = ast_type_convert(*expr, target_type);
+    }
+
+    assertf(type_compare(expr->type, target_type), "type inconsistency");
     return expr->type;
 }
 
@@ -1080,14 +1137,13 @@ static typeuse_t reduction_struct(module_t *m, typeuse_t t) {
             p->type = reduction_type(m, p->type);
         }
 
+        // 包含默认值
         if (p->right) {
-            // 推断右值表达式类型
-            typeuse_t right_type = infer_expr(m, p->right);
+            // 推断右值表达式类型(默认值推导)
+            typeuse_t right_type = infer_right_expr(m, p->right, p->type);
             if (p->type.kind == TYPE_UNKNOWN) {
                 assertf(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
                 p->type = right_type;
-            } else {
-                assertf(type_compare(p->type, right_type), "struct property=%s, type inconsistency", p->key);
             }
         }
 
@@ -1253,7 +1309,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     // env 表达式类型还原
     for (int i = 0; i < fndef->parent_view_envs->length; ++i) {
         ast_expr *env_expr = ct_list_value(fndef->parent_view_envs, i);
-        infer_expr(m, env_expr);
+        infer_left_expr(m, env_expr);
     }
 
     if (fndef->self_struct) {

@@ -62,11 +62,7 @@ bool type_compare(typeuse_t left, typeuse_t right) {
         return true;
     }
 
-    if (is_integer(left.kind) != is_integer(right.kind)) {
-        return false;
-    } else if (is_float(left.kind) != is_float(right.kind)) {
-        return false;
-    } else if (left.kind != right.kind) {
+    if (left.kind != right.kind) {
         return false;
     }
 
@@ -128,6 +124,7 @@ bool type_compare(typeuse_t left, typeuse_t right) {
             return false;
         }
 
+        // TODO rest 支持
         if (left_type_fn->formal_types->length != right_type_fn->formal_types->length) {
             return false;
         }

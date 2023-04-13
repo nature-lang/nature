@@ -34,17 +34,18 @@ typedef enum {
     TYPE_FLOAT,
     TYPE_FLOAT32,
     TYPE_FLOAT64,
-    TYPE_BYTE,
+
+    TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
     TYPE_INT8,
-    TYPE_UINT8,
-    TYPE_INT16,
     TYPE_UINT16,
-    TYPE_INT32,
+    TYPE_INT16,
     TYPE_UINT32,
-    TYPE_INT,
-    TYPE_UINT,
-    TYPE_INT64,
+    TYPE_INT32,
     TYPE_UINT64,
+    TYPE_INT64,
+    TYPE_UINT,
+    TYPE_INT,
+
     // 复合类型
     TYPE_ANY,
     TYPE_STRING, // 10
@@ -472,6 +473,10 @@ static bool is_integer(type_kind kind) {
            kind == TYPE_UINT64;
 }
 
+static bool is_number(type_kind kind) {
+    return is_float(kind) || is_integer(kind);
+}
+
 /**
  * 不需要进行类型还原的类型
  * @param t
@@ -495,6 +500,21 @@ static bool is_complex_type(typeuse_t t) {
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET
            || t.kind == TYPE_FN;
+}
+
+/**
+ * int(-1) + uint(a) 时，int > uint, 宽度相同时， int 大于 uint
+ * @param left
+ * @param right
+ * @return
+ */
+static typeuse_t basic_type_select(type_kind left, type_kind right) {
+    if (left >= right) {
+        return type_basic_new(left);
+    }
+
+
+    return type_basic_new(right);
 }
 
 #endif //NATURE_TYPE_H
