@@ -9,22 +9,31 @@
 
 int compiler_line = 0;
 
-lir_opcode_t ast_expr_operator_transform[] = {
-        [AST_EXPR_OPERATOR_ADD] = LIR_OPCODE_ADD,
-        [AST_EXPR_OPERATOR_SUB] = LIR_OPCODE_SUB,
-        [AST_EXPR_OPERATOR_MUL] = LIR_OPCODE_MUL,
-        [AST_EXPR_OPERATOR_DIV] = LIR_OPCODE_DIV,
-        [AST_EXPR_OPERATOR_REM] = LIR_OPCODE_REM,
+lir_opcode_t ast_op_convert[] = {
+        [AST_OP_ADD] = LIR_OPCODE_ADD,
+        [AST_OP_SUB] = LIR_OPCODE_SUB,
+        [AST_OP_MUL] = LIR_OPCODE_MUL,
+        [AST_OP_DIV] = LIR_OPCODE_DIV,
+        [AST_OP_REM] = LIR_OPCODE_REM,
 
-        [AST_EXPR_OPERATOR_LT] = LIR_OPCODE_SLT,
-        [AST_EXPR_OPERATOR_LTE] = LIR_OPCODE_SLE,
-        [AST_EXPR_OPERATOR_GT] = LIR_OPCODE_SGT,
-        [AST_EXPR_OPERATOR_GTE] = LIR_OPCODE_SGE,
-        [AST_EXPR_OPERATOR_EQ_EQ] = LIR_OPCODE_SEE,
-        [AST_EXPR_OPERATOR_NOT_EQ] = LIR_OPCODE_SNE,
+        [AST_OP_LSHIFT] = LIR_OPCODE_SHL,
+        [AST_OP_RSHIFT] = LIR_OPCODE_SHR,
+        [AST_OP_AND] = LIR_OPCODE_AND,
+        [AST_OP_OR] = LIR_OPCODE_OR,
+        [AST_OP_XOR] = LIR_OPCODE_XOR,
 
-        [AST_EXPR_OPERATOR_NOT] = LIR_OPCODE_NOT,
-        [AST_EXPR_OPERATOR_NEG] = LIR_OPCODE_NEG,
+        [AST_OP_BNOT] = LIR_OPCODE_BNOT,
+
+
+        [AST_OP_LT] = LIR_OPCODE_SLT,
+        [AST_OP_LTE] = LIR_OPCODE_SLE,
+        [AST_OP_GT] = LIR_OPCODE_SGT,
+        [AST_OP_GTE] = LIR_OPCODE_SGE,
+        [AST_OP_EQ_EQ] = LIR_OPCODE_SEE,
+        [AST_OP_NOT_EQ] = LIR_OPCODE_SNE,
+
+        [AST_OP_NOT] = LIR_OPCODE_NOT,
+        [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
 
@@ -61,21 +70,6 @@ static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     }
 
     return target;
-}
-
-static lir_operand_t *compiler_addr_of(module_t *m, ast_expr expr) {
-    ast_addr_of_t *addr_of = expr.value;
-    return var_ref_operand(m, compiler_expr(m, *addr_of->expr));
-}
-
-// *expr ,expr 的 type 必须是 pointer
-static lir_operand_t *compiler_value_of(module_t *m, ast_expr expr) {
-    ast_value_of_t *value_of = expr.value;
-    assertf(value_of->expr->type.kind == TYPE_POINTER, "value of expr must pointer");
-    lir_operand_t *ptr_target = compiler_expr(m, *value_of->expr);
-
-    // 将改地址中的存储的数据取出来
-    return lir_indirect_addr_operand(ptr_target, 0);
 }
 
 static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_operand_t *index_target, ast_expr src) {
@@ -520,7 +514,7 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
 static lir_operand_t *compiler_binary(module_t *m, ast_expr expr) {
     ast_binary_expr *binary_expr = expr.value;
 
-    lir_opcode_t type = ast_expr_operator_transform[binary_expr->operator];
+    lir_opcode_t type = ast_op_convert[binary_expr->operator];
 
     lir_operand_t *left_target = compiler_expr(m, binary_expr->left);
     lir_operand_t *right_target = compiler_expr(m, binary_expr->right);
@@ -541,14 +535,12 @@ static lir_operand_t *compiler_binary(module_t *m, ast_expr expr) {
  */
 static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
     ast_unary_expr *unary_expr = expr.value;
-
     lir_operand_t *target = temp_var_operand(m, expr.type);
-
     lir_operand_t *first = compiler_expr(m, unary_expr->operand);
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator == AST_EXPR_OPERATOR_NEG && first->assert_type == LIR_OPERAND_IMM) {
+    if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
         imm->int_value = -imm->int_value;
         // move 操作即可
@@ -556,9 +548,14 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
         return target;
     }
 
-    assertf(unary_expr->operator != AST_EXPR_OPERATOR_IA, "not support IA op");
+    // &var
+    if (unary_expr->operator == AST_OP_LA) {
+        return var_ref_operand(m, first);
+    }
 
-    lir_opcode_t type = ast_expr_operator_transform[unary_expr->operator];
+
+    assertf(unary_expr->operator != AST_OP_IA, "not support IA op");
+    lir_opcode_t type = ast_op_convert[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);
 
@@ -922,6 +919,34 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr expr) {
     return tuple_target;
 }
 
+static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
+    ast_type_convert_t *type_convert = expr.value;
+    lir_operand_t *result = compiler_expr(m, type_convert->expr);
+    if (is_number(type_convert->target_type.kind)) {
+        operand_convert(result, type_convert->target_type);
+        return result;
+    }
+
+    if (type_convert->target_type.kind == TYPE_ANY) {
+        if (result->assert_type == LIR_OPERAND_IMM) {
+            lir_imm_t *imm = result->value;
+            imm->kind = TYPE_INT64;
+        }
+
+        lir_operand_t *converted = temp_var_operand(m, expr.target_type);
+        // 基于 source 类型计算 element_rtype index
+        uint rtype_index = ct_find_rtype_index(expr.type);
+        // lir call type, value =>
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY,
+                            converted,
+                            2, int_operand(rtype_index), result));
+        return converted;
+    }
+
+    assertf(false, "not support convert to type %s", type_kind_string[type_convert->target_type.kind]);
+    exit(1);
+}
+
 static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
     ast_catch *catch = expr.value;
     typeuse_t tuple_type = expr.type;
@@ -1142,7 +1167,6 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt) {
 
 compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = compiler_literal,
-        [AST_EXPR_ADDR_OF] = compiler_addr_of,
         [AST_EXPR_IDENT] = compiler_ident,
         [AST_EXPR_ENV_ACCESS] = compiler_env_access,
         [AST_EXPR_BINARY] = compiler_binary,
@@ -1159,6 +1183,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_CALL] = compiler_call,
         [AST_FNDEF] = compiler_fndef,
         [AST_EXPR_CATCH] = compiler_catch,
+        [AST_EXPR_TYPE_CONVERT] = compiler_type_convert,
 };
 
 

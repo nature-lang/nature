@@ -43,7 +43,7 @@ static char *lib_file_path(char *file) {
  * @param m
  */
 static void assembler_module(module_t *m) {
-    if (BUILD_OS == OS_LINUX) {
+    if (BUILD_OS == OS_LINUX) { // elf 就是 linux 独有都
         char *object_file_name = str_connect(m->ident, ".n.o");
         str_replace_char(object_file_name, '/', '.');
 
@@ -61,7 +61,7 @@ static void assembler_module(module_t *m) {
         elf_output(ctx);
 
         // 完整输出路径
-        printf(" --> assembler: %s\n", output);
+        DEBUGF(" --> assembler: %s\n", output);
         m->object_file = output;
         return;
     }
@@ -73,7 +73,7 @@ static void assembler_module(module_t *m) {
  * modules modules
  * @param modules
  */
-void build_linker(slice_t *modules) {
+static void build_linker(slice_t *modules) {
     // 检测是否生成
     int fd;
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
@@ -94,9 +94,14 @@ void build_linker(slice_t *modules) {
     fd = open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
-    // libc.a (runtime 依赖了 c 标准库)
-    fd = open(lib_file_path(LIB_C_FILE), O_RDONLY | O_BINARY);
+    // libucontext.a
+    fd = open(lib_file_path(LIBUCONTEXT_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
+
+    // libc.a (runtime 依赖了 c 标准库)
+    fd = open(lib_file_path(LIBC_FILE), O_RDONLY | O_BINARY);
+    elf_load_archive(ctx, fd);
+
 
     executable_file_format(ctx);
 
@@ -110,7 +115,7 @@ void build_linker(slice_t *modules) {
     printf("build output--> %s\n", BUILD_OUTPUT);
 }
 
-void build_init(char *build_entry) {
+static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
@@ -129,7 +134,7 @@ void build_init(char *build_entry) {
     ct_rtype_size = 0;
 }
 
-void build_config_print() {
+static void config_print() {
     DEBUGF("NATURE_ROOT: %s", NATURE_ROOT);
     DEBUGF("BUILD_OS: %s", os_to_string(BUILD_OS));
     DEBUGF("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
@@ -143,7 +148,7 @@ void build_config_print() {
     DEBUGF("SOURCE_PATH: %s", SOURCE_PATH);
 }
 
-void build_assembler(slice_t *modules) {
+static void build_assembler(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
@@ -174,14 +179,14 @@ void build_assembler(slice_t *modules) {
     }
 }
 
-void build_builtin() {
+static void import_builtin() {
     // nature_root
     char *source_path = path_join(NATURE_ROOT, "builtin/builtin.n");
-    // build 中包含 analysis 已经将相关 symbol 写入了, 无论是后续都 analysis 或者 infer 都能够使用
+    // build 中包含 analyser 已经将相关 symbol 写入了, 无论是后续都 analyser 或者 infer 都能够使用
     module_build(source_path, MODULE_TYPE_BUILTIN);
 }
 
-slice_t *build_modules() {
+static slice_t *build_modules() {
     assertf(strlen(SOURCE_PATH) > 0, "SOURCE_PATH empty");
 
     table_t *module_table = table_new();
@@ -222,7 +227,7 @@ slice_t *build_modules() {
     return modules;
 }
 
-void build_compiler(slice_t *modules) {
+static void build_compiler(slice_t *modules) {
     // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
@@ -278,10 +283,10 @@ void build(char *build_entry) {
     build_init(build_entry);
 
     // debug
-    build_config_print();
+    config_print();
 
     // 前端处理
-    build_builtin();
+    import_builtin();
 
     slice_t *modules = build_modules();
 

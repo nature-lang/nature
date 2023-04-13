@@ -31,15 +31,6 @@ linked_t *scanner(module_t *module) {
             char *word = scanner_ident_advance(module);
 
             token_t *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
-
-            // 如果是 p<
-            if (t->type == TOKEN_IDENT && str_equal(t->literal, "p") && *module->s_cursor.guard == '<') {
-                // advance
-                scanner_guard_advance(module);
-                t->type = TOKEN_P_ANGLE;
-                t->literal = "p<";
-            }
-
             linked_push(list, t);
             continue;
         }
@@ -124,20 +115,23 @@ token_e scanner_special_char(module_t *m) {
             return TOKEN_SEMICOLON;
         case ',':
             return TOKEN_COMMA;
+        case '%':
+            return scanner_match(m, '=') ? TOKEN_PERSON_EQUAL : TOKEN_PERSON;
         case '-':
-            return TOKEN_MINUS;
+            return scanner_match(m, '=') ? TOKEN_MINUS_EQUAL : TOKEN_MINUS;
         case '+':
-            return TOKEN_PLUS;
+            return scanner_match(m, '=') ? TOKEN_PLUS_EQUAL : TOKEN_PLUS;
         case '/':
-            return TOKEN_SLASH;
+            return scanner_match(m, '=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH;
         case '*':
-            return TOKEN_STAR;
+            return scanner_match(m, '=') ? TOKEN_STAR_EQUAL : TOKEN_STAR;
         case '.': {
             if (scanner_match(m, '.')) {
                 // 下一个值必须也要是点，否则就报错
                 if (scanner_match(m, '.')) {
                     return TOKEN_ELLIPSIS;
                 }
+                // 以及吃掉了 2 个点了，没有回头路
                 return -1;
             }
             return TOKEN_DOT;
@@ -147,13 +141,34 @@ token_e scanner_special_char(module_t *m) {
         case '=':
             return scanner_match(m, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
         case '<':
-            return scanner_match(m, '=') ? TOKEN_LESS_EQUAL : TOKEN_LEFT_ANGLE;
+            if (scanner_match(m, '<')) { // <<
+                if (scanner_match(m, '=')) { // <<=
+                    return TOKEN_LEFT_SHIFT_EQUAL;
+                }
+                // <<
+                return TOKEN_LEFT_SHIFT;
+            } else if (scanner_match(m, '=')) {
+                return TOKEN_LESS_EQUAL;
+            }
+            return TOKEN_LEFT_ANGLE;
         case '>':
-            return scanner_match(m, '=') ? TOKEN_GREATER_EQUAL : TOKEN_RIGHT_ANGLE;
+            if (scanner_match(m, '<')) {
+                if (scanner_match(m, '=')) { // >>=
+                    return TOKEN_RIGHT_SHIFT_EQUAL;
+                }
+                return TOKEN_RIGHT_SHIFT; // >>
+            } else if (scanner_match(m, '=')) { // >=
+                return TOKEN_GREATER_EQUAL;
+            }
+            return TOKEN_RIGHT_ANGLE; // >
         case '&':
             return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
         case '|':
             return scanner_match(m, '|') ? TOKEN_OR_OR : TOKEN_OR;
+        case '~':
+            return TOKEN_TILDE;
+        case '^':
+            return scanner_match(m, '=') ? TOKEN_XOR_EQUAL : TOKEN_XOR;
         default:
             return -1;
     }
@@ -366,6 +381,8 @@ token_e scanner_ident_type(char *word, int length) {
         }
         case 'n':
             return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
+        case 'p':
+            return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
         case 's': { // self,string,struct
             if (word[1] == 'e') {
                 return scanner_rest(word, length, 2, 2, "lf", TOKEN_SELF);

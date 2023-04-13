@@ -11,16 +11,84 @@
 typedef enum {
     PRECEDENCE_NULL, // 最低优先级
     PRECEDENCE_ASSIGN,
-    PRECEDENCE_OR,
-    PRECEDENCE_AND,
-    PRECEDENCE_EQUALITY,
-    PRECEDENCE_COMPARE,
-    PRECEDENCE_TERM,
-    PRECEDENCE_FACTOR,
+    PRECEDENCE_OR_OR, // ||
+    PRECEDENCE_AND_AND, // &&
+    PRECEDENCE_OR, // |
+    PRECEDENCE_XOR, // ^
+    PRECEDENCE_AND, // %
+    PRECEDENCE_CMP_EQUAL, // == !=
+    PRECEDENCE_COMPARE, // > < >= <=
+    PRECEDENCE_SHIFT, // << >>
+    PRECEDENCE_TERM, // + -
+    PRECEDENCE_FACTOR, // * / %
     PRECEDENCE_UNARY,
     PRECEDENCE_CALL, // foo.bar foo["bar"] foo() foo().foo.bar 这几个表达式都是同一优先级，应该从左往右依次运算
     PRECEDENCE_PRIMARY, // 最高优先级
 } parser_precedence;
+
+
+static ast_expr_op_t token_to_ast_op[] = {
+        [TOKEN_PLUS] = AST_OP_ADD, // +
+        [TOKEN_MINUS] = AST_OP_SUB, // -
+        [TOKEN_STAR] = AST_OP_MUL, // *
+        [TOKEN_SLASH] = AST_OP_DIV, // /
+        [TOKEN_PERSON] = AST_OP_REM, // /
+        [TOKEN_EQUAL_EQUAL] = AST_OP_EQ_EQ,
+        [TOKEN_NOT_EQUAL] = AST_OP_NOT_EQ,
+        [TOKEN_GREATER_EQUAL] = AST_OP_GTE,
+        [TOKEN_RIGHT_ANGLE] = AST_OP_GT,
+        [TOKEN_LESS_EQUAL] = AST_OP_LTE,
+        [TOKEN_LEFT_ANGLE] = AST_OP_LT,
+        [TOKEN_AND_AND] = AST_OP_AND_AND,
+        [TOKEN_OR_OR] = AST_OP_OR_OR,
+        // 位运算
+        [TOKEN_TILDE] = AST_OP_BNOT, // ~
+        [TOKEN_AND] = AST_OP_AND,  // &
+        [TOKEN_OR] = AST_OP_OR,  // |
+        [TOKEN_XOR] = AST_OP_XOR,  // ^
+        [TOKEN_LEFT_SHIFT] = AST_OP_LSHIFT,  // <<
+        [TOKEN_RIGHT_SHIFT] = AST_OP_RSHIFT, // >>
+
+        // equal 快捷运算拆解
+        [TOKEN_PERSON_EQUAL] = AST_OP_REM,
+        [TOKEN_MINUS_EQUAL] =AST_OP_SUB,
+        [TOKEN_PLUS_EQUAL] = AST_OP_ADD,
+        [TOKEN_SLASH_EQUAL] = AST_OP_DIV,
+        [TOKEN_STAR_EQUAL] = AST_OP_MUL,
+        [TOKEN_OR_EQUAL] = AST_OP_OR,
+        [TOKEN_AND_EQUAL] = AST_OP_AND,
+        [TOKEN_XOR_EQUAL] = AST_OP_XOR,
+        [TOKEN_LEFT_SHIFT_EQUAL] = AST_OP_LSHIFT,
+        [TOKEN_RIGHT_SHIFT_EQUAL] = AST_OP_RSHIFT,
+};
+
+static type_kind token_to_kind[] = {
+        // literal
+        [TOKEN_TRUE] = TYPE_BOOL,
+        [TOKEN_FALSE] = TYPE_BOOL,
+        [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
+        [TOKEN_LITERAL_INT] = TYPE_INT,
+        [TOKEN_LITERAL_STRING] = TYPE_STRING,
+
+        // type
+        [TOKEN_BOOL] = TYPE_BOOL,
+        [TOKEN_FLOAT] = TYPE_FLOAT,
+        [TOKEN_INT] = TYPE_INT,
+        [TOKEN_I8] = TYPE_INT8,
+        [TOKEN_I16] = TYPE_INT16,
+        [TOKEN_I32] = TYPE_INT32,
+        [TOKEN_I64] = TYPE_INT64,
+        [TOKEN_UINT] = TYPE_UINT,
+        [TOKEN_U8] = TYPE_UINT8,
+        [TOKEN_U16] = TYPE_UINT16,
+        [TOKEN_U32] = TYPE_UINT32,
+        [TOKEN_U64] = TYPE_UINT64,
+        [TOKEN_STRING] = TYPE_STRING,
+        [TOKEN_NULL] = TYPE_NULL,
+        [TOKEN_VAR] = TYPE_UNKNOWN,
+        [TOKEN_ANY] = TYPE_ANY
+};
+
 
 typedef ast_expr (*parser_prefix_fn)(module_t *module);
 
@@ -45,123 +113,5 @@ static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence
 static parser_rule *find_rule(token_e type);
 
 static ast_stmt *parser_if_stmt(module_t *m);
-///**
-// * @param type
-// * @return
-// */
-//parser_rule *parser_get_rule(token_e type);
-//
-//ast_expr parser_expr(module_t *m);
-//
-//ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
-//
-//ast_expr parser_literal(module_t *m);
-//
-//ast_expr parser_unary(module_t *m);
-//
-//ast_expr parser_grouping(module_t *m);
-//
-//ast_expr parser_ident_expr(module_t *m);
-//
-//ast_expr parser_call_expr(module_t *m, ast_expr left_expr);
-//
-//ast_expr parser_struct_access(module_t *m, ast_expr left);
-//
-//ast_expr parser_access(module_t *m, ast_expr left);
-//
-//ast_expr parser_binary(module_t *m, ast_expr left);
-//
-//ast_expr parser_fn_decl_expr(module_t *m, typeuse_t type);
-//
-//ast_expr parser_new_struct(module_t *m, typeuse_t type);
-//
-//ast_expr parser_new_list(module_t *m);
-//
-//ast_expr parser_new_map(module_t *m);
-//
-//ast_expr parser_direct_type_expr(module_t *m);
-//
-//ast_expr parser_struct_type_expr(module_t *m);
-//
-//ast_stmt *parser_stmt(module_t *m);
-//
-//slice_t *parser_block(module_t *m);
-//
-//ast_stmt *parser_ident_stmt(module_t *m);
-//
-//ast_stmt *parser_import_stmt(module_t *m);
-//
-//ast_stmt *parser_return_stmt(module_t *m);
-//
-//ast_stmt *parser_auto_infer_decl(module_t *m);
-//
-//ast_stmt *parser_var_or_fn_decl(module_t *m);
-//
-//ast_stmt *parser_if_stmt(module_t *m);
-//
-//ast_stmt *parser_for_stmt(module_t *m);
-//
-//ast_stmt *parser_while_stmt(module_t *m);
-//
-//ast_stmt *parser_type_decl_stmt(module_t *m);
-//
-//slice_t *parser_else_if(module_t *m);
-//
-//ast_new_fn *parser_fn_decl(module_t *m, typeuse_t type);
-//
-//ast_var_decl *parser_var_decl(module_t *m);
-//
-//void parser_actual_param(module_t *m, ast_call *call);
-//
-//void parser_formal_param(module_t *m, ast_new_fn *fn_decl);
-//
-//void parser_type_function_formal_param(module_t *m, typeuse_fn_t *type_fn);
-//
-//typeuse_t parser_type(module_t *m);
-//
-///**
-// * foo = 12
-// * foo.bar = 12
-// * foo[bar] = 12
-// * @param ident
-// * @return
-// */
-//ast_stmt *parser_assign(module_t *m, ast_expr left);
-//
-//token_t *parser_advance(module_t *m);
-//
-//token_t *parser_peek(module_t *m);
-//
-//int parser_line(module_t *m);
-//
-//bool parser_consume(module_t *m, token_e t);
-//
-//bool parser_is(module_t *m, token_e t);
-//
-//bool parser_next_is(module_t *m, int step, token_e t);
-//
-//linked_node *parser_next(module_t *m, int step);
-//
-///**
-// * 兼容 void
-// * @return
-// */
-//bool parser_is_direct_type(module_t *m);
-//
-//bool parser_is_custom_type_var(module_t *m);
-//
-//bool parser_is_simple_type(module_t *m);
-//
-//token_t *parser_must(module_t *m, token_e t);
-//
-//bool parser_must_stmt_end(module_t *m);
-//
-//bool parser_is_fn_decl(module_t *m, linked_node *current);
-//
-//void parser_cursor_init(module_t *m, linked_t *token_list);
-//
-//ast_stmt *parser_new_stmt();
-//
-//ast_expr parser_new_expr(module_t *m);
-//
+
 #endif //NATURE_SRC_SYNTAX_PARSER_H_

@@ -42,8 +42,6 @@ static char *var_unique_ident(module_t *m, char *ident) {
  */
 void complete_import(string importer_dir, ast_import *import);
 
-char *parser_base_ns(char *dir);
-
 module_t *module_build(string source_path, module_type_t type);
 
 /**

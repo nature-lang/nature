@@ -4,24 +4,24 @@
 #include <assert.h>
 
 #include "utils/helper.h"
-#include "analysis.h"
+#include "analyser.h"
 #include "utils/error.h"
 #include "utils/table.h"
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
 #include "src/debug/debug.h"
 
-static void analysis_block(module_t *m, slice_t *block) {
+static void analyser_block(module_t *m, slice_t *block) {
     for (int i = 0; i < block->count; ++i) {
         // switch 结构导向优化
-#ifdef DEBUG_ANALYSIS
-        debug_stmt("ANALYSIS", block->tack[i]);
+#ifdef DEBUG_ANALYSER
+        debug_stmt("ANALYSER", block->tack[i]);
 #endif
-        analysis_stmt(m, block->take[i]);
+        analyser_stmt(m, block->take[i]);
     }
 }
 
-static char *analysis_resolve_type(module_t *m, analysis_fndef_t *current, string ident) {
+static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, string ident) {
     local_scope_t *current_scope = current->current_scope;
     while (current_scope != NULL) {
         for (int i = 0; i < current_scope->idents->count; ++i) {
@@ -35,44 +35,44 @@ static char *analysis_resolve_type(module_t *m, analysis_fndef_t *current, strin
     }
 
     if (current->parent == NULL) {
-        error_type_not_found(m->analysis_line, ident);
+        error_type_not_found(m->analyser_line, ident);
     }
 
-    return analysis_resolve_type(m, current->parent, ident);
+    return analyser_resolve_type(m, current->parent, ident);
 }
 
 /**
  * 类型的处理较为简单，不需要做将其引用的环境封闭。只需要类型为 typedef ident 时能够定位唯一名称即可
  * @param type
  */
-static void analysis_typeuse(module_t *m, typeuse_t *type) {
+static void analyser_typeuse(module_t *m, typeuse_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // type foo = int
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_IDENT) {
         // 向上查查查
         type_ident_t *ident = type->ident;
-        string unique_name = analysis_resolve_type(m, m->analysis_current, ident->literal);
+        string unique_name = analyser_resolve_type(m, m->analyser_current, ident->literal);
         ident->literal = unique_name;
         return;
     }
 
     if (type->kind == TYPE_MAP) {
         type_map_t *map_decl = type->map;
-        analysis_typeuse(m, &map_decl->key_type);
-        analysis_typeuse(m, &map_decl->value_type);
+        analyser_typeuse(m, &map_decl->key_type);
+        analyser_typeuse(m, &map_decl->value_type);
         return;
     }
 
     if (type->kind == TYPE_SET) {
         type_set_t *set = type->set;
-        analysis_typeuse(m, &set->key_type);
+        analyser_typeuse(m, &set->key_type);
         return;
     }
 
     if (type->kind == TYPE_LIST) {
         type_list_t *list_decl = type->list;
-        analysis_typeuse(m, &list_decl->element_type);
+        analyser_typeuse(m, &list_decl->element_type);
         return;
     }
 
@@ -80,17 +80,17 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
         type_tuple_t *tuple = type->tuple;
         for (int i = 0; i < tuple->elements->length; ++i) {
             typeuse_t *element_type = ct_list_value(tuple->elements, i);
-            analysis_typeuse(m, element_type);
+            analyser_typeuse(m, element_type);
         }
         return;
     }
 
     if (type->kind == TYPE_FN) {
         type_fn_t *type_fn = type->fn;
-        analysis_typeuse(m, &type_fn->return_type);
+        analyser_typeuse(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formal_types->length; ++i) {
             typeuse_t *t = ct_list_value(type_fn->formal_types, i);
-            analysis_typeuse(m, t);
+            analyser_typeuse(m, t);
         }
     }
 
@@ -98,7 +98,7 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
         type_struct_t *struct_decl = type->struct_;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
-            analysis_typeuse(m, &item->type);
+            analyser_typeuse(m, &item->type);
 
             // 可选右值解析
             if (item->right) {
@@ -108,7 +108,7 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
                     fndef->self_struct = type;
                 }
 
-                analysis_expr(m, item->right);
+                analyser_expr(m, item->right);
             }
         }
     }
@@ -118,7 +118,7 @@ static void analysis_typeuse(module_t *m, typeuse_t *type) {
 // * @param name
 // * @return
 // */
-//static char *analysis_unique_ident(module_t *m, char *name) {
+//static char *analyser_unique_ident(module_t *m, char *name) {
 //    char *unique_name = LIR_UNIQUE_NAME(name);
 //    return ident_with_module(m->ident, unique_name);
 //}
@@ -137,12 +137,12 @@ local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string
     local_ident_t *local = malloc(sizeof(local_ident_t));
     local->ident = ident;
     local->unique_ident = unique_ident;
-    local->scope_depth = m->analysis_current->scope_depth;
+    local->scope_depth = m->analyser_current->scope_depth;
     local->decl = decl;
     local->type = type;
 
     // 添加 locals
-    local_scope_t *current_scope = m->analysis_current->current_scope;
+    local_scope_t *current_scope = m->analyser_current->current_scope;
     slice_push(current_scope->idents, local);
 
     // 添加到全局符号表
@@ -162,48 +162,48 @@ static local_scope_t *local_scope_new(uint8_t scope_depth, local_scope_t *parent
 /**
  * 块级作用域处理
  */
-static void analysis_begin_scope(module_t *m) {
-    m->analysis_current->scope_depth++;
-    local_scope_t *current_scope = m->analysis_current->current_scope;
-    m->analysis_current->current_scope = local_scope_new(m->analysis_current->scope_depth, current_scope);
+static void analyser_begin_scope(module_t *m) {
+    m->analyser_current->scope_depth++;
+    local_scope_t *current_scope = m->analyser_current->current_scope;
+    m->analyser_current->current_scope = local_scope_new(m->analyser_current->scope_depth, current_scope);
 }
 
-static void analysis_end_scope(module_t *m) {
-    local_scope_t *current_scope = m->analysis_current->current_scope;
-    m->analysis_current->current_scope = current_scope->parent;
-    m->analysis_current->scope_depth--;
+static void analyser_end_scope(module_t *m) {
+    local_scope_t *current_scope = m->analyser_current->current_scope;
+    m->analyser_current->current_scope = current_scope->parent;
+    m->analyser_current->scope_depth--;
 }
 
 
-static void analysis_if(module_t *m, ast_if_stmt *if_stmt) {
-    analysis_expr(m, &if_stmt->condition);
+static void analyser_if(module_t *m, ast_if_stmt *if_stmt) {
+    analyser_expr(m, &if_stmt->condition);
 
-    analysis_begin_scope(m);
-    analysis_block(m, if_stmt->consequent);
-    analysis_end_scope(m);
+    analyser_begin_scope(m);
+    analyser_block(m, if_stmt->consequent);
+    analyser_end_scope(m);
 
-    analysis_begin_scope(m);
-    analysis_block(m, if_stmt->alternate);
-    analysis_end_scope(m);
+    analyser_begin_scope(m);
+    analyser_block(m, if_stmt->alternate);
+    analyser_end_scope(m);
 }
 
-static void analysis_assign(module_t *m, ast_assign_stmt *assign) {
-    analysis_expr(m, &assign->left);
-    analysis_expr(m, &assign->right);
+static void analyser_assign(module_t *m, ast_assign_stmt *assign) {
+    analyser_expr(m, &assign->left);
+    analyser_expr(m, &assign->right);
 }
 
-static void analysis_throw(module_t *m, ast_throw_stmt *throw) {
-    analysis_expr(m, &throw->error);
+static void analyser_throw(module_t *m, ast_throw_stmt *throw) {
+    analyser_expr(m, &throw->error);
 }
 
-static void analysis_call(module_t *m, ast_call *call) {
+static void analyser_call(module_t *m, ast_call *call) {
     // 函数地址 unique 改写
-    analysis_expr(m, &call->left);
+    analyser_expr(m, &call->left);
 
     // 实参 unique 改写
     for (int i = 0; i < call->actual_params->length; ++i) {
         ast_expr *actual_param = ct_list_value(call->actual_params, i);
-        analysis_expr(m, actual_param);
+        analyser_expr(m, actual_param);
     }
 }
 
@@ -213,12 +213,12 @@ static void analysis_call(module_t *m, ast_call *call) {
  * @param ident
  * @return
  */
-static bool analysis_redeclare_check(module_t *m, char *ident) {
-    local_scope_t *current_scope = m->analysis_current->current_scope;
+static bool analyser_redeclare_check(module_t *m, char *ident) {
+    local_scope_t *current_scope = m->analyser_current->current_scope;
     for (int i = 0; i < current_scope->idents->count; ++i) {
         local_ident_t *local = current_scope->idents->take[i];
         if (strcmp(ident, local->ident) == 0) {
-            error_redeclare_ident(m->analysis_line, ident);
+            error_redeclare_ident(m->analyser_line, ident);
             return false;
         }
     }
@@ -230,10 +230,10 @@ static bool analysis_redeclare_check(module_t *m, char *ident) {
  * 当子作用域中重新定义了变量，产生了同名变量时，则对变量进行重命名
  * @param var_decl
  */
-static void analysis_var_decl(module_t *m, ast_var_decl *var_decl) {
-    analysis_redeclare_check(m, var_decl->ident);
+static void analyser_var_decl(module_t *m, ast_var_decl *var_decl) {
+    analyser_redeclare_check(m, var_decl->ident);
 
-    analysis_typeuse(m, &var_decl->type);
+    analyser_typeuse(m, &var_decl->type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, var_decl, var_decl->ident);
 
@@ -241,23 +241,23 @@ static void analysis_var_decl(module_t *m, ast_var_decl *var_decl) {
     var_decl->ident = local->unique_ident;
 }
 
-static void analysis_vardef(module_t *m, ast_vardef_stmt *stmt) {
-    analysis_expr(m, &stmt->right);
-    analysis_redeclare_check(m, stmt->var_decl.ident);
-    analysis_typeuse(m, &stmt->var_decl.type);
+static void analyser_vardef(module_t *m, ast_vardef_stmt *stmt) {
+    analyser_expr(m, &stmt->right);
+    analyser_redeclare_check(m, stmt->var_decl.ident);
+    analyser_typeuse(m, &stmt->var_decl.type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &stmt->var_decl, stmt->var_decl.ident);
     stmt->var_decl.ident = local->unique_ident;
 }
 
-static void analysis_var_tuple_destr(module_t *m, ast_tuple_destr *tuple_destr) {
+static void analyser_var_tuple_destr(module_t *m, ast_tuple_destr *tuple_destr) {
     for (int i = 0; i < tuple_destr->elements->length; ++i) {
         ast_expr *expr = ct_list_value(tuple_destr->elements, i);
         // 要么是 ast_var_decl 要么是 ast_tuple_destr
         if (expr->assert_type == AST_VAR_DECL) {
-            analysis_var_decl(m, expr->value);
+            analyser_var_decl(m, expr->value);
         } else if (expr->assert_type == AST_STMT_VAR_TUPLE_DESTR) {
-            analysis_var_tuple_destr(m, expr->value);
+            analyser_var_tuple_destr(m, expr->value);
         } else {
             assertf(false, "var tuple destr expr type exception");
         }
@@ -269,12 +269,12 @@ static void analysis_var_tuple_destr(module_t *m, ast_tuple_destr *tuple_destr) 
  * @param m
  * @param stmt
  */
-static void analysis_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt *stmt) {
-    analysis_expr(m, &stmt->right);
-    analysis_var_tuple_destr(m, stmt->tuple_destr);
+static void analyser_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt *stmt) {
+    analyser_expr(m, &stmt->right);
+    analyser_var_tuple_destr(m, stmt->tuple_destr);
 }
 
-static void analysis_fndef_name(module_t *m, ast_fndef_t *fndef) {
+static void analyser_fndef_name(module_t *m, ast_fndef_t *fndef) {
     // 仅 fun 再次定义 as 才需要再次添加到符号表
     if (!str_equal(fndef->name, FN_MAIN_NAME)) {
         if (strlen(fndef->name) == 0) {
@@ -282,7 +282,7 @@ static void analysis_fndef_name(module_t *m, ast_fndef_t *fndef) {
             fndef->name = var_unique_ident(m, ANONYMOUS_FN_NAME);
         }
 
-        analysis_redeclare_check(m, fndef->name);
+        analyser_redeclare_check(m, fndef->name);
 
         // 函数名称改写
         local_ident_t *local = local_ident_new(m, SYMBOL_FN, fndef, fndef->name);
@@ -291,18 +291,18 @@ static void analysis_fndef_name(module_t *m, ast_fndef_t *fndef) {
     }
 }
 
-static void analysis_function_begin(module_t *m) {
-    analysis_begin_scope(m);
+static void analyser_function_begin(module_t *m) {
+    analyser_begin_scope(m);
 }
 
-static void analysis_function_end(module_t *m) {
-    analysis_end_scope(m);
+static void analyser_function_end(module_t *m) {
+    analyser_end_scope(m);
 
-    m->analysis_current = m->analysis_current->parent;
+    m->analyser_current = m->analyser_current->parent;
 }
 
-static analysis_fndef_t *analysis_current_init(module_t *m, local_scope_t *scope, char *fn_name) {
-    analysis_fndef_t *new = malloc(sizeof(analysis_fndef_t));
+static analyser_fndef_t *analyser_current_init(module_t *m, local_scope_t *scope, char *fn_name) {
+    analyser_fndef_t *new = malloc(sizeof(analyser_fndef_t));
     new->frees = slice_new();
     new->free_table = table_new();
     new->delay_fndefs = ct_list_new(sizeof(delay_fndef_t));
@@ -311,10 +311,10 @@ static analysis_fndef_t *analysis_current_init(module_t *m, local_scope_t *scope
     new->current_scope = scope;
 
     // 继承关系
-    new->parent = m->analysis_current;
-    m->analysis_current = new;
+    new->parent = m->analyser_current;
+    m->analyser_current = new;
 
-    return m->analysis_current;
+    return m->analyser_current;
 }
 
 
@@ -334,23 +334,23 @@ static analysis_fndef_t *analysis_current_init(module_t *m, local_scope_t *scope
  * @param fndef
  * @return
  */
-static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope) {
+static void analyser_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope) {
     fndef->parent_view_envs = ct_list_new(sizeof(ast_expr));
 
-    analysis_typeuse(m, &fndef->return_type);
+    analyser_typeuse(m, &fndef->return_type);
 
     // 初始化
-    analysis_current_init(m, scope, fndef->name);
+    analyser_current_init(m, scope, fndef->name);
 
     // 开启一个新的 function 作用域
-    analysis_function_begin(m);
+    analyser_function_begin(m);
 
     // 函数形参处理
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *param = ct_list_value(fndef->formals, i);
 
         // type 中引用了 typedef ident 到话,同样需要更新引用
-        analysis_typeuse(m, &param->type);
+        analyser_typeuse(m, &param->type);
 
         // 注册(param->ident 此时已经随 param->type 一起写入到了 symbol 中)
         local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
@@ -360,18 +360,18 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
     }
 
     // 分析请求体 block, 其中进行了对外部变量的捕获并改写, 以及 local var 名称 unique
-    analysis_block(m, fndef->body);
+    analyser_block(m, fndef->body);
 
     // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
     // free 是在外部环境构建 env 的。
     // current_function->env_unique_name = unique_var_ident(ENV_IDENT);
-//    closure->env_name = m->analysis_current->env_unique_name;
+//    closure->env_name = m->analyser_current->env_unique_name;
 
-    // 构造 env (通过 analysis block, 当前 block 中引用的所有外部变量都被收集了起来)
-    for (int i = 0; i < m->analysis_current->frees->count; ++i) {
+    // 构造 env (通过 analyser block, 当前 block 中引用的所有外部变量都被收集了起来)
+    for (int i = 0; i < m->analyser_current->frees->count; ++i) {
         // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
         // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
-        free_ident_t *free_var = m->analysis_current->frees->take[i];
+        free_ident_t *free_var = m->analyser_current->frees->take[i];
 
         // 封装成 ast_expr 更利于 compiler
         ast_expr expr;
@@ -385,7 +385,7 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
             // ast_env_index 表达式, 这里时 parent 再次引用了 parent env 到意思
             expr.assert_type = AST_EXPR_ENV_ACCESS;
             ast_env_access *env_access = NEW(ast_env_access);
-            env_access->fn_name = m->analysis_current->parent->fn_name;
+            env_access->fn_name = m->analyser_current->parent->fn_name;
             env_access->index = free_var->env_index;
             env_access->unique_ident = free_var->ident;
             expr.value = env_access;
@@ -394,15 +394,15 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
         ct_list_push(fndef->parent_view_envs, &expr);
     }
 
-    // 对当前 fndef 中对所有 sub fndef 进行 analysis
-    for (int i = 0; i < m->analysis_current->delay_fndefs->length; ++i) {
-        delay_fndef_t *d = ct_list_value(m->analysis_current->delay_fndefs, i);
-        analysis_fndef(m, d->fndef, d->scope);
+    // 对当前 fndef 中对所有 sub fndef 进行 analyser
+    for (int i = 0; i < m->analyser_current->delay_fndefs->length; ++i) {
+        delay_fndef_t *d = ct_list_value(m->analyser_current->delay_fndefs, i);
+        analyser_fndef(m, d->fndef, d->scope);
         // 将所有对 fndef 都加入到 flat fndefs 中, 且没有 parent 关系想关联。
         slice_push(m->ast_fndefs, d->fndef);
     }
 
-    analysis_function_end(m); // 退出当前 current
+    analyser_function_end(m); // 退出当前 current
 }
 
 /**
@@ -412,7 +412,7 @@ static void analysis_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
  * @param ident
  * @return
  */
-static int analysis_push_free(analysis_fndef_t *current, bool is_local, int index, string ident) {
+static int analyser_push_free(analyser_fndef_t *current, bool is_local, int index, string ident) {
     // if exists, return exists index
     free_ident_t *free = table_get(current->free_table, ident);
     if (free) {
@@ -437,7 +437,7 @@ static int analysis_push_free(analysis_fndef_t *current, bool is_local, int inde
  * @param ident
  * @return
  */
-int8_t analysis_resolve_free(analysis_fndef_t *current, string*ident) {
+int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
     if (current->parent == NULL) {
         return -1;
     }
@@ -450,15 +450,15 @@ int8_t analysis_resolve_free(analysis_fndef_t *current, string*ident) {
         if (strcmp(*ident, local->ident) == 0) {
             local->is_capture = true;
             *ident = local->unique_ident;
-            return (int8_t) analysis_push_free(current, true, i, *ident);
+            return (int8_t) analyser_push_free(current, true, i, *ident);
         }
     }
 
     // 一级 parent 没有找到，则继续向上 parent 递归查询
-    int8_t parent_free_index = analysis_resolve_free(current->parent, ident);
+    int8_t parent_free_index = analyser_resolve_free(current->parent, ident);
     if (parent_free_index != -1) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
-        return (int8_t) analysis_push_free(current, false, parent_free_index, *ident);
+        return (int8_t) analyser_push_free(current, false, parent_free_index, *ident);
     }
 
     return -1;
@@ -467,11 +467,11 @@ int8_t analysis_resolve_free(analysis_fndef_t *current, string*ident) {
 /**
  * @param expr
  */
-static void analysis_ident(module_t *m, ast_expr *expr) {
+static void analyser_ident(module_t *m, ast_expr *expr) {
     ast_ident *ident = expr->value;
 
     // 在当前函数作用域中查找变量定义
-    local_scope_t *current_scope = m->analysis_current->current_scope;
+    local_scope_t *current_scope = m->analyser_current->current_scope;
     while (current_scope != NULL) {
         for (int i = 0; i < current_scope->idents->count; ++i) {
             local_ident_t *local = current_scope->idents->take[i];
@@ -485,13 +485,13 @@ static void analysis_ident(module_t *m, ast_expr *expr) {
     }
 
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-    int8_t free_var_index = analysis_resolve_free(m->analysis_current, &ident->literal);
+    int8_t free_var_index = analyser_resolve_free(m->analyser_current, &ident->literal);
     if (free_var_index != -1) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;
         ast_env_access *env_access = NEW(ast_env_access);
-        env_access->fn_name = m->analysis_current->fn_name;
+        env_access->fn_name = m->analyser_current->fn_name;
         env_access->index = free_var_index;
         // 外部到 ident 可能已经修改了名字,这里进行冗于记录
         env_access->unique_ident = ident->literal;
@@ -519,19 +519,19 @@ static void analysis_ident(module_t *m, ast_expr *expr) {
 }
 
 
-static void analysis_access(module_t *m, ast_access *access) {
-    analysis_expr(m, &access->left);
-    analysis_expr(m, &access->key);
+static void analyser_access(module_t *m, ast_access *access) {
+    analyser_expr(m, &access->left);
+    analyser_expr(m, &access->key);
 }
 
 /*
  * 如果是 import_path.test 则进行符号改写, 改写成 namespace + module_name
  * struct.key , instance? 则不做任何对处理。
  */
-static void analysis_select(module_t *m, ast_expr *expr) {
+static void analyser_select(module_t *m, ast_expr *expr) {
     ast_select *select = expr->value;
     if (select->left.assert_type != AST_EXPR_IDENT) {
-        analysis_expr(m, &select->left);
+        analyser_expr(m, &select->left);
         return;
     }
     ast_ident *ident = select->left.value;
@@ -544,16 +544,16 @@ static void analysis_select(module_t *m, ast_expr *expr) {
         return;
     }
 
-    analysis_expr(m, &select->left);
+    analyser_expr(m, &select->left);
 }
 
-static void analysis_binary(module_t *m, ast_binary_expr *expr) {
-    analysis_expr(m, &expr->left);
-    analysis_expr(m, &expr->right);
+static void analyser_binary(module_t *m, ast_binary_expr *expr) {
+    analyser_expr(m, &expr->left);
+    analyser_expr(m, &expr->right);
 }
 
-static void analysis_unary(module_t *m, ast_unary_expr *expr) {
-    analysis_expr(m, &expr->operand);
+static void analyser_unary(module_t *m, ast_unary_expr *expr) {
+    analyser_expr(m, &expr->operand);
 }
 
 /**
@@ -562,35 +562,35 @@ static void analysis_unary(module_t *m, ast_unary_expr *expr) {
  * }
  * @param expr
  */
-static void analysis_struct_new(module_t *m, ast_struct_new_t *expr) {
-    analysis_typeuse(m, &expr->type);
+static void analyser_struct_new(module_t *m, ast_struct_new_t *expr) {
+    analyser_typeuse(m, &expr->type);
 
     for (int i = 0; i < expr->properties->length; ++i) {
         struct_property_t *property = ct_list_value(expr->properties, i);
-        analysis_expr(m, property->right);
+        analyser_expr(m, property->right);
     }
 }
 
-static void analysis_map_new(module_t *m, ast_map_new *expr) {
+static void analyser_map_new(module_t *m, ast_map_new *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_map_element *element = ct_list_value(expr->elements, i);
-        analysis_expr(m, &element->key);
-        analysis_expr(m, &element->value);
+        analyser_expr(m, &element->key);
+        analyser_expr(m, &element->value);
     }
 }
 
 
-static void analysis_set_new(module_t *m, ast_set_new *expr) {
+static void analyser_set_new(module_t *m, ast_set_new *expr) {
     for (int i = 0; i < expr->keys->length; ++i) {
         ast_expr *key = ct_list_value(expr->keys, i);
-        analysis_expr(m, key);
+        analyser_expr(m, key);
     }
 }
 
-static void analysis_tuple_new(module_t *m, ast_tuple_new *expr) {
+static void analyser_tuple_new(module_t *m, ast_tuple_new *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_expr *element = ct_list_value(expr->elements, i);
-        analysis_expr(m, element);
+        analyser_expr(m, element);
     }
 }
 
@@ -600,125 +600,125 @@ static void analysis_tuple_new(module_t *m, ast_tuple_new *expr) {
  * @param m
  * @param expr
  */
-static void analysis_tuple_destr(module_t *m, ast_tuple_destr *tuple) {
+static void analyser_tuple_destr(module_t *m, ast_tuple_destr *tuple) {
     for (int i = 0; i < tuple->elements->length; ++i) {
         ast_expr *element = ct_list_value(tuple->elements, i);
-        analysis_expr(m, element);
+        analyser_expr(m, element);
     }
 }
 
 
-static void analysis_list_new(module_t *m, ast_list_new *expr) {
+static void analyser_list_new(module_t *m, ast_list_new *expr) {
     for (int i = 0; i < expr->values->length; ++i) {
         ast_expr *value = ct_list_value(expr->values, i);
-        analysis_expr(m, value);
+        analyser_expr(m, value);
     }
 }
 
-static void analysis_catch(module_t *m, ast_catch *expr) {
-    analysis_call(m, expr->call);
+static void analyser_catch(module_t *m, ast_catch *expr) {
+    analyser_call(m, expr->call);
 }
 
-static void analysis_for_cond(module_t *m, ast_for_cond_stmt *stmt) {
-    analysis_expr(m, &stmt->condition);
+static void analyser_for_cond(module_t *m, ast_for_cond_stmt *stmt) {
+    analyser_expr(m, &stmt->condition);
 
-    analysis_begin_scope(m);
-    analysis_block(m, stmt->body);
-    analysis_end_scope(m);
+    analyser_begin_scope(m);
+    analyser_block(m, stmt->body);
+    analyser_end_scope(m);
 }
 
-static void analysis_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
-    analysis_begin_scope(m);
-    analysis_stmt(m, stmt->init);
-    analysis_expr(m, &stmt->cond);
-    analysis_stmt(m, stmt->update);
-    analysis_block(m, stmt->body);
-    analysis_end_scope(m);
+static void analyser_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
+    analyser_begin_scope(m);
+    analyser_stmt(m, stmt->init);
+    analyser_expr(m, &stmt->cond);
+    analyser_stmt(m, stmt->update);
+    analyser_block(m, stmt->body);
+    analyser_end_scope(m);
 }
 
-static void analysis_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
+static void analyser_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
     // iterate 是对变量的使用，所以其在 scope
-    analysis_expr(m, &stmt->iterate);
+    analyser_expr(m, &stmt->iterate);
 
-    analysis_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
+    analyser_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
-    analysis_var_decl(m, &stmt->key);
-    analysis_var_decl(m, &stmt->value);
-    analysis_block(m, stmt->body);
+    analyser_var_decl(m, &stmt->key);
+    analyser_var_decl(m, &stmt->value);
+    analyser_block(m, stmt->body);
 
-    analysis_end_scope(m);
+    analyser_end_scope(m);
 }
 
-static void analysis_return(module_t *m, ast_return_stmt *stmt) {
+static void analyser_return(module_t *m, ast_return_stmt *stmt) {
     if (stmt->expr != NULL) {
-        analysis_expr(m, stmt->expr);
+        analyser_expr(m, stmt->expr);
     }
 }
 
 // type foo = int
-static void analysis_typedef(module_t *m, ast_typedef_stmt *stmt) {
-    analysis_redeclare_check(m, stmt->ident);
-    analysis_typeuse(m, &stmt->type);
+static void analyser_typedef(module_t *m, ast_typedef_stmt *stmt) {
+    analyser_redeclare_check(m, stmt->ident);
+    analyser_typeuse(m, &stmt->type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_TYPEDEF, stmt, stmt->ident);
     stmt->ident = local->unique_ident;
 }
 
 
-static void analysis_expr(module_t *m, ast_expr *expr) {
+static void analyser_expr(module_t *m, ast_expr *expr) {
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
-            return analysis_binary(m, expr->value);
+            return analyser_binary(m, expr->value);
         }
         case AST_EXPR_UNARY: {
-            return analysis_unary(m, expr->value);
+            return analyser_unary(m, expr->value);
         }
         case AST_EXPR_CATCH: {
-            return analysis_catch(m, expr->value);
+            return analyser_catch(m, expr->value);
         }
         case AST_EXPR_STRUCT_NEW: {
-            return analysis_struct_new(m, expr->value);
+            return analyser_struct_new(m, expr->value);
         }
         case AST_EXPR_MAP_NEW: {
-            return analysis_map_new(m, expr->value);
+            return analyser_map_new(m, expr->value);
         }
         case AST_EXPR_SET_NEW: {
-            return analysis_set_new(m, expr->value);
+            return analyser_set_new(m, expr->value);
         }
         case AST_EXPR_TUPLE_NEW: {
-            return analysis_tuple_new(m, expr->value);
+            return analyser_tuple_new(m, expr->value);
         }
         case AST_EXPR_TUPLE_DESTR: {
-            return analysis_tuple_destr(m, expr->value);
+            return analyser_tuple_destr(m, expr->value);
         }
         case AST_EXPR_LIST_NEW: {
-            return analysis_list_new(m, expr->value);
+            return analyser_list_new(m, expr->value);
         }
         case AST_EXPR_ACCESS: {
-            return analysis_access(m, expr->value);
+            return analyser_access(m, expr->value);
         }
         case AST_EXPR_SELECT: {
-            // analysis 仅进行了变量重命名
+            // analyser 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
-            return analysis_select(m, expr);
+            return analyser_select(m, expr);
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
-            return analysis_ident(m, expr);
+            return analyser_ident(m, expr);
         }
         case AST_CALL: {
-            return analysis_call(m, expr->value);
+            return analyser_call(m, expr->value);
         }
         case AST_FNDEF: {
-            analysis_fndef_name(m, expr->value);
+            analyser_fndef_name(m, expr->value);
 
             // 函数体延迟到最后进行处理
             delay_fndef_t d = {
                     .fndef = expr->value,
                     .is_stmt = false,
-                    .scope = m->analysis_current->current_scope
+                    .scope = m->analyser_current->current_scope
             };
-            ct_list_push(m->analysis_current->delay_fndefs, &d);
+            ct_list_push(m->analyser_current->delay_fndefs, &d);
 
             break;
         }
@@ -728,56 +728,56 @@ static void analysis_expr(module_t *m, ast_expr *expr) {
 }
 
 
-static void analysis_stmt(module_t *m, ast_stmt *stmt) {
+static void analyser_stmt(module_t *m, ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
-            return analysis_var_decl(m, stmt->value);
+            return analyser_var_decl(m, stmt->value);
         }
         case AST_STMT_VAR_DEF: {
-            return analysis_vardef(m, stmt->value);
+            return analyser_vardef(m, stmt->value);
         }
         case AST_STMT_VAR_TUPLE_DESTR: {
-            return analysis_var_tuple_destr_stmt(m, stmt->value);
+            return analyser_var_tuple_destr_stmt(m, stmt->value);
         }
         case AST_STMT_ASSIGN: {
-            return analysis_assign(m, stmt->value);
+            return analyser_assign(m, stmt->value);
         }
         case AST_FNDEF: {
             // 主要是 fn_name unique 处理
-            analysis_fndef_name(m, stmt->value);
+            analyser_fndef_name(m, stmt->value);
 
             delay_fndef_t d = {
                     .fndef = stmt->value,
                     .is_stmt = true,
-                    .scope = m->analysis_current->current_scope
+                    .scope = m->analyser_current->current_scope
             };
-            ct_list_push(m->analysis_current->delay_fndefs, &d);
+            ct_list_push(m->analyser_current->delay_fndefs, &d);
 
             break;
         }
         case AST_CALL: {
-            return analysis_call(m, stmt->value);
+            return analyser_call(m, stmt->value);
         }
         case AST_STMT_THROW: {
-            return analysis_throw(m, stmt->value);
+            return analyser_throw(m, stmt->value);
         }
         case AST_STMT_IF: {
-            return analysis_if(m, stmt->value);
+            return analyser_if(m, stmt->value);
         }
         case AST_STMT_FOR_COND: {
-            return analysis_for_cond(m, stmt->value);
+            return analyser_for_cond(m, stmt->value);
         }
         case AST_STMT_FOR_TRADITION: {
-            return analysis_for_tradition(m, stmt->value);
+            return analyser_for_tradition(m, stmt->value);
         }
         case AST_STMT_FOR_ITERATOR: {
-            return analysis_for_iterator(m, stmt->value);
+            return analyser_for_iterator(m, stmt->value);
         }
         case AST_STMT_RETURN: {
-            return analysis_return(m, stmt->value);
+            return analyser_return(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
-            return analysis_typedef(m, stmt->value);
+            return analyser_typedef(m, stmt->value);
         }
         default: {
             return;
@@ -790,9 +790,9 @@ static void analysis_stmt(module_t *m, ast_stmt *stmt) {
  * @param m
  * @param stmt_list
  */
-static void analysis_module(module_t *m, slice_t *stmt_list) {
+static void analyser_module(module_t *m, slice_t *stmt_list) {
     // init
-    m->analysis_line = 0;
+    m->analyser_line = 0;
     int import_end_index = 0;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
@@ -867,7 +867,7 @@ static void analysis_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        assert(false && "[analysis_module] stmt.code not allow, must var_decl/new_fn/type_decl");
+        assert(false && "[analyser_module] stmt.code not allow, must var_decl/new_fn/type_decl");
     }
 
     // 添加 init fn
@@ -898,7 +898,7 @@ static void analysis_module(module_t *m, slice_t *stmt_list) {
     // 遍历所有 fn list
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
-        analysis_fndef(m, fndef, NULL);
+        analyser_fndef(m, fndef, NULL);
 
         slice_push(m->ast_fndefs, fndef);
     }
@@ -909,7 +909,7 @@ static void analysis_module(module_t *m, slice_t *stmt_list) {
  * @param t
  * @param stmt_list
  */
-static void analysis_main(module_t *m, slice_t *stmt_list) {
+static void analyser_main(module_t *m, slice_t *stmt_list) {
     // 过滤处 import 部分, 其余部分再包到 main closure_t 中
     int import_end_index = 0;
     for (int i = 0; i < stmt_list->count; ++i) {
@@ -928,7 +928,7 @@ static void analysis_main(module_t *m, slice_t *stmt_list) {
     }
 
     // init
-    m->analysis_line = 0;
+    m->analyser_line = 0;
 
     // block 封装进 function,再封装到 closure_t 中
     ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
@@ -944,14 +944,14 @@ static void analysis_main(module_t *m, slice_t *stmt_list) {
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, true);
     slice_push(m->global_symbols, s);
 
-    analysis_fndef(m, fndef, NULL);
+    analyser_fndef(m, fndef, NULL);
     slice_push(m->ast_fndefs, fndef);
 }
 
-void analysis(module_t *m, slice_t *stmt_list) {
+void analyser(module_t *m, slice_t *stmt_list) {
     if (m->type == MODULE_TYPE_MAIN) {
-        analysis_main(m, stmt_list);
+        analyser_main(m, stmt_list);
     } else {
-        analysis_module(m, stmt_list);
+        analyser_module(m, stmt_list);
     }
 }

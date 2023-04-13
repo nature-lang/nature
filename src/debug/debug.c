@@ -61,10 +61,27 @@ string token_type_to_str[] = {
         [TOKEN_EQUAL_EQUAL]="TOKEN_EQUAL_EQUAL",
         [TOKEN_GREATER_EQUAL]="TOKEN_GREATER_EQUAL",
         [TOKEN_LESS_EQUAL]="TOKEN_LESS_EQUAL",
-        [TOKEN_AND]="TOKEN_AND",
         [TOKEN_AND_AND]="TOKEN_AND_AND",
-        [TOKEN_OR]="TOKEN_OR",
         [TOKEN_OR_OR]="TOKEN_OR_OR",
+
+        [TOKEN_PLUS_EQUAL]="TOKEN_PLUS_EQUAL", // +=
+        [TOKEN_MINUS_EQUAL]="TOKEN_MINUS_EQUAL", // -=
+        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL", // *=
+        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL", // /=
+        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL", // %=
+        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL", // &=
+        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL", // |=
+        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL", // ^=
+        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL", // >>=
+        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL", // <<=
+
+        // 位运算
+        [TOKEN_TILDE] = "TOKEN_TILDE", // ~
+        [TOKEN_AND] = "TOKEN_AND",  // &
+        [TOKEN_OR] = "TOKEN_OR",  // |
+        [TOKEN_XOR] = "TOKEN_XOR",  // ^
+        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
+        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT", // >>
 
         // LITERALS.
         [TOKEN_IDENT]="TOKEN_IDENT",

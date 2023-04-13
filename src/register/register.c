@@ -1,4 +1,5 @@
 #include "register.h"
+#include "src/cross.h"
 #include "utils/helper.h"
 #include "amd64.h"
 #include <assert.h>
@@ -32,9 +33,7 @@ void reg_init() {
     regs = slice_new();
     memset(alloc_regs, 0, sizeof(alloc_regs));
 
-    if (BUILD_ARCH == ARCH_AMD64) {
-        amd64_reg_init();
-    }
+    CROSS_REG_INIT();
 }
 
 

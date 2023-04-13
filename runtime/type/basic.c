@@ -1,16 +1,7 @@
-#include "any.h"
+#include "basic.h"
 #include "runtime/allocator.h"
 
-
-/**
- * 可是怎么返回超过 8byte 的数据？
- * 将 value 转换成 any 类型的数据！
- * value 必须是指针数据，因为 any 类型只能存储 8byte 的数据
- * @param rtype_index
- * @param value
- * @return
- */
-memory_any_t *trans_any(uint rtype_index, void *value) {
+memory_any_t *convert_any(uint64_t rtype_index, void *value) {
     // - 根据 rtype_index 找到对应的
     rtype_t *rtype = rt_find_rtype(rtype_index);
 

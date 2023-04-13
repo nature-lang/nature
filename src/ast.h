@@ -72,41 +72,64 @@ typedef enum {
 } ast_type_t;
 
 typedef enum {
-    AST_EXPR_OPERATOR_ADD,
-    AST_EXPR_OPERATOR_SUB,
-    AST_EXPR_OPERATOR_MUL,
-    AST_EXPR_OPERATOR_DIV,
+    // ARITHMETIC 运算
+    AST_OP_ADD, // +
+    AST_OP_SUB, // -
+    AST_OP_MUL, // *
+    AST_OP_DIV, // /
+    AST_OP_REM, // %
 
-    AST_EXPR_OPERATOR_REM,
+    // unary
+    AST_OP_NOT, // UNARY !RIGHT
+    AST_OP_NEG, // UNARY -RIGHT
+    AST_OP_BNOT, // ~
+    AST_OP_LA, // load addr
+    AST_OP_IA, // indirect addr  *解引用
 
-    AST_EXPR_OPERATOR_LT,
-    AST_EXPR_OPERATOR_LTE,
-    AST_EXPR_OPERATOR_GT, // >
-    AST_EXPR_OPERATOR_GTE,  // >=
-    AST_EXPR_OPERATOR_EQ_EQ, // ==
-    AST_EXPR_OPERATOR_NOT_EQ, // !=
 
-    AST_EXPR_OPERATOR_NOT, // unary !right
-    AST_EXPR_OPERATOR_NEG, // unary -right
-    AST_EXPR_OPERATOR_IA, // *解引用
-} ast_expr_operator_t;
+    // 位运算
+    AST_OP_AND,
+    AST_OP_OR,
+    AST_OP_XOR,
+    AST_OP_LSHIFT,
+    AST_OP_RSHIFT,
+
+
+    AST_OP_LT, // <
+    AST_OP_LTE, // <=
+    AST_OP_GT, // >
+    AST_OP_GTE,  // >=
+    AST_OP_EQ_EQ, // ==
+    AST_OP_NOT_EQ, // !=
+
+    AST_OP_AND_AND,
+    AST_OP_OR_OR,
+
+} ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-        [AST_EXPR_OPERATOR_ADD] = "+",
-        [AST_EXPR_OPERATOR_SUB] = "-",
-        [AST_EXPR_OPERATOR_MUL] = "*",
-        [AST_EXPR_OPERATOR_DIV] = "/",
-        [AST_EXPR_OPERATOR_REM] = "%",
+        [AST_OP_ADD] = "+",
+        [AST_OP_SUB] = "-",
+        [AST_OP_MUL] = "*",
+        [AST_OP_DIV] = "/",
+        [AST_OP_REM] = "%",
 
-        [AST_EXPR_OPERATOR_LT] = "<",
-        [AST_EXPR_OPERATOR_LTE] = "<=",
-        [AST_EXPR_OPERATOR_GT] = ">", // >
-        [AST_EXPR_OPERATOR_GTE] = ">=",  // >=
-        [AST_EXPR_OPERATOR_EQ_EQ] = "==", // ==
-        [AST_EXPR_OPERATOR_NOT_EQ] = "!=", // !=
+        [AST_OP_AND] = "&",
+        [AST_OP_OR] = "|",
+        [AST_OP_XOR] = "^",
+        [AST_OP_BNOT] = "~",
+        [AST_OP_LSHIFT] = "<<",
+        [AST_OP_RSHIFT] = ">>",
 
-        [AST_EXPR_OPERATOR_NOT] = "!", // unary !right
-        [AST_EXPR_OPERATOR_NEG] = "-", // unary -right
+        [AST_OP_LT] = "<",
+        [AST_OP_LTE] = "<=",
+        [AST_OP_GT] = ">", // >
+        [AST_OP_GTE] = ">=",  // >=
+        [AST_OP_EQ_EQ] = "==", // ==
+        [AST_OP_NOT_EQ] = "!=", // !=
+
+        [AST_OP_NOT] = "!", // unary !right
+        [AST_OP_NEG] = "-", // unary -right
 };
 
 typedef struct {
@@ -138,25 +161,15 @@ typedef struct {
     ast_expr expr; // 将表达式转换成 target_type
 } ast_type_convert_t;
 
-// 取表达式指针 &expr
-typedef struct {
-    ast_expr *expr;
-} ast_addr_of_t;
-
-// *expr
-typedef struct {
-    ast_expr *expr;
-} ast_value_of_t;
-
 // 一元表达式
 typedef struct {
-    ast_expr_operator_t operator; // 取反，取绝对值, 解引用等
+    ast_expr_op_t operator; // 取反，取绝对值, 解引用等,取指针，按位取反
     ast_expr operand; // 操作对象
 } ast_unary_expr;
 
 // 二元表达式
 typedef struct {
-    ast_expr_operator_t operator; // +/-/*// 等 二元表达式
+    ast_expr_op_t operator; // +/-/*// 等 二元表达式
     ast_expr right;
     ast_expr left;
 } ast_binary_expr;
@@ -399,7 +412,7 @@ typedef struct ast_fndef_t {
     // ast_expr, 由 parent closure 编译当前 fndef 时负责写入
     list_t *parent_view_envs;
 
-    // analysis stage, 当 fn 定义在 struct 中,用于记录 struct type
+    // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
     typeuse_t *self_struct;
 
     struct ast_fndef_t *parent;
@@ -423,26 +436,15 @@ static ast_expr *ast_ident_expr(char *literal) {
     return expr;
 }
 
-static ast_expr *ast_addr_of(ast_expr *target) {
+static ast_expr *ast_unary(ast_expr *target, ast_expr_op_t unary_op) {
     ast_expr *result = NEW(ast_expr);
 
-    ast_addr_of_t *addr_of = NEW(ast_addr_of_t);
-    addr_of->expr = target;
+    ast_unary_expr *expr = NEW(ast_unary_expr);
+    expr->operand = *target;
+    expr->operator = unary_op;
 
-    result->assert_type = AST_EXPR_ADDR_OF;
-    result->value = addr_of;
-    result->type = type_ptrof(target->type);
-    return result;
-}
-
-static ast_expr *ast_value_of(ast_expr *target) {
-    ast_expr *result = NEW(ast_expr);
-
-    ast_value_of_t *value_of = NEW(ast_value_of_t);
-    value_of->expr = target;
-
-    result->assert_type = AST_EXPR_VALUE_OF;
-    result->value = value_of;
+    result->assert_type = AST_EXPR_UNARY;
+    result->value = expr;
     result->type = type_ptrof(target->type);
     return result;
 }
@@ -472,7 +474,6 @@ typeuse_t select_actual_param(ast_call *call, uint8_t index);
 typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(typeuse_t left, typeuse_t right);
-
 
 static bool can_assign(ast_type_t t) {
     if (t == AST_EXPR_IDENT ||

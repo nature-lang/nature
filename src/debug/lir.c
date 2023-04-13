@@ -4,7 +4,7 @@
 #include "lir.h"
 #include "src/symbol/symbol.h"
 #include "utils/helper.h"
-#include "src/semantic/analysis.h"
+#include "src/semantic/analyser.h"
 
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {

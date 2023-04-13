@@ -1,52 +1,9 @@
 #include "parser.h"
+#include "token.h"
 #include "utils/error.h"
-#include "utils/slice.h"
 #include <stdio.h>
 #include "src/debug/debug.h"
 #include <string.h>
-
-//parser_cursor_t path->p_cursor;
-
-ast_expr_operator_t token_to_ast_op[] = {
-        [TOKEN_PLUS] = AST_EXPR_OPERATOR_ADD, // +
-        [TOKEN_MINUS] = AST_EXPR_OPERATOR_SUB, // -
-        [TOKEN_STAR] = AST_EXPR_OPERATOR_MUL, // *
-        [TOKEN_SLASH] = AST_EXPR_OPERATOR_DIV, // /
-        [TOKEN_PERSON] = AST_EXPR_OPERATOR_REM, // /
-        [TOKEN_EQUAL_EQUAL] = AST_EXPR_OPERATOR_EQ_EQ,
-        [TOKEN_NOT_EQUAL] = AST_EXPR_OPERATOR_NOT_EQ,
-        [TOKEN_GREATER_EQUAL] = AST_EXPR_OPERATOR_GTE,
-        [TOKEN_RIGHT_ANGLE] = AST_EXPR_OPERATOR_GT,
-        [TOKEN_LESS_EQUAL] = AST_EXPR_OPERATOR_LTE,
-        [TOKEN_LEFT_ANGLE] = AST_EXPR_OPERATOR_LT,
-};
-
-type_kind token_to_kind[] = {
-        // literal
-        [TOKEN_TRUE] = TYPE_BOOL,
-        [TOKEN_FALSE] = TYPE_BOOL,
-        [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
-        [TOKEN_LITERAL_INT] = TYPE_INT,
-        [TOKEN_LITERAL_STRING] = TYPE_STRING,
-
-        // type
-        [TOKEN_BOOL] = TYPE_BOOL,
-        [TOKEN_FLOAT] = TYPE_FLOAT,
-        [TOKEN_INT] = TYPE_INT,
-        [TOKEN_I8] = TYPE_INT8,
-        [TOKEN_I16] = TYPE_INT16,
-        [TOKEN_I32] = TYPE_INT32,
-        [TOKEN_I64] = TYPE_INT64,
-        [TOKEN_UINT] = TYPE_UINT,
-        [TOKEN_U8] = TYPE_UINT8,
-        [TOKEN_U16] = TYPE_UINT16,
-        [TOKEN_U32] = TYPE_UINT32,
-        [TOKEN_U64] = TYPE_UINT64,
-        [TOKEN_STRING] = TYPE_STRING,
-        [TOKEN_NULL] = TYPE_NULL,
-        [TOKEN_VAR] = TYPE_UNKNOWN,
-        [TOKEN_ANY] = TYPE_ANY
-};
 
 
 static token_t *parser_advance(module_t *m) {
@@ -171,12 +128,23 @@ static bool parser_must_stmt_end(module_t *m) {
     return false;
 }
 
-static bool parser_is_simple_type(module_t *m) {
+static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_ANY)
         || parser_is(m, TOKEN_INT)
+        || parser_is(m, TOKEN_I8)
+        || parser_is(m, TOKEN_I16)
+        || parser_is(m, TOKEN_I32)
+        || parser_is(m, TOKEN_I64)
+        || parser_is(m, TOKEN_UINT)
+        || parser_is(m, TOKEN_U8)
+        || parser_is(m, TOKEN_U16)
+        || parser_is(m, TOKEN_U32)
+        || parser_is(m, TOKEN_U64)
         || parser_is(m, TOKEN_FLOAT)
+        || parser_is(m, TOKEN_F32)
+        || parser_is(m, TOKEN_F64)
         || parser_is(m, TOKEN_BOOL)
         || parser_is(m, TOKEN_STRING)) {
         return true;
@@ -209,21 +177,33 @@ static typeuse_t parser_typeuse(module_t *m) {
     };
 
     // int/float/bool/string/void/var/any/self
-    if (parser_is_simple_type(m)) {
+    if (parser_basic_token_type(m)) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->type];
         result.value = NULL;
         return result;
     }
 
+    // ptr<int>
+    if (parser_consume(m, TOKEN_POINTER)) {
+        parser_must(m, TOKEN_LEFT_CURLY);
+        type_pointer_t *type_pointer = NEW(type_pointer_t);
+        type_pointer->value_type = parser_typeuse(m);
+        parser_must(m, TOKEN_RIGHT_CURLY);
+
+        result.kind = TYPE_POINTER;
+        result.pointer = type_pointer;
+        return result;
+    }
+
     // [int] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
-        type_list_t *list_decl = NEW(type_list_t);
-        list_decl->element_type = parser_typeuse(m);
+        type_list_t *type_list = NEW(type_list_t);
+        type_list->element_type = parser_typeuse(m);
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
-        result.list = list_decl;
+        result.list = type_list;
         return result;
     }
 
@@ -315,6 +295,7 @@ static typeuse_t parser_typeuse(module_t *m) {
     }
 
     assertf(false, "line: %d, parser typedecl failed", parser_line(m));
+    exit(1);
 }
 
 /**
@@ -410,13 +391,20 @@ static ast_expr parser_unary(module_t *m) {
 
     ast_unary_expr *unary_expr = malloc(sizeof(ast_unary_expr));
 
-    if (operator_token->type == TOKEN_NOT) {
-        unary_expr->operator = AST_EXPR_OPERATOR_NOT;
-    } else if (operator_token->type == TOKEN_MINUS) {
-        unary_expr->operator = AST_EXPR_OPERATOR_NEG;
+    if (operator_token->type == TOKEN_NOT) { // !true
+        unary_expr->operator = AST_OP_NOT;
+    } else if (operator_token->type == TOKEN_MINUS) { // -2
+        unary_expr->operator = AST_OP_NEG;
+    } else if (operator_token->type == TOKEN_TILDE) { // ~0b2
+        unary_expr->operator = AST_OP_BNOT;
+    } else if (operator_token->type == TOKEN_AND) { // &a
+        unary_expr->operator = AST_OP_LA;
+    } else if (operator_token->type == TOKEN_STAR) { // *a
+        unary_expr->operator = AST_OP_IA;
     } else {
-        error_exit("unknown operator code");
+        assertf(false, "unknown unary operator=%d", token_str[operator_token->type]);
     }
+
 
     unary_expr->operand = operand;
 
@@ -774,12 +762,16 @@ static ast_stmt *parser_if_stmt(module_t *m) {
  */
 static bool is_typedecl(module_t *m) {
     // var/any/int/float/bool/string
-    if (parser_is_simple_type(m)) {
+    if (parser_basic_token_type(m)) {
         return true;
     }
 
     if (parser_is(m, TOKEN_LEFT_CURLY) || // {int}/{int:int}
         parser_is(m, TOKEN_LEFT_SQUARE)) { // [int]
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_POINTER)) {
         return true;
     }
 
@@ -862,15 +854,39 @@ static ast_stmt *parser_for_stmt(module_t *m) {
     return result;
 }
 
+/**
+ * @param m
+ * @param left
+ * @return
+ */
 static ast_stmt *parser_assign(module_t *m, ast_expr left) {
     ast_stmt *result = stmt_new(m);
     ast_assign_stmt *assign_stmt = NEW(ast_assign_stmt);
     assign_stmt->left = left;
-    parser_must(m, TOKEN_EQUAL);
-    assign_stmt->right = parser_expr(m);
+
+    if (parser_consume(m, TOKEN_EQUAL)) {
+        assign_stmt->right = parser_expr(m);
+        result->assert_type = AST_STMT_ASSIGN;
+        result->value = assign_stmt;
+        return result;
+    }
+
+
+    token_t *t = parser_advance(m);
+    assertf(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
+
+    // 转换成逻辑运算符
+    ast_binary_expr *binary_expr = NEW(ast_binary_expr);
+    binary_expr->right = parser_expr(m);
+    binary_expr->operator = token_to_ast_op[t->type];
+    binary_expr->left = left;
+
+    assign_stmt->right = (ast_expr) {
+            .assert_type = AST_EXPR_BINARY,
+            .value = binary_expr
+    };
     result->assert_type = AST_STMT_ASSIGN;
     result->value = assign_stmt;
-
     return result;
 }
 
@@ -888,6 +904,8 @@ static void parser_cursor_init(module_t *module, linked_t *token_list) {
  * foo = 1
  * foo[bar] = 1
  * foo.bar = 1
+ *
+ * bar += 1
  *
  * @return
  */
@@ -1319,13 +1337,20 @@ static parser_rule rules[] = {
         [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
         [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
+        [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_NULL},
+        [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_NULL},
+        [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
+        [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
+        [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
+        [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+        [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+        [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
         [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
         [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-        [TOKEN_STAR] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-        [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR},
-        [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND},
-        [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_EQUALITY},
-        [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_EQUALITY},
+        [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR_OR},
+        [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
+        [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+        [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
         [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LEFT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},

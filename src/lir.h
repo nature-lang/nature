@@ -64,8 +64,7 @@
 #define RT_CALL_TUPLE_ASSIGN "tuple_assign"
 #define RT_CALL_TUPLE_ACCESS "tuple_access"
 
-
-#define RT_CALL_TRANS_ANY "trans_any"
+#define RT_CALL_CONVERT_ANY "convert_any"
 
 #define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
 #define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"
@@ -82,6 +81,8 @@
 #define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
+
+#define RT_CALL_TYPE_CONVERT "type_convert"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
@@ -103,20 +104,27 @@ typedef enum {
 } lir_operand_type_t;
 
 typedef enum {
-    LIR_OPCODE_ADD = 1,
     LIR_OPCODE_CLR,
+    LIR_OPCODE_ADD = 1,
     LIR_OPCODE_SUB,
     LIR_OPCODE_MUL,
     LIR_OPCODE_DIV,
     LIR_OPCODE_REM, // remainder
-    LIR_OPCODE_SLT, // set less than
-    LIR_OPCODE_SLE, // set less eq
-    LIR_OPCODE_SGT,
-    LIR_OPCODE_SGE,
-    LIR_OPCODE_SEE,
-    LIR_OPCODE_SNE,
+    LIR_OPCODE_SHR, // >>
+    LIR_OPCODE_SHL, // <<
+    LIR_OPCODE_AND, // &
+    LIR_OPCODE_OR, // |
+    LIR_OPCODE_XOR, // ^
+    LIR_OPCODE_BNOT, // ~ 取反
     LIR_OPCODE_NOT, // ! 取反
     LIR_OPCODE_NEG, // -取负数
+
+    LIR_OPCODE_SLT, // set less than <
+    LIR_OPCODE_SLE, // set less eq <=
+    LIR_OPCODE_SGT, // >
+    LIR_OPCODE_SGE, // >=
+    LIR_OPCODE_SEE, // ==
+    LIR_OPCODE_SNE, // !=
 
     LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
 //    LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
@@ -543,6 +551,33 @@ static inline lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
 
 static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_LEA, src, NULL, dst);
+}
+
+static void operand_convert(lir_operand_t *operand, typeuse_t target_type) {
+    if (operand->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *var = operand->value;
+        var->type = target_type;
+        return;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        addr->type = target_type;
+        return;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        lir_symbol_var_t *s = operand->value;
+        s->type = target_type.kind;
+        return;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = operand->value;
+        imm->kind = target_type.kind;
+        return;
+    }
+
 }
 
 static type_kind operand_type_kind(lir_operand_t *operand) {

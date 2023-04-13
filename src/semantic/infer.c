@@ -2,7 +2,7 @@
 #include "infer.h"
 #include "utils/error.h"
 #include "src/symbol/symbol.h"
-#include "analysis.h"
+#include "analyser.h"
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
@@ -48,21 +48,26 @@ static typeuse_t infer_binary(module_t *m, ast_binary_expr *expr) {
 
     switch (expr->operator) {
         // 算术运算符
-        case AST_EXPR_OPERATOR_REM:
-        case AST_EXPR_OPERATOR_ADD:
-        case AST_EXPR_OPERATOR_SUB:
-        case AST_EXPR_OPERATOR_MUL:
-        case AST_EXPR_OPERATOR_DIV: {
+        case AST_OP_LSHIFT:
+        case AST_OP_RSHIFT:
+        case AST_OP_AND:
+        case AST_OP_OR:
+        case AST_OP_XOR:
+        case AST_OP_REM:
+        case AST_OP_ADD:
+        case AST_OP_SUB:
+        case AST_OP_MUL:
+        case AST_OP_DIV: {
             return target_type;
         }
 
             // 逻辑运算符
-        case AST_EXPR_OPERATOR_LT:
-        case AST_EXPR_OPERATOR_LTE:
-        case AST_EXPR_OPERATOR_GT:
-        case AST_EXPR_OPERATOR_GTE:
-        case AST_EXPR_OPERATOR_EQ_EQ:
-        case AST_EXPR_OPERATOR_NOT_EQ: {
+        case AST_OP_LT:
+        case AST_OP_LTE:
+        case AST_OP_GT:
+        case AST_OP_GTE:
+        case AST_OP_EQ_EQ:
+        case AST_OP_NOT_EQ: {
             return type_basic_new(TYPE_BOOL);
         }
         default: {
@@ -85,12 +90,12 @@ static typeuse_t infer_unary(module_t *m, ast_unary_expr *expr) {
     typeuse_t operand_type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
 
     // !
-    if (expr->operator == AST_EXPR_OPERATOR_NOT && operand_type.kind != TYPE_BOOL) {
+    if (expr->operator == AST_OP_NOT && operand_type.kind != TYPE_BOOL) {
         assertf(false, "not operand must applies to bool type");
     }
 
     // -
-    if ((expr->operator == AST_EXPR_OPERATOR_NEG) && !is_integer(operand_type.kind) && !is_float(operand_type.kind)) {
+    if ((expr->operator == AST_OP_NEG) && !is_integer(operand_type.kind) && !is_float(operand_type.kind)) {
         assertf(false, "neg operand must applies to int or float type");
     }
 
@@ -431,7 +436,7 @@ static typeuse_t infer_list_select_call(module_t *m, ast_call *call) {
         // 参数重写
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left); // list expr
-        ct_list_push(call->actual_params, ast_addr_of(expr)); // value expr
+        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA)); // value expr
 
         call->left = *ast_ident_expr(RT_CALL_LIST_PUSH);
         infer_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
@@ -473,7 +478,7 @@ static typeuse_t infer_map_select_call(module_t *m, ast_call *call) {
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
-        ct_list_push(call->actual_params, ast_addr_of(expr));
+        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
         infer_left_expr(m, &call->left);
@@ -506,7 +511,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
-        ct_list_push(call->actual_params, ast_addr_of(expr));
+        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
         infer_left_expr(m, &call->left);
@@ -521,7 +526,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
-        ct_list_push(call->actual_params, ast_addr_of(expr));
+        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_ADD);
         infer_left_expr(m, &call->left);
@@ -536,7 +541,7 @@ static typeuse_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &call->left);
-        ct_list_push(call->actual_params, ast_addr_of(expr));
+        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
         infer_left_expr(m, &call->left);
@@ -1155,6 +1160,12 @@ static typeuse_t reduction_struct(module_t *m, typeuse_t t) {
 }
 
 static typeuse_t reduction_complex_type(module_t *m, typeuse_t t) {
+    if (t.kind == TYPE_POINTER) {
+        type_pointer_t *type_pointer = t.pointer;
+        type_pointer->value_type = reduction_type(m, type_pointer->value_type);
+        return t;
+    }
+
     if (t.kind == TYPE_LIST) {
         type_list_t *type_list = t.list;
         type_list->element_type = reduction_type(m, type_list->element_type);

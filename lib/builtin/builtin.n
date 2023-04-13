@@ -6,19 +6,19 @@ fn println(...[any] args) {}
 fn set(...[type] keys):{type} {}
 
 // 比如 [type] 类型的 list 只能接收 type 类型的 v
-fn list_push([type] list, p<type> v) {}
+fn list_push([type] list, ptr<type> v) {}
 
 fn list_length([type] list):int {}
 
-fn map_delete({type:type} map, p<type> key) {}
+fn map_delete({type:type} map, ptr<type> key) {}
 
 fn map_length({type:type} map):int {}
 
-fn set_contains({type} set, p<type> key):bool {}
+fn set_contains({type} set, ptr<type> key):bool {}
 
-fn set_add({type} set, p<type> key): bool {}
+fn set_add({type} set, ptr<type> key): bool {}
 
-fn set_delete({type} set, p<type> key) {}
+fn set_delete({type} set, ptr<type> key) {}
 
 // 这里都 string 是 nature string 类型
 type errort = struct {

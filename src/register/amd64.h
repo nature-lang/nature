@@ -133,7 +133,7 @@ reg_t *zmm15;
 #define AMD64_ALLOC_REG_COUNT 14+16;
 #define ALIGN_SIZE 16
 
-void amd64_reg_init();
+//void amd64_reg_init();
 
 /**
  * index 对应寄存器的 index， 不过同一个 index 会对应多个 register

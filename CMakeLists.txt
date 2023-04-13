@@ -40,10 +40,9 @@ set(SRC_SYNTAX
         ${SRC_DIR}/syntax/parser.h)
 
 set(SRC_SEMANTIC
-        ${SRC_DIR}/semantic/analysis.c
-        ${SRC_DIR}/semantic/analysis.h
+        ${SRC_DIR}/semantic/analyser.c
+        ${SRC_DIR}/semantic/analyser.h
         ${SRC_DIR}/semantic/infer.h
-        ${SRC_DIR}/semantic/infer.c
         ${SRC_DIR}/semantic/infer.c)
 
 set(SRC_DEBUG
@@ -92,6 +91,7 @@ set(SRC
         ${SRC_DIR}/symbol/symbol.c
         ${SRC_DIR}/symbol/builtin.h
         ${SRC_DIR}/symbol/builtin.c
+        ${SRC_DIR}/cross.h
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
         ${SRC_DIR}/lir.h
@@ -138,6 +138,8 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/basic.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/basic.h
         ${PROJECT_SOURCE_DIR}/runtime/type/hash.h
         ${PROJECT_SOURCE_DIR}/runtime/type/map.h
         ${PROJECT_SOURCE_DIR}/runtime/type/map.c
@@ -151,9 +153,7 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/type/string.h
         ${PROJECT_SOURCE_DIR}/runtime/type/string.c
         ${PROJECT_SOURCE_DIR}/runtime/type/list.h
-        ${PROJECT_SOURCE_DIR}/runtime/type/list.c
-        ${PROJECT_SOURCE_DIR}/runtime/type/any.h
-        ${PROJECT_SOURCE_DIR}/runtime/type/any.c)
+        ${PROJECT_SOURCE_DIR}/runtime/type/list.c)
 
 set(BUILD_SOURCE_FILES ${SRC} ${CMD} ${UTILS} ${SRC_DEBUG} ${SRC_SEMANTIC} ${SRC_SYNTAX} ${SRC_NATIVE} ${SRC_BINARY})
 
