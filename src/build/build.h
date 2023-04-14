@@ -5,4 +5,4 @@
 
 void build(char *build_entry);
 
-#endif //NATURE_BUILD_H
+#endif //NATURE_ROOT_H

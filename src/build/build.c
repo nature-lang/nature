@@ -1,6 +1,7 @@
 #include "build.h"
 #include "src/module.h"
 #include "utils/helper.h"
+#include "src/cross.h"
 #include "src/semantic/infer.h"
 #include "src/compiler.h"
 #include "src/cfg.h"
@@ -13,9 +14,7 @@
 #include "src/binary/elf/amd64.h"
 #include "src/binary/elf/output.h"
 #include "src/ssa.h"
-#include "src/lower/lower.h"
 #include "src/register/linearscan.h"
-#include "src/binary/opcode/opcode.h"
 #include "utils/error.h"
 #include "config.h"
 #include "utils/links.h"
@@ -119,8 +118,8 @@ static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
-    reg_init();
-    opcode_init();
+    cross_reg_init();
+    cross_opcode_init();
 
     // 全局 init
     BUILD_ENTRY = build_entry;
@@ -196,7 +195,7 @@ static slice_t *build_modules() {
 
     linked_t *work_list = linked_new();
     linked_push(work_list, root);
-    // 图遍历构造一组 path
+
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);;
         for (int j = 0; j < m->imports->count; ++j) {
@@ -205,10 +204,10 @@ static slice_t *build_modules() {
                 continue;
             }
 
-            module_t *new_module = module_build(import->full_path, false);
-            linked_push(work_list, new_module);
-            slice_push(modules, new_module);
-            table_set(module_table, import->full_path, new_module);
+            module_t *module_new = module_build(import->full_path, false);
+            linked_push(work_list, module_new);
+            slice_push(modules, module_new);
+            table_set(module_table, import->full_path, module_new);
         }
     }
 
@@ -258,13 +257,13 @@ static void build_compiler(slice_t *modules) {
 
             debug_lir(c);
 
-            lower(c);
+            cross_lower(c);
 
             linear_scan(c);
 
             debug_lir(c);
 
-            native(c);
+            cross_native(c);
 
             debug_asm(c);
         }

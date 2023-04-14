@@ -1,5 +1,5 @@
 #include "assembler.h"
-#include "arch.h"
+#include "src/cross.h"
 #include "src/native/native.h"
 
 void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
@@ -23,7 +23,7 @@ void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
 
 void object_load_operations(elf_context *ctx, closure_t *c) {
     // 代码段生成
-    c->text_count = opcode_encodings(ctx, c->asm_operations);
+    c->text_count = cross_opcode_encodings(ctx, c->asm_operations);
 
     alloc_section_names(ctx, 1);
     size_t file_offset = sizeof(Elf64_Ehdr);

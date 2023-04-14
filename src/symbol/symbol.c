@@ -1,5 +1,4 @@
 #include "symbol.h"
-#include "builtin.h"
 #include "utils/helper.h"
 
 static symbol_t *_symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
@@ -20,7 +19,7 @@ void symbol_init() {
 }
 
 // compiler 阶段临时生成的数据
-void symbol_table_set_var(char *unique_ident, typeuse_t type) {
+void symbol_table_set_var(char *unique_ident, type_t type) {
     ast_var_decl *var_decl = NEW(ast_var_decl);
     var_decl->type = type;
     var_decl->ident = unique_ident;

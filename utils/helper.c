@@ -168,32 +168,32 @@ ssize_t full_read(int fd, void *buf, size_t count) {
 }
 
 
-char *str_replace(char *orig, char *rep, char *with) {
+char *str_replace(char *str, char *old, char *new) {
     char *result; // the return string
     char *ins;    // the next insert pointer
     char *tmp;    // varies
-    int len_rep;  // length of rep (the string to remove)
-    int len_with; // length of with (the string to replace rep with)
-    int len_front; // distance between rep and end of last rep
+    int len_rep;  // length of old (the string to remove)
+    int len_with; // length of new (the string to replace old new)
+    int len_front; // distance between old and end of last old
     int count;    // number of replacements
 
     // sanity checks and initialization
-    if (!orig || !rep)
+    if (!str || !old)
         return NULL;
-    len_rep = strlen(rep);
+    len_rep = strlen(old);
     if (len_rep == 0)
-        return NULL; // empty rep causes infinite loop during count
-    if (!with)
-        with = "";
-    len_with = strlen(with);
+        return NULL; // empty old causes infinite loop during count
+    if (!new)
+        new = "";
+    len_with = strlen(new);
 
     // count the number of replacements needed
-    ins = orig;
-    for (count = 0; tmp = strstr(ins, rep); ++count) {
+    ins = str;
+    for (count = 0; tmp = strstr(ins, old); ++count) {
         ins = tmp + len_rep;
     }
 
-    tmp = result = malloc(strlen(orig) + (len_with - len_rep) * count + 1);
+    tmp = result = malloc(strlen(str) + (len_with - len_rep) * count + 1);
 
     if (!result)
         return NULL;
@@ -201,16 +201,16 @@ char *str_replace(char *orig, char *rep, char *with) {
     // first time through the loop, all the variable are set correctly
     // from here on,
     //    tmp points to the end of the result string
-    //    ins points to the next occurrence of rep in orig
-    //    orig points to the remainder of orig after "end of rep"
+    //    ins points to the next occurrence of old in str
+    //    str points to the remainder of str after "end of old"
     while (count--) {
-        ins = strstr(orig, rep);
-        len_front = ins - orig;
-        tmp = strncpy(tmp, orig, len_front) + len_front;
-        tmp = strcpy(tmp, with) + len_with;
-        orig += len_front + len_rep; // move to next "end of rep"
+        ins = strstr(str, old);
+        len_front = ins - str;
+        tmp = strncpy(tmp, str, len_front) + len_front;
+        tmp = strcpy(tmp, new) + len_with;
+        str += len_front + len_rep; // move to next "end of old"
     }
-    strcpy(tmp, orig);
+    strcpy(tmp, str);
     return result;
 }
 

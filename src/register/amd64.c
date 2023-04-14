@@ -1,6 +1,7 @@
 #include "amd64.h"
 #include "utils/type.h"
 #include "utils/slice.h"
+#include "src/cross.h"
 #include <stdio.h>
 
 
@@ -167,12 +168,12 @@ reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind base) {
     // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
     if (reg_type == VR_FLAG_ALLOC_INT && index <= 5) {
         uint8_t reg_index = int_param_indexes[index];
-        return (reg_t *) reg_select(reg_index, base);
+        return (reg_t *) cross_reg_select(reg_index, base);
     }
 
     // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
     if (reg_type == VR_FLAG_ALLOC_FLOAT && index <= 7) {
-        return (reg_t *) reg_select(index, base);
+        return (reg_t *) cross_reg_select(index, base);
     }
 
     return NULL;

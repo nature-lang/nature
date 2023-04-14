@@ -2,25 +2,34 @@
 #define NATURE_CROSS_H
 
 #include "build/config.h"
+#include "structs.h"
+#include "utils/type.h"
+
+// -------- reg init start -----------
+table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
+slice_t *regs;
+reg_t *alloc_regs[UINT8_MAX];
 
 void amd64_reg_init();
 
-void riscv64_reg_init();
+static void cross_reg_init() {
+    // 初始化
+    reg_table = table_new();
+    regs = slice_new();
+    memset(alloc_regs, 0, sizeof(alloc_regs));
 
-typedef void (*fn_reg_init)();
-
-#define CROSS_REG_INIT cross_reg_init()
-
-static fn_reg_init cross_reg_init() {
     if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_reg_init;
+        amd64_reg_init();
+        return;
     }
 
     assertf(false, "not support arch %d", BUILD_ARCH);
-    return NULL;
 }
+// -------- reg init end -----------
 
 
+
+// -------- alloc init start -----------
 #define AMD64_ALLOC_REG_COUNT 14+16;
 
 static uint8_t cross_alloc_reg_count() {
@@ -31,5 +40,167 @@ static uint8_t cross_alloc_reg_count() {
     assertf(false, "not support arch %d", BUILD_ARCH);
     exit(1);
 }
+// -------- alloc init end -----------
+
+
+// -------- reg select start -----------
+reg_t *amd64_reg_select(uint8_t index, type_kind base);
+
+/**
+ * index 对应寄存器的 index， 不过同一个 index 会对应多个 register
+ */
+static reg_t *cross_reg_select(uint8_t index, type_kind base) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_reg_select(index, base);
+    }
+
+    assert(false && "not support arch");
+}
+
+// -------- reg select end -----------
+
+
+
+// -------- native start -----------
+void amd64_native(closure_t *c);
+
+void cross_native(closure_t *c) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_native(c);
+    }
+
+    assert(false && "not support arch");
+}
+// -------- native end -----------
+
+// -------- lower start -----------
+void amd64_lower(closure_t *c);
+
+static void cross_lower(closure_t *c) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_lower(c);
+    }
+
+    assert(false && "not support arch");
+}
+// -------- lower end -----------
+
+
+// -------- opcode init start -----------
+void amd64_opcode_init();
+
+/**
+ * 1. 初始化 opcode_root
+ * 2. 将所有的指令注册到 tree 中
+ * @return
+ */
+static void cross_opcode_init() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_opcode_init();
+        return;
+    }
+
+    assert(false && "not support this arch");
+}
+// -------- opcode init end -----------
+
+// -------- linker/elf start -----------
+
+#define AMD64_ELF_START_ADDR 0x400000
+#define AMD64_64_ELF_PAGE_SIZE 0x200000
+#define AMD64_PTR_SIZE 8 // 单位 byte
+
+uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr);
+
+int amd64_gotplt_entry_type(uint relocate_type);
+
+int8_t amd64_is_code_relocate(uint relocate_type);
+
+void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
+
+/**
+ * 经过两次遍历最终生成 section text、symbol、rela
+ * @param ctx
+ * @param operations amd64_opcode_t
+ */
+uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations);
+
+static uint cross_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_create_plt_entry(ctx, got_offset, attr);
+    }
+
+    assert(false && "not support this arch");
+}
+
+
+static int8_t cross_is_code_relocate(uint relocate_type) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_is_code_relocate(relocate_type);
+    }
+    assert(false && "not support this arch");
+}
+
+static int cross_got_rel_type(bool is_code_rel) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        if (is_code_rel) {
+            return R_X86_64_JUMP_SLOT;
+        } else {
+            return R_X86_64_GLOB_DAT;
+        }
+    }
+    assert(false && "not support this arch");
+}
+
+static int cross_gotplt_entry_type(uint relocate_type) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_gotplt_entry_type(relocate_type);
+    }
+    assert(false && "not support this arch");
+}
+
+static uint8_t cross_ptr_size() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return AMD64_PTR_SIZE;
+    }
+    assert(false && "not support this arch");
+}
+
+static uint64_t cross_elf_start_addr() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return AMD64_ELF_START_ADDR;
+    }
+    assert(false && "not support this arch");
+}
+
+static uint64_t cross_elf_page_size() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return AMD64_64_ELF_PAGE_SIZE;
+    }
+    assert(false && "not support this arch");
+}
+
+static void cross_relocate(elf_context *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_relocate(l, rel, type, ptr, addr, val);
+    }
+    assert(false && "not support this arch");
+}
+
+static uint16_t cross_ehdr_machine() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return EM_X86_64;
+    }
+    assert(false && "not support this arch");
+}
+
+static uint64_t cross_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_operation_encodings(ctx, opcodes);
+    }
+    assert(false && "not support this arch");
+}
+// -------- linker/elf end -----------
+
 
 #endif //NATURE_CROSS_H

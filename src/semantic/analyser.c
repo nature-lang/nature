@@ -45,7 +45,7 @@ static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, strin
  * 类型的处理较为简单，不需要做将其引用的环境封闭。只需要类型为 typedef ident 时能够定位唯一名称即可
  * @param type
  */
-static void analyser_typeuse(module_t *m, typeuse_t *type) {
+static void analyser_typeuse(module_t *m, type_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // type foo = int
     // 'foo' is type_decl_ident
@@ -79,7 +79,7 @@ static void analyser_typeuse(module_t *m, typeuse_t *type) {
     if (type->kind == TYPE_TUPLE) {
         type_tuple_t *tuple = type->tuple;
         for (int i = 0; i < tuple->elements->length; ++i) {
-            typeuse_t *element_type = ct_list_value(tuple->elements, i);
+            type_t *element_type = ct_list_value(tuple->elements, i);
             analyser_typeuse(m, element_type);
         }
         return;
@@ -89,7 +89,7 @@ static void analyser_typeuse(module_t *m, typeuse_t *type) {
         type_fn_t *type_fn = type->fn;
         analyser_typeuse(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->formal_types->length; ++i) {
-            typeuse_t *t = ct_list_value(type_fn->formal_types, i);
+            type_t *t = ct_list_value(type_fn->formal_types, i);
             analyser_typeuse(m, t);
         }
     }
@@ -537,7 +537,7 @@ static void analyser_select(module_t *m, ast_expr *expr) {
     ast_ident *ident = select->left.value;
     ast_import *import = table_get(m->import_table, ident->literal);
     if (import) {
-        // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
+        // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！(不需要检测 import 服务是否存在，这在 linker 中会做的)
         char *unique_ident = ident_with_module(import->module_ident, select->key);
         expr->assert_type = AST_EXPR_IDENT;
         expr->value = ast_new_ident(unique_ident);
@@ -802,7 +802,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         }
 
         ast_import *import = stmt->value;
-        complete_import(m->source_dir, import);
+        full_import(m->source_dir, import);
 
         // 简单处理
         slice_push(m->imports, import);
@@ -920,7 +920,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
         }
 
         ast_import *import = stmt->value;
-        complete_import(m->source_dir, import);
+        full_import(m->source_dir, import);
 
         // 简单处理
         slice_push(m->imports, import);

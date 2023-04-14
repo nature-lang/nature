@@ -40,7 +40,7 @@ static char *var_unique_ident(module_t *m, char *ident) {
  * @param import
  * @return
  */
-void complete_import(string importer_dir, ast_import *import);
+void full_import(string importer_dir, ast_import *import);
 
 module_t *module_build(string source_path, module_type_t type);
 
@@ -50,7 +50,8 @@ module_t *module_build(string source_path, module_type_t type);
  * @return
  */
 static char *module_unique_ident(char *full_path) {
-    char *result = str_replace(full_path, WORK_DIR, ""); // 从 BASE_NS 开始，截止到目录部分
+    // 从 BASE_NS 开始，截止到目录部分
+    char *result = str_replace(full_path, WORK_DIR, "");
 
     result = str_connect(BASE_NS, result);
     // 去掉结尾的 .n 部分

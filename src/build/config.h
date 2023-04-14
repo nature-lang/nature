@@ -26,7 +26,7 @@ static char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default 
 static char *BUILD_OUTPUT_DIR; // default is work_dir test 使用，指定编译路径输出文件
 static char *BUILD_OUTPUT; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
-static char *WORK_DIR; // 执行 shell 命令所在的目录
+static char *WORK_DIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 static char *BASE_NS; // 最后一级目录的名称，也可以自定义
 static char *TEMP_DIR; // 链接临时目录
 
@@ -104,6 +104,7 @@ static uint8_t arch_to_uint8(char *arch) {
 
 static void config_init() {
     WORK_DIR = get_work_dir();
+    // 当前所在目录的最后一级目录(当 import 已 base_ns 开头时，表示从 root_ns 进行文件搜索)
     BASE_NS = parser_base_ns(WORK_DIR);
     TEMP_DIR = temp_dir();
     if (!BUILD_OUTPUT_DIR) {

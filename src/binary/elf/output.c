@@ -1,5 +1,5 @@
 #include "output.h"
-#include "arch.h"
+#include "src/cross.h"
 #include "utils/error.h"
 #include "utils/helper.h"
 
@@ -49,7 +49,7 @@ void elf_output(elf_context *ctx) {
         ehdr.e_entry = elf_get_sym_addr(ctx, START_LABEL); // 目前位于 crt1.o 中
     }
 
-    ehdr.e_machine = ehdr_machine();
+    ehdr.e_machine = cross_ehdr_machine();
     ehdr.e_version = EV_CURRENT;
     ehdr.e_shoff = ctx->file_offset;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);

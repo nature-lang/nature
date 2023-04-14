@@ -8,10 +8,6 @@
 
 #include <stdlib.h>
 
-#define AMD64_ELF_START_ADDR 0x400000
-#define AMD64_64_ELF_PAGE_SIZE 0x200000
-#define AMD64_PTR_SIZE 8 // 单位 byte
-
 typedef struct {
     inst_t *inst;
     uint8_t *data;
@@ -26,19 +22,5 @@ typedef struct {
     Elf64_Rela *elf_rel;
 } amd64_build_temp_t;
 
-int amd64_gotplt_entry_type(uint relocate_type);
-
-uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr);
-
-int8_t amd64_is_code_relocate(uint relocate_type);
-
-void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
-
-/**
- * 经过两次遍历最终生成 section text、symbol、rela
- * @param ctx
- * @param operations amd64_opcode_t
- */
-uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations);
 
 #endif //NATURE_AMD64_H

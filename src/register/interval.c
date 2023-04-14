@@ -390,7 +390,7 @@ void interval_mark_number(closure_t *c) {
 
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
-    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
+    for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = interval_new(c);
         interval->index = reg_id;
@@ -459,7 +459,7 @@ void interval_build(closure_t *c) {
             // fixed all phy reg in call
             if (lir_op_is_call(op)) {
                 // traverse all register
-                for (int j = 1; j < alloc_reg_count(); ++j) {
+                for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
                     if (interval != NULL) {

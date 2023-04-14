@@ -7,6 +7,7 @@
 #include "utils/linked.h"
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
+#include <elf.h>
 
 typedef uint64_t flag_t;
 
@@ -21,6 +22,13 @@ typedef enum {
     VR_FLAG_INDIRECT_ADDR_BASE,
 } vr_flag_t;
 
+typedef struct {
+    string name;
+    uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
+    uint8_t size; // 实际的位宽, 对应 intel 手册
+    uint8_t alloc_id; // 寄存器分配期间的 id，能通过 id 进行唯一检索
+    flag_t flag;
+} reg_t; // 做类型转换
 
 typedef enum {
     MODULE_TYPE_MAIN = 1,
@@ -261,5 +269,73 @@ typedef struct closure_t {
     slice_t *asm_symbols;
     module_t *module;
 } closure_t;
+
+/**
+ * 段表与相应的二进制数据合并
+ */
+typedef struct section_t {
+    // Elf64_Shdr 原始字段继承
+    uint sh_name; // 段名称，段表字符串表 slot ~ \0
+    uint sh_type; // 段类型，
+    uint sh_flags;
+    uint sh_info;
+    uint sh_addralign;
+    uint sh_entsize;
+    uint sh_size;
+    uint sh_offset;
+    addr_t sh_addr; // 可重定位地址
+
+
+    uint64_t data_count; // 数据位置
+    uint64_t data_capacity; // 极限容量
+    uint8_t *data; // 段二进制数据
+    int sh_index; // 段表索引
+    char name[50]; // 段表名称字符串冗余
+
+    // 排序字段
+    int actual_sh_index;
+    int actual_sh_weight;
+    uint phdr_flags; // 第8位表示是否需要 PT_LOAD 装载到内存中
+
+    struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
+    struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 cross_relocate 指向 .rela.text
+    struct section_t *prev; // slice 中的上一个 section
+} section_t;
+
+typedef struct {
+    uint got_offset;
+    uint plt_offset;
+    uint64_t plt_sym;
+    int dyn_index;
+} sym_attr_t;
+
+
+typedef struct {
+    slice_t *sections;
+    slice_t *private_sections;
+    table_t *symtab_hash; // 直接指向符号表 sym
+    section_t *symtab_section;
+    sym_attr_t *sym_attrs;
+    uint sym_attrs_count;
+    section_t *bss_section;
+    section_t *data_section;
+    section_t *text_section;
+//    section_t *rodata_section;
+    section_t *got;
+    section_t *plt;
+    section_t *rtype_section;
+    section_t *fndef_section;
+    section_t *symdef_section;
+
+
+    // 可执行文件构建字段
+    Elf64_Phdr *phdr_list; // 程序头表
+    uint phdr_count; // 程序头表数量
+
+    uint64_t file_offset;
+    char *output; // 完整路径名称
+    uint8_t output_type;
+} elf_context;
+
 
 #endif //NATURE_STRUCTS_H

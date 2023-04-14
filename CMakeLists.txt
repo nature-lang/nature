@@ -6,7 +6,6 @@ set(CMAKE_C_STANDARD 11)
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
 set(SRC_BINARY
-        ${SRC_DIR}/binary/opcode/opcode.h
         ${SRC_DIR}/binary/opcode/amd64/asm.c
         ${SRC_DIR}/binary/opcode/amd64/asm.h
         ${SRC_DIR}/binary/opcode/amd64/opcode.c
@@ -14,8 +13,6 @@ set(SRC_BINARY
         ${SRC_DIR}/binary/elf/elf.h
         ${SRC_DIR}/binary/elf/output.h
         ${SRC_DIR}/binary/elf/output.c
-        ${SRC_DIR}/binary/elf/arch.h
-        ${SRC_DIR}/binary/elf/arch.c
         ${SRC_DIR}/binary/elf/amd64.h
         ${SRC_DIR}/binary/elf/amd64.c
         ${SRC_DIR}/binary/elf/linker.h
@@ -27,8 +24,7 @@ set(SRC_BINARY
 set(SRC_NATIVE
         ${SRC_DIR}/native/amd64.c
         ${SRC_DIR}/native/amd64.h
-        ${SRC_DIR}/native/native.h
-        ${SRC_DIR}/native/native.c)
+        ${SRC_DIR}/native/native.h)
 
 
 set(SRC_SYNTAX
@@ -80,8 +76,7 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/exec.h)
 
 set(CMD
-        ${PROJECT_SOURCE_DIR}/cmd/build.h
-        ${PROJECT_SOURCE_DIR}/cmd/build.c)
+        ${PROJECT_SOURCE_DIR}/cmd/root.h)
 
 set(SRC
         ${SRC_DIR}/structs.h
@@ -89,8 +84,6 @@ set(SRC
         ${SRC_DIR}/ast.c
         ${SRC_DIR}/symbol/symbol.h
         ${SRC_DIR}/symbol/symbol.c
-        ${SRC_DIR}/symbol/builtin.h
-        ${SRC_DIR}/symbol/builtin.c
         ${SRC_DIR}/cross.h
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
@@ -102,11 +95,8 @@ set(SRC
         ${SRC_DIR}/module.h
         ${SRC_DIR}/module.c
         ${SRC_DIR}/build/config.h
-        ${SRC_DIR}/build/config.c
         ${SRC_DIR}/build/build.h
         ${SRC_DIR}/build/build.c
-        ${SRC_DIR}/lower/lower.h
-        ${SRC_DIR}/lower/lower.c
         ${SRC_DIR}/lower/amd64.h
         ${SRC_DIR}/lower/amd64.c
         ${SRC_DIR}/register/amd64.h

@@ -119,7 +119,7 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
     return operations;
 }
 
-void amd64_lower_block(closure_t *c, basic_block_t *block) {
+static void amd64_lower_block(closure_t *c, basic_block_t *block) {
     // handle operations
     for (linked_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
         lir_op_t *op = node->value;
@@ -264,3 +264,13 @@ void amd64_lower_block(closure_t *c, basic_block_t *block) {
 }
 
 
+void amd64_lower(closure_t *c) {
+    // 按基本块遍历所有指令
+    SLICE_FOR(c->blocks) {
+        basic_block_t *block = SLICE_VALUE(c->blocks);
+        amd64_lower_block(c, block);
+
+        // 设置 block 的首尾 op
+        lir_set_quick_op(block);
+    }
+}

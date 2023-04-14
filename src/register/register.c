@@ -9,42 +9,9 @@ string reg_table_key(uint8_t index, uint8_t size) {
     return itoa(int_key);
 }
 
-/**
- * 根据类型选择合适的寄存器
- * @param index
- * @param base
- * @return
- */
-reg_t *reg_select(uint8_t index, type_kind base) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_reg_select(index, base);
-    }
-
-    assert(false && "not support arch");
-}
-
 reg_t *reg_find(uint8_t index, size_t size) {
     return table_get(reg_table, reg_table_key(index, size));
 }
-
-void reg_init() {
-    // 初始化
-    reg_table = table_new();
-    regs = slice_new();
-    memset(alloc_regs, 0, sizeof(alloc_regs));
-
-    CROSS_REG_INIT();
-}
-
-
-uint8_t alloc_reg_count() {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return AMD64_ALLOC_REG_COUNT;
-    }
-
-    assert(false && "not support arch");
-}
-
 
 reg_t *reg_new(char *name, uint8_t index, vr_flag_t alloc_type, uint8_t size, uint8_t reg_id) {
     reg_t *reg = NEW(reg_t);

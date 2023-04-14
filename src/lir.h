@@ -65,6 +65,8 @@
 #define RT_CALL_TUPLE_ACCESS "tuple_access"
 
 #define RT_CALL_CONVERT_ANY "convert_any"
+#define RT_CALL_CONVERT_INTEGER "convert_int"
+#define RT_CALL_CONVERT_FLOAT "convert_float"
 
 #define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
 #define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"
@@ -81,8 +83,6 @@
 #define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
-
-#define RT_CALL_TYPE_CONVERT "type_convert"
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
@@ -155,7 +155,7 @@ typedef struct {
     string old; // ssa 之前的名称
 
     flag_t flag;
-    typeuse_t type;
+    type_t type;
 
 //    uint8_t pointer; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 pointer 等于 3 TODO 暂时没有使用
 //    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
@@ -178,12 +178,12 @@ typedef struct {
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
     uint64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    typeuse_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    type_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 //typedef struct {
 //    lir_operand_t *base; // 只允许是 [indirect_addr_t?]
-//    typeuse_t type;
+//    type_t type;
 //} lir_lea_addr_t; // 读取 base 所在的地址
 
 typedef struct {
@@ -553,32 +553,32 @@ static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_LEA, src, NULL, dst);
 }
 
-static void operand_convert(lir_operand_t *operand, typeuse_t target_type) {
-    if (operand->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var = operand->value;
-        var->type = target_type;
-        return;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr = operand->value;
-        addr->type = target_type;
-        return;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        lir_symbol_var_t *s = operand->value;
-        s->type = target_type.kind;
-        return;
-    }
-
-    if (operand->assert_type == LIR_OPERAND_IMM) {
-        lir_imm_t *imm = operand->value;
-        imm->kind = target_type.kind;
-        return;
-    }
-
-}
+//static void operand_convert(lir_operand_t *operand, type_t target_type) {
+//    if (operand->assert_type == LIR_OPERAND_VAR) {
+//        lir_var_t *var = operand->value;
+//        var->type = target_type;
+//        return;
+//    }
+//
+//    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+//        lir_indirect_addr_t *addr = operand->value;
+//        addr->type = target_type;
+//        return;
+//    }
+//
+//    if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+//        lir_symbol_var_t *s = operand->value;
+//        s->type = target_type.kind;
+//        return;
+//    }
+//
+//    if (operand->assert_type == LIR_OPERAND_IMM) {
+//        lir_imm_t *imm = operand->value;
+//        imm->kind = target_type.kind;
+//        return;
+//    }
+//
+//}
 
 static type_kind operand_type_kind(lir_operand_t *operand) {
     assert(operand->assert_type != LIR_OPERAND_REG);
@@ -677,7 +677,7 @@ static lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...)
  * @param type
  * @return
  */
-static lir_operand_t *temp_var_operand(module_t *m, typeuse_t type) {
+static lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     string unique_ident = var_unique_ident(m, TEMP_IDENT);
 
     symbol_table_set_var(unique_ident, type);
@@ -724,7 +724,7 @@ static closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->loop_ends = slice_new();
     c->loop_headers = slice_new();
 
-    c->interval_count = alloc_reg_count() + 1;
+    c->interval_count = cross_alloc_reg_count() + 1;
     fndef->closure = c;
     return c;
 }

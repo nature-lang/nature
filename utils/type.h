@@ -138,7 +138,7 @@ typedef struct type_set_t type_set_t;
 
 // (int, int, float)
 typedef struct {
-    list_t *elements; //  typeuse_t
+    list_t *elements; //  type_t
 } type_tuple_t;
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
@@ -165,22 +165,19 @@ typedef struct type_t {
     };
     type_kind kind;
     reduction_status_t status;
-//    uint8_t pointer; // 指针等级, 如果等于0 表示非指针, 例如 int*** a; a 的 pointer 等于 3
-//    bool is_pointer; // p<type>
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
-} typeuse_t;
+} type_t;
 
 // list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
 // 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
 // 反而更好处理？
 struct type_list_t {
-    typeuse_t element_type;
-    // 类型描述信息根本就不能有值这个东西出现
+    type_t element_type;
 };
 
 // p<value_type>
 struct type_pointer_t {
-    typeuse_t value_type;
+    type_t value_type;
 };
 
 
@@ -209,7 +206,7 @@ struct type_ident_t {
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct type_array_t {
     uint64_t length;
-    typeuse_t element_type;
+    type_t element_type;
     rtype_t element_rtype;
 };
 
@@ -217,7 +214,7 @@ struct type_array_t {
  * set{int}
  */
 struct type_set_t {
-    typeuse_t key_type;
+    type_t key_type;
 };
 
 
@@ -225,13 +222,13 @@ struct type_set_t {
  * map{int:int}
  */
 struct type_map_t {
-    typeuse_t key_type;
-    typeuse_t value_type;
+    type_t key_type;
+    type_t value_type;
 };
 
 // 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
-    typeuse_t type;
+    type_t type;
     char *key;
     void *right; // ast_expr
 } struct_property_t;
@@ -255,8 +252,8 @@ struct type_struct_t {
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
 struct type_fn_t {
-    typeuse_t return_type;
-    list_t *formal_types; // typeuse_t
+    type_t return_type;
+    list_t *formal_types; // type_t
     bool rest;
 };
 
@@ -345,11 +342,11 @@ typedef struct {
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
 
-rtype_t reflect_type(typeuse_t t);
+rtype_t reflect_type(type_t t);
 
-rtype_t ct_reflect_type(typeuse_t t);
+rtype_t ct_reflect_type(type_t t);
 
-rtype_t rt_reflect_type(typeuse_t t);
+rtype_t rt_reflect_type(type_t t);
 
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
@@ -358,7 +355,7 @@ rtype_t rt_reflect_type(typeuse_t t);
  */
 uint64_t rtypes_push(rtype_t rtype);
 
-uint ct_find_rtype_index(typeuse_t t);
+uint ct_find_rtype_index(type_t t);
 
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小
@@ -372,7 +369,7 @@ uint8_t type_kind_sizeof(type_kind t);
  * @param t
  * @return
  */
-uint16_t type_sizeof(typeuse_t t);
+uint16_t type_sizeof(type_t t);
 
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
@@ -383,9 +380,9 @@ uint16_t type_sizeof(typeuse_t t);
  * @param t
  * @return
  */
-bool type_need_gc(typeuse_t t);
+bool type_need_gc(type_t t);
 
-typeuse_t type_ptrof(typeuse_t t);
+type_t type_ptrof(type_t t);
 
 /**
  * 一般标量类型其值默认会存储在 stack 中
@@ -395,7 +392,7 @@ typeuse_t type_ptrof(typeuse_t t);
  * @param typedecl
  * @return
  */
-static bool type_default_in_heap(typeuse_t typedecl) {
+static bool type_default_in_heap(type_t typedecl) {
     if (typedecl.kind == TYPE_ANY ||
         typedecl.kind == TYPE_STRING ||
         typedecl.kind == TYPE_LIST ||
@@ -410,8 +407,8 @@ static bool type_default_in_heap(typeuse_t typedecl) {
     return false;
 }
 
-static typeuse_t type_basic_new(type_kind kind) {
-    typeuse_t result = {
+static type_t type_basic_new(type_kind kind) {
+    type_t result = {
             .status = REDUCTION_STATUS_DONE,
             .kind = kind,
             .value = 0,
@@ -422,8 +419,8 @@ static typeuse_t type_basic_new(type_kind kind) {
     return result;
 }
 
-static typeuse_t type_new(type_kind kind, void *value) {
-    typeuse_t result = {
+static type_t type_new(type_kind kind, void *value) {
+    type_t result = {
             .kind = kind,
             .value = value
     };
@@ -482,7 +479,7 @@ static bool is_number(type_kind kind) {
  * @param t
  * @return
  */
-static bool is_basic_type(typeuse_t t) {
+static bool is_basic_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
            t.kind == TYPE_NULL ||
@@ -493,7 +490,7 @@ static bool is_basic_type(typeuse_t t) {
 
 }
 
-static bool is_complex_type(typeuse_t t) {
+static bool is_complex_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
@@ -508,7 +505,7 @@ static bool is_complex_type(typeuse_t t) {
  * @param right
  * @return
  */
-static typeuse_t basic_type_select(type_kind left, type_kind right) {
+static type_t basic_type_select(type_kind left, type_kind right) {
     if (left >= right) {
         return type_basic_new(left);
     }

@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "cmd/build.h"
+#include "cmd/root.h"
 #include "utils/helper.h"
 
 #define ARG_BUILD "build"
@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
     if (str_equal(first, ARG_BUILD)) {
         argv[1] = argv[0];
         argv += 1;
-        cmd_build_arg(argc - 1, argv);
+        cmd_entry(argc - 1, argv);
         return 0;
     }
     printf("unknown command: %s\n", first);

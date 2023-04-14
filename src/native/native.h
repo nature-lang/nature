@@ -20,7 +20,4 @@ typedef struct {
    temp_name;                                   \
 })
 
-void native(closure_t *c);
-
-
 #endif //NATURE_NATIVE_H

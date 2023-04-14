@@ -28,32 +28,37 @@ static char *module_full_path(char *path, char *name) {
     return NULL;
 }
 
-void complete_import(char *importer_dir, ast_import *import) {
-    // import 目前必须基于 BASE_NS 开始，不支持相对路径
-    if (strncmp(BASE_NS, import->path, strlen(BASE_NS)) == 0) {
-        // 基于命名空间 import
-        char *relative_dir = import->path + strlen(BASE_NS);
-        char *module_name = import->path;
-        char *rest = strrchr(import->path, '/');
-        if (rest != NULL) {
-            // example /foo/bar/car => rest: /car
-            module_name = rest + 1;
-        }
-        // 链接
-        char *module_path = str_connect(WORK_DIR, relative_dir);
-        char *full_path = module_full_path(module_path, module_name);
-        if (full_path == NULL) {
-            error_exit("[complete_import] module %s not found", import->path);
-        }
-        if (import->as == NULL) {
-            import->as = module_name;
-        }
-        import->full_path = full_path;
-        import->module_ident = module_unique_ident(full_path);
-        return;
+/**
+ * 目前必须以 .n 结尾
+ * @param importer_dir
+ * @param import
+ */
+void full_import(char *importer_dir, ast_import *import) {
+    // import->path 必须以 .n 结尾
+    assertf(ends_with(import->path, ".n"), "import suffix must .n");
+    assertf(strncmp(BASE_NS, import->path, strlen(BASE_NS)) == 0, "import path must start %s", BASE_NS);
+
+    // import 目前必须基于 BASE_NS 开始，暂时不支持相对路径
+    // 基于命名空间 import
+    // 指针向前移动 BASE_NS 位，从而去掉 BASE_NS 前缀
+    char *relative_dir = import->path + strlen(BASE_NS);
+
+
+    char *rest = strrchr(import->path, '/'); // foo/bar.n -> /bar.n
+    if (rest != NULL) {
+        rest++;
+    }
+    // 去掉 .n 部分
+    char *module_as = str_replace(rest, ".n", "");
+
+
+    // 链接  /root/base_ns/foo/bar.n
+    import->full_path = str_connect(WORK_DIR, relative_dir);
+    if (import->as == NULL) {
+        import->as = module_as;
     }
 
-    assertf(false, "import grammar only support BASE_NS=%s start, actual=%s", BASE_NS, import->path);
+    import->module_ident = module_unique_ident(import->full_path);
 }
 
 module_t *module_build(char *source_path, module_type_t type) {

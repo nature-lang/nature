@@ -3,6 +3,6 @@
 
 #include "src/lir.h"
 
-void amd64_lower_block(closure_t *c, basic_block_t *block);
+static void amd64_lower(closure_t *c);
 
 #endif //NATURE_AMD64_H

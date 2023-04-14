@@ -5,8 +5,8 @@
 #include "utils/links.h"
 #include "utils/type.h"
 #include "amd64.h"
-#include "arch.h"
 #include "src/lir.h"
+#include "src/cross.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -250,8 +250,8 @@ static void layout_sections(elf_context *ctx) {
     ctx->phdr_list = mallocz(phdr_count * sizeof(Elf64_Phdr));
 
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
-    addr_t s_align = elf_page_size();
-    addr_t addr = elf_start_addr();
+    addr_t s_align = cross_elf_page_size();
+    addr_t addr = cross_elf_start_addr();
     addr_t base = addr; // elf 文件的起始虚拟内存地址
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
@@ -363,7 +363,7 @@ static int set_section_sizes(elf_context *ctx) {
 static uint64_t build_got(elf_context *ctx) {
     ctx->got = elf_new_section(ctx, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->got->sh_entsize = 4;
-    elf_section_data_add_ptr(ctx->got, 3 * ptr_size());
+    elf_section_data_add_ptr(ctx->got, 3 * cross_ptr_size());
 
     Elf64_Sym sym = {
             .st_value = 0,
@@ -412,7 +412,7 @@ static sym_attr_t *put_got_entry(elf_context *ctx, int relocate_type, uint64_t s
     }
 
     uint64_t got_offset = ctx->got->data_count;
-    elf_section_data_add_ptr(ctx->got, ptr_size());
+    elf_section_data_add_ptr(ctx->got, cross_ptr_size());
 
     Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
     char *sym_name = (char *) ctx->symtab_section->link->data + sym->st_name;
@@ -421,9 +421,7 @@ static sym_attr_t *put_got_entry(elf_context *ctx, int relocate_type, uint64_t s
 
     if (need_plt_entry) {
         // 基于 amd64 的 plt entry
-        if (BUILD_ARCH == ARCH_AMD64) {
-            attr->plt_offset = amd64_create_plt_entry(ctx, got_offset, attr);
-        }
+        attr->plt_offset = cross_create_plt_entry(ctx, got_offset, attr);
 
         size_t len = strlen(sym_name);
         if (len > sizeof(plt_name) - 5) {
@@ -806,8 +804,8 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
  * - pre_handle custom links
  * - alloc section name
  * - layout sections
- * - relocate global_symbols
- * - relocate sections
+ * - cross_relocate global_symbols
+ * - cross_relocate sections
  * - fill got
  * - output execute
  */
@@ -877,7 +875,7 @@ void elf_build_got_entries(elf_context *ctx, uint got_sym_index) {
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
 
-            int gotplt_type = gotplt_entry_type(type);
+            int gotplt_type = cross_gotplt_entry_type(type);
             if (gotplt_type == -1) {
                 error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
@@ -897,16 +895,15 @@ void elf_build_got_entries(elf_context *ctx, uint got_sym_index) {
 
             // 架构相关代码 if arch == amd64
             if (BUILD_ARCH == ARCH_AMD64) {
-                // 重定位类型改写， 这两种的类型的重定位不参与 PLT 和 GOT 的构建
-                if (type == R_X86_64_PLT32 || type == R_X86_64_PC32 &&
-                                              sym->st_shndx != SHN_UNDEF) {
+                // 重定位类型改写， amd64 下 这两种的类型的重定位不参与 PLT 和 GOT 的构建
+                if (type == R_X86_64_PLT32 || type == R_X86_64_PC32 && sym->st_shndx != SHN_UNDEF) {
                     rel->r_info = ELF64_R_INFO(sym_index, R_X86_64_PC32);
                     continue;
                 }
             }
 
             // 代码段 PLT 构建
-            int8_t is_code_rel = is_code_relocate(type);
+            int8_t is_code_rel = cross_is_code_relocate(type);
             if (is_code_rel == -1) {
                 error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
@@ -936,7 +933,7 @@ void elf_build_got_entries(elf_context *ctx, uint got_sym_index) {
                 got_sym_index = build_got(ctx);
             }
 
-            int rel_type = got_rel_type((bool) is_code_rel);
+            int rel_type = cross_got_rel_type((bool) is_code_rel);
             sym_attr_t *attr = put_got_entry(ctx, rel_type, sym_index);
 
             if (is_code_rel) {
@@ -1045,7 +1042,7 @@ void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t 
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
         uint64_t addr = apply_section->sh_addr + rel->r_offset;
-        relocate(ctx, rel, type, ptr, addr, target);
+        cross_relocate(ctx, rel, type, ptr, addr, target);
     }
 }
 
@@ -1084,14 +1081,14 @@ void elf_fill_got_entry(elf_context *ctx, Elf64_Rela *rel) {
     if (offset == 0) {
         return;
     }
-    if (offset + ptr_size() > ctx->got->data_capacity) {
-        elf_section_realloc(ctx->got, offset + ptr_size());
+    if (offset + cross_ptr_size() > ctx->got->data_capacity) {
+        elf_section_realloc(ctx->got, offset + cross_ptr_size());
     }
-    if (offset + ptr_size() > ctx->got->data_count) {
-        ctx->got->data_count = offset + ptr_size();
+    if (offset + cross_ptr_size() > ctx->got->data_count) {
+        ctx->got->data_count = offset + cross_ptr_size();
     }
 
-    if (ptr_size() == 8) {
+    if (cross_ptr_size() == 8) {
         write64le(ctx->got->data + offset, sym->st_value);
     } else {
         write32le(ctx->got->data + offset, sym->st_value);
@@ -1167,13 +1164,13 @@ section_t *elf_new_section(elf_context *ctx, char *name, uint sh_type, uint sh_f
         case SHT_DYNAMIC:
         case SHT_GNU_verneed:
         case SHT_GNU_verdef:
-            s->sh_addralign = ptr_size();
+            s->sh_addralign = cross_ptr_size();
             break;
         case SHT_STRTAB:
             s->sh_addralign = 1;
             break;
         default:
-            s->sh_addralign = ptr_size(); /* gcc/pcc default alignment */
+            s->sh_addralign = cross_ptr_size(); /* gcc/pcc default alignment */
             break;
     }
     if (sh_flags & SHF_PRIVATE) {

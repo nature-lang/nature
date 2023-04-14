@@ -39,7 +39,7 @@ char *str_connect(char *a, char *b);
 
 void str_replace_char(char *str, char from, char to);
 
-char *str_replace(char *orig, char *rep, char *with);
+char *str_replace(char *str, char *old, char *new);
 
 char *file_read(char *path);
 

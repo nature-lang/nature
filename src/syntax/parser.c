@@ -171,8 +171,8 @@ static slice_t *parser_block(module_t *m) {
  * 兼容 var
  * @return
  */
-static typeuse_t parser_typeuse(module_t *m) {
-    typeuse_t result = {
+static type_t parser_typeuse(module_t *m) {
+    type_t result = {
             .status = REDUCTION_STATUS_UNDO
     };
 
@@ -210,9 +210,9 @@ static typeuse_t parser_typeuse(module_t *m) {
     // (int, float)
     if (parser_consume(m, TOKEN_LEFT_PAREN)) {
         type_tuple_t *tuple = NEW(type_tuple_t);
-        tuple->elements = ct_list_new(sizeof(typeuse_t));
+        tuple->elements = ct_list_new(sizeof(type_t));
         do {
-            typeuse_t t = parser_typeuse(m);
+            type_t t = parser_typeuse(m);
             ct_list_push(tuple->elements, &t);
         } while (parser_consume(m, TOKEN_COMMA));
 
@@ -221,7 +221,7 @@ static typeuse_t parser_typeuse(module_t *m) {
 
     // {int:int} or {int}
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
-        typeuse_t key_type = parser_typeuse(m);
+        type_t key_type = parser_typeuse(m);
         if (parser_consume(m, TOKEN_COLON)) {
             // map
             type_map_t *map = NEW(type_map_t);
@@ -270,11 +270,11 @@ static typeuse_t parser_typeuse(module_t *m) {
     if (parser_consume(m, TOKEN_FN)) {
         parser_must(m, TOKEN_LEFT_PAREN);
         type_fn_t *typeuse_fn = NEW(type_fn_t);
-        typeuse_fn->formal_types = ct_list_new(sizeof(typeuse_t));
+        typeuse_fn->formal_types = ct_list_new(sizeof(type_t));
         if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
             // 包含参数类型
             do {
-                typeuse_t t = parser_typeuse(m);
+                type_t t = parser_typeuse(m);
                 ct_list_push(typeuse_fn->formal_types, &t);
             } while (parser_consume(m, TOKEN_COMMA));
         }
@@ -318,7 +318,7 @@ static ast_stmt *parser_typedef_stmt(module_t *m) {
 }
 
 static ast_var_decl *parser_var_decl(module_t *m) {
-    typeuse_t var_type = parser_typeuse(m);
+    type_t var_type = parser_typeuse(m);
 
     // 变量名称必须为 ident
     token_t *var_ident = parser_advance(m);
@@ -499,7 +499,7 @@ static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
  * @param type
  * @return
  */
-static ast_expr parser_struct_new(module_t *m, typeuse_t type) {
+static ast_expr parser_struct_new(module_t *m, type_t type) {
     ast_expr result;
     ast_struct_new_t *struct_new = NEW(ast_struct_new_t);
     struct_new->properties = ct_list_new(sizeof(struct_property_t));
@@ -554,7 +554,7 @@ static ast_expr parser_ident_expr(module_t *m) {
       * }
       **/
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
-        typeuse_t typeuse_ident = {
+        type_t typeuse_ident = {
                 .kind = TYPE_IDENT,
                 .status = REDUCTION_STATUS_UNDO,
                 .ident = typeuse_ident_new(ident_token->literal)
@@ -956,16 +956,12 @@ static ast_stmt *parser_import_stmt(module_t *m) {
     stmt->module_ident = NULL;
 
     token_t *token = parser_advance(m);
-    if (token->type != TOKEN_LITERAL_STRING) {
-        error_exit("[parser_import_stmt] import token_t not a string");
-    }
+    assertf(token->type == TOKEN_LITERAL_STRING, "import token must string");
 
     stmt->path = token->literal;
     if (parser_consume(m, TOKEN_AS)) {
         token = parser_advance(m);
-        if (token->type != TOKEN_IDENT) {
-            error_exit("[parser_import_stmt] import module_name not a TOKEN ident");
-        }
+        assertf(token->type == TOKEN_IDENT, "import as must ident");
         stmt->as = token->literal;
     }
     result->assert_type = AST_STMT_IMPORT;
@@ -1092,7 +1088,7 @@ static ast_expr parser_catch_expr(module_t *m) {
     parser_must(m, TOKEN_CATCH);
 
     ast_expr call_expr = parser_expr(m);
-    assertf(call_expr.assert_type == AST_CALL, "the catch target must be call expr");
+    assertf(call_expr.assert_type == AST_CALL, "the catch target must be call operand");
 
     ast_catch *catch = NEW(ast_catch);
     catch->call = call_expr.value;
@@ -1119,7 +1115,7 @@ static ast_tuple_destr *parser_tuple_destr(module_t *m) {
         } else {
             expr = parser_expr(m);
             // a a[0], a["b"] a.b
-            assertf(can_assign(expr.assert_type), "tuple destr src must can assign expr");
+            assertf(can_assign(expr.assert_type), "tuple destr src must can assign operand");
         }
 
         ct_list_push(result->elements, &expr);
@@ -1168,7 +1164,7 @@ static ast_tuple_destr *parser_var_tuple_destr(module_t *m) {
  */
 static ast_stmt *parser_var_begin_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    typeuse_t typedecl = parser_typeuse(m);
+    type_t typedecl = parser_typeuse(m);
 
     // var (a, b)
     if (parser_is(m, TOKEN_LEFT_PAREN)) {
@@ -1198,7 +1194,7 @@ static ast_stmt *parser_var_begin_stmt(module_t *m) {
 static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
     // 类型解析
-    typeuse_t typedecl = parser_typeuse(m);
+    type_t typedecl = parser_typeuse(m);
     token_t *ident_token = parser_advance(m);
 
     // next param 不能是 (a, b) 这样的形式, 不支持

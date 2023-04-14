@@ -141,8 +141,8 @@ typedef struct {
 typedef struct {
     int line;
     ast_type_t assert_type; // 表达式断言
-    typeuse_t type; // 表达式自身的类型
-    typeuse_t target_type; // 表达式赋值的目标的 type
+    type_t type; // 表达式自身的类型
+    type_t target_type; // 表达式赋值的目标的 type
     void *value;
 } ast_expr;
 
@@ -157,8 +157,8 @@ typedef struct {
 } ast_ident;
 
 typedef struct {
-    typeuse_t target_type; // 将表达式
-    ast_expr expr; // 将表达式转换成 target_type
+    type_t target_type; // 将表达式
+    ast_expr operand; // 将表达式转换成 target_type
 } ast_type_convert_t;
 
 // 一元表达式
@@ -176,7 +176,7 @@ typedef struct {
 
 // 调用函数
 typedef struct {
-    typeuse_t return_type; // call return type 冗余
+    type_t return_type; // call return type 冗余
     ast_expr left;
     list_t *actual_params;// ast_expr
     bool catch; // 本次 call 是否被 catch
@@ -192,7 +192,7 @@ typedef struct {
 // (xx, xx, xx)
 typedef struct {
     // var 中, ast_expr 的 type 是  ast_var_decl 和 ast_tuple_destr
-    // assign 中 (a, b, (c.e, d[0])) = (1, 2) ast_expr 可能是所有 expr 类型，包括 ast_tuple_destr 自身
+    // assign 中 (a, b, (c.e, d[0])) = (1, 2) ast_expr 可能是所有 operand 类型，包括 ast_tuple_destr 自身
     list_t *elements;  // ast_expr
 } ast_tuple_destr;
 
@@ -205,7 +205,7 @@ typedef struct {
 // int a;
 typedef struct {
     string ident;
-    typeuse_t type; // type 已经决定了 size
+    type_t type; // type 已经决定了 size
 } ast_var_decl;
 
 // 包含了声明与赋值，所以统称为定义
@@ -278,12 +278,12 @@ typedef struct {
 
 // import "module_path" module_name alias
 typedef struct {
-    string path; // import "xxx" 的 xxx 部分
-    string as; // import "foo/bar" as xxx 的 xxx 部分  代码中使用都是基于这个 as 的，没有就使用 bra 作为 as
+    string path; // import "xxx"
+    string as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
-    // 计算得出
+    // 绝对路径计算
     string full_path; // 绝对完整的文件路径
-    string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来
+    string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import;
 
 /**
@@ -298,7 +298,7 @@ typedef struct {
 typedef struct {
     // parser 阶段是 typedef ident
     // infer 完成后是 typeuse_struct
-    typeuse_t type;
+    type_t type;
 
     list_t *properties; // struct_property_t
 } ast_struct_new_t;
@@ -328,20 +328,20 @@ typedef struct {
  * optimize 表达式阶段生成该值，不行也要行！
  */
 typedef struct {
-    typeuse_t element_type; // 访问的 value 的类型
+    type_t element_type; // 访问的 value 的类型
     ast_expr left;
     ast_expr index;
 } ast_list_access_t;
 
 typedef struct {
-    typeuse_t element_type; // index 对应的 value 的 type
+    type_t element_type; // index 对应的 value 的 type
     ast_expr left;
     uint64_t index;
 } ast_tuple_access_t;
 
 typedef struct {
-    typeuse_t key_type;
-    typeuse_t value_type;
+    type_t key_type;
+    type_t value_type;
 
     ast_expr left;
     ast_expr key;
@@ -355,7 +355,7 @@ typedef struct {
 // [1,a.b, call()]
 typedef struct {
     list_t *values; // ast_expr
-    typeuse_t type; // list的类型 (类型推导截断冗余)
+    type_t type; // list的类型 (类型推导截断冗余)
 } ast_list_new;
 
 typedef struct {
@@ -397,13 +397,13 @@ typedef struct {
  */
 typedef struct {
     string ident; // my_int (自定义的类型名称)
-    typeuse_t type; // int (类型)
+    type_t type; // int (类型)
 } ast_typedef_stmt;
 
 // 这里包含 body, 所以属于 def
 typedef struct ast_fndef_t {
     char *name;
-    typeuse_t return_type;
+    type_t return_type;
     list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
@@ -413,7 +413,7 @@ typedef struct ast_fndef_t {
     list_t *parent_view_envs;
 
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
-    typeuse_t *self_struct;
+    type_t *self_struct;
 
     struct ast_fndef_t *parent;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
@@ -455,12 +455,12 @@ static ast_expr *ast_unary(ast_expr *target, ast_expr_op_t unary_op) {
  * @param target_type
  * @return
  */
-static ast_expr ast_type_convert(ast_expr expr, typeuse_t target_type) {
+static ast_expr ast_type_convert(ast_expr expr, type_t target_type) {
     assertf(target_type.status == REDUCTION_STATUS_DONE, "target type not reduction");
     ast_expr *result = NEW(ast_expr);
 
     ast_type_convert_t *convert = NEW(ast_type_convert_t);
-    convert->expr = expr;
+    convert->operand = expr;
     convert->target_type = target_type;
 
     result->assert_type = AST_EXPR_TYPE_CONVERT;
@@ -469,11 +469,11 @@ static ast_expr ast_type_convert(ast_expr expr, typeuse_t target_type) {
     return *result;
 }
 
-typeuse_t select_actual_param(ast_call *call, uint8_t index);
+type_t select_actual_param(ast_call *call, uint8_t index);
 
-typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
+type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
-bool type_compare(typeuse_t left, typeuse_t right);
+bool type_compare(type_t left, type_t right);
 
 static bool can_assign(ast_type_t t) {
     if (t == AST_EXPR_IDENT ||

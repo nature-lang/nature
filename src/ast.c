@@ -13,11 +13,11 @@ ast_ident *ast_new_ident(char *literal) {
  * @param index
  * @return
  */
-typeuse_t select_actual_param(ast_call *call, uint8_t index) {
+type_t select_actual_param(ast_call *call, uint8_t index) {
 //    if (call->spread && index >= call->actual_params->length - 1) {
 //        // last actual param type must array
 //        ast_expr *last_param_expr = ct_list_value(call->actual_params, call->actual_params->length - 1);
-//        typeuse_t last_param_type = last_param_expr->type;
+//        type_t last_param_type = last_param_expr->type;
 //        assertf(last_param_type.kind == TYPE_LIST, "spread param must list");
 //        type_list_t *list_decl = last_param_type.list;
 //        return list_decl->element_type;
@@ -27,10 +27,10 @@ typeuse_t select_actual_param(ast_call *call, uint8_t index) {
     return last_param_expr->type;
 }
 
-typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
+type_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
     if (formal_fn->rest && index >= formal_fn->formal_types->length - 1) {
 
-        typeuse_t *last_param_type = ct_list_value(formal_fn->formal_types, formal_fn->formal_types->length - 1);
+        type_t *last_param_type = ct_list_value(formal_fn->formal_types, formal_fn->formal_types->length - 1);
         assertf(last_param_type->kind == TYPE_LIST, "rest param must list");
         type_list_t *list_decl = last_param_type->list;
 
@@ -38,7 +38,7 @@ typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
     }
 
     assertf(index < formal_fn->formal_types->length, "select index out range");
-    typeuse_t *result = ct_list_value(formal_fn->formal_types, index);
+    type_t *result = ct_list_value(formal_fn->formal_types, index);
     return *result;
 }
 
@@ -50,7 +50,7 @@ typeuse_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
  * @param right
  * @return
  */
-bool type_compare(typeuse_t left, typeuse_t right) {
+bool type_compare(type_t left, type_t right) {
     assertf(left.status == REDUCTION_STATUS_DONE && right.status == REDUCTION_STATUS_DONE,
             "type not origin, left: '%s', right: '%s'",
             type_kind_string[left.kind],
@@ -108,8 +108,8 @@ bool type_compare(typeuse_t left, typeuse_t right) {
             return false;
         }
         for (int i = 0; i < left_tuple->elements->length; ++i) {
-            typeuse_t *left_item = ct_list_value(left_tuple->elements, i);
-            typeuse_t *right_item = ct_list_value(right_tuple->elements, i);
+            type_t *left_item = ct_list_value(left_tuple->elements, i);
+            type_t *right_item = ct_list_value(right_tuple->elements, i);
             if (!type_compare(*left_item, *right_item)) {
                 return false;
             }
@@ -130,8 +130,8 @@ bool type_compare(typeuse_t left, typeuse_t right) {
         }
 
         for (int i = 0; i < left_type_fn->formal_types->length; ++i) {
-            typeuse_t *left_formal_type = ct_list_value(left_type_fn->formal_types, i);
-            typeuse_t *right_formal_type = ct_list_value(right_type_fn->formal_types, i);
+            type_t *left_formal_type = ct_list_value(left_type_fn->formal_types, i);
+            type_t *right_formal_type = ct_list_value(right_type_fn->formal_types, i);
             if (!type_compare(*left_formal_type, *right_formal_type)) {
                 return false;
             }

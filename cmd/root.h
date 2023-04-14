@@ -1,23 +1,21 @@
+#ifndef NATURE_ROOT_H
+#define NATURE_ROOT_H
+
+#include "utils/value.h"
 #include <stdio.h>
 #include <unistd.h>
-#include "build.h"
+#include "root.h"
 #include "src/module.h"
-#include "utils/helper.h"
-#include "src/semantic/infer.h"
-#include "src/compiler.h"
-#include "src/cfg.h"
-#include "src/debug/debug.h"
-#include "src/native/amd64.h"
 #include "utils/error.h"
 #include "utils/exec.h"
 #include "src/build/config.h"
 #include "src/build/build.h"
 
-void cmd_build_arg(int argc, char **argv) {
+void cmd_entry(int argc, char **argv) {
     // 读取最后一个参数
     char *build_file = argv[argc - 1];
     if (!ends_with(build_file, ".n")) {
-        error_exit("[cmd_build_arg] named files must be .n files: %s", build_file);
+        error_exit("[cmd_entry] named files must be .n files: %s", build_file);
         return;
     }
 
@@ -34,3 +32,4 @@ void cmd_build_arg(int argc, char **argv) {
     build(build_file);
 }
 
+#endif //NATURE_ROOT_H

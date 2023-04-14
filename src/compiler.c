@@ -110,7 +110,7 @@ static void compiler_map_assign(module_t *m, ast_assign_stmt *stmt) {
 
 static void compiler_struct_assign(module_t *m, ast_assign_stmt *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
-    typeuse_t struct_type = struct_access->left.type;
+    type_t struct_type = struct_access->left.type;
     lir_operand_t *struct_target = compiler_expr(m, struct_access->left);
     uint64_t offset = type_struct_offset(struct_type.struct_, struct_access->key);
     uint64_t item_size = type_sizeof(struct_access->property->type);
@@ -124,7 +124,7 @@ static void compiler_struct_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 /**
- * ident = expr
+ * ident = operand
  * @param c
  * @param stmt
  */
@@ -171,7 +171,7 @@ static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operan
 }
 
 /**
- * (a, b, (c[0], d.b)) = expr
+ * (a, b, (c[0], d.b)) = operand
  * @param m
  * @param stmt
  */
@@ -182,7 +182,7 @@ static void compiler_tuple_destr_stmt(module_t *m, ast_assign_stmt *stmt) {
 }
 
 /**
- * var (a, b, (c, d)) = expr
+ * var (a, b, (c, d)) = operand
  * @param m
  * @param var_tuple_def
  * @return
@@ -209,7 +209,7 @@ static void compiler_vardef(module_t *m, ast_vardef_stmt *stmt) {
 /**
  * a = 1 // left_target is lir_var_operand
  * a.b = 1 // left_target is lir_memory(base_address)
- * (a, b, (a.b, b[0])) = expr
+ * (a, b, (a.b, b[0])) = operand
  * @param c
  * @param stmt
  * @return
@@ -467,7 +467,7 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
         }
 
         int rest_index = i;
-        typeuse_t *rest_type = ct_list_value(formal_fn->formal_types, i);
+        type_t *rest_type = ct_list_value(formal_fn->formal_types, i);
         assertf(rest_type->kind == TYPE_LIST, "rest param must list type");
 
         // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
@@ -500,7 +500,7 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
     OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
 
-    // 编译时判断是否有 catch 当前 call expr, 如果存在 catch,则无论如何都不进行 beq
+    // 编译时判断是否有 catch 当前 call operand, 如果存在 catch,则无论如何都不进行 beq
     if (!call->catch) {
         // beq has_errort,true -> fn_end_label
         OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_errort,
@@ -665,7 +665,7 @@ static lir_operand_t *compiler_map_access(module_t *m, ast_expr expr) {
 
     // compiler base address left_target
     lir_operand_t *map_target = compiler_expr(m, ast->left);
-    typeuse_t type_map_decl = ast->left.type;
+    type_t type_map_decl = ast->left.type;
 
     // compiler key to temp var
     lir_operand_t *key_target_ref = var_ref_operand(m, compiler_expr(m, ast->key));
@@ -689,7 +689,7 @@ static lir_operand_t *compiler_map_access(module_t *m, ast_expr expr) {
  */
 static lir_operand_t *compiler_set_new(module_t *m, ast_expr expr) {
     ast_set_new *ast = expr.value;
-    typeuse_t typedecl = expr.type;
+    type_t typedecl = expr.type;
 
     uint64_t rtype_index = ct_find_rtype_index(typedecl);
     uint64_t key_index = ct_find_rtype_index(typedecl.map->key_type);
@@ -721,7 +721,7 @@ static lir_operand_t *compiler_set_new(module_t *m, ast_expr expr) {
  */
 static lir_operand_t *compiler_map_new(module_t *m, ast_expr expr) {
     ast_map_new *ast = expr.value;
-    typeuse_t map_type = expr.type;
+    type_t map_type = expr.type;
 
     uint64_t map_rtype_index = ct_find_rtype_index(map_type);
     uint64_t key_index = ct_find_rtype_index(map_type.map->key_type);
@@ -762,7 +762,7 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
     ast_struct_select_t *ast = expr.value;
 
     lir_operand_t *struct_target = compiler_expr(m, ast->left);
-    typeuse_t t = ast->left.type;
+    type_t t = ast->left.type;
     uint64_t item_size = type_sizeof(ast->property->type);
     uint64_t offset = type_struct_offset(t.struct_, ast->key);
 
@@ -777,7 +777,7 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
 }
 
 /**
- * expr = ast_call, but ast_call.left is struct access
+ * operand = ast_call, but ast_call.left is struct access
  * @param c
  * @param expr
  * @return
@@ -785,7 +785,7 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
 static lir_operand_t *compiler_struct_access_call(module_t *m, ast_expr expr) {
     ast_select *ast = expr.value;
 
-    // TODO 这里的 ast->left 的类型可能并不是 struct,expr 自身则是 var 或者 global symbol operand
+    // TODO 这里的 ast->left 的类型可能并不是 struct,operand 自身则是 var 或者 global symbol operand
     lir_operand_t *left_target = compiler_expr(m, ast->left);
 
     // if left_target == list,
@@ -799,7 +799,7 @@ static lir_operand_t *compiler_struct_access_call(module_t *m, ast_expr expr) {
     // 由于该 list 没有进行过实际的 struct_new 操作,所以需要在 runtime_init 时进行相关的 struct_new?
     // 通过固定的 rtype_index 找到 struct 并且 new 即可
     // 在 runtime 中 init 回面临一个指针存储的问题.需要通过 rt_call 获得 list 的 typeuse_struct_t? 好像也没啥问题
-    // 至此 list 的 typeuse_struct_t 的 typeuse_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
+    // 至此 list 的 typeuse_struct_t 的 type_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
 
     // TODO left 的类型决定了怎么 call, 如果是 struct access 则需要做特殊逻辑支持。
 
@@ -819,7 +819,7 @@ static lir_operand_t *compiler_tuple_access(module_t *m, ast_expr expr) {
     ast_tuple_access_t *ast = expr.value;
 
     lir_operand_t *tuple_target = compiler_expr(m, ast->left);
-    typeuse_t t = ast->left.type;
+    type_t t = ast->left.type;
     uint64_t item_size = type_sizeof(ast->element_type);
     uint64_t offset = type_tuple_offset(t.tuple, ast->index);
 
@@ -849,7 +849,7 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr expr) {
     ast_struct_new_t *ast = expr.value;
     lir_operand_t *struct_target = temp_var_operand(m, expr.type);
 
-    typeuse_t type = ast->type;
+    type_t type = ast->type;
 
     uint64_t rtype_index = ct_find_rtype_index(type);
 
@@ -891,7 +891,7 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr expr) {
 static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr expr) {
     ast_tuple_new *ast = expr.value;
 
-    typeuse_t typedecl = expr.type;
+    type_t typedecl = expr.type;
     uint64_t rtype_index = ct_find_rtype_index(typedecl);
 
     lir_operand_t *tuple_target = temp_var_operand(m, expr.type);
@@ -920,36 +920,39 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr expr) {
 }
 
 static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
-    ast_type_convert_t *type_convert = expr.value;
-    lir_operand_t *result = compiler_expr(m, type_convert->expr);
-    if (is_number(type_convert->target_type.kind)) {
-        operand_convert(result, type_convert->target_type);
-        return result;
+    ast_type_convert_t *convert = expr.value;
+    lir_operand_t *input = compiler_expr(m, convert->operand);
+    lir_operand_t *output = temp_var_operand(m, convert->target_type);
+    uint64_t input_rtype_index = ct_find_rtype_index(convert->operand.type);
+
+    if (is_integer(convert->target_type.kind)) {
+        assertf(is_number(convert->operand.type.kind), "only support number type convert");
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_INTEGER, output, 2, int_operand(input_rtype_index), input));
+        return output;
+    }
+    if (is_float(convert->target_type.kind)) {
+        assertf(is_number(convert->operand.type.kind), "only support number type convert");
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_FLOAT, output, 2, int_operand(input_rtype_index), input));
+        return output;
     }
 
-    if (type_convert->target_type.kind == TYPE_ANY) {
-        if (result->assert_type == LIR_OPERAND_IMM) {
-            lir_imm_t *imm = result->value;
-            imm->kind = TYPE_INT64;
-        }
+    if (convert->target_type.kind == TYPE_ANY) {
+//        if (input->assert_type == LIR_OPERAND_IMM) {
+//            lir_imm_t *imm = input->value;
+//            imm->kind = TYPE_INT64;
+//        }
 
-        lir_operand_t *converted = temp_var_operand(m, expr.target_type);
-        // 基于 source 类型计算 element_rtype index
-        uint rtype_index = ct_find_rtype_index(expr.type);
-        // lir call type, value =>
-        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY,
-                            converted,
-                            2, int_operand(rtype_index), result));
-        return converted;
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input));
+        return output;
     }
 
-    assertf(false, "not support convert to type %s", type_kind_string[type_convert->target_type.kind]);
+    assertf(false, "not support convert to type %s", type_kind_string[convert->target_type.kind]);
     exit(1);
 }
 
 static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
     ast_catch *catch = expr.value;
-    typeuse_t tuple_type = expr.type;
+    type_t tuple_type = expr.type;
 
     lir_operand_t *call_result_operand = compiler_expr(m, (ast_expr) {
             .assert_type = AST_CALL,

@@ -210,7 +210,7 @@ static rtype_t rtype_fn(type_fn_t *t) {
     rtype_t return_rtype = ct_reflect_type(t->return_type);
     str = str_connect(str, itoa(return_rtype.hash));
     for (int i = 0; i < t->formal_types->length; ++i) {
-        typeuse_t *typeuse = ct_list_value(t->formal_types, i);
+        type_t *typeuse = ct_list_value(t->formal_types, i);
         rtype_t formal_type = ct_reflect_type(*typeuse);
         str = str_connect(str, itoa(formal_type.hash));
     }
@@ -287,7 +287,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 key 的
     for (uint64_t i = 0; i < t->elements->length; ++i) {
-        typeuse_t *element_type = ct_list_value(t->elements, i);
+        type_t *element_type = ct_list_value(t->elements, i);
         uint16_t item_size = type_sizeof(*element_type);
         if (item_size > max) {
             max = item_size;
@@ -353,13 +353,13 @@ uint8_t type_kind_sizeof(type_kind t) {
  * @param t
  * @return
  */
-uint16_t type_sizeof(typeuse_t t) {
+uint16_t type_sizeof(type_t t) {
     return type_kind_sizeof(t.kind);
 }
 
 
-typeuse_t type_ptrof(typeuse_t t) {
-    typeuse_t result;
+type_t type_ptrof(type_t t) {
+    type_t result;
     result.status = t.status;
 
     result.kind = TYPE_POINTER;
@@ -374,7 +374,7 @@ typeuse_t type_ptrof(typeuse_t t) {
  * @param t
  * @return
  */
-rtype_t reflect_type(typeuse_t t) {
+rtype_t reflect_type(type_t t) {
     rtype_t rtype;
     switch (t.kind) {
         case TYPE_BOOL:
@@ -422,7 +422,7 @@ rtype_t reflect_type(typeuse_t t) {
     return rtype;
 }
 
-rtype_t ct_reflect_type(typeuse_t t) {
+rtype_t ct_reflect_type(type_t t) {
     rtype_t rtype = reflect_type(t);
     if (!rtype.kind) {
         return rtype;
@@ -443,7 +443,7 @@ rtype_t ct_reflect_type(typeuse_t t) {
 }
 
 
-rtype_t rt_reflect_type(typeuse_t t) {
+rtype_t rt_reflect_type(type_t t) {
     rtype_t rtype = reflect_type(t);
 
     // TODO 应该在 runtime 中实现，且写入到 rt reflect_type 中
@@ -472,7 +472,7 @@ type_ident_t *typeuse_ident_new(char *literal) {
     return t;
 }
 
-bool type_need_gc(typeuse_t t) {
+bool type_need_gc(type_t t) {
     if (t.in_heap) {
         return true;
     }
@@ -497,7 +497,7 @@ uint64_t rtypes_push(rtype_t rtype) {
  * @param t
  * @return
  */
-uint ct_find_rtype_index(typeuse_t t) {
+uint ct_find_rtype_index(type_t t) {
     rtype_t rtype = ct_reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
     uint64_t index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
@@ -557,7 +557,7 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key) {
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     uint64_t offset = 0;
     for (int i = 0; i < t->elements->length; ++i) {
-        typeuse_t *typedecl = ct_list_value(t->elements, i);
+        type_t *typedecl = ct_list_value(t->elements, i);
         uint64_t item_size = type_sizeof(*typedecl);
         offset = align(offset, item_size);
 

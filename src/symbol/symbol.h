@@ -46,7 +46,7 @@ symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool
 
 symbol_t *symbol_table_get(string ident);
 
-void symbol_table_set_var(string unique_ident, typeuse_t type);
+void symbol_table_set_var(string unique_ident, type_t type);
 
 ast_var_decl *symbol_table_get_var(string ident);
 
