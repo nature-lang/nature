@@ -7,3 +7,4 @@ tmp/
 .idea
 .DS_store
 test.text
+libruntime.a

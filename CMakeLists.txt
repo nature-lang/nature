@@ -3,6 +3,8 @@ project(nature C)
 
 set(CMAKE_C_STANDARD 11)
 
+file(READ "VERSION" PROJECT_VERSION)
+
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
 
 set(SRC_BINARY
@@ -157,3 +159,12 @@ include_directories(.)
 enable_testing()
 add_subdirectory(tests)
 add_subdirectory(runtime)
+
+#--------------------------------- install ---------------------------------
+install(TARGETS nature DESTINATION nature/bin)
+install(DIRECTORY lib/ DESTINATION nature/lib)
+install(FILES LICENSE DESTINATION nature/)
+install(FILES VERSION DESTINATION nature/)
+
+
+include(cmake/CMackCPack.cmake)
