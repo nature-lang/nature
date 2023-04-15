@@ -79,8 +79,10 @@ module_t *module_build(char *source_path, module_type_t type) {
     m->source = file_read(source_path);
     char *temp = strrchr(source_path, '/');
     m->source_dir = rtrim(source_path, strlen(temp));
-    if (type == MODULE_TYPE_IMPORTED) {
+    if (type == MODULE_TYPE_COMMON) {
         m->ident = module_unique_ident(source_path);
+    } else if (type == MODULE_TYPE_MAIN) {
+        m->ident = FN_MAIN_NAME;
     }
     m->type = type;
 

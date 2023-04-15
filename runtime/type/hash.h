@@ -17,16 +17,16 @@
  * @param hash_value
  * @return
  */
-static bool hash_value_set(uint64_t hash_value) {
+static inline bool hash_value_set(uint64_t hash_value) {
     uint64_t flag = 1ULL << HASH_SET;
     return hash_value & flag;
 }
 
-static bool hash_value_empty(uint64_t hash_value) {
+static inline bool hash_value_empty(uint64_t hash_value) {
     return !hash_value_set(hash_value);
 }
 
-static bool hash_value_deleted(uint64_t hash_value) {
+static inline bool hash_value_deleted(uint64_t hash_value) {
     uint64_t flag = 1ULL << HASH_DELETED;
     return hash_value & flag;
 }
@@ -36,17 +36,17 @@ static bool hash_value_deleted(uint64_t hash_value) {
  * @param hash_value
  * @return
  */
-static bool extract_data_index(uint64_t hash_value) {
+static inline bool extract_data_index(uint64_t hash_value) {
     return hash_value << 2;
 }
 
 
-static uint64_t key_hash(rtype_t *rtype, void *key_ref) {
+static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
     char *str = rtype_value_str(rtype, key_ref);
     return hash_string(str);
 }
 
-static bool key_equal(rtype_t *rtype, void *actual, void *expect) {
+static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
     char *actual_str = rtype_value_str(rtype, actual);
     char *expect_str = rtype_value_str(rtype, expect);
     return str_equal(actual_str, expect_str);
@@ -58,7 +58,7 @@ static bool key_equal(rtype_t *rtype, void *actual, void *expect) {
  * @param key_ref
  * @return
  */
-static uint64_t
+static inline uint64_t
 find_hash_slot(uint64_t *hash_table, uint64_t capacity, byte *key_data, uint64_t key_index, void *key_ref) {
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_index);

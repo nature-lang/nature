@@ -18,6 +18,10 @@ uint64_t pre_fndef_list() {
         symbol_t *s = SLICE_VALUE(symbol_fn_list);
         ast_fndef_t *fn = s->ast_value;
         closure_t *c = fn->closure;
+        // builtin continue
+        if (!c) {
+            continue;
+        }
 
         fndef_t *f = &ct_fndef_list[index];
         f->stack_size = align(c->stack_size, cross_ptr_size());

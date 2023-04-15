@@ -4,6 +4,7 @@
 #include "memory.h"
 #include "allocator.h"
 #include <stdio.h>
+#include <stdint.h>
 
 #define STACK_TOP() ({\
     uint64_t addr = 0; \
@@ -34,7 +35,7 @@
     swapcontext(&_old.ctx, &_new.ctx);\
 
 
-uint processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
+uint64_t processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
 processor_t *processor_list;
 
 /**

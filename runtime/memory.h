@@ -64,7 +64,7 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
 };
 
 
-static uint summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
+static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
@@ -84,10 +84,10 @@ typedef struct mspan_t {
     addr_t end;
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
 
-    uint pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages 是不固定的
-    uint obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1， 也就是一个 obj 占用一个 span
-    uint obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass 获取，但是不兼容大对象
-    uint alloc_count; // 已经用掉的 obj count
+    uint64_t pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages 是不固定的
+    uint64_t obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1， 也就是一个 obj 占用一个 span
+    uint64_t obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass 获取，但是不兼容大对象
+    uint64_t alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     bitmap_t *alloc_bits;

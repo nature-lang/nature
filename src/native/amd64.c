@@ -422,7 +422,7 @@ slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * example:
+ * examples:
  * lea imm(string_raw), reg
  * lea var,  reg
  * @param c

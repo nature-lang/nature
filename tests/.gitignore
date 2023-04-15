@@ -1,2 +1,5 @@
 tmp/
 main
+cmocka/doc
+cmocka/example
+cmocka/tests

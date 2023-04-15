@@ -39,7 +39,7 @@ void error_message(int line, char *message) {
 }
 
 void error_type_not_found(int line, char *ident) {
-    printf("line: %d, code '%s' undeclared \n", line, ident);
+    printf("line: %d, type '%s' undeclared \n", line, ident);
     exit(1);
 }
 

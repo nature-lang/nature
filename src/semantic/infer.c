@@ -559,9 +559,9 @@ static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_typ
 
     for (int i = 0; i < call->actual_params->length; ++i) {
         // first param from formal
-        type_t formal_target_Type = select_formal_param(target_type_fn, i);
-        ast_expr *expr = ct_list_value(call->actual_params, i);
-        infer_right_expr(m, expr, formal_target_Type);
+        type_t formal_target_type = select_formal_param(target_type_fn, i);
+        ast_expr *actual_param = ct_list_value(call->actual_params, i);
+        infer_right_expr(m, actual_param, formal_target_type);
     }
 }
 
@@ -1241,7 +1241,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
-    assertf(t.kind == TYPE_SELF, "cannot use type self everywhere except struct fn decl");
+    assertf(t.kind != TYPE_SELF, "cannot use type self everywhere except struct fn decl first param");
 
     if (t.status == REDUCTION_STATUS_DONE) {
         goto STATUS_DONE;

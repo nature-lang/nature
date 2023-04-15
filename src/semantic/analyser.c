@@ -21,12 +21,22 @@ static void analyser_block(module_t *m, slice_t *block) {
     }
 }
 
+/**
+ * type 不像 var 一样可以通过 env 引入进来，type 只有作用域的概念
+ * 如果在当前文件的作用域中没有找到当前 type?
+ * @param m
+ * @param current
+ * @param ident
+ * @return
+ */
 static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, string ident) {
     local_scope_t *current_scope = current->current_scope;
     while (current_scope != NULL) {
         for (int i = 0; i < current_scope->idents->count; ++i) {
             local_ident_t *local = current_scope->idents->take[i];
-            if (strcmp(ident, local->ident) == 0) {
+            if (str_equal(ident, local->ident)) {
+                assertf(local->type == SYMBOL_TYPEDEF, "ident=%s not type", local->ident);
+                // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
                 return local->unique_ident;
             }
         }
@@ -35,7 +45,15 @@ static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, strin
     }
 
     if (current->parent == NULL) {
-        error_type_not_found(m->analyser_line, ident);
+        // 当前 module 中同样有全局 type，在使用时是可以省略名称的
+        // analyser 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
+        char *global_ident = ident_with_module(m->ident, ident);
+        symbol_t *s = table_get(symbol_table, global_ident);
+        if (s != NULL) {
+            return global_ident; // 完善 type 都访问名称
+        }
+
+        assertf(false, "line: %d, type '%s' undeclared \n", m->analyser_line, ident);
     }
 
     return analyser_resolve_type(m, current->parent, ident);
@@ -50,7 +68,6 @@ static void analyser_typeuse(module_t *m, type_t *type) {
     // type foo = int
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_IDENT) {
-        // 向上查查查
         type_ident_t *ident = type->ident;
         string unique_name = analyser_resolve_type(m, m->analyser_current, ident->literal);
         ident->literal = unique_name;
@@ -337,10 +354,9 @@ static analyser_fndef_t *analyser_current_init(module_t *m, local_scope_t *scope
 static void analyser_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope) {
     fndef->parent_view_envs = ct_list_new(sizeof(ast_expr));
 
-    analyser_typeuse(m, &fndef->return_type);
-
-    // 初始化
     analyser_current_init(m, scope, fndef->name);
+
+    analyser_typeuse(m, &fndef->return_type);
 
     // 开启一个新的 function 作用域
     analyser_function_begin(m);
@@ -475,7 +491,7 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
     while (current_scope != NULL) {
         for (int i = 0; i < current_scope->idents->count; ++i) {
             local_ident_t *local = current_scope->idents->take[i];
-            if (strcmp(ident->literal, local->ident) == 0) {
+            if (str_equal(ident->literal, local->ident)) {
                 // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
                 expr->value = ast_new_ident(local->unique_ident);
                 return;
@@ -499,19 +515,22 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // 如果是 xxx.xxx 这样的访问方式在 selector key 中已经进行了处理, 但是有部分 builtin 的全局符号 比如 print/set 等
-    symbol_t *s = table_get(symbol_table, ident->literal);
-    if (s != NULL) {
-        return;
-    }
 
 
     // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号(当前 module 注册的符号都加上了前缀)中查找
     // 所以这里要拼接前缀
     char *global_ident = ident_with_module(m->ident, ident->literal);
-    s = table_get(symbol_table, global_ident);
+    symbol_t *s = table_get(symbol_table, global_ident);
     if (s != NULL) {
         ident->literal = global_ident; // 完善访问名称
+        return;
+    }
+
+    // free_var_index == -1 表示符号在当前的作用域链中无法找到，可能是全局符号
+    // println/print/set 等全局符号都已经预注册完成了
+    s = table_get(symbol_table, ident->literal);
+    if (s != NULL) {
+        // 全局符号什么都不需要做，名称已经是正确的了
         return;
     }
 
@@ -885,16 +904,16 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
     slice_push(fn_list, fn_init);
 
     // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
-    ast_stmt *temp_stmt = NEW(ast_stmt);
+    ast_stmt *call_stmt = NEW(ast_stmt);
     ast_call *call = NEW(ast_call);
     call->left = (ast_expr) {
             .assert_type = AST_EXPR_IDENT,
             .value = ast_new_ident(s->ident), // module.init
     };
     call->actual_params = ct_list_new(sizeof(ast_expr));
-    temp_stmt->assert_type = AST_CALL;
-    temp_stmt->value = call;
-    m->call_init_stmt = temp_stmt;
+    call_stmt->assert_type = AST_CALL;
+    call_stmt->value = call;
+    m->call_init_stmt = call_stmt;
 
     // 此时所有对符号都已经主要到了全局变量表中，vardef 到右值则注册到 init fn 中，有下面到 fndef 进行改写
     // 遍历所有 fn list

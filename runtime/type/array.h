@@ -4,7 +4,7 @@
 #include "utils/type.h"
 #include "runtime/allocator.h"
 
-static memory_array_t *array_new(rtype_t *element_rtype, uint64_t length) {
+static inline memory_array_t *array_new(rtype_t *element_rtype, uint64_t length) {
     // - 创建一个 typeuse_array_t 结构
     type_t type_array = type_basic_new(TYPE_ARRAY);
     type_array.array = NEW(type_array_t);

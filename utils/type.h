@@ -85,7 +85,7 @@ static string type_kind_string[] = {
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_IDENT] = "decl", // char*
-        [TYPE_ARRAY] = "list",
+        [TYPE_LIST] = "list",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
         [TYPE_TUPLE] = "tuple",
@@ -263,10 +263,10 @@ struct type_fn_t {
  * 但是给定 void* value,能够知道其内存中存储了什么东西！
  */
 struct type_any_t {
-//    uint size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
+//    uint64_t size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
     // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
 //    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
-//    uint rtype_index; // 这样定位更快
+//    uint64_t rtype_index; // 这样定位更快
 //    void *value;
 };
 
@@ -352,7 +352,7 @@ rtype_t rt_reflect_type(type_t t);
  */
 uint64_t rtypes_push(rtype_t rtype);
 
-uint ct_find_rtype_index(type_t t);
+uint64_t ct_find_rtype_index(type_t t);
 
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小
@@ -450,11 +450,11 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 
-static bool is_float(type_kind kind) {
+static inline bool is_float(type_kind kind) {
     return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
 }
 
-static bool is_integer(type_kind kind) {
+static inline bool is_integer(type_kind kind) {
     return kind == TYPE_INT ||
            kind == TYPE_INT8 ||
            kind == TYPE_INT16 ||
@@ -467,7 +467,7 @@ static bool is_integer(type_kind kind) {
            kind == TYPE_UINT64;
 }
 
-static bool is_number(type_kind kind) {
+static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }
 
@@ -476,7 +476,7 @@ static bool is_number(type_kind kind) {
  * @param t
  * @return
  */
-static bool is_basic_type(type_t t) {
+static inline bool is_basic_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
            t.kind == TYPE_NULL ||
@@ -487,7 +487,7 @@ static bool is_basic_type(type_t t) {
 
 }
 
-static bool is_complex_type(type_t t) {
+static inline bool is_complex_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
@@ -502,7 +502,7 @@ static bool is_complex_type(type_t t) {
  * @param right
  * @return
  */
-static type_t basic_type_select(type_kind left, type_kind right) {
+static inline type_t basic_type_select(type_kind left, type_kind right) {
     if (left >= right) {
         return type_basic_new(left);
     }

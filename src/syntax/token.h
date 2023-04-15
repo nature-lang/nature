@@ -177,7 +177,7 @@ typedef struct {
 
 token_t *token_new(uint8_t type, char *literal, int line);
 
-static bool token_complex_assign(token_e t) {
+static inline bool token_complex_assign(token_e t) {
     return t == TOKEN_PERSON_EQUAL ||
            t == TOKEN_MINUS_EQUAL ||
            t == TOKEN_PLUS_EQUAL ||

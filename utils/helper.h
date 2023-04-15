@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <sys/mman.h>
@@ -36,6 +37,7 @@ static inline void *mallocz(size_t size) {
 
 #define FLAG(value) (1 << value)
 
+//#define DEBUG_PARSER 1
 #define DEBUG 1
 
 #ifdef DEBUG
@@ -73,7 +75,7 @@ static inline uint32_t hash_string(char *str) {
     return hash_data(str, strlen(str));
 }
 
-static bool memory_empty(uint8_t *base, uint64_t size) {
+static inline bool memory_empty(uint8_t *base, uint64_t size) {
     for (int i = 0; i < size; ++i) {
         if (*(base + i) != 0) {
             return false;
@@ -171,6 +173,12 @@ static inline bool str_equal(char *a, char *b) {
     return strcmp(a, b) == 0;
 }
 
+static int inline check_open(char *filepath, int flag) {
+    int fd = open(filepath, flag);
+    assertf(fd != -1, "cannot open file=%s", filepath);
+    return fd;
+}
+
 static inline char *str_connect(char *dst, char *src) {
     size_t dst_len = strlen(dst);
     size_t src_len = strlen(src);
@@ -251,7 +259,7 @@ static inline char *get_work_dir() {
     return buf;
 }
 
-static inline void *copy(char *dst, char *src, uint mode) {
+static inline void *copy(char *dst, char *src, int mode) {
     FILE *src_fd, *dst_fd;
     src_fd = fopen(src, "rb");
     assert(src_fd && "open src file failed");

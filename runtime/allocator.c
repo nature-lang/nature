@@ -6,7 +6,7 @@
 
 static uint8_t calc_sizeclass(uint8_t size) {
     for (int i = 0; i < SIZECLASS_COUNT; ++i) {
-        uint obj_size = class_obj_size[i];
+        uint64_t obj_size = class_obj_size[i];
         if (size > obj_size) {
             continue;
         }
@@ -26,7 +26,7 @@ static uint8_t take_sizeclass(uint8_t spanclass) {
     return spanclass >> 1;
 }
 
-static uint span_pages_count(uint8_t spanclass) {
+static uint64_t span_pages_count(uint8_t spanclass) {
     uint8_t sizeclass = take_sizeclass(spanclass);
     return clas_pages_count[sizeclass];
 }
@@ -117,8 +117,8 @@ static page_chunk_t *take_chunk(addr_t base) {
  */
 static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint32_t max = 0;
-    uint bit_start = 0;
-    uint bit_end = 0;
+    uint64_t bit_start = 0;
+    uint64_t bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
         bool used = bitmap_test((byte *) chunk.blocks, i);
         if (used) {
@@ -228,7 +228,7 @@ static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summari
  */
 static void
 calc_page_summary_index(uint8_t level, addr_t start, addr_t end, uint64_t *start_index, uint64_t *end_index) {
-    uint scale = summary_index_scale[level];
+    uint64_t scale = summary_index_scale[level];
     // 计算 chunk index
     *start_index = chunk_index(start) / scale;
     *end_index = chunk_index(end - 1) / scale;
@@ -335,7 +335,7 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
  * @param pages_count
  * @return
  */
-static addr_t page_alloc_find(uint pages_count) {
+static addr_t page_alloc_find(uint64_t pages_count) {
     // 第一个 level 需要查找所有的元素
     uint64_t start = 0;
     uint64_t end = PAGE_SUMMARY_COUNT_L1; // l1 有 8192 个元素
@@ -489,7 +489,7 @@ static void mheap_set_spans(mspan_t *span) {
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
-    uint page_index = (span->base - arena->base) / PAGE_SIZE;
+    uint64_t page_index = (span->base - arena->base) / PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = span;
         page_index += 1;
@@ -500,7 +500,7 @@ static void mheap_clear_spans(mspan_t *span) {
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
-    uint page_index = (span->base - arena->base) / PAGE_SIZE;
+    uint64_t page_index = (span->base - arena->base) / PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = NULL;
         page_index += 1;
@@ -511,7 +511,7 @@ static void mheap_clear_spans(mspan_t *span) {
  * arena heap 增长 pages_count 长度,如果 current arena 没有足够的空间，将会申请 1 个或者 n个崭新的 arena
  * @param pages_count
  */
-static void mheap_grow(uint pages_count) {
+static void mheap_grow(uint64_t pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
     uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * PAGE_SIZE;
 
@@ -546,7 +546,7 @@ static void mheap_grow(uint pages_count) {
  * @param spanclass
  * @return
  */
-static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
+static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
     // 因为有垃圾回收的存在，所以 page_alloc 中的历史上的某些部分存在空闲且连续的 pages
     addr_t base = page_alloc_find(pages_count);
@@ -569,7 +569,7 @@ static mspan_t *mheap_alloc_span(uint pages_count, uint8_t spanclass) {
 
 static void mcentral_grow(mcentral_t *mcentral) {
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
-    uint pages_count = span_pages_count(mcentral->spanclass);
+    uint64_t pages_count = span_pages_count(mcentral->spanclass);
 
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assertf(span->alloc_count < span->obj_count, "heap alloc span alloc_count == 0");
@@ -682,7 +682,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param obj_size
  * @param rtype
  */
-static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, rtype_t *rtype) {
+static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
     // 确定 arena bits base
     arena_t *arena = take_arena(addr);
     byte *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
@@ -702,7 +702,7 @@ static void heap_arena_bits_set(addr_t addr, uint size, uint obj_size, rtype_t *
 }
 
 // 单位
-static addr_t std_malloc(uint size, rtype_t *rtype) {
+static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     bool has_ptr = rtype != NULL && rtype->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
@@ -723,12 +723,12 @@ static addr_t std_malloc(uint size, rtype_t *rtype) {
     return addr;
 }
 
-static addr_t large_malloc(uint size, rtype_t *rtype) {
+static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     bool no_ptr = rtype == NULL || rtype->last_ptr == 0;
     uint8_t spanclass = make_spanclass(0, no_ptr);
 
     // 计算需要分配的 page count(向上取整)
-    uint pages_count = size / PAGE_SIZE;
+    uint64_t pages_count = size / PAGE_SIZE;
     if ((size & PAGE_MASK) != 0) {
         pages_count += 1;
     }
@@ -870,7 +870,7 @@ uint64_t arena_index(uint64_t base) {
  * @param type 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
  * @return
  */
-void *runtime_malloc(uint size, rtype_t *type) {
+void *runtime_malloc(uint64_t size, rtype_t *type) {
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return (void *) std_malloc(size, type);
@@ -880,7 +880,7 @@ void *runtime_malloc(uint size, rtype_t *type) {
     return (void *) large_malloc(size, type);
 }
 
-mspan_t *mspan_new(uint64_t base, uint pages_count, uint8_t spanclass) {
+mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = NEW(mspan_t);
     span->spanclass = spanclass;
     uint8_t sizeclass = take_sizeclass(spanclass);

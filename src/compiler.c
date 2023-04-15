@@ -34,7 +34,6 @@ lir_opcode_t ast_op_convert[] = {
 
 
 /**
- * TODO 如果使用了全局符号怎么办？
  * @param m
  * @param expr
  * @return
@@ -44,6 +43,8 @@ static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     lir_operand_t *target = lir_new_empty_operand();
 
     symbol_t *s = symbol_table_get(ident->literal);
+
+    assertf(s, "ident %s not declare");
 
     if (s->type == SYMBOL_FN) {
         // label
@@ -453,20 +454,17 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < formal_fn->formal_types->length; ++i) {
-        ast_expr *param_expr = ct_list_value(call->actual_params, i);
-
-        lir_operand_t *param_operand = compiler_expr(m, *param_expr);
-
         if (!formal_fn->rest || i < formal_fn->formal_types->length - 1) {
-            slice_push(params, param_operand);
+            ast_expr *actual_param = ct_list_value(call->actual_params, i);
+            lir_operand_t *actual_param_operand = compiler_expr(m, *actual_param);
+            slice_push(params, actual_param_operand);
             continue;
         }
 
-        int rest_index = i;
         type_t *rest_type = ct_list_value(formal_fn->formal_types, i);
         assertf(rest_type->kind == TYPE_LIST, "rest param must list type");
 
-        // actual 剩余的所有参数都需要用一个数组收集起来，并写入到 target_operand 中
+        // actual 剩余的所有参数进行 compiler_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
         lir_operand_t *rest_target = temp_var_operand(m, *rest_type);
         lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(*rest_type));
         lir_operand_t *element_index = int_operand(ct_find_rtype_index(rest_type->list->element_type));
@@ -474,10 +472,11 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
         OP_PUSH(lir_rt_call(RT_CALL_LIST_NEW, rest_target, 3, rtype_index, element_index, capacity));
 
         for (int j = i; j < call->actual_params->length; ++j) {
-            ct_list_value(call->actual_params, j);
+            ast_expr *actual_param = ct_list_value(call->actual_params, j);
+            lir_operand_t *rest_actual_param = compiler_expr(m, *actual_param);
 
             // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
-            lir_operand_t *param_ref = var_ref_operand(m, param_operand);
+            lir_operand_t *param_ref = var_ref_operand(m, rest_actual_param);
             OP_PUSH(lir_rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, param_ref));
         }
 

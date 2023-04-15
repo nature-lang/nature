@@ -66,6 +66,7 @@ void amd64_native(closure_t *c);
 static inline void cross_native(closure_t *c) {
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_native(c);
+        return;
     }
 
     assert(false && "not support arch");
@@ -78,6 +79,7 @@ void amd64_lower(closure_t *c);
 static inline void cross_lower(closure_t *c) {
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_lower(c);
+        return;
     }
 
     assert(false && "not support arch");
@@ -110,11 +112,11 @@ static inline void cross_opcode_init() {
 #define AMD64_PTR_SIZE 8 // 单位 byte
 #define AMD64_NUMBER_SIZE 8 // 单位 byte
 
-uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr);
+uint64_t amd64_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr);
 
-int amd64_gotplt_entry_type(uint relocate_type);
+int amd64_gotplt_entry_type(uint64_t relocate_type);
 
-int8_t amd64_is_code_relocate(uint relocate_type);
+int8_t amd64_is_code_relocate(uint64_t relocate_type);
 
 void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
 
@@ -125,7 +127,7 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, a
  */
 uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations);
 
-static inline uint cross_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr) {
+static inline uint64_t cross_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_create_plt_entry(ctx, got_offset, attr);
     }
@@ -134,7 +136,7 @@ static inline uint cross_create_plt_entry(elf_context *ctx, uint got_offset, sym
 }
 
 
-static inline int8_t cross_is_code_relocate(uint relocate_type) {
+static inline int8_t cross_is_code_relocate(uint64_t relocate_type) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_is_code_relocate(relocate_type);
     }
@@ -152,7 +154,7 @@ static inline int cross_got_rel_type(bool is_code_rel) {
     assert(false && "not support this arch");
 }
 
-static inline int cross_gotplt_entry_type(uint relocate_type) {
+static inline int cross_gotplt_entry_type(uint64_t relocate_type) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_gotplt_entry_type(relocate_type);
     }

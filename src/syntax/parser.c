@@ -186,10 +186,10 @@ static type_t parser_typeuse(module_t *m) {
 
     // ptr<int>
     if (parser_consume(m, TOKEN_POINTER)) {
-        parser_must(m, TOKEN_LEFT_CURLY);
+        parser_must(m, TOKEN_LEFT_ANGLE);
         type_pointer_t *type_pointer = NEW(type_pointer_t);
         type_pointer->value_type = parser_typeuse(m);
-        parser_must(m, TOKEN_RIGHT_CURLY);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
 
         result.kind = TYPE_POINTER;
         result.pointer = type_pointer;
@@ -234,7 +234,6 @@ static type_t parser_typeuse(module_t *m) {
         } else {
             // set
             type_set_t *set = NEW(type_set_t);
-            parser_must(m, TOKEN_LEFT_CURLY);
             set->key_type = key_type;
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_MAP;
@@ -251,11 +250,17 @@ static type_t parser_typeuse(module_t *m) {
         type_struct_t *type_struct = NEW(type_struct_t);
         type_struct->properties = ct_list_new(sizeof(struct_property_t));
         parser_must(m, TOKEN_LEFT_CURLY);
-        while (parser_consume(m, TOKEN_RIGHT_CURLY)) {
+        while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item;
             item.type = parser_typeuse(m);
             item.key = parser_advance(m)->literal;
+
+            if (parser_consume(m, TOKEN_EQUAL)) {
+                ast_expr *temp_expr = NEW(ast_expr);
+                *temp_expr = parser_expr(m);
+                item.right = temp_expr;
+            }
 
             ct_list_push(type_struct->properties, &item);
             parser_must_stmt_end(m);
@@ -268,15 +273,17 @@ static type_t parser_typeuse(module_t *m) {
 
     // fn(int, int):int f
     if (parser_consume(m, TOKEN_FN)) {
-        parser_must(m, TOKEN_LEFT_PAREN);
         type_fn_t *typeuse_fn = NEW(type_fn_t);
         typeuse_fn->formal_types = ct_list_new(sizeof(type_t));
-        if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+
+        parser_must(m, TOKEN_LEFT_PAREN);
+        if (!parser_consume(m, TOKEN_RIGHT_PAREN)) {
             // 包含参数类型
             do {
                 type_t t = parser_typeuse(m);
                 ct_list_push(typeuse_fn->formal_types, &t);
             } while (parser_consume(m, TOKEN_COMMA));
+            parser_consume(m, TOKEN_RIGHT_PAREN);
         }
 
         parser_must(m, TOKEN_COLON);
@@ -1075,6 +1082,13 @@ static ast_expr parser_fndef_expr(module_t *m) {
     }
 
     parser_formals(m, fn_decl);
+
+    if (parser_consume(m, TOKEN_COLON)) {
+        fn_decl->return_type = parser_typeuse(m);
+    } else {
+        fn_decl->return_type = type_basic_new(TYPE_VOID);
+    }
+
     fn_decl->body = parser_block(m);
 
     result.assert_type = AST_FNDEF;
@@ -1235,8 +1249,13 @@ static ast_stmt *parser_fndef_stmt(module_t *m) {
     token_t *name_token = parser_must(m, TOKEN_IDENT);
     fn_decl->name = name_token->literal;
     parser_formals(m, fn_decl);
-    parser_must(m, TOKEN_COLON);
-    fn_decl->return_type = parser_typeuse(m);
+    // 可选返回参数
+    if (parser_consume(m, TOKEN_COLON)) {
+        fn_decl->return_type = parser_typeuse(m);
+    } else {
+        fn_decl->return_type = type_basic_new(TYPE_VOID);
+    }
+
     fn_decl->body = parser_block(m);
 
     result->assert_type = AST_FNDEF;

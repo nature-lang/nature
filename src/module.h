@@ -10,8 +10,8 @@
 #define MODULE_SUFFIX ".n"
 
 // module_path + path + ident
-static char *ident_with_module(char *module_ident, char *ident) {
-    if (str_equal(module_ident, "")) {
+static inline char *ident_with_module(char *module_ident, char *ident) {
+    if (!module_ident) {
         return ident;
     }
 
@@ -20,14 +20,14 @@ static char *ident_with_module(char *module_ident, char *ident) {
     return temp;
 }
 
-static char *make_unique_ident(module_t *m, char *ident) {
+static inline char *make_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
     sprintf(result, "%s_%d", ident, m->var_unique_count++);
     return result;
 }
 
 
-static char *var_unique_ident(module_t *m, char *ident) {
+static inline char *var_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
     sprintf(result, "%s_%d", ident, m->var_unique_count++);
 
@@ -49,7 +49,7 @@ module_t *module_build(string source_path, module_type_t type);
  * @param full_path
  * @return
  */
-static char *module_unique_ident(char *full_path) {
+static inline char *module_unique_ident(char *full_path) {
     // 从 BASE_NS 开始，截止到目录部分
     char *result = str_replace(full_path, WORK_DIR, "");
 

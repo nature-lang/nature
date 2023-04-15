@@ -32,7 +32,7 @@ typedef struct {
 
 typedef enum {
     MODULE_TYPE_MAIN = 1,
-    MODULE_TYPE_IMPORTED = 2,
+    MODULE_TYPE_COMMON = 2,
     MODULE_TYPE_BUILTIN = 3
 } module_type_t;
 
@@ -275,14 +275,14 @@ typedef struct closure_t {
  */
 typedef struct section_t {
     // Elf64_Shdr 原始字段继承
-    uint sh_name; // 段名称，段表字符串表 slot ~ \0
-    uint sh_type; // 段类型，
-    uint sh_flags;
-    uint sh_info;
-    uint sh_addralign;
-    uint sh_entsize;
-    uint sh_size;
-    uint sh_offset;
+    uint64_t sh_name; // 段名称，段表字符串表 slot ~ \0
+    uint64_t sh_type; // 段类型，
+    uint64_t sh_flags;
+    uint64_t sh_info;
+    uint64_t sh_addralign;
+    uint64_t sh_entsize;
+    uint64_t sh_size;
+    uint64_t sh_offset;
     addr_t sh_addr; // 可重定位地址
 
 
@@ -295,7 +295,7 @@ typedef struct section_t {
     // 排序字段
     int actual_sh_index;
     int actual_sh_weight;
-    uint phdr_flags; // 第8位表示是否需要 PT_LOAD 装载到内存中
+    uint64_t phdr_flags; // 第8位表示是否需要 PT_LOAD 装载到内存中
 
     struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 cross_relocate 指向 .rela.text
@@ -303,8 +303,8 @@ typedef struct section_t {
 } section_t;
 
 typedef struct {
-    uint got_offset;
-    uint plt_offset;
+    uint64_t got_offset;
+    uint64_t plt_offset;
     uint64_t plt_sym;
     int dyn_index;
 } sym_attr_t;
@@ -316,7 +316,7 @@ typedef struct {
     table_t *symtab_hash; // 直接指向符号表 sym
     section_t *symtab_section;
     sym_attr_t *sym_attrs;
-    uint sym_attrs_count;
+    uint64_t sym_attrs_count;
     section_t *bss_section;
     section_t *data_section;
     section_t *text_section;
@@ -330,7 +330,7 @@ typedef struct {
 
     // 可执行文件构建字段
     Elf64_Phdr *phdr_list; // 程序头表
-    uint phdr_count; // 程序头表数量
+    uint64_t phdr_count; // 程序头表数量
 
     uint64_t file_offset;
     char *output; // 完整路径名称

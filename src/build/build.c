@@ -77,24 +77,24 @@ static void build_linker(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
-        fd = open(m->object_file, O_RDONLY | O_BINARY);
+        fd = check_open(m->object_file, O_RDONLY | O_BINARY);
         elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
 
     // crt1.o (包含入口 label _start, 其进行初始化后会调用 main label)
-    fd = open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
+    fd = check_open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
     elf_load_object_file(ctx, fd, 0);
 
     // libruntime.a
-    fd = open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
+    fd = check_open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
     // libucontext.a
-    fd = open(lib_file_path(LIBUCONTEXT_FILE), O_RDONLY | O_BINARY);
+    fd = check_open(lib_file_path(LIBUCONTEXT_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
     // libc.a (runtime 依赖了 c 标准库)
-    fd = open(lib_file_path(LIBC_FILE), O_RDONLY | O_BINARY);
+    fd = check_open(lib_file_path(LIBC_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
 
@@ -176,7 +176,8 @@ static void build_assembler(slice_t *modules) {
 
 static void import_builtin() {
     // nature_root
-    char *source_path = path_join(NATURE_ROOT, "builtin/builtin.n");
+    char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
+    assertf(file_exists(source_path), "builtin.n not found");
     // build 中包含 analyser 已经将相关 symbol 写入了, 无论是后续都 analyser 或者 infer 都能够使用
     module_build(source_path, MODULE_TYPE_BUILTIN);
 }

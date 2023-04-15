@@ -14,9 +14,9 @@
  * @param type
  * @return
  */
-void * runtime_malloc(uint size, rtype_t *type);
+void * runtime_malloc(uint64_t size, rtype_t *type);
 
-mspan_t *mspan_new(addr_t base, uint pages_count, uint8_t spanclass);
+mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
 
 arena_hint_t *arena_hints_init();
 

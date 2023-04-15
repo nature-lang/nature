@@ -5,7 +5,22 @@ set(CMAKE_C_STANDARD 11)
 
 file(READ "VERSION" PROJECT_VERSION)
 
+# 打印当前的项目版本
+message("nature version: ${PROJECT_VERSION}")
+message("workdir: ${CMAKE_CURRENT_BINARY_DIR}")
 set(SRC_DIR "${PROJECT_SOURCE_DIR}/src")
+
+# 设置交叉编译工具链
+if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    set(CMAKE_SYSTEM_NAME darwin)
+endif ()
+if (CMAKE_SYSTEM_NAME STREQUAL Linux)
+    set(CMAKE_SYSTEM_NAME linux)
+endif ()
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
+    set(CMAKE_SYSTEM_PROCESSOR amd64)
+endif ()
+
 
 set(SRC_BINARY
         ${SRC_DIR}/binary/opcode/amd64/asm.c
@@ -117,8 +132,6 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/runtime.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h
         ${PROJECT_SOURCE_DIR}/runtime/env.c
-        ${PROJECT_SOURCE_DIR}/runtime/debug.h
-        ${PROJECT_SOURCE_DIR}/runtime/debug.c
         ${PROJECT_SOURCE_DIR}/runtime/processor.h
         ${PROJECT_SOURCE_DIR}/runtime/processor.c
         ${PROJECT_SOURCE_DIR}/runtime/sizeclass.h
@@ -163,6 +176,7 @@ add_subdirectory(runtime)
 #--------------------------------- install ---------------------------------
 install(TARGETS nature DESTINATION nature/bin)
 install(DIRECTORY lib/ DESTINATION nature/lib)
+install(DIRECTORY std/ DESTINATION nature/std)
 install(FILES LICENSE DESTINATION nature/)
 install(FILES VERSION DESTINATION nature/)
 

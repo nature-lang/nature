@@ -238,7 +238,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
     *section_offset = temp_section_offset;
 }
 
-int amd64_gotplt_entry_type(uint relocate_type) {
+int amd64_gotplt_entry_type(uint64_t relocate_type) {
     switch (relocate_type) {
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT:
@@ -281,7 +281,7 @@ int amd64_gotplt_entry_type(uint relocate_type) {
     return -1;
 }
 
-uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr) {
+uint64_t amd64_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
     section_t *plt = ctx->plt;
 
     int modrm = 0x25;
@@ -294,7 +294,7 @@ uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr)
         p[7] = modrm;
         write32le(p + 8, cross_ptr_size() * 2);
     }
-    uint plt_offset = plt->data_count;
+    uint64_t plt_offset = plt->data_count;
     uint8_t plt_rel_offset = plt->relocate ? plt->relocate->data_count : 0;
 
     uint8_t *p = elf_section_data_add_ptr(plt, 16);
@@ -309,7 +309,7 @@ uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr)
     return plt_offset;
 }
 
-int8_t amd64_is_code_relocate(uint relocate_type) {
+int8_t amd64_is_code_relocate(uint64_t relocate_type) {
     switch (relocate_type) {
         case R_X86_64_32:
         case R_X86_64_32S:

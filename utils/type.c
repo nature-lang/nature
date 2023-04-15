@@ -232,9 +232,9 @@ static rtype_t rtype_fn(type_fn_t *t) {
  */
 static rtype_t rtype_struct(type_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
-    uint offset = 0;
-    uint max = 0;
-    uint need_gc_count = 0;
+    uint64_t offset = 0;
+    uint64_t max = 0;
+    uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 key 的
     for (int i = 0; i < t->properties->length; ++i) {
@@ -254,7 +254,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
         }
         offset += item_size;
     }
-    uint size = align(offset, max);
+    uint64_t size = align(offset, max);
 
 
     rtype_t rtype = {
@@ -282,9 +282,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
  */
 static rtype_t rtype_tuple(type_tuple_t *t) {
     char *str = itoa(TYPE_TUPLE);
-    uint offset = 0;
-    uint max = 0;
-    uint need_gc_count = 0;
+    uint64_t offset = 0;
+    uint64_t max = 0;
+    uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 key 的
     for (uint64_t i = 0; i < t->elements->length; ++i) {
@@ -307,7 +307,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
         }
         offset += item_size;
     }
-    uint size = align(offset, max);
+    uint64_t size = align(offset, max);
 
 
     rtype_t rtype = {
@@ -382,7 +382,11 @@ type_t type_ptrof(type_t t) {
  * @return
  */
 rtype_t reflect_type(type_t t) {
-    rtype_t rtype;
+    rtype_t rtype = {
+            .kind = 0,
+            .in_heap = t.in_heap
+    };
+
     switch (t.kind) {
         case TYPE_BOOL:
             rtype = rtype_bool();
@@ -420,18 +424,14 @@ rtype_t reflect_type(type_t t) {
         default:
             if (is_integer(t.kind) || is_float(t.kind)) {
                 rtype = rtype_base(t.kind);
-            } else {
-                assertf(false, "cannot reflect type=%s", t.kind);
-                exit(0);
             }
     }
-    rtype.in_heap = t.in_heap;
     return rtype;
 }
 
 rtype_t ct_reflect_type(type_t t) {
     rtype_t rtype = reflect_type(t);
-    if (!rtype.kind) {
+    if (rtype.kind == 0) {
         return rtype;
     }
 
@@ -504,7 +504,7 @@ uint64_t rtypes_push(rtype_t rtype) {
  * @param t
  * @return
  */
-uint ct_find_rtype_index(type_t t) {
+uint64_t ct_find_rtype_index(type_t t) {
     rtype_t rtype = ct_reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
     uint64_t index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));

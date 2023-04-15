@@ -143,6 +143,7 @@ typedef struct {
     type_t type; // 表达式自身的类型
     type_t target_type; // 表达式赋值的目标的 type
     void *value;
+    // TODO union value
 } ast_expr;
 
 typedef struct {

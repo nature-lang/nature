@@ -81,7 +81,7 @@ void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
  */
 void executable_file_format(elf_context *ctx);
 
-section_t *elf_new_section(elf_context *ctx, char *name, uint sh_type, uint sh_flags);
+section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint64_t sh_flags);
 
 /**
  * 全局 section data 写入点
@@ -94,7 +94,7 @@ void *elf_section_data_add_ptr(section_t *section, addr_t size);
  * data_count forward
  * @return
  */
-size_t elf_section_data_forward(section_t *section, addr_t size, uint align);
+size_t elf_section_data_forward(section_t *section, addr_t size, uint64_t align);
 
 void elf_section_realloc(section_t *section, uint64_t new_size);
 
@@ -108,7 +108,7 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count);
 
 void elf_resolve_common_symbols(elf_context *ctx);
 
-void elf_build_got_entries(elf_context *ctx, uint got_sym_index);
+void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index);
 
 Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section,
                              uint64_t offset, int type, int sym_index, int64_t addend);
@@ -119,7 +119,7 @@ void elf_relocate_sections(elf_context *ctx);
 
 void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t *rel_section);
 
-sym_attr_t *elf_get_sym_attr(elf_context *ctx, uint sym_index, bool alloc);
+sym_attr_t *elf_get_sym_attr(elf_context *ctx, uint64_t sym_index, bool alloc);
 
 addr_t elf_get_sym_addr(elf_context *ctx, char *name);
 

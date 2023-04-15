@@ -15,7 +15,7 @@ set(STUB_FILES
 
 foreach (STUB_FILE ${STUB_FILES})
     add_executable(${STUB_FILE} ${STUB_FILE}.c ${BUILD_SOURCE_FILES})
-    target_link_libraries(${STUB_FILE} cmocka)
+    target_link_libraries(${STUB_FILE} cmocka-static)
     # 如果 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + STUB_FILE 是一个文件夹, 那工作目录应该是 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + STUB_FILE
     set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
     set(ENTRY_FILE ${STUB_FILE}.n)
@@ -31,7 +31,7 @@ foreach (STUB_FILE ${STUB_FILES})
 
     set_property(TEST ${STUB_FILE}
             PROPERTY
-            ENVIRONMENT "BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR}/debug;")
+            ENVIRONMENT "BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};")
     message("register ${STUB_FILE}, success")
 endforeach ()
 
