@@ -4,10 +4,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ucontext.h>
+#include "structs.h"
 
 
 #include "utils/links.h"
-#include "utils/value.h"
+#include "utils/helper.h"
 #include "utils/slice.h"
 #include "utils/linked.h"
 #include "utils/bitmap.h"

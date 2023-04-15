@@ -1,4 +1,5 @@
 #include "amd64.h"
+#include "src/cross.h"
 #include "elf.h"
 #include "linker.h"
 #include "utils/helper.h"
@@ -291,7 +292,7 @@ uint amd64_create_plt_entry(elf_context *ctx, uint got_offset, sym_attr_t *attr)
         write32le(p + 2, 8);
         p[6] = 0xff;
         p[7] = modrm;
-        write32le(p + 8, AMD64_PTR_SIZE * 2);
+        write32le(p + 8, cross_ptr_size() * 2);
     }
     uint plt_offset = plt->data_count;
     uint8_t plt_rel_offset = plt->relocate ? plt->relocate->data_count : 0;

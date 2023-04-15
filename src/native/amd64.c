@@ -508,7 +508,6 @@ slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
     return operations;
 }
 
-
 void amd64_native(closure_t *c) {
     assert(c->module);
 

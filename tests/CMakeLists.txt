@@ -1,11 +1,11 @@
 # Find cmocka
 add_subdirectory(cmocka)
-add_subdirectory(black_box)
+add_subdirectory(blackbox)
 
 # copy stubs 文件到程序执行目录下的 stub, 但是并不会每一次都同步
 #file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/stubs DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(test_hello test_hello.c)
+add_executable(test_hello test_hello.c ${BUILD_SOURCE_FILES})
 target_link_libraries(test_hello cmocka)
 add_test(test_hello test_hello)
 

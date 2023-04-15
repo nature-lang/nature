@@ -130,7 +130,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // TODO lower indirect addr
         // TODO lower lea op
 
-        if (lir_op_is_call(op) && op->second->value != NULL) {
+        if (lir_op_call(op) && op->second->value != NULL) {
             // lower call actual params
             linked_t *temps = amd64_actual_params_lower(c, op->second->value);
             linked_node *current = temps->front;

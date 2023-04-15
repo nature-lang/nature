@@ -2,9 +2,9 @@
 #define NATURE_MODULE_H
 
 #include "utils/linked.h"
-#include "utils/value.h"
+#include "src/build/config.h"
+#include "utils/helper.h"
 #include "src/symbol/symbol.h"
-#include "lir.h"
 #include "structs.h"
 
 #define MODULE_SUFFIX ".n"
@@ -20,18 +20,18 @@ static char *ident_with_module(char *module_ident, char *ident) {
     return temp;
 }
 
-static char *unique_ident(module_t *m, char *ident) {
-    char *unique_ident = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(unique_ident, "%s_%d", ident, m->var_unique_count++);
-    return unique_ident;
+static char *make_unique_ident(module_t *m, char *ident) {
+    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    return result;
 }
 
 
 static char *var_unique_ident(module_t *m, char *ident) {
-    char *unique_ident = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(unique_ident, "%s_%d", ident, m->var_unique_count++);
+    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    sprintf(result, "%s_%d", ident, m->var_unique_count++);
 
-    return ident_with_module(m->ident, unique_ident);
+    return ident_with_module(m->ident, result);
 }
 
 

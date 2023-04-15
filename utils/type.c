@@ -4,6 +4,7 @@
 #include "bitmap.h"
 #include "ct_list.h"
 #include "links.h"
+#include "src/cross.h"
 
 static rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
@@ -48,7 +49,7 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_pointer_t),
             .hash = hash,
-            .last_ptr = POINTER_SIZE,
+            .last_ptr = cross_ptr_size(),
             .kind = TYPE_POINTER,
     };
     // 计算 gc_bits
@@ -91,7 +92,7 @@ static rtype_t rtype_list(type_list_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_list_t),
             .hash = hash,
-            .last_ptr = POINTER_SIZE,
+            .last_ptr = cross_ptr_size(),
             .kind = TYPE_LIST,
     };
     // 计算 gc_bits
@@ -123,7 +124,7 @@ static rtype_t rtype_array(type_array_t *t) {
         rtype.last_ptr = element_size * t->length;
 
         // need_gc 暗示了 8byte 对齐了
-        for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
+        for (int i = 0; i < rtype.size / cross_ptr_size(); ++i) {
             bitmap_set(rtype.gc_bits, i);
         }
     }
@@ -145,7 +146,7 @@ static rtype_t rtype_map(type_map_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_map_t),
             .hash = hash,
-            .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
+            .last_ptr = cross_ptr_size() * 3, // hash_table + key_data + value_data
             .kind = TYPE_MAP,
     };
     // 计算 gc_bits
@@ -169,7 +170,7 @@ static rtype_t rtype_set(type_set_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_set_t),
             .hash = hash,
-            .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
+            .last_ptr = cross_ptr_size() * 2, // hash_table + key_data
             .kind = TYPE_SET,
     };
     // 计算 gc_bits
@@ -190,11 +191,11 @@ static rtype_t rtype_any(type_any_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_ANY));
 
     rtype_t rtype = {
-            .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
+            .size = cross_ptr_size() * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = hash,
             .kind = TYPE_ANY,
             .last_ptr = 0,
-            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
+            .gc_bits = malloc_gc_bits(cross_ptr_size() * 2)
     };
     return rtype;
 }
@@ -215,11 +216,11 @@ static rtype_t rtype_fn(type_fn_t *t) {
         str = str_connect(str, itoa(formal_type.hash));
     }
     rtype_t rtype = {
-            .size = POINTER_SIZE,
+            .size = cross_ptr_size(),
             .hash = hash_string(str),
             .kind = TYPE_FN,
             .last_ptr = 0,
-            .gc_bits = malloc_gc_bits(POINTER_SIZE)
+            .gc_bits = malloc_gc_bits(cross_ptr_size())
     };
     return rtype;
 }
@@ -266,9 +267,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
+            bitmap_set(rtype.gc_bits, gc_offset / cross_ptr_size());
         }
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
+        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + cross_ptr_size();
     }
 
     return rtype;
@@ -320,10 +321,10 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
+            bitmap_set(rtype.gc_bits, gc_offset / cross_ptr_size());
         }
 
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
+        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + cross_ptr_size();
     }
 
     return rtype;
@@ -334,17 +335,23 @@ uint8_t type_kind_sizeof(type_kind t) {
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:
-//        case TYPE_BYTE:
+        case TYPE_UINT8:
             return 1;
         case TYPE_INT16:
+        case TYPE_UINT16:
             return 2;
         case TYPE_INT32:
+        case TYPE_UINT32:
             return 4;
         case TYPE_INT64:
+        case TYPE_UINT64:
+            return 8;
+        case TYPE_INT:
+        case TYPE_UINT:
         case TYPE_FLOAT:
-            return INT_SIZE; // 固定大小
+            return cross_number_size(); // 固定大小
         default:
-            return POINTER_SIZE;
+            return cross_ptr_size();
     }
 }
 
@@ -451,9 +458,9 @@ rtype_t rt_reflect_type(type_t t) {
 }
 
 uint64_t calc_gc_bits_size(uint64_t size) {
-    size = align(size, POINTER_SIZE);
+    size = align(size, cross_ptr_size());
 
-    uint64_t gc_bits_size = size / POINTER_SIZE;
+    uint64_t gc_bits_size = size / cross_ptr_size();
 
     // 8bit  = 1byte, 再次对齐
     gc_bits_size = align(gc_bits_size, 8);
@@ -509,13 +516,13 @@ uint ct_find_rtype_index(type_t t) {
 /**
  * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
  * 如果类型没有存储在堆中，则其在堆外占用的大小是就是类型本身的大小，如果类型存储在堆中，其在堆外存储的是指向堆的指针
- * 占用 POINTER_SIZE 大小
+ * 占用 cross_ptr_size() 大小
  * @param rtype
  * @return
  */
 uint64_t rtype_heap_out_size(rtype_t *rtype) {
     if (rtype->in_heap) {
-        return POINTER_SIZE;
+        return cross_ptr_size();
     }
     return rtype->size;
 }

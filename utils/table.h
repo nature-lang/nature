@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_LIB_TABLE_H_
 #define NATURE_SRC_LIB_TABLE_H_
 
-#include "value.h"
+#include "helper.h"
 
 // hash_string 表写入负载
 #define TABLE_MAX_LOAD 0.75

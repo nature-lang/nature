@@ -17,21 +17,21 @@ typedef enum {
     ARCH_WASM,
 } build_param_t;
 
-static build_param_t BUILD_OS = OS_LINUX; // linux
-static build_param_t BUILD_ARCH = ARCH_AMD64; // amd64
+build_param_t BUILD_OS;
+build_param_t BUILD_ARCH;
 
-static char *BUILD_OUTPUT_NAME = "main";
-static char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default root
+char *BUILD_OUTPUT_NAME;
+char *NATURE_ROOT; // linux/darwin/freebsd default root
 
-static char *BUILD_OUTPUT_DIR; // default is work_dir test 使用，指定编译路径输出文件
-static char *BUILD_OUTPUT; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+char *BUILD_OUTPUT_DIR; // default is work_dir test 使用，指定编译路径输出文件
+char *BUILD_OUTPUT; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
-static char *WORK_DIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
-static char *BASE_NS; // 最后一级目录的名称，也可以自定义
-static char *TEMP_DIR; // 链接临时目录
+char *WORK_DIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
+char *BASE_NS; // 最后一级目录的名称，也可以自定义
+char *TEMP_DIR; // 链接临时目录
 
-static char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
-static char *SOURCE_PATH; // /opt/test/main.n 的绝对路径
+char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+char *SOURCE_PATH; // /opt/test/main.n 的绝对路径
 
 #define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
@@ -42,7 +42,7 @@ static char *SOURCE_PATH; // /opt/test/main.n 的绝对路径
 #define LINKER_OUTPUT "a.out"
 
 
-static char *temp_dir() {
+static inline char *temp_dir() {
     char *tmp_dir;
     if (BUILD_OS == OS_LINUX) {
         char temp[] = LINUX_BUILD_TMP_DIR;
@@ -62,7 +62,7 @@ static char *temp_dir() {
     exit(1);
 }
 
-static char *parser_base_ns(char *dir) {
+static inline char *parser_base_ns(char *dir) {
     char *result = dir;
     // 取最后一节
     char *trim_path = strrchr(dir, '/');
@@ -74,35 +74,35 @@ static char *parser_base_ns(char *dir) {
 }
 
 
-static char *os_to_string(uint8_t os) {
+static inline char *os_to_string(uint8_t os) {
     if (os == OS_LINUX) {
         return "linux";
     }
     return NULL;
 }
 
-static char *arch_to_string(uint8_t arch) {
+static inline char *arch_to_string(uint8_t arch) {
     if (arch == ARCH_AMD64) {
         return "amd64";
     }
     return NULL;
 }
 
-static uint8_t os_to_uint8(char *os) {
+static inline uint8_t os_to_uint8(char *os) {
     if (str_equal(os, "linux")) {
         return OS_LINUX;
     }
     return 0;
 }
 
-static uint8_t arch_to_uint8(char *arch) {
+static inline uint8_t arch_to_uint8(char *arch) {
     if (str_equal(arch, "amd64")) {
         return ARCH_AMD64;
     }
     return 0;
 }
 
-static void config_init() {
+static inline void config_init() {
     WORK_DIR = get_work_dir();
     // 当前所在目录的最后一级目录(当 import 已 base_ns 开头时，表示从 root_ns 进行文件搜索)
     BASE_NS = parser_base_ns(WORK_DIR);
@@ -113,7 +113,7 @@ static void config_init() {
     BUILD_OUTPUT = path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME);
 }
 
-static void env_init() {
+static inline void env_init() {
     char *os = getenv("BUILD_OS");
     if (os != NULL) {
         BUILD_OS = os_to_uint8(os);

@@ -2,7 +2,7 @@
 #define NATURE_SRC_OPCODE_AMD64_ASM_H_
 
 #include <string.h>
-#include "utils/value.h"
+#include "utils/helper.h"
 #include "utils/linked.h"
 #include "src/register/register.h"
 

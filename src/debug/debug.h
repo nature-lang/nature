@@ -1,7 +1,7 @@
 #ifndef NATURE_SRC_DEBUG_DEBUG_H_
 #define NATURE_SRC_DEBUG_DEBUG_H_
 
-#include "utils/value.h"
+#include "utils/helper.h"
 #include "src/ast.h"
 #include "src/syntax/token.h"
 #include "src/lir.h"

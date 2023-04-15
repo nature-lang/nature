@@ -457,7 +457,7 @@ void interval_build(closure_t *c) {
             lir_op_t *op = current->value;
 
             // fixed all phy reg in call
-            if (lir_op_is_call(op)) {
+            if (lir_op_call(op)) {
                 // traverse all register
                 for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
@@ -1046,7 +1046,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         r->insert_block = from;
 
         lir_op_t *last_op = from->last_op->value;
-        if (lir_op_is_branch(last_op)) {
+        if (lir_op_branch(last_op)) {
             // insert before last op
             r->insert_id = last_op->id - 1;
         } else {

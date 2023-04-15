@@ -643,7 +643,9 @@ static void analyser_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
     analyser_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
     analyser_var_decl(m, &stmt->key);
-    analyser_var_decl(m, &stmt->value);
+    if (stmt->value) {
+        analyser_var_decl(m, stmt->value);
+    }
     analyser_block(m, stmt->body);
 
     analyser_end_scope(m);

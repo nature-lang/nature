@@ -1,10 +1,7 @@
 #include "builtin.h"
-#include <stdarg.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
-#include "utils/assertf.h"
-#include "runtime/type/any.h"
 
 static char sprint_buf[1024];
 

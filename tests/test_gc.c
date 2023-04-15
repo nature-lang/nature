@@ -1,6 +1,7 @@
 #include "test.h"
 #include <stdio.h>
 #include "utils/links.h"
+#include "runtime/structs.h"
 #include "runtime/type/list.h"
 #include "runtime/processor.h"
 #include "runtime/collector.h"
@@ -71,7 +72,7 @@ static void _test_gc_basic() {
 
     // l 中存储的是栈中的地址，而 &
     // 使用堆模拟 data 中的地址
-    addr_t *data_size_addr = mallocz(POINTER_SIZE);
+    addr_t *data_size_addr = mallocz(sizeof(void *));
     *data_size_addr = (addr_t) l; // 将 l 的指存储到 data_size_addr 中
 
     // 随便找一个 symdef，将 指注册进去，从而至少能够触发 global symbol 维度的 gc
@@ -105,7 +106,7 @@ static void _test_gc_basic() {
     assert_int_equal((addr_t) l2, (addr_t) 0xc000002020);
 
     // 加入到 sym 中避免被清理
-    data_size_addr = mallocz(POINTER_SIZE);
+    data_size_addr = mallocz(sizeof(void *));
     *data_size_addr = (addr_t) l2; // 将 l 的指存储到 data_size_addr 中
     symdef = &rt_symdef_data[1];
     symdef->need_gc = type_need_gc(var->type);

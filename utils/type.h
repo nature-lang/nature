@@ -7,9 +7,6 @@
 #include "table.h"
 #include "ct_list.h"
 
-#define POINTER_SIZE 8 // 单位 byte
-#define INT_SIZE 8 // int 类型的占用的字节，随着平台的不同而不同
-
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
 #define WORD 2 // 2 byte = 16 位

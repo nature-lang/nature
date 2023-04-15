@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "value.h"
+#include "helper.h"
 
 // rear 为 empty node, 不会进入到循环中(一旦不满足条件，就会立即退出)
 #define LINKED_FOR(_list) for (linked_node *node = _list->front; node != _list->rear; node = node->succ)

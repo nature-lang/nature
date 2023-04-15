@@ -20,7 +20,7 @@ uint64_t pre_fndef_list() {
         closure_t *c = fn->closure;
 
         fndef_t *f = &ct_fndef_list[index];
-        f->stack_size = align(c->stack_size, POINTER_SIZE);
+        f->stack_size = align(c->stack_size, cross_ptr_size());
         f->gc_bits = malloc_gc_bits(f->stack_size);
         size += calc_gc_bits_size(f->stack_size);
         uint64_t offset = 0;
@@ -29,7 +29,7 @@ uint64_t pre_fndef_list() {
             offset = align(offset, type_sizeof(var->type)); // 按 size 对齐
             bool need = type_need_gc(var->type);
             if (need) {
-                bitmap_set(f->gc_bits, offset / POINTER_SIZE);
+                bitmap_set(f->gc_bits, offset / cross_ptr_size());
             }
         }
         f->base = 0; // 等待符号重定位

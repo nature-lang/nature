@@ -1,11 +1,7 @@
 #include <string.h>
+#include <stdio.h>
 #include "compiler.h"
-#include "semantic/infer.h"
-#include "src/symbol/symbol.h"
-#include "utils/error.h"
 #include "src/debug/debug.h"
-#include "utils/helper.h"
-#include "stdio.h"
 
 int compiler_line = 0;
 
@@ -340,7 +336,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 static void compiler_for_cond(module_t *m, ast_for_cond_stmt *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
     OP_PUSH(for_start);
-    lir_operand_t *for_end_operand = label_operand(unique_ident(m, FOR_COND_END_IDENT), true);
+    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_COND_END_IDENT), true);
 
     lir_operand_t *condition_target = compiler_expr(m, ast->condition);
     lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
@@ -362,7 +358,7 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
     OP_PUSH(for_start);
 
-    lir_operand_t *for_end_operand = label_operand(unique_ident(m, FOR_TRADITION_END_IDENT), true);
+    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_TRADITION_END_IDENT), true);
 
     // cond -> for_end
     lir_operand_t *cond_target = compiler_expr(m, ast->cond);
@@ -401,8 +397,8 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
 
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
-    lir_operand_t *end_label_operand = label_operand(unique_ident(m, END_IF_IDENT), true);
-    lir_operand_t *alternate_label_operand = label_operand(unique_ident(m, ALTERNATE_IF_IDENT), true);
+    lir_operand_t *end_label_operand = label_operand(make_unique_ident(m, END_IF_IDENT), true);
+    lir_operand_t *alternate_label_operand = label_operand(make_unique_ident(m, ALTERNATE_IF_IDENT), true);
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
@@ -1232,7 +1228,7 @@ static closure_t *compiler_closure(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *var_decl = ct_list_value(fndef->formals, i);
 
-        slice_push(params, lir_var_new(c, var_decl->ident));
+        slice_push(params, lir_var_new(m, var_decl->ident));
     }
     OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
 

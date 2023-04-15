@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 #include "utils/assertf.h"
-#include "utils/value.h"
 #include "utils/slice.h"
 #include "utils/ct_list.h"
 #include "utils/table.h"
@@ -384,11 +383,6 @@ typedef struct {
     char *unique_ident;
 } ast_env_access;
 
-//typedef struct {
-//  string as;
-//  // struct items
-//} ast_struct_stmt;
-
 /**
  * type my_int = int
  * type my_string =  string
@@ -418,25 +412,23 @@ typedef struct ast_fndef_t {
     struct ast_fndef_t *parent;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
-typedef struct {
-//    slice_t *env_list; // ast_expr*
-    list_t *env_list; // ast_expr
+type_t select_actual_param(ast_call *call, uint8_t index);
 
-    string env_name; // 唯一标识，可以全局定位
-    ast_fndef_t *fn;
-} ast_closure_t;
+type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
+bool type_compare(type_t left, type_t right);
 
 ast_ident *ast_new_ident(char *literal);
 
-static ast_expr *ast_ident_expr(char *literal) {
+
+static inline ast_expr *ast_ident_expr(char *literal) {
     ast_expr *expr = NEW(ast_expr);
     expr->assert_type = AST_EXPR_IDENT;
     expr->value = ast_new_ident(literal);
     return expr;
 }
 
-static ast_expr *ast_unary(ast_expr *target, ast_expr_op_t unary_op) {
+static inline ast_expr *ast_unary(ast_expr *target, ast_expr_op_t unary_op) {
     ast_expr *result = NEW(ast_expr);
 
     ast_unary_expr *expr = NEW(ast_unary_expr);
@@ -455,7 +447,7 @@ static ast_expr *ast_unary(ast_expr *target, ast_expr_op_t unary_op) {
  * @param target_type
  * @return
  */
-static ast_expr ast_type_convert(ast_expr expr, type_t target_type) {
+static inline ast_expr ast_type_convert(ast_expr expr, type_t target_type) {
     assertf(target_type.status == REDUCTION_STATUS_DONE, "target type not reduction");
     ast_expr *result = NEW(ast_expr);
 
@@ -469,13 +461,7 @@ static ast_expr ast_type_convert(ast_expr expr, type_t target_type) {
     return *result;
 }
 
-type_t select_actual_param(ast_call *call, uint8_t index);
-
-type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
-
-bool type_compare(type_t left, type_t right);
-
-static bool can_assign(ast_type_t t) {
+static inline bool can_assign(ast_type_t t) {
     if (t == AST_EXPR_IDENT ||
         t == AST_EXPR_ACCESS ||
         t == AST_EXPR_SELECT ||

@@ -77,11 +77,11 @@ void cfg(closure_t *c) {
             current_block = new_block;
         }
 
-        if (lir_op_is_branch(op) && LINKED_NODE()->succ != NULL) {
+        if (lir_op_branch(op) && LINKED_NODE()->succ != NULL) {
             // 如果下一条指令不是 LABEL，则使用主动添加 temp label
             lir_op_t *next_op = LINKED_NODE()->succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
-                lir_op_t *temp_label = lir_op_unique_label(TEMP_LABEL);
+                lir_op_t *temp_label = lir_op_unique_label(c->module, TEMP_LABEL);
                 linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }
@@ -109,7 +109,7 @@ void cfg(closure_t *c) {
         slice_push(target_block->preds, current_block);
 
         lir_op_t *second_last_op = linked_last(current_block->operations)->prev->value;
-        if (!lir_op_is_branch(second_last_op)) {
+        if (!lir_op_branch(second_last_op)) {
             continue;
         }
         name = ((lir_symbol_label_t *) second_last_op->output->value)->ident;
@@ -132,11 +132,11 @@ void broken_critical_edges(closure_t *c) {
             basic_block_t *p = b->preds->take[i];
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
-                lir_op_t *label_op = lir_op_unique_label(TEMP_LABEL);
-                lir_operand_t *label_operand = label_op->output;
+                lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
+                lir_operand_t *label = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(label_operand(b->name, true));
 
-                lir_symbol_label_t *symbol_label = label_operand->value;
+                lir_symbol_label_t *symbol_label = label->value;
                 basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
 //                slice_insert(c->blocks, b->id, new_block);
                 slice_push(c->blocks, new_block);
@@ -173,7 +173,7 @@ void broken_critical_edges(closure_t *c) {
                     symbol_label->ident = new_block->name;
                 }
 
-                if (lir_op_is_branch(last->prev->value)) {
+                if (lir_op_branch(last->prev->value)) {
                     symbol_label = OP(last->prev)->output->value;
                     if (symbol_label->ident == b->name) {
                         symbol_label->ident = new_block->name;

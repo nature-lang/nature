@@ -59,7 +59,6 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/links.h
         ${PROJECT_SOURCE_DIR}/utils/type.h
         ${PROJECT_SOURCE_DIR}/utils/type.c
-        ${PROJECT_SOURCE_DIR}/utils/value.h
         ${PROJECT_SOURCE_DIR}/utils/slice.c
         ${PROJECT_SOURCE_DIR}/utils/slice.h
         ${PROJECT_SOURCE_DIR}/utils/stack.c
@@ -71,7 +70,6 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/table.h
         ${PROJECT_SOURCE_DIR}/utils/table.c
         ${PROJECT_SOURCE_DIR}/utils/helper.h
-        ${PROJECT_SOURCE_DIR}/utils/helper.c
         ${PROJECT_SOURCE_DIR}/utils/bitmap.h
         ${PROJECT_SOURCE_DIR}/utils/bitmap.c
         ${PROJECT_SOURCE_DIR}/utils/exec.c
@@ -86,7 +84,6 @@ set(SRC
         ${SRC_DIR}/ast.c
         ${SRC_DIR}/symbol/symbol.h
         ${SRC_DIR}/symbol/symbol.c
-        ${SRC_DIR}/cross.h
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
         ${SRC_DIR}/lir.h
@@ -97,6 +94,7 @@ set(SRC
         ${SRC_DIR}/module.h
         ${SRC_DIR}/module.c
         ${SRC_DIR}/build/config.h
+        ${SRC_DIR}/build/config.c
         ${SRC_DIR}/build/build.h
         ${SRC_DIR}/build/build.c
         ${SRC_DIR}/lower/amd64.h
@@ -110,9 +108,11 @@ set(SRC
         ${SRC_DIR}/register/interval.h
         ${SRC_DIR}/register/interval.c
         ${SRC_DIR}/register/linearscan.h
-        ${SRC_DIR}/register/linearscan.c)
+        ${SRC_DIR}/register/linearscan.c
+        ${SRC_DIR}/cross.h)
 
 set(RUNTIME_FILES
+        ${PROJECT_SOURCE_DIR}/runtime/structs.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.c
         ${PROJECT_SOURCE_DIR}/runtime/env.h

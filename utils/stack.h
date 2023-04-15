@@ -2,7 +2,7 @@
 #define NATURE_SRC_LIB_STACK_H_
 
 #include <stdlib.h>
-#include "value.h"
+#include "helper.h"
 
 typedef struct stack_node {
     void *value;
@@ -19,6 +19,7 @@ stack_t *stack_new();
 void *stack_pop(stack_t *s); // 出栈 value
 void stack_push(stack_t *s, void *value); // 入栈
 bool stack_empty(stack_t *s);
+
 stack_node *stack_new_node(void *value);
 
 #endif //NATURE_SRC_LIB_STACK_H_

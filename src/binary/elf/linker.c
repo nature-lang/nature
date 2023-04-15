@@ -30,7 +30,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_other = 0
     };
     elf_set_sym(ctx, &rtype_sym, SYMBOL_RTYPE_DATA);
-    elf_set_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, INT_SIZE);
+    elf_set_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
 
 
     //  2. fndef handle
@@ -44,11 +44,11 @@ static void pre_handle_custom_links(elf_context *ctx) {
             .st_other = 0
     };
     elf_set_sym(ctx, &fndef_data_sym, SYMBOL_FNDEF_DATA);
-    elf_set_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, INT_SIZE);
+    elf_set_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
 
     // 2.5 fn base 占位
     int fn_main_base = 0;
-    fn_main_base_data_ptr = elf_set_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, INT_SIZE);
+    fn_main_base_data_ptr = elf_set_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, cross_number_size());
 
 
     // 3. symdef handle
@@ -63,7 +63,7 @@ static void pre_handle_custom_links(elf_context *ctx) {
     };
 
     elf_set_sym(ctx, &symdef_sym, SYMBOL_SYMDEF_DATA);
-    elf_set_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, INT_SIZE);
+    elf_set_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
 }
 
 /**
@@ -92,7 +92,7 @@ static void handle_custom_links(elf_context *ctx) {
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->fndef_section, ct_fndef_data, ct_fndef_size);
     assertf(fn_main_base, "linker notfound main fn");
-    memmove(fn_main_base_data_ptr, &fn_main_base, INT_SIZE);
+    memmove(fn_main_base_data_ptr, &fn_main_base, cross_number_size());
 
 
     // 2. symdef complete

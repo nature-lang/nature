@@ -240,8 +240,8 @@ void ssa_add_phi(closure_t *c) {
                 }
 
                 // add phi (x1, x2, x3) => x
-                lir_operand_t *result_param = operand_new(LIR_OPERAND_VAR, lir_var_new(c, var->ident));
-                lir_operand_t *first_param = lir_new_phi_body(c, var, df_block->preds->count);
+                lir_operand_t *result_param = operand_new(LIR_OPERAND_VAR, lir_var_new(c->module, var->ident));
+                lir_operand_t *first_param = lir_new_phi_body(c->module, var, df_block->preds->count);
                 lir_op_t *phi_op = lir_op_new(LIR_OPCODE_PHI, first_param, NULL, result_param);
 
 
