@@ -323,9 +323,9 @@ typedef struct {
 //    section_t *rodata_section;
     section_t *got;
     section_t *plt;
-    section_t *rtype_section;
-    section_t *fndef_section;
-    section_t *symdef_section;
+    section_t *data_rtype_section;
+    section_t *data_fndef_section;
+    section_t *data_symdef_section;
 
 
     // 可执行文件构建字段

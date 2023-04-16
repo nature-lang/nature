@@ -1,34 +1,25 @@
-#ifndef NATURE_LINKS_H
-#define NATURE_LINKS_H
+#ifndef NATURE_CUSTOM_LINKS_H
+#define NATURE_CUSTOM_LINKS_H
 
 #include "utils/type.h"
 #include "utils/ct_list.h"
 
-
-// 由 linker 传递到 runtime,其中最重要的莫过于符号所在的虚拟地址
-// 以及符号的内容摘要
-// 同理目前 nature 最大的符号就是 8byte
+/**
+ * 这里存储了 nature 所有全局变量
+ */
 typedef struct {
-    uint64_t size;
     addr_t base; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
+    uint64_t size;
     bool need_gc; // 符号和栈中的 var 一样最大的值不会超过 8byte,所以使用 bool 就可以判断了
 } symdef_t;
 
 typedef struct {
-    addr_t base; // text 虚拟地址起点
-    addr_t end; // text 虚拟地址终点
+    addr_t base; // text 虚拟地址起点,在 .data.fndef 段中占有 8byte 段空间，通过重定位补齐
+    uint64_t size; // 这里的 size 是 fn 编译成二进制后占用的空间的大小
+//    addr_t end; // text 虚拟地址终点
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     uint8_t *gc_bits; // 基于 stack_size 计算出的 gc_bits
 } fndef_t;
-
-// ct = compile time
-//symdef_t *ct_symdefs;
-//uint64_t ct_symdefs_size;
-// 预处理时使用的临时数据
-//fndef_t *ct_fndefs;
-//uint64_t ct_fndefs_size; // 对 fndef 进行序列化后的 byte 数，主要是包含 gc_bits 的数量
-
-void *fn_main_base_data_ptr; // 在 elf output 之前，都可以直接通过修改到 data_section->data 中的数据
 
 
 // gc 基于此进行全部符号的遍历
@@ -88,16 +79,4 @@ byte *symdefs_serialize();
  */
 byte *rtypes_serialize();
 
-/**
- * 反序列化
- * @param data
- * @param count 入参时是 byte 的数量，出参时是 ct_reflect_type 的数量
- * @return
- */
-//void rtypes_deserialize();
-
-uint64_t pre_fndef_list();
-
-uint64_t pre_symdef_list();
-
-#endif //NATURE_LINKS_H
+#endif //NATURE_CUSTOM_LINKS_H

@@ -8,7 +8,7 @@
 /**
  * - 编译指令
  */
-void object_load_operations(elf_context *ctx, closure_t *c);
+void object_file_format(elf_context *ctx);
 
 
 /**
@@ -17,5 +17,6 @@ void object_load_operations(elf_context *ctx, closure_t *c);
  * @param asm_symbols
  */
 void object_load_symbols(elf_context *ctx, slice_t *asm_symbols);
+
 
 #endif //NATURE_ASSEMBLER_H

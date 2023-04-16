@@ -21,11 +21,9 @@ void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
     }
 }
 
-void object_load_operations(elf_context *ctx, closure_t *c) {
-    // 代码段生成
-    c->text_count = cross_opcode_encodings(ctx, c->asm_operations);
-
+void object_file_format(elf_context *ctx) {
     alloc_section_names(ctx, 1);
+
     size_t file_offset = sizeof(Elf64_Ehdr);
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *s = SEC_TACK(sh_index);

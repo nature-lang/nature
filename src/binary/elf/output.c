@@ -63,6 +63,8 @@ void elf_output(elf_context *ctx) {
     uint64_t offset = sizeof(Elf64_Ehdr) + ctx->phdr_count * sizeof(Elf64_Phdr);
     // 符号排序
     sort_symbols(ctx, ctx->symtab_section);
+
+    // 将段数据写入文件
     for (int sh_index = 1; sh_index < shdr_count; ++sh_index) {
         int order_index = sh_index;
         if (ctx->output_type == OUTPUT_EXECUTABLE) {
@@ -86,11 +88,13 @@ void elf_output(elf_context *ctx) {
         fputc(0, f);
         offset++;
     }
+
+    // 写入段表
     for (int sh_index = 0; sh_index < shdr_count; ++sh_index) {
-        Elf64_Shdr shdr;
-        memset(&shdr, 0, sizeof(shdr));
+        Elf64_Shdr shdr = {0};
         section_t *s = SEC_TACK(sh_index);
         if (s) {
+//            DEBUGF("[elf_output] shr: %s write file", s->name);
             shdr.sh_name = s->sh_name;
             shdr.sh_type = s->sh_type;
             shdr.sh_flags = s->sh_flags;

@@ -1,6 +1,6 @@
 #include "test.h"
 #include <stdio.h>
-#include "utils/links.h"
+#include "utils/custom_links.h"
 #include "runtime/structs.h"
 #include "runtime/type/list.h"
 #include "runtime/processor.h"

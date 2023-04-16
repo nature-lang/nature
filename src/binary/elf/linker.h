@@ -113,6 +113,9 @@ void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index);
 Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section,
                              uint64_t offset, int type, int sym_index, int64_t addend);
 
+Elf64_Rela *
+elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type);
+
 void elf_relocate_symbols(elf_context *ctx, section_t *sym_section);
 
 void elf_relocate_sections(elf_context *ctx);
@@ -137,6 +140,11 @@ elf_context *elf_context_new(char *output, uint8_t type);
 
 void alloc_section_names(elf_context *ctx, bool is_obj);
 
-void *elf_set_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size);
+uint64_t elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_t value_size);
+
+uint64_t collect_fndef_list(elf_context *ctx);
+
+uint64_t collect_symdef_list(elf_context *ctx);
+
 
 #endif //NATURE_LINKER_H

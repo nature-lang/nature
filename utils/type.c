@@ -3,7 +3,7 @@
 #include "helper.h"
 #include "bitmap.h"
 #include "ct_list.h"
-#include "links.h"
+#include "custom_links.h"
 #include "src/cross.h"
 
 static rtype_t rtype_base(type_kind kind) {
@@ -457,10 +457,10 @@ rtype_t rt_reflect_type(type_t t) {
     return rtype;
 }
 
-uint64_t calc_gc_bits_size(uint64_t size) {
-    size = align(size, cross_ptr_size());
+uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
+    size = align(size, ptr_size);
 
-    uint64_t gc_bits_size = size / cross_ptr_size();
+    uint64_t gc_bits_size = size / ptr_size;
 
     // 8bit  = 1byte, 再次对齐
     gc_bits_size = align(gc_bits_size, 8);
@@ -469,7 +469,7 @@ uint64_t calc_gc_bits_size(uint64_t size) {
 }
 
 byte *malloc_gc_bits(uint64_t size) {
-    uint64_t gc_bits_size = calc_gc_bits_size(size);
+    uint64_t gc_bits_size = calc_gc_bits_size(size, cross_ptr_size());
     return mallocz(gc_bits_size);
 }
 
@@ -493,7 +493,7 @@ uint64_t rtypes_push(rtype_t rtype) {
     ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
-    ct_rtype_size += calc_gc_bits_size(rtype.size);
+    ct_rtype_size += calc_gc_bits_size(rtype.size, cross_ptr_size());
     ct_rtype_count += 1;
 
     return index;

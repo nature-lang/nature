@@ -432,7 +432,7 @@ type_ident_t *typeuse_ident_new(string literal);
  * @param size
  * @return
  */
-uint64_t calc_gc_bits_size(uint64_t size);
+uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
 
 /**
  * size 表示原始数据的程度，单位 byte

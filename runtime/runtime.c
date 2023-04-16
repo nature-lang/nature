@@ -30,21 +30,28 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 }
 
 
+// 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了
 extern void main();
 
 /**
  * crt1.o _start -> main  -> user_main
  */
 void runtime_main() {
+    DEBUGF("[runtime_main] start")
     // - processor 初始化(包括当前执行栈记录,用户栈生成)
     processor_init();
+
+    DEBUGF("[runtime_main] processor init success")
 
     // - 堆内存管理初始化
     memory_init();
 
+    DEBUGF("[runtime_main] memory init success")
+
     // - 初始化 stack return addr 为 main
     processor_t *p = processor_get();
 
+    DEBUGF("[runtime_main] current processor %p, will switch to user main call", p)
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
     MODE_CALL(p->user_mode, p->system_mode, main);
 

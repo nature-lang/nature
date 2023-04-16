@@ -21,6 +21,11 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
     set(CMAKE_SYSTEM_PROCESSOR amd64)
 endif ()
 
+# 开启通用 DEBUGF 输出
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+    message("DEBUGF enabled")
+    add_compile_definitions(DEBUG)
+endif ()
 
 set(SRC_BINARY
         ${SRC_DIR}/binary/opcode/amd64/asm.c
@@ -70,8 +75,7 @@ set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
         ${PROJECT_SOURCE_DIR}/utils/ct_list.c
         ${PROJECT_SOURCE_DIR}/utils/ct_list.h
-        ${PROJECT_SOURCE_DIR}/utils/links.c
-        ${PROJECT_SOURCE_DIR}/utils/links.h
+        ${PROJECT_SOURCE_DIR}/utils/custom_links.h
         ${PROJECT_SOURCE_DIR}/utils/type.h
         ${PROJECT_SOURCE_DIR}/utils/type.c
         ${PROJECT_SOURCE_DIR}/utils/slice.c

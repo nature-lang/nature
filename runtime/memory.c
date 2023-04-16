@@ -9,10 +9,11 @@ uint64_t rt_rtype_heap_out_size(uint64_t index) {
 }
 
 void fndefs_deserialize() {
+    DEBUGF("[fndefs_deserialize] rt_fndef_data addr is %p", rt_fndef_data);
     byte *gc_bits_offset = ((byte *) rt_fndef_data) + rt_fndef_count * sizeof(fndef_t);
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *f = &rt_fndef_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size);
+        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 
         f->gc_bits = gc_bits_offset;
 
@@ -29,7 +30,7 @@ void rtypes_deserialize() {
     byte *gc_bits_offset = (byte *) (rt_rtype_data + rt_rtype_count);
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_data[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(r->size);
+        uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
 
         r->gc_bits = gc_bits_offset;
         gc_bits_offset += gc_bits_size;

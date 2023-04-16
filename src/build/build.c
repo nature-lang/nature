@@ -13,7 +13,7 @@
 #include "src/register/linearscan.h"
 #include "utils/error.h"
 #include "config.h"
-#include "utils/links.h"
+#include "utils/custom_links.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -33,6 +33,79 @@ static char *lib_file_path(char *file) {
     return path_join(dir, file);
 }
 
+static char *custom_link_object_path() {
+    char *output = path_join(TEMP_DIR, "custom_links.n.o");
+    return output;
+}
+
+/**
+ * to custom_link.n.o
+ * .data
+ * .symbol
+ * .data.rtype
+ * .data.fndef
+ * .data.symdef
+ */
+static void assembler_custom_links() {
+    assertf(BUILD_OS == OS_LINUX, "only support built to linux");
+    elf_context *ctx = elf_context_new(custom_link_object_path(), OUTPUT_OBJECT);
+
+    ctx->data_rtype_section = elf_new_section(ctx, ".data.rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->data_fndef_section = elf_new_section(ctx, ".data.fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->data_symdef_section = elf_new_section(ctx, ".data.symdef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+
+    // rtype --------------------------------------------------------------------------
+    ct_rtype_data = rtypes_serialize();
+    elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
+    Elf64_Sym sym = {
+            .st_shndx = ctx->data_rtype_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_rtype_size,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
+
+    // fndef --------------------------------------------------------------------------
+    ct_fndef_size = collect_fndef_list(ctx);
+    ct_fndef_data = fndefs_serialize();
+    elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->data_fndef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_fndef_size,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
+
+    // symdef --------------------------------------------------------------------------
+    ct_symdef_size = collect_symdef_list(ctx);
+    ct_symdef_data = symdefs_serialize();
+    elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->data_symdef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_symdef_size,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
+
+    // fn_main base 地址注册
+//    int fn_main_base = 0;
+//    uint64_t rel_offset = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, cross_number_size());
+    // data 段和符号表中已经将 rt_fn_main_base 写入，值为 0 等待重定位，所以还需要注册到重定位表项中
+//    elf_put_rel_data(ctx, ctx->data_section, rel_offset, FN_MAIN_NAME, STT_FUNC);
+
+    object_file_format(ctx);
+    elf_output(ctx);
+    DEBUGF(" --> assembler: %s\n", custom_link_object_path());
+}
+
 /**
  * 汇编器目前只支持 linux elf amd64
  * @param m
@@ -50,8 +123,11 @@ static void assembler_module(module_t *m) {
 
         for (int i = 0; i < m->closures->count; ++i) {
             closure_t *c = m->closures->take[i];
-            object_load_operations(ctx, c);
+            c->text_count = cross_opcode_encodings(ctx, c->asm_operations);
         }
+
+        object_file_format(ctx);
+
         // 输出目标文件
         elf_output(ctx);
 
@@ -61,7 +137,7 @@ static void assembler_module(module_t *m) {
         return;
     }
 
-    assert(false && dsprintf("unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH));
+    assertf(false, "unsupported BUILD_OS %s", BUILD_OS);
 }
 
 /**
@@ -80,6 +156,9 @@ static void build_linker(slice_t *modules) {
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
         elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
+    fd = check_open(custom_link_object_path(), O_RDONLY | O_BINARY);
+    elf_load_object_file(ctx, fd, 0);
+
 
     // crt1.o (包含入口 label _start, 其进行初始化后会调用 main label)
     fd = check_open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
@@ -97,7 +176,6 @@ static void build_linker(slice_t *modules) {
     fd = check_open(lib_file_path(LIBC_FILE), O_RDONLY | O_BINARY);
     elf_load_archive(ctx, fd);
 
-
     executable_file_format(ctx);
 
     elf_output(ctx);
@@ -106,8 +184,8 @@ static void build_linker(slice_t *modules) {
     }
 
     copy(BUILD_OUTPUT, output, 0755);
-    printf("linker output--> %s\n", output);
-    printf("build output--> %s\n", BUILD_OUTPUT);
+    DEBUGF("linker output--> %s\n", output);
+    DEBUGF("build output--> %s\n", BUILD_OUTPUT);
 }
 
 static void build_init(char *build_entry) {
@@ -172,6 +250,8 @@ static void build_assembler(slice_t *modules) {
 
         assembler_module(m);
     }
+
+    assembler_custom_links();
 }
 
 static void import_builtin() {

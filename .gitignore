@@ -1,5 +1,6 @@
 cmake-build-*/
 build/
+build-runtime/
 bin
 /debug/
 release/

@@ -1,7 +1,7 @@
 #include "map.h"
 #include "hash.h"
 #include "array.h"
-#include "utils/links.h"
+#include "utils/custom_links.h"
 #include "runtime/memory.h"
 #include "runtime/allocator.h"
 #include "runtime/runtime.h"

@@ -38,7 +38,7 @@ static inline void *mallocz(size_t size) {
 #define FLAG(value) (1 << value)
 
 //#define DEBUG_PARSER 1
-#define DEBUG 1
+//#define DEBUG 1
 
 #ifdef DEBUG
 #define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);

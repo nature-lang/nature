@@ -819,9 +819,18 @@ void memory_init() {
     }
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
+    DEBUGF("[memory_init] will start deserialize")
+    DEBUGF("[memory_init] fndef count = %lu", rt_fndef_count);
+    DEBUGF("[memory_init] symdef count = %lu", rt_symdef_count);
+    DEBUGF("[memory_init] rtype count = %lu", rt_rtype_count);
+
     fndefs_deserialize();
+    DEBUGF("[memory_init] fndefs_deserialize success")
     symdefs_deserialize();
+    DEBUGF("[memory_init] symdefs_deserialize success")
     rtypes_deserialize();
+    DEBUGF("[memory_init] rtypes_deserialize success")
+
 
     memory = NEW(memory_t);
     memory->grey_list = linked_new();
