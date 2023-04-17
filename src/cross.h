@@ -165,14 +165,18 @@ static inline uint8_t cross_ptr_size() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_PTR_SIZE;
     }
-    assert(false && "not support this arch");
+
+    // TODO 判断当前是否在 runtime 中
+    return sizeof(void *);
+//    assert(false && "not support this arch");
 }
 
 static inline uint8_t cross_number_size() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_NUMBER_SIZE;
     }
-    assert(false && "not support this arch");
+    return sizeof(int);
+//    assert(false && "not support this arch");
 }
 
 static inline uint64_t cross_elf_start_addr() {

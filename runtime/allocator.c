@@ -572,7 +572,10 @@ static void mcentral_grow(mcentral_t *mcentral) {
     uint64_t pages_count = span_pages_count(mcentral->spanclass);
 
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
-    assertf(span->alloc_count < span->obj_count, "heap alloc span alloc_count == 0");
+    assertf(span->obj_count > 0, "alloc span failed, span.obj_count == 0, spanclass=%d", span->spanclass);
+
+    DEBUGF("[mcentral_grow] spanclass=%d, base=%lu, alloc_count=%lu, obj_count=%lu success",
+           span->spanclass, span->base, span->alloc_count, span->obj_count);
 
     // 插入到 mcentral 中
     linked_push(mcentral->partial_swept, span);
@@ -597,7 +600,9 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     span = linked_pop_free(mcentral->partial_swept);
 
     HAVE_SPAN:
-    assertf(span && span->obj_count - span->alloc_count > 0, "span unavailable");
+    assertf(span && span->obj_count - span->alloc_count > 0,
+            "span unavailable, obj_count=%d, alloc_count",
+            span->obj_count, span->alloc_count);
     return span;
 }
 
@@ -716,9 +721,9 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
-    DEBUGF("malloc success, span->class=%d, span->base=0x%lx, addr=0x%lx",
-           span->spanclass,
-           span->base, addr)
+//    DEBUGF("[std_malloc]malloc success, span->class=%d, span->base=0x%lx, addr=0x%lx",
+//           span->spanclass,
+//           span->base, addr)
 
     return addr;
 }
@@ -891,20 +896,25 @@ void *runtime_malloc(uint64_t size, rtype_t *type) {
 
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = NEW(mspan_t);
-    span->spanclass = spanclass;
-    uint8_t sizeclass = take_sizeclass(spanclass);
-    if (spanclass == 0) {
-        span->obj_size = pages_count * PAGE_SIZE;
-    } else {
-        span->obj_size = class_obj_size[sizeclass];
-    }
     span->base = base;
     span->pages_count = pages_count;
-    span->obj_count = span->pages_count * PAGE_SIZE / span->obj_size;
-    span->end = span->base + (span->pages_count * PAGE_SIZE);
+    span->spanclass = spanclass;
+    uint8_t sizeclass = take_sizeclass(spanclass);
+    if (sizeclass == 0) {
+        span->obj_size = pages_count * PAGE_SIZE;
+        span->obj_count = 1;
+    } else {
+        span->obj_size = class_obj_size[sizeclass];
+        assertf(span->obj_size > 0, "span obj_size is zero span_class=%d pages_count=%lu ", spanclass, pages_count);
+        span->obj_count = span->pages_count * PAGE_SIZE / span->obj_size;
+    }
 
+    span->end = span->base + (span->pages_count * PAGE_SIZE);
     span->alloc_bits = bitmap_new((int) span->obj_count);
     span->gcmark_bits = bitmap_new((int) span->obj_count);
+
+    DEBUGF("[mspan_new] success, base=%lu, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu",
+           span->base, span->pages_count, span->spanclass, sizeclass, span->obj_count, span->obj_size);
     return span;
 }
 

@@ -8,7 +8,7 @@
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
-    uint64_t data_size = rtype_heap_out_size(rtype);
+    uint64_t data_size = rtype_heap_out_size(rtype, POINTER_SIZE);
     if (is_integer(rtype->kind) || is_float(rtype->kind)) {
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
@@ -55,5 +55,5 @@ void runtime_main() {
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
     MODE_CALL(p->user_mode, p->system_mode, main);
 
-    printf("user code run completed,will exit");
+    DEBUGF("[runtime_main]user code run completed,will exit");
 }

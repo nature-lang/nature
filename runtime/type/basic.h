@@ -15,7 +15,7 @@ typedef union {
  * @param target_index
  * @param value_ref
  */
-memory_any_t *convert_any(uint64_t input_rtype_index, void *value);
+memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref);
 
 memory_int_t convert_int(uint64_t input_rtype_index, value_casting casting);
 

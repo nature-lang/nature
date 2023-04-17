@@ -7,7 +7,7 @@ void list_grow(memory_list_t *l) {
     l->capacity = l->capacity * 2;
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     memory_array_t *new_array_data = array_new(element_rtype, l->capacity);
-    memmove(new_array_data, l->array_data, l->capacity * rtype_heap_out_size(element_rtype));
+    memmove(new_array_data, l->array_data, l->capacity * rtype_heap_out_size(element_rtype, POINTER_SIZE));
     l->array_data = new_array_data;
 }
 
@@ -69,9 +69,9 @@ void list_assign(memory_list_t *l, uint64_t index, void *ref) {
     assertf(index <= l->length - 1, "index out of range [%d] with length %d", l->length, index);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
-    uint64_t element_size = rtype_heap_out_size(element_rtype);
+    uint64_t element_size = rtype_heap_out_size(element_rtype, POINTER_SIZE);
     // 计算 offset
-    uint64_t offset = rtype_heap_out_size(element_rtype) * index; // (size unit byte) * index
+    uint64_t offset = rtype_heap_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->array_data + offset;
     memmove(p, ref, element_size);
 }
@@ -86,6 +86,8 @@ uint64_t list_length(memory_list_t *l) {
  * @param ref
  */
 void list_push(memory_list_t *l, void *ref) {
+    DEBUGF("[list_push] length=%lu", l->length);
+
     if (l->length == l->capacity) {
         list_grow(l);
     }

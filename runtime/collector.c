@@ -26,7 +26,7 @@ static addr_t extract_frame_base(mmode_t mode) {
  */
 static fndef_t *find_fn(addr_t addr) {
     for (int i = 0; i < rt_fndef_count; ++i) {
-        fndef_t *fn = &rt_fndef_data[i];
+        fndef_t *fn = &rt_fndef_ptr[i];
         if (fn->base < addr && (fn->base + fn->size) > addr) {
             return fn;
         }
@@ -81,7 +81,7 @@ static void scan_stack(memory_t *m) {
 
 static void scan_symdefs(memory_t *m) {
     for (int i = 0; i < rt_symdef_count; ++i) {
-        symdef_t s = rt_symdef_data[i];
+        symdef_t s = rt_symdef_ptr[i];
         if (!s.need_gc) {
             continue;
         }

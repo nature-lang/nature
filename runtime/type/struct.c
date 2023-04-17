@@ -26,7 +26,7 @@ void *struct_access(memory_struct_t *s, uint64_t offset) {
 
 void struct_assign(memory_struct_t *s, uint64_t offset, uint64_t property_index, void *property_ref) {
     void *p = s + offset;
-    uint64_t size = rtype_heap_out_size(rt_find_rtype(property_index));
+    uint64_t size = rtype_heap_out_size(rt_find_rtype(property_index), POINTER_SIZE);
     memmove(p, property_ref, size);
 }
 

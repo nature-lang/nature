@@ -9,13 +9,13 @@
 addr_t rt_fn_main_base;
 
 uint64_t rt_symdef_count;
-symdef_t *rt_symdef_data;
+symdef_t rt_symdef_data;
 
 uint64_t rt_fndef_count;
-fndef_t *rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+fndef_t rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
 
 uint64_t rt_rtype_count;
-rtype_t *rt_rtype_data;
+rtype_t rt_rtype_data;
 
 char *build_entry = "main.n";
 
@@ -27,11 +27,11 @@ int setup(void **state) {
     build(build_entry);
 
     rt_symdef_count = ct_symdef_count;
-    rt_symdef_data = (symdef_t *) ct_symdef_data;
+    rt_symdef_ptr = (symdef_t *) ct_symdef_data;
     rt_fndef_count = ct_fndef_count;
-    rt_fndef_data = (fndef_t *) ct_fndef_data;
+    rt_fndef_ptr = (fndef_t *) ct_fndef_data;
     rt_rtype_count = ct_rtype_count;
-    rt_rtype_data = (rtype_t *) ct_rtype_data;
+    rt_rtype_ptr = (rtype_t *) ct_rtype_data;
 
     // runtime init
     processor_init();
@@ -76,7 +76,7 @@ static void _test_gc_basic() {
     *data_size_addr = (addr_t) l; // 将 l 的指存储到 data_size_addr 中
 
     // 随便找一个 symdef，将 指注册进去，从而至少能够触发 global symbol 维度的 gc
-    symdef_t *symdef = &rt_symdef_data[0];
+    symdef_t *symdef = &rt_symdef_ptr[0];
     symdef->need_gc = type_need_gc(var->type);
     symdef->size = type_sizeof(var->type); // 特殊标记
     symdef->base = (addr_t) data_size_addr;
@@ -108,7 +108,7 @@ static void _test_gc_basic() {
     // 加入到 sym 中避免被清理
     data_size_addr = mallocz(sizeof(void *));
     *data_size_addr = (addr_t) l2; // 将 l 的指存储到 data_size_addr 中
-    symdef = &rt_symdef_data[1];
+    symdef = &rt_symdef_ptr[1];
     symdef->need_gc = type_need_gc(var->type);
     symdef->size = type_sizeof(var->type); // 特殊标记
     symdef->base = (addr_t) data_size_addr;

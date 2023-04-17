@@ -932,12 +932,8 @@ static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
     }
 
     if (convert->target_type.kind == TYPE_ANY) {
-//        if (input->assert_type == LIR_OPERAND_IMM) {
-//            lir_imm_t *imm = input->value;
-//            imm->kind = TYPE_INT64;
-//        }
-
-        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input));
+        lir_operand_t *input_ref = var_ref_operand(m, input);
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input_ref));
         return output;
     }
 

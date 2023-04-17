@@ -520,7 +520,7 @@ uint64_t ct_find_rtype_index(type_t t) {
  * @param rtype
  * @return
  */
-uint64_t rtype_heap_out_size(rtype_t *rtype) {
+uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size) {
     if (rtype->in_heap) {
         return cross_ptr_size();
     }

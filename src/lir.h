@@ -671,7 +671,7 @@ static inline lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand
         var_operand = temp_operand;
     }
 
-    assertf(operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", operand->assert_type);
+    assertf(var_operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", operand->assert_type);
 
     lir_var_t *var = var_operand->value;
     lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type));

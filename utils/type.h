@@ -30,25 +30,25 @@ typedef enum {
     TYPE_BOOL,
     TYPE_FLOAT,
     TYPE_FLOAT32,
-    TYPE_FLOAT64,
+    TYPE_FLOAT64, // value = 5
 
     TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
     TYPE_INT8,
     TYPE_UINT16,
     TYPE_INT16,
-    TYPE_UINT32,
+    TYPE_UINT32, // value=10
     TYPE_INT32,
     TYPE_UINT64,
     TYPE_INT64,
     TYPE_UINT,
-    TYPE_INT,
+    TYPE_INT, // value=15
 
     // 复合类型
-    TYPE_ANY,
-    TYPE_STRING, // 10
+    TYPE_ANY, // value = 16
+    TYPE_STRING,
     TYPE_LIST,
     TYPE_ARRAY,
-    TYPE_MAP,
+    TYPE_MAP, // value = 20
     TYPE_SET,
     TYPE_TUPLE,
     TYPE_STRUCT,
@@ -441,7 +441,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  */
 byte *malloc_gc_bits(uint64_t size);
 
-uint64_t rtype_heap_out_size(rtype_t *rtype);
+uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size);
 
 uint64_t type_struct_offset(type_struct_t *s, char *key);
 

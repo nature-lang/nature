@@ -39,13 +39,16 @@ typedef struct {
 extern addr_t rt_fn_main_base;
 
 extern uint64_t rt_symdef_count;
-extern symdef_t *rt_symdef_data;
+extern symdef_t rt_symdef_data; // &rt_symdef_data 指向 .data.symdef section 所在地址
+symdef_t *rt_symdef_ptr;
 
 extern uint64_t rt_fndef_count;
-extern fndef_t *rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+extern fndef_t rt_fndef_data;
+fndef_t *rt_fndef_ptr;
 
 extern uint64_t rt_rtype_count;
-extern rtype_t *rt_rtype_data;
+extern rtype_t rt_rtype_data;
+rtype_t *rt_rtype_ptr;
 
 
 // - symdef
