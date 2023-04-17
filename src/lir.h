@@ -11,6 +11,7 @@
 #include "src/register/register.h"
 
 #define TEMP_IDENT "t"
+#define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "l"
 #define CONTINUE_IDENT "continue"
 #define FOR_COND_IDENT "for_cond"
@@ -661,6 +662,11 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 }
 
+/**
+ * @param m
+ * @param operand
+ * @return
+ */
 static inline lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand) {
     lir_operand_t *var_operand = operand;
     if (operand->assert_type == LIR_OPERAND_IMM) {
@@ -671,11 +677,10 @@ static inline lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand
         var_operand = temp_operand;
     }
 
-    assertf(var_operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", operand->assert_type);
-
+    assertf(var_operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", var_operand->assert_type);
     lir_var_t *var = var_operand->value;
     lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type));
-    OP_PUSH(lir_op_lea(value_ref, operand));
+    OP_PUSH(lir_op_lea(value_ref, var_operand));
     return value_ref;
 }
 

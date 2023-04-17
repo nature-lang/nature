@@ -22,6 +22,20 @@ typedef enum {
     VR_FLAG_INDIRECT_ADDR_BASE,
 } vr_flag_t;
 
+
+typedef enum {
+    MODULE_TYPE_MAIN = 1,
+    MODULE_TYPE_COMMON = 2,
+    MODULE_TYPE_BUILTIN = 3
+} module_type_t;
+
+typedef struct {
+    char *name; // 符号名称
+    size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
+    uint8_t *value; // 符号值
+} asm_global_symbol_t;
+
+
 typedef struct {
     string name;
     uint8_t index; // index 对应 intel 手册表中的索引，可以直接编译进 modrm 中
@@ -29,12 +43,6 @@ typedef struct {
     uint8_t alloc_id; // 寄存器分配期间的 id，能通过 id 进行唯一检索
     flag_t flag;
 } reg_t; // 做类型转换
-
-typedef enum {
-    MODULE_TYPE_MAIN = 1,
-    MODULE_TYPE_COMMON = 2,
-    MODULE_TYPE_BUILTIN = 3
-} module_type_t;
 
 typedef struct {
     char *source;
@@ -266,7 +274,7 @@ typedef struct closure_t {
     // refer module
     uint64_t text_count; // asm_operations 编译完成后占用的 count
     slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
-    slice_t *asm_symbols;
+    slice_t *asm_symbols; // asm_global_symbol_t
     module_t *module;
 } closure_t;
 

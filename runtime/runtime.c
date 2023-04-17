@@ -51,7 +51,8 @@ void runtime_main() {
     // - 初始化 stack return addr 为 main
     processor_t *p = processor_get();
 
-    DEBUGF("[runtime_main] current processor %p, will switch to user main call", p)
+    DEBUGF("[runtime_main] current processor %p, will switch to user main call, user_stack=%lx", p,
+           p->user_mode.stack_base);
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
     MODE_CALL(p->user_mode, p->system_mode, main);
 

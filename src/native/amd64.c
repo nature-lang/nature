@@ -1,6 +1,5 @@
 #include "amd64.h"
 #include "src/register/amd64.h"
-#include "src/native/native.h"
 #include "src/debug/debug.h"
 #include <assert.h>
 
@@ -51,28 +50,8 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
-        if (v->kind == TYPE_RAW_STRING) {
-            // 生成符号表(通常用于 .data 段)
-            char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            symbol->name = unique_name;
-            symbol->size = strlen(v->string_value) + 1; // + 1 表示 \0
-            symbol->value = (uint8_t *) v->string_value;
-            slice_push(c->asm_symbols, symbol);
-
-            // asm_copy
-            return SYMBOL(unique_name, false);
-        } else if (v->kind == TYPE_FLOAT) {
-            char *unique_name = ASM_VAR_DECL_UNIQUE_NAME(c->module);
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            symbol->name = unique_name;
-            symbol->size = QWORD;
-            symbol->value = (uint8_t *) &v->float_value; // float to uint8
-//            symbol->code = ASM_VAR_DECL_TYPE_FLOAT;
-            slice_push(c->asm_symbols, symbol);
-
-            return SYMBOL(unique_name, false);
-        } else if (v->kind == TYPE_INT || v->kind == TYPE_UINT) {
+        assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
+        if (v->kind == TYPE_INT || v->kind == TYPE_UINT) {
             return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8) {
             return UINT8(v->int_value);
@@ -435,7 +414,6 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
-
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
     slice_push(operations, ASM_INST("lea", { result, first }));

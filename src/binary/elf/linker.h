@@ -104,7 +104,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
 
 uint64_t elf_put_str(section_t *s, char *str);
 
-uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count);
+uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size);
 
 void elf_resolve_common_symbols(elf_context *ctx);
 

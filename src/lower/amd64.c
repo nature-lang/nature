@@ -10,22 +10,51 @@
 })\
 
 
+/**
+ * amd64 由于不支持直接操作浮点型和字符串, 所以将其作为全局变量直接注册到 closure asm_symbols 中
+ * 并添加 lea 指令对值进行加载
+ * 所以在 string 和 float 类型进行特殊处理，可以更容易在 native trans 时进行操作
+ * @param c
+ * @param block
+ * @param node
+ */
 static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_node *node) {
     lir_op_t *op = node->value;
     slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
-        if (imm->kind == TYPE_RAW_STRING) {
-            lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
-            slice_push(c->globals, var_operand->value);
+        if (imm->kind == TYPE_RAW_STRING || imm->kind == TYPE_FLOAT) {
+            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
+            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+            symbol->name = unique_name;
+            if (imm->kind == TYPE_RAW_STRING) {
+                symbol->size = strlen(imm->string_value) + 1;
+                symbol->value = (uint8_t *) imm->string_value;
+            } else {
+                symbol->size = QWORD;
+                symbol->value = (uint8_t *) &imm->float_value;
+            }
 
-            lir_op_t *temp = lir_op_new(LIR_OPCODE_LEA, imm_operand, NULL, var_operand);
-            linked_insert_before(block->operations, node, temp);
+            slice_push(c->asm_symbols, symbol);
+            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
+            symbol_var->type = imm->kind;
+            symbol_var->ident = unique_name;
 
-            lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-            imm_operand->assert_type = temp_operand->assert_type;
-            imm_operand->value = temp_operand->value;
+            if (imm->kind == TYPE_RAW_STRING) {
+                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
+                lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
+                slice_push(c->globals, var_operand->value);
+                lir_op_t *temp = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
+                linked_insert_before(block->operations, node, temp);
+
+                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
+                imm_operand->assert_type = temp_operand->assert_type;
+                imm_operand->value = temp_operand->value;
+            } else {
+                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
+                imm_operand->value = symbol_var;
+            }
         }
     }
 }
@@ -126,9 +155,6 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         // 处理 imm string operands
         amd64_lower_imm_operand(c, block, node);
-
-        // TODO lower indirect addr
-        // TODO lower lea op
 
         if (lir_op_call(op) && op->second->value != NULL) {
             // lower call actual params
@@ -252,6 +278,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             }
         }
 
+
         if (op->code == LIR_OPCODE_MOVE) {
             if (op->output->assert_type != LIR_OPERAND_VAR) {
                 // 将 output 转换成 var
@@ -260,6 +287,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             }
         }
 
+        // lea 指令的 first 不能是立即数
+        // string 和 float 在上面已经进行了处理
+        if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
+            op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
+        }
     }
 }
 

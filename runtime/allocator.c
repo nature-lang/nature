@@ -574,7 +574,7 @@ static void mcentral_grow(mcentral_t *mcentral) {
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assertf(span->obj_count > 0, "alloc span failed, span.obj_count == 0, spanclass=%d", span->spanclass);
 
-    DEBUGF("[mcentral_grow] spanclass=%d, base=%lu, alloc_count=%lu, obj_count=%lu success",
+    DEBUGF("[mcentral_grow] spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu success",
            span->spanclass, span->base, span->alloc_count, span->obj_count);
 
     // 插入到 mcentral 中
@@ -913,7 +913,7 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->alloc_bits = bitmap_new((int) span->obj_count);
     span->gcmark_bits = bitmap_new((int) span->obj_count);
 
-    DEBUGF("[mspan_new] success, base=%lu, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu",
+    DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu",
            span->base, span->pages_count, span->spanclass, sizeclass, span->obj_count, span->obj_size);
     return span;
 }

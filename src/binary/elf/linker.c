@@ -694,13 +694,13 @@ uint64_t elf_put_str(section_t *s, char *str) {
     return offset;
 }
 
-uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t count) {
-    char *ptr = elf_section_data_add_ptr(s, count);
+uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size) {
+    char *ptr = elf_section_data_add_ptr(s, size);
     // 如果 data 为 null, 则填入 0
     if (data) {
-        memmove(ptr, data, count);
+        memmove(ptr, data, size);
     } else {
-        memset(ptr, 0, count);
+        memset(ptr, 0, size);
     }
     return (uint64_t) ptr - (uint64_t) s->data;
 }

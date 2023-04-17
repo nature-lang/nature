@@ -1138,7 +1138,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        if (p->type.kind == TYPE_UNKNOWN) {
+        if (p->type.kind != TYPE_UNKNOWN) {
             p->type = reduction_type(m, p->type);
         }
 

@@ -14,21 +14,24 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
 
     assertf(rtype, "cannot find rtype, index = %lu", input_rtype_index);
 
-    DEBUGF("[convert_any] input_rtype_index=%lu, kind=%d, actual_index=%lu",
-           input_rtype_index, rtype->kind, rtype->index);
+    DEBUGF("[convert_any] input_rtype_index=%lu, kind=%d, actual_index=%lu, in_heap=%d",
+           input_rtype_index, rtype->kind, rtype->index, rtype->in_heap);
 
     rtype_t any_rtype = rt_reflect_type(type_basic_new(TYPE_ANY));
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     memory_any_t *any = runtime_malloc(sizeof(memory_any_t), &any_rtype);
 
-    DEBUGF("[convert_any] runtime_malloc success, base=%p, size=%lu, any_rtype_index=%lu",
+    DEBUGF("[convert_any] any_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            any,
-           sizeof(memory_any_t),
-           any_rtype.index);
+           value_ref,
+           &any->value,
+           rtype_heap_out_size(rtype, POINTER_SIZE),
+           (void *) fetch_addr_value((addr_t) value_ref))
 
     any->rtype = rtype;
-    memmove(any->value, value_ref, rtype->size);
+    memmove(&any->value, value_ref, rtype_heap_out_size(rtype, POINTER_SIZE));
+    DEBUGF("[convert_any] success")
 
     return any;
 }

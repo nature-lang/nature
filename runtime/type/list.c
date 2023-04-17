@@ -19,6 +19,7 @@ void list_grow(memory_list_t *l) {
  * @return
  */
 memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint64_t capacity) {
+    DEBUGF("[list_new] r_index=%lu, element_index=%lu, capacity=%lu", rtype_index, element_rtype_index, capacity);
     if (!capacity) {
         capacity = LIST_DEFAULT_CAPACITY;
     }

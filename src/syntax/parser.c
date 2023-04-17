@@ -252,7 +252,7 @@ static type_t parser_typeuse(module_t *m) {
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
-            struct_property_t item;
+            struct_property_t item = {0};
             item.type = parser_typeuse(m);
             item.key = parser_advance(m)->literal;
 

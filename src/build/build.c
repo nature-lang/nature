@@ -5,7 +5,6 @@
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/native/amd64.h"
-#include "src/native/native.h"
 #include "src/binary/elf/linker.h"
 #include "src/binary/elf/amd64.h"
 #include "src/binary/elf/output.h"

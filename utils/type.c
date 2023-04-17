@@ -382,10 +382,7 @@ type_t type_ptrof(type_t t) {
  * @return
  */
 rtype_t reflect_type(type_t t) {
-    rtype_t rtype = {
-            .kind = 0,
-            .in_heap = t.in_heap
-    };
+    rtype_t rtype;
 
     switch (t.kind) {
         case TYPE_BOOL:
@@ -426,6 +423,7 @@ rtype_t reflect_type(type_t t) {
                 rtype = rtype_base(t.kind);
             }
     }
+    rtype.in_heap = t.in_heap;
     return rtype;
 }
 

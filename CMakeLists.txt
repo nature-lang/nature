@@ -45,8 +45,7 @@ set(SRC_BINARY
 
 set(SRC_NATIVE
         ${SRC_DIR}/native/amd64.c
-        ${SRC_DIR}/native/amd64.h
-        ${SRC_DIR}/native/native.h)
+        ${SRC_DIR}/native/amd64.h)
 
 
 set(SRC_SYNTAX

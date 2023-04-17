@@ -40,18 +40,15 @@ static void print_arg(memory_any_t *arg) {
 }
 
 void print(memory_list_t *args) {
-
-
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
     addr_t base = (addr_t) args->array_data; // 把 data 中存储的值赋值给 p
-
-    rtype_t *element_rtype = rt_find_rtype(args->element_rtype_index);
+    uint64_t element_size = rt_rtype_heap_out_size(args->element_rtype_index);
     DEBUGF("[runtime.print] memory_list_t base=%p,length=%lu, array_data_base=%lx, element_size=%lu",
-           args, args->length, base, element_rtype->size);
+           args, args->length, base, element_size);
 
     for (int i = 0; i < args->length; ++i) {
-        addr_t p = base + (i * element_rtype->size);
+        addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
         memory_any_t **value = (void *) p;

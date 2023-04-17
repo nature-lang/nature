@@ -1,6 +1,5 @@
 #include "assembler.h"
 #include "src/cross.h"
-#include "src/native/native.h"
 
 void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
     // 将全局变量定义写入到数据段与符号表

@@ -18,10 +18,16 @@
 
 typedef uint8_t byte;
 
+
+typedef union {
+    int64_t int_value;
+    double float_value;
+} value_casting;
+
 typedef enum {
     REDUCTION_STATUS_UNDO = 1,
-    REDUCTION_STATUS_DOING = 1,
-    REDUCTION_STATUS_DONE = 1,
+    REDUCTION_STATUS_DOING,
+    REDUCTION_STATUS_DONE
 } reduction_status_t;
 
 typedef enum {
@@ -386,19 +392,19 @@ type_t type_ptrof(type_t t);
  * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
  * 可以通过 kind 进行判断。
  * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
- * @param typedecl
+ * @param type
  * @return
  */
-static bool type_default_in_heap(type_t typedecl) {
-    if (typedecl.kind == TYPE_ANY ||
-        typedecl.kind == TYPE_STRING ||
-        typedecl.kind == TYPE_LIST ||
-        typedecl.kind == TYPE_ARRAY ||
-        typedecl.kind == TYPE_MAP ||
-        typedecl.kind == TYPE_SET ||
-        typedecl.kind == TYPE_TUPLE ||
-        typedecl.kind == TYPE_STRUCT ||
-        typedecl.kind == TYPE_FN) {
+static bool type_default_in_heap(type_t type) {
+    if (type.kind == TYPE_ANY ||
+        type.kind == TYPE_STRING ||
+        type.kind == TYPE_LIST ||
+        type.kind == TYPE_ARRAY ||
+        type.kind == TYPE_MAP ||
+        type.kind == TYPE_SET ||
+        type.kind == TYPE_TUPLE ||
+        type.kind == TYPE_STRUCT ||
+        type.kind == TYPE_FN) {
         return true;
     }
     return false;
