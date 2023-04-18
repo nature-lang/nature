@@ -125,7 +125,7 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, a
  * @param ctx
  * @param operations amd64_opcode_t
  */
-uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations);
+void amd64_operation_encodings(elf_context *ctx, slice_t *closures);
 
 static inline uint64_t cross_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
     if (BUILD_ARCH == ARCH_AMD64) {
@@ -207,9 +207,9 @@ static inline uint16_t cross_ehdr_machine() {
     assert(false && "not support this arch");
 }
 
-static inline uint64_t cross_opcode_encodings(elf_context *ctx, slice_t *opcodes) {
+static inline void cross_opcode_encodings(elf_context *ctx, slice_t *closures) {
     if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_operation_encodings(ctx, opcodes);
+        return amd64_operation_encodings(ctx, closures);
     }
     assert(false && "not support this arch");
 }

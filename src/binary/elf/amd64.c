@@ -186,6 +186,13 @@ static void amd64_rewrite_rel32_to_rel8(amd64_build_temp_t *temp) {
     temp->may_need_reduce = false;
 }
 
+/**
+ * 有 bug,请勿调用, 暂时不搞这里到逻辑了，太复杂了
+ * @param symtab
+ * @param build_temps
+ * @param section_offset
+ * @param name
+ */
 static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t *section_offset, string name) {
     if (build_temps->count == 0) {
         return;
@@ -221,7 +228,7 @@ static void amd64_confirm_rel(section_t *symtab, slice_t *build_temps, uint64_t 
         *temp->offset = temp_section_offset;
 
         if (temp->may_need_reduce && str_equal(temp->rel_symbol, name)) {
-            amd64_rewrite_rel32_to_rel8(temp);
+            amd64_rewrite_rel32_to_rel8(temp); // 这里修正了历史上的 data->count
         }
         // 如果存在符号表引用了位置数据，则修正符号表中的数据
         if (temp->sym_index > 0) {
@@ -501,111 +508,116 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
     }
 }
 
-uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
-    if (operations->count == 0) {
-        return 0;
+void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
+    if (closures->count == 0) {
+        return;
     }
 
     slice_t *build_temps = slice_new();
-
     uint64_t section_offset = 0; // text section slot
+
     // 一次遍历
-    for (int i = 0; i < operations->count; ++i) {
-        asm_operation_t *operation = operations->take[i];
-        amd64_build_temp_t *temp = build_temp_new(operation);
-        slice_push(build_temps, temp);
+    for (int i = 0; i < closures->count; ++i) {
+        closure_t *c = closures->take[i];
+        for (int j = 0; j < c->asm_operations->count; ++j) {
+            asm_operation_t *operation = c->asm_operations->take[j];
+            amd64_build_temp_t *temp = build_temp_new(operation);
+            slice_push(build_temps, temp);
+            slice_push(c->asm_build_temps, temp);
 
-        *temp->offset = section_offset;
-
-        // 定义符号
-        if (str_equal(operation->name, "label")) {
-            // 解析符号值，并添加到符号表
-            asm_symbol_t *s = operation->operands[0]->value;
-            // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
-            // 一旦发现定义点,就需要反推
-            amd64_confirm_rel(ctx->symtab_section, build_temps, &section_offset, s->name);
-
-            // confirm_rel32 可能会修改 section_offset， 所以需要重新计算
             *temp->offset = section_offset;
-            Elf64_Sym sym = {
-                    .st_shndx = ctx->text_section->sh_index,
-                    .st_size = 0,
-                    .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
-                    .st_other = 0,
-                    .st_value = *temp->offset,
-            };
-            uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
-            temp->sym_index = sym_index;
-            continue;
-        }
 
-        asm_operand_t *rel_operand = has_symbol_operand(operation);
-        if (rel_operand != NULL) {
-            // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
-            // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
-            // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位),都是在 .text section 内，所以可以使用 jmp 相对寻址, 连接器不会破坏同一个段内的位置
-            asm_symbol_t *symbol_operand = rel_operand->value;
-            // 判断是否为标签符号引用, 比如 call symbol call(一次遍历时不能确定符号是否必定不存在，所以必须等二次遍历才能确定是否写入 rel)
-            if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
-                // 标签符号
-                uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
-                if (sym_index > 0) {
-                    // 引用了已经存在的符号，直接计算相对位置即可
-                    Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
-                    int rel_diff = sym.st_value - section_offset;
-                    amd64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
-                } else {
-                    // 引用了 label 符号，但是符号目前不在符号表中(可能在后续 text 中，也可以能不在，所以需要二次扫描才能确定,这里仅仅占位)
-                    // 此时使用 rel32 占位，其中 jmp 指令后续可能需要替换 rel8
-                    amd64_rewrite_rel_symbol(operation, rel_operand, 0);
-                    temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
-                    temp->rel_symbol = symbol_operand->name;
-                    uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
-                    if (reduce_count > 0) {
-                        temp->may_need_reduce = true;
-                        temp->reduce_count = reduce_count;
-                    }
-                }
-            } else {
-                // 其他指令(可能是 mov 等,对数据段符号的引用)引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip),让重定位阶段去找改符号进行重定位即可
-                // 完全不用考虑是标签符号还是数据符号
-                // 添加到重定位表(.rela.text)
-                // 根据指令计算 slot 重定位 rip slot
-                // 这里先注册到符号表，让符号和和 symbol 关联
-                uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
-                if (sym_index == 0) {
-                    Elf64_Sym sym = {
-                            .st_shndx = 0,
-                            .st_size = 0,
-                            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                            .st_other = 0,
-                            .st_value = 0,
-                    };
-                    sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
-                }
-                // rewrite symbol
-                amd64_rewrite_rip_symbol(rel_operand);
+            // 定义符号
+            if (str_equal(operation->name, "label")) {
+                // 解析符号值，并添加到符号表
+                asm_symbol_t *s = operation->operands[0]->value;
+                // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
+                // 一旦发现定义点,就需要反推  取消反推重写逻辑,实现太复杂
+//                amd64_confirm_rel(ctx->symtab_section, build_temps, &section_offset, s->name);
+                // amd64_confirm_rel 可能会修改 section_offset， 所以需要重新计算
+//                *temp->offset = section_offset;
 
-                // 编码
-                temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
-                section_offset += temp->data_count;
-
-                // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
-                uint64_t rel_offset = *temp->offset + operation_rip_offset(temp->inst);
-                temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
-                                                 rel_offset, R_X86_64_PC32, (int) sym_index, -4);
-
+                Elf64_Sym sym = {
+                        .st_shndx = ctx->text_section->sh_index,
+                        .st_size = 0,
+                        .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
+                        .st_other = 0,
+                        .st_value = *temp->offset,
+                };
+                uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
+                temp->sym_index = sym_index;
                 continue;
-
             }
-        }
 
-        // 编码
-        temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
-        section_offset += temp->data_count;
+            asm_operand_t *rel_operand = has_symbol_operand(operation);
+            if (rel_operand != NULL) {
+                // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
+                // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
+                // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位),都是在 .text section 内，所以可以使用 jmp 相对寻址, 连接器不会破坏同一个段内的位置
+                asm_symbol_t *symbol_operand = rel_operand->value;
+                // 判断是否为标签符号引用, 比如 call symbol call(一次遍历时不能确定符号是否必定不存在，所以必须等二次遍历才能确定是否写入 rel)
+                if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
+                    // 标签符号
+                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
+                    if (sym_index > 0) {
+                        // 引用了已经存在的符号，直接计算相对位置即可
+                        Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+                        int rel_diff = sym.st_value - section_offset;
+                        amd64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
+                    } else {
+                        // 引用了 label 符号，但是符号目前不在符号表中(可能在后续 text 中，也可以能不在，所以需要二次扫描才能确定,这里仅仅占位)
+                        // 此时使用 rel32 占位，~~其中 jmp 指令后续可能需要替换 rel8~~
+                        amd64_rewrite_rel_symbol(operation, rel_operand, 0);
+                        temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
+                        temp->rel_symbol = symbol_operand->name;
+                        uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
+                        if (reduce_count > 0) {
+                            temp->may_need_reduce = true;
+                            temp->reduce_count = reduce_count;
+                        }
+                    }
+                } else {
+                    // 其他指令(可能是 mov 等,对数据段符号的引用)引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip),让重定位阶段去找改符号进行重定位即可
+                    // 完全不用考虑是标签符号还是数据符号
+                    // 添加到重定位表(.rela.text)
+                    // 根据指令计算 slot 重定位 rip slot
+                    // 这里先注册到符号表，让符号和和 symbol 关联
+                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
+                    if (sym_index == 0) {
+                        Elf64_Sym sym = {
+                                .st_shndx = 0,
+                                .st_size = 0,
+                                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                                .st_other = 0,
+                                .st_value = 0,
+                        };
+                        sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
+                    }
+                    // rewrite symbol
+                    amd64_rewrite_rip_symbol(rel_operand);
+
+                    // 编码
+                    temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+                    section_offset += temp->data_count;
+
+                    // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
+                    uint64_t rel_offset = *temp->offset + operation_rip_offset(temp->inst);
+                    temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
+                                                     rel_offset, R_X86_64_PC32, (int) sym_index, -4);
+
+                    continue;
+
+                }
+            }
+
+            // 编码
+            temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+            section_offset += temp->data_count;
+        }
     }
 
-    // 二次遍历,基于 build_temps
+
+    // 基于 build_temps 做二次遍历，主要是对不好进行重定位，不会在改写 build opcode 了
     for (int i = 0; i < build_temps->count; ++i) {
         amd64_build_temp_t *temp = build_temps->take[i];
         if (!temp->rel_symbol) {
@@ -633,8 +645,12 @@ uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
             int rel_diff = sym->st_value - *temp->offset;
-            amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff); // 仅仅重写了符号，长度不会再变了，
+            // 仅仅重写了符号，data 长度不会再变了
+            amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
+
+            uint8_t old_count = temp->data_count;
             temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
+            assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // 外部符号添加重定位信息
             uint64_t rel_offset = *temp->offset + operation_rip_offset(temp->inst);
@@ -644,12 +660,14 @@ uint64_t amd64_operation_encodings(elf_context *ctx, slice_t *operations) {
 
     }
 
-    uint64_t count = 0;
     // 代码段已经确定，生成 text 数据
-    for (int i = 0; i < build_temps->count; ++i) {
-        amd64_build_temp_t *temp = build_temps->take[i];
-        elf_put_data(ctx->text_section, temp->data, temp->data_count);
-        count += temp->data_count;
+    for (int i = 0; i < closures->count; ++i) {
+        closure_t *c = closures->take[i];
+        c->text_count = 0;
+        for (int j = 0; j < c->asm_build_temps->count; ++j) {
+            amd64_build_temp_t *temp = c->asm_build_temps->take[j];
+            elf_put_data(ctx->text_section, temp->data, temp->data_count);
+            c->text_count += temp->data_count;
+        }
     }
-    return count;
 }

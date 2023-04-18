@@ -1,4 +1,4 @@
-int sum(int a, int b) {
+fn sum(int a, int b):int {
     return a + b
 }
 

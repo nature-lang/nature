@@ -51,7 +51,7 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
  * @param value_ref
  */
 void list_access(memory_list_t *l, uint64_t index, void *value_ref) {
-    assertf(index < l->length, "index out of range [%d] with length %d", l->length, index);
+    assertf(index < l->length, "index out of range [%d] with length %d", index, l->length);
 
     uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_index);
     // 计算 offset
@@ -67,7 +67,7 @@ void list_access(memory_list_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void list_assign(memory_list_t *l, uint64_t index, void *ref) {
-    assertf(index <= l->length - 1, "index out of range [%d] with length %d", l->length, index);
+    assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_index);
     uint64_t element_size = rtype_heap_out_size(element_rtype, POINTER_SIZE);
@@ -87,9 +87,10 @@ uint64_t list_length(memory_list_t *l) {
  * @param ref
  */
 void list_push(memory_list_t *l, void *ref) {
-    DEBUGF("[list_push] length=%lu", l->length);
+    DEBUGF("[list_push] current_length=%lu", l->length);
 
     if (l->length == l->capacity) {
+        DEBUGF("[list_push] current_length=%lu == capacity, trigger grow", l->length);
         list_grow(l);
     }
 

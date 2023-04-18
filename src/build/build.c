@@ -120,10 +120,7 @@ static void assembler_module(module_t *m) {
         // 将全局变量写入到数据段或者符号表 (这里应该叫 global var)
         object_load_symbols(ctx, m->asm_global_symbols);
 
-        for (int i = 0; i < m->closures->count; ++i) {
-            closure_t *c = m->closures->take[i];
-            c->text_count = cross_opcode_encodings(ctx, c->asm_operations);
-        }
+        cross_opcode_encodings(ctx, m->closures);
 
         object_file_format(ctx);
 
@@ -239,13 +236,15 @@ static void build_assembler(slice_t *modules) {
             slice_push(m->asm_global_symbols, symbol);
         }
 
+        DEBUGF("[build_assembler] module=%s", m->ident);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
             slice_concat(m->asm_global_symbols, c->asm_symbols);
-            slice_concat(m->asm_operations, c->asm_operations);
+            debug_asm(c);
         }
+
 
         assembler_module(m);
     }
@@ -322,16 +321,17 @@ static void build_compiler(slice_t *modules) {
         compiler(m);
 
 
+
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
+
+            debug_lir(c);
 
             cfg(c);
 
             // 构造 ssa
             ssa(c);
-
-            debug_block_lir(c);
 
             cross_lower(c);
 
@@ -340,8 +340,6 @@ static void build_compiler(slice_t *modules) {
             debug_block_lir(c);
 
             cross_native(c);
-
-            debug_asm(c);
         }
     }
 }

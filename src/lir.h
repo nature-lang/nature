@@ -82,6 +82,8 @@
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 
+#define RT_CALL_VAR_CLR_DEF "var_clr_def" // 定义变量，并声明一个空值
+
 #define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
@@ -212,15 +214,16 @@ typedef struct {
 struct lir_operand_t {
     lir_operand_type_t assert_type;
     // TODO 统一替换成 union
-    union {
+//    union {
 //        lir_var_t var;
 //        lir_stack_t stack;
 //        lir_indirect_addr_t indirect_addr;
 //        lir_symbol_label_t symbol_label;
 //        lir_symbol_var_t symbol_var;
 //        lir_imm_t imm;
-        void *value;
-    };
+//    };
+
+    void *value;
     vr_flag_t pos; // 在 opcode 中的位置信息
 };
 
@@ -456,6 +459,10 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
     return new_operand;
 }
 
+/**
+ * TODO 并不是 intput 就一定是 use, 比如 memmove(var_dst, var_src) 中都 dst 就属于 def
+ * @param operand
+ */
 static inline void set_operand_flag(lir_operand_t *operand) {
     if (!operand) {
         return;
@@ -651,6 +658,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 
 /**
  * 临时变量是否影响变量入栈？
+ * TODO 加入 global 中，从而可以预留出栈空间?
  * @param type
  * @return
  */
@@ -661,6 +669,7 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
 
     return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 }
+
 
 /**
  * @param m
@@ -691,6 +700,7 @@ static inline closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->operations = linked_new();
     c->text_count = 0;
     c->asm_operations = slice_new();
+    c->asm_build_temps = slice_new();
     c->asm_symbols = slice_new();
     c->entry = NULL;
     c->globals = slice_new();

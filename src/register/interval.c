@@ -735,22 +735,28 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     closure_insert_mov(c, position, i, child);
 
     // 将 child 加入 parent 的 children 中,
-    // 因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
     interval_t *parent = i;
     if (parent->parent) {
         parent = parent->parent;
-    }
-    if (linked_empty(parent->children)) {
-        linked_push(parent->children, child);
-    } else {
-        LINKED_FOR(parent->children) {
-            interval_t *current = LINKED_VALUE();
-            if (current->index == i->index) {
-                linked_insert_after(parent->children, LINKED_NODE(), child);
-                break;
+        // i 此时存在 parent,因为是从 i 中分割出来的，所以需要插入到 i 对应到 node 的后方
+        if (linked_empty(parent->children)) {
+            linked_push(parent->children, child);
+        } else {
+            LINKED_FOR(parent->children) {
+                interval_t *current = LINKED_VALUE();
+                if (current->index == i->index) {
+                    linked_insert_after(parent->children, LINKED_NODE(), child);
+                    break;
+                }
             }
         }
+    } else {
+        // 如果 i 就是 parent?
+        // child 从 i 中刚刚分割出来都，那么其 last->rang->to 一定会大于 exists children 中都任意值
+        // 所以这里只需要将 child 插入到 parent->children 都最前面即可 都最前面
+        linked_insert_before(parent->children, NULL, child);
     }
+
 
     // 切割 range
     LINKED_FOR(i->ranges) {

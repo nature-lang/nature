@@ -76,3 +76,7 @@ memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting) 
     return 0;
 }
 
+uint64_t var_clr_def() {
+    return 0;
+}
+

@@ -231,8 +231,9 @@ static void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int befor
  */
 static void assign_interval(closure_t *c, allocate_t *a, interval_t *i, uint8_t assigned) {
     assertf(assigned > 0, "assign reg id must > 0");
-    i->assigned = assigned; // i 已经争取到了寄存器 assigned,
-    use_pos_t *stack_pos = interval_must_stack_pos(i);
+    i->assigned = assigned; // interval 已经成果分配到了寄存器 assigned id,
+
+    use_pos_t *stack_pos = interval_must_stack_pos(i); // 但是部分 pos 中，var 必须保持在 stack 中！
     if (!stack_pos) {
         return;
     }

@@ -286,6 +286,16 @@ void debug_basic_block(basic_block_t *block) {
     printf("\n\n\n");
 }
 
+void debug_module_asm(module_t *m) {
+#ifdef DEBUG_ASM
+    printf("module asm: %s------------------------------------------------------------------------\n", m->ident);
+    for (int i = 0; i < m->asm_operations->count; ++i) {
+        asm_op_to_string(i, m->asm_operations->take[i]);
+    }
+    fflush(stdout);
+#endif
+}
+
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
     printf("asm: %s------------------------------------------------------------------------\n", c->name);

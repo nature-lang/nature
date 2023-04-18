@@ -855,6 +855,7 @@ static ast_stmt *parser_for_stmt(module_t *m) {
     // for (condition) {}
     ast_for_cond_stmt *for_cond = NEW(ast_for_cond_stmt);
     for_cond->condition = parser_expr(m);
+    parser_must(m, TOKEN_RIGHT_PAREN);
     for_cond->body = parser_block(m);
     result->assert_type = AST_STMT_FOR_COND;
     result->value = for_cond;
@@ -1211,7 +1212,7 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
     type_t typedecl = parser_typeuse(m);
     token_t *ident_token = parser_advance(m);
 
-    // next param 不能是 (a, b) 这样的形式, 不支持
+    // 仅 var 支持 tuple destr
     assertf(!parser_is(m, TOKEN_LEFT_PAREN), "only support var (a, b) this form decl assign");
 
     ast_var_decl *var_decl = NEW(ast_var_decl);

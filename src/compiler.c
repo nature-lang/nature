@@ -32,6 +32,11 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+static lir_operand_t *compiler_temp_var_operand(module_t *m, type_t type) {
+    lir_operand_t *temp = temp_var_operand(m, type);
+    OP_PUSH(lir_rt_call(RT_CALL_VAR_CLR_DEF, temp, 0));
+    return temp;
+}
 
 /**
  * @param m
@@ -69,9 +74,13 @@ static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     return target;
 }
 
-static void compiler_list_assign(module_t *m, lir_operand_t *list_target, lir_operand_t *index_target, ast_expr src) {
+static void compiler_list_assign(module_t *m, ast_assign_stmt *stmt) {
+    ast_list_access_t *list_access = stmt->left.value;
+    lir_operand_t *list_target = compiler_expr(m, list_access->left);
+    lir_operand_t *index_target = compiler_expr(m, list_access->index);
+
     // 取 value 栈指针,如果 value 不是 var， 会自动转换成 var
-    lir_operand_t *value_ref = var_ref_operand(m, compiler_expr(m, src));
+    lir_operand_t *value_ref = var_ref_operand(m, compiler_expr(m, stmt->right));
 
     // mov $1, -4(%rbp) // 以 var 的形式入栈
     // mov -4(%rbp), rcx // 参数 1, move 将 -4(%rbp) 处的值穿递给了 rcx, 而不是 -4(%rbp) 这个栈地址
@@ -143,7 +152,8 @@ static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operan
         uint64_t item_size = type_sizeof(element->type);
         offset = align((int64_t) offset, (int64_t) item_size);
 
-        lir_operand_t *dst = temp_var_operand(m, element->type);
+        lir_operand_t *dst = compiler_temp_var_operand(m, element->type);
+
         lir_operand_t *dst_ref = var_ref_operand(m, dst);
         lir_operand_t *src_ref = lir_indirect_addr_operand(tuple_target, offset);
         OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
@@ -216,10 +226,8 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
 
     // map assign list[0] = 1
     if (left.assert_type == AST_EXPR_LIST_ACCESS) {
-        ast_list_access_t *list_access = stmt->left.value;
-        lir_operand_t *list_target = compiler_expr(m, list_access->left);
-        lir_operand_t *index_target = compiler_expr(m, list_access->index);
-        return compiler_list_assign(m, list_target, index_target, stmt->right);
+
+        return compiler_list_assign(m, stmt);
     }
 
     // set assign m["a"] = 2
@@ -252,12 +260,16 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 /**
+ * 类似这样仅做了声明没有立即赋值，这里进行空赋值。从而能够保障有内存空间分配
+ * int a;
+ * float b;
  * @param c
  * @param var_decl
  * @return
  */
-static linked_t *compiler_var_decl(module_t *m, ast_var_decl *var_decl) {
-    return linked_new();
+static void compiler_var_decl(module_t *m, ast_var_decl *var_decl) {
+    lir_operand_t *operand = var_operand(m, var_decl->ident);
+    OP_PUSH(lir_rt_call(RT_CALL_VAR_CLR_DEF, operand, 0));
 }
 
 
@@ -279,7 +291,6 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
     // map or list
     lir_operand_t *iterator_target = compiler_expr(m, ast->iterate);
 
-//    lir_operand_t *length_target = temp_var_operand(c, type_basic_new(TYPE_INT));
     uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
 
     lir_operand_t *cursor_operand = temp_var_operand(m, type_basic_new(TYPE_INT));
@@ -569,7 +580,7 @@ static lir_operand_t *compiler_list_access(module_t *m, ast_expr expr) {
     lir_operand_t *list_target = compiler_expr(m, ast->left);
     lir_operand_t *index_target = compiler_expr(m, ast->index);
 
-    lir_operand_t *result = temp_var_operand(m, expr.type);
+    lir_operand_t *result = compiler_temp_var_operand(m, expr.type);
     // 读取 result 的指针地址，给到 access 进行写入
     lir_operand_t *result_ref = var_ref_operand(m, result);
 
@@ -597,9 +608,9 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
 
     lir_operand_t *list_target = temp_var_operand(m, expr.type);
 
-    type_list_t *list_decl = ast->type.list;
+    type_list_t *list_decl = expr.type.list;
     // call list_new
-    lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(ast->type));
+    lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(expr.type));
 
     lir_operand_t *element_index = int_operand(ct_find_rtype_index(list_decl->element_type));
 
@@ -613,8 +624,10 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
     // 值初始化 assign
     for (int i = 0; i < ast->values->length; ++i) {
         ast_expr *item_expr = ct_list_value(ast->values, i);
-        lir_operand_t *index_target = int_operand(i);
-        compiler_list_assign(m, list_target, index_target, *item_expr);
+        lir_operand_t *value_ref = var_ref_operand(m, compiler_expr(m, *item_expr));
+
+
+        OP_PUSH(lir_rt_call(RT_CALL_LIST_PUSH, NULL, 2, list_target, value_ref));
     }
 
     return list_target;
@@ -634,7 +647,8 @@ static lir_operand_t *compiler_env_access(module_t *m, ast_expr expr) {
     lir_operand_t *fn_name = string_operand(m->compiler_current->name);
     lir_operand_t *index = int_operand(ast->index);
 
-    lir_operand_t *result = temp_var_operand(m, expr.type);
+    lir_operand_t *result = compiler_temp_var_operand(m, expr.type);
+
     // 读取 result 的指针地址，给到 access 进行写入
     lir_operand_t *dst_ref = var_ref_operand(m, result);
 
@@ -666,7 +680,7 @@ static lir_operand_t *compiler_map_access(module_t *m, ast_expr expr) {
 
     // compiler key to temp var
     lir_operand_t *key_target_ref = var_ref_operand(m, compiler_expr(m, ast->key));
-    lir_operand_t *value_target = temp_var_operand(m, type_map_decl.map->value_type);
+    lir_operand_t *value_target = compiler_temp_var_operand(m, type_map_decl.map->value_type);
     lir_operand_t *value_target_ref = var_ref_operand(m, value_target);
 
     // runtime get slot by temp var runtime.map_offset(base, "key")
@@ -763,7 +777,7 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
     uint64_t item_size = type_sizeof(ast->property->type);
     uint64_t offset = type_struct_offset(t.struct_, ast->key);
 
-    lir_operand_t *dst = temp_var_operand(m, ast->property->type);
+    lir_operand_t *dst = compiler_temp_var_operand(m, ast->property->type);
     lir_operand_t *dst_ref = var_ref_operand(m, dst);
 
     lir_operand_t *src_ref = lir_indirect_addr_operand(struct_target, offset);
@@ -820,7 +834,7 @@ static lir_operand_t *compiler_tuple_access(module_t *m, ast_expr expr) {
     uint64_t item_size = type_sizeof(ast->element_type);
     uint64_t offset = type_tuple_offset(t.tuple, ast->index);
 
-    lir_operand_t *dst = temp_var_operand(m, ast->element_type);
+    lir_operand_t *dst = compiler_temp_var_operand(m, ast->element_type);
     lir_operand_t *dst_ref = var_ref_operand(m, dst);
     lir_operand_t *src_ref = lir_indirect_addr_operand(tuple_target, offset);
     OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,

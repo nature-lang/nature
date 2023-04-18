@@ -131,6 +131,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     }
 
     assertf(false, "symbol type not expect");
+    exit(1);
 }
 
 /**
@@ -166,10 +167,12 @@ static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_
             }
         }
     }
-    // list type 冗余,便于 compiler
-    list_new->type = result;
 
     result.list = type_list;
+
+    // list type 冗余,便于 compiler
+//    list_new->type = result;
+
     return result;
 }
 
@@ -1243,6 +1246,10 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
 static type_t reduction_type(module_t *m, type_t t) {
     assertf(t.kind != TYPE_SELF, "cannot use type self everywhere except struct fn decl first param");
 
+    if (t.kind == TYPE_UNKNOWN) {
+        return t;
+    }
+
     if (t.status == REDUCTION_STATUS_DONE) {
         goto STATUS_DONE;
     }
@@ -1267,10 +1274,6 @@ static type_t reduction_type(module_t *m, type_t t) {
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = type_default_in_heap(t);
-
-    if (t.kind == TYPE_UNKNOWN) {
-        return t;
-    }
 
     // 计算 reflect type
     ct_reflect_type(t);

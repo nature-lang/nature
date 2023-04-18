@@ -318,14 +318,14 @@ static void analyser_function_end(module_t *m) {
     m->analyser_current = m->analyser_current->parent;
 }
 
-static analyser_fndef_t *analyser_current_init(module_t *m, local_scope_t *scope, char *fn_name) {
+static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
     analyser_fndef_t *new = malloc(sizeof(analyser_fndef_t));
     new->frees = slice_new();
     new->free_table = table_new();
     new->delay_fndefs = ct_list_new(sizeof(delay_fndef_t));
     new->scope_depth = 0;
     new->fn_name = fn_name;
-    new->current_scope = scope;
+    new->current_scope = NULL;
 
     // 继承关系
     new->parent = m->analyser_current;
@@ -351,10 +351,10 @@ static analyser_fndef_t *analyser_current_init(module_t *m, local_scope_t *scope
  * @param fndef
  * @return
  */
-static void analyser_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope) {
+static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
     fndef->parent_view_envs = ct_list_new(sizeof(ast_expr));
 
-    analyser_current_init(m, scope, fndef->name);
+    analyser_current_init(m, fndef->name);
 
     analyser_typeuse(m, &fndef->return_type);
 
@@ -413,7 +413,7 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef, local_scope_t *scope
     // 对当前 fndef 中对所有 sub fndef 进行 analyser
     for (int i = 0; i < m->analyser_current->delay_fndefs->length; ++i) {
         delay_fndef_t *d = ct_list_value(m->analyser_current->delay_fndefs, i);
-        analyser_fndef(m, d->fndef, d->scope);
+        analyser_fndef(m, d->fndef);
         // 将所有对 fndef 都加入到 flat fndefs 中, 且没有 parent 关系想关联。
         slice_push(m->ast_fndefs, d->fndef);
     }
@@ -737,7 +737,7 @@ static void analyser_expr(module_t *m, ast_expr *expr) {
             delay_fndef_t d = {
                     .fndef = expr->value,
                     .is_stmt = false,
-                    .scope = m->analyser_current->current_scope
+//                    .scope = m->analyser_current->current_scope
             };
             ct_list_push(m->analyser_current->delay_fndefs, &d);
 
@@ -770,7 +770,7 @@ static void analyser_stmt(module_t *m, ast_stmt *stmt) {
             delay_fndef_t d = {
                     .fndef = stmt->value,
                     .is_stmt = true,
-                    .scope = m->analyser_current->current_scope
+//                    .scope = m->analyser_current->current_scope
             };
             ct_list_push(m->analyser_current->delay_fndefs, &d);
 
@@ -919,7 +919,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
     // 遍历所有 fn list
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
-        analyser_fndef(m, fndef, NULL);
+        analyser_fndef(m, fndef);
 
         slice_push(m->ast_fndefs, fndef);
     }
@@ -951,21 +951,18 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     // init
     m->analyser_line = 0;
 
-    // block 封装进 function,再封装到 closure_t 中
     ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
     fndef->name = FN_MAIN_NAME;
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl));
-    for (int i = import_end_index; i < stmt_list->count; ++i) {
-        slice_push(fndef->body, stmt_list->take[i]);
-    }
+    slice_concat(fndef->body, stmt_list);
 
     // 符号表注册
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, true);
     slice_push(m->global_symbols, s);
 
-    analyser_fndef(m, fndef, NULL);
+    analyser_fndef(m, fndef);
     slice_push(m->ast_fndefs, fndef);
 }
 

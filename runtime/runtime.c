@@ -56,5 +56,5 @@ void runtime_main() {
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
     MODE_CALL(p->user_mode, p->system_mode, main);
 
-    DEBUGF("[runtime_main]user code run completed,will exit");
+    DEBUGF("[runtime_main] user code run completed,will exit");
 }

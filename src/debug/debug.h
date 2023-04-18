@@ -36,6 +36,8 @@ void debug_lir(closure_t *c);
 
 void debug_block_lir(closure_t *c);
 
+void debug_module_asm(module_t *m);
+
 void debug_asm(closure_t *c);
 
 void debug_basic_block(basic_block_t *block);

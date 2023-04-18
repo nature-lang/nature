@@ -100,7 +100,7 @@ typedef struct local_scope_t {
 // 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
 typedef struct {
     // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-    local_scope_t *scope;
+//    local_scope_t *scope;
     ast_fndef_t *fndef;
     bool is_stmt;
 } delay_fndef_t;
@@ -274,6 +274,7 @@ typedef struct closure_t {
     // refer module
     uint64_t text_count; // asm_operations 编译完成后占用的 count
     slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
+    slice_t *asm_build_temps; // 架构相关编译临时
     slice_t *asm_symbols; // asm_global_symbol_t
     module_t *module;
 } closure_t;

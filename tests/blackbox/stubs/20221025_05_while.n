@@ -1,6 +1,0 @@
-int i = 0
-while (20 > i) {
-    println(i)
-    i = i + 1
-}
-print("while end, i=", i)

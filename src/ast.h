@@ -355,7 +355,7 @@ typedef struct {
 // [1,a.b, call()]
 typedef struct {
     list_t *values; // ast_expr
-    type_t type; // list的类型 (类型推导截断冗余)
+//    type_t type; // list的类型 (类型推导截断冗余)
 } ast_list_new;
 
 typedef struct {
