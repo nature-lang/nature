@@ -170,12 +170,49 @@ void debug_stmt(string type, ast_stmt stmt) {
 }
 
 /**
- * 遍历展示 blocks
+ * c->operations
  * @param c
  */
 void debug_lir(closure_t *c) {
 #ifdef DEBUG_LIR
-    printf("lir: %s------------------------------------------------------------------------\n", c->name);
+    printf("lir: %s ---------------------------------------------------------------------\n", c->name);
+    linked_node *current = c->operations->front;
+    while (current->value != NULL) {
+        lir_op_t *op = current->value;
+        printf("%d", op->id);
+        printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+
+        // first
+        if (op->first) {
+            printf("%s", lir_operand_to_string(op->first));
+        }
+        if (op->second) {
+            if (op->first) {
+                printf(", ");
+            }
+            printf("%s", lir_operand_to_string(op->second));
+        }
+        if (op->output) {
+            if (op->first) {
+                printf(" -> ");
+            }
+            printf("%s", lir_operand_to_string(op->output));
+        }
+        printf("\n");
+
+        current = current->succ;
+    }
+    fflush(stdout);
+#endif
+}
+
+/**
+ * 遍历展示 blocks
+ * @param c
+ */
+void debug_block_lir(closure_t *c) {
+#ifdef DEBUG_LIR
+    printf("block_lir: %s------------------------------------------------------------------------\n", c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);

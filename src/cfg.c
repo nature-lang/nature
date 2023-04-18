@@ -66,7 +66,19 @@ void cfg(closure_t *c) {
             // 3. 建立顺序关联关系 (由于顺序遍历 code, 所以只能建立顺序关系)
             if (current_block != NULL) {
                 // 存在 new_block, current_block 必须已 BAL 指令结尾跳转到 new_block
-                lir_op_t *last_op = linked_last(current_block->operations)->value;
+                linked_node *last_node = linked_last(current_block->operations);
+                lir_op_t *last_op = last_node->value;
+
+                // if last_op branch and label == bal target, the change this op code is bal
+                if (lir_op_branch_cmp(last_op)) {
+                    lir_symbol_label_t *label = last_op->output->value;
+                    if (str_equal(label->ident, new_block->name)) {
+                        // 删除最后一个指令,只保留下面需要接入到 bal
+                        linked_remove(current_block->operations, last_node);
+                    }
+                }
+
+                // 所有指令块必须以 bal 结尾
                 if (last_op->code != LIR_OPCODE_BAL) {
                     lir_op_t *temp_op = lir_op_bal(label_operand(new_block->name, true));
                     linked_push(current_block->operations, temp_op);
@@ -92,7 +104,6 @@ void cfg(closure_t *c) {
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
     // call 调到别的 closure_t 去了，不在当前 closure_t cfg 构造的考虑范围
-
     SLICE_FOR(c->blocks) {
         current_block = SLICE_VALUE(c->blocks);
 
@@ -129,7 +140,7 @@ void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *b = SLICE_VALUE(c->blocks);
         for (int i = 0; i < b->preds->count; ++i) {
-            basic_block_t *p = b->preds->take[i];
+            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
                 lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);

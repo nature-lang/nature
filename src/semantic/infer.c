@@ -1268,6 +1268,10 @@ static type_t reduction_type(module_t *m, type_t t) {
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = type_default_in_heap(t);
 
+    if (t.kind == TYPE_UNKNOWN) {
+        return t;
+    }
+
     // 计算 reflect type
     ct_reflect_type(t);
     return t;

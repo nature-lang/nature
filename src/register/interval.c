@@ -883,7 +883,19 @@ void resolve_data_flow(closure_t *c) {
 
                 // 判断是否在 form->to edge 最终的 interval TODO last_op + 1?
                 interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id + 1, false);
-                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id, false);
+
+                //  如果 live var interval 刚好是在 to->first_op 中到 use 作为声明周期到则需要特殊处理
+                // from->last_op 不需要担心这个问题，其总是 branch op
+                bool is_use = false;
+                slice_t *vars = lir_var_operands(to->first_op->value, VR_FLAG_USE | VR_FLAG_DEF);
+                for (int k = 0; k < vars->count; ++k) {
+                    lir_var_t *temp_var = vars->take[k];
+                    if (str_equal(temp_var->ident, var->ident) && temp_var->flag & FLAG(VR_FLAG_USE)) {
+                        is_use = true;
+                    }
+                }
+
+                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id, is_use);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload

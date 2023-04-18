@@ -1474,7 +1474,9 @@ byte *rtypes_serialize() {
     for (int i = 0; i < ct_rtype_list->length; ++i) {
         rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, cross_ptr_size());
-        memmove(p, r->gc_bits, gc_bits_size);
+        if (gc_bits_size) {
+            memmove(p, r->gc_bits, gc_bits_size);
+        }
         p += gc_bits_size;
     }
 

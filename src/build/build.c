@@ -331,13 +331,13 @@ static void build_compiler(slice_t *modules) {
             // 构造 ssa
             ssa(c);
 
-            debug_lir(c);
+            debug_block_lir(c);
 
             cross_lower(c);
 
             linear_scan(c);
 
-            debug_lir(c);
+            debug_block_lir(c);
 
             cross_native(c);
 

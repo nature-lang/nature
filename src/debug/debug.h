@@ -34,6 +34,8 @@ void debug_stmt(string type, ast_stmt stmt);
 
 void debug_lir(closure_t *c);
 
+void debug_block_lir(closure_t *c);
+
 void debug_asm(closure_t *c);
 
 void debug_basic_block(basic_block_t *block);

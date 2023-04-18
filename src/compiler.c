@@ -491,14 +491,16 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     // 触发 call 指令, 结果存储在 target 指令中
     OP_PUSH(call_op);
 
-    // 判断 call 是否 throw 了 error 到
+    // 判断 call op 是否存在 error, 如果存在 error 则不允许往下执行，
+    // 而应该直接跳转到函数结束部分,这样 errort 就会继续向上传递
     lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
     OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
 
-    // 编译时判断是否有 catch 当前 call operand, 如果存在 catch,则无论如何都不进行 beq
+    // 如果 不存在 catch, 则需要判断当前是否存在 errort, 存在 errort 则需要立刻 ret
     if (!call->catch) {
         // beq has_errort,true -> fn_end_label
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_errort,
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
+                           bool_operand(true), has_errort,
                            label_operand(m->compiler_current->end_label, false)));
     }
 

@@ -763,6 +763,11 @@ static inline lir_operand_t *lir_new_phi_body(module_t *m, lir_var_t *var, uint8
     return operand;
 }
 
+
+static inline bool lir_op_branch_cmp(lir_op_t *op) {
+    return op->code == LIR_OPCODE_BEQ;
+}
+
 static inline bool lir_op_branch(lir_op_t *op) {
     return op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ;
 }
@@ -847,7 +852,7 @@ static inline slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t
 /**
  * @param op
  * @param vr_flag  use or def
- * @return
+ * @return lir_var_t
  */
 static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);

@@ -382,7 +382,7 @@ type_t type_ptrof(type_t t) {
  * @return
  */
 rtype_t reflect_type(type_t t) {
-    rtype_t rtype;
+    rtype_t rtype = {0};
 
     switch (t.kind) {
         case TYPE_BOOL:
