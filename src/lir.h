@@ -676,7 +676,7 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
  * @param operand
  * @return
  */
-static inline lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand) {
+static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *operand) {
     lir_operand_t *var_operand = operand;
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
@@ -686,7 +686,9 @@ static inline lir_operand_t *var_ref_operand(module_t *m, lir_operand_t *operand
         var_operand = temp_operand;
     }
 
-    assertf(var_operand->assert_type == LIR_OPERAND_VAR, "only support var ref, actual=%d", var_operand->assert_type);
+    assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR,
+            "only support var or indirect_addr ref, actual=%d",
+            var_operand->assert_type);
     lir_var_t *var = var_operand->value;
     lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type));
     OP_PUSH(lir_op_lea(value_ref, var_operand));

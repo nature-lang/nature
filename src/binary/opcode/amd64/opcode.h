@@ -234,12 +234,12 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operand
 
 /**
  * 指令选择
- * 根据 asm 指令选择 opcode
+ * 根据 asm 指令选择 operation
  * 1. map 结构选择指令
  * 2. tree 结构进一步选择
  * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
  */
-inst_t *opcode_select(asm_operation_t opcode);
+inst_t *opcode_select(asm_operation_t operation);
 
 /**
  * 指令填充

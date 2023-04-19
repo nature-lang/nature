@@ -74,12 +74,19 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
     // mov $1, %rax 是将 $1 写入到 rax 寄存器
     // mov $1, (%rax)  // rax 中必须存储一个合法的虚拟地址，将 $1 写入到 rax 存储的地址处，最常用的地方就是 rbp 栈栈中的使用
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *v = operand->value;
-        lir_operand_t *base = v->base;
+        lir_indirect_addr_t *indirect = operand->value;
+        lir_operand_t *base = indirect->base;
         assertf(base->assert_type == LIR_OPERAND_REG, "indirect addr base must be reg");
 
+        // 虽然栈的增长方向是相反的，但是数据存储总是正向的
         reg_t *reg = base->value;
-        asm_operand_t *asm_operand = INDIRECT_REG(reg, type_kind_sizeof(v->type.kind));
+        asm_operand_t *asm_operand;
+        if (indirect->offset == 0) {
+            asm_operand = INDIRECT_REG(reg, type_kind_sizeof(indirect->type.kind));
+        } else {
+            asm_operand = DISP_REG(reg, indirect->offset, type_kind_sizeof(indirect->type.kind));
+        }
+
         return asm_operand;
     }
 
@@ -415,6 +422,9 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
 
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
+
+    // lea 取的是 first 的地址，amd64 下一定是 8byte
+    first->size = QWORD;
 
     slice_push(operations, ASM_INST("lea", { result, first }));
     return operations;

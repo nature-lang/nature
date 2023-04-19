@@ -36,8 +36,8 @@ static inline bool hash_value_deleted(uint64_t hash_value) {
  * @param hash_value
  * @return
  */
-static inline bool extract_data_index(uint64_t hash_value) {
-    return hash_value << 2;
+static inline uint64_t extract_data_index(uint64_t hash_value) {
+    return hash_value << 2 >> 2;
 }
 
 

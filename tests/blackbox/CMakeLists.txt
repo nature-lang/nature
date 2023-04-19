@@ -11,6 +11,8 @@ set(STUB_FILES
         20221025_05_for_cond
         20221025_06_closure
         20221025_07_list
+        20221025_08_struct
+        20221025_09_map
         20221113_01_rest)
 
 foreach (STUB_FILE ${STUB_FILES})

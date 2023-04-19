@@ -19,7 +19,7 @@ static uint64_t get_data_index(memory_map_t *m, uint64_t hash_index) {
 }
 
 static void set_data_index(memory_map_t *m, uint64_t hash_index, uint64_t data_index) {
-    uint64_t hash_value = data_index & (1ULL << HASH_SET);
+    uint64_t hash_value = data_index | (1ULL << HASH_SET);
 
     m->hash_table[hash_index] = hash_value;
 }
@@ -88,8 +88,18 @@ memory_map_t *map_new(uint64_t rtype_index, uint64_t key_index, uint64_t value_i
  */
 bool map_access(memory_map_t *m, void *key_ref, void *value_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
+
+    rtype_t *key_rtype = rt_find_rtype(m->key_index);
+    char *key_str = rtype_value_str(key_rtype, key_ref);
+    DEBUGF("[runtime.map_access] key_rtype_kind: %d, key_str: %s, hash_index=%lu,", key_rtype->kind, key_str,
+           hash_index);
+
     uint64_t hash_value = m->hash_table[hash_index];
     if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
+        DEBUGF("[runtime.map_access] hash value=%lu, empty=%d, deleted=%d",
+               hash_value,
+               hash_value_empty(hash_value),
+               hash_value_deleted(hash_value));
         return false;
     }
 
@@ -97,6 +107,12 @@ bool map_access(memory_map_t *m, void *key_ref, void *value_ref) {
 
     // 找到值所在中数组位置起始点并返回
     uint64_t value_size = rt_rtype_heap_out_size(m->value_index);
+
+    DEBUGF("[runtime.map_access] value_base=%p, find hash_value=%lu,data_index=%lu,value_size=%lu success",
+           m->value_data,
+           hash_value,
+           data_index,
+           value_size);
 
     void *src = m->value_data + value_size * data_index; // 单位字节
     memmove(value_ref, src, value_size);
@@ -111,7 +127,17 @@ void map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
 
-    uint64_t data_index;
+    rtype_t *key_rtype = rt_find_rtype(m->key_index);
+    char *key_str = rtype_value_str(key_rtype, key_ref);
+    rtype_t *value_rtype = rt_find_rtype(m->value_index);
+    char *value_str = rtype_value_str(value_rtype, value_ref);
+    DEBUGF("[runtime.map_assign] key_rtype_kind: %d, key_str: %s, value_str: %s, hash_index=%lu,",
+           key_rtype->kind,
+           key_str,
+           value_str,
+           hash_index);
+
+    uint64_t data_index = 0;
     if (hash_value_empty(hash_value)) {
         data_index = m->length++;
     } else if (hash_value_deleted(hash_value)) {
@@ -126,6 +152,9 @@ void map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
 
     uint64_t key_size = rt_rtype_heap_out_size(m->key_index);
     uint64_t value_size = rt_rtype_heap_out_size(m->value_index);
+    DEBUGF("[runtime.map_assign] assign success data_index=%lu, hash_value=%lu",
+           data_index,
+           m->hash_table[hash_index])
 
     // push to key list and value list
     memmove(m->key_data + key_size * data_index, key_ref, key_size);

@@ -132,10 +132,10 @@
 
 typedef enum {
     ASM_OPERAND_TYPE_REG = 1,
-    ASM_OPERAND_TYPE_INDIRECT_REG,
+    ASM_OPERAND_TYPE_INDIRECT_REG, // 这是啥？
     ASM_OPERAND_TYPE_SIB_REG,
     ASM_OPERAND_TYPE_RIP_RELATIVE,
-    ASM_OPERAND_TYPE_DISP_REG,
+    ASM_OPERAND_TYPE_DISP_REG, // 这是啥？有区别？
     ASM_OPERAND_TYPE_SYMBOL,
     ASM_OPERAND_TYPE_UINT8,
     ASM_OPERAND_TYPE_UINT16,
@@ -193,7 +193,7 @@ typedef struct {
 
 typedef struct {
     reg_t *reg;
-    int32_t disp;
+    int32_t disp; // disp 为 0 不就退化为 indirect_reg_t 了么
 } asm_disp_reg_t;
 
 typedef struct {

@@ -198,8 +198,8 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
 
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element *item = ct_list_value(map_new->elements, i);
-        type_t key_type = infer_right_expr(m, &item[i].key, key_target_type);
-        type_t value_type = infer_right_expr(m, &item[i].value, value_target_type);
+        type_t key_type = infer_right_expr(m, &item->key, key_target_type);
+        type_t value_type = infer_right_expr(m, &item->value, value_target_type);
 
         // key
         if (type_map->key_type.kind == TYPE_UNKNOWN) {
@@ -287,10 +287,10 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *s) {
 
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(s->properties, i);
+        struct_property_t *type_property = ct_list_value(struct_decl->properties, i);
 
         // struct_decl 已经是被还原过的类型了
-        type_t expect_type = struct_property->type;
-        infer_right_expr(m, struct_property->right, expect_type);
+        infer_right_expr(m, struct_property->right, type_property->type);
     }
 
     return s->type;
@@ -304,18 +304,20 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *s) {
 static type_t infer_access(module_t *m, ast_expr *expr) {
     ast_access *access = expr->value;
     type_t left_type = infer_left_expr(m, &access->left);
-    type_t key_type = infer_right_expr(m, &access->key, type_basic_new(TYPE_INT));
 
     // ast_access to ast_map_access
     if (left_type.kind == TYPE_MAP) {
-        ast_map_access_t *map_access = malloc(sizeof(ast_map_access_t));
+        ast_map_access_t *map_access = NEW(ast_map_access_t);
         type_map_t *type_map = left_type.map;
 
-        // 参数改写
+        // 基于 map 编译 key
+        infer_right_expr(m, &access->key, type_map->key_type);
+
+        // 参数改写(这里照抄就行了)
         map_access->left = access->left;
         map_access->key = access->key;
 
-        // access_map 冗余字段处理
+        // access_map type 字段冗余 冗余字段处理
         map_access->key_type = type_map->key_type;
         map_access->value_type = type_map->value_type;
         expr->assert_type = AST_EXPR_MAP_ACCESS;
@@ -326,7 +328,7 @@ static type_t infer_access(module_t *m, ast_expr *expr) {
     }
 
     if (left_type.kind == TYPE_LIST) {
-        assertf(key_type.kind == TYPE_INT, "access list failed, index type must by int");
+        type_t key_type = infer_right_expr(m, &access->key, type_basic_new(TYPE_INT));
 
         // ast_access -> ast_list_access
         ast_list_access_t *list_access = NEW(ast_list_access_t);
@@ -344,8 +346,10 @@ static type_t infer_access(module_t *m, ast_expr *expr) {
     }
 
     if (left_type.kind == TYPE_TUPLE) {
-        assertf(key_type.kind == TYPE_INT, "tuple index field type must int");
+        type_t key_type = infer_right_expr(m, &access->key, type_basic_new(TYPE_INT));
+
         assertf(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
+
         type_tuple_t *type_tuple = left_type.tuple;
 
         ast_literal *index_literal = access->key.value; // 读取 index 的值
@@ -1002,7 +1006,6 @@ static type_t infer_left_expr(module_t *m, ast_expr *expr) {
             break;
         }
         case AST_EXPR_ACCESS: {
-            // 这里需要做类型改写，确定具体的访问类型所以传递整个表达式
             type = infer_access(m, expr);
             break;
         }
@@ -1288,8 +1291,9 @@ static type_t reduction_type(module_t *m, type_t t) {
 static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
     // 对 fndef 进行类型还原
     type_fn_t *f = NEW(type_fn_t);
-    f->formal_types = ct_list_new(sizeof(type_t));
 
+    f->name = fndef->name;
+    f->formal_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
 
     for (int i = 0; i < fndef->formals->length; ++i) {

@@ -571,9 +571,9 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_RM64) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 8);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 8);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 8);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
         highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
         res.list = highs;
@@ -581,10 +581,11 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_M) {
-        res.count = 2;
+        res.count = 3;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 8);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -852,9 +853,9 @@ static bool has_rex_extension(opcode_ext *list) {
     return false;
 }
 
-inst_t *opcode_select(asm_operation_t opcode) {
-    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, opcode.name);
-    assert(current != NULL && dsprintf("cannot identify asm opcode %s ", opcode.name));
+inst_t *opcode_select(asm_operation_t operation) {
+    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, operation.name);
+    assert(current != NULL && dsprintf("cannot identify asm operation %s ", operation.name));
 
     // 这里仅使用了大小匹配，但是对于 r8 和 rm8 存在一些特殊情况需要处理
     // 比如 ah 寄存器对应的操作码必须包含扩展 rex
@@ -862,8 +863,8 @@ inst_t *opcode_select(asm_operation_t opcode) {
     bool has64_reg = false;
     bool has_high_eight_reg = false;
 
-    for (int i = 0; i < opcode.count; ++i) {
-        asm_operand_t *operand = opcode.operands[i];
+    for (int i = 0; i < operation.count; ++i) {
+        asm_operand_t *operand = operation.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REG) {
             if (is_high_eight_reg(operand->value)) {
                 has_high_eight_reg = true;
@@ -879,7 +880,7 @@ inst_t *opcode_select(asm_operation_t opcode) {
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
-        assertf(exists, "cannot identify asm opcode %s with operand %d", opcode.name, i);
+        assertf(exists, "cannot identify asm operation %s with operand %d", operation.name, i);
         current = table_get(current->succs, key);
     }
 
@@ -902,12 +903,13 @@ inst_t *opcode_select(asm_operation_t opcode) {
         insts.list[insts.count++] = inst;
     }
     if (insts.count == 0) {
-        error_exit("[opcode_select] opcode %s 1_size:%d, 2_size: %d not match insts,  has 64: %d, has high eight: %d",
-                   opcode.name,
-                   opcode.operands[0]->size,
-                   opcode.operands[1]->size,
-                   has64_reg,
-                   has_high_eight_reg);
+        error_exit(
+                "[opcode_select] operation %s 1_size:%d, 2_size: %d not match insts,  has 64: %d, has high eight: %d",
+                operation.name,
+                operation.operands[0]->size,
+                operation.operands[1]->size,
+                has64_reg,
+                has_high_eight_reg);
     }
 
     opcode_sort_insts(&insts);

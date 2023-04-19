@@ -244,7 +244,7 @@ struct type_struct_t {
     char *ident;
 //    uint8_t count;
 //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
-    list_t *properties;
+    list_t *properties; // struct_property_t
 };
 
 /**
@@ -255,6 +255,7 @@ struct type_struct_t {
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
 struct type_fn_t {
+    char *name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
     list_t *formal_types; // type_t
     bool rest;

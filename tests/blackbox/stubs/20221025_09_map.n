@@ -1,0 +1,9 @@
+var m = {"a": 1, "b": 2, "c": 3}
+
+println("a=", m["a"])
+//println(m["a"], m["b"], m["c"])
+
+m["b"] = m["c"]
+m["c"] =  33
+
+print(m["b"], m["c"])

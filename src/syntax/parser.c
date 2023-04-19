@@ -509,12 +509,13 @@ static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
 static ast_expr parser_struct_new(module_t *m, type_t type) {
     ast_expr result;
     ast_struct_new_t *struct_new = NEW(ast_struct_new_t);
+    struct_new->type = type;
     struct_new->properties = ct_list_new(sizeof(struct_property_t));
 
-    if (parser_consume(m, TOKEN_RIGHT_CURLY)) {
+    if (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
         do {
             // ident 类型
-            struct_property_t item;
+            struct_property_t item = {0};
             item.key = parser_must(m, TOKEN_IDENT)->literal;
             parser_must(m, TOKEN_EQUAL);
             item.right = NEW(ast_expr);
@@ -522,6 +523,7 @@ static ast_expr parser_struct_new(module_t *m, type_t type) {
 
             ct_list_push(struct_new->properties, &item);
         } while (parser_consume(m, TOKEN_COMMA));
+        parser_consume(m, TOKEN_RIGHT_CURLY);
     }
 
     result.assert_type = AST_EXPR_STRUCT_NEW;
@@ -614,7 +616,7 @@ static ast_expr parser_select(module_t *m, ast_expr left) {
     select->left = left;
     select->key = property_token->literal; // struct 的 property 不能是运行时计算的结果，必须是具体的值
 
-    result.assert_type = AST_EXPR_ACCESS;
+    result.assert_type = AST_EXPR_SELECT;
     result.value = select;
 
     return result;
