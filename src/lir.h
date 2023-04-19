@@ -69,6 +69,7 @@
 #define RT_CALL_CONVERT_ANY "convert_any"
 #define RT_CALL_CONVERT_INTEGER "convert_int"
 #define RT_CALL_CONVERT_FLOAT "convert_float"
+#define RT_CALL_CONVERT_BOOL "convert_bool"
 
 #define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
 #define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"

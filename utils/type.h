@@ -22,6 +22,7 @@ typedef uint8_t byte;
 typedef union {
     int64_t int_value;
     double float_value;
+    uint8_t bool_value;
 } value_casting;
 
 typedef enum {
@@ -299,6 +300,8 @@ typedef struct {
     uint64_t length;
 } memory_string_t;
 
+typedef uint8_t memory_bool_t;
+
 typedef byte memory_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t memory_int_t;
@@ -500,7 +503,8 @@ static inline bool is_complex_type(type_t t) {
            || t.kind == TYPE_LIST
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET
-           || t.kind == TYPE_FN;
+           || t.kind == TYPE_FN
+           || t.kind == TYPE_POINTER;
 }
 
 /**

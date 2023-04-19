@@ -53,7 +53,7 @@ static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, strin
             return global_ident; // 完善 type 都访问名称
         }
 
-        assertf(false, "line: %d, type '%s' undeclared \n", m->analyser_line, ident);
+        assertf(false, "type '%s' undeclared \n", ident);
     }
 
     return analyser_resolve_type(m, current->parent, ident);

@@ -3,38 +3,31 @@ message("will make dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 
 # build stubs
-set(STUB_FILES
-        20221025_01_hello
-        20221025_02_sum
-        20221025_03_call
-        20221025_04_if
-        20221025_05_for_cond
-        20221025_06_closure
-        20221025_07_list
-        20221025_08_struct
-        20221025_09_map
-        20221113_01_rest)
+file(GLOB TEST_SOURCES "*.c")
 
-foreach (STUB_FILE ${STUB_FILES})
-    add_executable(${STUB_FILE} ${STUB_FILE}.c ${BUILD_SOURCE_FILES})
-    target_link_libraries(${STUB_FILE} cmocka-static)
-    # 如果 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + STUB_FILE 是一个文件夹, 那工作目录应该是 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + STUB_FILE
+
+foreach (TEST_SOURCE ${TEST_SOURCES})
+    get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
+
+    add_executable(${TEST_NAME} ${TEST_SOURCE} ${BUILD_SOURCE_FILES})
+    target_link_libraries(${TEST_NAME} cmocka-static)
+
+    # 如果 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + TEST_NAME 是一个文件夹, 那工作目录应该是 ${CMAKE_CURRENT_SOURCE_DIR}/stubs + TEST_NAME
     set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
-    set(ENTRY_FILE ${STUB_FILE}.n)
-    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/stubs/${STUB_FILE})
-        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/stubs/${STUB_FILE})
+    set(ENTRY_FILE ${TEST_NAME}.n)
+
+    # stub 是一个目录
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/stubs/${TEST_NAME})
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/stubs/${TEST_NAME})
         set(ENTRY_FILE main.n)
     endif ()
-    message(DEBUG "work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
 
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
 
-    add_test(NAME ${STUB_FILE} COMMAND ${STUB_FILE}
-            WORKING_DIRECTORY ${WORK_DIR})
+    set_property(TEST ${TEST_NAME}
+            PROPERTY ENVIRONMENT "BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};")
 
-    set_property(TEST ${STUB_FILE}
-            PROPERTY
-            ENVIRONMENT "BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};")
-    message("register ${STUB_FILE}, success")
+    message("register test ${TEST_NAME} file success, stub work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
 endforeach ()
 
 # build stub dir

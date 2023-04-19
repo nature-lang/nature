@@ -423,7 +423,6 @@ static type_t infer_select(module_t *m, ast_expr *expr) {
 }
 
 /**
- * TODO list.push(1) 此时这个 1 无法被 compiler 描述出来？
  * 对 call 参数验证后对 call 进行改写
  * @param m
  * @param call
@@ -442,7 +441,7 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
         // 参数重写
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left); // list operand
+        ct_list_push(call->actual_params, &s->left); // list operand
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA)); // value operand
 
         call->left = *ast_ident_expr(RT_CALL_LIST_PUSH);
@@ -454,9 +453,10 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
 
     if (str_equal(s->key, LIST_LENGTH_KEY)) {
         assertf(call->actual_params->length == 0, "list length not param");
+
         // 改写
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left); // list operand
+        ct_list_push(call->actual_params, &s->left); // list operand
 
         call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
         infer_left_expr(m, &call->left);
@@ -484,7 +484,7 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
         infer_right_expr(m, expr, map_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left);
+        ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
@@ -495,8 +495,9 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
 
     if (str_equal(s->key, LIST_LENGTH_KEY)) {
         assertf(call->actual_params->length == 0, "map.length not param");
+
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left);
+        ct_list_push(call->actual_params, &s->left);
 
         call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
         infer_left_expr(m, &call->left);
@@ -517,11 +518,12 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
         infer_right_expr(m, expr, set_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left);
+        ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
         infer_left_expr(m, &call->left);
+
 
         return type_basic_new(TYPE_VOID);
     }
@@ -531,8 +533,9 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
         ast_expr *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->key_type);
 
+        // s = left.key() 这里到 left 才是目标即可
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left);
+        ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_ADD);
@@ -547,7 +550,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
         infer_right_expr(m, expr, set_type->key_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
-        ct_list_push(call->actual_params, &call->left);
+        ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
@@ -557,7 +560,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
     }
 
     assertf(false, "set not field '%s'", s->key);
-    exit(0);
+    exit(1);
 }
 
 static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_type_fn) {
@@ -771,7 +774,10 @@ static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 static void infer_if(module_t *m, ast_if_stmt *stmt) {
-    infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
+    type_t condition_type = infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_UNKNOWN));
+    if (condition_type.kind != TYPE_BOOL) {
+        stmt->condition = ast_type_convert(stmt->condition, type_basic_new(TYPE_BOOL));
+    }
 
     infer_block(m, stmt->consequent);
     infer_block(m, stmt->alternate);
@@ -1123,7 +1129,7 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
         return expr->type;
     }
 
-    // 从 var decl 则需要进行类型推断
+    // 数值类型转换
     if (is_number(target_type.kind) && expr->type.kind != target_type.kind) {
         *expr = ast_type_convert(*expr, target_type);
     }

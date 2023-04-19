@@ -39,7 +39,7 @@ inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {
 };
 
 
-// sum imm32 -> rm64
+// sub imm32 -> rm64  sub rm64 - imm32 = rm64
 inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
                          {
                                  {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
@@ -47,6 +47,29 @@ inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_
                          }
 };
 
+inst_t sub_rm64_r64 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+
+
+inst_t sub_r64_rm64 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                       }
+};
+
+inst_t sub_rm64_imm8 = {"sub", "sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                        {
+                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                        }
+};
 
 inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
                          {
@@ -68,13 +91,6 @@ inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
-};
-
-inst_t sub_imm8_rm64 = {"sub", "sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
-                        {
-                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                        }
 };
 
 inst_t add_imm8_rm64 = {"add", "add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
@@ -439,8 +455,11 @@ void amd64_opcode_init() {
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
     opcode_tree_build(&pop_rm64);
+    opcode_tree_build(&sub_rm64_imm8);
     opcode_tree_build(&sub_rm64_imm32);
-    opcode_tree_build(&sub_imm8_rm64);
+    opcode_tree_build(&sub_rm64_r64);
+    opcode_tree_build(&sub_r64_rm64);
+    opcode_tree_build(&sub_rm64_imm32);
     opcode_tree_build(&add_rm64_imm32);
     opcode_tree_build(&add_imm8_rm64);
     opcode_tree_build(&add_r64_rm64);

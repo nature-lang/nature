@@ -80,3 +80,13 @@ uint64_t var_clr_def() {
     return 0;
 }
 
+/**
+ * null/false/0 会转换成 false, 其他都是 true
+ * @param input_rtype_index
+ * @param casting
+ * @return
+ */
+memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting) {
+    return casting.bool_value;
+}
+

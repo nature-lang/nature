@@ -106,7 +106,7 @@ static ast_stmt *parser_stmt(module_t *m);
 
 static ast_expr parser_expr(module_t *m);
 
-static type_t parser_typeuse(module_t *m);
+static type_t parser_type(module_t *m);
 
 static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
 

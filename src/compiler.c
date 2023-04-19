@@ -955,6 +955,11 @@ static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
         return output;
     }
 
+    if (convert->target_type.kind == TYPE_BOOL) {
+        OP_PUSH(lir_rt_call(RT_CALL_CONVERT_BOOL, output, 2, int_operand(input_rtype_index), input));
+        return output;
+    }
+
     if (convert->target_type.kind == TYPE_ANY) {
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
         OP_PUSH(lir_rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input_ref));

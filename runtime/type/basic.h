@@ -15,6 +15,8 @@ memory_int_t convert_int(uint64_t input_rtype_index, value_casting casting);
 
 memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting);
 
+memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting);
+
 uint64_t var_clr_def();
 
 #endif //NATURE_BASIC_H

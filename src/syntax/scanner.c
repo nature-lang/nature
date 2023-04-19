@@ -499,7 +499,8 @@ bool scanner_is_at_stmt_end(module_t *module) {
         && module->s_cursor.space_prev != '['
         && module->s_cursor.space_prev != '='
         && module->s_cursor.space_prev != '{'
-        && module->s_cursor.space_next != '{') {
+//           && module->s_cursor.space_next != '{'
+            ) {
         return true;
     }
 
