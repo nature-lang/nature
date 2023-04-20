@@ -1,6 +1,7 @@
 #include "cfg.h"
 #include <assert.h>
 
+
 /**
  * l1:
  *  move
@@ -52,8 +53,8 @@ void cfg(closure_t *c) {
     lir_op_t *label_op = linked_first(c->operations)->value;
     assert(label_op->code == LIR_OPCODE_LABEL && "first op must be label");
 
-    LINKED_FOR(c->operations) {
-        lir_op_t *op = LINKED_VALUE();
+    for (linked_node *node = c->operations->front; node != c->operations->rear; node = node->succ) {
+        lir_op_t *op = node->value;
         if (op->code == LIR_OPCODE_LABEL) {
             // 遇到 label， 开启一个新的 basic block
             lir_symbol_label_t *operand_label = op->output->value;
@@ -69,15 +70,18 @@ void cfg(closure_t *c) {
                 linked_node *last_node = linked_last(current_block->operations);
                 lir_op_t *last_op = last_node->value;
 
+                // 重复指令处理
                 // if last_op branch and label == bal target, the change this op code is bal
-                // if 情况下异常
-//                if (lir_op_branch_cmp(last_op)) {
-//                    lir_symbol_label_t *label = last_op->output->value;
-//                    if (str_equal(label->ident, new_block->name)) {
-//                        // 删除最后一个指令,只保留下面需要接入到 bal
-//                        linked_remove(current_block->operations, last_node);
-//                    }
-//                }
+                if (lir_op_branch_cmp(last_op)) {
+                    lir_symbol_label_t *label = last_op->output->value;
+                    if (str_equal(label->ident, new_block->name)) {
+                        // 删除最后一个指令,只保留下面需要接入到 bal
+                        linked_remove(current_block->operations, last_node);
+                    }
+                }
+
+                // 重启读取 last op value
+                last_op = linked_last(current_block->operations)->value;
 
                 // 所有指令块必须以 bal 结尾
                 if (last_op->code != LIR_OPCODE_BAL) {
@@ -88,17 +92,41 @@ void cfg(closure_t *c) {
 
             // 4. current = new
             current_block = new_block;
+
+            goto BLOCK_OP_PUSH;
         }
 
-        if (lir_op_branch(op) && LINKED_NODE()->succ != NULL) {
-            // 如果下一条指令不是 LABEL，则使用主动添加 temp label
-            lir_op_t *next_op = LINKED_NODE()->succ->value;
+
+        if (lir_op_branch(op) && node->succ) {
+            linked_node *succ = node->succ;
+
+            // 连续 branch 优化，抛弃 bal 之后的 branch
+            if (op->code == LIR_OPCODE_BAL && lir_op_branch(succ->value)) {
+                /**
+                 * bal 会导致强制跳转，如果有这种情况则到 xxx 之间的指令没有 label 引导，是不可达的
+                 * 所以需要清理 bal 后续仅跟着的指令
+                 * bal foo
+                 * bal bar
+                 * beq car
+                 * bal dog
+                 * xxx
+                 */
+                do {
+                    linked_remove(c->operations, succ);
+                    // succ 已经从 linked 中删除，所以 node->succ 将会是一个全新当值
+                    succ = node->succ;
+                } while (succ && lir_op_branch(succ->value));
+            }
+
+            // 如果下一条指令不是 LABEL，则使用主动添加  label 指令
+            lir_op_t *next_op = succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
                 lir_op_t *temp_label = lir_op_unique_label(c->module, TEMP_LABEL);
                 linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }
 
+        BLOCK_OP_PUSH:
         // 值 copy
         linked_push(current_block->operations, op);
     }

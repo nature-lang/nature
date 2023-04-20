@@ -241,7 +241,7 @@ struct lir_operand_t {
  *
  * label: 同样也是使用 first_param
  */
-typedef struct lir_op {
+typedef struct lir_op_t {
     lir_opcode_t code;
     lir_operand_t *first; // 参数1
     lir_operand_t *second; // 参数2

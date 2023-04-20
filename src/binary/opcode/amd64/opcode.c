@@ -2,6 +2,7 @@
 #include "string.h"
 #include "utils/error.h"
 #include "utils/helper.h"
+#include "src/register/amd64.h"
 #include <assert.h>
 
 inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
@@ -362,6 +363,12 @@ inst_t cmp_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_SLASHR},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
                      }
 };
+inst_t cmp_rex_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                         }
+};
 
 inst_t cmp_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
                      {
@@ -370,6 +377,12 @@ inst_t cmp_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
                      }
 };
 
+inst_t cmp_rex_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                         }
+};
 
 inst_t cmp_rm64_imm8 = {"cmp", "cmp", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
                         {
@@ -399,12 +412,12 @@ inst_t cmp_rax_imm32 = {"cmp", "cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_I
                         }
 };
 
-inst_t cmp_al_imm8 = {"cmp", "cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
-                      {
-                              {OPERAND_TYPE_AL, ENCODING_TYPE_MODRM_AL},
-                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                      }
-};
+//inst_t cmp_al_imm8 = {"cmp", "cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
+//                      {
+//                              {OPERAND_TYPE_AL, ENCODING_TYPE_MODRM_AL},
+//                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+//                      }
+//};
 
 
 inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
@@ -507,15 +520,18 @@ void amd64_opcode_init() {
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
     opcode_tree_build(&xor_r64_rm64); // xmm 到内存或者xmm
     opcode_tree_build(&xor_rm64_r64); // xmm 到内存或者xmm
-    opcode_tree_build(&cmp_al_imm8);
+
     opcode_tree_build(&cmp_rax_imm32);
     opcode_tree_build(&cmp_r64_rm64);
     opcode_tree_build(&cmp_rm64_imm32);
     opcode_tree_build(&cmp_rm64_imm8);
     opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rm8_r8);
+    opcode_tree_build(&cmp_rex_rm8_r8);
     opcode_tree_build(&cmp_r8_rm8);
+    opcode_tree_build(&cmp_rex_r8_rm8);
     opcode_tree_build(&cmp_rm64_r64);
+
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);
     opcode_tree_build(&setl_rm8);
@@ -602,13 +618,14 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_RM64) {
-        res.count = 5;
+        res.count = 6;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[5] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
         res.list = highs;
         return res;
     }
@@ -687,13 +704,13 @@ asm_keys_t operand_low_to_high(operand_type t) {
         res.list = highs;
         return res;
     }
-    if (t == OPERAND_TYPE_AL) {
-        res.count = 1;
-        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
-        res.list = highs;
-        return res;
-    }
+//    if (t == OPERAND_TYPE_AL) {
+//        res.count = 1;
+//        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+//        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
+//        res.list = highs;
+//        return res;
+//    }
 
 
     if (t == OPERAND_TYPE_R16) {
@@ -713,17 +730,21 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_R64) {
-        res.count = 1;
+        res.count = 2;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
         res.list = highs;
         return res;
     }
 
+    /**
+     * 这回导致所有的 QWORD reg 选择到改指令，而不是仅仅 rax 会进来！
+     */
     if (t == OPERAND_TYPE_RAX) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
         res.list = highs;
         return res;
     }
@@ -899,13 +920,18 @@ inst_t *opcode_select(asm_operation_t operation) {
     for (int i = 0; i < operation.count; ++i) {
         asm_operand_t *operand = operation.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REG) {
-            if (is_high_eight_reg(operand->value)) {
+            reg_t *reg = operand->value;
+            if (is_high_eight_reg(reg)) {
                 has_high_eight_reg = true;
             }
-            if (is_64_reg(operand->value)) {
+            if (is_64_reg(reg)) {
                 has64_reg = true;
             }
 
+            // rax 特殊处理,部分指令特殊指定了 rax 参与,进行精确类型转换
+            if (str_equal(reg->name, rax->name)) {
+                operand->type = ASM_OPERAND_TYPE_RAX;
+            }
         }
 
         // 生成 key
@@ -936,7 +962,7 @@ inst_t *opcode_select(asm_operation_t operation) {
         insts.list[insts.count++] = inst;
     }
     if (insts.count == 0) {
-        error_exit(
+        assertf(false,
                 "[opcode_select] operation %s 1_size:%d, 2_size: %d not match insts,  has 64: %d, has high eight: %d",
                 operation.name,
                 operation.operands[0]->size,
@@ -1209,7 +1235,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
         opcode_operand_t operand = inst->operands[i];
         asm_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
-        if (asm_operand->type == ASM_OPERAND_TYPE_REG) {
+        if (asm_operand->type == ASM_OPERAND_TYPE_REG || asm_operand->type == ASM_OPERAND_TYPE_RAX) {
             reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -1352,7 +1378,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 int32_to_uint8(r->disp, temp);
                 set_disp(format, "", temp, 4);
             } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
-                asm_sib_reg_t *r = asm_operand->value;
+                asm_sib_reg_t *sib_reg = asm_operand->value;
                 if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                     if (format->modrm == NULL) {
                         format->modrm = new_modrm();
@@ -1361,23 +1387,23 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
                     format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM;
 
-                    format->sib = new_sib(r->scale, r->index->index, r->base->index);
+                    format->sib = new_sib(sib_reg->scale, sib_reg->index->index, sib_reg->base->index);
                     if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                        format->rex_prefix->x = r->index->index > 7;
-                        format->rex_prefix->b = r->base->index > 7;
+                        format->rex_prefix->x = sib_reg->index->index > 7;
+                        format->rex_prefix->b = sib_reg->base->index > 7;
                     }
 
-                    if (r->base->index == 13) {
+                    if (sib_reg->base->index == 13) {
                         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
                         uint8_t temp[1] = {0};
-                        set_disp(format, r->base->name, temp, 0);
+                        set_disp(format, sib_reg->base->name, temp, 0);
                     }
                 }
             }
         } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT64) {
-            asm_uint64_t *i = asm_operand->value;
+            asm_uint64_t *uint = asm_operand->value;
             uint8_t temp[8];
-            memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+            memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 8);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT64) {
             asm_float64_t *f = asm_operand->value;
@@ -1385,36 +1411,37 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32 || asm_operand->type == ASM_OPERAND_TYPE_UINT) {
-            asm_uint32_t *i = asm_operand->value;
+            asm_uint32_t *uint = asm_operand->value;
             uint8_t temp[4];
-            memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+            memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 4);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT16) {
-            asm_uint16_t *i = asm_operand->value;
+            asm_uint16_t *uint = asm_operand->value;
             uint8_t temp[2];
-            memcpy(temp, &i->value, sizeof(i->value)); // 小端处理
+            memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 2);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT8) {
-            asm_uint8_t *i = asm_operand->value;
-            uint8_t temp[1] = {i->value};
+            asm_uint8_t *uint = asm_operand->value;
+            uint8_t temp[1] = {uint->value};
             set_imm(format, temp, 1);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
             asm_float32_t *f = asm_operand->value;
             uint8_t temp[4];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
-        } /*else if (asm_operand->code == ASM_OPERAND_TYPE_INT32) {
-      asm_operand_int32 *i = asm_operand->value;
-      uint8_t temp[4];
-      memcpy(temp, &i->value, sizeof(i->value));
-    } else if (asm_operand->code == ASM_OPERAND_TYPE_INT8) {
-      asm_operand_int32 *i = asm_operand->value;
-      uint8_t temp[4];
-      memcpy(temp, &i->value, sizeof(i->value));
-    }*/ else {
-            error_exit("unsupported asm operand code %d", asm_operand->type);
+        } else {
+            assertf(false, "unsupported asm operand code %d", asm_operand->type);
             return NULL;
         }
+        /*else if (asm_operand->code == ASM_OPERAND_TYPE_INT32) {
+          asm_operand_int32 *i = asm_operand->value;
+          uint8_t temp[4];
+          memcpy(temp, &i->value, sizeof(i->value));
+        } else if (asm_operand->code == ASM_OPERAND_TYPE_INT8) {
+          asm_operand_int32 *i = asm_operand->value;
+          uint8_t temp[4];
+          memcpy(temp, &i->value, sizeof(i->value));
+        }*/
 
         i++;
     }

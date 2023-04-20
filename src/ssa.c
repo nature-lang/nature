@@ -523,7 +523,7 @@ void ssa_rename(closure_t *c) {
 
 void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
     // skip label code
-//    lir_op *current_op = block->asm_operations->front->succ;
+//    lir_op_t *current_op = block->asm_operations->front->succ;
     linked_node *current = block->operations->front->succ;
 
     // 当前块内的先命名
@@ -570,7 +570,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
-//        lir_op *succ_op = succ_block->asm_operations->front->succ;
+//        lir_op_t *succ_op = succ_block->asm_operations->front->succ;
         linked_node *op_node = linked_first(succ_block->operations)->succ; // front is label
         while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(op_node);
