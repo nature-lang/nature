@@ -412,7 +412,7 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
     lir_operand_t *end_label_operand = label_operand(make_unique_ident(m, END_IF_IDENT), true);
-    lir_operand_t *alternate_label_operand = label_operand(make_unique_ident(m, ALTERNATE_IF_IDENT), true);
+    lir_operand_t *alternate_label_operand = label_operand(make_unique_ident(m, IF_ALTERNATE_IDENT), true);
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
@@ -423,7 +423,7 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
                               lir_copy_label_operand(alternate_label_operand));
     }
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_unique_label(m, CONTINUE_IDENT));
+    OP_PUSH(lir_op_unique_label(m, IF_CONTINUE_IDENT));
 
     // 编译 consequent block
     compiler_block(m, if_stmt->consequent);

@@ -209,7 +209,7 @@ typedef struct {
 } loop_t;
 
 typedef struct basic_block_t {
-    uint8_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
+    uint16_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
     string name;
 
     // op pointer
@@ -230,10 +230,12 @@ typedef struct basic_block_t {
     slice_t *live_out;
     slice_t *live_in; // ssa 阶段计算的精确 live in 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
     slice_t *live; // reg alloc 阶段计算
-    slice_t *dom; // 当前块被哪些基本块支配
+    // employer
+    slice_t *domers; // 当前块被哪些基本块管辖
+    struct basic_block_t *imm_domer; // 当前块的直接(最近)支配者
     slice_t *df;
-    slice_t *be_idom; // 哪些块已当前块作为最近支配块,其组成了支配者树
-    struct basic_block_t *idom; // 当前块的最近支配者
+    // employee
+    slice_t *imm_domees; // 当前块直接支配了那些块，也就是哪些块已当前块作为最近支配块,其组成了支配者树
 
     // loop detection
     loop_t loop;

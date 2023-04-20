@@ -70,13 +70,14 @@ void cfg(closure_t *c) {
                 lir_op_t *last_op = last_node->value;
 
                 // if last_op branch and label == bal target, the change this op code is bal
-                if (lir_op_branch_cmp(last_op)) {
-                    lir_symbol_label_t *label = last_op->output->value;
-                    if (str_equal(label->ident, new_block->name)) {
-                        // 删除最后一个指令,只保留下面需要接入到 bal
-                        linked_remove(current_block->operations, last_node);
-                    }
-                }
+                // if 情况下异常
+//                if (lir_op_branch_cmp(last_op)) {
+//                    lir_symbol_label_t *label = last_op->output->value;
+//                    if (str_equal(label->ident, new_block->name)) {
+//                        // 删除最后一个指令,只保留下面需要接入到 bal
+//                        linked_remove(current_block->operations, last_node);
+//                    }
+//                }
 
                 // 所有指令块必须以 bal 结尾
                 if (last_op->code != LIR_OPCODE_BAL) {
@@ -101,6 +102,7 @@ void cfg(closure_t *c) {
         // 值 copy
         linked_push(current_block->operations, op);
     }
+
 
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
     // call 调到别的 closure_t 去了，不在当前 closure_t cfg 构造的考虑范围
@@ -130,7 +132,7 @@ void cfg(closure_t *c) {
         slice_push(target_block->preds, current_block);
     }
 
-    broken_critical_edges(c);
+//    broken_critical_edges(c);
 
     // 添加入口块
     c->entry = c->blocks->take[0];

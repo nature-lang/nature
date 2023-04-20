@@ -408,12 +408,22 @@ inst_t cmp_al_imm8 = {"cmp", "cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
 
 
 inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
-}
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
 inst_t setge_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM
-}
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setl_rm8 = {"setl", "setl", 0, {0x0F, 0x9C}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setle_rm8 = {"setle", "setle", 0, {0x0F, 0x9E}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t sete_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setne_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
 
 
@@ -508,6 +518,10 @@ void amd64_opcode_init() {
     opcode_tree_build(&cmp_rm64_r64);
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);
+    opcode_tree_build(&setl_rm8);
+    opcode_tree_build(&setle_rm8);
+    opcode_tree_build(&sete_rm8);
+    opcode_tree_build(&setne_rm8);
     opcode_tree_build(&lea_r64_m);
     opcode_tree_build(&syscall_inst);
 }

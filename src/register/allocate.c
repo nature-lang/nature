@@ -50,7 +50,7 @@ static linked_t *inactive_new(closure_t *c) {
  * @param operand
  * @param i
  */
-static void var_replace(lir_operand_t *operand, interval_t *i) {
+void var_replace(lir_operand_t *operand, interval_t *i) {
     lir_var_t *var = operand->value;
     if (i->spilled) {
         lir_stack_t *stack = NEW(lir_stack_t);

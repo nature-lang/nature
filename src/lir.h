@@ -20,8 +20,9 @@
 #define FOR_COND_END_IDENT "for_cond_end"
 #define FOR_ITERATOR_IDENT "for_iterator"
 #define FOR_END_ITERATOR_IDENT "end_for_iterator"
-#define END_IF_IDENT "end_if"
-#define ALTERNATE_IF_IDENT "alternate_if"
+#define END_IF_IDENT "if_end"
+#define IF_ALTERNATE_IDENT "if_alternate"
+#define IF_CONTINUE_IDENT "if_continue"
 #define ERRORT_TYPE_IDENT "errort"
 #define ERRORT_MSG_IDENT "msg"
 
@@ -723,7 +724,7 @@ static inline closure_t *lir_closure_new(ast_fndef_t *fndef) {
     return c;
 }
 
-static inline basic_block_t *lir_new_basic_block(char *name, uint8_t label_index) {
+static inline basic_block_t *lir_new_basic_block(char *name, uint16_t label_index) {
     basic_block_t *basic_block = NEW(basic_block_t);
     basic_block->name = name;
     basic_block->id = label_index;
@@ -740,9 +741,9 @@ static inline basic_block_t *lir_new_basic_block(char *name, uint8_t label_index
     basic_block->live = slice_new();
     basic_block->live_in = slice_new();
     basic_block->live_out = slice_new();
-    basic_block->dom = slice_new();
+    basic_block->domers = slice_new();
     basic_block->df = slice_new();
-    basic_block->be_idom = slice_new();
+    basic_block->imm_domees = slice_new();
     basic_block->loop.index = -1;
     memset(basic_block->loop.index_map, 0, sizeof(basic_block->loop.index_map));
     basic_block->loop.depth = 0;
@@ -754,9 +755,10 @@ static inline basic_block_t *lir_new_basic_block(char *name, uint8_t label_index
     return basic_block;
 }
 
-static inline bool lir_blocks_contains(slice_t *blocks, uint8_t label) {
+static inline bool lir_blocks_contains(slice_t *blocks, uint16_t id) {
     for (int i = 0; i < blocks->count; ++i) {
-        if (((basic_block_t *) blocks->take[i])->id == label) {
+        basic_block_t *block = blocks->take[i];
+        if (block->id == id) {
             return true;
         }
     }

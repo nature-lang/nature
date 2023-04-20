@@ -167,4 +167,6 @@ void resolve_mappings(closure_t *c, resolver_t *r);
 
 use_pos_t *first_use_pos(interval_t *i, use_kind_e kind);
 
+void var_replace(lir_operand_t *operand, interval_t *i);
+
 #endif

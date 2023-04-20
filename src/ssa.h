@@ -30,11 +30,9 @@ typedef struct {
 void ssa(closure_t *c);
 
 // 计算支配者
-void ssa_dom(closure_t *c);
+void ssa_domers(closure_t *c);
 
-void ssa_idom(closure_t *c);
-
-bool ssa_is_idom(slice_t *dom, basic_block_t *await);
+void ssa_imm_domer(closure_t *c);
 
 void ssa_df(closure_t *c);
 

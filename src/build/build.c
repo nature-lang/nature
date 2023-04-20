@@ -330,6 +330,8 @@ static void build_compiler(slice_t *modules) {
 
             cfg(c);
 
+            debug_block_lir(c);
+
             // 构造 ssa
             ssa(c);
 

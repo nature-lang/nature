@@ -190,7 +190,13 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
     return true;
 }
 
-static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i) {
+/**
+ * @param block
+ * @param id
+ * @param src_i
+ * @param dst_i
+ */
+static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i, bool imm_replace) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
         if (op->id < id) {
@@ -200,6 +206,11 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         // last->id < id < op->id
         lir_operand_t *dst = operand_new(LIR_OPERAND_VAR, dst_i->var);
         lir_operand_t *src = operand_new(LIR_OPERAND_VAR, src_i->var);
+        if (imm_replace) {
+            var_replace(dst, dst_i);
+            var_replace(src, src_i);
+        }
+
         lir_op_t *mov_op = lir_op_move(dst, src);
         mov_op->id = id;
         linked_insert_before(block->operations, LINKED_NODE(), mov_op);
@@ -218,7 +229,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
             continue;
         }
 
-        block_insert_mov(block, insert_id, src_i, dst_i);
+        block_insert_mov(block, insert_id, src_i, dst_i, false);
     }
 }
 
@@ -732,6 +743,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     interval_t *child = interval_new_child(c, i);
 
     // mov id = position - 1
+    // 此时 child 还没有确定是分配寄存器还是溢出
     closure_insert_mov(c, position, i, child);
 
     // 将 child 加入 parent 的 children 中,
@@ -866,6 +878,10 @@ use_pos_t *interval_must_stack_pos(interval_t *i) {
 }
 
 
+/**
+ * linear scan 中将 block 当成是线性块处理，但是实际上 block 是个图，resolve_data_flow 的作用就是以图的角度将缺失的 edge 进行关联
+ * @param c
+ */
 void resolve_data_flow(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *from = SLICE_VALUE(c->blocks);
@@ -1024,7 +1040,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
                 continue;
             }
 
-            block_insert_mov(r->insert_block, r->insert_id, from, to);
+            block_insert_mov(r->insert_block, r->insert_id, from, to, true);
 
             if (from->assigned) {
                 block_regs[from->assigned] -= 1;
@@ -1045,7 +1061,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
             interval_spill_slot(c, spill_child);
 
             // insert mov
-            block_insert_mov(r->insert_block, r->insert_id, from, spill_child);
+            block_insert_mov(r->insert_block, r->insert_id, from, spill_child, true);
 
             // from update
             r->from_list->take[spill_candidate] = spill_child;

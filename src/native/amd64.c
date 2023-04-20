@@ -3,6 +3,15 @@
 #include "src/debug/debug.h"
 #include <assert.h>
 
+static char *asm_setcc_trans[] = {
+        [LIR_OPCODE_SLT] = "setl",
+        [LIR_OPCODE_SLE] = "setle",
+        [LIR_OPCODE_SGT] = "setg",
+        [LIR_OPCODE_SGE] = "setge",
+        [LIR_OPCODE_SEE] = "sete",
+        [LIR_OPCODE_SNE] = "setne",
+};
+
 static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
     if (a->type != b->type) {
         return false;
@@ -345,7 +354,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 }
 
 // lir GT foo,bar => result
-static slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op) {
+static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
     assert(op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
@@ -358,7 +367,9 @@ static slice_t *amd64_native_sgt(closure_t *c, lir_op_t *op) {
     slice_push(operations, ASM_INST("cmp", { first, second }));
 
     // setg r/m8
-    slice_push(operations, ASM_INST("setg", { result }));
+    char *asm_code = asm_setcc_trans[op->code];
+    assertf(asm_code, "not found op->code map asm->code");
+    slice_push(operations, ASM_INST(asm_code, { result }));
 
     return operations;
 }
@@ -471,7 +482,14 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_RETURN] = amd64_native_return,
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
-        [LIR_OPCODE_SGT] = amd64_native_sgt,
+        // 逻辑相关运算符
+        [LIR_OPCODE_SGT] = amd64_native_scc,
+        [LIR_OPCODE_SGE] = amd64_native_scc,
+        [LIR_OPCODE_SLT] = amd64_native_scc,
+        [LIR_OPCODE_SLE] = amd64_native_scc,
+        [LIR_OPCODE_SEE] = amd64_native_scc,
+        [LIR_OPCODE_SNE] = amd64_native_scc,
+
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
