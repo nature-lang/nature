@@ -7,6 +7,7 @@
 #include "utils/helper.h"
 
 #define DEBUG_LIR
+#define DEBUG_INTERVAL
 #define DEBUG_ASM
 #define ASSERTF_DEF_ONCE
 

@@ -19,7 +19,7 @@
 #define FOR_TRADITION_END_IDENT "for_tradition_end"
 #define FOR_COND_END_IDENT "for_cond_end"
 #define FOR_ITERATOR_IDENT "for_iterator"
-#define FOR_END_ITERATOR_IDENT "end_for_iterator"
+#define FOR_END_ITERATOR_IDENT "for_end_iterator"
 #define END_IF_IDENT "if_end"
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
@@ -73,7 +73,7 @@
 #define RT_CALL_CONVERT_BOOL "convert_bool"
 
 #define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
-#define RT_CALL_ITERATE_NEXT_VALUE "iterate_next_value"
+#define RT_CALL_ITERATE_VALUE "iterate_value"
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
@@ -384,7 +384,13 @@ static inline slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
         }
     }
 
-    // TODO phi body handle, phi body are var or imm
+    if (flag & FLAG(LIR_OPERAND_VAR) && operand->assert_type == LIR_OPERAND_PHI_BODY) {
+        slice_t *body = operand->value;
+        for (int i = 0; i < body->count; ++i) {
+            lir_var_t *var = body->take[i];
+            slice_push(result, operand_new(LIR_OPERAND_VAR, var));
+        }
+    }
 
     return result;
 }

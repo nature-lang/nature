@@ -5,6 +5,8 @@
 #include "src/ast.h"
 #include "src/syntax/token.h"
 #include "src/lir.h"
+#include "src/register/interval.h"
+#include "src/register/allocate.h"
 
 string lir_opcode_to_string[UINT8_MAX];
 
@@ -35,6 +37,8 @@ void debug_stmt(string type, ast_stmt stmt);
 void debug_lir(closure_t *c);
 
 void debug_block_lir(closure_t *c);
+
+void debug_interval(closure_t *c);
 
 void debug_module_asm(module_t *m);
 

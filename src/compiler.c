@@ -269,9 +269,10 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
  * @param var_decl
  * @return
  */
-static void compiler_var_decl(module_t *m, ast_var_decl *var_decl) {
+static lir_operand_t *compiler_var_decl(module_t *m, ast_var_decl *var_decl) {
     lir_operand_t *operand = var_operand(m, var_decl->ident);
     OP_PUSH(lir_rt_call(RT_CALL_VAR_CLR_DEF, operand, 0));
+    return operand;
 }
 
 
@@ -295,8 +296,9 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 
     uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
 
+    // cursor 初始值
     lir_operand_t *cursor_operand = temp_var_operand(m, type_basic_new(TYPE_INT));
-    OP_PUSH(lir_op_move(cursor_operand, int_operand(0)));
+    OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));
 
     // make label
     lir_op_t *for_start_label = lir_op_unique_label(m, FOR_ITERATOR_IDENT);
@@ -305,12 +307,21 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
     // set label
     OP_PUSH(for_start_label);
 
-    lir_operand_t *key_target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, ast->key.ident));
-    OP_PUSH(lir_rt_call(
-            RT_CALL_ITERATE_NEXT_KEY, key_target, 3, iterator_target, rtype_index, cursor_operand));
+    // key 和 value 需要进行一次初始化
+    lir_operand_t *key_target = compiler_var_decl(m, &ast->key);
+    lir_operand_t *key_ref = lea_operand_pointer(m, key_target);
 
-    // beq length == 0? for_end_label
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(0),
+    OP_PUSH(lir_rt_call(
+            RT_CALL_ITERATE_NEXT_KEY,
+            cursor_operand,
+            4,
+            iterator_target,
+            int_operand(rtype_index),
+            cursor_operand, // 当前的 cursor 的值
+            key_ref));
+
+    // 基于 key 已经可以判断迭代是否还有了，下面的 next value 直接根据 cursor_operand 取值即可
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1),
                        key_target, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
@@ -318,22 +329,18 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 
     // gen value
     if (ast->value) {
-        lir_operand_t *value_target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, ast->value->ident));
+        lir_operand_t *value_target = compiler_var_decl(m, ast->value);
+        lir_operand_t *value_ref = lea_operand_pointer(m, value_target);
+
         OP_PUSH(lir_rt_call(
-                RT_CALL_ITERATE_NEXT_VALUE, value_target, 3, iterator_target, rtype_index, cursor_operand));
+                RT_CALL_ITERATE_VALUE, NULL, 4,
+                iterator_target,
+                int_operand(rtype_index),
+                cursor_operand, value_ref));
 
     }
     // block
     compiler_block(m, ast->body);
-
-    // sub count, 1 => count
-    lir_op_t *add_op = lir_op_new(
-            LIR_OPCODE_ADD,
-            cursor_operand,
-            int_operand(1),
-            cursor_operand);
-
-    OP_PUSH(add_op);
 
     // goto for start
     OP_PUSH(lir_op_bal(for_start_label->output));

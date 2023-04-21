@@ -75,16 +75,22 @@ static void recollect_globals(closure_t *c) {
 void ssa(closure_t *c) {
     // 计算每个 basic_block 支配者，一个基本块可以被多个父级基本块支配
     ssa_domers(c);
+
     // 计算最近支配者
     ssa_imm_domer(c);
+
     // 计算支配边界
     ssa_df(c);
+
     // use def
     ssa_use_def(c);
+
     // 活跃分析, 计算基本块入口活跃 live_in 和 出口活跃 live_out
     ssa_live(c);
+
     // 放置 phi 函数
     ssa_add_phi(c);
+
     // rename
     ssa_rename(c);
 

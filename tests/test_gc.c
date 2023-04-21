@@ -57,7 +57,7 @@ int teardown(void **state) {
  */
 static void _test_gc_basic() {
     DEBUG_STACK();
-    // - 找到 stubs 中的 list 对应的 rtype
+    // - 找到 cases 中的 list 对应的 rtype
     symbol_t *s = symbol_table_get("test_gc.main.local_list_1");
     ast_var_decl *var = s->ast_value;
     assert_int_equal(var->type.kind, TYPE_LIST);

@@ -222,6 +222,56 @@ void debug_block_lir(closure_t *c) {
 #endif
 }
 
+void debug_interval(closure_t *c) {
+#ifdef DEBUG_INTERVAL
+    DEBUGF("closure=%s interval ------------------------------------------------------------------------", c->name);
+    for (int i = 0; i < c->globals->count; ++i) {
+        lir_var_t *var = c->globals->take[i];
+        interval_t *interval = table_get(c->interval_table, var->ident);
+        assert(interval);
+        int parent_index = 0;
+        char *parent_ident = "";
+        bool assigned = 0;
+        int stack_slot = 0;
+        char *ranges = "";
+        char *use_pos = "";
+
+        if (interval->parent) {
+            parent_index = interval->parent->index;
+            parent_ident = interval->parent->var->ident;
+        }
+        if (interval->assigned) {
+            assigned = 1;
+        }
+        if (interval->stack_slot) {
+            stack_slot = *interval->stack_slot;
+        }
+
+        LINKED_FOR(interval->ranges) {
+            interval_range_t *r = LINKED_VALUE();
+            char *temp_range = dsprintf("[%d,%d)\t", r->from, r->to);
+            ranges = str_connect(ranges, temp_range);
+        }
+        LINKED_FOR(interval->use_pos_list) {
+            use_pos_t *u = LINKED_VALUE();
+            char *temp_use = dsprintf("%d-%d\t", u->value, u->kind);
+            use_pos = str_connect(use_pos, temp_use);
+        }
+
+
+        DEBUGF("i(%d-%s), parent(%d-%s), assigned=%d, stack_slot=%d, ranges=%s, use_pos=%s",
+               interval->index,
+               interval->var->ident,
+               parent_index,
+               parent_ident,
+               assigned,
+               stack_slot,
+               ranges,
+               use_pos);
+    }
+#endif
+}
+
 /**
  * block: as
  *     move....

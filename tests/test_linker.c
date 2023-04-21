@@ -22,7 +22,7 @@ static void test_basic() {
     elf_context *l = elf_context_new(output, OUTPUT_EXECUTABLE);
 
     // 读取 main.o
-    int main_fd = open("./stubs/linker/main.o", O_RDONLY | O_BINARY);
+    int main_fd = open("./cases/linker/main.o", O_RDONLY | O_BINARY);
     // 读取 crt1.o
     int crt1_fd = open("/usr/local/musl/lib/crt1.o", O_RDONLY | O_BINARY);
     // 读取 libc.a

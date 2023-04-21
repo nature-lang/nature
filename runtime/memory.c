@@ -18,7 +18,10 @@ void fndefs_deserialize() {
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *f = &rt_fndef_ptr[i];
         uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
-
+        DEBUGF("[fndefs_deserialize] f->base=%lx, f->size=%lu, f->stack=%lu",
+               f->base,
+               f->size,
+               f->stack_size);
         f->gc_bits = gc_bits_offset;
 
         gc_bits_offset += gc_bits_size;

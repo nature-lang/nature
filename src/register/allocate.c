@@ -264,6 +264,16 @@ void allocate_walk(closure_t *c) {
             continue;
         }
 
+        // current is phi def, set reg_hint
+        if (a->current->phi_hints->count > 0) {
+            for (int i = 0; i < a->current->phi_hints->count; ++i) {
+                interval_t *hint_interval = a->current->phi_hints->take[i];
+                if (hint_interval->assigned) {
+                    a->current->reg_hint = hint_interval;
+                }
+            }
+        }
+
         // 尝试为 current 分配寄存器
         bool allocated = allocate_free_reg(c, a);
         if (allocated) {

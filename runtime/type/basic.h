@@ -19,4 +19,8 @@ memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting);
 
 uint64_t var_clr_def();
 
+int64_t iterate_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, void *key_ref);
+
+void iterate_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *value_ref);
+
 #endif //NATURE_BASIC_H

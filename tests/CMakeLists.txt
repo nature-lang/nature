@@ -11,8 +11,8 @@ set(PICKY_DEVELOPER OFF CACHE BOOL "CMocka: Build with picky developer flags" FO
 add_subdirectory(cmocka)
 add_subdirectory(blackbox)
 
-# copy stubs 文件到程序执行目录下的 stub, 但是并不会每一次都同步
-#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/stubs DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+# copy cases 文件到程序执行目录下的 stub, 但是并不会每一次都同步
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/cases DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(test_hello test_hello.c ${BUILD_SOURCE_FILES})
 target_link_libraries(test_hello cmocka-static)

@@ -20,6 +20,9 @@ fn set_add({T} set, ptr<T> key): bool {}
 
 fn set_delete({T} set, ptr<T> key) {}
 
+// 方便测试，后续封装到系统调用库中
+fn sleep(int second) {}
+
 type T = struct{}
 
 // 这里都 string 是 nature string 类型

@@ -37,6 +37,7 @@ typedef struct interval_t {
     bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
     struct interval_t *reg_hint;
+    slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
     vr_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT

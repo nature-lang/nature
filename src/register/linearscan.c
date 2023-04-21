@@ -33,6 +33,8 @@ void linear_scan(closure_t *c) {
 
     interval_build(c);
 
+    debug_interval(c);
+
     allocate_walk(c);
 
     resolve_data_flow(c);

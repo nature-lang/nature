@@ -840,6 +840,7 @@ static ast_stmt *parser_for_stmt(module_t *m) {
 
         if (parser_consume(m, TOKEN_COMMA)) {
             for_iterator_stmt->value = NEW(ast_var_decl);
+            // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
             for_iterator_stmt->value->type = type_basic_new(TYPE_UNKNOWN);
             for_iterator_stmt->value->ident = parser_must(m, TOKEN_IDENT)->literal;
         }

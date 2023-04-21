@@ -261,7 +261,7 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
+static use_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
         if (var->flag & FLAG(VR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
             return USE_KIND_SHOULD;
@@ -271,6 +271,7 @@ static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
         return USE_KIND_SHOULD;
     }
 
+    // phi 也属于 def, 所以必须分配寄存器
     return USE_KIND_MUST;
 }
 
@@ -283,7 +284,7 @@ static use_kind_e use_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
  * @param i
  * @return
  */
-static use_kind_e use_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
+static use_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (op->code == LIR_OPCODE_LEA && var->flag & FLAG(VR_FLAG_FIRST)) {
         return USE_KIND_NOT;
     }
@@ -424,27 +425,30 @@ void interval_build(closure_t *c) {
     // 倒序遍历顺序基本块基本块
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *block = c->blocks->take[i];
-        slice_t *live = slice_new();
+        // 计算当前 block 中到 lives
+        slice_t *lives = slice_new();
+        table_t *live_table = table_new();
 
-        // 1. calc live in = union of successor.liveIn for each successor of b
-        table_t *exist_vars = table_new();
+        // 1. calc lives in = union of successor.liveIn for each successor of b
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
             for (int k = 0; k < succ->live->count; ++k) {
                 lir_var_t *var = succ->live->take[k];
-                live_add(exist_vars, live, var);
+                // 同时添加到 table 和 lives 中
+                live_add(live_table, lives, var);
             }
         }
 
         // 2. phi function phi of successors of b do
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ_block = block->succs->take[j];
+            // first is label
             linked_node *current = linked_first(succ_block->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
-                lir_op_t *op = OP(current);
-                // TODO ssh_phi_body_of 有问题！
-                lir_var_t *var = ssa_phi_body_of(op->first->value, succ_block->preds, block);
-                live_add(exist_vars, live, var);
+                lir_op_t *phi_op = OP(current);
+                lir_var_t *var = ssa_phi_body_of(phi_op->first->value, succ_block->preds, block);
+
+                live_add(live_table, lives, var);
 
                 current = current->succ;
             }
@@ -452,16 +456,17 @@ void interval_build(closure_t *c) {
 
 
         int block_from = OP(linked_first(block->operations))->id;
-        int block_to = OP(block->last_op)->id + 2; // whether add 2?
+        int block_to = OP(block->last_op)->id + 2; // +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
 
-        // live in add full range 遍历所有的 live(union all succ, so it similar live_out),直接添加最长间隔,后面会逐渐缩减该间隔
-        for (int k = 0; k < live->count; ++k) {
-            lir_var_t *var = live->take[k];
+        // lives in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
+        // 后续遇到 def 时会缩减长度， add_range 会对 range 进行合并,上面的 +2 是合并的基础
+        for (int k = 0; k < lives->count; ++k) {
+            lir_var_t *var = lives->take[k];
             interval_t *interval = table_get(c->interval_table, var->ident);
             interval_add_range(c, interval, block_from, block_to);
         }
 
-        // 倒序遍历所有块指令
+        // 倒序遍历所有块指令添加 use_pos
         linked_node *current = linked_last(block->operations);
         while (current != NULL && current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
@@ -481,19 +486,30 @@ void interval_build(closure_t *c) {
 
             // add reg hint for move
             if (op->code == LIR_OPCODE_MOVE) {
-                interval_t *src_interval = operand_interval(c, op->first);
-                interval_t *dst_interval = operand_interval(c, op->output);
-                if (src_interval != NULL && dst_interval != NULL) {
-                    dst_interval->reg_hint = src_interval;
+                interval_t *hint_interval = operand_interval(c, op->first);
+                interval_t *interval = operand_interval(c, op->output);
+                if (hint_interval != NULL && interval != NULL) {
+                    interval->reg_hint = hint_interval;
                 }
             }
 
-            // TODO add reg hint for phi, but phi a lot of input var?
+            // 离的最近的？必须是 pred 的？
+            if (op->code == LIR_OPCODE_PHI) {
+                interval_t *def_interval = operand_interval(c, op->output);
+                slice_t *phi_body = op->first->value;
+                for (int j = 0; j < phi_body->count; ++j) {
+                    lir_var_t *var = phi_body->take[i];
+                    interval_t *hint_interval = operand_interval(c, operand_new(LIR_OPERAND_VAR, var));
+                    assertf(hint_interval, "phi body var=%s not build interval", var->ident);
+                    slice_push(def_interval->phi_hints, hint_interval);
+                }
+            }
 
             // interval by output params, so it contain opcode phi
             // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
-            slice_t *def_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+            slice_t *def_operands = lir_op_operands(op,
+                                                    FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
                                                     FLAG(VR_FLAG_DEF), false);
             for (int j = 0; j < def_operands->count; ++j) {
                 lir_operand_t *operand = def_operands->take[j];
@@ -510,13 +526,14 @@ void interval_build(closure_t *c) {
                 }
 
                 if (!interval->fixed) {
-                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be live");
-                    live_remove(exist_vars, live, interval->var);
-                    interval_add_use_pos(c, interval, op->id, use_kind_of_def(c, op, operand->value));
+                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
+                    live_remove(live_table, lives, interval->var);
+                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_def(c, op, operand->value));
                 }
             }
 
 
+            // phi input 同样需要添加 use pos, 且添加到值就是当前 op->id 到值就可以了
             slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
                                                     FLAG(VR_FLAG_USE), false);
             for (int j = 0; j < use_operands->count; ++j) {
@@ -525,26 +542,28 @@ void interval_build(closure_t *c) {
                 if (!interval) {
                     continue;
                 }
-
                 interval_add_range(c, interval, block_from, op->id);
 
                 if (!interval->fixed) {
-                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be live");
-                    live_add(exist_vars, live, interval->var);
-                    interval_add_use_pos(c, interval, op->id, use_kind_of_use(c, op, operand->value));
+                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
+                    if (op->code != LIR_OPCODE_PHI) {
+                        // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
+                        live_add(live_table, lives, interval->var);
+                    }
+                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
                 }
             }
 
             current = current->prev;
         }
 
-        // live in 中不能包含 phi output
+        // lives in 中不能包含 phi output
         current = linked_first(block->operations)->succ;
         while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(current);
 
             lir_var_t *var = op->output->value;
-            live_remove(exist_vars, live, var);
+            live_remove(live_table, lives, var);
             current = current->succ;
         }
 
@@ -554,14 +573,14 @@ void interval_build(closure_t *c) {
         if (block->loop.header) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
                 basic_block_t *end = block->loop_ends->take[j];
-                for (int k = 0; k < live->count; ++k) {
-                    lir_var_t *var = live->take[k];
+                for (int k = 0; k < lives->count; ++k) {
+                    lir_var_t *var = lives->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
                     interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
                 }
             }
         }
-        block->live = live;
+        block->live = lives;
     }
 }
 
@@ -571,6 +590,7 @@ interval_t *interval_new(closure_t *c) {
     i->ranges = linked_new();
     i->use_pos_list = linked_new();
     i->children = linked_new();
+    i->phi_hints = slice_new();
     i->stack_slot = NEW(int);
     *i->stack_slot = 0;
     i->spilled = false;
@@ -642,7 +662,7 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
  * @param to
  */
 void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
-    assert(from < to);
+    assert(from <= to);
 
     if (linked_empty(i->ranges)) {
         interval_range_t *range = NEW(interval_range_t);
@@ -931,18 +951,18 @@ void resolve_data_flow(closure_t *c) {
             // phi def interval(label op -> phi op -> ... -> phi op -> other op)
             linked_node *current = linked_first(to->operations)->succ;
             while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
-                lir_op_t *op = OP(current);
+                lir_op_t *to_op = OP(current);
                 //  to phi.inputOf(pred def) will is from interval
                 // TODO ssa body constant handle
-                lir_var_t *var = ssa_phi_body_of(op->first->value, to->preds, from);
-                interval_t *temp_interval = table_get(c->interval_table, var->ident);
-                assert(temp_interval);
-                interval_t *from_interval = interval_child_at(temp_interval, OP(from->last_op)->id, false);
+                lir_var_t *var = ssa_phi_body_of(to_op->first->value, to->preds, from);
+                interval_t *form_parent_interval = table_get(c->interval_table, var->ident);
+                assert(form_parent_interval);
+                interval_t *from_interval = interval_child_at(form_parent_interval, OP(from->last_op)->id, false);
 
-                lir_var_t *def = op->output->value; // result must assign reg
-                temp_interval = table_get(c->interval_table, def->ident);
-                assert(temp_interval);
-                interval_t *to_interval = interval_child_at(temp_interval, OP(to->first_op)->id, false);
+                lir_var_t *def = to_op->output->value; // result must assign reg
+                interval_t *to_parent_interval = table_get(c->interval_table, def->ident);
+                assert(to_parent_interval);
+                interval_t *to_interval = interval_child_at(to_parent_interval, to_op->id, false);
 
                 if (interval_need_move(from_interval, to_interval)) {
                     slice_push(r.from_list, from_interval);
