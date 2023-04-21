@@ -37,6 +37,8 @@ void linear_scan(closure_t *c) {
 
     allocate_walk(c);
 
+    debug_interval(c);
+
     resolve_data_flow(c);
 
     replace_virtual_register(c);

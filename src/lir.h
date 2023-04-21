@@ -13,6 +13,7 @@
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "l"
+#define ITERATOR_CURSOR "cursor"
 #define CONTINUE_IDENT "continue"
 #define FOR_COND_IDENT "for_cond"
 #define FOR_TRADITION_IDENT "for_tradition"
@@ -72,8 +73,8 @@
 #define RT_CALL_CONVERT_FLOAT "convert_float"
 #define RT_CALL_CONVERT_BOOL "convert_bool"
 
-#define RT_CALL_ITERATE_NEXT_KEY "iterate_next_key"
-#define RT_CALL_ITERATE_VALUE "iterate_value"
+#define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
+#define RT_CALL_ITERATOR_VALUE "iterator_value"
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
@@ -672,6 +673,19 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
  */
 static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     string result = var_unique_ident(m, TEMP_IDENT);
+
+    symbol_table_set_var(result, type);
+
+    return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
+}
+
+/**
+ * 临时变量是否影响变量入栈？
+ * @param type
+ * @return
+ */
+static inline lir_operand_t *custom_var_operand(module_t *m, type_t type, char *ident) {
+    string result = var_unique_ident(m, ident);
 
     symbol_table_set_var(result, type);
 

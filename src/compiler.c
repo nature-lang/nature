@@ -297,7 +297,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
     uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
 
     // cursor 初始值
-    lir_operand_t *cursor_operand = temp_var_operand(m, type_basic_new(TYPE_INT));
+    lir_operand_t *cursor_operand = custom_var_operand(m, type_basic_new(TYPE_INT), ITERATOR_CURSOR);
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));
 
     // make label
@@ -312,7 +312,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
     lir_operand_t *key_ref = lea_operand_pointer(m, key_target);
 
     OP_PUSH(lir_rt_call(
-            RT_CALL_ITERATE_NEXT_KEY,
+            RT_CALL_ITERATOR_NEXT_KEY,
             cursor_operand,
             4,
             iterator_target,
@@ -322,7 +322,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 
     // 基于 key 已经可以判断迭代是否还有了，下面的 next value 直接根据 cursor_operand 取值即可
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1),
-                       key_target, lir_copy_label_operand(for_end_label->output)));
+                       cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
     OP_PUSH(lir_op_unique_label(m, CONTINUE_IDENT));
@@ -333,7 +333,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
         lir_operand_t *value_ref = lea_operand_pointer(m, value_target);
 
         OP_PUSH(lir_rt_call(
-                RT_CALL_ITERATE_VALUE, NULL, 4,
+                RT_CALL_ITERATOR_VALUE, NULL, 4,
                 iterator_target,
                 int_operand(rtype_index),
                 cursor_operand, value_ref));

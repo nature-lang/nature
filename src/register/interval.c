@@ -156,7 +156,10 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = temp_var_operand(c->module, i->var->type)->value;
+        lir_var_t *var = custom_var_operand(c->module, i->var->type, "child")->value;
+        // 加入到 global 中
+        slice_push(c->globals, var);
+
         child->var = var;
         table_set(c->interval_table, var->ident, child);
     } else {
@@ -191,6 +194,7 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 }
 
 /**
+ * 同一个 id 可能需要插入多个值，此时按先后顺序插入
  * @param block
  * @param id
  * @param src_i
@@ -199,7 +203,7 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i, bool imm_replace) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
-        if (op->id < id) {
+        if (op->id <= id) {
             continue;
         }
 
@@ -220,17 +224,20 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         }
         return;
     }
+    assertf(false, "id=%v notfound in block=%s", id, block->name);
 }
 
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
-        if (OP(block->first_op)->id > insert_id || OP(block->last_op)->id < insert_id) {
-            continue;
+        lir_op_t *first = linked_first(block->operations)->value;
+        lir_op_t *last = OP(block->last_op);
+        if (first->id < insert_id && insert_id < last->id) {
+            block_insert_mov(block, insert_id, src_i, dst_i, false);
+            return;
         }
-
-        block_insert_mov(block, insert_id, src_i, dst_i, false);
     }
+    assertf(false, "closure=%s cannot find insert id=%d position", c->name, insert_id);
 }
 
 static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
@@ -466,11 +473,23 @@ void interval_build(closure_t *c) {
             interval_add_range(c, interval, block_from, block_to);
         }
 
-        // 倒序遍历所有块指令添加 use_pos
+        // 倒序遍历所有块指令添加 use and pos
         linked_node *current = linked_last(block->operations);
         while (current != NULL && current->value != NULL) {
             // 判断是否是 call op,是的话就截断所有物理寄存器
             lir_op_t *op = current->value;
+
+            // phi hint
+            if (op->code == LIR_OPCODE_PHI) {
+                interval_t *def_interval = operand_interval(c, op->output);
+                slice_t *phi_body = op->first->value;
+                for (int j = 0; j < phi_body->count; ++j) {
+                    lir_var_t *var = phi_body->take[j];
+                    interval_t *hint_interval = operand_interval(c, operand_new(LIR_OPERAND_VAR, var));
+                    assertf(hint_interval, "phi body var=%s not build interval", var->ident);
+                    slice_push(def_interval->phi_hints, hint_interval);
+                }
+            }
 
             // fixed all phy reg in call
             if (lir_op_call(op)) {
@@ -490,18 +509,6 @@ void interval_build(closure_t *c) {
                 interval_t *interval = operand_interval(c, op->output);
                 if (hint_interval != NULL && interval != NULL) {
                     interval->reg_hint = hint_interval;
-                }
-            }
-
-            // 离的最近的？必须是 pred 的？
-            if (op->code == LIR_OPCODE_PHI) {
-                interval_t *def_interval = operand_interval(c, op->output);
-                slice_t *phi_body = op->first->value;
-                for (int j = 0; j < phi_body->count; ++j) {
-                    lir_var_t *var = phi_body->take[i];
-                    interval_t *hint_interval = operand_interval(c, operand_new(LIR_OPERAND_VAR, var));
-                    assertf(hint_interval, "phi body var=%s not build interval", var->ident);
-                    slice_push(def_interval->phi_hints, hint_interval);
                 }
             }
 
@@ -533,24 +540,24 @@ void interval_build(closure_t *c) {
             }
 
 
-            // phi input 同样需要添加 use pos, 且添加到值就是当前 op->id 到值就可以了
-            slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                    FLAG(VR_FLAG_USE), false);
-            for (int j = 0; j < use_operands->count; ++j) {
-                lir_operand_t *operand = use_operands->take[j];
-                interval_t *interval = operand_interval(c, operand);
-                if (!interval) {
-                    continue;
-                }
-                interval_add_range(c, interval, block_from, op->id);
+            // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
+            if (op->code != LIR_OPCODE_PHI) {
+                slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                        FLAG(VR_FLAG_USE), false);
+                for (int j = 0; j < use_operands->count; ++j) {
+                    lir_operand_t *operand = use_operands->take[j];
+                    interval_t *interval = operand_interval(c, operand);
+                    if (!interval) {
+                        continue;
+                    }
+                    interval_add_range(c, interval, block_from, op->id);
 
-                if (!interval->fixed) {
-                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
-                    if (op->code != LIR_OPCODE_PHI) {
+                    if (!interval->fixed) {
+                        assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
                         // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
                         live_add(live_table, lives, interval->var);
+                        interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
                     }
-                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
                 }
             }
 
@@ -790,47 +797,36 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     }
 
 
-    // 切割 range
+    linked_t *left_ranges = linked_new();
+    linked_t *right_ranges = linked_new();
     LINKED_FOR(i->ranges) {
         interval_range_t *range = LINKED_VALUE();
-        if (position <= range->from) {
-            continue;
-        }
-
-        // position 大于 range->from, 此时有三种情况，
-        // pos == range->from
-        //  range->from < pos < range->to
-        //  range->to <= pos, pos 等于 range->to 就表示没有被 range 覆盖
-
-        // 如果 position 在 range 的起始位置，则直接将 ranges list 的当前部分和剩余部分分给 child interval 即可
-        // 否则 对 range 进行切割
-        // tips: position 必定不等于 range->to, 因为 to 是 excluded
-        if (position == range->from) {
-            child->ranges = linked_split(i->ranges, LINKED_NODE());
-        } else if (position >= range->to) {
-            child->ranges = linked_split(i->ranges, LINKED_NODE()->succ);
+        if (range->to <= position) {
+            linked_push(left_ranges, range);
+        } else if (range->from >= position) {
+            // 必定在右边
+            linked_push(right_ranges, range);
         } else {
-            // new range for child
+
+            // 新建的丢到右边
             interval_range_t *new_range = NEW(interval_range_t);
             new_range->from = position;
             new_range->to = range->to;
+            linked_push(right_ranges, new_range);
 
+            // from < position < to
+            range->to = position; // 截短丢到左边
+            linked_push(left_ranges, range);
 
-            range->to = position; // 截短
-
-            // 将 new_range 插入到 ranges 中
-            linked_insert_after(i->ranges, LINKED_NODE(), new_range);
-
-            child->ranges = linked_split(i->ranges, LINKED_NODE()->succ);
         }
-
-        child->first_range = linked_first(child->ranges)->value;
-        child->last_range = linked_last(child->ranges)->value;
-
-        i->first_range = linked_first(i->ranges)->value;
-        i->last_range = linked_last(i->ranges)->value;
-        break;
     }
+    i->ranges = left_ranges;
+    i->first_range = linked_first(i->ranges)->value;
+    i->last_range = linked_last(i->ranges)->value;
+
+    child->ranges = right_ranges;
+    child->first_range = linked_first(child->ranges)->value;
+    child->last_range = linked_last(child->ranges)->value;
 
     // 划分 position
     LINKED_FOR(i->use_pos_list) {
@@ -1003,6 +999,8 @@ interval_t *interval_child_at(interval_t *i, int op_id, bool is_use) {
         return i;
     }
 
+    assertf(i->children->count > 0, "interval=%s not contains op_id=%d", i->var->ident, op_id);
+
     // i->var 在不同的指令处可能作为 input 也可能作为 output
     // 甚至在同一条指令处即作为 input，又作为 output， 比如 20: v1 + 1 -> v2
     LINKED_FOR(i->children) {
@@ -1037,7 +1035,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
     // block all from interval, value 表示被 input 引用的次数, 0 表示为被引用
     // 避免出现同一个寄存器的 output 覆盖 input
     int8_t block_regs[UINT8_MAX] = {0};
-
+    // from 如果使用了寄存器，则需要 block 这些寄存器，避免被其他人覆盖
     SLICE_FOR(r->from_list) {
         interval_t *i = SLICE_VALUE(r->from_list);
         if (i->assigned) {
@@ -1114,7 +1112,10 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 }
 
 use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
-    assert(i->use_pos_list->count > 0);
+    if (i->use_pos_list->count == 0) {
+        return NULL;
+    }
+//    assert(i->use_pos_list->count > 0);
 
     if (!kind) {
         return linked_first(i->use_pos_list)->value;

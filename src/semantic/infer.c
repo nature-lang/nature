@@ -565,7 +565,9 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
 
 static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量应该大于等于形参的数量
-    assertf(call->actual_params->length >= target_type_fn->formal_types->length, "call params count failed");
+    if (!target_type_fn->rest) {
+        assertf(call->actual_params->length == target_type_fn->formal_types->length, "call params count failed");
+    }
 
     for (int i = 0; i < call->actual_params->length; ++i) {
         // first param from formal

@@ -96,8 +96,8 @@ memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting) {
  * @param cursor
  * @return
  */
-int64_t iterate_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, void *key_ref) {
-    DEBUGF("[runtime.iterate_next_key] iterator base=%p,rtype_index=%lu, cursor=%lu",
+int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, void *key_ref) {
+    DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_index=%lu, cursor=%lu",
            iterator, rtype_index, cursor);
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_index);
@@ -105,7 +105,7 @@ int64_t iterate_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, v
     cursor += 1;
     if (iterator_rtype->kind == TYPE_LIST) {
         memory_list_t *list = iterator;
-        DEBUGF("[runtime.iterate_next_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
+        DEBUGF("[runtime.iterator_next_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
                list->array_data);
 
         if (cursor >= list->length) {
@@ -119,7 +119,7 @@ int64_t iterate_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, v
     if (iterator_rtype->kind == TYPE_MAP) {
         memory_map_t *map = iterator;
         uint64_t key_size = rt_rtype_heap_out_size(map->key_index);
-        DEBUGF("[runtime.iterate_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
+        DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data, map->key_index, key_size);
 
         if (cursor >= map->length) {
@@ -135,18 +135,19 @@ int64_t iterate_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, v
 }
 
 
-void iterate_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *value_ref) {
-    DEBUGF("[runtime.iterate_next_value] iterator base=%p,rtype_index=%lu, cursor=%lu",
+void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *value_ref) {
+    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_index=%lu, cursor=%lu",
            iterator, rtype_index, cursor);
+    assertf(cursor != -1, "cannot iterator value");
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_index);
 
     if (iterator_rtype->kind == TYPE_LIST) {
         memory_list_t *list = iterator;
-        DEBUGF("[runtime.iterate_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
+        DEBUGF("[runtime.iterator_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
                list->array_data);
 
-        assertf(cursor < list->length, "[runtime.iterate_value] cursor=%d >= list->length=%d", cursor, list->length);
+        assertf(cursor < list->length, "[runtime.iterator_value] cursor=%d >= list->length=%d", cursor, list->length);
 
         uint64_t element_size = rt_rtype_heap_out_size(list->element_rtype_index);
         memmove(value_ref, list->array_data + element_size * cursor, element_size);
@@ -156,10 +157,10 @@ void iterate_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *v
     if (iterator_rtype->kind == TYPE_MAP) {
         memory_map_t *map = iterator;
         uint64_t value_size = rt_rtype_heap_out_size(map->value_index);
-        DEBUGF("[runtime.iterate_key] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
+        DEBUGF("[runtime.iterator_key] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
                map->length, map->value_data, map->value_index, value_size);
 
-        assertf(cursor < map->length, "[runtime.iterate_value] cursor=%d >= map->length=%d", cursor, map->length);
+        assertf(cursor < map->length, "[runtime.iterator_value] cursor=%d >= map->length=%d", cursor, map->length);
 
         memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return;

@@ -6,7 +6,7 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    assert_string_equal(raw, "011122334558613721824\n");
+    assert_string_equal(raw, "36\n88\na\nb\nc\n6\n");
 }
 
 int main(void) {

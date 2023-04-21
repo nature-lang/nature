@@ -258,7 +258,7 @@ void allocate_walk(closure_t *c) {
         handle_inactive(a);
 
         use_pos_t *first_use = first_use_pos(a->current, 0);
-        if (first_use->kind == USE_KIND_NOT) {
+        if (!first_use || first_use->kind == USE_KIND_NOT) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
@@ -270,6 +270,7 @@ void allocate_walk(closure_t *c) {
                 interval_t *hint_interval = a->current->phi_hints->take[i];
                 if (hint_interval->assigned) {
                     a->current->reg_hint = hint_interval;
+                    continue;
                 }
             }
         }
@@ -365,6 +366,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         // 最长空闲的寄存器也不空闲
         return false;
     }
+    // TODO free_pos[reg_id] 和 a->current->first_range->start 如果只有 1 到 2 个空间空闲， 且不是 must kind 需求,可以不分配寄存器
 
     // 有空闲的寄存器，但是空闲时间不够,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
