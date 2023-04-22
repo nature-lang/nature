@@ -330,18 +330,18 @@ static void build_compiler(slice_t *modules) {
 
             cfg(c);
 
-            debug_block_lir(c);
+            debug_block_lir(c, "cfg");
 
             // 构造 ssa
             ssa(c);
 
             cross_lower(c);
 
-            debug_block_lir(c);
+            debug_block_lir(c, "ssa and lower");
 
             linear_scan(c);
 
-            debug_block_lir(c);
+            debug_block_lir(c, "linear scan");
 
             cross_native(c);
         }

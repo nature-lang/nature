@@ -12,6 +12,23 @@ static char *asm_setcc_trans[] = {
         [LIR_OPCODE_SNE] = "setne",
 };
 
+static asm_operand_t *amd64_fit_number(uint8_t size, int64_t number) {
+    if (size == BYTE) {
+        return UINT8(number);
+    }
+    if (size == WORD) {
+        return UINT16(number);
+    }
+    if (size == DWORD) {
+        return UINT32(number);
+    }
+    if (size == QWORD) {
+        return UINT64(number);
+    }
+
+    assert(false);
+}
+
 static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
     if (a->type != b->type) {
         return false;
@@ -133,7 +150,7 @@ static asm_operation_t *reg_cleanup(reg_t *reg) {
  */
 static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
-    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+//    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     asm_operand_t *output = lir_operand_trans(c, operations, op->output);
@@ -178,6 +195,41 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
     slice_push(operations, ASM_INST("jmp", { result }));
     return operations;
+}
+
+/**
+ * -0x18(%rbp) = indirect addr
+ * @param op
+ * @param count
+ * @return
+ */
+static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
+    lir_operand_t *output = op->output;
+    assert(output->assert_type == LIR_OPERAND_REG || output->assert_type == LIR_OPERAND_STACK);
+    assert(output);
+
+    slice_t *operations = slice_new();
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
+
+    if (output->assert_type == LIR_OPERAND_REG) {
+        slice_push(operations, ASM_INST("xor", { result, result }));
+        return operations;
+    }
+
+    if (output->assert_type == LIR_OPERAND_STACK) {
+        lir_stack_t *stack = output->value;
+        assertf(stack->size <= AMD64_PTR_SIZE, "only can clv size <= %d, actual=%d", AMD64_PTR_SIZE, stack->size);
+        // amd64 目前仅支持
+        // MOV r/m8, imm8
+        // MOV r/m8***, imm8
+        // MOV r/m16, imm16
+        // MOV r/m32, imm32
+        uint8_t size = stack->size > DWORD ? DWORD : stack->size;
+        slice_push(operations, ASM_INST("mov", { result, amd64_fit_number(size, 0) }));
+        return operations;
+    }
+
+    assert(false);
 }
 
 /**
@@ -470,12 +522,12 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
 
 amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_CLR] = amd64_native_clr,
+        [LIR_OPCODE_CLV] = amd64_native_clv,
         [LIR_OPCODE_ADD] = amd64_native_add,
         [LIR_OPCODE_SUB] = amd64_native_sub,
         [LIR_OPCODE_DIV] = amd64_native_div,
         [LIR_OPCODE_MUL] = amd64_native_mul,
         [LIR_OPCODE_CALL] = amd64_native_call,
-        [LIR_OPCODE_BUILTIN_CALL] = amd64_native_call,
         [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
         [LIR_OPCODE_PUSH] = amd64_native_push,

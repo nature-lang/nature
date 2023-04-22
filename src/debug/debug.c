@@ -138,9 +138,9 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_PUSH]="PUSH  ",
         [LIR_OPCODE_POP]="POP   ",
         [LIR_OPCODE_CALL]="CALL  ",
-        [LIR_OPCODE_BUILTIN_CALL]="B_CALL",
         [LIR_OPCODE_RT_CALL]="R_CALL",
         [LIR_OPCODE_CLR] ="CLR    ",
+        [LIR_OPCODE_CLV] ="CLV    ",
         [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
@@ -175,7 +175,7 @@ void debug_stmt(string type, ast_stmt stmt) {
  */
 void debug_lir(closure_t *c) {
 #ifdef DEBUG_LIR
-    printf("lir: %s ---------------------------------------------------------------------\n", c->name);
+    printf("compiler closure lir: %s ---------------------------------------------------------------------\n", c->name);
     linked_node *current = c->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
@@ -203,6 +203,7 @@ void debug_lir(closure_t *c) {
         current = current->succ;
     }
     fflush(stdout);
+    printf("\n\n");
 #endif
 }
 
@@ -210,13 +211,16 @@ void debug_lir(closure_t *c) {
  * 遍历展示 blocks
  * @param c
  */
-void debug_block_lir(closure_t *c) {
+void debug_block_lir(closure_t *c, char *stage_after) {
 #ifdef DEBUG_LIR
-    printf("block_lir: %s------------------------------------------------------------------------\n", c->name);
+    printf("%s after block_lir: %s------------------------------------------------------------------------\n",
+           stage_after,
+           c->name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);
     }
+    printf("\n\n");
 
     fflush(stdout);
 #endif
@@ -269,6 +273,7 @@ void debug_interval(closure_t *c) {
                ranges,
                use_pos);
     }
+    printf("\n\n");
 #endif
 }
 

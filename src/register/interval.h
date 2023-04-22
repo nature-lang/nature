@@ -4,6 +4,9 @@
 #include "src/lir.h"
 #include "utils/linked.h"
 
+// 如果仅仅使用
+#define ALLOC_USE_MIN 4
+
 typedef enum {
     USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
     USE_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值

@@ -274,9 +274,21 @@ static use_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) 
             return USE_KIND_SHOULD;
         }
     }
-    if (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB) {
+    if (op->code == LIR_OPCODE_MOVE) {
+        // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
+        assertf(var->flag & FLAG(VR_FLAG_OUTPUT), "move def must in output");
+        lir_operand_t *first = op->first;
+        if (first->assert_type == LIR_OPERAND_IMM || first->assert_type == LIR_OPERAND_REG) {
+            return USE_KIND_SHOULD;
+        }
+    }
+    if (op->code == LIR_OPCODE_CLV) {
         return USE_KIND_SHOULD;
     }
+
+//    if (lir_op_term(op)) {
+//        return USE_KIND_SHOULD;
+//    }
 
     // phi 也属于 def, 所以必须分配寄存器
     return USE_KIND_MUST;
@@ -491,6 +503,8 @@ void interval_build(closure_t *c) {
                 }
             }
 
+            // TODO 如果能够优化 runtime_call 不使用寄存器，则可以大量的减少寄存器的使用
+            //  比如将 runtime_call 优化成 inline lir
             // fixed all phy reg in call
             if (lir_op_call(op)) {
                 // traverse all register
@@ -1128,5 +1142,6 @@ use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
         }
     }
 
-    assert(false && "no use pos found");
+//    assert(false && "no use pos found");
+    return NULL;
 }

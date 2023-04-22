@@ -111,7 +111,6 @@ typedef enum {
 } lir_operand_type_t;
 
 typedef enum {
-    LIR_OPCODE_CLR,
     LIR_OPCODE_ADD = 1,
     LIR_OPCODE_SUB,
     LIR_OPCODE_MUL,
@@ -126,6 +125,8 @@ typedef enum {
     LIR_OPCODE_NOT, // ! 取反
     LIR_OPCODE_NEG, // -取负数
 
+    LIR_OPCODE_CLR, // clean reg
+    LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
     LIR_OPCODE_SLT, // set less than <
     LIR_OPCODE_SLE, // set less eq <=
     LIR_OPCODE_SGT, // >
@@ -637,20 +638,6 @@ static inline lir_op_t *lir_rt_call(char *name, lir_operand_t *result, int arg_c
     return lir_op_new(LIR_OPCODE_RT_CALL, label_operand(name, false), call_params_operand, result);
 }
 
-static inline lir_op_t *lir_op_builtin_call(char *name, lir_operand_t *result, int arg_count, ...) {
-    slice_t *params_operand = slice_new();
-
-    va_list args;
-    va_start(args, arg_count); // 初始化参数
-    for (int i = 0; i < arg_count; ++i) {
-        lir_operand_t *param = va_arg(args, lir_operand_t*);
-        slice_push(params_operand, param);
-    }
-    va_end(args);
-    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
-    return lir_op_new(LIR_OPCODE_BUILTIN_CALL, label_operand(name, false), call_params_operand, result);
-}
-
 static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *params_operand = slice_new();
 
@@ -808,7 +795,7 @@ static inline bool lir_op_branch(lir_op_t *op) {
 }
 
 static inline bool lir_op_call(lir_op_t *op) {
-    return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_BUILTIN_CALL || op->code == LIR_OPCODE_RT_CALL;
+    return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL;
 }
 
 static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {

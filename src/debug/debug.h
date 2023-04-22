@@ -36,7 +36,7 @@ void debug_stmt(string type, ast_stmt stmt);
 
 void debug_lir(closure_t *c);
 
-void debug_block_lir(closure_t *c);
+void debug_block_lir(closure_t *c, char *stage_after);
 
 void debug_interval(closure_t *c);
 

@@ -336,16 +336,16 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_BOOL:
         case TYPE_INT8:
         case TYPE_UINT8:
-            return 1;
+            return BYTE;
         case TYPE_INT16:
         case TYPE_UINT16:
-            return 2;
+            return WORD;
         case TYPE_INT32:
         case TYPE_UINT32:
-            return 4;
+            return DWORD;
         case TYPE_INT64:
         case TYPE_UINT64:
-            return 8;
+            return QWORD;
         case TYPE_INT:
         case TYPE_UINT:
         case TYPE_FLOAT:

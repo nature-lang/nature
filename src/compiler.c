@@ -34,7 +34,7 @@ lir_opcode_t ast_op_convert[] = {
 
 static lir_operand_t *compiler_temp_var_operand(module_t *m, type_t type) {
     lir_operand_t *temp = temp_var_operand(m, type);
-    OP_PUSH(lir_rt_call(RT_CALL_VAR_CLR_DEF, temp, 0));
+    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, temp));
     return temp;
 }
 
@@ -262,7 +262,7 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 /**
- * 类似这样仅做了声明没有立即赋值，这里进行空赋值。从而能够保障有内存空间分配
+ * 类似这样仅做了声明没有立即赋值，这里进行空赋值,从而能够保障有内存空间分配.
  * int a;
  * float b;
  * @param c
@@ -271,7 +271,7 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
  */
 static lir_operand_t *compiler_var_decl(module_t *m, ast_var_decl *var_decl) {
     lir_operand_t *operand = var_operand(m, var_decl->ident);
-    OP_PUSH(lir_rt_call(RT_CALL_VAR_CLR_DEF, operand, 0));
+    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, operand));
     return operand;
 }
 

@@ -289,6 +289,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         // lea 指令的 first 不能是立即数
         // string 和 float 在上面已经进行了处理
+        // 现在只能是 var 了，在 reg alloc 时为 lea first var 注册了 USE_KIND_NOT
+        // 也就是不允许分配寄存器
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
             op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
         }

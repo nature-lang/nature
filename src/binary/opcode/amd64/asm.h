@@ -121,13 +121,13 @@
 #define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
-    asm_operand_t *number_operand = malloc(sizeof(asm_operand_t));\
-    number_operand->type = (_operand_type);\
-    _type *number = malloc(sizeof(_type));\
-    number->value = (_value);\
-    number_operand->size = (_size);\
-    number_operand->value = number;\
-    number_operand;\
+    asm_operand_t *_number_operand = malloc(sizeof(asm_operand_t));\
+    _number_operand->type = (_operand_type);\
+    _type *_number = malloc(sizeof(_type));\
+    _number->value = (_value);\
+    _number_operand->size = (_size);\
+    _number_operand->value = _number;\
+    _number_operand;\
 })
 
 typedef enum {

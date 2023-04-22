@@ -263,6 +263,15 @@ void allocate_walk(closure_t *c) {
             linked_push(a->handled, a->current);
             continue;
         }
+        // interval 使用时间过短，无法分配寄存器
+        use_pos_t *first_not = first_use_pos(a->current, USE_KIND_NOT);
+        if (first_use->kind != USE_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
+            spill_interval(c, a, a->current, 0);
+            linked_push(a->handled, a->current);
+            continue;
+        }
+
+        // 附近有 call 指令导致所有寄存器溢出
 
         // current is phi def, set reg_hint
         if (a->current->phi_hints->count > 0) {
@@ -276,13 +285,13 @@ void allocate_walk(closure_t *c) {
         }
 
         // 尝试为 current 分配寄存器
-        bool allocated = allocate_free_reg(c, a);
-        if (allocated) {
-            linked_push(a->active, a->current);
+        bool processed = allocate_free_reg(c, a);
+        if (processed) {
             continue;
         }
 
-        allocated = allocate_block_reg(c, a);
+        // 如果当前的 var 的使用时间长,则可以考虑从正在使用的寄存器中抢一个过来
+        bool allocated = allocate_block_reg(c, a);
         if (allocated) {
             linked_push(a->active, a->current);
             continue;
@@ -366,7 +375,16 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         // 最长空闲的寄存器也不空闲
         return false;
     }
-    // TODO free_pos[reg_id] 和 a->current->first_range->start 如果只有 1 到 2 个空间空闲， 且不是 must kind 需求,可以不分配寄存器
+
+    // free_pos[reg_id] 和 a->current->first_range->start 如果只有 N 个空间空闲，
+    // 且不是 must kind 需求,可以不分配寄存器
+    // 虽然有可用的空闲寄存器，但是空闲时间过短，此时直接进行溢出
+    use_pos_t *first_use = first_use_pos(a->current, 0);
+    if (first_use->kind != USE_KIND_MUST && free_pos[reg_id] - a->current->first_range->from < ALLOC_USE_MIN) {
+        spill_interval(c, a, a->current, 0);
+        linked_push(a->handled, a->current);
+        return true;
+    }
 
     // 有空闲的寄存器，但是空闲时间不够,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
@@ -378,6 +396,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     }
 
     assign_interval(c, a, a->current, reg_id);
+    linked_push(a->active, a->current);
     return true;
 }
 
@@ -400,6 +419,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         if (!(FLAG(a->current->alloc_type) & reg->flag)) {
             continue;
         }
+        // 这里包含了 use_pos 的设置
         SET_BLOCK_POS(reg_id, INT32_MAX);
     }
 
@@ -444,13 +464,15 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // max use pos 表示空闲时间最长的寄存器(必定会有一个大于 0 的值, 因为寄存器从 1 开始算的)
     uint8_t reg_id = find_block_reg(a->current, use_pos, block_pos);
 
+    // 经过多次 split，如果 first_use 是 must，其一定会小于所有 use_pos 和 block_pos, 从而分配到可用寄存器,然后在瞬间溢出
     use_pos_t *first_use = first_use_pos(a->current, 0);
+    assert(first_use);
     if (!reg_id || use_pos[reg_id] < first_use->value) {
         // 此处最典型的应用就是 current 被 call fixed interval 阻塞，需要溢出自身
 
         //  a->current,range 为 4 ~ 18, 且 4 是 mov output first use pos, 所以必须占用一个寄存器, 此时是否会进入到 use_pos[reg_id] < first_use ？
         //  假设所有的寄存器都被 active interval 占用， use_pos 记录的是 first_use + 1(指令之间的间隔是 2) 之后的使用位置(还在 active 就表示至少还有一个使用位置)
-        //  则不可能出现，所有的 use_pos min <  first_use + 1, 必定是 use pos min(下一条指令) > first_use + 1, 即使 ip = 6 指令是 call, 同样如此
+        //  则不可能出现，所有的 use_pos min <  first_use + 1, 必定是 use pos min(下一条指令) > first_use + 1, 即使 id = 6 指令是 call, 同样如此
         //  并不影响 id = 4 的位置拿一个寄存器来用。 call 指令并不会添加 use_pos, 只是添加了 range, 此时所有的物理寄存器被 block，
         if (first_use->kind == USE_KIND_MUST && first_use->value == first_from) {
             assert(false && "cannot spill and spilt current, use_pos collect exception");

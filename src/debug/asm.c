@@ -64,7 +64,7 @@ void asm_op_to_string(int i, asm_operation_t *op) {
     if (str_equal(op->name, "label")) {
         printf("%s  ", op->name);
     } else {
-        printf("\t%s  ", op->name);
+        printf("\t\t%s  ", op->name);
     }
 
     if (op->count == 1) {

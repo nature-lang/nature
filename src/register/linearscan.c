@@ -29,7 +29,7 @@ void linear_scan(closure_t *c) {
 
     interval_mark_number(c);
 
-    debug_block_lir(c);
+    debug_block_lir(c, "linear_scan.mark_number");
 
     interval_build(c);
 
