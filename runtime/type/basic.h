@@ -21,4 +21,6 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, 
 
 void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *value_ref);
 
+void memory_move(byte *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size);
+
 #endif //NATURE_BASIC_H

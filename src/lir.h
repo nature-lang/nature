@@ -85,8 +85,6 @@
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 
-#define RT_CALL_VAR_CLR_DEF "var_clr_def" // 定义变量，并声明一个空值
-
 #define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
@@ -880,13 +878,12 @@ static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
 }
 
-static lir_operand_t *lir_indirect_addr_operand(lir_operand_t *var_operand, uint64_t offset) {
-    assertf(var_operand->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
+static lir_operand_t *lir_indirect_addr_operand(lir_operand_t *base_operand, type_t type, uint64_t offset) {
+    assertf(base_operand->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
 
-    lir_var_t *var = var_operand->value;
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
-    addr->base = var_operand;
-    addr->type = var->type;
+    addr->base = base_operand;
+    addr->type = type;
     addr->offset = offset;
     return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
 }

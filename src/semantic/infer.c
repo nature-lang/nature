@@ -896,11 +896,12 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, type_t t)
 
     // 挨个对比
     for (int i = 0; i < destr->elements->length; ++i) {
-        ast_expr *expr = ct_list_value(destr->elements, i);
         type_t *actual_type = ct_list_value(tuple_type->elements, i);
-
         assertf(type_confirmed(*actual_type), "tuple operand index=%d type unknown");
 
+        ast_expr *expr = ct_list_value(destr->elements, i);
+
+        expr->type = *actual_type; // value is var_decl 不需要进行推导了
         if (expr->assert_type == AST_VAR_DECL) {
             // 直接推到出具体类型并回写到 operand 的 var_decl 中
             ast_var_decl *var_decl = expr->value;
@@ -914,9 +915,10 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, type_t t)
 
 static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt *stmt) {
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
-    type_t expr_type = infer_right_expr(m, &stmt->right, type_basic_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &stmt->right, type_basic_new(TYPE_UNKNOWN));
+    assert(t.kind == TYPE_TUPLE);
 
-    infer_var_tuple_destr(m, stmt->tuple_destr, expr_type);
+    infer_var_tuple_destr(m, stmt->tuple_destr, t);
 }
 
 
@@ -1031,6 +1033,7 @@ static type_t infer_left_expr(module_t *m, ast_expr *expr) {
         }
         default: {
             assertf(false, "operand assert=%d cannot used in left", expr->assert_type);
+            exit(0);
         }
     }
 

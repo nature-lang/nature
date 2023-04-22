@@ -33,6 +33,7 @@ lir_opcode_t ast_op_convert[] = {
 };
 
 static lir_operand_t *compiler_temp_var_operand(module_t *m, type_t type) {
+    assert(type.kind > 0);
     lir_operand_t *temp = temp_var_operand(m, type);
     OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, temp));
     return temp;
@@ -121,13 +122,16 @@ static void compiler_struct_assign(module_t *m, ast_assign_stmt *stmt) {
     uint64_t offset = type_struct_offset(struct_type.struct_, struct_access->key);
     uint64_t item_size = type_sizeof(struct_access->property->type);
 
-    lir_operand_t *dst = lir_indirect_addr_operand(struct_target, offset);
-    lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
     lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, stmt->right));
 
     // move by item size
     OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                        3, dst_ref, src_ref, int_operand(item_size)));
+                        5,
+                        struct_target,
+                        int_operand(offset),
+                        src_ref,
+                        int_operand(0),
+                        int_operand(item_size)));
 }
 
 /**
@@ -153,25 +157,31 @@ static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operan
         uint64_t item_size = type_sizeof(element->type);
         offset = align((int64_t) offset, (int64_t) item_size);
 
-        lir_operand_t *dst = compiler_temp_var_operand(m, element->type);
+        lir_operand_t *temp = compiler_temp_var_operand(m, element->type);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, temp);
 
-        lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
-        lir_operand_t *src_ref = lea_operand_pointer(m, lir_indirect_addr_operand(tuple_target, offset));
+        OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE,
+                            NULL,
+                            5,
+                            dst_ref,
+                            int_operand(0),
+                            tuple_target,
+                            int_operand(offset),
+                            int_operand(item_size)));
 
-        OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                            3, dst_ref, src_ref, int_operand(item_size)));
-        lir_operand_t *src = dst;
-
-        // dst 中已经存储了 tuple element compiler 后的值
+        // temp 用与临时存储 tuple 中的值，下面则是真正的使用该临时值
         if (element->assert_type == AST_VAR_DECL) {
+            // var_decl 独有
             ast_var_decl *var_decl = element->value;
-            dst = var_operand(m, var_decl->ident);
-            OP_PUSH(lir_op_move(dst, src));
+            lir_operand_t *dst = var_operand(m, var_decl->ident);
+            OP_PUSH(lir_op_move(dst, temp));
+
         } else if (can_assign(element->assert_type)) {
-            dst = compiler_expr(m, *element);
-            OP_PUSH(lir_op_move(dst, src));
+            lir_operand_t *dst = compiler_expr(m, *element);
+            OP_PUSH(lir_op_move(dst, temp));
+
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
-            compiler_tuple_destr(m, element->value, src);
+            compiler_tuple_destr(m, element->value, temp);
         } else {
             assertf(false, "var tuple destr must var/tuple_destr");
         }
@@ -794,9 +804,13 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
     lir_operand_t *dst = compiler_temp_var_operand(m, ast->property->type);
     lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
 
-    lir_operand_t *src_ref = lea_operand_pointer(m, lir_indirect_addr_operand(struct_target, offset));
     OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                        3, dst_ref, src_ref, int_operand(item_size)));
+                        5,
+                        dst_ref,
+                        int_operand(0),
+                        struct_target,
+                        int_operand(offset),
+                        int_operand(item_size)));
 
     return dst;
 }
@@ -850,9 +864,13 @@ static lir_operand_t *compiler_tuple_access(module_t *m, ast_expr expr) {
 
     lir_operand_t *dst = compiler_temp_var_operand(m, ast->element_type);
     lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
-    lir_operand_t *src_ref = lea_operand_pointer(m, lir_indirect_addr_operand(tuple_target, offset));
     OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                        3, dst_ref, src_ref, int_operand(item_size)));
+                        5,
+                        dst_ref,
+                        int_operand(0),
+                        tuple_target,
+                        int_operand(offset),
+                        int_operand(item_size)));
 
     return dst;
 }
@@ -893,12 +911,16 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr expr) {
 
         ast_expr *property = p->right;
         // offset(var) var must assign reg
-        lir_operand_t *dst_ref = lea_operand_pointer(m, lir_indirect_addr_operand(struct_target, offset));
         lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, *property));
 
         // move by item size
         OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                            3, dst_ref, src_ref, int_operand(item_size)));
+                            5,
+                            struct_target,
+                            int_operand(offset),
+                            src_ref,
+                            int_operand(0),
+                            int_operand(item_size)));
         offset += item_size;
     }
 
@@ -931,14 +953,18 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr expr) {
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
         offset = align((int64_t) offset, (int64_t) item_size);
 
+        // tuple_target 中包含到是一个执行堆区到地址，直接将该堆区到地址丢给 memory_move 即可
         // offset(var) var must assign reg
-        lir_operand_t *dst = lir_indirect_addr_operand(tuple_target, offset);
-        lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
         lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, *element));
 
         // move by item size
         OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
-                            3, dst_ref, src_ref, int_operand(item_size)));
+                            5,
+                            tuple_target,
+                            int_operand(offset),
+                            src_ref,
+                            int_operand(0),
+                            int_operand(item_size)));
         offset += item_size;
     }
 

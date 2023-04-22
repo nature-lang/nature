@@ -62,7 +62,3 @@ void println(memory_list_t *args) {
     print(args);
     write(STDOUT_FILENO, "\n", 1);
 }
-
-void memory_move(void *dst, void *src, uint64_t size) {
-    memmove(dst, src, size);
-}

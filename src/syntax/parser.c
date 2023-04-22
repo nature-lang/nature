@@ -429,9 +429,13 @@ static ast_expr parser_left_paren_expr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
     ast_expr expr = parser_expr(m); // 算术表达式中的 ()
     if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+        // ast 本身已经包含了 group 的含义，所以这里不需要特别再包一层 group 了
         return expr;
     }
 
+    parser_must(m, TOKEN_COMMA);
+
+    // 下一个是逗号才能判断为 tuple
     ast_tuple_new *tuple = NEW(ast_tuple_new);
     tuple->elements = ct_list_new(sizeof(ast_expr));
     ct_list_push(tuple->elements, &expr);
@@ -439,11 +443,14 @@ static ast_expr parser_left_paren_expr(module_t *m) {
         expr = parser_expr(m);
         ct_list_push(tuple->elements, &expr);
     } while (parser_consume(m, TOKEN_COMMA));
+
     parser_must(m, TOKEN_RIGHT_PAREN);
 
     expr = expr_new(m);
     expr.assert_type = AST_EXPR_TUPLE_NEW;
     expr.value = tuple;
+    return expr;
+
 
     return expr;
 }

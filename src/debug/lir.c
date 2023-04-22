@@ -9,7 +9,7 @@
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {
     char *str = (char *) malloc(sizeof(char) * 100);
-    sprintf(str, "STACK[%d]", stack->slot);
+    sprintf(str, "STACK[%d|%d]", stack->slot, stack->size);
     return str;
 }
 

@@ -165,3 +165,15 @@ void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *
     assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
     exit(0);
 }
+
+
+/**
+ * dst offset 按字节记
+ * @param dst
+ * @param dst_offset
+ * @param src
+ * @param size
+ */
+void memory_move(byte *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size) {
+    memmove(dst + dst_offset, src + src_offset, size);
+}
