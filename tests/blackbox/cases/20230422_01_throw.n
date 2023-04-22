@@ -1,0 +1,7 @@
+fn hello() {
+    println("hello nature")
+    throw "world error"
+}
+
+hello()
+println("Can't get here")

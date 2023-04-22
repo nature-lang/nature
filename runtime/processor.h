@@ -34,6 +34,10 @@
     makecontext(&_new.ctx, _fn, 0); \
     swapcontext(&_old.ctx, &_new.ctx);\
 
+// memory_struct_t mock to c
+typedef struct {
+    memory_string_t *msg;
+} mock_errort;
 
 uint64_t processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
 processor_t *processor_list;
@@ -53,5 +57,6 @@ memory_struct_t *processor_remove_errort();
 
 bool processor_has_errort();
 
+void processor_dump_errort(memory_struct_t *errort);
 
 #endif //NATURE_PROCESSOR_H

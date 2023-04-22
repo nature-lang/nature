@@ -83,7 +83,13 @@ memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting) 
  * @return
  */
 memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting) {
-    return casting.bool_value;
+    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, value=%p, int_value=%lu, float_value=%f",
+           input_rtype_index,
+           casting.value,
+           casting.int_value,
+           casting.float_value);
+
+    return casting.value != NULL;
 }
 
 /**

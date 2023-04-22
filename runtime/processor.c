@@ -38,19 +38,36 @@ processor_t *processor_get() {
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void processor_attach_errort(memory_struct_t *errort) {
+    DEBUGF("[runtime.processor_attach_errort] errort base=%p", errort)
     processor_t *p = processor_get();
     p->errort = errort;
 }
 
 memory_struct_t *processor_remove_errort() {
     processor_t *p = processor_get();
-    memory_struct_t *errort = p->errort;
+    memory_struct_t *errort = p->errort; // 可能本身就为 null
     // 垃圾回收会清理 p->errort
     p->errort = NULL;
+
+    DEBUGF("[runtime.processor_remove_errort] remove errort: %p", errort);
     return errort;
 }
 
 bool processor_has_errort() {
     processor_t *p = processor_get();
+    DEBUGF("[runtime.processor_has_errort] errort?  %p", p->errort)
+
     return p->errort ? true : false;
+}
+
+void processor_dump_errort(memory_struct_t *errort) {
+    DEBUGF("[runtime.processor_dump_errort] errort base=%p", errort)
+    mock_errort *error = (mock_errort *) errort;
+    memory_string_t *msg = error->msg;
+    DEBUGF("[runtime.processor_dump_errort] memory_string len: %lu, base: %p",
+           msg->length, msg->array_data);
+
+    char *error_prefix = "runtime catch error: ";
+    write(STDOUT_FILENO, error_prefix, strlen(error_prefix));
+    write(STDOUT_FILENO, msg->array_data, msg->length);
 }

@@ -22,7 +22,7 @@ typedef uint8_t byte;
 typedef union {
     int64_t int_value;
     double float_value;
-    uint8_t bool_value;
+    void *value;
 } value_casting;
 
 typedef enum {
@@ -91,7 +91,7 @@ static string type_kind_string[] = {
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_IDENT] = "decl", // char*
+        [TYPE_IDENT] = "type_ident", // char*
         [TYPE_LIST] = "list",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",

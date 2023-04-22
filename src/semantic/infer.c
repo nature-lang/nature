@@ -659,23 +659,29 @@ static type_t infer_call(module_t *m, ast_call *call) {
 
 
 /**
- * (xx, errort) = catch foo()
+ * var (foo, error) = catch foo()
+ * var error = catch foo()
  * @param catch
  * @return
  */
 static type_t infer_catch(module_t *m, ast_catch *catch) {
+
+    type_t return_type = infer_call(m, catch->call);
+    type_t errort = type_new(TYPE_IDENT, NULL);
+    errort.ident = NEW(type_ident_t);
+    errort.ident->literal = ERRORT_TYPE_IDENT;
+    errort.status = REDUCTION_STATUS_UNDO;
+    errort = reduction_type(m, errort);
+
+    if (return_type.kind == TYPE_VOID) {
+        return errort;
+    }
+
     type_t t = type_basic_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(type_t));
 
-    type_t return_type = infer_call(m, catch->call);
     ct_list_push(t.tuple->elements, &return_type);
-
-    type_t errort = type_basic_new(TYPE_IDENT);
-    errort.ident = NEW(type_ident_t);
-    errort.ident->literal = ERRORT_TYPE_IDENT;
-    errort = reduction_type(m, errort);
-
     ct_list_push(t.tuple->elements, &errort);
     return t;
 }
@@ -1254,7 +1260,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     }
 
     typedef_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
-    return reduction_type(m, t);
+    return reduction_type(m, typedef_stmt->type);
 }
 
 static type_t reduction_type(module_t *m, type_t t) {

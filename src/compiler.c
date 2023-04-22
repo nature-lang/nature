@@ -523,19 +523,13 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     // 判断 call op 是否存在 error, 如果存在 error 则不允许往下执行，
     // 而应该直接跳转到函数结束部分,这样 errort 就会继续向上传递
     // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_errort
-    if (!is_builtin_call(formal_fn->name)) {
+    if (!is_builtin_call(formal_fn->name) && !call->catch) {
         lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
         OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
-
-        // 如果 不存在 catch, 且存在 errort 则需要退出当前函数的执行
-        if (!call->catch) {
-            // beq has_errort,true -> fn_end_label
-            OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
-                               bool_operand(true), has_errort,
-                               label_operand(m->compiler_current->end_label, false)));
-        }
-    } else {
-        assertf(!call->catch, "cannot catch builtin fn: %s", formal_fn->name);
+        // beq has_errort,true -> fn_end_label
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
+                           bool_operand(true), has_errort,
+                           label_operand(m->compiler_current->end_label, false)));
     }
 
 
@@ -1012,6 +1006,23 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
             .type = catch->call->return_type,
             .value = catch->call
     });
+
+
+    // remove error by runtime processor
+    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_IDENT);
+    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
+    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
+    lir_operand_t *errort_operand = temp_var_operand(m, typedef_stmt->type);
+    OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
+
+    // call 没有返回值，此时直接 remove errort 即可
+    if (!call_result_operand) {
+        return errort_operand;
+    }
+
+
+    // make tuple target return
+    assertf(call_result_operand->assert_type == LIR_OPERAND_VAR, "compiler call result operand must lir var");
     ast_ident *call_result_ident = NEW(ast_ident);
     call_result_ident->literal = ((lir_var_t *) call_result_operand->value)->ident;
     ast_expr call_result_expr = {
@@ -1021,13 +1032,7 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
     };
 
 
-    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_IDENT);
-    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
-
-    lir_operand_t *errort_operand = temp_var_operand(m, typedef_stmt->type);
-    OP_PUSH(lir_rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
-
+    // temp error ident
     ast_ident *errort_ident = NEW(ast_ident);
     errort_ident->literal = ((lir_var_t *) errort_operand->value)->ident;
     ast_expr errort_expr = {
@@ -1036,10 +1041,9 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
             .value = errort_ident
     };
 
-
     // (call(), error_operand())
     ast_tuple_new *tuple = NEW(ast_tuple_new);
-    tuple->elements = NEW(ast_tuple_new);
+    tuple->elements = ct_list_new(sizeof(ast_expr));
     ct_list_push(tuple->elements, &call_result_expr);
     ct_list_push(tuple->elements, &errort_expr);
 

@@ -29,7 +29,6 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-
 // 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了
 extern void main();
 
@@ -55,6 +54,14 @@ void runtime_main() {
            p->user_mode.stack_base);
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
     MODE_CALL(p->user_mode, p->system_mode, main);
+
+    // 检查错误
+    DEBUGF("[runtime_main] errort?: %p", p->errort);
+    if (p->errort) {
+        // down load error
+        processor_dump_errort(p->errort);
+        exit(1);
+    }
 
     DEBUGF("[runtime_main] user code run completed,will exit");
 }
