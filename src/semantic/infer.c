@@ -274,26 +274,43 @@ static type_t infer_set_new(module_t *m, ast_set_new *set_new, type_t target_typ
  *  age = 1
  * }
  *
- * @param s
+ * @param ast
  * @return
  */
-static type_t infer_struct_new(module_t *m, ast_struct_new_t *s) {
+static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
     // person to struct
-    s->type = reduction_type(m, s->type);
+    ast->type = reduction_type(m, ast->type);
 
-    assertf(s->type.kind == TYPE_STRUCT, "ident not struct, cannot new instance");
+    assertf(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
 
-    type_struct_t *struct_decl = s->type.struct_;
+    type_struct_t *struct_decl = ast->type.struct_;
 
-    for (int i = 0; i < s->properties->length; ++i) {
-        struct_property_t *struct_property = ct_list_value(s->properties, i);
+    table_t *exists = table_new();
+    // exists key
+    for (int i = 0; i < ast->properties->length; ++i) {
+        struct_property_t *struct_property = ct_list_value(ast->properties, i);
         struct_property_t *type_property = ct_list_value(struct_decl->properties, i);
+
+        // type 冗余,方便计算 size (不能用来计算 offset)
+        struct_property->type = type_property->type;
+
+        table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
         infer_right_expr(m, struct_property->right, type_property->type);
     }
 
-    return s->type;
+    list_t *default_properties = ast->type.struct_->properties;
+    for (int i = 0; i < default_properties->length; ++i) {
+        struct_property_t *d = ct_list_value(default_properties, i);
+        if (!d->right || table_exist(exists, d->key)) {
+            continue;
+        }
+
+        ct_list_push(ast->properties, d);
+    }
+
+    return ast->type;
 }
 
 /**
@@ -388,22 +405,22 @@ static type_t infer_access(module_t *m, ast_expr *expr) {
 static type_t infer_select(module_t *m, ast_expr *expr) {
     ast_select *select = expr->value;
 
-    select->left.type = infer_left_expr(m, &select->left);
+    infer_left_expr(m, &select->left);
 
-    type_t left_type = select->left.type;
+    // self type to select
     // self_select -> instance_select
-    if (left_type.kind == TYPE_SELF) {
+    if (select->left.type.kind == TYPE_SELF) {
         ast_fndef_t *current = m->infer_current;
         assertf(current->self_struct, "use 'self' in struct outside");
 
         // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
-        left_type = *current->self_struct;
+        select->left.type = reduction_type(m, *current->self_struct);
     }
 
     // ast_access to ast_struct_access
-    if (left_type.kind == TYPE_STRUCT) {
+    if (select->left.type.kind == TYPE_STRUCT) {
         // 经过上面对 infer_right_expr, 这里对 type 一定是 reduction 的
-        type_struct_t *type_struct = left_type.struct_;
+        type_struct_t *type_struct = select->left.type.struct_;
         struct_property_t *p = type_struct_property(type_struct, select->key);
         assertf(p, "type %s struct no property '%s'", type_struct->ident, select->key);
 
@@ -418,7 +435,7 @@ static type_t infer_select(module_t *m, ast_expr *expr) {
         return p->type;
     }
 
-    assertf(false, "type '%s' cannot use dot syntax", type_kind_string[left_type.kind]);
+    assertf(false, "type '%s' cannot use dot syntax", type_kind_string[select->left.type.kind]);
     exit(1);
 }
 
@@ -573,6 +590,11 @@ static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_typ
         // first param from formal
         type_t formal_target_type = select_formal_param(target_type_fn, i);
         ast_expr *actual_param = ct_list_value(call->actual_params, i);
+        if (i == 0 && formal_target_type.kind == TYPE_SELF) {
+            // select first param 是 infer 自己伪造的，所以这里不需要在进行校验了
+            continue;
+        }
+
         infer_right_expr(m, actual_param, formal_target_type);
     }
 }
@@ -591,26 +613,35 @@ static type_t infer_struct_select_call(module_t *m, ast_call *call) {
     struct_property_t *p = type_struct_property(type_struct, s->key);
     assertf(p, "type %s struct no property '%s'", type_struct->ident, s->key);
 
+    // call left 改写
+    ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
+    struct_select->left = s->left;
+    struct_select->key = s->key;
+    struct_select->property = p;
+    call->left.assert_type = AST_EXPR_STRUCT_SELECT;
+    call->left.value = struct_select;
+    call->left.type = p->type;
 
     // 进入前已经进行了 infer left, 所以这里的 type 都是 reduction 过的
     assertf(p->type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = p->type.fn;
 
-    infer_call_params(m, call, type_fn);
-
     type_t *first = ct_list_value(type_fn->formal_types, 0);
     if (first->kind != TYPE_SELF) {
+        infer_call_params(m, call, type_fn);
         return type_fn->return_type;
     }
 
-    // 参数已经核验通过，进行参数改写，只需要将 struct 丢到 call 的第一个参数中即可
+    // formal 的首个参数是 self, 且 self 未经过推断
     list_t *actual_params = call->actual_params;
     call->actual_params = ct_list_new(sizeof(ast_expr));
-    ct_list_push(call->actual_params, &s->left);
+    ct_list_push(call->actual_params, &struct_select->left);
     for (int i = 0; i < actual_params->length; ++i) {
         ct_list_push(call->actual_params, ct_list_value(actual_params, i));
     }
+    infer_call_params(m, call, type_fn);
 
+    call->return_type = type_fn->return_type;
     return type_fn->return_type;
 }
 
@@ -624,7 +655,18 @@ static type_t infer_call(module_t *m, ast_call *call) {
         ast_select *select = call->left.value;
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         infer_left_expr(m, &select->left);
+        // self 快速改写
+        if (select->left.type.kind == TYPE_SELF) {
+            ast_fndef_t *current = m->infer_current;
+            assertf(current->self_struct, "use 'self' in struct outside");
+
+            // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
+            select->left.type = reduction_type(m, *current->self_struct);
+        }
+
+
         type_kind select_left_kind = select->left.type.kind;
+
 
         if (select_left_kind == TYPE_LIST) {
             return infer_list_select_call(m, call);
@@ -1264,9 +1306,15 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
-    assertf(t.kind != TYPE_SELF, "cannot use type self everywhere except struct fn decl first param");
+    assert(t.kind > 0);
 
     if (t.kind == TYPE_UNKNOWN) {
+        return t;
+    }
+
+    if (t.kind == TYPE_SELF) {
+        t.status = REDUCTION_STATUS_DONE;
+        t.in_heap = true;
         return t;
     }
 
@@ -1315,16 +1363,11 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
 
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *var = ct_list_value(fndef->formals, i);
+        if (var->type.kind == TYPE_SELF) {
+            assertf(i == 0 && fndef->self_struct, "only use self in fn first param");
+        }
 
-        // 首个参数，且 type 为 self 时不需要走 reduction_type, 直接定义为以还原
-        // 这样就可以避免在其他地方使用 self 参数了
-        if (i == 0 && var->type.kind == TYPE_SELF) {
-            assertf(fndef->self_struct, "use 'self' in struct outside");
-            var->type.status = REDUCTION_STATUS_DONE;
-        } else {
-            // 对 var 对 type 部分进行类型还原即可
-            var->type = reduction_type(m, var->type);
-        };
+        var->type = reduction_type(m, var->type);
 
         ct_list_push(f->formal_types, &var->type);
     }
@@ -1343,6 +1386,8 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
  * @param fndef
  */
 static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
+    m->infer_current = fndef;
+
     infer_fndef_decl(m, fndef);
 
     // env 表达式类型还原
@@ -1354,8 +1399,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     if (fndef->self_struct) {
         *fndef->self_struct = reduction_type(m, *fndef->self_struct);
     }
-
-    m->infer_current = fndef;
 
     // body infer
     infer_block(m, fndef->body);

@@ -37,7 +37,7 @@ typedef enum {
 
 typedef struct {
     string ident; // 符号唯一标识
-    bool is_local; // 对应 elf 符号中的 global/local
+    bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type type;
     void *ast_value; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
 } symbol_t;

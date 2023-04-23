@@ -99,6 +99,7 @@ static string type_kind_string[] = {
         [TYPE_FN] = "fn",
         [TYPE_POINTER] = "pointer", // p<type>
         [TYPE_NULL] = "null",
+        [TYPE_SELF] = "self",
 };
 
 // reflect type
@@ -400,6 +401,8 @@ type_t type_ptrof(type_t t);
  * @return
  */
 static bool type_default_in_heap(type_t type) {
+    assert(type.kind > 0);
+
     if (type.kind == TYPE_ANY ||
         type.kind == TYPE_STRING ||
         type.kind == TYPE_LIST ||

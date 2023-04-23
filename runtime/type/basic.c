@@ -181,5 +181,7 @@ void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *
  * @param size
  */
 void memory_move(byte *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size) {
+    DEBUGF("[runtime.memory_move] dst=%p, dst_offset=%lu, src=%p, src_offset=%lu, size=%lu",
+           dst, dst_offset, src, src_offset, size);
     memmove(dst + dst_offset, src + src_offset, size);
 }

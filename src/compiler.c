@@ -480,6 +480,7 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
 
     slice_t *params = slice_new();
     type_fn_t *formal_fn = call->left.type.fn;
+    assert(formal_fn);
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < formal_fn->formal_types->length; ++i) {
@@ -810,37 +811,6 @@ static lir_operand_t *compiler_struct_select(module_t *m, ast_expr expr) {
 }
 
 /**
- * operand = ast_call, but ast_call.left is struct access
- * @param c
- * @param expr
- * @return
- */
-static lir_operand_t *compiler_struct_access_call(module_t *m, ast_expr expr) {
-    ast_select *ast = expr.value;
-
-    // TODO 这里的 ast->left 的类型可能并不是 struct,operand 自身则是 var 或者 global symbol operand
-    lir_operand_t *left_target = compiler_expr(m, ast->left);
-
-    // if left_target == list,
-
-    // 现在 left 的类型可能是 struct 也有可能是 list 或者 map
-    // list 就算打死我我也不可能编译出一个 memory_struct_t 出来? 现在问题的关键是 var 中存储的是 memory_list_t
-    // 此时不能走基于 memory_struct_t 的 offset 方案读取 fn 的基础地址
-    // 那如何才能读取 list 的 push 或者 pop 或者 delete 等等属性呢?
-    // 假如做一层抽象,让 left_target == memory_struct_t(list),其他部分继续走
-    // 这需要服务端配合定义一个 typeuse_struct_t 名字叫 list, 并且写入到符号表中
-    // 由于该 list 没有进行过实际的 struct_new 操作,所以需要在 runtime_init 时进行相关的 struct_new?
-    // 通过固定的 rtype_index 找到 struct 并且 new 即可
-    // 在 runtime 中 init 回面临一个指针存储的问题.需要通过 rt_call 获得 list 的 typeuse_struct_t? 好像也没啥问题
-    // 至此 list 的 typeuse_struct_t 的 type_t 和 memory_struct_t 都有了,可以通过一般方法进行 struct call
-
-    // TODO left 的类型决定了怎么 call, 如果是 struct access 则需要做特殊逻辑支持。
-
-    // 假设 left 是
-    // rt_call list_push(left:memory_list_t, )
-}
-
-/**
  * mov [base+slot,n] => target
  * bar().baz
  * @param c
@@ -894,18 +864,18 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr expr) {
                         1, int_operand(rtype_index)));
 
     // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
-    uint64_t offset = 0;
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *p = ct_list_value(ast->properties, i);
 
         // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
+        uint64_t offset = type_struct_offset(type.struct_, p->key);
         uint64_t item_size = type_sizeof(p->type);
-        offset = align((int64_t) offset, (int64_t) item_size);
-        assertf(p->right, "struct new property value empty");
 
-        ast_expr *property = p->right;
-        // offset(var) var must assign reg
-        lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, *property));
+        assertf(p->right, "struct new property_expr value empty");
+
+        ast_expr *property_expr = p->right;
+        lir_operand_t *property_target = compiler_expr(m, *property_expr);
+        lir_operand_t *src_ref = lea_operand_pointer(m, property_target);
 
         // move by item size
         OP_PUSH(lir_rt_call(RT_CALL_MEMORY_MOVE, NULL,
@@ -915,7 +885,6 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr expr) {
                             src_ref,
                             int_operand(0),
                             int_operand(item_size)));
-        offset += item_size;
     }
 
     return struct_target;
@@ -1132,7 +1101,10 @@ static lir_operand_t *compiler_fndef(module_t *m, ast_expr expr) {
 
     }
 
-    return var_operand(m, fndef->name);
+    // 经过 lambda 提升，fndef name 此时应该是一个全局符号，对其对访问也应该是通过 lir_symbol
+
+
+    return symbol_label_operand(m, fndef->name);
 }
 
 static void compiler_throw(module_t *m, ast_throw_stmt *stmt) {

@@ -332,6 +332,8 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
 
 // TODO 功能上和 type in_heap 有一定的冲突
 uint8_t type_kind_sizeof(type_kind t) {
+    assert(t > 0);
+
     switch (t) {
         case TYPE_BOOL:
         case TYPE_INT8:

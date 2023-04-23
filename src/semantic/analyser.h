@@ -5,9 +5,7 @@
 #include "src/symbol/symbol.h"
 #include "src/module.h"
 
-
-#define ANONYMOUS_FN_NAME "_"
-
+#define ANONYMOUS_FN_NAME "@lambda"
 
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换,import 收集
 // 都放在 target 中就行了

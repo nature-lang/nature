@@ -27,7 +27,6 @@
 #define ERRORT_TYPE_IDENT "errort"
 #define ERRORT_MSG_IDENT "msg"
 
-
 // RT = runtime
 // CT = compile time
 #define RT_CALL_LIST_NEW "list_new"
@@ -308,7 +307,11 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     var->old = ident;
     var->flag = 0;
 
-    ast_var_decl *global_var = symbol_table_get_var(ident);
+    symbol_t *s = symbol_table_get(ident);
+    assertf(s, "notfound symbol=%s", ident);
+    assertf(s->type == SYMBOL_VAR, "symbol=%s type not var", ident);
+
+    ast_var_decl *global_var = s->ast_value;
     var->type = global_var->type;
     var->flag |= type_base_trans_alloc(global_var->type.kind);
 
@@ -318,6 +321,18 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 static inline lir_operand_t *var_operand(module_t *m, char *ident) {
     lir_var_t *var = lir_var_new(m, ident);
     return operand_new(LIR_OPERAND_VAR, var);
+}
+
+static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
+    symbol_t *s = symbol_table_get(ident);
+    assertf(s, "notfound symbol=%s", ident);
+    assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);
+
+    // 构造 label
+    lir_symbol_label_t *symbol = NEW(lir_symbol_label_t);
+    symbol->ident = ident;
+    symbol->is_local = s->is_local;
+    return operand_new(LIR_OPERAND_SYMBOL_LABEL, symbol);
 }
 
 
@@ -657,6 +672,8 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
  * @return
  */
 static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
+    assert(type.kind > 0);
+
     string result = var_unique_ident(m, TEMP_IDENT);
 
     symbol_table_set_var(result, type);
@@ -693,9 +710,18 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
         var_operand = temp_operand;
     }
 
-    assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR,
-            "only support var or indirect_addr ref, actual=%d",
+    // symbol var 和 symbol label 的区别是， symbol var 中存储的是一个值， lea rax, [rip+symbol_var]
+    // rax 将 data 段的地址传递给了 rax
+    // 而 lea rax, [rip+symbol_label]
+    // TODO symbol label 会被编译成 [rip+symbol] lea [rip+symbol], symbol label 的值是什么
+    //   605691:	48 8d 05 08 ff ff ff 	lea    -0xf8(%rip),%rax        # 6055a0 <main.@lambda_0>
+
+    assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+            var_operand->assert_type == LIR_OPERAND_SYMBOL_LABEL ||
+            var_operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+            "only support lea var/symbol/addr, actual=%d",
             var_operand->assert_type);
+
     lir_var_t *var = var_operand->value;
     lir_operand_t *value_ref = temp_var_operand(m, type_ptrof(var->type));
     OP_PUSH(lir_op_lea(value_ref, var_operand));

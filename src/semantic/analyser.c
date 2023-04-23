@@ -296,10 +296,10 @@ static void analyser_fndef_name(module_t *m, ast_fndef_t *fndef) {
     if (!str_equal(fndef->name, FN_MAIN_NAME)) {
         if (strlen(fndef->name) == 0) {
             // 如果没有函数名称，则添加匿名函数名称(通过 module 唯一标识区分)
-            fndef->name = var_unique_ident(m, ANONYMOUS_FN_NAME);
+            fndef->name = ANONYMOUS_FN_NAME;
+        } else {
+            analyser_redeclare_check(m, fndef->name);
         }
-
-        analyser_redeclare_check(m, fndef->name);
 
         // 函数名称改写
         local_ident_t *local = local_ident_new(m, SYMBOL_FN, fndef, fndef->name);
@@ -530,7 +530,7 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
     // println/print/set 等全局符号都已经预注册完成了
     s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
-        // 全局符号什么都不需要做，名称已经是正确的了
+        // 当前模块内都全局符号引用什么都不需要做，名称已经是正确的了
         return;
     }
 

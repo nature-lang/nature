@@ -243,7 +243,6 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
             // div rax, v2 -> rax
             op->first = lir_reset_operand(rax_operand, VR_FLAG_FIRST);
-            op->output = lir_reset_operand(rax_operand, VR_FLAG_OUTPUT);
 
             if (op->code == LIR_OPCODE_REM) {
                 op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
@@ -254,6 +253,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 // mov rax -> output
                 linked_insert_after(block->operations, node, lir_op_move(op->output, rax_operand));
             }
+
+            op->output = lir_reset_operand(rax_operand, VR_FLAG_OUTPUT);
             continue;
         }
 
