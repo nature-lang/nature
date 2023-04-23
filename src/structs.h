@@ -121,9 +121,10 @@ typedef struct analyser_fndef_t {
     uint8_t scope_depth;
 
     char *fn_name;
+
     // 函数定义在当前作用域仅加载 function as
     // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
-    list_t *delay_fndefs;
+    list_t *delay_fndefs; // delay_fndef_t
 } analyser_fndef_t;
 
 

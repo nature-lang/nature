@@ -141,7 +141,6 @@ typedef struct {
     type_t type; // 表达式自身的类型
     type_t target_type; // 表达式赋值的目标的 type
     void *value;
-    // TODO union value
 } ast_expr;
 
 typedef struct {
@@ -151,7 +150,7 @@ typedef struct {
 } ast_block_stmt;
 
 typedef struct {
-    string literal;
+    char *literal;
 } ast_ident;
 
 typedef struct {
@@ -202,7 +201,7 @@ typedef struct {
 // 仅仅包含了声明
 // int a;
 typedef struct {
-    string ident;
+    char *ident;
     type_t type; // type 已经决定了 size
 } ast_var_decl;
 
@@ -410,8 +409,6 @@ typedef struct ast_fndef_t {
 
     struct ast_fndef_t *parent;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
-
-type_t select_actual_param(ast_call *call, uint8_t index);
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
 

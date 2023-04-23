@@ -13,6 +13,7 @@ void env_new(char *fn_name, int capacity) {
 }
 
 void env_assign(char *fn_name, uint64_t index, addr_t addr) {
+    DEBUGF("[runtime.env_assign] fn_name=%s, index=%ld, addr=%lx", fn_name, index, addr);
     assertf(env_table, "env_table is null");
     addr_t *items = table_get(env_table, fn_name);
     assertf(items, "envs=%s not found int table", fn_name);
@@ -27,6 +28,14 @@ void env_access_ref(char *fn_name, uint64_t index, void *dst_ref, uint64_t size)
 
     // src_ref 是一致地址数据，其指向了 env 引用的变量的栈起始位置
     void *src_ref = (void *) items[index];
+    DEBUGF("[runtime.env_access_ref] fn_name=%s, index=%ld, dst=%p, src=%p, size=%lu",
+           fn_name,
+           index,
+           dst_ref,
+           src_ref,
+           size);
+
+
     memmove(dst_ref, src_ref, size);
 }
 
@@ -37,6 +46,13 @@ void env_assign_ref(char *fn_name, uint64_t index, void *src_ref, uint64_t size)
 
     // src_ref 是一致地址数据，其指向了 env 引用的变量的栈起始位置
     void *dst_ref = (void *) items[index];
+    DEBUGF("[runtime.env_assign_ref] fn_name=%s, index=%ld, dst=%p, src=%p, size=%lu",
+           fn_name,
+           index,
+           dst_ref,
+           src_ref,
+           size);
+
     memmove(dst_ref, src_ref, size); // ?? size
 }
 

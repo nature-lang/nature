@@ -2,29 +2,9 @@
 #include "utils/helper.h"
 
 ast_ident *ast_new_ident(char *literal) {
-    ast_ident *ident = malloc(sizeof(ast_ident));
+    ast_ident *ident = NEW(ast_ident);
     ident->literal = literal;
     return ident;
-}
-
-/**
- * 外部已经进行过类型还原了，这里不需要再类型还原
- * @param call
- * @param index
- * @return
- */
-type_t select_actual_param(ast_call *call, uint8_t index) {
-//    if (call->spread && index >= call->actual_params->length - 1) {
-//        // last actual param type must array
-//        ast_expr *last_param_expr = ct_list_value(call->actual_params, call->actual_params->length - 1);
-//        type_t last_param_type = last_param_expr->type;
-//        assertf(last_param_type.kind == TYPE_LIST, "spread param must list");
-//        type_list_t *list_decl = last_param_type.list;
-//        return list_decl->element_type;
-//    }
-
-    ast_expr *last_param_expr = ct_list_value(call->actual_params, index);
-    return last_param_expr->type;
 }
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {

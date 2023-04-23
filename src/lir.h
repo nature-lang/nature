@@ -712,11 +712,12 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
 
     // symbol label 是一个指针，memory_fn_t 中存储的就是这个指针的值，所以需要将其取出来，然后再复制给一个栈临时变量。
     if (operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
-        lir_symbol_label_t *symbol = operand->value;
+        assert(false);
+//        lir_symbol_label_t *symbol = operand->value;
         // temp_operand 是 type_fn, 就像 type_string, type_array 一样
-        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
-        OP_PUSH(lir_op_lea(temp_operand, operand));
-        var_operand = temp_operand;
+//        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
+//        OP_PUSH(lir_op_lea(temp_operand, operand));
+//        var_operand = temp_operand;
     }
 
     assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||

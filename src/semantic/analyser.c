@@ -151,7 +151,7 @@ local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string
     // unique ident
     string unique_ident = var_unique_ident(m, ident);
 
-    local_ident_t *local = malloc(sizeof(local_ident_t));
+    local_ident_t *local = NEW(local_ident_t);
     local->ident = ident;
     local->unique_ident = unique_ident;
     local->scope_depth = m->analyser_current->scope_depth;
@@ -315,6 +315,11 @@ static void analyser_function_begin(module_t *m) {
 static void analyser_function_end(module_t *m) {
     analyser_end_scope(m);
 
+    m->analyser_current->current_scope->idents;
+    // TODO 如果被下级捕获，则函数推出时，应该将捕获的相关变量 copy 到 heap 中，
+    // 更新下一级中到 env 引用到值即可？
+    // env 多级引用时？保存到是个啥？
+
     m->analyser_current = m->analyser_current->parent;
 }
 
@@ -413,9 +418,11 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
     // 对当前 fndef 中对所有 sub fndef 进行 analyser
     for (int i = 0; i < m->analyser_current->delay_fndefs->length; ++i) {
         delay_fndef_t *d = ct_list_value(m->analyser_current->delay_fndefs, i);
-        analyser_fndef(m, d->fndef);
+        // 子 fn 注册
         // 将所有对 fndef 都加入到 flat fndefs 中, 且没有 parent 关系想关联。
         slice_push(m->ast_fndefs, d->fndef);
+
+        analyser_fndef(m, d->fndef);
     }
 
     analyser_function_end(m); // 退出当前 current
@@ -484,7 +491,11 @@ int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
  * @param expr
  */
 static void analyser_ident(module_t *m, ast_expr *expr) {
-    ast_ident *ident = expr->value;
+    ast_ident *temp = expr->value;
+    // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
+    ast_ident *ident = NEW(ast_ident);
+    ident->literal = temp->literal;
+    expr->value = ident;
 
     // 在当前函数作用域中查找变量定义
     local_scope_t *current_scope = m->analyser_current->current_scope;
@@ -951,6 +962,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     // init
     m->analyser_line = 0;
 
+    // main 包裹
     ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
     fndef->name = FN_MAIN_NAME;
     fndef->body = slice_new();
@@ -962,8 +974,10 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, true);
     slice_push(m->global_symbols, s);
 
-    analyser_fndef(m, fndef);
+    // 先注册主 fndef
     slice_push(m->ast_fndefs, fndef);
+
+    analyser_fndef(m, fndef);
 }
 
 void analyser(module_t *m, slice_t *stmt_list) {

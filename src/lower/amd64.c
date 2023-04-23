@@ -78,7 +78,6 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
         lir_operand_t *param_operand = actual_params->take[i];
         type_kind type_base = operand_type_kind(param_operand);
         reg_t *reg = amd64_fn_param_next_reg(used, type_base);
-        lir_operand_t *target = NULL;
         if (reg) {
             // empty reg
             if (reg->size < QWORD) {

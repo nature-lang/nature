@@ -43,6 +43,10 @@ typedef struct {
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {
+    if (!ident) {
+        return false;
+    }
+
     return str_equal(ident, "print") ||
            str_equal(ident, "println") ||
            str_equal(ident, "list_push") ||

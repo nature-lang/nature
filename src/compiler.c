@@ -1076,6 +1076,10 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
 /**
  * fndef 到 body 已经编译完成并变成了 label, 此时不需要再递归到 fn body 内部,也不需要调整 m->compiler_current
  * 只需要将 fndef 到 env 写入到 fndef->name 对应到 envs 中即可, 返回值则返回函数到唯一 ident 即可
+ *
+ * 1. fndef 处创建 env 是因为这里是定义 fn 的 op id 处，所有的变量都已经初始化完毕
+ * 2. op call 会导致所有寄存器在这之前溢出，即使不溢出，lea 也至少能够得到变量的内存地址
+ * 3. call fndef 之前所有的寄存器会溢出将值保存到栈中，这构成了 env_access 能够访问正确对栈地址对基础
  * @param m
  * @param expr
  * @return
@@ -1102,8 +1106,6 @@ static lir_operand_t *compiler_fndef(module_t *m, ast_expr expr) {
     }
 
     // 经过 lambda 提升，fndef name 此时应该是一个全局符号，对其对访问也应该是通过 lir_symbol
-
-
     return symbol_label_operand(m, fndef->name);
 }
 
@@ -1224,9 +1226,19 @@ static lir_operand_t *compiler_expr(module_t *m, ast_expr expr) {
     compiler_expr_fn fn = expr_fn_table[expr.assert_type];
     assertf(fn, "ast right not support");
 
-    lir_operand_t *source = fn(m, expr);
+    lir_operand_t *operand = fn(m, expr);
 
-    return source;
+    // 当 source 作为一个 symbol_label 时，其不能作为一个标准的 lir 进行 move 等处理，所以这里将其预处理成 var
+    // 让其作为类型 type_string/type_list 等等符合类型一样的存在
+    if (operand && operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
+        // temp_operand 是 type_fn, 就像 type_string, type_array 一样
+        // TODO set type_fn
+        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
+        OP_PUSH(lir_op_lea(temp_operand, operand));
+        operand = temp_operand;
+    }
+
+    return operand;
 }
 
 

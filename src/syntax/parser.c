@@ -381,8 +381,6 @@ static ast_expr parser_binary(module_t *m, ast_expr left) {
     result.assert_type = AST_EXPR_BINARY;
     result.value = binary_expr;
 
-//  printf("code: %s\n", operator_token->literal);
-
     return result;
 }
 
@@ -897,7 +895,7 @@ static ast_stmt *parser_assign(module_t *m, ast_expr left) {
     ast_binary_expr *binary_expr = NEW(ast_binary_expr);
     binary_expr->right = parser_expr(m);
     binary_expr->operator = token_to_ast_op[t->type];
-    binary_expr->left = left;
+    binary_expr->left = left; // TODO copy
 
     assign_stmt->right = (ast_expr) {
             .assert_type = AST_EXPR_BINARY,

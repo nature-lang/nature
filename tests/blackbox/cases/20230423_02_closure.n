@@ -1,0 +1,14 @@
+fn make():fn(int):int {
+    var clash = 1000
+    return fn(int amount):int {
+        clash -= amount // clash = clash - amount
+        return clash
+    }
+}
+
+var withdraw = make()
+
+var balance = withdraw(10)
+//println("balance=", balance)
+
+//println("balance=", withdraw(100))
