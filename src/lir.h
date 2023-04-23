@@ -710,11 +710,14 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
         var_operand = temp_operand;
     }
 
-    // symbol var 和 symbol label 的区别是， symbol var 中存储的是一个值， lea rax, [rip+symbol_var]
-    // rax 将 data 段的地址传递给了 rax
-    // 而 lea rax, [rip+symbol_label]
-    // TODO symbol label 会被编译成 [rip+symbol] lea [rip+symbol], symbol label 的值是什么
-    //   605691:	48 8d 05 08 ff ff ff 	lea    -0xf8(%rip),%rax        # 6055a0 <main.@lambda_0>
+    // symbol label 是一个指针，memory_fn_t 中存储的就是这个指针的值，所以需要将其取出来，然后再复制给一个栈临时变量。
+    if (operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
+        lir_symbol_label_t *symbol = operand->value;
+        // temp_operand 是 type_fn, 就像 type_string, type_array 一样
+        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
+        OP_PUSH(lir_op_lea(temp_operand, operand));
+        var_operand = temp_operand;
+    }
 
     assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
             var_operand->assert_type == LIR_OPERAND_SYMBOL_LABEL ||
@@ -744,7 +747,7 @@ static inline closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->interval_table = table_new();
 
 //    c->var_decl_table = table_new();
-    c->stack_size = 0;
+    c->stack_offset = 0;
     c->stack_vars = slice_new();
     c->loop_count = 0;
     c->loop_ends = slice_new();

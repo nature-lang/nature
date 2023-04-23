@@ -10,6 +10,15 @@
 })\
 
 
+static lir_operand_t *select_first_reg(lir_operand_t *operand) {
+    type_kind kind = operand_type_kind(operand);
+    if (kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64) {
+        return operand_new(LIR_OPERAND_REG, xmm0);
+    }
+
+    return operand_new(LIR_OPERAND_REG, cross_reg_select(rax->index, kind));
+}
+
 /**
  * amd64 由于不支持直接操作浮点型和字符串, 所以将其作为全局变量直接注册到 closure asm_symbols 中
  * 并添加 lea 指令对值进行加载
@@ -173,12 +182,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
              * mov rax/xmm0 -> var
              */
             if (op->output != NULL) {
-                lir_operand_t *reg_operand;
-                if (operand_type_kind(op->output) == TYPE_FLOAT) {
-                    reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
-                } else {
-                    reg_operand = operand_new(LIR_OPERAND_REG, rax);
-                }
+                lir_operand_t *reg_operand = select_first_reg(op->output);
+
                 linked_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
                 op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
             }
@@ -212,13 +217,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
          */
         if (op->code == LIR_OPCODE_RETURN && op->first != NULL) {
             // 1.1 return 指令需要将返回值放到 rax 中
-            lir_operand_t *reg_operand;
-            if (operand_type_kind(op->first) == TYPE_FLOAT) {
-                reg_operand = operand_new(LIR_OPERAND_REG, xmm0);
-            } else {
-                reg_operand = operand_new(LIR_OPERAND_REG, rax);
-            }
-
+            lir_operand_t *reg_operand = select_first_reg(op->first);
             linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
             op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
             continue;
@@ -231,7 +230,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // DIV rax, second -> rax  amd64: div divisor  其中 rax 存储商， rdx 存储余数
         // mov rax -> output
         if (op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM) {
-            lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
+            lir_operand_t *ax_operand = select_first_reg(op->output);
 
             // second cannot imm?
             if (op->second->assert_type != LIR_OPERAND_VAR) {
@@ -239,10 +238,10 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             }
 
             // mov first -> rax
-            linked_insert_before(block->operations, node, lir_op_move(rax_operand, op->first));
+            linked_insert_before(block->operations, node, lir_op_move(ax_operand, op->first));
 
             // div rax, v2 -> rax
-            op->first = lir_reset_operand(rax_operand, VR_FLAG_FIRST);
+            op->first = lir_reset_operand(ax_operand, VR_FLAG_FIRST);
 
             if (op->code == LIR_OPCODE_REM) {
                 op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
@@ -251,10 +250,10 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                                     lir_op_move(op->output, operand_new(LIR_OPERAND_REG, rdx)));
             } else {
                 // mov rax -> output
-                linked_insert_after(block->operations, node, lir_op_move(op->output, rax_operand));
+                linked_insert_after(block->operations, node, lir_op_move(op->output, ax_operand));
             }
 
-            op->output = lir_reset_operand(rax_operand, VR_FLAG_OUTPUT);
+            op->output = lir_reset_operand(ax_operand, VR_FLAG_OUTPUT);
             continue;
         }
 

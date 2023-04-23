@@ -48,9 +48,9 @@ reg_t *amd64_reg_select(uint8_t index, type_kind base);
 /**
  * index 对应寄存器的 index， 不过同一个 index 会对应多个 register
  */
-static inline reg_t *cross_reg_select(uint8_t index, type_kind base) {
+static inline reg_t *cross_reg_select(uint8_t index, type_kind kind) {
     if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_reg_select(index, base);
+        return amd64_reg_select(index, kind);
     }
 
     assert(false && "not support arch");

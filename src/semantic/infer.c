@@ -463,6 +463,7 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_LIST_PUSH);
         infer_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
+        call->return_type = type_basic_new(TYPE_VOID);
 
         // list_push() 返回 void
         return type_basic_new(TYPE_VOID);
@@ -477,6 +478,7 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
         infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
 
         return type_basic_new(TYPE_INT);
     }
@@ -506,6 +508,7 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
         infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_VOID);
 
         return type_basic_new(TYPE_VOID);
     }
@@ -518,6 +521,7 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
         infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
 
         return type_basic_new(TYPE_INT);
     }
@@ -540,7 +544,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
         infer_left_expr(m, &call->left);
-
+        call->return_type = type_basic_new(TYPE_VOID);
 
         return type_basic_new(TYPE_VOID);
     }
@@ -557,6 +561,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_SET_ADD);
         infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_BOOL);
 
         return type_basic_new(TYPE_BOOL);
     }
@@ -572,6 +577,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
 
         call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
         infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_BOOL);
 
         return type_basic_new(TYPE_BOOL);
     }

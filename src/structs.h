@@ -265,7 +265,7 @@ typedef struct closure_t {
     string end_label; // 结束地址
     linked_t *operations; // 指令列表
 
-    int64_t stack_size; // 初始值为 0，像下增长，用于寄存器分配时的栈区 slot 分配
+    int64_t stack_offset; // 初始值为 0，用于寄存器分配时的栈区 slot 分配, 按栈规则对其
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
 
     // loop collect

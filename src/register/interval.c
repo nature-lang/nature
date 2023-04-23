@@ -612,7 +612,7 @@ interval_t *interval_new(closure_t *c) {
     i->use_pos_list = linked_new();
     i->children = linked_new();
     i->phi_hints = slice_new();
-    i->stack_slot = NEW(int);
+    i->stack_slot = NEW(int64_t);
     *i->stack_slot = 0;
     i->spilled = false;
     i->fixed = false;
@@ -871,11 +871,13 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     if (*i->stack_slot != 0) { // 已经分配了 slot 了
         return;
     }
-    // TODO 将 stack var 信息记录在 closure 中
-    // TODO 进行 stack offset 对齐
-    // 根据 closure stack slot 分配堆栈插槽,暂时不用考虑对齐，直接从 0 开始分配即可
-    c->stack_size += type_kind_sizeof(i->var->type.kind);
-    *i->stack_slot = -c->stack_size; // 取负数，一般栈都是高往低向下增长
+
+    // 由于栈是从高向低增长的，所以需要先预留 size
+    int64_t size = type_kind_sizeof(i->var->type.kind);
+    c->stack_offset += size;
+    c->stack_offset = align(c->stack_offset, size);
+
+    *i->stack_slot = -c->stack_offset; // 取负数，一般栈都是高往低向下增长
 }
 
 /**

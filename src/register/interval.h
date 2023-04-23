@@ -36,7 +36,7 @@ typedef struct interval_t {
 
     lir_var_t *var; // var 中存储着 stack slot
 
-    int *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
+    int64_t *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
     bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
     struct interval_t *reg_hint;

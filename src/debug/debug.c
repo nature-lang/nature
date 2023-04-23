@@ -236,7 +236,7 @@ void debug_interval(closure_t *c) {
         int parent_index = 0;
         char *parent_ident = "";
         bool assigned = 0;
-        int stack_slot = 0;
+        int64_t stack_slot = 0;
         char *ranges = "";
         char *use_pos = "";
 
@@ -262,8 +262,7 @@ void debug_interval(closure_t *c) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-
-        DEBUGF("i(%d-%s), parent(%d-%s), assigned=%d, stack_slot=%d, ranges=%s, use_pos=%s",
+        DEBUGF("i(%d-%s), parent(%d-%s), assigned=%d, stack_slot=%ld, ranges=%s, use_pos=%s",
                interval->index,
                interval->var->ident,
                parent_index,
