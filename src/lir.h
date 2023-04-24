@@ -27,6 +27,8 @@
 #define ERRORT_TYPE_IDENT "errort"
 #define ERRORT_MSG_IDENT "msg"
 
+#define FN_RUNTIME_IDENT "@fn_runtime"
+
 // RT = runtime
 // CT = compile time
 #define RT_CALL_LIST_NEW "list_new"
@@ -667,7 +669,6 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 
 /**
  * 临时变量是否影响变量入栈？
- * TODO 加入 global 中，从而可以预留出栈空间?
  * @param type
  * @return
  */

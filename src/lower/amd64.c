@@ -68,7 +68,14 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
     }
 }
 
-// mov var -> eax
+/**
+ * call actual params handle
+ * mov var -> rdi
+ * mov var -> rax
+ * @param c
+ * @param actual_params
+ * @return
+ */
 static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
     linked_t *operations = linked_new();
     linked_t *push_operations = linked_new();
@@ -89,6 +96,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
 
             linked_push(operations, op);
         } else {
+            // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);

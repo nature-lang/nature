@@ -404,6 +404,8 @@ typedef struct ast_fndef_t {
     // ast_expr, 由 parent closure 编译当前 fndef 时负责写入
     list_t *parent_view_envs;
 
+    char *fn_runtime_name;
+
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;
 

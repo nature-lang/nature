@@ -514,6 +514,11 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
         break;
     }
 
+    // 使用一个 int_operand(0) 预留出 fn_runtime 所需的空间,这里不需要也不能判断出 target 是否有空间引用，所以统一预留
+    // call 本身不需要做任何的调整
+    slice_push(params, int_operand(0));
+
+
     // call base_target,params -> target
     lir_op_t *call_op = lir_op_new(LIR_OPCODE_CALL, base_target,
                                    operand_new(LIR_OPERAND_ACTUAL_PARAMS, params), target);
@@ -1275,6 +1280,12 @@ static closure_t *compiler_closure(module_t *m, ast_fndef_t *fndef) {
 
         slice_push(params, lir_var_new(m, var_decl->ident));
     }
+
+    //if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
+    if (fndef->parent_view_envs->length > 0) {
+        slice_push(params, custom_var_operand(m, type_basic_new(TYPE_INT64), FN_RUNTIME_IDENT));
+    }
+
     OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
 
     compiler_block(m, fndef->body);

@@ -254,7 +254,7 @@ typedef struct basic_block_t {
  * 是一个变量，还是结构体的元素
  */
 typedef struct closure_t {
-    slice_t *globals; // closure_t 中定义的变量列表, 用于 ssa 构建, 以及寄存器分配时的 interval 也是基于次
+    slice_t *globals; // closure_t 中定义的变量列表,ssa 构建时采集并用于 ssa 构建, 以及寄存器分配时的 interval 也是基于此
     slice_t *blocks; // 根据解析顺序得到
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]

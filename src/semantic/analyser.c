@@ -397,6 +397,7 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
         // 封装成 ast_expr 更利于 compiler
         ast_expr expr;
 
+        // 这里其实是在 make env
         // 调用函数中引用的逃逸变量就在当前作用域中
         if (free_var->is_local) {
             // ast_ident 表达式
