@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include "slice.h"
 #include "table.h"
 #include "ct_list.h"
@@ -21,6 +23,7 @@ typedef uint8_t byte;
 
 typedef union {
     int64_t int_value;
+    uint64_t uint_value;
     double float_value;
     void *value;
 } value_casting;
@@ -524,5 +527,12 @@ static inline type_t basic_type_select(type_kind left, type_kind right) {
 
     return type_basic_new(right);
 }
+
+/**
+ * 主要是用于 gc 的快速构建
+ * @return
+ */
+rtype_t rt_tuple_rtype(uint32_t count, ...);
+
 
 #endif //NATURE_TYPE_H

@@ -401,10 +401,10 @@ typedef struct ast_fndef_t {
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
 
-    // ast_expr, 由 parent closure 编译当前 fndef 时负责写入
-    list_t *parent_view_envs;
+    // ast_expr, 当前 fn 中引用的外部的环境
+    list_t *catch_envs;
 
-    char *fn_runtime_name;
+    list_t *be_catch_vars; // 当前 fn 中被内部环境引用的 vars
 
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;

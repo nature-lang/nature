@@ -36,4 +36,6 @@ void *ct_list_value(list_t *l, uint64_t index);
 //void list_pop(list_t *l, void *value);
 //void ct_list_remove(list_t *l, uint64_t index);
 
+void ct_list_free(list_t *l);
+
 #endif //NATURE_LIST_H

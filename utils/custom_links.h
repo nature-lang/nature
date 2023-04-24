@@ -16,6 +16,8 @@ typedef struct {
 typedef struct {
     addr_t base; // text 虚拟地址起点,在 .data.fndef 段中占有 8byte 段空间，通过重定位补齐
     uint64_t size; // 这里的 size 是 fn 编译成二进制后占用的空间的大小
+    uint64_t fn_runtime_reg; //  0 表示不在
+    uint64_t fn_runtime_stack; // 0 就啥也不是，
 //    addr_t end; // text 虚拟地址终点
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits

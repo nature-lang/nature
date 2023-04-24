@@ -134,8 +134,6 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/structs.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.c
-        ${PROJECT_SOURCE_DIR}/runtime/env.h
-        ${PROJECT_SOURCE_DIR}/runtime/env.c
         ${PROJECT_SOURCE_DIR}/runtime/processor.h
         ${PROJECT_SOURCE_DIR}/runtime/processor.c
         ${PROJECT_SOURCE_DIR}/runtime/sizeclass.h
@@ -147,6 +145,8 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
+        ${PROJECT_SOURCE_DIR}/runtime/type/fn.h
+        ${PROJECT_SOURCE_DIR}/runtime/type/fn.c
         ${PROJECT_SOURCE_DIR}/runtime/type/basic.c
         ${PROJECT_SOURCE_DIR}/runtime/type/basic.h
         ${PROJECT_SOURCE_DIR}/runtime/type/hash.h

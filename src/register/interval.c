@@ -873,6 +873,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     }
 
     // 由于栈是从高向低增长的，所以需要先预留 size
+    slice_push(c->stack_vars, i->var);
     int64_t size = type_kind_sizeof(i->var->type.kind);
     c->stack_offset += size;
     c->stack_offset = align(c->stack_offset, size);

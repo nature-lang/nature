@@ -35,3 +35,8 @@ void *ct_list_value(list_t *l, uint64_t index) {
     uint64_t offset = index * l->element_size;
     return l->take + offset;
 }
+
+void ct_list_free(list_t *l) {
+    free(l->take);
+    free(l);
+}

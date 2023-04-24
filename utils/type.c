@@ -453,6 +453,7 @@ rtype_t ct_reflect_type(type_t t) {
 rtype_t rt_reflect_type(type_t t) {
     rtype_t rtype = reflect_type(t);
 
+    // TODO 基于 hash 的重复检测
     // TODO 应该在 runtime 中实现，且写入到 rt reflect_type 中
     return rtype;
 }
@@ -576,4 +577,30 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     }
 
     return 0;
+}
+
+rtype_t rt_tuple_rtype(uint32_t count, ...) {
+    type_tuple_t *tuple = NEW(type_tuple_t);
+    tuple->elements = ct_list_new(sizeof(type_t));
+    type_t t = type_basic_new(TYPE_TUPLE);
+    t.tuple = tuple;
+
+    va_list valist;
+    /* 初始化可变参数列表 */
+    va_start(valist, count);
+
+    for (int i = 0; i < count; i++) {
+        type_kind kind = va_arg(valist, type_kind);
+        type_t temp = type_basic_new(kind);
+        ct_list_push(tuple->elements, &temp);
+
+    }
+    va_end(valist);
+
+    rtype_t result = rt_reflect_type(t);
+
+    ct_list_free(tuple->elements);
+    free(tuple);
+
+    return result;
 }

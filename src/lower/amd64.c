@@ -42,7 +42,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
                 symbol->value = (uint8_t *) imm->string_value;
             } else {
                 symbol->size = QWORD;
-                symbol->value = (uint8_t *) &imm->float_value;
+                symbol->value = (uint8_t * ) & imm->float_value;
             }
 
             slice_push(c->asm_symbols, symbol);
@@ -95,12 +95,24 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
             lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
 
             linked_push(operations, op);
+            // fn runtime 参数
+            if (i == actual_params->count - 1) {
+                c->fn_runtime_reg = reg->index;
+            }
         } else {
             // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
             linked_push(push_operations, push_op);
+
+            // 根据 push_length 根据 push_length 推断出最后一个参数的位置
+            if (i == actual_params->count - 1) {
+                uint64_t base = 0x10; // 如果只有一个，那就是 0x10, 两个参数呢？0x18, 0x20
+                c->fn_runtime_stack += base;
+                c->fn_runtime_stack += push_length;
+            }
+
             push_length += QWORD;
         }
     }

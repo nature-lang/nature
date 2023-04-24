@@ -77,6 +77,8 @@
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 #define RT_CALL_ITERATOR_VALUE "iterator_value"
 
+#define RT_CALL_FN_NEW "fn_new"
+
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
 #define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"

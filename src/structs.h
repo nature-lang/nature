@@ -66,14 +66,15 @@ typedef struct {
     linked_node *current;
 } parser_cursor_t;
 
+// 函数定义在当前作用域仅加载 fn decl
+// 函数体的解析则延迟到当前作用域内的所有标识符都定义好后再做
+// 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
 typedef struct {
-    symbol_type type;
-    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
-    string ident; // 原始名称
-    string unique_ident; // 唯一名称
-    int scope_depth;
-    bool is_capture; // 是否被捕获(是否被下级引用)
-} local_ident_t;
+    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
+//    local_scope_t *scope;
+    ast_fndef_t *fndef;
+    bool is_stmt;
+} delay_fndef_t;
 
 /**
  * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
@@ -88,22 +89,14 @@ typedef struct {
     int index; // free in frees index
 } free_ident_t;
 
-typedef struct local_scope_t {
-    struct local_scope_t *parent;
-    slice_t *idents; // local_ident_t*
-
-    uint8_t scope_depth;
-} local_scope_t;
-
-// 函数定义在当前作用域仅加载 fn decl
-// 函数体的解析则延迟到当前作用域内的所有标识符都定义好后再做
-// 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
 typedef struct {
-    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-//    local_scope_t *scope;
-    ast_fndef_t *fndef;
-    bool is_stmt;
-} delay_fndef_t;
+    symbol_type type;
+    void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
+    string ident; // 原始名称
+    string unique_ident; // 唯一名称
+    int depth; // 变量声明的深度，如果变量的 depth == depth 则说明同一作用域下重复声明
+    bool is_capture; // 是否被捕获(是否被下级引用)
+} local_ident_t;
 
 /**
  * 词法作用域
@@ -111,14 +104,13 @@ typedef struct {
 typedef struct analyser_fndef_t {
     struct analyser_fndef_t *parent;
 
-    local_scope_t *current_scope;
+    slice_t *locals; // local_ident
+    // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
+    uint8_t scope_depth;
 
     // 使用了当前函数作用域之外的变量
     slice_t *frees; // analyser_free_ident_t*
     table_t *free_table; // analyser_free_ident_t*
-
-    // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
-    uint8_t scope_depth;
 
     char *fn_name;
 
@@ -266,8 +258,12 @@ typedef struct closure_t {
     string end_label; // 结束地址
     linked_t *operations; // 指令列表
 
+    // gc 使用
     int64_t stack_offset; // 初始值为 0，用于寄存器分配时的栈区 slot 分配, 按栈规则对其
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
+    uint64_t fn_runtime_reg;
+    uint64_t fn_runtime_stack;
+    void *fn_runtime_operand;
 
     // loop collect
     int8_t loop_count;

@@ -1397,8 +1397,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     infer_fndef_decl(m, fndef);
 
     // env 表达式类型还原
-    for (int i = 0; i < fndef->parent_view_envs->length; ++i) {
-        ast_expr *env_expr = ct_list_value(fndef->parent_view_envs, i);
+    for (int i = 0; i < fndef->catch_envs->length; ++i) {
+        ast_expr *env_expr = ct_list_value(fndef->catch_envs, i);
         infer_left_expr(m, env_expr);
     }
 

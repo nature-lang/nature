@@ -95,14 +95,15 @@ static void compiler_list_assign(module_t *m, ast_assign_stmt *stmt) {
  */
 static void compiler_env_assign(module_t *m, ast_assign_stmt *stmt) {
     ast_env_access *ast = stmt->left.value;
-    lir_operand_t *fn_name = string_operand(m->compiler_current->name);
     lir_operand_t *index = int_operand(ast->index);
 
     lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, stmt->right));
     uint64_t size = type_sizeof(stmt->right.type);
+    assertf(m->compiler_current->fn_runtime_operand, "have env access, must have fn_runtime_operand");
 
-    OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN_REF, NULL,
-                        4, fn_name, index, src_ref, int_operand(size)));
+    OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN_REF, NULL, 4,
+                        m->compiler_current->fn_runtime_operand,
+                        index, src_ref, int_operand(size)));
 }
 
 
@@ -668,18 +669,19 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
  */
 static lir_operand_t *compiler_env_access(module_t *m, ast_expr expr) {
     ast_env_access *ast = expr.value;
-    lir_operand_t *fn_name = string_operand(m->compiler_current->name);
     lir_operand_t *index = int_operand(ast->index);
-
     lir_operand_t *result = compiler_temp_var_operand(m, expr.type);
-
-    // 读取 result 的指针地址，给到 access 进行写入
     lir_operand_t *dst_ref = lea_operand_pointer(m, result);
 
     uint64_t size = type_sizeof(expr.type);
+    assertf(m->compiler_current->fn_runtime_operand, "have env access, must have fn_runtime_operand");
 
     OP_PUSH(lir_rt_call(RT_CALL_ENV_ACCESS_REF, NULL,
-                        4, fn_name, index, dst_ref, int_operand(size)));
+                        4,
+                        m->compiler_current->fn_runtime_operand,
+                        index,
+                        dst_ref,
+                        int_operand(size)));
 
     return result;
 }
@@ -1090,28 +1092,36 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
  * @return
  */
 static lir_operand_t *compiler_fndef(module_t *m, ast_expr expr) {
+    // var a = fn() {} 类似此时的右值就是 fndef, 此时可以为 fn 创建对应的 closure 了
     ast_fndef_t *fndef = expr.value;
 
-    if (fndef->parent_view_envs->length > 0) {
-        lir_operand_t *capacity = int_operand(fndef->parent_view_envs->length);
-        lir_operand_t *fn_name_operand = string_operand(fndef->name);
-        // rt_call env_new(fndef->name, capacity)
-        OP_PUSH(lir_rt_call(RT_CALL_ENV_NEW, NULL, 2, fn_name_operand, capacity));
-
-        for (int i = 0; i < fndef->parent_view_envs->length; ++i) {
-            ast_expr *item = ct_list_value(fndef->parent_view_envs, i);
-
-            // 此时更新了 envs 中的值
-            lir_operand_t *ref = lea_operand_pointer(m, compiler_expr(m, *item));
-
-            // rt_call env_assign(fndef->name, index_operand lir_operand)
-            OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN, NULL, 3, fn_name_operand, int_operand(i), ref));
-        }
-
+    if (fndef->catch_envs->length == 0) {
+        lir_operand_t *result = temp_var_operand(m, expr.type);
+        OP_PUSH(lir_op_lea(result, symbol_label_operand(m, fndef->name)));
+        return result;
     }
 
-    // 经过 lambda 提升，fndef name 此时应该是一个全局符号，对其对访问也应该是通过 lir_symbol
-    return symbol_label_operand(m, fndef->name);
+    // make envs
+    lir_operand_t *length = int_operand(fndef->catch_envs->length);
+
+    // rt_call env_new(fndef->name, length)
+    lir_operand_t *env_operand = temp_var_operand(m, type_basic_new(TYPE_INT64));
+    OP_PUSH(lir_rt_call(RT_CALL_ENV_NEW, env_operand, 1, length));
+    for (int i = 0; i < fndef->catch_envs->length; ++i) {
+        ast_expr *item = ct_list_value(fndef->catch_envs, i);
+        //  加载 free var 在栈上的指针
+        lir_operand_t *stack_addr_ref = lea_operand_pointer(m, compiler_expr(m, *item));
+        // rt_call env_assign(fndef->name, index_operand lir_operand)
+        OP_PUSH(lir_rt_call(RT_CALL_ENV_ASSIGN, NULL, 4,
+                            env_operand,
+                            int_operand(ct_reflect_type(item->type).index),
+                            int_operand(i),
+                            stack_addr_ref));
+    }
+
+    lir_operand_t *result = temp_var_operand(m, expr.type);
+    OP_PUSH(lir_rt_call(RT_CALL_FN_NEW, result, 2, symbol_label_operand(m, fndef->name), env_operand));
+    return result;
 }
 
 static void compiler_throw(module_t *m, ast_throw_stmt *stmt) {
@@ -1281,9 +1291,13 @@ static closure_t *compiler_closure(module_t *m, ast_fndef_t *fndef) {
         slice_push(params, lir_var_new(m, var_decl->ident));
     }
 
+    // 和 compiler_fndef 不同，compiler_closure 是函数内部的空间中,添加的也是当前 fn 的形式参数
+    // 当前 fn 的形式参数在 body 中都是可以随意调用的
     //if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
-    if (fndef->parent_view_envs->length > 0) {
-        slice_push(params, custom_var_operand(m, type_basic_new(TYPE_INT64), FN_RUNTIME_IDENT));
+    if (fndef->catch_envs->length > 0) {
+        lir_operand_t *fn_runtime_operand = custom_var_operand(m, type_basic_new(TYPE_INT64), FN_RUNTIME_IDENT);
+        slice_push(params, fn_runtime_operand);
+        c->fn_runtime_operand = fn_runtime_operand;
     }
 
     OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
@@ -1291,6 +1305,9 @@ static closure_t *compiler_closure(module_t *m, ast_fndef_t *fndef) {
     compiler_block(m, fndef->body);
 
     OP_PUSH(lir_op_label(c->end_label, true));
+
+    // TODO close all catch vars, 基于 var operand 找到即可
+
 
     OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, NULL, NULL, NULL));
 

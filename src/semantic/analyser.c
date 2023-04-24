@@ -30,18 +30,14 @@ static void analyser_block(module_t *m, slice_t *block) {
  * @return
  */
 static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, string ident) {
-    local_scope_t *current_scope = current->current_scope;
-    while (current_scope != NULL) {
-        for (int i = 0; i < current_scope->idents->count; ++i) {
-            local_ident_t *local = current_scope->idents->take[i];
-            if (str_equal(ident, local->ident)) {
-                assertf(local->type == SYMBOL_TYPEDEF, "ident=%s not type", local->ident);
-                // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
-                return local->unique_ident;
-            }
+    slice_t *locals = m->analyser_current->locals;
+    for (int i = locals->count - 1; i >= 0; --i) {
+        local_ident_t *local = locals->take[i];
+        if (str_equal(ident, local->ident)) {
+            assertf(local->type == SYMBOL_TYPEDEF, "ident=%s not type", local->ident);
+            // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
+            return local->unique_ident;
         }
-
-        current_scope = current_scope->parent;
     }
 
     if (current->parent == NULL) {
@@ -154,13 +150,14 @@ local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string
     local_ident_t *local = NEW(local_ident_t);
     local->ident = ident;
     local->unique_ident = unique_ident;
-    local->scope_depth = m->analyser_current->scope_depth;
+    local->depth = m->analyser_current->scope_depth;
     local->decl = decl;
     local->type = type;
 
     // 添加 locals
-    local_scope_t *current_scope = m->analyser_current->current_scope;
-    slice_push(current_scope->idents, local);
+    slice_t *locals = m->analyser_current->locals;
+    slice_push(locals, local);
+
 
     // 添加到全局符号表
     symbol_table_set(local->unique_ident, type, decl, true);
@@ -168,27 +165,27 @@ local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string
     return local;
 }
 
-static local_scope_t *local_scope_new(uint8_t scope_depth, local_scope_t *parent) {
-    local_scope_t *new = malloc(sizeof(local_scope_t));
-    new->idents = slice_new();
-    new->scope_depth = scope_depth;
-    new->parent = parent;
-    return new;
-}
-
 /**
  * 块级作用域处理
  */
 static void analyser_begin_scope(module_t *m) {
     m->analyser_current->scope_depth++;
-    local_scope_t *current_scope = m->analyser_current->current_scope;
-    m->analyser_current->current_scope = local_scope_new(m->analyser_current->scope_depth, current_scope);
 }
 
 static void analyser_end_scope(module_t *m) {
-    local_scope_t *current_scope = m->analyser_current->current_scope;
-    m->analyser_current->current_scope = current_scope->parent;
     m->analyser_current->scope_depth--;
+    slice_t *locals = m->analyser_current->locals;
+    while (locals->count > 0) {
+        local_ident_t *local = locals->take[locals->count - 1];
+        if (local->depth <= m->analyser_current->scope_depth) {
+            break;
+        }
+
+        // TODO close upvalue? 不需要在这里操作，只需要在这里将 local->is_capture 的 ident 收集一下
+        //  在 compiler closure 的最后做统一 close 就可以了，liner scan 不会根据 scope 的变化动态变更一个变量所在的栈的位置
+        // 而是同一个 ident 只会在同一个 stack slot 中
+        slice_remove(locals, locals->count - 1);
+    }
 }
 
 
@@ -231,12 +228,22 @@ static void analyser_call(module_t *m, ast_call *call) {
  * @return
  */
 static bool analyser_redeclare_check(module_t *m, char *ident) {
-    local_scope_t *current_scope = m->analyser_current->current_scope;
-    for (int i = 0; i < current_scope->idents->count; ++i) {
-        local_ident_t *local = current_scope->idents->take[i];
-        if (strcmp(ident, local->ident) == 0) {
-            error_redeclare_ident(m->analyser_line, ident);
-            return false;
+    if (m->analyser_current->scope_depth == 0) {
+        return true;
+    }
+
+    // 从内往外遍历
+    slice_t *locals = m->analyser_current->locals;
+    for (int i = locals->count - 1; i >= 0; --i) {
+        local_ident_t *local = locals->take[i];
+
+        // 如果找到了更高一级的作用域此时是允许重复定义变量的，直接跳过就行了
+        if (local->depth != -1 && local->depth < m->analyser_current->scope_depth) {
+            break;
+        }
+
+        if (str_equal(local->ident, ident)) {
+            assertf(false, "line=%d, redeclare ident=%s", m->analyser_line, ident);
         }
     }
 
@@ -315,22 +322,18 @@ static void analyser_function_begin(module_t *m) {
 static void analyser_function_end(module_t *m) {
     analyser_end_scope(m);
 
-    m->analyser_current->current_scope->idents;
-    // TODO 如果被下级捕获，则函数推出时，应该将捕获的相关变量 copy 到 heap 中，
-    // 更新下一级中到 env 引用到值即可？
-    // env 多级引用时？保存到是个啥？
-
     m->analyser_current = m->analyser_current->parent;
 }
 
 static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
-    analyser_fndef_t *new = malloc(sizeof(analyser_fndef_t));
+    analyser_fndef_t *new = NEW(analyser_fndef_t);
+    new->locals = slice_new();
     new->frees = slice_new();
     new->free_table = table_new();
+
     new->delay_fndefs = ct_list_new(sizeof(delay_fndef_t));
     new->scope_depth = 0;
     new->fn_name = fn_name;
-    new->current_scope = NULL;
 
     // 继承关系
     new->parent = m->analyser_current;
@@ -357,7 +360,7 @@ static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
  * @return
  */
 static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
-    fndef->parent_view_envs = ct_list_new(sizeof(ast_expr));
+    fndef->catch_envs = ct_list_new(sizeof(ast_expr));
 
     analyser_current_init(m, fndef->name);
 
@@ -413,7 +416,7 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
             expr.value = env_access;
         }
 
-        ct_list_push(fndef->parent_view_envs, &expr);
+        ct_list_push(fndef->catch_envs, &expr);
     }
 
     // 对当前 fndef 中对所有 sub fndef 进行 analyser
@@ -466,9 +469,9 @@ int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
         return -1;
     }
 
-    local_scope_t *scope = current->parent->current_scope;
-    for (int i = 0; i < scope->idents->count; ++i) {
-        local_ident_t *local = scope->idents->take[i];
+    slice_t *locals = current->parent->locals;
+    for (int i = locals->count - 1; i >= 0; --i) {
+        local_ident_t *local = locals->take[i];
 
         // 在父级作用域找到对应的 ident
         if (strcmp(*ident, local->ident) == 0) {
@@ -477,6 +480,7 @@ int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
             return (int8_t) analyser_push_free(current, true, i, *ident);
         }
     }
+
 
     // 一级 parent 没有找到，则继续向上 parent 递归查询
     int8_t parent_free_index = analyser_resolve_free(current->parent, ident);
@@ -498,18 +502,14 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
     ident->literal = temp->literal;
     expr->value = ident;
 
-    // 在当前函数作用域中查找变量定义
-    local_scope_t *current_scope = m->analyser_current->current_scope;
-    while (current_scope != NULL) {
-        for (int i = 0; i < current_scope->idents->count; ++i) {
-            local_ident_t *local = current_scope->idents->take[i];
-            if (str_equal(ident->literal, local->ident)) {
-                // 在本地变量中找到,则进行简单改写 (从而可以在符号表中有唯一名称,方便定位)
-                expr->value = ast_new_ident(local->unique_ident);
-                return;
-            }
+    // 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的 local)
+    slice_t *locals = m->analyser_current->locals;
+    for (int i = locals->count - 1; i >= 0; --i) {
+        local_ident_t *local = locals->take[i];
+        if (str_equal(local->ident, ident->literal)) {
+            ident->literal = local->unique_ident;
+            return;
         }
-        current_scope = current_scope->parent;
     }
 
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
