@@ -73,6 +73,8 @@ static type_kind token_to_kind[] = {
         // type
         [TOKEN_BOOL] = TYPE_BOOL,
         [TOKEN_FLOAT] = TYPE_FLOAT,
+        [TOKEN_F32] = TYPE_FLOAT32,
+        [TOKEN_F64] = TYPE_FLOAT64,
         [TOKEN_INT] = TYPE_INT,
         [TOKEN_I8] = TYPE_INT8,
         [TOKEN_I16] = TYPE_INT16,

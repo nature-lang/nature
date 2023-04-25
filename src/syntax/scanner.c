@@ -376,7 +376,7 @@ token_e scanner_ident_type(char *word, int length) {
                 case '3':
                     return scanner_rest(word, length, 2, 1, "2", TOKEN_I32);
                 case '6':
-                    return scanner_rest(word, length, 2, 1, "6", TOKEN_I64);
+                    return scanner_rest(word, length, 2, 1, "4", TOKEN_I64);
             }
         }
         case 'n':
@@ -425,7 +425,7 @@ token_e scanner_ident_type(char *word, int length) {
                 case '3':
                     return scanner_rest(word, length, 2, 1, "2", TOKEN_U32);
                 case '6':
-                    return scanner_rest(word, length, 2, 1, "6", TOKEN_U64);
+                    return scanner_rest(word, length, 2, 1, "4", TOKEN_U64);
             }
         }
         case 'r': {

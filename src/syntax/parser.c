@@ -45,7 +45,7 @@ static token_t *parser_must(module_t *m, token_e expect) {
     assertf(t->type == expect, "line: %d, parser error: expect '%s' token_t actual '%s' token_t",
             parser_line(m),
             token_str[expect],
-            token_str[t->type]);
+            t->literal);
 
     parser_advance(m);
     return t;
@@ -217,6 +217,9 @@ static type_t parser_type(module_t *m) {
         } while (parser_consume(m, TOKEN_COMMA));
 
         parser_must(m, TOKEN_RIGHT_PAREN);
+        result.kind = TYPE_TUPLE;
+        result.tuple = tuple;
+        return result;
     }
 
     // {int:int} or {int}
@@ -1252,24 +1255,24 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
  */
 static ast_stmt *parser_fndef_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_fndef_t *fn_decl = NEW(ast_fndef_t);
+    ast_fndef_t *fndef = NEW(ast_fndef_t);
 
     parser_must(m, TOKEN_FN);
     // stmt 中 name 不允许省略
     token_t *name_token = parser_must(m, TOKEN_IDENT);
-    fn_decl->name = name_token->literal;
-    parser_formals(m, fn_decl);
+    fndef->name = name_token->literal;
+    parser_formals(m, fndef);
     // 可选返回参数
     if (parser_consume(m, TOKEN_COLON)) {
-        fn_decl->return_type = parser_type(m);
+        fndef->return_type = parser_type(m);
     } else {
-        fn_decl->return_type = type_basic_new(TYPE_VOID);
+        fndef->return_type = type_basic_new(TYPE_VOID);
     }
 
-    fn_decl->body = parser_block(m);
+    fndef->body = parser_block(m);
 
     result->assert_type = AST_FNDEF;
-    result->value = fn_decl;
+    result->value = fndef;
     return result;
 }
 
