@@ -258,7 +258,7 @@ typedef struct closure_t {
     char *name;
     char *end_label; // 结束 label
     // lir_operand_t
-    void *lir_result; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
+    void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
 
     linked_t *operations; // 指令列表
 

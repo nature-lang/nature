@@ -2,6 +2,7 @@ int cash = 1000 // main 不是 module, 所以这里不是全局符号,而是局�
 
 fn save(int number):int {
     cash = cash + number
+    return cash
 }
 
 println("init, cash=", cash)

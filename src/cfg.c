@@ -1,50 +1,108 @@
 #include "cfg.h"
 #include <assert.h>
 
+static void broken_critical_edges(closure_t *c) {
+    SLICE_FOR(c->blocks) {
+        basic_block_t *b = SLICE_VALUE(c->blocks);
+        for (int i = 0; i < b->preds->count; ++i) {
+            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
+            if (b->preds->count > 1 && p->succs->count > 1) {
+                // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
+                lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
+                lir_operand_t *label = label_op->output;
+                lir_op_t *bal_op = lir_op_bal(label_operand(b->name, true));
+
+                lir_symbol_label_t *symbol_label = label->value;
+                basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
+//                slice_insert(c->blocks, b->id, new_block);
+                slice_push(c->blocks, new_block);
+                // 添加指令
+                linked_push(new_block->operations, label_op);
+                linked_push(new_block->operations, bal_op);
+
+                // cfg 关系调整
+                slice_push(new_block->succs, b);
+                slice_push(b->preds, new_block);
+
+                slice_push(new_block->preds, p);
+                slice_push(p->succs, new_block);
+                // 从 p->succs 中删除 b, 从 b 的 preds 中删除 p
+                for (int j = 0; j < p->succs->count; ++j) {
+                    if (p->succs->take[j] == b) {
+                        slice_remove(p->succs, j);
+                        break;
+                    }
+                }
+                for (int j = 0; j < b->preds->count; ++j) {
+                    if (b->preds->take[j] == p) {
+                        slice_remove(b->preds, j);
+                        break;
+                    }
+                }
+
+                // 跳转指令调整  p -> b 改成 p -> new_block -> b
+                linked_node *last = linked_last(p->operations);
+                assert(OP(last)->code == LIR_OPCODE_BAL);
+                symbol_label = OP(last)->output->value;
+                if (symbol_label->ident == b->name) {
+                    // change to new_block
+                    symbol_label->ident = new_block->name;
+                }
+
+                if (lir_op_branch(last->prev->value)) {
+                    symbol_label = OP(last->prev)->output->value;
+                    if (symbol_label->ident == b->name) {
+                        symbol_label->ident = new_block->name;
+                    }
+                }
+
+            }
+        }
+    }
+}
 
 /**
- * l1:
- *  move
- *  move
- *  add
- *  goto l2 一定会有 label
- *
- * C1:
- *  add
- *  add
- *  goto l3
- *
- * C2:
- *  move
- *  move
- *  bal end_for
- *
- * end_for:
- *  test
- *  sub
- *  shift
- *  beq l3
- *  bal l3
- *
- * l3:
- *  test
- *  sub
- *  shift
- * 当遇到 label_a 时会开启一个新的 basic block, 如果再次遇到一个 label_b 也需要开启一个 branch 指令，但如果 label_a 最后一条指令不是 branch 指令，
- * 则需要添加 branch 指令到 label_a 中链接 label_a 和 label_b, 同理，如果遇到了 branch 指令(需要结束 basic block)到下一条指令不是 label，
- * 则需要添加 label 到 branch 到下一条指令中。 从而能够正确开启新的 basic block
- *
- * 为了 basic block 之间能够任意排序，即使是顺序 block，之间也需要添加 BAL 指令进行链接
- * 类似:
- * BEA B1
- * BAL B3
- *
- * 如果 from -> edge -> to, to 不是 from 的唯一 succ, from 也不是 to 的唯一 pred,这种边称为 critical edges，会影响 RESOLVE ssa 和 data_flow
- * 所以需要添加一个新的 basic block, 作为 edge 的中间节点,从而打破 critical edges
+ * 从 entry 到 end block 到所有线路上都需要包含 return 语句
+ * 如果到达了 label_end block 则说明这一条线路上没有 return, 直接 assert 即可
  * @param c
+ * @param entry
  * @return
  */
-void cfg(closure_t *c) {
+static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
+    if (c->return_operand == NULL) {
+        return;
+    }
+
+    if (handled == NULL) {
+        handled = table_new();
+    }
+    if (table_exist(handled, b->name)) {
+        // 循环节点
+        return;
+    }
+
+    // 含多个 return 指令，都清理掉
+    LINKED_FOR(b->operations) {
+        lir_op_t *op = LINKED_VALUE();
+        // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
+        if (op->code == LIR_OPCODE_RETURN) {
+            return; // 递归返回
+        }
+    }
+
+
+    // end_label 是最后到 label 如果都不包含 opcode return, 则存在一条不包含 return 的线路
+    if (str_equal(b->name, c->end_label)) {
+        assertf(false, "fn %s missing return", c->name);
+    }
+
+    // 当前 block 没有找到 return, 递归寻找 succ
+    for (int i = 0; i < b->succs->count; ++i) {
+        return_check(c, handled, b->succs->take[i]);
+    }
+}
+
+static void cfg_build(closure_t *c) {
     // 用于快速定位 block succ/pred
     table_t *basic_block_table = table_new();
 
@@ -131,7 +189,6 @@ void cfg(closure_t *c) {
         linked_push(current_block->operations, op);
     }
 
-
     // 2. 根据 last_op is goto,cmp_goto 构造跳跃关联关系(所以一个 basic block 通常只有两个 succ)
     // call 调到别的 closure_t 去了，不在当前 closure_t cfg 构造的考虑范围
     SLICE_FOR(c->blocks) {
@@ -159,69 +216,58 @@ void cfg(closure_t *c) {
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
     }
+}
+
+/**
+ * l1:
+ *  move
+ *  move
+ *  add
+ *  goto l2 一定会有 label
+ *
+ * C1:
+ *  add
+ *  add
+ *  goto l3
+ *
+ * C2:
+ *  move
+ *  move
+ *  bal end_for
+ *
+ * end_for:
+ *  test
+ *  sub
+ *  shift
+ *  beq l3
+ *  bal l3
+ *
+ * l3:
+ *  test
+ *  sub
+ *  shift
+ * 当遇到 label_a 时会开启一个新的 basic block, 如果再次遇到一个 label_b 也需要开启一个 branch 指令，但如果 label_a 最后一条指令不是 branch 指令，
+ * 则需要添加 branch 指令到 label_a 中链接 label_a 和 label_b, 同理，如果遇到了 branch 指令(需要结束 basic block)到下一条指令不是 label，
+ * 则需要添加 label 到 branch 到下一条指令中。 从而能够正确开启新的 basic block
+ *
+ * 为了 basic block 之间能够任意排序，即使是顺序 block，之间也需要添加 BAL 指令进行链接
+ * 类似:
+ * BEA B1
+ * BAL B3
+ *
+ * 如果 from -> edge -> to, to 不是 from 的唯一 succ, from 也不是 to 的唯一 pred,这种边称为 critical edges，会影响 RESOLVE ssa 和 data_flow
+ * 所以需要添加一个新的 basic block, 作为 edge 的中间节点,从而打破 critical edges
+ * @param c
+ * @return
+ */
+void cfg(closure_t *c) {
+    cfg_build(c);
 
     broken_critical_edges(c);
 
     // 添加入口块
     c->entry = c->blocks->take[0];
-}
 
-void broken_critical_edges(closure_t *c) {
-    SLICE_FOR(c->blocks) {
-        basic_block_t *b = SLICE_VALUE(c->blocks);
-        for (int i = 0; i < b->preds->count; ++i) {
-            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
-            if (b->preds->count > 1 && p->succs->count > 1) {
-                // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
-                lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
-                lir_operand_t *label = label_op->output;
-                lir_op_t *bal_op = lir_op_bal(label_operand(b->name, true));
-
-                lir_symbol_label_t *symbol_label = label->value;
-                basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
-//                slice_insert(c->blocks, b->id, new_block);
-                slice_push(c->blocks, new_block);
-                // 添加指令
-                linked_push(new_block->operations, label_op);
-                linked_push(new_block->operations, bal_op);
-
-                // cfg 关系调整
-                slice_push(new_block->succs, b);
-                slice_push(b->preds, new_block);
-
-                slice_push(new_block->preds, p);
-                slice_push(p->succs, new_block);
-                // 从 p->succs 中删除 b, 从 b 的 preds 中删除 p
-                for (int j = 0; j < p->succs->count; ++j) {
-                    if (p->succs->take[j] == b) {
-                        slice_remove(p->succs, j);
-                        break;
-                    }
-                }
-                for (int j = 0; j < b->preds->count; ++j) {
-                    if (b->preds->take[j] == p) {
-                        slice_remove(b->preds, j);
-                        break;
-                    }
-                }
-
-                // 跳转指令调整  p -> b 改成 p -> new_block -> b
-                linked_node *last = linked_last(p->operations);
-                assert(OP(last)->code == LIR_OPCODE_BAL);
-                symbol_label = OP(last)->output->value;
-                if (symbol_label->ident == b->name) {
-                    // change to new_block
-                    symbol_label->ident = new_block->name;
-                }
-
-                if (lir_op_branch(last->prev->value)) {
-                    symbol_label = OP(last->prev)->output->value;
-                    if (symbol_label->ident == b->name) {
-                        symbol_label->ident = new_block->name;
-                    }
-                }
-
-            }
-        }
-    }
+    // return 分析
+    return_check(c, NULL, c->entry);
 }

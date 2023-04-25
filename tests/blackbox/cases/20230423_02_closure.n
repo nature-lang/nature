@@ -7,11 +7,9 @@ fn make_atm():fn(int):int {
 }
 
 var atm1_draw = make_atm()
-//var atm2_draw = make_atm()
+var atm2_draw = make_atm()
 
-atm1_draw(100)
-
-//println(atm1_draw(100))
-//println(atm1_draw(100))
-//println(atm2_draw(100))
-//println(atm2_draw(100))
+println(atm1_draw(100))
+println(atm1_draw(100))
+println(atm2_draw(100))
+println(atm2_draw(100))

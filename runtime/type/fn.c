@@ -188,6 +188,8 @@ void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t env_index, add
         table_set(env_table, utoa(stack_addr), upvalue);
         upvalue->ref = (void *) stack_addr;
         DEBUGF("[runtime.env_assign] upvalue %p created", upvalue);
+    } else {
+        DEBUGF("[runtime.env_assign] upvalue=%p already in table", upvalue);
     }
 
     envs->values[env_index] = upvalue;
@@ -203,6 +205,7 @@ void env_closure(uint64_t stack_addr) {
     upvalue->value.uint_value = value;
     upvalue->ref = &upvalue->value;
 
+    table_delete(env_table, utoa(stack_addr));
 }
 
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {

@@ -426,9 +426,12 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt *ast) {
 
 static void compiler_return(module_t *m, ast_return_stmt *ast) {
     if (ast->expr != NULL) {
-        assert(m->compiler_current->lir_result);
+        assert(m->compiler_current->return_operand);
         lir_operand_t *src = compiler_expr(m, *ast->expr);
-        OP_PUSH(lir_op_move(m->compiler_current->lir_result, src));
+        OP_PUSH(lir_op_move(m->compiler_current->return_operand, src));
+
+        // 用来做可达分析
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
     }
 
     OP_PUSH(lir_op_bal(label_operand(m->compiler_current->end_label, false)));
@@ -1165,6 +1168,9 @@ static void compiler_throw(module_t *m, ast_throw_stmt *stmt) {
     // attach errort to processor
     OP_PUSH(rt_call(RT_CALL_PROCESSOR_ATTACH_ERRORT, NULL, 1, errort_target));
 
+    // 插入 return 标识(用来做 return check 的，check 完会清除的)
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
+
     // ret
     OP_PUSH(lir_op_bal(label_operand(m->compiler_current->end_label, false)));
 }
@@ -1299,8 +1305,7 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 有返回值
     if (fndef->return_type.kind != TYPE_VOID) {
-        char *ident = str_connect(c->name, ".result");
-        c->lir_result = custom_var_operand(m, fndef->return_type, ident);
+        c->return_operand = custom_var_operand(m, fndef->return_type, "$result");
     }
 
     OP_PUSH(lir_op_label(fndef->name, false));
@@ -1328,7 +1333,6 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
-    // closure env var
     for (int i = 0; i < fndef->be_capture_locals->count; ++i) {
         local_ident_t *local = fndef->be_capture_locals->take[i];
         assert(local->is_capture);
@@ -1338,7 +1342,7 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // lower 的时候需要进行特殊的处理
-    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->lir_result, NULL, NULL));
+    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));
 
     return c;
 }
