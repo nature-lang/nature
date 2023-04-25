@@ -1075,7 +1075,7 @@ static ast_expr parser_left_curly_expr(module_t *m) {
 }
 
 /**
- * fn def 如果是右值定义时，是允许匿名的
+ * fn def 如果是右值定义时，必须使用匿名函数
  * @param m
  * @return
  */
@@ -1086,8 +1086,9 @@ static ast_expr parser_fndef_expr(module_t *m) {
 
     parser_must(m, TOKEN_FN);
     if (parser_is(m, TOKEN_IDENT)) {
-        token_t *name_token = parser_advance(m);
-        fn_decl->name = name_token->literal;
+        assertf(false, "closure fndef cannot with name");
+//        token_t *name_token = parser_advance(m);
+//        fn_decl->name = name_token->literal;
     }
 
     parser_formals(m, fn_decl);

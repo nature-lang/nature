@@ -363,7 +363,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
 }
 
 static inline void *sys_memory_map(void *hint, uint64_t size) {
-    return mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    return mmap(hint, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 }
 
 static inline void *mallocz_big(size_t size) {

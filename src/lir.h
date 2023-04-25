@@ -80,7 +80,8 @@
 #define RT_CALL_FN_NEW "fn_new"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_ENV_ASSIGN "env_assign" // 更新 envs[i] 的值
+#define RT_CALL_ENV_ASSIGN "env_assign"
+#define RT_CALL_ENV_CLOSURE "env_closure"
 #define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"
 #define RT_CALL_ENV_ACCESS_REF "env_access_ref"
 
@@ -327,36 +328,20 @@ static inline lir_operand_t *var_operand(module_t *m, char *ident) {
     return operand_new(LIR_OPERAND_VAR, var);
 }
 
+static inline lir_operand_t *label_operand(char *ident, bool is_local) {
+    lir_symbol_label_t *label = NEW(lir_symbol_label_t);
+    label->ident = ident;
+    label->is_local = is_local;
+    return operand_new(LIR_OPERAND_SYMBOL_LABEL, label);
+}
+
 static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
     symbol_t *s = symbol_table_get(ident);
     assertf(s, "notfound symbol=%s", ident);
     assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);
 
     // 构造 label
-    lir_symbol_label_t *symbol = NEW(lir_symbol_label_t);
-    symbol->ident = ident;
-    symbol->is_local = s->is_local;
-    return operand_new(LIR_OPERAND_SYMBOL_LABEL, symbol);
-}
-
-
-static inline lir_operand_t *lir_new_empty_operand() {
-    lir_operand_t *operand = NEW(lir_operand_t);
-    operand->assert_type = 0;
-    operand->value = NULL;
-    return operand;
-}
-
-
-static inline lir_operand_t *label_operand(char *ident, bool is_local) {
-    lir_symbol_label_t *label = NEW(lir_symbol_label_t);
-    label->ident = ident;
-    label->is_local = is_local;
-
-    lir_operand_t *operand = NEW(lir_operand_t);
-    operand->assert_type = LIR_OPERAND_SYMBOL_LABEL;
-    operand->value = label;
-    return operand;
+    return label_operand(ident, s->is_local);
 }
 
 
@@ -641,7 +626,7 @@ static inline void lir_set_quick_op(basic_block_t *block) {
 }
 
 
-static inline lir_op_t *lir_rt_call(char *name, lir_operand_t *result, int arg_count, ...) {
+static inline lir_op_t *rt_call(char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *params_operand = slice_new();
 
     va_list args;

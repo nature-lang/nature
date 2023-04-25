@@ -12,17 +12,16 @@ static inline memory_array_t *array_new(rtype_t *element_rtype, uint64_t length)
     type_array.array->length = length;
 
     // - 将 type_array 转换成 rtype
-    rtype_t rtype_array = reflect_type(type_array);
-
+    rtype_t rtype = rtype_array(type_array.array);
 
     // - 基于 rtype 进行 malloc 的申请调用, 这里进行的是堆内存申请，所以需要的就是其在在堆内存中占用的空间大小
-    void *addr = runtime_malloc(rtype_array.size, &rtype_array);
+    void *addr = runtime_malloc(rtype.size, &rtype);
     DEBUGF("[array_new] base=%p, element_rtype.index=%lu, element_rtype.kind=%d, rtype_size=%lu,rtype_kind=%d",
            addr,
            element_rtype->index,
            element_rtype->kind,
-           rtype_array.size,
-           rtype_array.kind)
+           rtype.size,
+           rtype.kind)
 
     return addr;
 }

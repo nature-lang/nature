@@ -27,7 +27,7 @@ static addr_t extract_frame_base(mmode_t mode) {
 fndef_t *find_fn(addr_t addr) {
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *fn = &rt_fndef_ptr[i];
-        if (fn->base < addr && (fn->base + fn->size) > addr) {
+        if (fn->base <= addr && addr < (fn->base + fn->size)) {
             return fn;
         }
     }

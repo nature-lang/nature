@@ -1378,6 +1378,8 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         }
 
         fndef_t *f = &ct_fndef_list[count++];
+        f->fn_runtime_reg = c->fn_runtime_reg;
+        f->fn_runtime_stack = c->fn_runtime_stack;
         f->stack_size = align(c->stack_offset, cross_ptr_size());
         f->gc_bits = malloc_gc_bits(f->stack_size);
         size += calc_gc_bits_size(f->stack_size, cross_ptr_size());

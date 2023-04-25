@@ -17,7 +17,7 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
     DEBUGF("[convert_any] input_rtype_index=%lu, kind=%d, actual_index=%lu, in_heap=%d",
            input_rtype_index, rtype->kind, rtype->index, rtype->in_heap);
 
-    rtype_t any_rtype = rt_reflect_type(type_basic_new(TYPE_ANY));
+    rtype_t any_rtype = gc_rtype(2, TYPE_GC_NOSCAN, to_gc_kind(rtype->kind));
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     memory_any_t *any = runtime_malloc(sizeof(memory_any_t), &any_rtype);
@@ -85,11 +85,11 @@ memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting) 
 memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting) {
     DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, value=%p, int_value=%lu, float_value=%f",
            input_rtype_index,
-           casting.value,
+           casting.ptr_value,
            casting.int_value,
            casting.float_value);
 
-    return casting.value != NULL;
+    return casting.ptr_value != NULL;
 }
 
 /**

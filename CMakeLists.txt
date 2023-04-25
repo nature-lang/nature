@@ -28,6 +28,11 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     add_compile_definitions(DEBUG_PARSER)
 endif ()
 
+if (CMAKE_SYSTEM_PROCESSOR MATCHES amd64)
+    message("add compile def __AMD64")
+    add_compile_definitions(__AMD64)
+endif ()
+
 set(SRC_BINARY
         ${SRC_DIR}/binary/opcode/amd64/asm.c
         ${SRC_DIR}/binary/opcode/amd64/asm.h
@@ -131,7 +136,6 @@ set(SRC
         ${SRC_DIR}/cross.h)
 
 set(RUNTIME_FILES
-        ${PROJECT_SOURCE_DIR}/runtime/structs.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.h
         ${PROJECT_SOURCE_DIR}/runtime/runtime.c
         ${PROJECT_SOURCE_DIR}/runtime/processor.h
@@ -147,8 +151,8 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c
         ${PROJECT_SOURCE_DIR}/runtime/type/fn.h
         ${PROJECT_SOURCE_DIR}/runtime/type/fn.c
-        ${PROJECT_SOURCE_DIR}/runtime/type/basic.c
-        ${PROJECT_SOURCE_DIR}/runtime/type/basic.h
+        ${PROJECT_SOURCE_DIR}/runtime/basic.c
+        ${PROJECT_SOURCE_DIR}/runtime/basic.h
         ${PROJECT_SOURCE_DIR}/runtime/type/hash.h
         ${PROJECT_SOURCE_DIR}/runtime/type/map.h
         ${PROJECT_SOURCE_DIR}/runtime/type/map.c

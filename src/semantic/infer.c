@@ -1347,7 +1347,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     assertf(false, "cannot parser type %s", type_kind_string[t.kind]);
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
-    t.in_heap = type_default_in_heap(t);
+    t.in_heap = kind_in_heap(t.kind);
 
     // 计算 reflect type
     ct_reflect_type(t);
@@ -1383,6 +1383,8 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
     type_t result = type_new(TYPE_FN, f);
     result.status = REDUCTION_STATUS_DONE;
 
+    // 冗余一份，方便计算使用
+    fndef->type = result;
     return result;
 }
 
@@ -1397,8 +1399,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     infer_fndef_decl(m, fndef);
 
     // env 表达式类型还原
-    for (int i = 0; i < fndef->catch_envs->length; ++i) {
-        ast_expr *env_expr = ct_list_value(fndef->catch_envs, i);
+    for (int i = 0; i < fndef->capture_exprs->length; ++i) {
+        ast_expr *env_expr = ct_list_value(fndef->capture_exprs, i);
         infer_left_expr(m, env_expr);
     }
 

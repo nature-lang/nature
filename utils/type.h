@@ -18,14 +18,18 @@
 #define YWORD 32 // 32 byte = ymm
 #define ZWORD 64 // 64 byte
 
+#define POINTER_SIZE sizeof(void*)
+#define INT_SIZE sizeof(int64_t)
+
 typedef uint8_t byte;
 
 
 typedef union {
     int64_t int_value;
+    bool bool_value;
     uint64_t uint_value;
     double float_value;
-    void *value;
+    void *ptr_value;
 } value_casting;
 
 typedef enum {
@@ -72,6 +76,11 @@ typedef enum {
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_SELF,
+
+    // runtime 中使用的一种需要 gc 的 pointer base type 结构
+    TYPE_GC,
+    TYPE_GC_SCAN,
+    TYPE_GC_NOSCAN,
 } type_kind;
 
 static string type_kind_string[] = {
@@ -339,13 +348,8 @@ typedef struct {
 } memory_fn_t; // 就占用一个指针大小
 
 typedef struct {
-    rtype_t *rtype;
-    union {
-        void *value;
-        double float_value;
-        bool bool_value;
-        int64_t int_value;
-    };
+    value_casting value;
+    rtype_t *rtype; // TODO use rtype index
 } memory_any_t;
 
 
@@ -356,8 +360,6 @@ typedef struct {
 rtype_t reflect_type(type_t t);
 
 rtype_t ct_reflect_type(type_t t);
-
-rtype_t rt_reflect_type(type_t t);
 
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
@@ -382,6 +384,10 @@ uint8_t type_kind_sizeof(type_kind t);
  */
 uint16_t type_sizeof(type_t t);
 
+rtype_t rtype_base(type_kind kind);
+
+rtype_t rtype_array(type_array_t *t);
+
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
  * 后续 nature 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
@@ -394,51 +400,6 @@ uint16_t type_sizeof(type_t t);
 bool type_need_gc(type_t t);
 
 type_t type_ptrof(type_t t);
-
-/**
- * 一般标量类型其值默认会存储在 stack 中
- * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
- * 可以通过 kind 进行判断。
- * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
- * @param type
- * @return
- */
-static bool type_default_in_heap(type_t type) {
-    assert(type.kind > 0);
-
-    if (type.kind == TYPE_ANY ||
-        type.kind == TYPE_STRING ||
-        type.kind == TYPE_LIST ||
-        type.kind == TYPE_ARRAY ||
-        type.kind == TYPE_MAP ||
-        type.kind == TYPE_SET ||
-        type.kind == TYPE_TUPLE ||
-        type.kind == TYPE_STRUCT ||
-        type.kind == TYPE_FN) {
-        return true;
-    }
-    return false;
-}
-
-static type_t type_basic_new(type_kind kind) {
-    type_t result = {
-            .status = REDUCTION_STATUS_DONE,
-            .kind = kind,
-            .value = 0,
-    };
-
-    result.in_heap = type_default_in_heap(result);
-
-    return result;
-}
-
-static type_t type_new(type_kind kind, void *value) {
-    type_t result = {
-            .kind = kind,
-            .value = value
-    };
-    return result;
-}
 
 
 type_ident_t *typeuse_ident_new(string literal);
@@ -465,6 +426,52 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
+rtype_t gc_rtype(uint32_t count, ...);
+
+/**
+ * 一般标量类型其值默认会存储在 stack 中
+ * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
+ * 可以通过 kind 进行判断。
+ * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
+ * @param type
+ * @return
+ */
+static inline bool kind_in_heap(type_kind kind) {
+    assert(kind > 0);
+    if (kind == TYPE_ANY ||
+        kind == TYPE_STRING ||
+        kind == TYPE_POINTER ||
+        kind == TYPE_LIST ||
+        kind == TYPE_ARRAY ||
+        kind == TYPE_MAP ||
+        kind == TYPE_SET ||
+        kind == TYPE_TUPLE ||
+        kind == TYPE_STRUCT ||
+        kind == TYPE_FN) {
+        return true;
+    }
+    return false;
+}
+
+static inline type_t type_basic_new(type_kind kind) {
+    type_t result = {
+            .status = REDUCTION_STATUS_DONE,
+            .kind = kind,
+            .value = 0,
+    };
+
+    result.in_heap = kind_in_heap(kind);
+
+    return result;
+}
+
+static inline type_t type_new(type_kind kind, void *value) {
+    type_t result = {
+            .kind = kind,
+            .value = value
+    };
+    return result;
+}
 
 static inline bool is_float(type_kind kind) {
     return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
@@ -528,11 +535,6 @@ static inline type_t basic_type_select(type_kind left, type_kind right) {
     return type_basic_new(right);
 }
 
-/**
- * 主要是用于 gc 的快速构建
- * @return
- */
-rtype_t rt_tuple_rtype(uint32_t count, ...);
-
+type_kind to_gc_kind(type_kind kind);
 
 #endif //NATURE_TYPE_H

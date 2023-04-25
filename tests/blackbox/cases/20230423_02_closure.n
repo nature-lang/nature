@@ -1,14 +1,17 @@
-fn make():fn(int):int {
-    var clash = 1000
+fn make_atm():fn(int):int {
+    var cash = 1000
     return fn(int amount):int {
-        clash -= amount // clash = clash - amount
-        return clash
+        cash -= amount
+        return cash
     }
 }
 
-var withdraw = make()
+var atm1_draw = make_atm()
+//var atm2_draw = make_atm()
 
-var balance = withdraw(10)
-//println("balance=", balance)
+atm1_draw(100)
 
-//println("balance=", withdraw(100))
+//println(atm1_draw(100))
+//println(atm1_draw(100))
+//println(atm2_draw(100))
+//println(atm2_draw(100))

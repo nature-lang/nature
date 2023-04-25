@@ -376,7 +376,6 @@ typedef struct {
 } ast_tuple_new;
 
 typedef struct {
-    char *fn_name;
     uint8_t index;
     char *unique_ident;
 } ast_env_access;
@@ -402,14 +401,13 @@ typedef struct ast_fndef_t {
     void *closure; // 全局 closure 冗余
 
     // ast_expr, 当前 fn 中引用的外部的环境
-    list_t *catch_envs;
+    list_t *capture_exprs;
 
-    list_t *be_catch_vars; // 当前 fn 中被内部环境引用的 vars
+    slice_t *be_capture_locals; // local_ident_t*
 
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;
-
-    struct ast_fndef_t *parent;
+    type_t type; // 类型冗余一份
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);

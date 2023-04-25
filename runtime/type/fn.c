@@ -3,6 +3,8 @@
 #include "runtime/collector.h"
 #include "array.h"
 
+#ifdef __AMD64
+
 /**
  * 绝对地址跳转
  * 假设 addr = 0x40007fffb8
@@ -123,9 +125,16 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
     fn_runtime->code_size = size;
 }
 
+#else
+static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr_t fn_addr) {
+    assertf(false, "[runtime.gen_closure_jit_codes]cannot support arch");
+}
+#endif
+
 void *fn_new(addr_t fn_addr, envs_t *envs) {
+    DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs_base=%p", fn_addr, envs);
     assert(envs);
-    rtype_t fn_rtype = rt_tuple_rtype(4, TYPE_POINTER, TYPE_POINTER, TYPE_INT64, TYPE_INT64);
+    rtype_t fn_rtype = gc_rtype(4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     runtime_fn_t *fn_runtime = runtime_malloc(sizeof(runtime_fn_t), &fn_rtype);
     free(fn_rtype.gc_bits);
     fn_runtime->fn_addr = fn_addr;
@@ -134,13 +143,11 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr);
-    assertf(fndef, "cannot find fn by addr=%lx", fn_addr);
+    assertf(fndef, "cannot find fn by addr=0x%lx", fn_addr);
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
-    DEBUGF("[runtime.fn_new] fn_runtime_base=%p, fn_addr=0x%lx, envs_base=%p, fndef.fn_runtime_stack=%lu, fndef.fn_runtime_reg=%lu, jit_code=%p",
+    DEBUGF("[runtime.fn_new] fn find success, fn_runtime_base=%p, fndef.fn_runtime_stack=%lu, fndef.fn_runtime_reg=%lu, jit_code=%p",
            fn_runtime,
-           fn_addr,
-           envs,
            fndef->fn_runtime_stack,
            fndef->fn_runtime_reg,
            fn_runtime->closure_jit_codes)
@@ -148,41 +155,49 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     return fn_runtime->closure_jit_codes;
 }
 
-envs_t *env_new(int length) {
+envs_t *env_new(uint64_t length) {
+    DEBUGF("[runtime.env_new] length=%lu, %p", length, env_table);
     if (env_table == NULL) {
         env_table = table_new();
     }
 
-    rtype_t element_rtype = rt_reflect_type(type_basic_new(TYPE_POINTER));
+    rtype_t element_rtype = gc_rtype(1, TYPE_GC_SCAN);
     void *values = array_new(&element_rtype, length);
 
-    rtype_t envs_rtype = rt_tuple_rtype(2, TYPE_POINTER, TYPE_INT64);
+    rtype_t envs_rtype = gc_rtype(2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     envs_t *envs = runtime_malloc(sizeof(envs_t), &envs_rtype);
     free(envs_rtype.gc_bits);
     envs->length = length;
     envs->values = values;
 
+    DEBUGF("[runtime.env_new] success, values_base=%p, length=%lu", envs->values, envs->length);
     return envs;
 }
 
-void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t index, addr_t stack_addr) {
+void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t env_index, addr_t stack_addr) {
+    DEBUGF("[runtime.env_assign] env_base=%p, rtype_index=%lu, env_index=%lu, stack_addr=0x%lx",
+           envs, item_rtype_index, env_index, stack_addr);
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     rtype_t *item_rtype = rt_find_rtype(item_rtype_index);
     if (!upvalue) {
+        DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr)
         // create upvalue_t
-        rtype_t upvalue_rtype = rt_tuple_rtype(2, item_rtype->kind, TYPE_INT64);
+        rtype_t upvalue_rtype = gc_rtype(2, to_gc_kind(item_rtype->kind), TYPE_GC_NOSCAN);
         upvalue = runtime_malloc(sizeof(upvalue_t), &upvalue_rtype);
         free(upvalue_rtype.gc_bits);
         table_set(env_table, utoa(stack_addr), upvalue);
         upvalue->ref = (void *) stack_addr;
+        DEBUGF("[runtime.env_assign] upvalue %p created", upvalue);
     }
 
-    envs->values[index] = upvalue;
+    envs->values[env_index] = upvalue;
 }
 
-void env_close(uint64_t stack_addr) {
+void env_closure(uint64_t stack_addr) {
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);
+    DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p", stack_addr, upvalue);
+
     // 无论值的大小，同一按 8byte copy 就是了， copy 多了也没事
     uint64_t value = fetch_addr_value(stack_addr);
     upvalue->value.uint_value = value;
@@ -193,16 +208,17 @@ void env_close(uint64_t stack_addr) {
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {
     DEBUGF("[env_access_ref] fn_base=%p, fn->envs_base=%p, index=%lu, dst_ref=%p, size=%lu",
            fn, fn->envs, index, dst_ref, size);
-    assert(index >= fn->envs->length);
+    assert(index < fn->envs->length);
     upvalue_t *upvalue = fn->envs->values[index];
 
     memmove(dst_ref, upvalue->ref, size);
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
-    DEBUGF("[env_access_ref] fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu",
-           fn, fn->envs, index, src_ref, size);
-    assert(index >= fn->envs->length);
+    DEBUGF("[env_access_ref] fn_base=%p, index=%lu, src_ref=%p, size=%lu",
+           fn, index, src_ref, size);
+    assert(index < fn->envs->length);
+    assert(fn);
 
     upvalue_t *upvalue = fn->envs->values[index];
 

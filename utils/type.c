@@ -6,7 +6,7 @@
 #include "custom_links.h"
 #include "src/cross.h"
 
-static rtype_t rtype_base(type_kind kind) {
+rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
     rtype_t rtype = {
             .size = type_kind_sizeof(kind),  // 单位 byte
@@ -18,10 +18,6 @@ static rtype_t rtype_base(type_kind kind) {
 
     return rtype;
 }
-
-//static rtype_t rtype_byte() {
-//    return rtype_base(TYPE_BYTE);
-//}
 
 static rtype_t rtype_int(type_kind kind) {
     return rtype_base(kind);
@@ -69,7 +65,7 @@ static rtype_t rtype_string() {
     rtype_t rtype = {
             .size = sizeof(memory_string_t),
             .hash = hash,
-            .last_ptr = 0,
+            .last_ptr = cross_ptr_size(),
             .kind = TYPE_STRING,
     };
 
@@ -107,7 +103,7 @@ static rtype_t rtype_list(type_list_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_array(type_array_t *t) {
+rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = t->element_rtype;
     uint64_t element_size = element_rtype.size;
 
@@ -183,6 +179,7 @@ static rtype_t rtype_set(type_set_t *t) {
 
 
 /**
+ * 从类型声明上无法看出 any 是否需要 gc,那就默认第二个值总是需要 gc 扫描
  * hash = type_kind
  * @param t
  * @return
@@ -194,9 +191,12 @@ static rtype_t rtype_any(type_any_t *t) {
             .size = cross_ptr_size() * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = hash,
             .kind = TYPE_ANY,
-            .last_ptr = 0,
+            .last_ptr = cross_ptr_size(),
             .gc_bits = malloc_gc_bits(cross_ptr_size() * 2)
     };
+
+    bitmap_set(rtype.gc_bits, 0);
+
     return rtype;
 }
 
@@ -449,15 +449,6 @@ rtype_t ct_reflect_type(type_t t) {
     return rtype;
 }
 
-
-rtype_t rt_reflect_type(type_t t) {
-    rtype_t rtype = reflect_type(t);
-
-    // TODO 基于 hash 的重复检测
-    // TODO 应该在 runtime 中实现，且写入到 rt reflect_type 中
-    return rtype;
-}
-
 uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
     size = align(size, ptr_size);
 
@@ -579,11 +570,30 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     return 0;
 }
 
-rtype_t rt_tuple_rtype(uint32_t count, ...) {
-    type_tuple_t *tuple = NEW(type_tuple_t);
-    tuple->elements = ct_list_new(sizeof(type_t));
-    type_t t = type_basic_new(TYPE_TUPLE);
-    t.tuple = tuple;
+type_kind to_gc_kind(type_kind kind) {
+    assert(kind > 0);
+    if (kind_in_heap(kind)) {
+        return TYPE_GC_SCAN;
+    }
+
+    return TYPE_GC_NOSCAN;
+}
+
+/**
+ * 生成用于 gc 的 rtype
+ * @param count
+ * @param ...
+ * @return
+ */
+rtype_t gc_rtype(uint32_t count, ...) {
+    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
+    rtype_t rtype = {
+            .size = count * POINTER_SIZE,
+            .kind = TYPE_GC,
+            .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+            .gc_bits = malloc_gc_bits(count * POINTER_SIZE)
+    };
+
 
     va_list valist;
     /* 初始化可变参数列表 */
@@ -591,16 +601,17 @@ rtype_t rt_tuple_rtype(uint32_t count, ...) {
 
     for (int i = 0; i < count; i++) {
         type_kind kind = va_arg(valist, type_kind);
-        type_t temp = type_basic_new(kind);
-        ct_list_push(tuple->elements, &temp);
-
+        if (kind == TYPE_GC_SCAN) {
+            bitmap_set(rtype.gc_bits, i);
+            rtype.last_ptr = (i + 1) * POINTER_SIZE;
+        } else if (kind == TYPE_GC_NOSCAN) {
+//            bitmap_clear(rtype.gc_bits, i);
+        } else {
+            assertf(false, "gc rtype kind exception");
+        }
     }
     va_end(valist);
 
-    rtype_t result = rt_reflect_type(t);
-
-    ct_list_free(tuple->elements);
-    free(tuple);
-
-    return result;
+    return rtype;
 }
+

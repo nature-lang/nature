@@ -25,11 +25,11 @@ typedef struct {
 
 void *fn_new(addr_t fn_addr, envs_t *envs);
 
-envs_t *env_new(int length);
+envs_t *env_new(uint64_t length);
 
-void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t index, addr_t stack_addr);
+void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t env_index, addr_t stack_addr);
 
-void env_close(addr_t stack_addr);
+void env_closure(addr_t stack_addr);
 
 /**
  * 访问的是 env[index] 对应的 addr 中的对应的数据并复制给 dst_ref

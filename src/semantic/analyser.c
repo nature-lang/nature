@@ -181,8 +181,11 @@ static void analyser_end_scope(module_t *m) {
             break;
         }
 
-        // TODO close upvalue? 不需要在这里操作，只需要在这里将 local->is_capture 的 ident 收集一下
-        //  在 compiler closure 的最后做统一 close 就可以了，liner scan 不会根据 scope 的变化动态变更一个变量所在的栈的位置
+
+        if (local->is_capture) {
+            slice_push(m->analyser_current->fndef->be_capture_locals, local);
+        }
+
         // 而是同一个 ident 只会在同一个 stack slot 中
         slice_remove(locals, locals->count - 1);
     }
@@ -299,20 +302,12 @@ static void analyser_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt *s
 }
 
 static void analyser_fndef_name(module_t *m, ast_fndef_t *fndef) {
-    // 仅 fun 再次定义 as 才需要再次添加到符号表
-    if (!str_equal(fndef->name, FN_MAIN_NAME)) {
-        if (strlen(fndef->name) == 0) {
-            // 如果没有函数名称，则添加匿名函数名称(通过 module 唯一标识区分)
-            fndef->name = ANONYMOUS_FN_NAME;
-        } else {
-            analyser_redeclare_check(m, fndef->name);
-        }
+    assertf(str_equal(fndef->name, ""), "closure fn has name=%s", fndef->name);
 
-        // 函数名称改写
-        local_ident_t *local = local_ident_new(m, SYMBOL_FN, fndef, fndef->name);
-
-        fndef->name = local->unique_ident;
-    }
+    // 这里是 label lift 后到 label name
+    fndef->name = ANONYMOUS_FN_NAME;
+    local_ident_t *local = local_ident_new(m, SYMBOL_FN, fndef, fndef->name);
+    fndef->name = local->unique_ident;
 }
 
 static void analyser_function_begin(module_t *m) {
@@ -325,7 +320,7 @@ static void analyser_function_end(module_t *m) {
     m->analyser_current = m->analyser_current->parent;
 }
 
-static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
+static analyser_fndef_t *analyser_current_init(module_t *m, ast_fndef_t *fndef) {
     analyser_fndef_t *new = NEW(analyser_fndef_t);
     new->locals = slice_new();
     new->frees = slice_new();
@@ -333,7 +328,10 @@ static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
 
     new->delay_fndefs = ct_list_new(sizeof(delay_fndef_t));
     new->scope_depth = 0;
-    new->fn_name = fn_name;
+
+    fndef->capture_exprs = ct_list_new(sizeof(ast_expr));
+    fndef->be_capture_locals = slice_new();
+    new->fndef = fndef;
 
     // 继承关系
     new->parent = m->analyser_current;
@@ -360,9 +358,7 @@ static analyser_fndef_t *analyser_current_init(module_t *m, char *fn_name) {
  * @return
  */
 static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
-    fndef->catch_envs = ct_list_new(sizeof(ast_expr));
-
-    analyser_current_init(m, fndef->name);
+    analyser_current_init(m, fndef);
 
     analyser_typeuse(m, &fndef->return_type);
 
@@ -410,13 +406,12 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
             // ast_env_index 表达式, 这里时 parent 再次引用了 parent env 到意思
             expr.assert_type = AST_EXPR_ENV_ACCESS;
             ast_env_access *env_access = NEW(ast_env_access);
-            env_access->fn_name = m->analyser_current->parent->fn_name;
             env_access->index = free_var->env_index;
             env_access->unique_ident = free_var->ident;
             expr.value = env_access;
         }
 
-        ct_list_push(fndef->catch_envs, &expr);
+        ct_list_push(fndef->capture_exprs, &expr);
     }
 
     // 对当前 fndef 中对所有 sub fndef 进行 analyser
@@ -519,7 +514,6 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;
         ast_env_access *env_access = NEW(ast_env_access);
-        env_access->fn_name = m->analyser_current->fn_name;
         env_access->index = free_var_index;
         // 外部到 ident 可能已经修改了名字,这里进行冗于记录
         env_access->unique_ident = ident->literal;
@@ -760,7 +754,11 @@ static void analyser_expr(module_t *m, ast_expr *expr) {
     }
 }
 
-
+/**
+ * 包含在 fndef body 中等各种表达式
+ * @param m
+ * @param stmt
+ */
 static void analyser_stmt(module_t *m, ast_stmt *stmt) {
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
@@ -776,15 +774,16 @@ static void analyser_stmt(module_t *m, ast_stmt *stmt) {
             return analyser_assign(m, stmt->value);
         }
         case AST_FNDEF: {
+            assertf(false, "closure fn '%s' can only be used in expr", ((ast_fndef_t *) stmt->value)->name);
             // 主要是 fn_name unique 处理
-            analyser_fndef_name(m, stmt->value);
+//            analyser_fndef_name(m, stmt->value);
 
-            delay_fndef_t d = {
-                    .fndef = stmt->value,
-                    .is_stmt = true,
+//            delay_fndef_t d = {
+//                    .fndef = stmt->value,
+//                    .is_stmt = true,
 //                    .scope = m->analyser_current->current_scope
-            };
-            ct_list_push(m->analyser_current->delay_fndefs, &d);
+//            };
+//            ct_list_push(m->analyser_current->delay_fndefs, &d);
 
             break;
         }
@@ -846,7 +845,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
     slice_t *var_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
 
-    // 跳过 import 语句开始计算
+    // 跳过 import 语句开始计算, 不直接使用 analyser stmt, 因为 module 中不需要这么多表达式
     for (int i = import_end_index; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type == AST_VAR_DECL) {
@@ -891,16 +890,15 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = stmt->value;
-            // 这里就可以看到 fn name 没有做唯一性处理，只是加了 ident 限定
+            // 这里就可以看到 fn name 没有做唯一性处理，只是加了 ident 限定, 并加入到了全局符号表中
             fndef->name = ident_with_module(m->ident, fndef->name); // 全局函数改名
-
             symbol_t *s = symbol_table_set(fndef->name, SYMBOL_FN, fndef, false);
             slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
             continue;
         }
 
-        assert(false && "[analyser_module] stmt.code not allow, must var_decl/new_fn/type_decl");
+        assert(false && "[analyser_module] module stmt only support var_decl/new_fn/type_decl");
     }
 
     // 添加 init fn
@@ -963,7 +961,32 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     // init
     m->analyser_line = 0;
 
-    // main 包裹
+
+    // main 中到 fn 正常来说只允许 var f = fn(){} 的形式，但是考虑渐进式的脚本的使用方式
+    // 对于 fn f() {} 这样形式的 fndef 改写成 var f = fn() {} 的形式
+
+    for (int i = import_end_index; i < stmt_list->count; ++i) {
+        ast_stmt *stmt = stmt_list->take[i];
+        if (stmt->assert_type != AST_FNDEF) {
+            continue;
+        }
+
+        ast_fndef_t *fndef = stmt->value;
+        assert(!str_equal(fndef->name, ""));
+        char *ident = fndef->name;
+        fndef->name = "";
+        ast_vardef_stmt *var_assign = NEW(ast_vardef_stmt);
+        var_assign->var_decl.type = type_basic_new(TYPE_UNKNOWN);
+        var_assign->var_decl.ident = ident;
+        var_assign->right = (ast_expr) {
+                .assert_type = AST_FNDEF,
+                .value = fndef,
+        };
+        stmt->assert_type = AST_STMT_VAR_DEF;
+        stmt->value = var_assign;
+    }
+
+    // main 所有表达式
     ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
     fndef->name = FN_MAIN_NAME;
     fndef->body = slice_new();
@@ -978,6 +1001,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     // 先注册主 fndef
     slice_push(m->ast_fndefs, fndef);
 
+    // 作为 fn 的 body 处理
     analyser_fndef(m, fndef);
 }
 

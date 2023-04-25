@@ -167,7 +167,7 @@ static inline uint8_t cross_ptr_size() {
     }
 
     // TODO 判断当前是否在 runtime 中
-    return sizeof(void *);
+    return POINTER_SIZE;
 //    assert(false && "not support this arch");
 }
 

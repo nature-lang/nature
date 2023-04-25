@@ -12,13 +12,12 @@ memory_string_t *string_new(void *raw_string, uint64_t length) {
     DEBUGF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
 
     // byte 数组，先手动创建一个简单类型
-    type_t element_type = type_basic_new(TYPE_UINT8);
-    rtype_t element_rtype = rt_reflect_type(element_type);
+    rtype_t element_rtype = rtype_base(TYPE_UINT8);
     memory_array_t *array_data = array_new(&element_rtype, length);
 
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
     type_t string_type = type_basic_new(TYPE_STRING);
-    rtype_t string_rtype = rt_reflect_type(string_type);
+    rtype_t string_rtype = gc_rtype(2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     DEBUGF("[string_new] rtype_index=%lu, r_type_in_heap=%d, type_in_heap=%d",
            string_rtype.index, string_rtype.in_heap, string_type.in_heap);
 

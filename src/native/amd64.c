@@ -170,16 +170,16 @@ static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
  * @param ast
  * @return
  */
-static slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
-    // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
-    slice_t *operations = slice_new();
-
-    // compiler 阶段已经附加了 bal end fn 的指令
-    // lower 阶段已经将返回值放在了 rax/xmm0 中
-    // 所以这里什么都不用做
-
-    return operations;
-}
+//static slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
+//    // 编译时总是使用了一个 temp var 来作为 target, 所以这里进行简单转换即可
+//    slice_t *operations = slice_new();
+//
+//    // compiler 阶段已经附加了 bal end fn 的指令
+//    // lower 阶段已经将返回值放在了 rax/xmm0 中
+//    // 所以这里什么都不用做
+//
+//    return operations;
+//}
 
 static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
@@ -530,7 +530,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
         [LIR_OPCODE_PUSH] = amd64_native_push,
-        [LIR_OPCODE_RETURN] = amd64_native_return,
+//        [LIR_OPCODE_RETURN] = amd64_native_return,
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
         // 逻辑相关运算符

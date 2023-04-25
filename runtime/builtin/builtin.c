@@ -13,23 +13,23 @@ static void print_arg(memory_any_t *arg) {
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
-        memory_string_t *s = arg->value; // 字符串的内存视角
+        memory_string_t *s = arg->value.ptr_value; // 字符串的内存视角
         write(STDOUT_FILENO, s->array_data, s->length);
         return;
     }
     if (is_float(arg->rtype->kind)) {
-        int n = sprintf(sprint_buf, "%.5f", arg->float_value);
+        int n = sprintf(sprint_buf, "%.5f", arg->value.float_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (is_integer(arg->rtype->kind)) {
-        int n = sprintf(sprint_buf, "%ld", arg->int_value);
+        int n = sprintf(sprint_buf, "%ld", arg->value.int_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_BOOL) {
         char *raw = "false";
-        if (arg->bool_value) {
+        if (arg->value.bool_value) {
             raw = "true";
         }
         write(STDOUT_FILENO, raw, strlen(raw));

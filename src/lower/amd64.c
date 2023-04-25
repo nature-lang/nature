@@ -42,7 +42,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
                 symbol->value = (uint8_t *) imm->string_value;
             } else {
                 symbol->size = QWORD;
-                symbol->value = (uint8_t * ) & imm->float_value;
+                symbol->value = (uint8_t *) &imm->float_value;
             }
 
             slice_push(c->asm_symbols, symbol);
@@ -95,24 +95,12 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
             lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
 
             linked_push(operations, op);
-            // fn runtime 参数
-            if (i == actual_params->count - 1) {
-                c->fn_runtime_reg = reg->index;
-            }
         } else {
             // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
             linked_push(push_operations, push_op);
-
-            // 根据 push_length 根据 push_length 推断出最后一个参数的位置
-            if (i == actual_params->count - 1) {
-                uint64_t base = 0x10; // 如果只有一个，那就是 0x10, 两个参数呢？0x18, 0x20
-                c->fn_runtime_stack += base;
-                c->fn_runtime_stack += push_length;
-            }
-
             push_length += QWORD;
         }
     }
@@ -150,17 +138,24 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
     uint8_t used[2] = {0};
     // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
     int16_t stack_param_slot = 16; // ret addr + push rsp
-    SLICE_FOR(formal_params) {
-        lir_var_t *var = SLICE_VALUE(formal_params);
+    for (int _i = 0; _i < (formal_params)->count; ++_i) {
+        lir_var_t *var = formal_params->take[_i];
         lir_operand_t *source = NULL;
         reg_t *reg = amd64_fn_param_next_reg(used, var->type.kind);
         if (reg) {
             source = operand_new(LIR_OPERAND_REG, reg);
+
+            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
+                c->fn_runtime_reg = reg->index;
+            }
         } else {
             lir_stack_t *stack = NEW(lir_stack_t);
             // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
             stack->size = type_kind_sizeof(var->type.kind);
             stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
+            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
+                c->fn_runtime_stack = stack->slot;
+            }
 
             // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了
             // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
@@ -229,12 +224,9 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         /**
-         * return var
-         * ↓
-         * mov var -> rax/xmm0
          * return rax/xmm0
          */
-        if (op->code == LIR_OPCODE_RETURN && op->first != NULL) {
+        if (op->code == LIR_OPCODE_FN_END && op->first != NULL) {
             // 1.1 return 指令需要将返回值放到 rax 中
             lir_operand_t *reg_operand = select_first_reg(op->first);
             linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));

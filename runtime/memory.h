@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ucontext.h>
-#include "structs.h"
-
 
 #include "utils/custom_links.h"
 #include "utils/helper.h"

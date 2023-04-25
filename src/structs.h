@@ -104,6 +104,7 @@ typedef struct {
 typedef struct analyser_fndef_t {
     struct analyser_fndef_t *parent;
 
+    ast_fndef_t *fndef;
     slice_t *locals; // local_ident
     // 当前函数内的块作用域深度(基于当前函数,所以初始值为 0, 用于块作用域判定)
     uint8_t scope_depth;
@@ -254,8 +255,11 @@ typedef struct closure_t {
     int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
-    string name;
-    string end_label; // 结束地址
+    char *name;
+    char *end_label; // 结束 label
+    // lir_operand_t
+    void *lir_result; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
+
     linked_t *operations; // 指令列表
 
     // gc 使用

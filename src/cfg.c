@@ -160,7 +160,7 @@ void cfg(closure_t *c) {
         slice_push(target_block->preds, current_block);
     }
 
-//    broken_critical_edges(c);
+    broken_critical_edges(c);
 
     // 添加入口块
     c->entry = c->blocks->take[0];
@@ -207,7 +207,7 @@ void broken_critical_edges(closure_t *c) {
 
                 // 跳转指令调整  p -> b 改成 p -> new_block -> b
                 linked_node *last = linked_last(p->operations);
-                assert(OP(last)->fn_addr == LIR_OPCODE_BAL);
+                assert(OP(last)->code == LIR_OPCODE_BAL);
                 symbol_label = OP(last)->output->value;
                 if (symbol_label->ident == b->name) {
                     // change to new_block
