@@ -17,8 +17,13 @@ static void print_arg(memory_any_t *arg) {
         write(STDOUT_FILENO, s->array_data, s->length);
         return;
     }
-    if (is_float(arg->rtype->kind)) {
-        int n = sprintf(sprint_buf, "%.5f", arg->value.float_value);
+    if (arg->rtype->kind == TYPE_FLOAT64 || arg->rtype->kind == TYPE_FLOAT) {
+        int n = sprintf(sprint_buf, "%.5f", arg->value.f64_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_FLOAT32) {
+        int n = sprintf(sprint_buf, "%.5f", arg->value.f32_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }

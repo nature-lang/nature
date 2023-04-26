@@ -30,8 +30,8 @@ reg_t *reg_new(char *name, uint8_t index, lir_flag_t alloc_type, uint8_t size, u
     return reg;
 }
 
-lir_flag_t type_base_trans_alloc(type_kind t) {
-    if (t == TYPE_FLOAT) {
+lir_flag_t type_base_trans_alloc(type_kind kind) {
+    if (is_float(kind)) {
         return LIR_FLAG_ALLOC_FLOAT;
     }
 

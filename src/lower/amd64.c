@@ -25,7 +25,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
-        if (imm->kind == TYPE_RAW_STRING || imm->kind == TYPE_FLOAT) {
+        if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
             char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = unique_name;
@@ -33,7 +33,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
                 symbol->size = strlen(imm->string_value) + 1;
                 symbol->value = (uint8_t *) imm->string_value;
             } else {
-                symbol->size = QWORD;
+                symbol->size = type_kind_sizeof(imm->kind);
                 symbol->value = (uint8_t *) &imm->float_value;
             }
 

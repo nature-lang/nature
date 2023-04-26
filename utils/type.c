@@ -344,9 +344,11 @@ uint8_t type_kind_sizeof(type_kind t) {
             return WORD;
         case TYPE_INT32:
         case TYPE_UINT32:
+        case TYPE_FLOAT32:
             return DWORD;
         case TYPE_INT64:
         case TYPE_UINT64:
+        case TYPE_FLOAT64:
             return QWORD;
         case TYPE_INT:
         case TYPE_UINT:

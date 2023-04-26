@@ -36,7 +36,8 @@ typedef union {
     uint16_t u16_value;
     uint8_t u8_value;
     bool bool_value;
-    double float_value;
+    double f64_value;
+    float f32_value;
     void *ptr_value;
 } value_casting;
 
@@ -50,8 +51,8 @@ typedef enum {
     // 基础类型
     TYPE_NULL = 1,
     TYPE_BOOL,
-    TYPE_FLOAT,
     TYPE_FLOAT32,
+    TYPE_FLOAT, // f64
     TYPE_FLOAT64, // value = 5
 
     TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
@@ -328,6 +329,8 @@ typedef byte memory_array_t; // 数组在内存中的变现形式就是 byte 列
 typedef int64_t memory_int_t;
 
 typedef double memory_float_t;
+typedef double memory_f64_t;
+typedef float memory_f32_t;
 
 typedef byte memory_struct_t; // 长度不确定
 

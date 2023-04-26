@@ -283,9 +283,7 @@ inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_
 };
 
 
-
 // intel 指令顺序
-
 inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
@@ -297,7 +295,7 @@ inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLA
 inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                                 {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
                          }
 };
 
@@ -305,6 +303,25 @@ inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT
                              {
                                      {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
+                             }
+};
+
+inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                          {
+                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                          }
+};
+inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}
+                         }
+};
+inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG}
                              }
 };
 
@@ -548,6 +565,11 @@ void amd64_opcode_init() {
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
+
+    opcode_tree_build(&movss_xmm1_xmm2); // 内存到 xmm
+    opcode_tree_build(&movss_xmm1_m32); // 内存到 xmm
+    opcode_tree_build(&movss_xmm2m32_xmm1); // xmm 到内存或者xmm
+
     opcode_tree_build(&xor_r64_rm64); // xmm 到内存或者xmm
     opcode_tree_build(&xor_rm64_r64); // xmm 到内存或者xmm
 
@@ -679,17 +701,21 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_M32) {
-        res.count = 1;
+        res.count = 3;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 4);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
         res.list = highs;
         return res;
     }
 
     if (t == OPERAND_TYPE_M64) {
-        res.count = 1;
+        res.count = 3;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -788,14 +814,24 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
-        res.count = 6;
+        res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 8);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 16);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 8);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, 8);
-        highs[5] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 8);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 8);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, 8);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 8);
+        res.list = highs;
+        return res;
+    }
+    if (t == OPERAND_TYPE_XMM2M32 || t == OPERAND_TYPE_XMM1M32) {
+        res.count = 5;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
         res.list = highs;
         return res;
     }
@@ -803,7 +839,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_YMM1 || t == OPERAND_TYPE_YMM2) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 32);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, YWORD);
         res.list = highs;
         return res;
     }
@@ -947,6 +983,8 @@ inst_t *opcode_select(asm_operation_t operation) {
     bool has64_reg = false;
     bool has_high_eight_reg = false;
 
+    // TODO has ax 并优先选择携带 ax 的寄存器
+
     for (int i = 0; i < operation.count; ++i) {
         asm_operand_t *operand = operation.operands[i];
         if (operand->type == ASM_OPERAND_TYPE_REG) {
@@ -988,6 +1026,7 @@ inst_t *opcode_select(asm_operation_t operation) {
         if (has_high_eight_reg && has_rex_extension(inst->extensions)) {
             continue;
         }
+        // 和 has ax 协作从而优先使用携带 ax 的寄存器
 
         insts.list[insts.count++] = inst;
     }

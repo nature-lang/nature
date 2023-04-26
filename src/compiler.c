@@ -986,9 +986,14 @@ static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
         OP_PUSH(rt_call(RT_CALL_CONVERT_INTEGER, output, 2, int_operand(input_rtype_index), input));
         return output;
     }
-    if (is_float(convert->target_type.kind)) {
+    if (convert->target_type.kind == TYPE_FLOAT || convert->target_type.kind == TYPE_FLOAT64) {
         assertf(is_number(convert->operand.type.kind), "only support number type convert");
-        OP_PUSH(rt_call(RT_CALL_CONVERT_FLOAT, output, 2, int_operand(input_rtype_index), input));
+        OP_PUSH(rt_call(RT_CALL_CONVERT_F64, output, 2, int_operand(input_rtype_index), input));
+        return output;
+    }
+    if (convert->target_type.kind == TYPE_FLOAT32) {
+        assertf(is_number(convert->operand.type.kind), "only support number type convert");
+        OP_PUSH(rt_call(RT_CALL_CONVERT_F32, output, 2, int_operand(input_rtype_index), input));
         return output;
     }
 

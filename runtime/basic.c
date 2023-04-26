@@ -45,7 +45,7 @@ memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double f
     rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
 
     if (is_integer(input_rtype->kind)) {
-        return int_value;
+        return (memory_int_t) int_value; // 避免空间不足造成的非 0 值
     }
 
     if (is_float(input_rtype->kind)) {
@@ -56,23 +56,43 @@ memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double f
     exit(0);
 }
 
-memory_float_t convert_float(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[convert_float] input_index=%lu, int_v=%lu, float_v=%f",
+memory_f64_t convert_f64(uint64_t input_rtype_index, int64_t int_value, double float_value) {
+    DEBUGF("[convert_f64] input_index=%lu, int_v=%lu, float_v=%f",
            input_rtype_index,
            int_value,
            float_value);
 
     rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
     if (is_float(input_rtype->kind)) {
-        return float_value;
+        return (memory_f64_t) float_value; // 不特别写转换直接返回
     }
 
     if (is_integer(input_rtype->kind)) {
-        return (double) int_value;
+        return (memory_f64_t) int_value;
     }
 
     assertf(false, "cannot convert type=%s to float", type_kind_string[input_rtype->kind]);
-    return 0;
+    exit(1);
+}
+
+
+memory_f32_t convert_f32(uint64_t input_rtype_index, int64_t int_value, double float_value) {
+    DEBUGF("[convert_f32] input_index=%lu, int_v=%lu, float_v=%f",
+           input_rtype_index,
+           int_value,
+           float_value);
+
+    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
+    if (is_float(input_rtype->kind)) {
+        return (memory_f32_t) float_value; // 不特别写转换直接返回
+    }
+
+    if (is_integer(input_rtype->kind)) {
+        return (memory_f32_t) int_value;
+    }
+
+    assertf(false, "cannot convert type=%s to float", type_kind_string[input_rtype->kind]);
+    exit(1);
 }
 
 /**
@@ -82,7 +102,7 @@ memory_float_t convert_float(uint64_t input_rtype_index, int64_t int_value, doub
  * @return
  */
 memory_bool_t convert_bool(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, int_value=%lu, float_value=%f",
+    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, int_value=%lu, f64_value=%f",
            input_rtype_index,
            int_value,
            float_value);
