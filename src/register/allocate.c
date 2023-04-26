@@ -258,14 +258,14 @@ void allocate_walk(closure_t *c) {
         handle_inactive(a);
 
         use_pos_t *first_use = first_use_pos(a->current, 0);
-        if (!first_use || first_use->kind == USE_KIND_NOT) {
+        if (!first_use || first_use->kind == ALLOC_KIND_NOT) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
         }
         // interval 使用时间过短，无法分配寄存器
-        use_pos_t *first_not = first_use_pos(a->current, USE_KIND_NOT);
-        if (first_use->kind != USE_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
+        use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_NOT);
+        if (first_use->kind != ALLOC_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
@@ -380,7 +380,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     // 且不是 must kind 需求,可以不分配寄存器
     // 虽然有可用的空闲寄存器，但是空闲时间过短，此时直接进行溢出
     use_pos_t *first_use = first_use_pos(a->current, 0);
-    if (first_use->kind != USE_KIND_MUST && free_pos[reg_id] - a->current->first_range->from < ALLOC_USE_MIN) {
+    if (first_use->kind != ALLOC_KIND_MUST && free_pos[reg_id] - a->current->first_range->from < ALLOC_USE_MIN) {
         spill_interval(c, a, a->current, 0);
         linked_push(a->handled, a->current);
         return true;
@@ -474,7 +474,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         //  假设所有的寄存器都被 active interval 占用， use_pos 记录的是 first_use + 1(指令之间的间隔是 2) 之后的使用位置(还在 active 就表示至少还有一个使用位置)
         //  则不可能出现，所有的 use_pos min <  first_use + 1, 必定是 use pos min(下一条指令) > first_use + 1, 即使 id = 6 指令是 call, 同样如此
         //  并不影响 id = 4 的位置拿一个寄存器来用。 call 指令并不会添加 use_pos, 只是添加了 range, 此时所有的物理寄存器被 block，
-        if (first_use->kind == USE_KIND_MUST && first_use->value == first_from) {
+        if (first_use->kind == ALLOC_KIND_MUST && first_use->value == first_from) {
             assert(false && "cannot spill and spilt current, use_pos collect exception");
         }
 

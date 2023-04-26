@@ -1189,7 +1189,9 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
     }
 
     // 数值类型转换
-    if (is_number(target_type.kind) && expr->type.kind != target_type.kind) {
+    if (is_number(target_type.kind) &&
+        is_number(expr->type.kind) &&
+        expr->type.kind != target_type.kind) {
         *expr = ast_type_convert(*expr, target_type);
     }
 

@@ -36,40 +36,39 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
     return any;
 }
 
-memory_int_t convert_int(uint64_t input_rtype_index, value_casting casting) {
+memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double float_value) {
     DEBUGF("[convert_int] input_index=%lu, int_v=%lu, float_v=%f",
            input_rtype_index,
-           casting.int_value,
-           casting.float_value);
+           int_value,
+           float_value);
 
     rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-    if (is_integer(input_rtype->kind)) {
-        int64_t v = casting.int_value;
 
-        return (memory_int_t) v;
+    if (is_integer(input_rtype->kind)) {
+        return int_value;
     }
 
     if (is_float(input_rtype->kind)) {
-        return (memory_int_t) casting.float_value;
+        return (memory_int_t) float_value;
     }
 
     assertf(false, "cannot convert type=%s to int", type_kind_string[input_rtype->kind]);
     exit(0);
 }
 
-memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting) {
+memory_float_t convert_float(uint64_t input_rtype_index, int64_t int_value, double float_value) {
     DEBUGF("[convert_float] input_index=%lu, int_v=%lu, float_v=%f",
            input_rtype_index,
-           casting.int_value,
-           casting.float_value);
+           int_value,
+           float_value);
 
     rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-    if (is_integer(input_rtype->kind)) {
-        return (memory_float_t) casting.int_value;
+    if (is_float(input_rtype->kind)) {
+        return float_value;
     }
 
-    if (is_float(input_rtype->kind)) {
-        return (memory_float_t) casting.float_value;
+    if (is_integer(input_rtype->kind)) {
+        return (double) int_value;
     }
 
     assertf(false, "cannot convert type=%s to float", type_kind_string[input_rtype->kind]);
@@ -79,17 +78,20 @@ memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting) 
 /**
  * null/false/0 会转换成 false, 其他都是 true
  * @param input_rtype_index
- * @param casting
+ * @param int_value
  * @return
  */
-memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting) {
-    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, value=%p, int_value=%lu, float_value=%f",
+memory_bool_t convert_bool(uint64_t input_rtype_index, int64_t int_value, double float_value) {
+    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, int_value=%lu, float_value=%f",
            input_rtype_index,
-           casting.ptr_value,
-           casting.int_value,
-           casting.float_value);
+           int_value,
+           float_value);
+    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
+    if (is_float(input_rtype->kind)) {
+        return float_value != 0;
+    }
 
-    return casting.ptr_value != NULL;
+    return int_value != 0;
 }
 
 /**

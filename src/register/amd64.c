@@ -191,7 +191,7 @@ reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind base) {
 alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
         if (var->flag & FLAG(LIR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
-            return USE_KIND_SHOULD;
+            return ALLOC_KIND_SHOULD;
         }
     }
     if (op->code == LIR_OPCODE_MOVE) {
@@ -200,22 +200,22 @@ alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var)
 
         lir_operand_t *first = op->first;
         if (first->assert_type == LIR_OPERAND_REG) {
-            return USE_KIND_SHOULD;
+            return ALLOC_KIND_SHOULD;
         }
 
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
             if (!is_qword_int(imm->kind)) {
-                return USE_KIND_SHOULD;
+                return ALLOC_KIND_SHOULD;
             }
         }
     }
     if (op->code == LIR_OPCODE_CLV) {
-        return USE_KIND_SHOULD;
+        return ALLOC_KIND_SHOULD;
     }
 
     // phi 也属于 def, 所以必须分配寄存器
-    return USE_KIND_MUST;
+    return ALLOC_KIND_MUST;
 }
 
 /**
@@ -229,13 +229,13 @@ alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var)
 alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
     // lea 指令的 use 一定是 first, 所以不需要重复判断
     if (op->code == LIR_OPCODE_LEA) {
-        return USE_KIND_NOT;
+        return ALLOC_KIND_NOT;
     }
 
     if (lir_op_term(op)) {
         assertf(op->first->assert_type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
         if (var->flag & FLAG(LIR_FLAG_FIRST)) {
-            return USE_KIND_MUST;
+            return ALLOC_KIND_MUST;
         }
     }
 
@@ -246,21 +246,21 @@ alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var)
                "cmp must have var, var can allocate registers");
 
         if (var->flag & FLAG(LIR_FLAG_FIRST)) {
-            return USE_KIND_MUST;
+            return ALLOC_KIND_MUST;
         }
 
         // second 只能是在 first 非 var 的情况下才能分配寄存器
         if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
-            return USE_KIND_MUST;
+            return ALLOC_KIND_MUST;
         }
     }
 
     // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
     if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
-        return USE_KIND_MUST;
+        return ALLOC_KIND_MUST;
     }
 
-    return USE_KIND_SHOULD;
+    return ALLOC_KIND_SHOULD;
 }
 

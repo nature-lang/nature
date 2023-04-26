@@ -810,7 +810,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 use_pos_t *interval_must_reg_pos(interval_t *i) {
     LINKED_FOR(i->use_pos_list) {
         use_pos_t *pos = LINKED_VALUE();
-        if (pos->kind == USE_KIND_MUST) {
+        if (pos->kind == ALLOC_KIND_MUST) {
             return pos;
         }
     }
@@ -824,7 +824,7 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
 use_pos_t *interval_must_stack_pos(interval_t *i) {
     LINKED_FOR(i->use_pos_list) {
         use_pos_t *pos = LINKED_VALUE();
-        if (pos->kind == USE_KIND_NOT) {
+        if (pos->kind == ALLOC_KIND_NOT) {
             return pos;
         }
     }

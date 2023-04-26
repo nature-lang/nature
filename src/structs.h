@@ -12,9 +12,9 @@
 typedef uint64_t flag_t;
 
 typedef enum {
-    USE_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
-    USE_KIND_MUST = 2, // 必须分配寄存器
-    USE_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
+    ALLOC_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
+    ALLOC_KIND_MUST = 2, // 必须分配寄存器
+    ALLOC_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
 } alloc_kind_e;
 
 typedef enum {

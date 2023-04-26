@@ -964,6 +964,23 @@ static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
     lir_operand_t *output = temp_var_operand(m, convert->target_type);
     uint64_t input_rtype_index = ct_find_rtype_index(convert->operand.type);
 
+    // 与寄存器分配功能冲突，如果已经分配了 xmm 寄存器，这里强制转换成 int 得到的原始错误的值
+//    // 如果原始类型是 float, 则强制转换成 int 类型
+//    // 这样才能通过整形寄存器进行参数传递, 否则无法在 runtime 中适配整形或者非整形两种寄存器
+//    if (input->assert_type == LIR_OPERAND_VAR) {
+//        lir_var_t *var = input->value;
+//        if (is_float(var->type.kind)) {
+//            var->type = type_basic_new(TYPE_INT);
+//        }
+//    } else if (input->assert_type == LIR_OPERAND_IMM) {
+//        lir_imm_t *imm = input->value;
+//        if (is_float(imm->kind)) {
+//            imm->kind = TYPE_INT;
+//        }
+//    } else {
+//        assertf(false, "cannot support input operand %d convert", input->assert_type);
+//    }
+
     if (is_integer(convert->target_type.kind)) {
         assertf(is_number(convert->operand.type.kind), "only support number type convert");
         OP_PUSH(rt_call(RT_CALL_CONVERT_INTEGER, output, 2, int_operand(input_rtype_index), input));
@@ -1304,12 +1321,6 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     c->end_label = str_connect("end_", c->name);
 
     OP_PUSH(lir_op_label(fndef->name, false));
-    // 有返回值
-    if (fndef->return_type.kind != TYPE_VOID) {
-        c->return_operand = custom_var_operand(m, fndef->return_type, "$result");
-        // 初始化空值, 让 use-def 关系完整，避免 ssa 生成异常
-        OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
-    }
 
 
     // 编译 fn param -> lir_var_t*
@@ -1330,6 +1341,14 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
+
+    // 返回值处理
+    if (fndef->return_type.kind != TYPE_VOID) {
+        c->return_operand = custom_var_operand(m, fndef->return_type, "$result");
+        // 初始化空值, 让 use-def 关系完整，避免 ssa 生成异常
+        OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
+    }
+
 
     compiler_block(m, fndef->body);
 

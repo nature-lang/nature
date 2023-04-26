@@ -11,11 +11,11 @@
  */
 memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref);
 
-memory_int_t convert_int(uint64_t input_rtype_index, value_casting casting);
+memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double float_value);
 
-memory_float_t convert_float(uint64_t input_rtype_index, value_casting casting);
+memory_float_t convert_float(uint64_t input_rtype_index, int64_t int_value, double float_value);
 
-memory_bool_t convert_bool(uint64_t input_rtype_index, value_casting casting);
+memory_bool_t convert_bool(uint64_t input_rtype_index, int64_t int_value, double float_value);
 
 int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, void *key_ref);
 
