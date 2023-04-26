@@ -196,7 +196,7 @@ inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SL
                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
                          }
 };
-inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_SLASHR},
+inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}

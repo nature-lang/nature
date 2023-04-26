@@ -965,22 +965,6 @@ static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
     uint64_t input_rtype_index = ct_find_rtype_index(convert->operand.type);
 
     // 与寄存器分配功能冲突，如果已经分配了 xmm 寄存器，这里强制转换成 int 得到的原始错误的值
-//    // 如果原始类型是 float, 则强制转换成 int 类型
-//    // 这样才能通过整形寄存器进行参数传递, 否则无法在 runtime 中适配整形或者非整形两种寄存器
-//    if (input->assert_type == LIR_OPERAND_VAR) {
-//        lir_var_t *var = input->value;
-//        if (is_float(var->type.kind)) {
-//            var->type = type_basic_new(TYPE_INT);
-//        }
-//    } else if (input->assert_type == LIR_OPERAND_IMM) {
-//        lir_imm_t *imm = input->value;
-//        if (is_float(imm->kind)) {
-//            imm->kind = TYPE_INT;
-//        }
-//    } else {
-//        assertf(false, "cannot support input operand %d convert", input->assert_type);
-//    }
-
     if (is_integer(convert->target_type.kind)) {
         assertf(is_number(convert->operand.type.kind), "only support number type convert");
         OP_PUSH(rt_call(RT_CALL_CONVERT_INTEGER, output, 2, int_operand(input_rtype_index), input));

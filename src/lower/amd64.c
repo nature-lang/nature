@@ -88,6 +88,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
                                                    operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
             }
 
+            // TODO 直接按 兼容非常规尺寸匹配
             lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
 
             linked_push(operations, op);
