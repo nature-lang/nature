@@ -10,11 +10,11 @@ if (error) {
 }
 
 // 有参数
-fn one(bool need): int {
+fn one(bool need):int {
     if (need) {
         throw "i'm one error"
     }
-    return 1
+    return 2
 }
 
 var (s, one_error) = catch one(true)

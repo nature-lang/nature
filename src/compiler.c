@@ -592,7 +592,7 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
     if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
-        imm->int_value = -imm->int_value;
+        imm->uint_value = -imm->uint_value;
         // move 操作即可
         OP_PUSH(lir_op_move(target, first));
         return target;
@@ -1303,12 +1303,14 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     c->module = m;
     c->end_label = str_connect("end_", c->name);
 
+    OP_PUSH(lir_op_label(fndef->name, false));
     // 有返回值
     if (fndef->return_type.kind != TYPE_VOID) {
         c->return_operand = custom_var_operand(m, fndef->return_type, "$result");
+        // 初始化空值, 让 use-def 关系完整，避免 ssa 生成异常
+        OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
     }
 
-    OP_PUSH(lir_op_label(fndef->name, false));
 
     // 编译 fn param -> lir_var_t*
     slice_t *params = slice_new();

@@ -6,17 +6,17 @@ static string asm_operand_to_string(asm_operand_t *operand) {
     void *value = operand->value;
     switch (operand->type) {
         case ASM_OPERAND_TYPE_UINT8: {
-            return itoa(((asm_uint8_t *) value)->value);
+            return utoa(((asm_uint8_t *) value)->value);
         }
         case ASM_OPERAND_TYPE_UINT16: {
-            return itoa(((asm_uint16_t *) value)->value);
+            return utoa(((asm_uint16_t *) value)->value);
         }
         case ASM_OPERAND_TYPE_UINT:
         case ASM_OPERAND_TYPE_UINT32: {
-            return itoa(((asm_uint32_t *) value)->value);
+            return utoa(((asm_uint32_t *) value)->value);
         }
         case ASM_OPERAND_TYPE_UINT64: {
-            return itoa(((asm_uint64_t *) value)->value);
+            return utoa(((asm_uint64_t *) value)->value);
         }
         case ASM_OPERAND_TYPE_INT8: {
             return itoa(((asm_int8_t *) value)->value);
@@ -29,13 +29,13 @@ static string asm_operand_to_string(asm_operand_t *operand) {
         }
         case ASM_OPERAND_TYPE_DISP_REG: {
             asm_disp_reg_t *disp = value;
-            return dsprintf("[%s%d]", disp->reg->name, disp->disp);
+            return dsprintf("[%s%d|%d]", disp->reg->name, disp->disp, operand->size);
         }
         case ASM_OPERAND_TYPE_RIP_RELATIVE: {
-            return dsprintf("[rip%d]", ((asm_rip_relative_t *) value)->disp);
+            return dsprintf("[rip%d|%d]", ((asm_rip_relative_t *) value)->disp, operand->size);
         }
         case ASM_OPERAND_TYPE_INDIRECT_REG: {
-            return dsprintf("[%s]", ((asm_indirect_reg_t *) value)->reg->name);
+            return dsprintf("[%s|%d]", ((asm_indirect_reg_t *) value)->reg->name, operand->size);
         }
         case ASM_OPERAND_TYPE_SIB_REG: {
             // [base+index*scale+offset]

@@ -46,7 +46,7 @@ static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
     return false;
 }
 
-static void asm_mov(slice_t *operations, asm_operand_t *dst, asm_operand_t *src) {
+static void asm_mov(slice_t *operations, lir_op_t *op, asm_operand_t *dst, asm_operand_t *src) {
     if (asm_operand_equal(dst, src)) {
         return;
     }
@@ -60,7 +60,6 @@ static void asm_mov(slice_t *operations, asm_operand_t *dst, asm_operand_t *src)
  * type_string/lir_operand_memory
  * @param operand
  * @param asm_operand
- * @param used_regs
  * @return
  */
 static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_operand_t *operand) {
@@ -77,16 +76,18 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
         assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
-        if (v->kind == TYPE_INT || v->kind == TYPE_UINT) {
-            return UINT(v->int_value); // 默认使用 UINT32,v->int_value 真的大于 32 位时使用 64
+        if (v->kind == TYPE_INT || v->kind == TYPE_UINT || v->kind == TYPE_INT64 || v->kind == TYPE_UINT64) {
+            // mov r64,imm64 转换成 mov rm64,imm32
+            if (v->int_value > INT32_MAX || v->int_value < INT32_MIN) {
+                return UINT64(v->uint_value);
+            }
+            return UINT32(v->uint_value);
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8) {
-            return UINT8(v->int_value);
+            return UINT8(v->uint_value);
         } else if (v->kind == TYPE_INT16 || v->kind == TYPE_UINT16) {
-            return UINT16(v->int_value);
-        } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT64) {
-            return UINT32(v->int_value);
-        } else if (v->kind == TYPE_INT64 || v->kind == TYPE_UINT64) {
-            return UINT64(v->int_value);
+            return UINT16(v->uint_value);
+        } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT32) {
+            return UINT32(v->uint_value);
         } else if (v->kind == TYPE_FLOAT || v->kind == TYPE_FLOAT32) {
             return FLOAT32(v->float_value);
         } else if (v->kind == TYPE_FLOAT64) {
@@ -133,13 +134,13 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
 }
 
 
-static asm_operation_t *reg_cleanup(reg_t *reg) {
-    // TODO ah/bh/ch/dh 不能这么清理
-
-    reg_t *r = (reg_t *) reg_find(reg->index, QWORD);
-    assert(r && "reg not found");
-    return ASM_INST("xor", { REG(r), REG(r) });
-}
+//static asm_operation_t *reg_cleanup(reg_t *reg) {
+//    // TODO ah/bh/ch/dh 不能这么清理
+//
+//    reg_t *r = (reg_t *) reg_find(reg->index, QWORD);
+//    assert(r && "reg not found");
+//    return ASM_INST("xor", { REG(r), REG(r) });
+//}
 
 /**
  * op->result must reg
@@ -155,7 +156,7 @@ static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     asm_operand_t *output = lir_operand_trans(c, operations, op->output);
 
-    asm_mov(operations, output, first);
+    asm_mov(operations, op, output, first);
     return operations;
 }
 
@@ -220,10 +221,11 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
         lir_stack_t *stack = output->value;
         assertf(stack->size <= AMD64_PTR_SIZE, "only can clv size <= %d, actual=%d", AMD64_PTR_SIZE, stack->size);
         // amd64 目前仅支持
-        // MOV r/m8, imm8
-        // MOV r/m8***, imm8
-        // MOV r/m16, imm16
-        // MOV r/m32, imm32
+        // MOV rm8, imm8
+        // MOV rm8***, imm8
+        // MOV rm16, imm16
+        // MOV rm32, imm32
+        // MOV rm64, imm32
         uint8_t size = stack->size > DWORD ? DWORD : stack->size;
         slice_push(operations, ASM_INST("mov", { result, amd64_fit_number(size, 0) }));
         return operations;
@@ -320,7 +322,7 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     // add rax -> rcx, mov rcx -> rax
     // 完全不用考虑寄存器覆盖的问题
     slice_push(operations, ASM_INST("add", { first, second }));
-    asm_mov(operations, result, first);
+    asm_mov(operations, op, result, first);
 
     return operations;
 }
@@ -352,7 +354,7 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
     // 原始: rax - rcx = rax
     // sub rcx -> rax, mov rax -> rax
     slice_push(operations, ASM_INST("sub", { first, second }));
-    asm_mov(operations, result, first);
+    asm_mov(operations, op, result, first);
 
     return operations;
 }

@@ -13,7 +13,7 @@ reg_t *reg_find(uint8_t index, size_t size) {
     return table_get(reg_table, reg_table_key(index, size));
 }
 
-reg_t *reg_new(char *name, uint8_t index, vr_flag_t alloc_type, uint8_t size, uint8_t reg_id) {
+reg_t *reg_new(char *name, uint8_t index, lir_flag_t alloc_type, uint8_t size, uint8_t reg_id) {
     reg_t *reg = NEW(reg_t);
     reg->name = name;
     reg->index = index;
@@ -30,16 +30,16 @@ reg_t *reg_new(char *name, uint8_t index, vr_flag_t alloc_type, uint8_t size, ui
     return reg;
 }
 
-vr_flag_t type_base_trans_alloc(type_kind t) {
+lir_flag_t type_base_trans_alloc(type_kind t) {
     if (t == TYPE_FLOAT) {
-        return VR_FLAG_ALLOC_FLOAT;
+        return LIR_FLAG_ALLOC_FLOAT;
     }
 
-    return VR_FLAG_ALLOC_INT;
+    return LIR_FLAG_ALLOC_INT;
 }
 
 reg_t *covert_alloc_reg(reg_t *reg) {
-    if (reg->flag & FLAG(VR_FLAG_ALLOC_FLOAT)) {
+    if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
         return reg_find(reg->index, OWORD);
     }
 

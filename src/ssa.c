@@ -58,7 +58,7 @@ static void recollect_globals(closure_t *c) {
         basic_block_t *block = c->blocks->take[i];
         LINKED_FOR(block->operations) {
             lir_op_t *op = LINKED_VALUE();
-            slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+            slice_t *vars = lir_var_operands(op, FLAG(LIR_FLAG_DEF));
             for (int j = 0; j < vars->count; ++j) {
                 lir_var_t *var = vars->take[j];
                 slice_push(globals, var);
@@ -402,7 +402,7 @@ void ssa_use_def(closure_t *c) {
             lir_op_t *op = LINKED_VALUE();
 
             // first param (use)
-            slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_USE));
+            slice_t *vars = lir_var_operands(op, FLAG(LIR_FLAG_USE));
             for (int i = 0; i < vars->count; ++i) {
                 lir_var_t *var = vars->take[i];
                 bool is_def = ssa_var_belong(var, def);
@@ -417,7 +417,7 @@ void ssa_use_def(closure_t *c) {
             }
 
             // def
-            vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+            vars = lir_var_operands(op, FLAG(LIR_FLAG_DEF));
             for (int i = 0; i < vars->count; ++i) {
                 lir_var_t *var = vars->take[i];
                 if (!table_exist(exist_def, var->ident)) {
@@ -546,7 +546,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
         }
 
         // use
-        slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_USE));
+        slice_t *vars = lir_var_operands(op, FLAG(LIR_FLAG_USE));
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
             var_number_stack *stack = table_get(stack_table, var->old);
@@ -554,7 +554,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
             ssa_rename_var(var, number);
         }
 
-        vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+        vars = lir_var_operands(op, FLAG(LIR_FLAG_DEF));
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
@@ -606,7 +606,7 @@ void ssa_rename_block(basic_block_t *block, table_t *var_number_table, table_t *
     while (current_node->value != NULL) {
         lir_op_t *op = current_node->value;
         // output var
-        slice_t *vars = lir_var_operands(op, FLAG(VR_FLAG_DEF));
+        slice_t *vars = lir_var_operands(op, FLAG(LIR_FLAG_DEF));
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
 

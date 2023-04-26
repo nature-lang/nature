@@ -12,15 +12,24 @@
 typedef uint64_t flag_t;
 
 typedef enum {
-    VR_FLAG_FIRST = 1,
-    VR_FLAG_SECOND,
-    VR_FLAG_OUTPUT,
-    VR_FLAG_ALLOC_INT,
-    VR_FLAG_ALLOC_FLOAT,
-    VR_FLAG_USE,
-    VR_FLAG_DEF,
-    VR_FLAG_INDIRECT_ADDR_BASE,
-} vr_flag_t;
+    USE_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
+    USE_KIND_MUST = 2, // 必须分配寄存器
+    USE_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
+} alloc_kind_e;
+
+typedef enum {
+    LIR_FLAG_FIRST = 1,
+    LIR_FLAG_SECOND,
+    LIR_FLAG_OUTPUT,
+    LIR_FLAG_ALLOC_INT,
+    LIR_FLAG_ALLOC_FLOAT,
+    LIR_FLAG_ALLOC_MUST, // 必须分配寄存器
+    LIR_FLAG_ALLOC_SHOULD, // 可以分可以不分配
+    LIR_FLAG_ALLOC_NOT, // 绝对不能分配寄存器
+    LIR_FLAG_USE,
+    LIR_FLAG_DEF,
+    LIR_FLAG_INDIRECT_ADDR_BASE,
+} lir_flag_t;
 
 
 typedef enum {

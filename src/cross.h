@@ -4,8 +4,9 @@
 #include "structs.h"
 #include "utils/type.h"
 #include "src/build/config.h"
+#include "src/lir.h"
 
-// -------- reg init start -----------
+// -------- reg start -----------
 table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
 slice_t *regs;
 reg_t *alloc_regs[UINT8_MAX];
@@ -28,7 +29,7 @@ static inline void cross_reg_init() {
 // -------- reg init end -----------
 
 
-// -------- alloc init start -----------
+// -------- cross_alloc_reg_count start -----------
 #define AMD64_ALLOC_REG_COUNT 14+16;
 
 static inline uint8_t cross_alloc_reg_count() {
@@ -39,7 +40,32 @@ static inline uint8_t cross_alloc_reg_count() {
     assertf(false, "not support arch %d", BUILD_ARCH);
     exit(1);
 }
-// -------- alloc init end -----------
+// -------- cross_alloc_reg_count end -----------
+
+
+// -------- alloc kind start -----------
+alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var);
+
+alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var);
+
+static inline alloc_kind_e cross_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_alloc_kind_of_def(c, op, var);
+    }
+
+    assert(false && "not support arch");
+}
+
+static inline alloc_kind_e cross_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_alloc_kind_of_use(c, op, var);
+    }
+
+    assert(false && "not support arch");
+}
+
+
+// -------- alloc kind end -----------
 
 
 // -------- reg select start -----------
@@ -58,6 +84,8 @@ static inline reg_t *cross_reg_select(uint8_t index, type_kind kind) {
 
 // -------- reg select end -----------
 
+
+//static inline
 
 
 // -------- native start -----------
@@ -85,6 +113,7 @@ static inline void cross_lower(closure_t *c) {
     assert(false && "not support arch");
 }
 // -------- lower end -----------
+
 
 
 // -------- opcode init start -----------

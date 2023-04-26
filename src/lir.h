@@ -5,7 +5,6 @@
 #include "utils/helper.h"
 #include "utils/table.h"
 #include "src/structs.h"
-#include "src/cross.h"
 #include "src/module.h"
 #include "src/symbol/symbol.h"
 #include "src/register/register.h"
@@ -164,11 +163,8 @@ typedef struct {
     string ident; // ssa 后的新名称
     string old; // ssa 之前的名称
 
-    flag_t flag;
+    flag_t flag; // TODO 可以直接在 flag 中写入是否必须分配寄存器到信息
     type_t type;
-
-//    uint8_t pointer; // 指针等级, 如果等于 0 表示非指针, 例如 int*** a; a 的 pointer 等于 3 TODO 暂时没有使用
-//    bool indirect_addr; // &a  TODO 不使用这个了，使用新的 operand indirect addr
 } lir_var_t;
 
 /**
@@ -208,7 +204,8 @@ typedef struct {
 
 typedef struct {
     union {
-        uint64_t int_value; // 8bit, 负数使用补码存储
+        uint64_t uint_value; // 8bit, 负数使用补码存储
+        int64_t int_value; // 8bit, 负数使用补码存储
         double float_value; // 8bit = c.double
         bool bool_value; // 1bit
         string string_value; // 8bit
@@ -230,7 +227,7 @@ struct lir_operand_t {
 //    };
 
     void *value;
-    vr_flag_t pos; // 在 opcode 中的位置信息
+    lir_flag_t pos; // 在 opcode 中的位置信息
 };
 
 /**
@@ -256,7 +253,7 @@ typedef struct lir_op_t {
 static inline lir_operand_t *int_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_INT;
-    imm_operand->int_value = val;
+    imm_operand->uint_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
     operand->value = imm_operand;
@@ -484,10 +481,10 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
         var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
-        if (operand->pos == VR_FLAG_OUTPUT) {
-            var->flag |= FLAG(VR_FLAG_DEF);
+        if (operand->pos == LIR_FLAG_OUTPUT) {
+            var->flag |= FLAG(LIR_FLAG_DEF);
         } else {
-            var->flag |= FLAG(VR_FLAG_USE);
+            var->flag |= FLAG(LIR_FLAG_USE);
         }
 
         return;
@@ -496,10 +493,10 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
         reg->flag |= FLAG(operand->pos);
-        if (operand->pos == VR_FLAG_OUTPUT) {
-            reg->flag |= FLAG(VR_FLAG_DEF);
+        if (operand->pos == LIR_FLAG_OUTPUT) {
+            reg->flag |= FLAG(LIR_FLAG_DEF);
         } else {
-            reg->flag |= FLAG(VR_FLAG_USE);
+            reg->flag |= FLAG(LIR_FLAG_USE);
         }
         return;
     }
@@ -508,8 +505,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         lir_indirect_addr_t *addr = operand->value;
         if (addr->base->assert_type == LIR_OPERAND_VAR) {
             lir_var_t *var = addr->base->value;
-            var->flag |= FLAG(VR_FLAG_USE);
-            var->flag |= FLAG(VR_FLAG_INDIRECT_ADDR_BASE);
+            var->flag |= FLAG(LIR_FLAG_USE);
+            var->flag |= FLAG(LIR_FLAG_INDIRECT_ADDR_BASE);
         }
         return;
     }
@@ -518,7 +515,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         slice_t *formal_params = operand->value;
         for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
             lir_var_t *var = formal_params->take[i];
-            var->flag |= FLAG(VR_FLAG_DEF);
+            var->flag |= FLAG(LIR_FLAG_DEF);
         }
         return;
     }
@@ -540,9 +537,9 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
-    op->first && (op->first->pos = VR_FLAG_FIRST);
-    op->second && (op->second->pos = VR_FLAG_SECOND);
-    op->output && (op->output->pos = VR_FLAG_OUTPUT);
+    op->first && (op->first->pos = LIR_FLAG_FIRST);
+    op->second && (op->second->pos = LIR_FLAG_SECOND);
+    op->output && (op->output->pos = LIR_FLAG_OUTPUT);
 
     set_operand_flag(op->first);
     set_operand_flag(op->second);
@@ -602,6 +599,12 @@ static inline type_kind operand_type_kind(lir_operand_t *operand) {
     return TYPE_UNKNOWN;
 }
 
+/**
+ * operand 此时并没有 pos 需要替换成新的 operand,替换的过程中需要重新设定
+ * @param operand
+ * @param pos
+ * @return
+ */
 static inline lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t pos) {
     lir_operand_t *temp = lir_operand_copy(operand);
     temp->pos = pos;
@@ -721,31 +724,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
 }
 
 
-static inline closure_t *lir_closure_new(ast_fndef_t *fndef) {
-    closure_t *c = NEW(closure_t);
-    c->name = fndef->name;
-    c->operations = linked_new();
-    c->text_count = 0;
-    c->asm_operations = slice_new();
-    c->asm_build_temps = slice_new();
-    c->asm_symbols = slice_new();
-    c->entry = NULL;
-    c->globals = slice_new();
-    c->blocks = slice_new(); // basic_block_t
-
-    c->interval_table = table_new();
-
-//    c->var_decl_table = table_new();
-    c->stack_offset = 0;
-    c->stack_vars = slice_new();
-    c->loop_count = 0;
-    c->loop_ends = slice_new();
-    c->loop_headers = slice_new();
-
-    c->interval_count = cross_alloc_reg_count() + 1;
-    fndef->closure = c;
-    return c;
-}
+closure_t *lir_closure_new(ast_fndef_t *fndef);
 
 static inline basic_block_t *lir_new_basic_block(char *name, uint16_t label_index) {
     basic_block_t *basic_block = NEW(basic_block_t);
@@ -896,14 +875,20 @@ static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
 }
 
-static lir_operand_t *lir_indirect_addr_operand(lir_operand_t *base_operand, type_t type, uint64_t offset) {
-    assertf(base_operand->assert_type == LIR_OPERAND_VAR, "indirect addr base must var operand");
-
-    lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
-    addr->base = base_operand;
-    addr->type = type;
-    addr->offset = offset;
-    return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
+/**
+ * 尽量在不影响原有 operand 的情况下进行值的替换, 这样通用性更强
+ * @param c
+ * @param b
+ * @param operand
+ */
+static inline void convert_to_var(closure_t *c, basic_block_t *b, linked_node *node, lir_operand_t *operand) {
+    type_kind kind = operand_type_kind(operand);
+    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
+    slice_push(c->globals, temp->value);
+    linked_insert_before(b->operations, node, lir_op_move(temp, operand));
+    temp = lir_reset_operand(temp, operand->pos);
+    operand->assert_type = temp->assert_type;
+    operand->value = temp->value;
 }
 
 #endif //NATURE_SRC_LIR_H_

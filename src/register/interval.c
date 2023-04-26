@@ -261,85 +261,6 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     return NULL;
 }
 
-/**
- * output 没有特殊情况就必须分一个寄存器，主要是 amd64 的指令基本都是需要寄存器参与的
- * @param c
- * @param op
- * @param i
- * @return
- */
-static use_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
-    if (lir_op_contain_cmp(op)) {
-        if (var->flag & FLAG(VR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
-            return USE_KIND_SHOULD;
-        }
-    }
-    if (op->code == LIR_OPCODE_MOVE) {
-        // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
-        assertf(var->flag & FLAG(VR_FLAG_OUTPUT), "move def must in output");
-        lir_operand_t *first = op->first;
-        if (first->assert_type == LIR_OPERAND_IMM || first->assert_type == LIR_OPERAND_REG) {
-            return USE_KIND_SHOULD;
-        }
-    }
-    if (op->code == LIR_OPCODE_CLV) {
-        return USE_KIND_SHOULD;
-    }
-
-//    if (lir_op_term(op)) {
-//        return USE_KIND_SHOULD;
-//    }
-
-    // phi 也属于 def, 所以必须分配寄存器
-    return USE_KIND_MUST;
-}
-
-/**
- * TODO 这里的 use_kind 应该是要按 arch 适配的
- * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
- * output 已经必须要有寄存器了, input 就无所谓了
- * @param c
- * @param op
- * @param i
- * @return
- */
-static use_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
-    if (op->code == LIR_OPCODE_LEA && var->flag & FLAG(VR_FLAG_FIRST)) {
-        return USE_KIND_NOT;
-    }
-
-    if (lir_op_term(op)) {
-        assertf(op->first->assert_type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
-        if (var->flag & FLAG(VR_FLAG_FIRST)) {
-            return USE_KIND_MUST;
-        }
-    }
-
-    // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
-    // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
-    if (lir_op_contain_cmp(op)) { // cmp indirect addr
-        assert((op->first->assert_type == LIR_OPERAND_VAR || op->second->assert_type == LIR_OPERAND_VAR) &&
-               "cmp must have var, var can allocate registers");
-
-        if (var->flag & FLAG(VR_FLAG_FIRST)) {
-            return USE_KIND_MUST;
-        }
-
-        // second 只能是在 first 非 var 的期刊下才能分配寄存器
-        if (var->flag & FLAG(VR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
-            // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
-            return USE_KIND_MUST;
-        }
-    }
-
-    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
-    if (var->flag & FLAG(VR_FLAG_INDIRECT_ADDR_BASE)) {
-        return USE_KIND_MUST;
-    }
-
-    return USE_KIND_SHOULD;
-}
-
 static bool in_range(interval_range_t *range, int position) {
     return range->from <= position && position < range->to;
 }
@@ -427,8 +348,8 @@ void interval_build(closure_t *c) {
         interval->index = reg_id;
         interval->fixed = true;
         interval->assigned = reg_id;
-        assertf(reg->flag & (FLAG(VR_FLAG_ALLOC_FLOAT) | FLAG(VR_FLAG_ALLOC_INT)), "reg must be alloc float or int");
-        interval->alloc_type = reg->flag & FLAG(VR_FLAG_ALLOC_FLOAT) ? VR_FLAG_ALLOC_FLOAT : VR_FLAG_ALLOC_INT;
+        assertf(reg->flag & (FLAG(LIR_FLAG_ALLOC_FLOAT) | FLAG(LIR_FLAG_ALLOC_INT)), "reg must be alloc float or int");
+        interval->alloc_type = reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT) ? LIR_FLAG_ALLOC_FLOAT : LIR_FLAG_ALLOC_INT;
         table_set(c->interval_table, reg->name, interval);
     }
 
@@ -531,7 +452,7 @@ void interval_build(closure_t *c) {
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
             slice_t *def_operands = lir_op_operands(op,
                                                     FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                    FLAG(VR_FLAG_DEF), false);
+                                                    FLAG(LIR_FLAG_DEF), false);
             for (int j = 0; j < def_operands->count; ++j) {
                 lir_operand_t *operand = def_operands->take[j];
                 interval_t *interval = operand_interval(c, operand);
@@ -549,7 +470,7 @@ void interval_build(closure_t *c) {
                 if (!interval->fixed) {
                     assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
                     live_remove(live_table, lives, interval->var);
-                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_def(c, op, operand->value));
+                    interval_add_use_pos(c, interval, op->id, cross_alloc_kind_of_def(c, op, operand->value));
                 }
             }
 
@@ -557,7 +478,7 @@ void interval_build(closure_t *c) {
             // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
             if (op->code != LIR_OPCODE_PHI) {
                 slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                        FLAG(VR_FLAG_USE), false);
+                                                        FLAG(LIR_FLAG_USE), false);
                 for (int j = 0; j < use_operands->count; ++j) {
                     lir_operand_t *operand = use_operands->take[j];
                     interval_t *interval = operand_interval(c, operand);
@@ -570,7 +491,7 @@ void interval_build(closure_t *c) {
                         assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
                         // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
                         live_add(live_table, lives, interval->var);
-                        interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
+                        interval_add_use_pos(c, interval, op->id, cross_alloc_kind_of_use(c, op, operand->value));
                     }
                 }
             }
@@ -737,7 +658,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
  * @param position
  * @param kind
  */
-void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind) {
+void interval_add_use_pos(closure_t *c, interval_t *i, int position, alloc_kind_e kind) {
     linked_t *pos_list = i->use_pos_list;
 
     use_pos_t *new_pos = NEW(use_pos_t);
@@ -942,10 +863,10 @@ void resolve_data_flow(closure_t *c) {
                 //  如果 live var interval 刚好是在 to->first_op 中到 use 作为声明周期到则需要特殊处理
                 // from->last_op 不需要担心这个问题，其总是 branch op
                 bool is_use = false;
-                slice_t *vars = lir_var_operands(to->first_op->value, VR_FLAG_USE | VR_FLAG_DEF);
+                slice_t *vars = lir_var_operands(to->first_op->value, LIR_FLAG_USE | LIR_FLAG_DEF);
                 for (int k = 0; k < vars->count; ++k) {
                     lir_var_t *temp_var = vars->take[k];
-                    if (str_equal(temp_var->ident, var->ident) && temp_var->flag & FLAG(VR_FLAG_USE)) {
+                    if (str_equal(temp_var->ident, var->ident) && temp_var->flag & FLAG(LIR_FLAG_USE)) {
                         is_use = true;
                     }
                 }
@@ -1128,7 +1049,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
     }
 }
 
-use_pos_t *first_use_pos(interval_t *i, use_kind_e kind) {
+use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind) {
     if (i->use_pos_list->count == 0) {
         return NULL;
     }

@@ -7,16 +7,9 @@
 // 如果仅仅使用
 #define ALLOC_USE_MIN 4
 
-typedef enum {
-    USE_KIND_NULL = 0, // 默认值，不强制分配寄存器
-    USE_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
-    USE_KIND_MUST = 2, // 必须分配寄存器
-    USE_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
-} use_kind_e;
-
 typedef struct {
     int value;
-    use_kind_e kind;
+    alloc_kind_e kind;
 } use_pos_t;
 
 typedef struct {
@@ -43,7 +36,7 @@ typedef struct interval_t {
     slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
     uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
-    vr_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
+    lir_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
@@ -97,7 +90,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to);
  * @param i
  * @param position
  */
-void interval_add_use_pos(closure_t *c, interval_t *i, int position, use_kind_e kind);
+void interval_add_use_pos(closure_t *c, interval_t *i, int position, alloc_kind_e kind);
 
 /**
  * @param i
@@ -169,7 +162,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
 
 void resolve_mappings(closure_t *c, resolver_t *r);
 
-use_pos_t *first_use_pos(interval_t *i, use_kind_e kind);
+use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind);
 
 void var_replace(lir_operand_t *operand, interval_t *i);
 

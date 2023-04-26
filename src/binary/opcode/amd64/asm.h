@@ -24,9 +24,10 @@
 })
 
 // ASM_INST("mov", { to, from });
-#define ASM_INST(_name, ...) ({\
+#define ASM_INST(_name, ...) ({ \
   asm_operation_t *_inst = NEW(asm_operation_t); \
   memset(_inst, 0, sizeof(asm_operation_t)); \
+  _inst->op_id = op->id; \
   _inst->name = _name;\
   asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
   for (int _i = 0; _i < 4; ++_i) {\
@@ -218,6 +219,7 @@ typedef struct {
  * 指令名称可以包含 label
  */
 typedef struct {
+    uint64_t op_id;
     string name; // 指令名称 operator symbol
     uint8_t prefix; // 自定义指令前缀，覆盖
     uint8_t count;

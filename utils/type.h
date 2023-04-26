@@ -26,8 +26,16 @@ typedef uint8_t byte;
 
 typedef union {
     int64_t int_value;
-    bool bool_value;
+    int64_t i64_value;
+    int32_t i32_value;
+    int8_t i16_value;
+    int8_t i8_value;
     uint64_t uint_value;
+    uint64_t u64_value;
+    uint32_t u32_value;
+    uint16_t u16_value;
+    uint8_t u8_value;
+    bool bool_value;
     double float_value;
     void *ptr_value;
 } value_casting;
@@ -440,7 +448,6 @@ static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     if (kind == TYPE_ANY ||
         kind == TYPE_STRING ||
-        kind == TYPE_POINTER ||
         kind == TYPE_LIST ||
         kind == TYPE_ARRAY ||
         kind == TYPE_MAP ||
@@ -518,6 +525,10 @@ static inline bool is_complex_type(type_t t) {
            || t.kind == TYPE_SET
            || t.kind == TYPE_FN
            || t.kind == TYPE_POINTER;
+}
+
+static inline bool is_qword_int(type_kind kind) {
+    return kind == TYPE_INT64 || kind == TYPE_UINT64 || kind == TYPE_UINT || kind == TYPE_INT;
 }
 
 /**

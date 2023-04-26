@@ -1,14 +1,6 @@
 #include "amd64.h"
+#include "src/cross.h"
 #include "src/register/amd64.h"
-
-#define CONVERT_TO_VAR(_operand, _flag) ({ \
-   type_kind base = operand_type_kind(_operand); \
-   lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(base)); \
-   slice_push(c->globals, temp->value);                \
-   linked_insert_before(block->operations, node, lir_op_move(temp, op->first)); \
-   lir_reset_operand(temp, VR_FLAG_FIRST);      \
-})\
-
 
 static lir_operand_t *select_first_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
@@ -64,6 +56,10 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
                 imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
                 imm_operand->value = symbol_var;
             }
+        }
+
+        if (is_qword_int(imm->kind)) {
+            convert_to_var(c, block, node, imm_operand);
         }
     }
 }
@@ -199,7 +195,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 lir_operand_t *reg_operand = select_first_reg(op->output);
 
                 linked_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
-                op->output = lir_reset_operand(reg_operand, VR_FLAG_OUTPUT);
+                op->output = lir_reset_operand(reg_operand, LIR_FLAG_OUTPUT);
             }
 
             continue;
@@ -230,10 +226,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // 1.1 return 指令需要将返回值放到 rax 中
             lir_operand_t *reg_operand = select_first_reg(op->first);
             linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
-            op->first = lir_reset_operand(reg_operand, VR_FLAG_FIRST);
+            op->first = lir_reset_operand(reg_operand, LIR_FLAG_FIRST);
             continue;
         }
 
+        // TODO 浮点数除法
         // div 被输数，除数 -> 商
         // DIV first,second -> output
         // ↓
@@ -241,18 +238,18 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // DIV rax, second -> rax  amd64: div divisor  其中 rax 存储商， rdx 存储余数
         // mov rax -> output
         if (op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM) {
-            lir_operand_t *ax_operand = select_first_reg(op->output);
+            lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
 
             // second cannot imm?
             if (op->second->assert_type != LIR_OPERAND_VAR) {
-                op->second = CONVERT_TO_VAR(op->second, VR_FLAG_SECOND);
+                convert_to_var(c, block, node, op->second);
             }
 
             // mov first -> rax
-            linked_insert_before(block->operations, node, lir_op_move(ax_operand, op->first));
+            linked_insert_before(block->operations, node, lir_op_move(rax_operand, op->first));
 
             // div rax, v2 -> rax
-            op->first = lir_reset_operand(ax_operand, VR_FLAG_FIRST);
+            op->first = lir_reset_operand(rax_operand, LIR_FLAG_FIRST);
 
             if (op->code == LIR_OPCODE_REM) {
                 op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
@@ -261,10 +258,10 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                                     lir_op_move(op->output, operand_new(LIR_OPERAND_REG, rdx)));
             } else {
                 // mov rax -> output
-                linked_insert_after(block->operations, node, lir_op_move(op->output, ax_operand));
+                linked_insert_after(block->operations, node, lir_op_move(op->output, rax_operand));
             }
 
-            op->output = lir_reset_operand(ax_operand, VR_FLAG_OUTPUT);
+            op->output = lir_reset_operand(rax_operand, LIR_FLAG_OUTPUT);
             continue;
         }
 
@@ -276,7 +273,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_contain_cmp(op)) {
             // first is native target, cannot imm, so in case swap first and second
             if (op->first->assert_type != LIR_OPERAND_VAR) {
-                op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
+                convert_to_var(c, block, node, op->first);
                 continue;
             }
         }
@@ -284,7 +281,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_term(op)) {
             // first must var for assign reg
             if (op->first->assert_type != LIR_OPERAND_VAR) {
-                op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
+                convert_to_var(c, block, node, op->first);
                 continue;
             }
         }
@@ -293,7 +290,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (op->code == LIR_OPCODE_MOVE) {
             if (op->output->assert_type != LIR_OPERAND_VAR) {
                 // 将 output 转换成 var
-                op->output = CONVERT_TO_VAR(op->output, VR_FLAG_OUTPUT);
+                convert_to_var(c, block, node, op->output);
                 continue;
             }
         }
@@ -303,7 +300,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         // 现在只能是 var 了，在 reg alloc 时为 lea first var 注册了 USE_KIND_NOT
         // 也就是不允许分配寄存器
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
-            op->first = CONVERT_TO_VAR(op->first, VR_FLAG_FIRST);
+            convert_to_var(c, block, node, op->first);
         }
     }
 }

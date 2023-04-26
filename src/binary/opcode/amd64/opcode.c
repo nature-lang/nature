@@ -112,7 +112,7 @@ inst_t idiv_rex_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SL
                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                        }
 };
-inst_t idiv_rm16 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7},
+inst_t idiv_rm16 = {"idiv", "idiv", 0x66, {0xF7}, {OPCODE_EXT_SLASH7},
                     {
                             {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
                     }
@@ -134,7 +134,7 @@ inst_t imul_rm8 = {"imul", "imul", 0, {0xF6}, {OPCODE_EXT_SLASH5},
                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                    }
 };
-inst_t imul_rm16 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5},
+inst_t imul_rm16 = {"imul", "imul", 0x66, {0xF7}, {OPCODE_EXT_SLASH5},
                     {
                             {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
                     }
@@ -151,54 +151,94 @@ inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
 };
 
 
+// mov reg -> rm ------------------------------------------------------------------------------------------------------
 inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                      }
 };
-
 inst_t mov_rex_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                  {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                          }
 };
+inst_t mov_rm16_r16 = {"mov", "mov", 0x66, {0x89}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t mov_rm32_r32 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
 
+// mov rm -> reg ------------------------------------------------------------------------------------------------------
 inst_t mov_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
                      {
                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
                      }
 };
-
 inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
                          }
 };
-
-// 注册指令列表 asm operand
 inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
                        }
 };
+inst_t mov_r32_rm32 = {"mov", "movsd", 0, {0x8B}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
 
-inst_t mov_imm32_r32 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
+// mov imm -> reg ------------------------------------------------------------------------------------------------------
+inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
+                      {
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
+                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                      }
+};
+inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
+                          {
+                                  {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
+                                  {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                          }
+};
+inst_t mov_r16_imm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_IMM_WORD},
+                        {
+                                {OPERAND_TYPE_R16, ENCODING_TYPE_OPCODE_PLUS},
+                                {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                        }
+};
+inst_t mov_r32_imm32 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
                         {
                                 {OPERAND_TYPE_R32, ENCODING_TYPE_OPCODE_PLUS},
                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                         }
-};
-
-inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                         {
-                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                         }
 };
 
 inst_t mov_r64_imm64 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD},
@@ -208,13 +248,14 @@ inst_t mov_r64_imm64 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_I
                         }
 };
 
+
+// mov imm -> rm ------------------------------------------------------------------------------------------------------
 inst_t mov_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                        {
                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                        }
 };
-
 inst_t mov_rex_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                            {
                                    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
@@ -222,36 +263,28 @@ inst_t mov_rex_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_
                            }
 };
 
-
-inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
-                      {
-                              {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
-                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                      }
+inst_t mov_rm16_imm16 = {"mov", "mov", 0x66, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD},
+                         {
+                                 {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t mov_rm32_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
 };
 
-inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
-                          {
-                                  {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
-                                  {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                          }
-};
 
 
 // intel 指令顺序
-inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                       }
-};
-
-inst_t mov_r32_rm32 = {"mov", "movsd", 0, {0x8B}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                       }
-};
 
 inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
@@ -275,20 +308,6 @@ inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT
                              }
 };
 
-
-inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                       }
-};
-
-inst_t mov_rm32_r32 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                       }
-};
 
 // intel 指令顺序
 inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
@@ -498,23 +517,34 @@ void amd64_opcode_init() {
     opcode_tree_build(&imul_rm32);
     opcode_tree_build(&imul_rm64);
 
-
+    // mov reg -> rm
     opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rex_rm8_r8);
+    opcode_tree_build(&mov_rm16_r16);
+    opcode_tree_build(&mov_rm32_r32);
+    opcode_tree_build(&mov_rm64_r64);
+
+    // mov rm -> reg
     opcode_tree_build(&mov_r8_rm8);
     opcode_tree_build(&mov_rex_r8_rm8);
     opcode_tree_build(&mov_r16_rm16);
-    opcode_tree_build(&mov_imm32_r32);
-    opcode_tree_build(&mov_rm64_imm32);
-    opcode_tree_build(&mov_r64_imm64);
-    opcode_tree_build(&mov_rex_rm8_imm8);
-    opcode_tree_build(&mov_rex_r8_imm8);
-    opcode_tree_build(&mov_rm8_imm8);
-    opcode_tree_build(&mov_r8_imm8);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_r32_rm32);
-    opcode_tree_build(&mov_rm64_r64);
-    opcode_tree_build(&mov_rm32_r32);
+
+    // mov imm ->reg
+    opcode_tree_build(&mov_rex_r8_imm8);
+    opcode_tree_build(&mov_r8_imm8);
+    opcode_tree_build(&mov_r16_imm16);
+    opcode_tree_build(&mov_r32_imm32);
+    opcode_tree_build(&mov_r64_imm64);
+
+    // mov imm -> rm
+    opcode_tree_build(&mov_rex_rm8_imm8);
+    opcode_tree_build(&mov_rm8_imm8);
+    opcode_tree_build(&mov_rm16_imm16);
+    opcode_tree_build(&mov_rm32_imm32);
+    opcode_tree_build(&mov_rm64_imm32);
+
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm

@@ -9,7 +9,7 @@ static char sprint_buf[1024];
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(memory_any_t *arg) {
-    DEBUGF("[print_arg] memory_any_t base=%p, kind=%d", arg, arg->rtype->kind);
+    DEBUGF("[runtime.print_arg] memory_any_t base=%p, kind=%d", arg, arg->rtype->kind);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -22,8 +22,43 @@ static void print_arg(memory_any_t *arg) {
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
-    if (is_integer(arg->rtype->kind)) {
-        int n = sprintf(sprint_buf, "%ld", arg->value.int_value);
+    if (arg->rtype->kind == TYPE_UINT || arg->rtype->kind == TYPE_UINT64) {
+        int n = sprintf(sprint_buf, "%lu", arg->value.u64_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_UINT32) {
+        int n = sprintf(sprint_buf, "%u", arg->value.u32_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_UINT16) {
+        int n = sprintf(sprint_buf, "%u", arg->value.u16_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_UINT8) {
+        int n = sprintf(sprint_buf, "%u", arg->value.u8_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_INT || arg->rtype->kind == TYPE_INT64) {
+        int n = sprintf(sprint_buf, "%ld", arg->value.i64_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_INT32) {
+        int n = sprintf(sprint_buf, "%d", arg->value.i32_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_INT16) {
+        int n = sprintf(sprint_buf, "%d", arg->value.i16_value);
+        write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
+    if (arg->rtype->kind == TYPE_INT8) {
+        int n = sprintf(sprint_buf, "%d", arg->value.i8_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }

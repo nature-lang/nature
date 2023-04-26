@@ -2,9 +2,6 @@
 #include <string.h>
 #include "debug.h"
 #include "lir.h"
-#include "src/symbol/symbol.h"
-#include "utils/helper.h"
-#include "src/semantic/analyser.h"
 
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {
@@ -118,39 +115,39 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
             break;
         }
         case TYPE_INT: {
-            len = sprintf(buf, "IMM[%ld:INT]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:INT]", immediate->uint_value);
             break;
         }
         case TYPE_INT8: {
-            len = sprintf(buf, "IMM[%ld:INT8]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:INT8]", immediate->uint_value);
             break;
         }
         case TYPE_INT16: {
-            len = sprintf(buf, "IMM[%ld:INT16]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:INT16]", immediate->uint_value);
             break;
         }
         case TYPE_INT32: {
-            len = sprintf(buf, "IMM[%ld:INT32]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:INT32]", immediate->uint_value);
             break;
         }
         case TYPE_UINT: {
-            len = sprintf(buf, "IMM[%ld:UINT]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:UINT]", immediate->uint_value);
             break;
         }
         case TYPE_UINT8: {
-            len = sprintf(buf, "IMM[%ld:UINT8]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:UINT8]", immediate->uint_value);
             break;
         }
         case TYPE_UINT16: {
-            len = sprintf(buf, "IMM[%ld:UINT16]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:UINT16]", immediate->uint_value);
             break;
         }
         case TYPE_UINT32: {
-            len = sprintf(buf, "IMM[%ld:UINT32]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:UINT32]", immediate->uint_value);
             break;
         }
         case TYPE_UINT64: {
-            len = sprintf(buf, "IMM[%ld:UINT64]", immediate->int_value);
+            len = sprintf(buf, "IMM[%ld:UINT64]", immediate->uint_value);
             break;
         }
         case TYPE_FLOAT: {
@@ -242,4 +239,30 @@ char *lir_phi_body_to_string(slice_t *phi_body) {
     free(params);
 
     return buf;
+}
+
+closure_t *lir_closure_new(ast_fndef_t *fndef) {
+    closure_t *c = NEW(closure_t);
+    c->name = fndef->name;
+    c->operations = linked_new();
+    c->text_count = 0;
+    c->asm_operations = slice_new();
+    c->asm_build_temps = slice_new();
+    c->asm_symbols = slice_new();
+    c->entry = NULL;
+    c->globals = slice_new();
+    c->blocks = slice_new(); // basic_block_t
+
+    c->interval_table = table_new();
+
+//    c->var_decl_table = table_new();
+    c->stack_offset = 0;
+    c->stack_vars = slice_new();
+    c->loop_count = 0;
+    c->loop_ends = slice_new();
+    c->loop_headers = slice_new();
+
+    c->interval_count = cross_alloc_reg_count() + 1;
+    fndef->closure = c;
+    return c;
 }

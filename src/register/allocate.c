@@ -550,7 +550,7 @@ void replace_virtual_register(closure_t *c) {
         linked_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *var_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(VR_FLAG_DEF) | FLAG(VR_FLAG_USE),
+            slice_t *var_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(LIR_FLAG_DEF) | FLAG(LIR_FLAG_USE),
                                                     false);
 
             for (int j = 0; j < var_operands->count; ++j) {
@@ -559,7 +559,7 @@ void replace_virtual_register(closure_t *c) {
                 interval_t *parent = table_get(c->interval_table, var->ident);
                 assert(parent);
 
-                interval_t *interval = interval_child_at(parent, op->id, var->flag & FLAG(VR_FLAG_USE));
+                interval_t *interval = interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
 
                 var_replace(operand, interval);
             }
