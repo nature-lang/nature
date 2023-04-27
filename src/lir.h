@@ -28,7 +28,7 @@
 
 #define FN_RUNTIME_IDENT "@fn_runtime"
 
-#define FLOAT_NEG_MSAK_IDENT "float_neg_mask" // -0
+#define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
 // RT = runtime
 // CT = compile time
@@ -446,7 +446,12 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_reg->index = reg->index;
         new_reg->size = reg->size;
         new_reg->alloc_id = reg->alloc_id;
-        new_reg->flag = 0;
+
+        // 保留原始类型值
+        flag_t mask = 0;
+        mask |= FLAG(LIR_FLAG_ALLOC_INT);
+        mask |= FLAG(LIR_FLAG_ALLOC_FLOAT);
+        new_reg->flag = (reg->flag & mask);
         new_operand->value = new_reg;
         return new_operand;
     }
@@ -822,25 +827,23 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
 }
 
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
-    if (op->code == LIR_OPCODE_BEQ ||
-        op->code == LIR_OPCODE_SGT ||
-        op->code == LIR_OPCODE_SGE ||
-        op->code == LIR_OPCODE_SEE ||
-        op->code == LIR_OPCODE_SNE ||
-        op->code == LIR_OPCODE_SLT ||
-        op->code == LIR_OPCODE_SLE) {
-        return true;
-    }
-    return false;
+    return (op->code == LIR_OPCODE_BEQ ||
+            op->code == LIR_OPCODE_SGT ||
+            op->code == LIR_OPCODE_SGE ||
+            op->code == LIR_OPCODE_SEE ||
+            op->code == LIR_OPCODE_SNE ||
+            op->code == LIR_OPCODE_SLT ||
+            op->code == LIR_OPCODE_SLE);
 }
 
 
 static inline bool lir_op_term(lir_op_t *op) {
-    if (op->code == LIR_OPCODE_ADD ||
-        op->code == LIR_OPCODE_SUB) {
-        return true;
-    }
-    return false;
+    return (op->code == LIR_OPCODE_ADD ||
+            op->code == LIR_OPCODE_SUB);
+}
+
+static inline bool lir_op_factor(lir_op_t *op) {
+    return op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM;
 }
 
 static inline slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {
@@ -881,22 +884,6 @@ static inline slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t
  */
 static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
-}
-
-/**
- * 尽量在不影响原有 operand 的情况下进行值的替换, 这样通用性更强
- * @param c
- * @param b
- * @param operand
- */
-static inline void convert_to_var(closure_t *c, basic_block_t *b, linked_node *node, lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->globals, temp->value);
-    linked_insert_before(b->operations, node, lir_op_move(temp, operand));
-    temp = lir_reset_operand(temp, operand->pos);
-    operand->assert_type = temp->assert_type;
-    operand->value = temp->value;
 }
 
 #endif //NATURE_SRC_LIR_H_

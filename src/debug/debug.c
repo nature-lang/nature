@@ -133,6 +133,7 @@ string lir_opcode_to_string[] = {
 //        [LIR_OPCODE_SIA]="SIA  ",
         [LIR_OPCODE_PHI]="PHI  ",
         [LIR_OPCODE_MOVE]="MOVE ",
+        [LIR_OPCODE_XOR]="XOR",
         [LIR_OPCODE_BEQ]="BEQ",
         [LIR_OPCODE_BAL]="BAL ",
         [LIR_OPCODE_PUSH]="PUSH  ",

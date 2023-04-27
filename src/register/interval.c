@@ -460,11 +460,11 @@ void interval_build(closure_t *c) {
                     continue;
                 }
 
-                // first range 为 null,表示仅定义，未使用
+                // first range 为 null,表示仅定义，后续并未使用(倒叙遍历，所以应该先遇到使用)
                 if (interval->first_range == NULL) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
-                    interval->first_range->from = op->id;
+                    interval->first_range->from = op->id; // 范围缩小，同样适用于固定寄存器
                 }
 
                 if (!interval->fixed) {

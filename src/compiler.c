@@ -594,9 +594,9 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
         lir_imm_t *imm = first->value;
         assertf(is_number(imm->kind), "only number can neg operate");
         if (imm->kind == TYPE_INT) {
-            imm->int_value = imm->int_value * -1;
+            imm->int_value = 0 - imm->int_value;
         } else {
-            imm->float_value = imm->float_value * -1;
+            imm->float_value = 0 - imm->float_value;
         }
         // move 操作即可
         OP_PUSH(lir_op_move(target, first));

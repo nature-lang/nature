@@ -94,11 +94,11 @@ static void assembler_custom_links() {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
 
-    // fn_main base 地址注册
-//    int fn_main_base = 0;
-//    uint64_t rel_offset = elf_put_global_symbol(ctx, SYMBOL_FN_MAIN_BASE, &fn_main_base, cross_number_size());
-    // data 段和符号表中已经将 rt_fn_main_base 写入，值为 0 等待重定位，所以还需要注册到重定位表项中
-//    elf_put_rel_data(ctx, ctx->data_section, rel_offset, FN_MAIN_NAME, STT_FUNC);
+
+    // custom_global symbol ------------------------------------------------------------------------------------------------------
+    double float_mask = -0.0;
+    elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, cross_number_size());
+
 
     object_file_format(ctx);
     elf_output(ctx);

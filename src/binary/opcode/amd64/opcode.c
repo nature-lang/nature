@@ -78,7 +78,6 @@ inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                          }
 };
-
 // intel 指令顺序
 inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
@@ -86,21 +85,18 @@ inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
                        }
 };
-
 inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
                        }
 };
-
 inst_t add_imm8_rm64 = {"add", "add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                         {
                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                 {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
                         }
 };
-
 
 inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7},
                    {
@@ -148,6 +144,20 @@ inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
                     {
                             {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                     }
+};
+
+// float 算数运算 ------------------------------------------------------------------------------------------------------
+inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t addss_xmm1_xmm2m32 = {"add", "addsd", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                             }
 };
 
 
@@ -487,6 +497,20 @@ inst_t neg_rm64 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH3
         OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
 };
 
+// xor ------------------------------------------------------------------------------------------------------
+inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
+                              {
+                                      {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                      {OPERAND_TYPE_XMM2M128, ENCODING_TYPE_MODRM_RM}
+                              }
+};
+inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASHR},
+                              {
+                                      {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                      {OPERAND_TYPE_XMM2M128, ENCODING_TYPE_MODRM_RM}
+                              }
+};
+
 
 // opcode end ------------------------------------------------------------------------------------------------------
 
@@ -530,6 +554,8 @@ void amd64_opcode_init() {
     opcode_tree_build(&push_r64);
     opcode_tree_build(&pop_r64);
     opcode_tree_build(&pop_rm64);
+
+    // 整形算数运算
     opcode_tree_build(&sub_rm64_imm8);
     opcode_tree_build(&sub_rm64_imm32);
     opcode_tree_build(&sub_rm64_r64);
@@ -544,11 +570,15 @@ void amd64_opcode_init() {
     opcode_tree_build(&idiv_rm16);
     opcode_tree_build(&idiv_rm32);
     opcode_tree_build(&idiv_rm64);
-
     opcode_tree_build(&imul_rm8);
     opcode_tree_build(&imul_rm16);
     opcode_tree_build(&imul_rm32);
     opcode_tree_build(&imul_rm64);
+
+    // 浮点数算数运算
+    opcode_tree_build(&addss_xmm1_xmm2m32);
+    opcode_tree_build(&addsd_xmm1_xmm2m64);
+
 
     // mov reg -> rm
     opcode_tree_build(&mov_rm8_r8);
@@ -612,6 +642,9 @@ void amd64_opcode_init() {
     opcode_tree_build(&neg_rm16);
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
+
+    opcode_tree_build(&xorps_xmm1_xmm2m128);
+    opcode_tree_build(&xorpd_xmm1_xmm2m128);
 }
 
 /**
@@ -833,6 +866,15 @@ asm_keys_t operand_low_to_high(operand_type t) {
         return res;
     }
 
+    // 暂时没有支持 M128 的形式，所以必须使用 xmm2 部分
+    if (t == OPERAND_TYPE_XMM2M128) {
+        res.count = 1;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        res.list = highs;
+        return res;
+    }
+
     if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
@@ -870,7 +912,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
 
 void opcode_tree_build(inst_t *inst) {
     // 第一层结构 指令名称
-    amd64_opcode_tree_node_t *node = opcode_find_name(inst->name);
+    amd64_opcode_tree_node_t *node = opcode_find_name(inst->group);
 
     // 其余层级结构,指令参数
     opcode_find_succs(node, inst, 0);

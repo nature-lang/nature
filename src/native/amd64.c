@@ -297,7 +297,6 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * 浮点数或者整形都会走到这里来
  * @param c
  * @param op
  * @return
@@ -315,6 +314,31 @@ static slice_t *amd64_native_neg(closure_t *c, lir_op_t *op) {
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     asm_mov(operations, op, result, first);
     slice_push(operations, ASM_INST("neg", { result }));
+
+    return operations;
+}
+
+
+/**
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_xor(closure_t *c, lir_op_t *op) {
+    assert(op->first->assert_type == LIR_OPERAND_REG || op->output->assert_type == LIR_OPERAND_REG);
+
+    // 由于存在 mov 操作，所以必须有一个操作数分配到寄存器
+    slice_t *operations = slice_new();
+
+    // 参数转换
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
+    asm_operand_t *second = lir_operand_trans(c, operations, op->second); // float mask
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
+
+    // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
+    asm_mov(operations, op, result, first);
+
+    slice_push(operations, ASM_INST("xor", { result, second }));
 
     return operations;
 }
@@ -558,6 +582,10 @@ amd64_native_fn amd64_native_table[] = {
         // 一元运算符
         [LIR_OPCODE_NEG] = amd64_native_neg,
 
+        // 位运算
+        [LIR_OPCODE_XOR] = amd64_native_xor,
+
+        // 算数运算
         [LIR_OPCODE_ADD] = amd64_native_add,
         [LIR_OPCODE_SUB] = amd64_native_sub,
         [LIR_OPCODE_DIV] = amd64_native_div,

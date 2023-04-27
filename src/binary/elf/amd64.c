@@ -28,6 +28,10 @@ static uint64_t operation_rip_offset(inst_t *inst) {
         // rip 相对寻址
         return 4;
     }
+    if (str_equal(inst->opcode_text, "addsd")) {
+        // rip 相对寻址
+        return 4;
+    }
     if (str_equal(inst->opcode_text, "lea")) {
         return 3;
     }

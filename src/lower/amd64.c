@@ -2,66 +2,22 @@
 #include "src/cross.h"
 #include "src/register/amd64.h"
 
-static lir_operand_t *select_first_reg(lir_operand_t *operand) {
+static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+    type_kind kind = operand_type_kind(operand);
+    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
+    slice_push(c->globals, temp->value);
+
+    linked_push(list, lir_op_move(temp, operand));
+    return lir_reset_operand(temp, operand->pos);
+}
+
+static lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     if (kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64) {
         return operand_new(LIR_OPERAND_REG, xmm0);
     }
 
     return operand_new(LIR_OPERAND_REG, cross_reg_select(rax->index, kind));
-}
-
-/**
- * amd64 由于不支持直接操作浮点型和字符串, 所以将其作为全局变量直接注册到 closure asm_symbols 中
- * 并添加 lea 指令对值进行加载
- * 所以在 string 和 float 类型进行特殊处理，可以更容易在 native trans 时进行操作
- * @param c
- * @param block
- * @param node
- */
-static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_node *node) {
-    lir_op_t *op = node->value;
-    slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
-    for (int i = 0; i < imm_operands->count; ++i) {
-        lir_operand_t *imm_operand = imm_operands->take[i];
-        lir_imm_t *imm = imm_operand->value;
-        if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
-            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            symbol->name = unique_name;
-            if (imm->kind == TYPE_RAW_STRING) {
-                symbol->size = strlen(imm->string_value) + 1;
-                symbol->value = (uint8_t *) imm->string_value;
-            } else {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->float_value;
-            }
-
-            slice_push(c->asm_symbols, symbol);
-            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-            symbol_var->kind = imm->kind;
-            symbol_var->ident = unique_name;
-
-            if (imm->kind == TYPE_RAW_STRING) {
-                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
-                slice_push(c->globals, var_operand->value);
-                lir_op_t *temp = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
-                linked_insert_before(block->operations, node, temp);
-
-                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-                imm_operand->assert_type = temp_operand->assert_type;
-                imm_operand->value = temp_operand->value;
-            } else {
-                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
-                imm_operand->value = symbol_var;
-            }
-        }
-
-        if (is_qword_int(imm->kind)) {
-            convert_to_var(c, block, node, imm_operand);
-        }
-    }
 }
 
 /**
@@ -169,154 +125,224 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
 }
 
 
-static void amd64_lower_neg_float(closure_t *c, basic_block_t *block, linked_node *node) {
-    lir_op_t *op = node->value;
-    type_kind kind = operand_type_kind(op->output);
+static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    // var 才能分配 reg, 正常来说肯定是，如果不是就需要做 convert
+    assert(op->output->assert_type == LIR_OPERAND_VAR);
 
-    linked_insert_before(block->operations, node, lir_op_move(op->output, op->first));
-    op->code = LIR_OPCODE_XOR;
-    op->first = lir_reset_operand(op->output, LIR_FLAG_FIRST);
-    op->second = lir_reset_operand(symbol_var_operand(FLOAT_NEG_MSAK_IDENT, kind), LIR_FLAG_SECOND);
+    type_kind kind = operand_type_kind(op->output);
+    assert(is_number(kind));
+    if (is_integer(kind)) {
+        linked_push(list, op);
+        return list;
+    }
+
+    linked_push(list, lir_op_move(op->output, op->first));
+    // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
+    // 这里用 xmm1 进行一个中转
+
+    lir_operand_t *xmm_operand = operand_new(LIR_OPERAND_REG, xmm0);
+    linked_push(list, lir_op_move(xmm_operand,
+                                  symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
+
+
+    linked_push(list, lir_op_new(LIR_OPCODE_XOR,
+                                 op->output,
+                                 xmm_operand,
+                                 op->output));
+    return list;
+}
+
+/**
+ * amd64 由于不支持直接操作浮点型和字符串, 所以将其作为全局变量直接注册到 closure asm_symbols 中
+ * 并添加 lea 指令对值进行加载
+ * 所以在 string 和 float 类型进行特殊处理，可以更容易在 native trans 时进行操作
+ * @param c
+ * @param block
+ * @param node
+ */
+static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // imm 提取
+    slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
+    for (int i = 0; i < imm_operands->count; ++i) {
+        lir_operand_t *imm_operand = imm_operands->take[i];
+        lir_imm_t *imm = imm_operand->value;
+
+        if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
+            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
+            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+            symbol->name = unique_name;
+            if (imm->kind == TYPE_RAW_STRING) {
+                symbol->size = strlen(imm->string_value) + 1;
+                symbol->value = (uint8_t *) imm->string_value;
+            } else {
+                symbol->size = type_kind_sizeof(imm->kind);
+                symbol->value = (uint8_t *) &imm->float_value;
+            }
+
+            slice_push(c->asm_symbols, symbol);
+            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
+            symbol_var->kind = imm->kind;
+            symbol_var->ident = unique_name;
+
+            if (imm->kind == TYPE_RAW_STRING) {
+                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
+                lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
+                slice_push(c->globals, var_operand->value);
+                lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
+                linked_push(list, temp_ref);
+
+                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
+                imm_operand->assert_type = temp_operand->assert_type;
+                imm_operand->value = temp_operand->value;
+            } else {
+                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
+                imm_operand->value = symbol_var;
+            }
+
+        } else if (is_qword_int(imm->kind)) {
+            // 大数值必须通过 reg 转化
+            type_kind kind = operand_type_kind(imm_operand);
+            lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
+            slice_push(c->globals, temp->value);
+
+            linked_push(list, lir_op_move(temp, imm_operand));
+            temp = lir_reset_operand(temp, imm_operand->pos);
+            imm_operand->assert_type = temp->assert_type;
+            imm_operand->value = temp->value;
+        }
+    }
+
+    return list;
+}
+
+static linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // lower call actual params
+    linked_t *temps = amd64_actual_params_lower(c, op->second->value);
+    linked_concat(list, temps);
+    op->second->value = slice_new();
+
+    if (op->output == NULL) {
+        linked_push(list, op);
+    } else {
+        lir_operand_t *reg_operand = select_return_reg(op->output);
+        linked_push(list, lir_op_new(op->code, op->first, op->second, reg_operand));
+        linked_push(list, lir_op_move(op->output, reg_operand));
+    }
+
+    return list;
+}
+
+static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    linked_push(list, op);
+
+    // fn begin
+    // mov rsi -> formal param 1
+    // mov rdi -> formal param 2
+    // ....
+    linked_t *temps = amd64_formal_params_lower(c, op->output->value);
+    linked_node *current = linked_last(temps);
+    while (current && current->value != NULL) {
+        linked_push(list, current->value);
+        current = current->prev;
+    }
+    op->output->value = slice_new();
+
+    return list;
+}
+
+static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    // 1.1 return 指令需要将返回值放到 rax 中
+    lir_operand_t *reg_operand = select_return_reg(op->first);
+    linked_push(list, lir_op_move(reg_operand, op->first));
+    linked_push(list, lir_op_new(op->code, reg_operand, NULL, NULL));
+    return list;
+}
+
+static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
+    lir_operand_t *rdx_operand = operand_new(LIR_OPERAND_REG, rdx);
+
+    // second cannot imm?
+    if (op->second->assert_type != LIR_OPERAND_VAR) {
+        op->second = amd64_convert_to_var(c, list, op->second);
+    }
+
+    // mov first -> rax
+    linked_push(list, lir_op_move(rax_operand, op->first));
+
+    // [div|mul|rem] rax, v2 -> rax
+    linked_push(list, lir_op_new(op->code, rax_operand, op->second, rax_operand));
+
+    if (op->code == LIR_OPCODE_REM) {
+        op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
+        // mov rdx -> output
+        linked_push(list, lir_op_move(op->output, rdx_operand));
+    } else {
+        // mov rax -> output
+        linked_push(list, lir_op_move(op->output, rax_operand));
+    }
+
+    return list;
 }
 
 static void amd64_lower_block(closure_t *c, basic_block_t *block) {
-    // handle operations
-    for (linked_node *node = block->operations->front; node != block->operations->rear; node = node->succ) {
-        lir_op_t *op = node->value;
+    linked_t *operations = linked_new();
+    LINKED_FOR(block->operations) {
+        lir_op_t *op = LINKED_VALUE();
 
-        // 处理 imm string operands
-        amd64_lower_imm_operand(c, block, node);
+        linked_concat(operations, amd64_lower_imm(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {
-            // lower call actual params
-            linked_t *temps = amd64_actual_params_lower(c, op->second->value);
-            linked_node *current = temps->front;
-            while (current->value != NULL) {
-                linked_insert_before(block->operations, LINKED_NODE(), current->value);
-                current = current->succ;
-            }
-            op->second->value = slice_new();
-
-            /**
-             * call test -> var
-             * ↓
-             * call test -> rax/xmm0
-             * mov rax/xmm0 -> var
-             */
-            if (op->output != NULL) {
-                lir_operand_t *reg_operand = select_first_reg(op->output);
-
-                linked_insert_after(block->operations, node, lir_op_move(op->output, reg_operand));
-                op->output = lir_reset_operand(reg_operand, LIR_FLAG_OUTPUT);
-            }
-
+            linked_concat(operations, amd64_lower_call(c, op));
             continue;
         }
-
-        // if op is fn begin, will set formal param
-        // 也就是为了能够方便的计算生命周期，把 native 中做的事情提前到这里而已
+        if (op->code == LIR_OPCODE_NEG) {
+            linked_concat(operations, amd64_lower_neg(c, op));
+            continue;
+        }
         if (op->code == LIR_OPCODE_FN_BEGIN) {
-            // fn begin
-            // mov rsi -> formal param 1
-            // mov rdi -> formal param 2
-            // ....
-            linked_t *temps = amd64_formal_params_lower(c, op->output->value);
-            linked_node *current = temps->front;
-            while (current->value != NULL) {
-                linked_insert_after(block->operations, LINKED_NODE(), current->value);
-                current = current->succ;
-            }
-            op->output->value = slice_new();
-
+            linked_concat(operations, amd64_lower_fn_begin(c, op));
             continue;
         }
-
-        /**
-         * return rax/xmm0
-         */
         if (op->code == LIR_OPCODE_FN_END && op->first != NULL) {
-            // 1.1 return 指令需要将返回值放到 rax 中
-            lir_operand_t *reg_operand = select_first_reg(op->first);
-            linked_insert_before(block->operations, node, lir_op_move(reg_operand, op->first));
-            op->first = lir_reset_operand(reg_operand, LIR_FLAG_FIRST);
+            linked_concat(operations, amd64_lower_fn_end(c, op));
+            continue;
+        }
+        if (lir_op_factor(op)) {
+            linked_concat(operations, amd64_lower_factor(c, op));
+            continue;
+        }
+        if ((lir_op_contain_cmp(op) || lir_op_term(op)) && op->first->assert_type != LIR_OPERAND_VAR) {
+            op->first = amd64_convert_to_var(c, operations, op->first);
+            linked_push(operations, op);
+            continue;
+        }
+        if (op->code == LIR_OPCODE_MOVE && op->output->assert_type != LIR_OPERAND_VAR) {
+            op->output = amd64_convert_to_var(c, operations, op->output);
+            linked_push(operations, op);
             continue;
         }
 
-        // TODO 浮点数除法
-        // div 被输数，除数 -> 商
-        // DIV first,second -> output
-        // ↓
-        // mov first -> rax
-        // DIV rax, second -> rax  amd64: div divisor  其中 rax 存储商， rdx 存储余数
-        // mov rax -> output
-        if (op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM) {
-            lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
-
-            // second cannot imm?
-            if (op->second->assert_type != LIR_OPERAND_VAR) {
-                convert_to_var(c, block, node, op->second);
-            }
-
-            // mov first -> rax
-            linked_insert_before(block->operations, node, lir_op_move(rax_operand, op->first));
-
-            // div rax, v2 -> rax
-            op->first = lir_reset_operand(rax_operand, LIR_FLAG_FIRST);
-
-            if (op->code == LIR_OPCODE_REM) {
-                op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
-                // mov rdx -> output
-                linked_insert_after(block->operations, node,
-                                    lir_op_move(op->output, operand_new(LIR_OPERAND_REG, rdx)));
-            } else {
-                // mov rax -> output
-                linked_insert_after(block->operations, node, lir_op_move(op->output, rax_operand));
-            }
-
-            op->output = lir_reset_operand(rax_operand, LIR_FLAG_OUTPUT);
-            continue;
-        }
-
-        // amd64 的 add imm -> rax 相当于 add imm,rax -> rax
-        // cmp imm -> rax 同理。所以 output 部分不能是 imm 操作数, 且必须要有一个寄存器参与计算
-        // 对于 lir 指令，例如 bea first,second => label 进行比较时，将 first 放到 asm 的 result 部分
-        // second 放到 asm 的 input 部分。 所以 result 不能为 imm, 也就是 beq 指令的 first 部分不能为 imm
-        // tips: 不能随便调换 first 和 second 的顺序，会导致 asm cmp 指令对比异常
-        if (lir_op_contain_cmp(op)) {
-            // first is native target, cannot imm, so in case swap first and second
-            if (op->first->assert_type != LIR_OPERAND_VAR) {
-                convert_to_var(c, block, node, op->first);
-                continue;
-            }
-        }
-
-        if (lir_op_term(op)) {
-            // first must var for assign reg
-            if (op->first->assert_type != LIR_OPERAND_VAR) {
-                convert_to_var(c, block, node, op->first);
-                continue;
-            }
-        }
-
-
-        if (op->code == LIR_OPCODE_MOVE) {
-            if (op->output->assert_type != LIR_OPERAND_VAR) {
-                // 将 output 转换成 var
-                convert_to_var(c, block, node, op->output);
-                continue;
-            }
-        }
-
-        // lea 指令的 first 不能是立即数
-        // string 和 float 在上面已经进行了处理
-        // 现在只能是 var 了，在 reg alloc 时为 lea first var 注册了 USE_KIND_NOT
-        // 也就是不允许分配寄存器
+        // lea symbol_label -> var 等都是允许的，主要是应对 imm int
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
-            convert_to_var(c, block, node, op->first);
+            op->first = amd64_convert_to_var(c, operations, op->first);
+            linked_push(operations, op);
+            continue;
         }
-    }
-}
 
+        linked_push(operations, op);
+    }
+    block->operations = operations;
+}
 
 void amd64_lower(closure_t *c) {
     // 按基本块遍历所有指令

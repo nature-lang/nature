@@ -67,8 +67,8 @@ typedef enum {
     OPERAND_TYPE_XMM1,
     OPERAND_TYPE_XMM1M64,
     OPERAND_TYPE_XMM1M32,
-    OPERAND_TYPE_XMM2M32,
     OPERAND_TYPE_XMM2,
+    OPERAND_TYPE_XMM2M32,
     OPERAND_TYPE_XMM2M64,
     OPERAND_TYPE_XMM2M128,
     OPERAND_TYPE_YMM1,
@@ -147,7 +147,7 @@ typedef struct {
 } opcode_operand_t; // reg 64
 
 typedef struct {
-    char *name; // 分组名称
+    char *group; // 分组名称
     char *opcode_text; // opcode 名称
     uint8_t prefix;
     uint8_t opcode[3];
