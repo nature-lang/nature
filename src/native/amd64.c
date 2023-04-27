@@ -121,7 +121,7 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
         lir_symbol_var_t *v = operand->value;
         asm_operand_t *asm_operand = SYMBOL(v->ident, false);
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
-        asm_operand->size = type_kind_sizeof(v->type);
+        asm_operand->size = type_kind_sizeof(v->kind);
         return asm_operand;
     }
 
@@ -293,6 +293,29 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
 
     asm_operand_t *second = lir_operand_trans(c, operations, op->second);
     slice_push(operations, ASM_INST("imul", { second }));
+    return operations;
+}
+
+/**
+ * 浮点数或者整形都会走到这里来
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_neg(closure_t *c, lir_op_t *op) {
+    // 由于存在 mov 操作，所以必须有一个操作数分配到寄存器
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
+    slice_t *operations = slice_new();
+
+    // 参数转换
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
+
+    // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
+    asm_mov(operations, op, result, first);
+    slice_push(operations, ASM_INST("neg", { result }));
+
     return operations;
 }
 
@@ -524,10 +547,6 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
 amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_CLR] = amd64_native_clr,
         [LIR_OPCODE_CLV] = amd64_native_clv,
-        [LIR_OPCODE_ADD] = amd64_native_add,
-        [LIR_OPCODE_SUB] = amd64_native_sub,
-        [LIR_OPCODE_DIV] = amd64_native_div,
-        [LIR_OPCODE_MUL] = amd64_native_mul,
         [LIR_OPCODE_CALL] = amd64_native_call,
         [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
@@ -535,6 +554,14 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_RETURN] = amd64_native_return,
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
+
+        // 一元运算符
+        [LIR_OPCODE_NEG] = amd64_native_neg,
+
+        [LIR_OPCODE_ADD] = amd64_native_add,
+        [LIR_OPCODE_SUB] = amd64_native_sub,
+        [LIR_OPCODE_DIV] = amd64_native_div,
+        [LIR_OPCODE_MUL] = amd64_native_mul,
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = amd64_native_scc,
         [LIR_OPCODE_SGE] = amd64_native_scc,

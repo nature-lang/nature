@@ -28,6 +28,8 @@
 
 #define FN_RUNTIME_IDENT "@fn_runtime"
 
+#define FLOAT_NEG_MSAK_IDENT "float_neg_mask" // -0
+
 // RT = runtime
 // CT = compile time
 #define RT_CALL_LIST_NEW "list_new"
@@ -198,7 +200,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_kind type;
+    type_kind kind;
 } lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
@@ -338,6 +340,13 @@ static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
 
     // 构造 label
     return label_operand(ident, s->is_local);
+}
+
+static inline lir_operand_t *symbol_var_operand(char *ident, type_kind kind) {
+    lir_symbol_var_t *var = NEW(lir_symbol_var_t);
+    var->ident = ident;
+    var->kind = kind;
+    return operand_new(LIR_OPERAND_SYMBOL_VAR, var);
 }
 
 
@@ -587,7 +596,7 @@ static inline type_kind operand_type_kind(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *s = operand->value;
-        return s->type;
+        return s->kind;
     }
 
     if (operand->assert_type == LIR_OPERAND_IMM) {

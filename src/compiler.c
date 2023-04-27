@@ -78,7 +78,7 @@ static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
         } else {
             lir_symbol_var_t *symbol = NEW(lir_symbol_var_t);
             symbol->ident = ident->literal;
-            symbol->type = var->type.kind;
+            symbol->kind = var->type.kind;
             return operand_new(LIR_OPERAND_SYMBOL_VAR, symbol);
         }
     }
@@ -609,6 +609,7 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
     }
 
 
+    // neg source -> target
     assertf(unary_expr->operator != AST_OP_IA, "not support IA op");
     lir_opcode_t type = ast_op_convert[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);

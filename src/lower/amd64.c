@@ -39,7 +39,7 @@ static void amd64_lower_imm_operand(closure_t *c, basic_block_t *block, linked_n
 
             slice_push(c->asm_symbols, symbol);
             lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-            symbol_var->type = imm->kind;
+            symbol_var->kind = imm->kind;
             symbol_var->ident = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
@@ -166,6 +166,17 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
     }
 
     return operations;
+}
+
+
+static void amd64_lower_neg_float(closure_t *c, basic_block_t *block, linked_node *node) {
+    lir_op_t *op = node->value;
+    type_kind kind = operand_type_kind(op->output);
+
+    linked_insert_before(block->operations, node, lir_op_move(op->output, op->first));
+    op->code = LIR_OPCODE_XOR;
+    op->first = lir_reset_operand(op->output, LIR_FLAG_FIRST);
+    op->second = lir_reset_operand(symbol_var_operand(FLOAT_NEG_MSAK_IDENT, kind), LIR_FLAG_SECOND);
 }
 
 static void amd64_lower_block(closure_t *c, basic_block_t *block) {

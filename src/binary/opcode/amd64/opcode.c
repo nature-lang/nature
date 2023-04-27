@@ -448,14 +448,8 @@ inst_t cmp_rax_imm32 = {"cmp", "cmp", 0, {0x3D}, {OPCODE_EXT_REX_W, OPCODE_EXT_I
                         }
 };
 
-//inst_t cmp_al_imm8 = {"cmp", "cmp", 0, {0x3C}, {OPCODE_EXT_IMM_BYTE},
-//                      {
-//                              {OPERAND_TYPE_AL, ENCODING_TYPE_MODRM_AL},
-//                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-//                      }
-//};
 
-
+// setcc ------------------------------------------------------------------------------------------------------
 inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
         OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
@@ -475,6 +469,26 @@ inst_t setne_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {}, {
         OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
 
+
+// neg ------------------------------------------------------------------------------------------------------
+inst_t neg_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_SLASH3}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t neg_rex_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH3}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t neg_rm16 = {"neg", "neg", 0x66, {0xF7}, {OPCODE_EXT_SLASH3}, {
+        OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+};
+inst_t neg_rm32 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_SLASH3}, {
+        OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+};
+inst_t neg_rm64 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH3}, {
+        OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+};
+
+
+// opcode end ------------------------------------------------------------------------------------------------------
 
 static amd64_opcode_tree_node_t *opcode_node_new() {
     amd64_opcode_tree_node_t *node = NEW(amd64_opcode_tree_node_t);
@@ -503,6 +517,8 @@ void amd64_opcode_init() {
     opcode_tree_root = opcode_node_new();
     opcode_tree_root->key = "root";
     // 收集所有指令，进行注册
+    opcode_tree_build(&lea_r64_m);
+    opcode_tree_build(&syscall_inst);
     opcode_tree_build(&call_rm64);
     opcode_tree_build(&call_rel32);
     opcode_tree_build(&jmp_rel8);
@@ -590,8 +606,12 @@ void amd64_opcode_init() {
     opcode_tree_build(&setle_rm8);
     opcode_tree_build(&sete_rm8);
     opcode_tree_build(&setne_rm8);
-    opcode_tree_build(&lea_r64_m);
-    opcode_tree_build(&syscall_inst);
+
+    opcode_tree_build(&neg_rm8);
+    opcode_tree_build(&neg_rex_rm8);
+    opcode_tree_build(&neg_rm16);
+    opcode_tree_build(&neg_rm32);
+    opcode_tree_build(&neg_rm64);
 }
 
 /**
