@@ -592,7 +592,12 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
     if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
-        imm->uint_value = -imm->uint_value;
+        assertf(is_number(imm->kind), "only number can neg operate");
+        if (imm->kind == TYPE_INT) {
+            imm->int_value = imm->int_value * -1;
+        } else {
+            imm->float_value = imm->float_value * -1;
+        }
         // move 操作即可
         OP_PUSH(lir_op_move(target, first));
         return target;
@@ -961,37 +966,29 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr expr) {
 static lir_operand_t *compiler_type_convert(module_t *m, ast_expr expr) {
     ast_type_convert_t *convert = expr.value;
     lir_operand_t *input = compiler_expr(m, convert->operand);
-    lir_operand_t *output = temp_var_operand(m, convert->target_type);
     uint64_t input_rtype_index = ct_find_rtype_index(convert->operand.type);
 
-    // 与寄存器分配功能冲突，如果已经分配了 xmm 寄存器，这里强制转换成 int 得到的原始错误的值
-    if (is_integer(convert->target_type.kind)) {
-        assertf(is_number(convert->operand.type.kind), "only support number type convert");
-        OP_PUSH(rt_call(RT_CALL_CONVERT_INTEGER, output, 2, int_operand(input_rtype_index), input));
-        return output;
-    }
-    if (convert->target_type.kind == TYPE_FLOAT || convert->target_type.kind == TYPE_FLOAT64) {
-        assertf(is_number(convert->operand.type.kind), "only support number type convert");
-        OP_PUSH(rt_call(RT_CALL_CONVERT_F64, output, 2, int_operand(input_rtype_index), input));
-        return output;
-    }
-    if (convert->target_type.kind == TYPE_FLOAT32) {
-        assertf(is_number(convert->operand.type.kind), "only support number type convert");
-        OP_PUSH(rt_call(RT_CALL_CONVERT_F32, output, 2, int_operand(input_rtype_index), input));
+    if (is_number(convert->target_type.kind) && is_number(convert->operand.type.kind)) {
+        lir_operand_t *output = compiler_temp_var_operand(m, convert->target_type);
+        lir_operand_t *output_rtype = int_operand(ct_find_rtype_index(convert->target_type));
+        lir_operand_t *output_ref = lea_operand_pointer(m, output);
+        lir_operand_t *input_ref = lea_operand_pointer(m, input);
+
+        OP_PUSH(rt_call(RT_CALL_NUMBER_CASTING, NULL, 4,
+                        int_operand(input_rtype_index), input_ref, output_rtype, output_ref));
         return output;
     }
 
+    lir_operand_t *output = temp_var_operand(m, convert->target_type);
     if (convert->target_type.kind == TYPE_BOOL) {
         OP_PUSH(rt_call(RT_CALL_CONVERT_BOOL, output, 2, int_operand(input_rtype_index), input));
         return output;
     }
-
     if (convert->target_type.kind == TYPE_ANY) {
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
         OP_PUSH(rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input_ref));
         return output;
     }
-
     assertf(false, "not support convert to type %s", type_kind_string[convert->target_type.kind]);
     exit(1);
 }

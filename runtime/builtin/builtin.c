@@ -9,7 +9,8 @@ static char sprint_buf[1024];
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(memory_any_t *arg) {
-    DEBUGF("[runtime.print_arg] memory_any_t base=%p, kind=%d", arg, arg->rtype->kind);
+    DEBUGF("[runtime.print_arg] memory_any_t any_base=%p, kind=%s, value_i64_casting=%ld", arg,
+           type_kind_string[arg->rtype->kind], arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -18,12 +19,12 @@ static void print_arg(memory_any_t *arg) {
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT64 || arg->rtype->kind == TYPE_FLOAT) {
-        int n = sprintf(sprint_buf, "%.5f", arg->value.f64_value);
+        int n = sprintf(sprint_buf, "%f", arg->value.f64_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT32) {
-        int n = sprintf(sprint_buf, "%.5f", arg->value.f32_value);
+        int n = sprintf(sprint_buf, "%f", arg->value.f32_value);
         write(STDOUT_FILENO, sprint_buf, n);
         return;
     }

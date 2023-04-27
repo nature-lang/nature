@@ -1,5 +1,0 @@
-// i -> u
-i8 s7 = -10
-//u8 d70 = s7
-int d71 = s7
-println(s7,d71)

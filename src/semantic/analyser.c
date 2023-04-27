@@ -540,7 +540,7 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    assertf(false, "ident not found line: %d, identifier '%s' undeclared \n", expr->line, ident->literal);
+    assertf(false, "line=%d, identifier '%s' undeclared \n", expr->line, ident->literal);
 }
 
 

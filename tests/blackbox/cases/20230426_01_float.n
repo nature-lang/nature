@@ -4,6 +4,6 @@ fn values():(float, f32, f64) {
     return (a, b, 3.3)
 }
 
-var foo = values()
+var (a, b, c) = values()
 
-println(foo[0], foo[1], foo[2])
+println(a, b, c)

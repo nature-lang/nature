@@ -354,12 +354,19 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     // active(已经分配到了 reg) interval 不予分配，所以 pos 设置为 0
     LINKED_FOR(a->active) {
         interval_t *select = LINKED_VALUE();
+        if (select->alloc_type != a->current->alloc_type) {
+            continue;
+        }
         set_pos(free_pos, select->assigned, 0);
     }
 
     // ssa 表单中不会因为 redefine 产生 lifetime hole，只会由于 if-else block 产生少量的 hole
     LINKED_FOR(a->inactive) {
         interval_t *select = LINKED_VALUE();
+        if (select->alloc_type != a->current->alloc_type) {
+            continue;
+        }
+
         int pos = interval_next_intersection(a->current, select);
         if (pos == 0) {
             continue;
@@ -428,6 +435,10 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // 遍历固定寄存器(active) TODO 固定间隔也进不来呀？
     LINKED_FOR(a->active) {
         interval_t *select = LINKED_VALUE();
+        if (select->alloc_type != a->current->alloc_type) {
+            continue;
+        }
+
         // 固定间隔本身就是 short range 了，但如果还在 current pos is active,so will set that block and use to 0
         if (select->fixed) {
             // 正在使用中的 fixed register,所有使用了该寄存器的 interval 都要让路
@@ -445,6 +456,10 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     int pos;
     LINKED_FOR(a->inactive) {
         interval_t *select = LINKED_VALUE();
+        if (select->alloc_type != a->current->alloc_type) {
+            continue;
+        }
+
         pos = interval_next_intersection(a->current, select);
         if (pos == 0) {
             continue;

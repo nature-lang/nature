@@ -459,7 +459,7 @@ static ast_expr parser_left_paren_expr(module_t *m) {
 static ast_expr parser_literal(module_t *m) {
     ast_expr result = expr_new(m);
     token_t *literal_token = parser_advance(m);
-    ast_literal *literal_expr = malloc(sizeof(ast_literal));
+    ast_literal *literal_expr = NEW(ast_literal);
     literal_expr->kind = token_to_kind[literal_token->type];
     literal_expr->value = literal_token->literal; // 具体数值
 

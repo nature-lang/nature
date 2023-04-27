@@ -1,6 +1,83 @@
 #include "basic.h"
 #include "runtime/allocator.h"
 
+#define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
+    switch (_kind) { \
+        case TYPE_FLOAT: \
+        case TYPE_FLOAT64: \
+            *(double *) output_ref = (double) _input_value; \
+            return; \
+        case TYPE_FLOAT32: \
+            *(float *) output_ref = (float) _input_value; \
+            return; \
+        case TYPE_INT: \
+        case TYPE_INT64: \
+            *(int64_t *) output_ref = (int64_t) _input_value; \
+            return; \
+        case TYPE_INT32: \
+            *(int32_t *) output_ref = (int32_t) _input_value; \
+            return; \
+        case TYPE_INT16:                       \
+            *(int16_t *) output_ref = (int16_t) _input_value; \
+            DEBUGF("[runtime.number_casting] output(i16): %d, debug_input(i64): %ld", *(int16_t*)output_ref, _debug_int64_value); \
+            return;                            \
+        case TYPE_INT8: \
+            *(int8_t *) output_ref = (int8_t) _input_value; \
+            return; \
+        case TYPE_UINT: \
+        case TYPE_UINT64: \
+            *(uint64_t *) output_ref = (uint64_t) _input_value; \
+            return; \
+        case TYPE_UINT32: \
+            *(uint32_t *) output_ref = (uint32_t) _input_value; \
+            return; \
+        case TYPE_UINT16: \
+            *(uint16_t *) output_ref = (uint16_t) _input_value; \
+            return; \
+        case TYPE_UINT8: \
+            *(uint8_t *) output_ref = (uint8_t) _input_value; \
+            return; \
+        default: \
+            assertf(false, "cannot convert %s to %s type", \
+                    type_kind_string[input_rtype->kind], \
+                    type_kind_string[output_rtype->kind]); \
+            exit(1); \
+    }\
+}
+
+void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output_rtype_index, void *output_ref) {
+    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
+    rtype_t *output_rtype = rt_find_rtype(output_rtype_index);
+    DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p",
+           type_kind_string[input_rtype->kind],
+           input_ref,
+           type_kind_string[output_rtype->kind],
+           output_ref);
+
+    value_casting v = {0};
+    memmove(&v, input_ref, input_rtype->size);
+
+    switch (input_rtype->kind) {
+        case TYPE_FLOAT:
+        case TYPE_FLOAT64: _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
+        case TYPE_FLOAT32: _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
+        case TYPE_INT:
+        case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
+        case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
+        case TYPE_INT16: _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
+        case TYPE_INT8: _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
+        case TYPE_UINT:
+        case TYPE_UINT64: _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
+        case TYPE_UINT32: _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
+        case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
+        case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
+        default:
+            assertf(false, "type %s cannot ident", type_kind_string[input_rtype->kind]);
+            exit(1);
+    }
+}
+
+
 /**
  * TODO value 可能是各个角度传递过来的实际的值, 比如 int 就是 int
  * 但是当传递当类型为 float 时，由于 float 走 xmm0 寄存器，所以会有读取当问题
@@ -14,8 +91,8 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
 
     assertf(rtype, "cannot find rtype, index = %lu", input_rtype_index);
 
-    DEBUGF("[convert_any] input_rtype_index=%lu, kind=%d, actual_index=%lu, in_heap=%d",
-           input_rtype_index, rtype->kind, rtype->index, rtype->in_heap);
+    DEBUGF("[convert_any] input_kind=%s, in_heap=%d",
+           type_kind_string[rtype->kind], rtype->in_heap);
 
     rtype_t any_rtype = gc_rtype(2, TYPE_GC_NOSCAN, to_gc_kind(rtype->kind));
 
@@ -31,68 +108,10 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
 
     any->rtype = rtype;
     memmove(&any->value, value_ref, rtype_heap_out_size(rtype, POINTER_SIZE));
-    DEBUGF("[convert_any] success")
+    DEBUGF("[convert_any] success, any_base: %p, any_rtype: %p, any_i64_value: %ld", any, any->rtype,
+           any->value.i64_value);
 
     return any;
-}
-
-memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[convert_int] input_index=%lu, int_v=%lu, float_v=%f",
-           input_rtype_index,
-           int_value,
-           float_value);
-
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-
-    if (is_integer(input_rtype->kind)) {
-        return (memory_int_t) int_value; // 避免空间不足造成的非 0 值
-    }
-
-    if (is_float(input_rtype->kind)) {
-        return (memory_int_t) float_value;
-    }
-
-    assertf(false, "cannot convert type=%s to int", type_kind_string[input_rtype->kind]);
-    exit(0);
-}
-
-memory_f64_t convert_f64(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[convert_f64] input_index=%lu, int_v=%lu, float_v=%f",
-           input_rtype_index,
-           int_value,
-           float_value);
-
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-    if (is_float(input_rtype->kind)) {
-        return (memory_f64_t) float_value; // 不特别写转换直接返回
-    }
-
-    if (is_integer(input_rtype->kind)) {
-        return (memory_f64_t) int_value;
-    }
-
-    assertf(false, "cannot convert type=%s to float", type_kind_string[input_rtype->kind]);
-    exit(1);
-}
-
-
-memory_f32_t convert_f32(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[convert_f32] input_index=%lu, int_v=%lu, float_v=%f",
-           input_rtype_index,
-           int_value,
-           float_value);
-
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-    if (is_float(input_rtype->kind)) {
-        return (memory_f32_t) float_value; // 不特别写转换直接返回
-    }
-
-    if (is_integer(input_rtype->kind)) {
-        return (memory_f32_t) int_value;
-    }
-
-    assertf(false, "cannot convert type=%s to float", type_kind_string[input_rtype->kind]);
-    exit(1);
 }
 
 /**

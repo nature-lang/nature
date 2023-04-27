@@ -118,48 +118,8 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
             len = sprintf(buf, "IMM[%ld:INT]", immediate->uint_value);
             break;
         }
-        case TYPE_INT8: {
-            len = sprintf(buf, "IMM[%ld:INT8]", immediate->uint_value);
-            break;
-        }
-        case TYPE_INT16: {
-            len = sprintf(buf, "IMM[%ld:INT16]", immediate->uint_value);
-            break;
-        }
-        case TYPE_INT32: {
-            len = sprintf(buf, "IMM[%ld:INT32]", immediate->uint_value);
-            break;
-        }
-        case TYPE_UINT: {
-            len = sprintf(buf, "IMM[%ld:UINT]", immediate->uint_value);
-            break;
-        }
-        case TYPE_UINT8: {
-            len = sprintf(buf, "IMM[%ld:UINT8]", immediate->uint_value);
-            break;
-        }
-        case TYPE_UINT16: {
-            len = sprintf(buf, "IMM[%ld:UINT16]", immediate->uint_value);
-            break;
-        }
-        case TYPE_UINT32: {
-            len = sprintf(buf, "IMM[%ld:UINT32]", immediate->uint_value);
-            break;
-        }
-        case TYPE_UINT64: {
-            len = sprintf(buf, "IMM[%ld:UINT64]", immediate->uint_value);
-            break;
-        }
         case TYPE_FLOAT: {
             len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
-            break;
-        }
-        case TYPE_FLOAT32: {
-            len = sprintf(buf, "IMM[%f:FLOAT32]", immediate->float_value);
-            break;
-        }
-        case TYPE_FLOAT64: {
-            len = sprintf(buf, "IMM[%f:FLOAT64]", immediate->float_value);
             break;
         }
         case TYPE_RAW_STRING: {

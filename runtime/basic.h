@@ -11,11 +11,7 @@
  */
 memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref);
 
-memory_int_t convert_int(uint64_t input_rtype_index, int64_t int_value, double float_value);
-
-memory_f32_t convert_f32(uint64_t input_rtype_index, int64_t int_value, double float_value);
-
-memory_f64_t convert_f64(uint64_t input_rtype_index, int64_t int_value, double float_value);
+void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output_rtype_index, void *output_ref);
 
 memory_bool_t convert_bool(uint64_t input_rtype_index, int64_t int_value, double float_value);
 

@@ -235,18 +235,19 @@ void debug_interval(closure_t *c) {
         assert(interval);
         int parent_index = 0;
         char *parent_ident = "";
-        bool assigned = 0;
         int64_t stack_slot = 0;
         char *ranges = "";
         char *use_pos = "";
+        char *type_str = "int";
+        if (interval->alloc_type == LIR_FLAG_ALLOC_FLOAT) {
+            type_str = "float";
+        }
 
         if (interval->parent) {
             parent_index = interval->parent->index;
             parent_ident = interval->parent->var->ident;
         }
-        if (interval->assigned) {
-            assigned = 1;
-        }
+
         if (interval->stack_slot) {
             stack_slot = *interval->stack_slot;
         }
@@ -262,12 +263,13 @@ void debug_interval(closure_t *c) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-        DEBUGF("i(%d-%s), parent(%d-%s), assigned=%d, stack_slot=%ld, ranges=%s, use_pos=%s",
+        DEBUGF("index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
                interval->index,
                interval->var->ident,
                parent_index,
                parent_ident,
-               assigned,
+               interval->assigned,
+               type_str,
                stack_slot,
                ranges,
                use_pos);

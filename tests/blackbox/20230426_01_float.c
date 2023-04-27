@@ -4,7 +4,7 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    assert_string_equal(raw, "1.100002.200003.30000\n");
+    assert_string_equal(raw, "1.1000002.2000003.300000\n");
 }
 
 int main(void) {

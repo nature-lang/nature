@@ -28,7 +28,7 @@ typedef union {
     int64_t int_value;
     int64_t i64_value;
     int32_t i32_value;
-    int8_t i16_value;
+    int16_t i16_value;
     int8_t i8_value;
     uint64_t uint_value;
     uint64_t u64_value;
