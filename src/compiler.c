@@ -18,9 +18,6 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_OR] = LIR_OPCODE_OR,
         [AST_OP_XOR] = LIR_OPCODE_XOR,
 
-        [AST_OP_BNOT] = LIR_OPCODE_BNOT,
-
-
         [AST_OP_LT] = LIR_OPCODE_SLT,
         [AST_OP_LTE] = LIR_OPCODE_SLE,
         [AST_OP_GT] = LIR_OPCODE_SGT,
@@ -28,7 +25,7 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_EQ_EQ] = LIR_OPCODE_SEE,
         [AST_OP_NOT_EQ] = LIR_OPCODE_SNE,
 
-        [AST_OP_NOT] = LIR_OPCODE_NOT,
+        [AST_OP_BNOT] = LIR_OPCODE_NOT,
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
@@ -600,6 +597,21 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr expr) {
         }
         // move 操作即可
         OP_PUSH(lir_op_move(target, first));
+        return target;
+    }
+
+    //
+    if (unary_expr->operator == AST_OP_NOT) {
+        assert(unary_expr->operand.type.kind == TYPE_BOOL);
+        if (first->assert_type == LIR_OPERAND_IMM) {
+            lir_imm_t *imm = first->value;
+            imm->bool_value = !imm->bool_value;
+            OP_PUSH(lir_op_move(target, first));
+            return target;
+        }
+
+        // bool not to bit xor  !true = xor $1,true
+        OP_PUSH(lir_op_new(LIR_OPCODE_XOR, first, bool_operand(true), target));
         return target;
     }
 

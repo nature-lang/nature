@@ -77,9 +77,9 @@ typedef enum {
     AST_OP_REM, // %
 
     // unary
-    AST_OP_NOT, // unary bool !right
+    AST_OP_NOT, // unary bool !right, right must bool
     AST_OP_NEG, // unary number -right
-    AST_OP_BNOT, // unary binary ~
+    AST_OP_BNOT, // unary binary ~right, right must int
     AST_OP_LA, // load addr
     AST_OP_IA, // indirect addr  *解引用
 

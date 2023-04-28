@@ -87,19 +87,17 @@ static type_t infer_type_convert(module_t *m, ast_type_convert_t *convert) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr *expr) {
-    type_t operand_type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
-
-    // !
-    if (expr->operator == AST_OP_NOT && operand_type.kind != TYPE_BOOL) {
-        assertf(false, "not operand must applies to bool type");
+    if (expr->operator == AST_OP_NOT) {
+        // bool 支持各种类型的 implicit type convert
+        return infer_right_expr(m, &expr->operand, type_basic_new(TYPE_BOOL));
     }
 
-    // -
-    if ((expr->operator == AST_OP_NEG) && !is_integer(operand_type.kind) && !is_float(operand_type.kind)) {
+    type_t type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
+    if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
         assertf(false, "neg operand must applies to int or float type");
     }
 
-    return operand_type;
+    return type;
 }
 
 /**
@@ -830,10 +828,7 @@ static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 static void infer_if(module_t *m, ast_if_stmt *stmt) {
-    type_t condition_type = infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_UNKNOWN));
-    if (condition_type.kind != TYPE_BOOL) {
-        stmt->condition = ast_type_convert(stmt->condition, type_basic_new(TYPE_BOOL));
-    }
+    infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
     infer_block(m, stmt->consequent);
     infer_block(m, stmt->alternate);
@@ -1193,6 +1188,11 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
         is_number(expr->type.kind) &&
         expr->type.kind != target_type.kind) {
         *expr = ast_type_convert(*expr, target_type);
+    }
+
+    // bool 类型转换
+    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
+        *expr = ast_type_convert(*expr, type_basic_new(TYPE_BOOL));
     }
 
     if (target_type.kind == TYPE_ANY && expr->type.kind != TYPE_ANY) {

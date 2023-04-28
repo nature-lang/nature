@@ -123,8 +123,7 @@ typedef enum {
     LIR_OPCODE_AND, // &
     LIR_OPCODE_OR, // |
     LIR_OPCODE_XOR, // ^
-    LIR_OPCODE_BNOT, // ~ 取反
-    LIR_OPCODE_NOT, // ! 取反
+    LIR_OPCODE_NOT, // 按位取反
     LIR_OPCODE_NEG, // -取负数
 
     LIR_OPCODE_CLR, // clean reg

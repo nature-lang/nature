@@ -336,22 +336,6 @@ inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT
 };
 
 
-// intel 指令顺序
-inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                       }
-};
-
-// intel 指令顺序
-inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                       }
-};
-
 inst_t lea_r64_m = {"lea", "lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                     {
                             {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
@@ -497,7 +481,117 @@ inst_t neg_rm64 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH3
         OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
 };
 
+// not ------------------------------------------------------------------------------------------------------
+inst_t not_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_SLASH2}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t not_rex_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH2}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t not_rm16 = {"not", "not", 0x66, {0xF7}, {OPCODE_EXT_SLASH2}, {
+        OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+};
+inst_t not_rm32 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_SLASH2}, {
+        OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+};
+inst_t not_rm64 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH2},
+                   {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
+};
+
 // xor ------------------------------------------------------------------------------------------------------
+inst_t xor_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
+                       {
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                       }
+};
+inst_t xor_rex_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
+                           {
+                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                   {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                           }
+};
+inst_t xor_rm16_imm16 = {"xor", "xor", 0x66, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_WORD},
+                         {
+                                 {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t xor_rm32_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t xor_rm64_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t xor_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                     }
+};
+inst_t xor_rex_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                         }
+};
+inst_t xor_rm16_r16 = {"xor", "xor", 0x66, {0x31}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t xor_rm32_r32 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+
+inst_t xor_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                     }
+};
+inst_t xor_rex_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                         }
+};
+inst_t xor_r16_rm16 = {"xor", "xor", 0x66, {0x33}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+inst_t xor_r32_rm32 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+
 inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
                               {
                                       {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
@@ -510,6 +604,10 @@ inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASH
                                       {OPERAND_TYPE_XMM2M128, ENCODING_TYPE_MODRM_RM}
                               }
 };
+
+
+// not ------------------------------------------------------------------------------------------------------
+
 
 
 // opcode end ------------------------------------------------------------------------------------------------------
@@ -616,9 +714,6 @@ void amd64_opcode_init() {
     opcode_tree_build(&movss_xmm1_m32); // 内存到 xmm
     opcode_tree_build(&movss_xmm2m32_xmm1); // xmm 到内存或者xmm
 
-    opcode_tree_build(&xor_r64_rm64); // xmm 到内存或者xmm
-    opcode_tree_build(&xor_rm64_r64); // xmm 到内存或者xmm
-
     opcode_tree_build(&cmp_rax_imm32);
     opcode_tree_build(&cmp_r64_rm64);
     opcode_tree_build(&cmp_rm64_imm32);
@@ -642,6 +737,28 @@ void amd64_opcode_init() {
     opcode_tree_build(&neg_rm16);
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
+
+    opcode_tree_build(&not_rm8);
+    opcode_tree_build(&not_rex_rm8);
+    opcode_tree_build(&not_rm16);
+    opcode_tree_build(&not_rm32);
+    opcode_tree_build(&not_rm64);
+
+    opcode_tree_build(&xor_rm8_imm8);
+    opcode_tree_build(&xor_rex_rm8_imm8);
+    opcode_tree_build(&xor_rm16_imm16);
+    opcode_tree_build(&xor_rm32_imm32);
+    opcode_tree_build(&xor_rm64_imm32);
+    opcode_tree_build(&xor_rm8_r8);
+    opcode_tree_build(&xor_rex_rm8_r8);
+    opcode_tree_build(&xor_rm16_r16);
+    opcode_tree_build(&xor_rm32_r32);
+    opcode_tree_build(&xor_r64_rm64);
+    opcode_tree_build(&xor_r8_rm8);
+    opcode_tree_build(&xor_rex_r8_rm8);
+    opcode_tree_build(&xor_r16_rm16);
+    opcode_tree_build(&xor_r32_rm32);
+    opcode_tree_build(&xor_r64_rm64);
 
     opcode_tree_build(&xorps_xmm1_xmm2m128);
     opcode_tree_build(&xorpd_xmm1_xmm2m128);
