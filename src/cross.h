@@ -244,5 +244,21 @@ static inline void cross_opcode_encodings(elf_context *ctx, slice_t *closures) {
 }
 // -------- linker/elf end -----------
 
+static inline type_kind cross_kind_trans(type_kind kind) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        if (kind == TYPE_FLOAT) {
+            return TYPE_FLOAT64;
+        }
+        if (kind == TYPE_INT) {
+            return TYPE_INT64;
+        }
+        if (kind == TYPE_UINT) {
+            return TYPE_UINT64;
+        }
+
+        return kind;
+    }
+    assert(false && "not support this arch");
+}
 
 #endif //NATURE_CROSS_H

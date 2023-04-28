@@ -3,11 +3,20 @@
 #include "src/debug/debug.h"
 #include <assert.h>
 
-static char *asm_setcc_trans[] = {
+static char *asm_setcc_integer_trans[] = {
         [LIR_OPCODE_SLT] = "setl",
         [LIR_OPCODE_SLE] = "setle",
         [LIR_OPCODE_SGT] = "setg",
         [LIR_OPCODE_SGE] = "setge",
+        [LIR_OPCODE_SEE] = "sete",
+        [LIR_OPCODE_SNE] = "setne",
+};
+
+static char *asm_setcc_float_trans[] = {
+        [LIR_OPCODE_SLT] = "setb",
+        [LIR_OPCODE_SLE] = "setbe",
+        [LIR_OPCODE_SGT] = "seta",
+        [LIR_OPCODE_SGE] = "setae",
         [LIR_OPCODE_SEE] = "sete",
         [LIR_OPCODE_SNE] = "setne",
 };
@@ -27,6 +36,19 @@ static asm_operand_t *amd64_fit_number(uint8_t size, int64_t number) {
     }
 
     assert(false);
+}
+
+static bool amd64_is_integer_operand(lir_operand_t *operand) {
+    if (operand->assert_type == LIR_OPERAND_REG) {
+        reg_t *reg = operand->value;
+        if (reg->size <= QWORD) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    return is_integer(operand_type_kind(operand));
 }
 
 static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
@@ -260,18 +282,31 @@ static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assertf(op->first->assert_type == LIR_OPERAND_REG, "div op first must reg");
-    assertf(op->second->assert_type != LIR_OPERAND_IMM, "div op second cannot imm");
     assertf(op->output->assert_type == LIR_OPERAND_REG, "div op output must reg");
-    reg_t *first_reg = op->first->value;
-    reg_t *output_reg = op->output->value;
-    assertf(first_reg->index == rax->index, "div op first reg must rax");
-    assertf(output_reg->index == rax->index || output_reg->index == rdx->index,
-            "div op output reg must rax/rdx");
 
+    if (amd64_is_integer_operand(op->output)) {
+        assertf(op->first->assert_type == LIR_OPERAND_REG, "div op first must reg");
+        assertf(op->second->assert_type != LIR_OPERAND_IMM, "div op second cannot imm");
+        reg_t *first_reg = op->first->value;
+        reg_t *output_reg = op->output->value;
+        assertf(first_reg->index == rax->index, "div op first reg must rax");
+        assertf(output_reg->index == rax->index || output_reg->index == rdx->index,
+                "div op output reg must rax/rdx");
+
+        asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+
+        slice_push(operations, ASM_INST("idiv", { second }));
+        return operations;
+    }
+
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
-    slice_push(operations, ASM_INST("idiv", { second }));
+    assert(!asm_operand_equal(second, result));
+    // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
+    asm_mov(operations, op, result, first);
+    slice_push(operations, ASM_INST("div", { result, second }));
     return operations;
 }
 
@@ -283,17 +318,28 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
-    assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
     assertf(op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
-    reg_t *first_reg = op->first->value;
-    reg_t *output_reg = op->output->value;
-    assertf(first_reg->index == rax->index, "mul op first reg must rax");
-    assertf(output_reg->index == rax->index, "mul op output reg must rax");
 
+    if (amd64_is_integer_operand(op->output)) {
+        assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
+        assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
+        reg_t *first_reg = op->first->value;
+        reg_t *output_reg = op->output->value;
+        assertf(first_reg->index == rax->index, "mul op first reg must rax");
+        assertf(output_reg->index == rax->index, "mul op output reg must rax");
+        asm_operand_t *second = lir_operand_trans(c, operations, op->second);
+        slice_push(operations, ASM_INST("imul", { second }));
+        return operations;
+    }
 
+    asm_operand_t *first = lir_operand_trans(c, operations, op->first);
     asm_operand_t *second = lir_operand_trans(c, operations, op->second);
-    slice_push(operations, ASM_INST("imul", { second }));
+    asm_operand_t *result = lir_operand_trans(c, operations, op->output);
+
+    assert(!asm_operand_equal(second, result));
+    // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
+    asm_mov(operations, op, result, first);
+    slice_push(operations, ASM_INST("mul", { result, second }));
     return operations;
 }
 
@@ -337,6 +383,7 @@ static slice_t *amd64_native_xor(closure_t *c, lir_op_t *op) {
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
+    assert(!asm_operand_equal(second, result));
     asm_mov(operations, op, result, first);
 
     slice_push(operations, ASM_INST("xor", { result, second }));
@@ -377,7 +424,6 @@ static slice_t *amd64_native_not(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_REG);
-
     slice_t *operations = slice_new();
 
     // 参数转换
@@ -385,16 +431,11 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     asm_operand_t *second = lir_operand_trans(c, operations, op->second);
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
 
-    // 如果 first is reg, 则有
-    // add second -> first
-    // mov first -> result
-    // 例如: rax + rcx = rax
-    // add rcx -> rax, mov ra-> rax
-    // 例如：rcx + rax = rax
-    // add rax -> rcx, mov rcx -> rax
-    // 完全不用考虑寄存器覆盖的问题
-    slice_push(operations, ASM_INST("add", { first, second }));
+    // 由于需要 first -> result 进行覆盖，所以 second 和 result 不允许是统一地址或者 reg
+    assert(!asm_operand_equal(second, result));
+
     asm_mov(operations, op, result, first);
+    slice_push(operations, ASM_INST("add", { result, second }));
 
     return operations;
 }
@@ -409,7 +450,7 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
  * @return
  */
 static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
-    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
 
     slice_t *operations = slice_new();
 
@@ -419,14 +460,13 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
     asm_operand_t *result = lir_operand_trans(c, operations, op->output); // rax
 
 
-    // 在 first 是 reg 的前提下，则有
-    // sub second -> first, 此时结果存储在 first, 且 first 为寄存器, mov first -> result 即可
-    // 原始： rcx - rax = rax
-    // sub rax -> rcx, mov rcx -> rax
-    // 原始: rax - rcx = rax
-    // sub rcx -> rax, mov rax -> rax
-    slice_push(operations, ASM_INST("sub", { first, second }));
+    assert(!asm_operand_equal(second, result));
+
+    // SUB src - imm = result
+    // mov src -> result
     asm_mov(operations, op, result, first);
+    //  sub imm -> result
+    slice_push(operations, ASM_INST("sub", { result, second }));
 
     return operations;
 }
@@ -479,9 +519,11 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
-// lir GT foo,bar => result
+// result = foo > bar
+// lir GT foo,bar => result // foo GT bar // foo > bar // foo - bar > 0
+//  foo(dst) - bar(src)
 static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
-    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->first->assert_type == LIR_OPERAND_REG || op->second->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
 
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
@@ -489,12 +531,19 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
     asm_operand_t *result = lir_operand_trans(c, operations, op->output);
     assert(result->size == BYTE);
 
-    // bool = int64 > int64
+    // cmp dst, src 也就是 dst - src 的结果
     slice_push(operations, ASM_INST("cmp", { first, second }));
 
-    // setg r/m8
-    char *asm_code = asm_setcc_trans[op->code];
-    assertf(asm_code, "not found op->code map asm->code");
+    char *asm_code;
+    if (amd64_is_integer_operand(op->first)) {
+        // seta r/m8, dst - src > 0 也就是 dst > src 时, cf = zf = 0, seta 就是这两个为 0 时将结果设置为 1
+        // 也就是 dst > src 时，将 1 写入到结果中
+        asm_code = asm_setcc_integer_trans[op->code];
+    } else {
+        asm_code = asm_setcc_float_trans[op->code];
+    }
+
+    assertf(asm_code, "not found op_code map asm_code");
     slice_push(operations, ASM_INST(asm_code, { result }));
 
     return operations;

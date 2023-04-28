@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "utils/helper.h"
+#include "src/cross.h"
 
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
@@ -42,7 +43,7 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind != right.kind) {
+    if (cross_kind_trans(left.kind) != cross_kind_trans(right.kind)) {
         return false;
     }
 

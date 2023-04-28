@@ -19,11 +19,11 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_XOR] = LIR_OPCODE_XOR,
 
         [AST_OP_LT] = LIR_OPCODE_SLT,
-        [AST_OP_LTE] = LIR_OPCODE_SLE,
+        [AST_OP_LE] = LIR_OPCODE_SLE,
         [AST_OP_GT] = LIR_OPCODE_SGT,
-        [AST_OP_GTE] = LIR_OPCODE_SGE,
-        [AST_OP_EQ_EQ] = LIR_OPCODE_SEE,
-        [AST_OP_NOT_EQ] = LIR_OPCODE_SNE,
+        [AST_OP_GE] = LIR_OPCODE_SGE,
+        [AST_OP_EE] = LIR_OPCODE_SEE,
+        [AST_OP_NE] = LIR_OPCODE_SNE,
 
         [AST_OP_BNOT] = LIR_OPCODE_NOT,
         [AST_OP_NEG] = LIR_OPCODE_NEG,
@@ -1090,11 +1090,13 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
         case TYPE_RAW_STRING: {
             return string_operand(literal->value);
         }
-        case TYPE_INT: {
+        case TYPE_INT:
+        case TYPE_INT64: {
             // literal 默认编译成 int 类型
             return int_operand(atoi(literal->value));
         }
-        case TYPE_FLOAT: {
+        case TYPE_FLOAT:
+        case TYPE_FLOAT64: {
             return float_operand(atof(literal->value));
         }
         case TYPE_BOOL: {
@@ -1106,7 +1108,7 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
         }
 
         default: {
-            assertf(false, "line: %d, cannot compiler literal->code", compiler_line);
+            assertf(false, "line: %d, cannot compiler literal->kind", compiler_line);
         }
     }
     exit(1);

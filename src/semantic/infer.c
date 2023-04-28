@@ -39,7 +39,8 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
 
     if (is_integer_operator(expr->operator)) {
         assertf(is_integer(left_type.kind) && is_integer(right_type.kind),
-                "operator=%s only integer operand", ast_expr_op_str[expr->operator]);
+                "binary operator '%s' only integer operand",
+                ast_expr_op_str[expr->operator]);
     }
 
 
@@ -69,11 +70,11 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
 
             // 逻辑运算符
         case AST_OP_LT:
-        case AST_OP_LTE:
+        case AST_OP_LE:
         case AST_OP_GT:
-        case AST_OP_GTE:
-        case AST_OP_EQ_EQ:
-        case AST_OP_NOT_EQ: {
+        case AST_OP_GE:
+        case AST_OP_EE:
+        case AST_OP_NE: {
             return type_basic_new(TYPE_BOOL);
         }
         default: {
@@ -1190,9 +1191,8 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
     }
 
     // 数值类型转换
-    if (is_number(target_type.kind) &&
-        is_number(expr->type.kind) &&
-        expr->type.kind != target_type.kind) {
+    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
+        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
         *expr = ast_type_convert(*expr, target_type);
     }
 

@@ -93,11 +93,11 @@ typedef enum {
 
 
     AST_OP_LT, // <
-    AST_OP_LTE, // <=
+    AST_OP_LE, // <=
     AST_OP_GT, // >
-    AST_OP_GTE,  // >=
-    AST_OP_EQ_EQ, // ==
-    AST_OP_NOT_EQ, // !=
+    AST_OP_GE,  // >=
+    AST_OP_EE, // ==
+    AST_OP_NE, // !=
 
     AST_OP_AND_AND,
     AST_OP_OR_OR,
@@ -119,11 +119,11 @@ static string ast_expr_op_str[] = {
         [AST_OP_RSHIFT] = ">>",
 
         [AST_OP_LT] = "<",
-        [AST_OP_LTE] = "<=",
+        [AST_OP_LE] = "<=",
         [AST_OP_GT] = ">", // >
-        [AST_OP_GTE] = ">=",  // >=
-        [AST_OP_EQ_EQ] = "==", // ==
-        [AST_OP_NOT_EQ] = "!=", // !=
+        [AST_OP_GE] = ">=",  // >=
+        [AST_OP_EE] = "==", // ==
+        [AST_OP_NE] = "!=", // !=
 
         [AST_OP_NOT] = "!", // unary !right
         [AST_OP_NEG] = "-", // unary -right

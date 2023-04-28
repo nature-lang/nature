@@ -146,20 +146,6 @@ inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
                     }
 };
 
-// float 算数运算 ------------------------------------------------------------------------------------------------------
-inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
-                             {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                             }
-};
-inst_t addss_xmm1_xmm2m32 = {"add", "addsd", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
-                             {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                             }
-};
-
 
 // mov reg -> rm ------------------------------------------------------------------------------------------------------
 inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
@@ -291,50 +277,6 @@ inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_
                                  {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
                          }
 };
-
-
-// intel 指令顺序
-inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                          {
-                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
-                          }
-};
-
-
-inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                         {
-                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                 {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
-                         }
-};
-
-inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
-                             {
-                                     {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
-                             }
-};
-
-inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                          {
-                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
-                          }
-};
-inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                         {
-                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                 {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}
-                         }
-};
-inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
-                             {
-                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG}
-                             }
-};
-
 
 inst_t lea_r64_m = {"lea", "lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
                     {
@@ -468,6 +410,18 @@ inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
 
 
 // setcc ------------------------------------------------------------------------------------------------------
+inst_t seta_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setae_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setb_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setbe_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
 inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
         OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
@@ -484,6 +438,19 @@ inst_t sete_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {}, {
         OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
 inst_t setne_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+// set rex ------------------------------------------------------------------------------------------------------
+inst_t seta_rex_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {OPCODE_EXT_REX}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setae_rex_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {OPCODE_EXT_REX}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setb_rex_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {OPCODE_EXT_REX}, {
+        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+};
+inst_t setbe_rex_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {OPCODE_EXT_REX}, {
         OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
 };
 inst_t setg_rex_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {OPCODE_EXT_REX}, {
@@ -634,6 +601,10 @@ inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
 };
 
 
+// float ------------------------------------------------------------------------------------------------------
+
+
+// float xor ------------------------------------------------------------------------------------------------------
 inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
                               {
                                       {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
@@ -648,7 +619,103 @@ inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASH
 };
 
 
-// not ------------------------------------------------------------------------------------------------------
+// float mov ------------------------------------------------------------------------------------------------------
+inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                          {
+                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                          }
+};
+inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
+                         }
+};
+inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
+                                     {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
+                             }
+};
+inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                          {
+                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                          }
+};
+inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG}}
+};
+
+// float 算数运算 ------------------------------------------------------------------------------------------------------
+inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0, {0xF2, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0, {0xF3, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0, {0xF2, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0, {0xF3, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+                             {
+                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                             }
+};
+inst_t comisd = {"cmp", "comisd", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+                 {
+                         {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                         {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
+                 }
+};
+inst_t comiss = {"cmp", "comiss", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+                 {
+                         {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                         {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
+                 }
+};
 
 
 
@@ -715,10 +782,6 @@ void amd64_opcode_init() {
     opcode_tree_build(&imul_rm32);
     opcode_tree_build(&imul_rm64);
 
-    // 浮点数算数运算
-    opcode_tree_build(&addss_xmm1_xmm2m32);
-    opcode_tree_build(&addsd_xmm1_xmm2m64);
-
 
     // mov reg -> rm
     opcode_tree_build(&mov_rm8_r8);
@@ -748,14 +811,6 @@ void amd64_opcode_init() {
     opcode_tree_build(&mov_rm32_imm32);
     opcode_tree_build(&mov_rm64_imm32);
 
-    opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
-    opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
-    opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
-
-    opcode_tree_build(&movss_xmm1_xmm2); // 内存到 xmm
-    opcode_tree_build(&movss_xmm1_m32); // 内存到 xmm
-    opcode_tree_build(&movss_xmm2m32_xmm1); // xmm 到内存或者xmm
-
     opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rex_rm8_imm8);
     opcode_tree_build(&cmp_rm16_imm16);
@@ -772,12 +827,20 @@ void amd64_opcode_init() {
     opcode_tree_build(&cmp_r32_rm32);
     opcode_tree_build(&cmp_r64_rm64);
 
+    opcode_tree_build(&seta_rm8);
+    opcode_tree_build(&setae_rm8);
+    opcode_tree_build(&setb_rm8);
+    opcode_tree_build(&setbe_rm8);
     opcode_tree_build(&setg_rm8);
     opcode_tree_build(&setge_rm8);
     opcode_tree_build(&setl_rm8);
     opcode_tree_build(&setle_rm8);
     opcode_tree_build(&sete_rm8);
     opcode_tree_build(&setne_rm8);
+    opcode_tree_build(&seta_rex_rm8);
+    opcode_tree_build(&setae_rex_rm8);
+    opcode_tree_build(&setb_rex_rm8);
+    opcode_tree_build(&setbe_rex_rm8);
     opcode_tree_build(&setg_rex_rm8);
     opcode_tree_build(&setge_rex_rm8);
     opcode_tree_build(&setl_rex_rm8);
@@ -806,15 +869,36 @@ void amd64_opcode_init() {
     opcode_tree_build(&xor_rex_rm8_r8);
     opcode_tree_build(&xor_rm16_r16);
     opcode_tree_build(&xor_rm32_r32);
-    opcode_tree_build(&xor_r64_rm64);
+    opcode_tree_build(&xor_rm64_r64);
     opcode_tree_build(&xor_r8_rm8);
     opcode_tree_build(&xor_rex_r8_rm8);
     opcode_tree_build(&xor_r16_rm16);
     opcode_tree_build(&xor_r32_rm32);
     opcode_tree_build(&xor_r64_rm64);
 
+    // 浮点数算数运算
+    opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
+    opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
+    opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm
+
+    opcode_tree_build(&movss_xmm1_xmm2); // 内存到 xmm
+    opcode_tree_build(&movss_xmm1_m32); // 内存到 xmm
+    opcode_tree_build(&movss_xmm2m32_xmm1); // xmm 到内存或者xmm
     opcode_tree_build(&xorps_xmm1_xmm2m128);
     opcode_tree_build(&xorpd_xmm1_xmm2m128);
+
+    // 浮点算数运算
+    opcode_tree_build(&addss_xmm1_xmm2m32);
+    opcode_tree_build(&addsd_xmm1_xmm2m64);
+    opcode_tree_build(&subss_xmm1_xmm2m32);
+    opcode_tree_build(&subsd_xmm1_xmm2m64);
+    opcode_tree_build(&mulss_xmm1_xmm2m32);
+    opcode_tree_build(&mulsd_xmm1_xmm2m64);
+    opcode_tree_build(&divss_xmm1_xmm2m32);
+    opcode_tree_build(&divsd_xmm1_xmm2m64);
+    opcode_tree_build(&comiss);
+    opcode_tree_build(&comisd);
+
 }
 
 /**

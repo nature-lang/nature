@@ -887,4 +887,17 @@ static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
     return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
 }
 
+static inline bool is_ternary(lir_op_t *op) {
+    return op->code == LIR_OPCODE_ADD ||
+           op->code == LIR_OPCODE_SUB ||
+           op->code == LIR_OPCODE_MUL ||
+           op->code == LIR_OPCODE_DIV ||
+           op->code == LIR_OPCODE_REM ||
+           op->code == LIR_OPCODE_SHR ||
+           op->code == LIR_OPCODE_SHL ||
+           op->code == LIR_OPCODE_AND ||
+           op->code == LIR_OPCODE_OR ||
+           op->code == LIR_OPCODE_XOR;
+}
+
 #endif //NATURE_SRC_LIR_H_

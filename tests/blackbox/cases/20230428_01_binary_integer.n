@@ -21,3 +21,4 @@ bool b3 = s3 >= s1
 bool b4 = s2 == -100
 bool b5 = s2 != s1
 println(b0, b1, b2, b3, b4, b5) // truefalsefalsefalsetruetrue
+println(s1, s2, s3) // 100-10024

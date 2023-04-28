@@ -24,30 +24,37 @@ static uint64_t operation_rip_offset(inst_t *inst) {
         // rip 相对寻址
         return 3;
     }
-    if (str_equal(inst->opcode_text, "movsd")) {
-        // rip 相对寻址
+    if (
+            str_equal(inst->opcode_text, "addsd") ||
+            str_equal(inst->opcode_text, "addss") ||
+            str_equal(inst->opcode_text, "subsd") ||
+            str_equal(inst->opcode_text, "subss") ||
+            str_equal(inst->opcode_text, "movsd") ||
+            str_equal(inst->opcode_text, "movss") ||
+            str_equal(inst->opcode_text, "divsd") ||
+            str_equal(inst->opcode_text, "divss") ||
+            str_equal(inst->opcode_text, "movsd") ||
+            str_equal(inst->opcode_text, "movss") ||
+            str_equal(inst->opcode_text, "comisd") ||
+            str_equal(inst->opcode_text, "comiss")
+            ) {
+        // rip 相对寻址总是使用 4 个位置
         return 4;
     }
-    if (str_equal(inst->opcode_text, "addsd")) {
-        // rip 相对寻址
-        return 4;
-    }
+
     if (str_equal(inst->opcode_text, "lea")) {
         return 3;
     }
 
     if (str_equal(inst->opcode_text, "call")) {
-//        if (operation->operands[0]->code == ASM_OPERAND_TYPE_RIP_RELATIVE) {
-//            return 2;
-//        }
-
         return 1;
     }
     if (inst->opcode_text[0] == 'j') {
         return 1;
     }
 
-    assert(false && "cannot ident operation");
+    assertf(false, "cannot ident operation=%s", inst->opcode_text);
+    exit(1);
 }
 
 static uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) {

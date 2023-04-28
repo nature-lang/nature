@@ -51,9 +51,6 @@ typedef enum {
     // 基础类型
     TYPE_NULL = 1,
     TYPE_BOOL,
-    TYPE_FLOAT32,
-    TYPE_FLOAT, // f64
-    TYPE_FLOAT64, // value = 5
 
     TYPE_INT8,
     TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
@@ -65,6 +62,10 @@ typedef enum {
     TYPE_UINT64,
     TYPE_INT, // value=15
     TYPE_UINT,
+
+    TYPE_FLOAT32,
+    TYPE_FLOAT, // f64
+    TYPE_FLOAT64, // value = 5
 
     // 复合类型
     TYPE_ANY, // value = 16

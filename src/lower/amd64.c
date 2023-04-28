@@ -265,6 +265,29 @@ static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+/**
+ * 三元组中  add imm, rax -> rax 是完全合法都指令，但是需要转换成二元组时
+ * 却无法简单都通过 mov first -> result 来操作，因为此时 result = second, 所以 first 会覆盖掉 second 都值
+ * @param c
+ * @param op
+ * @return
+ */
+static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
+    assert(op->first && op->second && op->output);
+
+    linked_t *list = linked_new();
+    // 通过一个临时 var, 领 first = output = reg, 从而将三元转换成二元表达式
+    type_kind kind = operand_type_kind(op->output);
+    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
+    slice_push(c->globals, temp->value);
+
+    linked_push(list, lir_op_move(temp, op->first));
+    linked_push(list, lir_op_new(op->code, temp, op->second, temp));
+    linked_push(list, lir_op_move(op->output, temp));
+
+    return list;
+}
+
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
@@ -325,11 +348,12 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_concat(operations, amd64_lower_fn_end(c, op));
             continue;
         }
-        if (lir_op_factor(op)) {
+        if (lir_op_factor(op) && is_integer(operand_type_kind(op->output))) {
+            // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));
             continue;
         }
-        if ((lir_op_contain_cmp(op) || lir_op_term(op)) && op->first->assert_type != LIR_OPERAND_VAR) {
+        if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
             op->first = amd64_convert_to_var(c, operations, op->first);
             linked_push(operations, op);
             continue;
@@ -344,6 +368,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
             op->first = amd64_convert_to_var(c, operations, op->first);
             linked_push(operations, op);
+            continue;
+        }
+        // 所有都三元运算都是不兼容 amd64 的，所以这里尽可能的进行三元转换为二元的处理
+        if (is_ternary(op)) {
+            linked_concat(operations, amd64_lower_ternary(c, op));
             continue;
         }
 
