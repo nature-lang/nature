@@ -320,6 +320,8 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     return var;
 }
 
+lir_operand_t *reg_operand(uint8_t index, type_kind kind);
+
 static inline lir_operand_t *var_operand(module_t *m, char *ident) {
     lir_var_t *var = lir_var_new(m, ident);
     return operand_new(LIR_OPERAND_VAR, var);

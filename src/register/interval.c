@@ -566,6 +566,13 @@ bool interval_expired(interval_t *i, int position, bool is_input) {
 
 
 bool interval_covered(interval_t *i, int position, bool is_input) {
+    if (i->ranges->count == 0) {
+        return false;
+    }
+    if (position > i->last_range->to || position < i->first_range->from) {
+        return false;
+    }
+
     linked_node *current = linked_first(i->ranges);
     while (current->value != NULL) {
         interval_range_t *range = current->value;
@@ -578,16 +585,37 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
     return false;
 }
 
+/**
+ * 1. 如果重合则返回第一个重合的点
+ * 2. 如果遍历到 current->last_to 都不重合则继续像后遍历，直到遇到第一被 select covert 位置
+ * 两个 interval 的重合点
+ * @param current
+ * @param select
+ * @return
+ */
 int interval_next_intersection(interval_t *current, interval_t *select) {
+    if (select->ranges->count == 0) {
+        return INT32_MAX;
+    }
+
     int position = current->first_range->from; // first_from 指向 range 的开头
-    while (position < current->last_range->to) {
-        if (interval_covered(current, position, false) && interval_covered(select, position, false)) {
+    while (position < select->last_range->to) {
+        bool cover_current = interval_covered(current, position, false);
+        bool cover_select = interval_covered(select, position, false);
+
+        if (cover_current && cover_select) {
+            return position;
+        }
+
+        // 已经超过了 current 表示不可能存在交集，此时找到 select 在 current->last_to 之后都最后一个使用位置即可
+        if (position > current->last_range->to && cover_select) {
             return position;
         }
         position++;
     }
 
-    return 0;
+    assertf(false, "cannot find andy intersection in interval index=%d", select->index);
+    exit(1);
 }
 
 // 在 before 前挑选一个最佳的位置进行 split

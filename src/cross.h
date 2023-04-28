@@ -69,7 +69,7 @@ static inline alloc_kind_e cross_alloc_kind_of_use(closure_t *c, lir_op_t *op, l
 
 
 // -------- reg select start -----------
-reg_t *amd64_reg_select(uint8_t index, type_kind base);
+reg_t *amd64_reg_select(uint8_t index, type_kind kind);
 
 /**
  * index 对应寄存器的 index， 不过同一个 index 会对应多个 register

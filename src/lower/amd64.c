@@ -17,7 +17,7 @@ static lir_operand_t *select_return_reg(lir_operand_t *operand) {
         return operand_new(LIR_OPERAND_REG, xmm0);
     }
 
-    return operand_new(LIR_OPERAND_REG, cross_reg_select(rax->index, kind));
+    return reg_operand(rax->index, kind);
 }
 
 /**
@@ -268,8 +268,8 @@ static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
-    lir_operand_t *rdx_operand = operand_new(LIR_OPERAND_REG, rdx);
+    lir_operand_t *ax_operand = reg_operand(rax->index, operand_type_kind(op->output));
+    lir_operand_t *dx_operand = reg_operand(rdx->index, operand_type_kind(op->output));
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {
@@ -277,19 +277,27 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     }
 
     // mov first -> rax
-    linked_push(list, lir_op_move(rax_operand, op->first));
+    linked_push(list, lir_op_move(ax_operand, op->first));
+
+    lir_opcode_t op_code = op->code;
+    lir_operand_t *result_operand = ax_operand;
+    if (op->code == LIR_OPCODE_REM) {
+        op_code = LIR_OPCODE_DIV; // rem 也是基于 div 计算得到的
+        result_operand = dx_operand; // 余数固定寄存器
+    }
+
+    // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数
+    // 即rdx中的值作为高64位、rax中的值作为低64位
+    // 格式：idiv src，结果存储在rax中
+    // 因此，在使用idiv进行计算时，rdx 中不得为随机值，否则会发生浮点异常。
+    if (op_code == LIR_OPCODE_DIV) {
+        // TODO 如果寄存器分配识别异常可以考虑 first = dx_operand, 让 fixed interval 的固定生命周期完善
+        linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
+    }
 
     // [div|mul|rem] rax, v2 -> rax
-    linked_push(list, lir_op_new(op->code, rax_operand, op->second, rax_operand));
-
-    if (op->code == LIR_OPCODE_REM) {
-        op->code = LIR_OPCODE_DIV; // div 指令的余数存储在 rdx 寄存器中
-        // mov rdx -> output
-        linked_push(list, lir_op_move(op->output, rdx_operand));
-    } else {
-        // mov rax -> output
-        linked_push(list, lir_op_move(op->output, rax_operand));
-    }
+    linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+    linked_push(list, lir_op_move(op->output, result_operand));
 
     return list;
 }

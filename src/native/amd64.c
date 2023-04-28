@@ -266,7 +266,8 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
     reg_t *first_reg = op->first->value;
     reg_t *output_reg = op->output->value;
     assertf(first_reg->index == rax->index, "div op first reg must rax");
-    assertf(output_reg->index == rax->index, "div op output reg must rax");
+    assertf(output_reg->index == rax->index || output_reg->index == rdx->index,
+            "div op output reg must rax/rdx");
 
     asm_operand_t *second = lir_operand_trans(c, operations, op->second);
 

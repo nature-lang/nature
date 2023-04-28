@@ -457,6 +457,20 @@ static inline ast_expr ast_type_convert(ast_expr expr, type_t target_type) {
     return *result;
 }
 
+/**
+ * 部分运算符只支持 int 类型数值运算，此时数值类型提升也拯救不了该运算
+ * @return
+ */
+static inline bool is_integer_operator(ast_expr_op_t op) {
+    return op == AST_OP_REM ||
+           op == AST_OP_LSHIFT ||
+           op == AST_OP_RSHIFT ||
+           op == AST_OP_AND ||
+           op == AST_OP_OR ||
+           op == AST_OP_XOR ||
+           op == AST_OP_BNOT;
+}
+
 static inline bool can_assign(ast_type_t t) {
     if (t == AST_EXPR_IDENT ||
         t == AST_EXPR_ACCESS ||

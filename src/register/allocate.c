@@ -78,7 +78,8 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
  * @return
  */
 static uint8_t find_free_reg(interval_t *current, int *free_pos) {
-    uint8_t min_full_reg_id = 0; // 直接分配不用 split
+//    uint8_t min_full_reg_id = 0; // 能够用于整个 current lifetime 寄存器器中 free 时间最短的寄存器(hotspot LinearScanWalker::find_free_reg)
+    uint8_t full_reg_id = 0; //  能够用于整个 current lifetime 寄存器器中 free 时间最长的寄存器
     uint8_t max_part_reg_id = 0; // 需要 split current to unhandled
     uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
     if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
@@ -88,13 +89,16 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
     for (int i = 1; i < cross_alloc_reg_count(); ++i) {
         if (free_pos[i] > current->last_range->to) {
             // 如果有多个寄存器比较空闲，则优先考虑 hint
-            // 否则优先考虑 free 时间最小的寄存器，从而可以充分利用寄存器
-            if (min_full_reg_id == 0 || i == hint_reg_id ||
-                (min_full_reg_id != hint_reg_id && free_pos[i] < free_pos[min_full_reg_id])) {
-                min_full_reg_id = i;
+            // ~~否则优先考虑 free 时间最小的寄存器,从而可以充分利用寄存器的时间~~
+            // 由于 nature 中 rt_call 较多，临时变量较多，所以寄存器利用率不高(根本用不完)
+            // 所以直接选取空闲时间最长的寄存器使用, 如果 rt_call 能够 inline 的话，这里可以改成 min full 逻辑
+            if (full_reg_id == 0 || i == hint_reg_id ||
+                (full_reg_id != hint_reg_id && free_pos[i] > free_pos[full_reg_id])) {
+                full_reg_id = i;
             }
         } else if (free_pos[i] > current->first_range->from + 1) {
             // 如果有多个寄存器可以借给 current 使用一段时间，则优先考虑能够借用时间最长的寄存器(free[i] 最大的)
+            // 从而减少溢出的可能
             if (max_part_reg_id == 0 || i == hint_reg_id ||
                 (max_part_reg_id != hint_reg_id && free_pos[i] > free_pos[max_part_reg_id])) {
                 max_part_reg_id = i;
@@ -102,8 +106,8 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
         }
     }
 
-    if (min_full_reg_id > 0) {
-        return min_full_reg_id;
+    if (full_reg_id > 0) {
+        return full_reg_id;
     }
 
     if (max_part_reg_id > 0) {
@@ -368,9 +372,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         }
 
         int pos = interval_next_intersection(a->current, select);
-        if (pos == 0) {
-            continue;
-        }
+        assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
     }
@@ -461,9 +463,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         }
 
         pos = interval_next_intersection(a->current, select);
-        if (pos == 0) {
-            continue;
-        }
+        assert(pos);
 
         if (select->fixed) {
             // 该 interval 虽然是固定 interval(short range), 但是当前正处于 hole 中

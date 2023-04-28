@@ -55,16 +55,16 @@ typedef enum {
     TYPE_FLOAT, // f64
     TYPE_FLOAT64, // value = 5
 
-    TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
     TYPE_INT8,
-    TYPE_UINT16,
+    TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
     TYPE_INT16,
-    TYPE_UINT32, // value=10
+    TYPE_UINT16,
     TYPE_INT32,
-    TYPE_UINT64,
+    TYPE_UINT32, // value=10
     TYPE_INT64,
-    TYPE_UINT,
+    TYPE_UINT64,
     TYPE_INT, // value=15
+    TYPE_UINT,
 
     // 复合类型
     TYPE_ANY, // value = 16
@@ -535,16 +535,14 @@ static inline bool is_qword_int(type_kind kind) {
 }
 
 /**
- * int(-1) + uint(a) 时，int > uint, 宽度相同时， int 大于 uint
  * @param left
  * @param right
  * @return
  */
-static inline type_t basic_type_select(type_kind left, type_kind right) {
+static inline type_t type_lift(type_kind left, type_kind right) {
     if (left >= right) {
         return type_basic_new(left);
     }
-
 
     return type_basic_new(right);
 }

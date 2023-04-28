@@ -133,9 +133,9 @@ void amd64_reg_init() {
     zmm15 = reg_new("zmm15", 15, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
 }
 
-reg_t *amd64_reg_select(uint8_t index, type_kind base) {
-    uint8_t select_size = type_kind_sizeof(base);
-    uint8_t alloc_type = type_base_trans_alloc(base);
+reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
+    uint8_t select_size = type_kind_sizeof(kind);
+    uint8_t alloc_type = type_base_trans_alloc(kind);
     if (alloc_type == LIR_FLAG_ALLOC_FLOAT) {
         select_size = OWORD; // 固定使用 xmm0 ~ xmm15
     }

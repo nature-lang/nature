@@ -32,13 +32,19 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
     type_t right_type = infer_right_expr(m, &expr->right, type_basic_new(TYPE_UNKNOWN));
 
     // 目前 binary 的两侧符号只支持 int 和 float
-    assertf(is_float(left_type.kind) || is_integer(left_type.kind),
-            "invalid operation: %s, right type must be int or float, cannot '%s' type",
+    assertf(is_number(left_type.kind) && is_number(right_type.kind),
+            "binary operate only support number operand,actual operate=%s, operand=%s",
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
 
-    type_t target_type = basic_type_select(left_type.kind, right_type.kind);
+    if (is_integer_operator(expr->operator)) {
+        assertf(is_integer(left_type.kind) && is_integer(right_type.kind),
+                "operator=%s only integer operand", ast_expr_op_str[expr->operator]);
+    }
 
+
+    // 类型自动提升
+    type_t target_type = type_lift(left_type.kind, right_type.kind);
     if (left_type.kind != target_type.kind) {
         expr->left = ast_type_convert(expr->left, target_type);
     }
