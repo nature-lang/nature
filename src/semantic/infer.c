@@ -43,6 +43,10 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
                 ast_expr_op_str[expr->operator]);
     }
 
+    // 不需要类型提升，且返回的类型为 first 的类型
+    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
+        return left_type;
+    }
 
     // 类型自动提升
     type_t target_type = type_lift(left_type.kind, right_type.kind);

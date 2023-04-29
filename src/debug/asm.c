@@ -60,7 +60,7 @@ static string asm_operand_to_string(asm_operand_t *operand) {
 
 // mov a -> b
 void asm_op_to_string(int i, asm_operation_t *op) {
-    printf("%d \t", i);
+    printf("%4lu\t", op->op_id);
     if (str_equal(op->name, "label")) {
         printf("%s  ", op->name);
     } else {

@@ -288,6 +288,27 @@ static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // second to cl/rcx
+    lir_operand_t *fit_cx_operand = reg_operand(cl->index, operand_type_kind(op->second));
+    linked_push(list, lir_op_move(fit_cx_operand, op->second));
+
+    type_kind kind = operand_type_kind(op->output);
+    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
+    slice_push(c->globals, temp->value);
+    linked_push(list, lir_op_move(temp, op->first));
+
+    // 这里相当于做了一次基于寄存器的类型转换了
+    lir_operand_t *cl_operand = reg_operand(cl->index, TYPE_UINT8);
+    // sar/sal
+    linked_push(list, lir_op_new(op->code, temp, cl_operand, temp));
+    linked_push(list, lir_op_move(op->output, temp));
+
+    return list;
+}
+
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
@@ -353,6 +374,12 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_concat(operations, amd64_lower_factor(c, op));
             continue;
         }
+
+        if (op->code == LIR_OPCODE_SHL || op->code == LIR_OPCODE_SHR) {
+            linked_concat(operations, amd64_lower_shift(c, op));
+            continue;
+        }
+
         if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
             op->first = amd64_convert_to_var(c, operations, op->first);
             linked_push(operations, op);
@@ -370,6 +397,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_push(operations, op);
             continue;
         }
+
         // 所有都三元运算都是不兼容 amd64 的，所以这里尽可能的进行三元转换为二元的处理
         if (is_ternary(op)) {
             linked_concat(operations, amd64_lower_ternary(c, op));

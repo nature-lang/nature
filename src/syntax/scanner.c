@@ -152,7 +152,7 @@ token_e scanner_special_char(module_t *m) {
             }
             return TOKEN_LEFT_ANGLE;
         case '>':
-            if (scanner_match(m, '<')) {
+            if (scanner_match(m, '>')) {
                 if (scanner_match(m, '=')) { // >>=
                     return TOKEN_RIGHT_SHIFT_EQUAL;
                 }

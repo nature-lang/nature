@@ -1413,7 +1413,7 @@ static parser_rule *find_rule(token_e type) {
 static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence) {
     // 读取表达式前缀
     parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
-    assertf(prefix_fn, "line=%d, cannot parser ident=%s", parser_line(m), parser_peek(m)->literal);
+    assertf(prefix_fn, "line=%d, cannot parser ident='%s'", parser_line(m), parser_peek(m)->literal);
 
     ast_expr expr = prefix_fn(m); // advance
 

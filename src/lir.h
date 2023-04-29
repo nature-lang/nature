@@ -118,13 +118,15 @@ typedef enum {
     LIR_OPCODE_MUL,
     LIR_OPCODE_DIV,
     LIR_OPCODE_REM, // remainder
+    LIR_OPCODE_NEG, // -取负数
+
+    // 位运算
     LIR_OPCODE_SHR, // >>
     LIR_OPCODE_SHL, // <<
     LIR_OPCODE_AND, // &
     LIR_OPCODE_OR, // |
     LIR_OPCODE_XOR, // ^
     LIR_OPCODE_NOT, // 按位取反
-    LIR_OPCODE_NEG, // -取负数
 
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能

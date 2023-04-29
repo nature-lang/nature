@@ -600,10 +600,254 @@ inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
                        }
 };
 
+// or ------------------------------------------------------------------------------------------------------
+inst_t or_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE},
+                      {
+                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                      }
+};
+inst_t or_rex_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE},
+                          {
+                                  {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                  {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                          }
+};
+inst_t or_rm16_imm16 = {"or", "or", 0x66, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_WORD},
+                        {
+                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                        }
+};
+inst_t or_rm32_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD},
+                        {
+                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                        }
+};
+inst_t or_rm64_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD},
+                        {
+                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                        }
+};
+inst_t or_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_SLASHR},
+                    {
+                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                            {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                    }
+};
+inst_t or_rex_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                        {
+                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                        }
+};
+inst_t or_rm16_r16 = {"or", "or", 0x66, {0x09}, {OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t or_rm32_r32 = {"or", "or", 0, {0x09}, {OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t or_rm64_r64 = {"or", "or", 0, {0x09}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t or_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_SLASHR},
+                    {
+                            {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                    }
+};
+inst_t or_rex_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                        {
+                                {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                        }
+};
+inst_t or_r16_rm16 = {"or", "or", 0x66, {0x0B}, {OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
+                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+                      }
+};
+inst_t or_r32_rm32 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+                      }
+};
+inst_t or_r64_rm64 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                      {
+                              {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                      }
+};
+
+// and ------------------------------------------------------------------------------------------------------
+inst_t and_rm8_imm8 = {"and", "and", 0, {0x80}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE},
+                       {
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                       }
+};
+inst_t and_rex_rm8_imm8 = {"and", "and", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE},
+                           {
+                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                   {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
+                           }
+};
+inst_t and_rm16_imm16 = {"and", "and", 0x66, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_WORD},
+                         {
+                                 {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t and_rm32_imm32 = {"and", "and", 0, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t and_rm64_imm32 = {"and", "and", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD},
+                         {
+                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
+                         }
+};
+inst_t and_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                     }
+};
+inst_t and_rex_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                         }
+};
+inst_t and_rm16_r16 = {"and", "and", 0x66, {0x21}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t and_rm32_r32 = {"and", "and", 0, {0x21}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t and_rm64_r64 = {"and", "and", 0, {0x21}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
+                       }
+};
+inst_t and_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_SLASHR},
+                     {
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                     }
+};
+inst_t and_rex_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
+                         }
+};
+inst_t and_r16_rm16 = {"and", "and", 0x66, {0x23}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+inst_t and_r32_rm32 = {"and", "and", 0, {0x23}, {OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+inst_t and_r64_rm64 = {"and", "and", 0, {0x23}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {
+                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
+                       }
+};
+
+// shift ------------------------------------------------------------------------------------------------------
+inst_t sal_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_SLASH4},
+                     {
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                     }
+};
+inst_t sal_rex_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                         }
+};
+inst_t sal_rm16_cl = {"sal", "sal", 0x66, {0xD3}, {OPCODE_EXT_SLASH4},
+                      {
+                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t sal_rm32_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_SLASH4},
+                      {
+                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t sal_rm64_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4},
+                      {
+                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+
+inst_t sar_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_SLASH7},
+                     {
+                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                     }
+};
+inst_t sar_rex_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7},
+                         {
+                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                         }
+};
+inst_t sar_rm16_cl = {"sar", "sar", 0x66, {0xD3}, {OPCODE_EXT_SLASH7},
+                      {
+                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t sar_rm32_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_SLASH7},
+                      {
+                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
+inst_t sar_rm64_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7},
+                      {
+                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
+                      }
+};
 
 // float ------------------------------------------------------------------------------------------------------
-
-
 // float xor ------------------------------------------------------------------------------------------------------
 inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
                               {
@@ -854,6 +1098,7 @@ void amd64_opcode_init() {
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
 
+    // 位运算
     opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rex_rm8);
     opcode_tree_build(&not_rm16);
@@ -875,6 +1120,49 @@ void amd64_opcode_init() {
     opcode_tree_build(&xor_r16_rm16);
     opcode_tree_build(&xor_r32_rm32);
     opcode_tree_build(&xor_r64_rm64);
+
+    opcode_tree_build(&or_rm8_imm8);
+    opcode_tree_build(&or_rex_rm8_imm8);
+    opcode_tree_build(&or_rm16_imm16);
+    opcode_tree_build(&or_rm32_imm32);
+    opcode_tree_build(&or_rm64_imm32);
+    opcode_tree_build(&or_rm8_r8);
+    opcode_tree_build(&or_rex_rm8_r8);
+    opcode_tree_build(&or_rm16_r16);
+    opcode_tree_build(&or_rm32_r32);
+    opcode_tree_build(&or_rm64_r64);
+    opcode_tree_build(&or_r8_rm8);
+    opcode_tree_build(&or_rex_r8_rm8);
+    opcode_tree_build(&or_r16_rm16);
+    opcode_tree_build(&or_r32_rm32);
+    opcode_tree_build(&or_r64_rm64);
+
+    opcode_tree_build(&and_rm8_imm8);
+    opcode_tree_build(&and_rex_rm8_imm8);
+    opcode_tree_build(&and_rm16_imm16);
+    opcode_tree_build(&and_rm32_imm32);
+    opcode_tree_build(&and_rm64_imm32);
+    opcode_tree_build(&and_rm8_r8);
+    opcode_tree_build(&and_rex_rm8_r8);
+    opcode_tree_build(&and_rm16_r16);
+    opcode_tree_build(&and_rm32_r32);
+    opcode_tree_build(&and_rm64_r64);
+    opcode_tree_build(&and_r8_rm8);
+    opcode_tree_build(&and_rex_r8_rm8);
+    opcode_tree_build(&and_r16_rm16);
+    opcode_tree_build(&and_r32_rm32);
+    opcode_tree_build(&and_r64_rm64);
+
+    opcode_tree_build(&sal_rm8_cl);
+    opcode_tree_build(&sal_rex_rm8_cl);
+    opcode_tree_build(&sal_rm16_cl);
+    opcode_tree_build(&sal_rm32_cl);
+    opcode_tree_build(&sal_rm64_cl);
+    opcode_tree_build(&sar_rm8_cl);
+    opcode_tree_build(&sar_rex_rm8_cl);
+    opcode_tree_build(&sar_rm16_cl);
+    opcode_tree_build(&sar_rm32_cl);
+    opcode_tree_build(&sar_rm64_cl);
 
     // 浮点数算数运算
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
@@ -977,14 +1265,13 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_RM64) {
-        res.count = 6;
+        res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[5] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
         res.list = highs;
         return res;
     }
@@ -1093,21 +1380,9 @@ asm_keys_t operand_low_to_high(operand_type t) {
     }
 
     if (t == OPERAND_TYPE_R64) {
-        res.count = 2;
-        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
-        res.list = highs;
-        return res;
-    }
-
-    /**
-     * 这回导致所有的 QWORD reg 选择到改指令，而不是仅仅 rax 会进来！
-     */
-    if (t == OPERAND_TYPE_RAX) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_RAX, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
         res.list = highs;
         return res;
     }
@@ -1220,7 +1495,7 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operand
 
 // spl,bpl,sil,dil and reg index >= 8
 // must has rex/rexw/vex128/vex256
-static bool is_64_reg(reg_t *reg) {
+static bool has_64_reg(reg_t *reg) {
     if (str_equal(reg->name, "spl")) {
         return true;
     }
@@ -1308,13 +1583,8 @@ inst_t *opcode_select(asm_operation_t operation) {
             if (is_high_eight_reg(reg)) {
                 has_high_eight_reg = true;
             }
-            if (is_64_reg(reg)) {
+            if (has_64_reg(reg)) {
                 has64_reg = true;
-            }
-
-            // rax 特殊处理,部分指令特殊指定了 rax 参与,进行精确类型转换
-            if (str_equal(reg->name, rax->name)) {
-                operand->type = ASM_OPERAND_TYPE_RAX;
             }
         }
 
@@ -1333,15 +1603,27 @@ inst_t *opcode_select(asm_operation_t operation) {
             .count = 0,
             .list= malloc(sizeof(inst_t) * 10)
     };
+
+    /**
+     * 上面只进行了 size 和 type 等匹配，现在需要进行一些特殊规则的过滤
+     * 1. 如果 asm 中使用了 sh/ch/dh/bh 这四个旧版本寄存器，则 inst 中不能包含 rex/rexw 64位标识(rex 标识会将数据编译到 al/bl/cl/dl 寄存器中)。
+     */
     for (int i = 0; i < temps.count; ++i) {
         inst_t *inst = temps.list[i];
-        if (has64_reg && !has_64_extension(inst->extensions)) {
-            continue;
-        }
-
         if (has_high_eight_reg && has_rex_extension(inst->extensions)) {
             continue;
         }
+
+        if (has64_reg && !has_64_extension(inst->extensions)) {
+            // 找一个空闲到位置， 主动带上 EXT_REX ,暂时不需要这样到安全限制,默认就是优先支持 rex
+            for (int j = 0; j < 4; ++j) {
+                if (!inst->extensions[j]) {
+                    inst->extensions[j] = OPCODE_EXT_REX;
+                    break;
+                }
+            }
+        }
+
         // 和 has ax 协作从而优先使用携带 ax 的寄存器
 
         insts.list[insts.count++] = inst;
@@ -1604,21 +1886,22 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
     }
 
     // format 填充 extensions
-    int i = 0;
     bool ext_exists[OPCODE_EXT_EOF] = {false};
-    while (inst->extensions[i] > 0) {
-        opcode_ext ext = inst->extensions[i++];
-
-        parser_ext(format, ext);
-        ext_exists[ext] = true;
+    for (int j = 0; j < 4; ++j) {
+        opcode_ext ext = inst->extensions[j];
+        if (ext > 0) {
+            parser_ext(format, ext);
+            ext_exists[ext] = true;
+        }
     }
 
-    i = 0;
-    while (inst->operands[i].type > 0) {
+
+    int i = 0;
+    while (i <= 3 && inst->operands[i].type > 0) {
         opcode_operand_t operand = inst->operands[i];
         asm_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
-        if (asm_operand->type == ASM_OPERAND_TYPE_REG || asm_operand->type == ASM_OPERAND_TYPE_RAX) {
+        if (asm_operand->type == ASM_OPERAND_TYPE_REG) {
             reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -1632,21 +1915,19 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
                     format->vex_prefix->b = r->index <= 7;
                 }
-            } else if (operand.encoding == ENCODING_TYPE_MODRM_RAX || operand.encoding == ENCODING_TYPE_MODRM_AL) {
-                if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
-                    format->vex_prefix->r = true;
-                }
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
                 if (format->modrm == NULL) {
                     format->modrm = new_modrm();
                     format->modrm->mod = MODRM_MOD_DIRECT_REGISTER;
                 }
 
-                format->modrm->reg = r->index;
-                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                    format->rex_prefix->r = r->index > 7; // 添加 rex_prefix-b 前缀
-                } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
-                    format->vex_prefix->r = r->index <= 7;
+                if (ext_exists[OPCODE_EXT_SLASHR]) {
+                    format->modrm->reg = r->index;
+                    if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+                        format->rex_prefix->r = r->index > 7; // 添加 rex_prefix-b 前缀
+                    } else if (ext_exists[OPCODE_EXT_VEX_128] || ext_exists[OPCODE_EXT_VEX_256]) {
+                        format->vex_prefix->r = r->index <= 7;
+                    }
                 }
             } else if (operand.encoding == ENCODING_TYPE_OPCODE_PLUS) { // opcode = opcode + reg
                 format->opcode[0] += r->index & 7;
@@ -1691,18 +1972,19 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->rex_prefix->b = r->reg->index > 7;
                 }
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
-                if (format->modrm == NULL) {
-                    format->modrm = new_modrm();
-                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
-                }
-
-                format->modrm->reg = r->reg->index;
-                uint8_t temp[] = {r->disp};
-                set_disp(format, r->reg->name, temp, 1);
-
-                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                    format->rex_prefix->r = r->reg->index > 7;
-                }
+                assertf(false, "disp_reg is rm, cannot modrm to reg");
+//                if (format->modrm == NULL) {
+//                    format->modrm = new_modrm();
+//                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+//                }
+//
+//                format->modrm->reg = r->reg->index;
+//                uint8_t temp[] = {r->disp};
+//                set_disp(format, r->reg->name, temp, 1);
+//
+//                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+//                    format->rex_prefix->r = r->reg->index > 7;
+//                }
             } else {
                 error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
@@ -1906,7 +2188,7 @@ static void opcode_rex_encoding(amd64_inst_format_t *format, uint8_t *result) {
 
 static void opcode_modrm_encoding(amd64_inst_format_t *format, uint8_t *result) {
     modrm_t *modrm = format->modrm;
-    // &7 = &00000111 让其余未归零处理
+    // &7 = &00000111 避免值到大小超过 7
     *result = modrm->rm & 7;
     *result |= (modrm->reg & 7) << 3;
 
