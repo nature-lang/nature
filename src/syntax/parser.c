@@ -42,7 +42,7 @@ static int parser_line(module_t *m) {
 
 static token_t *parser_must(module_t *m, token_e expect) {
     token_t *t = m->p_cursor.current->value;
-    assertf(t->type == expect, "line: %d, parser error: expect '%s' token_t actual '%s' token_t",
+    assertf(t->type == expect, "line: %d, parser error: expect '%s' actual '%s'",
             parser_line(m),
             token_str[expect],
             t->literal);
@@ -596,7 +596,7 @@ static ast_expr parser_access(module_t *m, ast_expr left) {
     ast_expr result = expr_new(m);
 
     parser_must(m, TOKEN_LEFT_SQUARE);
-    ast_expr key = parser_precedence_expr(m, PRECEDENCE_CALL);
+    ast_expr key = parser_expr(m);
     parser_must(m, TOKEN_RIGHT_SQUARE);
     ast_access *access_expr = malloc(sizeof(ast_access));
     access_expr->left = left;

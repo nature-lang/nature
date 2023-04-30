@@ -385,11 +385,6 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_push(operations, op);
             continue;
         }
-        if (op->code == LIR_OPCODE_MOVE && op->output->assert_type != LIR_OPERAND_VAR) {
-            op->output = amd64_convert_to_var(c, operations, op->output);
-            linked_push(operations, op);
-            continue;
-        }
 
         // lea symbol_label -> var 等都是允许的，主要是应对 imm int
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {

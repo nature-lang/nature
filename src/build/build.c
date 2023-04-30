@@ -268,7 +268,7 @@ static slice_t *build_modules() {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
-    module_t *root = module_build(SOURCE_PATH, true);
+    module_t *root = module_build(SOURCE_PATH, MODULE_TYPE_MAIN);
     slice_push(modules, root);
 
     linked_t *work_list = linked_new();
@@ -282,7 +282,7 @@ static slice_t *build_modules() {
                 continue;
             }
 
-            module_t *module_new = module_build(import->full_path, false);
+            module_t *module_new = module_build(import->full_path, MODULE_TYPE_COMMON);
             linked_push(work_list, module_new);
             slice_push(modules, module_new);
             table_set(module_table, import->full_path, module_new);
@@ -290,16 +290,17 @@ static slice_t *build_modules() {
     }
 
     // 将所有模块都 init 函数都注册到 root body 的最前面
+    assert(root->ast_fndefs->count > 0);
     ast_fndef_t *root_fndef = root->ast_fndefs->take[0];
+
+    slice_t *new_body = slice_new();
     for (int i = 1; i < modules->count; ++i) {
         module_t *m = modules->take[i];
         assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
-
-        slice_t *body = slice_new();
-        slice_push(body, m->call_init_stmt);
-        slice_concat_free(body, root_fndef->body);
-        root_fndef->body = body;
+        slice_push(new_body, m->call_init_stmt);
     }
+    slice_concat(new_body, root_fndef->body);
+    root_fndef->body = new_body;
 
     return modules;
 }
@@ -322,8 +323,6 @@ static void build_compiler(slice_t *modules) {
         infer(m);
 
         compiler(m);
-
-
 
         // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {

@@ -23,6 +23,8 @@ fn set_delete({T} set, ptr<T> key) {}
 // 方便测试，后续封装到系统调用库中
 fn sleep(int second) {}
 
+fn runtime_gc() {}
+
 type T = struct{}
 
 // 这里都 string 是 nature string 类型

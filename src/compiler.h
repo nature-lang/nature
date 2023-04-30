@@ -17,4 +17,6 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt);
 
 static lir_operand_t *compiler_expr(module_t *m, ast_expr expr);
 
+static void compiler_assign(module_t *m, ast_assign_stmt *stmt);
+
 #endif //NATURE_SRC_COMPILER_H_

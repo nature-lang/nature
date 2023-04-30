@@ -586,20 +586,19 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
         return;
     }
 
-    // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号(当前 module 注册的符号都加上了前缀)中查找
-    // 所以这里要拼接前缀
+    // 使用当前 module 中的全局符号是可以省略 module name 的, 但是当前 module 在注册 ident 时缺附加了 module.ident
+    // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
     char *global_ident = ident_with_module(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, global_ident);
     if (s != NULL) {
-        ident->literal = global_ident; // 完善访问名称
+        ident->literal = global_ident; // 找到了则添加全局名称
         return;
     }
 
-    // free_var_index == -1 表示符号在当前的作用域链中无法找到，可能是全局符号
-    // println/print/set 等全局符号都已经预注册完成了
+    // 最后还要判断是不是 println/print/set 等 builtin 全局符号
     s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
-        // 当前模块内都全局符号引用什么都不需要做，名称已经是正确的了
+        // 不需要改写使用的名称了
         return;
     }
 
@@ -618,18 +617,17 @@ static void analyser_access(module_t *m, ast_access *access) {
  */
 static void analyser_select(module_t *m, ast_expr *expr) {
     ast_select *select = expr->value;
-    if (select->left.assert_type != AST_EXPR_IDENT) {
-        analyser_expr(m, &select->left);
-        return;
-    }
-    ast_ident *ident = select->left.value;
-    ast_import *import = table_get(m->import_table, ident->literal);
-    if (import) {
-        // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！(不需要检测 import 服务是否存在，这在 linker 中会做的)
-        char *unique_ident = ident_with_module(import->module_ident, select->key);
-        expr->assert_type = AST_EXPR_IDENT;
-        expr->value = ast_new_ident(unique_ident);
-        return;
+    if (select->left.assert_type == AST_EXPR_IDENT) {
+        // 这里将全局名称改写后并不能直接去符号表中查找，但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
+        ast_ident *ident = select->left.value;
+        ast_import *import = table_get(m->import_table, ident->literal);
+        if (import) {
+            // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！(不需要检测 import 服务是否存在，这在 linker 中会做的)
+            char *unique_ident = ident_with_module(import->module_ident, select->key);
+            expr->assert_type = AST_EXPR_IDENT;
+            expr->value = ast_new_ident(unique_ident);
+            return;
+        }
     }
 
     analyser_expr(m, &select->left);
@@ -871,6 +869,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
     // init
     m->analyser_line = 0;
     int import_end_index = 0;
+    // import 统计
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type != AST_STMT_IMPORT) {
@@ -895,9 +894,9 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type == AST_VAR_DECL) {
             ast_var_decl *var_decl = stmt->value;
-            char *ident = ident_with_module(m->ident, var_decl->ident);
+            var_decl->ident = ident_with_module(m->ident, var_decl->ident);
 
-            symbol_t *s = symbol_table_set(ident, SYMBOL_VAR, var_decl, false);
+            symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             slice_push(m->global_symbols, s);
             continue;
         }
@@ -905,9 +904,8 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_STMT_VAR_DEF) {
             ast_vardef_stmt *vardef = stmt->value;
             ast_var_decl *var_decl = &vardef->var_decl;
-            char *ident = ident_with_module(m->ident, var_decl->ident);
-
-            symbol_t *s = symbol_table_set(ident, SYMBOL_VAR, var_decl, false);
+            var_decl->ident = ident_with_module(m->ident, var_decl->ident);
+            symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             slice_push(m->global_symbols, s);
 
             // 转换成 assign stmt，然后导入到 init 中
@@ -927,8 +925,8 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_STMT_TYPEDEF) {
             ast_typedef_stmt *type_decl = stmt->value;
-            char *ident = ident_with_module(m->ident, type_decl->ident);
-            symbol_t *s = symbol_table_set(ident, SYMBOL_TYPEDEF, type_decl, false);
+            type_decl->ident = ident_with_module(m->ident, type_decl->ident);
+            symbol_t *s = symbol_table_set(type_decl->ident, SYMBOL_TYPEDEF, type_decl, false);
             slice_push(m->global_symbols, s);
             continue;
         }
@@ -1010,7 +1008,9 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl));
-    slice_concat(fndef->body, stmt_list);
+    for (int i = import_end_index; i < stmt_list->count; ++i) {
+        slice_push(fndef->body, stmt_list->take[i]);
+    }
 
     // 符号表注册
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, false);

@@ -1188,6 +1188,8 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
         return expr->type;
     }
 
+    assertf(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_kind_string[target_type.kind]);
+
     // 数值类型转换
     if (is_number(target_type.kind) && is_number(expr->type.kind) &&
         cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {

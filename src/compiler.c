@@ -167,8 +167,15 @@ static void compiler_ident_assign(module_t *m, ast_assign_stmt *stmt) {
 }
 
 
-// 将 tuple 按递归解析赋值给 tuple_destr 中声明的所有 var
-// 递归将导致优先从左侧进行展开
+//
+//
+/**
+ * 将 tuple 按递归解析赋值给 tuple_destr 中声明的所有 var
+ * 递归将导致优先从左侧进行展开, 需要注意的是，仅支持 left 表达式，且需要走 assign
+ * @param m
+ * @param destr
+ * @param tuple_target
+ */
 static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operand_t *tuple_target) {
     uint64_t offset = 0;
     for (int i = 0; i < destr->elements->length; ++i) {
@@ -197,9 +204,13 @@ static void compiler_tuple_destr(module_t *m, ast_tuple_destr *destr, lir_operan
             OP_PUSH(lir_op_move(dst, temp));
 
         } else if (can_assign(element->assert_type)) {
-            lir_operand_t *dst = compiler_expr(m, *element);
-            OP_PUSH(lir_op_move(dst, temp));
-
+            assert(temp->assert_type == LIR_OPERAND_VAR);
+            // element 是左值
+            ast_assign_stmt *assign_stmt = NEW(ast_assign_stmt);
+            assign_stmt->left = *element;
+            // temp is ident， 把 ident 解析出来
+            assign_stmt->right = *ast_ident_expr(((lir_var_t *) temp->value)->ident);
+            compiler_assign(m, assign_stmt);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             compiler_tuple_destr(m, element->value, temp);
         } else {
@@ -1315,7 +1326,7 @@ static void compiler_block(module_t *m, slice_t *block) {
         compiler_line = stmt->line;
         m->compiler_line = stmt->line;
 #ifdef DEBUG_COMPILER
-        debug_stmt("COMPILER", stmt);
+        debug_stmt("COMPILER", *stmt);
 #endif
         compiler_stmt(m, stmt);
     }
