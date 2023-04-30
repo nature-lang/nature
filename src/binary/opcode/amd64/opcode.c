@@ -34,68 +34,8 @@ inst_t je_rel8 = {"je", "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {
 }
 };
 
-inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {
-        OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
-}
-};
-
-
-// sub imm32 -> rm64  sub rm64 - imm32 = rm64
-inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
-                         {
-                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                         }
-};
-
-inst_t sub_rm64_r64 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-
-                       {
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                       }
-};
-
-
-inst_t sub_r64_rm64 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-
-                       {
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                       }
-};
-
-inst_t sub_rm64_imm8 = {"sub", "sub", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
-                        {
-                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                        }
-};
-
-inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                         {
-                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                         }
-};
-// intel 指令顺序
-inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                       }
-};
-inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                       }
-};
-inst_t add_imm8_rm64 = {"add", "add", 0, {0x83}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                        {
-                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                        }
+inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD},
+                   {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}
 };
 
 inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7},
@@ -144,6 +84,100 @@ inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
                     {
                             {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                     }
+};
+
+// add------------------------------------------------------------------------------------------------------
+inst_t add_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},{OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+};
+inst_t add_rex_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
+                           {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+};
+inst_t add_rm16_imm16 = {"add", "add", 0x66, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD},
+                         {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
+};
+inst_t add_rm32_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+                         {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
+};
+inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
+                         {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
+};
+inst_t add_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_SLASHR},
+                     {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t add_rex_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t add_rm16_r16 = {"add", "add", 0x66, {0x01}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t add_rm32_r32 = {"add", "add", 0, {0x01}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t add_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_SLASHR},
+                     {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t add_rex_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t add_r16_rm16 = {"add", "add", 0x66, {0x03}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t add_r32_rm32 = {"add", "add", 0, {0x03}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
+};
+
+// sub ------------------------------------------------------------------------------------------------------
+inst_t sub_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},{OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+};
+inst_t sub_rex_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                           {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+};
+inst_t sub_rm16_imm16 = {"sub", "sub", 0x66, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_WORD},
+                         {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
+};
+inst_t sub_rm32_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+                         {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
+};
+inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
+                         {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
+};
+inst_t sub_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_SLASHR},
+                     {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t sub_rex_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t sub_rm16_r16 = {"sub", "sub", 0x66, {0x29}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t sub_rm32_r32 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t sub_rm64_r64 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
+};
+inst_t sub_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_SLASHR},
+                     {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t sub_rex_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                         {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t sub_r16_rm16 = {"sub", "sub", 0x66, {0x2B}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t sub_r32_rm32 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
+};
+inst_t sub_r64_rm64 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                       {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
 };
 
 
@@ -512,92 +546,48 @@ inst_t xor_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_SLASH6, OPCODE_EXT_I
                        {
                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                       }
-};
+                       }};
 inst_t xor_rex_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
-                           {
-                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                   {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                           }
+                           {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
 };
 inst_t xor_rm16_imm16 = {"xor", "xor", 0x66, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_WORD},
-                         {
-                                 {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                         }
+                         {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
 };
 inst_t xor_rm32_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
-                         {
-                                 {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                         }
+                         {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
 };
 inst_t xor_rm64_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
-                         {
-                                 {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                         }
+                         {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
 };
 inst_t xor_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_SLASHR},
-                     {
-                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                     }
+                     {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
 };
 inst_t xor_rex_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                         {
-                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                         }
+                         {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
 };
 inst_t xor_rm16_r16 = {"xor", "xor", 0x66, {0x31}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
-                       }
+                       {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
 };
 inst_t xor_rm32_r32 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                       }
+                       {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
 };
 inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                       }
+                       {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
 };
-
 inst_t xor_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_SLASHR},
-                     {
-                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                     }
+                     {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
 };
 inst_t xor_rex_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                         {
-                                 {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                 {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                         }
+                         {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
 };
 inst_t xor_r16_rm16 = {"xor", "xor", 0x66, {0x33}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                       }
+                       {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
 };
 inst_t xor_r32_rm32 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                       }
+                       {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
 };
 inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                       {
-                               {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                               {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                       }
+                       {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
 };
 
 // or ------------------------------------------------------------------------------------------------------
@@ -1007,15 +997,38 @@ void amd64_opcode_init() {
     opcode_tree_build(&pop_rm64);
 
     // 整形算数运算
-    opcode_tree_build(&sub_rm64_imm8);
-    opcode_tree_build(&sub_rm64_imm32);
-    opcode_tree_build(&sub_rm64_r64);
-    opcode_tree_build(&sub_r64_rm64);
-    opcode_tree_build(&sub_rm64_imm32);
+    opcode_tree_build(&add_rm8_imm8);
+    opcode_tree_build(&add_rex_rm8_imm8);
+    opcode_tree_build(&add_rm16_imm16);
+    opcode_tree_build(&add_rm32_imm32);
     opcode_tree_build(&add_rm64_imm32);
-    opcode_tree_build(&add_imm8_rm64);
-    opcode_tree_build(&add_r64_rm64);
+    opcode_tree_build(&add_rm8_r8);
+    opcode_tree_build(&add_rex_rm8_r8);
+    opcode_tree_build(&add_rm16_r16);
+    opcode_tree_build(&add_rm32_r32);
     opcode_tree_build(&add_rm64_r64);
+    opcode_tree_build(&add_r8_rm8);
+    opcode_tree_build(&add_rex_r8_rm8);
+    opcode_tree_build(&add_r16_rm16);
+    opcode_tree_build(&add_r32_rm32);
+    opcode_tree_build(&add_r64_rm64);
+
+    opcode_tree_build(&sub_rm8_imm8);
+    opcode_tree_build(&sub_rex_rm8_imm8);
+    opcode_tree_build(&sub_rm16_imm16);
+    opcode_tree_build(&sub_rm32_imm32);
+    opcode_tree_build(&sub_rm64_imm32);
+    opcode_tree_build(&sub_rm8_r8);
+    opcode_tree_build(&sub_rex_rm8_r8);
+    opcode_tree_build(&sub_rm16_r16);
+    opcode_tree_build(&sub_rm32_r32);
+    opcode_tree_build(&sub_rm64_r64);
+    opcode_tree_build(&sub_r8_rm8);
+    opcode_tree_build(&sub_rex_r8_rm8);
+    opcode_tree_build(&sub_r16_rm16);
+    opcode_tree_build(&sub_r32_rm32);
+    opcode_tree_build(&sub_r64_rm64);
+
     opcode_tree_build(&idiv_rm8);
     opcode_tree_build(&idiv_rex_rm8);
     opcode_tree_build(&idiv_rm16);
