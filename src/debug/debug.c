@@ -181,7 +181,7 @@ void debug_stmt(string type, ast_stmt stmt) {
  */
 void debug_lir(closure_t *c) {
 #ifdef DEBUG_LIR
-    printf("compiler closure lir: %s ---------------------------------------------------------------------\n", c->name);
+    printf("compiler closure lir: %s ---------------------------------------------------------------------\n", c->symbol_name);
     linked_node *current = c->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
@@ -221,7 +221,7 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after,
-           c->name);
+           c->symbol_name);
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *basic_block = c->blocks->take[i];
         debug_basic_block(basic_block);
@@ -234,7 +234,7 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 
 void debug_interval(closure_t *c) {
 #ifdef DEBUG_INTERVAL
-    DEBUGF("closure=%s interval ------------------------------------------------------------------------", c->name);
+    DEBUGF("closure=%s interval ------------------------------------------------------------------------", c->symbol_name);
     for (int i = 0; i < c->globals->count; ++i) {
         lir_var_t *var = c->globals->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
@@ -360,7 +360,7 @@ void debug_module_asm(module_t *m) {
 
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
-    printf("asm: %s------------------------------------------------------------------------\n", c->name);
+    printf("asm: %s------------------------------------------------------------------------\n", c->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
         asm_op_to_string(i, c->asm_operations->take[i]);
     }

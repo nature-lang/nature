@@ -3,6 +3,7 @@
 
 #include "utils/type.h"
 
+#define JIT_CODES_SIZE 80 // byte
 
 table_t *env_table;
 
@@ -17,10 +18,9 @@ typedef struct {
 } envs_t;
 
 typedef struct {
-    envs_t *envs;
-    uint8_t *closure_jit_codes;
+    uint8_t closure_jit_codes[JIT_CODES_SIZE];
     addr_t fn_addr;
-    uint64_t code_size;
+    envs_t *envs;
 } runtime_fn_t;
 
 void *fn_new(addr_t fn_addr, envs_t *envs);

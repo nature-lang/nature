@@ -393,16 +393,18 @@ typedef struct {
 
 // 这里包含 body, 所以属于 def
 typedef struct ast_fndef_t {
-    char *name;
+    char *symbol_name;
+    char *closure_name;
     type_t return_type;
     list_t *formals; // ast_var_decl
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
 
-    // ast_expr, 当前 fn 中引用的外部的环境
+    // ast_expr, 当前 fn body 中引用的外部的环境
     list_t *capture_exprs;
 
+    // 当前 fn 中被内部 fn 引用对 fn, 当前函数退出时需要对这些 fn 进行 closure 操作
     slice_t *be_capture_locals; // local_ident_t*
 
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type

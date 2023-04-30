@@ -1396,7 +1396,7 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         assert(c->text_count > 0);
         f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
-        elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->name, STT_FUNC);
+        elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 
         rel_offset += sizeof(fndef_t);
     }

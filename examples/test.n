@@ -1,210 +1,106 @@
-//import "src/redis" module_name local_redis // redis.set
-//import "github.com/weiwenhao/redis" module_name remote_redis // redis.set
+/home/vagrant/Code/nature-lang/nature/build/tests/blackbox/20221025_06_closure
+[==========] Running 1 test(s).
+NATURE_ROOT: /home/vagrant/Code/nature-lang/nature
+BUILD_OS: linux
+BUILD_ARCH: amd64
+BUILD_OUTPUT_NAME: main
+BUILD_OUTPUT_DIR: /home/vagrant/Code/nature-lang/nature/tests/blackbox/tmp
+BUILD_OUTPUT: /home/vagrant/Code/nature-lang/nature/tests/blackbox/tmp/main
+WORK_DIR: /home/vagrant/Code/nature-lang/nature/tests/blackbox/cases
+BASE_NS: cases
+TERM_DIR: /tmp/nature-build.ut41Vz
+BUILD_ENTRY: 20221025_06_closure.n
+SOURCE_PATH: /home/vagrant/Code/nature-lang/nature/tests/blackbox/cases/20221025_06_closure.n
+
+1:fn print ( ... [ any ] args ) { }
+2:;
+3:fn println ( ... [ any ] args ) { }
+5:;
+6:fn set ( ... [ T ] keys ) : { T } { }
+8:;
+9:fn list_push ( [ T ] list , ptr < T > v ) { }
+10:;
+11:fn list_length ( [ T ] list ) : int { }
+12:;
+13:fn map_delete ( { T : T } map , ptr < T > key ) { }
+14:;
+15:fn map_length ( { T : T } map ) : int { }
+16:;
+17:fn set_contains ( { T } set , ptr < T > key ) : bool { }
+18:;
+19:fn set_add ( { T } set , ptr < T > key ) : bool { }
+20:;
+21:fn set_delete ( { T } set , ptr < T > key ) { }
+23:;
+24:fn sleep ( int second ) { }
+25:;
+26:type T = struct { }
+28:;
+29:type errort = struct {
+30:string msg
+31:}
+1:int cash = 1000
+2:;
+3:fn save ( int number ) : int {
+4:cash = cash + number ;
+5:return cash
+6:}
+7:; compiler closure lir: main ---------------------------------------------------------------------
+0		LABEL 	SYMBOL[main|G]
+0		FN_BEGIN	FORMALS()
+0		MOVE 	IMM[1000:INT] -> VAR[main.cash_0|int]
+0		R_CALL	SYMBOL[env_new|G], PARAMS(IMM[1:INT]) -> VAR[main.t_5|i64]
+0		LEA   	VAR[main.cash_0|int] -> VAR[main.t_6|pointer]
+0		R_CALL	SYMBOL[env_assign|G], PARAMS(VAR[main.t_5|i64],IMM[9:INT],IMM[0:INT],VAR[main.t_6|pointer])
+0		LEA   	SYMBOL[main.@lambda_3|L] -> VAR[main.t_4|fn]
+0		R_CALL	SYMBOL[fn_new|G], PARAMS(VAR[main.t_4|fn],VAR[main.t_5|i64]) -> VAR[main.save_1|fn]
+0		BAL 	SYMBOL[end_main|L]
+0		LABEL 	SYMBOL[error_main|L]
+0		RETURN
+0		BAL 	SYMBOL[end_main|L]
+0		LABEL 	SYMBOL[end_main|L]
+0		LEA   	VAR[main.cash_0|int] -> VAR[main.t_7|pointer]
+0		R_CALL	SYMBOL[env_closure|G], PARAMS(VAR[main.t_7|pointer])
+0		FN_END
+
+
+cfg after block_lir: main------------------------------------------------------------------------
+block: main
+0		LABEL 	SYMBOL[main|G]
+0		FN_BEGIN	FORMALS()
+0		MOVE 	IMM[1000:INT] -> VAR[main.cash_0|int]
+0		R_CALL	SYMBOL[env_new|G], PARAMS(IMM[1:INT]) -> VAR[main.t_5|i64]
+0		LEA   	VAR[main.cash_0|int] -> VAR[main.t_6|pointer]
+0		R_CALL	SYMBOL[env_assign|G], PARAMS(VAR[main.t_5|i64],IMM[9:INT],IMM[0:INT],VAR[main.t_6|pointer])
+0		LEA   	SYMBOL[main.@lambda_3|L] -> VAR[main.t_4|fn]
+0		R_CALL	SYMBOL[fn_new|G], PARAMS(VAR[main.t_4|fn],VAR[main.t_5|i64]) -> VAR[main.save_1|fn]
+0		BAL 	SYMBOL[end_main|L]
+
+		pred:
+		succ:end_main
+		live_in:
+
+
+block: error_main
+0		LABEL 	SYMBOL[error_main|L]
+0		RETURN
+0		BAL 	SYMBOL[end_main|L]
+
+		pred:
+		succ:end_main
+		live_in:
+
+
+block: end_main
+0		LABEL 	SYMBOL[end_main|L]
+0		LEA   	VAR[main.cash_0|int] -> VAR[main.t_7|pointer]
+0		R_CALL	SYMBOL[env_closure|G], PARAMS(VAR[main.t_7|pointer])
+0		FN_END
+
+		pred:main	error_main
+		succ:
+		live_in:
 
-type struct_test = struct {
-	fn<int()> car
-}
 
-var baz = struct_test {
-	car = int () {
-		int a =12
-		return a
-	}
-}
-
-baz.car = int () {
-
-}
-baz.car = fn(): int {
-
-}
-
-var etc = struct {
-	int a
-	bool b
-} {
-	a = 1
-}
-
-
-map{string:int} foo_44 = {
-  'a-a':1,
-  'b-b':2,
-  'c-c':3
-}
-
-type custom1 = int
-//custom1 testy() {
-//
-//}
-
-fn<custom1()> testy = custom1 () {
-
-}
-
-var foo19 = testy()
-
-string car = "str"
-
-int call4() {
-
-}
-
-fn call4(): int {
-}
-
-var b11 = 3
-var a12 = 12
-
-while (true) {
-	var b = 3
-	var a = 12
-}
-
-
-
-var test2 = 12
-
-var test = 12
-
-int custom_call(int foo, int bar, fn<int()> c) {
-
-}
-
-type person = int
-var custom_type = 1
-custom_call(
-test,
-test2,
-person () {
-	return 1
-})
-
-var a = ["123"]
-var iteration = [1,2,3]
-for (var key,value in iteration) {
-
-}
-
-int b
-if (b > 1) {
-	b = b + 1
-}
-
-
-var test3 = 1
-int call() {
-}
-
-int test_f1(int a) {}
-
-test_f1(call())
-
-type custom = int
-
-var a1 = custom () {
-
-}
-
-var a2 = custom foo3() {
-
-}
-
-custom () {
-
-}
-
-
-
-bool () {
-	return true
-}
-
-custom test5() {
-
-}
-var foo1 = test5()
-
-list[int] foo = [
-			1,
-			2
-]
-
-int test6() {
-	int a = 24
-	return 12
-}
-
-map{string:int} foo_4 = {
-  'a-a':1,
-  'b-b':2,
-  'c-c':3
-}
-
-var bar = "test"
-var bbq =24
-
-foo[bbq] = 12
-int foo_5
-var foo_6 = 12 // 类型推导
-
-
-foo_6 = 1 + 3
-foo_6 = 1 + 1 * 1
-foo_6 = 1 + 4 * (2 - 3 / 3)
-int foo_7 = 12
-bool foo_8 = true
-string foo_9 = "为什么最常用的字符串要是双引号？，是有什么规定吗？"
-
-
-foo[2] = 12
-baz.car()
-baz.car()
-baz.car()
-baz.car()
-
-// 特殊格式语法糖，兼容  list<int>
-list[int] foo_10 = [
-			1,
-			2
-]
-//list[int] foo = list_gen(int, 100) // 待定
-//list[int] foo = make(list[int], 100) // 待定
-//list<int> bar = []
-// list<int> bar = my_gen()
-//list[int]
-
-var a_3 = [true,false]
-
-
-// 特殊格式语法糖，兼容 map<string,int>
-map{string:int} foo_11 = {
-  'a-a':1,
-  'b-b':2,
-  'c-c':3
-}
-
-type my_int_a = int
-
-float test25(int a) {
-	my_int_a foo = 24
-	return 12.2
-}
-
-var apple = test25(1)
-
-if (apple > 1) {
-	apple = apple + 1
-}
-
-var l = ["str","str21"]
-
-for (var key,value in l) {
-
-}
-
-while (true) {
-
-}
 
 

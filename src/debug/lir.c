@@ -203,7 +203,8 @@ char *lir_phi_body_to_string(slice_t *phi_body) {
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
     closure_t *c = NEW(closure_t);
-    c->name = fndef->name;
+    c->symbol_name = fndef->symbol_name;
+    c->closure_name = fndef->closure_name;
     c->operations = linked_new();
     c->text_count = 0;
     c->asm_operations = slice_new();

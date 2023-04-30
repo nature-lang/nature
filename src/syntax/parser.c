@@ -1085,13 +1085,13 @@ static ast_expr parser_left_curly_expr(module_t *m) {
 static ast_expr parser_fndef_expr(module_t *m) {
     ast_expr result = expr_new(m);
     ast_fndef_t *fn_decl = NEW(ast_fndef_t);
-    fn_decl->name = "";
+    fn_decl->symbol_name = NULL;
+    fn_decl->closure_name = NULL;
 
     parser_must(m, TOKEN_FN);
     if (parser_is(m, TOKEN_IDENT)) {
-        assertf(false, "closure fndef cannot with name");
-//        token_t *name_token = parser_advance(m);
-//        fn_decl->name = name_token->literal;
+        token_t *name_token = parser_advance(m);
+        fn_decl->symbol_name = name_token->literal;
     }
 
     parser_formals(m, fn_decl);
@@ -1256,11 +1256,12 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
 static ast_stmt *parser_fndef_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
     ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->closure_name = NULL;
 
     parser_must(m, TOKEN_FN);
     // stmt 中 name 不允许省略
     token_t *name_token = parser_must(m, TOKEN_IDENT);
-    fndef->name = name_token->literal;
+    fndef->symbol_name = name_token->literal;
     parser_formals(m, fndef);
     // 可选返回参数
     if (parser_consume(m, TOKEN_COLON)) {

@@ -21,6 +21,24 @@ static void analyser_block(module_t *m, slice_t *block) {
     }
 }
 
+static type_t analyser_fndef_to_type(ast_fndef_t *fndef) {
+    type_fn_t *f = NEW(type_fn_t);
+    f->name = fndef->symbol_name;
+    f->formal_types = ct_list_new(sizeof(type_t));
+    f->return_type = fndef->return_type;
+    for (int i = 0; i < fndef->formals->length; ++i) {
+        ast_var_decl *var = ct_list_value(fndef->formals, i);
+        ct_list_push(f->formal_types, &var->type);
+    }
+    f->rest = fndef->rest_param;
+    type_t result = type_new(TYPE_FN, f);
+    result.status = REDUCTION_STATUS_UNDO;
+
+    fndef->type = result;
+
+    return result;
+}
+
 /**
  * type 不像 var 一样可以通过 env 引入进来，type 只有作用域的概念
  * 如果在当前文件的作用域中没有找到当前 type?
@@ -127,17 +145,7 @@ static void analyser_typeuse(module_t *m, type_t *type) {
     }
 }
 
-///**
-// * @param name
-// * @return
-// */
-//static char *analyser_unique_ident(module_t *m, char *name) {
-//    char *unique_name = LIR_UNIQUE_NAME(name);
-//    return ident_with_module(m->ident, unique_name);
-//}
-
 /**
- * TODO 不同 module 直接有同名的 ident 怎么处理？
  * code 可能还是 var 等待推导,但是基础信息已经填充完毕了
  * @param type
  * @param ident
@@ -155,8 +163,7 @@ local_ident_t *local_ident_new(module_t *m, symbol_type type, void *decl, string
     local->type = type;
 
     // 添加 locals
-    slice_t *locals = m->analyser_current->locals;
-    slice_push(locals, local);
+    slice_push(m->analyser_current->locals, local);
 
 
     // 添加到全局符号表
@@ -213,6 +220,15 @@ static void analyser_throw(module_t *m, ast_throw_stmt *throw) {
     analyser_expr(m, &throw->error);
 }
 
+/**
+ * 函数的递归自调用分为两种类型，一种是包含名称的函数递归自调用, 一种是不包含名称的函数递归自调用。
+ * 对于第一种形式， global ident 一定能够找到该 fn 进行调用。
+ *
+ * 现在是较为复杂的第二种情况(self 关键字现在已经被占用了，所以无法使用),
+ * 也就是闭包 fn 的自调用。这
+ * @param m
+ * @param call
+ */
 static void analyser_call(module_t *m, ast_call *call) {
     // 函数地址 unique 改写
     analyser_expr(m, &call->left);
@@ -301,32 +317,12 @@ static void analyser_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt *s
     analyser_var_tuple_destr(m, stmt->tuple_destr);
 }
 
-static void analyser_fndef_name(module_t *m, ast_fndef_t *fndef) {
-    assertf(str_equal(fndef->name, ""), "closure fn has name=%s", fndef->name);
-
-    // 这里是 label lift 后到 label name
-    fndef->name = ANONYMOUS_FN_NAME;
-    local_ident_t *local = local_ident_new(m, SYMBOL_FN, fndef, fndef->name);
-    fndef->name = local->unique_ident;
-}
-
-static void analyser_function_begin(module_t *m) {
-    analyser_begin_scope(m);
-}
-
-static void analyser_function_end(module_t *m) {
-    analyser_end_scope(m);
-
-    m->analyser_current = m->analyser_current->parent;
-}
-
 static analyser_fndef_t *analyser_current_init(module_t *m, ast_fndef_t *fndef) {
     analyser_fndef_t *new = NEW(analyser_fndef_t);
     new->locals = slice_new();
     new->frees = slice_new();
     new->free_table = table_new();
 
-    new->delay_fndefs = ct_list_new(sizeof(delay_fndef_t));
     new->scope_depth = 0;
 
     fndef->capture_exprs = ct_list_new(sizeof(ast_expr));
@@ -338,6 +334,33 @@ static analyser_fndef_t *analyser_current_init(module_t *m, ast_fndef_t *fndef) 
     m->analyser_current = new;
 
     return m->analyser_current;
+}
+
+/**
+ * 全局 fn (main/module fn) 到 name 已经提前加入到了符号表中。不需要重新调整，主要是对 param 和 body 进行处理即可
+ * @param m
+ * @param fndef
+ */
+static void analyser_global_fndef(module_t *m, ast_fndef_t *fndef) {
+    analyser_current_init(m, fndef);
+    analyser_typeuse(m, &fndef->return_type);
+    analyser_begin_scope(m);
+    // 函数形参处理
+    for (int i = 0; i < fndef->formals->length; ++i) {
+        ast_var_decl *param = ct_list_value(fndef->formals, i);
+
+        // type 中引用了 typedef ident 到话,同样需要更新引用
+        analyser_typeuse(m, &param->type);
+
+        // 注册(param->ident 此时已经随 param->type 一起写入到了 symbol 中)
+        local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
+
+        // 将 ast 中到 param->ident 进行改写
+        param->ident = param_local->unique_ident;
+    }
+    analyser_block(m, fndef->body);
+    analyser_end_scope(m);
+    m->analyser_current = m->analyser_current->parent;
 }
 
 
@@ -357,13 +380,31 @@ static analyser_fndef_t *analyser_current_init(module_t *m, ast_fndef_t *fndef) 
  * @param fndef
  * @return
  */
-static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
+static void analyser_local_fndef(module_t *m, ast_fndef_t *fndef) {
+    // 更新 m->analyser_current
     analyser_current_init(m, fndef);
 
-    analyser_typeuse(m, &fndef->return_type);
+    // 函数名称重复声明检测,
+    if (fndef->symbol_name == NULL) {
+        fndef->symbol_name = ANONYMOUS_FN_NAME;
+    } else {
+        analyser_redeclare_check(m, fndef->symbol_name);
+    }
 
+    // 在内部作用域中已 symbol fn 的形式注册该 fn_name,顺便改写名称,由于不确定符号的具体类型，所以暂时不注册到符号表中
+    string unique_ident = var_unique_ident(m, fndef->symbol_name);
+    local_ident_t *fn_local = NEW(local_ident_t);
+    fn_local->ident = fndef->symbol_name;
+    fn_local->unique_ident = unique_ident;
+    fn_local->depth = m->analyser_current->scope_depth;
+    fn_local->decl = fndef;
+    fn_local->type = SYMBOL_FN;
+    slice_push(m->analyser_current->locals, fn_local);
+    fndef->symbol_name = fn_local->unique_ident;
+
+    analyser_typeuse(m, &fndef->return_type);
     // 开启一个新的 function 作用域
-    analyser_function_begin(m);
+    analyser_begin_scope(m);
 
     // 函数形参处理
     for (int i = 0; i < fndef->formals->length; ++i) {
@@ -382,13 +423,10 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
     // 分析请求体 block, 其中进行了对外部变量的捕获并改写, 以及 local var 名称 unique
     analyser_block(m, fndef->body);
 
-    // 注意，环境中的自由变量捕捉是基于 current_function->parent 进行的
-    // free 是在外部环境构建 env 的。
-    // current_function->env_unique_name = unique_var_ident(ENV_IDENT);
-//    closure->env_name = m->analyser_current->env_unique_name;
+    int free_count = m->analyser_current->frees->count;
 
-    // 构造 env (通过 analyser block, 当前 block 中引用的所有外部变量都被收集了起来)
-    for (int i = 0; i < m->analyser_current->frees->count; ++i) {
+    // m->analyser_current free > 0 表示当前函数引用了外部的环境，此时该函数将被编译成一个 closure
+    for (int i = 0; i < free_count; ++i) {
         // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
         // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
         free_ident_t *free_var = m->analyser_current->frees->take[i];
@@ -396,8 +434,7 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
         // 封装成 ast_expr 更利于 compiler
         ast_expr expr;
 
-        // 这里其实是在 make env
-        // 调用函数中引用的逃逸变量就在当前作用域中
+        // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
         if (free_var->is_local) {
             // ast_ident 表达式
             expr.assert_type = AST_EXPR_IDENT;
@@ -414,17 +451,48 @@ static void analyser_fndef(module_t *m, ast_fndef_t *fndef) {
         ct_list_push(fndef->capture_exprs, &expr);
     }
 
-    // 对当前 fndef 中对所有 sub fndef 进行 analyser
-    for (int i = 0; i < m->analyser_current->delay_fndefs->length; ++i) {
-        delay_fndef_t *d = ct_list_value(m->analyser_current->delay_fndefs, i);
-        // 子 fn 注册
-        // 将所有对 fndef 都加入到 flat fndefs 中, 且没有 parent 关系想关联。
-        slice_push(m->ast_fndefs, d->fndef);
+    analyser_end_scope(m);
 
-        analyser_fndef(m, d->fndef);
+    // 退出当前 current
+    m->analyser_current = m->analyser_current->parent;
+
+    assert(m->analyser_current);
+
+    // 如果当前函数是定层函数，退出后 m->analyser_current is null
+    // 不过顶层函数也不存在 closure 引用的情况，直接注册到符号表中退出就行了
+    if (free_count > 0) {
+        fndef->closure_name = fndef->symbol_name;
+        fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME); // 二进制中的 label name
+
+        // 符号表内容修改为 var_decl
+        ast_var_decl *var_decl = NEW(ast_var_decl);
+        var_decl->type = analyser_fndef_to_type(fndef);
+        var_decl->ident = fndef->closure_name;
+
+        symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
+        symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
+
+        local_ident_t *parent_var_local = NEW(local_ident_t);
+        parent_var_local->ident = fn_local->ident; // 原始名称不变
+        parent_var_local->unique_ident = var_decl->ident;
+        parent_var_local->depth = m->analyser_current->scope_depth;
+        parent_var_local->decl = var_decl;
+        parent_var_local->type = SYMBOL_VAR;
+        slice_push(m->analyser_current->locals, parent_var_local);
+
+    } else {
+        // 符号就是普通的 symbol fn 符号，现在可以注册到符号表中了
+        symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
+
+        // 仅加入到作用域，符号表就不需要重复添加了
+        local_ident_t *parent_fn_local = NEW(local_ident_t);
+        parent_fn_local->ident = fn_local->ident;
+        parent_fn_local->unique_ident = fn_local->unique_ident;
+        parent_fn_local->depth = m->analyser_current->scope_depth;
+        parent_fn_local->decl = fn_local->decl;
+        parent_fn_local->type = SYMBOL_FN;
+        slice_push(m->analyser_current->locals, parent_fn_local);
     }
-
-    analyser_function_end(m); // 退出当前 current
 }
 
 /**
@@ -487,9 +555,6 @@ int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
     return -1;
 }
 
-/**
- * @param expr
- */
 static void analyser_ident(module_t *m, ast_expr *expr) {
     ast_ident *temp = expr->value;
     // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
@@ -520,8 +585,6 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
         expr->value = env_access;
         return;
     }
-
-
 
     // 当前 module 中的全局符号是可以省略 module name 的, 所以需要在当前 module 的全局符号(当前 module 注册的符号都加上了前缀)中查找
     // 所以这里要拼接前缀
@@ -737,17 +800,8 @@ static void analyser_expr(module_t *m, ast_expr *expr) {
             return analyser_call(m, expr->value);
         }
         case AST_FNDEF: {
-            analyser_fndef_name(m, expr->value);
-
-            // 函数体延迟到最后进行处理
-            delay_fndef_t d = {
-                    .fndef = expr->value,
-                    .is_stmt = false,
-//                    .scope = m->analyser_current->current_scope
-            };
-            ct_list_push(m->analyser_current->delay_fndefs, &d);
-
-            break;
+            slice_push(m->ast_fndefs, expr->value);
+            return analyser_local_fndef(m, expr->value);
         }
         default:
             return;
@@ -774,18 +828,9 @@ static void analyser_stmt(module_t *m, ast_stmt *stmt) {
             return analyser_assign(m, stmt->value);
         }
         case AST_FNDEF: {
-            assertf(false, "closure fn '%s' can only be used in expr", ((ast_fndef_t *) stmt->value)->name);
-            // 主要是 fn_name unique 处理
-//            analyser_fndef_name(m, stmt->value);
+            slice_push(m->ast_fndefs, stmt->value);
 
-//            delay_fndef_t d = {
-//                    .fndef = stmt->value,
-//                    .is_stmt = true,
-//                    .scope = m->analyser_current->current_scope
-//            };
-//            ct_list_push(m->analyser_current->delay_fndefs, &d);
-
-            break;
+            return analyser_local_fndef(m, stmt->value);
         }
         case AST_CALL: {
             return analyser_call(m, stmt->value);
@@ -891,8 +936,8 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = stmt->value;
             // 这里就可以看到 fn name 没有做唯一性处理，只是加了 ident 限定, 并加入到了全局符号表中
-            fndef->name = ident_with_module(m->ident, fndef->name); // 全局函数改名
-            symbol_t *s = symbol_table_set(fndef->name, SYMBOL_FN, fndef, false);
+            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
             continue;
@@ -903,13 +948,13 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
 
     // 添加 init fn
     ast_fndef_t *fn_init = NEW(ast_fndef_t);
-    fn_init->name = ident_with_module(m->ident, FN_INIT_NAME);
+    fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_basic_new(TYPE_VOID);
     fn_init->formals = ct_list_new(sizeof(ast_var_decl));
     fn_init->body = var_assign_list;
 
     // 加入到全局符号表，等着调用就好了
-    symbol_t *s = symbol_table_set(fn_init->name, SYMBOL_FN, fn_init, false);
+    symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
     slice_push(m->global_symbols, s);
     slice_push(fn_list, fn_init);
 
@@ -925,13 +970,11 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
     call_stmt->value = call;
     m->call_init_stmt = call_stmt;
 
-    // 此时所有对符号都已经主要到了全局变量表中，vardef 到右值则注册到 init fn 中，有下面到 fndef 进行改写
-    // 遍历所有 fn list
+    // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef 进行改写
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
-        analyser_fndef(m, fndef);
-
         slice_push(m->ast_fndefs, fndef);
+        analyser_global_fndef(m, fndef);
     }
 }
 
@@ -958,51 +1001,26 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
         table_set(m->import_table, import->as, import);
     }
 
-    // init
     m->analyser_line = 0;
 
-
-    // main 中到 fn 正常来说只允许 var f = fn(){} 的形式，但是考虑渐进式的脚本的使用方式
-    // 对于 fn f() {} 这样形式的 fndef 改写成 var f = fn() {} 的形式
-
-    for (int i = import_end_index; i < stmt_list->count; ++i) {
-        ast_stmt *stmt = stmt_list->take[i];
-        if (stmt->assert_type != AST_FNDEF) {
-            continue;
-        }
-
-        ast_fndef_t *fndef = stmt->value;
-        assert(!str_equal(fndef->name, ""));
-        char *ident = fndef->name;
-        fndef->name = "";
-        ast_vardef_stmt *var_assign = NEW(ast_vardef_stmt);
-        var_assign->var_decl.type = type_basic_new(TYPE_UNKNOWN);
-        var_assign->var_decl.ident = ident;
-        var_assign->right = (ast_expr) {
-                .assert_type = AST_FNDEF,
-                .value = fndef,
-        };
-        stmt->assert_type = AST_STMT_VAR_DEF;
-        stmt->value = var_assign;
-    }
-
     // main 所有表达式
-    ast_fndef_t *fndef = malloc(sizeof(ast_fndef_t));
-    fndef->name = FN_MAIN_NAME;
+    ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->symbol_name = FN_MAIN_NAME;
+    fndef->closure_name = NULL;
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl));
     slice_concat(fndef->body, stmt_list);
 
     // 符号表注册
-    symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, true);
+    symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, false);
     slice_push(m->global_symbols, s);
 
     // 先注册主 fndef
     slice_push(m->ast_fndefs, fndef);
 
     // 作为 fn 的 body 处理
-    analyser_fndef(m, fndef);
+    analyser_global_fndef(m, fndef);
 }
 
 void analyser(module_t *m, slice_t *stmt_list) {

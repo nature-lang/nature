@@ -112,12 +112,6 @@ static type_t infer_unary(module_t *m, ast_unary_expr *expr) {
 }
 
 /**
- * func main() {
- *  a = 1
- *  fmt.Println(a)
- *}
- * var a int
- *
  * 参考 golang，声明是可能在使用之后的
  * @param expr
  * @return
@@ -1375,7 +1369,7 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
     // 对 fndef 进行类型还原
     type_fn_t *f = NEW(type_fn_t);
 
-    f->name = fndef->name;
+    f->name = fndef->symbol_name;
     f->formal_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
 
@@ -1408,7 +1402,14 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
 static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     m->infer_current = fndef;
 
-    infer_fndef_decl(m, fndef);
+    type_t t = infer_fndef_decl(m, fndef);
+    if (fndef->closure_name) {
+        symbol_t *symbol = symbol_table_get(fndef->closure_name);
+        assertf(symbol, "fn var ident %s not found", fndef->closure_name);
+        assert(symbol->type == SYMBOL_VAR);
+        ast_var_decl *var_decl = symbol->ast_value;
+        var_decl->type = t;
+    }
 
     // env 表达式类型还原
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {

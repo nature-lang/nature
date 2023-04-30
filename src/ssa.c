@@ -196,6 +196,10 @@ void ssa_df(closure_t *c) {
             while (runner->id != current->imm_domer->id) {
                 slice_push(runner->df, current);
 
+                if (runner->imm_domer->id == runner->id) {
+                    assertf(false, "block=%s imm_domer is current", runner->name);
+                }
+
                 // 向上查找
                 runner = runner->imm_domer;
             }

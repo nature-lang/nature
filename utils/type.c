@@ -617,3 +617,19 @@ rtype_t gc_rtype(uint32_t count, ...) {
     return rtype;
 }
 
+/**
+ * 默认就是不 gc 数组
+ * @param count
+ * @return
+ */
+rtype_t gc_rtype_array(uint32_t length) {
+    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
+    rtype_t rtype = {
+            .size = length * POINTER_SIZE,
+            .kind = TYPE_GC,
+            .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+            .gc_bits = malloc_gc_bits(length * POINTER_SIZE)
+    };
+
+    return rtype;
+}

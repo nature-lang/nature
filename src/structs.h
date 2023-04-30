@@ -121,12 +121,6 @@ typedef struct analyser_fndef_t {
     // 使用了当前函数作用域之外的变量
     slice_t *frees; // analyser_free_ident_t*
     table_t *free_table; // analyser_free_ident_t*
-
-    char *fn_name;
-
-    // 函数定义在当前作用域仅加载 function as
-    // 函数体的解析则延迟到当前作用域内的所有标识符都定义明确好
-    list_t *delay_fndefs; // delay_fndef_t
 } analyser_fndef_t;
 
 
@@ -264,8 +258,12 @@ typedef struct closure_t {
     int interval_count; // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
-    char *name;
+    char *symbol_name;
+    char *closure_name;
     char *end_label; // 结束 label
+    char *error_label; // 异常 label
+    bool to_error_label;
+
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
 
@@ -276,7 +274,7 @@ typedef struct closure_t {
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
     uint64_t fn_runtime_reg;
     uint64_t fn_runtime_stack;
-    void *fn_runtime_operand;
+    void *fn_runtime_operand; // lir_operand_t
 
     // loop collect
     int8_t loop_count;

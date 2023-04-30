@@ -6,7 +6,6 @@
 #ifdef __AMD64
 
 /**
- * 绝对地址跳转
  * 假设 addr = 0x40007fffb8
  * 汇编为
  * mov rax,0x40007fffb8
@@ -119,10 +118,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
         codes[size++] = temp_codes[i];
     }
 
-    uint8_t *jit_codes = runtime_malloc(size, NULL);
-    memcpy(jit_codes, codes, size);
-    fn_runtime->closure_jit_codes = jit_codes;
-    fn_runtime->code_size = size;
+    memcpy(fn_runtime->closure_jit_codes, codes, size);
 }
 
 #else
@@ -134,7 +130,10 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 void *fn_new(addr_t fn_addr, envs_t *envs) {
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs_base=%p", fn_addr, envs);
     assert(envs);
-    rtype_t fn_rtype = gc_rtype(4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    rtype_t fn_rtype = gc_rtype_array(sizeof(runtime_fn_t) / POINTER_SIZE);
+    // 手动设置 gc 区域, runtime_fn_t 一共是 12 个 pointer 区域，最后一个区域保存的是 envs 需要扫描
+    // 其他区域都不需要扫面
+    bitmap_set(fn_rtype.gc_bits, 11);
     runtime_fn_t *fn_runtime = runtime_malloc(sizeof(runtime_fn_t), &fn_rtype);
     free(fn_rtype.gc_bits);
     fn_runtime->fn_addr = fn_addr;
@@ -144,6 +143,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr);
     assertf(fndef, "cannot find fn by addr=0x%lx", fn_addr);
+
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
     DEBUGF("[runtime.fn_new] fn find success, fn_runtime_base=%p, fndef.fn_runtime_stack=%lu, fndef.fn_runtime_reg=%lu, jit_code=%p",
@@ -152,6 +152,13 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
            fndef->fn_runtime_reg,
            fn_runtime->closure_jit_codes)
 
+    /**
+     * closure_jit_codes 就是 fn_runtime 对首个值，所以 return fn_runtime 和 fn_runtime->closure_jit_codes 没有区别
+     * 都是堆内存区域对首个地址, 所以将返回值当成数据参数或者时 call label 都是可以的.
+     *
+     */
+    assertf((void *) fn_runtime == (void *) fn_runtime->closure_jit_codes,
+            "fn_new base must equal fn_runtime first property");
     return fn_runtime->closure_jit_codes;
 }
 

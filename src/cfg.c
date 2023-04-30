@@ -1,5 +1,34 @@
 #include "cfg.h"
+#include "src/debug/debug.h"
 #include <assert.h>
+
+/**
+ * 删除不可达代码块
+ */
+static void cfg_pruning(closure_t *c) {
+    slice_t *blocks = slice_new();
+    slice_push(blocks, c->blocks->take[0]);
+    for (int i = 1; i < c->blocks->count; ++i) {
+        basic_block_t *b = c->blocks->take[i];
+        if (b->preds->count > 0) {
+            slice_push(blocks, b);
+            continue;
+        }
+        // 需要删减该块, 则该块的后记也需要清除对该块对引用
+        for (int j = 0; j < b->succs->count; ++j) {
+            basic_block_t *succ = b->succs->take[j];
+            // 重新构建 succ 的 preds
+            for (int k = 0; k < succ->preds->count; ++k) {
+                basic_block_t *succ_pred = succ->preds->take[k];
+                if (succ_pred->id == b->id) {
+                    slice_remove(succ->preds, k);
+                    break;
+                }
+            }
+        }
+    }
+    c->blocks = blocks;
+}
 
 static void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
@@ -90,10 +119,9 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         }
     }
 
-
     // end_label 是最后到 label 如果都不包含 opcode return, 则存在一条不包含 return 的线路
     if (str_equal(b->name, c->end_label)) {
-        assertf(false, "fn %s missing return", c->name);
+        assertf(false, "fn %s missing return", c->symbol_name);
     }
 
     // 当前 block 没有找到 return, 递归寻找 succ
@@ -262,6 +290,9 @@ static void cfg_build(closure_t *c) {
  */
 void cfg(closure_t *c) {
     cfg_build(c);
+
+    // 不可达代码块消除
+    cfg_pruning(c);
 
     broken_critical_edges(c);
 

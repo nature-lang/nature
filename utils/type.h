@@ -440,6 +440,8 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 rtype_t gc_rtype(uint32_t count, ...);
 
+rtype_t gc_rtype_array(uint32_t count);
+
 /**
  * 一般标量类型其值默认会存储在 stack 中
  * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。

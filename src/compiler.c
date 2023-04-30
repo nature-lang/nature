@@ -33,6 +33,7 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr expr) {
     if (expr.assert_type != AST_EXPR_IDENT) {
         return NULL;
     }
+
     ast_ident *ident = expr.value;
     symbol_t *s = symbol_table_get(ident->literal);
     assertf(s, "ident %s not declare");
@@ -57,8 +58,18 @@ static lir_operand_t *compiler_temp_var_operand(module_t *m, type_t type) {
 static lir_operand_t *compiler_ident(module_t *m, ast_expr expr) {
     ast_ident *ident = expr.value;
     symbol_t *s = symbol_table_get(ident->literal);
-
     assertf(s, "ident %s not declare");
+
+    char *closure_name = m->compiler_current->closure_name;
+    if (closure_name && str_equal(s->ident, closure_name)) {
+        // symbol 中的该符号已经改写成 closure var 了，该 closure var 通过 last param 丢了进来
+        // 所以直接使用 fn 该 fn 就行了，该 fn 一定被赋值了，就放心好了
+        assertf(s->type == SYMBOL_VAR, "closure symbol=%s not var");
+        assertf(m->compiler_current->fn_runtime_operand, "closure->fn_runtime_operand not init");
+        lir_operand_t *operand = m->compiler_current->fn_runtime_operand;
+        lir_var_t *var = operand->value;
+        assert(str_equal(var->ident, ident->literal));
+    }
 
     if (s->type == SYMBOL_FN) {
         // 现在 symbol fn 是作为一个 type_nf 值进行传递，所以需要取出其 label 进行处理。
@@ -469,11 +480,8 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
 }
 
 /**
- * 1.0 函数参数使用 param var 存储,按约定从左到右(code.result 为 param, code.first 为实参)
- * 1.1 code.operand 模仿 phi body 弄成列表的形式！
- * 2. 目前编译依旧使用 var，所以不需要考虑寄存器溢出
- * 3. 函数返回结果存储在 target 中
- * call as, param => result
+ * - 函数参数使用 param var 存储,按约定从左到右(code.result 为 param, code.first 为实参)
+ * - code.operand 模仿 phi body 弄成列表的形式！
  * @param c
  * @param expr
  * @return
@@ -547,10 +555,14 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr expr) {
     if (!is_builtin_call(formal_fn->name) && !call->catch) {
         lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
         OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
+        // 如果 eq = true 直接去到 fn_end, 但是此时并没有一个合适到 return 语句。
+
         // beq has_errort,true -> fn_end_label
         OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
                            bool_operand(true), has_errort,
-                           label_operand(m->compiler_current->end_label, false)));
+                           label_operand(m->compiler_current->error_label, true)));
+
+        m->compiler_current->to_error_label = true;
     }
 
 
@@ -1119,9 +1131,9 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
  * fndef 到 body 已经编译完成并变成了 label, 此时不需要再递归到 fn body 内部,也不需要调整 m->compiler_current
  * 只需要将 fndef 到 env 写入到 fndef->name 对应到 envs 中即可, 返回值则返回函数到唯一 ident 即可
  *
- * 1. fndef 处创建 env 是因为这里是定义 fn 的 op id 处，所有的变量都已经初始化完毕
- * 2. op call 会导致所有寄存器在这之前溢出，即使不溢出，lea 也至少能够得到变量的内存地址
- * 3. call fndef 之前所有的寄存器会溢出将值保存到栈中，这构成了 env_access 能够访问正确对栈地址对基础
+ * fn_decl 允许在 stmt 或者 expr 中, 但是无论是在哪里声明，当前函数都可能会有两个 ident 需要处理
+ * 1. fndef->closure_name，该 ident 作为一个 var 编译，其中存储了 runtime_fn_new
+ * 2. fndef->symbol_name, 该 ident 作为一个 symbol fn 符号进行编译, 仅当 fndef->closure_name 为空时使用。
  * @param m
  * @param expr
  * @return
@@ -1129,16 +1141,24 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr expr) {
 static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
     // var a = fn() {} 类似此时的右值就是 fndef, 此时可以为 fn 创建对应的 closure 了
     ast_fndef_t *fndef = expr.value;
-    lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->name);
-    lir_operand_t *fn_addr_operand = temp_var_operand(m, fndef->type);
-    OP_PUSH(lir_op_lea(fn_addr_operand, fn_symbol_operand));
-    if (fndef->capture_exprs->length == 0) {
-        return fn_addr_operand;
-    }
 
+    // symbol label 不能使用 mov 在变量间自由的传递，所以这里将 symbol label 的 addr 加载出来返回
+    lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
+    lir_operand_t *label_addr_operand = temp_var_operand(m, fndef->type);
+
+    if (!fndef->closure_name) {
+        if (!expr.target_type.kind) {
+            return NULL; // 没有表达式需要接收值
+        }
+
+        OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
+        return label_addr_operand;
+    }
+    assert(!str_equal(fndef->closure_name, ""));
+
+    // 函数引用了外部的环境变量，所以需要编译成一个闭包
     // make envs
     lir_operand_t *length = int_operand(fndef->capture_exprs->length);
-
     // rt_call env_new(fndef->name, length)
     lir_operand_t *env_operand = temp_var_operand(m, type_basic_new(TYPE_INT64));
     OP_PUSH(rt_call(RT_CALL_ENV_NEW, env_operand, 1, length));
@@ -1154,8 +1174,9 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
                         stack_addr_ref));
     }
 
-    lir_operand_t *result = temp_var_operand(m, fndef->type);
-    OP_PUSH(rt_call(RT_CALL_FN_NEW, result, 2, fn_addr_operand, env_operand));
+    OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
+    lir_operand_t *result = var_operand(m, fndef->closure_name);
+    OP_PUSH(rt_call(RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand));
     return result;
 }
 
@@ -1225,6 +1246,7 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt) {
                     .line = stmt->line,
                     .assert_type = stmt->assert_type,
                     .value = stmt->value,
+                    .target_type = NULL
             });
             return;
         }
@@ -1283,16 +1305,6 @@ static lir_operand_t *compiler_expr(module_t *m, ast_expr expr) {
 
     lir_operand_t *operand = fn(m, expr);
 
-    // 当 source 作为一个 symbol_label 时，其不能作为一个标准的 lir 进行 move 等处理，所以这里将其预处理成 var
-    // 让其作为类型 type_string/type_list 等等符合类型一样的存在
-    if (operand && operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
-        // temp_operand 是 type_fn, 就像 type_string, type_array 一样
-        // TODO set type_fn
-        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
-        OP_PUSH(lir_op_lea(temp_operand, operand));
-        operand = temp_operand;
-    }
-
     return operand;
 }
 
@@ -1310,18 +1322,23 @@ static void compiler_block(module_t *m, slice_t *block) {
 }
 
 
-// 看起来是返回了 fn->name ? 但是部分 fn 是没有名称的?
-// 比如 fn 在 list[0] 中? 不对 fn 一定有名字,不然怎么能写入到 text 中?
-
+/**
+ * 这里主要编译 fn param 和 body, 不编译名称与 env
+ * @param m
+ * @param fndef
+ * @return
+ */
 static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     // 创建 closure, 并写入到 m module 中
     closure_t *c = lir_closure_new(fndef);
     // 互相关联关系
     m->compiler_current = c;
     c->module = m;
-    c->end_label = str_connect("end_", c->name);
+    c->end_label = str_connect("end_", c->symbol_name);
+    c->error_label = str_connect("error_", c->symbol_name);
 
-    OP_PUSH(lir_op_label(fndef->name, false));
+    // label name 使用 symbol_name!
+    OP_PUSH(lir_op_label(fndef->symbol_name, false));
 
 
     // 编译 fn param -> lir_var_t*
@@ -1335,8 +1352,9 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
     // 和 compiler_fndef 不同，compiler_closure 是函数内部的空间中,添加的也是当前 fn 的形式参数
     // 当前 fn 的形式参数在 body 中都是可以随意调用的
     //if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
-    if (fndef->capture_exprs->length > 0) {
-        lir_operand_t *fn_runtime_operand = custom_var_operand(m, type_basic_new(TYPE_INT64), FN_RUNTIME_IDENT);
+    if (fndef->closure_name) {
+        // 直接使用 fn->closure_name 作为 runtime name?
+        lir_operand_t *fn_runtime_operand = var_operand(m, fndef->closure_name);
         slice_push(params, fn_runtime_operand->value);
         c->fn_runtime_operand = fn_runtime_operand;
     }
@@ -1350,8 +1368,17 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
     }
 
-
     compiler_block(m, fndef->body);
+
+    if (c->to_error_label) {
+        // bal end_label
+        OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
+        OP_PUSH(lir_op_label(c->error_label, true));
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
+        // error handle
+        OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
+    }
+
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
