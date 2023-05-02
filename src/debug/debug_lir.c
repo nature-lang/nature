@@ -1,24 +1,24 @@
 #include <stdio.h>
 #include <string.h>
 #include "debug.h"
-#include "lir.h"
+#include "debug_lir.h"
 
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {
-    char *str = (char *) malloc(sizeof(char) * 100);
-    sprintf(str, "STACK[%d|%d]", stack->slot, stack->size);
+    char *str = (char *) mallocz(100);
+    sprintf(str, "STACK[%ld|%ld]", stack->slot, stack->size);
     return str;
 }
 
 // REG[rax]
 static char *lir_operand_reg_to_string(reg_t *reg) {
-    char *str = (char *) malloc(sizeof(char) * 100);
+    char *str = (char *) mallocz(100);
     sprintf(str, "REG[%s]", reg->name);
     return str;
 }
 
 static char *lir_operand_symbol_to_string(lir_symbol_var_t *ptr) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
     int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
     return realloc(buf, len + 1);
 }
@@ -53,21 +53,22 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_ACTUAL_PARAMS: {
             return lir_actual_param_to_string((slice_t *) operand->value);
         }
-        case LIR_OPERAND_FORMAL_PARAMS: {
-            return lir_formal_param_to_string((slice_t *) operand->value);
-        }
+        case LIR_OPERAND_CLOSURE_VARS:
+        case LIR_OPERAND_VARS:
+        case LIR_OPERAND_FORMAL_PARAMS:
         case LIR_OPERAND_PHI_BODY: {
-            return lir_phi_body_to_string(operand->value);
+            return lir_vars_to_string(operand->value);
         }
         default: {
             assertf(0, "unknown operand type: %d", operand->assert_type);
         }
     }
 
+    exit(1);
 }
 
 string lir_label_to_string(lir_symbol_label_t *label) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
     string scope = "G";
     if (label->is_local) {
         scope = "L";
@@ -82,28 +83,18 @@ string lir_label_to_string(lir_symbol_label_t *label) {
  * @return
  */
 char *lir_var_to_string(lir_var_t *var) {
-//    int stack_frame_offset = 0;
     char *type_string = "";
-    int len;
 
-//    stack_frame_offset = *var->local->stack_frame_offset;
     if (var->type.kind > 0) {
         type_string = type_kind_string[var->type.kind];
-//        for (int i = 0; i < var->type.pointer; ++i) {
-//            type_string = str_connect(type_string, "*");
-//        }
     }
 
     string ident = var->ident;
-    string indirect_addr = "";
-//    if (var->indirect_addr) {
-//        indirect_addr = "*";
-//    }
     return dsprintf("VAR[%s|%s]", ident, type_string);
 }
 
 char *lir_imm_to_string(lir_imm_t *immediate) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
     int len;
     switch (immediate->kind) {
         case TYPE_BOOL: {
@@ -134,7 +125,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
 }
 
 char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
     string indirect_addr_str = "";
     string type_string = type_kind_string[operand_addr->type.kind];
     sprintf(buf, "%sI_ADDR[%s:%lu:%s]",
@@ -146,8 +137,8 @@ char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
 }
 
 char *lir_formal_param_to_string(slice_t *formal_params) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    string params = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
+    string params = mallocz(DEBUG_STR_COUNT);
     for (int i = 0; i < formal_params->count; ++i) {
         string src = lir_var_to_string(formal_params->take[i]);
         strcat(params, src);
@@ -165,8 +156,8 @@ char *lir_formal_param_to_string(slice_t *formal_params) {
 
 
 char *lir_actual_param_to_string(slice_t *actual_params) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT);
-    string params = malloc(sizeof(char) * DEBUG_STR_COUNT);
+    string buf = mallocz(DEBUG_STR_COUNT);
+    string params = mallocz(DEBUG_STR_COUNT);
     for (int i = 0; i < actual_params->count; ++i) {
         string src = lir_operand_to_string(actual_params->take[i]);
         strcat(params, src);
@@ -183,53 +174,24 @@ char *lir_actual_param_to_string(slice_t *actual_params) {
     return buf;
 }
 
-char *lir_phi_body_to_string(slice_t *phi_body) {
-    string buf = malloc(sizeof(char) * DEBUG_STR_COUNT * (phi_body->count + 1));
-    string params = malloc(sizeof(char) * DEBUG_STR_COUNT * phi_body->count);
-    for (int i = 0; i < phi_body->count; ++i) {
-        string src = lir_var_to_string(phi_body->take[i]);
+char *lir_vars_to_string(slice_t *vars) {
+    if (vars->count == 0) {
+        return "VARS()";
+    }
+
+    string buf = mallocz(DEBUG_STR_COUNT * (vars->count + 1));
+    string params = mallocz(DEBUG_STR_COUNT * vars->count);
+    for (int i = 0; i < vars->count; ++i) {
+        string src = lir_var_to_string(vars->take[i]);
         strcat(params, src);
 
-        if (i < phi_body->count - 1) {
+        if (i < vars->count - 1) {
             strcat(params, ",");
         }
     }
 
-    sprintf(buf, "BODY(%s)", params);
+    sprintf(buf, "VARS(%s)", params);
     free(params);
 
     return buf;
-}
-
-closure_t *lir_closure_new(ast_fndef_t *fndef) {
-    closure_t *c = NEW(closure_t);
-    c->symbol_name = fndef->symbol_name;
-    c->closure_name = fndef->closure_name;
-    c->operations = linked_new();
-    c->text_count = 0;
-    c->asm_operations = slice_new();
-    c->asm_build_temps = slice_new();
-    c->asm_symbols = slice_new();
-    c->entry = NULL;
-    c->globals = slice_new();
-    c->blocks = slice_new(); // basic_block_t
-
-    c->interval_table = table_new();
-
-//    c->var_decl_table = table_new();
-    c->stack_offset = 0;
-    c->stack_vars = slice_new();
-    c->loop_count = 0;
-    c->loop_ends = slice_new();
-    c->loop_headers = slice_new();
-
-    c->interval_count = cross_alloc_reg_count() + 1;
-    fndef->closure = c;
-    return c;
-}
-
-lir_operand_t *reg_operand(uint8_t index, type_kind kind) {
-    reg_t *reg = cross_reg_select(index, kind);
-    assert(reg);
-    return operand_new(LIR_OPERAND_REG, reg);
 }

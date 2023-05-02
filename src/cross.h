@@ -112,6 +112,16 @@ static inline void cross_lower(closure_t *c) {
 
     assert(false && "not support arch");
 }
+
+linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op);
+
+static inline linked_t *cross_lower_env_closure(closure_t *c, lir_op_t *op) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_lower_env_closure(c, op);
+    }
+
+    assert(false && "not support arch");
+}
 // -------- lower end -----------
 
 
@@ -195,10 +205,13 @@ static inline uint8_t cross_ptr_size() {
         return AMD64_PTR_SIZE;
     }
 
-    // TODO 判断当前是否在 runtime 中
-    return POINTER_SIZE;
+    return sizeof(void *);
 //    assert(false && "not support this arch");
 }
+
+#ifndef POINTER_SIZE
+#define POINTER_SIZE cross_ptr_size()
+#endif
 
 static inline uint8_t cross_number_size() {
     if (BUILD_ARCH == ARCH_AMD64) {

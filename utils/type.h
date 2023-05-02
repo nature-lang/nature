@@ -17,12 +17,7 @@
 #define OWORD 16 // 16 byte = 128位 xmm
 #define YWORD 32 // 32 byte = ymm
 #define ZWORD 64 // 64 byte
-
-#define POINTER_SIZE sizeof(void*)
-#define INT_SIZE sizeof(int64_t)
-
 typedef uint8_t byte;
-
 
 typedef union {
     int64_t int_value;
@@ -94,6 +89,8 @@ typedef enum {
 } type_kind;
 
 static string type_kind_string[] = {
+        [TYPE_GC] = "gc",
+
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
@@ -361,7 +358,7 @@ typedef struct {
 
 typedef struct {
     value_casting value;
-    rtype_t *rtype; // TODO use rtype index
+    rtype_t *rtype;
 } memory_any_t;
 
 
@@ -438,7 +435,7 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
-rtype_t gc_rtype(uint32_t count, ...);
+rtype_t gc_rtype(type_kind kind, uint32_t count, ...);
 
 rtype_t gc_rtype_array(uint32_t count);
 

@@ -204,6 +204,10 @@ static slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+static slice_t *amd64_native_skip(closure_t *c, lir_op_t *op) {
+    return slice_new();
+}
+
 static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
@@ -563,7 +567,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     // first is fn label or addr
     asm_operand_t *first = lir_operand_trans(c, operations, op->first);
 
-    // 2. 参数处理  lir_ope code->second;
+    // 2. 参数处理  lir_ope code->second; lower 之后参数都按实际处理过了
     assert(((slice_t *) op->second->value)->count == 0);
     // lower 阶段已经处理过了
 
@@ -747,6 +751,9 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,
+
+        // 伪指令，直接忽略即可
+        [LIR_OPCODE_ENV_CAPTURE] = amd64_native_skip,
 };
 
 

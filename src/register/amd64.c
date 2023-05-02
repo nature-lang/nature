@@ -180,7 +180,6 @@ reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind base) {
 }
 
 
-
 /**
  * output 没有特殊情况就必须分一个寄存器，主要是 amd64 的指令基本都是需要寄存器参与的
  * @param c
@@ -230,6 +229,12 @@ alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var)
     // lea 指令的 use 一定是 first, 所以不需要重复判断
     if (op->code == LIR_OPCODE_LEA) {
         return ALLOC_KIND_NOT;
+    }
+
+    if (op->code == LIR_OPCODE_MOVE) {
+        if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            return ALLOC_KIND_MUST;
+        }
     }
 
     if (lir_op_term(op)) {

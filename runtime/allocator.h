@@ -8,13 +8,16 @@
 #include "memory.h"
 
 
+uint64_t allocator_bytes; // 当前分配的内存空间
+uint64_t next_gc_bytes; // 下一次 gc 的内存量
+
 /**
  * 分配入口
  * @param size
  * @param type
  * @return
  */
-void * runtime_malloc(uint64_t size, rtype_t *type);
+void *runtime_malloc(uint64_t size, rtype_t *type);
 
 mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
 

@@ -94,7 +94,7 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
     DEBUGF("[convert_any] input_kind=%s, in_heap=%d",
            type_kind_string[rtype->kind], rtype->in_heap);
 
-    rtype_t any_rtype = gc_rtype(2, TYPE_GC_NOSCAN, to_gc_kind(rtype->kind));
+    rtype_t any_rtype = gc_rtype(TYPE_ANY, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     memory_any_t *any = runtime_malloc(sizeof(memory_any_t), &any_rtype);

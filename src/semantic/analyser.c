@@ -183,7 +183,8 @@ static void analyser_end_scope(module_t *m) {
     m->analyser_current->scope_depth--;
     slice_t *locals = m->analyser_current->locals;
     while (locals->count > 0) {
-        local_ident_t *local = locals->take[locals->count - 1];
+        int index = locals->count - 1;
+        local_ident_t *local = locals->take[index];
         if (local->depth <= m->analyser_current->scope_depth) {
             break;
         }
@@ -193,8 +194,9 @@ static void analyser_end_scope(module_t *m) {
             slice_push(m->analyser_current->fndef->be_capture_locals, local);
         }
 
-        // 而是同一个 ident 只会在同一个 stack slot 中
-        slice_remove(locals, locals->count - 1);
+
+        // 从 locals 中移除该变量
+        slice_remove(locals, index);
     }
 }
 
@@ -983,11 +985,10 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
  */
 static void analyser_main(module_t *m, slice_t *stmt_list) {
     // 过滤处 import 部分, 其余部分再包到 main closure_t 中
-    int import_end_index = 0;
+    int import_last_index = -1;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type != AST_STMT_IMPORT) {
-            import_end_index = i;
             break;
         }
 
@@ -997,6 +998,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
         // 简单处理
         slice_push(m->imports, import);
         table_set(m->import_table, import->as, import);
+        import_last_index = i;
     }
 
     m->analyser_line = 0;
@@ -1008,7 +1010,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl));
-    for (int i = import_end_index; i < stmt_list->count; ++i) {
+    for (int i = import_last_index + 1; i < stmt_list->count; ++i) {
         slice_push(fndef->body, stmt_list->take[i]);
     }
 

@@ -8,9 +8,11 @@
  * 这里存储了 nature 所有全局变量
  */
 typedef struct {
+    // base 一定要放在第一个位置，这关乎到能否争取进行重定位
     addr_t base; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
     uint64_t size;
     bool need_gc; // 符号和栈中的 var 一样最大的值不会超过 8byte,所以使用 bool 就可以判断了
+    char name[80];
 } symdef_t;
 
 typedef struct {
@@ -18,9 +20,9 @@ typedef struct {
     uint64_t size; // 这里的 size 是 fn 编译成二进制后占用的空间的大小
     uint64_t fn_runtime_reg; //  0 表示不在
     uint64_t fn_runtime_stack; // 0 就啥也不是，
-//    addr_t end; // text 虚拟地址终点
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits
+    char name[80];
 } fndef_t;
 
 

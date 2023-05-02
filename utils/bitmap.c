@@ -1,7 +1,7 @@
 #include "bitmap.h"
 #include "helper.h"
 
-bitmap_t *bitmap_new(int size) {
+bitmap_t *bitmap_new(uint64_t size) {
     bitmap_t *b = NEW(bitmap_t);
 
     b->bits = mallocz(size);
@@ -38,6 +38,19 @@ int bitmap_set_count(bitmap_t *b) {
     }
 
     return count;
+}
+
+char *bitmap_to_str(uint8_t *bits, uint64_t count) {
+    char *result = malloc(count);
+    result[count - 1] = '\0';
+    for (int i = 0; i < count; ++i) {
+        if(bitmap_test(bits, i)) {
+            result[i] = '1';
+        } else {
+            result[i] = '0';
+        };
+    }
+    return result;
 }
 
 

@@ -16,10 +16,8 @@ memory_string_t *string_new(void *raw_string, uint64_t length) {
     memory_array_t *array_data = array_new(&element_rtype, length);
 
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
-    type_t string_type = type_basic_new(TYPE_STRING);
-    rtype_t string_rtype = gc_rtype(2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    DEBUGF("[string_new] rtype_index=%lu, r_type_in_heap=%d, type_in_heap=%d",
-           string_rtype.index, string_rtype.in_heap, string_type.in_heap);
+    rtype_t string_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype.gc_bits, 2));
 
     memory_string_t *string_data = runtime_malloc(string_rtype.size, &string_rtype);
 

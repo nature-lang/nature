@@ -8,16 +8,6 @@
 #include "utils/table.h"
 #include "utils/type.h"
 
-//#define AST_BASE_TYPE_FALSE "false"
-//#define AST_BASE_TYPE_TRUE "true"
-//#define AST_BASE_TYPE_NULL "null"
-//#define AST_VAR "var"
-//
-//typedef enum {
-//    AST_COMPLEX_TYPE_CLOSURE,
-//    AST_COMPLEX_TYPE_ENV,
-//} ast_complex_type;
-
 typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
     AST_EXPR_BINARY,
@@ -65,7 +55,7 @@ typedef enum {
     AST_STMT_TYPEDEF,
     AST_CALL,
     AST_FNDEF, // fn def (其包含 body)
-    AST_CLOSURE_DEF, // closure def
+    AST_STMT_ENV_CLOSURE, // closure def
 } ast_type_t;
 
 typedef enum {
@@ -401,11 +391,9 @@ typedef struct ast_fndef_t {
     slice_t *body; // ast_stmt* 函数体
     void *closure; // 全局 closure 冗余
 
-    // ast_expr, 当前 fn body 中引用的外部的环境
+    // ast_expr, 当前 fn body 中引用的外部的环境(parent 视角)
     list_t *capture_exprs;
-
-    // 当前 fn 中被内部 fn 引用对 fn, 当前函数退出时需要对这些 fn 进行 closure 操作
-    slice_t *be_capture_locals; // local_ident_t*
+    slice_t *be_capture_locals; // 当前函数中是否存在被外部引用的变量
 
     // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;

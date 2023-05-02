@@ -190,6 +190,7 @@ typedef struct {
     string object_file;
 } module_t;
 
+
 /**
  * 遍历期间，block 第一次被访问时打上 visited 标识
  * 当 block 的所有 succs 被遍历后，该块同时被标记为 active
@@ -211,7 +212,7 @@ typedef struct basic_block_t {
 
     // op pointer
 //    linked_node *phi; // fist_node 即可
-    linked_node *first_op; // 真正的指令开始,在插入 phi 和 label 之前的指令开始位置
+    linked_node *first_op; // 跳过了 phi 和 label 的指令开始位置
     linked_node *last_op; // last_node 即可
     linked_t *operations;
 
@@ -238,6 +239,144 @@ typedef struct basic_block_t {
     loop_t loop;
 } basic_block_t;
 
+
+// 寄存器分配 ------------------------------------------------------------------------------------------------------
+/**
+ * 存放在寄存器或者内存中, var a = 1
+ */
+typedef struct {
+    string ident; // ssa 后的新名称
+    string old; // ssa 之前的名称
+
+    flag_t flag;
+    type_t type;
+} lir_var_t;
+
+typedef struct {
+    int value;
+    alloc_kind_e kind;
+} use_pos_t;
+
+typedef struct {
+    int from; // 包含
+    int to; // 不包含
+} interval_range_t;
+
+// interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
+typedef struct interval_t {
+    int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
+    interval_range_t *first_range;
+    interval_range_t *last_range;
+    linked_t *ranges;
+    linked_t *use_pos_list; // 存储 use_position 列表
+    struct interval_t *parent;
+    linked_t *children; // 动态数组
+
+    lir_var_t *var; // var 中存储着 stack slot
+
+    int64_t *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
+    bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
+    // 当有多个空闲 register 时，优先分配 hint 对应的 register
+    struct interval_t *reg_hint;
+    slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
+    uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
+
+    lir_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
+    bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
+} interval_t;
+
+typedef struct {
+    slice_t *from_list;
+    slice_t *to_list;
+    basic_block_t *insert_block;
+    int insert_id;
+} resolver_t;
+
+// lir ------------------------------------------------------------------------------------------------------
+typedef enum {
+    LIR_OPERAND_NULL = 0,
+    LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
+    LIR_OPERAND_REG,
+    LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
+    LIR_OPERAND_STACK,
+    LIR_OPERAND_PHI_BODY,
+    LIR_OPERAND_FORMAL_PARAMS,
+    LIR_OPERAND_ACTUAL_PARAMS,
+    LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
+    LIR_OPERAND_IMM,
+    LIR_OPERAND_INDIRECT_ADDR,
+    LIR_OPERAND_VARS, // 与 pyi_body, formal_params 一样都是 slice_t + lir_var
+    LIR_OPERAND_CLOSURE_VARS,  // 无法通过 extract 函数提取出来，也不是提取出来，仅仅是为了临时存储使用
+} lir_operand_type_t;
+
+typedef enum {
+    LIR_OPCODE_ADD = 1,
+    LIR_OPCODE_SUB,
+    LIR_OPCODE_MUL,
+    LIR_OPCODE_DIV,
+    LIR_OPCODE_REM, // remainder
+    LIR_OPCODE_NEG, // -取负数
+
+    // 位运算
+    LIR_OPCODE_SHR, // >>
+    LIR_OPCODE_SHL, // <<
+    LIR_OPCODE_AND, // &
+    LIR_OPCODE_OR, // |
+    LIR_OPCODE_XOR, // ^
+    LIR_OPCODE_NOT, // 按位取反
+
+    LIR_OPCODE_CLR, // clean reg
+    LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
+    LIR_OPCODE_SLT, // set less than <
+    LIR_OPCODE_SLE, // set less eq <=
+    LIR_OPCODE_SGT, // >
+    LIR_OPCODE_SGE, // >=
+    LIR_OPCODE_SEE, // ==
+    LIR_OPCODE_SNE, // !=
+
+    LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
+//    LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
+//    LIR_OPCODE_SIA, // store reg(var) to indirect addr，将寄存器中的数据存入内存
+
+    LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
+    LIR_OPCODE_MOVE,
+    LIR_OPCODE_BEQ, // branch if eq a,b
+    LIR_OPCODE_BAL, // branch always
+    LIR_OPCODE_PUSH, // first
+    LIR_OPCODE_POP, // output
+    LIR_OPCODE_CALL, // 复合指令，位置在 second
+    LIR_OPCODE_RT_CALL,
+    LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
+    LIR_OPCODE_LABEL,
+    LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
+    LIR_OPCODE_FN_END, // 无操作数
+
+    LIR_OPCODE_ENV_CAPTURE,
+    LIR_OPCODE_ENV_CLOSURE,
+} lir_opcode_t;
+
+typedef struct lir_operand_t lir_operand_t;
+
+/**
+ * 四元组
+ * add first second -> result
+ * move first -> result // a = 12
+ * 例如
+ * call sum.n 12, 14 // 指令是 call
+ * first param 是函数名称（label）
+ * second param 是函数参数，函数调用并不产生新的变量，因此没必要放在 result 中
+ * 原则上会新增变量的放在 result,使用变量放在 first/second
+ *
+ * label: 同样也是使用 first_param
+ */
+typedef struct lir_op_t {
+    lir_opcode_t code;
+    lir_operand_t *first; // 参数1
+    lir_operand_t *second; // 参数2
+    lir_operand_t *output; // 参数3
+    int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
+} lir_op_t;
+
 /**
  * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
  * 形参有一条专门的指令 lir_formal_param 编译这条指令的时候处理形参即可
@@ -250,8 +389,19 @@ typedef struct basic_block_t {
  * 是一个变量，还是结构体的元素
  */
 typedef struct closure_t {
-    slice_t *globals; // closure_t 中定义的变量列表,ssa 构建时采集并用于 ssa 构建, 以及寄存器分配时的 interval 也是基于此
-    slice_t *blocks; // 根据解析顺序得到
+    // lir_var*, 寄存器分配将基于该 var 列表进行 interval 的创建
+    // 这里的 def 不是变量定义，而是 ssa 中的定值
+    slice_t *var_defs;
+    slice_t *blocks; // 根据解析顺序得到, 在 linear scan 时进行了排序
+
+    // ssa
+    slice_t *ssa_globals; // 存活周期 >= 2 个 basic block 的 var
+    table_t *ssa_globals_table; // 存活周期 >= 2 个 basic block 的 var
+    table_t *ssa_var_blocks; // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
+    table_t *ssa_var_block_exists; // 是否已经添加过，避免 var+block_name 的重复添加
+
+    table_t *closure_var_table;
+    slice_t *closure_vars;
 
     basic_block_t *entry; // 基本块入口, 指向 blocks[0]
     table_t *interval_table; // key 包括 fixed register as 和 variable.ident

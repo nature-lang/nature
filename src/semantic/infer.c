@@ -191,7 +191,6 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
     type_map->key_type = type_basic_new(TYPE_UNKNOWN);
     type_map->value_type = type_basic_new(TYPE_UNKNOWN);
 
-
     type_t key_target_type = type_basic_new(TYPE_UNKNOWN);
     type_t value_target_type = type_basic_new(TYPE_UNKNOWN);
     if (target_type.kind != TYPE_UNKNOWN) {
@@ -1205,7 +1204,7 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
         *expr = ast_type_convert(*expr, target_type);
     }
 
-    assertf(type_compare(expr->type, target_type), "type inconsistency");
+    assertf(type_compare(expr->type, target_type), "line=%d, type inconsistency", expr->line);
     return expr->type;
 }
 
@@ -1253,7 +1252,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_MAP) {
         t.map->key_type = reduction_type(m, t.map->key_type);
-        t.map->value_type = reduction_type(m, t.map->key_type);
+        t.map->value_type = reduction_type(m, t.map->value_type);
         return t;
     }
 

@@ -41,55 +41,90 @@ static void scan_stack(memory_t *m) {
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
 
-    addr_t stack_frame = extract_frame_base(mode); // 从大向小增长。
-    assertf(stack_frame >= mode.stack_base && stack_frame < mode.stack_base + mode.stack_size, "stack overflow");
+    addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
+    assertf(frame_base >= mode.stack_base && frame_base < mode.stack_base + mode.stack_size, "stack overflow");
+
+    DEBUGF("[runtime_gc.scan_stack] start, stack_base=0x%lx, stack_end=0x%lx, stack_frame=0x%lx",
+           mode.stack_base,
+           mode.stack_base + mode.stack_size,
+           frame_base);
 
     while (true) {
-        addr_t return_addr = (addr_t) fetch_addr_value(stack_frame + POINTER_SIZE);
+        addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
         if (!fn) {
-            // TODO assertf
+            DEBUGF("[runtime_gc.scan_stack] fn not found by return_addr=0x%lx, may have arrived root", return_addr);
             break;
         }
 
+
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
-        // 由于栈向下增长，所以此处 top 小于 base, 且取值则是想上增长
-        addr_t frame_top = stack_frame + POINTER_SIZE * 2;
-        stack_frame = frame_top + fn->stack_size;
+        // 由于栈向下增长，所以此处 top 小于 base, 且取值则是向上增加
+        addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base > prev frame_base >  return_addr > stack
+        frame_base = frame_top + fn->stack_size;
+
+        DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
+               "(min)frame_top=0x%lx,(big)frame_base=0x%lx",
+               fn->name,
+               fn->base,
+               fn->stack_size,
+               fn->size,
+               bitmap_to_str(fn->gc_bits, fn->stack_size / POINTER_SIZE),
+               frame_top,
+               frame_base);
 
         // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
         // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
-        addr_t cursor = frame_top;
+        // frame_base = rbp-0. bit=0 存储的是(rbp-8 ~ rbp-0) 处的值
+        addr_t cursor = frame_base - POINTER_SIZE;
         int i = 0;
-        while (cursor < stack_frame) {
+        while (cursor > frame_top) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
+            DEBUGF("[runtime_gc.scan_stack] bit_i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,fetch_int_value=0x%lx",
+                   i, cursor, is_ptr,
+                   fetch_int_value(cursor, 8))
             if (is_ptr) {
-                // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-                linked_push(m->grey_list, (void *) fetch_addr_value(cursor));
+                // var 即使 spill 了, 但是可能由于还没有运行到函数结尾，所以可能此时这里是空值或者无效值
+                // 错误也没关系，只是引用了导致不会清空，但是至少不会错误清理
+                addr_t addr = fetch_addr_value(cursor);
+                if (in_heap(addr)) {
+                    // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
+                    linked_push(m->grey_list, (void *) addr);
+                }
             }
 
             i += 1;
-            cursor += 8;
+            cursor -= POINTER_SIZE;
         }
 
         // 已经到达了栈底(大值)
-        if (stack_frame >= mode.stack_base + mode.stack_size) {
+        if (frame_base >= mode.stack_base + mode.stack_size) {
             break;
         }
     }
 }
 
 static void scan_symdefs(memory_t *m) {
+    DEBUGF("[runtime_gc.scan_symdefs] start")
+
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];
         if (!s.need_gc) {
             continue;
         }
-        // TODO 如果 size 超过了 8byte？就不兼容了, 虽然目前不会超过 8byte
+
+        DEBUGF("[runtime.scan_symdefs] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx",
+               s.name, s.base, s.size, s.need_gc, fetch_int_value(s.base, s.size));
+
         assertf(s.size <= 8, "temp do not support symbol size > 8byte");
         assertf(s.base > 0, "s.base is zero,cannot fetch value by base");
-        // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
-        linked_push(m->grey_list, (void *) fetch_addr_value(s.base));
+        // 触发 gc 时全局变量可能还没有进行初始化, 所以这里进行一下地址可用对判断
+        addr_t addr = fetch_addr_value(s.base);
+        if (in_heap(addr)) {
+            // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
+            // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
+            linked_push(m->grey_list, (void *) addr);
+        }
     }
 }
 
@@ -132,7 +167,6 @@ static void grey_list_work(memory_t *m) {
             obj_count++;
             // - pop ptr, 该 ptr 是堆中的内存，首先找到其 mspan, 确定其大小以及
             addr_t addr = (addr_t) LINKED_VALUE();
-            arena_t *arena = memory->mheap->arenas[arena_index(addr)];
 
             // get mspan by ptr
             mspan_t *span = span_of(addr);
@@ -154,22 +188,25 @@ static void grey_list_work(memory_t *m) {
                 continue;
             }
 
-            // - obj 中包含一到多个指针，需要进一步扫描
-            // - locate to the arena bits start
-            uint8_t *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
-
             // scan object
             // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
             // ++i 此时按指针跨度增加
             int index = 0;
             for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += POINTER_SIZE) {
-                int bit_index = (index / 4) * 8 + (index % 4);
+                arena_t *arena = take_arena(addr);
+                uint64_t bit_index = arena_bits_index(arena, temp_addr);
                 index++;
-                // TODO arena_t bits 高地位标记了后续是否还有更多的指针，如果没有了，就可以直接停止了
-                bool is_ptr = bitmap_test(bits_base, bit_index);
+                bool is_ptr = bitmap_test(arena->bits, bit_index);
                 if (is_ptr) {
-                    // 如果是 ptr 则将其加入到 grey list 中
-                    linked_push(temp_grey_list, (void *) fetch_addr_value(temp_addr));
+                    // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
+                    addr_t heap_addr = fetch_addr_value(temp_addr);
+
+                    DEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx temp_addr=0x%lx fetch_heap_value=0x%lx,"
+                           "obj_size=%ld, bit_index=%lu",
+                           addr, temp_addr, heap_addr, span->obj_size, bit_index);
+                    if (in_heap(heap_addr)) {
+                        linked_push(temp_grey_list, (void *) heap_addr);
+                    }
                 }
             }
 
@@ -193,9 +230,21 @@ static void free_mspan_meta(mspan_t *span) {
  * @param span span 是否被释放，如果释放了需要将其从 list 中抹除
  */
 static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
+    // 但是此时 span 其实并没有真的被释放,只有 alloc_count = 0 时才会触发真正的释放操作
+    for (int i = 0; i < span->obj_count; ++i) {
+        // 如果 gcmark_bits = 0, alloc_bits = 1, 则表明内存被释放，可以进行释放的
+        if (bitmap_test(span->alloc_bits->bits, i) && !bitmap_test(span->gcmark_bits->bits, i)) {
+            // 内存回收(未返回到堆)
+            allocator_bytes -= span->obj_size;
+            DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_add=0x%lx, allocator_bytes=%ld",
+                   span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocator_bytes);
+        }
+    }
+
+
     bitmap_free(span->alloc_bits);
     span->alloc_bits = span->gcmark_bits;
-    span->gcmark_bits = bitmap_new(span->obj_count);
+    span->gcmark_bits = bitmap_new(span->obj_count); // 清空
 
     // 重新计算 alloc_count
     span->alloc_count = bitmap_set_count(span->alloc_bits);
@@ -268,6 +317,7 @@ static void _runtime_gc() {
 
     // - 遍历 global symbol list,如果是 ptr 则将 ptr 指向的内存块进行分析，然后加入到 grey 队列
     scan_symdefs(memory);
+
     // - 遍历 user stack
     scan_stack(memory);
 
@@ -279,8 +329,6 @@ static void _runtime_gc() {
 
     // 5. sweep all span (iterate mcentral list)
     mcentral_sweep(memory->mheap);
-
-    // 执行完成会自动回退
 }
 
 /**
@@ -297,12 +345,9 @@ static void _runtime_gc() {
  * @return
  */
 void runtime_gc() {
-//    DEBUG_STACK();
-
+    DEBUGF("[runtime_gc] start")
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
     processor_t *p = processor_get();
     MODE_CALL(p->temp_mode, p->user_mode, _runtime_gc)
-
-//    DEBUG_STACK();
-    DEBUGF("runtime gc completed")
+    DEBUGF("[runtime_gc] completed")
 }

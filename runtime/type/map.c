@@ -67,6 +67,16 @@ memory_map_t *map_new(uint64_t rtype_index, uint64_t key_index, uint64_t value_i
     rtype_t *key_rtype = rt_find_rtype(key_index);
     rtype_t *value_rtype = rt_find_rtype(value_index);
     uint64_t capacity = MAP_DEFAULT_CAPACITY;
+    DEBUGF("[runtime.map_new] map_rindex=%ld(%s-%ld), key_rindex=%ld(%s-%ld), value_rindex=%ld(%s-%ld)",
+           rtype_index,
+           type_kind_string[map_rtype->kind],
+           map_rtype->size,
+           key_index,
+           type_kind_string[key_rtype->kind],
+           key_rtype->size,
+           value_index,
+           type_kind_string[value_rtype->kind],
+           value_rtype->size);
 
     memory_map_t *map_data = runtime_malloc(map_rtype->size, map_rtype);
     map_data->capacity = capacity;
@@ -130,11 +140,15 @@ void map_assign(memory_map_t *m, void *key_ref, void *value_ref) {
     rtype_t *key_rtype = rt_find_rtype(m->key_index);
     char *key_str = rtype_value_str(key_rtype, key_ref);
     rtype_t *value_rtype = rt_find_rtype(m->value_index);
-    char *value_str = rtype_value_str(value_rtype, value_ref);
+
+    char *debug_value_str = "type_not_support";
+    if (is_number(value_rtype->kind) || value_rtype->kind == TYPE_STRING) {
+        debug_value_str = rtype_value_str(value_rtype, value_ref);
+    }
     DEBUGF("[runtime.map_assign] key_rtype_kind: %d, key_str: %s, value_str: %s, hash_index=%lu,",
            key_rtype->kind,
            key_str,
-           value_str,
+           debug_value_str,
            hash_index);
 
     uint64_t data_index = 0;

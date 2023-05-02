@@ -7,59 +7,12 @@
 // 如果仅仅使用
 #define ALLOC_USE_MIN 4
 
-typedef struct {
-    int value;
-    alloc_kind_e kind;
-} use_pos_t;
-
-typedef struct {
-    int from; // 包含
-    int to; // 不包含
-} interval_range_t;
-
-// interval 分为两种，一种是虚拟寄存器，一种是固定寄存器
-typedef struct interval_t {
-    int index; // 对应的 var 对应的 interval 编号，可能是物理寄存器，也可能是虚拟寄存器产生的 index
-    interval_range_t *first_range;
-    interval_range_t *last_range;
-    linked_t *ranges;
-    linked_t *use_pos_list; // 存储 use_position 列表
-    struct interval_t *parent;
-    linked_t *children; // 动态数组
-
-    lir_var_t *var; // var 中存储着 stack slot
-
-    int64_t *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
-    bool spilled; // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
-    // 当有多个空闲 register 时，优先分配 hint 对应的 register
-    struct interval_t *reg_hint;
-    slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
-    uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
-
-    lir_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
-    bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
-} interval_t;
-
-
-typedef struct {
-    slice_t *from_list;
-    slice_t *to_list;
-    basic_block_t *insert_block;
-    int insert_id;
-} resolver_t;
-
 /**
  * 根据块的权重（loop.depth） 对所有基本块进行排序插入到 closure_t->order_blocks 中
  * 权重越大越靠前
  * @param c
  */
 void interval_block_order(closure_t *c);
-
-/**
- * 为 operation 进行编号，采用偶数编号，编号时忽略 phi 指令
- * @param c
- */
-void interval_mark_number(closure_t *c);
 
 /**
  * 倒序遍历排好序，编好号的 block 和 operation 构造 interval 并添加到 closure_t->interval_table 中

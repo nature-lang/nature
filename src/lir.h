@@ -13,13 +13,11 @@
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "l"
 #define ITERATOR_CURSOR "cursor"
-#define CONTINUE_IDENT "continue"
+#define FOR_CONTINUE_IDENT "for_continue"
+#define FOR_END_IDENT "for_end"
 #define FOR_COND_IDENT "for_cond"
 #define FOR_TRADITION_IDENT "for_tradition"
-#define FOR_TRADITION_END_IDENT "for_tradition_end"
-#define FOR_COND_END_IDENT "for_cond_end"
 #define FOR_ITERATOR_IDENT "for_iterator"
-#define FOR_END_ITERATOR_IDENT "for_end_iterator"
 #define END_IF_IDENT "if_end"
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
@@ -98,85 +96,13 @@
 
 #define OP_PUSH(_op) linked_push(m->compiler_current->operations, _op)
 
-
-typedef enum {
-    LIR_OPERAND_NULL = 0,
-    LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
-    LIR_OPERAND_REG,
-    LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
-    LIR_OPERAND_STACK,
-    LIR_OPERAND_PHI_BODY,
-    LIR_OPERAND_FORMAL_PARAMS,
-    LIR_OPERAND_ACTUAL_PARAMS,
-    LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
-    LIR_OPERAND_IMM,
-    LIR_OPERAND_INDIRECT_ADDR,
-} lir_operand_type_t;
-
-typedef enum {
-    LIR_OPCODE_ADD = 1,
-    LIR_OPCODE_SUB,
-    LIR_OPCODE_MUL,
-    LIR_OPCODE_DIV,
-    LIR_OPCODE_REM, // remainder
-    LIR_OPCODE_NEG, // -取负数
-
-    // 位运算
-    LIR_OPCODE_SHR, // >>
-    LIR_OPCODE_SHL, // <<
-    LIR_OPCODE_AND, // &
-    LIR_OPCODE_OR, // |
-    LIR_OPCODE_XOR, // ^
-    LIR_OPCODE_NOT, // 按位取反
-
-    LIR_OPCODE_CLR, // clean reg
-    LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
-    LIR_OPCODE_SLT, // set less than <
-    LIR_OPCODE_SLE, // set less eq <=
-    LIR_OPCODE_SGT, // >
-    LIR_OPCODE_SGE, // >=
-    LIR_OPCODE_SEE, // ==
-    LIR_OPCODE_SNE, // !=
-
-    LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
-//    LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
-//    LIR_OPCODE_SIA, // store reg(var) to indirect addr，将寄存器中的数据存入内存
-
-    LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
-    LIR_OPCODE_MOVE,
-    LIR_OPCODE_BEQ, // branch if eq a,b
-    LIR_OPCODE_BAL, // branch always
-    LIR_OPCODE_PUSH, // first
-    LIR_OPCODE_POP, // output
-    LIR_OPCODE_CALL, // 复合指令，位置在 second
-    LIR_OPCODE_RT_CALL,
-    LIR_OPCODE_BUILTIN_CALL, // BUILTIN_CALL print params -> nil
-    LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
-    LIR_OPCODE_LABEL,
-    LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
-    LIR_OPCODE_FN_END, // 无操作数
-} lir_opcode_t;
-
-typedef struct lir_operand_t lir_operand_t;
-
-/**
- * 存放在寄存器或者内存中, var a = 1
- */
-typedef struct {
-    string ident; // ssa 后的新名称
-    string old; // ssa 之前的名称
-
-    flag_t flag; // TODO 可以直接在 flag 中写入是否必须分配寄存器到信息
-    type_t type;
-} lir_var_t;
-
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
  * 也就是 stack 是向下增长，但是存储数据是从低地址往搞地址存储
  */
 typedef struct {
-    int slot;
-    int size;
+    int64_t slot;
+    uint64_t size;
 } lir_stack_t;
 
 /**
@@ -232,26 +158,6 @@ struct lir_operand_t {
     void *value;
     lir_flag_t pos; // 在 opcode 中的位置信息
 };
-
-/**
- * 四元组
- * add first second -> result
- * move first -> result // a = 12
- * 例如
- * call sum.n 12, 14 // 指令是 call
- * first param 是函数名称（label）
- * second param 是函数参数，函数调用并不产生新的变量，因此没必要放在 result 中
- * 原则上会新增变量的放在 result,使用变量放在 first/second
- *
- * label: 同样也是使用 first_param
- */
-typedef struct lir_op_t {
-    lir_opcode_t code;
-    lir_operand_t *first; // 参数1
-    lir_operand_t *second; // 参数2
-    lir_operand_t *output; // 参数3
-    int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
-} lir_op_t;
 
 static inline lir_operand_t *int_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
@@ -359,7 +265,7 @@ static inline lir_operand_t *lir_copy_label_operand(lir_operand_t *l) {
     return label_operand(label->ident, label->is_local);
 }
 
-static inline slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
+static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64_t flag) {
     slice_t *result = slice_new();
     if (!operand) {
         return result;
@@ -382,25 +288,24 @@ static inline slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
         slice_t *operands = operand->value;
         for (int i = 0; i < operands->count; ++i) {
             lir_operand_t *o = operands->take[i];
-            assert(o->assert_type != LIR_OPERAND_ACTUAL_PARAMS && "ACTUAL_PARAM nesting is not allowed");
-
-            slice_concat(result, extract_operands(o, flag));
+            assert(o->assert_type == LIR_OPERAND_VAR ||
+                   o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
+                   o->assert_type == LIR_OPERAND_IMM ||
+                   o->assert_type == LIR_OPERAND_STACK ||
+                   o->assert_type == LIR_OPERAND_REG ||
+                   o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+            slice_concat(result, recursion_extract_operands(o, flag));
         }
         return result;
     }
 
-    if (flag & FLAG(LIR_OPERAND_VAR) && operand->assert_type == LIR_OPERAND_FORMAL_PARAMS) {
-        slice_t *formal_params = operand->value;
-        for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
-            lir_var_t *var = formal_params->take[i];
-            slice_push(result, operand_new(LIR_OPERAND_VAR, var));
-        }
-    }
-
-    if (flag & FLAG(LIR_OPERAND_VAR) && operand->assert_type == LIR_OPERAND_PHI_BODY) {
-        slice_t *body = operand->value;
-        for (int i = 0; i < body->count; ++i) {
-            lir_var_t *var = body->take[i];
+    if (flag & FLAG(LIR_OPERAND_VAR) &&
+        (operand->assert_type == LIR_OPERAND_PHI_BODY ||
+         operand->assert_type == LIR_OPERAND_VARS ||
+         operand->assert_type == LIR_OPERAND_FORMAL_PARAMS)) {
+        slice_t *vars = operand->value;
+        for (int i = 0; i < vars->count; ++i) {
+            lir_var_t *var = vars->take[i];
             slice_push(result, operand_new(LIR_OPERAND_VAR, var));
         }
     }
@@ -409,10 +314,10 @@ static inline slice_t *extract_operands(lir_operand_t *operand, uint64_t flag) {
 }
 
 
-static inline slice_t *op_extract_operands(lir_op_t *op, uint64_t operand_flag) {
-    slice_t *result = extract_operands(op->output, operand_flag);
-    slice_concat(result, extract_operands(op->first, operand_flag));
-    slice_concat(result, extract_operands(op->second, operand_flag));
+static inline slice_t *extract_all_operands(lir_op_t *op, uint64_t operand_flag) {
+    slice_t *result = recursion_extract_operands(op->output, operand_flag);
+    slice_concat(result, recursion_extract_operands(op->first, operand_flag));
+    slice_concat(result, recursion_extract_operands(op->second, operand_flag));
 
     return result;
 }
@@ -438,7 +343,6 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->old = var->old;
         new_var->type = var->type;
         new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
-//        new_var->indirect_addr = var->indirect_addr;
         new_operand->value = new_var;
         return new_operand;
     }
@@ -538,7 +442,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     }
 
     // 剩下的都是 use 直接提取出来即可
-    slice_t *operands = extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
+    slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
         set_operand_flag(o); // 符合嵌入的全部定义成 USE
@@ -850,8 +754,9 @@ static inline bool lir_op_factor(lir_op_t *op) {
     return op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM;
 }
 
-static inline slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {
-    slice_t *temps = op_extract_operands(op, operand_flag);
+static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {
+    slice_t *temps = extract_all_operands(op, operand_flag);
+
     slice_t *results = slice_new();
     for (int i = 0; i < temps->count; ++i) {
         lir_operand_t *operand = temps->take[i];
@@ -886,8 +791,8 @@ static inline slice_t *lir_op_operands(lir_op_t *op, flag_t operand_flag, flag_t
  * @param vr_flag  use or def
  * @return lir_var_t
  */
-static inline slice_t *lir_var_operands(lir_op_t *op, flag_t vr_flag) {
-    return lir_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
+static inline slice_t *extract_var_operands(lir_op_t *op, flag_t vr_flag) {
+    return extract_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
 }
 
 static inline bool is_ternary(lir_op_t *op) {
@@ -901,6 +806,20 @@ static inline bool is_ternary(lir_op_t *op) {
            op->code == LIR_OPCODE_AND ||
            op->code == LIR_OPCODE_OR ||
            op->code == LIR_OPCODE_XOR;
+}
+
+/**
+ * 该函数能够成立的依据是，即使同一个 var 在不同的生命周期下会有不同的 reg, 但是在所有生命周期下共享一个 stack_slot
+ * 一旦溢出，则一定在该 stack 中
+ * @param c
+ * @return
+ */
+static inline int64_t var_stack_slot(closure_t *c, lir_var_t *var) {
+    interval_t *i = table_get(c->interval_table, var->ident);
+    assert(i);
+    assert(i->stack_slot);
+    assert(*i->stack_slot != 0);
+    return *i->stack_slot;
 }
 
 #endif //NATURE_SRC_LIR_H_

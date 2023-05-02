@@ -158,7 +158,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     if (i->var) {
         lir_var_t *var = custom_var_operand(c->module, i->var->type, "child")->value;
         // 加入到 global 中
-        slice_push(c->globals, var);
+        slice_push(c->var_defs, var);
 
         child->var = var;
         table_set(c->interval_table, var->ident, child);
@@ -317,29 +317,6 @@ void interval_block_order(closure_t *c) {
     c->blocks = order_blocks;
 }
 
-void interval_mark_number(closure_t *c) {
-    int next_id = 0;
-    for (int i = 0; i < c->blocks->count; ++i) {
-        basic_block_t *block = c->blocks->take[i];
-        linked_node *current = linked_first(block->operations);
-        lir_op_t *label_op = current->value;
-        assert(label_op->code == LIR_OPCODE_LABEL);
-
-        while (current->value != NULL) {
-            lir_op_t *op = current->value;
-            if (op->code == LIR_OPCODE_PHI) {
-                op->id = label_op->id;
-                current = current->succ;
-                continue;
-            }
-
-            op->id = next_id;
-            next_id += 2;
-            current = current->succ;
-        }
-    }
-}
-
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
     for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
@@ -354,8 +331,8 @@ void interval_build(closure_t *c) {
     }
 
     // new interval for all virtual registers in closure
-    for (int i = 0; i < c->globals->count; ++i) {
-        lir_var_t *var = c->globals->take[i];
+    for (int i = 0; i < c->var_defs->count; ++i) {
+        lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
         interval->alloc_type = type_base_trans_alloc(var->type.kind);
@@ -427,7 +404,7 @@ void interval_build(closure_t *c) {
             // TODO 如果能够优化 runtime_call 不使用寄存器，则可以大量的减少寄存器的使用
             //  比如将 runtime_call 优化成 inline lir
             // fixed all phy reg in call
-            if (lir_op_call(op)) {
+            if (lir_op_call(op) || op->code == LIR_OPCODE_ENV_CLOSURE) {
                 // traverse all register
                 for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
@@ -437,7 +414,6 @@ void interval_build(closure_t *c) {
                     }
                 }
             }
-
             // add reg hint for move
             if (op->code == LIR_OPCODE_MOVE) {
                 interval_t *hint_interval = operand_interval(c, op->first);
@@ -450,9 +426,9 @@ void interval_build(closure_t *c) {
             // interval by output params, so it contain opcode phi
             // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
-            slice_t *def_operands = lir_op_operands(op,
-                                                    FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                    FLAG(LIR_FLAG_DEF), false);
+            slice_t *def_operands = extract_op_operands(op,
+                                                        FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                        FLAG(LIR_FLAG_DEF), false);
             for (int j = 0; j < def_operands->count; ++j) {
                 lir_operand_t *operand = def_operands->take[j];
                 interval_t *interval = operand_interval(c, operand);
@@ -477,8 +453,8 @@ void interval_build(closure_t *c) {
 
             // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
             if (op->code != LIR_OPCODE_PHI) {
-                slice_t *use_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                        FLAG(LIR_FLAG_USE), false);
+                slice_t *use_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                            FLAG(LIR_FLAG_USE), false);
                 for (int j = 0; j < use_operands->count; ++j) {
                     lir_operand_t *operand = use_operands->take[j];
                     interval_t *interval = operand_interval(c, operand);
@@ -822,10 +798,10 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     }
 
     // 由于栈是从高向低增长的，所以需要先预留 size
-    slice_push(c->stack_vars, i->var);
     int64_t size = type_kind_sizeof(i->var->type.kind);
     c->stack_offset += size;
     c->stack_offset = align(c->stack_offset, size);
+    slice_push(c->stack_vars, i->var);
 
     *i->stack_slot = -c->stack_offset; // 取负数，一般栈都是高往低向下增长
 }
@@ -891,7 +867,7 @@ void resolve_data_flow(closure_t *c) {
                 //  如果 live var interval 刚好是在 to->first_op 中到 use 作为声明周期到则需要特殊处理
                 // from->last_op 不需要担心这个问题，其总是 branch op
                 bool is_use = false;
-                slice_t *vars = lir_var_operands(to->first_op->value, LIR_FLAG_USE | LIR_FLAG_DEF);
+                slice_t *vars = extract_var_operands(to->first_op->value, LIR_FLAG_USE | LIR_FLAG_DEF);
                 for (int k = 0; k < vars->count; ++k) {
                     lir_var_t *temp_var = vars->take[k];
                     if (str_equal(temp_var->ident, var->ident) && temp_var->flag & FLAG(LIR_FLAG_USE)) {
@@ -933,7 +909,6 @@ void resolve_data_flow(closure_t *c) {
 
                 current = current->succ;
             }
-
 
             // 对一条边的处理完毕，可能涉及多个寄存器，stack, 也有可能一个寄存器被多次操作,所以需要处理覆盖问题
             // 同一条边上的所有 resolve 操作只插入在同一块中，要么是在 from、要么是在 to。 tips: 所有的 critical edge 都已经被处理了

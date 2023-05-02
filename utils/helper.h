@@ -53,11 +53,13 @@ static inline void *mallocz(size_t size) {
     dst;                               \
 })
 
+
 static inline addr_t fetch_addr_value(addr_t addr) {
     // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
     addr_t *p = (addr_t *) addr;
     return *p;
 }
+
 
 static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
     uint32_t hash = 2166136261u;

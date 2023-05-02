@@ -343,7 +343,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 
     // make label
     lir_op_t *for_start_label = lir_op_unique_label(m, FOR_ITERATOR_IDENT);
-    lir_op_t *for_end_label = lir_op_unique_label(m, FOR_END_ITERATOR_IDENT);
+    lir_op_t *for_end_label = lir_op_unique_label(m, FOR_END_IDENT);
 
     // set label
     OP_PUSH(for_start_label);
@@ -366,7 +366,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
                        cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
-    OP_PUSH(lir_op_unique_label(m, CONTINUE_IDENT));
+    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
 
     // gen value
     if (ast->value) {
@@ -398,13 +398,13 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 static void compiler_for_cond(module_t *m, ast_for_cond_stmt *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
     OP_PUSH(for_start);
-    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_COND_END_IDENT), true);
+    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_END_IDENT), true);
 
     lir_operand_t *condition_target = compiler_expr(m, ast->condition);
     lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
 
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_unique_label(m, CONTINUE_IDENT));
+    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
     compiler_block(m, ast->body);
 
     // bal => goto
@@ -420,7 +420,7 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
     OP_PUSH(for_start);
 
-    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_TRADITION_END_IDENT), true);
+    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_END_IDENT), true);
 
     // cond -> for_end
     lir_operand_t *cond_target = compiler_expr(m, ast->cond);
@@ -428,7 +428,7 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt *ast) {
     OP_PUSH(cmp_goto);
 
     // continue
-    OP_PUSH(lir_op_unique_label(m, CONTINUE_IDENT));
+    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
 
     // block
     compiler_block(m, ast->body);
@@ -1173,8 +1173,16 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
     // rt_call env_new(fndef->name, length)
     lir_operand_t *env_operand = temp_var_operand(m, type_basic_new(TYPE_INT64));
     OP_PUSH(rt_call(RT_CALL_ENV_NEW, env_operand, 1, length));
+
+    slice_t *capture_vars = slice_new();
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr *item = ct_list_value(fndef->capture_exprs, i);
+        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪, ssa 完成后
+        if (item->assert_type == AST_EXPR_IDENT) {
+            char *ident = ((ast_ident *) item->value)->literal;
+            slice_push(capture_vars, lir_var_new(m, ident));
+        }
+
         //  加载 free var 在栈上的指针
         lir_operand_t *stack_addr_ref = lea_operand_pointer(m, compiler_expr(m, *item));
         // rt_call env_assign(fndef->name, index_operand lir_operand)
@@ -1185,9 +1193,16 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
                         stack_addr_ref));
     }
 
+    // 记录引用关系, ssa 将会实时调整这些地方到值，一旦 ssa 完成这些 var 就有了唯一名称
+    if (capture_vars->count > 0) {
+        lir_operand_t *capture_operand = operand_new(LIR_OPERAND_VARS, capture_vars);
+        OP_PUSH(lir_op_new(LIR_OPCODE_ENV_CAPTURE, capture_operand, NULL, NULL));
+    }
+
     OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
     lir_operand_t *result = var_operand(m, fndef->closure_name);
     OP_PUSH(rt_call(RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand));
+
     return result;
 }
 
@@ -1393,12 +1408,12 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
-    for (int i = 0; i < fndef->be_capture_locals->count; ++i) {
-        local_ident_t *local = fndef->be_capture_locals->take[i];
-        assert(local->is_capture);
-
-        lir_operand_t *var_ref = lea_operand_pointer(m, var_operand(m, local->unique_ident));
-        OP_PUSH(rt_call(RT_CALL_ENV_CLOSURE, NULL, 1, var_ref));
+    if (fndef->be_capture_locals->count > 0) {
+        lir_operand_t *capture_operand = operand_new(LIR_OPERAND_CLOSURE_VARS, slice_new());
+        lir_op_t *op = lir_op_new(LIR_OPCODE_ENV_CLOSURE, capture_operand, NULL, NULL);
+        OP_PUSH(op);
+        c->closure_vars = op->first->value;
+        c->closure_var_table = table_new();
     }
 
     // lower 的时候需要进行特殊的处理

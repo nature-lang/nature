@@ -472,16 +472,6 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
 }
 
 /**
- * 根据内存地址找到响应的 arena
- * @param base
- * @return
- */
-static arena_t *take_arena(addr_t base) {
-    return memory->mheap->arenas[arena_index(base)];
-}
-
-
-/**
  * 计算 mheap 的 pages ->spans
  * @param span
  */
@@ -688,20 +678,24 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    // 确定 arena bits base
-    arena_t *arena = take_arena(addr);
-    byte *bits_base = &arena->bits[(addr - arena->base) / (4 * POINTER_SIZE)];
-
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
-        // 标记的是 ptr bit，(scan bit 暂时不做支持)
-        int bit_index = (index / 4) * 8 + (index % 4);
+        // 确定 arena bits base
+        arena_t *arena = take_arena(addr);
 
+        // 标记的是 ptr bit，(scan bit 暂时不做支持)
+        uint64_t bit_index = arena_bits_index(arena, temp_addr);
+        int bit_value;
         if (bitmap_test(rtype->gc_bits, index)) {
-            bitmap_set(bits_base, bit_index); // 1 表示为指针
+            bitmap_set(arena->bits, bit_index); // 1 表示为指针
+            bit_value = 1;
         } else {
-            bitmap_clear(bits_base, bit_index);
+            bitmap_clear(arena->bits, bit_index);
+            bit_value = 0;
         }
+        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value=%d",
+               type_kind_string[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+
         index += 1;
     }
 }
@@ -721,9 +715,21 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
-//    DEBUGF("[std_malloc]malloc success, span->class=%d, span->base=0x%lx, addr=0x%lx",
-//           span->spanclass,
-//           span->base, addr)
+    allocator_bytes += span->obj_size;
+
+    char *debug_kind = "";
+    if (rtype) {
+        debug_kind = type_kind_string[rtype->kind];
+    }
+    DEBUGF("[runtime.std_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, "
+           "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
+           span->spanclass,
+           span->base,
+           span->obj_size,
+           size,
+           debug_kind,
+           addr,
+           allocator_bytes);
 
     return addr;
 }
@@ -739,13 +745,30 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     }
 
     // 直接从堆中分配 span
-    mspan_t *s = mheap_alloc_span(pages_count, spanclass);
-    assertf(s != NULL, "out of memory");
+    mspan_t *span = mheap_alloc_span(pages_count, spanclass);
+    assertf(span != NULL, "out of memory");
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_t *central = &memory->mheap->centrals[spanclass];
-    linked_push(central->full_swept, s);
-    return s->base;
+    linked_push(central->full_swept, span);
+
+    allocator_bytes += span->obj_size;
+
+    char *debug_kind = "";
+    if (rtype) {
+        debug_kind = type_kind_string[rtype->kind];
+    }
+    DEBUGF("[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
+           "addr=0x%lx, allocator_bytes=%ld",
+           span->spanclass,
+           span->base,
+           span->obj_size,
+           size,
+           debug_kind,
+           span->base,
+           allocator_bytes);
+
+    return span->base;
 }
 
 /**
@@ -860,23 +883,6 @@ addr_t mstack_new(uint64_t size) {
     return (addr_t) base;
 }
 
-/**
- * 最后一位如果为 1 表示 no ptr, 0 表示 has ptr
- * @param spanclass
- * @return
- */
-bool spanclass_has_ptr(uint8_t spanclass) {
-    return (spanclass & 1) == 0;
-}
-
-
-addr_t arena_base(uint64_t arena_index) {
-    return arena_index * ARENA_SIZE + ARENA_BASE_OFFSET;
-}
-
-uint64_t arena_index(uint64_t base) {
-    return (base - ARENA_BASE_OFFSET) / ARENA_SIZE;
-}
 
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
@@ -885,6 +891,12 @@ uint64_t arena_index(uint64_t base) {
  * @return
  */
 void *runtime_malloc(uint64_t size, rtype_t *type) {
+    if (type) {
+        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_string[type->kind]);
+    } else {
+        DEBUGF("[runtime_malloc] size=%ld, type is null", size);
+    }
+
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return (void *) std_malloc(size, type);

@@ -9,8 +9,8 @@
 static linked_t *unhandled_new(closure_t *c) {
     linked_t *unhandled = linked_new();
     // 遍历所有变量,根据 interval from 进行排序
-    for (int i = 0; i < c->globals->count; ++i) {
-        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->globals->take[i])->ident);
+    for (int i = 0; i < c->var_defs->count; ++i) {
+        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->var_defs->take[i])->ident);
 
         assert(item);
 
@@ -565,8 +565,9 @@ void replace_virtual_register(closure_t *c) {
         linked_node *current = block->first_op;
         while (current->value != NULL) {
             lir_op_t *op = current->value;
-            slice_t *var_operands = lir_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(LIR_FLAG_DEF) | FLAG(LIR_FLAG_USE),
-                                                    false);
+            slice_t *var_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR),
+                                                        FLAG(LIR_FLAG_DEF) | FLAG(LIR_FLAG_USE),
+                                                        false);
 
             for (int j = 0; j < var_operands->count; ++j) {
                 lir_operand_t *operand = var_operands->take[j];

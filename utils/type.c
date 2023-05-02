@@ -45,7 +45,7 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_pointer_t),
             .hash = hash,
-            .last_ptr = cross_ptr_size(),
+            .last_ptr = POINTER_SIZE,
             .kind = TYPE_POINTER,
     };
     // 计算 gc_bits
@@ -65,7 +65,7 @@ static rtype_t rtype_string() {
     rtype_t rtype = {
             .size = sizeof(memory_string_t),
             .hash = hash,
-            .last_ptr = cross_ptr_size(),
+            .last_ptr = POINTER_SIZE,
             .kind = TYPE_STRING,
     };
 
@@ -88,7 +88,7 @@ static rtype_t rtype_list(type_list_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_list_t),
             .hash = hash,
-            .last_ptr = cross_ptr_size(),
+            .last_ptr = POINTER_SIZE,
             .kind = TYPE_LIST,
     };
     // 计算 gc_bits
@@ -105,7 +105,7 @@ static rtype_t rtype_list(type_list_t *t) {
  */
 rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = t->element_rtype;
-    uint64_t element_size = element_rtype.size;
+    uint64_t element_size = rtype_heap_out_size(&element_rtype, POINTER_SIZE);
 
     char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
     uint32_t hash = hash_string(str);
@@ -120,7 +120,7 @@ rtype_t rtype_array(type_array_t *t) {
         rtype.last_ptr = element_size * t->length;
 
         // need_gc 暗示了 8byte 对齐了
-        for (int i = 0; i < rtype.size / cross_ptr_size(); ++i) {
+        for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
             bitmap_set(rtype.gc_bits, i);
         }
     }
@@ -142,7 +142,7 @@ static rtype_t rtype_map(type_map_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_map_t),
             .hash = hash,
-            .last_ptr = cross_ptr_size() * 3, // hash_table + key_data + value_data
+            .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
             .kind = TYPE_MAP,
     };
     // 计算 gc_bits
@@ -166,7 +166,7 @@ static rtype_t rtype_set(type_set_t *t) {
     rtype_t rtype = {
             .size =  sizeof(memory_set_t),
             .hash = hash,
-            .last_ptr = cross_ptr_size() * 2, // hash_table + key_data
+            .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
             .kind = TYPE_SET,
     };
     // 计算 gc_bits
@@ -188,11 +188,11 @@ static rtype_t rtype_any(type_any_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_ANY));
 
     rtype_t rtype = {
-            .size = cross_ptr_size() * 2, // element_rtype + value(并不知道 value 的类型)
+            .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = hash,
             .kind = TYPE_ANY,
-            .last_ptr = cross_ptr_size(),
-            .gc_bits = malloc_gc_bits(cross_ptr_size() * 2)
+            .last_ptr = POINTER_SIZE,
+            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
     };
 
     bitmap_set(rtype.gc_bits, 0);
@@ -216,11 +216,11 @@ static rtype_t rtype_fn(type_fn_t *t) {
         str = str_connect(str, itoa(formal_type.hash));
     }
     rtype_t rtype = {
-            .size = cross_ptr_size(),
+            .size = POINTER_SIZE,
             .hash = hash_string(str),
             .kind = TYPE_FN,
             .last_ptr = 0,
-            .gc_bits = malloc_gc_bits(cross_ptr_size())
+            .gc_bits = malloc_gc_bits(POINTER_SIZE)
     };
     return rtype;
 }
@@ -267,9 +267,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(rtype.gc_bits, gc_offset / cross_ptr_size());
+            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
         }
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + cross_ptr_size();
+        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
     }
 
     return rtype;
@@ -321,10 +321,10 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(rtype.gc_bits, gc_offset / cross_ptr_size());
+            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
         }
 
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + cross_ptr_size();
+        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
     }
 
     return rtype;
@@ -355,7 +355,7 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_FLOAT:
             return cross_number_size(); // 固定大小
         default:
-            return cross_ptr_size();
+            return POINTER_SIZE;
     }
 }
 
@@ -463,7 +463,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
 }
 
 byte *malloc_gc_bits(uint64_t size) {
-    uint64_t gc_bits_size = calc_gc_bits_size(size, cross_ptr_size());
+    uint64_t gc_bits_size = calc_gc_bits_size(size, POINTER_SIZE);
     return mallocz(gc_bits_size);
 }
 
@@ -487,7 +487,7 @@ uint64_t rtypes_push(rtype_t rtype) {
     ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
-    ct_rtype_size += calc_gc_bits_size(rtype.size, cross_ptr_size());
+    ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
     ct_rtype_count += 1;
 
     return index;
@@ -510,13 +510,13 @@ uint64_t ct_find_rtype_index(type_t t) {
 /**
  * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
  * 如果类型没有存储在堆中，则其在堆外占用的大小是就是类型本身的大小，如果类型存储在堆中，其在堆外存储的是指向堆的指针
- * 占用 cross_ptr_size() 大小
+ * 占用 POINTER_SIZE 大小
  * @param rtype
  * @return
  */
 uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size) {
     if (rtype->in_heap) {
-        return cross_ptr_size();
+        return ptr_size;
     }
     return rtype->size;
 }
@@ -587,11 +587,11 @@ type_kind to_gc_kind(type_kind kind) {
  * @param ...
  * @return
  */
-rtype_t gc_rtype(uint32_t count, ...) {
+rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
     // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
     rtype_t rtype = {
             .size = count * POINTER_SIZE,
-            .kind = TYPE_GC,
+            .kind = kind,
             .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
             .gc_bits = malloc_gc_bits(count * POINTER_SIZE)
     };

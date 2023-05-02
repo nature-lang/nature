@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "basic.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
@@ -24,7 +25,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
         return str;
     }
 
-    assertf(false, "not support");
+    assertf(false, "not support kind=%s", type_kind_string[rtype->kind]);
 
     return NULL;
 }

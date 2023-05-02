@@ -5,7 +5,7 @@
 static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->globals, temp->value);
+    slice_push(c->var_defs, temp->value);
 
     linked_push(list, lir_op_move(temp, operand));
     return lir_reset_operand(temp, operand->pos);
@@ -44,7 +44,7 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
                                                    operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
             }
 
-            // TODO 直接按 兼容非常规尺寸匹配
+            // TODO 使用 movzx 或者 movsx 可以做尺寸不匹配到 mov, 就不用做上面到 CLR 了
             lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
 
             linked_push(operations, op);
@@ -165,7 +165,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     // imm 提取
-    slice_t *imm_operands = lir_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
+    slice_t *imm_operands = extract_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         lir_imm_t *imm = imm_operand->value;
@@ -190,7 +190,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             if (imm->kind == TYPE_RAW_STRING) {
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
                 lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
-                slice_push(c->globals, var_operand->value);
+                slice_push(c->var_defs, var_operand->value);
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 
@@ -206,13 +206,40 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             // 大数值必须通过 reg 转化
             type_kind kind = operand_type_kind(imm_operand);
             lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-            slice_push(c->globals, temp->value);
+            slice_push(c->var_defs, temp->value);
 
             linked_push(list, lir_op_move(temp, imm_operand));
             temp = lir_reset_operand(temp, imm_operand->pos);
             imm_operand->assert_type = temp->assert_type;
             imm_operand->value = temp->value;
         }
+    }
+
+    return list;
+}
+
+/**
+ * env closure 特有 call 指令
+ * @param c
+ * @param op
+ * @return
+ */
+linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    assert(op->first->assert_type == LIR_OPERAND_CLOSURE_VARS);
+
+    slice_t *closure_vars = op->first->value;
+    assert(closure_vars->count == 1);
+    for (int i = 0; i < closure_vars->count; ++i) {
+        lir_var_t *var = closure_vars->take[i];
+        int64_t stack_slot = var_stack_slot(c, var);
+        assert(stack_slot < 0);
+        lir_stack_t *stack = NEW(lir_stack_t);
+        stack->slot = stack_slot;
+        stack->size = type_kind_sizeof(var->type.kind);
+        lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
+        linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        linked_push(list, rt_call(RT_CALL_ENV_CLOSURE, NULL, 0));
     }
 
     return list;
@@ -279,7 +306,7 @@ static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
     // 通过一个临时 var, 领 first = output = reg, 从而将三元转换成二元表达式
     type_kind kind = operand_type_kind(op->output);
     lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->globals, temp->value);
+    slice_push(c->var_defs, temp->value);
 
     linked_push(list, lir_op_move(temp, op->first));
     linked_push(list, lir_op_new(op->code, temp, op->second, temp));
@@ -297,7 +324,7 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
 
     type_kind kind = operand_type_kind(op->output);
     lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->globals, temp->value);
+    slice_push(c->var_defs, temp->value);
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了

@@ -339,8 +339,6 @@ static void build_compiler(slice_t *modules) {
 
             cross_lower(c);
 
-            debug_block_lir(c, "ssa and lower");
-
             linear_scan(c);
 
             debug_block_lir(c, "linear scan");

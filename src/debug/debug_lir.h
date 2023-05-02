@@ -23,6 +23,6 @@ string lir_formal_param_to_string(slice_t *formal_params);
 
 string lir_actual_param_to_string(slice_t *actual_params);
 
-string lir_phi_body_to_string(slice_t *phi_body);
+string lir_vars_to_string(slice_t *vars);
 
 #endif //NATURE_SRC_DEBUG_DEBUG_LIR_H_

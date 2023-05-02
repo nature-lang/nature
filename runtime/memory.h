@@ -11,6 +11,7 @@
 #include "utils/linked.h"
 #include "utils/bitmap.h"
 #include "sizeclass.h"
+#include "basic.h"
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
@@ -155,7 +156,7 @@ typedef struct {
 // arena meta
 
 typedef struct {
-    // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。
+    // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。(也就是 2bit 标记一个指针)
     // 8bit 低四位用于标记这四个内存空间的类型(0: 标量 scalar， 1: 指针 pointer)。这是 gc 遍历所有对象的关键
     // 高四位用于标记这四个内存空间是否需要被 gc 扫描？ (0: dead，1: scan)
     // 高四位标记了 4 个指针，如果其是 1 表示其后面还有指针需要扫描，0 表示 no more pointers in this object
@@ -220,6 +221,79 @@ typedef struct {
 } memory_t;
 
 memory_t *memory;
+
+/**
+ * 最后一位如果为 1 表示 no ptr, 0 表示 has ptr
+ * @param spanclass
+ * @return
+ */
+static inline bool spanclass_has_ptr(uint8_t spanclass) {
+    return (spanclass & 1) == 0;
+}
+
+
+static inline addr_t arena_base(uint64_t arena_index) {
+    return arena_index * ARENA_SIZE + ARENA_BASE_OFFSET;
+}
+
+
+static inline uint64_t arena_index(uint64_t base) {
+    return (base - ARENA_BASE_OFFSET) / ARENA_SIZE;
+}
+
+/**
+ * 根据内存地址找到响应的 arena
+ * @param base
+ * @return
+ */
+static inline arena_t *take_arena(addr_t base) {
+    arena_t *arena = memory->mheap->arenas[arena_index(base)];
+    assertf(arena, "cannot find arena by addr=0x%lx", base);
+    return arena;
+}
+
+static inline uint64_t arena_bits_index(arena_t *arena, addr_t addr) {
+    uint64_t ptr_count = (addr - arena->base) / POINTER_SIZE;
+    uint64_t bit_index = (ptr_count / 4) * 8 + (ptr_count % 4);
+    return bit_index;
+}
+
+static inline bool in_heap(addr_t addr) {
+    return addr >= ARENA_HINT_BASE && addr < memory->mheap->current_arena.end;
+}
+
+static inline addr_t safe_heap_addr(addr_t addr) {
+    assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx",
+            addr,
+            ARENA_HINT_BASE);
+
+    assertf(addr < memory->mheap->current_arena.end,
+            "addr=0x%lx overflow heap, heap_end=0x%lx",
+            addr, memory->mheap->current_arena.end);
+    return addr;
+}
+
+static inline addr_t fetch_heap_addr(addr_t addr) {
+    addr_t result = fetch_addr_value(addr);
+    return safe_heap_addr(result);
+}
+
+static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
+    if (size == QWORD) {
+        return *(uint64_t *) addr;
+    }
+    if (size == DWORD) {
+        return *(uint32_t *) addr;
+    }
+    if (size == WORD) {
+        return *(uint16_t *) addr;
+    }
+    if (size == BYTE) {
+        return *(uint8_t *) addr;
+    }
+    assertf(false, "cannot fetch int value by size=%d", size);
+    exit(1);
+}
 
 void memory_init();
 

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "debug.h"
-#include "lir.h"
-#include "asm.h"
+#include "debug_lir.h"
+#include "debug_asm.h"
 
 int current_parser_line = 0;
 
@@ -28,8 +28,8 @@ string ast_type_to_str[] = {
         [AST_STMT_FOR_ITERATOR]="AST_STMT_FOR_ITERATOR",
         [AST_FNDEF]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
-        [AST_CLOSURE_DEF]="AST_CLOSURE_DECL",
         [AST_STMT_TYPEDEF]="AST_STMT_TYPE_DECL",
+        [AST_STMT_ENV_CLOSURE]="AST_ENV_CLOSURE",
 };
 
 string token_type_to_str[] = {
@@ -151,6 +151,8 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
+        [LIR_OPCODE_ENV_CAPTURE] = "ENV_CAPTURE",
+        [LIR_OPCODE_ENV_CLOSURE] = "ENV_CLOSURE",
 };
 
 void debug_parser(int line, char *token) {
@@ -181,7 +183,8 @@ void debug_stmt(string type, ast_stmt stmt) {
  */
 void debug_lir(closure_t *c) {
 #ifdef DEBUG_LIR
-    printf("compiler closure lir: %s ---------------------------------------------------------------------\n", c->symbol_name);
+    printf("compiler closure lir: %s ---------------------------------------------------------------------\n",
+           c->symbol_name);
     linked_node *current = c->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
@@ -234,9 +237,10 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 
 void debug_interval(closure_t *c) {
 #ifdef DEBUG_INTERVAL
-    DEBUGF("closure=%s interval ------------------------------------------------------------------------", c->symbol_name);
-    for (int i = 0; i < c->globals->count; ++i) {
-        lir_var_t *var = c->globals->take[i];
+    DEBUGF("closure=%s interval ------------------------------------------------------------------------",
+           c->symbol_name);
+    for (int i = 0; i < c->var_defs->count; ++i) {
+        lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
         assert(interval);
         int parent_index = 0;

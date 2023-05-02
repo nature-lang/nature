@@ -71,10 +71,10 @@ set(SRC_SEMANTIC
 set(SRC_DEBUG
         ${SRC_DIR}/debug/debug.c
         ${SRC_DIR}/debug/debug.h
-        ${SRC_DIR}/debug/asm.h
-        ${SRC_DIR}/debug/asm.c
-        ${SRC_DIR}/debug/lir.c
-        ${SRC_DIR}/debug/lir.h)
+        ${SRC_DIR}/debug/debug_asm.h
+        ${SRC_DIR}/debug/debug_asm.c
+        ${SRC_DIR}/debug/debug_lir.c
+        ${SRC_DIR}/debug/debug_lir.h)
 
 set(UTILS
         ${PROJECT_SOURCE_DIR}/utils/assertf.h
@@ -111,6 +111,7 @@ set(SRC
         ${SRC_DIR}/compiler.h
         ${SRC_DIR}/compiler.c
         ${SRC_DIR}/lir.h
+        ${SRC_DIR}/lir.c
         ${SRC_DIR}/cfg.c
         ${SRC_DIR}/cfg.h
         ${SRC_DIR}/ssa.h
