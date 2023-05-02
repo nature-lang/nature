@@ -86,10 +86,21 @@ typedef enum {
     TYPE_GC,
     TYPE_GC_SCAN,
     TYPE_GC_NOSCAN,
+    TYPE_GC_FN,
+    TYPE_GC_ENV,
+    TYPE_GC_ENV_VALUE,
+    TYPE_GC_ENV_VALUES,
+    TYPE_GC_UPVALUE
 } type_kind;
 
 static string type_kind_string[] = {
         [TYPE_GC] = "gc",
+        [TYPE_GC_FN] = "runtime_fn",
+        [TYPE_GC_ENV] = "env",
+        [TYPE_GC_ENV_VALUE] = "env_value",
+        [TYPE_GC_ENV_VALUES] = "env_values",
+        [TYPE_GC_UPVALUE] = "upvalue",
+
         [TYPE_ARRAY] = "array",
 
         [TYPE_STRING] = "string",
@@ -438,7 +449,7 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 rtype_t gc_rtype(type_kind kind, uint32_t count, ...);
 
-rtype_t gc_rtype_array(uint32_t count);
+rtype_t gc_rtype_array(type_kind kind, uint32_t count);
 
 /**
  * 一般标量类型其值默认会存储在 stack 中

@@ -7,7 +7,8 @@ fn large_allocator() {
     }
 
     runtime_gc()
-    println(list[4999])
+    println(list[380])
+    println(list[2000])
 }
 
 large_allocator()

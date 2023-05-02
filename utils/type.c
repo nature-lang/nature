@@ -201,7 +201,7 @@ static rtype_t rtype_any(type_any_t *t) {
 }
 
 /**
- * TODO golang 的 fn 的 gc 是 1，所以 fn 为啥需要扫描呢？难道函数的代码段还能存储在堆上？
+ * 无法分片 fn 是否是 closure, 所以统一都进行扫描, runtime 可以根据 fn 的地址判断是否需要进一步扫描
  * hash = type_kind + params hash + return_type hash
  * @param t
  * @return
@@ -222,6 +222,9 @@ static rtype_t rtype_fn(type_fn_t *t) {
             .last_ptr = 0,
             .gc_bits = malloc_gc_bits(POINTER_SIZE)
     };
+    rtype.last_ptr = 8;
+    bitmap_set(rtype.gc_bits, 0);
+
     return rtype;
 }
 
@@ -596,7 +599,6 @@ rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
             .gc_bits = malloc_gc_bits(count * POINTER_SIZE)
     };
 
-
     va_list valist;
     /* 初始化可变参数列表 */
     va_start(valist, count);
@@ -622,11 +624,11 @@ rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
  * @param count
  * @return
  */
-rtype_t gc_rtype_array(uint32_t length) {
+rtype_t gc_rtype_array(type_kind kind, uint32_t length) {
     // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
     rtype_t rtype = {
             .size = length * POINTER_SIZE,
-            .kind = TYPE_GC,
+            .kind = kind,
             .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
             .gc_bits = malloc_gc_bits(length * POINTER_SIZE)
     };

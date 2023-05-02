@@ -129,10 +129,12 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 void *fn_new(addr_t fn_addr, envs_t *envs) {
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs_base=%p", fn_addr, envs);
     assert(envs);
-    rtype_t fn_rtype = gc_rtype_array(sizeof(runtime_fn_t) / POINTER_SIZE);
+    rtype_t fn_rtype = gc_rtype_array(TYPE_GC_FN, sizeof(runtime_fn_t) / POINTER_SIZE);
     // 手动设置 gc 区域, runtime_fn_t 一共是 12 个 pointer 区域，最后一个区域保存的是 envs 需要扫描
     // 其他区域都不需要扫面
     bitmap_set(fn_rtype.gc_bits, 11);
+    fn_rtype.last_ptr = sizeof(runtime_fn_t); // 也就是最后一个内存位置包含了指针
+
     runtime_fn_t *fn_runtime = runtime_malloc(sizeof(runtime_fn_t), &fn_rtype);
     free(fn_rtype.gc_bits);
     fn_runtime->fn_addr = fn_addr;
@@ -167,16 +169,16 @@ envs_t *env_new(uint64_t length) {
         env_table = table_new();
     }
 
-    rtype_t element_rtype = gc_rtype(TYPE_GC, 1, TYPE_GC_SCAN);
+    rtype_t element_rtype = gc_rtype(TYPE_GC_ENV_VALUE, 1, TYPE_GC_SCAN);
     void *values = array_new(&element_rtype, length);
 
-    rtype_t envs_rtype = gc_rtype(TYPE_GC, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    rtype_t envs_rtype = gc_rtype(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     envs_t *envs = runtime_malloc(sizeof(envs_t), &envs_rtype);
     free(envs_rtype.gc_bits);
-    envs->length = length;
     envs->values = values;
+    envs->length = length;
 
-    DEBUGF("[runtime.env_new] success, values_base=%p, length=%lu", envs->values, envs->length);
+    DEBUGF("[runtime.env_new] success,env_base=%p, values_base=%p, length=%lu", envs, envs->values, envs->length);
     return envs;
 }
 
@@ -189,7 +191,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t env_index, add
     if (!upvalue) {
         DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr)
         // create upvalue_t
-        rtype_t upvalue_rtype = gc_rtype(TYPE_GC, 2, to_gc_kind(item_rtype->kind), TYPE_GC_NOSCAN);
+        rtype_t upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(item_rtype->kind), TYPE_GC_NOSCAN);
         upvalue = runtime_malloc(sizeof(upvalue_t), &upvalue_rtype);
         free(upvalue_rtype.gc_bits);
         table_set(env_table, utoa(stack_addr), upvalue);
@@ -218,6 +220,8 @@ void env_closure(uint64_t stack_addr) {
 }
 
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {
+    DEBUGF("[runtime.env_access_ref] fn_base=%p", fn);
+
     assert(index < fn->envs->length);
     upvalue_t *upvalue = fn->envs->values[index];
 

@@ -234,8 +234,15 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
         if (bitmap_test(span->alloc_bits->bits, i) && !bitmap_test(span->gcmark_bits->bits, i)) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
+
+#ifdef DEBUG
             DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_add=0x%lx, allocator_bytes=%ld",
                    span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
+
+            // 将对应位置的内存设置为 0
+            memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
+#endif
+
         }
     }
 

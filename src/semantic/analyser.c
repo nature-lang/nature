@@ -425,17 +425,20 @@ static void analyser_local_fndef(module_t *m, ast_fndef_t *fndef) {
     // 分析请求体 block, 其中进行了对外部变量的捕获并改写, 以及 local var 名称 unique
     analyser_block(m, fndef->body);
 
-    int free_count = m->analyser_current->frees->count;
+    int free_var_count = 0;
 
     // m->analyser_current free > 0 表示当前函数引用了外部的环境，此时该函数将被编译成一个 closure
-    for (int i = 0; i < free_count; ++i) {
+    for (int i = 0; i < m->analyser_current->frees->count; ++i) {
         // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
         // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
         free_ident_t *free_var = m->analyser_current->frees->take[i];
+        if (free_var->type != SYMBOL_VAR) { // fn label 可以直接全局访问到，不需要做 env assign
+            continue;
+        }
+        free_var_count++;
 
         // 封装成 ast_expr 更利于 compiler
         ast_expr expr;
-
         // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
         if (free_var->is_local) {
             // ast_ident 表达式
@@ -462,7 +465,7 @@ static void analyser_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 如果当前函数是定层函数，退出后 m->analyser_current is null
     // 不过顶层函数也不存在 closure 引用的情况，直接注册到符号表中退出就行了
-    if (free_count > 0) {
+    if (free_var_count > 0) {
         fndef->closure_name = fndef->symbol_name;
         fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME); // 二进制中的 label name
 
@@ -504,7 +507,7 @@ static void analyser_local_fndef(module_t *m, ast_fndef_t *fndef) {
  * @param ident
  * @return
  */
-static int analyser_push_free(analyser_fndef_t *current, bool is_local, int index, string ident) {
+static int analyser_push_free(analyser_fndef_t *current, bool is_local, int index, string ident, symbol_type type) {
     // if exists, return exists index
     free_ident_t *free = table_get(current->free_table, ident);
     if (free) {
@@ -512,10 +515,11 @@ static int analyser_push_free(analyser_fndef_t *current, bool is_local, int inde
     }
 
     // 新增 free
-    free = NEW(local_ident_t);
+    free = NEW(free_ident_t);
     free->is_local = is_local;
     free->env_index = index;
     free->ident = ident;
+    free->type = type;
     int free_index = slice_push(current->frees, free);
     free->index = free_index;
     table_set(current->free_table, ident, free);
@@ -529,7 +533,7 @@ static int analyser_push_free(analyser_fndef_t *current, bool is_local, int inde
  * @param ident
  * @return
  */
-int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
+static int8_t analyser_resolve_free(analyser_fndef_t *current, char **ident, symbol_type *type) {
     if (current->parent == NULL) {
         return -1;
     }
@@ -540,18 +544,21 @@ int8_t analyser_resolve_free(analyser_fndef_t *current, string*ident) {
 
         // 在父级作用域找到对应的 ident
         if (strcmp(*ident, local->ident) == 0) {
-            local->is_capture = true;
+            if (local->type == SYMBOL_VAR) {
+                local->is_capture = true;
+            }
             *ident = local->unique_ident;
-            return (int8_t) analyser_push_free(current, true, i, *ident);
+            *type = local->type;
+            return (int8_t) analyser_push_free(current, true, i, *ident, *type);
         }
     }
 
 
     // 一级 parent 没有找到，则继续向上 parent 递归查询
-    int8_t parent_free_index = analyser_resolve_free(current->parent, ident);
+    int8_t parent_free_index = analyser_resolve_free(current->parent, ident, type);
     if (parent_free_index != -1) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
-        return (int8_t) analyser_push_free(current, false, parent_free_index, *ident);
+        return (int8_t) analyser_push_free(current, false, parent_free_index, *ident, *type);
     }
 
     return -1;
@@ -575,8 +582,14 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
     }
 
     // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
-    int8_t free_var_index = analyser_resolve_free(m->analyser_current, &ident->literal);
+    symbol_type type = SYMBOL_VAR;
+    int8_t free_var_index = analyser_resolve_free(m->analyser_current, &ident->literal, &type);
     if (free_var_index != -1) {
+        // free 不一定是 var, 可能是 fn, 如果是 fn 只要改名了就行
+        if (type != SYMBOL_VAR) {
+            return;
+        }
+
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;

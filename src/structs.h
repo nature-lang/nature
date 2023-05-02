@@ -95,7 +95,8 @@ typedef struct {
     bool is_local;
     int env_index; // env_index
     string ident;
-    int index; // free in frees index
+    uint64_t index; // free in frees index
+    symbol_type type;
 } free_ident_t;
 
 typedef struct {

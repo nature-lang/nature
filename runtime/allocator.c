@@ -569,7 +569,7 @@ static void mcentral_grow(mcentral_t *mcentral) {
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assertf(span->obj_count > 0, "alloc span failed, span.obj_count == 0, spanclass=%d", span->spanclass);
 
-    DEBUGF("[runtime.mcentral_grow] spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu success",
+    DEBUGF("[runtime.mcentral_grow] success, spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu",
            span->spanclass, span->base, span->alloc_count, span->obj_count);
 
     // 插入到 mcentral 中
@@ -911,11 +911,11 @@ void *runtime_malloc(uint64_t size, rtype_t *type) {
 
     if (allocated_bytes > next_gc_bytes) {
         uint64_t before_bytes = allocated_bytes;
-        DEBUGF("[runtime_malloc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+        DEBUGF("[runtime_malloc.auto_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
                next_gc_bytes);
         runtime_gc();
         next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
-        DEBUGF("[runtime_malloc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
+        DEBUGF("[runtime_malloc.auto_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
                before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
     }
 

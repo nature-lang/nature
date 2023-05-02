@@ -1177,7 +1177,7 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
     slice_t *capture_vars = slice_new();
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr *item = ct_list_value(fndef->capture_exprs, i);
-        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪, ssa 完成后
+        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪
         if (item->assert_type == AST_EXPR_IDENT) {
             char *ident = ((ast_ident *) item->value)->literal;
             slice_push(capture_vars, lir_var_new(m, ident));

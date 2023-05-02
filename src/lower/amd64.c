@@ -229,7 +229,7 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
     assert(op->first->assert_type == LIR_OPERAND_CLOSURE_VARS);
 
     slice_t *closure_vars = op->first->value;
-    assert(closure_vars->count == 1);
+    assert(closure_vars->count > 0);
     for (int i = 0; i < closure_vars->count; ++i) {
         lir_var_t *var = closure_vars->take[i];
         int64_t stack_slot = var_stack_slot(c, var);
