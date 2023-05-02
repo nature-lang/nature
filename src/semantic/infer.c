@@ -138,6 +138,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
 }
 
 /**
+ * 这里如果有问题直接就退出了
  * [a, b(), c[1], d.foo]
  * @param list_new
  * @return 
@@ -149,14 +150,15 @@ static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_
     // 初始化时类型未知
     type_list->element_type = type_basic_new(TYPE_UNKNOWN);
 
-    type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
     if (target_type.kind != TYPE_UNKNOWN) {
-        element_target_type = target_type.list->element_type;
+        // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
+        // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
+        type_list->element_type = target_type.list->element_type;
     }
 
     for (int i = 0; i < list_new->values->length; ++i) {
         ast_expr *item_expr = ct_list_value(list_new->values, i);
-        type_t item_type = infer_right_expr(m, item_expr, element_target_type);
+        type_t item_type = infer_right_expr(m, item_expr, type_list->element_type);
 
         // 无法根据 [...] 右值推断出具体的类型
         if (type_list->element_type.kind == TYPE_UNKNOWN) {
@@ -172,10 +174,6 @@ static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_
     }
 
     result.list = type_list;
-
-    // list type 冗余,便于 compiler
-//    list_new->type = result;
-
     return result;
 }
 
@@ -191,17 +189,16 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
     type_map->key_type = type_basic_new(TYPE_UNKNOWN);
     type_map->value_type = type_basic_new(TYPE_UNKNOWN);
 
-    type_t key_target_type = type_basic_new(TYPE_UNKNOWN);
-    type_t value_target_type = type_basic_new(TYPE_UNKNOWN);
     if (target_type.kind != TYPE_UNKNOWN) {
-        key_target_type = target_type.map->key_type;
-        value_target_type = target_type.map->value_type;
+        // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
+        type_map->key_type = target_type.map->key_type;
+        type_map->value_type = target_type.map->value_type;
     }
 
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element *item = ct_list_value(map_new->elements, i);
-        type_t key_type = infer_right_expr(m, &item->key, key_target_type);
-        type_t value_type = infer_right_expr(m, &item->value, value_target_type);
+        type_t key_type = infer_right_expr(m, &item->key, type_map->key_type);
+        type_t value_type = infer_right_expr(m, &item->value, type_map->value_type);
 
         // key
         if (type_map->key_type.kind == TYPE_UNKNOWN) {
@@ -240,15 +237,14 @@ static type_t infer_set_new(module_t *m, ast_set_new *set_new, type_t target_typ
     set_decl->key_type = type_basic_new(TYPE_UNKNOWN);
 
     // 右值如果有推荐的类型，则基于推荐类型做 infer, 此时可能会触发类型转换
-    type_t key_target_type = type_basic_new(TYPE_UNKNOWN);
     if (target_type.kind != TYPE_UNKNOWN) {
-        key_target_type = target_type.set->key_type;
+        set_decl->key_type = target_type.set->key_type;
     }
 
     for (int i = 0; i < set_new->keys->length; ++i) {
         ast_expr *expr = ct_list_value(set_new->keys, i);
 
-        type_t key_type = infer_right_expr(m, expr, key_target_type);
+        type_t key_type = infer_right_expr(m, expr, set_decl->key_type);
 
         if (set_decl->key_type.kind == TYPE_UNKNOWN) {
             set_decl->key_type = key_type;
@@ -807,7 +803,8 @@ static bool type_confirmed(type_t t) {
  * var d = void (int a, int b) {}
  * var e = [1, 2, 3] // ?
  * var f = {"a": 1, "b": 2} // ?
- * var h = call();
+ * var h = call()
+ * [i64] list = []
  */
 static void infer_vardef(module_t *m, ast_vardef_stmt *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
@@ -985,16 +982,19 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new, type_t targ
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(type_t));
     t.tuple = tuple_type;
-
+    assertf(tuple_new->elements->length > 0, "tuple elements emtpy");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
-        type_t element_target = type_basic_new(TYPE_UNKNOWN);
-        if (target_type.kind == TYPE_TUPLE) {
+        type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
+        if (target_type.kind != TYPE_UNKNOWN) {
             type_t *temp = ct_list_value(target_type.tuple->elements, i);
-            element_target = *temp;
+            element_target_type = *temp;
         }
 
         ast_expr *expr = ct_list_value(tuple_new->elements, i);
-        type_t expr_type = infer_right_expr(m, expr, element_target);
+        type_t expr_type = infer_right_expr(m, expr, element_target_type);
+
+        assertf(type_confirmed(expr_type), "tuple element type type cannot confirmed");
+
         ct_list_push(tuple_type->elements, &expr_type);
     }
 
@@ -1204,7 +1204,7 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
         *expr = ast_type_convert(*expr, target_type);
     }
 
-    assertf(type_compare(expr->type, target_type), "line=%d, type inconsistency", expr->line);
+    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency", expr->line);
     return expr->type;
 }
 
@@ -1263,6 +1263,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_TUPLE) {
         type_tuple_t *tuple = t.tuple;
+        assertf(tuple->elements->length > 0, "tuple element empty");
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *use = ct_list_value(tuple->elements, i);
             *use = reduction_type(m, *use);

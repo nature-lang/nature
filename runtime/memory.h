@@ -21,7 +21,7 @@
 
 #define PAGE_MASK (PAGE_SIZE - 1) // 0b1111111111111
 
-#define MSTACK_SIZE (8 * 1024 * 1024) // 由于目前还没有栈扩容机制，所以初始化栈可以大一点
+#define MSTACK_SIZE (8 * 1024 * 1024) // 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
 #define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个page
 
@@ -52,6 +52,12 @@
 #define PAGE_SUMMARY_COUNT_L3  (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)
 #define PAGE_SUMMARY_COUNT_L2  (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)
 #define PAGE_SUMMARY_COUNT_L1  (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)
+
+#define DEFAULT_NEXT_GC_BYTES  (100 * 1024) // 100KB
+#define NEXT_GC_FACTOR 2
+
+uint64_t allocated_bytes; // 当前分配的内存空间
+uint64_t next_gc_bytes; // 下一次 gc 的内存量
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
@@ -328,5 +334,29 @@ void symdefs_deserialize();
 rtype_t *rt_find_rtype(uint64_t index);
 
 uint64_t rt_rtype_heap_out_size(uint64_t index);
+
+
+fndef_t *find_fn(addr_t addr);
+
+/**
+ * gc 入口
+ * @return
+ */
+void runtime_gc();
+
+
+/**
+ * 分配入口
+ * @param size
+ * @param type
+ * @return
+ */
+void *runtime_malloc(uint64_t size, rtype_t *type);
+
+uint64_t runtime_malloc_bytes();
+
+mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
+
+arena_hint_t *arena_hints_init();
 
 #endif //NATURE_MEMORY_H

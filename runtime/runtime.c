@@ -57,7 +57,7 @@ void runtime_main() {
     MODE_CALL(p->user_mode, p->system_mode, main);
 
     // 检查错误
-    DEBUGF("[runtime_main] errort?: %p", p->errort);
+    DEBUGF("[runtime_main] has errort? %p", p->errort);
     if (p->errort) {
         // down load error
         processor_dump_errort(p->errort);

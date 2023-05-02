@@ -1,7 +1,4 @@
-#include "collector.h"
-
 #include "memory.h"
-#include "allocator.h"
 #include "processor.h"
 
 // TODO default linux_amd64
@@ -42,21 +39,25 @@ static void scan_stack(memory_t *m) {
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
 
     addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
-    assertf(frame_base >= mode.stack_base && frame_base < mode.stack_base + mode.stack_size, "stack overflow");
+    uint64_t stack_top = mode.stack_base + mode.stack_size;
+    assertf(frame_base >= mode.stack_base && frame_base < stack_top, "stack overflow");
 
-    DEBUGF("[runtime_gc.scan_stack] start, stack_base=0x%lx, stack_end=0x%lx, stack_frame=0x%lx",
+    DEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx",
            mode.stack_base,
-           mode.stack_base + mode.stack_size,
+           stack_top,
            frame_base);
 
-    while (true) {
+    assert(frame_base % 8 == 0);
+    while (frame_base + POINTER_SIZE < stack_top) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
         if (!fn) {
-            DEBUGF("[runtime_gc.scan_stack] fn not found by return_addr=0x%lx, may have arrived root", return_addr);
-            break;
+            DEBUGF("[runtime_gc.scan_stack] fn not found,frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
+                   frame_base,
+                   return_addr);
+            frame_base += POINTER_SIZE;
+            continue;
         }
-
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是向上增加
@@ -96,12 +97,9 @@ static void scan_stack(memory_t *m) {
             i += 1;
             cursor -= POINTER_SIZE;
         }
-
-        // 已经到达了栈底(大值)
-        if (frame_base >= mode.stack_base + mode.stack_size) {
-            break;
-        }
     }
+
+    DEBUGF("[runtime_gc.scan_stack] completed, frame_base=0x%lx", frame_base);
 }
 
 static void scan_symdefs(memory_t *m) {
@@ -235,9 +233,9 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
         // 如果 gcmark_bits = 0, alloc_bits = 1, 则表明内存被释放，可以进行释放的
         if (bitmap_test(span->alloc_bits->bits, i) && !bitmap_test(span->gcmark_bits->bits, i)) {
             // 内存回收(未返回到堆)
-            allocator_bytes -= span->obj_size;
+            allocated_bytes -= span->obj_size;
             DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_add=0x%lx, allocator_bytes=%ld",
-                   span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocator_bytes);
+                   span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
         }
     }
 

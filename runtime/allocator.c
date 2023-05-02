@@ -1,10 +1,9 @@
-#include "allocator.h"
 #include "processor.h"
 #include "memory.h"
 #include "utils/type.h"
 
 
-static uint8_t calc_sizeclass(uint8_t size) {
+static uint8_t calc_sizeclass(uint64_t size) {
     for (int i = 0; i < SIZECLASS_COUNT; ++i) {
         uint64_t obj_size = class_obj_size[i];
         if (size > obj_size) {
@@ -26,7 +25,7 @@ static uint8_t take_sizeclass(uint8_t spanclass) {
     return spanclass >> 1;
 }
 
-static uint64_t span_pages_count(uint8_t spanclass) {
+static uint64_t take_pages_count(uint8_t spanclass) {
     uint8_t sizeclass = take_sizeclass(spanclass);
     return clas_pages_count[sizeclass];
 }
@@ -537,6 +536,7 @@ static void mheap_grow(uint64_t pages_count) {
  * @return
  */
 static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
+    assert(pages_count > 0);
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
     // 因为有垃圾回收的存在，所以 page_alloc 中的历史上的某些部分存在空闲且连续的 pages
     addr_t base = page_alloc_find(pages_count);
@@ -558,13 +558,18 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 }
 
 static void mcentral_grow(mcentral_t *mcentral) {
+    DEBUGF("[runtime.mcentral_grow] spanclass=%d, sizeclass=%d, pages_count=%lu",
+           mcentral->spanclass,
+           take_sizeclass(mcentral->spanclass),
+           take_pages_count(mcentral->spanclass));
+
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
-    uint64_t pages_count = span_pages_count(mcentral->spanclass);
+    uint64_t pages_count = take_pages_count(mcentral->spanclass);
 
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assertf(span->obj_count > 0, "alloc span failed, span.obj_count == 0, spanclass=%d", span->spanclass);
 
-    DEBUGF("[mcentral_grow] spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu success",
+    DEBUGF("[runtime.mcentral_grow] spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu success",
            span->spanclass, span->base, span->alloc_count, span->obj_count);
 
     // 插入到 mcentral 中
@@ -706,6 +711,8 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
+    assert(sizeclass > 0 && spanclass > 1);
+
     mspan_t *span;
     addr_t addr = mcache_alloc(spanclass, &span);
     assertf(span, "std_malloc notfound span");
@@ -715,21 +722,22 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
-    allocator_bytes += span->obj_size;
+    allocated_bytes += span->obj_size;
 
     char *debug_kind = "";
     if (rtype) {
         debug_kind = type_kind_string[rtype->kind];
     }
-    DEBUGF("[runtime.std_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, "
+    DEBUGF("[runtime.std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
            "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
            span->spanclass,
            span->base,
            span->obj_size,
+           span->alloc_count,
            size,
            debug_kind,
            addr,
-           allocator_bytes);
+           allocated_bytes);
 
     return addr;
 }
@@ -752,7 +760,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     mcentral_t *central = &memory->mheap->centrals[spanclass];
     linked_push(central->full_swept, span);
 
-    allocator_bytes += span->obj_size;
+    allocated_bytes += span->obj_size;
 
     char *debug_kind = "";
     if (rtype) {
@@ -766,7 +774,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
            size,
            debug_kind,
            span->base,
-           allocator_bytes);
+           allocated_bytes);
 
     return span->base;
 }
@@ -817,6 +825,10 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 
 
 void memory_init() {
+    // 初始化 gc 参数
+    allocated_bytes = 0;
+    next_gc_bytes = DEFAULT_NEXT_GC_BYTES;
+
     // - 初始化 mheap
     mheap_t *mheap = mallocz_big(sizeof(mheap_t)); // 所有的结构体，数组初始化为 0, 指针初始化为 null
     mheap->page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
@@ -897,6 +909,17 @@ void *runtime_malloc(uint64_t size, rtype_t *type) {
         DEBUGF("[runtime_malloc] size=%ld, type is null", size);
     }
 
+    if (allocated_bytes > next_gc_bytes) {
+        uint64_t before_bytes = allocated_bytes;
+        DEBUGF("[runtime_malloc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+               next_gc_bytes);
+        runtime_gc();
+        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
+        DEBUGF("[runtime_malloc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
+               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
+    }
+
+
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
         return (void *) std_malloc(size, type);
@@ -926,7 +949,11 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->gcmark_bits = bitmap_new((int) span->obj_count);
 
     DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu",
-           span->base, span->pages_count, span->spanclass, sizeclass, span->obj_count, span->obj_size);
+           span->base, span->pages_count, span->spanclass, sizeclass, span->obj_size, span->obj_count);
     return span;
+}
+
+uint64_t runtime_malloc_bytes() {
+    return allocated_bytes;
 }
 

@@ -2,7 +2,7 @@
 #define NATURE_RT_TYPE_ARRAY_H
 
 #include "utils/type.h"
-#include "runtime/allocator.h"
+#include "runtime/memory.h"
 
 static inline memory_array_t *array_new(rtype_t *element_rtype, uint64_t length) {
     // - 创建一个 typeuse_array_t 结构

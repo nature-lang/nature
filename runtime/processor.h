@@ -2,7 +2,6 @@
 #define NATURE_PROCESSOR_H
 
 #include "memory.h"
-#include "allocator.h"
 #include <stdio.h>
 #include <stdint.h>
 

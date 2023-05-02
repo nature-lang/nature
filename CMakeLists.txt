@@ -144,9 +144,7 @@ set(RUNTIME_FILES
         ${PROJECT_SOURCE_DIR}/runtime/sizeclass.h
         ${PROJECT_SOURCE_DIR}/runtime/memory.h
         ${PROJECT_SOURCE_DIR}/runtime/memory.c
-        ${PROJECT_SOURCE_DIR}/runtime/allocator.h
         ${PROJECT_SOURCE_DIR}/runtime/allocator.c
-        ${PROJECT_SOURCE_DIR}/runtime/collector.h
         ${PROJECT_SOURCE_DIR}/runtime/collector.c
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.h
         ${PROJECT_SOURCE_DIR}/runtime/builtin/builtin.c

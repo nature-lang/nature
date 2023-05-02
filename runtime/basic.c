@@ -1,5 +1,5 @@
 #include "basic.h"
-#include "runtime/allocator.h"
+#include "runtime/memory.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
     switch (_kind) { \

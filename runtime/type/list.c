@@ -1,6 +1,6 @@
 #include "list.h"
 #include "utils/custom_links.h"
-#include "runtime/allocator.h"
+#include "runtime/memory.h"
 #include "array.h"
 
 void list_grow(memory_list_t *l) {
@@ -87,10 +87,12 @@ uint64_t list_length(memory_list_t *l) {
  * @param ref
  */
 void list_push(memory_list_t *l, void *ref) {
-    DEBUGF("[list_push] current_length=%lu", l->length);
+//    DEBUGF("[list_push] current_length=%lu", l->length);
 
     if (l->length == l->capacity) {
-        DEBUGF("[list_push] current_length=%lu == capacity, trigger grow", l->length);
+        DEBUGF("[list_push] current_length=%lu == capacity, trigger grow, next capacity=%lu",
+               l->length,
+               l->capacity * 2);
         list_grow(l);
     }
 

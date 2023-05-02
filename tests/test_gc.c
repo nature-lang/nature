@@ -3,7 +3,7 @@
 #include "utils/custom_links.h"
 #include "runtime/type/list.h"
 #include "runtime/processor.h"
-#include "runtime/collector.h"
+#include "runtime/memory.h"
 
 addr_t rt_fn_main_base;
 

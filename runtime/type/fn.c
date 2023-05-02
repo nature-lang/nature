@@ -1,6 +1,5 @@
 #include "fn.h"
-#include "runtime/allocator.h"
-#include "runtime/collector.h"
+#include "runtime/memory.h"
 #include "array.h"
 
 #ifdef __AMD64

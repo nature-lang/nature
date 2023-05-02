@@ -383,4 +383,18 @@ static inline void sys_memory_remove(void *addr, uint64_t size) {
     madvise(addr, size, MADV_REMOVE);
 }
 
+static inline int64_t *take_numbers(char *str, uint64_t count) {
+    int64_t *numbers = malloc(count * sizeof(int64_t));
+    int i = 0;
+    char *token;
+    token = strtok(str, "\n");
+    while (token != NULL && i < count) {
+        // 使用 atoi 函数将字符串转换为整数，并存入数组中
+        numbers[i] = atoll(token);
+        i++;
+        token = strtok(NULL, "\n");  // 继续提取下一个数字
+    }
+    return numbers;
+}
+
 #endif //NATURE_SRC_LIB_HELPER_H_

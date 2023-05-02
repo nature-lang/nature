@@ -90,6 +90,7 @@ typedef enum {
 
 static string type_kind_string[] = {
         [TYPE_GC] = "gc",
+        [TYPE_ARRAY] = "array",
 
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",

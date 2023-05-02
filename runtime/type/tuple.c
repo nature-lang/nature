@@ -1,6 +1,5 @@
 #include "tuple.h"
 #include "runtime/memory.h"
-#include "runtime/allocator.h"
 
 memory_tuple_t *tuple_new(uint64_t rtype_index) {
     rtype_t *rtype = rt_find_rtype(rtype_index);

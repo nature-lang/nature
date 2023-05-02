@@ -4,7 +4,6 @@
 #include "utils/type.h"
 #include "utils/custom_links.h"
 #include "runtime/memory.h"
-#include "runtime/allocator.h"
 #include "array.h"
 #include "hash.h"
 
