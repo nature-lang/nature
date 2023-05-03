@@ -4,7 +4,10 @@
 #include "bitmap.h"
 #include "ct_list.h"
 #include "custom_links.h"
-#include "src/cross.h"
+
+#ifndef POINTER_SIZE
+#define POINTER_SIZE sizeof(void *)
+#endif
 
 rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
@@ -356,7 +359,7 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_INT:
         case TYPE_UINT:
         case TYPE_FLOAT:
-            return cross_number_size(); // 固定大小
+            return POINTER_SIZE; // 固定大小
         default:
             return POINTER_SIZE;
     }

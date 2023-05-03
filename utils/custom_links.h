@@ -1,8 +1,8 @@
 #ifndef NATURE_CUSTOM_LINKS_H
 #define NATURE_CUSTOM_LINKS_H
 
-#include "utils/type.h"
-#include "utils/ct_list.h"
+#include "type.h"
+#include "ct_list.h"
 
 /**
  * 这里存储了 nature 所有全局变量

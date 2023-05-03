@@ -155,6 +155,7 @@ typedef struct {
  * 机器码指令结构, 难道是这个的描述性不好？
  */
 typedef struct {
+    uint64_t op_id;
     uint8_t prefix; // 不知道是干嘛的，明明都有 rex.prefix 和 vex.prefix 了
     vex_prefix_t *vex_prefix;
     rex_prefix_t *rex_prefix;

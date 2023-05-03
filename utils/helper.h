@@ -17,6 +17,8 @@
 #define string char *
 #define STRING_EOF '\0'
 
+#define VOID (void)!
+
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
@@ -245,7 +247,8 @@ static inline bool file_exists(char *path) {
 }
 
 static inline char *rtrim(char *str, size_t trim_len) {
-    size_t len = strlen(str) - trim_len + 1; // +1 表示 \0 部分
+    size_t len = strlen(str); // +1 表示 \0 部分
+    len = len - trim_len + 1;
     char *res = malloc(len);
 
     strncpy(res, str, len);
@@ -257,7 +260,7 @@ static inline char *rtrim(char *str, size_t trim_len) {
 static inline char *get_work_dir() {
     int size = 256;
     char *buf = malloc(size);
-    getcwd(buf, size);
+    VOID getcwd(buf, size);
     return buf;
 }
 

@@ -6,12 +6,12 @@
 #include "src/binary/elf/output.h"
 #include "utils/helper.h"
 
-int setup(void **state) {
+int setup() {
     printf("setup\n");
     return 0;
 }
 
-int teardown(void **state) {
+int teardown() {
     printf("teardown\n");
     return 0;
 }
@@ -38,8 +38,7 @@ static void test_basic() {
 }
 
 int main(void) {
-    const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_basic),
-    };
-    return cmocka_run_group_tests(tests, setup, teardown);
+    setup();
+    test_basic();
+    teardown();
 }

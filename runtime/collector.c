@@ -1,11 +1,8 @@
 #include "memory.h"
 #include "processor.h"
 
-// TODO default linux_amd64
-#define LINUX_AMD64
-#ifdef LINUX_AMD64
-
 /**
+ * TODO current is AMD64
  * amd64 下，5 表示 rbp 寄存器的值，这里表示最后一次切换后，rbp 寄存器中的值
  * @param mode
  * @return
@@ -13,8 +10,6 @@
 static addr_t extract_frame_base(mmode_t mode) {
     return mode.ctx.uc_mcontext.gregs[10];
 }
-
-#endif
 
 /**
  * addr 是 .text 中的地址
@@ -40,6 +35,9 @@ static void scan_stack(memory_t *m) {
 
     addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
     uint64_t stack_top = mode.stack_base + mode.stack_size;
+
+    DEBUGF("[runtime.scan_stack] frame_base(BP)=0x%lx, stack_top(max)=0x%lx, stack_base(min)=0x%lx", frame_base,
+           stack_top, mode.stack_base);
     assertf(frame_base >= mode.stack_base && frame_base < stack_top, "stack overflow");
 
     DEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx",
@@ -313,7 +311,9 @@ void mcentral_sweep(mheap_t *mheap) {
  * @stack system
  */
 static void _runtime_gc() {
-//    DEBUG_STACK();
+    DEBUGF("[_runtime_gc] stack switched, current is temp mode");
+    DEBUG_STACK();
+    processor_t *_p = processor_get();
 
     // 2. 遍历 gc roots
     // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
@@ -351,6 +351,7 @@ static void _runtime_gc() {
  */
 void runtime_gc() {
     DEBUGF("[runtime_gc] start")
+    DEBUG_STACK();
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
     processor_t *p = processor_get();
     MODE_CALL(p->temp_mode, p->user_mode, _runtime_gc)

@@ -6,9 +6,7 @@
 #include <stdlib.h>
 #include "utils/helper.h"
 
-#define DEBUG_LIR
-#define DEBUG_INTERVAL
-#define DEBUG_ASM
+
 #define ASSERTF_DEF_ONCE
 
 typedef enum {
@@ -47,7 +45,7 @@ static inline char *temp_dir() {
     char *tmp_dir;
     if (BUILD_OS == OS_LINUX) {
         char temp[] = LINUX_BUILD_TMP_DIR;
-        mkdtemp(temp);
+        VOID mkdtemp(temp);
 
         size_t size = strlen(LINUX_BUILD_TMP_DIR) + 1;
         tmp_dir = malloc(size);

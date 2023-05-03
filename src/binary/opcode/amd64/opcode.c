@@ -88,7 +88,7 @@ inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
 
 // add------------------------------------------------------------------------------------------------------
 inst_t add_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},{OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
 };
 inst_t add_rex_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
                            {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
@@ -135,7 +135,7 @@ inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SL
 
 // sub ------------------------------------------------------------------------------------------------------
 inst_t sub_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
-                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},{OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
+                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
 };
 inst_t sub_rex_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
                            {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
@@ -1888,6 +1888,7 @@ static amd64_inst_format_t *inst_format_new(uint8_t *opcode) {
  */
 amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
     amd64_inst_format_t *format = inst_format_new(inst->opcode);
+    format->op_id = asm_inst.op_id;
 
     if (asm_inst.prefix > 0) {
         inst->prefix = asm_inst.prefix;
@@ -2231,7 +2232,7 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
     }
 
     uint8_t j = 0;
-    while (format->opcode[j] > 0 && j < 3) {
+    while (j < 3 && format->opcode[j] > 0) {
         data[(*count)++] = format->opcode[j++];
     }
 
@@ -2254,9 +2255,7 @@ void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t 
 
 inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8_t *count) {
     assert(opcode_tree_root);
-
     *count = 0;
-//    uint8_t *data = malloc(sizeof(uint8_t) * 30);
 
     inst_t *inst = opcode_select(operation);
     amd64_inst_format_t *format = opcode_fill(inst, operation);

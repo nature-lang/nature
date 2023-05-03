@@ -13,7 +13,7 @@ int teardown(void **state) {
 static void test_bitmap_base() {
     bitmap_t *b = bitmap_new(16);
     assert_int_equal(b->size, 16);
-    assert_non_null(b->bits);
+    assert(b->bits);
 
     bitmap_set(b->bits, 7);
     assert_int_equal(bitmap_test(b->bits, 7), 1);
@@ -31,8 +31,5 @@ static void test_bitmap_base() {
 }
 
 int main(void) {
-    const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_bitmap_base),
-    };
-    return cmocka_run_group_tests(tests, setup, teardown);
+    test_bitmap_base();
 }

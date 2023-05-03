@@ -15,57 +15,57 @@ static void print_arg(memory_any_t *arg) {
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
         memory_string_t *s = arg->value.ptr_value; // 字符串的内存视角
-        write(STDOUT_FILENO, s->array_data, s->length);
+        VOID write(STDOUT_FILENO, s->array_data, s->length);
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT64 || arg->rtype->kind == TYPE_FLOAT) {
         int n = sprintf(sprint_buf, "%f", arg->value.f64_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT32) {
         int n = sprintf(sprint_buf, "%f", arg->value.f32_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_UINT || arg->rtype->kind == TYPE_UINT64) {
         int n = sprintf(sprint_buf, "%lu", arg->value.u64_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_UINT32) {
         int n = sprintf(sprint_buf, "%u", arg->value.u32_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_UINT16) {
         int n = sprintf(sprint_buf, "%u", arg->value.u16_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_UINT8) {
         int n = sprintf(sprint_buf, "%u", arg->value.u8_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_INT || arg->rtype->kind == TYPE_INT64) {
         int n = sprintf(sprint_buf, "%ld", arg->value.i64_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_INT32) {
         int n = sprintf(sprint_buf, "%d", arg->value.i32_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_INT16) {
         int n = sprintf(sprint_buf, "%d", arg->value.i16_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_INT8) {
         int n = sprintf(sprint_buf, "%d", arg->value.i8_value);
-        write(STDOUT_FILENO, sprint_buf, n);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
     if (arg->rtype->kind == TYPE_BOOL) {
@@ -73,7 +73,7 @@ static void print_arg(memory_any_t *arg) {
         if (arg->value.bool_value) {
             raw = "true";
         }
-        write(STDOUT_FILENO, raw, strlen(raw));
+        VOID write(STDOUT_FILENO, raw, strlen(raw));
         return;
     }
 
@@ -101,5 +101,5 @@ void print(memory_list_t *args) {
 
 void println(memory_list_t *args) {
     print(args);
-    write(STDOUT_FILENO, "\n", 1);
+    VOID write(STDOUT_FILENO, "\n", 1);
 }

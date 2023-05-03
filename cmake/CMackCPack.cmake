@@ -6,6 +6,6 @@ set(CPACK_PACKAGE_FILE_NAME "nature-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CM
 set(CPACK_GENERATOR "TGZ")
 
 
-message(STATUS "hello generators: ${CPACK_GENERATOR}")
+message(STATUS "wille generators: ${CPACK_GENERATOR}")
 
 include(CPack)

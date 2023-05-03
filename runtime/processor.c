@@ -68,6 +68,6 @@ void processor_dump_errort(memory_struct_t *errort) {
            msg->length, msg->array_data);
 
     char *error_prefix = "runtime catch error: ";
-    write(STDOUT_FILENO, error_prefix, strlen(error_prefix));
-    write(STDOUT_FILENO, msg->array_data, msg->length);
+    VOID write(STDOUT_FILENO, error_prefix, strlen(error_prefix));
+    VOID write(STDOUT_FILENO, msg->array_data, msg->length);
 }

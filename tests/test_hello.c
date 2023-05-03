@@ -1,12 +1,12 @@
 #include "test.h"
 #include <stdio.h>
 
-int setup(void **state) {
+int setup() {
     printf("setup\n");
     return 0;
 }
 
-int teardown(void **state) {
+int teardown() {
     printf("teardown\n");
     return 0;
 }
@@ -16,8 +16,7 @@ static void test_hello() {
 }
 
 int main(void) {
-    const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_hello),
-    };
-    return cmocka_run_group_tests(tests, setup, teardown);
+    setup();
+    test_hello();
+    teardown();
 }

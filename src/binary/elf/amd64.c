@@ -137,7 +137,7 @@ static asm_operand_t *has_symbol_operand(asm_operation_t *operation) {
 
 static amd64_build_temp_t *build_temp_new(asm_operation_t *operation) {
     amd64_build_temp_t *temp = NEW(amd64_build_temp_t);
-    temp->data = malloc(sizeof(uint8_t) * 30);
+    temp->data = mallocz(sizeof(uint8_t) * 30);
     temp->data_count = 0;
     temp->inst = NULL;
     temp->offset = NEW(uint64_t);

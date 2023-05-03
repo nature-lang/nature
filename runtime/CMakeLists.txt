@@ -1,7 +1,49 @@
-set(LIB_OUTPUT_PREFIX ${PROJECT_SOURCE_DIR}/lib)
+cmake_minimum_required(VERSION 3.22)
+project(runtime C)
+
+# release 命令, 在 nature 跟目录下执行
+# rm -rf build-runtime &&
+# cmake -B build-runtime -S runtime -DCMAKE_TOOLCHAIN_FILE=$(pwd)/cmake/linux-amd64-toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_BUILD_TYPE=Release &&
+# cmake --build build-runtime --target runtime
+
+set(CMAKE_C_STANDARD 11)
+
+set(LIB_OUTPUT_PREFIX ../lib)
+
+# release 时的编译优化等级
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_C_FLAGS_RELEASE "-O0 -DNDEBUG")
+endif ()
+
+# 设置交叉编译工具链名称
+if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    set(CMAKE_SYSTEM_NAME darwin)
+endif ()
+if (CMAKE_SYSTEM_NAME STREQUAL Linux)
+    set(CMAKE_SYSTEM_NAME linux)
+endif ()
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
+    set(CMAKE_SYSTEM_PROCESSOR amd64)
+endif ()
+
+# 开启debug 参数
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+    message("DEBUGF enabled")
+    add_compile_definitions(DEBUG)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O1")
+endif ()
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES amd64)
+    message("add compile def __AMD64")
+    add_compile_definitions(__AMD64)
+endif ()
+
+include_directories(../)
+aux_source_directory(../utils UTILS)
+FILE(GLOB_RECURSE RUNTIMES ./*c)
 
 message("runtime os: ${CMAKE_SYSTEM_NAME} arch: ${CMAKE_SYSTEM_PROCESSOR}")
-add_library(runtime STATIC ${UTILS} ${RUNTIME_FILES})
+add_library(runtime STATIC ${UTILS} ${RUNTIMES})
 set_target_properties(runtime PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR})
 message("runtime register success")

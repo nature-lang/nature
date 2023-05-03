@@ -18,11 +18,11 @@ rtype_t rt_rtype_data;
 
 char *build_entry = "main.n";
 
-int setup(void **state) {
+int setup() {
     // 调整工作目录到 stub 中
     char *work_dir = getenv("WORK_DIR");
     assertf(strlen(work_dir), "work_dir empty");
-    chdir(work_dir);
+    VOID chdir(work_dir);
     build(build_entry);
 
     rt_symdef_count = ct_symdef_count;
@@ -40,7 +40,7 @@ int setup(void **state) {
     return 0;
 }
 
-int teardown(void **state) {
+int teardown() {
     printf("teardown\n");
     return 0;
 }
@@ -129,8 +129,7 @@ static void test_gc_basic() {
 }
 
 int main(void) {
-    const struct CMUnitTest tests[] = {
-            cmocka_unit_test(test_gc_basic),
-    };
-    return cmocka_run_group_tests(tests, setup, teardown);
+    setup();
+    test_gc_basic();
+    teardown();
 }

@@ -8,7 +8,7 @@
 // 结尾必须是 NULL,开头必须是重复命令
 char *exec(char *work_dir, char *file, slice_t *list) {
     int fd[2]; // write to fd[1], read by fd[0]
-    pipe(fd);
+    VOID pipe(fd);
 
     size_t count = list->count + 2;
     char *argv[count];
@@ -27,7 +27,7 @@ char *exec(char *work_dir, char *file, slice_t *list) {
         close(fd[1]);
         if (work_dir) {
             // 修改执行的工作目录
-            chdir(work_dir);
+            VOID chdir(work_dir);
         }
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误

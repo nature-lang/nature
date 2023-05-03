@@ -5,18 +5,20 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <stdint.h>
-#include "cmocka/include/cmocka.h"
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 #include "src/build/build.h"
 #include "utils/exec.h"
 
+#define assert_string_equal(_actual, _expect) (assertf(str_equal(_actual, _expect), "%s", _actual))
+#define assert_int_equal(_actual, _expect) (assert((_actual) == (_expect)))
+
 static inline char *exec_output() {
     return exec(BUILD_OUTPUT_DIR, BUILD_OUTPUT, slice_new());
 }
 
-static inline int stub_setup(void **state) {
+static inline int blackbox_setup() {
     char *nature_root = getenv("NATURE_ROOT");
     assert(nature_root != NULL);
 
@@ -30,15 +32,10 @@ static inline int stub_setup(void **state) {
     return 0;
 }
 
-static inline int stub_teardown() {
-    return 0;
-}
 
 #define TEST_BASIC \
-    const struct CMUnitTest tests[] = {\
-        cmocka_unit_test(test_basic),\
-    };\
-    return cmocka_run_group_tests(tests, stub_setup, stub_teardown);
+    blackbox_setup();              \
+    test_basic();\
 
 
 #endif //NATURE_TEST_H

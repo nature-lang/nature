@@ -19,9 +19,9 @@
     processor_t *_p = processor_get(); \
     mmode_t _s = _p->user_mode;      \
     DEBUGF("\nFN: %s", __func__);                   \
-    DEBUGF("user_stack:  base=%lx, size=%lx, ctx_sp=%p", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp); \
+    DEBUGF("user_stack:  base=0x%lx, size=0x%lx, ctx_sp=%p, bp=0x%lx", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp, extract_frame_base(_s)); \
     _s = _p->temp_mode; \
-    DEBUGF("temp_stack:  base=%lx, size=%lx, ctx_sp=%p", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp); \
+    DEBUGF("temp_stack:  base=0x%lx, size=0x%lx, ctx_sp=%p, bp=0x%lx", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp, extract_frame_base(_s)); \
     DEBUGF("actual:  top=%lx, frame=%lx\n", STACK_TOP(), STACK_FRAME_BASE());                                    \
 } \
 
