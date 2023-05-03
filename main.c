@@ -12,8 +12,8 @@
  */
 int main(int argc, char *argv[]) {
     // set binary_path
-    if (argc == 1) {
-        printf("unknown command, recommend to use 'nature build main.n'");
+    if (argc <= 1) {
+        printf("unknown command, example to use 'nature build main.n'");
         return 0;
     }
 
