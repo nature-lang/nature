@@ -349,7 +349,7 @@ static void _runtime_gc() {
  *    然后对 mcentral 中的 span 根据 gcmark bits 进行清扫。
  * @return
  */
-void runtime_gc() {
+void __attribute__ ((optimize(0))) runtime_gc() {
     DEBUGF("[runtime_gc] start")
     DEBUG_STACK();
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈

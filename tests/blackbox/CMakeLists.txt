@@ -14,7 +14,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases)
     set(ENTRY_FILE ${TEST_NAME}.n)
 
-    # stub 是一个目录
+    # cases 是一个目录
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_NAME})
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_NAME})
         set(ENTRY_FILE main.n)
@@ -25,7 +25,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     set_property(TEST ${TEST_NAME}
             PROPERTY ENVIRONMENT "BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};")
 
-    message("register test ${TEST_NAME} file success, stub work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
+    message("register test ${TEST_NAME} file success, cases work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
 endforeach ()
 
-# build stub dir
+# build cases stub dir

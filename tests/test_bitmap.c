@@ -13,7 +13,7 @@ int teardown(void **state) {
 static void test_bitmap_base() {
     bitmap_t *b = bitmap_new(16);
     assert_int_equal(b->size, 16);
-    assert(b->bits);
+    assert_true(b->bits);
 
     bitmap_set(b->bits, 7);
     assert_int_equal(bitmap_test(b->bits, 7), 1);

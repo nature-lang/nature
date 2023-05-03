@@ -19,7 +19,7 @@ rtype_t rt_rtype_data;
 char *build_entry = "main.n";
 
 int setup() {
-    // 调整工作目录到 stub 中
+    // 调整工作目录到 cases 中
     char *work_dir = getenv("WORK_DIR");
     assertf(strlen(work_dir), "work_dir empty");
     VOID chdir(work_dir);

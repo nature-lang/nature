@@ -246,12 +246,14 @@ static inline bool file_exists(char *path) {
     return (access(path, R_OK) == 0);
 }
 
-static inline char *rtrim(char *str, size_t trim_len) {
+static inline char *rtrim(char *str, char *sub) {
     size_t len = strlen(str); // +1 表示 \0 部分
-    len = len - trim_len + 1;
-    char *res = malloc(len);
+    len = len - strlen(sub) + 1;
 
-    strncpy(res, str, len);
+    char *res = mallocz(len);
+
+//    strncpy(res, str, len);
+    memcpy(res, str, len);
     res[len - 1] = '\0';
 
     return res;

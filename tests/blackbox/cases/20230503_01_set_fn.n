@@ -1,0 +1,6 @@
+{int} s = set()
+s.add(1)
+s.add(2)
+
+println(s.contains(2))
+println(s.contains(3))

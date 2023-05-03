@@ -12,8 +12,14 @@ set(LIB_OUTPUT_PREFIX ../lib)
 
 # release 时的编译优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_C_FLAGS_RELEASE "-O0 -DNDEBUG")
+    set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
 endif ()
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+    message("DEBUGF enabled")
+    add_compile_definitions(DEBUG)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+endif ()
+
 
 # 设置交叉编译工具链名称
 if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
@@ -24,13 +30,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
 endif ()
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
     set(CMAKE_SYSTEM_PROCESSOR amd64)
-endif ()
-
-# 开启debug 参数
-if (CMAKE_BUILD_TYPE MATCHES Debug)
-    message("DEBUGF enabled")
-    add_compile_definitions(DEBUG)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O1")
 endif ()
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES amd64)

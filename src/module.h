@@ -55,7 +55,7 @@ static inline char *module_unique_ident(char *full_path) {
 
     result = str_connect(BASE_NS, result);
     // 去掉结尾的 .n 部分
-    result = rtrim(result, strlen(".n"));
+    result = rtrim(result, ".n");
 
     // replace dot
     result = str_replace(result, "/", ".");

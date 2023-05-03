@@ -7,7 +7,7 @@ static void test_basic() {
     // 对 raw 按 \n 分割，并转化成数组
     int64_t *number = take_numbers(raw, 2);
     assert_int_equal(number[0], 9999);
-    assert(number[1] > 100000 && number[1] < 200000);
+    assert_true(number[1] > 100000 && number[1] < 200000);
 }
 
 int main(void) {

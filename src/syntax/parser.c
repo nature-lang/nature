@@ -668,7 +668,7 @@ static ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
         str_equal(((ast_ident *) left_expr.value)->literal, RT_CALL_SET_CALL_IDENT)) {
         ast_set_new *set_new = NEW(ast_set_new);
         set_new->keys = call_stmt->actual_params;
-        result.assert_type = AST_EXPR_MAP_NEW;
+        result.assert_type = AST_EXPR_SET_NEW;
         result.value = set_new;
         return result;
     }

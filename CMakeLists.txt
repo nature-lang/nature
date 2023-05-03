@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 project(nature C)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 file(READ "VERSION" PROJECT_VERSION)
 
@@ -25,8 +25,6 @@ endif ()
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
 endif ()
-
-
 # 设置 debug 模式下编译输出
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
@@ -35,6 +33,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)
     add_compile_definitions(DEBUG_INTERVAL)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
 endif ()
 
 aux_source_directory(${PROJECT_SOURCE_DIR}/cmd CMD)
@@ -49,7 +48,7 @@ target_link_libraries(nature m) # 链接数学计算库
 
 enable_testing()
 add_subdirectory(tests)
-#add_subdirectory(runtime)
+add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 #--------------------------------- install ---------------------------------
 install(TARGETS nature DESTINATION nature/bin)
