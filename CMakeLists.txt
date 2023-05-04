@@ -8,7 +8,10 @@ file(READ "VERSION" PROJECT_VERSION)
 
 # 打印当前的项目版本
 message("nature version: ${PROJECT_VERSION}")
-message("workdir: ${CMAKE_CURRENT_BINARY_DIR}")
+message("cmake workdir: ${CMAKE_CURRENT_BINARY_DIR}")
+
+string(TIMESTAMP BUILD_TIME "%Y-%m-%d")
+message("build time: ${BUILD_TIME}")
 
 # 设置交叉编译工具链名称
 if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
@@ -23,22 +26,27 @@ endif ()
 
 # 设置 release 模式下的优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(BUILD_TYPE "release")
     set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    set(BUILD_TYPE "release")
 endif ()
 # 设置 debug 模式下编译输出
 if (CMAKE_BUILD_TYPE MATCHES Debug)
-    message("DEBUGF enabled")
+    set(BUILD_TYPE "debug")
     add_compile_definitions(DEBUG)
     add_compile_definitions(DEBUG_LIR)
     add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)
     add_compile_definitions(DEBUG_INTERVAL)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+    message("cmake type is debug")
 endif ()
 
 aux_source_directory(${PROJECT_SOURCE_DIR}/cmd CMD)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/src/*.c)
 aux_source_directory(${PROJECT_SOURCE_DIR}/utils UTILS)
+
+configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}/config/config.h")
 
 # include 搜索路径, 有了这个就不需要在 add_executable 中声明 .h 文件了
 include_directories(.)

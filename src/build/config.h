@@ -1,13 +1,10 @@
-#ifndef NATURE_BUILD_ENV_H
-#define NATURE_BUILD_ENV_H
+#ifndef NATURE_BUILD_CONFIG_H
+#define NATURE_BUILD_CONFIG_H
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include "utils/helper.h"
-
-
-#define ASSERTF_DEF_ONCE
 
 typedef enum {
     OS_LINUX = 1,
