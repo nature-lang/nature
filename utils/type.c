@@ -162,7 +162,7 @@ static rtype_t rtype_map(type_map_t *t) {
  * @return
  */
 static rtype_t rtype_set(type_set_t *t) {
-    rtype_t key_rtype = reflect_type(t->key_type);
+    rtype_t key_rtype = reflect_type(t->element_type);
 
     char *str = fixed_sprintf("%d_%lu", TYPE_SET, key_rtype.hash);
     uint32_t hash = hash_string(str);

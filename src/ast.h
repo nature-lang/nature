@@ -341,7 +341,7 @@ typedef struct {
 
 // [1,a.b, call()]
 typedef struct {
-    list_t *values; // ast_expr
+    list_t *elements; // ast_expr
 //    type_t type; // list的类型 (类型推导截断冗余)
 } ast_list_new;
 
@@ -357,7 +357,7 @@ typedef struct {
 
 // var s = {1, 2, 3, call(), xxx}
 typedef struct {
-    list_t *keys; // 值为 ast_expr
+    list_t *elements; // 值为 ast_expr
 } ast_set_new;
 
 // var s = (1, 2, 2.14, 1.15, true)

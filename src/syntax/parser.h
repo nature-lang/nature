@@ -89,7 +89,8 @@ static type_kind token_to_kind[] = {
         [TOKEN_NULL] = TYPE_NULL,
         [TOKEN_SELF] = TYPE_SELF,
         [TOKEN_VAR] = TYPE_UNKNOWN,
-        [TOKEN_ANY] = TYPE_ANY
+        [TOKEN_ANY] = TYPE_ANY,
+        [TOKEN_T] = TYPE_GENERIC,
 };
 
 

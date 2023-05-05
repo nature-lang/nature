@@ -3,7 +3,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    assert_string_equal(raw, "true\nfalse\ntrue\n");
+    assert_string_equal(raw, "2424\n");
 }
 
 int main(void) {

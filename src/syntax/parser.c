@@ -130,6 +130,8 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
+        || parser_is(m, TOKEN_NULL)
+        || parser_is(m, TOKEN_T)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_ANY)
         || parser_is(m, TOKEN_INT)
@@ -237,7 +239,7 @@ static type_t parser_type(module_t *m) {
         } else {
             // set
             type_set_t *set = NEW(type_set_t);
-            set->key_type = key_type;
+            set->element_type = key_type;
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_SET;
             result.set = set;
@@ -667,7 +669,7 @@ static ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
     if (left_expr.assert_type == AST_EXPR_IDENT &&
         str_equal(((ast_ident *) left_expr.value)->literal, RT_CALL_SET_CALL_IDENT)) {
         ast_set_new *set_new = NEW(ast_set_new);
-        set_new->keys = call_stmt->actual_params;
+        set_new->elements = call_stmt->actual_params;
         result.assert_type = AST_EXPR_SET_NEW;
         result.value = set_new;
         return result;
@@ -699,8 +701,8 @@ static ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
 
 /**
  * if () {
- * } else if {
- * } else if {
+ * } else if() {
+ * } else if() {
  * ...
  * } else {
  * }
@@ -997,13 +999,13 @@ static ast_stmt *parser_import_stmt(module_t *m) {
 static ast_expr parser_list_new(module_t *m) {
     ast_expr result = expr_new(m);
     ast_list_new *list_new = NEW(ast_list_new);
-    list_new->values = ct_list_new(sizeof(ast_expr));
+    list_new->elements = ct_list_new(sizeof(ast_expr));
     parser_must(m, TOKEN_LEFT_SQUARE);
 
     if (!parser_is(m, TOKEN_RIGHT_SQUARE)) {
         do {
             ast_expr expr = parser_expr(m);
-            ct_list_push(list_new->values, &expr);
+            ct_list_push(list_new->elements, &expr);
         } while (parser_consume(m, TOKEN_COMMA));
     }
     parser_must(m, TOKEN_RIGHT_SQUARE);
@@ -1064,11 +1066,11 @@ static ast_expr parser_left_curly_expr(module_t *m) {
 
     // set
     ast_set_new *expr = NEW(ast_set_new);
-    expr->keys = ct_list_new(sizeof(ast_expr));
-    ct_list_push(expr->keys, &key_expr);
+    expr->elements = ct_list_new(sizeof(ast_expr));
+    ct_list_push(expr->elements, &key_expr);
     while (parser_consume(m, TOKEN_COMMA)) {
         key_expr = parser_expr(m);
-        ct_list_push(expr->keys, &key_expr);
+        ct_list_push(expr->elements, &key_expr);
     }
     parser_must(m, TOKEN_RIGHT_CURLY);
     result.assert_type = AST_EXPR_SET_NEW;

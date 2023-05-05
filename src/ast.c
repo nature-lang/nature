@@ -64,7 +64,7 @@ bool type_compare(type_t left, type_t right) {
         type_set_t *left_decl = left.set;
         type_set_t *right_decl = right.set;
 
-        if (!type_compare(left_decl->key_type, right_decl->key_type)) {
+        if (!type_compare(left_decl->element_type, right_decl->element_type)) {
             return false;
         }
     }

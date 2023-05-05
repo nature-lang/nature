@@ -691,11 +691,11 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
 
     lir_operand_t *list_target = temp_var_operand(m, expr.type);
 
-    type_list_t *list_decl = expr.type.list;
+    type_list_t *type_list = expr.type.list;
     // call list_new
     lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(expr.type));
 
-    lir_operand_t *element_index = int_operand(ct_find_rtype_index(list_decl->element_type));
+    lir_operand_t *element_index = int_operand(ct_find_rtype_index(type_list->element_type));
 
     lir_operand_t *capacity = int_operand(0);
 
@@ -705,8 +705,8 @@ static lir_operand_t *compiler_list_new(module_t *m, ast_expr expr) {
     OP_PUSH(call_op);
 
     // 值初始化 assign
-    for (int i = 0; i < ast->values->length; ++i) {
-        ast_expr *item_expr = ct_list_value(ast->values, i);
+    for (int i = 0; i < ast->elements->length; ++i) {
+        ast_expr *item_expr = ct_list_value(ast->elements, i);
         lir_operand_t *value_ref = lea_operand_pointer(m, compiler_expr(m, *item_expr));
 
 
@@ -795,8 +795,8 @@ static lir_operand_t *compiler_set_new(module_t *m, ast_expr expr) {
     OP_PUSH(call_op);
 
     // 默认值初始化 rt_call map_assign
-    for (int i = 0; i < ast->keys->length; ++i) {
-        ast_map_element *element = ct_list_value(ast->keys, i);
+    for (int i = 0; i < ast->elements->length; ++i) {
+        ast_map_element *element = ct_list_value(ast->elements, i);
         ast_expr key_expr = element->key;
         lir_operand_t *key_ref = lea_operand_pointer(m, compiler_expr(m, key_expr));
 

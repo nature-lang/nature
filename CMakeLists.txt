@@ -38,7 +38,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)
     add_compile_definitions(DEBUG_INTERVAL)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+    #    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
     message("cmake type is debug")
 endif ()
 

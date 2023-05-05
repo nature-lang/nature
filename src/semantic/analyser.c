@@ -97,7 +97,7 @@ static void analyser_typeuse(module_t *m, type_t *type) {
 
     if (type->kind == TYPE_SET) {
         type_set_t *set = type->set;
-        analyser_typeuse(m, &set->key_type);
+        analyser_typeuse(m, &set->element_type);
         return;
     }
 
@@ -682,8 +682,8 @@ static void analyser_map_new(module_t *m, ast_map_new *expr) {
 
 
 static void analyser_set_new(module_t *m, ast_set_new *expr) {
-    for (int i = 0; i < expr->keys->length; ++i) {
-        ast_expr *key = ct_list_value(expr->keys, i);
+    for (int i = 0; i < expr->elements->length; ++i) {
+        ast_expr *key = ct_list_value(expr->elements, i);
         analyser_expr(m, key);
     }
 }
@@ -710,8 +710,8 @@ static void analyser_tuple_destr(module_t *m, ast_tuple_destr *tuple) {
 
 
 static void analyser_list_new(module_t *m, ast_list_new *expr) {
-    for (int i = 0; i < expr->values->length; ++i) {
-        ast_expr *value = ct_list_value(expr->values, i);
+    for (int i = 0; i < expr->elements->length; ++i) {
+        ast_expr *value = ct_list_value(expr->elements, i);
         analyser_expr(m, value);
     }
 }

@@ -6,10 +6,6 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-static void set_expr_target(ast_expr *source_expr, type_t target_type) {
-    source_expr->target_type = target_type;
-}
-
 static void infer_block(module_t *m, slice_t *block) {
     for (int i = 0; i < block->count; ++i) {
 #ifdef DEBUG_INFER
@@ -21,6 +17,54 @@ static void infer_block(module_t *m, slice_t *block) {
     }
 }
 
+
+/**
+ * 判断该类型是否能够帮助 var 进行推导
+ * @param t
+ * @return
+ */
+static bool type_confirmed(type_t t) {
+    if (t.kind == TYPE_UNKNOWN) {
+        return false;
+    }
+
+    // var a = []  这样就完全不知道是个啥。。。
+    if (t.kind == TYPE_LIST) {
+        type_list_t *l = t.list;
+        if (l->element_type.kind == TYPE_UNKNOWN) {
+            return false;
+        }
+    }
+
+    if (t.kind == TYPE_MAP) {
+        type_map_t *m = t.map;
+        if (m->key_type.kind == TYPE_UNKNOWN) {
+            return false;
+        }
+        if (m->value_type.kind == TYPE_UNKNOWN) {
+            return false;
+        }
+    }
+
+    if (t.kind == TYPE_SET) {
+        type_set_t *m = t.set;
+        if (m->element_type.kind == TYPE_UNKNOWN) {
+            return false;
+        }
+    }
+
+    if (t.kind == TYPE_TUPLE) {
+        type_tuple_t *tuple = t.tuple;
+        for (int i = 0; i < tuple->elements->length; ++i) {
+            type_t *element_type = ct_list_value(tuple->elements, i);
+            if (element_type->kind == TYPE_UNKNOWN) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
 
 /**
  * @param expr
@@ -49,7 +93,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
     }
 
     // 类型自动提升
-    type_t target_type = type_lift(left_type.kind, right_type.kind);
+    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
     if (left_type.kind != target_type.kind) {
         expr->left = ast_type_convert(expr->left, target_type);
     }
@@ -155,25 +199,22 @@ static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_list->element_type = target_type.list->element_type;
     }
-
-    for (int i = 0; i < list_new->values->length; ++i) {
-        ast_expr *item_expr = ct_list_value(list_new->values, i);
-        type_t item_type = infer_right_expr(m, item_expr, type_list->element_type);
-
-        // 无法根据 [...] 右值推断出具体的类型
-        if (type_list->element_type.kind == TYPE_UNKNOWN) {
-            // 数组已经添加了初始化值，可以添加一种有值进行类型推导了
-            type_list->element_type = item_type;
-        } else {
-            if (!type_compare(item_type, type_list->element_type)) {
-                // 出现了多种类型，无法推导出具体的类型，可以暂定为 any, 并退出右值类型推导
-                type_list->element_type = type_basic_new(TYPE_ANY);
-                break;
-            }
-        }
+    result.list = type_list;
+    if (list_new->elements == 0) {
+        return result;
     }
 
-    result.list = type_list;
+    // target 类型不确定则按首个元素类型进行推导
+    if (target_type.kind == TYPE_UNKNOWN) {
+        ast_expr *item_expr = ct_list_value(list_new->elements, 0);
+        type_list->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
+    }
+
+    for (int i = 0; i < list_new->elements->length; ++i) {
+        ast_expr *item_expr = ct_list_value(list_new->elements, i);
+        infer_right_expr(m, item_expr, type_list->element_type);
+    }
+
     return result;
 }
 
@@ -194,34 +235,24 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
         type_map->key_type = target_type.map->key_type;
         type_map->value_type = target_type.map->value_type;
     }
+    result.map = type_map;
+    if (map_new->elements == 0) {
+        return result;
+    }
+
+    // target 类型不确定则按首个元素类型进行推导
+    if (target_type.kind == TYPE_UNKNOWN) {
+        ast_map_element *item = ct_list_value(map_new->elements, 0);
+        type_map->key_type = infer_right_expr(m, &item->key, type_basic_new(TYPE_UNKNOWN));
+        type_map->value_type = infer_right_expr(m, &item->value, type_basic_new(TYPE_UNKNOWN));
+    }
 
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element *item = ct_list_value(map_new->elements, i);
-        type_t key_type = infer_right_expr(m, &item->key, type_map->key_type);
-        type_t value_type = infer_right_expr(m, &item->value, type_map->value_type);
-
-        // key
-        if (type_map->key_type.kind == TYPE_UNKNOWN) {
-            type_map->key_type = key_type;
-        } else {
-            if (!type_compare(key_type, type_map->key_type)) {
-                type_map->key_type = type_basic_new(TYPE_ANY);
-                break;
-            }
-        }
-
-        // value
-        if (type_map->value_type.kind == TYPE_UNKNOWN) {
-            type_map->value_type = value_type;
-        } else {
-            if (!type_compare(value_type, type_map->value_type)) {
-                type_map->value_type = type_basic_new(TYPE_ANY);
-                break;
-            }
-        }
+        infer_right_expr(m, &item->key, type_map->key_type);
+        infer_right_expr(m, &item->value, type_map->value_type);
     }
 
-    result.map = type_map;
     return result;
 }
 
@@ -233,31 +264,28 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
 static type_t infer_set_new(module_t *m, ast_set_new *set_new, type_t target_type) {
     type_t result = type_basic_new(TYPE_SET);
 
-    type_set_t *set_decl = NEW(type_set_t);
-    set_decl->key_type = type_basic_new(TYPE_UNKNOWN);
+    type_set_t *type_set = NEW(type_set_t);
+    type_set->element_type = type_basic_new(TYPE_UNKNOWN);
 
     // 右值如果有推荐的类型，则基于推荐类型做 infer, 此时可能会触发类型转换
     if (target_type.kind != TYPE_UNKNOWN) {
-        set_decl->key_type = target_type.set->key_type;
+        type_set->element_type = target_type.set->element_type;
     }
 
-    for (int i = 0; i < set_new->keys->length; ++i) {
-        ast_expr *expr = ct_list_value(set_new->keys, i);
-
-        type_t key_type = infer_right_expr(m, expr, set_decl->key_type);
-
-        if (set_decl->key_type.kind == TYPE_UNKNOWN) {
-            set_decl->key_type = key_type;
-        } else {
-            if (!type_compare(key_type, set_decl->key_type)) {
-                set_decl->key_type = type_basic_new(TYPE_ANY);
-                break;
-            }
-        }
-
+    result.set = type_set;
+    if (set_new->elements == 0) {
+        return result;
+    }
+    // target 类型不确定则按首个元素类型进行推导
+    if (target_type.kind == TYPE_UNKNOWN) {
+        ast_expr *item_expr = ct_list_value(set_new->elements, 0);
+        type_set->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
+    }
+    for (int i = 0; i < set_new->elements->length; ++i) {
+        ast_expr *expr = ct_list_value(set_new->elements, i);
+        infer_right_expr(m, expr, type_set->element_type);
     }
 
-    result.set = set_decl;
     return result;
 }
 
@@ -534,7 +562,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_DELETE_KEY)) {
         assertf(call->actual_params->length == 1, "set.delete param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_right_expr(m, expr, set_type->key_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &s->left);
@@ -550,7 +578,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_ADD_KEY)) {
         assertf(call->actual_params->length == 1, "set.add param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_right_expr(m, expr, set_type->key_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         // s = left.key() 这里到 left 才是目标即可
         call->actual_params = ct_list_new(sizeof(ast_expr));
@@ -567,7 +595,7 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
     if (str_equal(s->key, SET_CONTAINS_KEY)) {
         assertf(call->actual_params->length == 1, "set.contains param failed");
         ast_expr *expr = ct_list_value(call->actual_params, 0);
-        infer_right_expr(m, expr, set_type->key_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         call->actual_params = ct_list_new(sizeof(ast_expr));
         ct_list_push(call->actual_params, &s->left);
@@ -658,7 +686,7 @@ static type_t infer_call(module_t *m, ast_call *call) {
     if (call->left.assert_type == AST_EXPR_SELECT) {
         ast_select *select = call->left.value;
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-        infer_left_expr(m, &select->left);
+        infer_right_expr(m, &select->left, type_basic_new(TYPE_UNKNOWN));
         // self 快速改写
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->infer_current;
@@ -744,55 +772,6 @@ void infer_var_decl(module_t *m, ast_var_decl *var_decl) {
     if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL || type.kind == TYPE_SELF) {
         assertf(false, "variable declaration cannot use type '%s'", type_kind_string[type.kind]);
     }
-}
-
-
-/**
- * 判断该类型是否能够帮助 var 进行推导
- * @param t
- * @return
- */
-static bool type_confirmed(type_t t) {
-    if (t.kind == TYPE_UNKNOWN) {
-        return false;
-    }
-
-    // var a = []  这样就完全不知道是个啥。。。
-    if (t.kind == TYPE_LIST) {
-        type_list_t *l = t.list;
-        if (l->element_type.kind == TYPE_UNKNOWN) {
-            return false;
-        }
-    }
-
-    if (t.kind == TYPE_MAP) {
-        type_map_t *m = t.map;
-        if (m->key_type.kind == TYPE_UNKNOWN) {
-            return false;
-        }
-        if (m->value_type.kind == TYPE_UNKNOWN) {
-            return false;
-        }
-    }
-
-    if (t.kind == TYPE_SET) {
-        type_set_t *m = t.set;
-        if (m->key_type.kind == TYPE_UNKNOWN) {
-            return false;
-        }
-    }
-
-    if (t.kind == TYPE_TUPLE) {
-        type_tuple_t *tuple = t.tuple;
-        for (int i = 0; i < tuple->elements->length; ++i) {
-            type_t *element_type = ct_list_value(tuple->elements, i);
-            if (element_type->kind == TYPE_UNKNOWN) {
-                return false;
-            }
-        }
-    }
-
-    return true;
 }
 
 /**
@@ -1253,11 +1232,15 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_MAP) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
+        assertf(is_number(t.map->key_type.kind) ||
+                t.map->key_type.kind == TYPE_STRING ||
+                t.map->key_type.kind == TYPE_GENERIC,
+                "map key only support float/integer/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
-        t.set->key_type = reduction_type(m, t.set->key_type);
+        t.set->element_type = reduction_type(m, t.set->element_type);
         return t;
     }
 
@@ -1342,12 +1325,12 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     // 只有 typedef ident 才有中间状态的说法
-    if (is_basic_type(t)) {
+    if (is_basic_decl_type(t)) {
         goto STATUS_DONE;
     }
 
     // infer complex type
-    if (is_complex_type(t)) {
+    if (is_complex_decl_type(t)) {
         t = reduction_complex_type(m, t);
         goto STATUS_DONE;
     }

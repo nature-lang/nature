@@ -27,8 +27,6 @@ fn runtime_gc() {}
 
 fn runtime_malloc_bytes():i64 {}
 
-type T = struct{}
-
 // 这里都 string 是 nature string 类型
 type errort = struct {
     string msg

@@ -1,5 +1,5 @@
 var a = 25
-{int} s = { -32, -64, 12 + 1, 25 - a}
+{int} s = {-32, -64, 12 + 1, 25 - a}
 
 var c0 = s.contains(13)
 println("c0=", c0)

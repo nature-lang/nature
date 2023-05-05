@@ -431,6 +431,9 @@ token_e scanner_ident_type(char *word, int length) {
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
         }
+        case 'T': {
+            return scanner_rest(word, length, 1, 0, "", TOKEN_T);
+        }
     }
 
     return TOKEN_IDENT;

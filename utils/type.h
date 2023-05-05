@@ -81,6 +81,7 @@ typedef enum {
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_SELF,
+    TYPE_GENERIC, // builtin 中的 T 临时使用
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,
@@ -242,7 +243,7 @@ struct type_ident_t {
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct type_array_t {
     uint64_t length;
-    type_t element_type;
+//    type_t element_type;
     rtype_t element_rtype;
 };
 
@@ -250,7 +251,7 @@ struct type_array_t {
  * set{int}
  */
 struct type_set_t {
-    type_t key_type;
+    type_t element_type;
 };
 
 
@@ -521,10 +522,11 @@ static inline bool is_number(type_kind kind) {
  * @param t
  * @return
  */
-static inline bool is_basic_type(type_t t) {
+static inline bool is_basic_decl_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
            t.kind == TYPE_NULL ||
+           t.kind == TYPE_GENERIC ||
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING ||
            t.kind == TYPE_ANY ||
@@ -532,7 +534,7 @@ static inline bool is_basic_type(type_t t) {
 
 }
 
-static inline bool is_complex_type(type_t t) {
+static inline bool is_complex_decl_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
@@ -551,7 +553,9 @@ static inline bool is_qword_int(type_kind kind) {
  * @param right
  * @return
  */
-static inline type_t type_lift(type_kind left, type_kind right) {
+static inline type_t number_type_lift(type_kind left, type_kind right) {
+    assertf(is_number(left) && is_number(right), "type lift kind must number");
+
     if (left >= right) {
         return type_basic_new(left);
     }
