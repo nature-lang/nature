@@ -110,12 +110,14 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         return;
     }
 
+    table_set(handled, b->name, b);
+
     // 含多个 return 指令，都清理掉
     LINKED_FOR(b->operations) {
         lir_op_t *op = LINKED_VALUE();
         // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
         if (op->code == LIR_OPCODE_RETURN) {
-            return; // 递归返回
+            return; // 找到了 return 指令返回
         }
     }
 
@@ -298,6 +300,8 @@ void cfg(closure_t *c) {
 
     // 添加入口块
     c->entry = c->blocks->take[0];
+
+//    debug_block_lir(c, "cfg_build");
 
     // return 分析
     return_check(c, NULL, c->entry);

@@ -555,6 +555,13 @@ static inline bool is_qword_int(type_kind kind) {
  */
 static inline type_t number_type_lift(type_kind left, type_kind right) {
     assertf(is_number(left) && is_number(right), "type lift kind must number");
+    if (left == right) {
+        return type_basic_new(left);
+    }
+
+    if (is_float(left) || is_float(right)) {
+        return type_basic_new(TYPE_FLOAT64);
+    }
 
     if (left >= right) {
         return type_basic_new(left);
