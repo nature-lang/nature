@@ -108,6 +108,26 @@ static void compiler_list_assign(module_t *m, ast_assign_stmt *stmt) {
                     3, list_target, index_target, value_ref));
 }
 
+static void compiler_tuple_assign(module_t *m, ast_assign_stmt *stmt) {
+    ast_tuple_access_t *tuple_access = stmt->left.value;
+    type_t tuple_type = tuple_access->left.type;
+    lir_operand_t *tuple_target = compiler_expr(m, tuple_access->left);
+
+    uint64_t item_size = type_sizeof(tuple_access->element_type);
+    uint64_t offset = type_tuple_offset(tuple_type.tuple, tuple_access->index);
+
+    // 取 value 栈指针,如果 value 不是 var， 会自动转换成 var
+    lir_operand_t *src_ref = lea_operand_pointer(m, compiler_expr(m, stmt->right));
+
+    OP_PUSH(rt_call(RT_CALL_MEMORY_MOVE, NULL,
+                    5,
+                    tuple_target, // dst
+                    int_operand(offset), // dst offset
+                    src_ref, // src
+                    int_operand(0), // src offset
+                    int_operand(item_size))); // size
+}
+
 /**
  * @param m
  * @param stmt
@@ -282,10 +302,15 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
         return compiler_env_assign(m, stmt);
     }
 
+    if (left.assert_type == AST_EXPR_TUPLE_ACCESS) {
+        return compiler_tuple_assign(m, stmt);
+    }
+
     // struct assign p.name = "wei"
     if (left.assert_type == AST_EXPR_STRUCT_SELECT) {
         return compiler_struct_assign(m, stmt);
     }
+
 
     if (left.assert_type == AST_EXPR_TUPLE_DESTR) {
         return compiler_tuple_destr_stmt(m, stmt);
@@ -296,9 +321,7 @@ static void compiler_assign(module_t *m, ast_assign_stmt *stmt) {
         return compiler_ident_assign(m, stmt);
     }
 
-    // tuple[0] = 1 x 禁止这种操作
-    // set[0] = 1 x 同样进制这种操作，set 只能通过 add 来添加 key
-    assertf(left.assert_type != AST_EXPR_TUPLE_ACCESS, "tuple dose not support item assign");
+    // set[0] = 1 x 不允许这么赋值，set 只能通过 add 来添加 key
     assertf(false, "dose not support assign to %d", left.assert_type);
 }
 

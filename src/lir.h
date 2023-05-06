@@ -25,8 +25,6 @@
 #define ERRORT_TYPE_IDENT "errort"
 #define ERRORT_MSG_IDENT "msg"
 
-#define FN_RUNTIME_IDENT "@fn_runtime"
-
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
 // RT = runtime

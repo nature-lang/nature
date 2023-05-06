@@ -3,8 +3,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-
-    assert_string_equal(raw, "1naturetrue\n1hellotrue\n1hellotrue\n2worldfalse\n");
+    assert_string_equal(raw, "11.200000hellotrue\n22.200000worldfalse\n");
 }
 
 int main(void) {

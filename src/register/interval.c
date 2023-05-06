@@ -564,20 +564,29 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
 /**
  * 1. 如果重合则返回第一个重合的点
  * 2. 如果遍历到 current->last_to 都不重合则继续像后遍历，直到遇到第一被 select covert 位置
+ * 3. 仅处于 active 或者 inactive 中到 interval 才会调用该函数
  * 两个 interval 的重合点
  * @param current
  * @param select
  * @return
  */
 int interval_next_intersection(interval_t *current, interval_t *select) {
-    if (select->ranges->count == 0) {
-        return INT32_MAX;
-    }
+    assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
+    assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
     int position = current->first_range->from; // first_from 指向 range 的开头
-    while (position < select->last_range->to) {
+
+    int64_t end = max(current->last_range->to, select->last_range->to);
+
+    int select_first_cover = -1;
+    // first covert select position
+    while (position < end) {
         bool cover_current = interval_covered(current, position, false);
         bool cover_select = interval_covered(select, position, false);
+
+        if (select_first_cover == -1 && cover_select) {
+            select_first_cover = position;
+        }
 
         if (cover_current && cover_select) {
             return position;
@@ -590,8 +599,14 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
         position++;
     }
 
-    assertf(false, "cannot find andy intersection in interval index=%d", select->index);
-    exit(1);
+    assertf(select_first_cover >= 0, "select range not found any intersection from=%d to=%d",
+            current->first_range->from,
+            end);
+    // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
+    // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
+    // current ---              ----
+    // select         ---
+    return select_first_cover;
 }
 
 // 在 before 前挑选一个最佳的位置进行 split
@@ -698,6 +713,17 @@ int interval_next_use_position(interval_t *i, int after_position) {
  * 从 position 将 interval 分成两端，多个 child interval 在一个 list 中，而不是多级 list
  * 如果 position 被 range cover, 则对 range 进行切分
  * child 的 register_hint 指向 parent
+ *
+ * 需要判断 position 是否在 hole 位置，例如下面这种情况，产生了 hole (传统非 ssa 形式)
+ * 10 x -> a
+ * 12 a -> x
+ * 14 a -> x
+ * ...
+ * 60 x -> a
+ * 62 a -> x
+ *
+ * 所以如果 position 在 interval 的 hole(包含 to) 中, 那就不需要进行任何额外的 mov 操作。
+ * ssa 中面临的则是 if 条件产生的 hole, 同样也不需要处理 mov, resolve_data_flow 会处理这种情况
  * @param c
  * @param i
  * @param position
@@ -707,10 +733,6 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(position >= i->first_range->from);
 
     interval_t *child = interval_new_child(c, i);
-
-    // mov id = position - 1
-    // 此时 child 还没有确定是分配寄存器还是溢出
-    closure_insert_mov(c, position, i, child);
 
     // 将 child 加入 parent 的 children 中,
     interval_t *parent = i;
@@ -736,17 +758,23 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     }
 
 
+    bool need_mov = false;
     linked_t *left_ranges = linked_new();
     linked_t *right_ranges = linked_new();
     LINKED_FOR(i->ranges) {
         interval_range_t *range = LINKED_VALUE();
+
+        // covered
+        if (range_covered(range, position, false)) {
+            need_mov = true;
+        }
+
         if (range->to <= position) {
             linked_push(left_ranges, range);
         } else if (range->from >= position) {
             // 必定在右边
             linked_push(right_ranges, range);
         } else {
-
             // 新建的丢到右边
             interval_range_t *new_range = NEW(interval_range_t);
             new_range->from = position;
@@ -779,6 +807,12 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
         break;
     }
 
+    if (need_mov) {
+        // mov id = position - 1
+        // 此时 child 还没有确定是分配寄存器还是溢出
+        closure_insert_mov(c, position, i, child);
+
+    }
 
     return child;
 }

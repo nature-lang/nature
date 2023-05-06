@@ -222,6 +222,10 @@ void ssa_live(closure_t *c) {
  * @param c
  */
 void ssa_add_phi(closure_t *c) {
+    // 跳过没有插入过 phi 的节点的 var，这些节点不需要重新 name
+    slice_t *added_phi_globals = slice_new();
+    table_t *added_phi_global_table = table_new();
+
     for (int i = 0; i < c->ssa_globals->count; ++i) {
         lir_var_t *var = c->ssa_globals->take[i];
         table_t *inserted = table_new(); // key is block name
@@ -250,11 +254,19 @@ void ssa_add_phi(closure_t *c) {
                 linked_insert_after(df_block->operations, label_node, phi_op);
                 table_set(inserted, df_block->name, df_block);
 
+                if (!table_exist(added_phi_global_table, var->ident)) {
+                    slice_push(added_phi_globals, var);
+                    table_set(added_phi_global_table, var->ident, var);
+                }
+
                 // df_block to work list, 起到一个向后传播 phi def 到作用
                 linked_push(work_list, df_block);
             }
         }
     }
+
+    c->ssa_globals = added_phi_globals;
+    c->ssa_globals_table = added_phi_global_table;
 }
 
 /**

@@ -4,7 +4,7 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    assert_string_equal(raw, "hello nature\nruntime catch error: world error");
+    assert_string_equal(raw, "hello nature\nruntime catch error: world error\n");
 }
 
 int main(void) {

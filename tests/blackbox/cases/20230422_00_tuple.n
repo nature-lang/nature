@@ -2,9 +2,12 @@ var tup = (1, "hello", true)
 
 var first = tup[0]
 
+tup[1] = "nature"
+
 println(first, tup[1], tup[2])
 
 // tuple def
+tup[1] = "hello"
 var (foo, bar, car) = tup
 println(foo, bar, car)
 

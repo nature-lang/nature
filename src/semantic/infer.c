@@ -1235,12 +1235,16 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         assertf(is_number(t.map->key_type.kind) ||
                 t.map->key_type.kind == TYPE_STRING ||
                 t.map->key_type.kind == TYPE_GENERIC,
-                "map key only support float/integer/string");
+                "map key only support numer/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
+        assertf(is_number(t.set->element_type.kind) ||
+                t.set->element_type.kind == TYPE_STRING ||
+                t.set->element_type.kind == TYPE_GENERIC,
+                "set element only support number/string");
         return t;
     }
 

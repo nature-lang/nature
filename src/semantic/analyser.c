@@ -67,6 +67,12 @@ static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, strin
             return global_ident; // 完善 type 都访问名称
         }
 
+        s = table_get(symbol_table, ident);
+        if (s != NULL) {
+            // 不需要改写使用的名称了
+            return ident;
+        }
+
         assertf(false, "type '%s' undeclared \n", ident);
     }
 
@@ -301,7 +307,7 @@ static void analyser_var_tuple_destr(module_t *m, ast_tuple_destr *tuple_destr) 
         // 要么是 ast_var_decl 要么是 ast_tuple_destr
         if (expr->assert_type == AST_VAR_DECL) {
             analyser_var_decl(m, expr->value);
-        } else if (expr->assert_type == AST_STMT_VAR_TUPLE_DESTR) {
+        } else if (expr->assert_type == AST_EXPR_TUPLE_DESTR) {
             analyser_var_tuple_destr(m, expr->value);
         } else {
             assertf(false, "var tuple destr expr type exception");
@@ -603,14 +609,14 @@ static void analyser_ident(module_t *m, ast_expr *expr) {
 
     // 使用当前 module 中的全局符号是可以省略 module name 的, 但是当前 module 在注册 ident 时缺附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
-    char *global_ident = ident_with_module(m->ident, ident->literal);
-    symbol_t *s = table_get(symbol_table, global_ident);
+    char *current_global_ident = ident_with_module(m->ident, ident->literal);
+    symbol_t *s = table_get(symbol_table, current_global_ident);
     if (s != NULL) {
-        ident->literal = global_ident; // 找到了则添加全局名称
+        ident->literal = current_global_ident; // 找到了则添加全局名称
         return;
     }
 
-    // 最后还要判断是不是 println/print/set 等 builtin 全局符号
+    // 最后还要判断是不是 println/print/set 等 builtin 类型的不带前缀的全局符号
     s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
         // 不需要改写使用的名称了
