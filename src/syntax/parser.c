@@ -291,8 +291,11 @@ static type_t parser_type(module_t *m) {
             parser_consume(m, TOKEN_RIGHT_PAREN);
         }
 
-        parser_must(m, TOKEN_COLON);
-        typeuse_fn->return_type = parser_type(m);
+        if (parser_consume(m, TOKEN_COLON)) {
+            typeuse_fn->return_type = parser_type(m);
+        } else {
+            typeuse_fn->return_type = type_basic_new(TYPE_VOID);
+        }
         result.kind = TYPE_FN;
         result.fn = typeuse_fn;
         return result;

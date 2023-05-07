@@ -48,17 +48,7 @@ static type_t analyser_fndef_to_type(ast_fndef_t *fndef) {
  * @return
  */
 static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, string ident) {
-    slice_t *locals = m->analyser_current->locals;
-    for (int i = locals->count - 1; i >= 0; --i) {
-        local_ident_t *local = locals->take[i];
-        if (str_equal(ident, local->ident)) {
-            assertf(local->type == SYMBOL_TYPEDEF, "ident=%s not type", local->ident);
-            // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
-            return local->unique_ident;
-        }
-    }
-
-    if (current->parent == NULL) {
+    if (current == NULL) {
         // 当前 module 中同样有全局 type，在使用时是可以省略名称的
         // analyser 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
         char *global_ident = ident_with_module(m->ident, ident);
@@ -74,6 +64,16 @@ static char *analyser_resolve_type(module_t *m, analyser_fndef_t *current, strin
         }
 
         assertf(false, "type '%s' undeclared \n", ident);
+    }
+
+    slice_t *locals = m->analyser_current->locals;
+    for (int i = locals->count - 1; i >= 0; --i) {
+        local_ident_t *local = locals->take[i];
+        if (str_equal(ident, local->ident)) {
+            assertf(local->type == SYMBOL_TYPEDEF, "ident=%s not type", local->ident);
+            // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
+            return local->unique_ident;
+        }
     }
 
     return analyser_resolve_type(m, current->parent, ident);
@@ -108,8 +108,8 @@ static void analyser_typeuse(module_t *m, type_t *type) {
     }
 
     if (type->kind == TYPE_LIST) {
-        type_list_t *list_decl = type->list;
-        analyser_typeuse(m, &list_decl->element_type);
+        type_list_t *list = type->list;
+        analyser_typeuse(m, &list->element_type);
         return;
     }
 
@@ -915,6 +915,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type == AST_VAR_DECL) {
             ast_var_decl *var_decl = stmt->value;
+            analyser_typeuse(m, &var_decl->type);
             var_decl->ident = ident_with_module(m->ident, var_decl->ident);
 
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
@@ -925,6 +926,7 @@ static void analyser_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_STMT_VAR_DEF) {
             ast_vardef_stmt *vardef = stmt->value;
             ast_var_decl *var_decl = &vardef->var_decl;
+            analyser_typeuse(m, &var_decl->type);
             var_decl->ident = ident_with_module(m->ident, var_decl->ident);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             slice_push(m->global_symbols, s);
@@ -1014,6 +1016,7 @@ static void analyser_main(module_t *m, slice_t *stmt_list) {
         ast_import *import = stmt->value;
         full_import(m->source_dir, import);
 
+        assert(import->as);
         // 简单处理
         slice_push(m->imports, import);
         table_set(m->import_table, import->as, import);

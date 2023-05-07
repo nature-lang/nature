@@ -266,7 +266,7 @@ static bool in_range(interval_range_t *range, int position) {
 }
 
 // 大值在栈顶被优先处理 block_to_stack
-static void block_to_depth_stack(stack_t *work_list, basic_block_t *block) {
+static void block_to_depth_stack(ct_stack_t *work_list, basic_block_t *block) {
     // next->next->next
     stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
     while (p->next != NULL && ((basic_block_t *) p->next->value)->loop.depth > block->loop.depth) {
@@ -293,7 +293,7 @@ void interval_block_order(closure_t *c) {
     loop_detect(c);
 
     slice_t *order_blocks = slice_new();
-    stack_t *work_list = stack_new();
+    ct_stack_t *work_list = stack_new();
     stack_push(work_list, c->entry);
 
     while (!stack_empty(work_list)) {

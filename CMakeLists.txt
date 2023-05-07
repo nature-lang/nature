@@ -66,4 +66,5 @@ install(FILES LICENSE DESTINATION nature/)
 install(FILES VERSION DESTINATION nature/)
 
 
-include(cmake/CMackCPack.cmake)
+include(cmake/cpack.cmake)
+include(cmake/cross.cmake)

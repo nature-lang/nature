@@ -8,6 +8,7 @@
 
 typedef enum {
     OS_LINUX = 1,
+    OS_DARWIN,
     ARCH_AMD64,
     ARCH_RISCV64,
     ARCH_WASM,
@@ -118,6 +119,15 @@ static inline void env_init() {
     char *arch = getenv("BUILD_ARCH");
     if (arch != NULL) {
         BUILD_ARCH = arch_to_uint8(arch);
+    }
+
+    if (BUILD_OS != OS_LINUX) {
+        assertf(false,
+                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n");
+    }
+    if (BUILD_ARCH != ARCH_AMD64) {
+        assertf(false,
+                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
     }
 
     char *root = getenv("NATURE_ROOT");

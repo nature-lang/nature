@@ -1,4 +1,4 @@
-import "20230430_04_module/src/config.n"
+import "src/config.n"
 
 println("config.max=", config.get_max())
 config.set_count(125)

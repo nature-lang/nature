@@ -35,25 +35,28 @@ static char *module_full_path(char *path, char *name) {
  */
 void full_import(char *importer_dir, ast_import *import) {
     // import->path 必须以 .n 结尾
-    assertf(ends_with(import->path, ".n"), "import suffix must .n");
-    assertf(strncmp(BASE_NS, import->path, strlen(BASE_NS)) == 0, "import path must start %s", BASE_NS);
-
-    // import 目前必须基于 BASE_NS 开始，暂时不支持相对路径
-    // 基于命名空间 import
-    // 指针向前移动 BASE_NS 位，从而去掉 BASE_NS 前缀
-    char *relative_dir = import->path + strlen(BASE_NS);
+    assertf(ends_with(import->path, ".n"), "import file suffix must .n");
+    // 不能有以 ./ 或者 / 开头
+    assertf(import->path[0] != '.', "cannot use  path=%s begin with '.'", import->path);
+    assertf(import->path[0] != '/', "cannot use absolute path=%s", import->path);
 
 
-    char *rest = strrchr(import->path, '/'); // foo/bar.n -> /bar.n
-    if (rest != NULL) {
-        rest++;
+    // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
+    char *temp_as = strrchr(import->path, '/'); // foo/bar.n -> /bar.n
+    if (temp_as != NULL) {
+        temp_as++;
+    } else {
+        temp_as = import->path;
     }
-    // 去掉 .n 部分
-    char *module_as = str_replace(rest, ".n", "");
+    char *module_as = str_replace(temp_as, ".n", "");
 
+
+    // 基于 importer_dir 做相对路径引入
+    char *full_path = str_connect("/", import->path);
+    full_path = str_connect(importer_dir, full_path);
 
     // 链接  /root/base_ns/foo/bar.n
-    import->full_path = str_connect(WORK_DIR, relative_dir);
+    import->full_path = full_path;
     if (import->as == NULL) {
         import->as = module_as;
     }

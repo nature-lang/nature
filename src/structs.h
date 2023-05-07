@@ -7,7 +7,7 @@
 #include "utils/linked.h"
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
-#include <elf.h>
+#include "binary/elf/elf.h"
 
 typedef uint64_t flag_t;
 

@@ -870,13 +870,13 @@ elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset
     // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
     //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
     uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
-    elf_put_relocate(ctx,
-                     ctx->symtab_section,
-                     apply_section,
-                     rel_offset,
-                     R_X86_64_64,
-                     (int) sym_index,
-                     0);
+    return elf_put_relocate(ctx,
+                            ctx->symtab_section,
+                            apply_section,
+                            rel_offset,
+                            R_X86_64_64,
+                            (int) sym_index,
+                            0);
 
 }
 

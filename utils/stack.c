@@ -1,7 +1,7 @@
-#include "stack.h"
+#include "utils/stack.h"
 
-stack_t *stack_new() {
-    stack_t *s = malloc(sizeof(stack_t));
+ct_stack_t *stack_new() {
+    ct_stack_t *s = malloc(sizeof(ct_stack_t));
     s->count = 0;
     // 栈顶始终使用空占位符
     stack_node *empty = stack_new_node(NULL);
@@ -9,7 +9,7 @@ stack_t *stack_new() {
     return s;
 }
 
-void stack_push(stack_t *s, void *value) {
+void stack_push(ct_stack_t *s, void *value) {
     stack_node *empty = stack_new_node(NULL);
     s->top->value = value;
     empty->next = s->top;
@@ -17,7 +17,7 @@ void stack_push(stack_t *s, void *value) {
     s->count++;
 }
 
-void *stack_pop(stack_t *s) {
+void *stack_pop(ct_stack_t *s) {
     if (stack_empty(s)) {
         return NULL;
     }
@@ -30,7 +30,7 @@ void *stack_pop(stack_t *s) {
     return value;
 }
 
-bool stack_empty(stack_t *s) {
+bool stack_empty(ct_stack_t *s) {
     return s->count == 0;
 }
 

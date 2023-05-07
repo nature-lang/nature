@@ -6,7 +6,7 @@
  */
 #include <stdlib.h>
 #include <stdint.h>
-#include <elf.h>
+#include "src/binary/elf/elf.h"
 #include "utils/slice.h"
 #include "utils/table.h"
 #include "src/structs.h"

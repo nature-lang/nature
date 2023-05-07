@@ -14,27 +14,11 @@ set(LIB_OUTPUT_PREFIX ../lib)
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
 endif ()
+
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
     add_compile_definitions(DEBUG)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
-endif ()
-
-
-# 设置交叉编译工具链名称
-if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    set(CMAKE_SYSTEM_NAME darwin)
-endif ()
-if (CMAKE_SYSTEM_NAME STREQUAL Linux)
-    set(CMAKE_SYSTEM_NAME linux)
-endif ()
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
-    set(CMAKE_SYSTEM_PROCESSOR amd64)
-endif ()
-
-if (CMAKE_SYSTEM_PROCESSOR MATCHES amd64)
-    message("add compile def __AMD64")
-    add_compile_definitions(__AMD64)
+    #    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
 endif ()
 
 include_directories(../)
@@ -47,3 +31,4 @@ set_target_properties(runtime PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR})
 message("runtime register success")
 
+include(../cmake/cross.cmake)

@@ -1,4 +1,4 @@
-import "20230501_00_gc/helper.n"
+import "helper.n"
 
 
 // 栈干扰

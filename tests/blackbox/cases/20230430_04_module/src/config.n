@@ -1,4 +1,4 @@
-import "20230430_04_module/src/math.n"
+import "math.n"
 
 int max = 10000
 int count

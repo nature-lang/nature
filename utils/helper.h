@@ -76,7 +76,7 @@ static inline uint32_t hash_string(char *str) {
     if (str == NULL) {
         return 0;
     }
-    return hash_data(str, strlen(str));
+    return hash_data((uint8_t *) str, strlen(str));
 }
 
 static inline bool memory_empty(uint8_t *base, uint64_t size) {
@@ -344,7 +344,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
 
     // count the number of replacements needed
     ins = str;
-    for (count = 0; tmp = strstr(ins, old); ++count) {
+    for (count = 0; (tmp = strstr(ins, old)); ++count) {
         ins = tmp + len_rep;
     }
 
@@ -384,9 +384,17 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
     munmap(base, size);
 }
 
+#ifdef __LINUX
 static inline void sys_memory_remove(void *addr, uint64_t size) {
     madvise(addr, size, MADV_REMOVE);
 }
+#else
+
+static inline void sys_memory_remove(void *addr, uint64_t size) {
+    assertf(false, "[runtime.sys_memory_remove] cannot support arch");
+}
+
+#endif
 
 static inline int64_t *take_numbers(char *str, uint64_t count) {
     int64_t *numbers = malloc(count * sizeof(int64_t));
