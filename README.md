@@ -1,8 +1,8 @@
 <p align="center"><a href="https://www.nature-lang.com" target="_blank"><img src="https://raw.githubusercontent.com/weiwenhao/pictures/main/blogslogo_300.png" width="400" alt="nature Logo"></a></p>
 
-# The Nature Programming Language
+## About Nature
 
-Nature is a programming language that pursues simplicity and elegance in syntax, focusing on the writing and reading experience of its users.
+**Nature is a programming language** that pursues simplicity and elegance in syntax, focusing on the writing and reading experience of its users.
 
 When the official version is released, nature will have a stable syntax API, type system, GC, coroutine, generics, package management, and basic standard library.
 
