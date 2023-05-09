@@ -1,8 +1,11 @@
-#ifndef NATURE_SRC_LIR_LOWER_BUILTIN_H_
-#define NATURE_SRC_LIR_LOWER_BUILTIN_H_
+#ifndef NATURE_RUNTIME_BUILTIN_H_
+#define NATURE_RUNTIME_BUILTIN_H_
 
-#include "runtime/type/string.h"
+#include "utils/type.h"
 
-void builtin_print(string_t *s);
+void print(memory_list_t *args);
 
-#endif //NATURE_SRC_LIR_LOWER_BUILTIN_H_
+void println(memory_list_t *args);
+
+
+#endif //NATURE_SRC_LIR_NATIVE_BUILTIN_H_

@@ -1,7 +1,0 @@
-int sum(int a, int b) {
-    return a + b
-}
-
-int foo = sum(1, 10)
-
-debug_printf("%d", foo)

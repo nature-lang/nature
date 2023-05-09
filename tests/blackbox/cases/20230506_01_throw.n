@@ -1,0 +1,37 @@
+fn rem(int dividend, int divisor):int {
+	if (divisor == 0) {
+		throw "divisor cannot zero"
+	}
+
+	return dividend % divisor
+}
+
+int result
+errort err
+
+// 正常情况处理
+result = rem(10, 3)
+println(result)
+
+
+// 正常情况 catch
+(result, err) = catch rem(10, 4)
+if (err) {
+	println(err.msg)
+} else {
+	println(result)
+}
+
+// 异常情况 catch
+(result, err) = catch rem(10, 0)
+if (err) {
+	// error handle, errort 结构中包含 msg 字段存储了错误的信息
+	println(err.msg)
+} else {
+	println(result)
+}
+
+
+// 异常情况不 catch
+result = rem(10, 0)
+println("hello world")

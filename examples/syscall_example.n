@@ -1,0 +1,7 @@
+import "syscall_inst"
+
+
+int fd = 1
+[uint8] data = [1, 2, 3]
+
+syscall_inst.write(fd, data) // 写入为 na 的类型

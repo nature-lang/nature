@@ -1,2 +1,0 @@
-int foo = 1 + 1
-debug_printf("1 + 1: %d", foo) // print 是内置函数，并不是 c stdio 中的 printf

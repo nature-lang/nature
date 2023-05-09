@@ -1,0 +1,7 @@
+fn sum(int a, int b):int {
+    return a + b
+}
+
+int foo = sum(15, -10)
+
+print("foo=", foo)

@@ -1,1 +1,0 @@
-builtin_print("hello world")

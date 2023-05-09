@@ -1,0 +1,24 @@
+var tup = (1, "hello", true)
+
+var first = tup[0]
+
+tup[1] = "nature"
+
+println(first, tup[1], tup[2])
+
+// tuple def
+tup[1] = "hello"
+var (foo, bar, car) = tup
+println(foo, bar, car)
+
+
+// tuple destr
+var a = 2
+var b = "world"
+var c = false
+(a, b, c) = tup
+println(a, b, c)
+
+var d = false
+(foo, bar, car) = (2, "world", d)
+println(foo, bar, car)

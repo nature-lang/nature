@@ -1,0 +1,24 @@
+bool a = !true
+bool b = a
+var b1 =!a
+println(a, b, b1) // falsefalsetrue
+
+
+var str = "hello world"
+bool c = !str
+string str2
+bool d = !str2
+println(c, d) // falsetrue
+
+
+bool e = 1 + 1
+bool f = !3.1415926
+println(e, f) // truefalse
+
+fn sum(int a, int b):int {
+    return a + b
+}
+var (g, error) = catch sum(12, -1)
+bool h = error
+bool i = !error
+println(g, h, i) // 11falsetrue

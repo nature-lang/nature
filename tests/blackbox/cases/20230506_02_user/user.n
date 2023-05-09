@@ -1,0 +1,36 @@
+// 全局类型
+type user = struct {
+	int id
+	string username
+	string password
+}
+
+// 全局变量(暂时不支持类型自动推导)
+int id = 1
+[user] list = []
+{string:user} userof = {}
+
+// 全局函数
+fn register(string username, string password) {
+	if (userof[username]) {
+		throw "The user has already registered"
+	}
+
+	var u = user {
+		id = id,
+		username = username,
+		password = password
+	}
+
+	list.push(u)
+	userof[username] = u
+	id += 1
+}
+
+fn find(string username):user {
+	if (!userof[username]) {
+		throw "user notfound"
+	}
+
+	return userof[username]
+}

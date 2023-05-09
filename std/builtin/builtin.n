@@ -1,0 +1,33 @@
+fn print(...[any] args) {}
+
+fn println(...[any] args) {}
+
+// T 和 any 是不一样的, 这里更像是模式匹配的含义
+fn set(...[T] keys):{T} {}
+
+// 比如 [T] 类型的 list 只能接收 T 类型的 v
+fn list_push([T] list, ptr<T> v) {}
+
+fn list_length([T] list):int {}
+
+fn map_delete({T:T} map, ptr<T> key) {}
+
+fn map_length({T:T} map):int {}
+
+fn set_contains({T} set, ptr<T> key):bool {}
+
+fn set_add({T} set, ptr<T> key): bool {}
+
+fn set_delete({T} set, ptr<T> key) {}
+
+// 方便测试，后续封装到系统调用库中
+fn sleep(int second) {}
+
+fn runtime_gc() {}
+
+fn runtime_malloc_bytes():i64 {}
+
+// 这里都 string 是 nature string 类型
+type errort = struct {
+    string msg
+}

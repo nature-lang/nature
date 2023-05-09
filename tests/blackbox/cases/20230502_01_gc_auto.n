@@ -1,0 +1,11 @@
+i16 a = 16
+i32 b = 32
+[i64] list = []
+i64 c = 64
+for (int i = 0; i < 10000; i+=1) {
+    list.push(i)
+}
+u32 d = 321
+
+println(list[9999])
+println(runtime_malloc_bytes())

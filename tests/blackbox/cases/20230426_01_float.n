@@ -1,0 +1,9 @@
+fn values():(float, f32, f64) {
+    var a = 1.1
+    f32 b = 2.2
+    return (a, b, 3.3)
+}
+
+var (a, b, c) = values()
+
+println(a, b, c)

@@ -1,0 +1,24 @@
+i16 s1 = 100
+i8 s2 = -100
+i32 s3 = 24
+
+var a = 1 + s1
+var b = s2 - 1
+println(a, b) // 101-101
+
+var c = s1 * s2
+int d = 125 / s3
+println(c, d) // -100005
+
+var e = s3 % 124
+var f = 124 % s3
+println(e, f) // 244
+
+bool b0 = 1 < s1
+var b1 = s2 > 2
+bool b2 = 101 <= s1
+bool b3 = s3 >= s1
+bool b4 = s2 == -100
+bool b5 = s2 != s1
+println(b0, b1, b2, b3, b4, b5) // truefalsefalsefalsetruetrue
+println(s1, s2, s3) // 100-10024

@@ -1,0 +1,7 @@
+[int] list = [1, 2]
+
+list[1] = 22
+
+var b = list[1] + 3
+
+println(list[0], list[1], b)

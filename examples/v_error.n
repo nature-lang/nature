@@ -1,0 +1,24 @@
+// base
+var a = call()
+var (a, err) = catch call()
+
+// assign
+int a
+a = call()
+errort err
+(a, err) = catch call()
+
+// tuple 嵌套
+var (a, b) = call()
+var ((a, b), err) = catch call()
+
+// 仅包含错误的情况处理，此时不再需要其他返回值
+var error = catch sign()
+
+
+// errort 类型标志定义, 类似 java 中各种类型的 exception
+// err.msg v
+type errort = struct {
+    string msg // v 错误信息
+}
+

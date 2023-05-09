@@ -1,7 +1,7 @@
-#ifndef NATURE_SRC_DEBUG_DEBUG_LIR_H_
-#define NATURE_SRC_DEBUG_DEBUG_LIR_H_
+#ifndef NATURE_SRC_DEBUG_LIR_H_
+#define NATURE_SRC_DEBUG_LIR_H_
 
-#include "src/lir/lir.h"
+#include "src/lir.h"
 
 /**
  * MOVE int[1],NULL => t1
@@ -9,18 +9,20 @@
  * @param operand
  * @return
  */
-string lir_operand_to_string(lir_operand *operand);
+string lir_operand_to_string(lir_operand_t *operand);
 
-string lir_operand_label_to_string(lir_operand_label *label);
+string lir_label_to_string(lir_symbol_label_t *label);
 
-string lir_operand_var_to_string(lir_operand_var *var);
+string lir_var_to_string(lir_var_t *var);
 
-string lir_operand_imm_to_string(lir_operand_immediate *immediate);
+string lir_imm_to_string(lir_imm_t *immediate);
 
-string lir_operand_memory_to_string(lir_operand_memory *operand_memory);
+string lir_addr_to_string(lir_indirect_addr_t *operand_addr);
 
-string lir_operand_actual_param_to_string(lir_operand_actual_param *actual_param);
+string lir_formal_param_to_string(slice_t *formal_params);
 
-string lir_operand_phi_body_to_string(lir_operand_phi_body *phi_body);
+string lir_actual_param_to_string(slice_t *actual_params);
+
+string lir_vars_to_string(slice_t *vars);
 
 #endif //NATURE_SRC_DEBUG_DEBUG_LIR_H_

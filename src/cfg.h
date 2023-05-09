@@ -1,15 +1,13 @@
 #ifndef NATURE_SRC_CFG_H_
 #define NATURE_SRC_CFG_H_
 
-#include "src/lir/lir.h"
-
-#define LIR_BLOCKS_PUSH(_list, item) (_list)->list[(_list)->count++] = (item)
+#include "lir.h"
 
 /**
- * operates to basic block
+ * asm_operations to basic block
  * 按顺序遍历指令集
- * new lir_basic_block
+ * new basic_block_t
  */
-void cfg(closure *c);
+void cfg(closure_t *c);
 
 #endif //NATURE_SRC_CFG_H_

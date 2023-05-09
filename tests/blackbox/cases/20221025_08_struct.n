@@ -1,0 +1,16 @@
+type people = struct {
+    int a = 12
+    bool b
+    int c = 12
+}
+
+var foo = people {
+    a = 22,
+    b = true
+}
+
+foo.c = 11
+
+println("foo.a = ", foo.a)
+println("foo.b = ", foo.b)
+println("foo.c = ", foo.c)

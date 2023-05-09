@@ -1,39 +1,49 @@
 #ifndef NATURE_SRC_DEBUG_DEBUG_H_
 #define NATURE_SRC_DEBUG_DEBUG_H_
 
-#include "src/value.h"
+#include "utils/helper.h"
 #include "src/ast.h"
 #include "src/syntax/token.h"
-#include "src/lir/lir.h"
+#include "src/lir.h"
+#include "src/register/interval.h"
+#include "src/register/allocate.h"
 
-#define DEBUG_STR_COUNT 1000
+string lir_opcode_to_string[UINT8_MAX];
 
-#define DEBUG_SCANNER
+#define DEBUG_STR_COUNT 1024
 
-#define DEBUG_PARSER
+//#define DEBUG_SCANNER
 
-#define DEBUG_ANALYSIS
+//#define DEBUG_PARSER
 
-#define DEBUG_INFER
+//#define DEBUG_ANALYSER
 
-#define DEBUG_COMPILER
+//#define DEBUG_INFER
 
-#define DEBUG_COMPILER_LIR
+//#define DEBUG_COMPILER
 
-#define DEBUG_CFG
+//#define DEBUG_LIR
 
-void debug_scanner(token *t);
+//#define DEBUG_CFG
+
+void debug_scanner(token_t *t);
 
 void debug_parser(int line, string token);
 
-void debug_parser_stmt(ast_stmt_expr_type t);
+void debug_parser_stmt(ast_type_t t);
 
 void debug_stmt(string type, ast_stmt stmt);
 
-void debug_lir(int lir_line, lir_op *op);
+void debug_lir(closure_t *c);
 
-void debug_cfg(closure *c);
+void debug_block_lir(closure_t *c, char *stage_after);
 
-void debug_basic_block(lir_basic_block *block);
+void debug_interval(closure_t *c);
+
+void debug_module_asm(module_t *m);
+
+void debug_asm(closure_t *c);
+
+void debug_basic_block(basic_block_t *block);
 
 #endif //NATURE_SRC_DEBUG_DEBUG_H_

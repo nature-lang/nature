@@ -1,0 +1,23 @@
+// for tradition， 只需要判断是否是类型开头就行了
+// 而且这里只能是简单类型开头？
+for (int a = 1;a <= 100; i+=1) {
+
+}
+
+// for in 形式, 判断 ident,ident IN
+// for (var (k,v) in list) x 太丑了
+// k,v 不需要 var 表达式再次定义了，默认就是新增变量,不支持像 golang 一样 assign,没有意义，新增变量的作用域则是当前 for 表达式内
+for (index in list) {}
+for (key in list) {}
+for (i,v in list) {}
+for (k,v in map) {}
+
+// for condition replace while
+for (a > 1) {
+}
+
+
+// only value  - 当前版本暂时不左支持
+// for (v in list) {
+//
+// }

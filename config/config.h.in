@@ -1,0 +1,9 @@
+#ifndef NATURE_CONFIG_H
+#define NATURE_CONFIG_H
+
+// nature version 0.1.0 - release build 2023-05-04
+#define BUILD_VERSION "@PROJECT_VERSION@"
+#define BUILD_TIME "@BUILD_TIME@"
+#define BUILD_TYPE "@BUILD_TYPE@"
+
+#endif

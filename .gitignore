@@ -1,5 +1,9 @@
-cmake-build-debug/
-cmake-build-debug-vm/
+/build
+/build-*
+bin
+release/
 tmp/
 .idea
 .DS_store
+test.text
+libruntime.a

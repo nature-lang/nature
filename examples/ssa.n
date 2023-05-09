@@ -1,0 +1,19 @@
+import "hello"
+import "http" module_name h
+
+int a = 3
+
+int b = a + 1
+int d = 12
+int e = 14
+int f = 14
+
+if (true) {
+	a = 6
+	int d = 17
+	int f = 19
+} else {
+    a = 7
+}
+
+var c = a + b

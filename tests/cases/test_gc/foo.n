@@ -1,0 +1,15 @@
+type person = struct {
+    int age
+    bool sex
+    float height
+}
+
+// 全局符号
+int global_i = 1314
+bool global_b = true
+string global_s = "hello world"
+
+int sum(int a, int b) {
+    return a + b
+}
+

@@ -1,0 +1,7 @@
+import "src/config.n"
+
+println("config.max=", config.get_max())
+config.set_count(125)
+println("config.count=", config.count)
+
+config.test_math()

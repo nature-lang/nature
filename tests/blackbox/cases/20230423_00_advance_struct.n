@@ -1,0 +1,15 @@
+type square = struct {
+    int length
+    int width
+    var area = fn(self s):int {
+        return s.length * s.width
+    }
+}
+
+var foo = square {
+    length = 10,
+    width = 5
+}
+
+var area = foo.area()
+println("area=", area)

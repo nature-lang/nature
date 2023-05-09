@@ -1,0 +1,16 @@
+fn<bool(int, int)> compare = bool(int a, int b) {
+	return a > b
+}
+
+bool sort(f<bool (int, int)> callback) {
+	var a = 12
+	var b = 13
+	return callback(a, b)
+}
+
+var res = sort(bool _(int a, int b) {
+	return a > b
+})
+
+map{int:int} get_map(int a, int b) {
+}

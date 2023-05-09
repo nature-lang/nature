@@ -1,0 +1,47 @@
+// 返回类型非常的突兀，让整体结构失去了连续性, 可以探索一些可能的方式,优化 fn 在表达式中的可读性
+// 同时需要兼顾类型的可读性
+//var f = fn(int,int)->int {
+//}
+
+//var f = fn(int,int)int {
+//}
+
+// 个人比较侵向于这一种
+var f = fn(int,int):int {
+}
+
+// 函数的声明为了一致性同样可以以这样的方式，类似于 php。
+fn sum(int a, int a): int {
+    return a + b
+}
+
+fn swap(int a, int b): (int, int) {
+    return b, a
+}
+
+
+// 高级参数
+fn timer(fn(int):bool callback) {
+    if (callback(24)) {
+        println("hello world")
+    }
+}
+
+// 直接回调
+fn callback(): fn(int):back {
+    return fn(int a) {
+        return a + 1
+    }
+}
+
+
+// 函数类型声明方式 1
+fn(int,int):bool cmp
+
+// 函数类型声明方式 2
+
+
+
+
+
+

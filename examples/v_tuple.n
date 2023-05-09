@@ -1,0 +1,27 @@
+// def
+(int, string, float) tup = (1, "hello", true) // v 声明一个 tuple 并赋值 (不允许只声明不赋值)
+var tup = (1, "hello", true) // v
+
+var first = tup[0] // v 元祖访问必须是 imm int, 不能是变量
+
+// var i = 0
+// var first = tup[i] // x 无法支持
+// tup[0] = 2 // x 元祖只能初始化时定义，不允许再 assign
+
+// destructuring
+var (a, b, c) = (1, "hello", true) // v 创建 a,b,c 变量
+var ((a, b), c) = ((1, "hello"), true) //  v， 左右需要保持数据格式一致
+
+int a // 变量声明不赋值，此时都有默认值的
+string b
+bool c
+(a, b, c) = (1, "hello", true) // v 修改 a,b,c 变量
+
+var list = [1, 2, 3]
+(list[0], b, c) = (1, "hello", true) // v
+(list[0], (b, c)) = (1, ("hello", true)) // v
+
+(custom_t,(int, float),int, map{int: int}, fn(), float) a = ... // v, 支持，但是不推荐这么写，比较难和 destr 区分
+
+call (a, b) = (1, 2) // x 太难以阅读理解了，当前版本不做支持
+(custom_t, int, float) (a, b, c) = (1, 1, 1.1) // 既然上面的不做支持，那这个当前版本也不做支持，定义新的变量且使用了 destr 时，必须通过自动类型推导 var 关键字来实现。

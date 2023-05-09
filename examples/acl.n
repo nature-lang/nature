@@ -1,0 +1,10 @@
+// @acl private
+void hello() {
+
+}
+
+// default public
+void hello() {
+
+}
+
