@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(runtime C)
 
+include(../cmake/cross.cmake)
+
 # release 命令, 在 nature 跟目录下执行
 # rm -rf build-runtime &&
 # cmake -B build-runtime -S runtime -DCMAKE_TOOLCHAIN_FILE=$(pwd)/cmake/linux-amd64-toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_BUILD_TYPE=Release &&
@@ -30,5 +32,3 @@ add_library(runtime STATIC ${UTILS} ${RUNTIMES})
 set_target_properties(runtime PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR})
 message("runtime register success")
-
-include(../cmake/cross.cmake)

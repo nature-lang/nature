@@ -4,6 +4,8 @@ project(nature C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
+include(cmake/cross.cmake)
+
 file(READ "VERSION" PROJECT_VERSION)
 
 # 打印当前的项目版本
@@ -12,17 +14,6 @@ message("cmake workdir: ${CMAKE_CURRENT_BINARY_DIR}")
 
 string(TIMESTAMP BUILD_TIME "%Y-%m-%d")
 message("build time: ${BUILD_TIME}")
-
-# 设置交叉编译工具链名称
-if (CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    set(CMAKE_SYSTEM_NAME darwin)
-endif ()
-if (CMAKE_SYSTEM_NAME STREQUAL Linux)
-    set(CMAKE_SYSTEM_NAME linux)
-endif ()
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
-    set(CMAKE_SYSTEM_PROCESSOR amd64)
-endif ()
 
 # 设置 release 模式下的优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -67,4 +58,4 @@ install(FILES VERSION DESTINATION nature/)
 
 
 include(cmake/cpack.cmake)
-include(cmake/cross.cmake)
+

@@ -123,11 +123,13 @@ static inline void env_init() {
 
     if (BUILD_OS != OS_LINUX) {
         assertf(false,
-                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n");
+                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n",
+                os_to_string(BUILD_OS));
     }
     if (BUILD_ARCH != ARCH_AMD64) {
         assertf(false,
-                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
+                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n",
+                arch_to_string(BUILD_ARCH));
     }
 
     char *root = getenv("NATURE_ROOT");

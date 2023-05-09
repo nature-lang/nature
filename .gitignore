@@ -1,8 +1,6 @@
-cmake-build-*/
-build/
-build-*/
+/build
+/build-*
 bin
-/debug/
 release/
 tmp/
 .idea

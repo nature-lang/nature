@@ -14,8 +14,9 @@
 void cmd_entry(int argc, char **argv) {
     // 读取最后一个参数
     char *build_file = argv[argc - 1];
+
     if (!ends_with(build_file, ".n")) {
-        assertf(false, "[cmd_entry] named files must be .n files: %s", build_file);
+        assertf(false, "must specify the compile target with suffix n, example: nature build main.n");
         return;
     }
 
