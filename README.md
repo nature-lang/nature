@@ -10,8 +10,7 @@ Nature supports cross-compilation, which can be compiled to linux/darwin & amd64
 
 ## Hello Nature
 
-To get started with Nature, download and extract the nature installation package from the [releases](https://github.com/nature-lang/nature/releases). We recommend moving  
-the extracted nature folder to `/usr/local/` and adding the `/usr/local/nature/bin` directory to the system's environment variables.
+To get started with Nature, download and extract the nature installation package from the [releases](https://github.com/nature-lang/nature/releases). We recommend moving the extracted nature folder to `/usr/local/` and adding the `/usr/local/nature/bin` directory to the system's environment variables.
 
 Create a main.n file with the following contents:
 
@@ -29,9 +28,6 @@ hello nature
 
 ## License
 
-As a programming language, source files (.n files) and compiled binary files generated during use of Nature are not
-subject to Open-source license restrictions. The Open-source license only restricts the relevant rights to the source
-code in this repository.
+As a programming language, source files (.n files) and compiled binary files generated during use of Nature are not subject to Open-source license restrictions. The Open-source license only restricts the relevant rights to the source code in this repository.
 
-Nature's source code uses [GPL-2.0](https://www.gnu.org/licenses/gpl-2.0.html) as its license until the first official
-version is released.
+Nature's source code uses [GPL-2.0](https://www.gnu.org/licenses/gpl-2.0.html) as its license until the first official version is released.
