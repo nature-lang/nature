@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 
     char *first = argv[1];
     if (str_equal(first, "--version")) {
-        printf("nature version %s - %s build %s\n", BUILD_VERSION, BUILD_TYPE, BUILD_TIME);
+        printf("nature %s - %s build %s\n", BUILD_VERSION, BUILD_TYPE, BUILD_TIME);
         return 0;
     }
 
