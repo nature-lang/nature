@@ -1,4 +1,4 @@
-# docker build -t naturelang/nature:latest --build-arg VERSION=0.1.0 .
+# docker build -t naturelang/nature:latest --build-arg VERSION=v0.1.0-beta .
 FROM alpine:latest
 
 WORKDIR /app
