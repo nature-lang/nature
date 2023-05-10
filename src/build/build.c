@@ -193,7 +193,16 @@ static void build_init(char *build_entry) {
 
     // 全局 init
     BUILD_ENTRY = build_entry;
-    SOURCE_PATH = path_join(WORK_DIR, BUILD_ENTRY);
+
+    char temp_path[PATH_MAX] = "";
+    if (realpath(build_entry, temp_path) == NULL) {
+        assertf(false, "entry file='%s' not found", build_entry);
+    }
+
+    // copy
+    strcpy(SOURCE_PATH, temp_path);
+    assertf(file_exists(SOURCE_PATH), "full entry file=%s not found", SOURCE_PATH);
+    assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannnot be a directory", BUILD_OUTPUT);
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
@@ -354,7 +363,7 @@ static void build_compiler(slice_t *modules) {
  * @param build_entry
  */
 void build(char *build_entry) {
-    assert(strlen(build_entry) > 2 && "build entry exception");
+    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
 
     // 配置初始化
     build_init(build_entry);

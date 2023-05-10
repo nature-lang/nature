@@ -4,6 +4,7 @@
 #include "utils/helper.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <limits.h>
 #include "root.h"
 #include "src/module.h"
 #include "utils/error.h"
@@ -24,9 +25,29 @@ void cmd_entry(int argc, char **argv) {
     int c;
     while ((c = getopt(argc, argv, "o:")) != -1) {
         switch (c) {
-            case 'o':
-                BUILD_OUTPUT_NAME = optarg;
+            case 'o': {
+                char *o_arg = optarg; // o_arg 指向字符串 "./haha/test"
+
+                // 解析出一个相对路径
+                char *output_dir = path_dir(o_arg);
+                if (strlen(output_dir) > 0) {
+                    char temp_path[PATH_MAX] = "";
+                    if (realpath(output_dir, temp_path) == NULL) {
+                        assertf(false, "output dir='%s' not created", output_dir);
+                    }
+
+                    strcpy(BUILD_OUTPUT_DIR, temp_path);
+                    assertf(dir_exists(BUILD_OUTPUT_DIR), "build output dir='%s' cannot be a file", BUILD_OUTPUT_DIR);
+                }
+
+                // 解析出文件名称
+                char *output_name = file_name(o_arg);
+                if (strlen(output_name) > 0) {
+                    strcpy(BUILD_OUTPUT_NAME, output_name);
+                }
+
                 break;
+            }
         }
     }
 

@@ -17,5 +17,8 @@ build_param_t BUILD_ARCH = ARCH_RISCV64;
 build_param_t BUILD_ARCH = 0;
 #endif
 
-char *BUILD_OUTPUT_NAME = "main";
 char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default root
+char BUILD_OUTPUT_NAME[PATH_MAX] = "main";
+char SOURCE_PATH[PATH_MAX] = "";
+char BUILD_OUTPUT_DIR[PATH_MAX] = "";
+char BUILD_OUTPUT[PATH_MAX] = "";

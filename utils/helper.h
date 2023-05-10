@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <limits.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -241,6 +242,46 @@ static inline int64_t align(int64_t n, int64_t align) {
     return (n + align - 1) & (~(align - 1));
 }
 
+
+static inline char *path_dir(char *path) {
+    char *result = malloc(PATH_MAX);
+    strcpy(result, path);
+    char *ptr = strrchr(result, '/');  // 查找最后一个斜杠
+    if (ptr == NULL) {
+        memset(result, 0, PATH_MAX);
+        return result;
+    }
+
+    *ptr = '\0';
+    return result;
+}
+
+static inline char *file_name(char *path) {
+    char *ptr = strrchr(path, '/');
+    if (ptr == NULL) {
+        return path; // path 本身就是 file name
+    }
+
+    if (*(ptr + 1) == '\0') { // 斜杠结尾是文件
+        return "";
+    }
+
+    return ptr + 1;
+}
+
+static inline bool dir_exists(char *dir) {
+    struct stat info;
+
+    if (stat(dir, &info) != 0) {
+        return false;
+    }
+    if (info.st_mode & S_IFDIR) {
+        return true;
+    }
+
+    // 文件存在，但不是一个目录
+    return false;
+}
 
 static inline bool file_exists(char *path) {
     return (access(path, R_OK) == 0);

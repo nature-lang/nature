@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "utils/helper.h"
 
 typedef enum {
@@ -17,18 +18,18 @@ typedef enum {
 build_param_t BUILD_OS;
 build_param_t BUILD_ARCH;
 
-char *BUILD_OUTPUT_NAME;
 char *NATURE_ROOT; // linux/darwin/freebsd default root
 
-char *BUILD_OUTPUT_DIR; // default is work_dir test 使用，指定编译路径输出文件
-char *BUILD_OUTPUT; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+char BUILD_OUTPUT_NAME[PATH_MAX]; // main
+char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
+char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
 char *WORK_DIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 char *BASE_NS; // 最后一级目录的名称，也可以自定义
 char *TEMP_DIR; // 链接临时目录
 
 char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
-char *SOURCE_PATH; // /opt/test/main.n 的绝对路径
+char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 #define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
@@ -104,10 +105,14 @@ static inline void config_init() {
     // 当前所在目录的最后一级目录(当 import 已 base_ns 开头时，表示从 root_ns 进行文件搜索)
     BASE_NS = parser_base_ns(WORK_DIR);
     TEMP_DIR = temp_dir();
-    if (!BUILD_OUTPUT_DIR) {
-        BUILD_OUTPUT_DIR = WORK_DIR;
+
+    // BUILD_OUTPUT_DIR 优先从 main 入口解析，如果没有值才是 work_dir
+    if (strlen(BUILD_OUTPUT_DIR) == 0) {
+        strcpy(BUILD_OUTPUT_DIR, WORK_DIR);
     }
-    BUILD_OUTPUT = path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME);
+
+    strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME));
+    assertf(!dir_exists(BUILD_OUTPUT), "build output='%s' cannnot be a directory", BUILD_OUTPUT);
 }
 
 static inline void env_init() {
@@ -123,21 +128,17 @@ static inline void env_init() {
 
     if (BUILD_OS != OS_LINUX) {
         assertf(false,
-                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n",
-                os_to_string(BUILD_OS));
+                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n");
     }
     if (BUILD_ARCH != ARCH_AMD64) {
         assertf(false,
-                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n",
-                arch_to_string(BUILD_ARCH));
+                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
     }
 
     char *root = getenv("NATURE_ROOT");
     if (root != NULL) {
         NATURE_ROOT = root;
     }
-
-    BUILD_OUTPUT_DIR = getenv("BUILD_OUTPUT_DIR");
 }
 
 

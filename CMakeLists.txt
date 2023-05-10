@@ -33,11 +33,11 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("cmake type is debug")
 endif ()
 
+configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}/config/config.h")
+
 aux_source_directory(${PROJECT_SOURCE_DIR}/cmd CMD)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/src/*.c)
 aux_source_directory(${PROJECT_SOURCE_DIR}/utils UTILS)
-
-configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}/config/config.h")
 
 # include 搜索路径, 有了这个就不需要在 add_executable 中声明 .h 文件了
 include_directories(.)

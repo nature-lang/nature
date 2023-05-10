@@ -16,7 +16,7 @@
 #define assert_true(_expr) (assertf(_expr, "not true"))
 
 static inline char *exec_output() {
-    return exec(BUILD_OUTPUT_DIR, BUILD_OUTPUT, slice_new());
+    return exec(WORK_DIR, BUILD_OUTPUT, slice_new());
 }
 
 static inline int blackbox_setup() {
