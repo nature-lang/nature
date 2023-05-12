@@ -8,6 +8,13 @@ When the official version is released, nature will have a stable syntax API, typ
 
 Nature supports cross-compilation, which can be compiled to linux/darwin & amd64/riscv64/wasm, and can also be interpreted to execute on the nature-vm.
 
+
+Through the official website, you can obtain more information as well as its documentation.
+
+Website: [https://nature-lang.org](https://nature-lang.org/)
+
+Docs: [https://nature-lang.org/docs/getting-started/installation](https://nature-lang.org/docs/getting-started/installation)
+
 ## Hello Nature
 
 To get started with Nature, download and extract the nature installation package from the [releases](https://github.com/nature-lang/nature/releases). We recommend moving the extracted nature folder to `/usr/local/` and adding the `/usr/local/nature/bin` directory to the system's environment variables.
