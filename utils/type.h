@@ -78,7 +78,7 @@ typedef enum {
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
+    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_SELF,
     TYPE_GENERIC, // builtin 中的 T 临时使用
 
@@ -122,7 +122,7 @@ static string type_kind_string[] = {
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_IDENT] = "type_ident", // char*
+        [TYPE_ALIAS] = "type_alias",
         [TYPE_LIST] = "list",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
@@ -158,7 +158,9 @@ typedef uint8_t type_bool_t;
  *  custom_type 是一个自定义的 type, 其可能是 struct，也可能是 int 等等
  *  但是在类型描述上来说，其就是一个 ident
  */
-typedef struct type_ident_t type_ident_t;
+typedef struct type_alias_t type_alias_t;
+
+typedef struct type_generic_t type_generic_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
@@ -195,7 +197,8 @@ typedef struct type_t {
         type_struct_t *struct_;
         type_fn_t *fn;
         type_any_t *any;
-        type_ident_t *ident; // 这个其实是自定义类型的 ident
+        type_alias_t *alias; // 这个其实是自定义类型的 ident
+        type_generic_t *generic; // type t0 = generic i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
     };
     type_kind kind;
@@ -230,10 +233,14 @@ struct type_pointer_t {
 struct type_string_t {
 };
 
-struct type_ident_t {
+struct type_alias_t {
     string literal; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
     list_t *actual_types; // type_t
+};
+
+struct type_generic_t {
+    list_t *constraints; // type_t
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -424,7 +431,7 @@ bool type_need_gc(type_t t);
 type_t type_ptrof(type_t t);
 
 
-type_ident_t *typeuse_ident_new(string literal);
+type_alias_t *typeuse_ident_new(string literal);
 
 /**
  * size 对应的 gc_bits 占用的字节数量

@@ -304,8 +304,8 @@ static type_t parser_type(module_t *m) {
     // person a
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *type_token = parser_advance(m);
-        result.kind = TYPE_IDENT;
-        result.ident = typeuse_ident_new(type_token->literal);
+        result.kind = TYPE_ALIAS;
+        result.alias = typeuse_ident_new(type_token->literal);
         return result;
     }
 
@@ -317,17 +317,17 @@ static type_t parser_type(module_t *m) {
  * type foo = int
  * @return
  */
-static ast_stmt *parser_typedef_stmt(module_t *m) {
+static ast_stmt *parser_type_alias_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_typedef_stmt *type_decl_stmt = malloc(sizeof(ast_typedef_stmt));
+    ast_type_alias_stmt *type_alias_stmt = malloc(sizeof(ast_type_alias_stmt));
     parser_must(m, TOKEN_TYPE); // code
-    type_decl_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
+    type_alias_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
     parser_must(m, TOKEN_EQUAL); // =
     // 类型解析
-    type_decl_stmt->type = parser_type(m); // int
+    type_alias_stmt->type = parser_type(m); // int
 
-    result->assert_type = AST_STMT_TYPEDEF;
-    result->value = type_decl_stmt;
+    result->assert_type = AST_STMT_TYPE_ALIAS;
+    result->value = type_alias_stmt;
 
     return result;
 }
@@ -577,9 +577,9 @@ static ast_expr parser_ident_expr(module_t *m) {
       **/
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
         type_t typeuse_ident = {
-                .kind = TYPE_IDENT,
+                .kind = TYPE_ALIAS,
                 .status = REDUCTION_STATUS_UNDO,
-                .ident = typeuse_ident_new(ident_token->literal)
+                .alias = typeuse_ident_new(ident_token->literal)
         };
         return parser_struct_new(m, typeuse_ident);
     }
@@ -1358,7 +1358,7 @@ static ast_stmt *parser_stmt(module_t *m) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
         // type a = xxx
-        return parser_typedef_stmt(m);
+        return parser_type_alias_stmt(m);
     }
 
     assertf(false, "line=%d, cannot parser stmt", parser_line(m));

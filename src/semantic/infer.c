@@ -739,14 +739,13 @@ static type_t infer_call(module_t *m, ast_call *call) {
  * @return
  */
 static type_t infer_catch(module_t *m, ast_catch *catch) {
-
     type_t return_type = infer_call(m, catch->call);
-    type_t errort = type_new(TYPE_IDENT, NULL);
-    errort.ident = NEW(type_ident_t);
-    errort.ident->literal = ERRORT_TYPE_IDENT;
+
+    type_t errort = type_new(TYPE_ALIAS, NULL);
+    errort.alias = NEW(type_alias_t);
+    errort.alias->literal = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
-
     if (return_type.kind == TYPE_VOID) {
         return errort;
     }
@@ -1262,7 +1261,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     // 不能随便动名字
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
-        // 可选的返回类型
         fn->return_type = reduction_type(m, fn->return_type);
         for (int i = 0; i < fn->formal_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->formal_types, i);
@@ -1280,30 +1278,34 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     exit(1);
 }
 
-static type_t reduction_type_ident(module_t *m, type_t t) {
-    type_ident_t *ident = t.ident;
-    symbol_t *symbol = symbol_table_get(ident->literal);
-
+/**
+ * custom_type a = ...
+ * custom_type 此时就是一个 type_alias
+ * @param m
+ * @param t
+ * @return
+ */
+static type_t reduction_type_alias(module_t *m, type_t t) {
+    type_alias_t *alias = t.alias;
+    symbol_t *symbol = symbol_table_get(alias->literal);
 
     assertf(symbol->type == SYMBOL_TYPEDEF, "'%s' is not a type", symbol->ident);
-    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-
-    assertf(m->reduction_typedef && typedef_stmt->type.status == REDUCTION_STATUS_DONE,
-            "typedef stage exception, all typedef ident operand must done");
+    ast_type_alias_stmt *type_alias_stmt = symbol->ast_value;
 
     // 检查右值是否 reduce 完成
-    if (typedef_stmt->type.status == REDUCTION_STATUS_DONE) {
-        return typedef_stmt->type;
+    if (type_alias_stmt->type.status == REDUCTION_STATUS_DONE) {
+        return type_alias_stmt->type;
     }
 
     // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
     // 此时直接将 ident 丢回去就可以了
-    if (typedef_stmt->type.status == REDUCTION_STATUS_DOING) {
+    if (type_alias_stmt->type.status == REDUCTION_STATUS_DOING) {
         return t;
     }
 
-    typedef_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
-    return reduction_type(m, typedef_stmt->type);
+    type_alias_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
+    type_alias_stmt->type = reduction_type(m, type_alias_stmt->type);
+    return type_alias_stmt->type;
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
@@ -1323,8 +1325,8 @@ static type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
-    if (t.kind == TYPE_IDENT) {
-        t = reduction_type_ident(m, t);
+    if (t.kind == TYPE_ALIAS) {
+        t = reduction_type_alias(m, t);
         goto STATUS_DONE;
     }
 
@@ -1392,6 +1394,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     m->infer_current = fndef;
 
     type_t t = infer_fndef_decl(m, fndef);
+
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);
         assertf(symbol, "fn var ident %s not found", fndef->closure_name);
@@ -1417,19 +1420,18 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
 void infer(module_t *m) {
     m->infer_line = 0;
 
-    // 1. 从符号表中遍历所有 typedef 进行预处理
-    for (int i = 0; i < symbol_typedef_list->count; ++i) {
-        symbol_t *symbol = symbol_typedef_list->take[i];
-        ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-        typedef_stmt->type.status = REDUCTION_STATUS_DOING;
-        // 符号表覆写
-        typedef_stmt->type = reduction_type(m, typedef_stmt->type);
+    // - 全局变量中也包含类型信息需要进行还原处理
+    for (int j = 0; j < m->global_symbols->count; ++j) {
+        symbol_t *s = m->global_symbols->take[j];
+        if (s->type != SYMBOL_VAR) {
+            continue;
+        }
+        infer_var_decl(m, s->ast_value); // 类型还原
     }
 
-    // 所有的 typedef 都已经还原完成
-    m->reduction_typedef = true;
+    // 泛型参数解析
 
-    // 2. 遍历所有 closure_fndefs 进行 infer 处理(包含 body)
+    // - 遍历所有 fndef 进行处理
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         infer_fndef(m, fndef);

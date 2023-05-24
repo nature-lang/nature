@@ -87,8 +87,8 @@ static void analyzer_typeuse(module_t *m, type_t *type) {
     // 如果只是简单的 ident,又应该如何改写呢？
     // type foo = int
     // 'foo' is type_decl_ident
-    if (type->kind == TYPE_IDENT) {
-        type_ident_t *ident = type->ident;
+    if (type->kind == TYPE_ALIAS) {
+        type_alias_t *ident = type->alias;
         string unique_name = analyzer_resolve_type(m, m->analyzer_current, ident->literal);
         ident->literal = unique_name;
         return;
@@ -353,6 +353,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_current_init(m, fndef);
     analyzer_typeuse(m, &fndef->return_type);
     analyzer_begin_scope(m);
+
     // 函数形参处理
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *param = ct_list_value(fndef->formals, i);
@@ -366,6 +367,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         // 将 ast 中到 param->ident 进行改写
         param->ident = param_local->unique_ident;
     }
+
     analyzer_block(m, fndef->body);
     analyzer_end_scope(m);
     m->analyzer_current = m->analyzer_current->parent;
@@ -765,7 +767,7 @@ static void analyzer_return(module_t *m, ast_return_stmt *stmt) {
 }
 
 // type foo = int
-static void analyzer_typedef(module_t *m, ast_typedef_stmt *stmt) {
+static void analyzer_type_alias(module_t *m, ast_type_alias_stmt *stmt) {
     analyzer_redeclare_check(m, stmt->ident);
     analyzer_typeuse(m, &stmt->type);
 
@@ -872,8 +874,8 @@ static void analyzer_stmt(module_t *m, ast_stmt *stmt) {
         case AST_STMT_RETURN: {
             return analyzer_return(m, stmt->value);
         }
-        case AST_STMT_TYPEDEF: {
-            return analyzer_typedef(m, stmt->value);
+        case AST_STMT_TYPE_ALIAS: {
+            return analyzer_type_alias(m, stmt->value);
         }
         default: {
             return;
@@ -882,7 +884,8 @@ static void analyzer_stmt(module_t *m, ast_stmt *stmt) {
 }
 
 /**
- * 多个模块的解析
+ * - 模块中的函数都是全局函数，将会在全局函数维度支持泛型函数与函数重载，由于在 analyzer 阶段还在收集所有的符号
+ *   所以无法确定全局的 unique ident，因此将会用一个链表结构，将所有的在当前作用域下的同名的函数都 append 进去
  * @param m
  * @param stmt_list
  */
@@ -890,7 +893,8 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // init
     m->analyzer_line = 0;
     int import_end_index = 0;
-    // import 统计
+
+    // import handle
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt *stmt = stmt_list->take[i];
         if (stmt->assert_type != AST_STMT_IMPORT) {
@@ -946,10 +950,10 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        if (stmt->assert_type == AST_STMT_TYPEDEF) {
-            ast_typedef_stmt *type_decl = stmt->value;
-            type_decl->ident = ident_with_module(m->ident, type_decl->ident);
-            symbol_t *s = symbol_table_set(type_decl->ident, SYMBOL_TYPEDEF, type_decl, false);
+        if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
+            ast_type_alias_stmt *type_alias = stmt->value;
+            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPEDEF, type_alias, false);
             slice_push(m->global_symbols, s);
             continue;
         }
@@ -957,7 +961,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = stmt->value;
             // 这里就可以看到 fn name 没有做唯一性处理，只是加了 ident 限定, 并加入到了全局符号表中
+            // 由于存在函数的重载，所以会存在多个同名的 fn symbol_name
             fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
@@ -991,9 +997,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     call_stmt->value = call;
     m->call_init_stmt = call_stmt;
 
-    // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef 进行改写
+    // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef body 进行符号定位与改写
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
+
+        // m->ast_fndefs 包含了当前 module 中的所有函数，嵌套定义的函数都进行了平铺
         slice_push(m->ast_fndefs, fndef);
         analyzer_global_fndef(m, fndef);
     }

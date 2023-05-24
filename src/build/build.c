@@ -322,18 +322,8 @@ static void build_compiler(slice_t *modules) {
         // 类型推断
         infer(m);
 
-        // 全局符号的定义也需要推导以下原始类型
-        for (int j = 0; j < m->global_symbols->count; ++j) {
-            symbol_t *s = m->global_symbols->take[j];
-            if (s->type != SYMBOL_VAR) {
-                continue;
-            }
-            infer_var_decl(m, s->ast_value); // 类型还原
-        }
-
         compiler(m);
 
-        // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
 

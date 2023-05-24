@@ -1064,17 +1064,16 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr expr) {
 
 
     // remove error by runtime processor
-    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_IDENT);
-    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
-    lir_operand_t *errort_operand = temp_var_operand(m, typedef_stmt->type);
+    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_ALIAS);
+    ast_type_alias_stmt *type_alias_stmt = symbol->ast_value;
+    assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
+    lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
     OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
 
     // call 没有返回值，此时直接 remove errort 即可
     if (!call_result_operand) {
         return errort_operand;
     }
-
 
     // make tuple target return
     assertf(call_result_operand->assert_type == LIR_OPERAND_VAR, "compiler call result operand must lir var");
@@ -1231,13 +1230,13 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr expr) {
 
 static void compiler_throw(module_t *m, ast_throw_stmt *stmt) {
     // msg to errort
-    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_IDENT);
-    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
+    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_ALIAS);
+    ast_type_alias_stmt *type_alias_stmt = symbol->ast_value;
+//    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
     // 构建 struct new  结构
     ast_struct_new_t *errort_struct = NEW(ast_struct_new_t);
-    errort_struct->type = typedef_stmt->type;
+    errort_struct->type = type_alias_stmt->type;
     errort_struct->properties = ct_list_new(sizeof(struct_property_t));
     struct_property_t property = {
             .type = type_basic_new(TYPE_STRING),
@@ -1316,7 +1315,7 @@ static void compiler_stmt(module_t *m, ast_stmt *stmt) {
         case AST_STMT_THROW: {
             return compiler_throw(m, stmt->value);
         }
-        case AST_STMT_TYPEDEF: {
+        case AST_STMT_TYPE_ALIAS: {
             return;
         }
         default: {

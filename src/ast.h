@@ -52,7 +52,7 @@ typedef enum {
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
-    AST_STMT_TYPEDEF,
+    AST_STMT_TYPE_ALIAS,
     AST_CALL,
     AST_FNDEF, // fn def (其包含 body)
     AST_STMT_ENV_CLOSURE, // closure def
@@ -379,11 +379,13 @@ typedef struct {
 typedef struct {
     string ident; // my_int (自定义的类型名称)
     type_t type; // int (类型)
-} ast_typedef_stmt;
+} ast_type_alias_stmt;
 
 // 这里包含 body, 所以属于 def
 typedef struct ast_fndef_t {
+    // 可执行文件中的 label，但是如果 fn 引用了外部的环境，则不能直接调用该 fn, 需要将 fn 关联的环境一起传递进来
     char *symbol_name;
+    // 可能为空，其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *closure_name;
     type_t return_type;
     list_t *formals; // ast_var_decl
@@ -398,6 +400,12 @@ typedef struct ast_fndef_t {
     // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;
     type_t type; // 类型冗余一份
+
+    slice_t *generic_params; // ast_typedef_stmt
+    table_t *exists_generic_params;  // 避免 generic_types 重复写入
+
+    table_t *generic_assign; // key is generic->ident, value is *type_t
+
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);

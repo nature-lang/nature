@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "utils/helper.h"
 #include "utils/table.h"
+#include "utils/linked.h"
 #include "src/ast.h"
 
 #define FN_MAIN_NAME "main"
@@ -39,7 +40,8 @@ typedef struct {
     string ident; // 符号唯一标识
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type type;
-    void *ast_value; // ast_type_decl_stmt/ast_var_decl/ast_new_fn
+    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t
+    linked_t *global_fndefs; // 当全局函数同名时会不断的 link 到这里, 首个函数则依旧在 ast_value 中
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {

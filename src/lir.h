@@ -22,7 +22,7 @@
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
 
-#define ERRORT_TYPE_IDENT "errort"
+#define ERRORT_TYPE_ALIAS "errort"
 #define ERRORT_MSG_IDENT "msg"
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0

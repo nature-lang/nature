@@ -7,7 +7,18 @@ static symbol_t *_symbol_table_set(string ident, symbol_type type, void *ast_val
     s->type = type;
     s->ast_value = ast_value;
     s->is_local = is_local;
-    table_set(symbol_table, ident, s);
+
+    if (!is_local && type == SYMBOL_FN && table_exist(symbol_table, ident)) {
+        // 对于全局同名函数，首次会进入到 s->ast_value, 其余的则会被作为同名函数进入到 s->global_fndefs
+        s = table_get(symbol_table, ident);
+        if (!s->global_fndefs) {
+            s->global_fndefs = linked_new();
+        }
+        linked_push(s->global_fndefs, s);
+    } else {
+        table_set(symbol_table, ident, s);
+    }
+
     return s;
 }
 
