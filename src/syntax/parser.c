@@ -5,6 +5,12 @@
 #include "src/debug/debug.h"
 #include <string.h>
 
+static ast_fndef_t *ast_fndef_new() {
+    ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->symbol_name = NULL;
+    fndef->closure_name = NULL;
+    return fndef;
+}
 
 static token_t *parser_advance(module_t *m) {
     if (m->p_cursor.current->succ == NULL) {
@@ -1089,28 +1095,26 @@ static ast_expr parser_left_curly_expr(module_t *m) {
  */
 static ast_expr parser_fndef_expr(module_t *m) {
     ast_expr result = expr_new(m);
-    ast_fndef_t *fn_decl = NEW(ast_fndef_t);
-    fn_decl->symbol_name = NULL;
-    fn_decl->closure_name = NULL;
+    ast_fndef_t *fndef = ast_fndef_new();
 
     parser_must(m, TOKEN_FN);
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *name_token = parser_advance(m);
-        fn_decl->symbol_name = name_token->literal;
+        fndef->symbol_name = name_token->literal;
     }
 
-    parser_formals(m, fn_decl);
+    parser_formals(m, fndef);
 
     if (parser_consume(m, TOKEN_COLON)) {
-        fn_decl->return_type = parser_type(m);
+        fndef->return_type = parser_type(m);
     } else {
-        fn_decl->return_type = type_basic_new(TYPE_VOID);
+        fndef->return_type = type_basic_new(TYPE_VOID);
     }
 
-    fn_decl->body = parser_block(m);
+    fndef->body = parser_block(m);
 
     result.assert_type = AST_FNDEF;
-    result.value = fn_decl;
+    result.value = fndef;
 
     return result;
 }
@@ -1260,8 +1264,7 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
  */
 static ast_stmt *parser_fndef_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_fndef_t *fndef = NEW(ast_fndef_t);
-    fndef->closure_name = NULL;
+    ast_fndef_t *fndef = ast_fndef_new();
 
     parser_must(m, TOKEN_FN);
     // stmt 中 name 不允许省略

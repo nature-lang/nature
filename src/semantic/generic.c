@@ -88,8 +88,21 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
 /**
  * 使用递归基于数组的索引的笛卡尔积组合
  */
-void params_cartesian_product(list_t *products, slice_t *generic_params, int depth) {
+void generic_cartesian_product(list_t *products, slice_t *generic_params, type_t **element, int depth) {
+    ast_type_alias_stmt *stmt = generic_params->take[depth];
+    assert(stmt->type.kind == TYPE_GENERIC);
+    if (depth == generic_params->count) {
+        // element 已经收集完毕，现在可以写入到 products 中并退出递归
+        ct_list_push(products, element);
+        return;
+    }
 
+    type_generic_t *generic = stmt->type.generic;
+    for (int i = 0; i < generic->constraints->length; ++i) {
+        // type*
+        element[depth] = ct_list_value(generic->constraints, i);
+        generic_cartesian_product(products, generic_params, element, depth + 1);
+    }
 }
 
 /**
@@ -99,6 +112,9 @@ void params_cartesian_product(list_t *products, slice_t *generic_params, int dep
  */
 slice_t *generic(ast_fndef_t *fndef) {
     slice_t *fndefs = slice_new();
+
+    fndef->exists_generic_params = table_new();
+    fndef->generic_params = slice_new();
 
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *var = ct_list_value(fndef->formals, i);
@@ -110,14 +126,12 @@ slice_t *generic(ast_fndef_t *fndef) {
         return fndefs;
     }
 
-    /**
-     typedef struct {
-        string ident; // my_int (自定义的类型名称)
-        type_t type; // int (类型)
-    } ast_typedef_stmt;
-     */
     // - 根据 generic_types 中的约束信息生成笛卡尔积列表，列表中的每个元素都是
+    uint64_t element_size = sizeof(type_t *) * fndef->generic_params->count;
+    list_t *products = ct_list_new(element_size);  // 收集的全量排列组合结果集
+    type_t **element = mallocz(element_size);
+    generic_cartesian_product(products, fndef->generic_params, element, 0);
     // table_t *generic_assign; // key is generic->ident, value is *type_t
-    // 通过这个列表我将生产一组函数
+    // 写入到 fndefs 中
 
 }
