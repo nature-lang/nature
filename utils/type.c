@@ -468,7 +468,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
     return gc_bits_size;
 }
 
-byte *malloc_gc_bits(uint64_t size) {
+uint8_t *malloc_gc_bits(uint64_t size) {
     uint64_t gc_bits_size = calc_gc_bits_size(size, POINTER_SIZE);
     return mallocz(gc_bits_size);
 }

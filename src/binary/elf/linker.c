@@ -1433,11 +1433,11 @@ uint64_t collect_fndef_list(elf_context *ctx) {
     return size_with_bits;
 }
 
-byte *fndefs_serialize() {
+uint8_t *fndefs_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
-    byte *data = mallocz(ct_fndef_size);
+    uint8_t *data = mallocz(ct_fndef_size);
 
-    byte *p = data;
+    uint8_t *p = data;
     // 首先将 fndef 移动到 data 中
     uint64_t size = ct_fndef_count * sizeof(fndef_t);
     memmove(p, ct_fndef_list, size);
@@ -1486,15 +1486,15 @@ uint64_t collect_symdef_list(elf_context *ctx) {
 }
 
 // 由于不包含 gc_bits，所以可以直接使用 ct_symdef_list 生成 symdef_data
-byte *symdefs_serialize() {
-    return (byte *) ct_symdef_list;
+uint8_t *symdefs_serialize() {
+    return (uint8_t *) ct_symdef_list;
 }
 
-byte *rtypes_serialize() {
+uint8_t *rtypes_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     // 计算 ct_reflect_type
-    byte *data = mallocz(ct_rtype_size);
-    byte *p = data;
+    uint8_t *data = mallocz(ct_rtype_size);
+    uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
     uint64_t size = ct_rtype_list->length * sizeof(rtype_t);

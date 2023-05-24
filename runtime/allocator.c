@@ -119,7 +119,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint64_t bit_start = 0;
     uint64_t bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((byte *) chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             // 重新开始计算
             bit_start = i + 1;
@@ -134,7 +134,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t start = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((byte *) chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             break;
         }
@@ -143,7 +143,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t end = 0;
     for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_test((byte *) chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             break;
         }
@@ -310,9 +310,9 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
 
         for (uint64_t i = bit_start; i <= bit_end; ++i) {
             if (v) {
-                bitmap_set((byte *) chunk->blocks, i);
+                bitmap_set((uint8_t *) chunk->blocks, i);
             } else {
-                bitmap_clear((byte *) chunk->blocks, i);
+                bitmap_clear((uint8_t *) chunk->blocks, i);
             };
         }
     }

@@ -2,7 +2,7 @@
 #include "infer.h"
 #include "utils/error.h"
 #include "src/symbol/symbol.h"
-#include "analyser.h"
+#include "analyzer.h"
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 

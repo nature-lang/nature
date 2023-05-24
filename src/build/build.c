@@ -265,7 +265,7 @@ static void import_builtin() {
     // nature_root
     char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
     assertf(file_exists(source_path), "builtin.n not found");
-    // build 中包含 analyser 已经将相关 symbol 写入了, 无论是后续都 analyser 或者 infer 都能够使用
+    // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
     module_t *builtin_module = module_build(source_path, MODULE_TYPE_BUILTIN);
 
     // infer type

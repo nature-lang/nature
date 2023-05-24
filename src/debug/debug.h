@@ -16,7 +16,7 @@ string lir_opcode_to_string[UINT8_MAX];
 
 //#define DEBUG_PARSER
 
-//#define DEBUG_ANALYSER
+//#define DEBUG_ANALYZER
 
 //#define DEBUG_INFER
 

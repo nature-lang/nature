@@ -17,7 +17,6 @@
 #define OWORD 16 // 16 byte = 128位 xmm
 #define YWORD 32 // 32 byte = ymm
 #define ZWORD 64 // 64 byte
-typedef uint8_t byte;
 
 typedef union {
     int64_t int_value;
@@ -143,7 +142,7 @@ typedef struct {
     uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
-    byte *gc_bits; // 类型 bit 数据(按 uint8 对齐)
+    uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 } rtype_t;
 
 
@@ -184,8 +183,7 @@ typedef struct type_fn_t type_fn_t;
 
 typedef struct type_any_t type_any_t;
 
-
-// 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
+// 类型的描述信息，无论是否还原，类型都会在这里呈现
 typedef struct type_t {
     union {
         void *value;
@@ -197,7 +195,7 @@ typedef struct type_t {
         type_struct_t *struct_;
         type_fn_t *fn;
         type_any_t *any;
-        type_ident_t *ident;
+        type_ident_t *ident; // 这个其实是自定义类型的 ident
         type_pointer_t *pointer;
     };
     type_kind kind;
@@ -234,6 +232,8 @@ struct type_string_t {
 
 struct type_ident_t {
     string literal; // 类型名称 type my_int = int
+    // 可以包含多个实际参数,实际参数由类型组成
+    list_t *actual_types; // type_t
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -317,7 +317,7 @@ struct type_any_t {
 // 部分类型的数据(复合类型)只能在堆内存中存储
 
 typedef struct {
-    byte *array_data;
+    uint8_t *array_data;
     // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
     // 内存优化时可以优化掉这个参数
     uint64_t element_rtype_index;
@@ -329,13 +329,13 @@ typedef struct {
 typedef addr_t memory_pointer_t;
 
 typedef struct {
-    byte *array_data;
+    uint8_t *array_data;
     uint64_t length;
 } memory_string_t;
 
 typedef uint8_t memory_bool_t;
 
-typedef byte memory_array_t; // 数组在内存中的变现形式就是 byte 列表
+typedef uint8_t memory_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t memory_int_t;
 
@@ -343,14 +343,14 @@ typedef double memory_float_t;
 typedef double memory_f64_t;
 typedef float memory_f32_t;
 
-typedef byte memory_struct_t; // 长度不确定
+typedef uint8_t memory_struct_t; // 长度不确定
 
-typedef byte memory_tuple_t; // 长度不确定
+typedef uint8_t memory_tuple_t; // 长度不确定
 
 typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
-    byte *key_data;
-    byte *value_data;
+    uint8_t *key_data;
+    uint8_t *value_data;
     uint64_t key_index; // key rtype index
     uint64_t value_index;
     uint64_t length; // 实际的元素的数量
@@ -359,7 +359,7 @@ typedef struct {
 
 typedef struct {
     uint64_t *hash_table;
-    byte *key_data; // hash 冲突时进行检测使用
+    uint8_t *key_data; // hash 冲突时进行检测使用
     uint64_t key_index;
     uint64_t length;
     uint64_t capacity;
@@ -438,7 +438,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  * @param size
  * @return
  */
-byte *malloc_gc_bits(uint64_t size);
+uint8_t *malloc_gc_bits(uint64_t size);
 
 uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size);
 

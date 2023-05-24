@@ -111,8 +111,8 @@ typedef struct {
 /**
  * 词法作用域
  */
-typedef struct analyser_fndef_t {
-    struct analyser_fndef_t *parent;
+typedef struct analyzer_fndef_t {
+    struct analyzer_fndef_t *parent;
 
     ast_fndef_t *fndef;
     slice_t *locals; // local_ident
@@ -120,9 +120,9 @@ typedef struct analyser_fndef_t {
     uint8_t scope_depth;
 
     // 使用了当前函数作用域之外的变量
-    slice_t *frees; // analyser_free_ident_t*
-    table_t *free_table; // analyser_free_ident_t*
-} analyser_fndef_t;
+    slice_t *frees; // analyzer_free_ident_t*
+    table_t *free_table; // analyzer_free_ident_t*
+} analyzer_fndef_t;
 
 
 /**
@@ -149,9 +149,9 @@ typedef struct {
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
 
-    // analyser
-    analyser_fndef_t *analyser_current;
-    int analyser_line;
+    // analyzer
+    analyzer_fndef_t *analyzer_current;
+    int analyzer_line;
 
     // infer
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
@@ -164,7 +164,7 @@ typedef struct {
     int compiler_line;
 
     // call init stmt
-    ast_stmt *call_init_stmt;  // analyser 阶段写入
+    ast_stmt *call_init_stmt;  // analyzer 阶段写入
 
     // TODO asm_global_symbols to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_global_symbols(symbol)/closure_decls

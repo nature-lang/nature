@@ -57,33 +57,33 @@ rtype_t *rt_rtype_ptr;
 
 // - symdef
 uint64_t ct_symdef_size; // 数量
-byte *ct_symdef_data; // 序列化后的 data 大小
+uint8_t *ct_symdef_data; // 序列化后的 data 大小
 uint64_t ct_symdef_count;
 symdef_t *ct_symdef_list;
 
 // - fndef
 uint64_t ct_fndef_size;
-byte *ct_fndef_data;
+uint8_t *ct_fndef_data;
 uint64_t ct_fndef_count;
 fndef_t *ct_fndef_list;
 
 
 // - rtype
 uint64_t ct_rtype_count; // 从 list 中提取而来
-byte *ct_rtype_data;
+uint8_t *ct_rtype_data;
 uint64_t ct_rtype_size; // rtype + gc_bits 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
 list_t *ct_rtype_list;
 table_t *ct_rtype_table;
 
 // 主要是需要处理 gc_bits 数据
-byte *fndefs_serialize();
+uint8_t *fndefs_serialize();
 
-byte *symdefs_serialize();
+uint8_t *symdefs_serialize();
 
 /**
  * 将 reflect_types 进行序列化,序列化后的 byte 总数就是 ct_rtype_size
  * @return
  */
-byte *rtypes_serialize();
+uint8_t *rtypes_serialize();
 
 #endif //NATURE_CUSTOM_LINKS_H

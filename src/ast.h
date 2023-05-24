@@ -395,7 +395,7 @@ typedef struct ast_fndef_t {
     list_t *capture_exprs;
     slice_t *be_capture_locals; // 当前函数中是否存在被外部引用的变量
 
-    // analyser stage, 当 fn 定义在 struct 中,用于记录 struct type
+    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;
     type_t type; // 类型冗余一份
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt

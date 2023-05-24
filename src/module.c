@@ -4,7 +4,7 @@
 #include "utils/error.h"
 #include "src/syntax/scanner.h"
 #include "src/syntax/parser.h"
-#include "src/semantic/analyser.h"
+#include "src/semantic/analyzer.h"
 #include "src/build/config.h"
 #include <string.h>
 #include <assert.h>
@@ -95,8 +95,8 @@ module_t *module_build(char *source_path, module_type_t type) {
     // parser
     m->stmt_list = parser(m, m->token_list);
 
-    // analyser => ast_closures
-    analyser(m, m->stmt_list);
+    // analyzer => ast_closures
+    analyzer(m, m->stmt_list);
 
     return m;
 }
