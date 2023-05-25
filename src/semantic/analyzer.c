@@ -11,13 +11,13 @@
 #include "src/symbol/symbol.h"
 #include "src/debug/debug.h"
 
-static void analyzer_block(module_t *m, slice_t *block) {
-    for (int i = 0; i < block->count; ++i) {
+static void analyzer_body(module_t *m, slice_t *body) {
+    for (int i = 0; i < body->count; ++i) {
         // switch 结构导向优化
 #ifdef DEBUG_ANALYZER
-        debug_stmt("ANALYZER", block->tack[i]);
+        debug_stmt("ANALYZER", body->tack[i]);
 #endif
-        analyzer_stmt(m, block->take[i]);
+        analyzer_stmt(m, body->take[i]);
     }
 }
 
@@ -211,11 +211,11 @@ static void analyzer_if(module_t *m, ast_if_stmt *if_stmt) {
     analyzer_expr(m, &if_stmt->condition);
 
     analyzer_begin_scope(m);
-    analyzer_block(m, if_stmt->consequent);
+    analyzer_body(m, if_stmt->consequent);
     analyzer_end_scope(m);
 
     analyzer_begin_scope(m);
-    analyzer_block(m, if_stmt->alternate);
+    analyzer_body(m, if_stmt->alternate);
     analyzer_end_scope(m);
 }
 
@@ -368,7 +368,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         param->ident = param_local->unique_ident;
     }
 
-    analyzer_block(m, fndef->body);
+    analyzer_body(m, fndef->body);
     analyzer_end_scope(m);
     m->analyzer_current = m->analyzer_current->parent;
 }
@@ -431,7 +431,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // 分析请求体 block, 其中进行了对外部变量的捕获并改写, 以及 local var 名称 unique
-    analyzer_block(m, fndef->body);
+    analyzer_body(m, fndef->body);
 
     int free_var_count = 0;
 
@@ -732,7 +732,7 @@ static void analyzer_for_cond(module_t *m, ast_for_cond_stmt *stmt) {
     analyzer_expr(m, &stmt->condition);
 
     analyzer_begin_scope(m);
-    analyzer_block(m, stmt->body);
+    analyzer_body(m, stmt->body);
     analyzer_end_scope(m);
 }
 
@@ -741,7 +741,7 @@ static void analyzer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
     analyzer_stmt(m, stmt->init);
     analyzer_expr(m, &stmt->cond);
     analyzer_stmt(m, stmt->update);
-    analyzer_block(m, stmt->body);
+    analyzer_body(m, stmt->body);
     analyzer_end_scope(m);
 }
 
@@ -755,7 +755,7 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
     if (stmt->value) {
         analyzer_var_decl(m, stmt->value);
     }
-    analyzer_block(m, stmt->body);
+    analyzer_body(m, stmt->body);
 
     analyzer_end_scope(m);
 }
@@ -821,8 +821,8 @@ static void analyzer_expr(module_t *m, ast_expr *expr) {
             return analyzer_call(m, expr->value);
         }
         case AST_FNDEF: {
-            // TODO 不能直接进行平铺，请延迟进行平铺处理
-//            slice_push(m->ast_fndefs, expr->value);
+            slice_push(m->analyzer_current->fndef->child_fndefs, expr->value);
+
             return analyzer_local_fndef(m, expr->value);
         }
         default:
@@ -850,8 +850,7 @@ static void analyzer_stmt(module_t *m, ast_stmt *stmt) {
             return analyzer_assign(m, stmt->value);
         }
         case AST_FNDEF: {
-            // TODO 延迟到 generic 阶段进行平铺处理。
-//            slice_push(m->ast_fndefs, stmt->value);
+            slice_push(m->analyzer_current->fndef->child_fndefs, stmt->value);
 
             return analyzer_local_fndef(m, stmt->value);
         }

@@ -404,7 +404,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt *ast) {
 
     }
     // block
-    compiler_block(m, ast->body);
+    compiler_body(m, ast->body);
 
     // goto for start
     OP_PUSH(lir_op_bal(for_start_label->output));
@@ -428,7 +428,7 @@ static void compiler_for_cond(module_t *m, ast_for_cond_stmt *ast) {
 
     OP_PUSH(cmp_goto);
     OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
-    compiler_block(m, ast->body);
+    compiler_body(m, ast->body);
 
     // bal => goto
     OP_PUSH(lir_op_bal(for_start->output));
@@ -454,7 +454,7 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt *ast) {
     OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
 
     // block
-    compiler_block(m, ast->body);
+    compiler_body(m, ast->body);
 
     // update
     compiler_stmt(m, ast->update);
@@ -500,13 +500,13 @@ static void compiler_if(module_t *m, ast_if_stmt *if_stmt) {
     OP_PUSH(lir_op_unique_label(m, IF_CONTINUE_IDENT));
 
     // 编译 consequent block
-    compiler_block(m, if_stmt->consequent);
+    compiler_body(m, if_stmt->consequent);
     OP_PUSH(lir_op_bal(end_label_operand));
 
     // 编译 alternate block
     if (if_stmt->alternate->count != 0) {
         OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, alternate_label_operand));
-        compiler_block(m, if_stmt->alternate);
+        compiler_body(m, if_stmt->alternate);
     }
 
     // 追加 end_if 标签
@@ -1357,9 +1357,9 @@ static lir_operand_t *compiler_expr(module_t *m, ast_expr expr) {
 }
 
 
-static void compiler_block(module_t *m, slice_t *block) {
-    for (int i = 0; i < block->count; ++i) {
-        ast_stmt *stmt = block->take[i];
+static void compiler_body(module_t *m, slice_t *body) {
+    for (int i = 0; i < body->count; ++i) {
+        ast_stmt *stmt = body->take[i];
         compiler_line = stmt->line;
         m->compiler_line = stmt->line;
 #ifdef DEBUG_COMPILER
@@ -1416,7 +1416,7 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
     }
 
-    compiler_block(m, fndef->body);
+    compiler_body(m, fndef->body);
 
     if (c->to_error_label) {
         // bal end_label

@@ -406,6 +406,8 @@ typedef struct ast_fndef_t {
 
     table_t *generic_assign; // key is generic->ident, value is *type_t
 
+    // fndefs
+    slice_t *child_fndefs;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 type_t select_formal_param(type_fn_t *formal_fn, uint8_t index);
@@ -486,6 +488,7 @@ static inline ast_fndef_t *ast_fndef_new() {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
     fndef->symbol_name = NULL;
     fndef->closure_name = NULL;
+    fndef->child_fndefs = slice_new();
     return fndef;
 }
 

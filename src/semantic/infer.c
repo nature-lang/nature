@@ -6,14 +6,14 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-static void infer_block(module_t *m, slice_t *block) {
-    for (int i = 0; i < block->count; ++i) {
+static void infer_body(module_t *m, slice_t *body) {
+    for (int i = 0; i < body->count; ++i) {
 #ifdef DEBUG_INFER
-        debug_stmt("INFER", block->list[i]);
+        debug_stmt("INFER", body->list[i]);
 #endif
 
         // switch 结构导向优化
-        infer_stmt(m, block->take[i]);
+        infer_stmt(m, body->take[i]);
     }
 }
 
@@ -809,14 +809,14 @@ static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
 static void infer_if(module_t *m, ast_if_stmt *stmt) {
     infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
-    infer_block(m, stmt->consequent);
-    infer_block(m, stmt->alternate);
+    infer_body(m, stmt->consequent);
+    infer_body(m, stmt->alternate);
 }
 
 static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt *stmt) {
     infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
 }
 
 /**
@@ -853,14 +853,14 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
     }
 
 
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
 }
 
 static void infer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
     infer_stmt(m, stmt->init);
     infer_right_expr(m, &stmt->cond, type_basic_new(TYPE_BOOL));
     infer_stmt(m, stmt->update);
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
 }
 
 /**
@@ -1414,7 +1414,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // body infer
-    infer_block(m, fndef->body);
+    infer_body(m, fndef->body);
 }
 
 void infer(module_t *m) {

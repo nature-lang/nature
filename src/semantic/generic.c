@@ -106,58 +106,14 @@ static void generic_cartesian_product(list_t *products, slice_t *generic_params,
 }
 
 /**
- * 无论 type 是否是泛类型都可以进入到该 fn 中进行泛型绑定
- * @param fndef
- * @param type
- * @return
- */
-static type_t generic_type(ast_fndef_t *fndef, type_t type) {
-
-}
-
-/**
- * 全局函数中包含函数的嵌套，虽然也是 ast_fndef 格式，但是也是需要处理的
- * @param temp
- * @return ast_fndef_t*
- */
-static void generic_fndef(ast_fndef_t *temp) {
-    assertf(temp->capture_exprs == NULL, "only global fn can generic production");
-    ast_fndef_t *fndef = ast_fndef_new();
-    // TODO push to global
-
-    fndef->symbol_name = temp->symbol_name;
-    fndef->closure_name = temp->closure_name;
-    fndef->return_type = temp->return_type;
-    fndef->rest_param = temp->rest_param;
-    fndef->generic_assign = temp->generic_assign;
-
-    fndef->return_type = generic_type(fndef, fndef->return_type);
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl *var = ct_list_value(fndef->formals, i);
-        var->type = generic_type(fndef, var->type);
-    }
-
-
-    // TODO 嵌套函数处理生成?其默认也依赖了泛型参数
-
-    // TODO formals 生成
-
-    // TODO body 生成
-
-//    return fndef;
-}
-
-/**
- * TODO 嵌套函数的平铺工作延迟到 generic 阶段
  * @param fndef
  * @return slice_t of ast_fndef_t
  */
 slice_t *generic(ast_fndef_t *fndef) {
-    slice_t *fndefs = slice_new();
+    slice_t *result = slice_new();
 
     fndef->exists_generic_params = table_new();
     fndef->generic_params = slice_new();
-    fndef->generic_assign = table_new();
 
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl *var = ct_list_value(fndef->formals, i);
@@ -165,30 +121,46 @@ slice_t *generic(ast_fndef_t *fndef) {
     }
 
     if (fndef->generic_params->count == 0) {
-        slice_push(fndefs, fndef);
-        return fndefs;
+        slice_push(result, fndef);
+        for (int i = 0; i < fndef->child_fndefs->count; ++i) {
+            slice_push(result, fndef->child_fndefs->take[i]);
+        }
+        return result;
     }
+
+
+    slice_t *temps = fndef->child_fndefs;
+    slice_push(temps, fndef);
 
     // - 根据 generic_types 中的约束信息生成笛卡尔积列表，列表中的每个元素都是
     uint64_t element_size = sizeof(type_t *) * fndef->generic_params->count;
     list_t *products = ct_list_new(element_size);  // 收集的全量排列组合结果集
     type_t **element = mallocz(element_size);
     generic_cartesian_product(products, fndef->generic_params, element, 0);
-    // 写入到 fndefs 中 table_t *generic_assign; key is generic->ident, value is *type_t
+    // 写入到 result 中 table_t *generic_assign; key is generic->ident, value is *type_t
     for (int i = 0; i < products->length; ++i) {
         // element 的长度等于 fndef->generic_params->count
         element = ct_list_value(products, i);
 
-        for (int j = 0; j < fndef->generic_params->count; ++j) {
-            ast_type_alias_stmt *stmt = fndef->generic_params->take[j];
 
-            type_t *assign_type = element[j];
-            // 由于各种指针数据引用，copy 一个 fndef 变得没这么容易，所以借此进行崭新的数据生成
-            table_set(fndef->generic_assign, stmt->ident, assign_type);
+        slice_t *fndefs = slice_new();
+        for (int j = 0; j < temps->count; ++j) {
+            ast_fndef_t *new_fndef = COPY_NEW(ast_fndef_t, temps->take[j]);
+            slice_push(fndefs, new_fndef);
+            slice_push(result, new_fndef);
+        }
 
+        for (int j = 0; j < fndefs->count; ++j) {
+            ast_fndef_t *new_fndef = fndefs->take[j];
+            new_fndef->generic_assign = table_new();
 
+            for (int k = 0; k < fndef->generic_params->count; ++k) {
+                ast_type_alias_stmt *stmt = fndef->generic_params->take[k];
+                type_t *assign_type = element[k];
+                table_set(new_fndef->generic_assign, stmt->ident, assign_type);
+            }
         }
     }
 
-    return fndefs;
+    return result;
 }
