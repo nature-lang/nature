@@ -821,7 +821,8 @@ static void analyzer_expr(module_t *m, ast_expr *expr) {
             return analyzer_call(m, expr->value);
         }
         case AST_FNDEF: {
-            slice_push(m->ast_fndefs, expr->value);
+            // TODO 不能直接进行平铺，请延迟进行平铺处理
+//            slice_push(m->ast_fndefs, expr->value);
             return analyzer_local_fndef(m, expr->value);
         }
         default:
@@ -849,7 +850,8 @@ static void analyzer_stmt(module_t *m, ast_stmt *stmt) {
             return analyzer_assign(m, stmt->value);
         }
         case AST_FNDEF: {
-            slice_push(m->ast_fndefs, stmt->value);
+            // TODO 延迟到 generic 阶段进行平铺处理。
+//            slice_push(m->ast_fndefs, stmt->value);
 
             return analyzer_local_fndef(m, stmt->value);
         }

@@ -482,4 +482,11 @@ static inline bool can_assign(ast_type_t t) {
     return false;
 }
 
+static inline ast_fndef_t *ast_fndef_new() {
+    ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->symbol_name = NULL;
+    fndef->closure_name = NULL;
+    return fndef;
+}
+
 #endif //NATURE_SRC_AST_H_

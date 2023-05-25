@@ -5,13 +5,6 @@
 #include "src/debug/debug.h"
 #include <string.h>
 
-static ast_fndef_t *ast_fndef_new() {
-    ast_fndef_t *fndef = NEW(ast_fndef_t);
-    fndef->symbol_name = NULL;
-    fndef->closure_name = NULL;
-    return fndef;
-}
-
 static token_t *parser_advance(module_t *m) {
     if (m->p_cursor.current->succ == NULL) {
         error_exit("next token_t is null");
