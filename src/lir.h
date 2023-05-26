@@ -22,7 +22,7 @@
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
 
-#define ERRORT_TYPE_IDENT "errort"
+#define ERRORT_TYPE_ALIAS "errort"
 #define ERRORT_MSG_IDENT "msg"
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
@@ -220,7 +220,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     assertf(s, "notfound symbol=%s", ident);
     assertf(s->type == SYMBOL_VAR, "symbol=%s type not var", ident);
 
-    ast_var_decl *global_var = s->ast_value;
+    ast_var_decl_t *global_var = s->ast_value;
     var->type = global_var->type;
     var->flag |= type_base_trans_alloc(global_var->type.kind);
 

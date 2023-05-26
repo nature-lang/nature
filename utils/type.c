@@ -473,8 +473,8 @@ uint8_t *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-type_ident_t *typeuse_ident_new(char *literal) {
-    type_ident_t *t = NEW(type_ident_t);
+type_alias_t *typeuse_ident_new(char *literal) {
+    type_alias_t *t = NEW(type_alias_t);
     t->literal = literal;
     return t;
 }
