@@ -1466,7 +1466,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
             continue;
         }
 
-        ast_var_decl *var_decl = s->ast_value;
+        ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->need_gc = type_need_gc(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小

@@ -1,7 +1,7 @@
 #include "symbol.h"
 #include "utils/helper.h"
 
-static symbol_t *_symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
+static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     symbol_t *s = NEW(symbol_t);
     s->ident = ident;
     s->type = type;
@@ -31,7 +31,7 @@ void symbol_init() {
 
 // compiler 阶段临时生成的数据
 void symbol_table_set_var(char *unique_ident, type_t type) {
-    ast_var_decl *var_decl = NEW(ast_var_decl);
+    ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
     var_decl->type = type;
     var_decl->ident = unique_ident;
 
@@ -40,7 +40,7 @@ void symbol_table_set_var(char *unique_ident, type_t type) {
 }
 
 
-symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local) {
+symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
     if (type == SYMBOL_FN) {
         slice_push(symbol_fn_list, s);
@@ -61,7 +61,7 @@ symbol_t *symbol_table_get(char *ident) {
     return table_get(symbol_table, ident);
 }
 
-ast_var_decl *symbol_table_get_var(char *ident) {
+ast_var_decl_t *symbol_table_get_var(char *ident) {
     symbol_t *s = table_get(symbol_table, ident);
     if (!s) {
         assertf(false, "symbol_table_get_var: symbol not found: %s", ident);

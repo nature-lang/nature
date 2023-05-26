@@ -75,16 +75,6 @@ typedef struct {
     linked_node *current;
 } parser_cursor_t;
 
-// 函数定义在当前作用域仅加载 fn decl
-// 函数体的解析则延迟到当前作用域内的所有标识符都定义好后再做
-// 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
-typedef struct {
-    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-//    local_scope_t *scope;
-    ast_fndef_t *fndef;
-    bool is_stmt;
-} delay_fndef_t;
-
 /**
  * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
  * 所以这里的 is_local 指的是在 parent 中的位置
@@ -96,11 +86,11 @@ typedef struct {
     int env_index; // env_index
     string ident;
     uint64_t index; // free in frees index
-    symbol_type type;
+    symbol_type_t type;
 } free_ident_t;
 
 typedef struct {
-    symbol_type type;
+    symbol_type_t type;
     void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
     string ident; // 原始名称
     string unique_ident; // 唯一名称

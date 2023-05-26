@@ -10,7 +10,7 @@
 void infer(module_t *m);
 
 
-void infer_var_decl(module_t *m, ast_var_decl *var_decl);
+void infer_var_decl(module_t *m, ast_var_decl_t *var_decl);
 
 static type_t reduction_type(module_t *m, type_t t);
 

@@ -237,7 +237,7 @@ static void build_assembler(slice_t *modules) {
             if (s->type != SYMBOL_VAR) {
                 continue;
             }
-            ast_var_decl *var_decl = s->ast_value;
+            ast_var_decl_t *var_decl = s->ast_value;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = s->ident;
             symbol->size = type_kind_sizeof(var_decl->type.kind);
@@ -286,7 +286,7 @@ static slice_t *build_modules() {
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);;
         for (int j = 0; j < m->imports->count; ++j) {
-            ast_import *import = m->imports->take[j];
+            ast_import_t *import = m->imports->take[j];
             if (table_exist(module_table, import->full_path)) {
                 continue;
             }
@@ -321,6 +321,8 @@ static void build_compiler(slice_t *modules) {
 
         // 类型推断
         infer(m);
+
+        // generic
 
         compiler(m);
 

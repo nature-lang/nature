@@ -6,9 +6,9 @@
  */
 static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
     if (t.kind == TYPE_ALIAS) {
-        if (t.alias->actual_types) {
-            for (int i = 0; i < t.alias->actual_types->length; ++i) {
-                type_t *temp = ct_list_value(t.alias->actual_types, i);
+        if (t.alias->actual_params) {
+            for (int i = 0; i < t.alias->actual_params->length; ++i) {
+                type_t *temp = ct_list_value(t.alias->actual_params, i);
                 generic_params_collect(fndef, *temp);
             }
 
@@ -17,7 +17,7 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
 
         symbol_t *symbol = symbol_table_get(t.alias->literal);
         assertf(symbol->type == SYMBOL_TYPEDEF, "'%s' is not a type", symbol->ident);
-        ast_type_alias_stmt *type_alias_stmt = symbol->ast_value;
+        ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
         if (type_alias_stmt->type.kind != TYPE_GENERIC) {
             return;
@@ -89,7 +89,7 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
  * 使用递归基于数组的索引的笛卡尔积组合
  */
 static void generic_cartesian_product(list_t *products, slice_t *generic_params, type_t **element, int depth) {
-    ast_type_alias_stmt *stmt = generic_params->take[depth];
+    ast_type_alias_stmt_t *stmt = generic_params->take[depth];
     assert(stmt->type.kind == TYPE_GENERIC);
     if (depth == generic_params->count) {
         // element 已经收集完毕，现在可以写入到 products 中并退出递归
@@ -105,18 +105,19 @@ static void generic_cartesian_product(list_t *products, slice_t *generic_params,
     }
 }
 
+
 /**
  * @param fndef
  * @return slice_t of ast_fndef_t
  */
-slice_t *generic(ast_fndef_t *fndef) {
+static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     slice_t *result = slice_new();
 
     fndef->exists_generic_params = table_new();
     fndef->generic_params = slice_new();
 
     for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl *var = ct_list_value(fndef->formals, i);
+        ast_var_decl_t *var = ct_list_value(fndef->formals, i);
         generic_params_collect(fndef, var->type);
     }
 
@@ -142,10 +143,10 @@ slice_t *generic(ast_fndef_t *fndef) {
         // element 的长度等于 fndef->generic_params->count
         element = ct_list_value(products, i);
 
-
         slice_t *fndefs = slice_new();
         for (int j = 0; j < temps->count; ++j) {
-            ast_fndef_t *new_fndef = COPY_NEW(ast_fndef_t, temps->take[j]);
+            ast_fndef_t *new_fndef = ast_fndef_copy(temps->take[j]);
+
             slice_push(fndefs, new_fndef);
             slice_push(result, new_fndef);
         }
@@ -155,7 +156,7 @@ slice_t *generic(ast_fndef_t *fndef) {
             new_fndef->generic_assign = table_new();
 
             for (int k = 0; k < fndef->generic_params->count; ++k) {
-                ast_type_alias_stmt *stmt = fndef->generic_params->take[k];
+                ast_type_alias_stmt_t *stmt = fndef->generic_params->take[k];
                 type_t *assign_type = element[k];
                 table_set(new_fndef->generic_assign, stmt->ident, assign_type);
             }
@@ -163,4 +164,11 @@ slice_t *generic(ast_fndef_t *fndef) {
     }
 
     return result;
+}
+
+void generic(module_t *m) {
+    slice_t *ast_fndefs = slice_new();
+    for (int i = 0; i < m->ast_fndefs->count; ++i) {
+
+    }
 }

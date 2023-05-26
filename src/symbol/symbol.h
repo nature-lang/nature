@@ -26,6 +26,8 @@ table_t *symbol_table;
 
 slice_t *symbol_fn_list;
 
+slice_t *symbol_closure_list;
+
 slice_t *symbol_var_list;
 
 slice_t *symbol_typedef_list;
@@ -34,14 +36,17 @@ typedef enum {
     SYMBOL_VAR,
     SYMBOL_TYPEDEF,
     SYMBOL_FN,
-} symbol_type;
+    SYMBOL_CLOSURE,
+} symbol_type_t;
 
 typedef struct {
     string ident; // 符号唯一标识
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
-    symbol_type type;
-    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t
-    linked_t *global_fndefs; // 当全局函数同名时会不断的 link 到这里, 首个函数则依旧在 ast_value 中
+    symbol_type_t type;
+    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
+    // 由于支持重载，所以会支持同名不同类型的函数, 但是由于在 analyzer 阶段类型仅仅收集了符号没有进行类型还原
+    // 所以所以无法准确的生产 fndefs 的相关的 unique key, 所以将同名函数都通过链表的方式链接进来, 不过好像后续也没有什么用了
+    linked_t *global_fndefs;
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {
@@ -60,13 +65,13 @@ static inline bool is_builtin_call(char *ident) {
            str_equal(ident, "set_delete");
 }
 
-symbol_t *symbol_table_set(string ident, symbol_type type, void *ast_value, bool is_local);
+symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local);
 
 symbol_t *symbol_table_get(string ident);
 
 void symbol_table_set_var(string unique_ident, type_t type);
 
-ast_var_decl *symbol_table_get_var(string ident);
+ast_var_decl_t *symbol_table_get_var(string ident);
 
 void symbol_init();
 

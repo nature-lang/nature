@@ -236,7 +236,7 @@ struct type_string_t {
 struct type_alias_t {
     string literal; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
-    list_t *actual_types; // type_t
+    list_t *actual_params; // type_t
 };
 
 struct type_generic_t {

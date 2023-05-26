@@ -318,7 +318,7 @@ static type_t parser_type(module_t *m) {
  */
 static ast_stmt *parser_type_alias_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_type_alias_stmt *type_alias_stmt = malloc(sizeof(ast_type_alias_stmt));
+    ast_type_alias_stmt_t *type_alias_stmt = malloc(sizeof(ast_type_alias_stmt_t));
     parser_must(m, TOKEN_TYPE); // code
     type_alias_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
     parser_must(m, TOKEN_EQUAL); // =
@@ -331,7 +331,7 @@ static ast_stmt *parser_type_alias_stmt(module_t *m) {
     return result;
 }
 
-static ast_var_decl *parser_var_decl(module_t *m) {
+static ast_var_decl_t *parser_var_decl(module_t *m) {
     type_t var_type = parser_type(m);
 
     // 变量名称必须为 ident
@@ -339,7 +339,7 @@ static ast_var_decl *parser_var_decl(module_t *m) {
     assertf(var_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident",
             var_ident->literal);
 
-    ast_var_decl *var_decl = malloc(sizeof(ast_var_decl));
+    ast_var_decl_t *var_decl = malloc(sizeof(ast_var_decl_t));
     var_decl->type = var_type;
     var_decl->ident = var_ident->literal;
     return var_decl;
@@ -348,7 +348,7 @@ static ast_var_decl *parser_var_decl(module_t *m) {
 
 static void parser_formals(module_t *m, ast_fndef_t *fn_decl) {
     parser_must(m, TOKEN_LEFT_PAREN);
-    fn_decl->formals = ct_list_new(sizeof(ast_var_decl));
+    fn_decl->formals = ct_list_new(sizeof(ast_var_decl_t));
     // not formal params
     if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
         return;
@@ -360,7 +360,7 @@ static void parser_formals(module_t *m, ast_fndef_t *fn_decl) {
         }
 
         // ref 本身就是堆上的地址，所以只需要把堆上的地址交给数组就可以了
-        ast_var_decl *ref = parser_var_decl(m);
+        ast_var_decl_t *ref = parser_var_decl(m);
         ct_list_push(fn_decl->formals, ref);
 
         if (fn_decl->rest_param) {
@@ -379,7 +379,7 @@ static ast_expr parser_binary(module_t *m, ast_expr left) {
     parser_precedence precedence = find_rule(operator_token->type)->infix_precedence;
     ast_expr right = parser_precedence_expr(m, precedence + 1);
 
-    ast_binary_expr *binary_expr = NEW(ast_binary_expr);
+    ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
     binary_expr->operator = token_to_ast_op[operator_token->type];
     binary_expr->left = left;
@@ -401,7 +401,7 @@ static ast_expr parser_unary(module_t *m) {
     token_t *operator_token = parser_advance(m);
     ast_expr operand = parser_precedence_expr(m, PRECEDENCE_UNARY);
 
-    ast_unary_expr *unary_expr = malloc(sizeof(ast_unary_expr));
+    ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
 
     if (operator_token->type == TOKEN_NOT) { // !true
         unary_expr->operator = AST_OP_NOT;
@@ -441,7 +441,7 @@ static ast_expr parser_left_paren_expr(module_t *m) {
     parser_must(m, TOKEN_COMMA);
 
     // 下一个是逗号才能判断为 tuple
-    ast_tuple_new *tuple = NEW(ast_tuple_new);
+    ast_tuple_new_t *tuple = NEW(ast_tuple_new_t);
     tuple->elements = ct_list_new(sizeof(ast_expr));
     ct_list_push(tuple->elements, &expr);
     do {
@@ -463,7 +463,7 @@ static ast_expr parser_left_paren_expr(module_t *m) {
 static ast_expr parser_literal(module_t *m) {
     ast_expr result = expr_new(m);
     token_t *literal_token = parser_advance(m);
-    ast_literal *literal_expr = NEW(ast_literal);
+    ast_literal_t *literal_expr = NEW(ast_literal_t);
     literal_expr->kind = token_to_kind[literal_token->type];
     literal_expr->value = literal_token->literal; // 具体数值
 
@@ -602,7 +602,7 @@ static ast_expr parser_access(module_t *m, ast_expr left) {
     parser_must(m, TOKEN_LEFT_SQUARE);
     ast_expr key = parser_expr(m);
     parser_must(m, TOKEN_RIGHT_SQUARE);
-    ast_access *access_expr = malloc(sizeof(ast_access));
+    ast_access_t *access_expr = malloc(sizeof(ast_access_t));
     access_expr->left = left;
     access_expr->key = key;
     result.assert_type = AST_EXPR_ACCESS;
@@ -623,7 +623,7 @@ static ast_expr parser_select(module_t *m, ast_expr left) {
     parser_must(m, TOKEN_DOT);
 
     token_t *property_token = parser_must(m, TOKEN_IDENT);
-    ast_select *select = NEW(ast_select);
+    ast_select_t *select = NEW(ast_select_t);
 
     select->left = left;
     select->key = property_token->literal; // struct 的 property 不能是运行时计算的结果，必须是具体的值
@@ -635,7 +635,7 @@ static ast_expr parser_select(module_t *m, ast_expr left) {
 }
 
 
-static void parser_actual_param(module_t *m, ast_call *call) {
+static void parser_actual_param(module_t *m, ast_call_t *call) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
@@ -660,7 +660,7 @@ static void parser_actual_param(module_t *m, ast_call *call) {
 static ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
     ast_expr result = expr_new(m);
 
-    ast_call *call_stmt = NEW(ast_call);
+    ast_call_t *call_stmt = NEW(ast_call_t);
     call_stmt->actual_params = ct_list_new(sizeof(ast_expr));
     call_stmt->left = left_expr;
 
@@ -670,7 +670,7 @@ static ast_expr parser_call_expr(module_t *m, ast_expr left_expr) {
     // 如果 left_expr 是 ident ,且 == set, 那么将其转化成 ast_set_new
     if (left_expr.assert_type == AST_EXPR_IDENT &&
         str_equal(((ast_ident *) left_expr.value)->literal, RT_CALL_SET_CALL_IDENT)) {
-        ast_set_new *set_new = NEW(ast_set_new);
+        ast_set_new_t *set_new = NEW(ast_set_new_t);
         set_new->elements = call_stmt->actual_params;
         result.assert_type = AST_EXPR_SET_NEW;
         result.value = set_new;
@@ -741,7 +741,7 @@ static slice_t *parser_else_if(module_t *m) {
  */
 static ast_stmt *parser_if_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_if_stmt *if_stmt = malloc(sizeof(ast_if_stmt));
+    ast_if_stmt_t *if_stmt = malloc(sizeof(ast_if_stmt_t));
     if_stmt->alternate = slice_new();
     if_stmt->consequent = slice_new();
     if_stmt->consequent->count = 0;
@@ -830,7 +830,7 @@ static ast_stmt *parser_for_stmt(module_t *m) {
 
     // for (int a = 1....)
     if (is_typedecl(m)) {
-        ast_for_tradition_stmt *for_tradition_stmt = NEW(ast_for_iterator_stmt);
+        ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
         parser_must(m, TOKEN_SEMICOLON);
         for_tradition_stmt->cond = parser_expr(m);
@@ -846,12 +846,12 @@ static ast_stmt *parser_for_stmt(module_t *m) {
 
     // for (k,v in map) {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
-        ast_for_iterator_stmt *for_iterator_stmt = NEW(ast_for_iterator_stmt);
+        ast_for_iterator_stmt_t *for_iterator_stmt = NEW(ast_for_iterator_stmt_t);
         for_iterator_stmt->key.type = type_basic_new(TYPE_UNKNOWN);
         for_iterator_stmt->key.ident = parser_must(m, TOKEN_IDENT)->literal;
 
         if (parser_consume(m, TOKEN_COMMA)) {
-            for_iterator_stmt->value = NEW(ast_var_decl);
+            for_iterator_stmt->value = NEW(ast_var_decl_t);
             // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
             for_iterator_stmt->value->type = type_basic_new(TYPE_UNKNOWN);
             for_iterator_stmt->value->ident = parser_must(m, TOKEN_IDENT)->literal;
@@ -868,7 +868,7 @@ static ast_stmt *parser_for_stmt(module_t *m) {
     }
 
     // for (condition) {}
-    ast_for_cond_stmt *for_cond = NEW(ast_for_cond_stmt);
+    ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);
     for_cond->condition = parser_expr(m);
     parser_must(m, TOKEN_RIGHT_PAREN);
     for_cond->body = parser_block(m);
@@ -884,7 +884,7 @@ static ast_stmt *parser_for_stmt(module_t *m) {
  */
 static ast_stmt *parser_assign(module_t *m, ast_expr left) {
     ast_stmt *result = stmt_new(m);
-    ast_assign_stmt *assign_stmt = NEW(ast_assign_stmt);
+    ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
     assign_stmt->left = left;
 
     if (parser_consume(m, TOKEN_EQUAL)) {
@@ -899,7 +899,7 @@ static ast_stmt *parser_assign(module_t *m, ast_expr left) {
     assertf(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
 
     // 转换成逻辑运算符
-    ast_binary_expr *binary_expr = NEW(ast_binary_expr);
+    ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     binary_expr->right = parser_expr(m);
     binary_expr->operator = token_to_ast_op[t->type];
     binary_expr->left = left; // TODO copy
@@ -952,7 +952,7 @@ static ast_stmt *parser_ident_begin_stmt(module_t *m) {
 static ast_stmt *parser_return_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
     parser_advance(m);
-    ast_return_stmt *stmt = malloc(sizeof(ast_return_stmt));
+    ast_return_stmt_t *stmt = malloc(sizeof(ast_return_stmt_t));
 
     // return } 或者 ;
     stmt->expr = NULL;
@@ -972,7 +972,7 @@ static ast_stmt *parser_return_stmt(module_t *m) {
 static ast_stmt *parser_import_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
     parser_advance(m);
-    ast_import *stmt = malloc(sizeof(ast_import));
+    ast_import_t *stmt = malloc(sizeof(ast_import_t));
     stmt->path = NULL;
     stmt->as = NULL;
     stmt->full_path = NULL;
@@ -1000,7 +1000,7 @@ static ast_stmt *parser_import_stmt(module_t *m) {
  */
 static ast_expr parser_list_new(module_t *m) {
     ast_expr result = expr_new(m);
-    ast_list_new *list_new = NEW(ast_list_new);
+    ast_list_new_t *list_new = NEW(ast_list_new_t);
     list_new->elements = ct_list_new(sizeof(ast_expr));
     parser_must(m, TOKEN_LEFT_SQUARE);
 
@@ -1018,8 +1018,8 @@ static ast_expr parser_list_new(module_t *m) {
     return result;
 }
 
-static ast_map_element parser_map_item(module_t *m) {
-    ast_map_element map_item = {
+static ast_map_element_t parser_map_item(module_t *m) {
+    ast_map_element_t map_item = {
             .key = parser_expr(m)
     };
     parser_must(m, TOKEN_COLON);
@@ -1039,8 +1039,8 @@ static ast_expr parser_left_curly_expr(module_t *m) {
     parser_must(m, TOKEN_LEFT_CURLY);
     if (parser_consume(m, TOKEN_RIGHT_CURLY)) {
         // {} 默认是字典
-        ast_map_new *map_new = NEW(ast_map_new);
-        map_new->elements = ct_list_new(sizeof(ast_map_element));
+        ast_map_new_t *map_new = NEW(ast_map_new_t);
+        map_new->elements = ct_list_new(sizeof(ast_map_element_t));
 
         result.assert_type = AST_EXPR_MAP_NEW;
         result.value = map_new;
@@ -1050,9 +1050,9 @@ static ast_expr parser_left_curly_expr(module_t *m) {
     ast_expr key_expr = parser_expr(m);
     if (parser_consume(m, TOKEN_COLON)) {
         // map
-        ast_map_new *map_new = NEW(ast_map_new);
-        map_new->elements = ct_list_new(sizeof(ast_map_element));
-        ast_map_element element = {.key = key_expr, .value = parser_expr(m)};
+        ast_map_new_t *map_new = NEW(ast_map_new_t);
+        map_new->elements = ct_list_new(sizeof(ast_map_element_t));
+        ast_map_element_t element = {.key = key_expr, .value = parser_expr(m)};
         ct_list_push(map_new->elements, &element);
         while (parser_consume(m, TOKEN_COMMA)) {
             element.key = parser_expr(m);
@@ -1067,7 +1067,7 @@ static ast_expr parser_left_curly_expr(module_t *m) {
     }
 
     // set
-    ast_set_new *expr = NEW(ast_set_new);
+    ast_set_new_t *expr = NEW(ast_set_new_t);
     expr->elements = ct_list_new(sizeof(ast_expr));
     ct_list_push(expr->elements, &key_expr);
     while (parser_consume(m, TOKEN_COMMA)) {
@@ -1119,7 +1119,7 @@ static ast_expr parser_catch_expr(module_t *m) {
     ast_expr call_expr = parser_expr(m);
     assertf(call_expr.assert_type == AST_CALL, "the catch target must be call operand");
 
-    ast_catch *catch = NEW(ast_catch);
+    ast_catch_t *catch = NEW(ast_catch_t);
     catch->call = call_expr.value;
     catch->call->catch = true;
 
@@ -1129,16 +1129,16 @@ static ast_expr parser_catch_expr(module_t *m) {
 }
 
 // (a, (b, c)) = (1, (2, 3))
-static ast_tuple_destr *parser_tuple_destr(module_t *m) {
+static ast_tuple_destr_t *parser_tuple_destr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
-    ast_tuple_destr *result = NEW(ast_tuple_destr);
+    ast_tuple_destr_t *result = NEW(ast_tuple_destr_t);
     result->elements = ct_list_new(sizeof(ast_expr));
     do {
         ast_expr expr = expr_new(m);
 
         if (parser_is(m, TOKEN_LEFT_PAREN)) {
-            ast_tuple_destr *t = parser_tuple_destr(m);
+            ast_tuple_destr_t *t = parser_tuple_destr(m);
             expr.assert_type = AST_EXPR_TUPLE_DESTR;
             expr.value = t;
         } else {
@@ -1156,22 +1156,22 @@ static ast_tuple_destr *parser_tuple_destr(module_t *m) {
 
 
 // var (a, (b, c)) = (1, (2, 3))
-static ast_tuple_destr *parser_var_tuple_destr(module_t *m) {
+static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
-    ast_tuple_destr *result = NEW(ast_tuple_destr);
+    ast_tuple_destr_t *result = NEW(ast_tuple_destr_t);
     result->elements = ct_list_new(sizeof(ast_expr));
 
     do {
         ast_expr expr = expr_new(m);
         // ident or tuple destr
         if (parser_is(m, TOKEN_LEFT_PAREN)) {
-            ast_tuple_destr *t = parser_var_tuple_destr(m);
+            ast_tuple_destr_t *t = parser_var_tuple_destr(m);
             expr.assert_type = AST_EXPR_TUPLE_DESTR;
             expr.value = t;
         } else {
             token_t *ident_token = parser_must(m, TOKEN_IDENT);
-            ast_var_decl *var_decl = NEW(ast_var_decl);
+            ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
             var_decl->type = type_basic_new(TYPE_UNKNOWN);
             var_decl->ident = ident_token->literal;
             expr.assert_type = AST_VAR_DECL;
@@ -1197,7 +1197,7 @@ static ast_stmt *parser_var_begin_stmt(module_t *m) {
 
     // var (a, b)
     if (parser_is(m, TOKEN_LEFT_PAREN)) {
-        ast_var_tuple_def_stmt *stmt = NEW(ast_var_tuple_def_stmt);
+        ast_var_tuple_def_stmt_t *stmt = NEW(ast_var_tuple_def_stmt_t);
         stmt->tuple_destr = parser_var_tuple_destr(m);
         parser_must(m, TOKEN_EQUAL);
         stmt->right = parser_expr(m);
@@ -1207,13 +1207,13 @@ static ast_stmt *parser_var_begin_stmt(module_t *m) {
     }
 
     // var a = 1 这样的标准情况
-    ast_vardef_stmt *var_assign = NEW(ast_vardef_stmt);
+    ast_vardef_stmt_t *var_assign = NEW(ast_vardef_stmt_t);
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
     var_assign->var_decl.type = typedecl;
     var_assign->var_decl.ident = ident_token->literal;
     parser_must(m, TOKEN_EQUAL);
     var_assign->right = parser_expr(m);
-    result->assert_type = AST_STMT_VAR_DEF;
+    result->assert_type = AST_STMT_VARDEF;
     result->value = var_assign;
 
     return result;
@@ -1229,16 +1229,16 @@ static ast_stmt *parser_typeuse_begin_stmt(module_t *m) {
     // 仅 var 支持 tuple destr
     assertf(!parser_is(m, TOKEN_LEFT_PAREN), "only support var (a, b) this form decl assign");
 
-    ast_var_decl *var_decl = NEW(ast_var_decl);
+    ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
     var_decl->type = typedecl;
     var_decl->ident = ident_token->literal;
 
     // var a = 1
     if (parser_consume(m, TOKEN_EQUAL)) {
-        ast_vardef_stmt *stmt = NEW(ast_vardef_stmt);
+        ast_vardef_stmt_t *stmt = NEW(ast_vardef_stmt_t);
         stmt->right = parser_expr(m);
         stmt->var_decl = *var_decl;
-        result->assert_type = AST_STMT_VAR_DEF;
+        result->assert_type = AST_STMT_VARDEF;
         result->value = stmt;
         return result;
     }
@@ -1281,7 +1281,7 @@ static ast_stmt *parser_fndef_stmt(module_t *m) {
 static ast_stmt *parser_throw_stmt(module_t *m) {
     parser_must(m, TOKEN_THROW);
     ast_stmt *result = stmt_new(m);
-    ast_throw_stmt *throw_stmt = NEW(ast_throw_stmt);
+    ast_throw_stmt_t *throw_stmt = NEW(ast_throw_stmt_t);
     throw_stmt->error = parser_expr(m);
     result->assert_type = AST_STMT_THROW;
     result->value = throw_stmt;
@@ -1291,7 +1291,7 @@ static ast_stmt *parser_throw_stmt(module_t *m) {
 // (var_a, var_b) = xxx
 static ast_stmt *parser_tuple_destr_stmt(module_t *m) {
     ast_stmt *result = stmt_new(m);
-    ast_assign_stmt *assign_stmt = NEW(ast_assign_stmt);
+    ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
 
     // assign_stmt
     ast_expr left_expr = {

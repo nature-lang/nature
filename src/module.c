@@ -33,7 +33,7 @@ static char *module_full_path(char *path, char *name) {
  * @param importer_dir
  * @param import
  */
-void full_import(char *importer_dir, ast_import *import) {
+void full_import(char *importer_dir, ast_import_t *import) {
     // import->path 必须以 .n 结尾
     assertf(ends_with(import->path, ".n"), "import file suffix must .n");
     // 不能有以 ./ 或者 / 开头
