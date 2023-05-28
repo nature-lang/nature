@@ -184,12 +184,18 @@ static int inline check_open(char *filepath, int flag) {
     return fd;
 }
 
-static inline char *str_connect(char *dst, char *src) {
-    size_t dst_len = strlen(dst);
-    size_t src_len = strlen(src);
+static inline char *str_connect(char *a, char *b) {
+    size_t dst_len = strlen(a);
+    size_t src_len = strlen(b);
     char *buf = malloc(dst_len + src_len + 1);
-    sprintf(buf, "%s%s", dst, src);
+    sprintf(buf, "%s%s", a, b);
     return buf;
+}
+
+static inline char *str_connect_by(char *a, char *b, char *separator) {
+    char *result = str_connect(a, separator);
+    result = str_connect(result, b);
+    return result;
 }
 
 static inline char *path_join(char *dst, char *src) {

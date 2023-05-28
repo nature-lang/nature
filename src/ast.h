@@ -385,6 +385,10 @@ typedef struct {
 
 // 这里包含 body, 所以属于 def
 typedef struct ast_fndef_t {
+    // 基于 rtype 计算出来的唯一标识，其在 infer 阶段计算出来，计算出来后
+    // 如果该 fn 是泛型 fn， 则该 fn 内的所有 ident 的定义与使用都将携带该 hash
+    string hash;
+
     // 可执行文件中的 label，但是如果 fn 引用了外部的环境，则不能直接调用该 fn, 需要将 fn 关联的环境一起传递进来
     char *symbol_name;
     // 可能为空，其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分

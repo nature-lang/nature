@@ -169,6 +169,8 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
 void generic(module_t *m) {
     slice_t *ast_fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
-
+        ast_fndef_t *fndef = m->ast_fndefs->take[i];
+        slice_concat(ast_fndefs, generic_global_fndef(fndef));
     }
+    m->ast_fndefs = ast_fndefs;
 }

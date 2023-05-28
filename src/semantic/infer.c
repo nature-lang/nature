@@ -6,6 +6,14 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
+static void rewrite_fndef(ast_fndef_t *fndef, type_t t) {
+    assert(t.kind == TYPE_FN);
+    rtype_t rtype = ct_reflect_type(t);
+    fndef->hash = itoa(rtype.hash);
+    fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->hash, ".");
+    // TODO 继续
+}
+
 static void infer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
 #ifdef DEBUG_INFER
@@ -16,7 +24,6 @@ static void infer_body(module_t *m, slice_t *body) {
         infer_stmt(m, body->take[i]);
     }
 }
-
 
 /**
  * 判断该类型是否能够帮助 var 进行推导
@@ -156,6 +163,9 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
 }
 
 /**
+ * TODO 这里的 ident 是对 ident 的使用，如果是一个 local ident 则需要考虑对 ident 进行改写让其附加上 fn hash
+ * TODO 从而保障其在全局符号表中的唯一性
+ *
  * 参考 golang，声明是可能在使用之后的
  * @param expr
  * @return
@@ -1313,6 +1323,8 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 static type_t reduction_type(module_t *m, type_t t) {
     assert(t.kind > 0);
 
+    // TODO generic confirm by m->infer_current
+
     if (t.kind == TYPE_UNKNOWN) {
         return t;
     }
@@ -1396,6 +1408,10 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     m->infer_current = fndef;
 
     type_t t = infer_fndef_decl(m, fndef);
+
+    // t 是一个 type fn 类型，其中的 formal_types 和 return_type 都是 reduction 过的
+    // 只要计算出 rtype 获取其 hash 就得到了这个函数的唯一标识
+    // 此时需要判断一下 fndef 是否是一个泛型函数，如果是则需要通过该唯一标识，我们需要对符号表进行重写
 
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);
