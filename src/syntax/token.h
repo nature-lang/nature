@@ -59,17 +59,17 @@ typedef enum {
     TOKEN_U8, TOKEN_U16, TOKEN_U32, TOKEN_U64,
     TOKEN_I8, TOKEN_I16, TOKEN_I32, TOKEN_I64,
     TOKEN_F32, TOKEN_F64,
-    TOKEN_T, // T
 
     // KEYWORDS.
     TOKEN_POINTER,
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
-    TOKEN_THROW, TOKEN_CATCH, TOKEN_SELF,
+    TOKEN_THROW, TOKEN_CATCH, TOKEN_SELF, TOKEN_CONTINUE, TOKEN_BREAK,
     TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR,
 //    TOKEN_MAP, TOKEN_SET,  TOKEN_WHILE, TOKEN_TUPLE, TOKEN_ARRAY,
+    TOKEN_IS, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
     TOKEN_FN,
-    TOKEN_IMPORT, TOKEN_AS, TOKEN_RETURN,
+    TOKEN_IMPORT, TOKEN_RETURN,
     TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
 
@@ -122,6 +122,9 @@ static string token_str[] = {
         [TOKEN_LITERAL_FLOAT] = "float literal",
         [TOKEN_LITERAL_INT] = "int literal",
 
+        [TOKEN_CONTINUE] = "continue",
+        [TOKEN_BREAK] = "break",
+
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",
@@ -153,18 +156,16 @@ static string token_str[] = {
         [TOKEN_U32] = "u32",
         [TOKEN_U64] = "u64",
 
-
-//        [TOKEN_LIST] = "list",
-//        [TOKEN_MAP] = "map",
-//        [TOKEN_SET] = "set",
-//        [TOKEN_TUPLE] = "tup",
         [TOKEN_FN] = "fn",
         [TOKEN_RETURN] = "return",
         [TOKEN_CATCH] = "catch",
         [TOKEN_THROW] = "throw",
 
+        [TOKEN_GEN] = "gen",
+
         [TOKEN_IMPORT] = "import",
         [TOKEN_AS] = "as",
+        [TOKEN_IS] = "is",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",
@@ -172,7 +173,7 @@ static string token_str[] = {
 
 typedef struct {
     token_e type; // 通配类型，如 var
-    string literal;
+    char *literal;
     int line;
 } token_t;
 

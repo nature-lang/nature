@@ -173,7 +173,7 @@ void debug_scanner(token_t *t) {
     printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_str[t->type], t->literal);
 }
 
-void debug_stmt(string type, ast_stmt stmt) {
+void debug_stmt(string type, ast_stmt_t stmt) {
     printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_type_to_str[stmt.assert_type]);
 }
 

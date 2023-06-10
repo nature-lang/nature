@@ -62,7 +62,6 @@ typedef enum {
     TYPE_FLOAT64, // value = 5
 
     // 复合类型
-    TYPE_ANY, // value = 16
     TYPE_STRING,
     TYPE_LIST,
     TYPE_ARRAY,
@@ -79,8 +78,10 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
+    TYPE_FORMAL, // formal param ident
     TYPE_SELF,
-    TYPE_GENERIC, // builtin 中的 T 临时使用
+    TYPE_GENERIC,
+    TYPE_UNION,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,
@@ -103,6 +104,9 @@ static string type_kind_string[] = {
 
         [TYPE_ARRAY] = "array",
 
+        [TYPE_GENERIC] = "generic",
+        [TYPE_UNION] = "union",
+
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
@@ -120,7 +124,6 @@ static string type_kind_string[] = {
         [TYPE_UINT64] = "u64",
         [TYPE_VOID] = "void",
         [TYPE_UNKNOWN] = "unknown",
-        [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_ALIAS] = "type_alias",
         [TYPE_LIST] = "list",
@@ -160,7 +163,14 @@ typedef uint8_t type_bool_t;
  */
 typedef struct type_alias_t type_alias_t;
 
+typedef struct type_formal_t type_formal_t;
+
 typedef struct type_generic_t type_generic_t;
+
+typedef struct {
+    bool any;
+    list_t *elements; // type_t*
+} type_union_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
@@ -183,8 +193,6 @@ typedef struct type_struct_t type_struct_t; // 目前只有 string
 
 typedef struct type_fn_t type_fn_t;
 
-typedef struct type_any_t type_any_t;
-
 // 类型的描述信息，无论是否还原，类型都会在这里呈现
 typedef struct type_t {
     union {
@@ -196,10 +204,11 @@ typedef struct type_t {
         type_tuple_t *tuple;
         type_struct_t *struct_;
         type_fn_t *fn;
-        type_any_t *any;
         type_alias_t *alias; // 这个其实是自定义类型的 ident
+        type_formal_t *formal;
         type_generic_t *generic; // type t0 = generic i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
+        type_union_t *union_;
     };
     type_kind kind;
     reduction_status_t status;
@@ -218,7 +227,6 @@ struct type_pointer_t {
     type_t value_type;
 };
 
-
 /**
  * data 指针指向什么？首先 data 需要存在在 mheap 中，因为其值可能会变。
  * 那其应该执行 type_array_t 还是 type_array_t.data ? type_array_t 是编译时的概念，其根本不在 mheap 中
@@ -233,10 +241,15 @@ struct type_pointer_t {
 struct type_string_t {
 };
 
+// type foo<formal> = fn(formal, int):formal
+struct type_formal_t {
+    string ident;
+};
+
 struct type_alias_t {
-    string literal; // 类型名称 type my_int = int
+    string ident; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
-    list_t *actual_params; // type_t
+    list_t *actual_params; // type_t|null
 };
 
 struct type_generic_t {
@@ -431,7 +444,7 @@ bool type_need_gc(type_t t);
 type_t type_ptrof(type_t t);
 
 
-type_alias_t *typeuse_ident_new(string literal);
+type_alias_t *type_alias_new(string literal);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -469,7 +482,7 @@ rtype_t gc_rtype_array(type_kind kind, uint32_t count);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    if (kind == TYPE_ANY ||
+    if (kind == TYPE_UNION ||
         kind == TYPE_STRING ||
         kind == TYPE_LIST ||
         kind == TYPE_ARRAY ||
@@ -525,23 +538,33 @@ static inline bool is_number(type_kind kind) {
 }
 
 /**
+ * 可以直接使用 0 进行填充的值，通常就是简单类型
+ * @param t
+ * @return
+ */
+static inline bool is_zero_type(type_t t) {
+    return is_integer(t.kind) ||
+           is_float(t.kind) ||
+           t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
+           t.kind == TYPE_UNION;
+}
+
+/**
  * 不需要进行类型还原的类型
  * @param t
  * @return
  */
-static inline bool is_basic_decl_type(type_t t) {
+static inline bool is_origin_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
            t.kind == TYPE_NULL ||
-           t.kind == TYPE_GENERIC ||
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING ||
-           t.kind == TYPE_ANY ||
            t.kind == TYPE_VOID;
-
 }
 
-static inline bool is_complex_decl_type(type_t t) {
+static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
@@ -553,6 +576,24 @@ static inline bool is_complex_decl_type(type_t t) {
 
 static inline bool is_qword_int(type_kind kind) {
     return kind == TYPE_INT64 || kind == TYPE_UINT64 || kind == TYPE_UINT || kind == TYPE_INT;
+}
+
+static inline bool union_type_contains(type_t union_type, type_t sub) {
+    assert(union_type.kind == TYPE_UNION);
+    assert(union_type.kind != TYPE_UNION);
+
+    if (union_type.union_->any) {
+        return true;
+    }
+
+    for (int i = 0; i < union_type.union_->elements->length; ++i) {
+        type_t *t = ct_list_value(union_type.union_->elements, i);
+        if (t->kind == sub.kind) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**

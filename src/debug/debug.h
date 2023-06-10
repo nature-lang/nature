@@ -32,7 +32,7 @@ void debug_parser(int line, string token);
 
 void debug_parser_stmt(ast_type_t t);
 
-void debug_stmt(string type, ast_stmt stmt);
+void debug_stmt(string type, ast_stmt_t stmt);
 
 void debug_lir(closure_t *c);
 

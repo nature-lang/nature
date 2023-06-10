@@ -8,6 +8,7 @@
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
 #include "binary/elf/elf.h"
+#include "utils/stack.h"
 
 typedef uint64_t flag_t;
 
@@ -136,25 +137,27 @@ typedef struct {
 
     int var_unique_count; // 同一个 module 下到所有变量都会通过该 ident 附加唯一标识
 
+    // parser
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
+    table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 formal
 
     // analyzer
     analyzer_fndef_t *analyzer_current;
+    ast_fndef_t *analyzer_global;
     int analyzer_line;
 
     // infer
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
     int infer_line;
-    // infer 第一步就会将所有的 typedef ident 的右值进行 reduction, 完成之后将会在这里打上标记
-    bool reduction_typedef;
+    table_t *type_actual_params; // 临时存储 infer alias 时传递的实参
 
     // compiler
     struct closure_t *compiler_current;
     int compiler_line;
 
     // call init stmt
-    ast_stmt *call_init_stmt;  // analyzer 阶段写入
+    ast_stmt_t *call_init_stmt;  // analyzer 阶段写入
 
     // TODO asm_global_symbols to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_global_symbols(symbol)/closure_decls
@@ -401,9 +404,12 @@ typedef struct closure_t {
     // 定义环境
     char *symbol_name;
     char *closure_name;
-    char *end_label; // 结束 label
-    char *error_label; // 异常 label
-    bool to_error_label;
+    char *end_label; // 函数的结束地址 label
+    char *error_label; //  遇到表达式错误时需要调整到的目标 label
+    char *catch_error_label;
+
+    ct_stack_t *for_start_labels; // 用于 for continue lir_operand*
+    ct_stack_t *for_end_labels; // 用于 for break lir_operand*
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中

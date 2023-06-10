@@ -8,22 +8,57 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-type_t select_formal_param(type_fn_t *formal_fn, uint8_t index) {
+type_t *select_formal_param(type_fn_t *formal_fn, uint8_t index) {
     if (formal_fn->rest && index >= formal_fn->formal_types->length - 1) {
-
         type_t *last_param_type = ct_list_value(formal_fn->formal_types, formal_fn->formal_types->length - 1);
-        assertf(last_param_type->kind == TYPE_LIST, "rest param must list");
+//        assertf(last_param_type->kind == TYPE_LIST, "rest param must list");
+        if (last_param_type->kind != TYPE_LIST) {
+            return NULL;
+        }
+
         type_list_t *list_decl = last_param_type->list;
 
-        return list_decl->element_type;
+        return &list_decl->element_type;
     }
 
-    assertf(index < formal_fn->formal_types->length, "select index out range");
-    type_t *result = ct_list_value(formal_fn->formal_types, index);
-    return *result;
+//    assertf(index < formal_fn->formal_types->length, "select index out range");
+    if (index > formal_fn->formal_types->length) {
+        return NULL;
+    }
+
+    return ct_list_value(formal_fn->formal_types, index);
 }
 
 
+bool type_union_compare(type_union_t *left, type_union_t *right) {
+    // 因为 any 的作用域大于非 any 的作用域
+    if (right->any && !left->any) {
+        return false;
+    }
+
+    // 创建一个标记数组，用于标记left中的类型是否已经匹配
+    // 遍历right中的类型，确保每个类型都存在于left中
+    for (int i = 0; i < right->elements->length; ++i) {
+        type_t *right_type = ct_list_value(right->elements, i);
+
+        // 检查right_type是否存在于left中
+        bool type_found = false;
+        for (int j = 0; j < left->elements->length; ++j) {
+            type_t *left_type = ct_list_value(left->elements, j);
+            if (type_compare(*left_type, *right_type)) {
+                type_found = true;
+                break;
+            }
+        }
+
+        // 如果right_type不存在于left中，则释放内存并返回false
+        if (!type_found) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 /**
  * 比较前都已经还原为原始类型了
@@ -39,12 +74,20 @@ bool type_compare(type_t left, type_t right) {
 
     assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type cannot infer");
 
-    if (left.kind == TYPE_ANY || right.kind == TYPE_ANY) {
-        return true;
-    }
 
     if (cross_kind_trans(left.kind) != cross_kind_trans(right.kind)) {
         return false;
+    }
+
+    if (left.kind == TYPE_UNION) {
+        type_union_t *left_union_decl = left.union_;
+        type_union_t *right_union_decl = right.union_;
+
+        if (left_union_decl->any) {
+            return true;
+        }
+
+        return type_union_compare(left_union_decl, right_union_decl);
     }
 
     if (left.kind == TYPE_MAP) {
@@ -58,6 +101,8 @@ bool type_compare(type_t left, type_t right) {
         if (!type_compare(left_map_decl->value_type, right_map_decl->value_type)) {
             return false;
         }
+
+        return true;
     }
 
     if (left.kind == TYPE_SET) {
@@ -67,6 +112,8 @@ bool type_compare(type_t left, type_t right) {
         if (!type_compare(left_decl->element_type, right_decl->element_type)) {
             return false;
         }
+
+        return true;
     }
 
     if (left.kind == TYPE_LIST) {
@@ -89,8 +136,8 @@ bool type_compare(type_t left, type_t right) {
                 return false;
             }
         }
+        return true;
     }
-
 
     if (left.kind == TYPE_FN) {
         type_fn_t *left_type_fn = left.fn;
@@ -111,6 +158,7 @@ bool type_compare(type_t left, type_t right) {
                 return false;
             }
         }
+        return true;
     }
 
     if (left.kind == TYPE_STRUCT) {
@@ -134,6 +182,8 @@ bool type_compare(type_t left, type_t right) {
                 return false;
             }
         }
+
+        return true;
     }
 
     return true;
@@ -150,9 +200,11 @@ static list_t *ct_list_type_copy(list_t *temp_list) {
     return list;
 }
 
-static type_any_t *type_any_copy(type_any_t *temp) {
-    type_any_t *any = COPY_NEW(type_any_t, temp);
-    return any;
+static type_union_t *type_union_copy(type_union_t *temp) {
+    type_union_t *union_ = COPY_NEW(type_union_t, temp);
+    union_->elements = ct_list_type_copy(temp->elements);
+    union_->any = temp->any;
+    return union_;
 }
 
 static type_fn_t *type_fn_copy(type_fn_t *temp) {
@@ -205,7 +257,7 @@ static type_struct_t *type_struct_copy(type_struct_t *temp) {
 
 static type_alias_t *type_alias_copy(type_alias_t *temp) {
     type_alias_t *alias = COPY_NEW(type_alias_t, temp);
-    alias->literal = strdup(temp->literal);
+    alias->ident = strdup(temp->ident);
     alias->actual_params = ct_list_type_copy(temp->actual_params);
     return alias;
 }
@@ -228,7 +280,7 @@ static type_array_t *type_array_copy(type_array_t *temp) {
 }
 
 
-static type_t type_copy(type_t temp) {
+type_t type_copy(type_t temp) {
     type_t type = temp;
     switch (temp.kind) {
         case TYPE_ALIAS: {
@@ -267,8 +319,8 @@ static type_t type_copy(type_t temp) {
             type.fn = type_fn_copy(temp.fn);
             break;
         }
-        case TYPE_ANY: {
-            type.any = type_any_copy(temp.any);
+        case TYPE_UNION: {
+            type.union_ = type_union_copy(temp.union_);
             break;
         }
         case TYPE_POINTER: {
@@ -284,9 +336,9 @@ static type_t type_copy(type_t temp) {
 }
 
 static list_t *ast_list_expr_copy(list_t *temp) {
-    list_t *elements = ct_list_new(sizeof(ast_expr));
+    list_t *elements = ct_list_new(sizeof(ast_expr_t));
     for (int i = 0; i < temp->length; ++i) {
-        ast_expr *expr = ct_list_value(temp, i);
+        ast_expr_t *expr = ct_list_value(temp, i);
         ct_list_push(elements, ast_expr_copy(expr));
     }
     return elements;
@@ -310,8 +362,8 @@ static ast_env_access_t *ast_env_access_copy(ast_env_access_t *temp) {
     return access;
 }
 
-static ast_type_convert_expr_t *ast_type_convert_copy(ast_type_convert_expr_t *temp) {
-    ast_type_convert_expr_t *type_convert = COPY_NEW(ast_type_convert_expr_t, temp);
+static ast_type_as_expr_t *ast_type_convert_copy(ast_type_as_expr_t *temp) {
+    ast_type_as_expr_t *type_convert = COPY_NEW(ast_type_as_expr_t, temp);
     type_convert->operand = *ast_expr_copy(&temp->operand);
     type_convert->target_type = type_copy(temp->target_type);
     return type_convert;
@@ -381,9 +433,9 @@ static ast_map_new_t *ast_map_new_copy(ast_map_new_t *temp) {
 
 static ast_set_new_t *ast_set_new_copy(ast_set_new_t *temp) {
     ast_set_new_t *set_new = COPY_NEW(ast_set_new_t, temp);
-    list_t *elements = ct_list_new(sizeof(ast_expr));
+    list_t *elements = ct_list_new(sizeof(ast_expr_t));
     for (int i = 0; i < temp->elements->length; ++i) {
-        ast_expr *expr = ct_list_value(temp->elements, i);
+        ast_expr_t *expr = ct_list_value(temp->elements, i);
         ct_list_push(elements, ast_expr_copy(expr));
     }
 
@@ -417,7 +469,7 @@ static ast_struct_new_t *ast_struct_new_copy(ast_struct_new_t *temp) {
 
 static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
     ast_catch_t *catch_expr = COPY_NEW(ast_catch_t, temp);
-    catch_expr->call = ast_call_copy(temp->call);
+    catch_expr->expr = *ast_expr_copy(&temp->expr);
     return catch_expr;
 }
 
@@ -444,12 +496,12 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(ast_tuple_destr_t *temp) {
 }
 
 
-static ast_expr *ast_expr_copy(ast_expr *temp) {
+static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
     if (temp == NULL) {
         return NULL;
     }
 
-    ast_expr *expr = COPY_NEW(ast_expr, temp);
+    ast_expr_t *expr = COPY_NEW(ast_expr_t, temp);
     switch (temp->assert_type) {
         case AST_EXPR_LITERAL: {
             expr->value = ast_literal_copy(temp->value);
@@ -519,7 +571,7 @@ static ast_expr *ast_expr_copy(ast_expr *temp) {
             expr->value = ast_catch_copy(temp->value);
             break;
         }
-        case AST_EXPR_TYPE_CONVERT: {
+        case AST_EXPR_TYPE_AS: {
             expr->value = ast_type_convert_copy(temp->value);
             break;
         }
@@ -624,8 +676,8 @@ static ast_call_t *ast_call_copy(ast_call_t *temp) {
     return call;
 }
 
-static ast_stmt *ast_stmt_copy(ast_stmt *temp) {
-    ast_stmt *stmt = COPY_NEW(ast_stmt, temp);
+static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
+    ast_stmt_t *stmt = COPY_NEW(ast_stmt_t, temp);
     switch (temp->assert_type) {
         case AST_VAR_DECL: {
             stmt->value = ast_var_decl_copy(temp->value);

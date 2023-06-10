@@ -22,10 +22,27 @@
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
 
+#define CATCH_NORMAL_IDENT "catch_normal"
+#define CATCH_ERROR_IDENT "catch_error"
+#define CATCH_END_IDENT "catch_end"
+
 #define ERRORT_TYPE_ALIAS "errort"
 #define ERRORT_MSG_IDENT "msg"
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
+
+
+#define LIST_PUSH_KEY "push"
+#define LIST_LENGTH_KEY "len"
+
+#define MAP_DELETE_KEY "delete"
+#define MAP_LENGTH_KEY "len"
+
+#define SET_CONTAINS_KEY "contains"
+#define SET_ADD_KEY "add"
+#define SET_DELETE_KEY "delete"
+
+#define RT_CALL_ZERO_FN "zero_fn"
 
 // RT = runtime
 // CT = compile time
@@ -36,17 +53,6 @@
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
-
-#define LIST_PUSH_KEY "push"
-#define LIST_LENGTH_KEY "length"
-
-#define MAP_DELETE_KEY "delete"
-#define MAP_LENGTH_KEY "length"
-
-#define SET_CONTAINS_KEY "contains"
-#define SET_ADD_KEY "add"
-#define SET_DELETE_KEY "delete"
-
 
 #define RT_CALL_MAP_NEW "map_new"
 #define RT_CALL_MAP_ACCESS "map_access"

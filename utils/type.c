@@ -34,7 +34,6 @@ static rtype_t rtype_bool() {
     return rtype_base(TYPE_BOOL);
 }
 
-
 /**
  * hash = type_kind + element_type_hash
  * @param t
@@ -473,9 +472,9 @@ uint8_t *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-type_alias_t *typeuse_ident_new(char *literal) {
+type_alias_t *type_alias_new(char *literal) {
     type_alias_t *t = NEW(type_alias_t);
-    t->literal = literal;
+    t->ident = literal;
     return t;
 }
 

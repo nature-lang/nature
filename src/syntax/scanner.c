@@ -30,7 +30,7 @@ linked_t *scanner(module_t *module) {
         if (scanner_is_alpha(module, *module->s_cursor.current)) {
             char *word = scanner_ident_advance(module);
 
-            token_t *t = token_new(scanner_ident_type(word, module->s_cursor.length), word, module->s_cursor.line);
+            token_t *t = token_new(scanner_ident(word, module->s_cursor.length), word, module->s_cursor.line);
             linked_push(list, t);
             continue;
         }
@@ -317,7 +317,7 @@ char *scanner_number_advance(module_t *module) {
     return scanner_gen_word(module);
 }
 
-token_e scanner_ident_type(char *word, int length) {
+token_e scanner_ident(char *word, int length) {
     switch (word[0]) {
         case 'a': {
             if (length == 2 && word[1] == 's') {
@@ -336,9 +336,19 @@ token_e scanner_ident_type(char *word, int length) {
 
         }
         case 'b':
-            return scanner_rest(word, length, 1, 3, "ool", TOKEN_BOOL);
+            switch (word[1]) {
+                case 'o':
+                    return scanner_rest(word, length, 2, 2, "ol", TOKEN_BOOL);
+                case 'r':
+                    return scanner_rest(word, length, 2, 3, "eak", TOKEN_BREAK);
+            }
         case 'c':
-            return scanner_rest(word, length, 1, 4, "atch", TOKEN_CATCH);
+            switch (word[1]) {
+                case 'o':
+                    return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
+                case 'a':
+                    return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
+            }
         case 'e':
             return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
@@ -357,9 +367,14 @@ token_e scanner_ident_type(char *word, int length) {
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_FOR);
             }
         }
+        case 'g':
+            return scanner_rest(word, length, 1, 2, "en", TOKEN_GEN);
         case 'i': {
             if (length == 2 && word[1] == 'n') {
                 return TOKEN_IN;
+            }
+            if (length == 2 && word[1] == 's') {
+                return TOKEN_IS;
             }
 
             switch (word[1]) {
@@ -431,8 +446,8 @@ token_e scanner_ident_type(char *word, int length) {
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
         }
-        case 'T': {
-            return scanner_rest(word, length, 1, 0, "", TOKEN_T);
+        case (char) 0xF0: { // temp use 💥
+            return scanner_rest(word, length, 1, 3, "\x9F\x92\xA5", TOKEN_BOOM);
         }
     }
 

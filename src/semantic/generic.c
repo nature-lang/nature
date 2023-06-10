@@ -15,8 +15,8 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
             return;
         }
 
-        symbol_t *symbol = symbol_table_get(t.alias->literal);
-        assertf(symbol->type == SYMBOL_TYPEDEF, "'%s' is not a type", symbol->ident);
+        symbol_t *symbol = symbol_table_get(t.alias->ident);
+        assertf(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
         ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
         if (type_alias_stmt->type.kind != TYPE_GENERIC) {
@@ -107,6 +107,7 @@ static void generic_cartesian_product(list_t *products, slice_t *generic_params,
 
 
 /**
+ * global fn 必须放在最前面，才能先解析出其中的必要参数
  * @param fndef
  * @return slice_t of ast_fndef_t
  */
@@ -121,17 +122,19 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
         generic_params_collect(fndef, var->type);
     }
 
+    // 非泛型 global fn, 此时 generic_assign 为 null
     if (fndef->generic_params->count == 0) {
         slice_push(result, fndef);
-        for (int i = 0; i < fndef->child_fndefs->count; ++i) {
-            slice_push(result, fndef->child_fndefs->take[i]);
-        }
+        slice_concat(result, fndef->local_children);
+        fndef->local_children = NULL;
         return result;
     }
 
-
-    slice_t *temps = fndef->child_fndefs;
+    // 泛型 global 函数处理
+    slice_t *temps = slice_new();
     slice_push(temps, fndef);
+    slice_concat(temps, fndef->local_children);
+    fndef->local_children = NULL;
 
     // - 根据 generic_types 中的约束信息生成笛卡尔积列表，列表中的每个元素都是
     uint64_t element_size = sizeof(type_t *) * fndef->generic_params->count;
@@ -143,9 +146,14 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
         // element 的长度等于 fndef->generic_params->count
         element = ct_list_value(products, i);
 
+        // 包含 global 和 local fn
         slice_t *fndefs = slice_new();
         for (int j = 0; j < temps->count; ++j) {
+            // 这里进行了深度 copy, 所有的表达式之间不会再有关联关系
             ast_fndef_t *new_fndef = ast_fndef_copy(temps->take[j]);
+
+            // 将 new fn 添加到 symbol table 中
+            symbol_table_set(new_fndef->symbol_name, SYMBOL_FN, new_fndef, fndef->is_local);
 
             slice_push(fndefs, new_fndef);
             slice_push(result, new_fndef);
@@ -166,6 +174,10 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     return result;
 }
 
+/**
+ * generic 中无论是泛型还是非泛型 fn, 都进行了 local fn 进行了展开平铺处理, 所以 m->ast_fndefs 中包含 local 和 global fn
+ * @param m
+ */
 void generic(module_t *m) {
     slice_t *ast_fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
