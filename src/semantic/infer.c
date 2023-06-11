@@ -97,7 +97,6 @@ static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
             var_decl->type = fndef->type;
             symbol_table_set(fndef->closure_name, SYMBOL_VAR, var_decl, true);
         }
-
     }
 
     fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->params_hash, ".");
@@ -236,12 +235,23 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     }
 }
 
-static type_t infer_type_as(module_t *m, ast_type_as_expr_t *type_as) {
+/**
+ * 类型转换 type casting
+ * i8 foo = 12 as i8
+ *
+ * 类型断言 type assert
+ * i8|i16|i32 bar = 24
+ * i16 foo = bar as i16
+ * @param m
+ * @param type_as
+ * @return
+ */
+static type_t infer_as_expr(module_t *m, ast_as_expr_t *type_as) {
     infer_right_expr(m, &type_as->operand, type_basic_new(TYPE_UNKNOWN));
     return reduction_type(m, type_as->target_type);
 }
 
-static type_t infer_type_is(module_t *m, ast_type_is_expr_t *type_is) {
+static type_t infer_is_expr(module_t *m, ast_is_expr_t *type_is) {
     type_t t = infer_right_expr(m, &type_is->operand, type_basic_new(TYPE_UNKNOWN));
     assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' grammar");
     return type_basic_new(TYPE_BOOL);
@@ -859,7 +869,6 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
     // 左值符号推导
     type_t left_type = infer_left_expr(m, &call->left);
     assertf(left_type.kind == TYPE_FN, "cannot call non-fn");
-
     type_fn_t *type_fn = left_type.fn;
     infer_call_params(m, call, type_fn);
 
@@ -897,12 +906,14 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch) {
 
 
 /**
- * 仅声明
+ * 仅声明不再被允许，所有的变量都必须在初始化时进行赋值操作
  * int a;
  * float b;
  * @param var_decl
  */
 void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
+    assertf(false, "var definitions must be initialized");
+
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
     if (type.kind == TYPE_UNKNOWN ||
@@ -1252,12 +1263,12 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
 static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     type_t type;
     switch (expr->assert_type) {
-        case AST_EXPR_TYPE_AS: {
-            type = infer_type_as(m, expr->value);
+        case AST_EXPR_AS: {
+            type = infer_as_expr(m, expr->value);
             break;
         }
-        case AST_EXPR_TYPE_IS: {
-            type = infer_type_is(m, expr->value);
+        case AST_EXPR_IS: {
+            type = infer_is_expr(m, expr->value);
             break;
         }
         case AST_EXPR_BINARY: {

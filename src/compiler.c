@@ -202,6 +202,19 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return label_operand(ident->literal, s->is_local);
 }
 
+static void compiler_error_handle(module_t *m) {
+    char *error_target_label = m->compiler_current->error_label;
+    if (m->compiler_current->catch_error_label) {
+        error_target_label = m->compiler_current->catch_error_label;
+    }
+
+    lir_operand_t *has_error = temp_var_operand(m, type_basic_new(TYPE_BOOL));
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_error, 0));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
+                       bool_operand(true), has_error,
+                       label_operand(error_target_label, true)));
+}
+
 static lir_operand_t *compiler_temp_var_operand(module_t *m, type_t type) {
     assert(type.kind > 0);
     lir_operand_t *temp = temp_var_operand(m, type);
@@ -772,20 +785,9 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
     // 触发 call 指令, 结果存储在 target 指令中
     OP_PUSH(call_op);
 
-    // 判断 call op 是否存在 error, 如果存在 error 则不允许往下执行，
-    // 而应该直接跳转到函数结束部分,这样 errort 就会继续向上传递
-    // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_errort
-    if (!is_builtin_call(formal_fn->name) && !call->catch) {
-        lir_operand_t *has_errort = temp_var_operand(m, type_basic_new(TYPE_BOOL));
-        OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_errort, 0));
-        // 如果 eq = true 直接去到 fn_end, 但是此时并没有一个合适到 return 语句。
-
-        // beq has_errort,true -> fn_end_label
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
-                           bool_operand(true), has_errort,
-                           label_operand(m->compiler_current->error_label, true)));
-
-        m->compiler_current->to_error_label = true;
+    // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
+    if (!is_builtin_call(formal_fn->name)) {
+        compiler_error_handle(m);
     }
 
 
@@ -866,7 +868,6 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr_t expr) {
 }
 
 /**
- * TODO 访问越界错误处理
  * int a = list[0]
  * string s = list[1]
  */
@@ -882,6 +883,9 @@ static lir_operand_t *compiler_list_access(module_t *m, ast_expr_t expr) {
 
     OP_PUSH(rt_call(RT_CALL_LIST_ACCESS, NULL,
                     3, list_target, index_target, result_ref));
+
+    // 可能会存在数组越界的错误需要拦截处理
+    compiler_error_handle(m);
 
     return result;
 }
@@ -1170,24 +1174,32 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
     return tuple_target;
 }
 
-static lir_operand_t *compiler_type_is(module_t *m, ast_expr_t expr) {
-    // TODO
+static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
+    ast_is_expr_t *is_expr = expr.value;
+    lir_operand_t *output = compiler_temp_var_operand(m, type_basic_new(TYPE_BOOL));
+
+    assert(is_expr->operand.type.kind == TYPE_UNION);
+    lir_operand_t *operand = compiler_expr(m, is_expr->operand);
+    uint64_t target_type_index = ct_find_rtype_index(is_expr->target_type);
+    OP_PUSH(rt_call(RT_CALL_UNION_TYPE_IS, output, 2, operand, target_type_index));
+
+    return output;
 }
 
 /**
- * - TODO 错误处理
  * @param m
  * @param expr
  * @return
  */
-static lir_operand_t *compiler_type_as(module_t *m, ast_expr_t expr) {
-    ast_type_as_expr_t *convert = expr.value;
-    lir_operand_t *input = compiler_expr(m, convert->operand);
-    uint64_t input_rtype_index = ct_find_rtype_index(convert->operand.type);
+static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
+    ast_as_expr_t *as_expr = expr.value;
+    lir_operand_t *input = compiler_expr(m, as_expr->operand);
+    uint64_t input_rtype_index = ct_find_rtype_index(as_expr->operand.type);
 
-    if (is_number(convert->target_type.kind) && is_number(convert->operand.type.kind)) {
-        lir_operand_t *output = compiler_temp_var_operand(m, convert->target_type);
-        lir_operand_t *output_rtype = int_operand(ct_find_rtype_index(convert->target_type));
+    // 数值类型转换
+    if (is_number(as_expr->target_type.kind) && is_number(as_expr->operand.type.kind)) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        lir_operand_t *output_rtype = int_operand(ct_find_rtype_index(as_expr->target_type));
         lir_operand_t *output_ref = lea_operand_pointer(m, output);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
 
@@ -1196,48 +1208,65 @@ static lir_operand_t *compiler_type_as(module_t *m, ast_expr_t expr) {
         return output;
     }
 
-    lir_operand_t *output = temp_var_operand(m, convert->target_type);
-    if (convert->target_type.kind == TYPE_BOOL) {
-        OP_PUSH(rt_call(RT_CALL_CONVERT_BOOL, output, 2, int_operand(input_rtype_index), input));
+    lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
+
+    // bool 类型转换
+    if (as_expr->target_type.kind == TYPE_BOOL) {
+        OP_PUSH(rt_call(RT_CALL_BOOL_CASTING, output, 2, int_operand(input_rtype_index), input));
         return output;
     }
-    if (convert->target_type.kind == TYPE_ANY) {
+
+    // single type to union type
+    if (as_expr->target_type.kind == TYPE_UNION) {
+        assert(as_expr->operand.type.kind != TYPE_UNION);
+
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
-        OP_PUSH(rt_call(RT_CALL_CONVERT_ANY, output, 2, int_operand(input_rtype_index), input_ref));
+        OP_PUSH(rt_call(RT_CALL_UNION_CASTING, output, 2, int_operand(input_rtype_index), input_ref));
         return output;
     }
-    assertf(false, "not support convert to type %s", type_kind_string[convert->target_type.kind]);
+
+    // union assert
+    if (as_expr->operand.type.kind == TYPE_UNION) {
+        assert(as_expr->target_type.kind != TYPE_UNION);
+        uint64_t output_rtype_index = ct_find_rtype_index(as_expr->target_type);
+        // union_assert(union_operand, target_rtype_index) -> target_operand
+        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, output, 2, input, int_operand(output_rtype_index)));
+
+        compiler_error_handle(m);
+        return output;
+    }
+
+    assertf(false, "not support as_expr to type %s", type_kind_string[as_expr->target_type.kind]);
     exit(1);
 }
 
 static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     ast_catch_t *catch = expr.value;
 
+    // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
     m->compiler_current->catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
-
-    lir_op_t *catch_normal_label = lir_op_unique_label(m, CATCH_NORMAL_IDENT);
-    lir_op_t *catch_error_label = lir_op_label(m->compiler_current->catch_error_label, true);
     lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
 
-    lir_operand_t *result_operand = compiler_expr(m, catch->expr);
-
-    OP_PUSH(lir_op_bal(catch_end_label->output));
-    OP_PUSH(catch_error_label);
-
-    // 将错误信息读取出来
     symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
     ast_type_alias_stmt_t *type_alias_stmt = s->ast_value;
     assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
-    lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
+
+    lir_operand_t *result_operand = compiler_expr(m, catch->expr);
+    OP_PUSH(lir_op_bal(catch_end_label->output));
+
+    // error_label
+    OP_PUSH(lir_op_label(m->compiler_current->catch_error_label, true));
+    // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
     lir_operand_t *zero_operand = compiler_zero_operand(m, catch->expr.type);
     OP_PUSH(lir_op_move(result_operand, zero_operand));
 
     OP_PUSH(catch_end_label);
+    // errort_operand 可能为空的 struct 或者非空
+    lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
     if (catch->expr.type.kind == TYPE_VOID) {
         return errort_operand;
     }
-
 
     // result label 和 error label 此时都是非 null 的值，将他们写入到 tuple 中即可
     // make tuple target return
@@ -1502,8 +1531,8 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_CALL] = compiler_call,
         [AST_FNDEF] = compiler_fn_decl,
         [AST_EXPR_CATCH] = compiler_catch,
-        [AST_EXPR_TYPE_AS] = compiler_type_as,
-        [AST_EXPR_TYPE_IS] = compiler_type_is,
+        [AST_EXPR_AS] = compiler_as_expr,
+        [AST_EXPR_IS] = compiler_is_expr,
 };
 
 

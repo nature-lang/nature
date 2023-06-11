@@ -488,10 +488,10 @@ static ast_expr_t parser_unary(module_t *m) {
 static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_AS);
-    ast_type_as_expr_t *as_expr = NEW(ast_type_as_expr_t);
+    ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->target_type = parser_single_type(m);
     as_expr->operand = left;
-    result.assert_type = AST_EXPR_TYPE_AS;
+    result.assert_type = AST_EXPR_AS;
     result.value = as_expr;
     return result;
 }
@@ -499,10 +499,10 @@ static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
 static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_IS);
-    ast_type_is_expr_t *is_expr = NEW(ast_type_is_expr_t);
+    ast_is_expr_t *is_expr = NEW(ast_is_expr_t);
     is_expr->target_type = parser_single_type(m);
     is_expr->operand = left;
-    result.assert_type = AST_EXPR_TYPE_IS;
+    result.assert_type = AST_EXPR_IS;
     result.value = is_expr;
     return result;
 }

@@ -376,6 +376,16 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     m->analyzer_current = m->analyzer_current->parent;
 }
 
+static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
+    analyzer_type(m, &as_expr->target_type);
+    analyzer_expr(m, &as_expr->operand);
+}
+
+
+static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
+    analyzer_type(m, &is_expr->target_type);
+    analyzer_expr(m, &is_expr->operand);
+}
 
 /**
  * env 中仅包含自由变量，不包含 function 原有的形参,且其还是形参的一部分
@@ -775,7 +785,7 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 // type foo = int
-static void analyzer_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
+static void analyzer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
     analyzer_redeclare_check(m, stmt->ident);
     analyzer_type(m, &stmt->type);
 
@@ -791,6 +801,12 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_UNARY: {
             return analyzer_unary(m, expr->value);
+        }
+        case AST_EXPR_AS: {
+            return analyzer_as_expr(m, expr->value);
+        }
+        case AST_EXPR_IS: {
+            return analyzer_is_expr(m, expr->value);
         }
         case AST_EXPR_CATCH: {
             return analyzer_catch(m, expr->value);
@@ -880,7 +896,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
             return analyzer_return(m, stmt->value);
         }
         case AST_STMT_TYPE_ALIAS: {
-            return analyzer_type_alias(m, stmt->value);
+            return analyzer_type_alias_stmt(m, stmt->value);
         }
         default: {
             return;

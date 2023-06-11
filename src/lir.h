@@ -73,9 +73,13 @@
 #define RT_CALL_TUPLE_ASSIGN "tuple_assign"
 #define RT_CALL_TUPLE_ACCESS "tuple_access"
 
-#define RT_CALL_CONVERT_ANY "convert_any"
-#define RT_CALL_CONVERT_BOOL "convert_bool"
+#define RT_CALL_UNION_TYPE_IS "union_type_is"
+
+#define RT_CALL_UNION_CASTING "union_casting"
+#define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
+
+#define RT_CALL_UNION_ASSERT "union_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 #define RT_CALL_ITERATOR_VALUE "iterator_value"

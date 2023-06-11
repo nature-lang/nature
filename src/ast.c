@@ -362,8 +362,8 @@ static ast_env_access_t *ast_env_access_copy(ast_env_access_t *temp) {
     return access;
 }
 
-static ast_type_as_expr_t *ast_type_convert_copy(ast_type_as_expr_t *temp) {
-    ast_type_as_expr_t *type_convert = COPY_NEW(ast_type_as_expr_t, temp);
+static ast_as_expr_t *ast_type_convert_copy(ast_as_expr_t *temp) {
+    ast_as_expr_t *type_convert = COPY_NEW(ast_as_expr_t, temp);
     type_convert->operand = *ast_expr_copy(&temp->operand);
     type_convert->target_type = type_copy(temp->target_type);
     return type_convert;
@@ -571,7 +571,7 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             expr->value = ast_catch_copy(temp->value);
             break;
         }
-        case AST_EXPR_TYPE_AS: {
+        case AST_EXPR_AS: {
             expr->value = ast_type_convert_copy(temp->value);
             break;
         }

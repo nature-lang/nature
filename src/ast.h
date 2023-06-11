@@ -13,8 +13,8 @@ typedef enum {
     AST_EXPR_BINARY,
     AST_EXPR_UNARY,
     AST_EXPR_IDENT,
-    AST_EXPR_TYPE_AS,
-    AST_EXPR_TYPE_IS,
+    AST_EXPR_AS,
+    AST_EXPR_IS,
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
@@ -157,7 +157,7 @@ typedef struct {
 typedef struct {
     type_t target_type;
     ast_expr_t operand; // 将表达式转换成 target_type
-} ast_type_as_expr_t;
+} ast_as_expr_t;
 
 /**
  * a is int, a must any or union
@@ -165,7 +165,7 @@ typedef struct {
 typedef struct {
     type_t target_type;
     ast_expr_t operand; // 将表达式转换成 target_type
-} ast_type_is_expr_t;
+} ast_is_expr_t;
 
 // 一元表达式
 typedef struct {
@@ -457,7 +457,7 @@ typedef struct ast_fndef_t {
     bool is_local; // 是否是全局函数
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
-type_t* select_formal_param(type_fn_t *formal_fn, uint8_t index);
+type_t *select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
 bool type_compare(type_t left, type_t right);
 
@@ -505,11 +505,11 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     assertf(target_type.status == REDUCTION_STATUS_DONE, "target type not reduction");
     ast_expr_t *result = NEW(ast_expr_t);
 
-    ast_type_as_expr_t *convert = NEW(ast_type_as_expr_t);
+    ast_as_expr_t *convert = NEW(ast_as_expr_t);
     convert->operand = expr;
     convert->target_type = target_type;
 
-    result->assert_type = AST_EXPR_TYPE_AS;
+    result->assert_type = AST_EXPR_AS;
     result->value = convert;
     result->type = target_type;
     return *result;
