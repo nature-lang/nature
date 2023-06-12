@@ -18,7 +18,7 @@ static uint32_t fn_params_hash(type_fn_t *fn) {
 }
 
 /**
- * 通过逐渐匹配实参的方式找出匹配的 fndefs, 最终应该只有一个可用的 ast_fn, 如果匹配到多个则应该 abort
+ * 当函数名称中存在多个函数时，将会通过简单的无类型转换进行函数匹配 (允许 single -> union type)
  * @param actual_params
  * @param s
  * @return
@@ -39,22 +39,30 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
         infer_fn_decl(m, fndef);
     }
 
-
     // 开始匹配
     for (int i = 0; i < actual_params->length; ++i) {
         ast_expr_t *expr = ct_list_value(actual_params, i);
         infer_right_expr(m, expr, type_basic_new(TYPE_UNKNOWN));
+        type_t actual_type = expr->type;
 
         // ast_fndef
         slice_t *temps = slice_new();
         for (int j = 0; j < fndefs->count; ++j) {
             ast_fndef_t *fndef = fndefs->take[j];
-            type_t fn_type = fndef->type;
-            type_t *t = select_formal_param(fn_type.fn, i);
-            if (!t) {
+            type_t type_fn = fndef->type;
+            type_t *formal_type = select_formal_param(type_fn.fn, i);
+            if (!formal_type) {
                 continue;
             }
-            if (!type_compare(*t, expr->type)) {
+
+            if (formal_type->kind == TYPE_UNION && actual_type.kind != TYPE_UNION) {
+                if (union_type_contains(*formal_type, actual_type)) {
+                    slice_push(temps, fndef);
+                }
+                continue;
+            }
+
+            if (!type_compare(*formal_type, actual_type)) {
                 continue;
             }
             slice_push(temps, fndef);
@@ -77,6 +85,14 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
 static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     assert(fndef->type.status == REDUCTION_STATUS_DONE);
     if (fndef->params_hash) {
+        return;
+    }
+
+    symbol_t *s = symbol_table_get(fndef->symbol_name);
+    assert(s->fndefs && s->fndefs->count > 0);
+
+    // 函数名称全局唯一，没必要进行重写
+    if (s->fndefs->count == 1) {
         return;
     }
 
@@ -105,7 +121,9 @@ static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
 
 static char *rewrite_ident_def(module_t *m, char *old) {
     assert(m->infer_current);
-    assert(strlen(m->infer_current->params_hash) > 0);
+    if (!m->infer_current->params_hash) {
+        return old;
+    }
 
     return str_connect_by(old, m->infer_current->params_hash, ".");
 }
@@ -752,10 +770,7 @@ static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_t
             continue;
         }
 
-        type_t actual_type = infer_right_expr(m, actual_param, type_basic_new(TYPE_UNKNOWN));
-
-        // 不再允许在 call 指令中进行隐式类型转换，必须强制保持类型的一致性
-        assertf(type_compare(*formal_type, actual_type), "type inconsistency");
+        infer_right_expr(m, actual_param, *formal_type);
     }
 }
 
@@ -855,14 +870,11 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
         symbol_t *s = symbol_table_get(ident->literal);
         assert(s);
 
-        // 调用了全局函数则需要进行函数的配置与调用 ident 改写
-        if (!s->is_local && s->type == SYMBOL_FN) {
+        if (s->type == SYMBOL_FN && s->fndefs->count > 1) {
             ast_fndef_t *f = fn_match(m, call->actual_params, s);
-            assert(!f->closure_name); // 全局函数不可能存在闭包的情况
-
-            rewrite_fndef(m, f);
-            ident->literal = f->symbol_name;
-            return f->return_type;
+            assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
+            rewrite_fndef(m, f); // 重复操作确保函数已经注册了新的符号
+            ident->literal = f->symbol_name; // 引用函数的新的符号
         }
     }
 
@@ -1033,7 +1045,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param stmt
  */
 static void infer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
-    assertf(stmt->type.kind != TYPE_GENERIC, "cannot use type generic in local scope");
+    assertf(stmt->type.kind != TYPE_GEN, "cannot use type generic in local scope");
 
     // 泛型函数中的标识进行唯一性处理(已经传递到 symbol table 中了)
     stmt->ident = rewrite_ident_def(m, stmt->ident);
@@ -1417,7 +1429,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
         assertf(is_number(t.map->key_type.kind) ||
                 t.map->key_type.kind == TYPE_STRING ||
-                t.map->key_type.kind == TYPE_GENERIC,
+                t.map->key_type.kind == TYPE_GEN,
                 "map key only support numer/string");
         return t;
     }
@@ -1426,7 +1438,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         assertf(is_number(t.set->element_type.kind) ||
                 t.set->element_type.kind == TYPE_STRING ||
-                t.set->element_type.kind == TYPE_GENERIC,
+                t.set->element_type.kind == TYPE_GEN,
                 "set element only support number/string");
         return t;
     }
@@ -1528,7 +1540,8 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
     type_alias_stmt->type = reduction_type(m, type_alias_stmt->type);
 
-    if (type_alias_stmt->type.kind == TYPE_GENERIC) {
+    // 引用了 gen 类型的 alias, 现在需要进行泛型特化
+    if (type_alias_stmt->type.kind == TYPE_GEN && !type_alias_stmt->type.gen->any) {
         return generic_specialization(m, type_alias_stmt->ident);
     }
 
@@ -1537,9 +1550,12 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
 static type_t reduction_union_type(module_t *m, type_t t) {
     type_union_t *type_union = t.union_;
+    if (type_union->any) {
+        return t;
+    }
 
-    for (int i = 0; i < t.generic->constraints->length; ++i) {
-        type_t *temp = ct_list_value(t.generic->constraints, i);
+    for (int i = 0; i < t.gen->constraints->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->constraints, i);
         *temp = reduction_type(m, *temp);
     }
 
@@ -1554,8 +1570,8 @@ static type_t reduction_union_type(module_t *m, type_t t) {
  * @return
  */
 static type_t reduction_generic_type(module_t *m, type_t t) {
-    for (int i = 0; i < t.generic->constraints->length; ++i) {
-        type_t *temp = ct_list_value(t.generic->constraints, i);
+    for (int i = 0; i < t.gen->constraints->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->constraints, i);
         *temp = reduction_type(m, *temp);
     }
 
@@ -1575,7 +1591,7 @@ static type_t reduction_type(module_t *m, type_t t) {
         return t;
     }
 
-    if (t.kind == TYPE_GENERIC) {
+    if (t.kind == TYPE_GEN) {
         t = reduction_generic_type(m, t);
         goto STATUS_DONE;
     }

@@ -19,14 +19,20 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
         assertf(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
         ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
-        if (type_alias_stmt->type.kind != TYPE_GENERIC) {
+        if (type_alias_stmt->type.kind != TYPE_GEN) {
             return;
         }
 
-        if (!table_exist(fndef->exists_generic_params, symbol->ident)) {
-            slice_push(fndef->generic_params, type_alias_stmt);
-            table_set(fndef->exists_generic_params, symbol->ident, type_alias_stmt);
+        if (type_alias_stmt->type.gen->any) {
+            return;
         }
+
+        if (table_exist(fndef->exists_generic_params, symbol->ident)) {
+            return;
+        }
+
+        slice_push(fndef->generic_params, type_alias_stmt);
+        table_set(fndef->exists_generic_params, symbol->ident, type_alias_stmt);
         return;
     }
 
@@ -89,15 +95,16 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
  * 使用递归基于数组的索引的笛卡尔积组合
  */
 static void generic_cartesian_product(list_t *products, slice_t *generic_params, type_t **element, int depth) {
-    ast_type_alias_stmt_t *stmt = generic_params->take[depth];
-    assert(stmt->type.kind == TYPE_GENERIC);
     if (depth == generic_params->count) {
         // element 已经收集完毕，现在可以写入到 products 中并退出递归
         ct_list_push(products, element);
         return;
     }
 
-    type_generic_t *generic = stmt->type.generic;
+
+    ast_type_alias_stmt_t *stmt = generic_params->take[depth];
+    assert(stmt->type.kind == TYPE_GEN);
+    type_gen_t *generic = stmt->type.gen;
     for (int i = 0; i < generic->constraints->length; ++i) {
         // type*
         element[depth] = ct_list_value(generic->constraints, i);

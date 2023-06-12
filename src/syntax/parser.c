@@ -94,7 +94,7 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
-        //        || parser_is(m, TOKEN_NULL)
+        //        || parser_is(m, TOKEN_ANY)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_INT)
         || parser_is(m, TOKEN_I8)
@@ -174,7 +174,7 @@ static type_t parser_single_type(module_t *m) {
             .status = REDUCTION_STATUS_UNDO
     };
 
-    if (parser_is(m, TOKEN_ANY)) {
+    if (parser_consume(m, TOKEN_ANY)) {
         type_t union_type = {
                 .status = REDUCTION_STATUS_UNDO,
                 .kind = TYPE_UNION,
@@ -308,26 +308,38 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // person a
     if (parser_is(m, TOKEN_IDENT)) {
-        token_t *type_token = parser_advance(m);
+        token_t *first = parser_advance(m);
 
-        if (table_exist(m->parser_type_formals, type_token->literal)) {
+        // type formal 快速处理, foo<formal1, formal2>
+        if (m->parser_type_formals && table_exist(m->parser_type_formals, first->literal)) {
             result.kind = TYPE_FORMAL;
+            result.formal = type_formal_new(first->literal);
+            return result;
+        }
+
+        token_t *second = NULL;
+        if (parser_consume(m, TOKEN_DOT)) {
+            second = parser_advance(m);
+        }
+
+        result.kind = TYPE_ALIAS;
+        if (second) {
+            result.alias = type_alias_new(second->literal, first->literal);
         } else {
-            result.kind = TYPE_ALIAS;
-            result.alias = type_alias_new(type_token->literal);
+            result.alias = type_alias_new(first->literal, NULL);
+        }
 
-            if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-                // parser actual params
-                result.alias->actual_params = ct_list_new(sizeof(type_t));
-                do {
-                    type_t item = parser_type(m);
-                    ct_list_push(result.alias->actual_params, &item);
-                } while (parser_consume(m, TOKEN_COMMA));
+        // 参数处理
+        if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+            // parser actual params
+            result.alias->actual_params = ct_list_new(sizeof(type_t));
+            do {
+                type_t item = parser_type(m);
+                ct_list_push(result.alias->actual_params, &item);
+            } while (parser_consume(m, TOKEN_COMMA));
 
-                parser_must(m, TOKEN_RIGHT_ANGLE);
-            }
+            parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
         return result;
@@ -340,7 +352,7 @@ static type_t parser_single_type(module_t *m) {
 /**
  * type foo = int
  * type foo<i8> = [i8]
- * type foo = generic i8|u8|i16
+ * type foo = gen i8|u8|i16
  * @return
  */
 static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
@@ -374,20 +386,27 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_GEN)) {
         type_t gen = {
                 .status = REDUCTION_STATUS_UNDO,
-                .kind = TYPE_GENERIC,
+                .kind = TYPE_GEN,
         };
-        gen.generic = NEW(type_generic_t);
-        gen.generic->constraints = ct_list_new(sizeof(type_t));
+        gen.gen = NEW(type_gen_t);
+        gen.gen->constraints = ct_list_new(sizeof(type_t));
         do {
-            type_t constraint = parser_single_type(m);
-            ct_list_push(gen.generic->constraints, &constraint);
+            type_t item = parser_single_type(m); // 至少包含一个约束
+            if (item.kind == TYPE_UNION && item.union_->any) {
+                gen.gen->any = true;
+            }
+            ct_list_push(gen.gen->constraints, &item);
         } while (parser_consume(m, TOKEN_OR));
+
+        if (gen.gen->any) {
+            assertf(gen.gen->constraints->length == 1, "generic any must only one constraint");
+        }
         type_alias_stmt->type = gen;
         return result;
     }
 
     type_alias_stmt->type = parser_type(m);
-    m->parser_type_formals = NULL;
+    m->parser_type_formals = NULL; // 右值解析完成后请及时清空
     return result;
 }
 
@@ -638,6 +657,10 @@ static ast_expr_t parser_struct_new(module_t *m, type_t type) {
  * person {
  * }
  *
+ * person<a, b> {
+ * }
+ *
+ * import_as.person { } 只包含一层解析，就不放在 select 处理了，直接在 ident 进行延伸处理
  *
  * @return
  */
@@ -646,8 +669,14 @@ static ast_expr_t parser_ident_expr(module_t *m) {
 
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
 
+    /**
+      * var a =  person<a, b> {
+      *              a = 1
+      *              b = 2
+      * }
+      **/
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-        type_alias_t *alias = type_alias_new(ident_token->literal);
+        type_alias_t *alias = type_alias_new(ident_token->literal, NULL);
         type_t t = {
                 .kind = TYPE_ALIAS,
                 .status = REDUCTION_STATUS_UNDO,
@@ -665,6 +694,36 @@ static ast_expr_t parser_ident_expr(module_t *m) {
         return parser_struct_new(m, t);
     }
 
+
+    /**
+      * var a =  foo.person<a, b> {
+      *              a = 1
+      *              b = 2
+      * }
+      **/
+    if (parser_is(m, TOKEN_DOT) && parser_next_is(m, 1, TOKEN_IDENT) && parser_next_is(m, 2, TOKEN_LEFT_ANGLE)) {
+        parser_must(m, TOKEN_DOT);
+        token_t *second_token = parser_must(m, TOKEN_IDENT);
+        type_alias_t *alias = type_alias_new(second_token->literal, ident_token->literal);
+        type_t t = {
+                .kind = TYPE_ALIAS,
+                .status = REDUCTION_STATUS_UNDO,
+                .alias = alias,
+        };
+
+        // parser actual params
+        alias->actual_params = ct_list_new(sizeof(type_t));
+        do {
+            type_t item = parser_type(m);
+            ct_list_push(alias->actual_params, &item);
+        } while (parser_consume(m, TOKEN_COMMA));
+
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        return parser_struct_new(m, t);
+    }
+
+
+
     /**
       * 请注意这里是实例化一个结构体,而不是声明一个结构体
       * 声明 type person = struct{int a, int b}
@@ -678,7 +737,24 @@ static ast_expr_t parser_ident_expr(module_t *m) {
         type_t t = {
                 .kind = TYPE_ALIAS,
                 .status = REDUCTION_STATUS_UNDO,
-                .alias = type_alias_new(ident_token->literal)
+                .alias = type_alias_new(ident_token->literal, NULL)
+        };
+        return parser_struct_new(m, t);
+    }
+    /**
+      * var a =  foo.person {
+      *              a = 1
+      *              b = 2
+      * }
+      **/
+    if (parser_is(m, TOKEN_DOT) && parser_next_is(m, 1, TOKEN_IDENT) && parser_next_is(m, 2, TOKEN_LEFT_CURLY)) {
+        parser_must(m, TOKEN_DOT);
+        token_t *second_token = parser_must(m, TOKEN_IDENT);
+        type_alias_t *alias = type_alias_new(second_token->literal, ident_token->literal);
+        type_t t = {
+                .kind = TYPE_ALIAS,
+                .status = REDUCTION_STATUS_UNDO,
+                .alias = alias
         };
         return parser_struct_new(m, t);
     }
@@ -928,7 +1004,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     parser_consume(m, TOKEN_FOR);
 //    parser_must(m, TOKEN_LEFT_PAREN);
 
-    // for (int a = 1....)
+    // for int i = 1; i <= 10; i+=1
     if (is_typedecl(m)) {
         ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
@@ -936,7 +1012,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         for_tradition_stmt->cond = parser_expr(m);
         parser_must(m, TOKEN_SEMICOLON);
         for_tradition_stmt->update = parser_stmt(m);
-        parser_must(m, TOKEN_RIGHT_PAREN);
+
         for_tradition_stmt->body = parser_block(m);
 
         result->assert_type = AST_STMT_FOR_TRADITION;
@@ -944,7 +1020,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         return result;
     }
 
-    // for (k,v in map) {}
+    // for k,v in map {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
         ast_for_iterator_stmt_t *for_iterator_stmt = NEW(ast_for_iterator_stmt_t);
         for_iterator_stmt->key.type = type_basic_new(TYPE_UNKNOWN);
@@ -958,8 +1034,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         }
 
         parser_must(m, TOKEN_IN);
-        for_iterator_stmt->iterate = parser_expr(m);
-        parser_must(m, TOKEN_RIGHT_PAREN);
+        for_iterator_stmt->iterate = parser_expr(m); // TODO 和 struct new 冲突问题处理
         for_iterator_stmt->body = parser_block(m);
 
         result->assert_type = AST_STMT_FOR_ITERATOR;
@@ -967,9 +1042,10 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         return result;
     }
 
+
     // for (condition) {}
     ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);
-    for_cond->condition = parser_expr(m);
+    for_cond->condition = parser_expr(m); // TODO 和 struct new 冲突问题处理
 //    parser_must(m, TOKEN_RIGHT_PAREN);
     for_cond->body = parser_block(m);
     result->assert_type = AST_STMT_FOR_COND;
@@ -1397,6 +1473,19 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     return result;
 }
 
+static ast_stmt_t *parser_let_stmt(module_t *m) {
+    parser_must(m, TOKEN_LET);
+    ast_stmt_t *result = stmt_new(m);
+
+    ast_let_t *stmt = NEW(ast_let_t);
+    ast_expr_t expr = parser_expr(m);
+    assertf(expr.assert_type == AST_EXPR_AS, "let stmt must be 'as' expr");
+    stmt->expr = expr;
+    result->assert_type = AST_STMT_LET;
+    result->value = stmt;
+    return result;
+}
+
 static ast_stmt_t *parser_throw_stmt(module_t *m) {
     parser_must(m, TOKEN_THROW);
     ast_stmt_t *result = stmt_new(m);
@@ -1459,6 +1548,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return parser_tuple_destr_stmt(m);
     } else if (parser_is(m, TOKEN_THROW)) {
         return parser_throw_stmt(m);
+    } else if (parser_is(m, TOKEN_LET)) {
+        return parser_let_stmt(m);
     } else if (parser_is(m, TOKEN_IDENT)) {
         return parser_ident_begin_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
@@ -1490,8 +1581,8 @@ static parser_rule rules[] = {
         [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
         [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
         [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
-        [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_NULL},
-        [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_NULL},
+        [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_UNARY},
+        [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_UNARY},
         [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
         [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
         [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},

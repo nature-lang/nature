@@ -190,6 +190,9 @@ bool type_compare(type_t left, type_t right) {
 }
 
 static list_t *ct_list_type_copy(list_t *temp_list) {
+    if (!temp_list) {
+        return NULL;
+    }
     list_t *list = ct_list_new(sizeof(type_t));
     for (int i = 0; i < temp_list->length; ++i) {
         type_t *temp = ct_list_value(temp_list, i);
@@ -262,10 +265,10 @@ static type_alias_t *type_alias_copy(type_alias_t *temp) {
     return alias;
 }
 
-static type_generic_t *type_generic_copy(type_generic_t *temp) {
-    type_generic_t *generic = COPY_NEW(type_generic_t, temp);
-    generic->constraints = ct_list_type_copy(temp->constraints);
-    return generic;
+static type_gen_t *type_gen_copy(type_gen_t *temp) {
+    type_gen_t *gen = COPY_NEW(type_gen_t, temp);
+    gen->constraints = ct_list_type_copy(temp->constraints);
+    return gen;
 }
 
 static type_pointer_t *type_pointer_copy(type_pointer_t *temp) {
@@ -287,8 +290,8 @@ type_t type_copy(type_t temp) {
             type.alias = type_alias_copy(temp.alias);
             break;
         }
-        case TYPE_GENERIC: {
-            type.generic = type_generic_copy(temp.generic);
+        case TYPE_GEN: {
+            type.gen = type_gen_copy(temp.gen);
             break;
         }
         case TYPE_LIST: {

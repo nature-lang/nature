@@ -88,9 +88,18 @@ static void analyzer_type(module_t *m, type_t *type) {
     // type foo = int
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_ALIAS) {
-        type_alias_t *ident = type->alias;
-        string unique_name = analyzer_resolve_type(m, m->analyzer_current, ident->ident);
-        ident->ident = unique_name;
+        // import 全局模式 alias 处理
+        type_alias_t *type_alias = type->alias;
+        if (type_alias->import_as) {
+            ast_import_t *import = table_get(m->import_table, type_alias->import_as);
+            assertf(import, "type left ident = %s not found in import", type_alias->import_as);
+            char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
+            type_alias->ident = unique_ident;
+            return;
+        }
+
+        string unique_name = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
+        type_alias->ident = unique_name;
         return;
     }
 
@@ -282,6 +291,8 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
  * @param var_decl
  */
 static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
+    assertf(false, "var definitions must be initialized");
+
     analyzer_redeclare_check(m, var_decl->ident);
 
     analyzer_type(m, &var_decl->type);
@@ -292,13 +303,13 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     var_decl->ident = local->unique_ident;
 }
 
-static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
-    analyzer_expr(m, &stmt->right);
-    analyzer_redeclare_check(m, stmt->var_decl.ident);
-    analyzer_type(m, &stmt->var_decl.type);
+static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
+    analyzer_expr(m, &vardef->right);
+    analyzer_redeclare_check(m, vardef->var_decl.ident);
+    analyzer_type(m, &vardef->var_decl.type);
 
-    local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &stmt->var_decl, stmt->var_decl.ident);
-    stmt->var_decl.ident = local->unique_ident;
+    local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
+    vardef->var_decl.ident = local->unique_ident;
 }
 
 static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr) {
@@ -386,6 +397,35 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     analyzer_type(m, &is_expr->target_type);
     analyzer_expr(m, &is_expr->operand);
 }
+
+
+/**
+ * 允许在同一作用域内重复定义, 直接将该表达式改写成 vardef 即可
+ * @param m
+ * @param expr
+ */
+static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
+    ast_let_t *let_stmt = stmt->value;
+    analyzer_expr(m, &let_stmt->expr);
+    ast_as_expr_t *as_expr = let_stmt->expr.value;
+    // 解析出 ident
+    assertf(as_expr->operand.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
+    ast_ident *ident = as_expr->operand.value;
+
+    ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
+    vardef->var_decl.ident = ident->literal;
+    vardef->var_decl.type = as_expr->target_type;
+    vardef->right = let_stmt->expr;
+
+    // 改写
+    local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
+    vardef->var_decl.ident = local->unique_ident;
+
+    // 表达式类型改写
+    stmt->assert_type = AST_STMT_VARDEF;
+    stmt->value = vardef;
+}
+
 
 /**
  * env 中仅包含自由变量，不包含 function 原有的形参,且其还是形参的一部分
@@ -862,6 +902,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_VAR_DECL: {
             return analyzer_var_decl(m, stmt->value);
         }
+        case AST_STMT_LET: {
+            return analyzer_let(m, stmt);
+        }
         case AST_STMT_VARDEF: {
             return analyzer_vardef(m, stmt->value);
         }
@@ -994,7 +1037,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     }
 
     // 添加 init fn
-    ast_fndef_t *fn_init = NEW(ast_fndef_t);
+    ast_fndef_t *fn_init = ast_fndef_new();
     fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_basic_new(TYPE_VOID);
     fn_init->formals = ct_list_new(sizeof(ast_var_decl_t));
@@ -1054,9 +1097,8 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
     m->analyzer_line = 0;
 
     // main 所有表达式
-    ast_fndef_t *fndef = NEW(ast_fndef_t);
+    ast_fndef_t *fndef = ast_fndef_new();
     fndef->symbol_name = FN_MAIN_NAME;
-    fndef->closure_name = NULL;
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl_t));

@@ -24,7 +24,6 @@
 #define addr_t uint64_t
 
 static inline void *mallocz(size_t size) {
-//    return calloc(1, size);
     void *ptr;
     ptr = malloc(size);
     if (size) {
@@ -432,9 +431,11 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
 }
 
 #ifdef __LINUX
+
 static inline void sys_memory_remove(void *addr, uint64_t size) {
     madvise(addr, size, MADV_REMOVE);
 }
+
 #else
 
 static inline void sys_memory_remove(void *addr, uint64_t size) {

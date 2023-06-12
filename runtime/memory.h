@@ -17,9 +17,9 @@
 
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
-#define PAGE_SIZE 8192 // 单位 byte
+#define ALLOC_PAGE_SIZE 8192 // 单位 byte
 
-#define PAGE_MASK (PAGE_SIZE - 1) // 0b1111111111111
+#define PAGE_MASK (ALLOC_PAGE_SIZE - 1) // 0b1111111111111
 
 #define MSTACK_SIZE (8 * 1024 * 1024) // 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 

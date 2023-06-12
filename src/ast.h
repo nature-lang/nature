@@ -51,6 +51,7 @@ typedef enum {
     AST_STMT_RETURN,
     AST_STMT_IF,
     AST_STMT_THROW,
+    AST_STMT_LET,
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
@@ -248,6 +249,13 @@ typedef struct {
 typedef struct {
     ast_expr_t error;
 } ast_throw_stmt_t;
+
+/**
+ * let foo as [i8]
+ */
+typedef struct {
+    ast_expr_t expr; // must as expr
+} ast_let_t;
 
 typedef struct {
     ast_expr_t expr; // expr type must union type

@@ -13,6 +13,7 @@
 #include "utils/error.h"
 #include "config.h"
 #include "utils/custom_links.h"
+#include "src/semantic/generic.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -202,7 +203,7 @@ static void build_init(char *build_entry) {
     // copy
     strcpy(SOURCE_PATH, temp_path);
     assertf(file_exists(SOURCE_PATH), "full entry file=%s not found", SOURCE_PATH);
-    assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannnot be a directory", BUILD_OUTPUT);
+    assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannot be a directory", BUILD_OUTPUT);
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
@@ -268,6 +269,8 @@ static void import_builtin() {
     // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
     module_t *builtin_module = module_build(source_path, MODULE_TYPE_BUILTIN);
 
+    generic(builtin_module);
+
     // infer type
     infer(builtin_module);
 }
@@ -319,10 +322,11 @@ static void build_compiler(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
+        // generic
+        generic(m);
+
         // 类型推断
         infer(m);
-
-        // generic
 
         compiler(m);
 

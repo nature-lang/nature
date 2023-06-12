@@ -80,7 +80,7 @@ typedef enum {
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_FORMAL, // formal param ident
     TYPE_SELF,
-    TYPE_GENERIC,
+    TYPE_GEN,
     TYPE_UNION,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
@@ -104,7 +104,7 @@ static string type_kind_string[] = {
 
         [TYPE_ARRAY] = "array",
 
-        [TYPE_GENERIC] = "generic",
+        [TYPE_GEN] = "gen",
         [TYPE_UNION] = "union",
 
         [TYPE_STRING] = "string",
@@ -165,7 +165,7 @@ typedef struct type_alias_t type_alias_t;
 
 typedef struct type_formal_t type_formal_t;
 
-typedef struct type_generic_t type_generic_t;
+typedef struct type_gen_t type_gen_t;
 
 typedef struct {
     bool any;
@@ -206,7 +206,7 @@ typedef struct type_t {
         type_fn_t *fn;
         type_alias_t *alias; // 这个其实是自定义类型的 ident
         type_formal_t *formal;
-        type_generic_t *generic; // type t0 = generic i8|i16|i32|i64|u8|u16|u32|u64
+        type_gen_t *gen; // type t0 = gen i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
         type_union_t *union_;
     };
@@ -243,16 +243,18 @@ struct type_string_t {
 
 // type foo<formal> = fn(formal, int):formal
 struct type_formal_t {
-    string ident;
+    char *ident;
 };
 
 struct type_alias_t {
-    string ident; // 类型名称 type my_int = int
+    char *import_as; // 可能为 null
+    char *ident; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
     list_t *actual_params; // type_t|null
 };
 
-struct type_generic_t {
+struct type_gen_t {
+    bool any;
     list_t *constraints; // type_t
 };
 
@@ -429,8 +431,9 @@ bool type_need_gc(type_t t);
 
 type_t type_ptrof(type_t t);
 
+type_formal_t *type_formal_new(char *literal);
 
-type_alias_t *type_alias_new(string literal);
+type_alias_t *type_alias_new(char *literal, char *import_as);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -566,7 +569,7 @@ static inline bool is_qword_int(type_kind kind) {
 
 static inline bool union_type_contains(type_t union_type, type_t sub) {
     assert(union_type.kind == TYPE_UNION);
-    assert(union_type.kind != TYPE_UNION);
+    assert(sub.kind != TYPE_UNION);
 
     if (union_type.union_->any) {
         return true;

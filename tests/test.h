@@ -23,10 +23,11 @@ static inline int blackbox_setup() {
     char *nature_root = getenv("NATURE_ROOT");
     assert_true(nature_root != NULL);
 
-
     // 从环境变量中读取 build entry
     char *entry = getenv("ENTRY_FILE");
     assert_true(entry && "entry file is null");
+
+    strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
 
     build(entry);
 

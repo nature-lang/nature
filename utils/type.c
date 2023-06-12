@@ -186,13 +186,13 @@ static rtype_t rtype_set(type_set_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_any(type_any_t *t) {
-    uint32_t hash = hash_string(itoa(TYPE_ANY));
+static rtype_t rtype_union(type_union_t *t) {
+    uint32_t hash = hash_string(itoa(TYPE_UNION));
 
     rtype_t rtype = {
             .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = hash,
-            .kind = TYPE_ANY,
+            .kind = TYPE_UNION,
             .last_ptr = POINTER_SIZE,
             .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
     };
@@ -424,8 +424,8 @@ rtype_t reflect_type(type_t t) {
         case TYPE_FN:
             rtype = rtype_fn(t.fn);
             break;
-        case TYPE_ANY:
-            rtype = rtype_any(t.any);
+        case TYPE_UNION:
+            rtype = rtype_union(t.union_);
             break;
         default:
             if (is_integer(t.kind) || is_float(t.kind)) {
@@ -472,9 +472,16 @@ uint8_t *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-type_alias_t *type_alias_new(char *literal) {
+type_formal_t *type_formal_new(char *literal) {
+    type_formal_t *t = NEW(type_formal_t);
+    t->ident = literal;
+    return t;
+}
+
+type_alias_t *type_alias_new(char *literal, char *import_as) {
     type_alias_t *t = NEW(type_alias_t);
     t->ident = literal;
+    t->import_as = import_as;
     return t;
 }
 

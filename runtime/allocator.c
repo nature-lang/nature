@@ -73,7 +73,7 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
 
 
 static addr_t chunk_base(addr_t index) {
-    return index * (CHUNK_BITS_COUNT * PAGE_SIZE) + ARENA_BASE_OFFSET;
+    return index * (CHUNK_BITS_COUNT * ALLOC_PAGE_SIZE) + ARENA_BASE_OFFSET;
 }
 
 /**
@@ -82,7 +82,7 @@ static addr_t chunk_base(addr_t index) {
  * @return
  */
 static uint64_t chunk_index(addr_t base) {
-    return (base - ARENA_BASE_OFFSET) / (CHUNK_BITS_COUNT * PAGE_SIZE);
+    return (base - ARENA_BASE_OFFSET) / (CHUNK_BITS_COUNT * ALLOC_PAGE_SIZE);
 }
 
 static uint64_t chunk_index_l1(uint64_t index) {
@@ -300,10 +300,10 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
         // temp_base 是 chunk 的起始地址
         // base 是内存的申请位置， base - temp_base / PAGE_SIZE 可以判断出当前 base 是从 chunk 的哪一部分开始申请的
         if (temp_base < base) {
-            bit_start = (base - temp_base) / PAGE_SIZE;
+            bit_start = (base - temp_base) / ALLOC_PAGE_SIZE;
         }
 
-        uint64_t bit_end = (end - temp_base) / PAGE_SIZE - 1;
+        uint64_t bit_end = (end - temp_base) / ALLOC_PAGE_SIZE - 1;
         if (bit_end > CHUNK_BITS_COUNT - 1) {
             bit_end = CHUNK_BITS_COUNT - 1;
         }
@@ -377,7 +377,7 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         }
 
         // 计算 find_addr
-        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+        find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
 
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
@@ -385,12 +385,12 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
         page_summary_t start_summary = l5_summaries[start];
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
-        find_addr = chunk_base(start) + bit_start * PAGE_SIZE;
+        find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
-    assertf(find_addr % PAGE_SIZE == 0, "find addr=%p not align", find_addr);
+    assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align", find_addr);
 
     // 更新相关的 chunks 为使用状态
-    chunks_set(find_addr, pages_count * PAGE_SIZE, 1);
+    chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
 
     return find_addr;
 }
@@ -478,7 +478,7 @@ static void mheap_set_spans(mspan_t *span) {
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
-    uint64_t page_index = (span->base - arena->base) / PAGE_SIZE;
+    uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = span;
         page_index += 1;
@@ -489,7 +489,7 @@ static void mheap_clear_spans(mspan_t *span) {
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
-    uint64_t page_index = (span->base - arena->base) / PAGE_SIZE;
+    uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = NULL;
         page_index += 1;
@@ -502,7 +502,7 @@ static void mheap_clear_spans(mspan_t *span) {
  */
 static void mheap_grow(uint64_t pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
-    uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * PAGE_SIZE;
+    uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
 
     addr_t cursor = memory->mheap->current_arena.cursor;
     addr_t end = memory->mheap->current_arena.end;
@@ -747,7 +747,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     uint8_t spanclass = make_spanclass(0, no_ptr);
 
     // 计算需要分配的 page count(向上取整)
-    uint64_t pages_count = size / PAGE_SIZE;
+    uint64_t pages_count = size / ALLOC_PAGE_SIZE;
     if ((size & PAGE_MASK) != 0) {
         pages_count += 1;
     }
@@ -811,7 +811,7 @@ arena_hint_t *arena_hints_init() {
 void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     // 从 page_alloc 的视角清理 span 对应的内存页
     // chunks bit = 0 表示空闲
-    chunks_set(span->base, span->pages_count * PAGE_SIZE, 0);
+    chunks_set(span->base, span->pages_count * ALLOC_PAGE_SIZE, 0);
 
     // 从 arena 视角清理 span
     mheap_clear_spans(span);
@@ -820,7 +820,7 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
 
     // 将物理内存归还给操作系统
-    sys_memory_remove((void *) span->base, span->pages_count * PAGE_SIZE);
+    sys_memory_remove((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
 }
 
 
@@ -882,7 +882,7 @@ mspan_t *span_of(uint64_t addr) {
     arena_t *arena = take_arena(addr);
     assertf(arena, "not found arena by addr: %p", addr);
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
-    uint64_t page_index = (addr - arena->base) / PAGE_SIZE;
+    uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
     assertf(span, "not found span by page_index: %d", page_index);
     return span;
@@ -936,15 +936,15 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->spanclass = spanclass;
     uint8_t sizeclass = take_sizeclass(spanclass);
     if (sizeclass == 0) {
-        span->obj_size = pages_count * PAGE_SIZE;
+        span->obj_size = pages_count * ALLOC_PAGE_SIZE;
         span->obj_count = 1;
     } else {
         span->obj_size = class_obj_size[sizeclass];
         assertf(span->obj_size > 0, "span obj_size is zero span_class=%d pages_count=%lu ", spanclass, pages_count);
-        span->obj_count = span->pages_count * PAGE_SIZE / span->obj_size;
+        span->obj_count = span->pages_count * ALLOC_PAGE_SIZE / span->obj_size;
     }
 
-    span->end = span->base + (span->pages_count * PAGE_SIZE);
+    span->end = span->base + (span->pages_count * ALLOC_PAGE_SIZE);
     span->alloc_bits = bitmap_new((int) span->obj_count);
     span->gcmark_bits = bitmap_new((int) span->obj_count);
 

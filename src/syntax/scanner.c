@@ -394,6 +394,9 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 1, "4", TOKEN_I64);
             }
         }
+        case 'l': {
+            return scanner_rest(word, length, 1, 2, "et", TOKEN_LET);
+        }
         case 'n':
             return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
         case 'p':

@@ -38,15 +38,14 @@ extern void main();
  */
 void runtime_main() {
     DEBUGF("[runtime_main] start")
-    // - processor 初始化(包括当前执行栈记录,用户栈生成)
-    processor_init();
-
-    DEBUGF("[runtime_main] processor init success")
 
     // - 堆内存管理初始化
     memory_init();
-
     DEBUGF("[runtime_main] memory init success")
+
+    // - processor 初始化(包括当前执行栈记录,用户栈生成)
+    processor_init();
+    DEBUGF("[runtime_main] processor init success")
 
     // - 初始化 stack return addr 为 main
     processor_t *p = processor_get();

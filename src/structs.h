@@ -140,7 +140,7 @@ typedef struct {
     // parser
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
-    table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 formal
+    table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 type param
 
     // analyzer
     analyzer_fndef_t *analyzer_current;
