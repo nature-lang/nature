@@ -291,8 +291,6 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
  * @param var_decl
  */
 static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    assertf(false, "var definitions must be initialized");
-
     analyzer_redeclare_check(m, var_decl->ident);
 
     analyzer_type(m, &var_decl->type);

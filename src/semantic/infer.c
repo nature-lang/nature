@@ -924,8 +924,6 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch) {
  * @param var_decl
  */
 void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    assertf(false, "var definitions must be initialized");
-
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
     if (type.kind == TYPE_UNKNOWN ||

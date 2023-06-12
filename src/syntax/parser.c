@@ -723,42 +723,6 @@ static ast_expr_t parser_ident_expr(module_t *m) {
     }
 
 
-
-    /**
-      * 请注意这里是实例化一个结构体,而不是声明一个结构体
-      * 声明 type person = struct{int a, int b}
-      * 实例化
-      * var a =  person {
-      *              a = 1
-      *              b = 2
-      * }
-      **/
-    if (parser_consume(m, TOKEN_LEFT_CURLY)) {
-        type_t t = {
-                .kind = TYPE_ALIAS,
-                .status = REDUCTION_STATUS_UNDO,
-                .alias = type_alias_new(ident_token->literal, NULL)
-        };
-        return parser_struct_new(m, t);
-    }
-    /**
-      * var a =  foo.person {
-      *              a = 1
-      *              b = 2
-      * }
-      **/
-    if (parser_is(m, TOKEN_DOT) && parser_next_is(m, 1, TOKEN_IDENT) && parser_next_is(m, 2, TOKEN_LEFT_CURLY)) {
-        parser_must(m, TOKEN_DOT);
-        token_t *second_token = parser_must(m, TOKEN_IDENT);
-        type_alias_t *alias = type_alias_new(second_token->literal, ident_token->literal);
-        type_t t = {
-                .kind = TYPE_ALIAS,
-                .status = REDUCTION_STATUS_UNDO,
-                .alias = alias
-        };
-        return parser_struct_new(m, t);
-    }
-
     // call()  a.b a[b], a.call() other ident prefix right
     result.assert_type = AST_EXPR_IDENT;
     result.value = ast_new_ident(ident_token->literal);
@@ -831,6 +795,44 @@ static void parser_actual_param(module_t *m, ast_call_t *call) {
     }
 
     parser_must(m, TOKEN_RIGHT_PAREN);
+}
+
+/**
+ * ident { ... }
+ * @param m
+ * @param left_expr
+ * @return
+ */
+static ast_expr_t parser_infix_left_curly(module_t *m, ast_expr_t left_expr) {
+    assertf(left_expr.assert_type == AST_EXPR_IDENT || left_expr.assert_type == AST_EXPR_SELECT,
+            "left expr must be ident or select");
+
+    parser_must(m, TOKEN_LEFT_CURLY);
+
+    if (left_expr.assert_type == AST_EXPR_IDENT) {
+        ast_ident *ident = left_expr.value;
+        // 提取 ident 作为 type 调用 parser_struct_new
+        type_t t = {
+                .kind = TYPE_ALIAS,
+                .status = REDUCTION_STATUS_UNDO,
+                .alias = type_alias_new(ident->literal, NULL)
+        };
+
+        return parser_struct_new(m, t);
+    }
+
+    ast_select_t *select = left_expr.value;
+    // 提取 select.key 作为 type 调用 parser_struct_new
+    assertf(select->left.assert_type == AST_EXPR_IDENT, "select expr left must be ident");
+    ast_ident *ident = select->left.value; // import as
+    char *key = select->key;
+    type_t t = {
+            .kind = TYPE_ALIAS,
+            .status = REDUCTION_STATUS_UNDO,
+            .alias = type_alias_new(key, ident->literal)
+    };
+
+    return parser_struct_new(m, t);
 }
 
 static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr) {
@@ -925,7 +927,7 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
 
     parser_must(m, TOKEN_IF);
 //    parser_must(m, TOKEN_LEFT_PAREN);
-    if_stmt->condition = parser_expr(m);
+    if_stmt->condition = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
 //    parser_must(m, TOKEN_RIGHT_PAREN);
     if_stmt->consequent = parser_block(m);
 
@@ -1034,7 +1036,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         }
 
         parser_must(m, TOKEN_IN);
-        for_iterator_stmt->iterate = parser_expr(m); // TODO 和 struct new 冲突问题处理
+        for_iterator_stmt->iterate = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
         for_iterator_stmt->body = parser_block(m);
 
         result->assert_type = AST_STMT_FOR_ITERATOR;
@@ -1045,7 +1047,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
 
     // for (condition) {}
     ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);
-    for_cond->condition = parser_expr(m); // TODO 和 struct new 冲突问题处理
+    for_cond->condition = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
 //    parser_must(m, TOKEN_RIGHT_PAREN);
     for_cond->body = parser_block(m);
     result->assert_type = AST_STMT_FOR_COND;
@@ -1063,6 +1065,7 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
     assign_stmt->left = left;
 
+    // 简单 assign
     if (parser_consume(m, TOKEN_EQUAL)) {
         assign_stmt->right = parser_expr(m);
         result->assert_type = AST_STMT_ASSIGN;
@@ -1071,14 +1074,15 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     }
 
 
+    // complex assign
     token_t *t = parser_advance(m);
     assertf(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
 
     // 转换成逻辑运算符
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
-    binary_expr->right = parser_expr(m);
+    binary_expr->right = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
     binary_expr->operator = token_to_ast_op[t->type];
-    binary_expr->left = left; // TODO copy
+    binary_expr->left = left;
 
     assign_stmt->right = (ast_expr_t) {
             .assert_type = AST_EXPR_BINARY,
@@ -1415,7 +1419,7 @@ static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
 }
 
 // int a = 1
-static ast_stmt_t *parser_typeuse_begin_stmt(module_t *m) {
+static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     // 类型解析
     type_t typedecl = parser_type(m);
@@ -1428,15 +1432,16 @@ static ast_stmt_t *parser_typeuse_begin_stmt(module_t *m) {
     var_decl->type = typedecl;
     var_decl->ident = ident_token->literal;
 
+    // 声明必须赋值
+    parser_must(m, TOKEN_EQUAL);
+
     // var a = 1
-    if (parser_consume(m, TOKEN_EQUAL)) {
-        ast_vardef_stmt_t *stmt = NEW(ast_vardef_stmt_t);
-        stmt->right = parser_expr(m);
-        stmt->var_decl = *var_decl;
-        result->assert_type = AST_STMT_VARDEF;
-        result->value = stmt;
-        return result;
-    }
+    ast_vardef_stmt_t *stmt = NEW(ast_vardef_stmt_t);
+    stmt->right = parser_expr(m);
+    stmt->var_decl = *var_decl;
+    result->assert_type = AST_STMT_VARDEF;
+    result->value = stmt;
+    return result;
 
     result->assert_type = AST_VAR_DECL;
     result->value = var_decl;
@@ -1542,7 +1547,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         // 更快的发现类型推断上的问题
         return parser_var_begin_stmt(m);
     } else if (is_typedecl(m)) {
-        return parser_typeuse_begin_stmt(m);
+        return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LEFT_PAREN)) {
         // 已 left param 开头的类型推断已经在 is_typedecl 中完成了，这里就是 tuple destr assign 的情况了
         return parser_tuple_destr_stmt(m);
@@ -1577,7 +1582,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
 static parser_rule rules[] = {
         [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
         [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
-        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, parser_infix_left_curly, PRECEDENCE_STRUCT_NEW},
         [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
         [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
         [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
