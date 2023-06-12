@@ -2,6 +2,7 @@
 #define NATURE_PROCESSOR_H
 
 #include "memory.h"
+#include "errort.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -31,12 +32,8 @@
     _new.ctx.uc_stack.ss_size = _new.stack_size; \
     _new.ctx.uc_link = &_old.ctx; \
     makecontext(&_new.ctx, _fn, 0); \
-    swapcontext(&_old.ctx, &_new.ctx);\
+    swapcontext(&_old.ctx, &_new.ctx);                     \
 
-// memory_struct_t mock to c
-typedef struct {
-    memory_string_t *msg;
-} mock_errort;
 
 uint64_t processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
 processor_t *processor_list;
@@ -50,12 +47,14 @@ processor_t *processor_get();
 
 void processor_init();
 
-void processor_attach_errort(memory_struct_t *errort);
+void rt_processor_attach_errort(char *msg);
 
-memory_struct_t *processor_remove_errort();
+void processor_attach_errort(memory_string_t *msg);
 
-bool processor_has_errort();
+memory_errort *processor_remove_errort();
 
-void processor_dump_errort(memory_struct_t *errort);
+uint8_t processor_has_errort();
+
+void processor_dump_errort(memory_errort *errort);
 
 #endif //NATURE_PROCESSOR_H

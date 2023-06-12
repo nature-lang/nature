@@ -1,5 +1,7 @@
 #include "basic.h"
 #include "runtime/memory.h"
+#include "processor.h"
+#include "string.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
     switch (_kind) { \
@@ -77,41 +79,59 @@ void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output
     }
 }
 
+/**
+ * 如果断言异常则在 processor 中附加上错误
+ * @param mu
+ * @param target_rtype_index
+ * @param value_ref
+ */
+void union_assert(memory_union_t *mu, int64_t target_rtype_index, void *value_ref) {
+    if (mu->rtype->index != target_rtype_index) {
+        rt_processor_attach_errort("type assert error");
+        return;
+    }
+
+    uint64_t size = rt_rtype_heap_out_size(target_rtype_index);
+
+    memmove(value_ref, &mu->value, size);
+    DEBUGF("[union_assert] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+           mu->value.i64_value);
+}
+
+bool union_is(memory_union_t *mu, int64_t target_rtype_index) {
+    return mu->rtype->index == target_rtype_index;
+}
 
 /**
- * TODO value 可能是各个角度传递过来的实际的值, 比如 int 就是 int
- * 但是当传递当类型为 float 时，由于 float 走 xmm0 寄存器，所以会有读取当问题
  * @param input_rtype_index
  * @param value
  * @return
  */
-memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
+memory_union_t *union_casting(uint64_t input_rtype_index, void *value_ref) {
     // - 根据 input_rtype_index 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_index);
-
     assertf(rtype, "cannot find rtype, index = %lu", input_rtype_index);
 
-    DEBUGF("[convert_any] input_kind=%s, in_heap=%d",
-           type_kind_string[rtype->kind], rtype->in_heap);
+    DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_string[rtype->kind], rtype->in_heap);
 
-    rtype_t any_rtype = gc_rtype(TYPE_ANY, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
+    rtype_t union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    memory_any_t *any = runtime_malloc(sizeof(memory_any_t), &any_rtype);
+    memory_union_t *mu = runtime_malloc(sizeof(memory_union_t), &union_rtype);
 
-    DEBUGF("[convert_any] any_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
-           any,
+    DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+           mu,
            value_ref,
-           &any->value,
+           &mu->value,
            rtype_heap_out_size(rtype, POINTER_SIZE),
            (void *) fetch_addr_value((addr_t) value_ref))
+    mu->rtype = rtype;
 
-    any->rtype = rtype;
-    memmove(&any->value, value_ref, rtype_heap_out_size(rtype, POINTER_SIZE));
-    DEBUGF("[convert_any] success, any_base: %p, any_rtype: %p, any_i64_value: %ld", any, any->rtype,
-           any->value.i64_value);
+    memmove(&mu->value, value_ref, rtype_heap_out_size(rtype, POINTER_SIZE));
+    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+           mu->value.i64_value);
 
-    return any;
+    return mu;
 }
 
 /**
@@ -120,8 +140,8 @@ memory_any_t *convert_any(uint64_t input_rtype_index, void *value_ref) {
  * @param int_value
  * @return
  */
-memory_bool_t convert_bool(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[runtime.convert_bool] input_rtype_index=%lu, int_value=%lu, f64_value=%f",
+memory_bool_t bool_casting(uint64_t input_rtype_index, int64_t int_value, double float_value) {
+    DEBUGF("[runtime.bool_casting] input_rtype_index=%lu, int_value=%lu, f64_value=%f",
            input_rtype_index,
            int_value,
            float_value);

@@ -314,23 +314,6 @@ struct type_fn_t {
     list_t *formal_types; // type_t
     bool rest;
 };
-
-/**
- * type_any_t 到底是类型，还是数据?, type_any_t 应该只是一个类型的描述，类似 type_array_t 一样
- * 比如 type_array_t 中有 element_type 和 count, 通过这两个数据我们能够知道其在内存中存储的数据的程度
- * 以及每一块内存存放了什么东西，但是并不知道数据实际存放在了哪里。
- *
- * 同理，如果 type_any_t 是类型的话，那就不知道存储的是什么,所以必须删除 void* value!
- * 但是给定 void* value,能够知道其内存中存储了什么东西！
- */
-struct type_any_t {
-//    uint64_t size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
-    // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
-//    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
-//    uint64_t rtype_index; // 这样定位更快
-//    void *value;
-};
-
 // 类型描述信息 end
 
 // 类型对应的数据在内存中的存储形式 --- start
@@ -389,10 +372,13 @@ typedef struct {
     void *fn_data;
 } memory_fn_t; // 就占用一个指针大小
 
+/**
+ * 不能随便调换顺序，这是 gc 的顺序
+ */
 typedef struct {
     value_casting value;
     rtype_t *rtype;
-} memory_any_t;
+} memory_union_t;
 
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中

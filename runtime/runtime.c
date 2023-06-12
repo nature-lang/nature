@@ -58,8 +58,7 @@ void runtime_main() {
 
     // 检查错误
     DEBUGF("[runtime_main] has errort? %p", p->errort);
-    if (p->errort) {
-        // down load error
+    if (p->errort->is) {
         processor_dump_errort(p->errort);
         exit(1);
     }

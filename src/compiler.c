@@ -1180,8 +1180,8 @@ static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
 
     assert(is_expr->operand.type.kind == TYPE_UNION);
     lir_operand_t *operand = compiler_expr(m, is_expr->operand);
-    uint64_t target_type_index = ct_find_rtype_index(is_expr->target_type);
-    OP_PUSH(rt_call(RT_CALL_UNION_TYPE_IS, output, 2, operand, target_type_index));
+    uint64_t target_rtype_index = ct_find_rtype_index(is_expr->target_type);
+    OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, target_rtype_index));
 
     return output;
 }
@@ -1208,10 +1208,10 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
         return output;
     }
 
-    lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
 
     // bool 类型转换
     if (as_expr->target_type.kind == TYPE_BOOL) {
+        lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
         OP_PUSH(rt_call(RT_CALL_BOOL_CASTING, output, 2, int_operand(input_rtype_index), input));
         return output;
     }
@@ -1219,7 +1219,7 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     // single type to union type
     if (as_expr->target_type.kind == TYPE_UNION) {
         assert(as_expr->operand.type.kind != TYPE_UNION);
-
+        lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
         OP_PUSH(rt_call(RT_CALL_UNION_CASTING, output, 2, int_operand(input_rtype_index), input_ref));
         return output;
@@ -1228,9 +1228,11 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     // union assert
     if (as_expr->operand.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
-        uint64_t output_rtype_index = ct_find_rtype_index(as_expr->target_type);
-        // union_assert(union_operand, target_rtype_index) -> target_operand
-        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, output, 2, input, int_operand(output_rtype_index)));
+        // 需要先预留好空间等待值 copy
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        lir_operand_t *output_ref = lea_operand_pointer(m, output);
+        uint64_t target_rtype_index = ct_find_rtype_index(as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, output, 3, input, int_operand(target_rtype_index), output_ref));
 
         compiler_error_handle(m);
         return output;
@@ -1414,29 +1416,12 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr_t expr) {
 static void compiler_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
     symbol_t *symbol = symbol_table_get(ERRORT_TYPE_ALIAS);
-    ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
-//    assertf(typedef_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
-    // 构建 struct new  结构
-    ast_struct_new_t *errort_struct = NEW(ast_struct_new_t);
-    errort_struct->type = type_alias_stmt->type;
-    errort_struct->properties = ct_list_new(sizeof(struct_property_t));
-    struct_property_t property = {
-            .type = type_basic_new(TYPE_STRING),
-            .key = ERRORT_MSG_IDENT,
-            .right = &stmt->error,
-    };
-    ct_list_push(errort_struct->properties, &property);
-
-    // target 是一个 ptr, 指向了一段 memory_struct_t
-    lir_operand_t *errort_target = compiler_struct_new(m, (ast_expr_t) {
-            .type = errort_struct->type,
-            .assert_type = AST_EXPR_STRUCT_NEW,
-            .value = errort_struct
-    });
+    assert(stmt->error.type.kind == TYPE_STRING);
+    lir_operand_t *msg_operand = compiler_expr(m, stmt->error);
 
     // attach errort to processor
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_ATTACH_ERRORT, NULL, 1, errort_target));
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_ATTACH_ERRORT, NULL, 1, msg_operand));
 
     // 插入 return 标识(用来做 return check 的，check 完会清除的)
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
@@ -1608,18 +1593,15 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
 
     compiler_body(m, fndef->body);
 
-    if (c->to_error_label) {
-        // bal end_label
-        OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
-        OP_PUSH(lir_op_label(c->error_label, true));
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
-        // error handle
-        OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
-    }
+    // bal end_label
+    OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
 
+    OP_PUSH(lir_op_label(c->error_label, true));
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
+    // TODO error handle... await complete
 
+    OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
     OP_PUSH(lir_op_label(c->end_label, true));
-
     if (fndef->be_capture_locals->count > 0) {
         lir_operand_t *capture_operand = operand_new(LIR_OPERAND_CLOSURE_VARS, slice_new());
         lir_op_t *op = lir_op_new(LIR_OPCODE_ENV_CLOSURE, capture_operand, NULL, NULL);

@@ -8,7 +8,7 @@ static char sprint_buf[1024];
 
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
-static void print_arg(memory_any_t *arg) {
+static void print_arg(memory_union_t *arg) {
     DEBUGF("[runtime.print_arg] memory_any_t any_base=%p, kind=%s, value_i64_casting=%ld", arg,
            type_kind_string[arg->rtype->kind], arg->value.i64_value);
 
@@ -92,7 +92,7 @@ void print(memory_list_t *args) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
-        memory_any_t **value = (void *) p;
+        memory_union_t **value = (void *) p;
 
         DEBUGF("[runtime.print] arg i=%d, p=%lx, p_value=%p ", i, p, *value);
         print_arg(*value);

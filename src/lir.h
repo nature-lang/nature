@@ -22,12 +22,12 @@
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
 
-#define CATCH_NORMAL_IDENT "catch_normal"
 #define CATCH_ERROR_IDENT "catch_error"
 #define CATCH_END_IDENT "catch_end"
 
 #define ERRORT_TYPE_ALIAS "errort"
 #define ERRORT_MSG_IDENT "msg"
+#define ERRORT_IS_IDENT "is"
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
@@ -73,12 +73,22 @@
 #define RT_CALL_TUPLE_ASSIGN "tuple_assign"
 #define RT_CALL_TUPLE_ACCESS "tuple_access"
 
-#define RT_CALL_UNION_TYPE_IS "union_type_is"
-
-#define RT_CALL_UNION_CASTING "union_casting"
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
 
+/**
+ * 将 single 类型转换为 union 类型
+ */
+#define RT_CALL_UNION_CASTING "union_casting"
+
+/**
+ * 判断 union 中的 single 类型是什么
+ */
+#define RT_CALL_UNION_IS "union_is"
+
+/**
+ * 将 union 断言为 single 类型
+ */
 #define RT_CALL_UNION_ASSERT "union_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
