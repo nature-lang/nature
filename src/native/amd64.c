@@ -111,9 +111,9 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
         } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT32) {
             return UINT32(v->uint_value);
         } else if (v->kind == TYPE_FLOAT32) {
-            return FLOAT32(v->float_value);
+            return FLOAT32(v->f64_value);
         } else if (v->kind == TYPE_FLOAT || v->kind == TYPE_FLOAT64) {
-            return FLOAT64(v->float_value);
+            return FLOAT64(v->f64_value);
         } else if (v->kind == TYPE_BOOL) {
             return UINT8(v->bool_value);
         }

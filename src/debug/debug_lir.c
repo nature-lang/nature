@@ -96,29 +96,20 @@ char *lir_var_to_string(lir_var_t *var) {
 char *lir_imm_to_string(lir_imm_t *immediate) {
     string buf = mallocz(DEBUG_STR_COUNT);
     int len;
-    switch (immediate->kind) {
-        case TYPE_BOOL: {
-            string bool_str = "true";
-            if (immediate->bool_value == false) {
-                bool_str = "false";
-            }
-            len = sprintf(buf, "IMM[%s|BOOL]", bool_str);
-            break;
+    if (immediate->kind == TYPE_BOOL) {
+        string bool_str = "true";
+        if (immediate->bool_value == false) {
+            bool_str = "false";
         }
-        case TYPE_INT: {
-            len = sprintf(buf, "IMM[%ld:INT]", immediate->uint_value);
-            break;
-        }
-        case TYPE_FLOAT: {
-            len = sprintf(buf, "IMM[%f:FLOAT]", immediate->float_value);
-            break;
-        }
-        case TYPE_RAW_STRING: {
-            len = sprintf(buf, "IMM[%s:RAW_STRING]", immediate->string_value);
-            break;
-        }
-        default:
-            return "UNKNOWN IMM";
+        len = sprintf(buf, "IMM[%s|BOOL]", bool_str);
+    } else if (is_integer(immediate->kind)) {
+        len = sprintf(buf, "IMM[%ld:INT]", immediate->uint_value);
+    } else if (is_float(immediate->kind)) {
+        len = sprintf(buf, "IMM[%f:FLOAT]", immediate->f64_value);
+    } else if (immediate->kind == TYPE_RAW_STRING) {
+        len = sprintf(buf, "IMM[%s:RAW_STRING]", immediate->string_value);
+    } else {
+        assertf(0, "unknown immediate type: %d", immediate->kind);
     }
 
     return buf;

@@ -477,13 +477,32 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 static ast_expr_t parser_unary(module_t *m) {
     ast_expr_t result = expr_new(m);
     token_t *operator_token = parser_advance(m);
-    ast_expr_t operand = parser_precedence_expr(m, PRECEDENCE_UNARY);
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
-
     if (operator_token->type == TOKEN_NOT) { // !true
         unary_expr->operator = AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) { // -2
+        // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
+        if (parser_is(m, TOKEN_LITERAL_INT)) {
+            token_t *int_token = parser_advance(m);
+            ast_literal_t *literal = NEW(ast_literal_t);
+            literal->kind = TYPE_INT;
+            literal->value = str_connect("-", int_token->literal);
+            result.assert_type = AST_EXPR_LITERAL;
+            result.value = literal;
+            return result;
+        }
+
+        if (parser_is(m, TOKEN_LITERAL_FLOAT)) {
+            token_t *float_token = parser_advance(m);
+            ast_literal_t *literal = NEW(ast_literal_t);
+            literal->kind = TYPE_FLOAT;
+            literal->value = str_connect("-", float_token->literal);
+            result.assert_type = AST_EXPR_LITERAL;
+            result.value = literal;
+            return result;
+        }
+
         unary_expr->operator = AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) { // ~0b2
         unary_expr->operator = AST_OP_BNOT;
@@ -495,7 +514,7 @@ static ast_expr_t parser_unary(module_t *m) {
         assertf(false, "unknown unary operator=%d", token_str[operator_token->type]);
     }
 
-
+    ast_expr_t operand = parser_precedence_expr(m, PRECEDENCE_UNARY);
     unary_expr->operand = operand;
 
     result.assert_type = AST_EXPR_UNARY;

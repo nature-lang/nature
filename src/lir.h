@@ -153,7 +153,8 @@ typedef struct {
     union {
         uint64_t uint_value; // 8bit, 负数使用补码存储
         int64_t int_value; // 8bit, 负数使用补码存储
-        double float_value; // 8bit = c.double
+        double f64_value; // 8bit
+        float f32_value; // 4bit
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
@@ -200,7 +201,7 @@ static inline lir_operand_t *bool_operand(bool val) {
 static inline lir_operand_t *float_operand(double val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_FLOAT;
-    imm_operand->float_value = val;
+    imm_operand->f64_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
     operand->value = imm_operand;

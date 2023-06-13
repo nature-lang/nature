@@ -830,7 +830,7 @@ static lir_operand_t *compiler_unary(module_t *m, ast_expr_t expr) {
         if (imm->kind == TYPE_INT) {
             imm->int_value = 0 - imm->int_value;
         } else {
-            imm->float_value = 0 - imm->float_value;
+            imm->f64_value = 0 - imm->f64_value;
         }
         // move 操作即可
         OP_PUSH(lir_op_move(target, first));
@@ -1313,45 +1313,61 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
 static lir_operand_t *compiler_literal(module_t *m, ast_expr_t expr) {
     ast_literal_t *literal = expr.value;
 
-    switch (literal->kind) {
-        case TYPE_STRING: {
-            // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
-            lir_operand_t *target = temp_var_operand(m, expr.type);
-            lir_operand_t *imm_c_string_operand = string_operand(literal->value);
-            lir_operand_t *imm_len_operand = int_operand(strlen(literal->value));
-            lir_op_t *call_op = rt_call(
-                    RT_CALL_STRING_NEW,
-                    target,
-                    2,
-                    imm_c_string_operand,
-                    imm_len_operand);
-            OP_PUSH(call_op);
-            return target;
-        }
-        case TYPE_RAW_STRING: {
-            return string_operand(literal->value);
-        }
-        case TYPE_INT:
-        case TYPE_INT64: {
-            // literal 默认编译成 int 类型
-            return int_operand(atoi(literal->value));
-        }
-        case TYPE_FLOAT:
-        case TYPE_FLOAT64: {
-            return float_operand(atof(literal->value));
-        }
-        case TYPE_BOOL: {
-            bool bool_value = false;
-            if (strcmp(literal->value, "true") == 0) {
-                bool_value = true;
-            }
-            return bool_operand(bool_value);
+    if (literal->kind == TYPE_STRING) {
+        // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
+        lir_operand_t *target = temp_var_operand(m, expr.type);
+        lir_operand_t *imm_c_string_operand = string_operand(literal->value);
+        lir_operand_t *imm_len_operand = int_operand(strlen(literal->value));
+        lir_op_t *call_op = rt_call(RT_CALL_STRING_NEW, target, 2, imm_c_string_operand, imm_len_operand);
+        OP_PUSH(call_op);
+        return target;
+    }
+
+    if (literal->kind == TYPE_STRING) {
+        return string_operand(literal->value);
+    }
+
+    if (literal->kind == TYPE_BOOL) {
+        bool bool_value = false;
+        if (strcmp(literal->value, "true") == 0) {
+            bool_value = true;
         }
 
-        default: {
-            assertf(false, "line: %d, cannot compiler literal->kind", compiler_line);
-        }
+        return bool_operand(bool_value);
     }
+
+    if (is_integer(literal->kind)) {
+        int64_t i = atoll(literal->value);
+        lir_imm_t *imm_operand = NEW(lir_imm_t);
+        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->int_value = i;
+        lir_operand_t *operand = NEW(lir_operand_t);
+        operand->assert_type = LIR_OPERAND_IMM;
+        operand->value = imm_operand;
+        return operand;
+    }
+
+    if (literal->kind == TYPE_FLOAT32) {
+        lir_imm_t *imm_operand = NEW(lir_imm_t);
+        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->f32_value = (float) atof(literal->value);
+        lir_operand_t *operand = NEW(lir_operand_t);
+        operand->assert_type = LIR_OPERAND_IMM;
+        operand->value = imm_operand;
+        return operand;
+    }
+
+    if (literal->kind == TYPE_FLOAT64) {
+        lir_imm_t *imm_operand = NEW(lir_imm_t);
+        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->f64_value = atof(literal->value);
+        lir_operand_t *operand = NEW(lir_operand_t);
+        operand->assert_type = LIR_OPERAND_IMM;
+        operand->value = imm_operand;
+        return operand;
+    }
+
+    assertf(0, "cannot compiler literal, kind=%s", type_kind_string[literal->kind]);
     exit(1);
 }
 

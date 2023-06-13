@@ -6,6 +6,28 @@
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
+static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
+    assert(expr->assert_type == AST_EXPR_LITERAL);
+    ast_literal_t *literal = expr->value;
+    assertf(is_integer(literal->kind), "line=%d, type inconsistency", expr->line);
+    type_kind target_kind = cross_kind_trans(target_type.kind);
+    int64_t i = atoll(literal->value);
+    assertf(integer_range_check(target_kind, i), "line=%d, integer out of range", expr->line);
+    literal->kind = target_type.kind;
+    expr->type = target_type;
+}
+
+static void literal_float_casting(ast_expr_t *expr, type_t target_type) {
+    assert(expr->assert_type == AST_EXPR_LITERAL);
+    ast_literal_t *literal = expr->value;
+    assertf(is_float(literal->kind), "line=%d, type inconsistency", expr->line);
+    type_kind target_kind = cross_kind_trans(target_type.kind);
+    double f = atof(literal->value);
+    assertf(float_range_check(target_kind, f), "line=%d, float out of range", expr->line);
+    literal->kind = target_type.kind;
+    expr->type = target_type;
+}
+
 static uint32_t fn_params_hash(type_fn_t *fn) {
     char *str = itoa(TYPE_FN);
     for (int i = 0; i < fn->formal_types->length; ++i) {
@@ -1063,6 +1085,7 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 static type_t infer_literal(module_t *m, ast_literal_t *literal) {
+    literal->kind = cross_kind_trans(literal->kind);
     return type_basic_new(literal->kind);
 }
 
@@ -1358,6 +1381,16 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         return expr->type;
     }
     assertf(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_kind_string[target_type.kind]);
+
+    // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
+    // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
+    if (is_integer(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+        literal_integer_casting(expr, target_type);
+    }
+
+    if (is_float(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+        literal_float_casting(expr, target_type);
+    }
 
     // number 数值之间的类型转换 (暂时关闭)
 //    if (is_number(target_type.kind) && is_number(expr->type.kind) &&

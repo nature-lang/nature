@@ -246,3 +246,7 @@ void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offs
            dst, dst_offset, src, src_offset, size);
     memmove(dst + dst_offset, src + src_offset, size);
 }
+
+void zero_fn() {
+    rt_processor_attach_errort("zero_fn");
+}

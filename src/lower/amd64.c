@@ -177,10 +177,16 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             if (imm->kind == TYPE_RAW_STRING) {
                 symbol->size = strlen(imm->string_value) + 1;
                 symbol->value = (uint8_t *) imm->string_value;
-            } else {
+            } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->float_value;
+                symbol->value = (uint8_t *) &imm->f64_value;
+            } else if (imm->kind == TYPE_FLOAT32) {
+                symbol->size = type_kind_sizeof(imm->kind);
+                symbol->value = (uint8_t *) &imm->f32_value;
+            } else {
+                assertf(false, "not support type %s", type_kind_string[imm->kind]);
             }
+
 
             slice_push(c->asm_symbols, symbol);
             lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);

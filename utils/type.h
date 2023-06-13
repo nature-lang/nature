@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <float.h>
 #include "slice.h"
 #include "table.h"
 #include "ct_list.h"
@@ -606,6 +607,41 @@ static inline type_t number_type_lift(type_kind left, type_kind right) {
 
     return type_basic_new(right);
 }
+
+static bool integer_range_check(type_kind kind, int64_t i) {
+    switch (kind) {
+        case TYPE_UINT8:
+            return i >= 0 && i <= UINT8_MAX;
+        case TYPE_INT8:
+            return i >= INT8_MIN && i <= INT8_MAX;
+        case TYPE_UINT16:
+            return i >= 0 && i <= UINT16_MAX;
+        case TYPE_INT16:
+            return i >= INT16_MIN && i <= INT16_MAX;
+        case TYPE_UINT32:
+            return i >= 0 && i <= UINT32_MAX;
+        case TYPE_INT32:
+            return i >= INT32_MIN && i <= INT32_MAX;
+        case TYPE_UINT64:
+            return i >= 0 && i <= UINT64_MAX;
+        case TYPE_INT64:
+            return i >= INT64_MIN && i <= INT64_MAX;
+        default:
+            return false;
+    }
+}
+
+static bool float_range_check(type_kind kind, double f) {
+    switch (kind) {
+        case TYPE_FLOAT32:
+            return f >= -FLT_MAX && f <= FLT_MAX;
+        case TYPE_FLOAT64:
+            return f >= -DBL_MAX && f <= DBL_MAX;
+        default:
+            return false;
+    }
+}
+
 
 type_kind to_gc_kind(type_kind kind);
 

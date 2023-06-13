@@ -28,4 +28,6 @@ void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *
 
 void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size);
 
+void zero_fn();
+
 #endif //NATURE_BASIC_H
