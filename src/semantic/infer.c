@@ -1359,17 +1359,18 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     }
     assertf(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_kind_string[target_type.kind]);
 
-    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
-        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
-        *expr = ast_type_as(*expr, target_type);
-    }
+    // number 数值之间的类型转换 (暂时关闭)
+//    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
+//        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
+//        *expr = ast_type_as(*expr, target_type);
+//    }
 
-    // bool 类型转换
-    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
-        *expr = ast_type_as(*expr, type_basic_new(TYPE_BOOL));
-    }
+    // bool 类型转换 (暂时关闭)
+//    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
+//        *expr = ast_type_as(*expr, type_basic_new(TYPE_BOOL));
+//    }
 
-    // single type to union type
+    // single type to union type (必须保留)
     if (target_type.kind == TYPE_UNION && expr->type.kind != TYPE_UNION) {
         assertf(union_type_contains(target_type, expr->type), "line=%d, union type not contains '%s'",
                 expr->line, type_kind_string[expr->type.kind]);

@@ -30,6 +30,6 @@ fn runtime_malloc_bytes():i64 {}
 
 // 这里都 string 是 nature string 类型
 type errort = struct {
-    bool is
     string msg
+    bool has
 }

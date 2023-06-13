@@ -45,7 +45,7 @@ void processor_attach_errort(memory_string_t *msg) {
 
     rtype_t errort_rtype = gc_rtype(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     memory_errort *errort = runtime_malloc(errort_rtype.size, &errort_rtype);
-    errort->is = 1;
+    errort->has = 1;
     errort->msg = msg;
 
     p->errort = errort;
@@ -70,7 +70,7 @@ uint8_t processor_has_errort() {
     processor_t *p = processor_get();
     DEBUGF("[runtime.processor_has_errort] errort?  %p", p->errort)
 
-    return p->errort->is;
+    return p->errort->has;
 }
 
 void processor_dump_errort(memory_errort *errort) {

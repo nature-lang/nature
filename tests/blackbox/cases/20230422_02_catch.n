@@ -1,32 +1,30 @@
-// 无参数
 fn hello() {
     println("hello nature")
     throw "world error"
 }
 
-var error = catch hello()
-if (error) {
-    println("catch err: ", error.msg)
+var err = catch hello()
+if err.has {
+    println("catch err: ", err.msg)
 }
 
-// 有参数
 fn one(bool need):int {
-    if (need) {
+    if need {
         throw "i'm one error"
     }
     return 2
 }
 
-var (s, one_error) = catch one(true)
-if (one_error) {
-    println("one(true) has err:", one_error.msg)
+var (s, one_err) = catch one(true)
+if one_err.has {
+    println("one(true) has err:", one_err.msg)
 } else {
     println("one(true) not err, s=", s)
 }
 
-var (s1, one_error1) = catch one(false)
-if (one_error1) {
-    println("one(false) has err:", one_error1.msg)
+var (s1, one_err1) = catch one(false)
+if one_err1.has {
+    println("one(false) has err:", one_err1.msg)
 } else {
     println("one(false) not err, s1=", s1)
 }

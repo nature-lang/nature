@@ -57,7 +57,7 @@ void runtime_main() {
 
     // 检查错误
     DEBUGF("[runtime_main] has errort? %p", p->errort);
-    if (p->errort->is) {
+    if (p->errort->has) {
         processor_dump_errort(p->errort);
         exit(1);
     }

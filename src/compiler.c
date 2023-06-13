@@ -1146,7 +1146,12 @@ static lir_operand_t *compiler_struct_new(module_t *m, ast_expr_t expr) {
 static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
     ast_tuple_new_t *ast = expr.value;
 
-    lir_operand_t *tuple_target = compiler_zero_tuple(m, expr.type);
+    // tuple new 时所有的值都必须进行初始化，所以不会出现 null 值
+    uint64_t rtype_index = ct_find_rtype_index(expr.type);
+    lir_operand_t *tuple_target = temp_var_operand(m, expr.type);
+    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, tuple_target, 1, int_operand(rtype_index)));
+
+//    lir_operand_t *tuple_target = compiler_zero_tuple(m, expr.type);
 
     uint64_t offset = 0;
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -1254,13 +1259,18 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
     lir_operand_t *result_operand = compiler_expr(m, catch->expr);
+
+    // bal -> catch_end
     OP_PUSH(lir_op_bal(catch_end_label->output));
 
-    // error_label
+    // catch_error_label
     OP_PUSH(lir_op_label(m->compiler_current->catch_error_label, true));
-    // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
-    lir_operand_t *zero_operand = compiler_zero_operand(m, catch->expr.type);
-    OP_PUSH(lir_op_move(result_operand, zero_operand));
+
+    if (catch->expr.type.kind != TYPE_VOID) {
+        // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
+        lir_operand_t *zero_operand = compiler_zero_operand(m, catch->expr.type);
+        OP_PUSH(lir_op_move(result_operand, zero_operand));
+    }
 
     OP_PUSH(catch_end_label);
     // errort_operand 可能为空的 struct 或者非空
@@ -1273,8 +1283,9 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     // result label 和 error label 此时都是非 null 的值，将他们写入到 tuple 中即可
     // make tuple target return
     assertf(result_operand->assert_type == LIR_OPERAND_VAR, "compiler expr result operand must lir var");
-    ast_expr_t *result_expr = ast_ident_expr(((lir_var_t *) result_operand->value)->ident);
-    result_expr->type = ((lir_var_t *) result_operand)->type;
+    lir_var_t *var = result_operand->value;
+    ast_expr_t *result_expr = ast_ident_expr(var->ident);
+    result_expr->type = var->type;
 
     // temp error ident
     ast_expr_t *err_expr = ast_ident_expr(((lir_var_t *) errort_operand->value)->ident);

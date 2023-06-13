@@ -207,7 +207,7 @@ typedef struct {
 
 typedef struct {
     memory_string_t *msg;
-    uint8_t is;
+    uint8_t has;
 } memory_errort;
 
 /**
