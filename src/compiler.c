@@ -1312,6 +1312,7 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
  */
 static lir_operand_t *compiler_literal(module_t *m, ast_expr_t expr) {
     ast_literal_t *literal = expr.value;
+    literal->kind = cross_kind_trans(literal->kind);
 
     if (literal->kind == TYPE_STRING) {
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target

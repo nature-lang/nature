@@ -318,6 +318,7 @@ static type_t parser_single_type(module_t *m) {
             return result;
         }
 
+        // a.b
         token_t *second = NULL;
         if (parser_consume(m, TOKEN_DOT)) {
             second = parser_advance(m);
@@ -684,11 +685,14 @@ static ast_expr_t parser_struct_new(module_t *m, type_t type) {
  * @return
  */
 static ast_expr_t parser_ident_expr(module_t *m) {
+    // 这里传递一个 precedence 参数, 基于该参数判断是否
+
     ast_expr_t result = expr_new(m);
 
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
 
     /**
+     * TODO 无法区分是 person < len - 1 还是一个闭合符号
       * var a =  person<a, b> {
       *              a = 1
       *              b = 2
@@ -715,6 +719,7 @@ static ast_expr_t parser_ident_expr(module_t *m) {
 
 
     /**
+     * TODO 同上
       * var a =  foo.person<a, b> {
       *              a = 1
       *              b = 2
@@ -839,6 +844,8 @@ static ast_expr_t parser_infix_left_curly(module_t *m, ast_expr_t left_expr) {
 
         return parser_struct_new(m, t);
     }
+
+    assert(left_expr.assert_type == AST_EXPR_SELECT);
 
     ast_select_t *select = left_expr.value;
     // 提取 select.key 作为 type 调用 parser_struct_new
@@ -978,7 +985,7 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
  * custom_x a = xxx # 连续两个 ident 判定就能判定出来
  * @return
  */
-static bool is_typedecl(module_t *m) {
+static bool is_type_begin_stmt(module_t *m) {
     // var/any/int/float/bool/string
     if (parser_basic_token_type(m)) {
         return true;
@@ -1003,11 +1010,20 @@ static bool is_typedecl(module_t *m) {
         return true;
     }
 
+    // TODO package.ident a = xxx
+    if (parser_is(m, TOKEN_IDENT) &&
+        parser_next_is(m, 1, TOKEN_DOT) &&
+        parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_IDENT)) {
+        return true;
+    }
+
     // (var_a, var_b) = (1, 2)
     // (custom, int, int, (int, int), map) a = xxx
     if (parser_is(m, TOKEN_LEFT_PAREN) && parser_is_tuple_typedecl(m, m->p_cursor.current)) {
         return true;
     }
+
 
     return false;
 }
@@ -1026,7 +1042,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
 //    parser_must(m, TOKEN_LEFT_PAREN);
 
     // for int i = 1; i <= 10; i+=1
-    if (is_typedecl(m)) {
+    if (is_type_begin_stmt(m)) {
         ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
         parser_must(m, TOKEN_SEMICOLON);
@@ -1565,10 +1581,10 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     if (parser_is(m, TOKEN_VAR)) {
         // 更快的发现类型推断上的问题
         return parser_var_begin_stmt(m);
-    } else if (is_typedecl(m)) {
+    } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LEFT_PAREN)) {
-        // 已 left param 开头的类型推断已经在 is_typedecl 中完成了，这里就是 tuple destr assign 的情况了
+        // 已 left param 开头的类型推断已经在 is_type_begin_stmt 中完成了，这里就是 tuple destr assign 的情况了
         return parser_tuple_destr_stmt(m);
     } else if (parser_is(m, TOKEN_THROW)) {
         return parser_throw_stmt(m);
@@ -1602,6 +1618,7 @@ static parser_rule rules[] = {
         [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
         [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
         [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, parser_infix_left_curly, PRECEDENCE_STRUCT_NEW},
+        [TOKEN_LEFT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE}, // TODO 两组符号，且具有不同的优先级如何处理
         [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
         [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
         [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
@@ -1621,7 +1638,6 @@ static parser_rule rules[] = {
         [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
         [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-        [TOKEN_LEFT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
         [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
@@ -1648,10 +1664,9 @@ static parser_rule rules[] = {
  * @param type
  * @return
  */
-static parser_rule *find_rule(token_e type) {
-    return &rules[type];
+static parser_rule *find_rule(token_e token_type) {
+    return &rules[token_type];
 }
-
 
 static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence) {
     // 读取表达式前缀
@@ -1661,10 +1676,11 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     ast_expr_t expr = prefix_fn(m); // advance
 
     // 前缀表达式已经处理完成，判断是否有中缀表达式，有则按表达式优先级进行处理, 如果 +/-/*// /. /[]  等
-    token_e type = parser_peek(m)->type;
-    parser_rule *infix_rule = find_rule(type);
+    token_e token_type = parser_peek(m)->type;
+    parser_rule *infix_rule = find_rule(token_type);
     while (infix_rule->infix_precedence >= precedence) {
         parser_infix_fn infix_fn = infix_rule->infix;
+
         expr = infix_fn(m, expr);
 
         infix_rule = find_rule(parser_peek(m)->type);
@@ -1673,11 +1689,24 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     return expr;
 }
 
+static ast_expr_t parser_is_struct_new_expr(module_t *m) {
+    // foo {} , foo.bar {}, foo.bar<a.b, [int], ...> {}, fo <a, b> {}
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
+        // TODO 区分是 类型参数还是 小于符号
+        // [foo < bar, car > 2, foo<bar,car>{}] // TODO 这完全区分不了，我的老天爷
+        // TODO 找到 < 闭合点或者 EOF，然后判断下一个符号？
+        if (parser_next_is(m, 2, TOKEN_IDENT) && ...) {
+        }
+    }
+}
+
 /**
  * 表达式优先级处理方式
  * @return
  */
 static ast_expr_t parser_expr(module_t *m) {
+    // TODO 特殊表达式 struct new 判断及解析
+
     return parser_precedence_expr(m, PRECEDENCE_ASSIGN);
 }
 

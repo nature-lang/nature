@@ -1085,7 +1085,6 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 static type_t infer_literal(module_t *m, ast_literal_t *literal) {
-    literal->kind = cross_kind_trans(literal->kind);
     return type_basic_new(literal->kind);
 }
 
@@ -1410,7 +1409,8 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         *expr = ast_type_as(*expr, target_type);
     }
 
-    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency", expr->line);
+    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency, expect=%s, actual=%s",
+            expr->line, type_kind_string[target_type.kind], type_kind_string[expr->type.kind]);
     return expr->type;
 }
 
