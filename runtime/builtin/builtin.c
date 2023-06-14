@@ -76,6 +76,11 @@ static void print_arg(memory_union_t *arg) {
         VOID write(STDOUT_FILENO, raw, strlen(raw));
         return;
     }
+    if (arg->rtype->kind == TYPE_NULL) {
+        char *raw = "null";
+        VOID write(STDOUT_FILENO, raw, strlen(raw));
+        return;
+    }
 
     assertf(false, "unsupported type kind=%d, index=%d", arg->rtype->kind, arg->rtype->index);
 }

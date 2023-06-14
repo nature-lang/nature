@@ -1237,8 +1237,7 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
         lir_operand_t *output_ref = lea_operand_pointer(m, output);
         uint64_t target_rtype_index = ct_find_rtype_index(as_expr->target_type);
-        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, output, 3, input, int_operand(target_rtype_index), output_ref));
-
+        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_index), output_ref));
         compiler_error_handle(m);
         return output;
     }
@@ -1338,6 +1337,10 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr_t expr) {
         }
 
         return bool_operand(bool_value);
+    }
+
+    if (literal->kind == TYPE_NULL) {
+        return int_operand(0);
     }
 
     if (is_integer(literal->kind)) {

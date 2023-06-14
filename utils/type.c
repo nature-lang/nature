@@ -428,7 +428,7 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_union(t.union_);
             break;
         default:
-            if (is_integer(t.kind) || is_float(t.kind)) {
+            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL) {
                 rtype = rtype_base(t.kind);
             }
     }

@@ -109,7 +109,7 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
-        //        || parser_is(m, TOKEN_ANY)
+        || parser_is(m, TOKEN_NULL)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_INT)
         || parser_is(m, TOKEN_I8)
@@ -173,7 +173,7 @@ static type_t parser_type(module_t *m) {
     union_type.union_->elements = ct_list_new(sizeof(type_t));
     ct_list_push(union_type.union_->elements, &t);
     do {
-        t = parser_type(m);
+        t = parser_single_type(m);
         ct_list_push(union_type.union_->elements, &t);
     } while (parser_consume(m, TOKEN_OR));
     return union_type;
@@ -189,6 +189,7 @@ static type_t parser_single_type(module_t *m) {
             .status = REDUCTION_STATUS_UNDO
     };
 
+    // any 特殊处理
     if (parser_consume(m, TOKEN_ANY)) {
         type_t union_type = {
                 .status = REDUCTION_STATUS_UNDO,
@@ -200,7 +201,7 @@ static type_t parser_single_type(module_t *m) {
         return union_type;
     }
 
-    // int/float/bool/string/void/var/any/self
+    // int/float/bool/string/void/var/self
     if (parser_basic_token_type(m)) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->type];
@@ -361,7 +362,7 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    assertf(false, "line: %d, parser typedecl failed", parser_line(m));
+    assertf(false, "line: %d, cannot parser type ident=%s failed", parser_line(m), parser_peek(m)->literal);
     exit(1);
 }
 
@@ -872,6 +873,10 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
+    if (parser_is(m, TOKEN_ANY)) {
+        return true;
+    }
+
     if (parser_is(m, TOKEN_LEFT_CURLY) || // {int}/{int:int}
         parser_is(m, TOKEN_LEFT_SQUARE)) { // [int]
         return true;
@@ -891,11 +896,24 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    // TODO package.ident a = xxx
+    // person|i8 a
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_OR)) {
+        return true;
+    }
+
+    // package.ident foo = xxx
     if (parser_is(m, TOKEN_IDENT) &&
         parser_next_is(m, 1, TOKEN_DOT) &&
         parser_next_is(m, 2, TOKEN_IDENT) &&
         parser_next_is(m, 3, TOKEN_IDENT)) {
+        return true;
+    }
+
+    // package.ident|i8 foo = xxx
+    if (parser_is(m, TOKEN_IDENT) &&
+        parser_next_is(m, 1, TOKEN_DOT) &&
+        parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_OR)) {
         return true;
     }
 
@@ -1525,6 +1543,7 @@ static parser_rule rules[] = {
         [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
         [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
         [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_NULL] = {parser_literal, NULL, PRECEDENCE_NULL},
 
         [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_IS] = {NULL, parser_is_expr, PRECEDENCE_TYPE_CAST},

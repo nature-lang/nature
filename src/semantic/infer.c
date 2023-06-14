@@ -216,33 +216,38 @@ static bool type_confirmed(type_t t) {
 static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, type_basic_new(TYPE_UNKNOWN));
-    type_t right_type = infer_right_expr(m, &expr->right, type_basic_new(TYPE_UNKNOWN));
+    type_t right_type = infer_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
     assertf(is_number(left_type.kind) && is_number(right_type.kind),
-            "binary operate only support number operand,actual operate=%s, operand=%s",
+            "binary operate only support number operand, actual '%s %s %s'",
+            type_kind_string[left_type.kind],
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
 
+    // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {
         assertf(is_integer(left_type.kind) && is_integer(right_type.kind),
                 "binary operator '%s' only integer operand",
                 ast_expr_op_str[expr->operator]);
     }
 
+    // 暂时取消类型隐式转换，而是使用左值的类型作为目标类型
+    type_t target_type = left_type;
+
     // 不需要类型提升，且返回的类型为 first 的类型
-    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
-        return left_type;
-    }
+//    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
+//        return left_type;
+//    }
 
     // 类型自动提升
-    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
-    if (left_type.kind != target_type.kind) {
-        expr->left = ast_type_as(expr->left, target_type);
-    }
-    if (right_type.kind != target_type.kind) {
-        expr->right = ast_type_as(expr->right, target_type);
-    }
+//    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
+//    if (left_type.kind != target_type.kind) {
+//        expr->left = ast_type_as(expr->left, target_type);
+//    }
+//    if (right_type.kind != target_type.kind) {
+//        expr->right = ast_type_as(expr->right, target_type);
+//    }
 
     switch (expr->operator) {
         // 算术运算符

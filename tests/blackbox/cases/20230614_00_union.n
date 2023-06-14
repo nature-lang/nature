@@ -1,0 +1,27 @@
+// nullable 测试  
+i8|null nat = null  
+println(nat)  
+nat = 6 as i8  
+println(nat)  
+  
+// union 类型可以进行类型推导  
+var foo = nat  
+println(foo)  
+  
+// 更大范围的类型接收小范围 union 的类型  
+i8|i32|null bar = nat  
+println(bar)  
+bar = 7 as i32  
+  
+// any 可以接收所有类型的值  
+any baz = bar  
+println(baz)  
+  
+// 重新赋值为 null  
+baz = null  
+println(baz)  
+  
+// 尝试基于类型断言进行数值运算  
+println(nat as i8)  
+i8 a = (nat as i8) + 2  
+println(a)

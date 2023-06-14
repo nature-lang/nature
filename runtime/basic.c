@@ -92,10 +92,13 @@ void union_assert(memory_union_t *mu, int64_t target_rtype_index, void *value_re
     }
 
     uint64_t size = rt_rtype_heap_out_size(target_rtype_index);
-
     memmove(value_ref, &mu->value, size);
-    DEBUGF("[union_assert] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
-           mu->value.i64_value);
+    DEBUGF("[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, values_ref: %p",
+           mu,
+           type_kind_string[mu->rtype->kind],
+           size,
+           mu->value.i64_value,
+           value_ref);
 }
 
 bool union_is(memory_union_t *mu, int64_t target_rtype_index) {
