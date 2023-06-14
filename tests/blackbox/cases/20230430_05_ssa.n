@@ -1,6 +1,7 @@
 int foo = 1
 foo = foo + 2
-if (true) {
+
+if true {
     int car = 4
     foo = 2
 } else {
@@ -11,8 +12,8 @@ if (true) {
 println(foo)
 
 int bar = 0
-for (int i = 0; i <= 100; i+=1) {
-    if ((i % 2) == 0) {
+for int i = 0; i <= 100; i+=1 {
+    if (i % 2) == 0 {
        bar += i
     }
 }

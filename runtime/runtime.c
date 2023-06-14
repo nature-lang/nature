@@ -56,7 +56,7 @@ void runtime_main() {
     MODE_CALL(p->user_mode, p->system_mode, main);
 
     // 检查错误
-    DEBUGF("[runtime_main] has errort? %p", p->errort);
+    DEBUGF("[runtime_main] has errort? %d", p->errort->has);
     if (p->errort->has) {
         processor_dump_errort(p->errort);
         exit(1);

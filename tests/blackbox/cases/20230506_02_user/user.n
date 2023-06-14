@@ -12,7 +12,7 @@ int id = 1
 
 // 全局函数
 fn register(string username, string password) {
-	if (userof[username]) {
+	if userof[username] as bool {
 		throw "The user has already registered"
 	}
 
@@ -28,7 +28,7 @@ fn register(string username, string password) {
 }
 
 fn find(string username):user {
-	if (!userof[username]) {
+	if !(userof[username] as bool) {
 		throw "user notfound"
 	}
 

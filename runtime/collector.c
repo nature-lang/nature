@@ -26,6 +26,17 @@ fndef_t *find_fn(addr_t addr) {
     return NULL;
 }
 
+/**
+ * runtime 中也申请了一些内存，为了避免被清理，需要将其加入到 root grey list 中
+ * @param m
+ */
+static void scan_runtime(memory_t *m) {
+    processor_t *p = processor_get();
+    assertf(in_heap((addr_t) p->errort), "[scan_runtime] processor.errort not in heap");
+    DEBUGF("[runtime_gc.scan_runtime] add errort=%p to grey list", p->errort);
+    linked_push(m->grey_list, p->errort);
+}
+
 static void scan_stack(memory_t *m) {
     processor_t *p = processor_get();
     mmode_t mode = p->user_mode;
@@ -114,7 +125,7 @@ static void scan_symdefs(memory_t *m) {
 
         assertf(s.size <= 8, "temp do not support symbol size > 8byte");
         assertf(s.base > 0, "s.base is zero,cannot fetch value by base");
-        // 触发 gc 时全局变量可能还没有进行初始化, 所以这里进行一下地址可用对判断
+        // 触发 gc 时全局变量可能还没有进行初始化, 所以这里使用 in_heap 进行一下地址可用对判断
         addr_t addr = fetch_addr_value(s.base);
         if (in_heap(addr)) {
             // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
@@ -325,6 +336,9 @@ static void _runtime_gc() {
 
     // - 遍历 user stack
     scan_stack(memory);
+
+    // - runtime grey
+    scan_runtime(memory);
 
     // 3. handle grey list until empty, all mspan gc_bits marked
     grey_list_work(memory);

@@ -7,6 +7,16 @@
 #include "string.h"
 #include <assert.h>
 
+static bool is_imm_operand(asm_operand_t *operand) {
+    return operand->type == ASM_OPERAND_TYPE_UINT ||
+           operand->type == ASM_OPERAND_TYPE_UINT8 ||
+           operand->type == ASM_OPERAND_TYPE_UINT16 ||
+           operand->type == ASM_OPERAND_TYPE_UINT32 ||
+           operand->type == ASM_OPERAND_TYPE_UINT64 ||
+           operand->type == ASM_OPERAND_TYPE_INT8 ||
+           operand->type == ASM_OPERAND_TYPE_INT32;
+}
+
 /**
  * mov 0x0(%rip),%rsi  // 48 8b 35 00 00 00 00，return 3
  * lea 0x0(%rip),%rax // 48 8d 05 00 00 00 00
@@ -14,12 +24,23 @@
  * call rel32 // e8 00 00 00 00
  * jmp rel32 // e9 00 00 00 00
  * movsd  0x0(%rip),%xmm0 //  f2 0f 10 05 00 00 00 00
+ *
+ * movb $0x18,0x0(%rip) // 40 c6 05 00 00 00 00 18 由于包含 imm 部分，所以 rip offset 不能是直接减去 4，还需要剪掉 imm 部分的宽度。
  * @param inst_count
  * @return
  */
-static uint64_t rip_offset(uint64_t inst_count) {
+static uint64_t rip_offset(uint64_t data_count, asm_operation_t *operation) {
     // R_X86_64_PC32 默认就是占用 4 byte
-    return inst_count - 4;
+    uint64_t offset = data_count - 4;
+
+    if (operation->count > 1) {
+        asm_operand_t *operand = operation->operands[1];
+        if (is_imm_operand(operand)) {
+            offset -= operand->size;
+        }
+    }
+
+    return offset;
 }
 
 static uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) {
@@ -123,8 +144,7 @@ static void amd64_rewrite_rip_symbol(asm_operand_t *operand) {
     operand->value = r;
 }
 
-
-static asm_operand_t *has_symbol_operand(asm_operation_t *operation) {
+static asm_operand_t *extract_symbol_operand(asm_operation_t *operation) {
     for (int i = 0; i < operation->count; ++i) {
         asm_operand_t *operand = operation->operands[i];
         if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
@@ -144,23 +164,23 @@ static amd64_build_temp_t *build_temp_new(asm_operation_t *operation) {
     temp->operation = operation;
     temp->rel_operand = NULL;
     temp->rel_symbol = NULL;
-    temp->may_need_reduce = false;
-    temp->reduce_count = 0;
+//    temp->may_need_reduce = false;
+//    temp->reduce_count = 0;
     temp->sym_index = 0;
     temp->elf_rel = NULL;
     return temp;
 }
 
-static void amd64_rewrite_rel32_to_rel8(amd64_build_temp_t *temp) {
-    asm_uint8_t *operand = NEW(asm_uint8_t);
-    operand->value = 0; // 仅占位即可
-    temp->operation->count = 1;
-    temp->operation->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
-    temp->operation->operands[0]->size = BYTE;
-    temp->operation->operands[0]->value = operand;
-    temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
-    temp->may_need_reduce = false;
-}
+//static void amd64_rewrite_rel32_to_rel8(amd64_build_temp_t *temp) {
+//    asm_uint8_t *operand = NEW(asm_uint8_t);
+//    operand->value = 0; // 仅占位即可
+//    temp->operation->count = 1;
+//    temp->operation->operands[0]->type = ASM_OPERAND_TYPE_UINT8;
+//    temp->operation->operands[0]->size = BYTE;
+//    temp->operation->operands[0]->value = operand;
+//    temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
+//    temp->may_need_reduce = false;
+//}
 
 ///**
 // * 有 bug,请勿调用, 暂时不搞这里到逻辑了，太复杂了
@@ -525,7 +545,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
                 continue;
             }
 
-            asm_operand_t *rel_operand = has_symbol_operand(operation);
+            asm_operand_t *rel_operand = extract_symbol_operand(operation);
             if (rel_operand != NULL) {
                 // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
                 // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
@@ -546,11 +566,11 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
                         amd64_rewrite_rel_symbol(operation, rel_operand, 0);
                         temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
                         temp->rel_symbol = symbol_operand->name;
-                        uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
-                        if (reduce_count > 0) {
-                            temp->may_need_reduce = true;
-                            temp->reduce_count = reduce_count;
-                        }
+//                        uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
+//                        if (reduce_count > 0) {
+//                            temp->may_need_reduce = true;
+//                            temp->reduce_count = reduce_count;
+//                        }
                     }
                 } else {
                     // 其他指令(可能是 mov 等,对数据段符号的引用)引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip),让重定位阶段去找改符号进行重定位即可
@@ -577,7 +597,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
                     section_offset += temp->data_count;
 
                     // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
-                    uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count);
+                    uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
                     temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                                      rel_offset, R_X86_64_PC32, (int) sym_index, -4);
 
@@ -629,7 +649,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // 外部符号添加重定位信息(temp->offset + 当前指令长度减去重定位的位置长度。 PC32 默认就是 4byte)
-            uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count);
+            uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
             temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
                                              rel_offset, R_X86_64_PC32, (int) sym_index, -4);
         }

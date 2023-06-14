@@ -68,7 +68,7 @@ memory_errort *processor_remove_errort() {
 
 uint8_t processor_has_errort() {
     processor_t *p = processor_get();
-    DEBUGF("[runtime.processor_has_errort] errort?  %p", p->errort)
+    DEBUGF("[runtime.processor_has_errort] errort?  %d", p->errort->has)
 
     return p->errort->has;
 }

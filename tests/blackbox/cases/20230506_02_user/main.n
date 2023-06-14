@@ -5,7 +5,7 @@ user.register("xiaowei", "hahaha123")
 user.register("xiaoyou", "nanana456")
 
 var err = catch user.register("xiaoyou", "nanana789")
-if (err) {
+if err.has {
 	println(err.msg)
 }
 
@@ -13,4 +13,4 @@ if (err) {
 var foo = user.find("xiaoyou")
 println(foo.username, "-", foo.password)
 
-println("current user count=", user.list.length())
+println("current user count=", user.list.len())

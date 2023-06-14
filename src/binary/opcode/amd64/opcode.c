@@ -2261,6 +2261,7 @@ inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8
     amd64_inst_format_t *format = opcode_fill(inst, operation);
     opcode_format_encoding(format, data, count);
 //    data = realloc(data, *count); // 这里如果修改 data 的地址会导致外面的引用位置改变
+
     return inst;
 }
 

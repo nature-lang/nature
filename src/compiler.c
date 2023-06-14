@@ -1251,7 +1251,8 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     ast_catch_t *catch = expr.value;
 
     // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-    m->compiler_current->catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    m->compiler_current->catch_error_label = catch_error_label;
     lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
 
     symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
@@ -1259,12 +1260,13 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
     lir_operand_t *result_operand = compiler_expr(m, catch->expr);
+    m->compiler_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
 
     // bal -> catch_end
     OP_PUSH(lir_op_bal(catch_end_label->output));
 
-    // catch_error_label
-    OP_PUSH(lir_op_label(m->compiler_current->catch_error_label, true));
+    // catch_error_label: ------------------------------------------------------------------------------------------------------
+    OP_PUSH(lir_op_label(catch_error_label, true));
 
     if (catch->expr.type.kind != TYPE_VOID) {
         // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
@@ -1272,6 +1274,7 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
         OP_PUSH(lir_op_move(result_operand, zero_operand));
     }
 
+    // catch_end_label: ------------------------------------------------------------------------------------------------------
     OP_PUSH(catch_end_label);
     // errort_operand 可能为空的 struct 或者非空
     lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
@@ -1626,9 +1629,10 @@ static closure_t *compiler_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->error_label, true));
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
-    // TODO error handle... await complete
-
+    // TODO error handle... example with stack
     OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
+
+
     OP_PUSH(lir_op_label(c->end_label, true));
     if (fndef->be_capture_locals->count > 0) {
         lir_operand_t *capture_operand = operand_new(LIR_OPERAND_CLOSURE_VARS, slice_new());
