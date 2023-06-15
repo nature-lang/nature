@@ -896,11 +896,6 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    // person|i8 a
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_OR)) {
-        return true;
-    }
-
     // package.ident foo = xxx
     if (parser_is(m, TOKEN_IDENT) &&
         parser_next_is(m, 1, TOKEN_DOT) &&
@@ -909,11 +904,29 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
+    // person|i8 a
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_OR)) {
+        return true;
+    }
+
     // package.ident|i8 foo = xxx
     if (parser_is(m, TOKEN_IDENT) &&
         parser_next_is(m, 1, TOKEN_DOT) &&
         parser_next_is(m, 2, TOKEN_IDENT) &&
         parser_next_is(m, 3, TOKEN_OR)) {
+        return true;
+    }
+
+    // person<[i8]> foo
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
+        return true;
+    }
+
+    // person.foo<[i8]>
+    if (parser_is(m, TOKEN_IDENT) &&
+        parser_next_is(m, 1, TOKEN_DOT) &&
+        parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         return true;
     }
 

@@ -1,0 +1,27 @@
+// nullable
+type nullable<t> = t|null
+
+nullable<[i8]> foo = null
+println(foo)
+
+foo = [1 as i8, 2, 3]
+let foo as [i8]
+println(foo[0], foo[1], foo[2])
+
+// struct box
+type box<t0, t1> = struct {
+	t0 width
+	t1 length
+	var area = fn(self s):t0 {
+	    return s.width * s.length as i8
+	}
+}
+
+// 实例化 box
+var b = box<i8, i16> {
+    width = 5,
+    length = 10
+}
+
+println("self area=", b.area())
+println("area=", b.width * b.length as i8)

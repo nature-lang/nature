@@ -245,7 +245,10 @@ static type_set_t *type_set_copy(type_set_t *temp) {
 
 static type_struct_t *type_struct_copy(type_struct_t *temp) {
     type_struct_t *struct_ = COPY_NEW(type_struct_t, temp);
-    struct_->ident = strdup(temp->ident);
+    if (temp->ident) {
+        struct_->ident = strdup(temp->ident);
+    }
+    struct_->properties = ct_list_new(sizeof(struct_property_t));
     for (int i = 0; i < temp->properties->length; ++i) {
         struct_property_t *temp_property = ct_list_value(temp->properties, i);
         struct_property_t *property = COPY_NEW(struct_property_t, temp_property);
@@ -587,6 +590,10 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
         }
         case AST_EXPR_IS: {
             expr->value = ast_is_expr_copy(temp->value);
+            break;
+        }
+        case AST_EXPR_SELECT: {
+            expr->value = ast_select_copy(temp->value);
             break;
         }
         default:
