@@ -436,6 +436,11 @@ type_formal_t *type_formal_new(char *literal);
 
 type_alias_t *type_alias_new(char *literal, char *import_as);
 
+type_kind to_gc_kind(type_kind kind);
+
+bool type_compare(type_t left, type_t right);
+
+
 /**
  * size 对应的 gc_bits 占用的字节数量
  * @param size
@@ -510,6 +515,7 @@ static inline bool is_float(type_kind kind) {
     return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
 }
 
+
 static inline bool is_integer(type_kind kind) {
     return kind == TYPE_INT ||
            kind == TYPE_INT8 ||
@@ -525,6 +531,11 @@ static inline bool is_integer(type_kind kind) {
 
 static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
+}
+
+
+static inline bool can_type_casting(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL;
 }
 
 /**
@@ -578,7 +589,7 @@ static inline bool union_type_contains(type_t union_type, type_t sub) {
 
     for (int i = 0; i < union_type.union_->elements->length; ++i) {
         type_t *t = ct_list_value(union_type.union_->elements, i);
-        if (t->kind == sub.kind) {
+        if (type_compare(*t, sub)) {
             return true;
         }
     }
@@ -641,8 +652,5 @@ static bool float_range_check(type_kind kind, double f) {
             return false;
     }
 }
-
-
-type_kind to_gc_kind(type_kind kind);
 
 #endif //NATURE_TYPE_H

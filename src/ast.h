@@ -467,7 +467,7 @@ typedef struct ast_fndef_t {
 
 type_t *select_formal_param(type_fn_t *formal_fn, uint8_t index);
 
-bool type_compare(type_t left, type_t right);
+//bool type_compare(type_t left, type_t right);
 
 ast_ident *ast_new_ident(char *literal);
 

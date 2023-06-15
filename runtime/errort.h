@@ -17,6 +17,7 @@ static inline memory_errort *memory_errort_new(char *raw_msg, uint8_t has) {
     memory_errort *errort = runtime_malloc(errort_rtype.size, &errort_rtype);
     errort->has = has;
     errort->msg = msg;
+    DEBUGF("[runtime.memory_errort_new] errort=%p, msg=%p, has=%d", errort, msg, has)
     return errort;
 }
 

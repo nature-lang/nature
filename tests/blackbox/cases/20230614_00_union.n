@@ -1,27 +1,44 @@
-// nullable 测试  
-i8|null nat = null  
-println(nat)  
-nat = 6 as i8  
-println(nat)  
-  
-// union 类型可以进行类型推导  
-var foo = nat  
-println(foo)  
-  
-// 更大范围的类型接收小范围 union 的类型  
-i8|i32|null bar = nat  
-println(bar)  
-bar = 7 as i32  
-  
-// any 可以接收所有类型的值  
-any baz = bar  
-println(baz)  
-  
-// 重新赋值为 null  
-baz = null  
-println(baz)  
-  
-// 尝试基于类型断言进行数值运算  
-println(nat as i8)  
-i8 a = (nat as i8) + 2  
+// nullable 测试
+i8|null nat = null
+println(nat)
+nat = 6 as i8
+println(nat)
+
+// union 类型可以进行类型推导
+var foo = nat
+println(foo)
+
+// 更大范围的类型接收小范围 union 的类型
+i8|i32|null bar = nat
+println(bar)
+bar = 7 as i32
+
+// any 可以接收所有类型的值
+any baz = bar
+println(baz)
+
+// 重新赋值为 null
+baz = null
+println(baz)
+
+// 尝试基于类型断言进行数值运算
+println(nat as i8)
+i8 a = (nat as i8) + 2
 println(a)
+
+// 类型检查
+println(nat is i8, nat is null, nat is [i8])
+
+// 基于首个元素类型进行推断
+[i8]|[i16] b = [0 as i8]
+
+// 通过类型转换语法进行推断
+println((b as [i8]).len())
+
+// 空数组快速确定类型
+[i8]|[i16] c = [] as [i8]
+var d = [] as [i16]
+println((c as [i8]).len(), d.len())
+c = d
+
+println(c is [i8], c is [i16])

@@ -87,6 +87,10 @@ void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output
  */
 void union_assert(memory_union_t *mu, int64_t target_rtype_index, void *value_ref) {
     if (mu->rtype->index != target_rtype_index) {
+        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_index: %ld",
+               type_kind_string[mu->rtype->kind],
+               target_rtype_index);
+
         rt_processor_attach_errort("type assert error");
         return;
     }

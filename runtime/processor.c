@@ -52,9 +52,9 @@ void processor_attach_errort(memory_string_t *msg) {
 }
 
 void rt_processor_attach_errort(char *msg) {
-    DEBUGF("[runtime.rt_processor_attach_errort] base=%s", msg);
+    DEBUGF("[runtime.rt_processor_attach_errort] msg=%s", msg);
     processor_t *p = processor_get();
-    memory_errort *errort = memory_errort_new(msg, strlen(msg));
+    memory_errort *errort = memory_errort_new(msg, 1);
     p->errort = errort;
 }
 

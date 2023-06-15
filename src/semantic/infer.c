@@ -291,14 +291,56 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
  * @param type_as
  * @return
  */
-static type_t infer_as_expr(module_t *m, ast_as_expr_t *type_as) {
-    infer_right_expr(m, &type_as->operand, type_basic_new(TYPE_UNKNOWN));
-    return reduction_type(m, type_as->target_type);
+static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
+    ast_as_expr_t *as_expr = expr->value;
+    type_t target_type = reduction_type(m, as_expr->target_type);
+
+    if (as_expr->operand.assert_type == AST_EXPR_LIST_NEW) {
+        ast_list_new_t *list_new_expr = as_expr->operand.value;
+        if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    if (as_expr->operand.assert_type == AST_EXPR_SET_NEW) {
+        ast_set_new_t *set_new_expr = as_expr->operand.value;
+        if (set_new_expr->elements->length == 0 && target_type.kind == TYPE_SET) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    if (as_expr->operand.assert_type == AST_EXPR_MAP_NEW) {
+        ast_map_new_t *map_new_expr = as_expr->operand.value;
+        if (map_new_expr->elements->length == 0 && target_type.kind == TYPE_MAP) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    infer_right_expr(m, &as_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    if (as_expr->operand.type.kind == TYPE_UNION) {
+        assertf(target_type.kind != TYPE_UNION, "union to union type is not supported");
+        // target_type 必须包含再 union 中
+        assertf(union_type_contains(as_expr->operand.type, target_type), "type = %s not contains in union type",
+                type_kind_string[target_type.kind]);
+        return target_type;
+    }
+
+    assertf(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_string[target_type.kind]);
+    return target_type;
 }
 
-static type_t infer_is_expr(module_t *m, ast_is_expr_t *type_is) {
-    type_t t = infer_right_expr(m, &type_is->operand, type_basic_new(TYPE_UNKNOWN));
-    assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' grammar");
+static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
+    type_t t = infer_right_expr(m, &is_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
     return type_basic_new(TYPE_BOOL);
 }
 
@@ -365,18 +407,20 @@ static type_t infer_list_new(module_t *m, ast_list_new_t *list_new, type_t targe
     // 初始化时类型未知
     type_list->element_type = type_basic_new(TYPE_UNKNOWN);
 
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_LIST) {
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_list->element_type = target_type.list->element_type;
     }
+
     result.list = type_list;
-    if (list_new->elements == 0) {
+    if (list_new->elements->length == 0) {
+        assertf(type_confirmed(type_list->element_type), "line=%d, list element type not confirm", m->infer_line);
         return result;
     }
 
-    // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
+    // target 类型不确定时，则按 list 首个元素类型进行推导
+    if (type_list->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(list_new->elements, 0);
         type_list->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
     }
@@ -401,18 +445,20 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
     type_map->key_type = type_basic_new(TYPE_UNKNOWN);
     type_map->value_type = type_basic_new(TYPE_UNKNOWN);
 
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_MAP) {
         // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
         type_map->key_type = target_type.map->key_type;
         type_map->value_type = target_type.map->value_type;
     }
     result.map = type_map;
-    if (map_new->elements == 0) {
+    if (map_new->elements->length == 0) {
+        assertf(type_confirmed(type_map->key_type), "line=%d, map key type not confirm", m->infer_line);
+        assertf(type_confirmed(type_map->value_type), "line=%d, map value type not confirm", m->infer_line);
         return result;
     }
 
-    // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
+    // 基于首个元素进行类型推断
+    if (type_map->key_type.kind == TYPE_UNKNOWN) {
         ast_map_element_t *item = ct_list_value(map_new->elements, 0);
         type_map->key_type = infer_right_expr(m, &item->key, type_basic_new(TYPE_UNKNOWN));
         type_map->value_type = infer_right_expr(m, &item->value, type_basic_new(TYPE_UNKNOWN));
@@ -439,19 +485,21 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
     type_set->element_type = type_basic_new(TYPE_UNKNOWN);
 
     // 右值如果有推荐的类型，则基于推荐类型做 infer, 此时可能会触发类型转换
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_SET) {
         type_set->element_type = target_type.set->element_type;
     }
 
     result.set = type_set;
-    if (set_new->elements == 0) {
+    if (set_new->elements->length == 0) {
+        assertf(type_confirmed(type_set->element_type), "line=%d, set element type not confirm", m->infer_line);
         return result;
     }
     // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
+    if (type_set->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(set_new->elements, 0);
         type_set->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
     }
+
     for (int i = 0; i < set_new->elements->length; ++i) {
         ast_expr_t *expr = ct_list_value(set_new->elements, i);
         infer_right_expr(m, expr, type_set->element_type);
@@ -1174,10 +1222,10 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(type_t));
     t.tuple = tuple_type;
-    assertf(tuple_new->elements->length > 0, "tuple elements emtpy");
+    assertf(tuple_new->elements->length > 0, "tuple elements empty");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
         type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
-        if (target_type.kind != TYPE_UNKNOWN) {
+        if (target_type.kind == TYPE_TUPLE) {
             type_t *temp = ct_list_value(target_type.tuple->elements, i);
             element_target_type = *temp;
         }
@@ -1301,7 +1349,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_AS: {
-            type = infer_as_expr(m, expr->value);
+            type = infer_as_expr(m, expr);
             break;
         }
         case AST_EXPR_IS: {

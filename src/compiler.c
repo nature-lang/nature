@@ -1181,12 +1181,11 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
 
 static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
     ast_is_expr_t *is_expr = expr.value;
-    lir_operand_t *output = compiler_temp_var_operand(m, type_basic_new(TYPE_BOOL));
-
     assert(is_expr->operand.type.kind == TYPE_UNION);
     lir_operand_t *operand = compiler_expr(m, is_expr->operand);
     uint64_t target_rtype_index = ct_find_rtype_index(is_expr->target_type);
-    OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, target_rtype_index));
+    lir_operand_t *output = temp_var_operand(m, type_basic_new(TYPE_BOOL));
+    OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, int_operand(target_rtype_index)));
 
     return output;
 }
