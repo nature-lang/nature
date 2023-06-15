@@ -17,7 +17,7 @@ println(e, f) // truefalse
 fn sum(int a, int b):int {
     return a + b
 }
-var (g, err) = catch sum(12, -1)
+var (g, err) = try sum(12, -1)
 bool h = err.has
 bool i = !err.has
 println(g, h, i) // 11falsetrue

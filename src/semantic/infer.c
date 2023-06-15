@@ -967,11 +967,11 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
  * var (foo, err) = catch foo()
  * var err = catch foo()
  * var err = catch foo['car'].car()
- * @param catch
+ * @param try
  * @return
  */
-static type_t infer_catch(module_t *m, ast_catch_t *catch) {
-    type_t return_type = infer_right_expr(m, &catch->expr, type_basic_new(TYPE_UNKNOWN));
+static type_t infer_try(module_t *m, ast_try_t *try) {
+    type_t return_type = infer_right_expr(m, &try->expr, type_basic_new(TYPE_UNKNOWN));
 
     // 当表达式没有返回值时进行特殊处理
     type_t errort = type_new(TYPE_ALIAS, NULL);
@@ -1401,8 +1401,8 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
             type = infer_call(m, expr->value);
             break;
         }
-        case AST_EXPR_CATCH: {
-            type = infer_catch(m, expr->value);
+        case AST_EXPR_TRY: {
+            type = infer_try(m, expr->value);
             break;
         }
         case AST_FNDEF: {

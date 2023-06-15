@@ -3,7 +3,7 @@ fn hello() {
     throw "world error"
 }
 
-var err = catch hello()
+var err = try hello()
 if err.has {
     println("catch err: ", err.msg)
 }
@@ -15,14 +15,14 @@ fn one(bool need):int {
     return 2
 }
 
-var (s, one_err) = catch one(true)
+var (s, one_err) = try one(true)
 if one_err.has {
     println("one(true) has err:", one_err.msg)
 } else {
     println("one(true) not err, s=", s)
 }
 
-var (s1, one_err1) = catch one(false)
+var (s1, one_err1) = try one(false)
 if one_err1.has {
     println("one(false) has err:", one_err1.msg)
 } else {

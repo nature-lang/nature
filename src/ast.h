@@ -33,8 +33,9 @@ typedef enum {
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
     AST_EXPR_TUPLE_DESTR, // (var_a, var_b, (var_c, var_d))
     AST_EXPR_STRUCT_NEW, // person {a = 1; b = 2}
-    AST_EXPR_CATCH, // catch test.call()
-    AST_EXPR_BOOM, // catch call()
+    AST_EXPR_TRY,
+    AST_EXPR_CATCH,
+    AST_EXPR_BOOM,
 
     // 抽象复合类型
     AST_EXPR_ACCESS,
@@ -262,14 +263,14 @@ typedef struct {
 } ast_boom_t;
 
 /**
- * var (res, error) = catch call()
- * var (res, error) = catch foo[1]
- * var (res, error) = catch bar.car.foo()
- * var (res, error) = catch bar().car().foo()
+ * var (res, error) = try call()
+ * var (res, error) = try foo[1]
+ * var (res, error) = try bar.car.foo()
+ * var (res, error) = try bar().car().foo()
  */
 typedef struct {
     ast_expr_t expr;
-} ast_catch_t;
+} ast_try_t;
 
 /**
  * for (int i = 0; i < 100; i++) {}

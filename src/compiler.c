@@ -1245,8 +1245,8 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     exit(1);
 }
 
-static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
-    ast_catch_t *catch = expr.value;
+static lir_operand_t *compiler_try(module_t *m, ast_expr_t expr) {
+    ast_try_t *try = expr.value;
 
     // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
     char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
@@ -1257,7 +1257,7 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     ast_type_alias_stmt_t *type_alias_stmt = s->ast_value;
     assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
-    lir_operand_t *result_operand = compiler_expr(m, catch->expr);
+    lir_operand_t *result_operand = compiler_expr(m, try->expr);
     m->compiler_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
 
     // bal -> catch_end
@@ -1266,9 +1266,9 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     // catch_error_label: ------------------------------------------------------------------------------------------------------
     OP_PUSH(lir_op_label(catch_error_label, true));
 
-    if (catch->expr.type.kind != TYPE_VOID) {
+    if (try->expr.type.kind != TYPE_VOID) {
         // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
-        lir_operand_t *zero_operand = compiler_zero_operand(m, catch->expr.type);
+        lir_operand_t *zero_operand = compiler_zero_operand(m, try->expr.type);
         OP_PUSH(lir_op_move(result_operand, zero_operand));
     }
 
@@ -1277,7 +1277,7 @@ static lir_operand_t *compiler_catch(module_t *m, ast_expr_t expr) {
     // errort_operand 可能为空的 struct 或者非空
     lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
     OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
-    if (catch->expr.type.kind == TYPE_VOID) {
+    if (try->expr.type.kind == TYPE_VOID) {
         return errort_operand;
     }
 
@@ -1548,7 +1548,7 @@ compiler_expr_fn expr_fn_table[] = {
         [AST_EXPR_SET_NEW] = compiler_set_new,
         [AST_CALL] = compiler_call,
         [AST_FNDEF] = compiler_fn_decl,
-        [AST_EXPR_CATCH] = compiler_catch,
+        [AST_EXPR_TRY] = compiler_try,
         [AST_EXPR_AS] = compiler_as_expr,
         [AST_EXPR_IS] = compiler_is_expr,
 };

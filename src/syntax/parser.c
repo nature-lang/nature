@@ -1234,17 +1234,17 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     return result;
 }
 
-static ast_expr_t parser_catch_expr(module_t *m) {
+static ast_expr_t parser_try_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
-    parser_must(m, TOKEN_CATCH);
+    parser_must(m, TOKEN_TRY);
 
     ast_expr_t expr = parser_expr(m);
 
-    ast_catch_t *catch = NEW(ast_catch_t);
-    catch->expr = expr;
+    ast_try_t *try = NEW(ast_try_t);
+    try->expr = expr;
 
-    result.assert_type = AST_EXPR_CATCH;
-    result.value = catch;
+    result.assert_type = AST_EXPR_TRY;
+    result.value = try;
     return result;
 }
 
@@ -1550,14 +1550,6 @@ static parser_rule rules[] = {
 
         // 以 ident 开头的前缀表达式
         [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
-
-        // var a = fn [name](int a, int b): bool {
-        // }
-//        [TOKEN_FN] = {parser_fndef_expr, NULL, PRECEDENCE_NULL},
-//        [TOKEN_CATCH] = {parser_catch_expr, NULL, PRECEDENCE_NULL},
-//        [TOKEN_BOOM] = {parser_boom_expr, NULL, PRECEDENCE_NULL},
-
-
         [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
@@ -1709,9 +1701,9 @@ static ast_expr_t parser_expr(module_t *m) {
         return parser_struct_new_expr(m);
     }
 
-    // catch
-    if (parser_is(m, TOKEN_CATCH)) {
-        return parser_catch_expr(m);
+    // try
+    if (parser_is(m, TOKEN_TRY)) {
+        return parser_try_expr(m);
     }
 
     // fn def

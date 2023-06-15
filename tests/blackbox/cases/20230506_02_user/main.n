@@ -4,7 +4,7 @@ user.register("xiaowei", "hahaha123")
 
 user.register("xiaoyou", "nanana456")
 
-var err = catch user.register("xiaoyou", "nanana789")
+var err = try user.register("xiaoyou", "nanana789")
 if err.has {
 	println(err.msg)
 }

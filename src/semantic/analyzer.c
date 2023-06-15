@@ -404,18 +404,21 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
  */
 static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
     ast_let_t *let_stmt = stmt->value;
-    analyzer_expr(m, &let_stmt->expr);
+    assertf(let_stmt->expr.assert_type == AST_EXPR_AS, "variables must be used for 'as' in the expression");
     ast_as_expr_t *as_expr = let_stmt->expr.value;
-    // 解析出 ident
     assertf(as_expr->operand.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
     ast_ident *ident = as_expr->operand.value;
+    char *old = strdup(ident->literal);
 
+    analyzer_expr(m, &let_stmt->expr);
+
+
+    // 表达式改写
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
-    vardef->var_decl.ident = ident->literal;
+    vardef->var_decl.ident = old;
     vardef->var_decl.type = as_expr->target_type;
     vardef->right = let_stmt->expr;
 
-    // 改写
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
     vardef->var_decl.ident = local->unique_ident;
 
@@ -780,7 +783,7 @@ static void analyzer_list_new(module_t *m, ast_list_new_t *expr) {
     }
 }
 
-static void analyzer_catch(module_t *m, ast_catch_t *expr) {
+static void analyzer_try(module_t *m, ast_try_t *expr) {
     analyzer_expr(m, &expr->expr);
 }
 
@@ -846,8 +849,8 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_IS: {
             return analyzer_is_expr(m, expr->value);
         }
-        case AST_EXPR_CATCH: {
-            return analyzer_catch(m, expr->value);
+        case AST_EXPR_TRY: {
+            return analyzer_try(m, expr->value);
         }
         case AST_EXPR_STRUCT_NEW: {
             return analyzer_struct_new(m, expr->value);

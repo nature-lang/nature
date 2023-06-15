@@ -424,8 +424,12 @@ token_e scanner_ident(char *word, int length) {
 //                        return scanner_rest(word, length, 2, 1, "p", TOKEN_TUPLE);
                     case 'y' :
                         return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
-                    case 'r' :
+                    case 'r' : {
+                        if (length == 3 && word[2] == 'y') {
+                            return TOKEN_TRY;
+                        }
                         return scanner_rest(word, length, 2, 2, "ue", TOKEN_TRUE);
+                    }
                 }
             }
         }

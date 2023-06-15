@@ -4,7 +4,7 @@
 
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
-    ident->literal = literal;
+    ident->literal = strdup(literal);
     return ident;
 }
 
@@ -365,11 +365,18 @@ static ast_env_access_t *ast_env_access_copy(ast_env_access_t *temp) {
     return access;
 }
 
-static ast_as_expr_t *ast_type_convert_copy(ast_as_expr_t *temp) {
-    ast_as_expr_t *type_convert = COPY_NEW(ast_as_expr_t, temp);
-    type_convert->operand = *ast_expr_copy(&temp->operand);
-    type_convert->target_type = type_copy(temp->target_type);
-    return type_convert;
+static ast_as_expr_t *ast_as_expr_copy(ast_as_expr_t *temp) {
+    ast_as_expr_t *as_expr = COPY_NEW(ast_as_expr_t, temp);
+    as_expr->operand = *ast_expr_copy(&temp->operand);
+    as_expr->target_type = type_copy(temp->target_type);
+    return as_expr;
+}
+
+static ast_is_expr_t *ast_is_expr_copy(ast_is_expr_t *temp) {
+    ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
+    is_expr->operand = *ast_expr_copy(&temp->operand);
+    is_expr->target_type = type_copy(temp->target_type);
+    return is_expr;
 }
 
 static ast_unary_expr_t *ast_unary_copy(ast_unary_expr_t *temp) {
@@ -470,10 +477,10 @@ static ast_struct_new_t *ast_struct_new_copy(ast_struct_new_t *temp) {
     return struct_new;
 }
 
-static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
-    ast_catch_t *catch_expr = COPY_NEW(ast_catch_t, temp);
-    catch_expr->expr = *ast_expr_copy(&temp->expr);
-    return catch_expr;
+static ast_try_t *ast_try_copy(ast_try_t *temp) {
+    ast_try_t *try_expr = COPY_NEW(ast_try_t, temp);
+    try_expr->expr = *ast_expr_copy(&temp->expr);
+    return try_expr;
 }
 
 
@@ -570,15 +577,18 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             expr->value = ast_fndef_copy(temp->value);
             break;
         }
-        case AST_EXPR_CATCH: {
-            expr->value = ast_catch_copy(temp->value);
+        case AST_EXPR_TRY: {
+            expr->value = ast_try_copy(temp->value);
             break;
         }
         case AST_EXPR_AS: {
-            expr->value = ast_type_convert_copy(temp->value);
+            expr->value = ast_as_expr_copy(temp->value);
             break;
         }
-
+        case AST_EXPR_IS: {
+            expr->value = ast_is_expr_copy(temp->value);
+            break;
+        }
         default:
             assertf(false, "[ast_expr_copy] unknown expr");
     }
