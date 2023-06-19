@@ -1370,10 +1370,15 @@ uint64_t collect_fndef_list(elf_context *ctx) {
     // - 遍历全局符号表中的所有 fn 数据就行了
     SLICE_FOR(symbol_fn_list) {
         symbol_t *s = SLICE_VALUE(symbol_fn_list);
+
         ast_fndef_t *fn = s->ast_value;
         closure_t *c = fn->closure;
         // builtin continue
         if (!c) {
+            continue;
+        }
+
+        if (c->text_count == 0) {
             continue;
         }
 

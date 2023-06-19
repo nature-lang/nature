@@ -249,12 +249,21 @@ static void build_assembler(slice_t *modules) {
         DEBUGF("[build_assembler] module=%s", m->ident);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
+
+        slice_t *closures = slice_new();
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
+            // 基于 symbol_name 读取引用次数
+            symbol_t *s = symbol_table_get_noref(c->symbol_name);
+            if (s->ref_count == 0) {
+                continue;
+            }
+
             slice_concat(m->asm_global_symbols, c->asm_symbols);
             debug_asm(c);
+            slice_push(closures, c);
         }
-
+        m->closures = closures;
 
         assembler_module(m);
     }
@@ -321,13 +330,10 @@ static void build_compiler(slice_t *modules) {
     // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-
-        // generic
-        generic(m);
-
         // 类型推断
         infer(m);
 
+        // 编译为 lir
         compiler(m);
 
         for (int j = 0; j < m->closures->count; ++j) {
@@ -335,6 +341,7 @@ static void build_compiler(slice_t *modules) {
 
             debug_lir(c);
 
+            // 构造 cfg
             cfg(c);
 
             debug_block_lir(c, "cfg");
@@ -342,12 +349,15 @@ static void build_compiler(slice_t *modules) {
             // 构造 ssa
             ssa(c);
 
+            // lir 向 arch 靠拢
             cross_lower(c);
 
+            // 线性扫描寄存器分配
             linear_scan(c);
 
             debug_block_lir(c, "linear scan");
 
+            // 基于 arch 生成汇编
             cross_native(c);
         }
     }
@@ -372,7 +382,7 @@ void build(char *build_entry) {
 
     slice_t *modules = build_modules();
 
-    // 编译
+    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
     build_compiler(modules);
 
     // 汇编

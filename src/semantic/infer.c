@@ -20,7 +20,8 @@ static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
 static void literal_float_casting(ast_expr_t *expr, type_t target_type) {
     assert(expr->assert_type == AST_EXPR_LITERAL);
     ast_literal_t *literal = expr->value;
-    assertf(is_float(literal->kind), "line=%d, type inconsistency", expr->line);
+    assertf(is_number(literal->kind), "line=%d, type inconsistency", expr->line);
+
     type_kind target_kind = cross_kind_trans(target_type.kind);
     double f = atof(literal->value);
     assertf(float_range_check(target_kind, f), "line=%d, float out of range", expr->line);
@@ -56,10 +57,13 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
     slice_t *fndefs = s->fndefs;
 
     // fndefs 进行类型还原
+    ast_fndef_t *origin = m->infer_current;
     for (int i = 0; i < fndefs->count; ++i) {
         ast_fndef_t *fndef = fndefs->take[i];
+        m->infer_current = fndef;
         infer_fn_decl(m, fndef);
     }
+    m->infer_current = origin;
 
     // 开始匹配
     for (int i = 0; i < actual_params->length; ++i) {
@@ -73,10 +77,12 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
             ast_fndef_t *fndef = fndefs->take[j];
             type_t type_fn = fndef->type;
             type_t *formal_type = select_formal_param(type_fn.fn, i);
+
             if (!formal_type) {
                 continue;
             }
 
+            assertf(formal_type->kind != TYPE_GEN, "line=%d, generic type not specialization", expr->line);
             if (formal_type->kind == TYPE_UNION && actual_type.kind != TYPE_UNION) {
                 if (union_type_contains(*formal_type, actual_type)) {
                     slice_push(temps, fndef);
@@ -147,8 +153,49 @@ static char *rewrite_ident_def(module_t *m, char *old) {
         return old;
     }
 
+    symbol_t *s = symbol_table_get(old);
+    assert(s->is_local);
+    assert(s->type != SYMBOL_FN);
+
+    char *ident = str_connect_by(old, m->infer_current->params_hash, ".");
+
+    s->ident = ident;
+    symbol_table_set(ident, s->type, s->ast_value, s->is_local);
+
+    return ident;
+}
+
+static char *rewrite_ident_use(module_t *m, char *old) {
+    assert(m->infer_current);
+    if (!m->infer_current->params_hash) {
+        return old;
+    }
+
     return str_connect_by(old, m->infer_current->params_hash, ".");
 }
+
+static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
+    assert(m->infer_current);
+    // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
+    if (!m->infer_current->params_hash) {
+        return;
+    }
+
+    stmt->ident = str_connect_by(stmt->ident, m->infer_current->params_hash, ".");
+    symbol_table_set(stmt->ident, SYMBOL_TYPE_ALIAS, stmt, true);
+}
+
+static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
+    assert(m->infer_current);
+    if (!m->infer_current->params_hash) {
+        return;
+    }
+
+    var_decl->ident = str_connect_by(var_decl->ident, m->infer_current->params_hash, ".");
+    // 只有 local var decl 才需要进行 rewrite
+    symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
+}
+
 
 static void infer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
@@ -293,6 +340,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
 static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     ast_as_expr_t *as_expr = expr->value;
     type_t target_type = reduction_type(m, as_expr->target_type);
+    as_expr->target_type = target_type;
 
     if (as_expr->operand.assert_type == AST_EXPR_LIST_NEW) {
         ast_list_new_t *list_new_expr = as_expr->operand.value;
@@ -372,9 +420,12 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
     assertf(symbol, "ident %s not found", unique_ident);
 
-    // use ident rewrite
+    // 引用了 local symbol 时则尝试对 ident 进行改写, 能够改写的前提是当前 infer 的 fn 是泛型 fn
     if (symbol->is_local) {
-        ident->literal = rewrite_ident_def(m, ident->literal);
+        ident->literal = rewrite_ident_use(m, ident->literal);
+        // 基于重写过后的符号重新定位 symbol
+        symbol = symbol_table_get(ident->literal);
+        assertf(symbol, "ident %s not found", ident->literal);
     }
 
     if (symbol->type == SYMBOL_VAR) {
@@ -1007,10 +1058,9 @@ void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
         assertf(false, "variable declaration cannot use type '%s'", type_kind_string[type.kind]);
     }
 
-    // infer current 存在表示当前 var 是 local var, need with fndef hash
+    // global var def 也会走该函数，所以需要特殊处理一下，必须携带 m->infer_current 时才进行 var_decl rewrite
     if (m->infer_current) {
-        // 泛型函数进行 ident 重写，具体试不试泛型函数直接通过 rewrite 判断即可
-        var_decl->ident = rewrite_ident_def(m, var_decl->ident);
+        rewrite_var_decl(m, var_decl);
     }
 }
 
@@ -1027,7 +1077,7 @@ void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
  */
 static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
-    stmt->var_decl.ident = rewrite_ident_def(m, stmt->var_decl.ident);
+    rewrite_var_decl(m, &stmt->var_decl);
 
 
     type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
@@ -1072,9 +1122,9 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
-    stmt->key.ident = rewrite_ident_def(m, stmt->key.ident);
+    rewrite_var_decl(m, &stmt->key);
     if (stmt->value) {
-        stmt->value->ident = rewrite_ident_def(m, stmt->value->ident);
+        rewrite_var_decl(m, stmt->value);
     }
 
     // 类型推断 (value 可选)
@@ -1117,10 +1167,9 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param stmt
  */
 static void infer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
-    assertf(stmt->type.kind != TYPE_GEN, "cannot use type generic in local scope");
+    assertf(stmt->type.kind != TYPE_GEN, "cannot use type gen in local scope");
 
-    // 泛型函数中的标识进行唯一性处理(已经传递到 symbol table 中了)
-    stmt->ident = rewrite_ident_def(m, stmt->ident);
+    rewrite_type_alias(m, stmt);
 }
 
 /**
@@ -1194,7 +1243,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t 
             // 直接推到出具体类型并回写到 operand 的 var_decl 中
             ast_var_decl_t *var_decl = expr->value;
             var_decl->type = *actual_type;
-            var_decl->ident = rewrite_ident_def(m, var_decl->ident);
+            rewrite_var_decl(m, var_decl);
         } else {
             assertf(expr->assert_type == AST_EXPR_TUPLE_DESTR, "var tuple destr must var/tuple_destr");
             infer_var_tuple_destr(m, expr->value, *actual_type);
@@ -1567,14 +1616,15 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  * @param t
  */
 static type_t generic_specialization(module_t *m, char *ident) {
-    assert(m->infer_current->generic_assign);
+    assertf(m->infer_current->generic_assign,
+            "generic param must be used in global fn, cannot be directly used in local fn.");
     type_t *assign = table_get(m->infer_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);
 }
 
 static type_t type_formal_specialization(module_t *m, type_t t) {
-    assert(t.kind = TYPE_FORMAL);
+    assert(t.kind == TYPE_FORMAL);
     assert(m->type_actual_params);
 
     // 实参可以没有 reduction
@@ -1612,6 +1662,13 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         return reduction_type(m, type_copy(type_alias_stmt->type));
     }
 
+
+    // 引用了 gen 类型的 alias, 现在需要进行泛型特化
+    if (type_alias_stmt->type.kind == TYPE_GEN && !type_alias_stmt->type.gen->any) {
+        return generic_specialization(m, type_alias_stmt->ident);
+    }
+
+
     // 检查右值是否 reduce 完成
     if (type_alias_stmt->type.status == REDUCTION_STATUS_DONE) {
         return type_alias_stmt->type;
@@ -1626,11 +1683,6 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
     type_alias_stmt->type = reduction_type(m, type_alias_stmt->type);
 
-    // 引用了 gen 类型的 alias, 现在需要进行泛型特化
-    if (type_alias_stmt->type.kind == TYPE_GEN && !type_alias_stmt->type.gen->any) {
-        return generic_specialization(m, type_alias_stmt->ident);
-    }
-
     return type_alias_stmt->type;
 }
 
@@ -1640,8 +1692,8 @@ static type_t reduction_union_type(module_t *m, type_t t) {
         return t;
     }
 
-    for (int i = 0; i < t.gen->constraints->length; ++i) {
-        type_t *temp = ct_list_value(t.gen->constraints, i);
+    for (int i = 0; i < t.gen->elements->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->elements, i);
         *temp = reduction_type(m, *temp);
     }
 
@@ -1656,8 +1708,8 @@ static type_t reduction_union_type(module_t *m, type_t t) {
  * @return
  */
 static type_t reduction_generic_type(module_t *m, type_t t) {
-    for (int i = 0; i < t.gen->constraints->length; ++i) {
-        type_t *temp = ct_list_value(t.gen->constraints, i);
+    for (int i = 0; i < t.gen->elements->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->elements, i);
         *temp = reduction_type(m, *temp);
     }
 
@@ -1772,9 +1824,15 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     // fndef params 已经进行了 reduction, 会同步影响到 symbol table 中的 fn
     type_t t = infer_fn_decl(m, fndef);
 
-    // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn 进行重写，且不用担心重复的问题
+    // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn->symbol 进行重写, 携带上 param_hash，且不用担心重复的问题
     // infer expr 中 fndef 确实会重复调用 infer_fn_decl 进行重复的推断
     rewrite_fndef(m, fndef);
+
+    // rewrite_formals ident
+    for (int i = 0; i < fndef->formals->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fndef->formals, i);
+        rewrite_var_decl(m, var_decl);
+    }
 
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);

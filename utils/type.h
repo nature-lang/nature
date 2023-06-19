@@ -79,7 +79,7 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
-    TYPE_FORMAL, // formal param ident
+    TYPE_FORMAL, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
     TYPE_SELF,
     TYPE_GEN,
     TYPE_UNION,
@@ -166,7 +166,10 @@ typedef struct type_alias_t type_alias_t;
 
 typedef struct type_formal_t type_formal_t;
 
-typedef struct type_gen_t type_gen_t;
+typedef struct {
+    bool any; // any gen
+    list_t *elements; // type_t
+} type_gen_t;
 
 typedef struct {
     bool any;
@@ -251,12 +254,7 @@ struct type_alias_t {
     char *import_as; // 可能为 null
     char *ident; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
-    list_t *actual_params; // type_t|null
-};
-
-struct type_gen_t {
-    bool any;
-    list_t *constraints; // type_t
+    list_t *actual_params; // type_t*
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢

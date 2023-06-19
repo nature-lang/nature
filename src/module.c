@@ -5,6 +5,7 @@
 #include "src/syntax/scanner.h"
 #include "src/syntax/parser.h"
 #include "src/semantic/analyzer.h"
+#include "src/semantic/generic.h"
 #include "src/build/config.h"
 #include <string.h>
 #include <assert.h>
@@ -95,8 +96,11 @@ module_t *module_build(char *source_path, module_type_t type) {
     // parser
     m->stmt_list = parser(m, m->token_list);
 
-    // analyzer => ast_closures
+    // analyzer => ast_fndefs(global)
     analyzer(m, m->stmt_list);
+
+    // generic => ast_fndef(global+local flat)
+    generic(m);
 
     return m;
 }

@@ -48,6 +48,7 @@ typedef struct {
     // 由于支持重载，所以会支持同名不同类型的函数, 但是由于在 analyzer 阶段类型仅仅收集了符号没有进行类型还原
     // 所以所有的同名全局函数都回注册到 fndefs 中
     slice_t *fndefs; // ast_fndef*
+    int64_t ref_count; // 引用计数
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {
@@ -66,13 +67,15 @@ static inline bool is_builtin_call(char *ident) {
            str_equal(ident, "set_delete");
 }
 
-symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local);
+symbol_t *symbol_table_set(char* ident, symbol_type_t type, void *ast_value, bool is_local);
 
-symbol_t *symbol_table_get(string ident);
+symbol_t *symbol_table_get(char* ident);
 
-void symbol_table_delete(string ident);
+symbol_t *symbol_table_get_noref(char* ident);
 
-void symbol_table_set_var(string unique_ident, type_t type);
+void symbol_table_delete(char* ident);
+
+void symbol_table_set_var(char* unique_ident, type_t type);
 
 void symbol_init();
 

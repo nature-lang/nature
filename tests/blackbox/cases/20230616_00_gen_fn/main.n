@@ -1,0 +1,31 @@
+import "mod.n"
+
+// int 再没有 ref 参考的的情况下存在默认值 int 类型
+var r1 = mod.sum(12, 13)
+println(r1)
+
+var r2 = mod.sum(12.5, 13.5) // 默认是 float = f64
+println(r2)
+
+var r3 = mod.sum(2.5 as f32, 3.7 as f32)
+println(r3)
+
+
+// 由首个元素的类型决定整个 list 的类型，为 [int]
+var l = [1, 2, 3, 4, 5]
+var r4 = mod.list_sum(l)
+println(r4)
+
+var f = [1.2 as f32, 2.3, 3.4]
+var r5 = mod.list_sum(f)
+println(r5)
+
+
+// 泛型函数作为 type_param 参数，此时会优先进行泛型函数的展开
+var b = mod.box<i8, i16> {
+    width = 5,
+    length = 8
+}
+
+var r6 = mod.area(b)
+println(r6)

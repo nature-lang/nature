@@ -138,7 +138,7 @@ static void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *
 
 static void amd64_rewrite_rip_symbol(asm_operand_t *operand) {
     operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
-    operand->size = QWORD;
+    operand->size = operand->size;
     asm_rip_relative_t *r = NEW(asm_rip_relative_t);
     r->disp = 0;
     operand->value = r;
@@ -589,6 +589,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
                         };
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
                     }
+
                     // rewrite symbol
                     amd64_rewrite_rip_symbol(rel_operand);
 
@@ -611,7 +612,6 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
             section_offset += temp->data_count;
         }
     }
-
 
     // 基于 build_temps 做二次遍历，主要是对不好进行重定位，不会在改写 build opcode 了
     for (int i = 0; i < build_temps->count; ++i) {

@@ -66,7 +66,7 @@ static char *analyzer_resolve_type(module_t *m, analyzer_fndef_t *current, strin
         assertf(false, "type '%s' undeclared \n", ident);
     }
 
-    slice_t *locals = m->analyzer_current->locals;
+    slice_t *locals = current->locals;
     for (int i = locals->count - 1; i >= 0; --i) {
         local_ident_t *local = locals->take[i];
         if (str_equal(ident, local->ident)) {
@@ -84,11 +84,10 @@ static char *analyzer_resolve_type(module_t *m, analyzer_fndef_t *current, strin
  * @param type
  */
 static void analyzer_type(module_t *m, type_t *type) {
-    // 如果只是简单的 ident,又应该如何改写呢？
     // type foo = int
     // 'foo' is type_decl_ident
     if (type->kind == TYPE_ALIAS) {
-        // import 全局模式 alias 处理
+        // import 全局模式 alias 处理, 例如 type a = package.foo, 对 package.foo 必定是其他 module 的 type alias 定义的 alias
         type_alias_t *type_alias = type->alias;
         if (type_alias->import_as) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
@@ -98,8 +97,39 @@ static void analyzer_type(module_t *m, type_t *type) {
             return;
         }
 
-        string unique_name = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
-        type_alias->ident = unique_name;
+        // local ident 或者当前 module 下的全局 ident
+        type_alias->ident = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
+
+        if (type_alias->actual_params) {
+            // actual param 处理
+            for (int i = 0; i < type_alias->actual_params->length; ++i) {
+                type_t *temp = ct_list_value(type_alias->actual_params, i);
+                analyzer_type(m, temp);
+            }
+        }
+
+        return;
+    }
+
+    if (type->kind == TYPE_UNION) {
+        type_union_t *u = type->union_;
+        if (!u->any) {
+            for (int i = 0; i < u->elements->length; ++i) {
+                type_t *temp = ct_list_value(u->elements, i);
+                analyzer_type(m, temp);
+            }
+            return;
+        }
+    }
+
+    if (type->kind == TYPE_GEN) {
+        type_gen_t *gen = type->gen;
+        if (!gen->any) {
+            for (int i = 0; i < gen->elements->length; ++i) {
+                type_t *temp = ct_list_value(gen->elements, i);
+                analyzer_type(m, temp);
+            }
+        }
         return;
     }
 
@@ -826,6 +856,7 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 // type foo = int
+// TODO stmt->formals 是否需要处理？
 static void analyzer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
     analyzer_redeclare_check(m, stmt->ident);
     analyzer_type(m, &stmt->type);
@@ -1020,6 +1051,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             type_alias->ident = ident_with_module(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             slice_push(m->global_symbols, s);
+
+            // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module ident
+            analyzer_type(m, &type_alias->type);
             continue;
         }
 

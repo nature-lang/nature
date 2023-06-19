@@ -3,9 +3,10 @@
 
 static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     symbol_t *s = table_get(symbol_table, ident);
+
     // 符号重复注册
     if (s) {
-        assertf(type == SYMBOL_FN, "symbol=%s duplicate set", ident);
+        assertf(type == SYMBOL_FN && is_local == false, "symbol=%s duplicate set", ident);
         assert(s->fndefs);
         assert(s->fndefs->count > 0);
         slice_push(s->fndefs, ast_value);
@@ -44,10 +45,6 @@ void symbol_table_set_var(char *unique_ident, type_t type) {
     symbol_table_set(unique_ident, SYMBOL_VAR, var_decl, true);
 }
 
-void symbol_table_delete(string ident) {
-    table_delete(symbol_table, ident);
-}
-
 symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
     if (type == SYMBOL_FN) {
@@ -65,8 +62,19 @@ symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bo
     return s;
 }
 
-symbol_t *symbol_table_get(char *ident) {
+
+symbol_t *symbol_table_get_noref(char *ident) {
     return table_get(symbol_table, ident);
+}
+
+symbol_t *symbol_table_get(char *ident) {
+    symbol_t *s = table_get(symbol_table, ident);
+
+    // 引用计数
+    s->ref_count += 1;
+    table_set(symbol_table, ident, s);
+
+    return s;
 }
 
 

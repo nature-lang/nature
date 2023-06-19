@@ -77,6 +77,40 @@ reg_t *ch;
 reg_t *dh;
 reg_t *bh;
 
+reg_t *xmm0s64;
+reg_t *xmm1s64;
+reg_t *xmm2s64;
+reg_t *xmm3s64;
+reg_t *xmm4s64;
+reg_t *xmm5s64;
+reg_t *xmm6s64;
+reg_t *xmm7s64;
+reg_t *xmm8s64;
+reg_t *xmm9s64;
+reg_t *xmm10s64;
+reg_t *xmm11s64;
+reg_t *xmm12s64;
+reg_t *xmm13s64;
+reg_t *xmm14s64;
+reg_t *xmm15s64;
+
+reg_t *xmm0s32;
+reg_t *xmm1s32;
+reg_t *xmm2s32;
+reg_t *xmm3s32;
+reg_t *xmm4s32;
+reg_t *xmm5s32;
+reg_t *xmm6s32;
+reg_t *xmm7s32;
+reg_t *xmm8s32;
+reg_t *xmm9s32;
+reg_t *xmm10s32;
+reg_t *xmm11s32;
+reg_t *xmm12s32;
+reg_t *xmm13s32;
+reg_t *xmm14s32;
+reg_t *xmm15s32;
+
 reg_t *xmm0;
 reg_t *xmm1;
 reg_t *xmm2;
@@ -134,6 +168,6 @@ reg_t *zmm15;
 #define ALIGN_SIZE 16
 
 
-reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_kind base);
+reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_kind kind);
 
 #endif //NATURE_AMD64_H

@@ -270,7 +270,7 @@ static type_alias_t *type_alias_copy(type_alias_t *temp) {
 
 static type_gen_t *type_gen_copy(type_gen_t *temp) {
     type_gen_t *gen = COPY_NEW(type_gen_t, temp);
-    gen->constraints = ct_list_type_copy(temp->constraints);
+    gen->elements = ct_list_type_copy(temp->elements);
     return gen;
 }
 
@@ -754,8 +754,20 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
     return stmt;
 }
 
+list_t *ast_fn_formals_copy(list_t *temp_formals) {
+    list_t *formals = ct_list_new(sizeof(ast_var_decl_t));
+
+    for (int i = 0; i < temp_formals->length; ++i) {
+        ast_var_decl_t *temp = ct_list_value(temp_formals, i);
+        ast_var_decl_t *var_decl = ast_var_decl_copy(temp);
+        ct_list_push(formals, var_decl);
+    }
+
+    return formals;
+}
+
 /**
- * 否则泛型阶段的 copy 都知识浅 copy
+ * 深度 copy
  * @return
  */
 ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
@@ -763,9 +775,11 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     fndef->symbol_name = temp->symbol_name;
     fndef->closure_name = temp->closure_name;
     fndef->return_type = type_copy(temp->return_type);
+    fndef->formals = ast_fn_formals_copy(temp->formals);
     fndef->type = type_copy(temp->type);
     fndef->capture_exprs = temp->capture_exprs;
     fndef->body = ast_body_copy(temp->body);
+
 
     return fndef;
 }

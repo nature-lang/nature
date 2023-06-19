@@ -425,7 +425,7 @@ typedef struct ast_fndef_t {
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *closure_name;
     type_t return_type;
-    list_t *formals; // ast_var_decl
+    list_t *formals; // ast_var_decl_t*
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余

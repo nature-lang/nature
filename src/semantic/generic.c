@@ -16,6 +16,7 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
         }
 
         symbol_t *symbol = symbol_table_get(t.alias->ident);
+        assertf(symbol, "type '%s' not found", t.alias->ident);
         assertf(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
         ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
@@ -105,9 +106,9 @@ static void generic_cartesian_product(list_t *products, slice_t *generic_params,
     ast_type_alias_stmt_t *stmt = generic_params->take[depth];
     assert(stmt->type.kind == TYPE_GEN);
     type_gen_t *generic = stmt->type.gen;
-    for (int i = 0; i < generic->constraints->length; ++i) {
+    for (int i = 0; i < generic->elements->length; ++i) {
         // type*
-        element[depth] = ct_list_value(generic->constraints, i);
+        element[depth] = ct_list_value(generic->elements, i);
         generic_cartesian_product(products, generic_params, element, depth + 1);
     }
 }
@@ -132,16 +133,21 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     // 非泛型 global fn, 此时 generic_assign 为 null
     if (fndef->generic_params->count == 0) {
         slice_push(result, fndef);
-        slice_concat(result, fndef->local_children);
-        fndef->local_children = NULL;
+        if (fndef->local_children) {
+            slice_concat(result, fndef->local_children);
+            fndef->local_children = NULL;
+        }
+
         return result;
     }
 
     // 泛型 global 函数处理
     slice_t *temps = slice_new();
     slice_push(temps, fndef);
-    slice_concat(temps, fndef->local_children);
-    fndef->local_children = NULL;
+    if (fndef->local_children) {
+        slice_concat(temps, fndef->local_children);
+        fndef->local_children = NULL;
+    }
 
     // - 根据 generic_types 中的约束信息生成笛卡尔积列表，列表中的每个元素都是
     uint64_t element_size = sizeof(type_t *) * fndef->generic_params->count;
@@ -156,11 +162,17 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
         // 包含 global 和 local fn
         slice_t *fndefs = slice_new();
         for (int j = 0; j < temps->count; ++j) {
-            // 这里进行了深度 copy, 所有的表达式之间不会再有关联关系
-            ast_fndef_t *new_fndef = ast_fndef_copy(temps->take[j]);
+            // 最后一组 gen types 直接基于 temps 进行生成，避免 symbol 中存在 generic_assign = null 的 temp
+            ast_fndef_t *new_fndef;
+            if (i == products->length - 1) {
+                new_fndef = temps->take[j];
+            } else {
+                // 这里进行了深度 copy, 所有的表达式之间不会再有关联关系
+                new_fndef = ast_fndef_copy(temps->take[j]);
+                // 将 new fn 添加到 symbol table 中 (依旧使用原始的名称, 方便使用者可以定位函数信息)
+                symbol_table_set(new_fndef->symbol_name, SYMBOL_FN, new_fndef, fndef->is_local);
+            }
 
-            // 将 new fn 添加到 symbol table 中
-            symbol_table_set(new_fndef->symbol_name, SYMBOL_FN, new_fndef, fndef->is_local);
 
             slice_push(fndefs, new_fndef);
             slice_push(result, new_fndef);

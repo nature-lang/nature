@@ -406,24 +406,24 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
                 .kind = TYPE_GEN,
         };
         gen.gen = NEW(type_gen_t);
-        gen.gen->constraints = ct_list_new(sizeof(type_t));
+        gen.gen->elements = ct_list_new(sizeof(type_t));
         do {
             type_t item = parser_single_type(m); // 至少包含一个约束
             if (item.kind == TYPE_UNION && item.union_->any) {
                 gen.gen->any = true;
             }
-            ct_list_push(gen.gen->constraints, &item);
+            ct_list_push(gen.gen->elements, &item);
         } while (parser_consume(m, TOKEN_OR));
 
         if (gen.gen->any) {
-            assertf(gen.gen->constraints->length == 1, "generic any must only one constraint");
+            assertf(gen.gen->elements->length == 1, "generic any must only one constraint");
         }
         type_alias_stmt->type = gen;
         return result;
     }
 
     type_alias_stmt->type = parser_type(m);
-    m->parser_type_formals = NULL; // 右值解析完成后请及时清空
+    m->parser_type_formals = NULL; // 右值解析完成后需要及时清空
     return result;
 }
 
