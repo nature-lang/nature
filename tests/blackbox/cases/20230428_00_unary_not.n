@@ -3,10 +3,10 @@ bool b = a
 var b1 =!a
 println(a, b, b1) // falsefalsetrue
 
-var str = "hello world"
+var str = 'hello world'
 bool c = !(str as bool)
 
-string str2 = ""
+string str2 = ''
 bool d = !(str2 as bool)
 println(c, d) // falsefalse
 

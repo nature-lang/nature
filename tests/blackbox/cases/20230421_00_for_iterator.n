@@ -8,7 +8,7 @@ for k, v in list {
 println(foo)
 println(bar)
 
-var map = {"a": 1, "b": 2, "c": 3}
+var map = {'a': 1, 'b': 2, 'c': 3}
 var sum = 0
 for k,v in map {
     sum += v

@@ -13,7 +13,7 @@ int id = 1
 // 全局函数
 fn register(string username, string password) {
 	if userof[username] as bool {
-		throw "The user has already registered"
+		throw 'The user has already registered'
 	}
 
 	var u = user {
@@ -29,7 +29,7 @@ fn register(string username, string password) {
 
 fn find(string username):user {
 	if !(userof[username] as bool) {
-		throw "user notfound"
+		throw 'user notfound'
 	}
 
 	return userof[username]

@@ -1,6 +1,6 @@
 fn rem(int dividend, int divisor):int {
 	if (divisor == 0) {
-		throw "divisor cannot zero"
+		throw 'divisor cannot zero'
 	}
 
 	return dividend % divisor
@@ -33,4 +33,4 @@ if err.has {
 
 // 异常情况不 try
 result = rem(10, 0)
-println("hello world")
+println('hello world')

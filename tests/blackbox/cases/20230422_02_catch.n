@@ -1,30 +1,30 @@
 fn hello() {
-    println("hello nature")
-    throw "world error"
+    println('hello nature')
+    throw 'world error'
 }
 
 var err = try hello()
 if err.has {
-    println("catch err: ", err.msg)
+    println('catch err: ', err.msg)
 }
 
 fn one(bool need):int {
     if need {
-        throw "i'm one error"
+        throw 'i am one error'
     }
     return 2
 }
 
 var (s, one_err) = try one(true)
 if one_err.has {
-    println("one(true) has err:", one_err.msg)
+    println('one(true) has err:', one_err.msg)
 } else {
-    println("one(true) not err, s=", s)
+    println('one(true) not err, s=', s)
 }
 
 var (s1, one_err1) = try one(false)
 if one_err1.has {
-    println("one(false) has err:", one_err1.msg)
+    println('one(false) has err:', one_err1.msg)
 } else {
-    println("one(false) not err, s1=", s1)
+    println('one(false) not err, s1=', s1)
 }

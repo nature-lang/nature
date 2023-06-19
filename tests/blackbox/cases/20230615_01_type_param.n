@@ -23,5 +23,5 @@ var b = box<i8, i16> {
     length = 10
 }
 
-println("self area=", b.area())
-println("area=", b.width * b.length as i8)
+println('self area=', b.area())
+println('area=', b.width * b.length as i8)

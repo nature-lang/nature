@@ -1,9 +1,8 @@
-var m = {"a": 1, "b": 2, "c": 3}
+var m = {'a': 1, 'b': 2, 'c': 3}
 
-println("a=", m["a"])
-//println(m["a"], m["b"], m["c"])
+println('a=', m['a'])
 
-m["b"] = m["c"]
-m["c"] =  33
+m['b'] = m['c']
+m['c'] =  33
 
-print(m["b"], m["c"])
+print(m['b'], m['c'])

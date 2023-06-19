@@ -1,4 +1,4 @@
-import "mod.n"
+import 'mod.n'
 
 // int 再没有 ref 参考的的情况下存在默认值 int 类型
 var r1 = mod.sum(12, 13)

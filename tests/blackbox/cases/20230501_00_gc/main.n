@@ -1,4 +1,4 @@
-import "helper.n"
+import 'helper.n'
 
 
 // 栈干扰
@@ -34,7 +34,7 @@ i32 b = 25
 fn gc_in2():[string] {
     u8 a = 12 // 栈干扰
     u16 b = 24
-    [string] list = ["hello", "world", "nature", "haha"]
+    [string] list = ['hello', 'world', 'nature', 'haha']
     runtime_gc()
 
     return list

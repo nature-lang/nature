@@ -1,16 +1,16 @@
-import "user.n"
+import 'user.n'
 
-user.register("xiaowei", "hahaha123")
+user.register('xiaowei', 'hahaha123')
 
-user.register("xiaoyou", "nanana456")
+user.register('xiaoyou', 'nanana456')
 
-var err = try user.register("xiaoyou", "nanana789")
+var err = try user.register('xiaoyou', 'nanana789')
 if err.has {
 	println(err.msg)
 }
 
 
-var foo = user.find("xiaoyou")
-println(foo.username, "-", foo.password)
+var foo = user.find('xiaoyou')
+println(foo.username, '-', foo.password)
 
-println("current user count=", user.list.len())
+println('current user count=', user.list.len())
