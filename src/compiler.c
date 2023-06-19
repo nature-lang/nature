@@ -733,14 +733,16 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
     }
 
     lir_operand_t *return_target = NULL;
-    // TYPE_VOID 是否有返回值
-    if (call->return_type.kind != TYPE_VOID) {
-        return_target = temp_var_operand(m, call->return_type);
-    }
 
     slice_t *params = slice_new();
     type_fn_t *formal_fn = call->left.type.fn;
     assert(formal_fn);
+
+
+    // TYPE_VOID 是否有返回值
+    if (call->return_type.kind != TYPE_VOID) {
+        return_target = temp_var_operand(m, call->return_type);
+    }
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < formal_fn->formal_types->length; ++i) {

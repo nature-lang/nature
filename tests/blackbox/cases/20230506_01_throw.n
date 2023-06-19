@@ -1,5 +1,5 @@
 fn rem(int dividend, int divisor):int {
-	if (divisor == 0) {
+	if divisor == 0 {
 		throw 'divisor cannot zero'
 	}
 

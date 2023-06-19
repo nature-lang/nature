@@ -578,21 +578,22 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
 
     assertf(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
 
-    type_struct_t *struct_decl = ast->type.struct_;
+    type_struct_t *type_struct = ast->type.struct_;
 
     table_t *exists = table_new();
     // exists key
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(ast->properties, i);
-        struct_property_t *type_property = ct_list_value(struct_decl->properties, i);
+        struct_property_t *type_property = ct_list_value(type_struct->properties, i);
 
-        // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = type_property->type;
 
         table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
         infer_right_expr(m, struct_property->right, type_property->type);
+
+        // type 冗余,方便计算 size (不能用来计算 offset)
+        struct_property->type = type_property->type;
     }
 
     list_t *default_properties = ast->type.struct_->properties;
@@ -925,6 +926,7 @@ static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
     // 进入前已经进行了 infer left, 所以这里的 type 都是 reduction 过的
     assertf(p->type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = p->type.fn;
+    call->return_type = type_fn->return_type;
 
     type_t *first = ct_list_value(type_fn->formal_types, 0);
     if (first->kind != TYPE_SELF) {
@@ -940,8 +942,6 @@ static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, ct_list_value(actual_params, i));
     }
     infer_call_params(m, call, type_fn);
-
-    call->return_type = type_fn->return_type;
     return type_fn->return_type;
 }
 

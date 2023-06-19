@@ -82,7 +82,7 @@ static void print_arg(memory_union_t *arg) {
         return;
     }
 
-    assertf(false, "unsupported type kind=%d, index=%d", arg->rtype->kind, arg->rtype->index);
+    assertf(false, "[print_arg] unsupported type=%s", type_kind_string[arg->rtype->kind]);
 }
 
 void print(memory_list_t *args) {
