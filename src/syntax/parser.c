@@ -1517,9 +1517,9 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_TYPE)) {
         return parser_type_alias_stmt(m);
     } else if (parser_is(m, TOKEN_CONTINUE)) {
-        return parser_break_stmt(m);
-    } else if (parser_is(m, TOKEN_BREAK)) {
         return parser_continue_stmt(m);
+    } else if (parser_is(m, TOKEN_BREAK)) {
+        return parser_break_stmt(m);
     }
 
     assertf(false, "line=%d, cannot parser stmt", parser_line(m));

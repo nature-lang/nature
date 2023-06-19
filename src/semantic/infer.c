@@ -1079,7 +1079,6 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
     rewrite_var_decl(m, &stmt->var_decl);
 
-
     type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
 
     // 需要进行类型推断

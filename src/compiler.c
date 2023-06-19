@@ -624,12 +624,13 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     compiler_stmt(m, ast->init);
 
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
+    lir_op_t *for_update = lir_op_unique_label(m, FOR_UPDATE_IDENT);
     lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_END_IDENT), true);
-    stack_push(m->compiler_current->for_start_labels, for_start->output);
+    stack_push(m->compiler_current->for_start_labels, for_update->output);
     stack_push(m->compiler_current->for_end_labels, for_end_operand);
 
+    // for_tradition
     OP_PUSH(for_start);
-
 
     // cond -> for_end
     lir_operand_t *cond_target = compiler_expr(m, ast->cond);
@@ -643,13 +644,13 @@ static void compiler_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     compiler_body(m, ast->body);
 
     // update
+    OP_PUSH(for_update);
     compiler_stmt(m, ast->update);
-
-    // bal for_start_label
     OP_PUSH(lir_op_bal(for_start->output));
 
     // label for_end
     OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
+
     stack_pop(m->compiler_current->for_start_labels);
     stack_pop(m->compiler_current->for_end_labels);
 }

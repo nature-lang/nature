@@ -14,6 +14,7 @@
 #define TEMP_LABEL "l"
 #define ITERATOR_CURSOR "cursor"
 #define FOR_CONTINUE_IDENT "for_continue"
+#define FOR_UPDATE_IDENT "for_update"
 #define FOR_END_IDENT "for_end"
 #define FOR_COND_IDENT "for_cond"
 #define FOR_TRADITION_IDENT "for_tradition"
