@@ -65,6 +65,25 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
     }
     m->infer_current = origin;
 
+    // 基于参数数量进行一次过滤
+    slice_t *temps = slice_new();
+    for (int i = 0; i < fndefs->count; ++i) {
+        ast_fndef_t *fndef = fndefs->take[i];
+        type_t type_fn = fndef->type;
+        if (type_fn.fn->rest && actual_params->length < (type_fn.fn->formal_types->length - 1)) {
+            // 实参的数量 type_fn.params.length
+            continue;
+        }
+
+        if (actual_params->length != type_fn.fn->formal_types->length) {
+            continue;
+        }
+
+        slice_push(temps, fndef);
+    }
+
+    fndefs = temps;
+
     // 开始匹配
     for (int i = 0; i < actual_params->length; ++i) {
         ast_expr_t *expr = ct_list_value(actual_params, i);
@@ -72,12 +91,12 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
         type_t actual_type = expr->type;
 
         // ast_fndef
-        slice_t *temps = slice_new();
+        temps = slice_new();
         for (int j = 0; j < fndefs->count; ++j) {
             ast_fndef_t *fndef = fndefs->take[j];
             type_t type_fn = fndef->type;
-            type_t *formal_type = select_formal_param(type_fn.fn, i);
 
+            type_t *formal_type = select_formal_param(type_fn.fn, i);
             if (!formal_type) {
                 continue;
             }

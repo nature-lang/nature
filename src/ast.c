@@ -8,9 +8,9 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-type_t *select_formal_param(type_fn_t *formal_fn, uint8_t index) {
-    if (formal_fn->rest && index >= formal_fn->formal_types->length - 1) {
-        type_t *last_param_type = ct_list_value(formal_fn->formal_types, formal_fn->formal_types->length - 1);
+type_t *select_formal_param(type_fn_t *type_fn, uint8_t index) {
+    if (type_fn->rest && index >= type_fn->formal_types->length - 1) {
+        type_t *last_param_type = ct_list_value(type_fn->formal_types, type_fn->formal_types->length - 1);
 //        assertf(last_param_type->kind == TYPE_LIST, "rest param must list");
         if (last_param_type->kind != TYPE_LIST) {
             return NULL;
@@ -22,11 +22,11 @@ type_t *select_formal_param(type_fn_t *formal_fn, uint8_t index) {
     }
 
 //    assertf(index < formal_fn->formal_types->length, "select index out range");
-    if (index > formal_fn->formal_types->length) {
+    if (index >= type_fn->formal_types->length) {
         return NULL;
     }
 
-    return ct_list_value(formal_fn->formal_types, index);
+    return ct_list_value(type_fn->formal_types, index);
 }
 
 //
