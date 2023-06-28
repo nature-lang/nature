@@ -880,7 +880,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_BOOL);
     }
 
-    if (str_equal(s->key, SET_CONTAINS_KEY)) {
+    if (str_equal(s->key, SET_HAS_KEY)) {
         assertf(call->actual_params->length == 1, "set.contains param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);

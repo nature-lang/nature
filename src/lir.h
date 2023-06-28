@@ -36,12 +36,12 @@
 #define LIST_PUSH_KEY "push"
 #define LIST_LENGTH_KEY "len"
 
-#define MAP_DELETE_KEY "delete"
+#define MAP_DELETE_KEY "del"
 #define MAP_LENGTH_KEY "len"
 
-#define SET_CONTAINS_KEY "contains"
+#define SET_HAS_KEY "has"
 #define SET_ADD_KEY "add"
-#define SET_DELETE_KEY "delete"
+#define SET_DELETE_KEY "del"
 
 #define RT_CALL_ZERO_FN "zero_fn"
 
