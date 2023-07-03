@@ -1,0 +1,24 @@
+int|null nat = 6
+
+let nat as int
+
+int foo = nat + 12
+println(foo)
+
+
+int|[i8] a = 24
+if (true) {
+    let a as int
+
+    // x a = [3, 4, 5], a 此时是一个 int 类型不能赋值数组
+    // 在一个临时作用域中让 a 作为 int 类型
+    println(a + 12)
+}
+
+// a 此时是一个 union 类型，所以不能作为 literal 的类型参考
+a = [3 as i8, 4, 5]
+println(a is int, a is null, a is [i8])
+
+[i8] b = [3, 4, 5]
+println(b.len())
+

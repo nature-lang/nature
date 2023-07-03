@@ -1,7 +1,7 @@
-import "math.n"
+import 'math.n'
 
 int max = 10000
-int count
+int count = 0
 
 fn get_max(): int {
     return max
@@ -13,5 +13,5 @@ fn set_count(int n) {
 
 fn test_math() {
     var result = math.max(max, count)
-    println("[test_math] max result=", result)
+    println('[test_math] max result=', result)
 }

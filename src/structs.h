@@ -8,6 +8,7 @@
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
 #include "binary/elf/elf.h"
+#include "utils/stack.h"
 
 typedef uint64_t flag_t;
 
@@ -75,16 +76,6 @@ typedef struct {
     linked_node *current;
 } parser_cursor_t;
 
-// 函数定义在当前作用域仅加载 fn decl
-// 函数体的解析则延迟到当前作用域内的所有标识符都定义好后再做
-// 从而能够支持，fn def 中引用 fn def 之后定义的符号(golang 不支持，python 支持)
-typedef struct {
-    // 由于需要延迟处理，所以缓存函数定义时的 scope，在处理时进行还原。
-//    local_scope_t *scope;
-    ast_fndef_t *fndef;
-    bool is_stmt;
-} delay_fndef_t;
-
 /**
  * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
  * 所以这里的 is_local 指的是在 parent 中的位置
@@ -96,11 +87,11 @@ typedef struct {
     int env_index; // env_index
     string ident;
     uint64_t index; // free in frees index
-    symbol_type type;
+    symbol_type_t type;
 } free_ident_t;
 
 typedef struct {
-    symbol_type type;
+    symbol_type_t type;
     void *decl; // ast_var_decl,ast_type_decl_stmt,ast_new_fn
     string ident; // 原始名称
     string unique_ident; // 唯一名称
@@ -111,8 +102,8 @@ typedef struct {
 /**
  * 词法作用域
  */
-typedef struct analyser_fndef_t {
-    struct analyser_fndef_t *parent;
+typedef struct analyzer_fndef_t {
+    struct analyzer_fndef_t *parent;
 
     ast_fndef_t *fndef;
     slice_t *locals; // local_ident
@@ -120,9 +111,9 @@ typedef struct analyser_fndef_t {
     uint8_t scope_depth;
 
     // 使用了当前函数作用域之外的变量
-    slice_t *frees; // analyser_free_ident_t*
-    table_t *free_table; // analyser_free_ident_t*
-} analyser_fndef_t;
+    slice_t *frees; // analyzer_free_ident_t*
+    table_t *free_table; // analyzer_free_ident_t*
+} analyzer_fndef_t;
 
 
 /**
@@ -146,25 +137,27 @@ typedef struct {
 
     int var_unique_count; // 同一个 module 下到所有变量都会通过该 ident 附加唯一标识
 
+    // parser
     parser_cursor_t p_cursor;
     slice_t *stmt_list;
+    table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 type param
 
-    // analyser
-    analyser_fndef_t *analyser_current;
-    int analyser_line;
+    // analyzer
+    analyzer_fndef_t *analyzer_current;
+    ast_fndef_t *analyzer_global;
+    int analyzer_line;
 
     // infer
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
     int infer_line;
-    // infer 第一步就会将所有的 typedef ident 的右值进行 reduction, 完成之后将会在这里打上标记
-    bool reduction_typedef;
+    table_t *type_actual_params; // 临时存储 infer alias 时传递的实参
 
     // compiler
     struct closure_t *compiler_current;
     int compiler_line;
 
     // call init stmt
-    ast_stmt *call_init_stmt;  // analyser 阶段写入
+    ast_stmt_t *call_init_stmt;  // analyzer 阶段写入
 
     // TODO asm_global_symbols to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_global_symbols(symbol)/closure_decls
@@ -411,9 +404,12 @@ typedef struct closure_t {
     // 定义环境
     char *symbol_name;
     char *closure_name;
-    char *end_label; // 结束 label
-    char *error_label; // 异常 label
-    bool to_error_label;
+    char *end_label; // 函数的结束地址 label
+    char *error_label; //  遇到表达式错误时需要调整到的目标 label
+    char *catch_error_label;
+
+    ct_stack_t *for_start_labels; // 用于 for continue lir_operand*
+    ct_stack_t *for_end_labels; // 用于 for break lir_operand*
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中

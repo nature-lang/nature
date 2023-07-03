@@ -41,11 +41,7 @@ static asm_operand_t *amd64_fit_number(uint8_t size, int64_t number) {
 static bool amd64_is_integer_operand(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
-        if (reg->size <= QWORD) {
-            return true;
-        } else {
-            return false;
-        }
+        return reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     }
 
     return is_integer(operand_type_kind(operand));
@@ -59,7 +55,7 @@ static bool asm_operand_equal(asm_operand_t *a, asm_operand_t *b) {
         return false;
     }
 
-    if (a->type == ASM_OPERAND_TYPE_REG) {
+    if (a->type == ASM_OPERAND_TYPE_REG || a->type == ASM_OPERAND_TYPE_FREG) {
         reg_t *reg_a = a->value;
         reg_t *reg_b = b->value;
         return str_equal(reg_a->name, reg_b->name);
@@ -111,9 +107,9 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
         } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT32) {
             return UINT32(v->uint_value);
         } else if (v->kind == TYPE_FLOAT32) {
-            return FLOAT32(v->float_value);
+            return FLOAT32(v->f64_value);
         } else if (v->kind == TYPE_FLOAT || v->kind == TYPE_FLOAT64) {
-            return FLOAT64(v->float_value);
+            return FLOAT64(v->f64_value);
         } else if (v->kind == TYPE_BOOL) {
             return UINT8(v->bool_value);
         }
@@ -327,10 +323,13 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     if (amd64_is_integer_operand(op->output)) {
         assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
         assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
+
         reg_t *first_reg = op->first->value;
         reg_t *output_reg = op->output->value;
+
         assertf(first_reg->index == rax->index, "mul op first reg must rax");
         assertf(output_reg->index == rax->index, "mul op output reg must rax");
+
         asm_operand_t *second = lir_operand_trans(c, operations, op->second);
         slice_push(operations, ASM_INST("imul", { second }));
         return operations;

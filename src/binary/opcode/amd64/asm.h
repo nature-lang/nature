@@ -40,19 +40,15 @@
 })
 
 #define REG(_reg) ({ \
-     asm_operand_t *reg_operand = NEW(asm_operand_t); \
-     reg_operand->type = ASM_OPERAND_TYPE_REG;  \
-     reg_operand->size = _reg->size;\
-     reg_operand->value = _reg;    \
-     reg_operand;\
-})
-
-#define REG_OPERAND(_name, _index, _size) ({ \
-     reg_t *reg = NEW(reg_t); \
-     reg->name = _name;\
-     reg->index = _index;\
-     reg->size = _size;                      \
-     reg;\
+    asm_operand_t *reg_operand = NEW(asm_operand_t); \
+    if (FLAG(LIR_FLAG_ALLOC_FLOAT) & _reg->flag) {\
+        reg_operand->type = ASM_OPERAND_TYPE_FREG; \
+    } else { \
+        reg_operand->type = ASM_OPERAND_TYPE_REG; \
+    }                 \
+    reg_operand->size = _reg->size;\
+    reg_operand->value = _reg;    \
+    reg_operand;\
 })
 
 #define SYMBOL(_name, _is_local) ({ \
@@ -133,7 +129,8 @@
 
 typedef enum {
     ASM_OPERAND_TYPE_REG = 1,
-    ASM_OPERAND_TYPE_INDIRECT_REG, // 这是啥？
+    ASM_OPERAND_TYPE_FREG,
+    ASM_OPERAND_TYPE_INDIRECT_REG,
     ASM_OPERAND_TYPE_SIB_REG,
     ASM_OPERAND_TYPE_RIP_RELATIVE,
     ASM_OPERAND_TYPE_DISP_REG, // 这是啥？有区别？

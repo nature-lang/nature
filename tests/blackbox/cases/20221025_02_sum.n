@@ -1,5 +1,5 @@
 int foo = -33 + 5
-println("foo=", foo)
+println('foo=', foo)
 
 int bar = foo + 12
-print("bar=", bar)
+print('bar=', bar)

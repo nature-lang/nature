@@ -24,6 +24,7 @@ static string asm_operand_to_string(asm_operand_t *operand) {
         case ASM_OPERAND_TYPE_INT32: {
             return itoa(((asm_int32_t *) value)->value);
         }
+        case ASM_OPERAND_TYPE_FREG:
         case ASM_OPERAND_TYPE_REG: {
             return ((reg_t *) value)->name;
         }

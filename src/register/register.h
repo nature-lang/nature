@@ -8,9 +8,9 @@
 #include "src/build/config.h"
 #include "utils/type.h"
 
-string reg_table_key(uint8_t index, uint8_t size);
+char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size);
 
-reg_t *reg_find(uint8_t index, size_t size);
+reg_t *reg_find(lir_flag_t alloc_type, uint8_t index, size_t size);
 
 reg_t *covert_alloc_reg(reg_t *reg);
 

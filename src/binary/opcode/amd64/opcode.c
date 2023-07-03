@@ -232,7 +232,7 @@ inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLASHR},
                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
                        }
 };
-inst_t mov_r32_rm32 = {"mov", "movsd", 0, {0x8B}, {OPCODE_EXT_SLASHR},
+inst_t mov_r32_rm32 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR},
                        {
                                {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
@@ -841,14 +841,14 @@ inst_t sar_rm64_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLA
 // float xor ------------------------------------------------------------------------------------------------------
 inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
                               {
-                                      {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                      {OPERAND_TYPE_XMM2M128, ENCODING_TYPE_MODRM_RM}
+                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                               }
 };
 inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASHR},
                               {
-                                      {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                      {OPERAND_TYPE_XMM2M128, ENCODING_TYPE_MODRM_RM}
+                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                               }
 };
 
@@ -856,97 +856,97 @@ inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASH
 // float mov ------------------------------------------------------------------------------------------------------
 inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
-                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}
                           }
 };
 inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
-                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
                          }
 };
 inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_REG}
+                                     {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}
                              }
 };
 inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
-                                  {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
-                                  {OPERAND_TYPE_XMM2, ENCODING_TYPE_MODRM_RM}
+                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                  {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}
                           }
 };
 inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
-                                 {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                 {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}
 };
 inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG}}
+                                     {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}
 };
 
 // float 算数运算 ------------------------------------------------------------------------------------------------------
 inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0, {0xF2, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0, {0xF3, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0, {0xF2, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0, {0xF3, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
-                                     {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                                     {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
 inst_t comisd = {"cmp", "comisd", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
-                         {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                         {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                  }
 };
 inst_t comiss = {"cmp", "comiss", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
-                         {OPERAND_TYPE_XMM1, ENCODING_TYPE_MODRM_REG},
+                         {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                  }
 };
@@ -1220,7 +1220,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_REL8) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT8, 1);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT8, BYTE);
         res.list = highs;
         return res;
     }
@@ -1228,7 +1228,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_REL16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT16, 2);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT16, WORD);
         res.list = highs;
         return res;
     }
@@ -1236,7 +1236,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_REL32) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, 4);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, DWORD);
         res.list = highs;
         return res;
     }
@@ -1244,11 +1244,11 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_RM8) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 1);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 1);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 1);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, BYTE);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, BYTE);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, BYTE);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, BYTE);
         res.list = highs;
         return res;
     }
@@ -1256,11 +1256,11 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_RM16) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 2);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 2);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 2);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, WORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, WORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, WORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, WORD);
         res.list = highs;
         return res;
     }
@@ -1268,11 +1268,11 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_RM32) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 4);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 4);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 4);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, DWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1302,7 +1302,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_M16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 2);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
         res.list = highs;
         return res;
     }
@@ -1400,10 +1400,18 @@ asm_keys_t operand_low_to_high(operand_type t) {
         return res;
     }
 
-    if (t == OPERAND_TYPE_XMM1 || t == OPERAND_TYPE_XMM2) {
+    if (t == OPERAND_TYPE_XMM1S64 || t == OPERAND_TYPE_XMM2S64) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, QWORD);
+        res.list = highs;
+        return res;
+    }
+
+    if (t == OPERAND_TYPE_XMM1S32 || t == OPERAND_TYPE_XMM2S32) {
+        res.count = 1;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1412,7 +1420,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_XMM2M128) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, OWORD);
         res.list = highs;
         return res;
     }
@@ -1420,18 +1428,18 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, 8);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, 8);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, 8);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, 8);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
         res.list = highs;
         return res;
     }
     if (t == OPERAND_TYPE_XMM2M32 || t == OPERAND_TYPE_XMM1M32) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, OWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, DWORD);
         highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
         highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
         highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
@@ -1443,7 +1451,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
     if (t == OPERAND_TYPE_YMM1 || t == OPERAND_TYPE_YMM2) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, YWORD);
+        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, YWORD);
         res.list = highs;
         return res;
     }
@@ -1915,7 +1923,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
         opcode_operand_t operand = inst->operands[i];
         asm_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
-        if (asm_operand->type == ASM_OPERAND_TYPE_REG) {
+        if (asm_operand->type == ASM_OPERAND_TYPE_REG || asm_operand->type == ASM_OPERAND_TYPE_FREG) {
             reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2261,6 +2269,7 @@ inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8
     amd64_inst_format_t *format = opcode_fill(inst, operation);
     opcode_format_encoding(format, data, count);
 //    data = realloc(data, *count); // 这里如果修改 data 的地址会导致外面的引用位置改变
+
     return inst;
 }
 

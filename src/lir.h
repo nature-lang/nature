@@ -14,6 +14,7 @@
 #define TEMP_LABEL "l"
 #define ITERATOR_CURSOR "cursor"
 #define FOR_CONTINUE_IDENT "for_continue"
+#define FOR_UPDATE_IDENT "for_update"
 #define FOR_END_IDENT "for_end"
 #define FOR_COND_IDENT "for_cond"
 #define FOR_TRADITION_IDENT "for_tradition"
@@ -22,10 +23,27 @@
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
 
-#define ERRORT_TYPE_IDENT "errort"
+#define CATCH_ERROR_IDENT "catch_error"
+#define CATCH_END_IDENT "catch_end"
+
+#define ERRORT_TYPE_ALIAS "errort"
 #define ERRORT_MSG_IDENT "msg"
+#define ERRORT_IS_IDENT "is"
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
+
+
+#define LIST_PUSH_KEY "push"
+#define LIST_LENGTH_KEY "len"
+
+#define MAP_DELETE_KEY "del"
+#define MAP_LENGTH_KEY "len"
+
+#define SET_HAS_KEY "has"
+#define SET_ADD_KEY "add"
+#define SET_DELETE_KEY "del"
+
+#define RT_CALL_ZERO_FN "zero_fn"
 
 // RT = runtime
 // CT = compile time
@@ -36,17 +54,6 @@
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
-
-#define LIST_PUSH_KEY "push"
-#define LIST_LENGTH_KEY "length"
-
-#define MAP_DELETE_KEY "delete"
-#define MAP_LENGTH_KEY "length"
-
-#define SET_CONTAINS_KEY "contains"
-#define SET_ADD_KEY "add"
-#define SET_DELETE_KEY "delete"
-
 
 #define RT_CALL_MAP_NEW "map_new"
 #define RT_CALL_MAP_ACCESS "map_access"
@@ -67,9 +74,23 @@
 #define RT_CALL_TUPLE_ASSIGN "tuple_assign"
 #define RT_CALL_TUPLE_ACCESS "tuple_access"
 
-#define RT_CALL_CONVERT_ANY "convert_any"
-#define RT_CALL_CONVERT_BOOL "convert_bool"
+#define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
+
+/**
+ * 将 single 类型转换为 union 类型
+ */
+#define RT_CALL_UNION_CASTING "union_casting"
+
+/**
+ * 判断 union 中的 single 类型是什么
+ */
+#define RT_CALL_UNION_IS "union_is"
+
+/**
+ * 将 union 断言为 single 类型
+ */
+#define RT_CALL_UNION_ASSERT "union_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 #define RT_CALL_ITERATOR_VALUE "iterator_value"
@@ -133,7 +154,8 @@ typedef struct {
     union {
         uint64_t uint_value; // 8bit, 负数使用补码存储
         int64_t int_value; // 8bit, 负数使用补码存储
-        double float_value; // 8bit = c.double
+        double f64_value; // 8bit
+        float f32_value; // 4bit
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
@@ -180,7 +202,7 @@ static inline lir_operand_t *bool_operand(bool val) {
 static inline lir_operand_t *float_operand(double val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_FLOAT;
-    imm_operand->float_value = val;
+    imm_operand->f64_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
     operand->value = imm_operand;
@@ -220,7 +242,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     assertf(s, "notfound symbol=%s", ident);
     assertf(s->type == SYMBOL_VAR, "symbol=%s type not var", ident);
 
-    ast_var_decl *global_var = s->ast_value;
+    ast_var_decl_t *global_var = s->ast_value;
     var->type = global_var->type;
     var->flag |= type_base_trans_alloc(global_var->type.kind);
 

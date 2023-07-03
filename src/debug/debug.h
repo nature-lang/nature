@@ -16,7 +16,7 @@ string lir_opcode_to_string[UINT8_MAX];
 
 //#define DEBUG_PARSER
 
-//#define DEBUG_ANALYSER
+//#define DEBUG_ANALYZER
 
 //#define DEBUG_INFER
 
@@ -32,7 +32,7 @@ void debug_parser(int line, string token);
 
 void debug_parser_stmt(ast_type_t t);
 
-void debug_stmt(string type, ast_stmt stmt);
+void debug_stmt(string type, ast_stmt_t stmt);
 
 void debug_lir(closure_t *c);
 

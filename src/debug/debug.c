@@ -21,14 +21,14 @@ string ast_type_to_str[] = {
         [AST_EXPR_LIST_NEW]="AST_EXPR_TYPE_NEW_LIST",
 //    [AST_EXPR_TYPE_LIST_DECL]="AST_EXPR_TYPE_LIST_DECL",
         [AST_VAR_DECL]="AST_VAR_DECL",
-        [AST_STMT_VAR_DEF]="AST_STMT_VAR_DECL_ASSIGN",
+        [AST_STMT_VARDEF]="AST_STMT_VAR_DECL_ASSIGN",
         [AST_STMT_ASSIGN]="AST_STMT_ASSIGN",
         [AST_STMT_RETURN]="AST_STMT_RETURN",
         [AST_STMT_IF]="AST_STMT_IF",
         [AST_STMT_FOR_ITERATOR]="AST_STMT_FOR_ITERATOR",
         [AST_FNDEF]="AST_FUNCTION_DECL",
         [AST_CALL]="AST_CALL",
-        [AST_STMT_TYPEDEF]="AST_STMT_TYPE_DECL",
+        [AST_STMT_TYPE_ALIAS]="AST_STMT_TYPE_DECL",
         [AST_STMT_ENV_CLOSURE]="AST_ENV_CLOSURE",
 };
 
@@ -173,7 +173,7 @@ void debug_scanner(token_t *t) {
     printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_str[t->type], t->literal);
 }
 
-void debug_stmt(string type, ast_stmt stmt) {
+void debug_stmt(string type, ast_stmt_t stmt) {
     printf("[DEBUG] %s line: %d, stmt: %s\n", type, stmt.line, ast_type_to_str[stmt.assert_type]);
 }
 

@@ -1,30 +1,29 @@
 fn rem(int dividend, int divisor):int {
-	if (divisor == 0) {
-		throw "divisor cannot zero"
+	if divisor == 0 {
+		throw 'divisor cannot zero'
 	}
 
 	return dividend % divisor
 }
 
-int result
-errort err
+int result = 0
+var err = errort{}
 
 // 正常情况处理
 result = rem(10, 3)
 println(result)
 
-
-// 正常情况 catch
-(result, err) = catch rem(10, 4)
-if (err) {
+// 正常情况
+(result, err) = try rem(10, 4)
+if err.has {
 	println(err.msg)
 } else {
 	println(result)
 }
 
-// 异常情况 catch
-(result, err) = catch rem(10, 0)
-if (err) {
+// 异常情况
+(result, err) = try rem(10, 0)
+if err.has {
 	// error handle, errort 结构中包含 msg 字段存储了错误的信息
 	println(err.msg)
 } else {
@@ -32,6 +31,6 @@ if (err) {
 }
 
 
-// 异常情况不 catch
+// 异常情况不 try
 result = rem(10, 0)
-println("hello world")
+println('hello world')

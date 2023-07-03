@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <float.h>
 #include "slice.h"
 #include "table.h"
 #include "ct_list.h"
@@ -17,7 +18,6 @@
 #define OWORD 16 // 16 byte = 128位 xmm
 #define YWORD 32 // 32 byte = ymm
 #define ZWORD 64 // 64 byte
-typedef uint8_t byte;
 
 typedef union {
     int64_t int_value;
@@ -63,7 +63,6 @@ typedef enum {
     TYPE_FLOAT64, // value = 5
 
     // 复合类型
-    TYPE_ANY, // value = 16
     TYPE_STRING,
     TYPE_LIST,
     TYPE_ARRAY,
@@ -79,9 +78,11 @@ typedef enum {
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_IDENT, // 声明一个新的类型时注册的 type 的类型是这个
+    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
+    TYPE_FORMAL, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
     TYPE_SELF,
-    TYPE_GENERIC, // builtin 中的 T 临时使用
+    TYPE_GEN,
+    TYPE_UNION,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,
@@ -104,6 +105,9 @@ static string type_kind_string[] = {
 
         [TYPE_ARRAY] = "array",
 
+        [TYPE_GEN] = "gen",
+        [TYPE_UNION] = "union",
+
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
@@ -121,9 +125,8 @@ static string type_kind_string[] = {
         [TYPE_UINT64] = "u64",
         [TYPE_VOID] = "void",
         [TYPE_UNKNOWN] = "unknown",
-        [TYPE_ANY] = "any",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_IDENT] = "type_ident", // char*
+        [TYPE_ALIAS] = "type_alias",
         [TYPE_LIST] = "list",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
@@ -143,7 +146,7 @@ typedef struct {
     uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
-    byte *gc_bits; // 类型 bit 数据(按 uint8 对齐)
+    uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 } rtype_t;
 
 
@@ -159,7 +162,19 @@ typedef uint8_t type_bool_t;
  *  custom_type 是一个自定义的 type, 其可能是 struct，也可能是 int 等等
  *  但是在类型描述上来说，其就是一个 ident
  */
-typedef struct type_ident_t type_ident_t;
+typedef struct type_alias_t type_alias_t;
+
+typedef struct type_formal_t type_formal_t;
+
+typedef struct {
+    bool any; // any gen
+    list_t *elements; // type_t
+} type_gen_t;
+
+typedef struct {
+    bool any;
+    list_t *elements; // type_t*
+} type_union_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
@@ -182,10 +197,7 @@ typedef struct type_struct_t type_struct_t; // 目前只有 string
 
 typedef struct type_fn_t type_fn_t;
 
-typedef struct type_any_t type_any_t;
-
-
-// 通用类型声明,本质上和 any 没有什么差别,能够表示任何类型
+// 类型的描述信息，无论是否还原，类型都会在这里呈现
 typedef struct type_t {
     union {
         void *value;
@@ -196,9 +208,11 @@ typedef struct type_t {
         type_tuple_t *tuple;
         type_struct_t *struct_;
         type_fn_t *fn;
-        type_any_t *any;
-        type_ident_t *ident;
+        type_alias_t *alias; // 这个其实是自定义类型的 ident
+        type_formal_t *formal;
+        type_gen_t *gen; // type t0 = gen i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
+        type_union_t *union_;
     };
     type_kind kind;
     reduction_status_t status;
@@ -217,7 +231,6 @@ struct type_pointer_t {
     type_t value_type;
 };
 
-
 /**
  * data 指针指向什么？首先 data 需要存在在 mheap 中，因为其值可能会变。
  * 那其应该执行 type_array_t 还是 type_array_t.data ? type_array_t 是编译时的概念，其根本不在 mheap 中
@@ -232,8 +245,16 @@ struct type_pointer_t {
 struct type_string_t {
 };
 
-struct type_ident_t {
-    string literal; // 类型名称 type my_int = int
+// type foo<formal> = fn(formal, int):formal
+struct type_formal_t {
+    char *ident;
+};
+
+struct type_alias_t {
+    char *import_as; // 可能为 null
+    char *ident; // 类型名称 type my_int = int
+    // 可以包含多个实际参数,实际参数由类型组成
+    list_t *actual_params; // type_t*
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -294,30 +315,13 @@ struct type_fn_t {
     list_t *formal_types; // type_t
     bool rest;
 };
-
-/**
- * type_any_t 到底是类型，还是数据?, type_any_t 应该只是一个类型的描述，类似 type_array_t 一样
- * 比如 type_array_t 中有 element_type 和 count, 通过这两个数据我们能够知道其在内存中存储的数据的程度
- * 以及每一块内存存放了什么东西，但是并不知道数据实际存放在了哪里。
- *
- * 同理，如果 type_any_t 是类型的话，那就不知道存储的是什么,所以必须删除 void* value!
- * 但是给定 void* value,能够知道其内存中存储了什么东西！
- */
-struct type_any_t {
-//    uint64_t size; // 16byte,一部分存储原始值，一部分存储 element_rtype 数据！
-    // element_rtype 和 value 都是变化的数据，所以类型描述信息中啥也没有，啥也不需要知道
-//    rtype_t *element_rtype; // 这样的话 new any_t 太麻烦了
-//    uint64_t rtype_index; // 这样定位更快
-//    void *value;
-};
-
 // 类型描述信息 end
 
 // 类型对应的数据在内存中的存储形式 --- start
 // 部分类型的数据(复合类型)只能在堆内存中存储
 
 typedef struct {
-    byte *array_data;
+    uint8_t *array_data;
     // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
     // 内存优化时可以优化掉这个参数
     uint64_t element_rtype_index;
@@ -329,13 +333,13 @@ typedef struct {
 typedef addr_t memory_pointer_t;
 
 typedef struct {
-    byte *array_data;
+    uint8_t *array_data;
     uint64_t length;
 } memory_string_t;
 
 typedef uint8_t memory_bool_t;
 
-typedef byte memory_array_t; // 数组在内存中的变现形式就是 byte 列表
+typedef uint8_t memory_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t memory_int_t;
 
@@ -343,14 +347,14 @@ typedef double memory_float_t;
 typedef double memory_f64_t;
 typedef float memory_f32_t;
 
-typedef byte memory_struct_t; // 长度不确定
+typedef uint8_t memory_struct_t; // 长度不确定
 
-typedef byte memory_tuple_t; // 长度不确定
+typedef uint8_t memory_tuple_t; // 长度不确定
 
 typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
-    byte *key_data;
-    byte *value_data;
+    uint8_t *key_data;
+    uint8_t *value_data;
     uint64_t key_index; // key rtype index
     uint64_t value_index;
     uint64_t length; // 实际的元素的数量
@@ -359,7 +363,7 @@ typedef struct {
 
 typedef struct {
     uint64_t *hash_table;
-    byte *key_data; // hash 冲突时进行检测使用
+    uint8_t *key_data; // hash 冲突时进行检测使用
     uint64_t key_index;
     uint64_t length;
     uint64_t capacity;
@@ -369,10 +373,13 @@ typedef struct {
     void *fn_data;
 } memory_fn_t; // 就占用一个指针大小
 
+/**
+ * 不能随便调换顺序，这是 gc 的顺序
+ */
 typedef struct {
     value_casting value;
     rtype_t *rtype;
-} memory_any_t;
+} memory_union_t;
 
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
@@ -423,8 +430,14 @@ bool type_need_gc(type_t t);
 
 type_t type_ptrof(type_t t);
 
+type_formal_t *type_formal_new(char *literal);
 
-type_ident_t *typeuse_ident_new(string literal);
+type_alias_t *type_alias_new(char *literal, char *import_as);
+
+type_kind to_gc_kind(type_kind kind);
+
+bool type_compare(type_t left, type_t right);
+
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -438,7 +451,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  * @param size
  * @return
  */
-byte *malloc_gc_bits(uint64_t size);
+uint8_t *malloc_gc_bits(uint64_t size);
 
 uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size);
 
@@ -462,7 +475,7 @@ rtype_t gc_rtype_array(type_kind kind, uint32_t count);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    if (kind == TYPE_ANY ||
+    if (kind == TYPE_UNION ||
         kind == TYPE_STRING ||
         kind == TYPE_LIST ||
         kind == TYPE_ARRAY ||
@@ -500,6 +513,7 @@ static inline bool is_float(type_kind kind) {
     return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
 }
 
+
 static inline bool is_integer(type_kind kind) {
     return kind == TYPE_INT ||
            kind == TYPE_INT8 ||
@@ -517,24 +531,39 @@ static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }
 
+
+static inline bool can_type_casting(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL;
+}
+
+/**
+ * 可以直接使用 0 进行填充的值，通常就是简单类型
+ * @param t
+ * @return
+ */
+static inline bool is_zero_type(type_t t) {
+    return is_integer(t.kind) ||
+           is_float(t.kind) ||
+           t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
+           t.kind == TYPE_UNION;
+}
+
 /**
  * 不需要进行类型还原的类型
  * @param t
  * @return
  */
-static inline bool is_basic_decl_type(type_t t) {
+static inline bool is_origin_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
            t.kind == TYPE_NULL ||
-           t.kind == TYPE_GENERIC ||
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING ||
-           t.kind == TYPE_ANY ||
            t.kind == TYPE_VOID;
-
 }
 
-static inline bool is_complex_decl_type(type_t t) {
+static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
@@ -546,6 +575,24 @@ static inline bool is_complex_decl_type(type_t t) {
 
 static inline bool is_qword_int(type_kind kind) {
     return kind == TYPE_INT64 || kind == TYPE_UINT64 || kind == TYPE_UINT || kind == TYPE_INT;
+}
+
+static inline bool union_type_contains(type_t union_type, type_t sub) {
+    assert(union_type.kind == TYPE_UNION);
+    assert(sub.kind != TYPE_UNION);
+
+    if (union_type.union_->any) {
+        return true;
+    }
+
+    for (int i = 0; i < union_type.union_->elements->length; ++i) {
+        type_t *t = ct_list_value(union_type.union_->elements, i);
+        if (type_compare(*t, sub)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -570,6 +617,38 @@ static inline type_t number_type_lift(type_kind left, type_kind right) {
     return type_basic_new(right);
 }
 
-type_kind to_gc_kind(type_kind kind);
+static bool integer_range_check(type_kind kind, int64_t i) {
+    switch (kind) {
+        case TYPE_UINT8:
+            return i >= 0 && i <= UINT8_MAX;
+        case TYPE_INT8:
+            return i >= INT8_MIN && i <= INT8_MAX;
+        case TYPE_UINT16:
+            return i >= 0 && i <= UINT16_MAX;
+        case TYPE_INT16:
+            return i >= INT16_MIN && i <= INT16_MAX;
+        case TYPE_UINT32:
+            return i >= 0 && i <= UINT32_MAX;
+        case TYPE_INT32:
+            return i >= INT32_MIN && i <= INT32_MAX;
+        case TYPE_UINT64:
+            return i >= 0 && i <= UINT64_MAX;
+        case TYPE_INT64:
+            return i >= INT64_MIN && i <= INT64_MAX;
+        default:
+            return false;
+    }
+}
+
+static bool float_range_check(type_kind kind, double f) {
+    switch (kind) {
+        case TYPE_FLOAT32:
+            return f >= -FLT_MAX && f <= FLT_MAX;
+        case TYPE_FLOAT64:
+            return f >= -DBL_MAX && f <= DBL_MAX;
+        default:
+            return false;
+    }
+}
 
 #endif //NATURE_TYPE_H

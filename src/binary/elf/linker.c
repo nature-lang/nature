@@ -1,8 +1,6 @@
 #include "linker.h"
 #include "elf.h"
-#include "utils/helper.h"
 #include "utils/error.h"
-#include "utils/type.h"
 #include "amd64.h"
 #include "src/lir.h"
 #include "src/cross.h"
@@ -1370,10 +1368,15 @@ uint64_t collect_fndef_list(elf_context *ctx) {
     // - 遍历全局符号表中的所有 fn 数据就行了
     SLICE_FOR(symbol_fn_list) {
         symbol_t *s = SLICE_VALUE(symbol_fn_list);
+
         ast_fndef_t *fn = s->ast_value;
         closure_t *c = fn->closure;
         // builtin continue
         if (!c) {
+            continue;
+        }
+
+        if (c->text_count == 0) {
             continue;
         }
 
@@ -1433,11 +1436,11 @@ uint64_t collect_fndef_list(elf_context *ctx) {
     return size_with_bits;
 }
 
-byte *fndefs_serialize() {
+uint8_t *fndefs_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
-    byte *data = mallocz(ct_fndef_size);
+    uint8_t *data = mallocz(ct_fndef_size);
 
-    byte *p = data;
+    uint8_t *p = data;
     // 首先将 fndef 移动到 data 中
     uint64_t size = ct_fndef_count * sizeof(fndef_t);
     memmove(p, ct_fndef_list, size);
@@ -1454,7 +1457,6 @@ byte *fndefs_serialize() {
     return data;
 }
 
-
 uint64_t collect_symdef_list(elf_context *ctx) {
     uint64_t size = symbol_var_list->count * sizeof(symdef_t);
     ct_symdef_list = mallocz(size);
@@ -1466,7 +1468,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
             continue;
         }
 
-        ast_var_decl *var_decl = s->ast_value;
+        ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->need_gc = type_need_gc(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小
@@ -1486,15 +1488,15 @@ uint64_t collect_symdef_list(elf_context *ctx) {
 }
 
 // 由于不包含 gc_bits，所以可以直接使用 ct_symdef_list 生成 symdef_data
-byte *symdefs_serialize() {
-    return (byte *) ct_symdef_list;
+uint8_t *symdefs_serialize() {
+    return (uint8_t *) ct_symdef_list;
 }
 
-byte *rtypes_serialize() {
+uint8_t *rtypes_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     // 计算 ct_reflect_type
-    byte *data = mallocz(ct_rtype_size);
-    byte *p = data;
+    uint8_t *data = mallocz(ct_rtype_size);
+    uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
     uint64_t size = ct_rtype_list->length * sizeof(rtype_t);

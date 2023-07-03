@@ -1,5 +1,5 @@
 [u8] list = [5, 4, 3, 2, 1]
 
-string haha = "hello world"
+string haha = 'hello world'
 
 u8 test = 24

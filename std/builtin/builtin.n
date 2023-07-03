@@ -1,24 +1,25 @@
+type t0 = gen any
+
 fn print(...[any] args) {}
 
 fn println(...[any] args) {}
 
-// T 和 any 是不一样的, 这里更像是模式匹配的含义
-fn set(...[T] keys):{T} {}
+fn set(...[t0] keys):{t0} {}
 
-// 比如 [T] 类型的 list 只能接收 T 类型的 v
-fn list_push([T] list, ptr<T> v) {}
+// 比如 [t0] 类型的 list 只能接收 t0 类型的 v
+fn list_push([t0] list, ptr<t0> v) {}
 
-fn list_length([T] list):int {}
+fn list_length([t0] list):int {}
 
-fn map_delete({T:T} map, ptr<T> key) {}
+fn map_delete({t0:t0} map, ptr<t0> key) {}
 
-fn map_length({T:T} map):int {}
+fn map_length({t0:t0} map):int {}
 
-fn set_contains({T} set, ptr<T> key):bool {}
+fn set_contains({t0} set, ptr<t0> key):bool {}
 
-fn set_add({T} set, ptr<T> key): bool {}
+fn set_add({t0} set, ptr<t0> key): bool {}
 
-fn set_delete({T} set, ptr<T> key) {}
+fn set_delete({t0} set, ptr<t0> key) {}
 
 // 方便测试，后续封装到系统调用库中
 fn sleep(int second) {}
@@ -30,4 +31,5 @@ fn runtime_malloc_bytes():i64 {}
 // 这里都 string 是 nature string 类型
 type errort = struct {
     string msg
+    bool has
 }

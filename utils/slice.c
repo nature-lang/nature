@@ -41,6 +41,7 @@ int slice_push(slice_t *s, void *value) {
 }
 
 void slice_concat(slice_t *dst, slice_t *src) {
+    assert(src);
     for (int i = 0; i < src->count; ++i) {
         slice_push(dst, src->take[i]);
     }

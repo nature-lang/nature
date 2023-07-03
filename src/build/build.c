@@ -13,6 +13,7 @@
 #include "utils/error.h"
 #include "config.h"
 #include "utils/custom_links.h"
+#include "src/semantic/generic.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -202,7 +203,7 @@ static void build_init(char *build_entry) {
     // copy
     strcpy(SOURCE_PATH, temp_path);
     assertf(file_exists(SOURCE_PATH), "full entry file=%s not found", SOURCE_PATH);
-    assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannnot be a directory", BUILD_OUTPUT);
+    assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannot be a directory", BUILD_OUTPUT);
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
@@ -237,7 +238,7 @@ static void build_assembler(slice_t *modules) {
             if (s->type != SYMBOL_VAR) {
                 continue;
             }
-            ast_var_decl *var_decl = s->ast_value;
+            ast_var_decl_t *var_decl = s->ast_value;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = s->ident;
             symbol->size = type_kind_sizeof(var_decl->type.kind);
@@ -248,12 +249,21 @@ static void build_assembler(slice_t *modules) {
         DEBUGF("[build_assembler] module=%s", m->ident);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
+
+        slice_t *closures = slice_new();
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
+            // 基于 symbol_name 读取引用次数
+            symbol_t *s = symbol_table_get_noref(c->symbol_name);
+            if (s->ref_count == 0) {
+                continue;
+            }
+
             slice_concat(m->asm_global_symbols, c->asm_symbols);
             debug_asm(c);
+            slice_push(closures, c);
         }
-
+        m->closures = closures;
 
         assembler_module(m);
     }
@@ -265,8 +275,10 @@ static void import_builtin() {
     // nature_root
     char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
     assertf(file_exists(source_path), "builtin.n not found");
-    // build 中包含 analyser 已经将相关 symbol 写入了, 无论是后续都 analyser 或者 infer 都能够使用
+    // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
     module_t *builtin_module = module_build(source_path, MODULE_TYPE_BUILTIN);
+
+    generic(builtin_module);
 
     // infer type
     infer(builtin_module);
@@ -286,7 +298,7 @@ static slice_t *build_modules() {
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);;
         for (int j = 0; j < m->imports->count; ++j) {
-            ast_import *import = m->imports->take[j];
+            ast_import_t *import = m->imports->take[j];
             if (table_exist(module_table, import->full_path)) {
                 continue;
             }
@@ -318,27 +330,18 @@ static void build_compiler(slice_t *modules) {
     // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-
         // 类型推断
         infer(m);
 
-        // 全局符号的定义也需要推导以下原始类型
-        for (int j = 0; j < m->global_symbols->count; ++j) {
-            symbol_t *s = m->global_symbols->take[j];
-            if (s->type != SYMBOL_VAR) {
-                continue;
-            }
-            infer_var_decl(m, s->ast_value); // 类型还原
-        }
-
+        // 编译为 lir
         compiler(m);
 
-        // 构造 cfg, 并转成目标架构编码
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
 
             debug_lir(c);
 
+            // 构造 cfg
             cfg(c);
 
             debug_block_lir(c, "cfg");
@@ -346,12 +349,15 @@ static void build_compiler(slice_t *modules) {
             // 构造 ssa
             ssa(c);
 
+            // lir 向 arch 靠拢
             cross_lower(c);
 
+            // 线性扫描寄存器分配
             linear_scan(c);
 
             debug_block_lir(c, "linear scan");
 
+            // 基于 arch 生成汇编
             cross_native(c);
         }
     }
@@ -376,7 +382,7 @@ void build(char *build_entry) {
 
     slice_t *modules = build_modules();
 
-    // 编译
+    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
     build_compiler(modules);
 
     // 汇编

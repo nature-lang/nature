@@ -98,6 +98,41 @@ void amd64_reg_init() {
     xmm14 = reg_new("xmm14", 14, LIR_FLAG_ALLOC_FLOAT, OWORD, 28);
     xmm15 = reg_new("xmm15", 15, LIR_FLAG_ALLOC_FLOAT, OWORD, 29);
 
+    xmm0s32 = reg_new("xmm0s32", 0, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm1s32 = reg_new("xmm1s32", 1, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm2s32 = reg_new("xmm2s32", 2, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm3s32 = reg_new("xmm3s32", 3, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm4s32 = reg_new("xmm4s32", 4, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm5s32 = reg_new("xmm5s32", 5, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm6s32 = reg_new("xmm6s32", 6, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm7s32 = reg_new("xmm7s32", 7, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm8s32 = reg_new("xmm8s32", 8, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm9s32 = reg_new("xmm9s32", 9, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm10s32 = reg_new("xmm10s32", 10, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm11s32 = reg_new("xmm11s32", 11, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm12s32 = reg_new("xmm12s32", 12, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm13s32 = reg_new("xmm13s32", 13, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm14s32 = reg_new("xmm14s32", 14, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    xmm15s32 = reg_new("xmm15s32", 15, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+
+    xmm0s64 = reg_new("xmm0s64", 0, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm1s64 = reg_new("xmm1s64", 1, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm2s64 = reg_new("xmm2s64", 2, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm3s64 = reg_new("xmm3s64", 3, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm4s64 = reg_new("xmm4s64", 4, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm5s64 = reg_new("xmm5s64", 5, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm6s64 = reg_new("xmm6s64", 6, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm7s64 = reg_new("xmm7s64", 7, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm8s64 = reg_new("xmm8s64", 8, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm9s64 = reg_new("xmm9s64", 9, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm10s64 = reg_new("xmm10s64", 10, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm11s64 = reg_new("xmm11s64", 11, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm12s64 = reg_new("xmm12s64", 12, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm13s64 = reg_new("xmm13s64", 13, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm14s64 = reg_new("xmm14s64", 14, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+    xmm15s64 = reg_new("xmm15s64", 15, LIR_FLAG_ALLOC_FLOAT, QWORD, 0);
+
+
     ymm0 = reg_new("ymm0", 0, LIR_FLAG_ALLOC_FLOAT, YWORD, 0);
     ymm1 = reg_new("ymm1", 1, LIR_FLAG_ALLOC_FLOAT, YWORD, 0);
     ymm2 = reg_new("ymm2", 2, LIR_FLAG_ALLOC_FLOAT, YWORD, 0);
@@ -134,13 +169,10 @@ void amd64_reg_init() {
 }
 
 reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
-    uint8_t select_size = type_kind_sizeof(kind);
     uint8_t alloc_type = type_base_trans_alloc(kind);
-    if (alloc_type == LIR_FLAG_ALLOC_FLOAT) {
-        select_size = OWORD; // 固定使用 xmm0 ~ xmm15
-    }
+    uint8_t size = type_kind_sizeof(kind);
 
-    return reg_find(index, select_size);
+    return reg_find(alloc_type, index, size);
 }
 
 
@@ -157,23 +189,23 @@ reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
  * @param size
  * @return
  */
-reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind base) {
-    uint8_t reg_type = type_base_trans_alloc(base);
+reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind kind) {
+    bool floated = is_float(kind);
     uint8_t used_index = 0;
-    if (reg_type == LIR_FLAG_ALLOC_FLOAT) {
+    if (floated) {
         used_index = 1;
     }
     uint8_t index = used[used_index]++;
     uint8_t int_param_indexes[] = {7, 6, 2, 1, 8, 9};
     // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
-    if (reg_type == LIR_FLAG_ALLOC_INT && index <= 5) {
+    if (!floated && index <= 5) {
         uint8_t reg_index = int_param_indexes[index];
-        return (reg_t *) cross_reg_select(reg_index, base);
+        return (reg_t *) cross_reg_select(reg_index, kind);
     }
 
     // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
-    if (reg_type == LIR_FLAG_ALLOC_FLOAT && index <= 7) {
-        return (reg_t *) cross_reg_select(index, base);
+    if (floated && index <= 7) {
+        return (reg_t *) cross_reg_select(index, kind);
     }
 
     return NULL;

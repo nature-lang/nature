@@ -11,6 +11,7 @@
 typedef enum {
     PRECEDENCE_NULL, // 最低优先级
     PRECEDENCE_ASSIGN,
+    PRECEDENCE_STRUCT_NEW, // as / is
     PRECEDENCE_OR_OR, // ||
     PRECEDENCE_AND_AND, // &&
     PRECEDENCE_OR, // |
@@ -21,6 +22,7 @@ typedef enum {
     PRECEDENCE_SHIFT, // << >>
     PRECEDENCE_TERM, // + -
     PRECEDENCE_FACTOR, // * / %
+    PRECEDENCE_TYPE_CAST, // as / is
     PRECEDENCE_UNARY, // - ! ~
     PRECEDENCE_CALL, // foo.bar foo["bar"] foo() foo().foo.bar 这几个表达式都是同一优先级，应该从左往右依次运算
     PRECEDENCE_PRIMARY, // 最高优先级
@@ -66,6 +68,7 @@ static type_kind token_to_kind[] = {
         // literal
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
+        [TOKEN_NULL] = TYPE_NULL,
         [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
         [TOKEN_LITERAL_INT] = TYPE_INT,
         [TOKEN_LITERAL_STRING] = TYPE_STRING,
@@ -89,14 +92,13 @@ static type_kind token_to_kind[] = {
         [TOKEN_NULL] = TYPE_NULL,
         [TOKEN_SELF] = TYPE_SELF,
         [TOKEN_VAR] = TYPE_UNKNOWN,
-        [TOKEN_ANY] = TYPE_ANY,
-        [TOKEN_T] = TYPE_GENERIC,
+        [TOKEN_ANY] = TYPE_UNION,
 };
 
 
-typedef ast_expr (*parser_prefix_fn)(module_t *module);
+typedef ast_expr_t (*parser_prefix_fn)(module_t *module);
 
-typedef ast_expr (*parser_infix_fn)(module_t *module, ast_expr prefix);
+typedef ast_expr_t (*parser_infix_fn)(module_t *module, ast_expr_t prefix);
 
 typedef struct {
     parser_prefix_fn prefix;
@@ -106,16 +108,20 @@ typedef struct {
 
 slice_t *parser(module_t *m, linked_t *token_list);
 
-static ast_stmt *parser_stmt(module_t *m);
+static ast_stmt_t *parser_stmt(module_t *m);
 
-static ast_expr parser_expr(module_t *m);
+static ast_expr_t parser_expr_with_precedence(module_t *m);
+
+static ast_expr_t parser_expr(module_t *m);
+
+static type_t parser_single_type(module_t *m);
 
 static type_t parser_type(module_t *m);
 
-static ast_expr parser_precedence_expr(module_t *m, parser_precedence precedence);
+static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence);
 
-static parser_rule *find_rule(token_e type);
+static parser_rule *find_rule(token_e token_type);
 
-static ast_stmt *parser_if_stmt(module_t *m);
+static ast_stmt_t *parser_if_stmt(module_t *m);
 
 #endif //NATURE_SRC_SYNTAX_PARSER_H_

@@ -1,7 +1,7 @@
-var (foo, bar, (baz, baq)) = (1, 1.2, ("hello", true))
+var (foo, bar, (baz, baq)) = (1, 1.2, ('hello', true))
 
 println(foo, bar, baz, baq)
 
-(foo, (bar, baz), baq) = (2, (2.2, "world"), false)
+(foo, (bar, baz), baq) = (2, (2.2, 'world'), false)
 
 println(foo, bar, baz, baq)

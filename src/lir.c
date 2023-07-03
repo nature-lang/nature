@@ -1,4 +1,5 @@
 #include "cross.h"
+#include "utils/stack.h"
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
     closure_t *c = NEW(closure_t);
@@ -12,6 +13,9 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->entry = NULL;
     c->var_defs = slice_new();
     c->blocks = slice_new(); // basic_block_t
+
+    c->for_start_labels = stack_new();
+    c->for_end_labels = stack_new();
 
     c->ssa_globals = slice_new();
     c->ssa_globals_table = table_new();

@@ -4,7 +4,7 @@ fn clock():int {
 
 fn morning(fn():int callback) {
     var t = callback()
-    println("timestamp=",t)
+    println('timestamp=',t)
 }
 
 morning(clock)

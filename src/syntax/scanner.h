@@ -27,7 +27,7 @@ char *scanner_number_advance(module_t *module);
 
 char *scanner_string_advance(module_t *module, char c);
 
-token_e scanner_ident_type(char *word, int length);
+token_e scanner_ident(char *word, int length);
 
 token_e scanner_rest(char *word,
                      int word_length,

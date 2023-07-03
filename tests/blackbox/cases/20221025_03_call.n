@@ -4,4 +4,4 @@ fn sum(int a, int b):int {
 
 int foo = sum(15, -10)
 
-print("foo=", foo)
+print('foo=', foo)

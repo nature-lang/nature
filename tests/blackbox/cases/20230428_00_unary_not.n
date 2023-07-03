@@ -3,22 +3,21 @@ bool b = a
 var b1 =!a
 println(a, b, b1) // falsefalsetrue
 
+var str = 'hello world'
+bool c = !(str as bool)
 
-var str = "hello world"
-bool c = !str
-string str2
-bool d = !str2
-println(c, d) // falsetrue
+string str2 = ''
+bool d = !(str2 as bool)
+println(c, d) // falsefalse
 
-
-bool e = 1 + 1
-bool f = !3.1415926
+bool e = (1 + 1) as bool
+bool f = !(3.1415926 as bool)
 println(e, f) // truefalse
 
 fn sum(int a, int b):int {
     return a + b
 }
-var (g, error) = catch sum(12, -1)
-bool h = error
-bool i = !error
+var (g, err) = try sum(12, -1)
+bool h = err.has
+bool i = !err.has
 println(g, h, i) // 11falsetrue

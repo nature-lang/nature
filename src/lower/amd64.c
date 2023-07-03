@@ -13,8 +13,11 @@ static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_ope
 
 static lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
-    if (kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64) {
-        return operand_new(LIR_OPERAND_REG, xmm0);
+    if (kind == TYPE_FLOAT || kind == TYPE_FLOAT64) {
+        return operand_new(LIR_OPERAND_REG, xmm0s64);
+    }
+    if (kind == TYPE_FLOAT32) {
+        return operand_new(LIR_OPERAND_REG, xmm0s32);
     }
 
     return reg_operand(rax->index, kind);
@@ -35,11 +38,11 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
     uint8_t used[2] = {0};
     for (int i = 0; i < actual_params->count; ++i) {
         lir_operand_t *param_operand = actual_params->take[i];
-        type_kind type_base = operand_type_kind(param_operand);
-        reg_t *reg = amd64_fn_param_next_reg(used, type_base);
+        type_kind type_kind = operand_type_kind(param_operand);
+        reg_t *reg = amd64_fn_param_next_reg(used, type_kind);
         if (reg) {
-            // empty reg
-            if (reg->size < QWORD) {
+            // 再全尺寸模式下清空 reg 避免因为 reg 空间占用导致的异常问题
+            if (reg->size < QWORD && is_integer(type_kind)) {
                 linked_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
                                                    operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
             }
@@ -136,14 +139,13 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
         linked_push(list, op);
         return list;
     }
+    // 副店形操作
 
     linked_push(list, lir_op_move(op->output, op->first));
     // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
     // 这里用 xmm1 进行一个中转
-
-    lir_operand_t *xmm_operand = operand_new(LIR_OPERAND_REG, xmm0);
-    linked_push(list, lir_op_move(xmm_operand,
-                                  symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
+    lir_operand_t *xmm_operand = select_return_reg(op->output);
+    linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
 
 
     linked_push(list, lir_op_new(LIR_OPCODE_XOR,
@@ -177,10 +179,16 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             if (imm->kind == TYPE_RAW_STRING) {
                 symbol->size = strlen(imm->string_value) + 1;
                 symbol->value = (uint8_t *) imm->string_value;
-            } else {
+            } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->float_value;
+                symbol->value = (uint8_t *) &imm->f64_value;
+            } else if (imm->kind == TYPE_FLOAT32) {
+                symbol->size = type_kind_sizeof(imm->kind);
+                symbol->value = (uint8_t *) &imm->f32_value;
+            } else {
+                assertf(false, "not support type %s", type_kind_string[imm->kind]);
             }
+
 
             slice_push(c->asm_symbols, symbol);
             lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);

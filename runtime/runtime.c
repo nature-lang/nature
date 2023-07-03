@@ -38,15 +38,14 @@ extern void main();
  */
 void runtime_main() {
     DEBUGF("[runtime_main] start")
-    // - processor 初始化(包括当前执行栈记录,用户栈生成)
-    processor_init();
-
-    DEBUGF("[runtime_main] processor init success")
 
     // - 堆内存管理初始化
     memory_init();
-
     DEBUGF("[runtime_main] memory init success")
+
+    // - processor 初始化(包括当前执行栈记录,用户栈生成)
+    processor_init();
+    DEBUGF("[runtime_main] processor init success")
 
     // - 初始化 stack return addr 为 main
     processor_t *p = processor_get();
@@ -57,9 +56,8 @@ void runtime_main() {
     MODE_CALL(p->user_mode, p->system_mode, main);
 
     // 检查错误
-    DEBUGF("[runtime_main] has errort? %p", p->errort);
-    if (p->errort) {
-        // down load error
+    DEBUGF("[runtime_main] has errort? %d", p->errort->has);
+    if (p->errort->has) {
         processor_dump_errort(p->errort);
         exit(1);
     }

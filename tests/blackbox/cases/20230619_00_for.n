@@ -1,0 +1,21 @@
+// for iteration 测试 break
+var list = [1, 1, 2, 3, 5, 8, 13, 21]
+var sum = 0
+for k, v in list {
+    if sum > 20 {
+        break
+    }
+    sum += v
+}
+println(sum)
+
+// for tradition 测试 continue
+var sum2 = 0
+for int i = 0; i < 100; i += 1 {
+    if i % 2 == 0 {
+        continue
+    }
+
+    sum2 += i
+}
+println(sum2)

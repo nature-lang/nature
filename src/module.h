@@ -40,7 +40,7 @@ static inline char *var_unique_ident(module_t *m, char *ident) {
  * @param import
  * @return
  */
-void full_import(string importer_dir, ast_import *import);
+void full_import(string importer_dir, ast_import_t *import);
 
 module_t *module_build(string source_path, module_type_t type);
 

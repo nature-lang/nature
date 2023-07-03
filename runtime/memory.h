@@ -17,9 +17,9 @@
 
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
-#define PAGE_SIZE 8192 // 单位 byte
+#define ALLOC_PAGE_SIZE 8192 // 单位 byte
 
-#define PAGE_MASK (PAGE_SIZE - 1) // 0b1111111111111
+#define PAGE_MASK (ALLOC_PAGE_SIZE - 1) // 0b1111111111111
 
 #define MSTACK_SIZE (8 * 1024 * 1024) // 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
@@ -205,6 +205,11 @@ typedef struct {
 } mheap_t;
 
 
+typedef struct {
+    memory_string_t *msg;
+    uint8_t has;
+} memory_errort;
+
 /**
  * linux 线程由自己的系统栈，多个线程就有多个 system stack
  * 由于进入到 runtime 的大多数情况中都需要切换栈区，所以必须知道当前线程的栈区
@@ -217,7 +222,7 @@ typedef struct processor_t {
     mmode_t user_mode;
     mmode_t system_mode;
     mcache_t mcache;
-    memory_struct_t *errort; // TODO 也需要参与垃圾回收,否则会造成 error 被清理
+    memory_errort *errort;
 } processor_t;
 
 typedef struct {

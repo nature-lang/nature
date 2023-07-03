@@ -1,6 +1,7 @@
 #include "list.h"
 #include "utils/custom_links.h"
 #include "runtime/memory.h"
+#include "runtime/processor.h"
 #include "array.h"
 
 void list_grow(memory_list_t *l) {
@@ -51,7 +52,12 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
  * @param value_ref
  */
 void list_access(memory_list_t *l, uint64_t index, void *value_ref) {
-    assertf(index < l->length, "index out of range [%d] with length %d", index, l->length);
+    if (index >= l->length) {
+        char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
+        DEBUGF("[runtime.list_access] has err %s", msg);
+        rt_processor_attach_errort(msg);
+        return;
+    }
 
     uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_index);
     // 计算 offset

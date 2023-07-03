@@ -1,0 +1,46 @@
+// try list index
+var list = [1, 2, 3]
+var (item, err) = try list[5]
+if err.has {
+    println("catch list index err=", err.msg)
+}
+println(item)
+
+//  try as
+any a1 = 1 as i8
+var (i1, err1) = try a1 as i16
+if err1.has {
+    println("catch type assert err=", err1.msg)
+}
+
+// 基于 struct fn 和 struct list 测试一下简单的链式调用
+type test = struct {
+    [i8] list
+    var div = fn(int a, int b):int {
+        if b == 0 {
+            throw 'divisor cannot zero'
+        }
+        return a / b
+    }
+}
+
+// 实例化
+var foo = test {
+    list = [1, 2, 3, 4, 5]
+}
+
+// 正常访问
+println(foo.list[1], foo.div(10, 5))
+
+// 异常处理
+var (a2, err2) = try foo.list[8]
+if err2.has {
+    println("chain access list err=", err2.msg)
+}
+
+var (a3, err3) = try foo.div(10, 0)
+if err3.has {
+    println("chain access call err=", err3.msg)
+}
+
+println("hello world")

@@ -4,7 +4,8 @@
 #include "utils/error.h"
 #include "src/syntax/scanner.h"
 #include "src/syntax/parser.h"
-#include "src/semantic/analyser.h"
+#include "src/semantic/analyzer.h"
+#include "src/semantic/generic.h"
 #include "src/build/config.h"
 #include <string.h>
 #include <assert.h>
@@ -33,7 +34,7 @@ static char *module_full_path(char *path, char *name) {
  * @param importer_dir
  * @param import
  */
-void full_import(char *importer_dir, ast_import *import) {
+void full_import(char *importer_dir, ast_import_t *import) {
     // import->path 必须以 .n 结尾
     assertf(ends_with(import->path, ".n"), "import file suffix must .n");
     // 不能有以 ./ 或者 / 开头
@@ -95,8 +96,11 @@ module_t *module_build(char *source_path, module_type_t type) {
     // parser
     m->stmt_list = parser(m, m->token_list);
 
-    // analyser => ast_closures
-    analyser(m, m->stmt_list);
+    // analyzer => ast_fndefs(global)
+    analyzer(m, m->stmt_list);
+
+    // generic => ast_fndef(global+local flat)
+    generic(m);
 
     return m;
 }

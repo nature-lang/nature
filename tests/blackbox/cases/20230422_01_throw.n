@@ -1,7 +1,7 @@
 fn hello() {
-    println("hello nature")
-    throw "world error"
+    println('hello nature')
+    throw 'world error'
 }
 
 hello()
-println("Can't get here")
+println('can not get here')

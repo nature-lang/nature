@@ -2,21 +2,229 @@
 #include "infer.h"
 #include "utils/error.h"
 #include "src/symbol/symbol.h"
-#include "analyser.h"
+#include "analyzer.h"
 #include "src/debug/debug.h"
 #include "utils/helper.h"
 
-static void infer_block(module_t *m, slice_t *block) {
-    for (int i = 0; i < block->count; ++i) {
-#ifdef DEBUG_INFER
-        debug_stmt("INFER", block->list[i]);
-#endif
-
-        // switch 结构导向优化
-        infer_stmt(m, block->take[i]);
-    }
+static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
+    assert(expr->assert_type == AST_EXPR_LITERAL);
+    ast_literal_t *literal = expr->value;
+    assertf(is_integer(literal->kind), "line=%d, type inconsistency", expr->line);
+    type_kind target_kind = cross_kind_trans(target_type.kind);
+    int64_t i = atoll(literal->value);
+    assertf(integer_range_check(target_kind, i), "line=%d, integer out of range", expr->line);
+    literal->kind = target_type.kind;
+    expr->type = target_type;
 }
 
+static void literal_float_casting(ast_expr_t *expr, type_t target_type) {
+    assert(expr->assert_type == AST_EXPR_LITERAL);
+    ast_literal_t *literal = expr->value;
+    assertf(is_number(literal->kind), "line=%d, type inconsistency", expr->line);
+
+    type_kind target_kind = cross_kind_trans(target_type.kind);
+    double f = atof(literal->value);
+    assertf(float_range_check(target_kind, f), "line=%d, float out of range", expr->line);
+    literal->kind = target_type.kind;
+    expr->type = target_type;
+}
+
+static uint32_t fn_params_hash(type_fn_t *fn) {
+    char *str = itoa(TYPE_FN);
+    for (int i = 0; i < fn->formal_types->length; ++i) {
+        type_t *t = ct_list_value(fn->formal_types, i);
+        rtype_t r = ct_reflect_type(*t);
+        str = str_connect(str, itoa(r.hash));
+    }
+
+    return hash_string(str);
+}
+
+/**
+ * 当函数名称中存在多个函数时，将会通过简单的无类型转换进行函数匹配 (允许 single -> union type)
+ * @param actual_params
+ * @param s
+ * @return
+ */
+static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
+    assert(s->type == SYMBOL_FN);
+    assert(s->fndefs);
+    assert(s->fndefs->count > 0);
+    if (s->fndefs->count == 1) {
+        return s->ast_value;
+    }
+
+    slice_t *fndefs = s->fndefs;
+
+    // fndefs 进行类型还原
+    ast_fndef_t *origin = m->infer_current;
+    for (int i = 0; i < fndefs->count; ++i) {
+        ast_fndef_t *fndef = fndefs->take[i];
+        m->infer_current = fndef;
+        infer_fn_decl(m, fndef);
+    }
+    m->infer_current = origin;
+
+    // 基于参数数量进行一次过滤
+    slice_t *temps = slice_new();
+    for (int i = 0; i < fndefs->count; ++i) {
+        ast_fndef_t *fndef = fndefs->take[i];
+        type_t type_fn = fndef->type;
+        if (type_fn.fn->rest && actual_params->length < (type_fn.fn->formal_types->length - 1)) {
+            // 实参的数量 type_fn.params.length
+            continue;
+        }
+
+        if (actual_params->length != type_fn.fn->formal_types->length) {
+            continue;
+        }
+
+        slice_push(temps, fndef);
+    }
+
+    fndefs = temps;
+
+    // 开始匹配
+    for (int i = 0; i < actual_params->length; ++i) {
+        ast_expr_t *expr = ct_list_value(actual_params, i);
+        infer_right_expr(m, expr, type_basic_new(TYPE_UNKNOWN));
+        type_t actual_type = expr->type;
+
+        // ast_fndef
+        temps = slice_new();
+        for (int j = 0; j < fndefs->count; ++j) {
+            ast_fndef_t *fndef = fndefs->take[j];
+            type_t type_fn = fndef->type;
+
+            type_t *formal_type = select_formal_param(type_fn.fn, i);
+            if (!formal_type) {
+                continue;
+            }
+
+            assertf(formal_type->kind != TYPE_GEN, "line=%d, generic type not specialization", expr->line);
+            if (formal_type->kind == TYPE_UNION && actual_type.kind != TYPE_UNION) {
+                if (union_type_contains(*formal_type, actual_type)) {
+                    slice_push(temps, fndef);
+                }
+                continue;
+            }
+
+            if (!type_compare(*formal_type, actual_type)) {
+                continue;
+            }
+            slice_push(temps, fndef);
+        }
+
+        fndefs = temps;
+    }
+
+    assertf(fndefs->count > 0, "cannot match fn=%s", s->ident);
+    assertf(fndefs->count < 2, "fn=%s match more than one fndef", s->ident);
+    return fndefs->take[0];
+}
+
+/**
+ * 所有的 fndef 都将从这里进入，一旦 reduction 完成，就能基于入参快速计算出唯一标识
+ * @param m
+ * @param fndef
+ * @param t
+ */
+static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
+    assert(fndef->type.status == REDUCTION_STATUS_DONE);
+    if (fndef->params_hash) {
+        return;
+    }
+
+    symbol_t *s = symbol_table_get(fndef->symbol_name);
+    assert(s->fndefs && s->fndefs->count > 0);
+
+    // 函数名称全局唯一，没必要进行重写
+    if (s->fndefs->count == 1) {
+        return;
+    }
+
+    if (!fndef->is_local) {
+        fndef->params_hash = itoa(fn_params_hash(fndef->type.fn));
+    } else {
+        // local fn 直接适用 parent 的 hash 即可, 这么做也是为了兼容 generic 的情况
+        // 否则 local fn 根据不会存在同名的情况, 另外 local fn 的调用作用域仅仅在当前函数内
+        assert(fndef->global_parent);
+        assert(strlen(fndef->global_parent->params_hash) > 0);
+
+        fndef->params_hash = fndef->global_parent->params_hash;
+        if (fndef->closure_name) {
+            fndef->closure_name = str_connect_by(fndef->closure_name, fndef->params_hash, ".");
+
+            ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
+            var_decl->ident = fndef->closure_name;
+            var_decl->type = fndef->type;
+            symbol_table_set(fndef->closure_name, SYMBOL_VAR, var_decl, true);
+        }
+    }
+
+    fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->params_hash, ".");
+    symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);
+}
+
+static char *rewrite_ident_def(module_t *m, char *old) {
+    assert(m->infer_current);
+    if (!m->infer_current->params_hash) {
+        return old;
+    }
+
+    symbol_t *s = symbol_table_get(old);
+    assert(s->is_local);
+    assert(s->type != SYMBOL_FN);
+
+    char *ident = str_connect_by(old, m->infer_current->params_hash, ".");
+
+    s->ident = ident;
+    symbol_table_set(ident, s->type, s->ast_value, s->is_local);
+
+    return ident;
+}
+
+static char *rewrite_ident_use(module_t *m, char *old) {
+    assert(m->infer_current);
+    if (!m->infer_current->params_hash) {
+        return old;
+    }
+
+    return str_connect_by(old, m->infer_current->params_hash, ".");
+}
+
+static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
+    assert(m->infer_current);
+    // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
+    if (!m->infer_current->params_hash) {
+        return;
+    }
+
+    stmt->ident = str_connect_by(stmt->ident, m->infer_current->params_hash, ".");
+    symbol_table_set(stmt->ident, SYMBOL_TYPE_ALIAS, stmt, true);
+}
+
+static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
+    assert(m->infer_current);
+    if (!m->infer_current->params_hash) {
+        return;
+    }
+
+    var_decl->ident = str_connect_by(var_decl->ident, m->infer_current->params_hash, ".");
+    // 只有 local var decl 才需要进行 rewrite
+    symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
+}
+
+
+static void infer_body(module_t *m, slice_t *body) {
+    for (int i = 0; i < body->count; ++i) {
+#ifdef DEBUG_INFER
+        debug_stmt("INFER", body->list[i]);
+#endif
+        // switch 结构导向优化
+        infer_stmt(m, body->take[i]);
+    }
+}
 
 /**
  * 判断该类型是否能够帮助 var 进行推导
@@ -70,36 +278,41 @@ static bool type_confirmed(type_t t) {
  * @param expr
  * @return
  */
-static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
+static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, type_basic_new(TYPE_UNKNOWN));
-    type_t right_type = infer_right_expr(m, &expr->right, type_basic_new(TYPE_UNKNOWN));
+    type_t right_type = infer_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
     assertf(is_number(left_type.kind) && is_number(right_type.kind),
-            "binary operate only support number operand,actual operate=%s, operand=%s",
+            "binary operate only support number operand, actual '%s %s %s'",
+            type_kind_string[left_type.kind],
             ast_expr_op_str[expr->operator],
             type_kind_string[right_type.kind]);
 
+    // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {
         assertf(is_integer(left_type.kind) && is_integer(right_type.kind),
                 "binary operator '%s' only integer operand",
                 ast_expr_op_str[expr->operator]);
     }
 
+    // 暂时取消类型隐式转换，而是使用左值的类型作为目标类型
+    type_t target_type = left_type;
+
     // 不需要类型提升，且返回的类型为 first 的类型
-    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
-        return left_type;
-    }
+//    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
+//        return left_type;
+//    }
 
     // 类型自动提升
-    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
-    if (left_type.kind != target_type.kind) {
-        expr->left = ast_type_convert(expr->left, target_type);
-    }
-    if (right_type.kind != target_type.kind) {
-        expr->right = ast_type_convert(expr->right, target_type);
-    }
+//    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
+//    if (left_type.kind != target_type.kind) {
+//        expr->left = ast_type_as(expr->left, target_type);
+//    }
+//    if (right_type.kind != target_type.kind) {
+//        expr->right = ast_type_as(expr->right, target_type);
+//    }
 
     switch (expr->operator) {
         // 算术运算符
@@ -132,8 +345,69 @@ static type_t infer_binary(module_t *m, ast_binary_expr *expr) {
     }
 }
 
-static type_t infer_type_convert(module_t *m, ast_type_convert_t *convert) {
-    return reduction_type(m, convert->target_type);
+/**
+ * 类型转换 type casting
+ * i8 foo = 12 as i8
+ *
+ * 类型断言 type assert
+ * i8|i16|i32 bar = 24
+ * i16 foo = bar as i16
+ * @param m
+ * @param type_as
+ * @return
+ */
+static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
+    ast_as_expr_t *as_expr = expr->value;
+    type_t target_type = reduction_type(m, as_expr->target_type);
+    as_expr->target_type = target_type;
+
+    if (as_expr->operand.assert_type == AST_EXPR_LIST_NEW) {
+        ast_list_new_t *list_new_expr = as_expr->operand.value;
+        if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    if (as_expr->operand.assert_type == AST_EXPR_SET_NEW) {
+        ast_set_new_t *set_new_expr = as_expr->operand.value;
+        if (set_new_expr->elements->length == 0 && target_type.kind == TYPE_SET) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    if (as_expr->operand.assert_type == AST_EXPR_MAP_NEW) {
+        ast_map_new_t *map_new_expr = as_expr->operand.value;
+        if (map_new_expr->elements->length == 0 && target_type.kind == TYPE_MAP) {
+            expr->type = target_type;
+            expr->assert_type = as_expr->operand.assert_type;
+            expr->value = as_expr->operand.value;
+            return target_type;
+        }
+    }
+
+    infer_right_expr(m, &as_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    if (as_expr->operand.type.kind == TYPE_UNION) {
+        assertf(target_type.kind != TYPE_UNION, "union to union type is not supported");
+        // target_type 必须包含再 union 中
+        assertf(union_type_contains(as_expr->operand.type, target_type), "type = %s not contains in union type",
+                type_kind_string[target_type.kind]);
+        return target_type;
+    }
+
+    assertf(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_string[target_type.kind]);
+    return target_type;
+}
+
+static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
+    type_t t = infer_right_expr(m, &is_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
+    return type_basic_new(TYPE_BOOL);
 }
 
 /**
@@ -141,7 +415,7 @@ static type_t infer_type_convert(module_t *m, ast_type_convert_t *convert) {
  * @param expr
  * @return
  */
-static type_t infer_unary(module_t *m, ast_unary_expr *expr) {
+static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     if (expr->operator == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_basic_new(TYPE_BOOL));
@@ -156,7 +430,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr *expr) {
 }
 
 /**
- * 参考 golang，声明是可能在使用之后的
+ * use ident
  * @param expr
  * @return
  */
@@ -165,8 +439,16 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     symbol_t *symbol = symbol_table_get(unique_ident);
     assertf(symbol, "ident %s not found", unique_ident);
 
+    // 引用了 local symbol 时则尝试对 ident 进行改写, 能够改写的前提是当前 infer 的 fn 是泛型 fn
+    if (symbol->is_local) {
+        ident->literal = rewrite_ident_use(m, ident->literal);
+        // 基于重写过后的符号重新定位 symbol
+        symbol = symbol_table_get(ident->literal);
+        assertf(symbol, "ident %s not found", ident->literal);
+    }
+
     if (symbol->type == SYMBOL_VAR) {
-        ast_var_decl *var_decl = symbol->ast_value;
+        ast_var_decl_t *var_decl = symbol->ast_value;
         var_decl->type = reduction_type(m, var_decl->type); // 类型还原
         return var_decl->type;
     }
@@ -174,7 +456,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     // 比如 print 和 println 都已经注册在了符号表中
     if (symbol->type == SYMBOL_FN) {
         ast_fndef_t *fndef = symbol->ast_value;
-        return infer_fndef_decl(m, fndef);
+        return infer_fn_decl(m, fndef);
     }
 
     assertf(false, "symbol type not expect");
@@ -187,31 +469,33 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
  * @param list_new
  * @return 
  */
-static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_type) {
+static type_t infer_list_new(module_t *m, ast_list_new_t *list_new, type_t target_type) {
     type_t result = type_basic_new(TYPE_LIST);
 
     type_list_t *type_list = NEW(type_list_t);
     // 初始化时类型未知
     type_list->element_type = type_basic_new(TYPE_UNKNOWN);
 
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_LIST) {
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_list->element_type = target_type.list->element_type;
     }
+
     result.list = type_list;
-    if (list_new->elements == 0) {
+    if (list_new->elements->length == 0) {
+        assertf(type_confirmed(type_list->element_type), "line=%d, list element type not confirm", m->infer_line);
         return result;
     }
 
-    // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
-        ast_expr *item_expr = ct_list_value(list_new->elements, 0);
+    // target 类型不确定时，则按 list 首个元素类型进行推导
+    if (type_list->element_type.kind == TYPE_UNKNOWN) {
+        ast_expr_t *item_expr = ct_list_value(list_new->elements, 0);
         type_list->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < list_new->elements->length; ++i) {
-        ast_expr *item_expr = ct_list_value(list_new->elements, i);
+        ast_expr_t *item_expr = ct_list_value(list_new->elements, i);
         infer_right_expr(m, item_expr, type_list->element_type);
     }
 
@@ -223,32 +507,34 @@ static type_t infer_list_new(module_t *m, ast_list_new *list_new, type_t target_
  * @param map_new
  * @return
  */
-static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_type) {
+static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type) {
     type_t result = type_basic_new(TYPE_MAP);
 
     type_map_t *type_map = NEW(type_map_t);
     type_map->key_type = type_basic_new(TYPE_UNKNOWN);
     type_map->value_type = type_basic_new(TYPE_UNKNOWN);
 
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_MAP) {
         // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
         type_map->key_type = target_type.map->key_type;
         type_map->value_type = target_type.map->value_type;
     }
     result.map = type_map;
-    if (map_new->elements == 0) {
+    if (map_new->elements->length == 0) {
+        assertf(type_confirmed(type_map->key_type), "line=%d, map key type not confirm", m->infer_line);
+        assertf(type_confirmed(type_map->value_type), "line=%d, map value type not confirm", m->infer_line);
         return result;
     }
 
-    // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
-        ast_map_element *item = ct_list_value(map_new->elements, 0);
+    // 基于首个元素进行类型推断
+    if (type_map->key_type.kind == TYPE_UNKNOWN) {
+        ast_map_element_t *item = ct_list_value(map_new->elements, 0);
         type_map->key_type = infer_right_expr(m, &item->key, type_basic_new(TYPE_UNKNOWN));
         type_map->value_type = infer_right_expr(m, &item->value, type_basic_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < map_new->elements->length; ++i) {
-        ast_map_element *item = ct_list_value(map_new->elements, i);
+        ast_map_element_t *item = ct_list_value(map_new->elements, i);
         infer_right_expr(m, &item->key, type_map->key_type);
         infer_right_expr(m, &item->value, type_map->value_type);
     }
@@ -261,28 +547,30 @@ static type_t infer_map_new(module_t *m, ast_map_new *map_new, type_t target_typ
  * @param set_new
  * @return
  */
-static type_t infer_set_new(module_t *m, ast_set_new *set_new, type_t target_type) {
+static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_type) {
     type_t result = type_basic_new(TYPE_SET);
 
     type_set_t *type_set = NEW(type_set_t);
     type_set->element_type = type_basic_new(TYPE_UNKNOWN);
 
     // 右值如果有推荐的类型，则基于推荐类型做 infer, 此时可能会触发类型转换
-    if (target_type.kind != TYPE_UNKNOWN) {
+    if (target_type.kind == TYPE_SET) {
         type_set->element_type = target_type.set->element_type;
     }
 
     result.set = type_set;
-    if (set_new->elements == 0) {
+    if (set_new->elements->length == 0) {
+        assertf(type_confirmed(type_set->element_type), "line=%d, set element type not confirm", m->infer_line);
         return result;
     }
     // target 类型不确定则按首个元素类型进行推导
-    if (target_type.kind == TYPE_UNKNOWN) {
-        ast_expr *item_expr = ct_list_value(set_new->elements, 0);
+    if (type_set->element_type.kind == TYPE_UNKNOWN) {
+        ast_expr_t *item_expr = ct_list_value(set_new->elements, 0);
         type_set->element_type = infer_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
     }
+
     for (int i = 0; i < set_new->elements->length; ++i) {
-        ast_expr *expr = ct_list_value(set_new->elements, i);
+        ast_expr_t *expr = ct_list_value(set_new->elements, i);
         infer_right_expr(m, expr, type_set->element_type);
     }
 
@@ -309,21 +597,22 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
 
     assertf(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
 
-    type_struct_t *struct_decl = ast->type.struct_;
+    type_struct_t *type_struct = ast->type.struct_;
 
     table_t *exists = table_new();
     // exists key
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(ast->properties, i);
-        struct_property_t *type_property = ct_list_value(struct_decl->properties, i);
+        struct_property_t *type_property = ct_list_value(type_struct->properties, i);
 
-        // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = type_property->type;
 
         table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
         infer_right_expr(m, struct_property->right, type_property->type);
+
+        // type 冗余,方便计算 size (不能用来计算 offset)
+        struct_property->type = type_property->type;
     }
 
     list_t *default_properties = ast->type.struct_->properties;
@@ -344,8 +633,8 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
  * @param expr
  * @return
  */
-static type_t infer_access(module_t *m, ast_expr *expr) {
-    ast_access *access = expr->value;
+static type_t infer_access(module_t *m, ast_expr_t *expr) {
+    ast_access_t *access = expr->value;
     type_t left_type = infer_left_expr(m, &access->left);
 
     // ast_access to ast_map_access
@@ -395,7 +684,7 @@ static type_t infer_access(module_t *m, ast_expr *expr) {
 
         type_tuple_t *type_tuple = left_type.tuple;
 
-        ast_literal *index_literal = access->key.value; // 读取 index 的值
+        ast_literal_t *index_literal = access->key.value; // 读取 index 的值
         assertf(index_literal->kind == TYPE_INT, "tuple index field must int immediate value");
         uint64_t index = atoi(index_literal->value);
 
@@ -428,8 +717,8 @@ static type_t infer_access(module_t *m, ast_expr *expr) {
  * @param select
  * @return
  */
-static type_t infer_select(module_t *m, ast_expr *expr) {
-    ast_select *select = expr->value;
+static type_t infer_select(module_t *m, ast_expr_t *expr) {
+    ast_select_t *select = expr->value;
 
     infer_left_expr(m, &select->left);
 
@@ -471,19 +760,19 @@ static type_t infer_select(module_t *m, ast_expr *expr) {
  * @param call
  * @return
  */
-static type_t infer_list_select_call(module_t *m, ast_call *call) {
-    ast_select *s = call->left.value;
+static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
     type_list_t *list_type = s->left.type.list; // 已经进行过类型推导了
 
     if (str_equal(s->key, LIST_PUSH_KEY)) {
         // push 对参数需要与 list element type 一致，否则抛出异常
         assertf(call->actual_params->length == 1, "list push param failed");
-        ast_expr *expr = ct_list_value(call->actual_params, 0);
+        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, list_type->element_type);
 
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
         // 参数重写
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left); // list operand
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA)); // value operand
 
@@ -499,7 +788,7 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
         assertf(call->actual_params->length == 0, "list length not param");
 
         // 改写
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left); // list operand
 
         call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
@@ -508,7 +797,6 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
 
         return type_basic_new(TYPE_INT);
     }
-
 
     assertf(false, "list not field '%s'", s->key);
     exit(0);
@@ -520,15 +808,15 @@ static type_t infer_list_select_call(module_t *m, ast_call *call) {
  * @param call
  * @return
  */
-static type_t infer_map_select_call(module_t *m, ast_call *call) {
-    ast_select *s = call->left.value;
+static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
     type_map_t *map_type = s->left.type.map; // 已经进行过类型推导了
     if (str_equal(s->key, MAP_DELETE_KEY)) {
         assertf(call->actual_params->length == 1, "map.delete param failed");
-        ast_expr *expr = ct_list_value(call->actual_params, 0);
+        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, map_type->key_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
@@ -539,10 +827,10 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
         return type_basic_new(TYPE_VOID);
     }
 
-    if (str_equal(s->key, LIST_LENGTH_KEY)) {
+    if (str_equal(s->key, MAP_LENGTH_KEY)) {
         assertf(call->actual_params->length == 0, "map.length not param");
 
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
 
         call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
@@ -556,15 +844,15 @@ static type_t infer_map_select_call(module_t *m, ast_call *call) {
     exit(0);
 }
 
-static type_t infer_set_select_call(module_t *m, ast_call *call) {
-    ast_select *s = call->left.value;
+static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
     type_set_t *set_type = s->left.type.set; // 已经进行过类型推导了
     if (str_equal(s->key, SET_DELETE_KEY)) {
         assertf(call->actual_params->length == 1, "set.delete param failed");
-        ast_expr *expr = ct_list_value(call->actual_params, 0);
+        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
@@ -577,11 +865,11 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
 
     if (str_equal(s->key, SET_ADD_KEY)) {
         assertf(call->actual_params->length == 1, "set.add param failed");
-        ast_expr *expr = ct_list_value(call->actual_params, 0);
+        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
         // s = left.key() 这里到 left 才是目标即可
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
@@ -592,12 +880,12 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
         return type_basic_new(TYPE_BOOL);
     }
 
-    if (str_equal(s->key, SET_CONTAINS_KEY)) {
+    if (str_equal(s->key, SET_HAS_KEY)) {
         assertf(call->actual_params->length == 1, "set.contains param failed");
-        ast_expr *expr = ct_list_value(call->actual_params, 0);
+        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr));
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
@@ -612,22 +900,22 @@ static type_t infer_set_select_call(module_t *m, ast_call *call) {
     exit(1);
 }
 
-static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_type_fn) {
-    // 由于支持 fndef rest 语言，所以实参的数量应该大于等于形参的数量
+static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
+    // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
         assertf(call->actual_params->length == target_type_fn->formal_types->length, "call params count failed");
     }
 
     for (int i = 0; i < call->actual_params->length; ++i) {
         // first param from formal
-        type_t formal_target_type = select_formal_param(target_type_fn, i);
-        ast_expr *actual_param = ct_list_value(call->actual_params, i);
-        if (i == 0 && formal_target_type.kind == TYPE_SELF) {
+        type_t *formal_type = select_formal_param(target_type_fn, i);
+        ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
+        if (i == 0 && formal_type->kind == TYPE_SELF) {
             // select first param 是 infer 自己伪造的，所以这里不需要在进行校验了
             continue;
         }
 
-        infer_right_expr(m, actual_param, formal_target_type);
+        infer_right_expr(m, actual_param, *formal_type);
     }
 }
 
@@ -639,8 +927,8 @@ static void infer_call_params(module_t *m, ast_call *call, type_fn_t *target_typ
  * @param call
  * @return
  */
-static type_t infer_struct_select_call(module_t *m, ast_call *call) {
-    ast_select *s = call->left.value;
+static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
     type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
     struct_property_t *p = type_struct_property(type_struct, s->key);
     assertf(p, "type %s struct no property '%s'", type_struct->ident, s->key);
@@ -657,6 +945,7 @@ static type_t infer_struct_select_call(module_t *m, ast_call *call) {
     // 进入前已经进行了 infer left, 所以这里的 type 都是 reduction 过的
     assertf(p->type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = p->type.fn;
+    call->return_type = type_fn->return_type;
 
     type_t *first = ct_list_value(type_fn->formal_types, 0);
     if (first->kind != TYPE_SELF) {
@@ -666,25 +955,26 @@ static type_t infer_struct_select_call(module_t *m, ast_call *call) {
 
     // formal 的首个参数是 self, 且 self 未经过推断
     list_t *actual_params = call->actual_params;
-    call->actual_params = ct_list_new(sizeof(ast_expr));
+    call->actual_params = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(call->actual_params, &struct_select->left);
     for (int i = 0; i < actual_params->length; ++i) {
         ct_list_push(call->actual_params, ct_list_value(actual_params, i));
     }
     infer_call_params(m, call, type_fn);
-
-    call->return_type = type_fn->return_type;
     return type_fn->return_type;
 }
 
 /**
- * 无论是什么类型对 select call 都需要走定制处理
+ * 由于重载的存在，对参数的 compare 变成了基于 type 的 search 的过程
+ * 如果找不到目标函数则说明 key 不存在或者没有找到匹配的函数类型
  * @param call
  * @return
  */
-static type_t infer_call(module_t *m, ast_call *call) {
+static type_t infer_call(module_t *m, ast_call_t *call) {
+    // [].len()
     if (call->left.assert_type == AST_EXPR_SELECT) {
-        ast_select *select = call->left.value;
+        ast_select_t *select = call->left.value;
+
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         infer_right_expr(m, &select->left, type_basic_new(TYPE_UNKNOWN));
         // self 快速改写
@@ -719,34 +1009,45 @@ static type_t infer_call(module_t *m, ast_call *call) {
         assertf(false, "select dot call not support type=%s", type_kind_string[select_left_kind]);
     }
 
+    if (call->left.assert_type == AST_EXPR_IDENT) {
+        ast_ident *ident = call->left.value;
+        symbol_t *s = symbol_table_get(ident->literal);
+        assert(s);
+
+        if (s->type == SYMBOL_FN && s->fndefs->count > 1) {
+            ast_fndef_t *f = fn_match(m, call->actual_params, s);
+            assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
+            rewrite_fndef(m, f); // 重复操作确保函数已经注册了新的符号
+            ident->literal = f->symbol_name; // 引用函数的新的符号
+        }
+    }
 
     // 左值符号推导
     type_t left_type = infer_left_expr(m, &call->left);
     assertf(left_type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = left_type.fn;
-
     infer_call_params(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
     return type_fn->return_type;
 }
 
-
 /**
- * var (foo, error) = catch foo()
- * var error = catch foo()
- * @param catch
+ * var (foo, err) = catch foo()
+ * var err = catch foo()
+ * var err = catch foo['car'].car()
+ * @param try
  * @return
  */
-static type_t infer_catch(module_t *m, ast_catch *catch) {
+static type_t infer_try(module_t *m, ast_try_t *try) {
+    type_t return_type = infer_right_expr(m, &try->expr, type_basic_new(TYPE_UNKNOWN));
 
-    type_t return_type = infer_call(m, catch->call);
-    type_t errort = type_new(TYPE_IDENT, NULL);
-    errort.ident = NEW(type_ident_t);
-    errort.ident->literal = ERRORT_TYPE_IDENT;
+    // 当表达式没有返回值时进行特殊处理
+    type_t errort = type_new(TYPE_ALIAS, NULL);
+    errort.alias = NEW(type_alias_t);
+    errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
-
     if (return_type.kind == TYPE_VOID) {
         return errort;
     }
@@ -754,7 +1055,6 @@ static type_t infer_catch(module_t *m, ast_catch *catch) {
     type_t t = type_basic_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(type_t));
-
     ct_list_push(t.tuple->elements, &return_type);
     ct_list_push(t.tuple->elements, &errort);
     return t;
@@ -762,15 +1062,24 @@ static type_t infer_catch(module_t *m, ast_catch *catch) {
 
 
 /**
+ * 仅声明不再被允许，所有的变量都必须在初始化时进行赋值操作
  * int a;
  * float b;
  * @param var_decl
  */
-void infer_var_decl(module_t *m, ast_var_decl *var_decl) {
+void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
-    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL || type.kind == TYPE_SELF) {
+    if (type.kind == TYPE_UNKNOWN ||
+        type.kind == TYPE_VOID ||
+        type.kind == TYPE_NULL ||
+        type.kind == TYPE_SELF) {
         assertf(false, "variable declaration cannot use type '%s'", type_kind_string[type.kind]);
+    }
+
+    // global var def 也会走该函数，所以需要特殊处理一下，必须携带 m->infer_current 时才进行 var_decl rewrite
+    if (m->infer_current) {
+        rewrite_var_decl(m, var_decl);
     }
 }
 
@@ -785,8 +1094,9 @@ void infer_var_decl(module_t *m, ast_var_decl *var_decl) {
  * var h = call()
  * [i64] list = []
  */
-static void infer_vardef(module_t *m, ast_vardef_stmt *stmt) {
+static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
+    rewrite_var_decl(m, &stmt->var_decl);
 
     type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
 
@@ -802,36 +1112,41 @@ static void infer_vardef(module_t *m, ast_vardef_stmt *stmt) {
 /**
  * @param stmt
  */
-static void infer_assign(module_t *m, ast_assign_stmt *stmt) {
+static void infer_assign(module_t *m, ast_assign_stmt_t *stmt) {
     type_t left_type = infer_left_expr(m, &stmt->left);
     infer_right_expr(m, &stmt->right, left_type);
 }
 
-static void infer_if(module_t *m, ast_if_stmt *stmt) {
+static void infer_if(module_t *m, ast_if_stmt_t *stmt) {
     infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
-    infer_block(m, stmt->consequent);
-    infer_block(m, stmt->alternate);
+    infer_body(m, stmt->consequent);
+    infer_body(m, stmt->alternate);
 }
 
-static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt *stmt) {
+static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
     infer_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
 
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
 }
 
 /**
  * 仅 list 和 map 类型支持 iterate
  * @param stmt
  */
-static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
+static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 infer_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = infer_right_expr(m, &stmt->iterate, type_basic_new(TYPE_UNKNOWN));
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
+    rewrite_var_decl(m, &stmt->key);
+    if (stmt->value) {
+        rewrite_var_decl(m, stmt->value);
+    }
+
     // 类型推断 (value 可选)
-    ast_var_decl *key_decl = &stmt->key;
+    ast_var_decl_t *key_decl = &stmt->key;
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *map_decl = iterate_type.map;
@@ -841,7 +1156,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
         key_decl->type = type_basic_new(TYPE_INT);
     }
 
-    ast_var_decl *value_decl = stmt->value;
+    ast_var_decl_t *value_decl = stmt->value;
     if (value_decl) {
         if (iterate_type.kind == TYPE_MAP) {
             type_map_t *map_decl = iterate_type.map;
@@ -854,21 +1169,32 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt *stmt) {
     }
 
 
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
 }
 
-static void infer_for_tradition(module_t *m, ast_for_tradition_stmt *stmt) {
+static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     infer_stmt(m, stmt->init);
     infer_right_expr(m, &stmt->cond, type_basic_new(TYPE_BOOL));
     infer_stmt(m, stmt->update);
-    infer_block(m, stmt->body);
+    infer_body(m, stmt->body);
+}
+
+/**
+ * type nullable<t> = null|t
+ * @param m
+ * @param stmt
+ */
+static void infer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
+    assertf(stmt->type.kind != TYPE_GEN, "cannot use type gen in local scope");
+
+    rewrite_type_alias(m, stmt);
 }
 
 /**
  * 但是我又怎么知道自己当前在哪个 closure_t 里面？
  * @param stmt
  */
-static void infer_return(module_t *m, ast_return_stmt *stmt) {
+static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->infer_current->return_type;
     if (stmt->expr != NULL) {
         infer_right_expr(m, stmt->expr, expect_type);
@@ -877,18 +1203,18 @@ static void infer_return(module_t *m, ast_return_stmt *stmt) {
     }
 }
 
-static type_t infer_literal(module_t *m, ast_literal *literal) {
+static type_t infer_literal(module_t *m, ast_literal_t *literal) {
     return type_basic_new(literal->kind);
 }
 
-static type_t infer_env_access(module_t *m, ast_env_access *expr) {
+static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
     ast_ident ident = {
             .literal = expr->unique_ident,
     };
     return infer_ident(m, &ident);
 }
 
-static void infer_throw(module_t *m, ast_throw_stmt *throw_stmt) {
+static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
     infer_right_expr(m, &throw_stmt->error, type_basic_new(TYPE_STRING));
 }
 
@@ -898,12 +1224,12 @@ static void infer_throw(module_t *m, ast_throw_stmt *throw_stmt) {
  * @param destr
  * @return
  */
-static type_t infer_tuple_destr(module_t *m, ast_tuple_destr *destr) {
+static type_t infer_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
     type_t t = type_basic_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(type_t));
     for (int i = 0; i < destr->elements->length; ++i) {
-        ast_expr *expr = ct_list_value(destr->elements, i);
+        ast_expr_t *expr = ct_list_value(destr->elements, i);
         type_t item_type = infer_left_expr(m, expr);
         ct_list_push(t.tuple->elements, &item_type);
     }
@@ -919,7 +1245,7 @@ static type_t infer_tuple_destr(module_t *m, ast_tuple_destr *destr) {
  * @param t
  * @return
  */
-static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, type_t t) {
+static void infer_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t t) {
     type_tuple_t *tuple_type = t.tuple;
     assertf(destr->elements->length == tuple_type->elements->length, "tuple destr length != tuple operand length");
 
@@ -928,13 +1254,14 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, type_t t)
         type_t *actual_type = ct_list_value(tuple_type->elements, i);
         assertf(type_confirmed(*actual_type), "tuple operand index=%d type unknown");
 
-        ast_expr *expr = ct_list_value(destr->elements, i);
+        ast_expr_t *expr = ct_list_value(destr->elements, i);
 
         expr->type = *actual_type; // value is var_decl 不需要进行推导了
         if (expr->assert_type == AST_VAR_DECL) {
             // 直接推到出具体类型并回写到 operand 的 var_decl 中
-            ast_var_decl *var_decl = expr->value;
+            ast_var_decl_t *var_decl = expr->value;
             var_decl->type = *actual_type;
+            rewrite_var_decl(m, var_decl);
         } else {
             assertf(expr->assert_type == AST_EXPR_TUPLE_DESTR, "var tuple destr must var/tuple_destr");
             infer_var_tuple_destr(m, expr->value, *actual_type);
@@ -942,7 +1269,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr *destr, type_t t)
     }
 }
 
-static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt *stmt) {
+static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
     type_t t = infer_right_expr(m, &stmt->right, type_basic_new(TYPE_UNKNOWN));
     assert(t.kind == TYPE_TUPLE);
@@ -956,20 +1283,20 @@ static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt *stmt) {
  * @param tuple_new
  * @return
  */
-static type_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new, type_t target_type) {
+static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t target_type) {
     type_t t = type_basic_new(TYPE_TUPLE);
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(type_t));
     t.tuple = tuple_type;
-    assertf(tuple_new->elements->length > 0, "tuple elements emtpy");
+    assertf(tuple_new->elements->length > 0, "tuple elements empty");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
         type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
-        if (target_type.kind != TYPE_UNKNOWN) {
+        if (target_type.kind == TYPE_TUPLE) {
             type_t *temp = ct_list_value(target_type.tuple->elements, i);
             element_target_type = *temp;
         }
 
-        ast_expr *expr = ct_list_value(tuple_new->elements, i);
+        ast_expr_t *expr = ct_list_value(tuple_new->elements, i);
         type_t expr_type = infer_right_expr(m, expr, element_target_type);
 
         assertf(type_confirmed(expr_type), "tuple element type type cannot confirmed");
@@ -981,12 +1308,13 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new *tuple_new, type_t targ
 }
 
 
-static void infer_stmt(module_t *m, ast_stmt *stmt) {
+static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
+    m->infer_line = stmt->line;
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             return infer_var_decl(m, stmt->value);
         }
-        case AST_STMT_VAR_DEF: {
+        case AST_STMT_VARDEF: {
             return infer_vardef(m, stmt->value);
         }
         case AST_STMT_VAR_TUPLE_DESTR: {
@@ -996,7 +1324,6 @@ static void infer_stmt(module_t *m, ast_stmt *stmt) {
             return infer_assign(m, stmt->value);
         }
         case AST_FNDEF: {
-            infer_fndef_decl(m, stmt->value);
             break;
         }
         case AST_CALL: {
@@ -1021,6 +1348,9 @@ static void infer_stmt(module_t *m, ast_stmt *stmt) {
         case AST_STMT_RETURN: {
             return infer_return(m, stmt->value);
         }
+        case AST_STMT_TYPE_ALIAS: {
+            return infer_type_alias_stmt(m, stmt->value);
+        }
         default: {
             return;
         }
@@ -1036,7 +1366,7 @@ static void infer_stmt(module_t *m, ast_stmt *stmt) {
  * @param expr
  * @return
  */
-static type_t infer_left_expr(module_t *m, ast_expr *expr) {
+static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_IDENT: {
@@ -1082,11 +1412,15 @@ static type_t infer_left_expr(module_t *m, ast_expr *expr) {
  * @param expr
  * @return
  */
-static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) {
+static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     type_t type;
     switch (expr->assert_type) {
-        case AST_EXPR_TYPE_CONVERT: {
-            type = infer_type_convert(m, expr->value);
+        case AST_EXPR_AS: {
+            type = infer_as_expr(m, expr);
+            break;
+        }
+        case AST_EXPR_IS: {
+            type = infer_is_expr(m, expr->value);
             break;
         }
         case AST_EXPR_BINARY: {
@@ -1134,12 +1468,12 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
             type = infer_call(m, expr->value);
             break;
         }
-        case AST_EXPR_CATCH: {
-            type = infer_catch(m, expr->value);
+        case AST_EXPR_TRY: {
+            type = infer_try(m, expr->value);
             break;
         }
         case AST_FNDEF: {
-            type = infer_fndef_decl(m, expr->value);
+            type = infer_fn_decl(m, expr->value);
             break;
         }
         case AST_EXPR_LITERAL: {
@@ -1165,25 +1499,39 @@ static type_t infer_right_expr(module_t *m, ast_expr *expr, type_t target_type) 
     if (target_type.kind == TYPE_UNKNOWN) {
         return expr->type;
     }
+    assertf(expr->type.kind != TYPE_VOID, "line=%d, cannot assign type void to %s", m->infer_line,
+            type_kind_string[target_type.kind]);
 
-    assertf(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_kind_string[target_type.kind]);
-
-    // 数值类型转换
-    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
-        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
-        *expr = ast_type_convert(*expr, target_type);
+    // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
+    // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
+    if (is_integer(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+        literal_integer_casting(expr, target_type);
     }
 
-    // bool 类型转换
-    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
-        *expr = ast_type_convert(*expr, type_basic_new(TYPE_BOOL));
+    if (is_float(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+        literal_float_casting(expr, target_type);
     }
 
-    if (target_type.kind == TYPE_ANY && expr->type.kind != TYPE_ANY) {
-        *expr = ast_type_convert(*expr, target_type);
+    // number 数值之间的类型转换 (暂时关闭)
+//    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
+//        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
+//        *expr = ast_type_as(*expr, target_type);
+//    }
+
+    // bool 类型转换 (暂时关闭)
+//    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
+//        *expr = ast_type_as(*expr, type_basic_new(TYPE_BOOL));
+//    }
+
+    // single type to union type (必须保留)
+    if (target_type.kind == TYPE_UNION && expr->type.kind != TYPE_UNION) {
+        assertf(union_type_contains(target_type, expr->type), "line=%d, union type not contains '%s'",
+                expr->line, type_kind_string[expr->type.kind]);
+        *expr = ast_type_as(*expr, target_type);
     }
 
-    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency", expr->line);
+    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency, expect=%s, actual=%s",
+            expr->line, type_kind_string[target_type.kind], type_kind_string[expr->type.kind]);
     return expr->type;
 }
 
@@ -1234,7 +1582,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
         assertf(is_number(t.map->key_type.kind) ||
                 t.map->key_type.kind == TYPE_STRING ||
-                t.map->key_type.kind == TYPE_GENERIC,
+                t.map->key_type.kind == TYPE_GEN,
                 "map key only support numer/string");
         return t;
     }
@@ -1243,7 +1591,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         assertf(is_number(t.set->element_type.kind) ||
                 t.set->element_type.kind == TYPE_STRING ||
-                t.set->element_type.kind == TYPE_GENERIC,
+                t.set->element_type.kind == TYPE_GEN,
                 "set element only support number/string");
         return t;
     }
@@ -1262,7 +1610,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     // 不能随便动名字
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
-        // 可选的返回类型
         fn->return_type = reduction_type(m, fn->return_type);
         for (int i = 0; i < fn->formal_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->formal_types, i);
@@ -1280,30 +1627,111 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     exit(1);
 }
 
-static type_t reduction_type_ident(module_t *m, type_t t) {
-    type_ident_t *ident = t.ident;
-    symbol_t *symbol = symbol_table_get(ident->literal);
+/**
+ * 泛型特化
+ * @param m
+ * @param ident
+ * @param t
+ */
+static type_t generic_specialization(module_t *m, char *ident) {
+    assertf(m->infer_current->generic_assign,
+            "generic param must be used in global fn, cannot be directly used in local fn.");
+    type_t *assign = table_get(m->infer_current->generic_assign, ident);
+    assert(assign);
+    return reduction_type(m, *assign);
+}
+
+static type_t type_formal_specialization(module_t *m, type_t t) {
+    assert(t.kind == TYPE_FORMAL);
+    assert(m->type_actual_params);
+
+    // 实参可以没有 reduction
+    type_t *type = table_get(m->type_actual_params, t.formal->ident);
+    return reduction_type(m, *type);
+}
+
+/**
+ * custom_type a = ...
+ * custom_type 此时就是一个 type_alias
+ * @param m
+ * @param t
+ * @return
+ */
+static type_t reduction_type_alias(module_t *m, type_t t) {
+    type_alias_t *alias = t.alias;
+    symbol_t *symbol = symbol_table_get(alias->ident);
+    assert(symbol);
+    assertf(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
+
+    ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
+
+    // 判断是否包含 param, 如果包含 param 则需要每一次 reduction 都进行处理
+    if (type_alias_stmt->formals) {
+        assert(t.alias->actual_params);
+        assert(t.alias->actual_params->length == type_alias_stmt->formals->length);
+
+        m->type_actual_params = table_new();
+        for (int i = 0; i < t.alias->actual_params->length; ++i) {
+            type_t *actual_param = ct_list_value(t.alias->actual_params, i);
+            ast_ident *formal_param = ct_list_value(type_alias_stmt->formals, i);
+            table_set(m->type_actual_params, formal_param->literal, actual_param);
+        }
+
+        return reduction_type(m, type_copy(type_alias_stmt->type));
+    }
 
 
-    assertf(symbol->type == SYMBOL_TYPEDEF, "'%s' is not a type", symbol->ident);
-    ast_typedef_stmt *typedef_stmt = symbol->ast_value;
+    // 引用了 gen 类型的 alias, 现在需要进行泛型特化
+    if (type_alias_stmt->type.kind == TYPE_GEN && !type_alias_stmt->type.gen->any) {
+        return generic_specialization(m, type_alias_stmt->ident);
+    }
 
-    assertf(m->reduction_typedef && typedef_stmt->type.status == REDUCTION_STATUS_DONE,
-            "typedef stage exception, all typedef ident operand must done");
 
     // 检查右值是否 reduce 完成
-    if (typedef_stmt->type.status == REDUCTION_STATUS_DONE) {
-        return typedef_stmt->type;
+    if (type_alias_stmt->type.status == REDUCTION_STATUS_DONE) {
+        return type_alias_stmt->type;
     }
 
     // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
     // 此时直接将 ident 丢回去就可以了
-    if (typedef_stmt->type.status == REDUCTION_STATUS_DOING) {
+    if (type_alias_stmt->type.status == REDUCTION_STATUS_DOING) {
         return t;
     }
 
-    typedef_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
-    return reduction_type(m, typedef_stmt->type);
+    type_alias_stmt->type.status = REDUCTION_STATUS_DOING; // 打上正在进行的标记,避免进入死循环
+    type_alias_stmt->type = reduction_type(m, type_alias_stmt->type);
+
+    return type_alias_stmt->type;
+}
+
+static type_t reduction_union_type(module_t *m, type_t t) {
+    type_union_t *type_union = t.union_;
+    if (type_union->any) {
+        return t;
+    }
+
+    for (int i = 0; i < t.gen->elements->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->elements, i);
+        *temp = reduction_type(m, *temp);
+    }
+
+    return t;
+}
+
+/**
+ * - 验证 m->infer_current->generic_assign 是否包含该 t.ident, 不包含就直接 assert
+ * - 取出对应的 assign 进行 reduction 并返回即可
+ * @param m
+ * @param t
+ * @return
+ */
+static type_t reduction_generic_type(module_t *m, type_t t) {
+    for (int i = 0; i < t.gen->elements->length; ++i) {
+        type_t *temp = ct_list_value(t.gen->elements, i);
+        *temp = reduction_type(m, *temp);
+    }
+
+    return t;
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
@@ -1319,22 +1747,38 @@ static type_t reduction_type(module_t *m, type_t t) {
         return t;
     }
 
+    if (t.kind == TYPE_GEN) {
+        t = reduction_generic_type(m, t);
+        goto STATUS_DONE;
+    }
+
+    // 跳过已经完成 reduction 的 type
     if (t.status == REDUCTION_STATUS_DONE) {
         goto STATUS_DONE;
     }
 
-    if (t.kind == TYPE_IDENT) {
-        t = reduction_type_ident(m, t);
+    if (t.kind == TYPE_ALIAS) {
+        t = reduction_type_alias(m, t);
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_FORMAL) {
+        t = type_formal_specialization(m, t);
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_UNION) {
+        t = reduction_union_type(m, t);
         goto STATUS_DONE;
     }
 
     // 只有 typedef ident 才有中间状态的说法
-    if (is_basic_decl_type(t)) {
+    if (is_origin_type(t)) {
         goto STATUS_DONE;
     }
 
     // infer complex type
-    if (is_complex_decl_type(t)) {
+    if (is_reduction_type(t)) {
         t = reduction_complex_type(m, t);
         goto STATUS_DONE;
     }
@@ -1350,20 +1794,25 @@ static type_t reduction_type(module_t *m, type_t t) {
 }
 
 /**
- * 仅 infer 了 fn 对声明部分，不包含 body
+ * 对参数和返回值进行了类型推导，不包含 body
  * @param m
  * @param fndef
  */
-static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
+static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
+    if (fndef->type.status == REDUCTION_STATUS_DONE) {
+        return fndef->type;
+    }
+
     // 对 fndef 进行类型还原
     type_fn_t *f = NEW(type_fn_t);
 
     f->name = fndef->symbol_name;
     f->formal_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
+    fndef->return_type = f->return_type;
 
     for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl *var = ct_list_value(fndef->formals, i);
+        ast_var_decl_t *var = ct_list_value(fndef->formals, i);
         if (var->type.kind == TYPE_SELF) {
             assertf(i == 0 && fndef->self_struct, "only use self in fn first param");
         }
@@ -1380,6 +1829,7 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
 
     // 冗余一份，方便计算使用
     fndef->type = result;
+
     return result;
 }
 
@@ -1389,20 +1839,30 @@ static type_t infer_fndef_decl(module_t *m, ast_fndef_t *fndef) {
  * @param fndef
  */
 static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
-    m->infer_current = fndef;
+    // fndef params 已经进行了 reduction, 会同步影响到 symbol table 中的 fn
+    type_t t = infer_fn_decl(m, fndef);
 
-    type_t t = infer_fndef_decl(m, fndef);
+    // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn->symbol 进行重写, 携带上 param_hash，且不用担心重复的问题
+    // infer expr 中 fndef 确实会重复调用 infer_fn_decl 进行重复的推断
+    rewrite_fndef(m, fndef);
+
+    // rewrite_formals ident
+    for (int i = 0; i < fndef->formals->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fndef->formals, i);
+        rewrite_var_decl(m, var_decl);
+    }
+
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);
         assertf(symbol, "fn var ident %s not found", fndef->closure_name);
         assert(symbol->type == SYMBOL_VAR);
-        ast_var_decl *var_decl = symbol->ast_value;
+        ast_var_decl_t *var_decl = symbol->ast_value;
         var_decl->type = t;
     }
 
     // env 表达式类型还原
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
-        ast_expr *env_expr = ct_list_value(fndef->capture_exprs, i);
+        ast_expr_t *env_expr = ct_list_value(fndef->capture_exprs, i);
         infer_left_expr(m, env_expr);
     }
 
@@ -1411,27 +1871,28 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // body infer
-    infer_block(m, fndef->body);
+    infer_body(m, fndef->body);
 }
 
 void infer(module_t *m) {
     m->infer_line = 0;
+    m->infer_current = NULL;
 
-    // 1. 从符号表中遍历所有 typedef 进行预处理
-    for (int i = 0; i < symbol_typedef_list->count; ++i) {
-        symbol_t *symbol = symbol_typedef_list->take[i];
-        ast_typedef_stmt *typedef_stmt = symbol->ast_value;
-        typedef_stmt->type.status = REDUCTION_STATUS_DOING;
-        // 符号表覆写
-        typedef_stmt->type = reduction_type(m, typedef_stmt->type);
+    // - 全局变量中也包含类型信息需要进行还原处理
+    for (int j = 0; j < m->global_symbols->count; ++j) {
+        symbol_t *s = m->global_symbols->take[j];
+        if (s->type != SYMBOL_VAR) {
+            continue;
+        }
+
+        infer_var_decl(m, s->ast_value); // 类型还原
     }
 
-    // 所有的 typedef 都已经还原完成
-    m->reduction_typedef = true;
-
-    // 2. 遍历所有 closure_fndefs 进行 infer 处理(包含 body)
+    // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
+        m->infer_current = fndef;
+
         infer_fndef(m, fndef);
     }
 }
