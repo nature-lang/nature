@@ -1,7 +1,6 @@
 #ifndef NATURE_CUSTOM_LINKS_H
 #define NATURE_CUSTOM_LINKS_H
 
-#include "type.h"
 #include "ct_list.h"
 
 /**
