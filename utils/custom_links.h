@@ -2,6 +2,7 @@
 #define NATURE_CUSTOM_LINKS_H
 
 #include "ct_list.h"
+#include "type.h"
 
 /**
  * 这里存储了 nature 所有全局变量

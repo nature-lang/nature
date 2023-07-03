@@ -1,8 +1,6 @@
 #include "linker.h"
 #include "elf.h"
-#include "utils/helper.h"
 #include "utils/error.h"
-#include "utils/type.h"
 #include "amd64.h"
 #include "src/lir.h"
 #include "src/cross.h"
@@ -1458,7 +1456,6 @@ uint8_t *fndefs_serialize() {
 
     return data;
 }
-
 
 uint64_t collect_symdef_list(elf_context *ctx) {
     uint64_t size = symbol_var_list->count * sizeof(symdef_t);
