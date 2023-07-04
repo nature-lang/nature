@@ -134,7 +134,7 @@ For information on source code directory structure, compilation, and related res
 
 For ideas and questions, it is recommended to use GitHub issues to facilitate wider attention and participation.
 
-Discord: [https://discord.gg/xYYkVaKZ](https://discord.gg/xYYkVaKZ)
+Discord: [https://discord.gg/s5x542RF](https://discord.gg/s5x542RF)
 
 微信: Add WeChat ID `nature-lang` and mention "申请加群"
 
