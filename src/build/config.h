@@ -71,7 +71,6 @@ static inline char *parser_base_ns(char *dir) {
     return result;
 }
 
-
 static inline char *os_to_string(uint8_t os) {
     if (os == OS_LINUX) {
         return "linux";

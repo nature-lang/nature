@@ -1117,16 +1117,26 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
     ast_import_t *stmt = malloc(sizeof(ast_import_t));
-    stmt->path = NULL;
+    stmt->file = NULL;
+    stmt->package = slice_new();
     stmt->as = NULL;
     stmt->full_path = NULL;
     stmt->module_ident = NULL;
 
     token_t *token = parser_advance(m);
-    assertf(token->type == TOKEN_LITERAL_STRING, "import token must string");
+    if (token->type == TOKEN_LITERAL_STRING) {
+        stmt->file = token->literal;
+    } else {
+        assertf(token->type == TOKEN_IDENT, "import token must string");
+        if (!parser_is(m, TOKEN_AS)) {
+            do {
+                token = parser_must(m, TOKEN_IDENT);
+                slice_push(stmt->package, token->literal);
+            } while (parser_consume(m, TOKEN_DOT));
+        }
+    }
 
-    stmt->path = token->literal;
-    if (parser_consume(m, TOKEN_AS)) {
+    if (parser_consume(m, TOKEN_AS)) { // 可选 as
         token = parser_advance(m);
         assertf(token->type == TOKEN_IDENT, "import as must ident");
         stmt->as = token->literal;

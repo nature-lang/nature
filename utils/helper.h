@@ -458,4 +458,8 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
     return numbers;
 }
 
+static inline char *homedir() {
+    return getenv("HOME");
+}
+
 #endif //NATURE_SRC_LIB_HELPER_H_

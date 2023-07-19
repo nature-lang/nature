@@ -18,6 +18,7 @@ build_param_t BUILD_ARCH = 0;
 #endif
 
 char *NATURE_ROOT = "/usr/local/nature"; // linux/darwin/freebsd default root
+char *NATURE_PATH = "~/.nature";
 char BUILD_OUTPUT_NAME[PATH_MAX] = "main";
 char SOURCE_PATH[PATH_MAX] = "";
 char BUILD_OUTPUT_DIR[PATH_MAX] = "";

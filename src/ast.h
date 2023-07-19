@@ -7,6 +7,7 @@
 #include "utils/ct_list.h"
 #include "utils/table.h"
 #include "utils/type.h"
+#include "package.h"
 
 typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
@@ -299,12 +300,19 @@ typedef struct {
 
 // import "module_path" module_name alias
 typedef struct {
-    string path; // import "xxx"
-    string as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
+    // file or package one of the two
+    char *file; // import 'xxx' or
+    slice_t *package; // a.b.c.d package 字符串数组
+    char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
-    // 绝对路径计算
-    string full_path; // 绝对完整的文件路径
-    string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
+    // 通过上面的 file 或者 package 解析出的完整 package 路径
+    // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
+    // 对应的 package.toml
+    char *full_path;
+    toml_table_t *package_toml;
+    char *workdir; // 这也是 import module 的 workdir
+
+    char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;
 
 /**

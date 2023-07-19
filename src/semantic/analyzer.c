@@ -10,6 +10,7 @@
 #include "utils/slice.h"
 #include "src/symbol/symbol.h"
 #include "src/debug/debug.h"
+#include "src/package.h"
 
 static void analyzer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
@@ -19,6 +20,82 @@ static void analyzer_body(module_t *m, slice_t *body) {
 #endif
         analyzer_stmt(m, body->take[i]);
     }
+}
+
+/**
+ * 目前必须以 .n 结尾
+ * @param importer_dir
+ * @param import
+ */
+void analyzer_import(module_t *m, ast_import_t *import) {
+    // TODO, file 模式下直接使用当前 module 的 package_toml
+    char *full_path;
+    char *module_as;
+
+    if (import->file) {
+        // import->path 必须以 .n 结尾
+        assertf(ends_with(import->file, ".n"), "import file suffix must .n");
+        // 不能有以 ./ 或者 / 开头
+        assertf(import->file[0] != '.', "cannot use  path=%s begin with '.'", import->file);
+        assertf(import->file[0] != '/', "cannot use absolute path=%s", import->file);
+
+
+        // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
+        char *temp_as = strrchr(import->file, '/'); // foo/bar.n -> /bar.n
+        if (temp_as != NULL) {
+            temp_as++;
+        } else {
+            temp_as = import->file;
+        }
+        module_as = str_replace(temp_as, ".n", "");
+
+
+        // 基于当前 module 的 source_dir 做相对路径引入
+        full_path = str_connect("/", import->file);
+        full_path = str_connect(m->source_dir, full_path);
+
+        // import file 模式下直接使用当前 module 携带的 package 即可,可能为 null
+        // 链接  /root/base_ns/foo/bar.n
+        import->full_path = full_path;
+        if (!import->as) {
+            import->as = module_as;
+        }
+
+        import->module_ident = module_unique_ident(import->full_path);
+        import->package_toml = m->package_toml;
+        import->workdir = m->workdir;
+
+        return;
+    }
+
+    assertf(import->package->count > 0, "import exception");
+    char *first = import->package->take[0];
+
+    // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
+    if (is_current_package(m->package_toml, first)) {
+        // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
+        import->workdir = m->workdir;
+        import->package_toml = m->package_toml;
+    } else if (is_dep_package(m->package_toml, first)) {
+        // 读取 dep type
+
+        // 如果是 git 类型则需要去 nature path 查找相关 package
+
+        // 如果是 local 则直接读取 path 作为 workdir
+
+    } else if (is_std_package(first)) {
+        // nature root 中查找
+    } else {
+        assertf(false, "import package %s not found", first);
+    }
+
+    // import foo.bar => foo is package.name, so import workdir/bar.n
+    import->full_path = module_full_path(import->workdir, import->package);
+
+    if (!import->as) {
+        import->as = import->package->take[import->package->count - 1];
+    }
+    import->module_ident = module_unique_ident(import->full_path);
 }
 
 static type_t analyzer_type_fn(ast_fndef_t *fndef) {
@@ -999,7 +1076,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         }
 
         ast_import_t *import = stmt->value;
-        full_import(m->source_dir, import);
+        analyzer_import(m, import);
 
         // 简单处理
         slice_push(m->imports, import);
@@ -1120,7 +1197,8 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
         }
 
         ast_import_t *import = stmt->value;
-        full_import(m->source_dir, import);
+
+        analyzer_import(m, import);
 
         assert(import->as);
         // 简单处理

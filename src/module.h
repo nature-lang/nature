@@ -34,15 +34,7 @@ static inline char *var_unique_ident(module_t *m, char *ident) {
     return ident_with_module(m->ident, result);
 }
 
-
-/**
- * @param importer_dir importer 所在的目录, 用来计算相对路径引入
- * @param import
- * @return
- */
-void full_import(string importer_dir, ast_import_t *import);
-
-module_t *module_build(string source_path, module_type_t type);
+module_t *module_build(char *workdir, toml_table_t *package_toml, char *source_path, module_type_t type);
 
 /**
  * 从 base_ns 开始，去掉结尾的 .n 部分
