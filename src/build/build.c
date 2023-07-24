@@ -191,7 +191,6 @@ static void build_init(char *build_entry) {
     symbol_init();
     cross_reg_init();
     cross_opcode_init();
-    package_init();
 
     // 全局 init
     BUILD_ENTRY = build_entry;
@@ -221,7 +220,7 @@ static void config_print() {
     DEBUGF("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
     DEBUGF("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
     DEBUGF("BUILD_OUTPUT: %s", BUILD_OUTPUT);
-    DEBUGF("WORK_DIR: %s", WORK_DIR);
+    DEBUGF("WORK_DIR: %s", WORKDIR);
     DEBUGF("BASE_NS: %s", BASE_NS);
     DEBUGF("TERM_DIR: %s", TEMP_DIR);
     DEBUGF("BUILD_ENTRY: %s", BUILD_ENTRY);
@@ -290,13 +289,22 @@ static slice_t *build_modules() {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
+
+
     toml_table_t *main_package = NULL;
-    if (package_linked) {
-        assert(package_linked->count > 0);
-        main_package = linked_first(package_linked)->value;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        main_package = package_parser(package_file);
     }
 
-    module_t *main = module_build(WORK_DIR, main_package, SOURCE_PATH, MODULE_TYPE_MAIN);
+    ast_import_t main_import = {
+            .package_dir = WORKDIR,
+            .package_conf = main_package,
+            .module_ident = FN_MAIN_NAME,
+    };
+
+    module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
+
     slice_push(modules, main);
 
     linked_t *work_list = linked_new();
@@ -313,8 +321,7 @@ static slice_t *build_modules() {
                 continue;
             }
 
-            module_t *new_module = module_build(import->workdir,
-                                                import->package_toml,
+            module_t *new_module = module_build(import,
                                                 import->full_path,
                                                 MODULE_TYPE_COMMON);
             linked_push(work_list, new_module);

@@ -129,8 +129,8 @@ typedef struct {
     string ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
 
     // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
-    char *workdir;
-    toml_table_t *package_toml;
+    char *package_dir;
+    toml_table_t *package_conf;
 
 //    bool entry; // 入口
     module_type_t type;

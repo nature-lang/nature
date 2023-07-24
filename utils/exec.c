@@ -32,6 +32,7 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误
         int result = execvp(file, argv);
+//        perror("failed message");
         exit(result);
     }
     close(fd[1]);
@@ -44,5 +45,65 @@ char *exec(char *work_dir, char *file, slice_t *list) {
     int exec_status;
     wait(&exec_status);
 
+    // 测试时需要测试异常退出的清空, 此时 status != 0
+//    if (exec_status != 0) {
+//        sprintf(buf, "exec file='%s' failed", file);
+//        return buf;
+//    }
+
     return buf;
 }
+
+char *command_output(const char *work_dir, const char *command) {
+    char *result = NULL;
+    FILE *pipe = NULL;
+
+    // Change the working directory
+    if (chdir(work_dir) != 0) {
+        perror("chdir");
+        return NULL;
+    }
+
+    // Open a pipe to the command's output using popen
+    pipe = popen(command, "r");
+    if (!pipe) {
+        perror("popen");
+        return NULL;
+    }
+
+    // Read the output from the pipe into a dynamically allocated buffer
+    char buffer[128];
+    size_t size = 0;
+    size_t capacity = 128;
+    result = (char *) malloc(capacity * sizeof(char));
+    if (!result) {
+        perror("malloc");
+        pclose(pipe);
+        return NULL;
+    }
+
+    while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        size_t len = strlen(buffer);
+        // Check if the buffer needs to be resized
+        if (size + len >= capacity) {
+            capacity *= 2;
+            char *temp = (char *) realloc(result, capacity * sizeof(char));
+            if (!temp) {
+                perror("realloc");
+                free(result);
+                pclose(pipe);
+                return NULL;
+            }
+            result = temp;
+        }
+        // Append the read data to the result buffer
+        strcpy(result + size, buffer);
+        size += len;
+    }
+
+    // Close the pipe
+    pclose(pipe);
+
+    return result;
+}
+

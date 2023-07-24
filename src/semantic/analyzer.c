@@ -12,6 +12,47 @@
 #include "src/debug/debug.h"
 #include "src/package.h"
 
+static void analyzer_import_std(module_t *m, char *package, ast_import_t *import) {
+    // /usr/local/nature/std
+    assertf(NATURE_ROOT, "NATURE_ROOT not found");
+
+    char *package_dir = path_join(NATURE_ROOT, "std");
+    package_dir = path_join(package_dir, package);
+
+    char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
+    assertf(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
+
+    import->package_dir = package_dir;
+    import->package_conf = package_parser(package_conf_path);
+}
+
+/**
+ * 基于 m->package_tol 完善 import
+ * @param m
+ * @param import
+ * @return
+ */
+static void analyzer_import_dep(module_t *m, char *package, ast_import_t *import) {
+    char *type = package_dep_str_in(m->package_conf, package, "type");
+    char *package_dir;
+
+    if (str_equal(type, TYPE_GIT)) {
+        package_dir = package_dep_git_dir(m->package_conf, package);
+    } else if (str_equal(type, TYPE_LOCAL)) {
+        package_dir = package_dep_local_dir(m->package_conf, package);
+        assertf(package_dir, "package=%s not found", package);
+    } else {
+        assertf(false, "unknown package dep type=%s", type);
+        exit(1);
+    }
+
+    char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
+    assertf(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
+
+    import->package_dir = package_dir;
+    import->package_conf = package_parser(package_conf_path);
+}
+
 static void analyzer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
         // switch 结构导向优化
@@ -27,11 +68,7 @@ static void analyzer_body(module_t *m, slice_t *body) {
  * @param importer_dir
  * @param import
  */
-void analyzer_import(module_t *m, ast_import_t *import) {
-    // TODO, file 模式下直接使用当前 module 的 package_toml
-    char *full_path;
-    char *module_as;
-
+static void analyzer_import(module_t *m, ast_import_t *import) {
     if (import->file) {
         // import->path 必须以 .n 结尾
         assertf(ends_with(import->file, ".n"), "import file suffix must .n");
@@ -47,55 +84,52 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         } else {
             temp_as = import->file;
         }
-        module_as = str_replace(temp_as, ".n", "");
+        char *module_as = str_replace(temp_as, ".n", "");
 
-
-        // 基于当前 module 的 source_dir 做相对路径引入
-        full_path = str_connect("/", import->file);
-        full_path = str_connect(m->source_dir, full_path);
-
+        // 基于当前 module 的 source_dir 做相对路径引入 (不支持跨平台引入)
         // import file 模式下直接使用当前 module 携带的 package 即可,可能为 null
         // 链接  /root/base_ns/foo/bar.n
-        import->full_path = full_path;
+        import->full_path = path_join(m->source_dir, import->file);
         if (!import->as) {
             import->as = module_as;
         }
 
-        import->module_ident = module_unique_ident(import->full_path);
-        import->package_toml = m->package_toml;
-        import->workdir = m->workdir;
+        import->package_conf = m->package_conf;
+        import->package_dir = m->package_dir;
 
+        import->module_ident = module_unique_ident(import);
         return;
     }
 
     assertf(import->package->count > 0, "import exception");
     char *first = import->package->take[0];
 
+    assert(m->package_conf);
+
     // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
-    if (is_current_package(m->package_toml, first)) {
+    if (is_current_package(m->package_conf, first)) {
         // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
-        import->workdir = m->workdir;
-        import->package_toml = m->package_toml;
-    } else if (is_dep_package(m->package_toml, first)) {
-        // 读取 dep type
-
-        // 如果是 git 类型则需要去 nature path 查找相关 package
-
-        // 如果是 local 则直接读取 path 作为 workdir
-
+        import->package_dir = m->package_dir;
+        import->package_conf = m->package_conf;
+    } else if (is_dep_package(m->package_conf, first)) {
+        analyzer_import_dep(m, first, import);
     } else if (is_std_package(first)) {
         // nature root 中查找
+        analyzer_import_std(m, first, import);
     } else {
         assertf(false, "import package %s not found", first);
     }
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
-    import->full_path = module_full_path(import->workdir, import->package);
+    import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->package);
+    assertf(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as) {
         import->as = import->package->take[import->package->count - 1];
     }
-    import->module_ident = module_unique_ident(import->full_path);
+
+    // package 模式下的 ident 应该基于 package module?
+    import->module_ident = module_unique_ident(import);
 }
 
 static type_t analyzer_type_fn(ast_fndef_t *fndef) {

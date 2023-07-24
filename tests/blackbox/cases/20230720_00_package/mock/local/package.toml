@@ -1,0 +1,10 @@
+# 基础信息
+name = "local"
+version = "0.1.0"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "lib" # lib or bin
+
+[dependencies]
+rand = {  type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/rand" }

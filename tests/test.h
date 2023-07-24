@@ -15,8 +15,10 @@
 #define assert_int_equal(_actual, _expect) (assertf((_actual) == (_expect), "%d", _actual))
 #define assert_true(_expr) (assertf(_expr, "not true"))
 
+#define PACKAGE_SYNC_COMMAND "npkg sync -v"
+
 static inline char *exec_output() {
-    return exec(WORK_DIR, BUILD_OUTPUT, slice_new());
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new());
 }
 
 static inline int blackbox_setup() {
@@ -34,10 +36,20 @@ static inline int blackbox_setup() {
     return 0;
 }
 
+static inline void blackbox_package_sync() {
+    // 环境变量下查找 package 可执行文件 npkg
+    char *workdir = get_workdir();
+    char *output = command_output(workdir, PACKAGE_SYNC_COMMAND);
+    DEBUGF("npkg sync:%s", output);
+}
 
 #define TEST_BASIC \
     blackbox_setup();              \
     test_basic();\
 
+#define TEST_WITH_PACKAGE \
+    blackbox_package_sync(); \
+    blackbox_setup();              \
+    test_basic();\
 
 #endif //NATURE_TEST_H

@@ -309,8 +309,8 @@ typedef struct {
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
     // 对应的 package.toml
     char *full_path;
-    toml_table_t *package_toml;
-    char *workdir; // 这也是 import module 的 workdir
+    toml_table_t *package_conf;
+    char *package_dir; // 这也是 import module 的 workdir
 
     char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;
