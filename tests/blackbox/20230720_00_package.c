@@ -25,9 +25,9 @@ static void test_basic() {
                              "this is pool\n"
                              "hello world syscall\n"
                              "hello os\n"
-                             "local.get_count() -> 555\n"
+                             "local.get_count() -> 444\n"
                              "this is other\n"
-                             "hello local\n");
+                             "hello local in cross linux amd64\n");
 }
 
 int main(void) {

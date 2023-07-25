@@ -1,19 +1,12 @@
 #include "package.h"
 #include "utils/slice.h"
+#include "build/config.h"
 
 static char *std_packages[] = {
         "os",
         "syscall",
         "string",
         // 添加其他 std package
-};
-
-static char *cross_suffix[] = {
-        "linux_amd64.n",
-        "linux_riscv64.n",
-        "darwin_amd64.n",
-        "linux.n",
-        "darwin.n",
 };
 
 bool is_std_package(char *package) {
@@ -61,16 +54,24 @@ char *package_import_fullpath(toml_table_t *package_conf, char *workdir, slice_t
         }
     }
 
-
-    // cross 文件确认
-    for (int i = 0; i < sizeof(cross_suffix) / sizeof(cross_suffix[0]); ++i) {
-        char *suffix = cross_suffix[i];
-        char *full_path = str_connect_by(temp, suffix, ".");
-        if (file_exists(full_path)) {
-            return full_path;
-        }
+    // os + arch 文件
+    char *os = os_to_string(BUILD_OS);
+    char *arch = arch_to_string(BUILD_ARCH);
+    char *os_arch = str_connect_by(os, arch, "_");
+    char *os_arch_full_path = str_connect_by(temp, os_arch, ".");
+    os_arch_full_path = str_connect(os_arch_full_path, ".n");
+    if (file_exists(os_arch_full_path)) {
+        return os_arch_full_path;
     }
 
+    // os 文件
+    char *os_full_path = str_connect_by(temp, os, ".");
+    os_full_path = str_connect(os_full_path, ".n");
+    if (file_exists(os_full_path)) {
+        return os_arch_full_path;
+    }
+
+    // 不带其他后缀
     char *full_path = str_connect(temp, ".n");
     assertf(file_exists(full_path), "cannot find file %s", full_path);
 
