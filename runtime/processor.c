@@ -39,12 +39,12 @@ processor_t *processor_get() {
 }
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
-void processor_attach_errort(memory_string_t *msg) {
-    DEBUGF("[runtime.processor_attach_errort] msg=%s", msg->array_data)
+void processor_attach_errort(n_string_t *msg) {
+    DEBUGF("[runtime.processor_attach_errort] msg=%s", msg->data)
     processor_t *p = processor_get();
 
-    rtype_t errort_rtype = gc_rtype(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    memory_errort *errort = runtime_malloc(errort_rtype.size, &errort_rtype);
+    rtype_t *errort_rtype = gc_rtype(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    memory_errort *errort = runtime_malloc(errort_rtype->size, errort_rtype);
     errort->has = 1;
     errort->msg = msg;
 
@@ -75,12 +75,12 @@ uint8_t processor_has_errort() {
 
 void processor_dump_errort(memory_errort *errort) {
     DEBUGF("[runtime.processor_dump_errort] errort base=%p", errort)
-    memory_string_t *msg = errort->msg;
+    n_string_t *msg = errort->msg;
     DEBUGF("[runtime.processor_dump_errort] memory_string len: %lu, base: %p",
-           msg->length, msg->array_data);
+           msg->length, msg->data);
 
     char *error_prefix = "runtime catch error: ";
     VOID write(STDOUT_FILENO, error_prefix, strlen(error_prefix));
-    VOID write(STDOUT_FILENO, msg->array_data, msg->length);
+    VOID write(STDOUT_FILENO, msg->data, msg->length);
     VOID write(STDOUT_FILENO, "\n", 1);
 }

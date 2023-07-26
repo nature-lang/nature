@@ -25,6 +25,8 @@ void table_free(table_t *t) {
 }
 
 void *table_get(table_t *t, string key) {
+    assertf(t, "table is null, called: %s");
+
     if (t->count == 0) {
         return NULL;
     }

@@ -3,6 +3,6 @@
 
 #include "utils/type.h"
 
-memory_tuple_t *tuple_new(uint64_t rtype_index);
+n_tuple_t *tuple_new(uint64_t rtype_hash);
 
 #endif //NATURE_TUPLE_H

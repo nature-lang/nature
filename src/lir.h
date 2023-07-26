@@ -93,7 +93,10 @@
 #define RT_CALL_UNION_ASSERT "union_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
-#define RT_CALL_ITERATOR_VALUE "iterator_value"
+
+#define RT_CALL_ITERATOR_NEXT_VALUE "iterator_next_value"
+
+#define RT_CALL_ITERATOR_TAKE_VALUE "iterator_take_value"
 
 #define RT_CALL_FN_NEW "fn_new"
 

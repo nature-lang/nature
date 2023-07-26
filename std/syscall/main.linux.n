@@ -1,0 +1,21 @@
+int O_RDONLY = 0x0  // 只读模式
+int O_WRONLY = 0x1  // 只写模式
+int O_RDWR   = 0x2  // 读写模式
+
+int O_APPEND = 0x8  // 追加写入
+int O_CREATE = 0x40 // 如果文件不存在则创建文件
+int O_EXCL   = 0x80 // 与 O_CREATE 一起使用，文件必须不存在
+int O_TRUNC  = 0x200 // 打开文件时清空文件内容
+
+
+fn read(int fd, int len):[u8] {
+    return syscall_read(fd, len)
+}
+
+fn write(int fd, [u8] buf):int {
+    return syscall_write(fd, buf)
+}
+
+fn open(string filename, int flags, u32 perm):int {
+    return syscall_open(filename, flags, perm)
+}

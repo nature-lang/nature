@@ -1,11 +1,11 @@
 #include "memory.h"
 
-rtype_t *rt_find_rtype(uint64_t index) {
-    return &rt_rtype_ptr[index];
+rtype_t *rt_find_rtype(uint32_t rtype_hash) {
+    return table_get(rt_rtype_table, itoa(rtype_hash));
 }
 
-uint64_t rt_rtype_heap_out_size(uint64_t index) {
-    return rtype_heap_out_size(rt_find_rtype(index), POINTER_SIZE);
+uint64_t rt_rtype_heap_out_size(uint32_t rtype_hash) {
+    return rtype_heap_out_size(rt_find_rtype(rtype_hash), POINTER_SIZE);
 }
 
 void fndefs_deserialize() {
@@ -40,9 +40,13 @@ void fndefs_deserialize() {
  * 接下来也只需要对 gc bits 进行重定位即可
  */
 void rtypes_deserialize() {
-    rt_rtype_ptr = &rt_rtype_data;
-    DEBUGF("[rtypes_deserialize] rt_fndef_ptr addr: %p", rt_rtype_ptr);
+    DEBUGF("[rtypes_deserialize] start");
 
+    rt_rtype_table = table_new();
+
+    rtype_t *rt_rtype_ptr = &rt_rtype_data;
+
+    // 全都丢到 hash table 里面去!
 
     uint8_t *gc_bits_offset = (uint8_t *) (rt_rtype_ptr + rt_rtype_count);
     uint64_t count = 0;
@@ -53,6 +57,9 @@ void rtypes_deserialize() {
         r->gc_bits = gc_bits_offset;
         gc_bits_offset += gc_bits_size;
         count++;
+
+        // 写入到 table 中
+        table_set(rt_rtype_table, itoa(r->hash), r);
     }
     DEBUGF("[rtypes_deserialize] count=%lu", count);
 }

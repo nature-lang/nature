@@ -143,7 +143,7 @@ typedef struct {
     uint64_t index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint64_t size; //  无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是 pointer 数据
-    uint32_t hash; // 做类型推断时能够快速判断出类型是否相等
+    uint64_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
@@ -321,35 +321,36 @@ struct type_fn_t {
 // 部分类型的数据(复合类型)只能在堆内存中存储
 
 typedef struct {
-    uint8_t *array_data;
+    uint8_t *data;
     // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
     // 内存优化时可以优化掉这个参数
-    uint64_t element_rtype_index;
+    uint64_t element_rtype_hash;
     uint64_t capacity; // 预先申请的容量大小
     uint64_t length; // 实际占用的位置的大小
-} memory_list_t;
+} n_list_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
-typedef addr_t memory_pointer_t;
+typedef addr_t n_pointer_t;
 
 typedef struct {
-    uint8_t *array_data;
-    uint64_t length;
-} memory_string_t;
+    uint8_t *data; // [uint8_t] 标识 uint 数组
+    uint64_t length; // 不包含 \0 的字符串长度
+} n_string_t;
 
-typedef uint8_t memory_bool_t;
+typedef uint8_t n_bool_t;
 
-typedef uint8_t memory_array_t; // 数组在内存中的变现形式就是 byte 列表
+typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
-typedef int64_t memory_int_t;
+typedef int64_t n_int_t;
+typedef uint32_t n_u32_t;
 
-typedef double memory_float_t;
-typedef double memory_f64_t;
-typedef float memory_f32_t;
+typedef double n_float_t;
+typedef double n_f64_t;
+typedef float n_f32_t;
 
-typedef uint8_t memory_struct_t; // 长度不确定
+typedef uint8_t n_struct_t; // 长度不确定
 
-typedef uint8_t memory_tuple_t; // 长度不确定
+typedef uint8_t n_tuple_t; // 长度不确定
 
 typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
@@ -359,7 +360,7 @@ typedef struct {
     uint64_t value_index;
     uint64_t length; // 实际的元素的数量
     uint64_t capacity; // 当达到一定的负载后将会触发 rehash
-} memory_map_t;
+} n_map_t;
 
 typedef struct {
     uint64_t *hash_table;
@@ -367,11 +368,11 @@ typedef struct {
     uint64_t key_index;
     uint64_t length;
     uint64_t capacity;
-} memory_set_t;
+} n_set_t;
 
 typedef struct {
     void *fn_data;
-} memory_fn_t; // 就占用一个指针大小
+} n_fn_t; // 就占用一个指针大小
 
 /**
  * 不能随便调换顺序，这是 gc 的顺序
@@ -379,7 +380,7 @@ typedef struct {
 typedef struct {
     value_casting value;
     rtype_t *rtype;
-} memory_union_t;
+} n_union_t;
 
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
@@ -395,9 +396,9 @@ rtype_t ct_reflect_type(type_t t);
  * @param rtype
  * @return
  */
-uint64_t rtypes_push(rtype_t rtype);
+rtype_t *rtypes_push(rtype_t rtype);
 
-uint64_t ct_find_rtype_index(type_t t);
+uint64_t ct_find_rtype_hash(type_t t);
 
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小
@@ -461,9 +462,9 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
-rtype_t gc_rtype(type_kind kind, uint32_t count, ...);
+rtype_t* gc_rtype(type_kind kind, uint32_t count, ...);
 
-rtype_t gc_rtype_array(type_kind kind, uint32_t count);
+rtype_t* gc_rtype_array(type_kind kind, uint32_t count);
 
 /**
  * 一般标量类型其值默认会存储在 stack 中

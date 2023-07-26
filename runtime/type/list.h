@@ -6,7 +6,7 @@
 
 #define LIST_DEFAULT_CAPACITY 8
 
-memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint64_t capacity);
+n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t capacity);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -14,22 +14,22 @@ memory_list_t *list_new(uint64_t rtype_index, uint64_t element_rtype_index, uint
  * @param index
  * @return
  */
-void list_access(memory_list_t *l, uint64_t index, void *value_ref);
+void list_access(n_list_t *l, uint64_t index, void *value_ref);
 
-void list_assign(memory_list_t *l, uint64_t index, void *ref);
+void list_assign(n_list_t *l, uint64_t index, void *ref);
 
 /**
  * @param l
  * @return
  */
-uint64_t list_length(memory_list_t *l);
+uint64_t list_length(n_list_t *l);
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中
  * @param l
  * @param value
  */
-void list_push(memory_list_t *l, void *ref);
+void list_push(n_list_t *l, void *ref);
 
 /**
  * slice 不会修改原数组
@@ -40,7 +40,7 @@ void list_push(memory_list_t *l, void *ref);
  * @param end
  * @return 返回切片后的数据
  */
-memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start, uint64_t end);
+n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t end);
 
 /**
  * 合并 a 和 b 两个 list 到一个新的 list 中
@@ -48,6 +48,6 @@ memory_list_t *list_slice(uint64_t rtype_index, memory_list_t *l, uint64_t start
  * @param b
  * @return
  */
-memory_list_t *list_concat(uint64_t rtype_index, memory_list_t *a, memory_list_t *b);
+n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b);
 
 #endif //NATURE_LIST_H

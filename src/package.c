@@ -25,16 +25,16 @@ bool is_std_package(char *package) {
  *
  * import foo.bar => foo is package.name, so import workdir/bar.n
  * import foo => import foo.foo => import workdir/foo.n
- * @param workdir
+ * @param package_dir
  * @param import_package  foo.bar.car 每一段都是一个字符串,放在了 import packages 中
  * @return
  */
-char *package_import_fullpath(toml_table_t *package_conf, char *workdir, slice_t *import_package) {
-    assert(workdir);
+char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *import_package) {
+    assert(package_dir);
     assert(import_package);
     assert(import_package->count > 0);
 
-    char *temp = workdir;
+    char *temp = package_dir;
     if (import_package->count == 1) {
         // 默认 entry 为 main, 可以通过 entry 手动指定
         char *entry = "main";
@@ -68,7 +68,7 @@ char *package_import_fullpath(toml_table_t *package_conf, char *workdir, slice_t
     char *os_full_path = str_connect_by(temp, os, ".");
     os_full_path = str_connect(os_full_path, ".n");
     if (file_exists(os_full_path)) {
-        return os_arch_full_path;
+        return os_full_path;
     }
 
     // 不带其他后缀

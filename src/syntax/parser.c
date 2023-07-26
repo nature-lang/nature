@@ -972,14 +972,14 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     // for k,v in map {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
         ast_for_iterator_stmt_t *for_iterator_stmt = NEW(ast_for_iterator_stmt_t);
-        for_iterator_stmt->key.type = type_basic_new(TYPE_UNKNOWN);
-        for_iterator_stmt->key.ident = parser_must(m, TOKEN_IDENT)->literal;
+        for_iterator_stmt->first.type = type_basic_new(TYPE_UNKNOWN);
+        for_iterator_stmt->first.ident = parser_must(m, TOKEN_IDENT)->literal;
 
         if (parser_consume(m, TOKEN_COMMA)) {
-            for_iterator_stmt->value = NEW(ast_var_decl_t);
+            for_iterator_stmt->second = NEW(ast_var_decl_t);
             // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
-            for_iterator_stmt->value->type = type_basic_new(TYPE_UNKNOWN);
-            for_iterator_stmt->value->ident = parser_must(m, TOKEN_IDENT)->literal;
+            for_iterator_stmt->second->type = type_basic_new(TYPE_UNKNOWN);
+            for_iterator_stmt->second->ident = parser_must(m, TOKEN_IDENT)->literal;
         }
 
         parser_must(m, TOKEN_IN);

@@ -1,12 +1,12 @@
 #include "set.h"
 
-static void set_data_index(memory_set_t *m, uint64_t hash_index, uint64_t data_index) {
+static void set_data_index(n_set_t *m, uint64_t hash_index, uint64_t data_index) {
     uint64_t hash_value = data_index | (1ULL << HASH_SET);
 
     m->hash_table[hash_index] = hash_value;
 }
 
-static void set_grow(memory_set_t *m) {
+static void set_grow(n_set_t *m) {
     DEBUGF("[runtime.set_grow] len=%lu, cap=%lu, key_data=%p, hash_table=%p", m->length, m->capacity, m->key_data,
            m->hash_table);
 
@@ -14,11 +14,11 @@ static void set_grow(memory_set_t *m) {
     uint64_t key_size = rtype_heap_out_size(key_rtype, POINTER_SIZE);
 
 
-    memory_set_t old_set = {0};
-    memmove(&old_set, m, sizeof(memory_set_t));
+    n_set_t old_set = {0};
+    memmove(&old_set, m, sizeof(n_set_t));
 
     m->capacity *= 2;
-    m->key_data = array_new(key_rtype, m->capacity);
+    m->key_data = rt_array_new(key_rtype, m->capacity);
     m->hash_table = runtime_malloc(sizeof(int64_t) * m->capacity, NULL);
 
 
@@ -43,15 +43,15 @@ static void set_grow(memory_set_t *m) {
     }
 }
 
-memory_set_t *set_new(uint64_t rtype_index, uint64_t key_index) {
-    rtype_t *set_rtype = rt_find_rtype(rtype_index);
+n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
+    rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_index);
 
-    memory_set_t *set_data = runtime_malloc(set_rtype->size, set_rtype);
+    n_set_t *set_data = runtime_malloc(set_rtype->size, set_rtype);
     set_data->capacity = SET_DEFAULT_CAPACITY;
     set_data->length = 0;
     set_data->key_index = key_index;
-    set_data->key_data = array_new(key_rtype, set_data->capacity);
+    set_data->key_data = rt_array_new(key_rtype, set_data->capacity);
     set_data->hash_table = runtime_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
 
     DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p",
@@ -65,7 +65,7 @@ memory_set_t *set_new(uint64_t rtype_index, uint64_t key_index) {
  * @param key_ref
  * @return
  */
-bool set_add(memory_set_t *m, void *key_ref) {
+bool set_add(n_set_t *m, void *key_ref) {
     // 扩容
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         set_grow(m);
@@ -106,7 +106,7 @@ bool set_add(memory_set_t *m, void *key_ref) {
  * @param key_ref
  * @return
  */
-bool set_contains(memory_set_t *m, void *key_ref) {
+bool set_contains(n_set_t *m, void *key_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
 
@@ -122,7 +122,7 @@ bool set_contains(memory_set_t *m, void *key_ref) {
     return true;
 }
 
-void set_delete(memory_set_t *m, void *key_ref) {
+void set_delete(n_set_t *m, void *key_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可

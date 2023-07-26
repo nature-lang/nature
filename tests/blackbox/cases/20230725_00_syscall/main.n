@@ -1,0 +1,23 @@
+import syscall
+
+// open
+var (fd, err) = try syscall.open('mock/open.txt', syscall.O_RDONLY, 0666)
+if err.has {
+    println('open mock/open.txt failed: ', err.msg, 'fd: ', fd)
+    return
+} else {
+    println('open mock/open.txt successful')
+}
+
+// read
+var (buf, read_err) = try syscall.read(fd, 20)
+if read_err.has {
+    print(read_err.msg)
+    return
+}
+
+println('actual read len: ', buf.len())
+for v in buf {
+    println(v)
+}
+//println('buf.3 = ', buf[2])

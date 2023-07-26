@@ -104,20 +104,23 @@ static void analyzer_import(module_t *m, ast_import_t *import) {
     assertf(import->package->count > 0, "import exception");
     char *first = import->package->take[0];
 
-    assert(m->package_conf);
 
-    // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
-    if (is_current_package(m->package_conf, first)) {
-        // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
-        import->package_dir = m->package_dir;
-        import->package_conf = m->package_conf;
-    } else if (is_dep_package(m->package_conf, first)) {
-        analyzer_import_dep(m, first, import);
-    } else if (is_std_package(first)) {
+    if (is_std_package(first)) {
         // nature root 中查找
         analyzer_import_std(m, first, import);
     } else {
-        assertf(false, "import package %s not found", first);
+        assertf(m->package_conf, "module %s not found package.toml", m->ident);
+
+        // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
+        if (is_current_package(m->package_conf, first)) {
+            // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
+            import->package_dir = m->package_dir;
+            import->package_conf = m->package_conf;
+        } else if (is_dep_package(m->package_conf, first)) {
+            analyzer_import_dep(m, first, import);
+        } else {
+            assertf(false, "import package %s not found", first);
+        }
     }
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
@@ -951,9 +954,9 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
 
     analyzer_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
-    analyzer_var_decl(m, &stmt->key);
-    if (stmt->value) {
-        analyzer_var_decl(m, stmt->value);
+    analyzer_var_decl(m, &stmt->first);
+    if (stmt->second) {
+        analyzer_var_decl(m, stmt->second);
     }
     analyzer_body(m, stmt->body);
 

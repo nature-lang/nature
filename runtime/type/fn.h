@@ -27,7 +27,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs);
 
 envs_t *env_new(uint64_t length);
 
-void env_assign(envs_t *envs, uint64_t item_rtype_index, uint64_t env_index, addr_t stack_addr);
+void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr_t stack_addr);
 
 void env_closure(addr_t stack_addr);
 

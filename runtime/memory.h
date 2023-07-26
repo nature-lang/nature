@@ -206,7 +206,7 @@ typedef struct {
 
 
 typedef struct {
-    memory_string_t *msg;
+    n_string_t *msg;
     uint8_t has;
 } memory_errort;
 
@@ -336,10 +336,9 @@ void fndefs_deserialize();
 
 void symdefs_deserialize();
 
-rtype_t *rt_find_rtype(uint64_t index);
+rtype_t *rt_find_rtype(uint32_t rtype_hash);
 
-uint64_t rt_rtype_heap_out_size(uint64_t index);
-
+uint64_t rt_rtype_heap_out_size(uint32_t rtype_hash);
 
 fndef_t *find_fn(addr_t addr);
 
@@ -353,10 +352,10 @@ void runtime_gc();
 /**
  * 分配入口
  * @param size
- * @param type
+ * @param rtype
  * @return
  */
-void *runtime_malloc(uint64_t size, rtype_t *type);
+void *runtime_malloc(uint64_t size, rtype_t *rtype);
 
 uint64_t runtime_malloc_bytes();
 

@@ -289,8 +289,8 @@ typedef struct {
  */
 typedef struct {
     ast_expr_t iterate; // list, foo.list, bar[0]
-    ast_var_decl_t key; // 类型推导, type 可能是 int 或者 string
-    ast_var_decl_t *value; // value 可选，可能为 null
+    ast_var_decl_t first; // 类型推导, type 可能是 int 或者 string
+    ast_var_decl_t *second; // value 可选，可能为 null
     slice_t *body;
 } ast_for_iterator_stmt_t;
 

@@ -4,11 +4,11 @@
 #include "runtime/memory.h"
 
 /**
- * @param rtype_index
+ * @param rtype_hash
  * @return
  */
-memory_struct_t *struct_new(uint64_t rtype_index) {
-    rtype_t *rtype = rt_find_rtype(rtype_index);
+n_struct_t *struct_new(uint64_t rtype_hash) {
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
     // 参数 2 主要是去读其中的 gc_bits 记录 gc 相关数据
     return runtime_malloc(rtype->size, rtype);
 }
@@ -19,11 +19,11 @@ memory_struct_t *struct_new(uint64_t rtype_index) {
  * @param s
  * @return
  */
-void *struct_access(memory_struct_t *s, uint64_t offset) {
+void *struct_access(n_struct_t *s, uint64_t offset) {
     return s + offset;
 }
 
-void struct_assign(memory_struct_t *s, uint64_t offset, uint64_t property_index, void *property_ref) {
+void struct_assign(n_struct_t *s, uint64_t offset, uint64_t property_index, void *property_ref) {
     void *p = s + offset;
     uint64_t size = rtype_heap_out_size(rt_find_rtype(property_index), POINTER_SIZE);
     memmove(p, property_ref, size);

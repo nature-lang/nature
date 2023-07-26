@@ -650,8 +650,8 @@ static ast_for_cond_stmt_t *ast_for_cond_copy(ast_for_cond_stmt_t *temp) {
 static ast_for_iterator_stmt_t *ast_for_iterator_copy(ast_for_iterator_stmt_t *temp) {
     ast_for_iterator_stmt_t *stmt = COPY_NEW(ast_for_iterator_stmt_t, temp);
     stmt->iterate = *ast_expr_copy(&temp->iterate);
-    stmt->key = *ast_var_decl_copy(&temp->key);
-    stmt->value = temp->value ? ast_var_decl_copy(temp->value) : NULL;
+    stmt->first = *ast_var_decl_copy(&temp->first);
+    stmt->second = temp->second ? ast_var_decl_copy(temp->second) : NULL;
     stmt->body = ast_body_copy(temp->body);  // 需要实现这个函数
     return stmt;
 }

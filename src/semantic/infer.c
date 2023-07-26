@@ -1140,13 +1140,13 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
-    rewrite_var_decl(m, &stmt->key);
-    if (stmt->value) {
-        rewrite_var_decl(m, stmt->value);
+    rewrite_var_decl(m, &stmt->first);
+    if (stmt->second) {
+        rewrite_var_decl(m, stmt->second);
     }
 
     // 类型推断 (value 可选)
-    ast_var_decl_t *key_decl = &stmt->key;
+    ast_var_decl_t *key_decl = &stmt->first;
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *map_decl = iterate_type.map;
@@ -1156,7 +1156,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         key_decl->type = type_basic_new(TYPE_INT);
     }
 
-    ast_var_decl_t *value_decl = stmt->value;
+    ast_var_decl_t *value_decl = stmt->second;
     if (value_decl) {
         if (iterate_type.kind == TYPE_MAP) {
             type_map_t *map_decl = iterate_type.map;

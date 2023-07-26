@@ -49,7 +49,7 @@ void processor_init();
 
 void rt_processor_attach_errort(char *msg);
 
-void processor_attach_errort(memory_string_t *msg);
+void processor_attach_errort(n_string_t *msg);
 
 memory_errort *processor_remove_errort();
 

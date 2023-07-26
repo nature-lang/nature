@@ -47,9 +47,9 @@
     }\
 }
 
-void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output_rtype_index, void *output_ref) {
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
-    rtype_t *output_rtype = rt_find_rtype(output_rtype_index);
+void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref) {
+    rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
+    rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
     DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p",
            type_kind_string[input_rtype->kind],
            input_ref,
@@ -82,20 +82,20 @@ void number_casting(uint64_t input_rtype_index, void *input_ref, uint64_t output
 /**
  * 如果断言异常则在 processor 中附加上错误
  * @param mu
- * @param target_rtype_index
+ * @param target_rtype_hash
  * @param value_ref
  */
-void union_assert(memory_union_t *mu, int64_t target_rtype_index, void *value_ref) {
-    if (mu->rtype->index != target_rtype_index) {
-        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_index: %ld",
+void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
+    if (mu->rtype->hash != target_rtype_hash) {
+        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_string[mu->rtype->kind],
-               target_rtype_index);
+               target_rtype_hash);
 
         rt_processor_attach_errort("type assert error");
         return;
     }
 
-    uint64_t size = rt_rtype_heap_out_size(target_rtype_index);
+    uint64_t size = rt_rtype_heap_out_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF("[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, values_ref: %p",
            mu,
@@ -105,26 +105,26 @@ void union_assert(memory_union_t *mu, int64_t target_rtype_index, void *value_re
            value_ref);
 }
 
-bool union_is(memory_union_t *mu, int64_t target_rtype_index) {
-    return mu->rtype->index == target_rtype_index;
+bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
+    return mu->rtype->hash == target_rtype_hash;
 }
 
 /**
- * @param input_rtype_index
+ * @param input_rtype_hash
  * @param value
  * @return
  */
-memory_union_t *union_casting(uint64_t input_rtype_index, void *value_ref) {
-    // - 根据 input_rtype_index 找到对应的
-    rtype_t *rtype = rt_find_rtype(input_rtype_index);
-    assertf(rtype, "cannot find rtype, index = %lu", input_rtype_index);
+n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
+    // - 根据 input_rtype_hash 找到对应的
+    rtype_t *rtype = rt_find_rtype(input_rtype_hash);
+    assertf(rtype, "cannot find rtype, index = %lu", input_rtype_hash);
 
     DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_string[rtype->kind], rtype->in_heap);
 
-    rtype_t union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
+    rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    memory_union_t *mu = runtime_malloc(sizeof(memory_union_t), &union_rtype);
+    n_union_t *mu = runtime_malloc(sizeof(n_union_t), union_rtype);
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu,
@@ -143,16 +143,16 @@ memory_union_t *union_casting(uint64_t input_rtype_index, void *value_ref) {
 
 /**
  * null/false/0 会转换成 false, 其他都是 true
- * @param input_rtype_index
+ * @param input_rtype_hash
  * @param int_value
  * @return
  */
-memory_bool_t bool_casting(uint64_t input_rtype_index, int64_t int_value, double float_value) {
-    DEBUGF("[runtime.bool_casting] input_rtype_index=%lu, int_value=%lu, f64_value=%f",
-           input_rtype_index,
+n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
+    DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f",
+           input_rtype_hash,
            int_value,
            float_value);
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_index);
+    rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     if (is_float(input_rtype->kind)) {
         return float_value != 0;
     }
@@ -162,21 +162,21 @@ memory_bool_t bool_casting(uint64_t input_rtype_index, int64_t int_value, double
 
 /**
  * @param iterator
- * @param rtype_index
+ * @param rtype_hash
  * @param cursor
  * @return
  */
-int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, void *key_ref) {
-    DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_index=%lu, cursor=%lu",
-           iterator, rtype_index, cursor);
+int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref) {
+    DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_hash=%lu, cursor=%lu",
+           iterator, rtype_hash, cursor);
 
-    rtype_t *iterator_rtype = rt_find_rtype(rtype_index);
+    rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     cursor += 1;
     if (iterator_rtype->kind == TYPE_LIST) {
-        memory_list_t *list = iterator;
+        n_list_t *list = iterator;
         DEBUGF("[runtime.iterator_next_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
-               list->array_data);
+               list->data);
 
         if (cursor >= list->length) {
             return -1;
@@ -187,7 +187,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, 
     }
 
     if (iterator_rtype->kind == TYPE_MAP) {
-        memory_map_t *map = iterator;
+        n_map_t *map = iterator;
         uint64_t key_size = rt_rtype_heap_out_size(map->key_index);
         DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data, map->key_index, key_size);
@@ -205,32 +205,73 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_index, int64_t cursor, 
 }
 
 
-void iterator_value(void *iterator, uint64_t rtype_index, int64_t cursor, void *value_ref) {
-    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_index=%lu, cursor=%lu",
-           iterator, rtype_index, cursor);
+int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu",
+           iterator, rtype_hash, cursor);
+
+    rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
+
+    cursor += 1;
+    if (iterator_rtype->kind == TYPE_LIST) {
+        n_list_t *list = iterator;
+        uint64_t value_size = rt_rtype_heap_out_size(list->element_rtype_hash);
+        DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p", list->length,
+               list->capacity,
+               list->data);
+
+        if (cursor >= list->length) {
+            return -1;
+        }
+
+        memmove(value_ref, list->data + value_size * cursor, value_size);
+        return cursor;
+    }
+
+    if (iterator_rtype->kind == TYPE_MAP) {
+        n_map_t *map = iterator;
+        uint64_t value_size = rt_rtype_heap_out_size(map->value_index);
+        DEBUGF("[runtime.iterator_next_value] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
+               map->length, map->key_data, map->key_index, value_size);
+
+        if (cursor >= map->length) {
+            return -1;
+        }
+
+        memmove(value_ref, map->value_data + value_size * cursor, value_size);
+        return cursor;
+    }
+
+    assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
+    exit(0);
+}
+
+void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu",
+           iterator, rtype_hash, cursor);
     assertf(cursor != -1, "cannot iterator value");
 
-    rtype_t *iterator_rtype = rt_find_rtype(rtype_index);
+    rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     if (iterator_rtype->kind == TYPE_LIST) {
-        memory_list_t *list = iterator;
+        n_list_t *list = iterator;
         DEBUGF("[runtime.iterator_key] kind is list, len=%lu, cap=%lu, data_base=%p", list->length, list->capacity,
-               list->array_data);
+               list->data);
 
-        assertf(cursor < list->length, "[runtime.iterator_value] cursor=%d >= list->length=%d", cursor, list->length);
+        assertf(cursor < list->length, "[runtime.iterator_take_value] cursor=%d >= list->length=%d", cursor,
+                list->length);
 
-        uint64_t element_size = rt_rtype_heap_out_size(list->element_rtype_index);
-        memmove(value_ref, list->array_data + element_size * cursor, element_size);
+        uint64_t element_size = rt_rtype_heap_out_size(list->element_rtype_hash);
+        memmove(value_ref, list->data + element_size * cursor, element_size);
         return;
     }
 
     if (iterator_rtype->kind == TYPE_MAP) {
-        memory_map_t *map = iterator;
+        n_map_t *map = iterator;
         uint64_t value_size = rt_rtype_heap_out_size(map->value_index);
         DEBUGF("[runtime.iterator_key] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
                map->length, map->value_data, map->value_index, value_size);
 
-        assertf(cursor < map->length, "[runtime.iterator_value] cursor=%d >= map->length=%d", cursor, map->length);
+        assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor, map->length);
 
         memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return;

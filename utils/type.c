@@ -46,7 +46,7 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
     char *str = fixed_sprintf("%d_%lu", TYPE_POINTER, value_rtype.hash);
     uint32_t hash = hash_string(str);
     rtype_t rtype = {
-            .size =  sizeof(memory_pointer_t),
+            .size =  sizeof(n_pointer_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_POINTER,
@@ -66,7 +66,7 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
 static rtype_t rtype_string() {
     uint32_t hash = hash_string(itoa(TYPE_STRING));
     rtype_t rtype = {
-            .size = sizeof(memory_string_t),
+            .size = sizeof(n_string_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_STRING,
@@ -89,7 +89,7 @@ static rtype_t rtype_list(type_list_t *t) {
     char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);
     uint32_t hash = hash_string(str);
     rtype_t rtype = {
-            .size =  sizeof(memory_list_t),
+            .size =  sizeof(n_list_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_LIST,
@@ -143,7 +143,7 @@ static rtype_t rtype_map(type_map_t *t) {
     char *str = fixed_sprintf("%d_%lu_%lu", TYPE_MAP, key_rtype.hash, value_rtype.hash);
     uint32_t hash = hash_string(str);
     rtype_t rtype = {
-            .size =  sizeof(memory_map_t),
+            .size =  sizeof(n_map_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
             .kind = TYPE_MAP,
@@ -167,7 +167,7 @@ static rtype_t rtype_set(type_set_t *t) {
     char *str = fixed_sprintf("%d_%lu", TYPE_SET, key_rtype.hash);
     uint32_t hash = hash_string(str);
     rtype_t rtype = {
-            .size =  sizeof(memory_set_t),
+            .size =  sizeof(n_set_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
             .kind = TYPE_SET,
@@ -443,15 +443,13 @@ rtype_t ct_reflect_type(type_t t) {
         return rtype;
     }
 
-    uint64_t rtype_index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
-    if (rtype_index == 0) {
+    bool exists = table_exist(ct_rtype_table, itoa(rtype.hash));
+    if (!exists) {
         // 添加到 ct_rtypes 并得到 index(element_rtype 是值传递并 copy)
-        uint64_t index = rtypes_push(rtype);
+        rtype_t *mem = rtypes_push(rtype);
+
         // 将 index 添加到 table
-        table_set(ct_rtype_table, itoa(rtype.hash), (void *) index);
-        rtype.index = index;
-    } else {
-        rtype.index = rtype_index;
+        table_set(ct_rtype_table, itoa(rtype.hash), mem);
     }
 
     return rtype;
@@ -493,17 +491,15 @@ bool type_need_gc(type_t t) {
     return false;
 }
 
-uint64_t rtypes_push(rtype_t rtype) {
+rtype_t *rtypes_push(rtype_t rtype) {
     uint64_t index = ct_rtype_list->length;
-
-    rtype.index = index; // 索引反填
     ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
     ct_rtype_count += 1;
 
-    return index;
+    return ct_list_value(ct_rtype_list, index);
 }
 
 /**
@@ -511,12 +507,10 @@ uint64_t rtypes_push(rtype_t rtype) {
  * @param t
  * @return
  */
-uint64_t ct_find_rtype_index(type_t t) {
+uint64_t ct_find_rtype_hash(type_t t) {
     rtype_t rtype = ct_reflect_type(t);
     assertf(rtype.hash, "type reflect failed");
-    uint64_t index = (uint64_t) table_get(ct_rtype_table, itoa(rtype.hash));
-    assertf(index, "notfound index by ct_rtype_table,hash=%d", rtype.hash);
-    return index;
+    return rtype.hash;
 }
 
 
@@ -600,25 +594,40 @@ type_kind to_gc_kind(type_kind kind) {
  * @param ...
  * @return
  */
-rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
+rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    rtype_t rtype = {
-            .size = count * POINTER_SIZE,
-            .kind = kind,
-            .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-            .gc_bits = malloc_gc_bits(count * POINTER_SIZE)
-    };
+    char *str = itoa(kind);
 
     va_list valist;
     /* 初始化可变参数列表 */
     va_start(valist, count);
-
     for (int i = 0; i < count; i++) {
-        type_kind kind = va_arg(valist, type_kind);
-        if (kind == TYPE_GC_SCAN) {
-            bitmap_set(rtype.gc_bits, i);
-            rtype.last_ptr = (i + 1) * POINTER_SIZE;
-        } else if (kind == TYPE_GC_NOSCAN) {
+        type_kind arg_kind = va_arg(valist, type_kind);
+        str = str_connect(str, itoa(arg_kind));
+    }
+    va_end(valist);
+
+    uint64_t hash = hash_string(str);
+    rtype_t *rtype = table_get(rt_rtype_table, itoa(hash));
+    if (rtype) {
+        return rtype;
+    }
+
+
+    rtype = NEW(rtype_t);
+    rtype->size = count * POINTER_SIZE;
+    rtype->kind = kind;
+    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
+
+    /* 初始化可变参数列表 */
+    va_start(valist, count);
+    for (int i = 0; i < count; i++) {
+        type_kind arg_kind = va_arg(valist, type_kind);
+        if (arg_kind == TYPE_GC_SCAN) {
+            bitmap_set(rtype->gc_bits, i);
+            rtype->last_ptr = (i + 1) * POINTER_SIZE;
+        } else if (arg_kind == TYPE_GC_NOSCAN) {
 //            bitmap_clear(rtype.gc_bits, i);
         } else {
             assertf(false, "gc rtype kind exception");
@@ -626,6 +635,9 @@ rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
     }
     va_end(valist);
 
+    rtype->hash = hash;
+
+    table_set(rt_rtype_table, itoa(rtype->hash), rtype);
     return rtype;
 }
 
@@ -634,15 +646,23 @@ rtype_t gc_rtype(type_kind kind, uint32_t count, ...) {
  * @param count
  * @return
  */
-rtype_t gc_rtype_array(type_kind kind, uint32_t length) {
-    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    rtype_t rtype = {
-            .size = length * POINTER_SIZE,
-            .kind = kind,
-            .last_ptr = 0, // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-            .gc_bits = malloc_gc_bits(length * POINTER_SIZE)
-    };
+rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
+    // 更简单的计算一下 hash 即可 array, len + scan 计算即可
+    char *str = fixed_sprintf("%d_%lu_%lu", kind, length, TYPE_POINTER);
+    uint64_t hash = hash_string(str);
+    rtype_t *rtype = table_get(rt_rtype_table, itoa(hash));
+    if (rtype) {
+        return rtype;
+    }
 
+    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
+    rtype = NEW(rtype_t);
+    rtype->size = length * POINTER_SIZE;
+    rtype->kind = kind;
+    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
+    rtype->hash = hash;
+    table_set(rt_rtype_table, itoa(rtype->hash), rtype);
     return rtype;
 }
 

@@ -899,12 +899,12 @@ addr_t mstack_new(uint64_t size) {
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
  * @param size
- * @param type 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
+ * @param rtype 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
  * @return
  */
-void *runtime_malloc(uint64_t size, rtype_t *type) {
-    if (type) {
-        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_string[type->kind]);
+void *runtime_malloc(uint64_t size, rtype_t *rtype) {
+    if (rtype) {
+        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_string[rtype->kind]);
     } else {
         DEBUGF("[runtime_malloc] size=%ld, type is null", size);
     }
@@ -922,11 +922,11 @@ void *runtime_malloc(uint64_t size, rtype_t *type) {
 
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
-        return (void *) std_malloc(size, type);
+        return (void *) std_malloc(size, rtype);
     }
 
     // 2. 大型内存分配(大于>32KB)
-    return (void *) large_malloc(size, type);
+    return (void *) large_malloc(size, rtype);
 }
 
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
