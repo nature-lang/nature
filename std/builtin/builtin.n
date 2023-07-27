@@ -43,3 +43,9 @@ fn syscall_open(string filename, int flags, u32 perm):int {}
 fn syscall_read(int fd, int len):[u8] {}
 
 fn syscall_write(int fd, [u8] buf):int {}
+
+fn syscall_close(int fd) {}
+
+fn syscall_unlink(string path) {}
+
+fn syscall_lseek(int fd, int offset, int whence):int {}

@@ -3,9 +3,13 @@ int O_WRONLY = 0x1  // 只写模式
 int O_RDWR   = 0x2  // 读写模式
 
 int O_APPEND = 0x8  // 追加写入
-int O_CREATE = 0x40 // 如果文件不存在则创建文件
-int O_EXCL   = 0x80 // 与 O_CREATE 一起使用，文件必须不存在
+int O_CREAT = 0x40 // 如果文件不存在则创建文件
+int O_EXCL   = 0x80 // 与 O_CREAT 一起使用，文件必须不存在
 int O_TRUNC  = 0x200 // 打开文件时清空文件内容
+
+int SEEK_SET = 0  // 移动到文件开头
+int SEEK_CUR = 1 // 保持不变
+int SEEK_END = 2 // 移动到文件末尾
 
 
 fn read(int fd, int len):[u8] {
@@ -18,4 +22,16 @@ fn write(int fd, [u8] buf):int {
 
 fn open(string filename, int flags, u32 perm):int {
     return syscall_open(filename, flags, perm)
+}
+
+fn close(int fd) {
+    return syscall_close(fd)
+}
+
+fn unlink(string path) {
+    return syscall_unlink(path)
+}
+
+fn seek(int fd, int offset, int whence):int {
+    return syscall_lseek(fd, offset, whence)
 }

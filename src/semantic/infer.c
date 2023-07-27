@@ -1527,6 +1527,11 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     if (target_type.kind == TYPE_UNKNOWN) {
         return expr->type;
     }
+
+    if (target_type.kind == TYPE_VOID && expr->type.kind == TYPE_VOID) {
+        return expr->type;
+    }
+
     assertf(expr->type.kind != TYPE_VOID, "line=%d, cannot assign type void to %s", m->infer_line,
             type_kind_string[target_type.kind]);
 

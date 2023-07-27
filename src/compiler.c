@@ -682,9 +682,11 @@ static void compiler_break(module_t *m, ast_break_t *stmt) {
 
 static void compiler_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
-        assert(m->compiler_current->return_operand);
         lir_operand_t *src = compiler_expr(m, *ast->expr);
-        OP_PUSH(lir_op_move(m->compiler_current->return_operand, src));
+        // return void_expr() 时, m->compiler_current->return_operand 是 null
+        if (m->compiler_current->return_operand) {
+            OP_PUSH(lir_op_move(m->compiler_current->return_operand, src));
+        }
 
         // 用来做可达分析
         OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
