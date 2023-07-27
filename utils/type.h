@@ -10,6 +10,10 @@
 #include "table.h"
 #include "ct_list.h"
 
+#ifndef POINTER_SIZE
+#define POINTER_SIZE sizeof(void *)
+#endif
+
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
 #define WORD 2 // 2 byte = 16 位
@@ -382,6 +386,10 @@ typedef struct {
     rtype_t *rtype;
 } n_union_t;
 
+typedef struct {
+    n_string_t *msg;
+    uint8_t has;
+} n_errort;
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
@@ -462,9 +470,9 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
-rtype_t* gc_rtype(type_kind kind, uint32_t count, ...);
+rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
-rtype_t* gc_rtype_array(type_kind kind, uint32_t count);
+rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
 
 /**
  * 一般标量类型其值默认会存储在 stack 中
@@ -476,18 +484,29 @@ rtype_t* gc_rtype_array(type_kind kind, uint32_t count);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    if (kind == TYPE_UNION ||
-        kind == TYPE_STRING ||
-        kind == TYPE_LIST ||
-        kind == TYPE_ARRAY ||
-        kind == TYPE_MAP ||
-        kind == TYPE_SET ||
-        kind == TYPE_TUPLE ||
-        kind == TYPE_STRUCT ||
-        kind == TYPE_FN) {
-        return true;
+    return kind == TYPE_UNION ||
+           kind == TYPE_STRING ||
+           kind == TYPE_LIST ||
+           kind == TYPE_ARRAY ||
+           kind == TYPE_MAP ||
+           kind == TYPE_SET ||
+           kind == TYPE_TUPLE ||
+           kind == TYPE_STRUCT ||
+           kind == TYPE_FN;
+}
+
+static inline bool is_list_u8(type_t t) {
+    if (t.kind != TYPE_LIST) {
+        return false;
     }
-    return false;
+
+    assert(t.list);
+
+    if (t.list->element_type.kind != TYPE_UINT8) {
+        return false;
+    }
+
+    return true;
 }
 
 static inline type_t type_basic_new(type_kind kind) {

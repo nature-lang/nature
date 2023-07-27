@@ -102,24 +102,24 @@ static void analyzer_import(module_t *m, ast_import_t *import) {
     }
 
     assertf(import->package->count > 0, "import exception");
-    char *first = import->package->take[0];
+    char *package = import->package->take[0];
 
-
-    if (is_std_package(first)) {
-        // nature root 中查找
-        analyzer_import_std(m, first, import);
+    if (!m->package_conf && is_std_package(package)) {
+        analyzer_import_std(m, package, import);
     } else {
+        // 一旦引入了包管理, 同名包优先级 current > dep > std
         assertf(m->package_conf, "module %s not found package.toml", m->ident);
-
         // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
-        if (is_current_package(m->package_conf, first)) {
+        if (is_current_package(m->package_conf, package)) {
             // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
             import->package_dir = m->package_dir;
             import->package_conf = m->package_conf;
-        } else if (is_dep_package(m->package_conf, first)) {
-            analyzer_import_dep(m, first, import);
+        } else if (is_dep_package(m->package_conf, package)) {
+            analyzer_import_dep(m, package, import);
+        } else if (is_std_package(package)) {
+            analyzer_import_std(m, package, import);
         } else {
-            assertf(false, "import package %s not found", first);
+            assertf(false, "import package %s not found", package);
         }
     }
 
@@ -434,8 +434,10 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
  * 当子作用域中重新定义了变量，产生了同名变量时，则对变量进行重命名
  * @param var_decl
  */
-static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    analyzer_redeclare_check(m, var_decl->ident);
+static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redeclare_check) {
+    if (redeclare_check) {
+        analyzer_redeclare_check(m, var_decl->ident);
+    }
 
     analyzer_type(m, &var_decl->type);
 
@@ -447,24 +449,33 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
 
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
     analyzer_expr(m, &vardef->right);
-    analyzer_redeclare_check(m, vardef->var_decl.ident);
+
+    // 如果右值是一个 try 表达式, 则不对返回的 error 类型变量进行重复声明的校验
+    if (vardef->right.assert_type != AST_EXPR_TRY) {
+        analyzer_redeclare_check(m, vardef->var_decl.ident);
+    }
+
     analyzer_type(m, &vardef->var_decl.type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
     vardef->var_decl.ident = local->unique_ident;
 }
 
+
+static void analyzer_var_tuple_destr_item(module_t *m, ast_expr_t *expr) {
+    if (expr->assert_type == AST_VAR_DECL) {
+        analyzer_var_decl(m, expr->value, true);
+    } else if (expr->assert_type == AST_EXPR_TUPLE_DESTR) {
+        analyzer_var_tuple_destr(m, expr->value);
+    } else {
+        assertf(false, "var tuple destr expr type exception");
+    }
+}
+
 static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr) {
     for (int i = 0; i < tuple_destr->elements->length; ++i) {
-        ast_expr_t *expr = ct_list_value(tuple_destr->elements, i);
-        // 要么是 ast_var_decl 要么是 ast_tuple_destr
-        if (expr->assert_type == AST_VAR_DECL) {
-            analyzer_var_decl(m, expr->value);
-        } else if (expr->assert_type == AST_EXPR_TUPLE_DESTR) {
-            analyzer_var_tuple_destr(m, expr->value);
-        } else {
-            assertf(false, "var tuple destr expr type exception");
-        }
+        ast_expr_t *item = ct_list_value(tuple_destr->elements, i);
+        analyzer_var_tuple_destr_item(m, item);
     }
 }
 
@@ -475,6 +486,23 @@ static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr
  */
 static void analyzer_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     analyzer_expr(m, &stmt->right);
+
+    if (stmt->right.assert_type == AST_EXPR_TRY) {
+        assertf(stmt->tuple_destr->elements->length == 2, "tuple destr length exception");
+
+        ast_expr_t *result_expr = ct_list_value(stmt->tuple_destr->elements, 0);
+        // result expr 只能是变量声明或者一个 tuple destr 声明
+        analyzer_var_tuple_destr_item(m, result_expr);
+
+        // err expr 只能是一个 var decl, 并且不需要进行重复声明检测
+        ast_expr_t *err_expr = ct_list_value(stmt->tuple_destr->elements, 1);
+        assertf(err_expr->assert_type == AST_VAR_DECL, "tuple destr last expr type exception");
+        analyzer_var_decl(m, err_expr->value, false);
+
+        return;
+    }
+
+    // 第一层需要进行 try 表达式特殊处理, 所以不进入低
     analyzer_var_tuple_destr(m, stmt->tuple_destr);
 }
 
@@ -531,13 +559,13 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
 static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_type(m, &as_expr->target_type);
-    analyzer_expr(m, &as_expr->operand);
+    analyzer_expr(m, &as_expr->src_operand);
 }
 
 
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     analyzer_type(m, &is_expr->target_type);
-    analyzer_expr(m, &is_expr->operand);
+    analyzer_expr(m, &is_expr->src_operand);
 }
 
 
@@ -550,8 +578,8 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
     ast_let_t *let_stmt = stmt->value;
     assertf(let_stmt->expr.assert_type == AST_EXPR_AS, "variables must be used for 'as' in the expression");
     ast_as_expr_t *as_expr = let_stmt->expr.value;
-    assertf(as_expr->operand.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
-    ast_ident *ident = as_expr->operand.value;
+    assertf(as_expr->src_operand.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
+    ast_ident *ident = as_expr->src_operand.value;
     char *old = strdup(ident->literal);
 
     analyzer_expr(m, &let_stmt->expr);
@@ -954,9 +982,9 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
 
     analyzer_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
-    analyzer_var_decl(m, &stmt->first);
+    analyzer_var_decl(m, &stmt->first, true);
     if (stmt->second) {
-        analyzer_var_decl(m, stmt->second);
+        analyzer_var_decl(m, stmt->second, true);
     }
     analyzer_body(m, stmt->body);
 
@@ -1046,7 +1074,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
 static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
-            return analyzer_var_decl(m, stmt->value);
+            return analyzer_var_decl(m, stmt->value, true);
         }
         case AST_STMT_LET: {
             return analyzer_let(m, stmt);

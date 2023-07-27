@@ -11,7 +11,6 @@
 #include "utils/linked.h"
 #include "utils/bitmap.h"
 #include "sizeclass.h"
-#include "basic.h"
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
@@ -205,11 +204,6 @@ typedef struct {
 } mheap_t;
 
 
-typedef struct {
-    n_string_t *msg;
-    uint8_t has;
-} memory_errort;
-
 /**
  * linux 线程由自己的系统栈，多个线程就有多个 system stack
  * 由于进入到 runtime 的大多数情况中都需要切换栈区，所以必须知道当前线程的栈区
@@ -222,7 +216,7 @@ typedef struct processor_t {
     mmode_t user_mode;
     mmode_t system_mode;
     mcache_t mcache;
-    memory_errort *errort;
+    n_errort *errort;
 } processor_t;
 
 typedef struct {

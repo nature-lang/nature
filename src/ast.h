@@ -159,7 +159,7 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t operand; // 将表达式转换成 target_type
+    ast_expr_t src_operand; // 将表达式转换成 target_type
 } ast_as_expr_t;
 
 /**
@@ -167,7 +167,7 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t operand; // 将表达式转换成 target_type
+    ast_expr_t src_operand; // 将表达式转换成 target_type
 } ast_is_expr_t;
 
 // 一元表达式
@@ -523,7 +523,7 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_as_expr_t *convert = NEW(ast_as_expr_t);
-    convert->operand = expr;
+    convert->src_operand = expr;
     convert->target_type = target_type;
 
     result->assert_type = AST_EXPR_AS;

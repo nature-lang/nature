@@ -20,5 +20,6 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr);
 
 static void analyzer_stmt(module_t *m, ast_stmt_t *stmt);
 
+static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr);
 
 #endif //NATURE_SRC_AST_ANALYZER_H_

@@ -1,6 +1,6 @@
 #include "basic.h"
 #include "runtime/memory.h"
-#include "processor.h"
+#include "runtime/processor.h"
 #include "string.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
@@ -297,4 +297,52 @@ void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offs
 
 void zero_fn() {
     rt_processor_attach_errort("zero_fn");
+}
+
+
+// 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
+void processor_attach_errort(n_string_t *msg) {
+    DEBUGF("[runtime.processor_attach_errort] msg=%s", msg->data)
+    processor_t *p = processor_get();
+
+    rtype_t *errort_rtype = gc_rtype(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    n_errort *errort = runtime_malloc(errort_rtype->size, errort_rtype);
+    errort->has = 1;
+    errort->msg = msg;
+
+    p->errort = errort;
+}
+
+n_errort *processor_remove_errort() {
+    processor_t *p = processor_get();
+    n_errort *errort = p->errort;
+    p->errort = n_errort_new("", 0);
+    DEBUGF("[runtime.processor_remove_errort] remove errort: %p", errort);
+    return errort;
+}
+
+uint8_t processor_has_errort() {
+    processor_t *p = processor_get();
+    DEBUGF("[runtime.processor_has_errort] errort?  %d", p->errort->has)
+
+    return p->errort->has;
+}
+
+/**
+ * string -> [u8]
+ * @param str
+ * @return
+ */
+n_list_t *string_to_list(n_string_t *str) {
+    DEBUGF("[runtime.string_to_list] str=%p, str->data=%p, str->length=%lu", str, str->data, str->length)
+    n_list_t *list = list_u8_new(str->length);
+    list->length = str->length;
+    list->data = str->data;
+
+    return list;
+}
+
+n_string_t *list_to_string(n_list_t *list) {
+    DEBUGF("[runtime.list_to_string] list=%p, list->data=%p, list->length=%lu", list, list->data, list->length)
+    return string_new(list->data, list->length);
 }

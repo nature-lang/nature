@@ -6,9 +6,6 @@
 #include "ct_list.h"
 #include "custom_links.h"
 
-#ifndef POINTER_SIZE
-#define POINTER_SIZE sizeof(void *)
-#endif
 
 rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));

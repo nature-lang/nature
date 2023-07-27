@@ -1196,8 +1196,8 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
 
 static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->operand.type.kind == TYPE_UNION);
-    lir_operand_t *operand = compiler_expr(m, is_expr->operand);
+    assert(is_expr->src_operand.type.kind == TYPE_UNION);
+    lir_operand_t *operand = compiler_expr(m, is_expr->src_operand);
     uint64_t target_rtype_hash = ct_find_rtype_hash(is_expr->target_type);
     lir_operand_t *output = temp_var_operand(m, type_basic_new(TYPE_BOOL));
     OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, int_operand(target_rtype_hash)));
@@ -1212,11 +1212,11 @@ static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
  */
 static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     ast_as_expr_t *as_expr = expr.value;
-    lir_operand_t *input = compiler_expr(m, as_expr->operand);
-    uint64_t input_rtype_hash = ct_find_rtype_hash(as_expr->operand.type);
+    lir_operand_t *input = compiler_expr(m, as_expr->src_operand);
+    uint64_t input_rtype_hash = ct_find_rtype_hash(as_expr->src_operand.type);
 
     // 数值类型转换
-    if (is_number(as_expr->target_type.kind) && is_number(as_expr->operand.type.kind)) {
+    if (is_number(as_expr->target_type.kind) && is_number(as_expr->src_operand.type.kind)) {
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
         lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
         lir_operand_t *output_ref = lea_operand_pointer(m, output);
@@ -1237,7 +1237,7 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
 
     // single type to union type
     if (as_expr->target_type.kind == TYPE_UNION) {
-        assert(as_expr->operand.type.kind != TYPE_UNION);
+        assert(as_expr->src_operand.type.kind != TYPE_UNION);
         lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
         OP_PUSH(rt_call(RT_CALL_UNION_CASTING, output, 2, int_operand(input_rtype_hash), input_ref));
@@ -1245,7 +1245,7 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     }
 
     // union assert
-    if (as_expr->operand.type.kind == TYPE_UNION) {
+    if (as_expr->src_operand.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
         // 需要先预留好空间等待值 copy
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
@@ -1253,6 +1253,20 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref));
         compiler_error_handle(m);
+        return output;
+    }
+
+    // string -> list u8
+    if (as_expr->src_operand.type.kind == TYPE_STRING && is_list_u8(as_expr->target_type)) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_STRING_TO_LIST, output, 1, input));
+        return output;
+    }
+
+    // list u8 -> string
+    if (is_list_u8(as_expr->src_operand.type) && as_expr->target_type.kind == TYPE_STRING) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_LIST_TO_STRING, output, 1, input));
         return output;
     }
 

@@ -2,8 +2,8 @@
 #define NATURE_BASIC_H
 
 #include "utils/type.h"
+#include "list.h"
 
-#define POINTER_SIZE sizeof(void*)
 #define INT_SIZE sizeof(int64_t)
 
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
@@ -31,5 +31,23 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size);
 
 void zero_fn();
+
+
+void processor_attach_errort(n_string_t *msg);
+
+n_errort *processor_remove_errort();
+
+uint8_t processor_has_errort();
+
+n_list_t *string_to_list(n_string_t *str);
+
+n_string_t *list_to_string(n_list_t *list);
+
+static inline n_list_t *list_u8_new(uint64_t cap) {
+    rtype_t *list_rtype = gc_rtype(TYPE_LIST, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
+
+    return list_new(list_rtype->hash, element_rtype->hash, cap);
+}
 
 #endif //NATURE_BASIC_H

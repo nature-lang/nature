@@ -97,6 +97,7 @@ static bool parser_must_stmt_end(module_t *m) {
     if (parser_is(m, TOKEN_EOF) || parser_is(m, TOKEN_RIGHT_CURLY)) {
         return true;
     }
+
     // ; (scanner 时主动添加)
     if (parser_is(m, TOKEN_STMT_EOF)) {
         parser_advance(m);
@@ -545,7 +546,7 @@ static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     parser_must(m, TOKEN_AS);
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->target_type = parser_single_type(m);
-    as_expr->operand = left;
+    as_expr->src_operand = left;
     result.assert_type = AST_EXPR_AS;
     result.value = as_expr;
     return result;
@@ -556,7 +557,7 @@ static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
     parser_must(m, TOKEN_IS);
     ast_is_expr_t *is_expr = NEW(ast_is_expr_t);
     is_expr->target_type = parser_single_type(m);
-    is_expr->operand = left;
+    is_expr->src_operand = left;
     result.assert_type = AST_EXPR_IS;
     result.value = is_expr;
     return result;
@@ -853,6 +854,40 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
     return result;
 }
 
+// for ... {
+static bool is_for_tradition_stmt(module_t *m) {
+    // 如果 for 后面直接接上 {, 则这就是 map 声明的 {}, 之后再无其他情况会出现 { 符号了
+    if (parser_is(m, TOKEN_LEFT_CURLY)) {
+        return true;
+    }
+
+    int semicolon_count = 0;
+    linked_node *current = m->p_cursor.current;
+    while (current->value) {
+        token_t *t = current->value;
+        if (t->type == TOKEN_EOF) {
+            assertf(false, "unexpected EOF");
+        }
+
+        // for {int:list} a = 1; a < xx; a ++ {}
+
+        if (t->type == TOKEN_SEMICOLON) {
+            semicolon_count++;
+        }
+
+        if (t->type == TOKEN_LEFT_CURLY) {
+            break;
+        }
+
+        current = current->succ;
+    }
+
+
+    assertf(semicolon_count == 0 || semicolon_count == 2, "for stmt exception");
+
+    return semicolon_count == 2;
+}
+
 /**
  * 只有变量声明是以类型开头
  * var a = xxx
@@ -953,8 +988,9 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     parser_consume(m, TOKEN_FOR);
 //    parser_must(m, TOKEN_LEFT_PAREN);
 
+    // 通过找 ; 号的形式判断, 必须要有两个 ; 才会是 tradition
     // for int i = 1; i <= 10; i+=1
-    if (is_type_begin_stmt(m)) {
+    if (is_for_tradition_stmt(m)) {
         ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
         parser_must(m, TOKEN_SEMICOLON);

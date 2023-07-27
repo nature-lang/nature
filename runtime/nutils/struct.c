@@ -1,6 +1,4 @@
 #include "struct.h"
-#include "utils/type.h"
-#include "utils/custom_links.h"
 #include "runtime/memory.h"
 
 /**

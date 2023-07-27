@@ -361,51 +361,65 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    if (as_expr->operand.assert_type == AST_EXPR_LIST_NEW) {
-        ast_list_new_t *list_new_expr = as_expr->operand.value;
+    // e.g. [] as [u8]
+    if (as_expr->src_operand.assert_type == AST_EXPR_LIST_NEW) {
+        ast_list_new_t *list_new_expr = as_expr->src_operand.value;
         if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    if (as_expr->operand.assert_type == AST_EXPR_SET_NEW) {
-        ast_set_new_t *set_new_expr = as_expr->operand.value;
+    // {} as {u8}
+    if (as_expr->src_operand.assert_type == AST_EXPR_SET_NEW) {
+        ast_set_new_t *set_new_expr = as_expr->src_operand.value;
         if (set_new_expr->elements->length == 0 && target_type.kind == TYPE_SET) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    if (as_expr->operand.assert_type == AST_EXPR_MAP_NEW) {
-        ast_map_new_t *map_new_expr = as_expr->operand.value;
+    // {} as {u8:string}
+    if (as_expr->src_operand.assert_type == AST_EXPR_MAP_NEW) {
+        ast_map_new_t *map_new_expr = as_expr->src_operand.value;
         if (map_new_expr->elements->length == 0 && target_type.kind == TYPE_MAP) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    infer_right_expr(m, &as_expr->operand, type_basic_new(TYPE_UNKNOWN));
-    if (as_expr->operand.type.kind == TYPE_UNION) {
+    infer_right_expr(m, &as_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
+    if (as_expr->src_operand.type.kind == TYPE_UNION) {
         assertf(target_type.kind != TYPE_UNION, "union to union type is not supported");
         // target_type 必须包含再 union 中
-        assertf(union_type_contains(as_expr->operand.type, target_type), "type = %s not contains in union type",
+        assertf(union_type_contains(as_expr->src_operand.type, target_type), "type = %s not contains in union type",
                 type_kind_string[target_type.kind]);
         return target_type;
     }
+
+    // 特殊类型转换 string -> list u8
+    if (as_expr->src_operand.type.kind == TYPE_STRING && is_list_u8(target_type)) {
+        return target_type;
+    }
+
+    // list u8 -> string
+    if (is_list_u8(as_expr->src_operand.type) && target_type.kind == TYPE_STRING) {
+        return target_type;
+    }
+
 
     assertf(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_string[target_type.kind]);
     return target_type;
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = infer_right_expr(m, &is_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &is_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
     assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
     return type_basic_new(TYPE_BOOL);
 }

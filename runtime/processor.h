@@ -2,7 +2,7 @@
 #define NATURE_PROCESSOR_H
 
 #include "memory.h"
-#include "errort.h"
+#include "nutils/errort.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -49,12 +49,6 @@ void processor_init();
 
 void rt_processor_attach_errort(char *msg);
 
-void processor_attach_errort(n_string_t *msg);
-
-memory_errort *processor_remove_errort();
-
-uint8_t processor_has_errort();
-
-void processor_dump_errort(memory_errort *errort);
+void processor_dump_errort(n_errort *errort);
 
 #endif //NATURE_PROCESSOR_H

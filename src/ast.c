@@ -370,14 +370,14 @@ static ast_env_access_t *ast_env_access_copy(ast_env_access_t *temp) {
 
 static ast_as_expr_t *ast_as_expr_copy(ast_as_expr_t *temp) {
     ast_as_expr_t *as_expr = COPY_NEW(ast_as_expr_t, temp);
-    as_expr->operand = *ast_expr_copy(&temp->operand);
+    as_expr->src_operand = *ast_expr_copy(&temp->src_operand);
     as_expr->target_type = type_copy(temp->target_type);
     return as_expr;
 }
 
 static ast_is_expr_t *ast_is_expr_copy(ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
-    is_expr->operand = *ast_expr_copy(&temp->operand);
+    is_expr->src_operand = *ast_expr_copy(&temp->src_operand);
     is_expr->target_type = type_copy(temp->target_type);
     return is_expr;
 }

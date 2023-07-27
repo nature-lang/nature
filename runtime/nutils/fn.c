@@ -136,7 +136,6 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     fn_rtype->last_ptr = sizeof(runtime_fn_t); // 也就是最后一个内存位置包含了指针
 
     runtime_fn_t *fn_runtime = runtime_malloc(sizeof(runtime_fn_t), fn_rtype);
-    free(fn_rtype->gc_bits);
     fn_runtime->fn_addr = fn_addr;
     fn_runtime->envs = envs;
 
@@ -174,7 +173,6 @@ envs_t *env_new(uint64_t length) {
 
     rtype_t *envs_rtype = gc_rtype(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     envs_t *envs = runtime_malloc(sizeof(envs_t), envs_rtype);
-    free(envs_rtype->gc_bits);
     envs->values = values;
     envs->length = length;
 
@@ -193,8 +191,11 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
         // create upvalue_t
         rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(item_rtype->kind), TYPE_GC_NOSCAN);
         upvalue = runtime_malloc(sizeof(upvalue_t), upvalue_rtype);
-        free(upvalue_rtype->gc_bits);
+        DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash)
+
         table_set(env_table, utoa(stack_addr), upvalue);
+        DEBUGF("[runtime.env_assign] table set success")
+
         upvalue->ref = (void *) stack_addr;
         DEBUGF("[runtime.env_assign] upvalue %p created", upvalue);
     } else {

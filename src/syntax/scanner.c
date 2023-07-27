@@ -37,12 +37,16 @@ linked_t *scanner(module_t *m) {
 
         // 首个字符是 0 ~ 9 则判定为数字
         if (scanner_is_number(m, *m->s_cursor.current)) {
-            scanner_guard_advance(m);
-
-            // 16 进制字符串
             char *word = NULL;
-            if (*m->s_cursor.guard == 'x' || *m->s_cursor.guard == 'X') {
-                word = scanner_hex_number_advance(m);
+
+            // 0 开头的数字特殊处理
+            if (*m->s_cursor.guard == '0') {
+                scanner_guard_advance(m);
+                if (*m->s_cursor.guard == 'x' || *m->s_cursor.guard == 'X') {
+                    word = scanner_hex_number_advance(m);
+                } else {
+                    word = scanner_number_advance(m); // 1, 1.12, 0.233
+                }
             } else {
                 word = scanner_number_advance(m); // 1, 1.12, 0.233
             }

@@ -1,5 +1,4 @@
 #include "runtime.h"
-#include "basic.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值

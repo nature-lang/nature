@@ -12,6 +12,6 @@ fn sort([int] list) {
 var list = [2, 8, 4, 2, 3]
 sort(list)
 
-for k in list {
-    println(list[k])
+for v in list {
+    println(v)
 }

@@ -10,7 +10,7 @@ fn makes() {
     [fn(int):int] atms = []
 
     int i = 0
-    for (i < 1000) {
+    for i < 1000 {
         var atm_draw = make_atm()
         atms.push(atm_draw)
         i += 1
