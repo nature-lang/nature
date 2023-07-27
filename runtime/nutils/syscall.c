@@ -110,6 +110,20 @@ n_int_t syscall_lseek(n_int_t fd, n_int_t offset, n_int_t whence) {
         rt_processor_attach_errort(strerror(errno));
         return 0;
     }
-   
+
     return off;
+}
+
+n_int_t syscall_fork() {
+    pid_t pid = fork();
+    if (pid < 0) {
+        rt_processor_attach_errort(strerror(errno));
+        return 0;
+    }
+    return pid;
+}
+
+// 基于 execve 进行改造
+void syscall_exec(n_string_t *path, n_list_t *args, n_list_t *envs) {
+
 }

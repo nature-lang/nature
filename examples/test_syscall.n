@@ -1,5 +1,0 @@
-import "syscall_inst"
-
-var a = [1, 235, 215, 212, 8832] // 这样其实不好做类型推导, 只能按默认 int 搞
-[uint8] b = [1, 2, 3, 4]
-syscall_inst.write(1, b)

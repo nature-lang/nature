@@ -1,0 +1,10 @@
+import syscall
+
+var (pid, err) = try syscall.fork()
+if err.has {
+    return println('fork err: ', err.msg)
+}
+
+if pid > 0 {
+    println('start child process successful')
+}

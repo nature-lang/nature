@@ -35,3 +35,7 @@ fn unlink(string path) {
 fn seek(int fd, int offset, int whence):int {
     return syscall_lseek(fd, offset, whence)
 }
+
+fn fork():int {
+    return syscall_fork()
+}

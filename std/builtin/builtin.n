@@ -49,3 +49,5 @@ fn syscall_close(int fd) {}
 fn syscall_unlink(string path) {}
 
 fn syscall_lseek(int fd, int offset, int whence):int {}
+
+fn syscall_fork():int {}

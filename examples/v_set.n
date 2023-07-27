@@ -1,7 +1,0 @@
-set{int} s = {1, 2, 3, 4, 5}
-
-set.add(1) // 往 set 中添加元素
-
-set.delete(5) // 删除 set 中的某个元素
-
-bool exists = set.contains(2) // 判断是否包含元素 2

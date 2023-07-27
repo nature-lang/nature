@@ -1,7 +1,0 @@
-// call spread js 中的扩展运算符号 [a, b, ...rest] = [10, 20, 30, 40, 50];
-call(...list)
-
-// fn def rest
-fn print(...[any] args) {}
-
-

@@ -15,4 +15,6 @@ void syscall_unlink(n_string_t *path);
 
 n_int_t syscall_lseek(n_int_t fd, n_int_t offset, n_int_t whence);
 
+n_int_t syscall_fork();
+
 #endif //NATURE_SYSCALL_H
