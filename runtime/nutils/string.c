@@ -54,3 +54,22 @@ char *string_to_c_string(n_string_t *n_str) {
 
     return c_str;
 }
+
+n_string_t *string_concat(n_string_t *a, n_string_t *b) {
+    DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
+
+    uint64_t length = a->length + b->length;
+    rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
+    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    n_array_t *data = rt_array_new(element_rtype, length + 1);
+
+    // 将 str copy 到 data 中
+    memmove(data, a->data, a->length);
+    memmove(data + a->length, b->data, b->length);
+    data[length] = '\0';
+
+    n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
+    str->length = length;
+    str->data = data;
+    return str;
+}

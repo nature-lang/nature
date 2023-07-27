@@ -284,11 +284,25 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     type_t right_type = infer_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
-    assertf(is_number(left_type.kind) && is_number(right_type.kind),
-            "binary operate only support number operand, actual '%s %s %s'",
-            type_kind_string[left_type.kind],
-            ast_expr_op_str[expr->operator],
-            type_kind_string[right_type.kind]);
+    if (is_number(left_type.kind)) {
+        // 右值也必须是 number
+        assertf(is_number(right_type.kind),
+                "binary operator '%s' only support number operand, actual '%s %s %s'",
+                ast_expr_op_str[expr->operator],
+                type_kind_string[left_type.kind],
+                ast_expr_op_str[expr->operator],
+                type_kind_string[right_type.kind]);
+    }
+
+    if (left_type.kind == TYPE_STRING) {
+        // 右值必须是 string
+        assertf(right_type.kind == TYPE_STRING,
+                "binary operator '%s' only support string operand, actual '%s %s %s'",
+                ast_expr_op_str[expr->operator],
+                type_kind_string[left_type.kind],
+                ast_expr_op_str[expr->operator],
+                type_kind_string[right_type.kind]);
+    }
 
     // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {

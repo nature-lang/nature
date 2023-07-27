@@ -110,6 +110,7 @@
 #define RT_CALL_ENV_ACCESS_REF "env_access_ref"
 
 #define RT_CALL_STRING_NEW "string_new"
+#define RT_CALL_STRING_CONCAT "string_concat"
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 

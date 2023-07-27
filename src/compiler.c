@@ -813,13 +813,20 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
 static lir_operand_t *compiler_binary(module_t *m, ast_expr_t expr) {
     ast_binary_expr_t *binary_expr = expr.value;
 
-    lir_opcode_t type = ast_op_convert[binary_expr->operator];
 
     lir_operand_t *left_target = compiler_expr(m, binary_expr->left);
     lir_operand_t *right_target = compiler_expr(m, binary_expr->right);
     lir_operand_t *result_target = temp_var_operand(m, expr.type);
 
-    OP_PUSH(lir_op_new(type, left_target, right_target, result_target));
+    if (expr.type.kind == TYPE_STRING) {
+        OP_PUSH(rt_call(RT_CALL_STRING_CONCAT, result_target, 2, left_target, right_target));
+        return result_target;
+    }
+
+
+    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
+
+    OP_PUSH(lir_op_new(operator, left_target, right_target, result_target));
 
     return result_target;
 }
