@@ -51,3 +51,29 @@ fn syscall_unlink(string path) {}
 fn syscall_lseek(int fd, int offset, int whence):int {}
 
 fn syscall_fork():int {}
+
+fn syscall_exec(string path, [string] argv, [string] envp) {}
+
+
+type syscall_timespec_t = struct {
+    i64 sec
+    i64 nsec
+}
+
+type syscall_stat_t = struct {
+    syscall_timespec_t atim
+    syscall_timespec_t mtim
+    syscall_timespec_t ctim
+    u64 dev
+    u64 ino
+    u64 nlink
+    u64 rdev
+    i64 size
+    i64 blksize
+    i64 blocks
+    u32 mode
+    u32 uid
+    u32 gid
+}
+
+fn syscall_stat(string filename):syscall_stat_t {}

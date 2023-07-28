@@ -17,4 +17,8 @@ n_int_t syscall_lseek(n_int_t fd, n_int_t offset, n_int_t whence);
 
 n_int_t syscall_fork();
 
+void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp);
+
+n_struct_t *syscall_stat(n_string_t *filename);
+
 #endif //NATURE_SYSCALL_H

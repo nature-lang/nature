@@ -854,9 +854,16 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
     return result;
 }
 
+static bool prev_token_is_type(token_t *prev) {
+    return prev->type == TOKEN_LEFT_PAREN ||
+           prev->type == TOKEN_LEFT_CURLY ||
+           prev->type == TOKEN_COLON ||
+           prev->type == TOKEN_COMMA;
+}
+
 // for ... {
 static bool is_for_tradition_stmt(module_t *m) {
-    // 如果 for 后面直接接上 {, 则这就是 map 声明的 {}, 之后再无其他情况会出现 { 符号了
+    // 如果 for 后面直接接上 {, 则这就是 map 类型声明的 {}
     if (parser_is(m, TOKEN_LEFT_CURLY)) {
         return true;
     }
@@ -876,6 +883,12 @@ static bool is_for_tradition_stmt(module_t *m) {
         }
 
         if (t->type == TOKEN_LEFT_CURLY) {
+            // 直接判断 { 的类型
+            token_t *prev = current->prev->value;
+            if (prev_token_is_type(prev)) {
+                return true;
+            }
+
             break;
         }
 
@@ -1026,7 +1039,6 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         result->value = for_iterator_stmt;
         return result;
     }
-
 
     // for (condition) {}
     ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);

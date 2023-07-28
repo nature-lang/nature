@@ -6,5 +6,17 @@ if err.has {
 }
 
 if pid > 0 {
-    println('start child process successful')
+    sleep(1)
+    // 主进程等待 1 秒钟, 等待子进程执行完成
+    println('start child process complete, will exit')
+} else {
+    // child 执行其他东西, 由于此时共用了 fd, 所以直接输出到标准输出中
+    println('child process will run')
+
+    var err = try syscall.exec('/binerror/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])
+    if err.has {
+        println('first exec err: ', err.msg)
+    }
+
+    syscall.exec('/bin/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])
 }

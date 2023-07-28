@@ -6,9 +6,12 @@
 static void test_basic() {
     char *raw = exec_output();
 
-//    char *str = "";
-//    assert_string_equal(raw, str);
-    printf("%s", raw);
+    char *str = "child process will run\n"
+                "first exec err: No such file or directory\n"
+                "hello world\n"
+                "start child process complete, will exit\n";
+
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

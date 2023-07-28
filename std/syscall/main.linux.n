@@ -11,6 +11,8 @@ int SEEK_SET = 0  // 移动到文件开头
 int SEEK_CUR = 1 // 保持不变
 int SEEK_END = 2 // 移动到文件末尾
 
+type timespec_t = syscall_timespec_t
+type stat_t = syscall_stat_t
 
 fn read(int fd, int len):[u8] {
     return syscall_read(fd, len)
@@ -38,4 +40,12 @@ fn seek(int fd, int offset, int whence):int {
 
 fn fork():int {
     return syscall_fork()
+}
+
+fn exec(string path, [string] argv, [string] envp) {
+    return syscall_exec(path, argv, envp)
+}
+
+fn stat(string filename):stat_t {
+    return syscall_stat(filename)
 }
