@@ -5,6 +5,9 @@
 #include "errno.h"
 #include "list.h"
 #include "basic.h"
+#include <signal.h>
+#include <sys/wait.h>
+
 
 n_int_t syscall_open(n_string_t *filename, n_int_t flags, n_u32_t perm) {
     DEBUGF("[syscall_open] filename: %s, %ld, %d\n", string_to_c_string_ref(filename), flags, perm);
@@ -98,6 +101,17 @@ void syscall_unlink(n_string_t *path) {
     char *f_str = string_to_c_string_ref(path);
 
     int result = unlink(f_str);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+
+void syscall_link(n_string_t *oldpath, n_string_t *newpath) {
+    char *old_str = string_to_c_string_ref(oldpath);
+    char *new_str = string_to_c_string_ref(newpath);
+    int result = link(old_str, new_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
         return;
@@ -249,4 +263,112 @@ n_struct_t *syscall_fstat(n_int_t fd) {
     n_struct_t *result = stat_to_n_struct(buf);
     free(buf);
     return result;
+}
+
+void syscall_mkdir(n_string_t *path, n_u32_t mode) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = mkdir(p_str, (mode_t) mode);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_rmdir(n_string_t *path) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = rmdir(p_str);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_rename(n_string_t *oldpath, n_string_t *newpath) {
+    char *old_str = string_to_c_string_ref(oldpath);
+    char *new_str = string_to_c_string_ref(newpath);
+    int result = rename(old_str, new_str);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_exit(n_int_t status) {
+    exit((int) status);
+}
+
+n_int_t syscall_getpid() {
+    return (n_int_t) getpid();
+}
+
+n_int_t syscall_getppid() {
+    return (n_int_t) getppid();
+}
+
+void syscall_kill(n_int_t pid, n_int_t sig) {
+    int result = kill((pid_t) pid, (int) sig);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+// 使用 waitpid, 返回值为 exit status
+n_u32_t syscall_wait(n_int_t pid) {
+    int status;
+    int result = waitpid((pid_t) pid, &status, 0);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return 0;
+    }
+
+    return (n_u32_t) status;
+}
+
+void syscall_chdir(n_string_t *path) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = chdir(p_str);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_chroot(n_string_t *path) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = chroot(p_str);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_chown(n_string_t *path, n_int_t uid, n_int_t gid) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = chown(p_str, (uid_t) uid, (gid_t) gid);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+void syscall_chmod(n_string_t *path, n_u32_t mode) {
+    char *p_str = string_to_c_string_ref(path);
+    int result = chmod(p_str, (mode_t) mode);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return;
+    }
+}
+
+n_string_t *syscall_getcwd() {
+    char *buf = mallocz(sizeof(char) * 1024);
+    char *result = getcwd(buf, 1024);
+    if (result == NULL) {
+        rt_processor_attach_errort(strerror(errno));
+        return NULL;
+    }
+    n_string_t *s = string_new(result, strlen(result));
+    free(buf);
+    return s;
 }

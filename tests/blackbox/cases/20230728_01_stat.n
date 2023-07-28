@@ -40,3 +40,9 @@ println(s2.mtim.nsec)
 println(s2.ctim.sec)
 println(s2.ctim.nsec)
 
+// 不存在的文件
+var (s3, err) = try syscall.stat('./mock/nofound.txt')
+if err.has {
+    println(err.msg)
+}
+

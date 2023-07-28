@@ -1,0 +1,57 @@
+import syscall
+
+string path = './mock/test_mkdir'
+string path2 = './mock/test_rename'
+
+var err = try syscall.mkdir(path, 0755)
+if err.has {
+    println('mkdir err: ', err.msg)
+}
+
+// 读取目录进行检查
+var st = syscall.stat(path)
+println('st.mode: ', st.mode)
+
+// 修改目录名称 test_rename
+syscall.rename(path, path2)
+println('rename success')
+
+var st2 = syscall.stat(path2)
+println('st2.mode: ', st2.mode)
+
+// chmod 为 0744
+syscall.chmod(path2, 0744)
+
+st2 = syscall.stat(path2)
+println('st2.mode: ', st2.mode)
+
+// chown 1 1
+var err = try syscall.chown(path2, 1, 1)
+if err.has {
+    println('chown err: ', err.msg)
+}
+
+
+// rmdir
+syscall.rmdir(path2)
+println('rmdir success')
+var (_, err) = try syscall.stat(path2)
+if err.has {
+    println('stat err: ', err.msg)
+}
+
+var pid = syscall.getpid()
+if pid > 0 {
+    println('getpid success')
+}
+
+var ppid = syscall.getppid()
+if ppid > 0 {
+    println('getppid success')
+}
+
+// get cwd
+var cwd = syscall.getcwd()
+if (cwd as [u8]).len() > 0 {
+    println('getcwd success')
+}

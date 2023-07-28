@@ -79,3 +79,29 @@ type syscall_stat_t = struct {
 fn syscall_stat(string filename):syscall_stat_t {}
 
 fn syscall_fstat(int fd):syscall_stat_t {}
+
+fn syscall_mkdir(string path, u32 mode) {}
+
+fn syscall_rmdir(string path) {}
+
+fn syscall_rename(string oldpath, string newpath) {}
+
+fn syscall_exit(int status) {}
+
+fn syscall_getpid():int {}
+
+fn syscall_getppid():int {}
+
+fn syscall_kill(int pid, int sig) {}
+
+fn syscall_wait(int pid):int {}
+
+fn syscall_chdir(string path) {}
+
+fn syscall_chroot(string path) {}
+
+fn syscall_chown(string path, u32 uid, u32 gid) {}
+
+fn syscall_chmod(string path, u32 mode) {}
+
+fn syscall_getcwd():string {}

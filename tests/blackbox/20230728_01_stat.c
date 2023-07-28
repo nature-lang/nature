@@ -38,6 +38,8 @@ static void test_basic() {
                             s2->st_mtim.tv_sec, s2->st_mtim.tv_nsec,
                             s2->st_ctim.tv_sec, s2->st_ctim.tv_nsec);
 
+    expect = str_connect(expect, "No such file or directory\n");
+
     char *raw = exec_output();
     assert_string_equal(raw, expect);
 }

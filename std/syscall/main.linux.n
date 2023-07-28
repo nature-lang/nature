@@ -53,3 +53,56 @@ fn stat(string filename):stat_t {
 fn fstat(int fd):stat_t {
     return syscall_fstat(fd)
 }
+
+fn mkdir(string path, u32 mode) {
+    return syscall_mkdir(path, mode)
+}
+
+fn rmdir(string path) {
+    return syscall_rmdir(path)
+}
+
+fn rename(string oldpath, string newpath) {
+    return syscall_rename(oldpath, newpath)
+}
+
+fn exit(int status) {
+    return syscall_exit(status)
+}
+
+fn getpid():int {
+    return syscall_getpid()
+}
+
+fn getppid():int {
+    return syscall_getppid()
+}
+
+fn kill(int pid, int sig) {
+    return syscall_kill(pid, sig)
+}
+
+fn wait(int pid):int {
+    return syscall_wait(pid)
+}
+
+fn chdir(string path) {
+    return syscall_chdir(path)
+}
+
+fn chroot(string path) {
+    return syscall_chroot(path)
+}
+
+fn chown(string path, u32 uid, u32 gid) {
+    return syscall_chown(path, uid, gid)
+}
+
+fn chmod(string path, u32 mode) {
+    return syscall_chmod(path, mode)
+}
+
+fn getcwd():string {
+    return syscall_getcwd()
+}
+
