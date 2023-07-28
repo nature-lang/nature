@@ -21,4 +21,6 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp);
 
 n_struct_t *syscall_stat(n_string_t *filename);
 
+n_struct_t *syscall_fstat(n_int_t fd);
+
 #endif //NATURE_SYSCALL_H

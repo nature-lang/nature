@@ -238,3 +238,15 @@ n_struct_t *syscall_stat(n_string_t *filename) {
     free(buf);
     return result;
 }
+
+n_struct_t *syscall_fstat(n_int_t fd) {
+    struct stat *buf = mallocz(sizeof(struct stat));
+    int s = fstat((int) fd, buf);
+    if (s == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return NULL;
+    }
+    n_struct_t *result = stat_to_n_struct(buf);
+    free(buf);
+    return result;
+}

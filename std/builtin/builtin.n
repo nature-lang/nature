@@ -77,3 +77,5 @@ type syscall_stat_t = struct {
 }
 
 fn syscall_stat(string filename):syscall_stat_t {}
+
+fn syscall_fstat(int fd):syscall_stat_t {}

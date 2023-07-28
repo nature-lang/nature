@@ -49,3 +49,7 @@ fn exec(string path, [string] argv, [string] envp) {
 fn stat(string filename):stat_t {
     return syscall_stat(filename)
 }
+
+fn fstat(int fd):stat_t {
+    return syscall_fstat(fd)
+}
