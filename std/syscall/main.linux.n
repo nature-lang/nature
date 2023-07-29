@@ -11,6 +11,44 @@ int SEEK_SET = 0  // 移动到文件开头
 int SEEK_CUR = 1 // 保持不变
 int SEEK_END = 2 // 移动到文件末尾
 
+// sigkill 相关信号
+int SIGABRT = 0x6
+int SIGALRM = 0xe
+int SIGBUS = 0x7
+int SIGCHLD = 0x11
+int SIGCLD = 0x11
+int SIGCONT = 0x12
+int SIGFPE = 0x8
+int SIGHUP = 0x1
+int SIGILL = 0x4
+int SIGINT = 0x2
+int SIGIO = 0x1d
+int SIGIOT = 0x6
+int SIGKILL = 0x9
+int SIGPIPE = 0xd
+int SIGPOLL = 0x1d
+int SIGPROF = 0x1b
+int SIGPWR = 0x1e
+int SIGQUIT = 0x3
+int SIGSEGV = 0xb
+int SIGSTKFLT = 0x10
+int SIGSTOP = 0x13
+int SIGSYS = 0x1f
+int SIGTERM = 0xf
+int SIGTRAP = 0x5
+int SIGTSTP = 0x14
+int SIGTTIN = 0x15
+int SIGTTOU = 0x16
+int SIGUNUSED = 0x1f
+int SIGURG = 0x17
+int SIGUSR1 = 0xa
+int SIGUSR2 = 0xc
+int SIGVTALRM = 0x1a
+int SIGWINCH = 0x1c
+int SIGXCPU = 0x18
+int SIGXFSZ = 0x19
+
+
 type timespec_t = syscall_timespec_t
 type stat_t = syscall_stat_t
 

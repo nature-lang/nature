@@ -1,0 +1,34 @@
+import syscall
+
+var (pid, err) = try syscall.fork()
+if err.has {
+    return println('fork err: ', err.msg)
+}
+
+if pid > 0 {
+    // 主进程, wait 阻塞, 并读取返回值
+    var status = syscall.wait(pid)
+    println('wait status: ', status)
+} else {
+    // 子进程通过 exec 调用 sleep
+    syscall.exec('/bin/sleep', ['sleep', '100'], ['env1=v', 'env2=2'])
+}
+
+
+// 测试主动 kill
+(pid, err) = try syscall.fork()
+if err.has {
+    return println('fork err: ', err.msg)
+}
+
+if pid > 0 {
+    // 主进程, wait 阻塞, 并读取返回值
+    var err = try syscall.kill(pid, syscall.SIGKILL)
+    if err.has {
+        println('kill err: ', err.msg)
+    } else {
+        println('kill success')
+    }
+} else {
+    syscall.exec('/bin/sleep', ['sleep', '1000'], [])
+}
