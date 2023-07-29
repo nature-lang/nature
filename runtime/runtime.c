@@ -17,7 +17,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     if (rtype->kind == TYPE_STRING) {
         n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        return (char *) string_to_c_string_ref(n_str);
+        return (char *) string_raw(n_str);
     }
 
     assertf(false, "not support kind=%s", type_kind_string[rtype->kind]);

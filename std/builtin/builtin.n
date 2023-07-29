@@ -6,8 +6,8 @@ type errort = struct {
     bool has
 }
 
-// 一个通用的 c 语言指针,可以理解为 c 中的 void*
-type cptr = ptr<int>
+// common pointer
+type cptr = uint
 
 fn print(...[any] args) {}
 
@@ -19,6 +19,10 @@ fn set(...[t0] keys):{t0} {}
 fn list_push([t0] list, ptr<t0> v) {}
 
 fn list_length([t0] list):int {}
+
+fn list_capacity([t0] list):int {}
+
+fn list_raw([t0] list):cptr {}
 
 fn map_delete({t0:t0} map, ptr<t0> key) {}
 
@@ -37,7 +41,14 @@ fn runtime_gc() {}
 
 fn runtime_malloc_bytes():i64 {}
 
-// syscall ---
+// rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
+fn string_length(string s):int {}
+
+fn string_raw(string s):cptr {}
+
+// 常用系统调用
+fn syscall_call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {}
+
 fn syscall_open(string filename, int flags, u32 perm):int {}
 
 fn syscall_read(int fd, int len):[u8] {}

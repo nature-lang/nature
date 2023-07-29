@@ -11,7 +11,7 @@ if pid > 0 {
     println('wait status: ', status)
 } else {
     // 子进程通过 exec 调用 sleep
-    syscall.exec('/bin/sleep', ['sleep', '100'], ['env1=v', 'env2=2'])
+    syscall.exec('/bin/sleep', ['sleep', '1'], ['env1=v', 'env2=2'])
 }
 
 

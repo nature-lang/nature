@@ -41,7 +41,7 @@ static lir_operand_t *compiler_zero_list(module_t *m, type_t t) {
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
     OP_PUSH(rt_call(RT_CALL_LIST_NEW, result, 3,
-                    rtype_hash, element_index, int_operand(0)));
+                    rtype_hash, element_index, int_operand(t.list->length)));
     return result;
 }
 
@@ -819,14 +819,46 @@ static lir_operand_t *compiler_binary(module_t *m, ast_expr_t expr) {
     lir_operand_t *left_target = compiler_expr(m, binary_expr->left);
     lir_operand_t *right_target = compiler_expr(m, binary_expr->right);
     lir_operand_t *result_target = temp_var_operand(m, expr.type);
+    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
     if (expr.type.kind == TYPE_STRING) {
-        OP_PUSH(rt_call(RT_CALL_STRING_CONCAT, result_target, 2, left_target, right_target));
+        switch (operator) {
+            case LIR_OPCODE_ADD: {
+                OP_PUSH(rt_call(RT_CALL_STRING_CONCAT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SEE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_EE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SNE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_NE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SGT: {
+                OP_PUSH(rt_call(RT_CALL_STRING_GT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SGE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_GE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SLT: {
+                OP_PUSH(rt_call(RT_CALL_STRING_LT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SLE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_LE, result_target, 2, left_target, right_target));
+                break;
+            }
+            default: {
+                assertf(false, "not support string operator %d", ast_expr_op_str[binary_expr->operator]);
+            }
+        }
+
         return result_target;
     }
 
-
-    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
     OP_PUSH(lir_op_new(operator, left_target, right_target, result_target));
 

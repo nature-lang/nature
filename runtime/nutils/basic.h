@@ -43,11 +43,11 @@ n_list_t *string_to_list(n_string_t *str);
 
 n_string_t *list_to_string(n_list_t *list);
 
-static inline n_list_t *list_u8_new(uint64_t cap) {
+static inline n_list_t *list_u8_new(uint64_t length) {
     rtype_t *list_rtype = gc_rtype(TYPE_LIST, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
 
-    return list_new(list_rtype->hash, element_rtype->hash, cap);
+    return list_new(list_rtype->hash, element_rtype->hash, length);
 }
 
 #endif //NATURE_BASIC_H

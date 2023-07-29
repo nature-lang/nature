@@ -35,6 +35,8 @@
 
 #define LIST_PUSH_KEY "push"
 #define LIST_LENGTH_KEY "len"
+#define LIST_CAPACITY_KEY "cap" // list.cap vs list.cap()
+#define LIST_RAW_KEY "raw" // list.raw()
 
 #define MAP_DELETE_KEY "del"
 #define MAP_LENGTH_KEY "len"
@@ -51,7 +53,9 @@
 #define RT_CALL_LIST_ACCESS "list_access"
 #define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SPLICE "list_slice"
+#define RT_CALL_LIST_RAW "list_raw"
 #define RT_CALL_LIST_LENGTH "list_length"
+#define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
@@ -110,7 +114,16 @@
 #define RT_CALL_ENV_ACCESS_REF "env_access_ref"
 
 #define RT_CALL_STRING_NEW "string_new"
+
 #define RT_CALL_STRING_CONCAT "string_concat"
+#define RT_CALL_STRING_EE "string_ee"
+#define RT_CALL_STRING_NE "string_ne"
+#define RT_CALL_STRING_LT "string_lt"
+#define RT_CALL_STRING_LE "string_le"
+#define RT_CALL_STRING_GT "string_gt"
+#define RT_CALL_STRING_GE "string_ge"
+#define RT_CALL_STRING_LENGTH "string_length"
+#define RT_CALL_STRING_RAW "string_raw" // 默认引用传递
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 

@@ -6,7 +6,7 @@
 
 #define LIST_DEFAULT_CAPACITY 8
 
-n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t capacity);
+n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -23,6 +23,10 @@ void list_assign(n_list_t *l, uint64_t index, void *ref);
  * @return
  */
 uint64_t list_length(n_list_t *l);
+
+uint64_t list_capacity(n_list_t *l);
+
+void *list_raw(n_list_t *l);
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中

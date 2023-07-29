@@ -1,0 +1,13 @@
+import syscall
+
+string s = 'hello world!'
+var raw_str = s.raw()
+int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as cptr, raw_str, s.len() as cptr, 0, 0, 0)
+
+// read
+var fd = syscall.open('./mock/stat.txt', syscall.O_RDONLY, 0666)
+var buf = [] as [u8,100]
+println('buf len: ', buf.len(), ', buf cap: ', buf.cap())
+result = syscall.call6(syscall.SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
+println('read result: ', result)
+println('buf: ', buf as string)

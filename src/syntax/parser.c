@@ -227,6 +227,13 @@ static type_t parser_single_type(module_t *m) {
         type_list_t *type_list = NEW(type_list_t);
         type_list->element_type = parser_type(m);
 
+        if (parser_consume(m, TOKEN_COMMA)) {
+            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
+            int cap = atoi(t->literal);
+            assertf(cap > 0, "line: %d, array cap must > 0", parser_line(m));
+            type_list->length = cap;
+        }
+
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
         result.list = type_list;

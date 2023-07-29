@@ -375,7 +375,8 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    // e.g. [] as [u8]
+    // e.g. [] as [u8,5]
+    // empty list handle
     if (as_expr->src_operand.assert_type == AST_EXPR_LIST_NEW) {
         ast_list_new_t *list_new_expr = as_expr->src_operand.value;
         if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
@@ -783,6 +784,46 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
 }
 
 /**
+ * 参考 infer_list_select_call 方法， 主要是要实现
+ *
+ * string.len() 返回 int
+ * string.c_string() 返回 type cptr = uint(未还原)
+ * @return
+ */
+static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
+
+    if (str_equal(s->key, "len")) {
+        // 参数核验
+        assertf(call->actual_params->length == 0, "string len param failed");
+
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left);
+
+        call->left = *ast_ident_expr(RT_CALL_STRING_LENGTH);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
+
+        return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, "raw")) {
+        assertf(call->actual_params->length == 0, "string c_string param failed");
+
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left);
+
+        call->left = *ast_ident_expr(RT_CALL_STRING_RAW);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_UINT);
+        return type_basic_new(TYPE_UINT);
+    }
+
+    assertf(false, "string select call '%s' not support", s->key);
+    exit(1);
+}
+
+/**
  * 对 call 参数验证后对 call 进行改写
  * @param m
  * @param call
@@ -824,6 +865,34 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         call->return_type = type_basic_new(TYPE_INT);
 
         return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, LIST_CAPACITY_KEY)) {
+        assertf(call->actual_params->length == 0, "list length not param");
+
+        // 改写
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // list operand
+
+        call->left = *ast_ident_expr(RT_CALL_LIST_CAPACITY);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
+
+        return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, LIST_RAW_KEY)) {
+        assertf(call->actual_params->length == 0, "list length not param");
+
+        // 改写
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // list operand
+
+        call->left = *ast_ident_expr(RT_CALL_LIST_RAW);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_UINT);
+
+        return type_basic_new(TYPE_UINT);
     }
 
     assertf(false, "list not field '%s'", s->key);
@@ -1028,6 +1097,10 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
         if (select_left_kind == TYPE_SET) {
             return infer_set_select_call(m, call);
+        }
+
+        if (select_left_kind == TYPE_STRING) {
+            return infer_string_select_call(m, call);
         }
 
         if (select_left_kind == TYPE_STRUCT) {

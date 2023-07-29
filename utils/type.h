@@ -119,6 +119,7 @@ static string type_kind_string[] = {
         [TYPE_FLOAT32] = "f32",
         [TYPE_FLOAT64] = "f64",
         [TYPE_INT] = "int",
+        [TYPE_UINT] = "uint",
         [TYPE_INT8] = "i8",
         [TYPE_INT16] = "i16",
         [TYPE_INT32] = "i32",
@@ -228,6 +229,7 @@ typedef struct type_t {
 // 反而更好处理？
 struct type_list_t {
     type_t element_type;
+    uint64_t length;
 };
 
 // p<value_type>
@@ -346,6 +348,7 @@ typedef uint8_t n_bool_t;
 typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t n_int_t;
+typedef uint64_t n_uint_t;
 typedef uint32_t n_u32_t;
 
 typedef double n_float_t;

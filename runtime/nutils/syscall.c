@@ -10,8 +10,8 @@
 
 
 n_int_t syscall_open(n_string_t *filename, n_int_t flags, n_u32_t perm) {
-    DEBUGF("[syscall_open] filename: %s, %ld, %d\n", string_to_c_string_ref(filename), flags, perm);
-    char *f_str = (char *) string_to_c_string_ref(filename);
+    DEBUGF("[syscall_open] filename: %s, %ld, %d\n", string_raw(filename), flags, perm);
+    char *f_str = (char *) string_raw(filename);
     n_int_t fd = open(f_str, (int) flags, perm);
     if (fd == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -98,7 +98,7 @@ void syscall_close(n_int_t fd) {
 }
 
 void syscall_unlink(n_string_t *path) {
-    char *f_str = string_to_c_string_ref(path);
+    char *f_str = string_raw(path);
 
     int result = unlink(f_str);
     if (result == -1) {
@@ -109,8 +109,8 @@ void syscall_unlink(n_string_t *path) {
 
 
 void syscall_link(n_string_t *oldpath, n_string_t *newpath) {
-    char *old_str = string_to_c_string_ref(oldpath);
-    char *new_str = string_to_c_string_ref(newpath);
+    char *old_str = string_raw(oldpath);
+    char *new_str = string_raw(newpath);
     int result = link(old_str, new_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -199,7 +199,7 @@ n_struct_t *stat_to_n_struct(struct stat *s) {
  * @param envp
  */
 void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
 
     // args 转换成 char* 格式并给到 execve
     char **c_args = mallocz(sizeof(char *) * argv->length + 1);
@@ -210,7 +210,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
             return;
         }
 
-        char *c_arg = string_to_c_string_ref(arg);
+        char *c_arg = string_raw(arg);
         c_args[i] = c_arg;
     }
     c_args[argv->length] = NULL; // 最后一个元素为 NULL
@@ -224,7 +224,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
             return;
         }
 
-        char *c_env = string_to_c_string_ref(env);
+        char *c_env = string_raw(env);
         c_envs[i] = c_env;
     }
     c_envs[envp->length] = NULL;
@@ -240,7 +240,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
 }
 
 n_struct_t *syscall_stat(n_string_t *filename) {
-    char *f_str = string_to_c_string_ref(filename);
+    char *f_str = string_raw(filename);
 
     struct stat *buf = mallocz(sizeof(struct stat));
     int s = stat(f_str, buf);
@@ -266,7 +266,7 @@ n_struct_t *syscall_fstat(n_int_t fd) {
 }
 
 void syscall_mkdir(n_string_t *path, n_u32_t mode) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = mkdir(p_str, (mode_t) mode);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -275,7 +275,7 @@ void syscall_mkdir(n_string_t *path, n_u32_t mode) {
 }
 
 void syscall_rmdir(n_string_t *path) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = rmdir(p_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -284,8 +284,8 @@ void syscall_rmdir(n_string_t *path) {
 }
 
 void syscall_rename(n_string_t *oldpath, n_string_t *newpath) {
-    char *old_str = string_to_c_string_ref(oldpath);
-    char *new_str = string_to_c_string_ref(newpath);
+    char *old_str = string_raw(oldpath);
+    char *new_str = string_raw(newpath);
     int result = rename(old_str, new_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -326,7 +326,7 @@ n_u32_t syscall_wait(n_int_t pid) {
 }
 
 void syscall_chdir(n_string_t *path) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = chdir(p_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -335,7 +335,7 @@ void syscall_chdir(n_string_t *path) {
 }
 
 void syscall_chroot(n_string_t *path) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = chroot(p_str);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -344,7 +344,7 @@ void syscall_chroot(n_string_t *path) {
 }
 
 void syscall_chown(n_string_t *path, n_int_t uid, n_int_t gid) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = chown(p_str, (uid_t) uid, (gid_t) gid);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -353,7 +353,7 @@ void syscall_chown(n_string_t *path, n_int_t uid, n_int_t gid) {
 }
 
 void syscall_chmod(n_string_t *path, n_u32_t mode) {
-    char *p_str = string_to_c_string_ref(path);
+    char *p_str = string_raw(path);
     int result = chmod(p_str, (mode_t) mode);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
@@ -372,3 +372,13 @@ n_string_t *syscall_getcwd() {
     free(buf);
     return s;
 }
+
+n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_uint_t a4, n_uint_t a5, n_uint_t a6) {
+    int result = syscall(number, a1, a2, a3, a4, a5, a6);
+    if (result == -1) {
+        rt_processor_attach_errort(strerror(errno));
+        return 0;
+    }
+    return (n_int_t) result;
+}
+

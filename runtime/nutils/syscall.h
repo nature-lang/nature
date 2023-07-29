@@ -3,6 +3,8 @@
 
 #include "utils/type.h"
 
+n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_uint_t a4, n_uint_t a5, n_uint_t a6);
+
 n_int_t syscall_open(n_string_t *filename, n_int_t flags, n_u32_t perm);
 
 void syscall_close(n_int_t fd);

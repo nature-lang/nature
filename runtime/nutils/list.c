@@ -16,13 +16,14 @@ void list_grow(n_list_t *l) {
  * [string] 对于这样的声明，现在默认其 element 元素是存储在堆上的
  * @param rtype_hash
  * @param element_rtype_hash
- * @param capacity list 大小，允许为 0，当 capacity = 0 时，使用 default_capacity
+ * @param length list 大小，允许为 0，当 capacity = 0 时，使用 default_capacity
  * @return
  */
-n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t capacity) {
-    DEBUGF("[list_new] r_index=%lu, element_index=%lu, capacity=%lu", rtype_hash, element_rtype_hash, capacity);
-    if (!capacity) {
-        capacity = LIST_DEFAULT_CAPACITY;
+n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length) {
+    DEBUGF("[list_new] r_index=%lu, element_index=%lu, length=%lu", rtype_hash, element_rtype_hash, length);
+    uint64_t capacity = LIST_DEFAULT_CAPACITY;
+    if (length) {
+        capacity = length;
     }
 
     // find rtype and element_rtype
@@ -37,7 +38,7 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t ca
     // 的技巧而已，所以这里要和数组结构做一个区分
     n_list_t *list_data = runtime_malloc(list_rtype->size, list_rtype);
     list_data->capacity = capacity;
-    list_data->length = 0;
+    list_data->length = length;
     list_data->element_rtype_hash = element_rtype_hash;
     list_data->data = array_data;
 
@@ -85,6 +86,14 @@ void list_assign(n_list_t *l, uint64_t index, void *ref) {
 
 uint64_t list_length(n_list_t *l) {
     return l->length;
+}
+
+uint64_t list_capacity(n_list_t *l) {
+    return l->capacity;
+}
+
+void *list_raw(n_list_t *l) {
+    return l->data;
 }
 
 /**
@@ -146,3 +155,4 @@ n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
 
     return merged;
 }
+
