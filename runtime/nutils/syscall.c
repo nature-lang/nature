@@ -376,7 +376,7 @@ n_string_t *syscall_getcwd() {
 }
 
 n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_uint_t a4, n_uint_t a5, n_uint_t a6) {
-    int result = syscall(number, a1, a2, a3, a4, a5, a6);
+    int64_t result = syscall(number, a1, a2, a3, a4, a5, a6);
     if (result == -1) {
         rt_processor_attach_errort(strerror(errno));
         return 0;
