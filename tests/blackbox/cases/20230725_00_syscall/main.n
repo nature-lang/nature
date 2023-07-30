@@ -17,14 +17,9 @@ if err.has {
 // read buf is [u8]
 var (buf, err) = try syscall.read(fd, 20)
 if err.has {
-    print(err.msg)
-    return
+    return print(err.msg)
 }
 
-println('actual read len: ', buf.len())
+println('actual read len: ', buf.len(), ' cap: ', buf.cap())
 var str =  buf as string
 println('buf as string: ', str)
-
-// continue read
-buf = syscall.read(fd, 100)
-println('second read len: ', buf.len(), ', buf: ', buf as string)

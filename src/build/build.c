@@ -260,7 +260,9 @@ static void build_assembler(slice_t *modules) {
             }
 
             slice_concat(m->asm_global_symbols, c->asm_symbols);
+
             debug_asm(c);
+
             slice_push(closures, c);
         }
         m->closures = closures;

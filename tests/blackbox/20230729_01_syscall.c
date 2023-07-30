@@ -1,15 +1,13 @@
 #include "tests/test.h"
-#include "utils/assertf.h"
-#include "utils/exec.h"
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/syscall.h>
 
 static void test_basic() {
     char *raw = exec_output();
-//    char *str = "";
-//    assert_string_equal(raw, str);
-    printf("%s", raw);
+    char *str = "hello world!buf len: 100, buf cap: 100\n"
+                "read result: 11\n"
+                "buf: hello world!!!\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

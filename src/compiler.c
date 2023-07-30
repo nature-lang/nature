@@ -40,8 +40,8 @@ static lir_operand_t *compiler_zero_list(module_t *m, type_t t) {
     lir_operand_t *result = temp_var_operand(m, t);
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
-    OP_PUSH(rt_call(RT_CALL_LIST_NEW, result, 3,
-                    rtype_hash, element_index, int_operand(t.list->length)));
+    OP_PUSH(rt_call(RT_CALL_LIST_NEW, result, 4,
+                    rtype_hash, element_index, int_operand(t.list->length), int_operand(0)));
     return result;
 }
 
@@ -774,8 +774,9 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
         lir_operand_t *rest_target = temp_var_operand(m, *rest_type);
         lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(*rest_type));
         lir_operand_t *element_index = int_operand(ct_find_rtype_hash(rest_type->list->element_type));
+        lir_operand_t *length = int_operand(0);
         lir_operand_t *capacity = int_operand(0);
-        OP_PUSH(rt_call(RT_CALL_LIST_NEW, rest_target, 3, rtype_hash, element_index, capacity));
+        OP_PUSH(rt_call(RT_CALL_LIST_NEW, rest_target, 4, rtype_hash, element_index, length, capacity));
 
         for (int j = i; j < call->actual_params->length; ++j) {
             ast_expr_t *actual_param = ct_list_value(call->actual_params, j);

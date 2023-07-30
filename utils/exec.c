@@ -37,10 +37,10 @@ char *exec(char *work_dir, char *file, slice_t *list) {
     }
     close(fd[1]);
 
-    char *buf = malloc(1024);
-    memset(buf, 0, 1024);
+    char *buf = malloc(4096);
+    memset(buf, 0, 4096);
 
-    full_read(fd[0], buf, 1024);
+    full_read(fd[0], buf, 4096);
 
     int exec_status;
     wait(&exec_status);

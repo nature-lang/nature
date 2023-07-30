@@ -10,7 +10,7 @@
 
 
 n_int_t syscall_open(n_string_t *filename, n_int_t flags, n_u32_t perm) {
-    DEBUGF("[syscall_open] filename: %s, %ld, %d\n", string_raw(filename), flags, perm);
+    DEBUGF("[syscall_open] filename: %s, %ld, %d\n", (char *) string_raw(filename), flags, perm);
     char *f_str = (char *) string_raw(filename);
     n_int_t fd = open(f_str, (int) flags, perm);
     if (fd == -1) {
@@ -30,10 +30,12 @@ n_list_t *syscall_read(n_int_t fd, n_int_t len) {
         rt_processor_attach_errort(strerror(errno));
         return NULL;
     }
-    DEBUGF("[syscall_read] read %ld bytes", bytes);
 
 
-    n_list_t *result = list_u8_new(bytes);
+    n_list_t *result = list_u8_new(0, bytes);
+
+    DEBUGF("[syscall_read]  bytes: %ld, result.len: %lu, result.cap: %lu",
+           bytes, result->length, result->capacity);
 
     for (int i = 0; i < bytes; ++i) {
         uint8_t b = buffer[i];

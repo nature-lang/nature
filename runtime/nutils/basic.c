@@ -335,7 +335,7 @@ uint8_t processor_has_errort() {
  */
 n_list_t *string_to_list(n_string_t *str) {
     DEBUGF("[runtime.string_to_list] str=%p, str->data=%p, str->length=%lu", str, str->data, str->length)
-    n_list_t *list = list_u8_new(str->length);
+    n_list_t *list = list_u8_new(str->length, str->length);
     list->data = str->data;
 
     return list;

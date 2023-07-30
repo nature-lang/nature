@@ -19,19 +19,27 @@ void list_grow(n_list_t *l) {
  * @param length list 大小，允许为 0，当 capacity = 0 时，使用 default_capacity
  * @return
  */
-n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length) {
-    DEBUGF("[list_new] r_index=%lu, element_index=%lu, length=%lu", rtype_hash, element_rtype_hash, length);
-    uint64_t capacity = LIST_DEFAULT_CAPACITY;
-    if (length) {
-        capacity = length;
+n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
+    DEBUGF("[list_new] r_index=%lu, element_index=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash,
+           length, capacity);
+
+    if (capacity == 0) {
+        if (length > 0) {
+            capacity = length;
+        } else {
+            capacity = LIST_DEFAULT_CAPACITY;
+        }
     }
+
+    assertf(capacity >= length, "capacity must be greater than length");
+    DEBUGF("[runtime.list_new] length=%lu, capacity=%lu", length, capacity)
 
     // find rtype and element_rtype
     rtype_t *list_rtype = rt_find_rtype(rtype_hash);
     rtype_t *element_rtype = rt_find_rtype(element_rtype_hash);
 
     // 创建 array data
-    n_array_t *array_data = rt_array_new(element_rtype, capacity);
+    n_array_t *data = rt_array_new(element_rtype, capacity);
 
     // - 进行内存申请,申请回来一段内存是 memory_list_t 大小的内存, memory_list_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 list_data + 1 时会按照 sizeof(memory_list_t) 大小的内存区域移动
@@ -40,7 +48,7 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
     list_data->capacity = capacity;
     list_data->length = length;
     list_data->element_rtype_hash = element_rtype_hash;
-    list_data->data = array_data;
+    list_data->data = data;
 
     return list_data;
 }
@@ -124,24 +132,25 @@ void list_push(n_list_t *l, void *ref) {
  * @return
  */
 n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t end) {
-    uint64_t capacity = end - start;
+    DEBUGF("[list_slice] rtype_hash=%lu, start=%lu, end=%lu", rtype_hash, start, end);
+    uint64_t length = end - start;
     uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_hash);
-    n_list_t *sliced_list = list_new(rtype_hash, l->element_rtype_hash, capacity);
+    n_list_t *sliced_list = list_new(rtype_hash, l->element_rtype_hash, length, length);
 
     void *src = l->data + start * element_size;
 
     // memmove
-    memmove(sliced_list->data, src, element_size * capacity);
-    sliced_list->length = capacity;
+    memmove(sliced_list->data, src, element_size * length);
 
     return sliced_list;
 }
 
 n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
+    DEBUGF("[list_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
     assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two lists are different");
     uint64_t element_size = rt_rtype_heap_out_size(a->element_rtype_hash);
-    uint64_t capacity = a->length + b->length;
-    n_list_t *merged = list_new(rtype_hash, a->element_rtype_hash, capacity);
+    uint64_t length = a->length + b->length;
+    n_list_t *merged = list_new(rtype_hash, a->element_rtype_hash, length, length);
 
     // 合并 a
     void *dst = merged->data + (merged->length - 1 * element_size);
