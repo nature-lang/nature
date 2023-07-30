@@ -4,8 +4,8 @@ rtype_t *rt_find_rtype(uint32_t rtype_hash) {
     return table_get(rt_rtype_table, itoa(rtype_hash));
 }
 
-uint64_t rt_rtype_heap_out_size(uint32_t rtype_hash) {
-    return rtype_heap_out_size(rt_find_rtype(rtype_hash), POINTER_SIZE);
+uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
+    return rtype_out_size(rt_find_rtype(rtype_hash), POINTER_SIZE);
 }
 
 void fndefs_deserialize() {
@@ -46,9 +46,9 @@ void rtypes_deserialize() {
 
     rtype_t *rt_rtype_ptr = &rt_rtype_data;
 
-    // 全都丢到 hash table 里面去!
-
     uint8_t *gc_bits_offset = (uint8_t *) (rt_rtype_ptr + rt_rtype_count);
+
+    // gc bits
     uint64_t count = 0;
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
@@ -58,9 +58,26 @@ void rtypes_deserialize() {
         gc_bits_offset += gc_bits_size;
         count++;
 
-        // 写入到 table 中
+
+    }
+
+    // elements
+    for (int i = 0; i < rt_rtype_count; ++i) {
+        rtype_t *r = &rt_rtype_ptr[i];
+
+        if (r->element_count == 0) {
+            continue;
+        }
+
+        uint64_t size = r->element_count * sizeof(uint64_t);
+        r->element_hashes = (uint64_t *) gc_bits_offset;
+        gc_bits_offset += size;
+
+        // rtype 已经组装完毕，现在加入到 rtype table 中
         table_set(rt_rtype_table, itoa(r->hash), r);
     }
+
+
     DEBUGF("[rtypes_deserialize] count=%lu", count);
 }
 

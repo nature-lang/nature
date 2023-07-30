@@ -332,7 +332,7 @@ void symdefs_deserialize();
 
 rtype_t *rt_find_rtype(uint32_t rtype_hash);
 
-uint64_t rt_rtype_heap_out_size(uint32_t rtype_hash);
+uint64_t rt_rtype_out_size(uint32_t rtype_hash);
 
 fndef_t *find_fn(addr_t addr);
 

@@ -105,7 +105,7 @@ static rtype_t rtype_list(type_list_t *t) {
  */
 rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = t->element_rtype;
-    uint64_t element_size = rtype_heap_out_size(&element_rtype, POINTER_SIZE);
+    uint64_t element_size = rtype_out_size(&element_rtype, POINTER_SIZE);
 
     char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
     uint32_t hash = hash_string(str);
@@ -239,6 +239,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
     uint64_t max = 0;
     uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
+
+    uint64_t *element_hash_list = malloc(sizeof(uint64_t) * t->properties->length);
+
     // 记录需要 gc 的 key 的
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *property = ct_list_value(t->properties, i);
@@ -249,13 +252,15 @@ static rtype_t rtype_struct(type_struct_t *t) {
         // 按 offset 对齐
         offset = align(offset, item_size);
         // 计算 element_rtype
-        rtype_t rtype = ct_reflect_type(property->type);
-        str = str_connect(str, itoa(rtype.hash));
+        rtype_t element_rtype = ct_reflect_type(property->type);
+        str = str_connect(str, itoa(element_rtype.hash));
         bool need_gc = type_need_gc(property->type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
         offset += item_size;
+
+        element_hash_list[i] = element_rtype.hash;
     }
     uint64_t size = align(offset, max);
 
@@ -264,8 +269,11 @@ static rtype_t rtype_struct(type_struct_t *t) {
             .size = size,
             .hash = hash_string(str),
             .kind = TYPE_STRUCT,
-            .gc_bits = malloc_gc_bits(size)
+            .gc_bits = malloc_gc_bits(size),
+            .element_count = t->properties->length,
+            .element_hashes = element_hash_list,
     };
+
     if (need_gc_count) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
@@ -443,7 +451,7 @@ rtype_t ct_reflect_type(type_t t) {
     bool exists = table_exist(ct_rtype_table, itoa(rtype.hash));
     if (!exists) {
         // 添加到 ct_rtypes 并得到 index(element_rtype 是值传递并 copy)
-        rtype_t *mem = rtypes_push(rtype);
+        rtype_t *mem = rtype_push(rtype);
 
         // 将 index 添加到 table
         table_set(ct_rtype_table, itoa(rtype.hash), mem);
@@ -488,12 +496,13 @@ bool type_need_gc(type_t t) {
     return false;
 }
 
-rtype_t *rtypes_push(rtype_t rtype) {
+rtype_t *rtype_push(rtype_t rtype) {
     uint64_t index = ct_rtype_list->length;
     ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
+    ct_rtype_size += (rtype.element_count * sizeof(uint64_t));
     ct_rtype_count += 1;
 
     return ct_list_value(ct_rtype_list, index);
@@ -518,7 +527,7 @@ uint64_t ct_find_rtype_hash(type_t t) {
  * @param rtype
  * @return
  */
-uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size) {
+uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size) {
     if (rtype->in_heap) {
         return ptr_size;
     }

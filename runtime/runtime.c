@@ -8,7 +8,7 @@
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
-    uint64_t data_size = rtype_heap_out_size(rtype, POINTER_SIZE);
+    uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
     if (is_number(rtype->kind)) {
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);

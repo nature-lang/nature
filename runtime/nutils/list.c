@@ -3,12 +3,13 @@
 #include "runtime/memory.h"
 #include "runtime/processor.h"
 #include "array.h"
+#include "struct.h"
 
 void list_grow(n_list_t *l) {
     l->capacity = l->capacity * 2;
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     n_array_t *new_array_data = rt_array_new(element_rtype, l->capacity);
-    memmove(new_array_data, l->data, l->capacity * rtype_heap_out_size(element_rtype, POINTER_SIZE));
+    memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
     l->data = new_array_data;
 }
 
@@ -68,7 +69,7 @@ void list_access(n_list_t *l, uint64_t index, void *value_ref) {
         return;
     }
 
-    uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_hash);
+    uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
     memmove(value_ref, l->data + offset, element_size);
@@ -85,9 +86,9 @@ void list_assign(n_list_t *l, uint64_t index, void *ref) {
     assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
-    uint64_t element_size = rtype_heap_out_size(element_rtype, POINTER_SIZE);
+    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
     // 计算 offset
-    uint64_t offset = rtype_heap_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
+    uint64_t offset = rtype_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->data + offset;
     memmove(p, ref, element_size);
 }
@@ -134,7 +135,7 @@ void list_push(n_list_t *l, void *ref) {
 n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t end) {
     DEBUGF("[list_slice] rtype_hash=%lu, start=%lu, end=%lu", rtype_hash, start, end);
     uint64_t length = end - start;
-    uint64_t element_size = rt_rtype_heap_out_size(l->element_rtype_hash);
+    uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     n_list_t *sliced_list = list_new(rtype_hash, l->element_rtype_hash, length, length);
 
     void *src = l->data + start * element_size;
@@ -148,7 +149,7 @@ n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t 
 n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
     DEBUGF("[list_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
     assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two lists are different");
-    uint64_t element_size = rt_rtype_heap_out_size(a->element_rtype_hash);
+    uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
     uint64_t length = a->length + b->length;
     n_list_t *merged = list_new(rtype_hash, a->element_rtype_hash, length, length);
 
@@ -164,4 +165,50 @@ n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
 
     return merged;
 }
+
+/**
+ * 将 list 中的每一个元素都 push 到 buf 中，如果 list 的元素是 list/struct 则需要进行展开
+ * @param l
+ * @param rtype_hash
+ * @param buf
+ */
+void list_to_buf(n_list_t *l, uint64_t rtype_hash, autobuf_t *buf) {
+    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
+    for (int i = 0; i < l->length; ++i) {
+        uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+        uint8_t *p = l->data + i * element_size;
+
+        if (element_rtype->kind == TYPE_LIST) {
+            // 此时 p 存储的是一个 pointer, 指向一个 list
+            list_to_buf((n_list_t *) p, element_rtype->hash, buf);
+        } else if (element_rtype->kind == TYPE_STRUCT) {
+            // 此时 p 存储的是一个 pointer, 指向一个 struct
+            struct_to_buf((n_struct_t *) p, element_rtype->hash, buf);
+        } else {
+            autobuf_push(buf, p, element_size);
+        }
+    }
+}
+
+void *list_toc(n_list_t *l, uint64_t rtype_hash) {
+    if (l->length == 0) {
+        DEBUGF("[list_toc] length == 0, return NULL")
+        return NULL;
+    }
+
+    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
+    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+    DEBUGF("[list_toc] element_size=%lu, length=%lu", element_size, l->length);
+
+    autobuf_t *buf = autobuf_new(l->length * element_size);
+    list_to_buf(l, rtype_hash, buf);
+    void *p = runtime_malloc(buf->len, NULL);
+    memmove(p, buf->data, buf->len);
+    autobuf_free(buf);
+
+    return p;
+}
+
+
+
 

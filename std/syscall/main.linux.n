@@ -456,3 +456,38 @@ fn getcwd():string {
 fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
     return syscall_call6(number, a1, a2, a3, a4, a5, a6)
 }
+
+
+// socket 相关
+type sockaddr_in = struct {
+    u8 sin_len
+    u8 sin_family
+    u16 sin_port
+    u32 sin_addr;
+
+    // zero 填充, 8 byte
+    [u8,8] sin_zero
+}
+
+type sockaddr_in6 = struct {
+    u8 sin6_len
+    u8 sin6_family
+    u16 sin6_port
+    u32 sin6_flowinfo
+    // ipv6 address(128-bit)
+    [u32,4] sin6_addr
+    u32 sin6_scope_id
+}
+
+type sockaddr_un = struct {
+    u8 sun_len
+    u8 sun_family
+    // 108 byte
+    [u8,104] sun_path
+}
+
+fn socket(int domain, int type, int protocol):int {
+    return call6(SYS_SOCKET, domain, type, protocol, 0, 0, 0)
+}
+
+

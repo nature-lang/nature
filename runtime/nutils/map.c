@@ -27,8 +27,8 @@ static void set_data_index(n_map_t *m, uint64_t hash_index, uint64_t data_index)
 void map_grow(n_map_t *m) {
     rtype_t *key_rtype = rt_find_rtype(m->key_index);
     rtype_t *value_rtype = rt_find_rtype(m->value_index);
-    uint64_t key_size = rtype_heap_out_size(key_rtype, POINTER_SIZE);
-    uint64_t value_size = rtype_heap_out_size(value_rtype, POINTER_SIZE);
+    uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
+    uint64_t value_size = rtype_out_size(value_rtype, POINTER_SIZE);
 
 
     n_map_t old_map;
@@ -115,7 +115,7 @@ bool map_access(n_map_t *m, void *key_ref, void *value_ref) {
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回
-    uint64_t value_size = rt_rtype_heap_out_size(m->value_index);
+    uint64_t value_size = rt_rtype_out_size(m->value_index);
 
     DEBUGF("[runtime.map_access] value_base=%p, find hash_value=%lu,data_index=%lu,value_size=%lu success",
            m->value_data,
@@ -163,8 +163,8 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
 
     set_data_index(m, hash_index, data_index);
 
-    uint64_t key_size = rt_rtype_heap_out_size(m->key_index);
-    uint64_t value_size = rt_rtype_heap_out_size(m->value_index);
+    uint64_t key_size = rt_rtype_out_size(m->key_index);
+    uint64_t value_size = rt_rtype_out_size(m->value_index);
     DEBUGF("[runtime.map_assign] assign success data_index=%lu, hash_value=%lu",
            data_index,
            m->hash_table[hash_index])

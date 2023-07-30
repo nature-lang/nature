@@ -95,7 +95,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
         return;
     }
 
-    uint64_t size = rt_rtype_heap_out_size(target_rtype_hash);
+    uint64_t size = rt_rtype_out_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF("[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, values_ref: %p",
            mu,
@@ -130,11 +130,11 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
            mu,
            value_ref,
            &mu->value,
-           rtype_heap_out_size(rtype, POINTER_SIZE),
+           rtype_out_size(rtype, POINTER_SIZE),
            (void *) fetch_addr_value((addr_t) value_ref))
     mu->rtype = rtype;
 
-    memmove(&mu->value, value_ref, rtype_heap_out_size(rtype, POINTER_SIZE));
+    memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
     DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
            mu->value.i64_value);
 
@@ -188,7 +188,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t key_size = rt_rtype_heap_out_size(map->key_index);
+        uint64_t key_size = rt_rtype_out_size(map->key_index);
         DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data, map->key_index, key_size);
 
@@ -214,7 +214,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_LIST) {
         n_list_t *list = iterator;
-        uint64_t value_size = rt_rtype_heap_out_size(list->element_rtype_hash);
+        uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p", list->length,
                list->capacity,
                list->data);
@@ -229,7 +229,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t value_size = rt_rtype_heap_out_size(map->value_index);
+        uint64_t value_size = rt_rtype_out_size(map->value_index);
         DEBUGF("[runtime.iterator_next_value] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data, map->key_index, value_size);
 
@@ -260,14 +260,14 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
         assertf(cursor < list->length, "[runtime.iterator_take_value] cursor=%d >= list->length=%d", cursor,
                 list->length);
 
-        uint64_t element_size = rt_rtype_heap_out_size(list->element_rtype_hash);
+        uint64_t element_size = rt_rtype_out_size(list->element_rtype_hash);
         memmove(value_ref, list->data + element_size * cursor, element_size);
         return;
     }
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t value_size = rt_rtype_heap_out_size(map->value_index);
+        uint64_t value_size = rt_rtype_out_size(map->value_index);
         DEBUGF("[runtime.iterator_key] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
                map->length, map->value_data, map->value_index, value_size);
 

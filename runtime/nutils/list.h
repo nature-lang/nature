@@ -3,6 +3,7 @@
 
 #include "utils/type.h"
 #include <stdint.h>
+#include "utils/autobuf.h"
 
 #define LIST_DEFAULT_CAPACITY 8
 
@@ -27,6 +28,11 @@ uint64_t list_length(n_list_t *l);
 uint64_t list_capacity(n_list_t *l);
 
 void *list_raw(n_list_t *l);
+
+void *list_toc(n_list_t *l, uint64_t rtype_hash);
+
+void list_to_buf(n_list_t *l, uint64_t rtype_hash, autobuf_t *buf);
+
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中

@@ -62,7 +62,7 @@ static inline uint64_t
 find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_index, void *key_ref) {
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_index);
-    uint64_t key_size = rtype_heap_out_size(key_rtype, POINTER_SIZE);
+    uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
     uint64_t hash = key_hash(key_rtype, key_ref);
 
     // - 开放寻址的方式查找

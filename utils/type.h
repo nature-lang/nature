@@ -152,6 +152,9 @@ typedef struct {
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
+
+    uint16_t element_count; // struct/tuple 类型的长度
+    uint64_t *element_hashes; // struct/tuple 每个类型的种类
 } rtype_t;
 
 
@@ -407,7 +410,7 @@ rtype_t ct_reflect_type(type_t t);
  * @param rtype
  * @return
  */
-rtype_t *rtypes_push(rtype_t rtype);
+rtype_t *rtype_push(rtype_t rtype);
 
 uint64_t ct_find_rtype_hash(type_t t);
 
@@ -465,7 +468,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  */
 uint8_t *malloc_gc_bits(uint64_t size);
 
-uint64_t rtype_heap_out_size(rtype_t *rtype, uint8_t ptr_size);
+uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size);
 
 uint64_t type_struct_offset(type_struct_t *s, char *key);
 

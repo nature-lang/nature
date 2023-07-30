@@ -1513,6 +1513,17 @@ uint8_t *rtypes_serialize() {
         p += gc_bits_size;
     }
 
+    // 移动 element_hashes
+    for (int i = 0; i < ct_rtype_list->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_list, i);
+
+        if (r->element_count > 0) {
+            memmove(p, r->element_hashes, r->element_count * sizeof(uint64_t));
+        }
+
+        p += r->element_count * sizeof(uint64_t);
+    }
+
     return data;
 }
 
