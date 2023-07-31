@@ -499,6 +499,16 @@ static inline ast_expr_t *ast_ident_expr(char *literal) {
     return expr;
 }
 
+static inline ast_expr_t *ast_int_expr(uint64_t number) {
+    ast_expr_t *expr = NEW(ast_expr_t);
+    expr->assert_type = AST_EXPR_LITERAL;
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = TYPE_INT;
+    literal->value = itoa(number);
+    expr->value = literal;
+    return expr;
+}
+
 static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) {
     ast_expr_t *result = NEW(ast_expr_t);
 

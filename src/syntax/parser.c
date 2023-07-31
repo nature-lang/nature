@@ -288,9 +288,10 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
-            struct_property_t item = {0};
-            item.type = parser_type(m);
-            item.key = parser_advance(m)->literal;
+            struct_property_t item = {
+                    .type = parser_type(m),
+                    .key = parser_advance(m)->literal
+            };
 
             if (parser_consume(m, TOKEN_EQUAL)) {
                 ast_expr_t *temp_expr = NEW(ast_expr_t);

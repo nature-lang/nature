@@ -21,7 +21,7 @@ void list_grow(n_list_t *l) {
  * @return
  */
 n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
-    DEBUGF("[list_new] r_index=%lu, element_index=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash,
+    DEBUGF("[list_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash,
            length, capacity);
 
     if (capacity == 0) {
@@ -37,7 +37,10 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
 
     // find rtype and element_rtype
     rtype_t *list_rtype = rt_find_rtype(rtype_hash);
+    assertf(list_rtype, "cannot find rtype with hash %lu", rtype_hash);
+
     rtype_t *element_rtype = rt_find_rtype(element_rtype_hash);
+    assertf(element_rtype, "cannot find element_rtype with hash %lu", element_rtype_hash);
 
     // 创建 array data
     n_array_t *data = rt_array_new(element_rtype, capacity);
@@ -166,48 +169,7 @@ n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
     return merged;
 }
 
-/**
- * 将 list 中的每一个元素都 push 到 buf 中，如果 list 的元素是 list/struct 则需要进行展开
- * @param l
- * @param rtype_hash
- * @param buf
- */
-void list_to_buf(n_list_t *l, uint64_t rtype_hash, autobuf_t *buf) {
-    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
-    for (int i = 0; i < l->length; ++i) {
-        uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
-        uint8_t *p = l->data + i * element_size;
 
-        if (element_rtype->kind == TYPE_LIST) {
-            // 此时 p 存储的是一个 pointer, 指向一个 list
-            list_to_buf((n_list_t *) p, element_rtype->hash, buf);
-        } else if (element_rtype->kind == TYPE_STRUCT) {
-            // 此时 p 存储的是一个 pointer, 指向一个 struct
-            struct_to_buf((n_struct_t *) p, element_rtype->hash, buf);
-        } else {
-            autobuf_push(buf, p, element_size);
-        }
-    }
-}
-
-void *list_toc(n_list_t *l, uint64_t rtype_hash) {
-    if (l->length == 0) {
-        DEBUGF("[list_toc] length == 0, return NULL")
-        return NULL;
-    }
-
-    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
-    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
-    DEBUGF("[list_toc] element_size=%lu, length=%lu", element_size, l->length);
-
-    autobuf_t *buf = autobuf_new(l->length * element_size);
-    list_to_buf(l, rtype_hash, buf);
-    void *p = runtime_malloc(buf->len, NULL);
-    memmove(p, buf->data, buf->len);
-    autobuf_free(buf);
-
-    return p;
-}
 
 
 

@@ -153,6 +153,7 @@ typedef struct {
     type_kind kind; // 类型的种类
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 
+    uint8_t align; // struct/list 最终对齐的字节数
     uint16_t element_count; // struct/tuple 类型的长度
     uint64_t *element_hashes; // struct/tuple 每个类型的种类
 } rtype_t;

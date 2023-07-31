@@ -357,6 +357,116 @@ int SIGWINCH = 0x1c
 int SIGXCPU = 0x18
 int SIGXFSZ = 0x19
 
+// 网络相关
+int AF_ALG = 0x26
+int AF_APPLETALK = 0x5
+int AF_ASH = 0x12
+int AF_ATMPVC = 0x8
+int AF_ATMSVC = 0x14
+int AF_AX25 = 0x3
+int AF_BLUETOOTH = 0x1f
+int AF_BRIDGE = 0x7
+int AF_CAIF = 0x25
+int AF_CAN = 0x1d
+int AF_DECnet = 0xc
+int AF_ECONET = 0x13
+int AF_FILE = 0x1
+int AF_IEEE802154 = 0x24
+int AF_INET = 0x2
+int AF_INET6 = 0xa
+int AF_IPX = 0x4
+int AF_IRDA = 0x17
+int AF_ISDN = 0x22
+int AF_IUCV = 0x20
+int AF_KEY = 0xf
+int AF_LLC = 0x1a
+int AF_LOCAL = 0x1
+int AF_MAX = 0x27
+int AF_NETBEUI = 0xd
+int AF_NETLINK = 0x10
+int AF_NETROM = 0x6
+int AF_PACKET = 0x11
+int AF_PHONET = 0x23
+int AF_PPPOX = 0x18
+int AF_RDS = 0x15
+int AF_ROSE = 0xb
+int AF_ROUTE = 0x10
+int AF_RXRPC = 0x21
+int AF_SECURITY = 0xe
+int AF_SNA = 0x16
+int AF_TIPC = 0x1e
+int AF_UNIX = 0x1
+int AF_UNSPEC = 0x0
+int AF_WANPIPE = 0x19
+int AF_X25 = 0x9
+int ARPHRD_ADAPT = 0x108
+int ARPHRD_APPLETLK = 0x8
+int ARPHRD_ARCNET = 0x7
+int ARPHRD_ASH = 0x30d
+int ARPHRD_ATM = 0x13
+int ARPHRD_AX25 = 0x3
+int ARPHRD_BIF = 0x307
+int ARPHRD_CHAOS = 0x5
+int ARPHRD_CISCO = 0x201
+int ARPHRD_CSLIP = 0x101
+int ARPHRD_CSLIP6 = 0x103
+int ARPHRD_DDCMP = 0x205
+int ARPHRD_DLCI = 0xf
+int ARPHRD_ECONET = 0x30e
+int ARPHRD_EETHER = 0x2
+int ARPHRD_ETHER = 0x1
+int ARPHRD_EUI64 = 0x1b
+int ARPHRD_FCAL = 0x311
+int ARPHRD_FCFABRIC = 0x313
+int ARPHRD_FCPL = 0x312
+int ARPHRD_FCPP = 0x310
+int ARPHRD_FDDI = 0x306
+int ARPHRD_FRAD = 0x302
+int ARPHRD_HDLC = 0x201
+int ARPHRD_HIPPI = 0x30c
+int ARPHRD_HWX25 = 0x110
+int ARPHRD_IEEE1394 = 0x18
+int ARPHRD_IEEE802 = 0x6
+int ARPHRD_IEEE80211 = 0x321
+int ARPHRD_IEEE80211_PRISM = 0x322
+int ARPHRD_IEEE80211_RADIOTAP = 0x323
+int ARPHRD_IEEE802154 = 0x324
+int ARPHRD_IEEE802154_PHY = 0x325
+int ARPHRD_IEEE802_TR = 0x320
+int ARPHRD_INFINIBAND = 0x20
+int ARPHRD_IPDDP = 0x309
+int ARPHRD_IPGRE = 0x30a
+int ARPHRD_IRDA = 0x30f
+int ARPHRD_LAPB = 0x204
+int ARPHRD_LOCALTLK = 0x305
+int ARPHRD_LOOPBACK = 0x304
+int ARPHRD_METRICOM = 0x17
+int ARPHRD_NETROM = 0x0
+int ARPHRD_NONE = 0xfffe
+int ARPHRD_PIMREG = 0x30b
+int ARPHRD_PPP = 0x200
+int ARPHRD_PRONET = 0x4
+int ARPHRD_RAWHDLC = 0x206
+int ARPHRD_ROSE = 0x10e
+int ARPHRD_RSRVD = 0x104
+int ARPHRD_SIT = 0x308
+int ARPHRD_SKIP = 0x303
+int ARPHRD_SLIP = 0x100
+int ARPHRD_SLIP6 = 0x102
+int ARPHRD_TUNNEL = 0x300
+int ARPHRD_TUNNEL6 = 0x301
+int ARPHRD_VOID = 0xffff
+int ARPHRD_X25 = 0x10f
+
+int SOCK_CLOEXEC = 0x80000
+int SOCK_DCCP = 0x6
+int SOCK_DGRAM = 0x2
+int SOCK_NONBLOCK = 0x800
+int SOCK_PACKET = 0xa
+int SOCK_RAW = 0x3
+int SOCK_RDM = 0x4
+int SOCK_SEQPACKET = 0x5
+int SOCK_STREAM = 0x1
 
 type timespec_t = syscall_timespec_t
 type stat_t = syscall_stat_t
@@ -459,13 +569,11 @@ fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
 
 
 // socket 相关
-type sockaddr_in = struct {
-    u8 sin_len
-    u8 sin_family
+type sockaddr_in = struct { // linux_amd64 占用 8 个字节
+    u16 sin_family
     u16 sin_port
-    u32 sin_addr;
+    u32 sin_addr
 
-    // zero 填充, 8 byte
     [u8,8] sin_zero
 }
 
@@ -486,8 +594,32 @@ type sockaddr_un = struct {
     [u8,104] sun_path
 }
 
-fn socket(int domain, int type, int protocol):int {
-    return call6(SYS_SOCKET, domain, type, protocol, 0, 0, 0)
+fn socket(int domain, int t, int protocol):int {
+    return call6(SYS_SOCKET, domain as cptr, t as cptr, protocol as cptr, 0, 0, 0)
 }
 
+// 泛型与重载组合使用
+type sockaddr = gen sockaddr_in|sockaddr_un
 
+fn bind(int sockfd, sockaddr addr) {
+    cptr p = addr.toc()
+    var len = 16 as cptr // in 和 unix 长度为 16byte
+    call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+}
+
+fn bind(int sockfd, sockaddr_in6 addr) {
+    cptr p = addr.toc()
+    var len = 28 as cptr
+    call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+}
+
+// en
+// backlog 表示最大的监听长度
+fn listen(int sockfd, int backlog) {
+    call6(SYS_LISTEN, sockfd as cptr, backlog as cptr, 0, 0, 0, 0)
+}
+
+fn accept(int sockfd):int {
+     addr.fromc()
+    return call6(SYS_ACCEPT, sockfd as cptr, 0, 0, 0, 0, 0)
+}

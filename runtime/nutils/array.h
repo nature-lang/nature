@@ -5,6 +5,14 @@
 #include "runtime/memory.h"
 
 static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
+    assertf(element_rtype, "element_rtype is null");
+
+    DEBUGF("[rt_array_new] element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), length=%lu",
+           element_rtype->size,
+           type_kind_string[element_rtype->kind],
+           element_rtype->last_ptr > 0,
+           length);
+
     // - 创建一个 typeuse_array_t 结构
     type_t type_array = type_basic_new(TYPE_ARRAY);
     type_array.array = NEW(type_array_t);

@@ -632,16 +632,16 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
     // exists key
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(ast->properties, i);
-        struct_property_t *type_property = ct_list_value(type_struct->properties, i);
+        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
 
 
         table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
-        infer_right_expr(m, struct_property->right, type_property->type);
+        infer_right_expr(m, struct_property->right, expect_property->type);
 
         // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = type_property->type;
+        struct_property->type = expect_property->type;
     }
 
     list_t *default_properties = ast->type.struct_->properties;
@@ -793,7 +793,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
 static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
 
-    if (str_equal(s->key, "len")) {
+    if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         // 参数核验
         assertf(call->actual_params->length == 0, "string len param failed");
 
@@ -807,7 +807,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_INT);
     }
 
-    if (str_equal(s->key, "raw")) {
+    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
         assertf(call->actual_params->length == 0, "string c_string param failed");
 
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
@@ -853,7 +853,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_VOID);
     }
 
-    if (str_equal(s->key, LIST_LENGTH_KEY)) {
+    if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         assertf(call->actual_params->length == 0, "list length not param");
 
         // 改写
@@ -867,7 +867,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_INT);
     }
 
-    if (str_equal(s->key, LIST_CAPACITY_KEY)) {
+    if (str_equal(s->key, BUILTIN_CAP_KEY)) {
         assertf(call->actual_params->length == 0, "list length not param");
 
         // 改写
@@ -881,7 +881,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_INT);
     }
 
-    if (str_equal(s->key, LIST_RAW_KEY)) {
+    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
         assertf(call->actual_params->length == 0, "list length not param");
 
         // 改写
@@ -889,6 +889,23 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left); // list operand
 
         call->left = *ast_ident_expr(RT_CALL_LIST_RAW);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_UINT);
+
+        return type_basic_new(TYPE_UINT);
+    }
+
+    if (str_equal(s->key, BUILTIN_TOC_KEY)) {
+        assertf(call->actual_params->length == 0, "list length not param");
+
+        // 改写
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // list operand
+
+        rtype_t list_rtype = reflect_type(s->left.type);
+        ct_list_push(call->actual_params, ast_int_expr(list_rtype.hash));
+
+        call->left = *ast_ident_expr(RT_CALL_LIST_TOC);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_UINT);
 
@@ -1026,6 +1043,24 @@ static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_t
  */
 static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
+
+    // struct 内置 fn 支持
+    if (str_equal(s->key, BUILTIN_TOC_KEY)) {
+        assertf(call->actual_params->length == 0, "toc param failed");
+
+        // 直接改写 call 指令
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // left is struct
+        rtype_t struct_rtype = reflect_type(s->left.type);
+        ct_list_push(call->actual_params, ast_int_expr(struct_rtype.hash));
+
+        call->left = *ast_ident_expr(RT_CALL_STRUCT_TOC);
+        infer_left_expr(m, &call->left);
+
+        call->return_type = type_basic_new(TYPE_UINT);
+        return type_basic_new(TYPE_UINT);
+    }
+
     type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
     struct_property_t *p = type_struct_property(type_struct, s->key);
     assertf(p, "type %s struct no property '%s'", type_struct->ident, s->key);
@@ -1074,7 +1109,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         infer_right_expr(m, &select->left, type_basic_new(TYPE_UNKNOWN));
-        // self 快速改写
+        // self 还原成 struct
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->infer_current;
             assertf(current->self_struct, "use 'self' in struct outside");
@@ -1085,7 +1120,6 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
 
         type_kind select_left_kind = select->left.type.kind;
-
 
         if (select_left_kind == TYPE_LIST) {
             return infer_list_select_call(m, call);

@@ -32,11 +32,15 @@
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
+#define BUILTIN_RAW_KEY "raw" // list.raw()
+#define BUILTIN_LEN_KEY "len" // list.len()
+#define BUILTIN_CAP_KEY "cap" // list.cap()
+#define BUILTIN_DEL_KEY "del" // list.del()
+#define BUILTIN_TOC_KEY "toc" // list.toc()
 
 #define LIST_PUSH_KEY "push"
 #define LIST_LENGTH_KEY "len"
 #define LIST_CAPACITY_KEY "cap" // list.cap vs list.cap()
-#define LIST_RAW_KEY "raw" // list.raw()
 
 #define MAP_DELETE_KEY "del"
 #define MAP_LENGTH_KEY "len"
@@ -54,6 +58,7 @@
 #define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SPLICE "list_slice"
 #define RT_CALL_LIST_RAW "list_raw"
+#define RT_CALL_LIST_TOC "list_toc"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
@@ -72,6 +77,7 @@
 #define RT_CALL_SET_DELETE "set_delete" // 将元素从 set 中移除
 
 #define RT_CALL_STRUCT_NEW "struct_new"
+#define RT_CALL_STRUCT_TOC "struct_toc"
 
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"

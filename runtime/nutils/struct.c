@@ -29,51 +29,5 @@ void struct_assign(n_struct_t *s, uint64_t offset, uint64_t property_index, void
     memmove(p, property_ref, size);
 }
 
-/**
- * 将 nature struct 转换成 c struct, 对于 list/struct 需要进入到内部进行展开。
- * 本质上其实就是计算 struct 在 c 语言中所用的空间
- * @param s
- * @param struct_rtype_hash
- */
-void struct_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, autobuf_t *buf) {
-    rtype_t *rtype = rt_find_rtype(struct_rtype_hash);
-    uint64_t offset = 0;
-    for (int i = 0; i < rtype->element_count; ++i) {
-        uint64_t hash = rtype->element_hashes[i];
-        rtype_t *element_rtype = rt_find_rtype(hash);
-        uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
-
-
-        if (element_rtype->kind == TYPE_STRUCT) {
-            struct_to_buf(s + offset, element_rtype->hash, buf);
-        } else if (element_rtype->kind == TYPE_LIST) {
-            list_to_buf((n_list_t *) (s + offset), element_rtype->hash, buf);
-        } else {
-            // set/map/string c 语言都没有实现，所以都默认为 pointer, 不需要展开
-            autobuf_push(buf, s + offset, element_size);
-        }
-
-        offset += element_size;
-    }
-}
-
-void *struct_toc(n_struct_t *s, uint64_t struct_rtype_hash) {
-    rtype_t *rtype = rt_find_rtype(struct_rtype_hash);
-    if (rtype->element_count == 0) {
-        DEBUGF("[runtime.struct_toc] rtype->element_count == 0\n");
-        return NULL;
-    }
-
-    autobuf_t *buf = autobuf_new(rtype->size);
-    DEBUGF("[runtime.struct_toc] struct->size: %lu\n", rtype->size);
-    struct_to_buf(s, struct_rtype_hash, buf);
-    assertf(buf->len > rtype->size, "buf->len: %lu, rtype->size: %lu\n", buf->len, rtype->size);
-
-    void *p = runtime_malloc(buf->len, NULL);
-    memmove(p, buf->data, buf->len);
-    autobuf_free(buf);
-
-    return p;
-}
 
 

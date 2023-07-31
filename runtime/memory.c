@@ -65,16 +65,15 @@ void rtypes_deserialize() {
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
 
-        if (r->element_count == 0) {
-            continue;
+        if (r->element_count > 0) {
+            uint64_t size = r->element_count * sizeof(uint64_t);
+            r->element_hashes = (uint64_t *) gc_bits_offset;
+            gc_bits_offset += size;
         }
-
-        uint64_t size = r->element_count * sizeof(uint64_t);
-        r->element_hashes = (uint64_t *) gc_bits_offset;
-        gc_bits_offset += size;
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
         table_set(rt_rtype_table, itoa(r->hash), r);
+
     }
 
 
