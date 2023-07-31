@@ -15,7 +15,7 @@ autobuf_t *autobuf_new(uint64_t cap) {
 }
 
 
-autobuf_t *autobuf_push(autobuf_t *buf, void *element, uint64_t element_size) {
+void autobuf_push(autobuf_t *buf, void *element, uint64_t element_size) {
     assertf(buf, "Buffer failed");
 
     // Check if the buffer has enough capacity, if not, reallocate the buffer
@@ -30,12 +30,18 @@ autobuf_t *autobuf_push(autobuf_t *buf, void *element, uint64_t element_size) {
 
     memcpy(buf->data + buf->len, element, element_size);
     buf->len += element_size;
-
-    return buf;
 }
 
 void autobuf_free(autobuf_t *buf) {
     assertf(buf, "Buffer failed");
     free(buf->data);
     free(buf);
+}
+
+// 填充 0
+void autobuf_padding(autobuf_t *buf, uint64_t element_size) {
+    uint8_t zero = 0;
+    for (int i = 0; i < element_size; ++i) {
+        autobuf_push(buf, &zero, 1);
+    }
 }

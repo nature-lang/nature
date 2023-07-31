@@ -36,7 +36,6 @@
 #define BUILTIN_LEN_KEY "len" // list.len()
 #define BUILTIN_CAP_KEY "cap" // list.cap()
 #define BUILTIN_DEL_KEY "del" // list.del()
-#define BUILTIN_TOC_KEY "toc" // list.toc()
 
 #define LIST_PUSH_KEY "push"
 #define LIST_LENGTH_KEY "len"
@@ -58,7 +57,6 @@
 #define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SPLICE "list_slice"
 #define RT_CALL_LIST_RAW "list_raw"
-#define RT_CALL_LIST_TOC "list_toc"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
@@ -77,7 +75,6 @@
 #define RT_CALL_SET_DELETE "set_delete" // 将元素从 set 中移除
 
 #define RT_CALL_STRUCT_NEW "struct_new"
-#define RT_CALL_STRUCT_TOC "struct_toc"
 
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"
@@ -86,6 +83,8 @@
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
+
+#define RT_CALL_PTR_TO_CPTR "ptr_to_cptr"
 
 #define RT_CALL_STRING_TO_LIST "string_to_list"
 #define RT_CALL_LIST_TO_STRING "list_to_string"

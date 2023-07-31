@@ -353,7 +353,9 @@ typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列�
 
 typedef int64_t n_int_t;
 typedef uint64_t n_uint_t;
+typedef uint64_t n_cptr_t;
 typedef uint32_t n_u32_t;
+typedef uint16_t n_u16_t;
 
 typedef double n_float_t;
 typedef double n_f64_t;

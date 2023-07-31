@@ -1,3 +1,5 @@
+import libc
+
 int O_RDONLY = 0x0  // 只读模式
 int O_WRONLY = 0x1  // 只写模式
 int O_RDWR   = 0x2  // 读写模式
@@ -599,27 +601,35 @@ fn socket(int domain, int t, int protocol):int {
 }
 
 // 泛型与重载组合使用
-type sockaddr = gen sockaddr_in|sockaddr_un
+type sockaddr_t = gen sockaddr_in|sockaddr_un
 
-fn bind(int sockfd, sockaddr addr) {
-    cptr p = addr.toc()
-    var len = 16 as cptr // in 和 unix 长度为 16byte
-    call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+fn bind(int sockfd, sockaddr_t addr) {
+    // 将 naturestruct 转换为 c struct
+     cptr p = libc.encode(addr)
+     var len = 16 as cptr // in 和 unix 长度为 16byte
+     call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
 }
 
 fn bind(int sockfd, sockaddr_in6 addr) {
-    cptr p = addr.toc()
+    cptr p = libc.encode(addr)
     var len = 28 as cptr
     call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
 }
 
-// en
 // backlog 表示最大的监听长度
 fn listen(int sockfd, int backlog) {
     call6(SYS_LISTEN, sockfd as cptr, backlog as cptr, 0, 0, 0, 0)
 }
 
-fn accept(int sockfd):int {
-     addr.fromc()
-    return call6(SYS_ACCEPT, sockfd as cptr, 0, 0, 0, 0, 0)
+// 相应 client sockfd 和 client sockaddr
+fn accept(int sockfd, sockaddr_t addr):int {
+    var p =  libc.encode(addr)
+    var len = 16
+    ptr<int> len_ptr = &len
+
+    int fd = call6(SYS_ACCEPT, sockfd as cptr, p, len_ptr as cptr, 0, 0, 0)
+
+    // 将 p 中的值赋值给 addr, p 会被垃圾回收回收
+    // libc.decode(p, addr)
+    return fd
 }

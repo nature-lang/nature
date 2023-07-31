@@ -1312,6 +1312,13 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
         return output;
     }
 
+    // pointer to uint
+    if (as_expr->src_operand.type.kind == TYPE_POINTER && as_expr->target_type.kind == TYPE_UINT) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_PTR_TO_CPTR, output, 1, input));
+        return output;
+    }
+
     assertf(false, "not support as_expr to type %s", type_kind_string[as_expr->target_type.kind]);
     exit(1);
 }

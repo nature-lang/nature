@@ -451,8 +451,22 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     type_t type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
+
     if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
         assertf(false, "neg operand must applies to int or float type");
+    }
+
+    // &var
+    if (expr->operator == AST_OP_LA) {
+        assertf(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
+                "cannot take the address of an literal or call");
+        return type_ptrof(type);
+    }
+
+    // *var
+    if (expr->operator == AST_OP_IA) {
+        assertf(type.kind == TYPE_POINTER, "cannot dereference non-pointer type");
+        return type.pointer->value_type;
     }
 
     return type;
@@ -895,23 +909,6 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_UINT);
     }
 
-    if (str_equal(s->key, BUILTIN_TOC_KEY)) {
-        assertf(call->actual_params->length == 0, "list length not param");
-
-        // 改写
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // list operand
-
-        rtype_t list_rtype = reflect_type(s->left.type);
-        ct_list_push(call->actual_params, ast_int_expr(list_rtype.hash));
-
-        call->left = *ast_ident_expr(RT_CALL_LIST_TOC);
-        infer_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_UINT);
-
-        return type_basic_new(TYPE_UINT);
-    }
-
     assertf(false, "list not field '%s'", s->key);
     exit(0);
 }
@@ -1043,23 +1040,6 @@ static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_t
  */
 static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
-
-    // struct 内置 fn 支持
-    if (str_equal(s->key, BUILTIN_TOC_KEY)) {
-        assertf(call->actual_params->length == 0, "toc param failed");
-
-        // 直接改写 call 指令
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // left is struct
-        rtype_t struct_rtype = reflect_type(s->left.type);
-        ct_list_push(call->actual_params, ast_int_expr(struct_rtype.hash));
-
-        call->left = *ast_ident_expr(RT_CALL_STRUCT_TOC);
-        infer_left_expr(m, &call->left);
-
-        call->return_type = type_basic_new(TYPE_UINT);
-        return type_basic_new(TYPE_UINT);
-    }
 
     type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
     struct_property_t *p = type_struct_property(type_struct, s->key);

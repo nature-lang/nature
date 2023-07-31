@@ -828,5 +828,11 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
+    if (left.kind == TYPE_POINTER) {
+        type_t left_pointer = left.pointer->value_type;
+        type_t right_pointer = right.pointer->value_type;
+        return type_compare(left_pointer, right_pointer);
+    }
+
     return true;
 }

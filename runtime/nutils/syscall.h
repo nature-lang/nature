@@ -53,4 +53,6 @@ void syscall_chmod(n_string_t *path, n_u32_t mode);
 
 n_string_t *syscall_getcwd();
 
+n_int_t syscall_accept(n_int_t sockfd, void *addr, n_int_t len);
+
 #endif //NATURE_SYSCALL_H

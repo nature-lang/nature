@@ -18,7 +18,9 @@ autobuf_t *autobuf_new(uint64_t cap);
  * @param element_size
  * @return
  */
-autobuf_t *autobuf_push(autobuf_t *buf, void *element, uint64_t element_size);
+void autobuf_push(autobuf_t *buf, void *element, uint64_t element_size);
+
+void autobuf_padding(autobuf_t *buf, uint64_t element_size);
 
 void autobuf_free(autobuf_t *buf);
 

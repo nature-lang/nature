@@ -1,8 +1,11 @@
 fn encode(any v):cptr {
-
+    return libc_encode(v)
 }
 
-// any v 中所有的空间都已经申请完毕, 只需要将数据搞进去就行了!
 fn decode(cptr p, any v) {
+    return libc_decode(p, v)
+}
 
+fn htons(u16 host):u16 {
+    return libc_htons(host)
 }

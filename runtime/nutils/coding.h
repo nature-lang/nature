@@ -4,7 +4,9 @@
 #include "utils/type.h"
 #include "utils/autobuf.h"
 
-static void struct_spread_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, autobuf_t *buf);
+static uint64_t struct_spread_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, autobuf_t *buf);
+
+static uint64_t struct_decode(uint8_t *cptr, n_struct_t *s, rtype_t *struct_rtype);
 
 /**
  * 目前仅支持 struct 和 list encode

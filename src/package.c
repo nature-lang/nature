@@ -3,9 +3,9 @@
 #include "build/config.h"
 
 static char *std_packages[] = {
-        "os",
         "syscall",
-        "string",
+        "strings",
+        "libc"
         // 添加其他 std package
 };
 

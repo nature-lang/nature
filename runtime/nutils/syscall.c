@@ -7,6 +7,9 @@
 #include "basic.h"
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 
 n_int_t syscall_open(n_string_t *filename, n_int_t flags, n_u32_t perm) {

@@ -345,3 +345,7 @@ n_string_t *list_to_string(n_list_t *list) {
     DEBUGF("[runtime.list_to_string] list=%p, list->data=%p, list->length=%lu", list, list->data, list->length)
     return string_new(list->data, list->length);
 }
+
+n_cptr_t ptr_to_cptr(n_pointer_t ptr) {
+    return ptr;
+}

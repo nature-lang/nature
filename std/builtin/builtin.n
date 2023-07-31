@@ -25,9 +25,6 @@ fn list_capacity([t0] list):int {}
 // 引用 data 部分,且对于复合没有展开操作
 fn list_raw([t0] list):cptr {}
 
-// copy data 部分, 且复制并展开了每个元素
-fn list_toc([t0] list, int rtype_hash):cptr {}
-
 fn map_delete({t0:t0} map, ptr<t0> key) {}
 
 fn map_length({t0:t0} map):int {}
@@ -38,9 +35,12 @@ fn set_add({t0} set, ptr<t0> key):bool {}
 
 fn set_delete({t0} set, ptr<t0> key) {}
 
-fn struct_toc(t0 s, int rtype_hash):cptr {}
+fn libc_encode(any v):cptr {}
 
-// 方便测试，后续封装到系统调用库中
+fn libc_decode(cptr p, any v) {}
+
+fn libc_htons(u16 host):u16 {}
+
 fn sleep(int second) {}
 
 fn runtime_gc() {}
