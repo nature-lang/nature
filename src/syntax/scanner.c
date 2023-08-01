@@ -383,6 +383,8 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
+                case 'p': // cptr
+                    return scanner_rest(word, length, 2, 2, "tr", TOKEN_CPTR);
             }
         case 'e':
             return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);

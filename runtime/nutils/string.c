@@ -68,7 +68,7 @@ n_int_t string_length(n_string_t *a) {
 }
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b) {
-    DEBUGF("[runtime.string_ee] a=%s, b=%s", a->data, b->data);
+    DEBUGF("[runtime.string_ee] a=%s, b=%s, a_len=%ld, b_len=%ld", a->data, b->data, a->length, b->length);
     return a->length == b->length && memcmp(a->data, b->data, a->length) == 0;
 }
 
@@ -78,28 +78,28 @@ n_bool_t string_ne(n_string_t *a, n_string_t *b) {
 }
 
 n_bool_t string_lt(n_string_t *a, n_string_t *b) {
-    printf("[runtime.string_lt] a=%s, b=%s\n", a->data, b->data);
+    DEBUGF("[runtime.string_lt] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
     return cmp_result < 0 || (cmp_result == 0 && a->length < b->length);
 }
 
 n_bool_t string_le(n_string_t *a, n_string_t *b) {
-    printf("[runtime.string_le] a=%s, b=%s\n", a->data, b->data);
+    DEBUGF("[runtime.string_le] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
     return cmp_result < 0 || (cmp_result == 0 && a->length <= b->length);
 }
 
 n_bool_t string_gt(n_string_t *a, n_string_t *b) {
-    printf("[runtime.string_gt] a=%s, b=%s\n", a->data, b->data);
+    DEBUGF("[runtime.string_gt] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
     return cmp_result > 0 || (cmp_result == 0 && a->length > b->length);
 }
 
 n_bool_t string_ge(n_string_t *a, n_string_t *b) {
-    printf("[runtime.string_ge] a=%s, b=%s\n", a->data, b->data);
+    DEBUGF("[runtime.string_ge] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
     return cmp_result > 0 || (cmp_result == 0 && a->length >= b->length);

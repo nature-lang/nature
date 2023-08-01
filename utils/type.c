@@ -361,10 +361,11 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_UINT64:
         case TYPE_FLOAT64:
             return QWORD;
-        case TYPE_INT:
-        case TYPE_UINT:
-        case TYPE_FLOAT:
-            return POINTER_SIZE; // 固定大小
+//        case TYPE_CPTR:
+//        case TYPE_INT:
+//        case TYPE_UINT:
+//        case TYPE_FLOAT:
+//            return POINTER_SIZE; // 固定大小
         default:
             return POINTER_SIZE;
     }

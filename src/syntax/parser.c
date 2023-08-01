@@ -110,6 +110,7 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
+        || parser_is(m, TOKEN_CPTR)
         || parser_is(m, TOKEN_NULL)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_INT)

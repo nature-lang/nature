@@ -14,3 +14,11 @@ println(s2)
 
 string s3 = s2 + ' ' + l2 as string
 println(s3)
+
+
+// 字符串比较操作
+var b = 'hello world' == 'hello world'
+println(b) // true
+println('hello world' != 'hello world') // false
+println('a' < 'b') // true
+println('a' > 'b') // false

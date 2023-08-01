@@ -79,6 +79,7 @@ typedef enum {
 
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
+    TYPE_CPTR, // 表示通用的指针，通常用于与 c 进行交互, 关键字 cptr
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
@@ -137,7 +138,8 @@ static string type_kind_string[] = {
         [TYPE_SET] = "set",
         [TYPE_TUPLE] = "tuple",
         [TYPE_FN] = "fn",
-        [TYPE_POINTER] = "pointer", // p<type>
+        [TYPE_POINTER] = "pointer", // ptr<type>
+        [TYPE_CPTR] = "cptr", // p<type>
         [TYPE_NULL] = "null",
         [TYPE_SELF] = "self",
 };
@@ -585,6 +587,7 @@ static inline bool is_zero_type(type_t t) {
 static inline bool is_origin_type(type_t t) {
     return is_integer(t.kind) ||
            is_float(t.kind) ||
+           t.kind == TYPE_CPTR ||
            t.kind == TYPE_NULL ||
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING ||

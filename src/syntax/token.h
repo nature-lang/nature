@@ -61,7 +61,8 @@ typedef enum {
     TOKEN_F32, TOKEN_F64,
 
     // KEYWORDS.
-    TOKEN_POINTER,
+    TOKEN_POINTER, // ptr<
+    TOKEN_CPTR, // cptr
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
     TOKEN_THROW, TOKEN_TRY, TOKEN_CATCH, TOKEN_SELF, TOKEN_CONTINUE, TOKEN_BREAK,
     TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
@@ -124,6 +125,8 @@ static string token_str[] = {
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
 
+        [TOKEN_POINTER] = "ptr",
+        [TOKEN_CPTR] = "cptr",
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",

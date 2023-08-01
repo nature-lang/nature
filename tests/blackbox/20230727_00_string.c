@@ -9,7 +9,11 @@ static void test_basic() {
     char *str = "nlelo world\n"
                 "nlelo world\n"
                 "nlelo world one piece\n"
-                "nlelo world one piece nice\n";
+                "nlelo world one piece nice\n"
+                "true\n"
+                "false\n"
+                "true\n"
+                "false\n";
     assert_string_equal(raw, str);
 }
 

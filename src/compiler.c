@@ -822,7 +822,7 @@ static lir_operand_t *compiler_binary(module_t *m, ast_expr_t expr) {
     lir_operand_t *result_target = temp_var_operand(m, expr.type);
     lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
-    if (expr.type.kind == TYPE_STRING) {
+    if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
             case LIR_OPCODE_ADD: {
                 OP_PUSH(rt_call(RT_CALL_STRING_CONCAT, result_target, 2, left_target, right_target));
@@ -1312,10 +1312,10 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
         return output;
     }
 
-    // pointer to uint
-    if (as_expr->src_operand.type.kind == TYPE_POINTER && as_expr->target_type.kind == TYPE_UINT) {
+    // anybody to cptr
+    if (as_expr->target_type.kind == TYPE_CPTR) {
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
-        OP_PUSH(rt_call(RT_CALL_PTR_TO_CPTR, output, 1, input));
+        OP_PUSH(rt_call(RT_CALL_CPTR_CASTING, output, 1, input));
         return output;
     }
 

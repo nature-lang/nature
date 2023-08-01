@@ -346,6 +346,6 @@ n_string_t *list_to_string(n_list_t *list) {
     return string_new(list->data, list->length);
 }
 
-n_cptr_t ptr_to_cptr(n_pointer_t ptr) {
-    return ptr;
+n_cptr_t cptr_casting(value_casting v) {
+    return v.u64_value;
 }

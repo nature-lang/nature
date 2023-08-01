@@ -10,9 +10,9 @@ static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
     assert(expr->assert_type == AST_EXPR_LITERAL);
     ast_literal_t *literal = expr->value;
     assertf(is_integer(literal->kind), "line=%d, type inconsistency", expr->line);
-    type_kind target_kind = cross_kind_trans(target_type.kind);
     int64_t i = atoll(literal->value);
-    assertf(integer_range_check(target_kind, i), "line=%d, integer out of range", expr->line);
+    assertf(integer_range_check(cross_kind_trans(target_type.kind), i), "line=%d, integer out of range", expr->line);
+
     literal->kind = target_type.kind;
     expr->type = target_type;
 }
@@ -428,6 +428,9 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
+    if (!is_float(as_expr->src_operand.type.kind) && target_type.kind == TYPE_CPTR) {
+        return target_type;
+    }
 
     assertf(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_string[target_type.kind]);
     return target_type;
@@ -829,8 +832,8 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(RT_CALL_STRING_RAW);
         infer_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_UINT);
-        return type_basic_new(TYPE_UINT);
+        call->return_type = type_basic_new(TYPE_CPTR);
+        return type_basic_new(TYPE_CPTR);
     }
 
     assertf(false, "string select call '%s' not support", s->key);
@@ -904,9 +907,9 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(RT_CALL_LIST_RAW);
         infer_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_UINT);
+        call->return_type = type_basic_new(TYPE_CPTR);
 
-        return type_basic_new(TYPE_UINT);
+        return type_basic_new(TYPE_CPTR);
     }
 
     assertf(false, "list not field '%s'", s->key);
@@ -1624,7 +1627,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
     // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
-    if (is_integer(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+    if ((is_integer(target_type.kind) || target_type.kind == TYPE_CPTR) && expr->assert_type == AST_EXPR_LITERAL) {
         literal_integer_casting(expr, target_type);
     }
 

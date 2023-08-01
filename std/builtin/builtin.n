@@ -6,9 +6,6 @@ type errort = struct {
     bool has
 }
 
-// common pointer
-type cptr = uint
-
 fn print(...[any] args) {}
 
 fn println(...[any] args) {}

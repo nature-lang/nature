@@ -30,6 +30,11 @@ static void print_arg(n_union_t *arg) {
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
+    if (arg->rtype->kind == TYPE_CPTR) {
+        int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
+        return;
+    }
     if (arg->rtype->kind == TYPE_UINT || arg->rtype->kind == TYPE_UINT64) {
         int n = sprintf(sprint_buf, "%lu", arg->value.u64_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);

@@ -94,7 +94,8 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
         assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
-        if (v->kind == TYPE_INT || v->kind == TYPE_UINT || v->kind == TYPE_INT64 || v->kind == TYPE_UINT64) {
+        if (v->kind == TYPE_INT || v->kind == TYPE_UINT || v->kind == TYPE_INT64 || v->kind == TYPE_UINT64 ||
+            v->kind == TYPE_CPTR) {
             // mov r64,imm64 转换成 mov rm64,imm32
             if (v->int_value > INT32_MAX || v->int_value < INT32_MIN) {
                 return UINT64(v->uint_value);
