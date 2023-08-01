@@ -2,14 +2,14 @@ import syscall
 
 var (fd, err) = try syscall.open('mock/notfound.txt', syscall.O_RDONLY, 0666)
 if err.has {
-    println('open mock/notfound.txt failed: ', err.msg)
+    print('open mock/notfound.txt failed: ', err.msg, '\n')
 } else {
     println('open mock/notfound.txt successful')
 }
 
 (fd, err) = try syscall.open('mock/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666)
 if err.has {
-    println('open mock/open.txt failed: ', err.msg)
+    print('open mock/open.txt failed: ', err.msg, '\n')
 } else {
     println('open mock/open.txt successful')
 }
@@ -20,6 +20,6 @@ if err.has {
     return print(err.msg)
 }
 
-println('actual read len: ', buf.len(), ' cap: ', buf.cap())
+print('actual read len: ', buf.len(), ' cap: ', buf.cap(), '\n')
 var str =  buf as string
-println('buf as string: ', str)
+print('buf as string: ', str, '\n')

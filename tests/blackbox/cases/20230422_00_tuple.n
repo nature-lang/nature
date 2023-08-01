@@ -4,12 +4,12 @@ var first = tup[0]
 
 tup[1] = 'nature'
 
-println(first, tup[1], tup[2])
+print(first, tup[1], tup[2], '\n')
 
 // tuple def
 tup[1] = 'hello'
 var (foo, bar, car) = tup
-println(foo, bar, car)
+print(foo, bar, car, '\n')
 
 
 // tuple destr
@@ -17,8 +17,8 @@ var a = 2
 var b = 'world'
 var c = false
 (a, b, c) = tup
-println(a, b, c)
+print(a, b, c, '\n')
 
 var d = false
 (foo, bar, car) = (2, 'world', d)
-println(foo, bar, car)
+print(foo, bar, car, '\n')

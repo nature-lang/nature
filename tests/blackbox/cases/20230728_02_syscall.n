@@ -5,32 +5,32 @@ string path2 = './mock/test_rename'
 
 var err = try syscall.mkdir(path, 0755)
 if err.has {
-    println('mkdir err: ', err.msg)
+    print('mkdir err: ', err.msg, '\n')
 }
 
 // 读取目录进行检查
 var st = syscall.stat(path)
-println('st.mode: ', st.mode)
+print('st.mode: ', st.mode, '\n')
 
 // 修改目录名称 test_rename
 syscall.rename(path, path2)
 println('rename success')
 
 var st2 = syscall.stat(path2)
-println('st2.mode: ', st2.mode)
+print('st2.mode: ', st2.mode, '\n')
 
 // chmod 为 0744
 syscall.chmod(path2, 0744)
 
 st2 = syscall.stat(path2)
-println('st2.mode: ', st2.mode)
+print('st2.mode: ', st2.mode, '\n')
 
 // rmdir
 syscall.rmdir(path2)
 println('rmdir success')
 var (_, err) = try syscall.stat(path2)
 if err.has {
-    println('stat err: ', err.msg)
+    print('stat err: ', err.msg, '\n')
 }
 
 var pid = syscall.getpid()

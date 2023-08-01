@@ -7,4 +7,4 @@ fn fib(int n):int {
 }
 
 var result = fib(10)
-println('result=', result)
+print('result=', result, '\n')

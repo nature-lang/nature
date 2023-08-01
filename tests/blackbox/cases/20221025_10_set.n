@@ -2,19 +2,19 @@ var a = 25
 {int} s = {-32, -64, 12 + 1, 25 - a}
 
 var c0 = s.has(13)
-println('c0=', c0)
+print('c0=', c0, '\n')
 
 c0 = s.has(111)
-println('c0=', c0)
+print('c0=', c0, '\n')
 
 s.add(111)
 var c1 = s.has(111)
-println('c1=', c1)
+print('c1=', c1, '\n')
 
 s.del(13)
 
 c1 = s.has(13)
-println('c1=', c1)
+print('c1=', c1, '\n')
 
 
 // 加入 75 个元素触发扩容
@@ -121,4 +121,4 @@ s.add(99)
 s.add(100)
 
 
-println(s.has(90), s.has(101))
+print(s.has(90), s.has(101), '\n')

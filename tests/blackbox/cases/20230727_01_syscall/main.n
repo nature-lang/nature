@@ -6,12 +6,12 @@ var fd = syscall.open(file, syscall.O_CREAT | syscall.O_RDWR, 0666)
 
 var write_bytes = syscall.write(fd, 'hello world' as [u8])
 
-println('write bytes: ', write_bytes)
+print('write bytes: ', write_bytes, '\n')
 
 syscall.seek(fd, 0, syscall.SEEK_SET)
 
 var buf = syscall.read(fd, 20)
-println('read len: ', buf.len(), ', data: ', buf as string)
+print('read len: ', buf.len(), ', data: ', buf as string, '\n')
 
 syscall.close(fd)
 syscall.unlink(file)

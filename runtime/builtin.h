@@ -3,9 +3,8 @@
 
 #include "utils/type.h"
 
-void print(n_list_t *args);
+void print(n_list_t *args, bool with_space);
 
 void println(n_list_t *args);
-
 
 #endif //NATURE_SRC_LIR_NATIVE_BUILTIN_H_

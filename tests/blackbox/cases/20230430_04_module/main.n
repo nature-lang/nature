@@ -1,7 +1,7 @@
 import 'src/config.n'
 
-println('config.max=', config.get_max())
+print('config.max=', config.get_max(), '\n')
 config.set_count(125)
-println('config.count=', config.count)
+print('config.count=', config.count, '\n')
 
 config.test_math()

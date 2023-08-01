@@ -5,6 +5,7 @@
 #include "runtime/memory.h"
 
 static char sprint_buf[1024];
+static char *space = " ";
 
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
@@ -86,7 +87,7 @@ static void print_arg(n_union_t *arg) {
     assertf(false, "[print_arg] unsupported type=%s", type_kind_string[arg->rtype->kind]);
 }
 
-void print(n_list_t *args) {
+void print(n_list_t *args, bool with_space) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
     addr_t base = (addr_t) args->data; // 把 data 中存储的值赋值给 p
@@ -102,10 +103,14 @@ void print(n_list_t *args) {
 
         DEBUGF("[runtime.print] arg i=%d, p=%lx, p_value=%p ", i, p, *value);
         print_arg(*value);
+
+        if (with_space && i < (args->length - 1)) {
+            VOID write(STDOUT_FILENO, space, 1);
+        }
     }
 }
 
 void println(n_list_t *args) {
-    print(args);
+    print(args, true);
     VOID write(STDOUT_FILENO, "\n", 1);
 }

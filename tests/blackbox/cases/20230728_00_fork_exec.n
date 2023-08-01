@@ -2,7 +2,7 @@ import syscall
 
 var (pid, err) = try syscall.fork()
 if err.has {
-    return println('fork err: ', err.msg)
+    return print('fork err: ', err.msg, '\n')
 }
 
 if pid > 0 {
@@ -15,7 +15,7 @@ if pid > 0 {
 
     var err = try syscall.exec('/binerror/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])
     if err.has {
-        println('first exec err: ', err.msg)
+        print('first exec err: ', err.msg, '\n')
     }
 
     syscall.exec('/bin/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])

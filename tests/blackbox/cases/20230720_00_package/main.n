@@ -5,9 +5,9 @@ import os
 import local
 
 int r =  rand.dump()
-println("rand.dump() -> ", r)
+print('rand.dump() -> ', r, '\n')
 seed.dump()
 syscall.dump()
 os.dump()
-println("local.get_count() -> ", local.get_count())
+print('local.get_count() -> ', local.get_count(), '\n')
 local.dump()

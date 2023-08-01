@@ -15,14 +15,14 @@ var addr = syscall.sockaddr_in {
 
 var err = try syscall.bind(sockfd, addr)
 if err.has {
-    return println('bind error: ', err.msg)
+    return print('bind error: ', err.msg)
 }
 println('bind :8080 success')
 
 // 监听链接
 var err = try syscall.listen(sockfd, 10)
 if err.has {
-    return println('listen error: ', err.msg)
+    return print('listen error: ', err.msg, '\n')
 }
 println('listen success')
 
@@ -31,7 +31,7 @@ var client_addr = syscall.sockaddr_in{} // 初始化一个空的地址，等待 
 
 var (client_fd,err) = try syscall.accept(sockfd, client_addr)
 if err.has {
-    return println('accept error: ', err.msg)
+    return print('accept error: ', err.msg, '\n')
 }
 
 println('accept success')
@@ -44,8 +44,8 @@ var resp_str = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 1
 var (bytes, err) = try syscall.sendto(client_fd, resp_str as [u8], 0)
 
 if err.has {
-    return println('send error: ', err.msg)
+    return print('send error: ', err.msg, '\n')
 }
-println('send success, len: ', bytes)
+print('send success, len: ', bytes, '\n')
 
 syscall.close(client_fd)

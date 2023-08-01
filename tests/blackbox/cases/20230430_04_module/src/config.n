@@ -13,5 +13,5 @@ fn set_count(int n) {
 
 fn test_math() {
     var result = math.max(max, count)
-    println('[test_math] max result=', result)
+    print('[test_math] max result=', result, '\n')
 }

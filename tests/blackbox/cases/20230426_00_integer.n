@@ -6,4 +6,4 @@ fn values():(u8, u16, u32, u64, i8, i16, i32, i64) {
 
 var t = values()
 
-println(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7])
+print(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], '\n')
