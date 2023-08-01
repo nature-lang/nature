@@ -6,6 +6,7 @@
 
 static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
     assertf(element_rtype, "element_rtype is null");
+    assertf(element_rtype->size > 0, "element_rtype size is zero");
 
     DEBUGF("[rt_array_new] element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), length=%lu",
            element_rtype->size,

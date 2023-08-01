@@ -15,11 +15,12 @@ if err.has {
 }
 
 // read buf is [u8]
-var (buf, err) = try syscall.read(fd, 20)
+var buf = [] as [u8,20]
+var (len, err) = try syscall.read(fd, buf)
 if err.has {
     return print(err.msg)
 }
 
-print('actual read len: ', buf.len(), ' cap: ', buf.cap(), '\n')
+print('actual read len: ', len, '\n')
 var str =  buf as string
 print('buf as string: ', str, '\n')

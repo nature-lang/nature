@@ -473,32 +473,32 @@ int SOCK_STREAM = 0x1
 type timespec_t = syscall_timespec_t
 type stat_t = syscall_stat_t
 
-fn read(int fd, int len):[u8] {
-    return syscall_read(fd, len)
+fn read(int fd, [u8] buf):int {
+    return call6(SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
 }
 
 fn write(int fd, [u8] buf):int {
-    return syscall_write(fd, buf)
+    return call6(SYS_WRITE, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
 }
 
 fn open(string filename, int flags, u32 perm):int {
-    return syscall_open(filename, flags, perm)
+    return call6(SYS_OPEN, filename.raw(), flags as cptr, perm as cptr, 0, 0, 0)
 }
 
 fn close(int fd) {
-    return syscall_close(fd)
+    call6(SYS_CLOSE, fd as cptr, 0, 0, 0, 0, 0)
 }
 
 fn unlink(string path) {
-    return syscall_unlink(path)
+    call6(SYS_UNLINK, path.raw(), 0, 0, 0, 0, 0)
 }
 
 fn seek(int fd, int offset, int whence):int {
-    return syscall_lseek(fd, offset, whence)
+    return call6(SYS_LSEEK, fd as cptr, offset as cptr, whence as cptr, 0, 0, 0)
 }
 
 fn fork():int {
-    return syscall_fork()
+    return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
 }
 
 fn exec(string path, [string] argv, [string] envp) {
@@ -514,31 +514,31 @@ fn fstat(int fd):stat_t {
 }
 
 fn mkdir(string path, u32 mode) {
-    return syscall_mkdir(path, mode)
+    call6(SYS_MKDIR, path.raw(), mode as cptr, 0, 0, 0, 0)
 }
 
 fn rmdir(string path) {
-    return syscall_rmdir(path)
+    call6(SYS_RMDIR, path.raw(), 0, 0, 0, 0, 0)
 }
 
 fn rename(string oldpath, string newpath) {
-    return syscall_rename(oldpath, newpath)
+    call6(SYS_RENAME, oldpath.raw(), newpath.raw(), 0, 0, 0, 0)
 }
 
 fn exit(int status) {
-    return syscall_exit(status)
+    call6(SYS_EXIT, status as cptr, 0, 0, 0, 0, 0)
 }
 
 fn getpid():int {
-    return syscall_getpid()
+    return call6(SYS_GETPID, 0, 0, 0, 0, 0, 0)
 }
 
 fn getppid():int {
-    return syscall_getppid()
+    return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
 }
 
 fn kill(int pid, int sig) {
-    return syscall_kill(pid, sig)
+    call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
 }
 
 fn wait(int pid):int {
@@ -546,19 +546,19 @@ fn wait(int pid):int {
 }
 
 fn chdir(string path) {
-    return syscall_chdir(path)
+    call6(SYS_CHDIR, path.raw(), 0, 0, 0, 0, 0)
 }
 
 fn chroot(string path) {
-    return syscall_chroot(path)
+    call6(SYS_CHROOT, path.raw(), 0, 0, 0, 0, 0)
 }
 
 fn chown(string path, u32 uid, u32 gid) {
-    return syscall_chown(path, uid, gid)
+    call6(SYS_CHOWN, path.raw(), uid as cptr, gid as cptr, 0, 0, 0)
 }
 
 fn chmod(string path, u32 mode) {
-    return syscall_chmod(path, mode)
+    call6(SYS_CHMOD, path.raw(), mode as cptr, 0, 0, 0, 0)
 }
 
 fn getcwd():string {

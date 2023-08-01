@@ -2,7 +2,6 @@
 #include "memory.h"
 #include "utils/type.h"
 
-
 static uint8_t calc_sizeclass(uint64_t size) {
     for (int i = 0; i < SIZECLASS_COUNT; ++i) {
         uint64_t obj_size = class_obj_size[i];

@@ -619,9 +619,12 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
         return rtype;
     }
 
-
     rtype = NEW(rtype_t);
     rtype->size = count * POINTER_SIZE;
+    if (rtype->size == 0) {
+        rtype->size = type_kind_sizeof(kind);
+    }
+
     rtype->kind = kind;
     rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
     rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);

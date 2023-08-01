@@ -10,8 +10,9 @@ print('write bytes: ', write_bytes, '\n')
 
 syscall.seek(fd, 0, syscall.SEEK_SET)
 
-var buf = syscall.read(fd, 20)
-print('read len: ', buf.len(), ', data: ', buf as string, '\n')
+var buf = [] as [u8,20]
+var len = syscall.read(fd, buf)
+print('read len: ', len, ', data: ', buf as string, '\n')
 
 syscall.close(fd)
 syscall.unlink(file)
