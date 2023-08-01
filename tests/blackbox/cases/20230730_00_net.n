@@ -4,7 +4,7 @@ import libc
 // 创建一个 socket
 int sockfd = syscall.socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 
-println('create socket success, fd: ', sockfd)
+println('create socket success')
 
 var addr = syscall.sockaddr_in {
     sin_family = syscall.AF_INET as u16,
@@ -34,6 +34,18 @@ if err.has {
     return println('accept error: ', err.msg)
 }
 
-println('accept success, fd: ', client_fd)
-// println('accept success', client_fd, client_addr.sin_addr, client_addr.sin_port)
+println('accept success')
+// println('client addr and port:', client_addr.sin_addr, client_addr.sin_port)
 
+var recv_buf = [] as [u8]
+syscall.recvfrom(client_fd, recv_buf, 0)
+
+var resp_str = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello, World!'
+var (bytes, err) = try syscall.sendto(client_fd, resp_str as [u8], 0)
+
+if err.has {
+    return println('send error: ', err.msg)
+}
+println('send success, len: ', bytes)
+
+syscall.close(client_fd)

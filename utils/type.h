@@ -158,7 +158,6 @@ typedef struct {
     uint64_t *element_hashes; // struct/tuple 每个类型的种类
 } rtype_t;
 
-
 // 类型描述信息 start
 typedef int64_t type_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
 

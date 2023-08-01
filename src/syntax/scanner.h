@@ -30,7 +30,7 @@ char *scanner_hex_number_advance(module_t *m);
 
 char *scanner_number_advance(module_t *m);
 
-char *scanner_string_advance(module_t *module, char c);
+char *scanner_string_advance(module_t *module, char close_char);
 
 token_e scanner_ident(char *word, int length);
 

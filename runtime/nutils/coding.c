@@ -226,7 +226,7 @@ static uint64_t struct_decode(uint8_t *cptr, n_struct_t *s, rtype_t *struct_rtyp
             c_align = element_size;
         }
 
-        uint64_t n_offset = align(n_offset, element_size);
+        n_offset = align(n_offset, element_size);
         uint64_t new_c_offset = align(c_offset, c_align);
 
         // 现在移动 cptr 到合适的位置 (需要记录当前的位置值,才能继续做移动)
@@ -267,12 +267,14 @@ void libc_decode(void *cptr, n_union_t *v) {
     // data 中已经存储了足够的数据, 但是依旧使用 copy 操作, 将数据 copy 到 v->value_casting 中
     if (v->rtype->kind == TYPE_STRUCT) {
         struct_decode(cptr, v->value.ptr_value, v->rtype);
+        return;
     }
 
     if (v->rtype->kind == TYPE_LIST) {
         list_decode(cptr, v->value.ptr_value, v->rtype);
+        return;
     }
 
-    assertf(false, "not support type");
+    assertf(false, "not support type=%s", type_kind_string[v->rtype->kind]);
     exit(EXIT_FAILURE);
 }

@@ -3,6 +3,7 @@
 #include "token.h"
 #include "scanner.h"
 #include "utils/error.h"
+#include "utils/autobuf.h"
 
 /**
  * 符号表使用什么结构来存储, 链表结构
@@ -280,6 +281,11 @@ bool scanner_is_at_end(module_t *m) {
     return *m->s_cursor.guard == '\0';
 }
 
+
+/**
+ * @param m
+ * @return
+ */
 char scanner_guard_advance(module_t *m) {
     m->s_cursor.guard++;
     m->s_cursor.length++;
@@ -490,16 +496,70 @@ token_e scanner_ident(char *word, int length) {
     return TOKEN_IDENT;
 }
 
-char *scanner_string_advance(module_t *m, char c) {
-    // 在遇到下一个 c 之前， 如果中间遇到了空格则忽略
-    m->s_cursor.guard++;
-    while (*m->s_cursor.guard != c && !scanner_is_at_end(m)) {
+char *scanner_string_advance(module_t *m, char close_char) {
+    // 在遇到下一个闭合字符之前， 如果中间遇到了空格则忽略
+    m->s_cursor.guard++; // 跳过 open_char
+    char escape_char = '\\';
+
+    // 由于包含字符串处理, 所以这里不使用 scanner_gen_word 直接生成
+    autobuf_t *buf = autobuf_new(10);
+
+    while (*m->s_cursor.guard != close_char && !scanner_is_at_end(m)) {
+        char guard = *m->s_cursor.guard;
+
+        if (guard == escape_char) {
+            // 跳过转义字符
+            m->s_cursor.guard++;
+
+            guard = *m->s_cursor.guard;
+            switch (guard) {
+                case 'n':
+                    guard = '\n';
+                    break;
+                case 't':
+                    guard = '\t';
+                    break;
+                case 'r':
+                    guard = '\r';
+                    break;
+                case 'b':
+                    guard = '\b';
+                    break;
+                case 'f':
+                    guard = '\f';
+                    break;
+                case 'a':
+                    guard = '\a';
+                    break;
+                case 'v':
+                    guard = '\v';
+                    break;
+                case '0':
+                    guard = '\0';
+                    break;
+                case '\\':
+                case '\'':
+                case '\"':
+                    break;
+                default:
+                    assertf(false, "unknown escape char %c", guard);
+
+            }
+        }
+
+        autobuf_push(buf, &guard, 1);
         scanner_guard_advance(m);
     }
-    m->s_cursor.guard++; // 跳过结尾的 ' 或者"
 
-    m->s_cursor.current++;
-    return scanner_gen_word(m);
+    // 跳过 close char
+    m->s_cursor.guard++;
+
+    // 结尾增加一个 \0 字符
+    char end = '\0';
+
+    autobuf_push(buf, &end, 1);
+
+    return (char *) buf->data;
 }
 
 char *scanner_gen_word(module_t *m) {

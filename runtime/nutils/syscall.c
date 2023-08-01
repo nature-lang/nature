@@ -112,7 +112,6 @@ void syscall_unlink(n_string_t *path) {
     }
 }
 
-
 void syscall_link(n_string_t *oldpath, n_string_t *newpath) {
     char *old_str = string_raw(oldpath);
     char *new_str = string_raw(newpath);

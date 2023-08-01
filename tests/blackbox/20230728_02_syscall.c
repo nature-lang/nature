@@ -10,7 +10,6 @@ static void test_basic() {
                 "rename success\n"
                 "st2.mode: 16877\n"
                 "st2.mode: 16868\n"
-                "chown err: Operation not permitted\n"
                 "rmdir success\n"
                 "stat err: No such file or directory\n"
                 "getpid success\n"

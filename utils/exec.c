@@ -1,7 +1,6 @@
 #include "exec.h"
 #include <unistd.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <sys/wait.h>
 #include "helper.h"
 
@@ -35,6 +34,7 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 //        perror("failed message");
         exit(result);
     }
+
     close(fd[1]);
 
     char *buf = malloc(4096);

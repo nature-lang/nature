@@ -630,6 +630,14 @@ fn accept(int sockfd, sockaddr_t addr):int {
     int fd = call6(SYS_ACCEPT, sockfd as cptr, p, len_ptr as cptr, 0, 0, 0)
 
     // 将 p 中的值赋值给 addr, p 会被垃圾回收回收
-    // libc.decode(p, addr)
+    libc.decode(p, addr)
     return fd
+}
+
+fn recvfrom(int sockfd, [u8] buf, int flags):int {
+    return call6(SYS_RECVFROM, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+}
+
+fn sendto(int sockfd, [u8] buf, int flags):int {
+    return call6(SYS_SENDTO, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
 }
