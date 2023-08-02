@@ -604,7 +604,7 @@ fn socket(int domain, int t, int protocol):int {
 type sockaddr_t = gen sockaddr_in|sockaddr_un
 
 fn bind(int sockfd, sockaddr_t addr) {
-    // 将 naturestruct 转换为 c struct
+    // 将 nature struct 转换为 c struct
      cptr p = libc.encode(addr)
      var len = 16 as cptr // in 和 unix 长度为 16byte
      call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)

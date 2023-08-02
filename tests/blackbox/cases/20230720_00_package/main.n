@@ -3,7 +3,9 @@ import rand.utils.seed
 import syscall
 import os
 import local
+import package.src.user
 
+user.dump()
 int r =  rand.dump()
 print('rand.dump() -> ', r, '\n')
 seed.dump()
