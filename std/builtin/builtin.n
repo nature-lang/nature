@@ -1,5 +1,11 @@
 type t0 = gen any
 
+// 这里都 string 是 nature string 类型
+type errort = struct {
+    string msg
+    bool has
+}
+
 fn print(...[any] args) {}
 
 fn println(...[any] args) {}
@@ -11,25 +17,68 @@ fn list_push([t0] list, ptr<t0> v) {}
 
 fn list_length([t0] list):int {}
 
+fn list_capacity([t0] list):int {}
+
+// 引用 data 部分,且对于复合没有展开操作
+fn list_raw([t0] list):cptr {}
+
 fn map_delete({t0:t0} map, ptr<t0> key) {}
 
 fn map_length({t0:t0} map):int {}
 
 fn set_contains({t0} set, ptr<t0> key):bool {}
 
-fn set_add({t0} set, ptr<t0> key): bool {}
+fn set_add({t0} set, ptr<t0> key):bool {}
 
 fn set_delete({t0} set, ptr<t0> key) {}
 
-// 方便测试，后续封装到系统调用库中
+fn libc_encode(any v):cptr {}
+
+fn libc_decode(cptr p, any v) {}
+
+fn libc_htons(u16 host):u16 {}
+
 fn sleep(int second) {}
 
 fn runtime_gc() {}
 
 fn runtime_malloc_bytes():i64 {}
 
-// 这里都 string 是 nature string 类型
-type errort = struct {
-    string msg
-    bool has
+// rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
+fn string_length(string s):int {}
+
+fn string_raw(string s):cptr {}
+
+// 常用系统调用
+fn syscall_call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {}
+
+fn syscall_exec(string path, [string] argv, [string] envp) {}
+
+type syscall_timespec_t = struct {
+    i64 sec
+    i64 nsec
 }
+
+type syscall_stat_t = struct {
+    syscall_timespec_t atim
+    syscall_timespec_t mtim
+    syscall_timespec_t ctim
+    u64 dev
+    u64 ino
+    u64 nlink
+    u64 rdev
+    i64 size
+    i64 blksize
+    i64 blocks
+    u32 mode
+    u32 uid
+    u32 gid
+}
+
+fn syscall_stat(string filename):syscall_stat_t {}
+
+fn syscall_fstat(int fd):syscall_stat_t {}
+
+fn syscall_wait(int pid):int {}
+
+fn syscall_getcwd():string {}

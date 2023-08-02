@@ -85,9 +85,10 @@ static bool is_jmp_op(char *name) {
  * @param operand
  * @param rel_diff
  */
-static void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *operand, int rel_diff) {
+static void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *operand, uint64_t rel_diff) {
+
+    // 目标 operand 已经确定了指令长度，不再是一个符号，所以不能在随意修正了
     if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
-        // 已经确定了指令长度，不能在随意修正了
         if (rel_diff == 0) {
             return;
         }
@@ -110,8 +111,8 @@ static void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *
 
 
     // symbol to rel32
-    // call 指令不能改写成 rel8
-    if (rel_diff == 0 || abs(rel_diff) > 128 || is_call_op(operation->name)) {
+    // call 指令不能改写成 rel8(-128 ~ 127)
+    if (rel_diff == 0 || rel_diff > 127 || rel_diff < -128 || is_call_op(operation->name)) {
         uint8_t data_count = 5;
         if (!is_call_op(operation->name)) {
             data_count = jmp_operation_count(operation, DWORD);
@@ -504,6 +505,11 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
     }
 }
 
+/**
+ * 两次遍历汇编
+ * @param ctx
+ * @param closures
+ */
 void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
     if (closures->count == 0) {
         return;
@@ -640,7 +646,8 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
         // 如果是数据符号就是 .data 段的偏移，如果是函数符号就是 .text 段的偏移
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
-            int rel_diff = sym->st_value - *temp->offset;
+            // 相对偏移 = 当前指令的偏移 - (jmp)目标符号的偏移
+            uint64_t rel_diff = sym->st_value - *temp->offset;
             // 仅仅重写了符号，data 长度不会再变了
             amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
@@ -648,6 +655,7 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
             temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
+            // st_value = 0 表示这是一个外部的符号， 需要添加重定位
             // 外部符号添加重定位信息(temp->offset + 当前指令长度减去重定位的位置长度。 PC32 默认就是 4byte)
             uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
             temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,

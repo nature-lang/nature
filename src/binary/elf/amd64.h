@@ -12,7 +12,7 @@ typedef struct {
     inst_t *inst;
     uint8_t *data;
     uint8_t data_count;
-    uint64_t *offset; // 指令的其实位置
+    uint64_t *offset; // 指令的位置
     asm_operation_t *operation; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
     string rel_symbol; // 使用的符号, 二次扫描时用于判断是否需要重定位，目前都只适用于 label
     asm_operand_t *rel_operand; // 引用自 asm_operations

@@ -220,7 +220,7 @@ static void config_print() {
     DEBUGF("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
     DEBUGF("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
     DEBUGF("BUILD_OUTPUT: %s", BUILD_OUTPUT);
-    DEBUGF("WORK_DIR: %s", WORK_DIR);
+    DEBUGF("WORK_DIR: %s", WORKDIR);
     DEBUGF("BASE_NS: %s", BASE_NS);
     DEBUGF("TERM_DIR: %s", TEMP_DIR);
     DEBUGF("BUILD_ENTRY: %s", BUILD_ENTRY);
@@ -260,7 +260,9 @@ static void build_assembler(slice_t *modules) {
             }
 
             slice_concat(m->asm_global_symbols, c->asm_symbols);
+
             debug_asm(c);
+
             slice_push(closures, c);
         }
         m->closures = closures;
@@ -276,7 +278,7 @@ static void import_builtin() {
     char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
     assertf(file_exists(source_path), "builtin.n not found");
     // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
-    module_t *builtin_module = module_build(source_path, MODULE_TYPE_BUILTIN);
+    module_t *builtin_module = module_build(NULL, source_path, MODULE_TYPE_BUILTIN);
 
     generic(builtin_module);
 
@@ -289,30 +291,50 @@ static slice_t *build_modules() {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
-    module_t *root = module_build(SOURCE_PATH, MODULE_TYPE_MAIN);
-    slice_push(modules, root);
+
+
+    toml_table_t *main_package = NULL;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        main_package = package_parser(package_file);
+    }
+
+    ast_import_t main_import = {
+            .package_dir = WORKDIR,
+            .package_conf = main_package,
+            .module_ident = FN_MAIN_NAME,
+    };
+
+    module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
+
+    slice_push(modules, main);
 
     linked_t *work_list = linked_new();
-    linked_push(work_list, root);
+    linked_push(work_list, main);
 
+    // 采用了广度优先的方式联系了所有的 import 的 module 进行编译
+    // 暂时不需要通过引用才 import 的方式
     while (work_list->count > 0) {
-        module_t *m = linked_pop(work_list);;
+        module_t *m = linked_pop(work_list);
+
         for (int j = 0; j < m->imports->count; ++j) {
             ast_import_t *import = m->imports->take[j];
             if (table_exist(module_table, import->full_path)) {
                 continue;
             }
 
-            module_t *module_new = module_build(import->full_path, MODULE_TYPE_COMMON);
-            linked_push(work_list, module_new);
-            slice_push(modules, module_new);
-            table_set(module_table, import->full_path, module_new);
+            module_t *new_module = module_build(import,
+                                                import->full_path,
+                                                MODULE_TYPE_COMMON);
+            linked_push(work_list, new_module);
+            slice_push(modules, new_module);
+            table_set(module_table, import->full_path, new_module);
         }
     }
 
-    // 将所有模块都 init 函数都注册到 root body 的最前面
-    assert(root->ast_fndefs->count > 0);
-    ast_fndef_t *root_fndef = root->ast_fndefs->take[0];
+    // register all module init to main module body
+    assert(main->ast_fndefs->count > 0);
+    ast_fndef_t *root_fndef = main->ast_fndefs->take[0];
 
     slice_t *new_body = slice_new();
     for (int i = 1; i < modules->count; ++i) {
@@ -377,7 +399,7 @@ void build(char *build_entry) {
     // debug
     config_print();
 
-    // 前端处理
+    // 导入自建模块
     import_builtin();
 
     slice_t *modules = build_modules();

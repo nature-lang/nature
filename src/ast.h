@@ -7,6 +7,7 @@
 #include "utils/ct_list.h"
 #include "utils/table.h"
 #include "utils/type.h"
+#include "package.h"
 
 typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
@@ -74,7 +75,7 @@ typedef enum {
     AST_OP_NOT, // unary bool !right, right must bool
     AST_OP_NEG, // unary number -right
     AST_OP_BNOT, // unary binary ~right, right must int
-    AST_OP_LA, // load addr
+    AST_OP_LA, // load addr &var
     AST_OP_IA, // indirect addr  *解引用
 
 
@@ -158,7 +159,7 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t operand; // 将表达式转换成 target_type
+    ast_expr_t src_operand; // 将表达式转换成 target_type
 } ast_as_expr_t;
 
 /**
@@ -166,7 +167,7 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t operand; // 将表达式转换成 target_type
+    ast_expr_t src_operand; // 将表达式转换成 target_type
 } ast_is_expr_t;
 
 // 一元表达式
@@ -288,8 +289,8 @@ typedef struct {
  */
 typedef struct {
     ast_expr_t iterate; // list, foo.list, bar[0]
-    ast_var_decl_t key; // 类型推导, type 可能是 int 或者 string
-    ast_var_decl_t *value; // value 可选，可能为 null
+    ast_var_decl_t first; // 类型推导, type 可能是 int 或者 string
+    ast_var_decl_t *second; // value 可选，可能为 null
     slice_t *body;
 } ast_for_iterator_stmt_t;
 
@@ -299,12 +300,19 @@ typedef struct {
 
 // import "module_path" module_name alias
 typedef struct {
-    string path; // import "xxx"
-    string as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
+    // file or package one of the two
+    char *file; // import 'xxx' or
+    slice_t *package; // a.b.c.d package 字符串数组
+    char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
-    // 绝对路径计算
-    string full_path; // 绝对完整的文件路径
-    string module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
+    // 通过上面的 file 或者 package 解析出的完整 package 路径
+    // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
+    // 对应的 package.toml
+    char *full_path;
+    toml_table_t *package_conf;
+    char *package_dir; // 这也是 import module 的 workdir
+
+    char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;
 
 /**
@@ -491,6 +499,16 @@ static inline ast_expr_t *ast_ident_expr(char *literal) {
     return expr;
 }
 
+static inline ast_expr_t *ast_int_expr(uint64_t number) {
+    ast_expr_t *expr = NEW(ast_expr_t);
+    expr->assert_type = AST_EXPR_LITERAL;
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = TYPE_INT;
+    literal->value = itoa(number);
+    expr->value = literal;
+    return expr;
+}
+
 static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) {
     ast_expr_t *result = NEW(ast_expr_t);
 
@@ -515,7 +533,7 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_as_expr_t *convert = NEW(ast_as_expr_t);
-    convert->operand = expr;
+    convert->src_operand = expr;
     convert->target_type = target_type;
 
     result->assert_type = AST_EXPR_AS;

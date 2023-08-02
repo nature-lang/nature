@@ -112,7 +112,7 @@ When version 1.0 is released, nature will be officially used for open source/com
 
 There is a saying in programming languages about first-class citizens, such as functions being the first-class citizens in JavaScript. While functions in nature can be passed as values and used in higher-order functions, functions are not the primary focus in nature. So what is the most important thing in nature?
 
-Is it compilation speed? Runtime speed? Safety? Simplicity? None of these. Even though we pursue the path of simplicity, we will never sacrifice the convenience of developers for it.
+Is it compilation speed? Runtime speed? Safety? Simplicity? None of these. Even though we pursue the file of simplicity, we will never sacrifice the convenience of developers for it.
 
 Therefore, the most important thing for nature is developers. It aims to provide convenience to developers, to make the language look pleasant and feel comfortable to write. This doesn't mean that nature lacks features like fast compilation, runtime speed, safety, and simplicity. We strive to strike a balance between convenience and these common features. However, if there is an irreconcilable conflict, the priority will be the convenience of developers rather than compilation speed, complexity, or simplicity.
 

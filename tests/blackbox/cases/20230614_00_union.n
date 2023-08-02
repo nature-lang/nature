@@ -27,7 +27,7 @@ i8 a = (nat as i8) + 2
 println(a)
 
 // 类型检查
-println(nat is i8, nat is null, nat is [i8])
+print(nat is i8, nat is null, nat is [i8], '\n')
 
 // 基于首个元素类型进行推断
 [i8]|[i16] b = [0 as i8]
@@ -38,7 +38,7 @@ println((b as [i8]).len())
 // 空数组快速确定类型
 [i8]|[i16] c = [] as [i8]
 var d = [] as [i16]
-println((c as [i8]).len(), d.len())
+print((c as [i8]).len(), d.len(), '\n')
 c = d
 
-println(c is [i8], c is [i16])
+print(c is [i8], c is [i16], '\n')

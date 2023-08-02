@@ -9,6 +9,7 @@
 #include "src/symbol/symbol.h"
 #include "binary/elf/elf.h"
 #include "utils/stack.h"
+#include "package.h"
 
 typedef uint64_t flag_t;
 
@@ -125,8 +126,11 @@ typedef struct {
     char *source; // 文件内容
     char *source_path; // 文件完整路径(外面丢进来的)
     char *source_dir; // 文件所在目录,去掉 xxx.n
-//    string namespace; // is dir, 从 base_ns 算起的 source_dir
     string ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
+
+    // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
+    char *package_dir;
+    toml_table_t *package_conf;
 
 //    bool entry; // 入口
     module_type_t type;
@@ -159,9 +163,8 @@ typedef struct {
     // call init stmt
     ast_stmt_t *call_init_stmt;  // analyzer 阶段写入
 
-    // TODO asm_global_symbols to init closures? 这样就只需要 compiler closures 就行了
     // 分析阶段(包括 closure_t 构建,全局符号表构建), 根据是否为 main 生成 import/symbol/asm_global_symbols(symbol)/closure_decls
-    slice_t *imports; // import_t, 图遍历 imports
+    slice_t *imports; // ast_import_t, 图遍历 imports
     table_t *import_table; // 使用处做符号改写使用
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl

@@ -34,32 +34,26 @@ static inline char *var_unique_ident(module_t *m, char *ident) {
     return ident_with_module(m->ident, result);
 }
 
-
-/**
- * @param importer_dir importer 所在的目录, 用来计算相对路径引入
- * @param import
- * @return
- */
-void full_import(string importer_dir, ast_import_t *import);
-
-module_t *module_build(string source_path, module_type_t type);
+module_t *module_build(ast_import_t *import, char *source_path, module_type_t type);
 
 /**
  * 从 base_ns 开始，去掉结尾的 .n 部分
  * @param full_path
  * @return
  */
-static inline char *module_unique_ident(char *full_path) {
-    // 从 BASE_NS 开始，截止到目录部分
-    char *result = str_replace(full_path, WORK_DIR, "");
+static inline char *module_unique_ident(ast_import_t *import) {
+    if (!import) {
+        return "";
+    }
 
-    result = str_connect(BASE_NS, result);
-    // 去掉结尾的 .n 部分
-    result = rtrim(result, ".n");
+    char *temp_dir = path_dir(import->package_dir);
+    char *ident = str_replace(import->full_path, temp_dir, "");
+    ident = ltrim(ident, "/");
 
-    // replace dot
-    result = str_replace(result, "/", ".");
-    return result;
+    ident = rtrim(ident, ".n");
+    ident = str_replace(ident, "/", ".");
+
+    return ident;
 }
 
 #endif //NATURE_MODULE_H

@@ -1,0 +1,12 @@
+name = "package"
+version = "1.0.0"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "bin" # lib or bin
+
+[dependencies]
+rand = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/rand" }
+syscall = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/syscall" }
+os = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/os" }
+local = { type = "local", version = "v1.0.0", path = "./mock/local" }

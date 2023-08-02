@@ -49,8 +49,19 @@ enable_testing()
 add_subdirectory(tests)
 add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
+# custom golang build package
+set(PACKAGE_BINARY_NAME npkg)
+set(GOBIN /usr/local/go/bin/go)
+
+add_custom_target(${PACKAGE_BINARY_NAME} ALL
+        COMMAND GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/package
+        COMMENT "package manager npkg"
+)
+
 #--------------------------------- install ---------------------------------
 install(TARGETS nature DESTINATION nature/bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nature/bin)
 install(DIRECTORY lib/ DESTINATION nature/lib)
 install(DIRECTORY std/ DESTINATION nature/std)
 install(FILES LICENSE DESTINATION nature/)

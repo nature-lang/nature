@@ -370,14 +370,14 @@ static ast_env_access_t *ast_env_access_copy(ast_env_access_t *temp) {
 
 static ast_as_expr_t *ast_as_expr_copy(ast_as_expr_t *temp) {
     ast_as_expr_t *as_expr = COPY_NEW(ast_as_expr_t, temp);
-    as_expr->operand = *ast_expr_copy(&temp->operand);
+    as_expr->src_operand = *ast_expr_copy(&temp->src_operand);
     as_expr->target_type = type_copy(temp->target_type);
     return as_expr;
 }
 
 static ast_is_expr_t *ast_is_expr_copy(ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
-    is_expr->operand = *ast_expr_copy(&temp->operand);
+    is_expr->src_operand = *ast_expr_copy(&temp->src_operand);
     is_expr->target_type = type_copy(temp->target_type);
     return is_expr;
 }
@@ -650,8 +650,8 @@ static ast_for_cond_stmt_t *ast_for_cond_copy(ast_for_cond_stmt_t *temp) {
 static ast_for_iterator_stmt_t *ast_for_iterator_copy(ast_for_iterator_stmt_t *temp) {
     ast_for_iterator_stmt_t *stmt = COPY_NEW(ast_for_iterator_stmt_t, temp);
     stmt->iterate = *ast_expr_copy(&temp->iterate);
-    stmt->key = *ast_var_decl_copy(&temp->key);
-    stmt->value = temp->value ? ast_var_decl_copy(temp->value) : NULL;
+    stmt->first = *ast_var_decl_copy(&temp->first);
+    stmt->second = temp->second ? ast_var_decl_copy(temp->second) : NULL;
     stmt->body = ast_body_copy(temp->body);  // 需要实现这个函数
     return stmt;
 }

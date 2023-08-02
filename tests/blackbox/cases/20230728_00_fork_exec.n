@@ -1,0 +1,22 @@
+import syscall
+
+var (pid, err) = try syscall.fork()
+if err.has {
+    return print('fork err: ', err.msg, '\n')
+}
+
+if pid > 0 {
+    sleep(1)
+    // 主进程等待 1 秒钟, 等待子进程执行完成
+    println('start child process complete, will exit')
+} else {
+    // child 执行其他东西, 由于此时共用了 fd, 所以直接输出到标准输出中
+    println('child process will run')
+
+    var err = try syscall.exec('/binerror/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])
+    if err.has {
+        print('first exec err: ', err.msg, '\n')
+    }
+
+    syscall.exec('/bin/echo', ['echo', 'hello world'], ['env1=v', 'env2=2'])
+}

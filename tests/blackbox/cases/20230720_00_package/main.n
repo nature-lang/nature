@@ -1,0 +1,13 @@
+import rand
+import rand.utils.seed
+import syscall
+import os
+import local
+
+int r =  rand.dump()
+print('rand.dump() -> ', r, '\n')
+seed.dump()
+syscall.dump()
+os.dump()
+print('local.get_count() -> ', local.get_count(), '\n')
+local.dump()

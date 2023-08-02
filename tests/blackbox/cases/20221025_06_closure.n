@@ -5,12 +5,12 @@ fn save(int number):int {
     return cash
 }
 
-println('init, cash=', cash)
+print('init, cash=', cash, '\n')
 
 save(10)
 
-println('saved 10, cash=', cash)
+print('saved 10, cash=', cash, '\n')
 
 save(20)
 
-println('saved 20, cash=', cash)
+print('saved 20, cash=', cash, '\n')

@@ -38,22 +38,22 @@ static lir_operand_t *compiler_zero_string(module_t *m, type_t t) {
 
 static lir_operand_t *compiler_zero_list(module_t *m, type_t t) {
     lir_operand_t *result = temp_var_operand(m, t);
-    lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(t));
-    lir_operand_t *element_index = int_operand(ct_find_rtype_index(t.list->element_type));
-    OP_PUSH(rt_call(RT_CALL_LIST_NEW, result, 3,
-                    rtype_index, element_index, int_operand(0)));
+    lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
+    lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
+    OP_PUSH(rt_call(RT_CALL_LIST_NEW, result, 4,
+                    rtype_hash, element_index, int_operand(t.list->length), int_operand(0)));
     return result;
 }
 
 static lir_operand_t *compiler_zero_map(module_t *m, type_t t) {
-    uint64_t map_rtype_index = ct_find_rtype_index(t);
-    uint64_t key_index = ct_find_rtype_index(t.map->key_type);
-    uint64_t value_index = ct_find_rtype_index(t.map->value_type);
+    uint64_t map_rtype_hash = ct_find_rtype_hash(t);
+    uint64_t key_index = ct_find_rtype_hash(t.map->key_type);
+    uint64_t value_index = ct_find_rtype_hash(t.map->value_type);
 
     lir_operand_t *result = temp_var_operand(m, t);
     lir_op_t *call_op = rt_call(RT_CALL_MAP_NEW, result,
                                 3,
-                                int_operand(map_rtype_index),
+                                int_operand(map_rtype_hash),
                                 int_operand(key_index),
                                 int_operand(value_index));
     OP_PUSH(call_op);
@@ -62,12 +62,12 @@ static lir_operand_t *compiler_zero_map(module_t *m, type_t t) {
 }
 
 static lir_operand_t *compiler_zero_set(module_t *m, type_t t) {
-    uint64_t rtype_index = ct_find_rtype_index(t);
-    uint64_t key_index = ct_find_rtype_index(t.map->key_type);
+    uint64_t rtype_hash = ct_find_rtype_hash(t);
+    uint64_t key_index = ct_find_rtype_hash(t.map->key_type);
 
     lir_operand_t *result = temp_var_operand(m, t);
     lir_op_t *call_op = rt_call(RT_CALL_SET_NEW, result,
-                                2, int_operand(rtype_index), int_operand(key_index));
+                                2, int_operand(rtype_hash), int_operand(key_index));
     OP_PUSH(call_op);
     return result;
 }
@@ -94,8 +94,8 @@ static lir_operand_t *compiler_zero_fn(module_t *m, type_t t) {
  */
 static lir_operand_t *compiler_zero_struct(module_t *m, type_t t) {
     lir_operand_t *result = temp_var_operand(m, t);
-    uint64_t rtype_index = ct_find_rtype_index(t);
-    OP_PUSH(rt_call(RT_CALL_STRUCT_NEW, result, 1, int_operand(rtype_index)));
+    uint64_t rtype_hash = ct_find_rtype_hash(t);
+    OP_PUSH(rt_call(RT_CALL_STRUCT_NEW, result, 1, int_operand(rtype_hash)));
 
     // 相关属性全都赋予 zero 值
     for (int i = 0; i < t.struct_->properties->length; ++i) {
@@ -124,8 +124,8 @@ static lir_operand_t *compiler_zero_struct(module_t *m, type_t t) {
  */
 static lir_operand_t *compiler_zero_tuple(module_t *m, type_t t) {
     lir_operand_t *result = temp_var_operand(m, t);
-    uint64_t rtype_index = ct_find_rtype_index(t);
-    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, result, 1, int_operand(rtype_index)));
+    uint64_t rtype_hash = ct_find_rtype_hash(t);
+    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, result, 1, int_operand(rtype_hash)));
 
     uint64_t offset = 0;
     for (int i = 0; i < t.tuple->elements->length; ++i) {
@@ -530,7 +530,7 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     // map or list
     lir_operand_t *iterator_target = compiler_expr(m, ast->iterate);
 
-    uint64_t rtype_index = ct_find_rtype_index(ast->iterate.type);
+    uint64_t rtype_hash = ct_find_rtype_hash(ast->iterate.type);
 
     // cursor 初始值
     lir_operand_t *cursor_operand = custom_var_operand(m, type_basic_new(TYPE_INT), ITERATOR_CURSOR);
@@ -547,17 +547,29 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(for_start_label);
 
     // key 和 value 需要进行一次初始化
-    lir_operand_t *key_target = compiler_var_decl(m, &ast->key);
-    lir_operand_t *key_ref = lea_operand_pointer(m, key_target);
+    lir_operand_t *first_target = compiler_var_decl(m, &ast->first);
+    lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
 
-    OP_PUSH(rt_call(
-            RT_CALL_ITERATOR_NEXT_KEY,
-            cursor_operand,
-            4,
-            iterator_target,
-            int_operand(rtype_index),
-            cursor_operand, // 当前的 cursor 的值
-            key_ref));
+    // 单值遍历清空下, 对于 list 调用 next value,
+    if (!ast->second && ast->iterate.type.kind == TYPE_LIST) {
+        OP_PUSH(rt_call(
+                RT_CALL_ITERATOR_NEXT_VALUE,
+                cursor_operand,
+                4,
+                iterator_target,
+                int_operand(rtype_hash),
+                cursor_operand,
+                first_ref));
+    } else {
+        OP_PUSH(rt_call(
+                RT_CALL_ITERATOR_NEXT_KEY,
+                cursor_operand,
+                4,
+                iterator_target,
+                int_operand(rtype_hash),
+                cursor_operand,
+                first_ref));
+    }
 
     // 基于 key 已经可以判断迭代是否还有了，下面的 next value 直接根据 cursor_operand 取值即可
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1),
@@ -567,14 +579,14 @@ static void compiler_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
 
     // gen value
-    if (ast->value) {
-        lir_operand_t *value_target = compiler_var_decl(m, ast->value);
+    if (ast->second) {
+        lir_operand_t *value_target = compiler_var_decl(m, ast->second);
         lir_operand_t *value_ref = lea_operand_pointer(m, value_target);
 
         OP_PUSH(rt_call(
-                RT_CALL_ITERATOR_VALUE, NULL, 4,
+                RT_CALL_ITERATOR_TAKE_VALUE, NULL, 4,
                 iterator_target,
-                int_operand(rtype_index),
+                int_operand(rtype_hash),
                 cursor_operand, value_ref));
 
     }
@@ -670,9 +682,11 @@ static void compiler_break(module_t *m, ast_break_t *stmt) {
 
 static void compiler_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
-        assert(m->compiler_current->return_operand);
         lir_operand_t *src = compiler_expr(m, *ast->expr);
-        OP_PUSH(lir_op_move(m->compiler_current->return_operand, src));
+        // return void_expr() 时, m->compiler_current->return_operand 是 null
+        if (m->compiler_current->return_operand) {
+            OP_PUSH(lir_op_move(m->compiler_current->return_operand, src));
+        }
 
         // 用来做可达分析
         OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
@@ -758,10 +772,11 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
 
         // actual 剩余的所有参数进行 compiler_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
         lir_operand_t *rest_target = temp_var_operand(m, *rest_type);
-        lir_operand_t *rtype_index = int_operand(ct_find_rtype_index(*rest_type));
-        lir_operand_t *element_index = int_operand(ct_find_rtype_index(rest_type->list->element_type));
+        lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(*rest_type));
+        lir_operand_t *element_index = int_operand(ct_find_rtype_hash(rest_type->list->element_type));
+        lir_operand_t *length = int_operand(0);
         lir_operand_t *capacity = int_operand(0);
-        OP_PUSH(rt_call(RT_CALL_LIST_NEW, rest_target, 3, rtype_index, element_index, capacity));
+        OP_PUSH(rt_call(RT_CALL_LIST_NEW, rest_target, 4, rtype_hash, element_index, length, capacity));
 
         for (int j = i; j < call->actual_params->length; ++j) {
             ast_expr_t *actual_param = ct_list_value(call->actual_params, j);
@@ -801,13 +816,52 @@ static lir_operand_t *compiler_call(module_t *m, ast_expr_t expr) {
 static lir_operand_t *compiler_binary(module_t *m, ast_expr_t expr) {
     ast_binary_expr_t *binary_expr = expr.value;
 
-    lir_opcode_t type = ast_op_convert[binary_expr->operator];
 
     lir_operand_t *left_target = compiler_expr(m, binary_expr->left);
     lir_operand_t *right_target = compiler_expr(m, binary_expr->right);
     lir_operand_t *result_target = temp_var_operand(m, expr.type);
+    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
-    OP_PUSH(lir_op_new(type, left_target, right_target, result_target));
+    if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
+        switch (operator) {
+            case LIR_OPCODE_ADD: {
+                OP_PUSH(rt_call(RT_CALL_STRING_CONCAT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SEE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_EE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SNE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_NE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SGT: {
+                OP_PUSH(rt_call(RT_CALL_STRING_GT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SGE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_GE, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SLT: {
+                OP_PUSH(rt_call(RT_CALL_STRING_LT, result_target, 2, left_target, right_target));
+                break;
+            }
+            case LIR_OPCODE_SLE: {
+                OP_PUSH(rt_call(RT_CALL_STRING_LE, result_target, 2, left_target, right_target));
+                break;
+            }
+            default: {
+                assertf(false, "not support string operator %d", ast_expr_op_str[binary_expr->operator]);
+            }
+        }
+
+        return result_target;
+    }
+
+
+    OP_PUSH(lir_op_new(operator, left_target, right_target, result_target));
 
     return result_target;
 }
@@ -1150,9 +1204,9 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
     ast_tuple_new_t *ast = expr.value;
 
     // tuple new 时所有的值都必须进行初始化，所以不会出现 null 值
-    uint64_t rtype_index = ct_find_rtype_index(expr.type);
+    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
     lir_operand_t *tuple_target = temp_var_operand(m, expr.type);
-    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, tuple_target, 1, int_operand(rtype_index)));
+    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, tuple_target, 1, int_operand(rtype_hash)));
 
 //    lir_operand_t *tuple_target = compiler_zero_tuple(m, expr.type);
 
@@ -1184,11 +1238,11 @@ static lir_operand_t *compiler_tuple_new(module_t *m, ast_expr_t expr) {
 
 static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->operand.type.kind == TYPE_UNION);
-    lir_operand_t *operand = compiler_expr(m, is_expr->operand);
-    uint64_t target_rtype_index = ct_find_rtype_index(is_expr->target_type);
+    assert(is_expr->src_operand.type.kind == TYPE_UNION);
+    lir_operand_t *operand = compiler_expr(m, is_expr->src_operand);
+    uint64_t target_rtype_hash = ct_find_rtype_hash(is_expr->target_type);
     lir_operand_t *output = temp_var_operand(m, type_basic_new(TYPE_BOOL));
-    OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, int_operand(target_rtype_index)));
+    OP_PUSH(rt_call(RT_CALL_UNION_IS, output, 2, operand, int_operand(target_rtype_hash)));
 
     return output;
 }
@@ -1200,18 +1254,18 @@ static lir_operand_t *compiler_is_expr(module_t *m, ast_expr_t expr) {
  */
 static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     ast_as_expr_t *as_expr = expr.value;
-    lir_operand_t *input = compiler_expr(m, as_expr->operand);
-    uint64_t input_rtype_index = ct_find_rtype_index(as_expr->operand.type);
+    lir_operand_t *input = compiler_expr(m, as_expr->src_operand);
+    uint64_t input_rtype_hash = ct_find_rtype_hash(as_expr->src_operand.type);
 
     // 数值类型转换
-    if (is_number(as_expr->target_type.kind) && is_number(as_expr->operand.type.kind)) {
+    if (is_number(as_expr->target_type.kind) && is_number(as_expr->src_operand.type.kind)) {
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
-        lir_operand_t *output_rtype = int_operand(ct_find_rtype_index(as_expr->target_type));
+        lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
         lir_operand_t *output_ref = lea_operand_pointer(m, output);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
 
         OP_PUSH(rt_call(RT_CALL_NUMBER_CASTING, NULL, 4,
-                        int_operand(input_rtype_index), input_ref, output_rtype, output_ref));
+                        int_operand(input_rtype_hash), input_ref, output_rtype, output_ref));
         return output;
     }
 
@@ -1219,28 +1273,49 @@ static lir_operand_t *compiler_as_expr(module_t *m, ast_expr_t expr) {
     // bool 类型转换
     if (as_expr->target_type.kind == TYPE_BOOL) {
         lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
-        OP_PUSH(rt_call(RT_CALL_BOOL_CASTING, output, 2, int_operand(input_rtype_index), input));
+        OP_PUSH(rt_call(RT_CALL_BOOL_CASTING, output, 2, int_operand(input_rtype_hash), input));
         return output;
     }
 
     // single type to union type
     if (as_expr->target_type.kind == TYPE_UNION) {
-        assert(as_expr->operand.type.kind != TYPE_UNION);
+        assert(as_expr->src_operand.type.kind != TYPE_UNION);
         lir_operand_t *output = temp_var_operand(m, as_expr->target_type);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
-        OP_PUSH(rt_call(RT_CALL_UNION_CASTING, output, 2, int_operand(input_rtype_index), input_ref));
+        OP_PUSH(rt_call(RT_CALL_UNION_CASTING, output, 2, int_operand(input_rtype_hash), input_ref));
         return output;
     }
 
     // union assert
-    if (as_expr->operand.type.kind == TYPE_UNION) {
+    if (as_expr->src_operand.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
         // 需要先预留好空间等待值 copy
         lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
         lir_operand_t *output_ref = lea_operand_pointer(m, output);
-        uint64_t target_rtype_index = ct_find_rtype_index(as_expr->target_type);
-        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_index), output_ref));
+        uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref));
         compiler_error_handle(m);
+        return output;
+    }
+
+    // string -> list u8
+    if (as_expr->src_operand.type.kind == TYPE_STRING && is_list_u8(as_expr->target_type)) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_STRING_TO_LIST, output, 1, input));
+        return output;
+    }
+
+    // list u8 -> string
+    if (is_list_u8(as_expr->src_operand.type) && as_expr->target_type.kind == TYPE_STRING) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_LIST_TO_STRING, output, 1, input));
+        return output;
+    }
+
+    // anybody to cptr
+    if (as_expr->target_type.kind == TYPE_CPTR) {
+        lir_operand_t *output = compiler_temp_var_operand(m, as_expr->target_type);
+        OP_PUSH(rt_call(RT_CALL_CPTR_CASTING, output, 1, input));
         return output;
     }
 
@@ -1346,7 +1421,12 @@ static lir_operand_t *compiler_literal(module_t *m, ast_expr_t expr) {
     }
 
     if (is_integer(literal->kind)) {
-        int64_t i = atoll(literal->value);
+        char *convert_endptr;
+        int64_t i = strtoll(literal->value, &convert_endptr, 0);
+        if (*convert_endptr != '\0') {
+            assertf(false, "covert '%s' to number failed in %s", literal->value, convert_endptr);
+        }
+
         lir_imm_t *imm_operand = NEW(lir_imm_t);
         imm_operand->kind = cross_kind_trans(literal->kind);
         imm_operand->int_value = i;
@@ -1431,7 +1511,7 @@ static lir_operand_t *compiler_fn_decl(module_t *m, ast_expr_t expr) {
         // rt_call env_assign(fndef->name, index_operand lir_operand)
         OP_PUSH(rt_call(RT_CALL_ENV_ASSIGN, NULL, 4,
                         env_operand,
-                        int_operand(ct_reflect_type(item->type).index),
+                        int_operand(ct_reflect_type(item->type).hash),
                         int_operand(i),
                         stack_addr_ref));
     }

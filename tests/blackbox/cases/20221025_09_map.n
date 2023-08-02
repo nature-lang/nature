@@ -1,6 +1,6 @@
 var m = {'a': 1, 'b': 2, 'c': 3}
 
-println('a=', m['a'])
+print('a=', m['a'], '\n')
 
 m['b'] = m['c']
 m['c'] =  33

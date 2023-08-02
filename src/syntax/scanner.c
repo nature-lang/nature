@@ -3,94 +3,109 @@
 #include "token.h"
 #include "scanner.h"
 #include "utils/error.h"
+#include "utils/autobuf.h"
 
 /**
  * 符号表使用什么结构来存储, 链表结构
  * @param chars
  */
-linked_t *scanner(module_t *module) {
+linked_t *scanner(module_t *m) {
     // init scanner
-    scanner_cursor_init(module);
-    scanner_error_init(module);
+    scanner_cursor_init(m);
+    scanner_error_init(m);
 
     linked_t *list = linked_new();
 
     while (true) {
-        scanner_skip_space(module);
+        scanner_skip_space(m);
 
-        if (module->s_cursor.has_newline && scanner_is_at_stmt_end(module)) {
+        if (m->s_cursor.has_newline && scanner_is_at_stmt_end(m)) {
             // push token_t TOKEN_STMT_EOF
-            linked_push(list, token_new(TOKEN_STMT_EOF, ";", module->s_cursor.line - 1));
+            linked_push(list, token_new(TOKEN_STMT_EOF, ";", m->s_cursor.line - 1));
         }
 
         // reset by guard
-        module->s_cursor.current = module->s_cursor.guard;
-        module->s_cursor.length = 0;
+        m->s_cursor.current = m->s_cursor.guard;
+        m->s_cursor.length = 0;
 
-        if (scanner_is_alpha(module, *module->s_cursor.current)) {
-            char *word = scanner_ident_advance(module);
+        if (scanner_is_alpha(m, *m->s_cursor.current)) {
+            char *word = scanner_ident_advance(m);
 
-            token_t *t = token_new(scanner_ident(word, module->s_cursor.length), word, module->s_cursor.line);
+            token_t *t = token_new(scanner_ident(word, m->s_cursor.length), word, m->s_cursor.line);
             linked_push(list, t);
             continue;
         }
 
-        if (scanner_is_number(module, *module->s_cursor.current)) {
-            char *word = scanner_number_advance(module); // 1, 1.12, 0.233
+        // 首个字符是 0 ~ 9 则判定为数字
+        if (scanner_is_number(m, *m->s_cursor.current)) {
+            char *word = NULL;
+
+            // 0 开头的数字特殊处理
+            if (*m->s_cursor.guard == '0') {
+                scanner_guard_advance(m);
+                if (*m->s_cursor.guard == 'x' || *m->s_cursor.guard == 'X') {
+                    word = scanner_hex_number_advance(m);
+                } else {
+                    word = scanner_number_advance(m); // 1, 1.12, 0.233
+                }
+            } else {
+                word = scanner_number_advance(m); // 1, 1.12, 0.233
+            }
+
             uint8_t type;
-            if (scanner_is_float(module, word)) {
+            if (scanner_is_float(m, word)) {
                 type = TOKEN_LITERAL_FLOAT;
             } else {
                 type = TOKEN_LITERAL_INT;
             }
 
-            linked_push(list, token_new(type, word, module->s_cursor.line));
+            linked_push(list, token_new(type, word, m->s_cursor.line));
             continue;
         }
 
         // 字符串扫描
-        if (scanner_is_string(module, *module->s_cursor.current)) {
-            char *str = scanner_string_advance(module, *module->s_cursor.current);
-            linked_push(list, token_new(TOKEN_LITERAL_STRING, str, module->s_cursor.line));
+        if (scanner_is_string(m, *m->s_cursor.current)) {
+            char *str = scanner_string_advance(m, *m->s_cursor.current);
+            linked_push(list, token_new(TOKEN_LITERAL_STRING, str, m->s_cursor.line));
             continue;
         }
 
         // if current is 特殊字符
-        if (!scanner_is_at_end(module)) {
-            int8_t special_type = scanner_special_char(module);
+        if (!scanner_is_at_end(m)) {
+            int8_t special_type = scanner_special_char(m);
             if (special_type == -1) { // 未识别的特殊符号
-                module->s_error.message = "scanner_special_char() not scanner_match";
+                m->s_error.message = "scanner_special_char() not scanner_match";
             } else {
-                linked_push(list, token_new(special_type, scanner_gen_word(module), module->s_cursor.line));
+                linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line));
                 continue;
             }
         }
 
 
         // if is end or error
-        if (scanner_has_error(module)) {
-            error_exit(module->s_error.message);
+        if (scanner_has_error(m)) {
+            error_exit(m->s_error.message);
         }
 
-        if (scanner_is_at_end(module)) {
+        if (scanner_is_at_end(m)) {
             break;
         }
     }
 
-    linked_push(list, token_new(TOKEN_EOF, "EOF", module->s_cursor.line));
+    linked_push(list, token_new(TOKEN_EOF, "EOF", m->s_cursor.line));
 
     return list;
 }
 
-char *scanner_ident_advance(module_t *module) {
+char *scanner_ident_advance(module_t *m) {
     // guard = current, 向前推进 guard,并累加 length
-    while ((scanner_is_alpha(module, *module->s_cursor.guard) ||
-            scanner_is_number(module, *module->s_cursor.guard))
-           && !scanner_is_at_end(module)) {
-        scanner_guard_advance(module);
+    while ((scanner_is_alpha(m, *m->s_cursor.guard) ||
+            scanner_is_number(m, *m->s_cursor.guard))
+           && !scanner_is_at_end(m)) {
+        scanner_guard_advance(m);
     }
 
-    return scanner_gen_word(module);
+    return scanner_gen_word(m);
 }
 
 token_e scanner_special_char(module_t *m) {
@@ -174,110 +189,119 @@ token_e scanner_special_char(module_t *m) {
     }
 }
 
-bool scanner_match(module_t *module, char expected) {
-    if (scanner_is_at_end(module)) {
+bool scanner_match(module_t *m, char expected) {
+    if (scanner_is_at_end(m)) {
         return false;
     }
 
-    if (*module->s_cursor.guard != expected) {
+    if (*m->s_cursor.guard != expected) {
         return false;
     }
 
-    scanner_guard_advance(module);
+    scanner_guard_advance(m);
     return true;
 }
 
-bool scanner_has_error(module_t *module) {
-    return module->s_error.has;
+bool scanner_has_error(module_t *m) {
+    return m->s_error.has;
 }
 
-void scanner_cursor_init(module_t *module) {
-    module->s_cursor.source = module->source;
-    module->s_cursor.current = module->source;
-    module->s_cursor.guard = module->source;
-    module->s_cursor.length = 0;
-    module->s_cursor.line = 1;
-    module->s_cursor.has_newline = false;
-    module->s_cursor.space_prev = STRING_EOF;
-    module->s_cursor.space_next = STRING_EOF;
+void scanner_cursor_init(module_t *m) {
+    m->s_cursor.source = m->source;
+    m->s_cursor.current = m->source;
+    m->s_cursor.guard = m->source;
+    m->s_cursor.length = 0;
+    m->s_cursor.line = 1;
+    m->s_cursor.has_newline = false;
+    m->s_cursor.space_prev = STRING_EOF;
+    m->s_cursor.space_next = STRING_EOF;
 }
 
-void scanner_error_init(module_t *module) {
-    module->s_error.message = "";
-    module->s_error.has = false;
+void scanner_error_init(module_t *m) {
+    m->s_error.message = "";
+    m->s_error.has = false;
 }
 
 /**
  * 在没有 ; 号的情况下，换行符在大多数时候承担着判断是否需要添加 TOKEN_EOF
  */
-void scanner_skip_space(module_t *module) {
-    module->s_cursor.has_newline = false;
-    if (module->s_cursor.guard != module->s_cursor.current) {
-        module->s_cursor.space_prev = module->s_cursor.guard[-1];
+void scanner_skip_space(module_t *m) {
+    m->s_cursor.has_newline = false;
+    if (m->s_cursor.guard != m->s_cursor.current) {
+        m->s_cursor.space_prev = m->s_cursor.guard[-1];
     }
 
     while (true) {
-        char c = *module->s_cursor.guard;
+        char c = *m->s_cursor.guard;
         switch (c) {
             case ' ':
             case '\r':
             case '\t': {
-                scanner_guard_advance(module);
+                scanner_guard_advance(m);
                 break;
             }
             case '\n': {
-                scanner_guard_advance(module);
-                module->s_cursor.line++;
-                module->s_cursor.has_newline = true;
+                scanner_guard_advance(m);
+                m->s_cursor.line++;
+                m->s_cursor.has_newline = true;
                 break;
             }
             case '/':
-                if (module->s_cursor.guard[1] == '/' && !scanner_is_at_end(module)) {
+                if (m->s_cursor.guard[1] == '/' && !scanner_is_at_end(m)) {
                     // 注释处理
-                    while (*module->s_cursor.guard != '\n' && !scanner_is_at_end(module)) {
-                        scanner_guard_advance(module);
+                    while (*m->s_cursor.guard != '\n' && !scanner_is_at_end(m)) {
+                        scanner_guard_advance(m);
                     }
                     break;
                 } else {
-                    module->s_cursor.space_next = *module->s_cursor.guard;
+                    m->s_cursor.space_next = *m->s_cursor.guard;
                     return;
                 }
             default: {
-                module->s_cursor.space_next = *module->s_cursor.guard;
+                m->s_cursor.space_next = *m->s_cursor.guard;
                 return;
             }
         }
     }
 }
 
-bool scanner_is_alpha(module_t *module, char c) {
+bool scanner_is_alpha(module_t *m, char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-bool scanner_is_number(module_t *module, char c) {
+bool scanner_is_number(module_t *m, char c) {
     return c >= '0' && c <= '9';
 }
 
-bool scanner_is_at_end(module_t *module) {
-    return *module->s_cursor.guard == '\0';
+bool scanner_is_hex_number(module_t *m, char c) {
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
 }
 
-char scanner_guard_advance(module_t *module) {
-    module->s_cursor.guard++;
-    module->s_cursor.length++;
-    return module->s_cursor.guard[-1]; // [] 访问的为值
+bool scanner_is_at_end(module_t *m) {
+    return *m->s_cursor.guard == '\0';
 }
 
-bool scanner_is_string(module_t *module, char s) {
+
+/**
+ * @param m
+ * @return
+ */
+char scanner_guard_advance(module_t *m) {
+    m->s_cursor.guard++;
+    m->s_cursor.length++;
+    return m->s_cursor.guard[-1]; // [] 访问的为值
+}
+
+bool scanner_is_string(module_t *m, char s) {
     return s == '"' || s == '`' || s == '\'';
 }
 
-bool scanner_is_float(module_t *module, char *word) {
+bool scanner_is_float(module_t *m, char *word) {
     // 是否包含 .,包含则为 float
     int dot_count = 0;
 
     if (*word == '.') {
-        module->s_error.message = "float literal format error";
+        m->s_error.message = "float literal format error";
         return false;
     }
 
@@ -290,7 +314,7 @@ bool scanner_is_float(module_t *module, char *word) {
     }
 
     if (word[-1] == '.') {
-        module->s_error.message = "float literal format error";
+        m->s_error.message = "float literal format error";
         return false;
     }
 
@@ -299,22 +323,33 @@ bool scanner_is_float(module_t *module, char *word) {
     }
 
     if (dot_count > 1) {
-        module->s_error.message = "float literal format error";
+        m->s_error.message = "float literal format error";
         return false;
     }
 
     return true;
 }
 
-// 需要考虑到浮点数
-char *scanner_number_advance(module_t *module) {
+char *scanner_hex_number_advance(module_t *m) {
+    scanner_guard_advance(m); // x or X
+
     // guard = current, 向前推进 guard,并累加 length
-    while ((scanner_is_number(module, *module->s_cursor.guard) || *module->s_cursor.guard == '.') &&
-           !scanner_is_at_end(module)) {
-        scanner_guard_advance(module);
+    while (scanner_is_hex_number(m, *m->s_cursor.guard) && !scanner_is_at_end(m)) {
+        scanner_guard_advance(m);
     }
 
-    return scanner_gen_word(module);
+    return scanner_gen_word(m);
+}
+
+// 需要考虑到浮点数
+char *scanner_number_advance(module_t *m) {
+    // guard = current, 向前推进 guard,并累加 length
+    while ((scanner_is_number(m, *m->s_cursor.guard) || *m->s_cursor.guard == '.') &&
+           !scanner_is_at_end(m)) {
+        scanner_guard_advance(m);
+    }
+
+    return scanner_gen_word(m);
 }
 
 token_e scanner_ident(char *word, int length) {
@@ -348,6 +383,8 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
+                case 'p': // cptr
+                    return scanner_rest(word, length, 2, 2, "tr", TOKEN_CPTR);
             }
         case 'e':
             return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);
@@ -461,22 +498,76 @@ token_e scanner_ident(char *word, int length) {
     return TOKEN_IDENT;
 }
 
-char *scanner_string_advance(module_t *module, char c) {
-    // 在遇到下一个 c 之前， 如果中间遇到了空格则忽略
-    module->s_cursor.guard++;
-    while (*module->s_cursor.guard != c && !scanner_is_at_end(module)) {
-        scanner_guard_advance(module);
-    }
-    module->s_cursor.guard++; // 跳过结尾的 ' 或者"
+char *scanner_string_advance(module_t *m, char close_char) {
+    // 在遇到下一个闭合字符之前， 如果中间遇到了空格则忽略
+    m->s_cursor.guard++; // 跳过 open_char
+    char escape_char = '\\';
 
-    module->s_cursor.current++;
-    return scanner_gen_word(module);
+    // 由于包含字符串处理, 所以这里不使用 scanner_gen_word 直接生成
+    autobuf_t *buf = autobuf_new(10);
+
+    while (*m->s_cursor.guard != close_char && !scanner_is_at_end(m)) {
+        char guard = *m->s_cursor.guard;
+
+        if (guard == escape_char) {
+            // 跳过转义字符
+            m->s_cursor.guard++;
+
+            guard = *m->s_cursor.guard;
+            switch (guard) {
+                case 'n':
+                    guard = '\n';
+                    break;
+                case 't':
+                    guard = '\t';
+                    break;
+                case 'r':
+                    guard = '\r';
+                    break;
+                case 'b':
+                    guard = '\b';
+                    break;
+                case 'f':
+                    guard = '\f';
+                    break;
+                case 'a':
+                    guard = '\a';
+                    break;
+                case 'v':
+                    guard = '\v';
+                    break;
+                case '0':
+                    guard = '\0';
+                    break;
+                case '\\':
+                case '\'':
+                case '\"':
+                    break;
+                default:
+                    assertf(false, "unknown escape char %c", guard);
+
+            }
+        }
+
+        autobuf_push(buf, &guard, 1);
+        scanner_guard_advance(m);
+    }
+
+    // 跳过 close char
+    m->s_cursor.guard++;
+
+    // 结尾增加一个 \0 字符
+    char end = '\0';
+
+    autobuf_push(buf, &end, 1);
+
+    return (char *) buf->data;
 }
 
-char *scanner_gen_word(module_t *module) {
-    char *word = malloc(sizeof(char) * module->s_cursor.length + 1);
-    strncpy(word, module->s_cursor.current, module->s_cursor.length);
-    word[module->s_cursor.length] = '\0';
+char *scanner_gen_word(module_t *m) {
+    char *word = malloc(sizeof(char) * m->s_cursor.length + 1);
+    strncpy(word, m->s_cursor.current, m->s_cursor.length);
+    word[m->s_cursor.length] = '\0';
 
     return word;
 }
@@ -499,32 +590,32 @@ token_e scanner_rest(char *word,
  * next not {
  * @return
  */
-bool scanner_is_at_stmt_end(module_t *module) {
-    if (scanner_is_space(module->s_cursor.space_prev)
-        || module->s_cursor.space_prev == '\\'
-        || module->s_cursor.space_prev == STRING_EOF) {
+bool scanner_is_at_stmt_end(module_t *m) {
+    if (scanner_is_space(m->s_cursor.space_prev)
+        || m->s_cursor.space_prev == '\\'
+        || m->s_cursor.space_prev == STRING_EOF) {
         return false;
     }
 
-    if (module->s_cursor.space_next == '}') {
+    if (m->s_cursor.space_next == '}') {
         return false;
     }
 
-    if (module->s_cursor.space_next == ']') {
+    if (m->s_cursor.space_next == ']') {
         return false;
     }
 
-    if (module->s_cursor.space_next == ')') {
+    if (m->s_cursor.space_next == ')') {
         return false;
     }
 
     // 前置非空白字符
-    if (module->s_cursor.space_prev != ','
-        && module->s_cursor.space_prev != '('
-        && module->s_cursor.space_prev != '['
-        && module->s_cursor.space_prev != '='
-        && module->s_cursor.space_prev != '{'
-//           && module->s_cursor.space_next != '{'
+    if (m->s_cursor.space_prev != ','
+        && m->s_cursor.space_prev != '('
+        && m->s_cursor.space_prev != '['
+        && m->s_cursor.space_prev != '='
+        && m->s_cursor.space_prev != '{'
+//           && m->s_cursor.space_next != '{'
             ) {
         return true;
     }

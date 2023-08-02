@@ -10,9 +10,9 @@ static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
     assert(expr->assert_type == AST_EXPR_LITERAL);
     ast_literal_t *literal = expr->value;
     assertf(is_integer(literal->kind), "line=%d, type inconsistency", expr->line);
-    type_kind target_kind = cross_kind_trans(target_type.kind);
     int64_t i = atoll(literal->value);
-    assertf(integer_range_check(target_kind, i), "line=%d, integer out of range", expr->line);
+    assertf(integer_range_check(cross_kind_trans(target_type.kind), i), "line=%d, integer out of range", expr->line);
+
     literal->kind = target_type.kind;
     expr->type = target_type;
 }
@@ -284,11 +284,25 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     type_t right_type = infer_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
-    assertf(is_number(left_type.kind) && is_number(right_type.kind),
-            "binary operate only support number operand, actual '%s %s %s'",
-            type_kind_string[left_type.kind],
-            ast_expr_op_str[expr->operator],
-            type_kind_string[right_type.kind]);
+    if (is_number(left_type.kind)) {
+        // 右值也必须是 number
+        assertf(is_number(right_type.kind),
+                "binary operator '%s' only support number operand, actual '%s %s %s'",
+                ast_expr_op_str[expr->operator],
+                type_kind_string[left_type.kind],
+                ast_expr_op_str[expr->operator],
+                type_kind_string[right_type.kind]);
+    }
+
+    if (left_type.kind == TYPE_STRING) {
+        // 右值必须是 string
+        assertf(right_type.kind == TYPE_STRING,
+                "binary operator '%s' only support string operand, actual '%s %s %s'",
+                ast_expr_op_str[expr->operator],
+                type_kind_string[left_type.kind],
+                ast_expr_op_str[expr->operator],
+                type_kind_string[right_type.kind]);
+    }
 
     // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {
@@ -361,42 +375,60 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    if (as_expr->operand.assert_type == AST_EXPR_LIST_NEW) {
-        ast_list_new_t *list_new_expr = as_expr->operand.value;
+    // e.g. [] as [u8,5]
+    // empty list handle
+    if (as_expr->src_operand.assert_type == AST_EXPR_LIST_NEW) {
+        ast_list_new_t *list_new_expr = as_expr->src_operand.value;
         if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    if (as_expr->operand.assert_type == AST_EXPR_SET_NEW) {
-        ast_set_new_t *set_new_expr = as_expr->operand.value;
+    // {} as {u8}
+    if (as_expr->src_operand.assert_type == AST_EXPR_SET_NEW) {
+        ast_set_new_t *set_new_expr = as_expr->src_operand.value;
         if (set_new_expr->elements->length == 0 && target_type.kind == TYPE_SET) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    if (as_expr->operand.assert_type == AST_EXPR_MAP_NEW) {
-        ast_map_new_t *map_new_expr = as_expr->operand.value;
+    // {} as {u8:string}
+    if (as_expr->src_operand.assert_type == AST_EXPR_MAP_NEW) {
+        ast_map_new_t *map_new_expr = as_expr->src_operand.value;
         if (map_new_expr->elements->length == 0 && target_type.kind == TYPE_MAP) {
             expr->type = target_type;
-            expr->assert_type = as_expr->operand.assert_type;
-            expr->value = as_expr->operand.value;
+            expr->assert_type = as_expr->src_operand.assert_type;
+            expr->value = as_expr->src_operand.value;
             return target_type;
         }
     }
 
-    infer_right_expr(m, &as_expr->operand, type_basic_new(TYPE_UNKNOWN));
-    if (as_expr->operand.type.kind == TYPE_UNION) {
+    infer_right_expr(m, &as_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
+    if (as_expr->src_operand.type.kind == TYPE_UNION) {
         assertf(target_type.kind != TYPE_UNION, "union to union type is not supported");
         // target_type 必须包含再 union 中
-        assertf(union_type_contains(as_expr->operand.type, target_type), "type = %s not contains in union type",
+        assertf(union_type_contains(as_expr->src_operand.type, target_type), "type = %s not contains in union type",
                 type_kind_string[target_type.kind]);
+        return target_type;
+    }
+
+    // 特殊类型转换 string -> list u8
+    if (as_expr->src_operand.type.kind == TYPE_STRING && is_list_u8(target_type)) {
+        return target_type;
+    }
+
+    // list u8 -> string
+    if (is_list_u8(as_expr->src_operand.type) && target_type.kind == TYPE_STRING) {
+        return target_type;
+    }
+
+    if (!is_float(as_expr->src_operand.type.kind) && target_type.kind == TYPE_CPTR) {
         return target_type;
     }
 
@@ -405,7 +437,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = infer_right_expr(m, &is_expr->operand, type_basic_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &is_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
     assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
     return type_basic_new(TYPE_BOOL);
 }
@@ -422,8 +454,22 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     type_t type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
+
     if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
         assertf(false, "neg operand must applies to int or float type");
+    }
+
+    // &var
+    if (expr->operator == AST_OP_LA) {
+        assertf(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
+                "cannot take the address of an literal or call");
+        return type_ptrof(type);
+    }
+
+    // *var
+    if (expr->operator == AST_OP_IA) {
+        assertf(type.kind == TYPE_POINTER, "cannot dereference non-pointer type");
+        return type.pointer->value_type;
     }
 
     return type;
@@ -603,16 +649,16 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
     // exists key
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(ast->properties, i);
-        struct_property_t *type_property = ct_list_value(type_struct->properties, i);
+        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
 
 
         table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
-        infer_right_expr(m, struct_property->right, type_property->type);
+        infer_right_expr(m, struct_property->right, expect_property->type);
 
         // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = type_property->type;
+        struct_property->type = expect_property->type;
     }
 
     list_t *default_properties = ast->type.struct_->properties;
@@ -755,6 +801,46 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
 }
 
 /**
+ * 参考 infer_list_select_call 方法， 主要是要实现
+ *
+ * string.len() 返回 int
+ * string.c_string() 返回 type cptr = uint(未还原)
+ * @return
+ */
+static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
+    ast_select_t *s = call->left.value;
+
+    if (str_equal(s->key, BUILTIN_LEN_KEY)) {
+        // 参数核验
+        assertf(call->actual_params->length == 0, "string len param failed");
+
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left);
+
+        call->left = *ast_ident_expr(RT_CALL_STRING_LENGTH);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
+
+        return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
+        assertf(call->actual_params->length == 0, "string c_string param failed");
+
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left);
+
+        call->left = *ast_ident_expr(RT_CALL_STRING_RAW);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_CPTR);
+        return type_basic_new(TYPE_CPTR);
+    }
+
+    assertf(false, "string select call '%s' not support", s->key);
+    exit(1);
+}
+
+/**
  * 对 call 参数验证后对 call 进行改写
  * @param m
  * @param call
@@ -784,7 +870,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_VOID);
     }
 
-    if (str_equal(s->key, LIST_LENGTH_KEY)) {
+    if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         assertf(call->actual_params->length == 0, "list length not param");
 
         // 改写
@@ -796,6 +882,34 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         call->return_type = type_basic_new(TYPE_INT);
 
         return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, BUILTIN_CAP_KEY)) {
+        assertf(call->actual_params->length == 0, "list length not param");
+
+        // 改写
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // list operand
+
+        call->left = *ast_ident_expr(RT_CALL_LIST_CAPACITY);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_INT);
+
+        return type_basic_new(TYPE_INT);
+    }
+
+    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
+        assertf(call->actual_params->length == 0, "list length not param");
+
+        // 改写
+        call->actual_params = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->actual_params, &s->left); // list operand
+
+        call->left = *ast_ident_expr(RT_CALL_LIST_RAW);
+        infer_left_expr(m, &call->left);
+        call->return_type = type_basic_new(TYPE_CPTR);
+
+        return type_basic_new(TYPE_CPTR);
     }
 
     assertf(false, "list not field '%s'", s->key);
@@ -929,6 +1043,7 @@ static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_t
  */
 static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
+
     type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
     struct_property_t *p = type_struct_property(type_struct, s->key);
     assertf(p, "type %s struct no property '%s'", type_struct->ident, s->key);
@@ -977,7 +1092,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         infer_right_expr(m, &select->left, type_basic_new(TYPE_UNKNOWN));
-        // self 快速改写
+        // self 还原成 struct
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->infer_current;
             assertf(current->self_struct, "use 'self' in struct outside");
@@ -989,7 +1104,6 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
         type_kind select_left_kind = select->left.type.kind;
 
-
         if (select_left_kind == TYPE_LIST) {
             return infer_list_select_call(m, call);
         }
@@ -1000,6 +1114,10 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
         if (select_left_kind == TYPE_SET) {
             return infer_set_select_call(m, call);
+        }
+
+        if (select_left_kind == TYPE_STRING) {
+            return infer_string_select_call(m, call);
         }
 
         if (select_left_kind == TYPE_STRUCT) {
@@ -1140,13 +1258,13 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
             "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
 
-    rewrite_var_decl(m, &stmt->key);
-    if (stmt->value) {
-        rewrite_var_decl(m, stmt->value);
+    rewrite_var_decl(m, &stmt->first);
+    if (stmt->second) {
+        rewrite_var_decl(m, stmt->second);
     }
 
     // 类型推断 (value 可选)
-    ast_var_decl_t *key_decl = &stmt->key;
+    ast_var_decl_t *key_decl = &stmt->first;
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *map_decl = iterate_type.map;
@@ -1156,7 +1274,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         key_decl->type = type_basic_new(TYPE_INT);
     }
 
-    ast_var_decl_t *value_decl = stmt->value;
+    ast_var_decl_t *value_decl = stmt->second;
     if (value_decl) {
         if (iterate_type.kind == TYPE_MAP) {
             type_map_t *map_decl = iterate_type.map;
@@ -1499,12 +1617,17 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     if (target_type.kind == TYPE_UNKNOWN) {
         return expr->type;
     }
+
+    if (target_type.kind == TYPE_VOID && expr->type.kind == TYPE_VOID) {
+        return expr->type;
+    }
+
     assertf(expr->type.kind != TYPE_VOID, "line=%d, cannot assign type void to %s", m->infer_line,
             type_kind_string[target_type.kind]);
 
     // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
     // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
-    if (is_integer(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
+    if ((is_integer(target_type.kind) || target_type.kind == TYPE_CPTR) && expr->assert_type == AST_EXPR_LITERAL) {
         literal_integer_casting(expr, target_type);
     }
 

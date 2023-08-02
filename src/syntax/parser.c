@@ -97,6 +97,7 @@ static bool parser_must_stmt_end(module_t *m) {
     if (parser_is(m, TOKEN_EOF) || parser_is(m, TOKEN_RIGHT_CURLY)) {
         return true;
     }
+
     // ; (scanner 时主动添加)
     if (parser_is(m, TOKEN_STMT_EOF)) {
         parser_advance(m);
@@ -109,6 +110,7 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
+        || parser_is(m, TOKEN_CPTR)
         || parser_is(m, TOKEN_NULL)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_INT)
@@ -226,6 +228,13 @@ static type_t parser_single_type(module_t *m) {
         type_list_t *type_list = NEW(type_list_t);
         type_list->element_type = parser_type(m);
 
+        if (parser_consume(m, TOKEN_COMMA)) {
+            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
+            int cap = atoi(t->literal);
+            assertf(cap > 0, "line: %d, array cap must > 0", parser_line(m));
+            type_list->length = cap;
+        }
+
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
         result.list = type_list;
@@ -280,9 +289,10 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
-            struct_property_t item = {0};
-            item.type = parser_type(m);
-            item.key = parser_advance(m)->literal;
+            struct_property_t item = {
+                    .type = parser_type(m),
+                    .key = parser_advance(m)->literal
+            };
 
             if (parser_consume(m, TOKEN_EQUAL)) {
                 ast_expr_t *temp_expr = NEW(ast_expr_t);
@@ -545,7 +555,7 @@ static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     parser_must(m, TOKEN_AS);
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->target_type = parser_single_type(m);
-    as_expr->operand = left;
+    as_expr->src_operand = left;
     result.assert_type = AST_EXPR_AS;
     result.value = as_expr;
     return result;
@@ -556,7 +566,7 @@ static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
     parser_must(m, TOKEN_IS);
     ast_is_expr_t *is_expr = NEW(ast_is_expr_t);
     is_expr->target_type = parser_single_type(m);
-    is_expr->operand = left;
+    is_expr->src_operand = left;
     result.assert_type = AST_EXPR_IS;
     result.value = is_expr;
     return result;
@@ -853,6 +863,53 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
     return result;
 }
 
+static bool prev_token_is_type(token_t *prev) {
+    return prev->type == TOKEN_LEFT_PAREN ||
+           prev->type == TOKEN_LEFT_CURLY ||
+           prev->type == TOKEN_COLON ||
+           prev->type == TOKEN_COMMA;
+}
+
+// for ... {
+static bool is_for_tradition_stmt(module_t *m) {
+    // 如果 for 后面直接接上 {, 则这就是 map 类型声明的 {}
+    if (parser_is(m, TOKEN_LEFT_CURLY)) {
+        return true;
+    }
+
+    int semicolon_count = 0;
+    linked_node *current = m->p_cursor.current;
+    while (current->value) {
+        token_t *t = current->value;
+        if (t->type == TOKEN_EOF) {
+            assertf(false, "unexpected EOF");
+        }
+
+        // for {int:list} a = 1; a < xx; a ++ {}
+
+        if (t->type == TOKEN_SEMICOLON) {
+            semicolon_count++;
+        }
+
+        if (t->type == TOKEN_LEFT_CURLY) {
+            // 直接判断 { 的类型
+            token_t *prev = current->prev->value;
+            if (prev_token_is_type(prev)) {
+                return true;
+            }
+
+            break;
+        }
+
+        current = current->succ;
+    }
+
+
+    assertf(semicolon_count == 0 || semicolon_count == 2, "for stmt exception");
+
+    return semicolon_count == 2;
+}
+
 /**
  * 只有变量声明是以类型开头
  * var a = xxx
@@ -953,8 +1010,9 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     parser_consume(m, TOKEN_FOR);
 //    parser_must(m, TOKEN_LEFT_PAREN);
 
+    // 通过找 ; 号的形式判断, 必须要有两个 ; 才会是 tradition
     // for int i = 1; i <= 10; i+=1
-    if (is_type_begin_stmt(m)) {
+    if (is_for_tradition_stmt(m)) {
         ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
         parser_must(m, TOKEN_SEMICOLON);
@@ -972,14 +1030,14 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     // for k,v in map {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
         ast_for_iterator_stmt_t *for_iterator_stmt = NEW(ast_for_iterator_stmt_t);
-        for_iterator_stmt->key.type = type_basic_new(TYPE_UNKNOWN);
-        for_iterator_stmt->key.ident = parser_must(m, TOKEN_IDENT)->literal;
+        for_iterator_stmt->first.type = type_basic_new(TYPE_UNKNOWN);
+        for_iterator_stmt->first.ident = parser_must(m, TOKEN_IDENT)->literal;
 
         if (parser_consume(m, TOKEN_COMMA)) {
-            for_iterator_stmt->value = NEW(ast_var_decl_t);
+            for_iterator_stmt->second = NEW(ast_var_decl_t);
             // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
-            for_iterator_stmt->value->type = type_basic_new(TYPE_UNKNOWN);
-            for_iterator_stmt->value->ident = parser_must(m, TOKEN_IDENT)->literal;
+            for_iterator_stmt->second->type = type_basic_new(TYPE_UNKNOWN);
+            for_iterator_stmt->second->ident = parser_must(m, TOKEN_IDENT)->literal;
         }
 
         parser_must(m, TOKEN_IN);
@@ -990,7 +1048,6 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         result->value = for_iterator_stmt;
         return result;
     }
-
 
     // for (condition) {}
     ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);
@@ -1117,16 +1174,25 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
     ast_import_t *stmt = malloc(sizeof(ast_import_t));
-    stmt->path = NULL;
+    stmt->file = NULL;
+    stmt->package = slice_new();
     stmt->as = NULL;
     stmt->full_path = NULL;
     stmt->module_ident = NULL;
 
     token_t *token = parser_advance(m);
-    assertf(token->type == TOKEN_LITERAL_STRING, "import token must string");
+    if (token->type == TOKEN_LITERAL_STRING) {
+        stmt->file = token->literal;
+    } else {
+        assertf(token->type == TOKEN_IDENT, "import token must string");
+        slice_push(stmt->package, token->literal);
+        while (parser_consume(m, TOKEN_DOT)) {
+            token = parser_must(m, TOKEN_IDENT);
+            slice_push(stmt->package, token->literal);
+        }
+    }
 
-    stmt->path = token->literal;
-    if (parser_consume(m, TOKEN_AS)) {
+    if (parser_consume(m, TOKEN_AS)) { // 可选 as
         token = parser_advance(m);
         assertf(token->type == TOKEN_IDENT, "import as must ident");
         stmt->as = token->literal;

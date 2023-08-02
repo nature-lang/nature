@@ -1,0 +1,12 @@
+import rand.other as rand_other
+
+int count = 444
+
+fn get_count():int {
+    return count
+}
+
+fn dump() {
+    rand_other.dump()
+    println("hello local in cross linux")
+}

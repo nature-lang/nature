@@ -305,7 +305,32 @@ static inline char *rtrim(char *str, char *sub) {
     return res;
 }
 
-static inline char *get_work_dir() {
+static inline char *ltrim(char *str, char *sub) {
+    size_t len = strlen(str);
+    size_t sub_len = strlen(sub);
+
+    // Count the number of leading occurrences of the substring
+    size_t count = 0;
+    while (strncmp(str + count * sub_len, sub, sub_len) == 0) {
+        count++;
+    }
+
+    // Calculate the length of the resulting string after trimming
+    size_t res_len = len - count * sub_len + 1;
+
+    // Allocate memory for the resulting trimmed string
+    char *res = malloc(res_len);
+
+    // Copy the characters after the leading occurrences of the substring to the result
+    memcpy(res, str + count * sub_len, res_len - 1);
+
+    // Null-terminate the result
+    res[res_len - 1] = '\0';
+
+    return res;
+}
+
+static inline char *get_workdir() {
     int size = 256;
     char *buf = malloc(size);
     VOID getcwd(buf, size);
@@ -456,6 +481,19 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
         token = strtok(NULL, "\n");  // 继续提取下一个数字
     }
     return numbers;
+}
+
+static inline char *homedir() {
+    return getenv("HOME");
+}
+
+static inline char *fullpath(char *rel) {
+    char *path = (char *) malloc(PATH_MAX * sizeof(char));
+    if (!realpath(rel, path)) {
+        return NULL;
+    }
+
+    return path;
 }
 
 #endif //NATURE_SRC_LIB_HELPER_H_

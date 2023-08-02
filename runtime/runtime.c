@@ -1,5 +1,4 @@
 #include "runtime.h"
-#include "basic.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
@@ -9,7 +8,7 @@
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
-    uint64_t data_size = rtype_heap_out_size(rtype, POINTER_SIZE);
+    uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
     if (is_number(rtype->kind)) {
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
@@ -17,12 +16,8 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        memory_string_t *memory_string = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        char *str = runtime_malloc(memory_string->length + 1, NULL);
-        str[memory_string->length] = '\0';
-
-        memmove(str, memory_string->array_data, memory_string->length);
-        return str;
+        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
+        return (char *) string_raw(n_str);
     }
 
     assertf(false, "not support kind=%s", type_kind_string[rtype->kind]);
@@ -44,6 +39,7 @@ void runtime_main() {
     DEBUGF("[runtime_main] memory init success")
 
     // - processor 初始化(包括当前执行栈记录,用户栈生成)
+    DEBUGF("[runtime_main] rt_rtype_table base=%p", rt_rtype_table);
     processor_init();
     DEBUGF("[runtime_main] processor init success")
 

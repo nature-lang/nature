@@ -5,7 +5,7 @@ fn hello() {
 
 var err = try hello()
 if err.has {
-    println('catch err: ', err.msg)
+    print('catch err: ', err.msg, '\n')
 }
 
 fn one(bool need):int {
@@ -17,14 +17,14 @@ fn one(bool need):int {
 
 var (s, one_err) = try one(true)
 if one_err.has {
-    println('one(true) has err:', one_err.msg)
+    print('one(true) has err:', one_err.msg, '\n')
 } else {
-    println('one(true) not err, s=', s)
+    print('one(true) not err, s=', s, '\n')
 }
 
 var (s1, one_err1) = try one(false)
 if one_err1.has {
-    println('one(false) has err:', one_err1.msg)
+    print('one(false) has err:', one_err1.msg, '\n')
 } else {
-    println('one(false) not err, s1=', s1)
+    print('one(false) not err, s1=', s1, '\n')
 }

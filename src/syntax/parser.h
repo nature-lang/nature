@@ -72,6 +72,7 @@ static type_kind token_to_kind[] = {
         [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
         [TOKEN_LITERAL_INT] = TYPE_INT,
         [TOKEN_LITERAL_STRING] = TYPE_STRING,
+        [TOKEN_CPTR] = TYPE_CPTR,
 
         // type
         [TOKEN_BOOL] = TYPE_BOOL,
@@ -89,7 +90,6 @@ static type_kind token_to_kind[] = {
         [TOKEN_U32] = TYPE_UINT32,
         [TOKEN_U64] = TYPE_UINT64,
         [TOKEN_STRING] = TYPE_STRING,
-        [TOKEN_NULL] = TYPE_NULL,
         [TOKEN_SELF] = TYPE_SELF,
         [TOKEN_VAR] = TYPE_UNKNOWN,
         [TOKEN_ANY] = TYPE_UNION,

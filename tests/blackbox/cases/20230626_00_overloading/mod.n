@@ -11,5 +11,5 @@ fn foo() {
 }
 
 fn foo(i8 a, f64 b) {
-    println("this is foo(i8 a, f64 b)")
+    println('this is foo(i8 a, f64 b)')
 }

@@ -24,7 +24,7 @@ char BUILD_OUTPUT_NAME[PATH_MAX]; // main
 char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
 char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
-char *WORK_DIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
+char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 char *BASE_NS; // 最后一级目录的名称，也可以自定义
 char *TEMP_DIR; // 链接临时目录
 
@@ -71,7 +71,6 @@ static inline char *parser_base_ns(char *dir) {
     return result;
 }
 
-
 static inline char *os_to_string(uint8_t os) {
     if (os == OS_LINUX) {
         return "linux";
@@ -101,14 +100,14 @@ static inline uint8_t arch_to_uint8(char *arch) {
 }
 
 static inline void config_init() {
-    WORK_DIR = get_work_dir();
+    WORKDIR = get_workdir();
     // 当前所在目录的最后一级目录(当 import 已 base_ns 开头时，表示从 root_ns 进行文件搜索)
-    BASE_NS = parser_base_ns(WORK_DIR);
+    BASE_NS = parser_base_ns(WORKDIR);
     TEMP_DIR = temp_dir();
 
     // BUILD_OUTPUT_DIR 优先从 main 入口解析，如果没有值才是 work_dir
     if (strlen(BUILD_OUTPUT_DIR) == 0) {
-        strcpy(BUILD_OUTPUT_DIR, WORK_DIR);
+        strcpy(BUILD_OUTPUT_DIR, WORKDIR);
     }
 
     strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME));

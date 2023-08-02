@@ -1,7 +1,0 @@
-// builtin function 构造
-// 内置函数关联着汇编外部函数
-
-void write(int fd, [uint8] data) {
-	// 如果转换成汇编调用？或者 c 语言调用？ 基于
-	// build_in 模块？
-}

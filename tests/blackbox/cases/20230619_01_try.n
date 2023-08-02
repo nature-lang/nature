@@ -2,7 +2,7 @@
 var list = [1, 2, 3]
 var (item, err) = try list[5]
 if err.has {
-    println("catch list index err=", err.msg)
+    print('catch list index err=', err.msg, '\n')
 }
 println(item)
 
@@ -10,7 +10,7 @@ println(item)
 any a1 = 1 as i8
 var (i1, err1) = try a1 as i16
 if err1.has {
-    println("catch type assert err=", err1.msg)
+    print('catch type assert err=', err1.msg, '\n')
 }
 
 // 基于 struct fn 和 struct list 测试一下简单的链式调用
@@ -30,17 +30,17 @@ var foo = test {
 }
 
 // 正常访问
-println(foo.list[1], foo.div(10, 5))
+print(foo.list[1], foo.div(10, 5), '\n')
 
 // 异常处理
 var (a2, err2) = try foo.list[8]
 if err2.has {
-    println("chain access list err=", err2.msg)
+    print('chain access list err=', err2.msg, '\n')
 }
 
 var (a3, err3) = try foo.div(10, 0)
 if err3.has {
-    println("chain access call err=", err3.msg)
+    print("chain access call err=", err3.msg, '\n')
 }
 
-println("hello world")
+println('hello world')

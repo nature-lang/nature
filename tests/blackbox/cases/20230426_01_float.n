@@ -6,4 +6,4 @@ fn values():(float, f32, f64) {
 
 var (a, b, c) = values()
 
-println(a, b, c)
+print(a, b, c, '\n')

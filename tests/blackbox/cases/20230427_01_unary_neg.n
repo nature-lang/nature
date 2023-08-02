@@ -7,10 +7,10 @@ var e = d
 int f = -24 + -23
 i16 g = 16
 i16 h = -g
-println(a, b, c, d, e, f, g, h)
+print(a, b, c, d, e, f, g, h, '\n')
 
 // neg float
 float f1 = 3.1415926
 var f2 = -f1
 var f3 = -(3.14 + 1.28)
-println(f1, f2, f3)
+print(f1, f2, f3, '\n')

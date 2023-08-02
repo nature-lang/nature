@@ -69,6 +69,7 @@ symbol_t *symbol_table_get_noref(char *ident) {
 
 symbol_t *symbol_table_get(char *ident) {
     symbol_t *s = table_get(symbol_table, ident);
+    assertf(s, "symbol=%s not found", ident);
 
     // 引用计数
     s->ref_count += 1;

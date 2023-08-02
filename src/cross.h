@@ -268,6 +268,10 @@ static inline type_kind cross_kind_trans(type_kind kind) {
             return TYPE_UINT64;
         }
 
+        if (kind == TYPE_CPTR) {
+            return TYPE_UINT64;
+        }
+
         return kind;
     }
     assert(false && "not support this arch");

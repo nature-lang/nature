@@ -1,6 +1,4 @@
 #include "tests/test.h"
-#include "utils/assertf.h"
-#include "utils/exec.h"
 #include <stdio.h>
 
 static void test_basic() {
