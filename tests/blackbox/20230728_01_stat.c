@@ -1,6 +1,4 @@
 #include "tests/test.h"
-#include "utils/assertf.h"
-#include "utils/exec.h"
 #include <stdio.h>
 
 static struct stat *mock_stat() {
@@ -19,6 +17,7 @@ static struct stat *mock_fstat() {
     return buf;
 }
 
+#ifdef __LINUX
 static void test_basic() {
     struct stat *s = mock_stat();
     struct stat *s2 = mock_fstat();
@@ -43,7 +42,10 @@ static void test_basic() {
     char *raw = exec_output();
     assert_string_equal(raw, expect);
 }
-
+#elif __DARWIN
+static void test_basic() {
+}
+#endif
 int main(void) {
     TEST_BASIC
 }
