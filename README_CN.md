@@ -52,32 +52,6 @@ docker run --rm -it -v $PWD:/app --name nature naturelang/nature:latest sh -c 'n
 ```
 
 
-
-## 🍼 编码示例
-
-
-错误处理
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630115906.png)
-
-泛型
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132324.png)
-
-联合类型
-
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132845.png)
-
-协程
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120423.png)
-
-函数标签
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120447.png)
-
-
-http server
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120523.png)
-
-
-
 ## 🌱 发布计划
 
 nature 版本号遵循[语义化版本](https://semver.org/)，️其中 0.1 ~ 1.0 包含上下两个部分
@@ -132,6 +106,30 @@ discard: [https://discord.gg/s5x542RF](https://discord.gg/s5x542RF)
 微信群: 添加微信号 `nature-lang` 备注 “申请加群”
 
 github 讨论社区: [https://github.com/nature-lang/nature/discussions](https://github.com/nature-lang/nature/discussions)
+
+
+## 🍼 编码示例
+
+
+错误处理
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630115906.png)
+
+泛型
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132324.png)
+
+联合类型
+
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132845.png)
+
+协程
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120423.png)
+
+函数标签
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120447.png)
+
+
+http server
+![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120523.png)
 
 
 ## 🫧 FAQ

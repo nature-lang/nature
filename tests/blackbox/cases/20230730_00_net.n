@@ -35,7 +35,6 @@ if err.has {
 }
 
 println('accept success')
-// println('client addr and port:', client_addr.sin_addr, client_addr.sin_port)
 
 var recv_buf = [] as [u8]
 syscall.recvfrom(client_fd, recv_buf, 0)
