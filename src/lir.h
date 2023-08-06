@@ -4,7 +4,7 @@
 #include "utils/linked.h"
 #include "utils/helper.h"
 #include "utils/table.h"
-#include "src/structs.h"
+#include "src/types.h"
 #include "src/module.h"
 #include "src/symbol/symbol.h"
 #include "src/register/register.h"
@@ -137,7 +137,7 @@
 
 #define OP(_node) ((lir_op_t*)_node->value)
 
-#define OP_PUSH(_op) linked_push(m->compiler_current->operations, _op)
+#define OP_PUSH(_op) linked_push(m->linear_current->operations, _op)
 
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间

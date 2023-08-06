@@ -1,7 +1,7 @@
 #include "build.h"
 #include "src/cross.h"
 #include "src/semantic/infer.h"
-#include "src/compiler.h"
+#include "src/linear.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/native/amd64.h"
@@ -356,7 +356,7 @@ static void build_compiler(slice_t *modules) {
         infer(m);
 
         // 编译为 lir
-        compiler(m);
+        linear(m);
 
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
@@ -375,9 +375,9 @@ static void build_compiler(slice_t *modules) {
             cross_lower(c);
 
             // 线性扫描寄存器分配
-            linear_scan(c);
+            reg_alloc(c);
 
-            debug_block_lir(c, "linear scan");
+            debug_block_lir(c, "reg_alloc");
 
             // 基于 arch 生成汇编
             cross_native(c);

@@ -1,5 +1,5 @@
-#ifndef NATURE_STRUCTS_H
-#define NATURE_STRUCTS_H
+#ifndef NATURE_TYPES_H
+#define NATURE_TYPES_H
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -33,6 +33,23 @@ typedef enum {
     LIR_FLAG_INDIRECT_ADDR_BASE,
 } lir_flag_t;
 
+typedef enum {
+    // 前端
+    CT_STAGE_SCANNER = 1,
+    CT_STAGE_PARSER,
+    CT_STAGE_ANALYZER,
+    CT_STAGE_GENERIC,
+    CT_STAGE_INFER,
+    CT_STAGE_LINEAR,
+    CT_STAGE_CFG, // return check 是基于 cfg 的
+
+    // 后端
+    CT_STAGE_SSA,
+    CT_STAGE_LOWER,
+    CT_STAGE_REG_ALLOC,
+    CT_STAGE_NATIVE, // 编程了汇编源语，不再受 closure 约束
+} ct_stage;
+
 
 typedef enum {
     MODULE_TYPE_MAIN = 1,
@@ -60,18 +77,13 @@ typedef struct {
     char *current;
     char *guard;
     int length;
-    int line; // 当前所在代码行，用于代码报错提示
 
-    bool has_newline;
+    int line; // 当前所在代码行，用于代码报错提示
+    int column; // 当前 scan 所在 column
+
     char space_prev;
     char space_next;
 } scanner_cursor_t;
-
-typedef struct {
-    bool has;
-    char *message;
-} scanner_error_t;
-
 
 typedef struct {
     linked_node *current;
@@ -116,6 +128,12 @@ typedef struct analyzer_fndef_t {
     table_t *free_table; // analyzer_free_ident_t*
 } analyzer_fndef_t;
 
+typedef struct {
+    ct_stage stage;
+    int line;
+    int column;
+    char msg[1024];
+} ct_error_t;
 
 /**
  * 可以理解为文件维度数据
@@ -132,11 +150,13 @@ typedef struct {
     char *package_dir;
     toml_table_t *package_conf;
 
+    // parser/analyzer/infer/compiler 阶段的所有异常都写入到这里
+    slice_t *ct_errors;
+
 //    bool entry; // 入口
     module_type_t type;
 
     scanner_cursor_t s_cursor;
-    scanner_error_t s_error;
     linked_t *token_list; // scanner 结果
 
     int var_unique_count; // 同一个 module 下到所有变量都会通过该 ident 附加唯一标识
@@ -157,8 +177,8 @@ typedef struct {
     table_t *type_actual_params; // 临时存储 infer alias 时传递的实参
 
     // compiler
-    struct closure_t *compiler_current;
-    int compiler_line;
+    struct closure_t *linear_current;
+    int linear_line;
 
     // call init stmt
     ast_stmt_t *call_init_stmt;  // analyzer 阶段写入
@@ -507,4 +527,4 @@ typedef struct {
 } elf_context;
 
 
-#endif //NATURE_STRUCTS_H
+#endif //NATURE_TYPES_H

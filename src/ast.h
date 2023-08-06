@@ -125,7 +125,8 @@ static string ast_expr_op_str[] = {
 };
 
 typedef struct {
-    int line; // 行号
+    int line;
+    int column;
     ast_type_t assert_type; // 声明语句类型
     void *value;
 } ast_stmt_t;
@@ -138,17 +139,12 @@ typedef struct {
 
 typedef struct {
     int line;
+    int column;
     ast_type_t assert_type; // 表达式断言
     type_t type; // 表达式自身的类型
     type_t target_type; // 表达式赋值的目标的 type
     void *value;
 } ast_expr_t;
-
-typedef struct {
-    size_t count; // 当前数量, unsigned int
-    size_t capacity; // 容量
-    ast_stmt_t *list;
-} ast_block_stmt;
 
 typedef struct {
     char *literal;

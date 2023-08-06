@@ -3,6 +3,6 @@
 
 #include "src/lir.h"
 
-void linear_scan(closure_t *c);
+void reg_alloc(closure_t *c);
 
 #endif //NATURE_LINEARSCAN_H

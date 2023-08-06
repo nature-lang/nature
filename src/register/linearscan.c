@@ -103,7 +103,7 @@ static void linear_prehandle(closure_t *c) {
  * ASSIGN_REG_NUM
  * @param c
  */
-void linear_scan(closure_t *c) {
+void reg_alloc(closure_t *c) {
     linear_prehandle(c);
 
     interval_block_order(c);

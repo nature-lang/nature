@@ -1,7 +1,7 @@
 #ifndef NATURE_CROSS_H
 #define NATURE_CROSS_H
 
-#include "structs.h"
+#include "types.h"
 #include "src/build/config.h"
 #include "src/lir.h"
 

@@ -179,9 +179,8 @@ typedef struct {
     token_e type; // 通配类型，如 var
     char *literal;
     int line;
+    int column;
 } token_t;
-
-token_t *token_new(uint8_t type, char *literal, int line);
 
 static inline bool token_complex_assign(token_e t) {
     return t == TOKEN_PERSON_EQUAL ||
@@ -195,5 +194,19 @@ static inline bool token_complex_assign(token_e t) {
            t == TOKEN_LEFT_SHIFT_EQUAL ||
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
+
+token_t *token_new(uint8_t type, char *literal, int line, int column) {
+    token_t *t = malloc(sizeof(token_t));
+    t->type = type;
+    t->literal = literal;
+    t->line = line;
+    t->column = column;
+
+#ifdef DEBUG_SCANNER
+    debug_scanner(t);
+#endif
+    return t;
+}
+
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_

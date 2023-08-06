@@ -2,7 +2,7 @@
 #define NATURE_SRC_REGISTER_REGISTER_H_
 
 #include "utils/helper.h"
-#include "src/structs.h"
+#include "src/types.h"
 #include "utils/slice.h"
 #include "utils/table.h"
 #include "src/build/config.h"

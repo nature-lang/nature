@@ -5,7 +5,7 @@
 #include "src/build/config.h"
 #include "utils/helper.h"
 #include "src/symbol/symbol.h"
-#include "structs.h"
+#include "types.h"
 
 #define MODULE_SUFFIX ".n"
 

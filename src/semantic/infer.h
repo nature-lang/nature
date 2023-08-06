@@ -5,7 +5,7 @@
 #define NATURE_SRC_AST_INFER_H_
 
 #include "src/ast.h"
-#include "src/structs.h"
+#include "src/types.h"
 
 void infer(module_t *m);
 
