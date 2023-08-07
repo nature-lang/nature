@@ -74,9 +74,8 @@ linked_t *scanner(module_t *m) {
         if (!scanner_at_eof(m)) {
             int8_t special_type = scanner_special_char(m);
             if (special_type == -1) {
-                push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+                dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
                             "special characters are not recognized");
-                dump_errors(m);
             } else {
                 linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column));
                 continue;
@@ -248,12 +247,14 @@ bool scanner_skip_space(module_t *m) {
                 } else if (m->s_cursor.guard[1] == '*') {
                     while (!scanner_multi_comment_end(m)) {
                         if (scanner_at_eof(m)) {
-                            push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length,
+                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length,
                                         "unterminated comment");
-                            dump_errors(m);
                         }
                         scanner_guard_advance(m);
                     }
+                    scanner_guard_advance(m); // *
+                    scanner_guard_advance(m); // /
+                    break;
                 } else {
                     m->s_cursor.space_next = *m->s_cursor.guard;
                     return has_new;
@@ -320,9 +321,8 @@ bool scanner_is_float(module_t *m, char *word) {
 
     // 结尾不能是 .
     if (word[-1] == '.') {
-        push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
                     "floating-point numbers cannot end with '.'");
-        dump_errors(m);
         return false;
     }
 
@@ -331,7 +331,7 @@ bool scanner_is_float(module_t *m, char *word) {
     }
 
     if (dot_count > 1) {
-        push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
                     "floating-point number contains multiple '.'");
         return false;
     }
@@ -552,8 +552,8 @@ char *scanner_string_advance(module_t *m, char close_char) {
                 case '\"':
                     break;
                 default:
-                    assertf(false, "unknown escape char %c", guard);
-
+                    push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+                                "unknown escape char %c", guard);
             }
         }
 

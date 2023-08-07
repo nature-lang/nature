@@ -716,8 +716,8 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
 bool type_compare(type_t left, type_t right) {
     assertf(left.status == REDUCTION_STATUS_DONE && right.status == REDUCTION_STATUS_DONE,
             "type not origin, left: '%s', right: '%s'",
-            type_kind_string[left.kind],
-            type_kind_string[right.kind]);
+            type_kind_str[left.kind],
+            type_kind_str[right.kind]);
 
     assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type unknown cannot infer");
 

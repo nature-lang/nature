@@ -100,7 +100,7 @@ typedef enum {
     TYPE_GC_UPVALUE
 } type_kind;
 
-static string type_kind_string[] = {
+static string type_kind_str[] = {
         [TYPE_GC] = "gc",
         [TYPE_GC_FN] = "runtime_fn",
         [TYPE_GC_ENV] = "env",
@@ -226,6 +226,8 @@ typedef struct type_t {
     };
     type_kind kind;
     reduction_status_t status;
+    int line;
+    int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } type_t;
 
@@ -262,7 +264,7 @@ struct type_formal_t {
 };
 
 struct type_alias_t {
-    char *import_as; // 可能为 null
+    char *import_as; // 可能为 null (foo.bar)
     char *ident; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
     list_t *actual_params; // type_t*

@@ -698,7 +698,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bit_value = 0;
         }
         DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value=%d",
-               type_kind_string[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
@@ -725,7 +725,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 
     char *debug_kind = "";
     if (rtype) {
-        debug_kind = type_kind_string[rtype->kind];
+        debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF("[runtime.std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
            "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
@@ -763,7 +763,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
 
     char *debug_kind = "";
     if (rtype) {
-        debug_kind = type_kind_string[rtype->kind];
+        debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF("[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
            "addr=0x%lx, allocator_bytes=%ld",
@@ -903,7 +903,7 @@ addr_t mstack_new(uint64_t size) {
  */
 void *runtime_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
-        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_string[rtype->kind]);
+        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
     } else {
         DEBUGF("[runtime_malloc] size=%ld, type is null", size);
     }

@@ -86,7 +86,7 @@ char *lir_var_to_string(lir_var_t *var) {
     char *type_string = "";
 
     if (var->type.kind > 0) {
-        type_string = type_kind_string[var->type.kind];
+        type_string = type_kind_str[var->type.kind];
     }
 
     string ident = var->ident;
@@ -118,7 +118,7 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
 char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     string buf = mallocz(DEBUG_STR_COUNT);
     string indirect_addr_str = "";
-    string type_string = type_kind_string[operand_addr->type.kind];
+    string type_string = type_kind_str[operand_addr->type.kind];
     sprintf(buf, "%sI_ADDR[%s:%lu:%s]",
             indirect_addr_str,
             lir_operand_to_string(operand_addr->base),

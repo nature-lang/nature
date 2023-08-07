@@ -1403,7 +1403,7 @@ uint64_t collect_fndef_list(elf_context *ctx) {
             DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
                    fn->symbol_name,
                    var->ident,
-                   type_kind_string[var->type.kind],
+                   type_kind_str[var->type.kind],
                    type_sizeof(var->type),
                    type_need_gc(var->type),
                    (stack_slot / POINTER_SIZE) - 1,

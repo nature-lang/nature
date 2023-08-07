@@ -169,11 +169,13 @@ typedef struct {
     // analyzer
     analyzer_fndef_t *analyzer_current;
     ast_fndef_t *analyzer_global;
-    int analyzer_line;
+
+    // 编译器前端统一使用
+    int current_line;
+    int current_column;
 
     // infer
     ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
-    int infer_line;
     table_t *type_actual_params; // 临时存储 infer alias 时传递的实参
 
     // compiler
@@ -206,7 +208,6 @@ typedef struct {
     uint8_t *elf_binary;
     string object_file;
 } module_t;
-
 
 /**
  * 遍历期间，block 第一次被访问时打上 visited 标识
@@ -457,6 +458,9 @@ typedef struct closure_t {
     slice_t *asm_build_temps; // 架构相关编译临时
     slice_t *asm_symbols; // asm_global_symbol_t
     module_t *module;
+
+    int line;
+    int column;
 } closure_t;
 
 /**

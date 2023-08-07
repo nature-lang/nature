@@ -13,7 +13,7 @@ static uint64_t list_spread_to_buf(n_list_t *l, uint64_t rtype_hash, autobuf_t *
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     assertf(element_rtype, "cannot find element rtype by hash=%lu", l->element_rtype_hash);
-    DEBUGF("[runtime.list_spread_to_buf] element->kind=%s", type_kind_string[element_rtype->kind])
+    DEBUGF("[runtime.list_spread_to_buf] element->kind=%s", type_kind_str[element_rtype->kind])
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
     uint64_t c_offset = 0;
@@ -22,7 +22,7 @@ static uint64_t list_spread_to_buf(n_list_t *l, uint64_t rtype_hash, autobuf_t *
         uint8_t *p = l->data + i * element_size;
 
         DEBUGF("[runtime.list_spread_to_buf] element_size=%lu, kind=%s, c_offset=%lu", element_size,
-               type_kind_string[element_rtype->kind], c_offset);
+               type_kind_str[element_rtype->kind], c_offset);
 
         uint64_t mov_size = 0;
         if (element_rtype->kind == TYPE_LIST) {
@@ -78,7 +78,7 @@ static uint64_t struct_spread_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, 
 
 
         DEBUGF("[runtime.struct_spread_to_buf] element_rtype_kind=%s, element_rtype->hash=%lu, element_size=%lu, element_offset=%lu",
-               type_kind_string[element_rtype->kind],
+               type_kind_str[element_rtype->kind],
                element_rtype->hash,
                element_size,
                n_offset)
@@ -174,7 +174,7 @@ static uint64_t list_decode(uint8_t *cptr, n_list_t *l, rtype_t *list_rtype) {
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     assertf(element_rtype, "cannot find element rtype by hash=%lu", l->element_rtype_hash);
-    DEBUGF("[runtime.list_decode] element->kind=%s", type_kind_string[element_rtype->kind])
+    DEBUGF("[runtime.list_decode] element->kind=%s", type_kind_str[element_rtype->kind])
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
     uint64_t c_offset = 0;
@@ -183,7 +183,7 @@ static uint64_t list_decode(uint8_t *cptr, n_list_t *l, rtype_t *list_rtype) {
         uint8_t *p = l->data + i * element_size; // 需要写入的点
 
         DEBUGF("[runtime.list_decode] element_size=%lu, kind=%s, c_offset=%lu", element_size,
-               type_kind_string[element_rtype->kind], c_offset)
+               type_kind_str[element_rtype->kind], c_offset)
 
         uint64_t mov_size = 0;
         if (element_rtype->kind == TYPE_LIST) {
@@ -234,7 +234,7 @@ static uint64_t struct_decode(uint8_t *cptr, n_struct_t *s, rtype_t *struct_rtyp
         c_offset = new_c_offset;
 
         DEBUGF("[runtime.struct_decode] element_size=%lu, kind=%s, c_offset=%lu, n_offset=%lu",
-               element_size, type_kind_string[element_rtype->kind], c_offset, n_offset)
+               element_size, type_kind_str[element_rtype->kind], c_offset, n_offset)
 
         uint64_t mov_size = 0;
         if (element_rtype->kind == TYPE_STRUCT) {
@@ -275,6 +275,6 @@ void libc_decode(void *cptr, n_union_t *v) {
         return;
     }
 
-    assertf(false, "not support type=%s", type_kind_string[v->rtype->kind]);
+    assertf(false, "not support type=%s", type_kind_str[v->rtype->kind]);
     exit(EXIT_FAILURE);
 }

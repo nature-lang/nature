@@ -25,6 +25,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         m->ident = import->module_ident;
     }
 
+    m->ct_errors = slice_new();
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();

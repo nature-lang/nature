@@ -5,22 +5,17 @@
 
 #include "utils/helper.h"
 #include "analyzer.h"
-#include "utils/error.h"
-#include "utils/table.h"
-#include "utils/slice.h"
-#include "src/symbol/symbol.h"
-#include "src/debug/debug.h"
-#include "src/package.h"
+#include "src/error.h"
 
 static void analyzer_import_std(module_t *m, char *package, ast_import_t *import) {
     // /usr/local/nature/std
-    assertf(NATURE_ROOT, "NATURE_ROOT not found");
+    ANALYZER_ASSERTF(NATURE_ROOT, "NATURE_ROOT not found");
 
     char *package_dir = path_join(NATURE_ROOT, "std");
     package_dir = path_join(package_dir, package);
 
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
-    assertf(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
+    ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
@@ -40,14 +35,14 @@ static void analyzer_import_dep(module_t *m, char *package, ast_import_t *import
         package_dir = package_dep_git_dir(m->package_conf, package);
     } else if (str_equal(type, TYPE_LOCAL)) {
         package_dir = package_dep_local_dir(m->package_conf, package);
-        assertf(package_dir, "package=%s not found", package);
+        ANALYZER_ASSERTF(package_dir, "package=%s not found", package);
     } else {
-        assertf(false, "unknown package dep type=%s", type);
+        ANALYZER_ASSERTF(false, "unknown package dep type=%s", type);
         exit(1);
     }
 
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
-    assertf(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
+    ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
@@ -55,10 +50,6 @@ static void analyzer_import_dep(module_t *m, char *package, ast_import_t *import
 
 static void analyzer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
-        // switch 结构导向优化
-#ifdef DEBUG_ANALYZER
-        debug_stmt("ANALYZER", body->tack[i]);
-#endif
         analyzer_stmt(m, body->take[i]);
     }
 }
@@ -71,10 +62,12 @@ static void analyzer_body(module_t *m, slice_t *body) {
 static void analyzer_import(module_t *m, ast_import_t *import) {
     if (import->file) {
         // import->path 必须以 .n 结尾
-        assertf(ends_with(import->file, ".n"), "import file suffix must .n");
+        ANALYZER_ASSERTF(ends_with(import->file, ".n"), "import file suffix must .n");
+
         // 不能有以 ./ 或者 / 开头
-        assertf(import->file[0] != '.', "cannot use  path=%s begin with '.'", import->file);
-        assertf(import->file[0] != '/', "cannot use absolute path=%s", import->file);
+        ANALYZER_ASSERTF(import->file[0] != '.', "cannot use path=%s begin with '.'", import->file);
+
+        ANALYZER_ASSERTF(import->file[0] != '/', "cannot use absolute path=%s", import->file);
 
 
         // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
@@ -101,14 +94,14 @@ static void analyzer_import(module_t *m, ast_import_t *import) {
         return;
     }
 
-    assertf(import->package->count > 0, "import exception");
+    ANALYZER_ASSERTF(import->package->count > 0, "import exception");
     char *package = import->package->take[0];
 
     if (!m->package_conf && is_std_package(package)) {
         analyzer_import_std(m, package, import);
     } else {
         // 一旦引入了包管理, 同名包优先级 current > dep > std
-        assertf(m->package_conf, "module %s not found package.toml", m->ident);
+        ANALYZER_ASSERTF(m->package_conf, "module %s not found package.toml", m->ident);
         // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
         if (is_current_package(m->package_conf, package)) {
             // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
@@ -119,13 +112,13 @@ static void analyzer_import(module_t *m, ast_import_t *import) {
         } else if (is_std_package(package)) {
             analyzer_import_std(m, package, import);
         } else {
-            assertf(false, "import package %s not found", package);
+            ANALYZER_ASSERTF(false, "import package %s not found", package);
         }
     }
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
     import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->package);
-    assertf(ends_with(import->full_path, ".n"), "import file suffix must .n");
+    ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as) {
         import->as = import->package->take[import->package->count - 1];
@@ -177,14 +170,14 @@ static char *analyzer_resolve_type(module_t *m, analyzer_fndef_t *current, strin
             return ident;
         }
 
-        assertf(false, "type '%s' undeclared \n", ident);
+        ANALYZER_ASSERTF(false, "type '%s' undeclared \n", ident);
     }
 
     slice_t *locals = current->locals;
     for (int i = locals->count - 1; i >= 0; --i) {
         local_ident_t *local = locals->take[i];
         if (str_equal(ident, local->ident)) {
-            assertf(local->type == SYMBOL_TYPE_ALIAS, "ident=%s not type", local->ident);
+            ANALYZER_ASSERTF(local->type == SYMBOL_TYPE_ALIAS, "ident=%s not type", local->ident);
             // 在 scope 中找到了该 type ident, 返回该 ident 的 unique_ident
             return local->unique_ident;
         }
@@ -198,14 +191,19 @@ static char *analyzer_resolve_type(module_t *m, analyzer_fndef_t *current, strin
  * @param type
  */
 static void analyzer_type(module_t *m, type_t *type) {
+    m->current_line = type->line;
+    m->current_column = type->column;
+
     // type foo = int
-    // 'foo' is type_decl_ident
+    // 'foo' is type_alias
     if (type->kind == TYPE_ALIAS) {
         // import 全局模式 alias 处理, 例如 type a = package.foo, 对 package.foo 必定是其他 module 的 type alias 定义的 alias
         type_alias_t *type_alias = type->alias;
         if (type_alias->import_as) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
-            assertf(import, "type left ident = %s not found in import", type_alias->import_as);
+
+            ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type_alias->import_as);
+
             char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
             type_alias->ident = unique_ident;
             return;
@@ -423,7 +421,7 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
         }
 
         if (str_equal(local->ident, ident)) {
-            assertf(false, "line=%d, redeclare ident=%s", m->analyzer_line, ident);
+            ANALYZER_ASSERTF(false, "redeclare ident=%s", ident);
         }
     }
 
@@ -468,7 +466,7 @@ static void analyzer_var_tuple_destr_item(module_t *m, ast_expr_t *expr) {
     } else if (expr->assert_type == AST_EXPR_TUPLE_DESTR) {
         analyzer_var_tuple_destr(m, expr->value);
     } else {
-        assertf(false, "var tuple destr expr type exception");
+        ANALYZER_ASSERTF(false, "var tuple destr expr type exception");
     }
 }
 
@@ -488,7 +486,7 @@ static void analyzer_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt_t 
     analyzer_expr(m, &stmt->right);
 
     if (stmt->right.assert_type == AST_EXPR_TRY) {
-        assertf(stmt->tuple_destr->elements->length == 2, "tuple destr length exception");
+        ANALYZER_ASSERTF(stmt->tuple_destr->elements->length == 2, "tuple destr length exception");
 
         ast_expr_t *result_expr = ct_list_value(stmt->tuple_destr->elements, 0);
         // result expr 只能是变量声明或者一个 tuple destr 声明
@@ -496,7 +494,9 @@ static void analyzer_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt_t 
 
         // err expr 只能是一个 var decl, 并且不需要进行重复声明检测
         ast_expr_t *err_expr = ct_list_value(stmt->tuple_destr->elements, 1);
-        assertf(err_expr->assert_type == AST_VAR_DECL, "tuple destr last expr type exception");
+
+        ANALYZER_ASSERTF(err_expr->assert_type == AST_VAR_DECL, "tuple destr last expr type exception");
+
         analyzer_var_decl(m, err_expr->value, false);
 
         return;
@@ -576,9 +576,13 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
  */
 static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
     ast_let_t *let_stmt = stmt->value;
-    assertf(let_stmt->expr.assert_type == AST_EXPR_AS, "variables must be used for 'as' in the expression");
+
+    ANALYZER_ASSERTF(let_stmt->expr.assert_type == AST_EXPR_AS, "variables must be used for 'as' in the expression");
+
     ast_as_expr_t *as_expr = let_stmt->expr.value;
-    assertf(as_expr->src_operand.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
+
+    ANALYZER_ASSERTF(as_expr->src_operand.assert_type == AST_EXPR_IDENT,
+                     "variables must be used for 'as' in the expression");
     ast_ident *ident = as_expr->src_operand.value;
     char *old = strdup(ident->literal);
 
@@ -617,7 +621,7 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    assertf(m->analyzer_global, "local fndef should be defined in global");
+    ANALYZER_ASSERTF(m->analyzer_global, "local fndef should be defined in global");
     slice_push(m->analyzer_global->local_children, fndef);
     // 反向关系
     fndef->global_parent = m->analyzer_global;
@@ -856,7 +860,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         return;
     }
 
-    assertf(false, "line=%d, identifier '%s' undeclared \n", expr->line, ident->literal);
+    ANALYZER_ASSERTF(false, "line=%d, identifier '%s' undeclared \n", expr->line, ident->literal);
 }
 
 
@@ -1009,6 +1013,9 @@ static void analyzer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
 
 
 static void analyzer_expr(module_t *m, ast_expr_t *expr) {
+    m->current_line = expr->line;
+    m->current_column = expr->column;
+
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
             return analyzer_binary(m, expr->value);
@@ -1072,6 +1079,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
  * @param stmt
  */
 static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
+    m->current_line = stmt->line;
+    m->current_column = stmt->column;
+
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             return analyzer_var_decl(m, stmt->value, true);
@@ -1129,7 +1139,6 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // init
-    m->analyzer_line = 0;
     int import_end_index = 0;
 
     // import handle
@@ -1179,7 +1188,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             assign->left = (ast_expr_t) {
                     .assert_type = AST_EXPR_IDENT,
                     .value = ast_new_ident(var_decl->ident),
-//                    .code = var_decl->code,
             };
             assign->right = vardef->right;
             temp_stmt->assert_type = AST_STMT_ASSIGN;
@@ -1210,11 +1218,12 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
+        // push 模式跳过
         assert(false && "[analyzer_module] module stmt only support var_decl/new_fn/type_decl");
     }
 
     // 添加 init fn
-    ast_fndef_t *fn_init = ast_fndef_new();
+    ast_fndef_t *fn_init = ast_fndef_new(0, 0);
     fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_basic_new(TYPE_VOID);
     fn_init->formals = ct_list_new(sizeof(ast_var_decl_t));
@@ -1243,6 +1252,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         // m->ast_fndefs 包含了当前 module 中的所有函数，嵌套定义的函数都进行了平铺
         slice_push(m->ast_fndefs, fndef);
+
         analyzer_global_fndef(m, fndef);
     }
 }
@@ -1257,6 +1267,10 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
     int import_last_index = -1;
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt_t *stmt = stmt_list->take[i];
+
+        m->current_line = stmt->line;
+        m->current_column = stmt->column;
+
         if (stmt->assert_type != AST_STMT_IMPORT) {
             break;
         }
@@ -1272,10 +1286,8 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
         import_last_index = i;
     }
 
-    m->analyzer_line = 0;
-
     // main 所有表达式
-    ast_fndef_t *fndef = ast_fndef_new();
+    ast_fndef_t *fndef = ast_fndef_new(0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
@@ -1296,6 +1308,9 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
 }
 
 void analyzer(module_t *m, slice_t *stmt_list) {
+    m->current_line = 0;
+    m->current_column = 0;
+
     if (m->type == MODULE_TYPE_MAIN) {
         analyzer_main(m, stmt_list);
     } else {

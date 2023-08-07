@@ -182,7 +182,7 @@ static lir_operand_t *linear_zero_operand(module_t *m, type_t t) {
         return linear_zero_tuple(m, t);
     }
 
-    assertf(1, "linear_zero_operand not support type=%s", type_kind_string[t.kind]);
+    assertf(1, "linear_zero_operand not support type=%s", type_kind_str[t.kind]);
     return NULL;
 }
 
@@ -1317,7 +1317,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr) {
         return output;
     }
 
-    assertf(false, "not support as_expr to type %s", type_kind_string[as_expr->target_type.kind]);
+    assertf(false, "not support as_expr to type %s", type_kind_str[as_expr->target_type.kind]);
     exit(1);
 }
 
@@ -1454,7 +1454,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr) {
         return operand;
     }
 
-    assertf(0, "cannot linear literal, kind=%s", type_kind_string[literal->kind]);
+    assertf(0, "cannot linear literal, kind=%s", type_kind_str[literal->kind]);
     exit(1);
 }
 

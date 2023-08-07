@@ -184,7 +184,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
     rtype_t *item_rtype = rt_find_rtype(item_rtype_hash);
 
     DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, env_index=%lu, stack_addr=0x%lx",
-           envs, type_kind_string[item_rtype->kind], env_index, stack_addr);
+           envs, type_kind_str[item_rtype->kind], env_index, stack_addr);
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     if (!upvalue) {
         DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr)

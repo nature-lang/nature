@@ -51,9 +51,9 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
     DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p",
-           type_kind_string[input_rtype->kind],
+           type_kind_str[input_rtype->kind],
            input_ref,
-           type_kind_string[output_rtype->kind],
+           type_kind_str[output_rtype->kind],
            output_ref);
 
     value_casting v = {0};
@@ -74,7 +74,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
         case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
         case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
         default:
-            assertf(false, "type %s cannot ident", type_kind_string[input_rtype->kind]);
+            assertf(false, "type %s cannot ident", type_kind_str[input_rtype->kind]);
             exit(1);
     }
 }
@@ -88,7 +88,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_string[mu->rtype->kind],
+               type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
         rt_processor_attach_errort("type assert error");
@@ -99,7 +99,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     memmove(value_ref, &mu->value, size);
     DEBUGF("[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, values_ref: %p",
            mu,
-           type_kind_string[mu->rtype->kind],
+           type_kind_str[mu->rtype->kind],
            size,
            mu->value.i64_value,
            value_ref);
@@ -119,7 +119,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assertf(rtype, "cannot find rtype, index = %lu", input_rtype_hash);
 
-    DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_string[rtype->kind], rtype->in_heap);
+    DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 

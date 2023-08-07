@@ -11,7 +11,7 @@ static char *space = " ";
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(n_union_t *arg) {
     DEBUGF("[runtime.print_arg] memory_any_t any_base=%p, kind=%s, value_i64_casting=%ld", arg,
-           type_kind_string[arg->rtype->kind], arg->value.i64_value);
+           type_kind_str[arg->rtype->kind], arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -89,7 +89,7 @@ static void print_arg(n_union_t *arg) {
         return;
     }
 
-    assertf(false, "[print_arg] unsupported type=%s", type_kind_string[arg->rtype->kind]);
+    assertf(false, "[print_arg] unsupported type=%s", type_kind_str[arg->rtype->kind]);
 }
 
 void print(n_list_t *args, bool with_space) {

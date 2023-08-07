@@ -68,13 +68,13 @@ n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) 
     uint64_t capacity = MAP_DEFAULT_CAPACITY;
     DEBUGF("[runtime.map_new] map_rindex=%ld(%s-%ld), key_rindex=%ld(%s-%ld), value_rindex=%ld(%s-%ld)",
            rtype_hash,
-           type_kind_string[map_rtype->kind],
+           type_kind_str[map_rtype->kind],
            map_rtype->size,
            key_index,
-           type_kind_string[key_rtype->kind],
+           type_kind_str[key_rtype->kind],
            key_rtype->size,
            value_index,
-           type_kind_string[value_rtype->kind],
+           type_kind_str[value_rtype->kind],
            value_rtype->size);
 
     n_map_t *map_data = runtime_malloc(map_rtype->size, map_rtype);

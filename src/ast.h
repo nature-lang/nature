@@ -127,6 +127,8 @@ static string ast_expr_op_str[] = {
 typedef struct {
     int line;
     int column;
+    bool error;
+
     ast_type_t assert_type; // 声明语句类型
     void *value;
 } ast_stmt_t;
@@ -468,6 +470,9 @@ typedef struct ast_fndef_t {
     slice_t *local_children;
     // analyzer 时赋值
     bool is_local; // 是否是全局函数
+
+    int column;
+    int line;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
 type_t *select_formal_param(type_fn_t *type_fn, uint8_t index);
@@ -565,10 +570,12 @@ static inline bool can_assign(ast_type_t t) {
     return false;
 }
 
-static inline ast_fndef_t *ast_fndef_new() {
+static inline ast_fndef_t *ast_fndef_new(int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
     fndef->symbol_name = NULL;
     fndef->closure_name = NULL;
+    fndef->line = line;
+    fndef->column = column;
     fndef->local_children = slice_new();
     return fndef;
 }

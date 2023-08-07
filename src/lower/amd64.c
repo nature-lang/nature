@@ -186,7 +186,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
                 symbol->size = type_kind_sizeof(imm->kind);
                 symbol->value = (uint8_t *) &imm->f32_value;
             } else {
-                assertf(false, "not support type %s", type_kind_string[imm->kind]);
+                assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
 
 

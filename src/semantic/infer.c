@@ -1,30 +1,37 @@
 #include <string.h>
 #include "infer.h"
-#include "utils/error.h"
-#include "src/symbol/symbol.h"
+#include "src/error.h"
 #include "analyzer.h"
 #include "src/debug/debug.h"
-#include "utils/helper.h"
 
-static void literal_integer_casting(ast_expr_t *expr, type_t target_type) {
-    assert(expr->assert_type == AST_EXPR_LITERAL);
+static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
+    INFER_ASSERTF(expr->assert_type == AST_EXPR_LITERAL, "integer casting only support literal");
+
     ast_literal_t *literal = expr->value;
-    assertf(is_integer(literal->kind), "line=%d, type inconsistency", expr->line);
+
+    INFER_ASSERTF(is_integer(literal->kind), "type inconsistency");
+
     int64_t i = atoll(literal->value);
-    assertf(integer_range_check(cross_kind_trans(target_type.kind), i), "line=%d, integer out of range", expr->line);
+
+    INFER_ASSERTF(integer_range_check(cross_kind_trans(target_type.kind), i), "integer out of range");
 
     literal->kind = target_type.kind;
     expr->type = target_type;
 }
 
-static void literal_float_casting(ast_expr_t *expr, type_t target_type) {
-    assert(expr->assert_type == AST_EXPR_LITERAL);
+static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
+    INFER_ASSERTF(expr->assert_type == AST_EXPR_LITERAL, "float casting only support literal");
+
     ast_literal_t *literal = expr->value;
-    assertf(is_number(literal->kind), "line=%d, type inconsistency", expr->line);
+
+    INFER_ASSERTF(is_number(literal->kind), "type inconsistency");
+
 
     type_kind target_kind = cross_kind_trans(target_type.kind);
     double f = atof(literal->value);
-    assertf(float_range_check(target_kind, f), "line=%d, float out of range", expr->line);
+
+    INFER_ASSERTF(float_range_check(cross_kind_trans(target_type.kind), f), "float out of range");
+
     literal->kind = target_type.kind;
     expr->type = target_type;
 }
@@ -101,7 +108,9 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
                 continue;
             }
 
-            assertf(formal_type->kind != TYPE_GEN, "line=%d, generic type not specialization", expr->line);
+            INFER_ASSERTF(formal_type->kind != TYPE_GEN, "generic type not specialization");
+
+
             if (formal_type->kind == TYPE_UNION && actual_type.kind != TYPE_UNION) {
                 if (union_type_contains(*formal_type, actual_type)) {
                     slice_push(temps, fndef);
@@ -118,8 +127,9 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
         fndefs = temps;
     }
 
-    assertf(fndefs->count > 0, "cannot match fn=%s", s->ident);
-    assertf(fndefs->count < 2, "fn=%s match more than one fndef", s->ident);
+    INFER_ASSERTF(fndefs->count > 0, "cannot match fn=%s", s->ident);
+    INFER_ASSERTF(fndefs->count < 2, "fn=%s match more than one fndef", s->ident);
+
     return fndefs->take[0];
 }
 
@@ -221,6 +231,7 @@ static void infer_body(module_t *m, slice_t *body) {
 #ifdef DEBUG_INFER
         debug_stmt("INFER", body->list[i]);
 #endif
+
         // switch 结构导向优化
         infer_stmt(m, body->take[i]);
     }
@@ -286,47 +297,33 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
     // 目前 binary 的两侧符号只支持 int 和 float
     if (is_number(left_type.kind)) {
         // 右值也必须是 number
-        assertf(is_number(right_type.kind),
-                "binary operator '%s' only support number operand, actual '%s %s %s'",
-                ast_expr_op_str[expr->operator],
-                type_kind_string[left_type.kind],
-                ast_expr_op_str[expr->operator],
-                type_kind_string[right_type.kind]);
+        INFER_ASSERTF(is_number(right_type.kind),
+                      "binary operator '%s' only support number operand, actual '%s %s %s'",
+                      ast_expr_op_str[expr->operator],
+                      type_kind_str[left_type.kind],
+                      ast_expr_op_str[expr->operator],
+                      type_kind_str[right_type.kind]);
     }
 
     if (left_type.kind == TYPE_STRING) {
         // 右值必须是 string
-        assertf(right_type.kind == TYPE_STRING,
-                "binary operator '%s' only support string operand, actual '%s %s %s'",
-                ast_expr_op_str[expr->operator],
-                type_kind_string[left_type.kind],
-                ast_expr_op_str[expr->operator],
-                type_kind_string[right_type.kind]);
+        INFER_ASSERTF(right_type.kind == TYPE_STRING,
+                      "binary operator '%s' only support string operand, actual '%s %s %s'",
+                      ast_expr_op_str[expr->operator],
+                      type_kind_str[left_type.kind],
+                      ast_expr_op_str[expr->operator],
+                      type_kind_str[right_type.kind]);
     }
 
     // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {
-        assertf(is_integer(left_type.kind) && is_integer(right_type.kind),
-                "binary operator '%s' only integer operand",
-                ast_expr_op_str[expr->operator]);
+        INFER_ASSERTF(is_integer(left_type.kind) && is_integer(right_type.kind),
+                      "binary operator '%s' only integer operand",
+                      ast_expr_op_str[expr->operator]);
     }
 
     // 暂时取消类型隐式转换，而是使用左值的类型作为目标类型
     type_t target_type = left_type;
-
-    // 不需要类型提升，且返回的类型为 first 的类型
-//    if (expr->operator == AST_OP_LSHIFT || expr->operator == AST_OP_RSHIFT) {
-//        return left_type;
-//    }
-
-    // 类型自动提升
-//    type_t target_type = number_type_lift(left_type.kind, right_type.kind);
-//    if (left_type.kind != target_type.kind) {
-//        expr->left = ast_type_as(expr->left, target_type);
-//    }
-//    if (right_type.kind != target_type.kind) {
-//        expr->right = ast_type_as(expr->right, target_type);
-//    }
 
     switch (expr->operator) {
         // 算术运算符
@@ -353,7 +350,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
             return type_basic_new(TYPE_BOOL);
         }
         default: {
-            assertf(false, "unknown operator type");
+            INFER_ASSERTF(false, "unknown operator");
             exit(1);
         }
     }
@@ -411,10 +408,12 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
     infer_right_expr(m, &as_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
     if (as_expr->src_operand.type.kind == TYPE_UNION) {
-        assertf(target_type.kind != TYPE_UNION, "union to union type is not supported");
+        INFER_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
+
         // target_type 必须包含再 union 中
-        assertf(union_type_contains(as_expr->src_operand.type, target_type), "type = %s not contains in union type",
-                type_kind_string[target_type.kind]);
+        INFER_ASSERTF(union_type_contains(as_expr->src_operand.type, target_type),
+                      "type = %s not contains in union type",
+                      type_kind_str[target_type.kind]);
         return target_type;
     }
 
@@ -432,13 +431,13 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
-    assertf(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_string[target_type.kind]);
+    INFER_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_str[target_type.kind]);
     return target_type;
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = infer_right_expr(m, &is_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
-    assertf(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
+    INFER_ASSERTF(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
     return type_basic_new(TYPE_BOOL);
 }
 
@@ -456,19 +455,19 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     type_t type = infer_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
 
     if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
-        assertf(false, "neg operand must applies to int or float type");
+        INFER_ASSERTF(false, "neg operand must applies to int or float type");
     }
 
     // &var
     if (expr->operator == AST_OP_LA) {
-        assertf(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                "cannot take the address of an literal or call");
+        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
+                      "cannot take the address of an literal or call");
         return type_ptrof(type);
     }
 
     // *var
     if (expr->operator == AST_OP_IA) {
-        assertf(type.kind == TYPE_POINTER, "cannot dereference non-pointer type");
+        INFER_ASSERTF(type.kind == TYPE_POINTER, "cannot dereference non-pointer type");
         return type.pointer->value_type;
     }
 
@@ -483,14 +482,14 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
 static type_t infer_ident(module_t *m, ast_ident *ident) {
     char *unique_ident = ident->literal;
     symbol_t *symbol = symbol_table_get(unique_ident);
-    assertf(symbol, "ident %s not found", unique_ident);
+    INFER_ASSERTF(symbol, "ident %s not found", unique_ident);
 
     // 引用了 local symbol 时则尝试对 ident 进行改写, 能够改写的前提是当前 infer 的 fn 是泛型 fn
     if (symbol->is_local) {
         ident->literal = rewrite_ident_use(m, ident->literal);
         // 基于重写过后的符号重新定位 symbol
         symbol = symbol_table_get(ident->literal);
-        assertf(symbol, "ident %s not found", ident->literal);
+        INFER_ASSERTF(symbol, "ident %s not found", ident->literal);
     }
 
     if (symbol->type == SYMBOL_VAR) {
@@ -505,7 +504,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
         return infer_fn_decl(m, fndef);
     }
 
-    assertf(false, "symbol type not expect");
+    INFER_ASSERTF(false, "symbol type not expect");
     exit(1);
 }
 
@@ -530,7 +529,7 @@ static type_t infer_list_new(module_t *m, ast_list_new_t *list_new, type_t targe
 
     result.list = type_list;
     if (list_new->elements->length == 0) {
-        assertf(type_confirmed(type_list->element_type), "line=%d, list element type not confirm", m->infer_line);
+        INFER_ASSERTF(type_confirmed(type_list->element_type), "list element type not confirm");
         return result;
     }
 
@@ -567,8 +566,8 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
     }
     result.map = type_map;
     if (map_new->elements->length == 0) {
-        assertf(type_confirmed(type_map->key_type), "line=%d, map key type not confirm", m->infer_line);
-        assertf(type_confirmed(type_map->value_type), "line=%d, map value type not confirm", m->infer_line);
+        INFER_ASSERTF(type_confirmed(type_map->key_type), "map key type not confirm");
+        INFER_ASSERTF(type_confirmed(type_map->value_type), "map value type not confirm");
         return result;
     }
 
@@ -606,7 +605,7 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
 
     result.set = type_set;
     if (set_new->elements->length == 0) {
-        assertf(type_confirmed(type_set->element_type), "line=%d, set element type not confirm", m->infer_line);
+        INFER_ASSERTF(type_confirmed(type_set->element_type), "set element type not confirm");
         return result;
     }
     // target 类型不确定则按首个元素类型进行推导
@@ -641,7 +640,7 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
     // person to struct
     ast->type = reduction_type(m, ast->type);
 
-    assertf(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
+    INFER_ASSERTF(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
 
     type_struct_t *type_struct = ast->type.struct_;
 
@@ -726,15 +725,15 @@ static type_t infer_access(module_t *m, ast_expr_t *expr) {
     if (left_type.kind == TYPE_TUPLE) {
         type_t key_type = infer_right_expr(m, &access->key, type_basic_new(TYPE_INT));
 
-        assertf(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
+        INFER_ASSERTF(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
 
         type_tuple_t *type_tuple = left_type.tuple;
 
         ast_literal_t *index_literal = access->key.value; // 读取 index 的值
-        assertf(index_literal->kind == TYPE_INT, "tuple index field must int immediate value");
+        INFER_ASSERTF(index_literal->kind == TYPE_INT, "tuple index field must int immediate value");
         uint64_t index = atoi(index_literal->value);
 
-        assertf(index < type_tuple->elements->length, "tuple index field '%d' not in tuples", index);
+        INFER_ASSERTF(index < type_tuple->elements->length, "tuple index field '%d' not in tuples", index);
 
         // 返回值的类型, get tuple element.
         type_t *type = ct_list_value(type_tuple->elements, index);
@@ -749,9 +748,8 @@ static type_t infer_access(module_t *m, ast_expr_t *expr) {
         return *type;
     }
 
-    assertf(false, "line: %d, access only support must map/list/tuple, cannot '%s'",
-            m->infer_line,
-            type_kind_string[left_type.kind]);
+    INFER_ASSERTF(false, "access only support must map/list/tuple, cannot '%s'",
+                  type_kind_str[left_type.kind]);
     exit(1);
 }
 
@@ -772,7 +770,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
     // self_select -> instance_select
     if (select->left.type.kind == TYPE_SELF) {
         ast_fndef_t *current = m->infer_current;
-        assertf(current->self_struct, "use 'self' in struct outside");
+        INFER_ASSERTF(current->self_struct, "use 'self' in struct outside");
 
         // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
         select->left.type = reduction_type(m, *current->self_struct);
@@ -783,7 +781,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
         // 经过上面对 infer_right_expr, 这里对 type 一定是 reduction 的
         type_struct_t *type_struct = select->left.type.struct_;
         struct_property_t *p = type_struct_property(type_struct, select->key);
-        assertf(p, "type %s struct no property '%s'", type_struct->ident, select->key);
+        INFER_ASSERTF(p, "type %s struct no property '%s'", type_struct->ident, select->key);
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
@@ -796,7 +794,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
         return p->type;
     }
 
-    assertf(false, "type '%s' cannot use dot syntax", type_kind_string[select->left.type.kind]);
+    INFER_ASSERTF(false, "type '%s' cannot use dot syntax", type_kind_str[select->left.type.kind]);
     exit(1);
 }
 
@@ -812,7 +810,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
 
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         // 参数核验
-        assertf(call->actual_params->length == 0, "string len param failed");
+        INFER_ASSERTF(call->actual_params->length == 0, "string len param failed");
 
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
@@ -825,7 +823,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
-        assertf(call->actual_params->length == 0, "string c_string param failed");
+        INFER_ASSERTF(call->actual_params->length == 0, "string c_string param failed");
 
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
@@ -836,7 +834,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_CPTR);
     }
 
-    assertf(false, "string select call '%s' not support", s->key);
+    INFER_ASSERTF(false, "string select call '%s' not support", s->key);
     exit(1);
 }
 
@@ -852,7 +850,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
 
     if (str_equal(s->key, LIST_PUSH_KEY)) {
         // push 对参数需要与 list element type 一致，否则抛出异常
-        assertf(call->actual_params->length == 1, "list push param failed");
+        INFER_ASSERTF(call->actual_params->length == 1, "list push param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, list_type->element_type);
 
@@ -871,7 +869,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
-        assertf(call->actual_params->length == 0, "list length not param");
+        INFER_ASSERTF(call->actual_params->length == 0, "list length not param");
 
         // 改写
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
@@ -885,7 +883,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_CAP_KEY)) {
-        assertf(call->actual_params->length == 0, "list length not param");
+        INFER_ASSERTF(call->actual_params->length == 0, "list length not param");
 
         // 改写
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
@@ -899,7 +897,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
-        assertf(call->actual_params->length == 0, "list length not param");
+        INFER_ASSERTF(call->actual_params->length == 0, "list length not param");
 
         // 改写
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
@@ -912,7 +910,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_CPTR);
     }
 
-    assertf(false, "list not field '%s'", s->key);
+    INFER_ASSERTF(false, "list not field '%s'", s->key);
     exit(0);
 }
 
@@ -926,7 +924,7 @@ static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
     type_map_t *map_type = s->left.type.map; // 已经进行过类型推导了
     if (str_equal(s->key, MAP_DELETE_KEY)) {
-        assertf(call->actual_params->length == 1, "map.delete param failed");
+        INFER_ASSERTF(call->actual_params->length == 1, "map.delete param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, map_type->key_type);
 
@@ -942,7 +940,7 @@ static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, MAP_LENGTH_KEY)) {
-        assertf(call->actual_params->length == 0, "map.length not param");
+        INFER_ASSERTF(call->actual_params->length == 0, "map.length not param");
 
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
@@ -954,7 +952,7 @@ static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_INT);
     }
 
-    assertf(false, "map not field '%s'", s->key);
+    INFER_ASSERTF(false, "map not field '%s'", s->key);
     exit(0);
 }
 
@@ -962,7 +960,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
     type_set_t *set_type = s->left.type.set; // 已经进行过类型推导了
     if (str_equal(s->key, SET_DELETE_KEY)) {
-        assertf(call->actual_params->length == 1, "set.delete param failed");
+        INFER_ASSERTF(call->actual_params->length == 1, "set.delete param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
@@ -978,7 +976,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, SET_ADD_KEY)) {
-        assertf(call->actual_params->length == 1, "set.add param failed");
+        INFER_ASSERTF(call->actual_params->length == 1, "set.add param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
@@ -995,7 +993,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, SET_HAS_KEY)) {
-        assertf(call->actual_params->length == 1, "set.contains param failed");
+        INFER_ASSERTF(call->actual_params->length == 1, "set.contains param failed");
         ast_expr_t *expr = ct_list_value(call->actual_params, 0);
         infer_right_expr(m, expr, set_type->element_type);
 
@@ -1010,14 +1008,14 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
         return type_basic_new(TYPE_BOOL);
     }
 
-    assertf(false, "set not field '%s'", s->key);
+    INFER_ASSERTF(false, "set not field '%s'", s->key);
     exit(1);
 }
 
 static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
-        assertf(call->actual_params->length == target_type_fn->formal_types->length, "call params count failed");
+        INFER_ASSERTF(call->actual_params->length == target_type_fn->formal_types->length, "call params count failed");
     }
 
     for (int i = 0; i < call->actual_params->length; ++i) {
@@ -1046,7 +1044,7 @@ static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
 
     type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
     struct_property_t *p = type_struct_property(type_struct, s->key);
-    assertf(p, "type %s struct no property '%s'", type_struct->ident, s->key);
+    INFER_ASSERTF(p, "type %s struct no property '%s'", type_struct->ident, s->key);
 
     // call left 改写
     ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
@@ -1058,7 +1056,7 @@ static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
     call->left.type = p->type;
 
     // 进入前已经进行了 infer left, 所以这里的 type 都是 reduction 过的
-    assertf(p->type.kind == TYPE_FN, "cannot call non-fn");
+    INFER_ASSERTF(p->type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = p->type.fn;
     call->return_type = type_fn->return_type;
 
@@ -1095,7 +1093,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
         // self 还原成 struct
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->infer_current;
-            assertf(current->self_struct, "use 'self' in struct outside");
+            INFER_ASSERTF(current->self_struct, "use 'self' in struct outside");
 
             // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
             select->left.type = reduction_type(m, *current->self_struct);
@@ -1124,7 +1122,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
             return infer_struct_select_call(m, call);
         }
 
-        assertf(false, "select dot call not support type=%s", type_kind_string[select_left_kind]);
+        INFER_ASSERTF(false, "select dot call not support type=%s", type_kind_str[select_left_kind]);
     }
 
     if (call->left.assert_type == AST_EXPR_IDENT) {
@@ -1142,7 +1140,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
 
     // 左值符号推导
     type_t left_type = infer_left_expr(m, &call->left);
-    assertf(left_type.kind == TYPE_FN, "cannot call non-fn");
+    INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = left_type.fn;
     infer_call_params(m, call, type_fn);
 
@@ -1192,7 +1190,7 @@ void infer_var_decl(module_t *m, ast_var_decl_t *var_decl) {
         type.kind == TYPE_VOID ||
         type.kind == TYPE_NULL ||
         type.kind == TYPE_SELF) {
-        assertf(false, "variable declaration cannot use type '%s'", type_kind_string[type.kind]);
+        INFER_ASSERTF(false, "variable declaration cannot use type '%s'", type_kind_str[type.kind]);
     }
 
     // global var def 也会走该函数，所以需要特殊处理一下，必须携带 m->infer_current 时才进行 var_decl rewrite
@@ -1220,7 +1218,7 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
 
     // 需要进行类型推断
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
-        assertf(type_confirmed(right_type), "type inference error, right type not confirmed");
+        INFER_ASSERTF(type_confirmed(right_type), "type inference error, right type not confirmed");
 
         stmt->var_decl.type = right_type;
         return;
@@ -1255,8 +1253,8 @@ static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
 static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 infer_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = infer_right_expr(m, &stmt->iterate, type_basic_new(TYPE_UNKNOWN));
-    assertf(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
-            "for in iterate type must be map/list, actual=%s", type_kind_string[iterate_type.kind]);
+    INFER_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
+                  "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
 
     rewrite_var_decl(m, &stmt->first);
     if (stmt->second) {
@@ -1303,7 +1301,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param stmt
  */
 static void infer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
-    assertf(stmt->type.kind != TYPE_GEN, "cannot use type gen in local scope");
+    INFER_ASSERTF(stmt->type.kind != TYPE_GEN, "cannot use type gen in local scope");
 
     rewrite_type_alias(m, stmt);
 }
@@ -1317,7 +1315,7 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     if (stmt->expr != NULL) {
         infer_right_expr(m, stmt->expr, expect_type);
     } else {
-        assertf(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_kind_string[expect_type.kind]);
+        INFER_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_kind_str[expect_type.kind]);
     }
 }
 
@@ -1365,12 +1363,13 @@ static type_t infer_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
  */
 static void infer_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t t) {
     type_tuple_t *tuple_type = t.tuple;
-    assertf(destr->elements->length == tuple_type->elements->length, "tuple destr length != tuple operand length");
+    INFER_ASSERTF(destr->elements->length == tuple_type->elements->length,
+                  "tuple destr length != tuple operand length");
 
     // 挨个对比
     for (int i = 0; i < destr->elements->length; ++i) {
         type_t *actual_type = ct_list_value(tuple_type->elements, i);
-        assertf(type_confirmed(*actual_type), "tuple operand index=%d type unknown");
+        INFER_ASSERTF(type_confirmed(*actual_type), "tuple operand index=%d type unknown");
 
         ast_expr_t *expr = ct_list_value(destr->elements, i);
 
@@ -1381,7 +1380,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t 
             var_decl->type = *actual_type;
             rewrite_var_decl(m, var_decl);
         } else {
-            assertf(expr->assert_type == AST_EXPR_TUPLE_DESTR, "var tuple destr must var/tuple_destr");
+            INFER_ASSERTF(expr->assert_type == AST_EXPR_TUPLE_DESTR, "var tuple destr must var/tuple_destr");
             infer_var_tuple_destr(m, expr->value, *actual_type);
         }
     }
@@ -1406,7 +1405,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(type_t));
     t.tuple = tuple_type;
-    assertf(tuple_new->elements->length > 0, "tuple elements empty");
+    INFER_ASSERTF(tuple_new->elements->length > 0, "tuple elements empty");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
         type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
         if (target_type.kind == TYPE_TUPLE) {
@@ -1417,7 +1416,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
         ast_expr_t *expr = ct_list_value(tuple_new->elements, i);
         type_t expr_type = infer_right_expr(m, expr, element_target_type);
 
-        assertf(type_confirmed(expr_type), "tuple element type type cannot confirmed");
+        INFER_ASSERTF(type_confirmed(expr_type), "tuple element type type cannot confirmed");
 
         ct_list_push(tuple_type->elements, &expr_type);
     }
@@ -1427,7 +1426,9 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
 
 
 static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
-    m->infer_line = stmt->line;
+    m->current_line = stmt->line;
+    m->current_column = stmt->column;
+
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             return infer_var_decl(m, stmt->value);
@@ -1485,6 +1486,9 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
+    m->current_line = expr->line;
+    m->current_column = expr->column;
+
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_IDENT: {
@@ -1512,7 +1516,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
             break;
         }
         default: {
-            assertf(false, "operand assert=%d cannot used in left", expr->assert_type);
+            INFER_ASSERTF(false, "operand assert=%d cannot used in left", expr->assert_type);
             exit(0);
         }
     }
@@ -1531,6 +1535,9 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+    m->current_line = expr->line;
+    m->current_column = expr->column;
+
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_AS: {
@@ -1603,7 +1610,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
             break;
         }
         default: {
-            assertf(false, "unknown operand %d", expr->assert_type);
+            INFER_ASSERTF(false, "unknown operand %d", expr->assert_type);
             exit(1);
         }
     }
@@ -1622,44 +1629,32 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         return expr->type;
     }
 
-    assertf(expr->type.kind != TYPE_VOID, "line=%d, cannot assign type void to %s", m->infer_line,
-            type_kind_string[target_type.kind]);
+    INFER_ASSERTF(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_kind_str[target_type.kind]);
 
     // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
     // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
     if ((is_integer(target_type.kind) || target_type.kind == TYPE_CPTR) && expr->assert_type == AST_EXPR_LITERAL) {
-        literal_integer_casting(expr, target_type);
+        literal_integer_casting(m, expr, target_type);
     }
 
     if (is_float(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
-        literal_float_casting(expr, target_type);
+        literal_float_casting(m, expr, target_type);
     }
-
-    // number 数值之间的类型转换 (暂时关闭)
-//    if (is_number(target_type.kind) && is_number(expr->type.kind) &&
-//        cross_kind_trans(expr->type.kind) != cross_kind_trans(target_type.kind)) {
-//        *expr = ast_type_as(*expr, target_type);
-//    }
-
-    // bool 类型转换 (暂时关闭)
-//    if (target_type.kind == TYPE_BOOL && expr->type.kind != TYPE_BOOL) {
-//        *expr = ast_type_as(*expr, type_basic_new(TYPE_BOOL));
-//    }
 
     // single type to union type (必须保留)
     if (target_type.kind == TYPE_UNION && expr->type.kind != TYPE_UNION) {
-        assertf(union_type_contains(target_type, expr->type), "line=%d, union type not contains '%s'",
-                expr->line, type_kind_string[expr->type.kind]);
+        INFER_ASSERTF(union_type_contains(target_type, expr->type), "union type not contains '%s'",
+                      type_kind_str[expr->type.kind]);
         *expr = ast_type_as(*expr, target_type);
     }
 
-    assertf(type_compare(target_type, expr->type), "line=%d, type inconsistency, expect=%s, actual=%s",
-            expr->line, type_kind_string[target_type.kind], type_kind_string[expr->type.kind]);
+    INFER_ASSERTF(type_compare(target_type, expr->type), "type inconsistency, expect=%s, actual=%s",
+                  type_kind_str[target_type.kind], type_kind_str[expr->type.kind]);
     return expr->type;
 }
 
 static type_t reduction_struct(module_t *m, type_t t) {
-    assertf(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_kind_string[t.kind]);
+    INFER_ASSERTF(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_kind_str[t.kind]);
 
     type_struct_t *s = t.struct_;
 
@@ -1675,12 +1670,12 @@ static type_t reduction_struct(module_t *m, type_t t) {
             // 推断右值表达式类型(默认值推导)
             type_t right_type = infer_right_expr(m, p->right, p->type);
             if (p->type.kind == TYPE_UNKNOWN) {
-                assertf(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
+                INFER_ASSERTF(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
                 p->type = right_type;
             }
         }
 
-        assertf(type_confirmed(p->type), "struct property=%s type cannot confirmed", p->key);
+        INFER_ASSERTF(type_confirmed(p->type), "struct property=%s type cannot confirmed", p->key);
         // 至此左值已经都是固定类型了, 如果存在 self 则 self 类型保持不变,self 不需要在这里处理
     }
 
@@ -1703,16 +1698,16 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_MAP) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
-        assertf(is_number(t.map->key_type.kind) ||
+        INFER_ASSERTF(is_number(t.map->key_type.kind) ||
                 t.map->key_type.kind == TYPE_STRING ||
                 t.map->key_type.kind == TYPE_GEN,
-                "map key only support numer/string");
+                "map key only support number/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
-        assertf(is_number(t.set->element_type.kind) ||
+        INFER_ASSERTF(is_number(t.set->element_type.kind) ||
                 t.set->element_type.kind == TYPE_STRING ||
                 t.set->element_type.kind == TYPE_GEN,
                 "set element only support number/string");
@@ -1721,7 +1716,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_TUPLE) {
         type_tuple_t *tuple = t.tuple;
-        assertf(tuple->elements->length > 0, "tuple element empty");
+        INFER_ASSERTF(tuple->elements->length > 0, "tuple element empty");
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *use = ct_list_value(tuple->elements, i);
             *use = reduction_type(m, *use);
@@ -1746,7 +1741,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return reduction_struct(m, t);
     }
 
-    assertf(false, "unknown type=%s", type_kind_string[t.kind]);
+    INFER_ASSERTF(false, "unknown type=%s", type_kind_str[t.kind]);
     exit(1);
 }
 
@@ -1757,8 +1752,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  * @param t
  */
 static type_t generic_specialization(module_t *m, char *ident) {
-    assertf(m->infer_current->generic_assign,
-            "generic param must be used in global fn, cannot be directly used in local fn.");
+    INFER_ASSERTF(m->infer_current->generic_assign,
+            "generic param must be used in global fn, cannot be directly used in local fn");
     type_t *assign = table_get(m->infer_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);
@@ -1784,7 +1779,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
     symbol_t *symbol = symbol_table_get(alias->ident);
     assert(symbol);
-    assertf(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
+    INFER_ASSERTF(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
 
     ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
@@ -1858,6 +1853,9 @@ static type_t reduction_generic_type(module_t *m, type_t t) {
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
+    m->current_line = t.line;
+    m->current_column = t.column;
+
     assert(t.kind > 0);
 
     if (t.kind == TYPE_UNKNOWN) {
@@ -1906,7 +1904,7 @@ static type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
-    assertf(false, "cannot parser type %s", type_kind_string[t.kind]);
+    INFER_ASSERTF(false, "cannot parser type %s", type_kind_str[t.kind]);
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
@@ -1937,7 +1935,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl_t *var = ct_list_value(fndef->formals, i);
         if (var->type.kind == TYPE_SELF) {
-            assertf(i == 0 && fndef->self_struct, "only use self in fn first param");
+            INFER_ASSERTF(i == 0 && fndef->self_struct, "only use self in fn first param");
         }
 
         var->type = reduction_type(m, var->type);
@@ -1977,7 +1975,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
 
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);
-        assertf(symbol, "fn var ident %s not found", fndef->closure_name);
+        INFER_ASSERTF(symbol, "fn var ident %s not found", fndef->closure_name);
         assert(symbol->type == SYMBOL_VAR);
         ast_var_decl_t *var_decl = symbol->ast_value;
         var_decl->type = t;
@@ -1998,8 +1996,9 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
 }
 
 void infer(module_t *m) {
-    m->infer_line = 0;
     m->infer_current = NULL;
+    m->current_line = 0;
+    m->current_column = 0;
 
     // - 全局变量中也包含类型信息需要进行还原处理
     for (int j = 0; j < m->global_symbols->count; ++j) {

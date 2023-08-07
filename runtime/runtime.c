@@ -20,7 +20,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
         return (char *) string_raw(n_str);
     }
 
-    assertf(false, "not support kind=%s", type_kind_string[rtype->kind]);
+    assertf(false, "not support kind=%s", type_kind_str[rtype->kind]);
 
     return NULL;
 }

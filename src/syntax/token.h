@@ -195,7 +195,7 @@ static inline bool token_complex_assign(token_e t) {
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
 
-token_t *token_new(uint8_t type, char *literal, int line, int column) {
+static inline token_t *token_new(uint8_t type, char *literal, int line, int column) {
     token_t *t = malloc(sizeof(token_t));
     t->type = type;
     t->literal = literal;

@@ -1,5 +1,6 @@
 #include "cfg.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
 #include <assert.h>
 
 /**
@@ -123,7 +124,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
 
     // end_label 是最后到 label 如果都不包含 opcode return, 则存在一条不包含 return 的线路
     if (str_equal(b->name, c->end_label)) {
-        assertf(false, "fn %s missing return", c->symbol_name);
+        dump_errorf(c->module, CT_STAGE_CFG, c->line, c->column, "fn %s missing return", c->symbol_name);
     }
 
     // 当前 block 没有找到 return, 递归寻找 succ
