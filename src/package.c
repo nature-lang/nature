@@ -3,6 +3,7 @@
 #include "build/config.h"
 
 static char *std_packages[] = {
+        "std",
         "syscall",
         "strings",
         "libc"

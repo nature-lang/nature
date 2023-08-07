@@ -21,6 +21,10 @@ static inline char *exec_output() {
     return exec(WORKDIR, BUILD_OUTPUT, slice_new());
 }
 
+static inline char *exec_with_args(slice_t *args) {
+    return exec(WORKDIR, BUILD_OUTPUT, args);
+}
+
 static inline int blackbox_setup() {
     char *nature_root = getenv("NATURE_ROOT");
     assert_true(nature_root != NULL);

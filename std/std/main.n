@@ -1,0 +1,6 @@
+// 相当于是 golang 中的 utils + os 库，包含了一些常用的辅助函数
+
+// 读取命令行参数
+fn args():[string] {
+    return std_args()
+}

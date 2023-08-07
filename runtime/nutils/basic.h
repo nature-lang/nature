@@ -6,6 +6,9 @@
 
 #define INT_SIZE sizeof(int64_t)
 
+int command_argc;
+char **command_argv;
+
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);
@@ -50,5 +53,7 @@ static inline n_list_t *list_u8_new(uint64_t length, uint64_t capacity) {
 
     return list_new(list_rtype->hash, element_rtype->hash, length, capacity);
 }
+
+n_list_t *std_args();
 
 #endif //NATURE_BASIC_H

@@ -1257,19 +1257,21 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
                   "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
 
     rewrite_var_decl(m, &stmt->first);
+
     if (stmt->second) {
         rewrite_var_decl(m, stmt->second);
     }
 
     // 类型推断 (value 可选)
-    ast_var_decl_t *key_decl = &stmt->first;
+    ast_var_decl_t *first = &stmt->first;
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
-        type_map_t *map_decl = iterate_type.map;
-        key_decl->type = map_decl->key_type;
+        type_map_t *type_map = iterate_type.map;
+        first->type = type_map->key_type;
     } else {
+        type_list_t *type_list = iterate_type.list;
         // list
-        key_decl->type = type_basic_new(TYPE_INT);
+        first->type = type_list->element_type;
     }
 
     ast_var_decl_t *value_decl = stmt->second;
@@ -1699,18 +1701,18 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
         INFER_ASSERTF(is_number(t.map->key_type.kind) ||
-                t.map->key_type.kind == TYPE_STRING ||
-                t.map->key_type.kind == TYPE_GEN,
-                "map key only support number/string");
+                      t.map->key_type.kind == TYPE_STRING ||
+                      t.map->key_type.kind == TYPE_GEN,
+                      "map key only support number/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         INFER_ASSERTF(is_number(t.set->element_type.kind) ||
-                t.set->element_type.kind == TYPE_STRING ||
-                t.set->element_type.kind == TYPE_GEN,
-                "set element only support number/string");
+                      t.set->element_type.kind == TYPE_STRING ||
+                      t.set->element_type.kind == TYPE_GEN,
+                      "set element only support number/string");
         return t;
     }
 
@@ -1753,7 +1755,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  */
 static type_t generic_specialization(module_t *m, char *ident) {
     INFER_ASSERTF(m->infer_current->generic_assign,
-            "generic param must be used in global fn, cannot be directly used in local fn");
+                  "generic param must be used in global fn, cannot be directly used in local fn");
     type_t *assign = table_get(m->infer_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);

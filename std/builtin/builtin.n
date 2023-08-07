@@ -82,3 +82,5 @@ fn syscall_fstat(int fd):syscall_stat_t {}
 fn syscall_wait(int pid):int {}
 
 fn syscall_getcwd():string {}
+
+fn std_args():[string] {}

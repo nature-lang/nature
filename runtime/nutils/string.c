@@ -28,13 +28,13 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     }
 
     DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
-    n_string_t *string_data = runtime_malloc(string_rtype->size, string_rtype);
-    string_data->data = data;
-    string_data->length = length;
-    memmove(string_data->data, raw_string, length);
+    n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
+    str->data = data;
+    str->length = length;
+    memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string_data=%p", string_data);
-    return string_data;
+    DEBUGF("[string_new] success, string_data=%p", str);
+    return str;
 }
 
 void *string_raw(n_string_t *n_str) {

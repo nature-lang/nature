@@ -529,9 +529,13 @@ uint64_t ct_find_rtype_hash(type_t t) {
  * @return
  */
 uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size) {
+    assert(rtype);
+
     if (rtype->in_heap) {
         return ptr_size;
     }
+
+    assert(rtype->size <= ptr_size); // 当前版本总是小于等于 8
     return rtype->size;
 }
 
@@ -646,6 +650,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     va_end(valist);
 
     rtype->hash = hash;
+    rtype->in_heap = kind_in_heap(kind);
 
     table_set(rt_rtype_table, itoa(rtype->hash), rtype);
     return rtype;
@@ -672,6 +677,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
     rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
     rtype->hash = hash;
+    rtype->in_heap = true;
     table_set(rt_rtype_table, itoa(rtype->hash), rtype);
     return rtype;
 }

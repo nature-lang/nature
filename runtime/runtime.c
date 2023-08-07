@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "runtime/nutils/basic.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
@@ -31,8 +32,11 @@ extern void main();
 /**
  * crt1.o _start -> main  -> user_main
  */
-void runtime_main() {
-    DEBUGF("[runtime_main] start")
+void runtime_main(int argc, char *argv[]) {
+    DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
+
+    command_argc = argc;
+    command_argv = argv;
 
     // - 堆内存管理初始化
     memory_init();
