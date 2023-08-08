@@ -1330,6 +1330,8 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr) {
     lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
 
     symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
+    assert(s);
+
     ast_type_alias_stmt_t *type_alias_stmt = s->ast_value;
     assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 

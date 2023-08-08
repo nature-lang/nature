@@ -1,0 +1,6 @@
+import syscall
+
+fn assert(bool cond, string msg) {
+    printn('failed: ', msg)
+    syscall.exit(1)
+}

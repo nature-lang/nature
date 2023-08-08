@@ -10,6 +10,7 @@
 #include "src/binary/elf/output.h"
 #include "src/ssa.h"
 #include "src/register/linearscan.h"
+#include "src/semantic/analyzer.h"
 #include "utils/error.h"
 #include "config.h"
 #include "utils/custom_links.h"
@@ -281,6 +282,8 @@ static void import_builtin() {
     // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
     module_t *builtin_module = module_build(NULL, source_path, MODULE_TYPE_BUILTIN);
 
+    analyzer(builtin_module, builtin_module->stmt_list);
+
     generic(builtin_module);
 
     // infer type
@@ -313,8 +316,6 @@ static slice_t *build_modules() {
     linked_t *work_list = linked_new();
     linked_push(work_list, main);
 
-    // 采用了广度优先的方式联系了所有的 import 的 module 进行编译
-    // 暂时不需要通过引用才 import 的方式
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);
 
@@ -331,6 +332,16 @@ static slice_t *build_modules() {
             slice_push(modules, new_module);
             table_set(module_table, import->full_path, new_module);
         }
+    }
+
+    // 遍历所有 module 开始进行 analyzer 和 import
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        // analyzer => ast_fndefs(global)
+        analyzer(m, m->stmt_list);
+
+        // generic => ast_fndef(global+local flat)
+        generic(m);
     }
 
     // register all module init to main module body

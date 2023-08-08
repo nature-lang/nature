@@ -146,6 +146,7 @@ static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     symbol_t *s = symbol_table_get(fndef->symbol_name);
+    assert(s);
     assert(s->fndefs && s->fndefs->count > 0);
 
     // 函数名称全局唯一，没必要进行重写
@@ -1264,25 +1265,32 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
 
     // 类型推断 (value 可选)
     ast_var_decl_t *first = &stmt->first;
+    ast_var_decl_t *second = stmt->second;
+
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *type_map = iterate_type.map;
         first->type = type_map->key_type;
     } else {
         type_list_t *type_list = iterate_type.list;
-        // list
-        first->type = type_list->element_type;
+
+        // 判断是否存储 second, 如何
+        if (!second) {
+            // list
+            first->type = type_list->element_type;
+        } else {
+            first->type = type_basic_new(TYPE_INT);
+        }
+
     }
 
-    ast_var_decl_t *value_decl = stmt->second;
-    if (value_decl) {
+    if (second) {
         if (iterate_type.kind == TYPE_MAP) {
             type_map_t *map_decl = iterate_type.map;
-            value_decl->type = map_decl->value_type;
+            second->type = map_decl->value_type;
         } else {
             type_list_t *list_decl = iterate_type.list;
-            value_decl->type = list_decl->element_type;
-
+            second->type = list_decl->element_type;
         }
     }
 
@@ -1780,7 +1788,7 @@ static type_t type_formal_specialization(module_t *m, type_t t) {
 static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
     symbol_t *symbol = symbol_table_get(alias->ident);
-    assert(symbol);
+    INFER_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
 
     ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
@@ -1978,7 +1986,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     if (fndef->closure_name) {
         symbol_t *symbol = symbol_table_get(fndef->closure_name);
         INFER_ASSERTF(symbol, "fn var ident %s not found", fndef->closure_name);
-        assert(symbol->type == SYMBOL_VAR);
+        INFER_ASSERTF(symbol->type == SYMBOL_VAR, "symbol type not expected");
+
         ast_var_decl_t *var_decl = symbol->ast_value;
         var_decl->type = t;
     }

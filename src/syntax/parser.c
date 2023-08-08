@@ -1173,7 +1173,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
 
     if (parser_consume(m, TOKEN_AS)) { // 可选 as
         token = parser_advance(m);
-        PARSER_ASSERTF(token->type == TOKEN_IDENT, "import as must ident");
+        PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_STAR, "import as must ident");
         stmt->as = token->literal;
     }
     result->assert_type = AST_STMT_IMPORT;

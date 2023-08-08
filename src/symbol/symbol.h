@@ -12,6 +12,9 @@
 //#define BUILTIN_ERRORT "errort"
 #define ENV_IDENT "env"
 
+// 临时表，用来临时记录, key = ident, value is any
+table_t *can_import_symbol_table;
+
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
@@ -67,15 +70,15 @@ static inline bool is_builtin_call(char *ident) {
            str_equal(ident, "set_delete");
 }
 
-symbol_t *symbol_table_set(char* ident, symbol_type_t type, void *ast_value, bool is_local);
+symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);
 
-symbol_t *symbol_table_get(char* ident);
+symbol_t *symbol_table_get(char *ident);
 
-symbol_t *symbol_table_get_noref(char* ident);
+symbol_t *symbol_table_get_noref(char *ident);
 
-void symbol_table_delete(char* ident);
+void symbol_table_delete(char *ident);
 
-void symbol_table_set_var(char* unique_ident, type_t type);
+void symbol_table_set_var(char *unique_ident, type_t type);
 
 void symbol_init();
 

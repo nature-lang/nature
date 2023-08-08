@@ -29,6 +29,7 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 }
 
 void symbol_init() {
+    can_import_symbol_table = table_new();
     symbol_table = table_new();
     symbol_fn_list = slice_new();
     symbol_var_list = slice_new();
@@ -69,7 +70,9 @@ symbol_t *symbol_table_get_noref(char *ident) {
 
 symbol_t *symbol_table_get(char *ident) {
     symbol_t *s = table_get(symbol_table, ident);
-    assertf(s, "symbol=%s not found", ident);
+    if (!s) {
+        return NULL;
+    }
 
     // 引用计数
     s->ref_count += 1;

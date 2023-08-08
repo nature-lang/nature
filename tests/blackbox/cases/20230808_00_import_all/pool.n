@@ -1,0 +1,6 @@
+int foo = 1
+int bar = 2
+
+fn log() {
+    println('i am pool.log')
+}

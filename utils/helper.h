@@ -496,4 +496,9 @@ static inline char *fullpath(char *rel) {
     return path;
 }
 
+static inline bool str_char(char *str, char c) {
+    char *result = strchr(str, c);
+    return result != NULL;
+}
+
 #endif //NATURE_SRC_LIB_HELPER_H_

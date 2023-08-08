@@ -178,7 +178,9 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     cursor += 1;
     if (iterator_rtype->kind == TYPE_LIST) {
         n_list_t *list = iterator;
-        DEBUGF("[runtime.iterator_next_key] kind is list, len=%lu, cap=%lu, data_base=%p, cursor=%ld", list->length,
+        DEBUGF("[runtime.iterator_next_key] list=%p, kind is list, len=%lu, cap=%lu, data_base=%p, cursor=%ld",
+               list,
+               list->length,
                list->capacity,
                list->data, cursor);
 
@@ -187,10 +189,10 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
             return -1;
         }
 
-        DEBUGF("[runtime.iterator_next_key] list mov cursor=%ld < list.length('%ld') to key ref=%p",
+        DEBUGF("[runtime.iterator_next_key] list mov cursor=%ld < list.length('%ld') to key ref=%p ~ %p",
                cursor,
                list->length,
-               key_ref);
+               key_ref, key_ref + INT_SIZE);
 
         memmove(key_ref, &cursor, INT_SIZE);
         return cursor;

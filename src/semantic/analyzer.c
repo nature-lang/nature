@@ -59,7 +59,7 @@ static void analyzer_body(module_t *m, slice_t *body) {
  * @param importer_dir
  * @param import
  */
-static void analyzer_import(module_t *m, ast_import_t *import) {
+void analyzer_import(module_t *m, ast_import_t *import) {
     if (import->file) {
         // import->path 必须以 .n 结尾
         ANALYZER_ASSERTF(ends_with(import->file, ".n"), "import file suffix must .n");
@@ -439,6 +439,7 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
 
     analyzer_type(m, &var_decl->type);
 
+    // 这里进行了全局符号表的注册
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, var_decl, var_decl->ident);
 
     // 改写
@@ -807,11 +808,16 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
     return -1;
 }
 
+/**
+ *
+ * @param m
+ * @param expr
+ */
 static void analyzer_ident(module_t *m, ast_expr_t *expr) {
-    ast_ident *temp = expr->value;
+    ast_ident *temp_ast_ident = expr->value;
     // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
     ast_ident *ident = NEW(ast_ident);
-    ident->literal = temp->literal;
+    ident->literal = temp_ast_ident->literal;
     expr->value = ident;
 
     // 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的 local)
@@ -844,12 +850,12 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         return;
     }
 
-    // 使用当前 module 中的全局符号是可以省略 module name 的, 但是当前 module 在注册 ident 时缺附加了 module.ident
+    // 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
-    char *current_global_ident = ident_with_module(m->ident, ident->literal);
-    symbol_t *s = table_get(symbol_table, current_global_ident);
+    char *temp = ident_with_module(m->ident, ident->literal);
+    symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
-        ident->literal = current_global_ident; // 找到了则修改为全局名称
+        ident->literal = temp; // 找到了则修改为全局名称
         return;
     }
 
@@ -860,7 +866,19 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         return;
     }
 
-    ANALYZER_ASSERTF(false, "line=%d, identifier '%s' undeclared \n", expr->line, ident->literal);
+    // import xxx as * 产生的全局符号
+    for (int i = 0; i < m->imports->count; ++i) {
+        ast_import_t *import = m->imports->take[i];
+        if (str_equal(import->as, "*")) {
+            temp = ident_with_module(import->module_ident, ident->literal);
+            if (table_exist(can_import_symbol_table, temp)) {
+                ident->literal = temp;
+                return;
+            }
+        }
+    }
+
+    ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ident->literal);
 }
 
 
@@ -876,18 +894,27 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
 static void analyzer_select(module_t *m, ast_expr_t *expr) {
     ast_select_t *select = expr->value;
     if (select->left.assert_type == AST_EXPR_IDENT) {
-        // 这里将全局名称改写后并不能直接去符号表中查找，但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
+        // 这里将全局名称改写后并不能直接去符号表中查找，
+        // 但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
         ast_ident *ident = select->left.value;
         ast_import_t *import = table_get(m->import_table, ident->literal);
         if (import) {
-            // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！(不需要检测 import 服务是否存在，这在 linker 中会做的)
+            // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
+            // (不需要检测 import 服务是否存在，这在 linker 中会做的)
             char *unique_ident = ident_with_module(import->module_ident, select->key);
+
+            // 检测 import ident 是否存在
+            if (!table_exist(can_import_symbol_table, unique_ident)) {
+                ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", unique_ident);
+            }
+
             expr->assert_type = AST_EXPR_IDENT;
             expr->value = ast_new_ident(unique_ident);
             return;
         }
     }
 
+    // analyzer ident 会再次处理 left
     analyzer_expr(m, &select->left);
 }
 
@@ -1138,32 +1165,18 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
  * @param stmt_list
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
-    // init
-    int import_end_index = 0;
-
-    // import handle
-    for (int i = 0; i < stmt_list->count; ++i) {
-        ast_stmt_t *stmt = stmt_list->take[i];
-        if (stmt->assert_type != AST_STMT_IMPORT) {
-            import_end_index = i;
-            break;
-        }
-
-        ast_import_t *import = stmt->value;
-        analyzer_import(m, import);
-
-        // 简单处理
-        slice_push(m->imports, import);
-        table_set(m->import_table, import->as, import);
-    }
-
     // var_decl blocks
     slice_t *var_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
 
     // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
-    for (int i = import_end_index; i < stmt_list->count; ++i) {
+    for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt_t *stmt = stmt_list->take[i];
+
+        if (stmt->assert_type == AST_STMT_IMPORT) {
+            continue;
+        }
+
         if (stmt->assert_type == AST_VAR_DECL) {
             ast_var_decl_t *var_decl = stmt->value;
             analyzer_type(m, &var_decl->type);
@@ -1218,8 +1231,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        // push 模式跳过
-        assert(false && "[analyzer_module] module stmt only support var_decl/new_fn/type_decl");
+        ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
     }
 
     // 添加 init fn
@@ -1263,37 +1275,20 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
  * @param stmt_list
  */
 static void analyzer_main(module_t *m, slice_t *stmt_list) {
-    // 过滤处 import 部分, 其余部分再包到 main closure_t 中
-    int import_last_index = -1;
-    for (int i = 0; i < stmt_list->count; ++i) {
-        ast_stmt_t *stmt = stmt_list->take[i];
-
-        m->current_line = stmt->line;
-        m->current_column = stmt->column;
-
-        if (stmt->assert_type != AST_STMT_IMPORT) {
-            break;
-        }
-
-        ast_import_t *import = stmt->value;
-
-        analyzer_import(m, import);
-
-        assert(import->as);
-        // 简单处理
-        slice_push(m->imports, import);
-        table_set(m->import_table, import->as, import);
-        import_last_index = i;
-    }
-
-    // main 所有表达式
     ast_fndef_t *fndef = ast_fndef_new(0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->body = slice_new();
     fndef->return_type = type_basic_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl_t));
-    for (int i = import_last_index + 1; i < stmt_list->count; ++i) {
-        slice_push(fndef->body, stmt_list->take[i]);
+    for (int i = 0; i < stmt_list->count; ++i) {
+        ast_stmt_t *stmt = stmt_list->take[i];
+
+        if (stmt->assert_type == AST_STMT_IMPORT) {
+            continue;
+        }
+
+
+        slice_push(fndef->body, stmt);
     }
 
     // 符号表注册

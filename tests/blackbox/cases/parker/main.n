@@ -1,0 +1,23 @@
+import std
+import syscall
+import parker.assert as * 
+import parker.log as * 
+
+var runner_name = 'runner'
+
+var args = std.args()
+
+// - 读取当前程序所在目录，找到 runner 程序
+assert(args.len() == 2, 'args failed')
+
+var exec_path = args[0]
+
+var main_name = args[1]
+
+
+// - 从参数中读取需要打包的主进程(以后的版本可以做进程解析)
+
+// - 读取当前工作目录, 确定需要打包的目录
+
+
+

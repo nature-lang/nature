@@ -16,6 +16,8 @@
  */
 void analyzer(module_t *m, slice_t *stmt_list);
 
+void analyzer_import(module_t *m, ast_import_t *import);
+
 static void analyzer_expr(module_t *m, ast_expr_t *expr);
 
 static void analyzer_stmt(module_t *m, ast_stmt_t *stmt);
