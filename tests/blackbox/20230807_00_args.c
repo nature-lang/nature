@@ -15,7 +15,6 @@ static void test_basic() {
     slice_push(args, &"nice");
     char *raw = exec_with_args(args);
 
-
     char *str = "arg1\n"
                 "-arg2\n"
                 "--hualaka\n"

@@ -27,6 +27,7 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+
 static lir_operand_t *linear_zero_string(module_t *m, type_t t) {
     lir_operand_t *result = temp_var_operand(m, t);
     OP_PUSH(rt_call(RT_CALL_STRING_NEW, result, 2, string_operand(""), int_operand(0)));
@@ -747,8 +748,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
     lir_operand_t *return_target = NULL;
 
     slice_t *params = slice_new();
-    type_fn_t *formal_fn = call->left.type.fn;
-    assert(formal_fn);
+    type_fn_t *type_fn = call->left.type.fn;
+    assert(type_fn);
 
 
     // TYPE_VOID 是否有返回值
@@ -757,36 +758,45 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
     }
 
     // call 所有的参数都丢到 params 变量中
-    for (int i = 0; i < formal_fn->formal_types->length; ++i) {
-        if (!formal_fn->rest || i < formal_fn->formal_types->length - 1) {
-            ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
-            lir_operand_t *actual_param_operand = linear_expr(m, *actual_param);
-            slice_push(params, actual_param_operand);
-            continue;
+    for (int i = 0; i < type_fn->formal_types->length; ++i) {
+        if (type_fn->rest && i >= type_fn->formal_types->length - 1) {
+            // rest 超载情况处理
+            type_t *rest_list_type = ct_list_value(type_fn->formal_types, i);
+            assertf(rest_list_type->kind == TYPE_LIST, "rest param must list type");
+
+            // actual 的参数个数与 formal 的参数一致，并且 actual last type(must list) == formal last type 一致。
+            if (call->actual_params->length == type_fn->formal_types->length &&
+                (call->actual_params->length - 1) == i) {
+                ast_expr_t *last_actual_param = ct_list_value(call->actual_params, i);
+
+                // last param
+                if (type_compare(*rest_list_type, last_actual_param->type)) {
+                    lir_operand_t *actual_operand = linear_expr(m, *last_actual_param);
+                    slice_push(params, actual_operand);
+                    break;
+                }
+            }
+
+            // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
+            lir_operand_t *rest_target = linear_zero_list(m, *rest_list_type);
+
+            for (int j = i; j < call->actual_params->length; ++j) {
+                ast_expr_t *actual_param = ct_list_value(call->actual_params, j);
+                lir_operand_t *rest_actual_param = linear_expr(m, *actual_param);
+
+                // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
+                lir_operand_t *param_ref = lea_operand_pointer(m, rest_actual_param);
+                OP_PUSH(rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, param_ref));
+            }
+
+            slice_push(params, rest_target);
+            break;
         }
 
-        type_t *rest_type = ct_list_value(formal_fn->formal_types, i);
-        assertf(rest_type->kind == TYPE_LIST, "rest param must list type");
-
-        // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
-        lir_operand_t *rest_target = temp_var_operand(m, *rest_type);
-        lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(*rest_type));
-        lir_operand_t *element_index = int_operand(ct_find_rtype_hash(rest_type->list->element_type));
-        lir_operand_t *length = int_operand(0);
-        lir_operand_t *capacity = int_operand(0);
-        OP_PUSH(rt_call(RT_CALL_LIST_NEW, rest_target, 4, rtype_hash, element_index, length, capacity));
-
-        for (int j = i; j < call->actual_params->length; ++j) {
-            ast_expr_t *actual_param = ct_list_value(call->actual_params, j);
-            lir_operand_t *rest_actual_param = linear_expr(m, *actual_param);
-
-            // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
-            lir_operand_t *param_ref = lea_operand_pointer(m, rest_actual_param);
-            OP_PUSH(rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, param_ref));
-        }
-
-        slice_push(params, rest_target);
-        break;
+        // 普通情况参数处理
+        ast_expr_t *actual = ct_list_value(call->actual_params, i);
+        lir_operand_t *actual_operand = linear_expr(m, *actual);
+        slice_push(params, actual_operand);
     }
 
     // 使用一个 int_operand(0) 预留出 fn_runtime 所需的空间,这里不需要也不能判断出 target 是否有空间引用，所以统一预留
@@ -802,7 +812,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
     OP_PUSH(call_op);
 
     // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
-    if (!is_builtin_call(formal_fn->name)) {
+    if (!is_builtin_call(type_fn->name)) {
         linear_error_handle(m);
     }
 

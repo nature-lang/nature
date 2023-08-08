@@ -559,6 +559,10 @@ static inline bool is_integer(type_kind kind) {
            kind == TYPE_UINT64;
 }
 
+static inline bool is_gen_any(type_t type) {
+    return type.kind == TYPE_GEN && type.gen->any;
+}
+
 static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }

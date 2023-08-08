@@ -727,6 +727,10 @@ bool type_compare(type_t left, type_t right) {
 
     assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type unknown cannot infer");
 
+    if (is_gen_any(left) || is_gen_any(right)) {
+        return true;
+    }
+
     if (cross_kind_trans(left.kind) != cross_kind_trans(right.kind)) {
         return false;
     }

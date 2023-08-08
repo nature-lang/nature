@@ -1,0 +1,3 @@
+fn log(string msg) {
+    println('log: ', msg)
+}

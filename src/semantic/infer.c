@@ -77,13 +77,16 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
     for (int i = 0; i < fndefs->count; ++i) {
         ast_fndef_t *fndef = fndefs->take[i];
         type_t type_fn = fndef->type;
-        if (type_fn.fn->rest && actual_params->length < (type_fn.fn->formal_types->length - 1)) {
-            // 实参的数量 type_fn.params.length
-            continue;
-        }
-
-        if (actual_params->length != type_fn.fn->formal_types->length) {
-            continue;
+        if (type_fn.fn->rest) {
+            // 实参的数量大于等于 type_fn.params.length - 1
+            if (actual_params->length < (type_fn.fn->formal_types->length - 1)) {
+                continue;
+            }
+        } else {
+            //数量必须相等
+            if (actual_params->length != type_fn.fn->formal_types->length) {
+                continue;
+            }
         }
 
         slice_push(temps, fndef);
@@ -110,6 +113,25 @@ static ast_fndef_t *fn_match(module_t *m, list_t *actual_params, symbol_t *s) {
 
             INFER_ASSERTF(formal_type->kind != TYPE_GEN, "generic type not specialization");
 
+            // 特殊情况处理
+            if (type_fn.fn->rest &&
+                actual_params->length == type_fn.fn->formal_types->length &&
+                (i == type_fn.fn->formal_types->length - 1)) {
+
+                // rest 情况
+                if (type_compare(*formal_type, actual_type)) {
+                    slice_push(temps, fndef);
+                }
+
+                // actual 是一个数组的替代情况
+                if (actual_type.kind == TYPE_LIST &&
+                    type_compare(*formal_type, actual_type.list->element_type)) {
+                    slice_push(temps, fndef);
+                }
+
+
+                continue;
+            }
 
             if (formal_type->kind == TYPE_UNION && actual_type.kind != TYPE_UNION) {
                 if (union_type_contains(*formal_type, actual_type)) {
@@ -1022,16 +1044,30 @@ static void infer_call_params(module_t *m, ast_call_t *call, type_fn_t *target_t
     for (int i = 0; i < call->actual_params->length; ++i) {
         // first param from formal
         type_t *formal_type = select_formal_param(target_type_fn, i);
-        ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
         if (i == 0 && formal_type->kind == TYPE_SELF) {
             // select first param 是 infer 自己伪造的，所以这里不需要在进行校验了
             continue;
         }
 
+        ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
+
+        // rest 的最后一个参数做特殊处理
+        if (target_type_fn->rest &&
+            call->actual_params->length == target_type_fn->formal_types->length &&
+            (i == target_type_fn->formal_types->length - 1)) {
+
+
+            // 此时 actual params 可以是一个数组也可以是一个元素
+            // TODO 这里左值被还原后不能进行二次推导了？二次推导就跳过 infer any 了
+            type_t actual_type = infer_right_expr(m, actual_param, type_basic_new(TYPE_UNKNOWN));
+            if (actual_type.kind == TYPE_LIST && type_compare(actual_type.list->element_type, *formal_type)) {
+                continue;
+            }
+        }
+
         infer_right_expr(m, actual_param, *formal_type);
     }
 }
-
 
 /**
  * if call first param type is self
@@ -1129,12 +1165,15 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
     if (call->left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = call->left.value;
         symbol_t *s = symbol_table_get(ident->literal);
-        assert(s);
+        INFER_ASSERTF(s, "symbol '%s' not found", ident->literal);
 
+        // 可能存在泛型参数匹配
         if (s->type == SYMBOL_FN && s->fndefs->count > 1) {
             ast_fndef_t *f = fn_match(m, call->actual_params, s);
+
             assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
-            rewrite_fndef(m, f); // 重复操作确保函数已经注册了新的符号
+
+            rewrite_fndef(m, f); // 从泛型名称改为具体名称
             ident->literal = f->symbol_name; // 引用函数的新的符号
         }
     }
@@ -1863,8 +1902,8 @@ static type_t reduction_generic_type(module_t *m, type_t t) {
 }
 
 static type_t reduction_type(module_t *m, type_t t) {
-    m->current_line = t.line;
-    m->current_column = t.column;
+//    m->current_line = t.line;
+//    m->current_column = t.column;
 
     assert(t.kind > 0);
 

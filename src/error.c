@@ -46,7 +46,11 @@ void dump_errors(module_t *m) {
     // 将所有的错误按格式输出即可
     for (int i = 0; i < m->ct_errors->count; ++i) {
         ct_error_t *error = m->ct_errors->take[i];
+#ifdef ASSERT_ERROR
+        assertf(false, "%s:%d:%d: %s\n", filepath, error->line, error->column, error->msg);
+#else
         printf("%s:%d:%d: %s\n", filepath, error->line, error->column, error->msg);
+#endif
     }
 
     exit(1);

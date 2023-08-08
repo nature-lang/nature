@@ -10,18 +10,16 @@ ast_ident *ast_new_ident(char *literal) {
 
 type_t *select_formal_param(type_fn_t *type_fn, uint8_t index) {
     if (type_fn->rest && index >= type_fn->formal_types->length - 1) {
+        // rest handle
         type_t *last_param_type = ct_list_value(type_fn->formal_types, type_fn->formal_types->length - 1);
-//        assertf(last_param_type->kind == TYPE_LIST, "rest param must list");
-        if (last_param_type->kind != TYPE_LIST) {
-            return NULL;
-        }
 
-        type_list_t *list_decl = last_param_type->list;
+        // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
+        assert(last_param_type->kind == TYPE_LIST);
 
-        return &list_decl->element_type;
+//        type_list_t *type_list = last_param_type->list;
+        return &last_param_type->list->element_type;
     }
 
-//    assertf(index < formal_fn->formal_types->length, "select index out range");
     if (index >= type_fn->formal_types->length) {
         return NULL;
     }
