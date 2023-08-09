@@ -6,16 +6,23 @@
 
 static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
     INFER_ASSERTF(expr->assert_type == AST_EXPR_LITERAL, "integer casting only support literal");
+    type_kind target_kind = target_type.kind;
+    if (target_kind == TYPE_CPTR) {
+        target_kind = TYPE_UINT;
+    }
 
     ast_literal_t *literal = expr->value;
 
-    INFER_ASSERTF(is_integer(literal->kind), "type inconsistency");
+    INFER_ASSERTF(is_integer(literal->kind), "type inconsistency, expect integer, actual: %s",
+                  type_kind_str[literal->kind]);
 
     int64_t i = atoll(literal->value);
 
-    INFER_ASSERTF(integer_range_check(cross_kind_trans(target_type.kind), i), "integer out of range");
 
-    literal->kind = target_type.kind;
+    INFER_ASSERTF(integer_range_check(cross_kind_trans(target_kind), i), "integer out of range");
+
+    literal->kind = target_kind;
+
     expr->type = target_type;
 }
 
@@ -125,6 +132,20 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
 
         fndefs = temps;
     }
+
+    table_t *fn_params_table = table_new();
+    temps = slice_new();
+    for (int i = 0; i < fndefs->count; ++i) {
+        ast_fndef_t *fndef = fndefs->take[i];
+        uint32_t hash = fn_params_hash(fndef->type.fn);
+        if (table_exist(fn_params_table, itoa(hash))) {
+            continue;
+        }
+
+        table_set(fn_params_table, itoa(hash), fndef);
+        slice_push(temps, fndef);
+    }
+    fndefs = temps;
 
     INFER_ASSERTF(fndefs->count > 0, "cannot match fn=%s", s->ident);
     INFER_ASSERTF(fndefs->count < 2, "fn=%s match more than one fndef", s->ident);
@@ -730,7 +751,7 @@ static type_t infer_access(module_t *m, ast_expr_t *expr) {
         type_tuple_t *type_tuple = left_type.tuple;
 
         ast_literal_t *index_literal = access->key.value; // 读取 index 的值
-        INFER_ASSERTF(index_literal->kind == TYPE_INT, "tuple index field must int immediate value");
+        INFER_ASSERTF(is_integer(index_literal->kind), "tuple index field must int immediate value");
         uint64_t index = atoi(index_literal->value);
 
         INFER_ASSERTF(index < type_tuple->elements->length, "tuple index field '%d' not in tuples", index);
@@ -1336,7 +1357,7 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 static type_t infer_literal(module_t *m, ast_literal_t *literal) {
-    return type_basic_new(literal->kind);
+    return reduction_type(m, type_basic_new(literal->kind));
 }
 
 static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
@@ -1633,7 +1654,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // 这里已经对表达式 type 做了调整
     target_type = reduction_type(m, target_type);
-    expr->type = type;
+    expr->type = reduction_type(m, type);
     expr->target_type = target_type;
 
     // TYPE_UNKNOWN 表示需要进行类型推断
@@ -1924,6 +1945,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
+    t.kind = cross_kind_trans(t.kind);
 
     // 计算 reflect type
     ct_reflect_type(t);

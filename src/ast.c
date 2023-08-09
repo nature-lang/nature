@@ -378,6 +378,10 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             expr->value = ast_unary_copy(temp->value);
             break;
         }
+        case AST_EXPR_ACCESS: {
+            expr->value = ast_access_copy(temp->value);
+            break;
+        }
         case AST_EXPR_LIST_NEW: {
             expr->value = ast_list_new_copy(temp->value);
             break;
@@ -404,6 +408,10 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
         }
         case AST_EXPR_TUPLE_NEW: {
             expr->value = ast_tuple_new_copy(temp->value);
+            break;
+        }
+        case AST_EXPR_TUPLE_DESTR: {
+            expr->value = ast_tuple_destr_copy(temp->value);
             break;
         }
         case AST_EXPR_TUPLE_ACCESS: {

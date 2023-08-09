@@ -17,6 +17,13 @@ void stack_push(ct_stack_t *s, void *value) {
     s->count++;
 }
 
+void *stack_top(ct_stack_t *s) {
+    if (stack_empty(s)) {
+        return NULL;
+    }
+    return s->top->next->value;
+}
+
 void *stack_pop(ct_stack_t *s) {
     if (stack_empty(s)) {
         return NULL;

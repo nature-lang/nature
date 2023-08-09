@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "linear.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
 
 lir_opcode_t ast_op_convert[] = {
         [AST_OP_ADD] = LIR_OPCODE_ADD,
@@ -668,14 +669,14 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
 
 static void linear_continue(module_t *m, ast_continue_t *stmt) {
-    assert(m->linear_current->for_start_labels->count > 0);
-    lir_operand_t *label = stack_pop(m->linear_current->for_start_labels);
+    LINEAR_ASSERTF(m->linear_current->for_start_labels->count > 0, "continue must use in for stmt")
+    lir_operand_t *label = stack_top(m->linear_current->for_start_labels);
     OP_PUSH(lir_op_bal(label));
 }
 
 static void linear_break(module_t *m, ast_break_t *stmt) {
     assert(m->linear_current->for_end_labels->count > 0);
-    lir_operand_t *label = stack_pop(m->linear_current->for_end_labels);
+    lir_operand_t *label = stack_top(m->linear_current->for_end_labels);
     OP_PUSH(lir_op_bal(label));
 }
 
@@ -1327,7 +1328,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr) {
         return output;
     }
 
-    assertf(false, "not support as_expr to type %s", type_kind_str[as_expr->target_type.kind]);
+    assertf(false, "not support as_expr type %s to type %s",
+            type_kind_str[as_expr->src_operand.type.kind], type_kind_str[as_expr->target_type.kind]);
     exit(1);
 }
 
@@ -1557,6 +1559,9 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
 }
 
 static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
+    m->current_line = stmt->line;
+    m->current_column = stmt->column;
+
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
             linear_var_decl(m, stmt->value);
@@ -1648,6 +1653,9 @@ linear_expr_fn expr_fn_table[] = {
 
 
 static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr) {
+    m->current_line = expr.line;
+    m->current_column = expr.column;
+
     // 特殊处理
     linear_expr_fn fn = expr_fn_table[expr.assert_type];
     assertf(fn, "ast right not support");
@@ -1748,6 +1756,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
  * @return
  */
 void linear(module_t *m) {
+    m->current_line = 0;
+    m->current_column = 0;
+
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         closure_t *closure = linear_fndef(m, fndef);

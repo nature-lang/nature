@@ -1,0 +1,13 @@
+var foo = [] as [u8]
+
+for false {
+    if false {
+        continue
+    }
+
+    var c = foo.len()
+
+    if true {
+        continue
+    }
+}

@@ -144,7 +144,7 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     // 泛型 global 函数处理
     slice_t *temps = slice_new();
     slice_push(temps, fndef);
-    if (fndef->local_children) {
+    if (fndef->local_children && fndef->local_children->count > 0) {
         slice_concat(temps, fndef->local_children);
         fndef->local_children = NULL;
     }

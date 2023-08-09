@@ -401,8 +401,7 @@ void interval_build(closure_t *c) {
                 }
             }
 
-            // TODO 如果能够优化 runtime_call 不使用寄存器，则可以大量的减少寄存器的使用
-            //  比如将 runtime_call 优化成 inline lir
+            // TODO 内联优化将会提高寄存器分配的使用率
             // fixed all phy reg in call
             if (lir_op_call(op) || op->code == LIR_OPCODE_ENV_CLOSURE) {
                 // traverse all register
@@ -487,6 +486,7 @@ void interval_build(closure_t *c) {
 
         /**
          * 由于采取了倒序遍历的方式，loop end 已经被遍历过了，但是 header 却还没有被处理。
+         * 为 for 循环中的变量添加跨越整个声明周期的环境变量
          */
         if (block->loop.header) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
@@ -646,7 +646,12 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
             // to 可能跨越了多个 range
             linked_node *current = linked_first(i->ranges)->succ;
             while (current->value && ((interval_range_t *) current->value)->from <= to) {
-                i->first_range->to = ((interval_range_t *) current->value)->to;
+                interval_range_t *current_interval = current->value;
+                // current_interval->to 可能也小于 to, 所以这里不能随意覆盖
+                if (current_interval->to > i->first_range->to) {
+                    i->first_range->to = current_interval->to;
+                }
+
                 linked_remove(i->ranges, current);
 
                 current = current->succ;
@@ -657,6 +662,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
 
 
     } else {
+        // 新的 range 和 旧的 range 无交集
         // 不重叠,则 range 插入到 ranges 的最前面
         interval_range_t *range = NEW(interval_range_t);
         range->from = from;
