@@ -7,8 +7,9 @@
 #include "src/ast.h"
 #include "src/types.h"
 
-void infer(module_t *m);
+#define GEN_REWRITE_SEPARATOR "@"
 
+void infer(module_t *m);
 
 void infer_var_decl(module_t *m, ast_var_decl_t *var_decl);
 

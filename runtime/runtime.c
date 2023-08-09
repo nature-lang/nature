@@ -10,6 +10,8 @@
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
+    DEBUGF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu",
+           type_kind_str[rtype->kind], data_ref, data_size);
     if (is_number(rtype->kind)) {
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);

@@ -1,13 +1,3 @@
-var foo = [] as [u8]
+import std
 
-for false {
-    if false {
-        continue
-    }
-
-    var c = foo.len()
-
-    if true {
-        continue
-    }
-}
+std.printf('hello %v, nice: %v, %%, float: %v', 'world', 12, 3.14)

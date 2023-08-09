@@ -47,6 +47,7 @@ static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
 }
 
 static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
+    DEBUGF("[key_equal] actual=%p, expect=%p", actual, expect)
     char *actual_str = rtype_value_str(rtype, actual);
     char *expect_str = rtype_value_str(rtype, expect);
     return str_equal(actual_str, expect_str);
@@ -59,9 +60,12 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
  * @return
  */
 static inline uint64_t
-find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_index, void *key_ref) {
+find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_rtype_hash, void *key_ref) {
     // - 计算 hash
-    rtype_t *key_rtype = rt_find_rtype(key_index);
+    rtype_t *key_rtype = rt_find_rtype(key_rtype_hash);
+    assertf(key_rtype, "cannot find rtype by hash=%d", key_rtype_hash);
+    DEBUGF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind])
+
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
     uint64_t hash = key_hash(key_rtype, key_ref);
 
@@ -73,6 +77,10 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
     int64_t first_deleted_index = -1;
     while (true) {
         uint64_t hash_value = hash_table[hash_index];
+        uint64_t key_index = extract_data_index(hash_value);
+        DEBUGF("[find_hash_slot] key_data=%p, key_size=%ld, hash_index=%lu, hash_value=%lu, key_index=%lu",
+               key_data, key_size, hash_index, hash_value, key_index)
+
 
         // 遇到了 empty 表示当前 key 是第一次插入到 hash 表，此时应该是插入到第一个遇到的 empty 或者 deleted slot
         // 谁先出现就用谁
@@ -85,7 +93,7 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
         }
 
         // key equal 的 slot 是最高优先且绝对正确的 slot
-        void *actual_key_ref = key_data + hash_value * key_size;
+        void *actual_key_ref = key_data + key_index * key_size;
         if (key_equal(key_rtype, actual_key_ref, key_ref)) {
             return hash_index;
         }

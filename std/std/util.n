@@ -1,6 +1,6 @@
 type integert = gen i8|i16|i32|i64|u8|u16|u32|u64|int|uint
 type floatert = gen float|f32|f64
-type numbert = gen i8|i16|i32|i64|u8|u16|u32|u64|f32|f64
+type numbert = gen integert|floatert
 
 fn ascii(string c):u8 {
     if c.len() != 1 {
@@ -39,7 +39,7 @@ fn itos(integert i):string {
     // 按 base 进行转换
     for i != 0 {
         int rem = i as int % base
-        result.push(rem + ascii('0') as u8)
+        result.push(rem as u8 + ascii('0') as u8)
 
         i = i / 10
     }
@@ -79,8 +79,7 @@ fn ftos(floatert f):string {
             var digit = (frac_part * 10) as int
             frac_str += itos(digit)
 
-            // frac_part = (frac_part * 10) - digit as float
-            frac_part = (frac_part * 10) - digit as float
+            frac_part = (frac_part * 10) - digit as floatert
         }
     }
 

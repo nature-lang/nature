@@ -159,19 +159,19 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
  * @param fndef
  * @param t
  */
-static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
+static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     assert(fndef->type.status == REDUCTION_STATUS_DONE);
     if (fndef->params_hash) {
-        return;
+        return true;
     }
 
     symbol_t *s = symbol_table_get(fndef->symbol_name);
     assert(s);
     assert(s->fndefs && s->fndefs->count > 0);
 
-    // 函数名称全局唯一，没必要进行重写
+    // 函数名称全局唯一，没必要进行符号表的改写
     if (s->fndefs->count == 1) {
-        return;
+        return true;
     }
 
     if (!fndef->is_local) {
@@ -193,8 +193,15 @@ static void rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
         }
     }
 
-    fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->params_hash, ".");
+    fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->params_hash, GEN_REWRITE_SEPARATOR);
+
+    if (symbol_table_get(fndef->symbol_name)) {
+        // exists
+        return false;
+    }
+
     symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);
+    return true;
 }
 
 static char *rewrite_ident_def(module_t *m, char *old) {
@@ -207,7 +214,7 @@ static char *rewrite_ident_def(module_t *m, char *old) {
     assert(s->is_local);
     assert(s->type != SYMBOL_FN);
 
-    char *ident = str_connect_by(old, m->infer_current->params_hash, ".");
+    char *ident = str_connect_by(old, m->infer_current->params_hash, GEN_REWRITE_SEPARATOR);
 
     s->ident = ident;
     symbol_table_set(ident, s->type, s->ast_value, s->is_local);
@@ -221,7 +228,9 @@ static char *rewrite_ident_use(module_t *m, char *old) {
         return old;
     }
 
-    return str_connect_by(old, m->infer_current->params_hash, ".");
+    assertf(!str_char(old, '@'), "repeat rewrite");
+
+    return str_connect_by(old, m->infer_current->params_hash, GEN_REWRITE_SEPARATOR);
 }
 
 static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
@@ -231,7 +240,7 @@ static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
         return;
     }
 
-    stmt->ident = str_connect_by(stmt->ident, m->infer_current->params_hash, ".");
+    stmt->ident = str_connect_by(stmt->ident, m->infer_current->params_hash, GEN_REWRITE_SEPARATOR);
     symbol_table_set(stmt->ident, SYMBOL_TYPE_ALIAS, stmt, true);
 }
 
@@ -241,7 +250,7 @@ static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
         return;
     }
 
-    var_decl->ident = str_connect_by(var_decl->ident, m->infer_current->params_hash, ".");
+    var_decl->ident = str_connect_by(var_decl->ident, m->infer_current->params_hash, GEN_REWRITE_SEPARATOR);
     // 只有 local var decl 才需要进行 rewrite
     symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
 }
@@ -1162,6 +1171,7 @@ static type_t infer_call(module_t *m, ast_call_t *call) {
             assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
 
             rewrite_fndef(m, f); // 从泛型名称改为具体名称
+
             ident->literal = f->symbol_name; // 引用函数的新的符号
         }
     }
@@ -1575,6 +1585,11 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     m->current_line = expr->line;
     m->current_column = expr->column;
 
+    // 表达式已经 infer 过了就不要重复 infer 了
+    if (expr->type.kind > 0) {
+        return expr->type;
+    }
+
     type_t type;
     switch (expr->assert_type) {
         case AST_EXPR_AS: {
@@ -1790,7 +1805,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  */
 static type_t generic_specialization(module_t *m, char *ident) {
     INFER_ASSERTF(m->infer_current->generic_assign,
-                  "generic param must be used in global fn, cannot be directly used in local fn");
+                  "generic assign failed, use type gen must in global fn");
     type_t *assign = table_get(m->infer_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);
@@ -1997,13 +2012,18 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
  * @param m
  * @param fndef
  */
-static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
+static bool infer_fndef(module_t *m, ast_fndef_t *fndef) {
     // fndef params 已经进行了 reduction, 会同步影响到 symbol table 中的 fn
     type_t t = infer_fn_decl(m, fndef);
 
     // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn->symbol 进行重写, 携带上 param_hash，且不用担心重复的问题
     // infer expr 中 fndef 确实会重复调用 infer_fn_decl 进行重复的推断
-    rewrite_fndef(m, fndef);
+    bool success = rewrite_fndef(m, fndef);
+    if (!success) {
+        // 主要是参数类型重复导致了符号表的重复注册
+        return false;
+    }
+
 
     // rewrite_formals ident
     for (int i = 0; i < fndef->formals->length; ++i) {
@@ -2032,6 +2052,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // body infer
     infer_body(m, fndef->body);
+    return true;
 }
 
 void infer(module_t *m) {
@@ -2050,10 +2071,19 @@ void infer(module_t *m) {
     }
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
+    slice_t *fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         m->infer_current = fndef;
 
-        infer_fndef(m, fndef);
+        m->current_line = fndef->line;
+        m->current_column = fndef->column;
+
+        bool success = infer_fndef(m, fndef);
+        if (success) {
+            slice_push(fndefs, fndef);
+        }
     }
+
+    m->ast_fndefs = fndefs;
 }

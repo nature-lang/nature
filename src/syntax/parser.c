@@ -376,7 +376,7 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    PARSER_ASSERTF(false, "cannot parser type ident=%s", parser_peek(m)->literal);
+    PARSER_ASSERTF(false, "ident '%s' is not a type", parser_peek(m)->literal);
     exit(1);
 }
 
@@ -862,32 +862,30 @@ static bool prev_token_is_type(token_t *prev) {
            prev->type == TOKEN_COMMA;
 }
 
-// for ... {
+// for {{}};{};{{}}. {for ; ; }
 static bool is_for_tradition_stmt(module_t *m) {
-    // 如果 for 后面直接接上 {, 则这就是 map 类型声明的 {}
-    if (parser_is(m, TOKEN_LEFT_CURLY)) {
-        return true;
-    }
-
     int semicolon_count = 0;
+    int close = 0;
     linked_node *current = m->p_cursor.current;
+    int current_line = ((token_t *) current->value)->line;
     while (current->value) {
         token_t *t = current->value;
 
         PARSER_ASSERTF(t->type != TOKEN_EOF, "unexpected EOF")
 
-
-        if (t->type == TOKEN_SEMICOLON) {
+        if (close == 0 && t->type == TOKEN_SEMICOLON) {
             semicolon_count++;
         }
 
         if (t->type == TOKEN_LEFT_CURLY) {
-            // 直接判断 { 的类型
-            token_t *prev = current->prev->value;
-            if (prev_token_is_type(prev)) {
-                return true;
-            }
+            close++;
+        }
 
+        if (t->type == TOKEN_RIGHT_CURLY) {
+            close--;
+        }
+
+        if (t->line != current_line) {
             break;
         }
 

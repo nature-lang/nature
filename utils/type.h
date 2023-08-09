@@ -372,8 +372,8 @@ typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
     uint8_t *key_data;
     uint8_t *value_data;
-    uint64_t key_index; // key rtype index
-    uint64_t value_index;
+    uint64_t key_rtype_hash; // key rtype index
+    uint64_t value_rtype_hash;
     uint64_t length; // 实际的元素的数量
     uint64_t capacity; // 当达到一定的负载后将会触发 rehash
 } n_map_t;
@@ -381,7 +381,7 @@ typedef struct {
 typedef struct {
     uint64_t *hash_table;
     uint8_t *key_data; // hash 冲突时进行检测使用
-    uint64_t key_index;
+    uint64_t key_rtype_hash;
     uint64_t length;
     uint64_t capacity;
 } n_set_t;

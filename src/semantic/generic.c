@@ -92,27 +92,65 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
     }
 }
 
+static list_t *generic_type_spread(type_gen_t *gen) {
+    list_t *elements = ct_list_new(sizeof(type_t));
+    for (int i = 0; i < gen->elements->length; ++i) {
+        type_t *item = ct_list_value(gen->elements, i);
+        // 如果 item type is alias, 并且 alias 对应的类型又是泛型，则进行展开
+        if (item->kind == TYPE_ALIAS) {
+            type_alias_t *alias = item->alias;
+            symbol_t *symbol = symbol_table_get(alias->ident);
+            assert(symbol);
+
+            ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
+            if (type_alias_stmt->type.kind != TYPE_GEN) {
+                goto LIST_PUSH;
+            }
+
+            type_gen_t *type_gen = type_alias_stmt->type.gen;
+            list_t *temps = generic_type_spread(type_gen);
+            assert(temps->length > 0);
+            for (int j = 0; j < temps->length; ++j) {
+                type_t *temp = ct_list_value(temps, j);
+                ct_list_push(elements, temp);
+            }
+
+            continue;
+        }
+
+        LIST_PUSH:
+
+        ct_list_push(elements, item);
+    }
+
+    return elements;
+}
+
 /**
  * 使用递归基于数组的索引的笛卡尔积组合
  */
-static void generic_cartesian_product(list_t *products, slice_t *generic_params, type_t **element, int depth) {
+static void
+generic_cartesian_product(ast_fndef_t *fndef, list_t *products, slice_t *generic_params, type_t **element, int depth) {
     if (depth == generic_params->count) {
         // element 已经收集完毕，现在可以写入到 products 中并退出递归
         ct_list_push(products, element);
         return;
     }
 
-
     ast_type_alias_stmt_t *stmt = generic_params->take[depth];
     assert(stmt->type.kind == TYPE_GEN);
-    type_gen_t *generic = stmt->type.gen;
-    for (int i = 0; i < generic->elements->length; ++i) {
-        // type*
-        element[depth] = ct_list_value(generic->elements, i);
-        generic_cartesian_product(products, generic_params, element, depth + 1);
+
+    type_gen_t *type_gen = stmt->type.gen;
+
+    // generic element spread
+    type_gen->elements = generic_type_spread(type_gen);
+
+    for (int i = 0; i < type_gen->elements->length; ++i) {
+        type_t *item = ct_list_value(type_gen->elements, i);
+        element[depth] = item;
+        generic_cartesian_product(fndef, products, generic_params, element, depth + 1);
     }
 }
-
 
 /**
  * global fn 必须放在最前面，才能先解析出其中的必要参数
@@ -153,7 +191,7 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     uint64_t element_size = sizeof(type_t *) * fndef->generic_params->count;
     list_t *products = ct_list_new(element_size);  // 收集的全量排列组合结果集
     type_t **element = mallocz(element_size);
-    generic_cartesian_product(products, fndef->generic_params, element, 0);
+    generic_cartesian_product(fndef, products, fndef->generic_params, element, 0);
     // 写入到 result 中 table_t *generic_assign; key is generic->ident, value is *type_t
     for (int i = 0; i < products->length; ++i) {
         // element 的长度等于 fndef->generic_params->count

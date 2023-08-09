@@ -1,6 +1,108 @@
-// 相当于是 golang 中的 utils + os 库，包含了一些常用的辅助函数
+import std.util as *
 
 // 读取命令行参数
 fn args():[string] {
     return std_args()
+}
+
+// 字符串格式化
+fn sprintf(string fmt, ...[any] args):string {
+    var end = fmt.len()
+    var result = [] as [u8]
+
+    var sources = fmt as [u8]
+
+    int i = 0
+    int arg_index = 0
+
+    for i < end {
+        u8 c = sources[i]
+        if c != ascii('%') {
+            result.push(c)
+            i += 1
+            continue
+        }
+
+        i += 1 // 跳过 % 字符串
+        
+        // 最后一个字符是一个 %, 但是没有后续字符了
+        if i == end {
+            continue
+        }
+
+        c = sources[i]
+        i+=1 // 跳过 c 字符
+
+        if c == ascii('%') {
+            result.push(ascii('%'))
+            continue
+        }
+
+        // c 不再 format 字符中，提示异常
+        if !{ascii('v')}.has(c) {
+            result.push(ascii('%'))
+            result.push(ascii('!'))
+            result.push(c)
+            continue
+        }
+
+        any arg = args[arg_index]
+        arg_index += 1
+
+        // 各种类型的值进行 string 处理
+        if c == ascii('v') {
+            string s = ''
+            if arg is int {
+                 s = itos(arg as int)
+            }  else if arg is i8 {
+                 s = itos(arg as i8)
+            }  else if arg is i16 {
+                 s = itos(arg as i16)
+            } else if arg is i32 {
+                 s = itos(arg as i32)
+            } else if arg is i64 {
+                 s = itos(arg as i64)
+            } else if arg is uint {
+                 s = itos(arg as uint)
+            } else if arg is u8 {
+                 s = itos(arg as u8)
+            }  else if arg is u16 {
+                 s = itos(arg as u16)
+            } else if arg is u32 {
+                 s = itos(arg as u32)
+            } else if arg is u64 {
+                 s = itos(arg as u64)
+            } else if arg is float {
+                 s = ftos(arg as float)
+            } else if arg is f64 {
+                 s = ftos(arg as f64)
+            } else if arg is f32 {
+                 s = ftos(arg as f32)
+            } else if arg is bool {
+                let arg as bool
+                if arg {
+                    s = 'true'
+                } else {
+                    s = 'false'
+                }
+            } else if arg is string {
+                s = arg as string
+            } else {
+                s = '%!v'
+            }
+
+            for c in s as [u8] { // c 是一个新的值，不会和上面的 c 冲突
+                result.push(c)
+            }
+
+            continue
+        }
+    }
+
+    return result as string
+}
+
+fn printf(string fmt, ...[any] args) {
+    var str = sprintf(fmt, ...args)
+    print(str)
 }

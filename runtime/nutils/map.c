@@ -25,8 +25,8 @@ static void set_data_index(n_map_t *m, uint64_t hash_index, uint64_t data_index)
 
 
 void map_grow(n_map_t *m) {
-    rtype_t *key_rtype = rt_find_rtype(m->key_index);
-    rtype_t *value_rtype = rt_find_rtype(m->value_index);
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+    rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
     uint64_t value_size = rtype_out_size(value_rtype, POINTER_SIZE);
 
@@ -48,7 +48,7 @@ void map_grow(n_map_t *m) {
         uint64_t hash_index = find_hash_slot(old_map.hash_table,
                                              old_map.capacity,
                                              old_map.key_data,
-                                             old_map.key_index,
+                                             old_map.key_rtype_hash,
                                              key_ref);
         if (hash_value_deleted(old_map.hash_table[hash_index])) {
             // 已经删除就不需要再写入到新的 hash table 中嘞
@@ -80,8 +80,8 @@ n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) 
     n_map_t *map_data = runtime_malloc(map_rtype->size, map_rtype);
     map_data->capacity = capacity;
     map_data->length = 0;
-    map_data->key_index = key_index;
-    map_data->value_index = value_index;
+    map_data->key_rtype_hash = key_index;
+    map_data->value_rtype_hash = value_index;
     map_data->hash_table = runtime_malloc(sizeof(uint64_t) * capacity, NULL);
     map_data->key_data = rt_array_new(key_rtype, capacity);
     map_data->value_data = rt_array_new(value_rtype, capacity);
@@ -96,9 +96,9 @@ n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) 
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
 bool map_access(n_map_t *m, void *key_ref, void *value_ref) {
-    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
+    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
-    rtype_t *key_rtype = rt_find_rtype(m->key_index);
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     char *key_str = rtype_value_str(key_rtype, key_ref);
     DEBUGF("[runtime.map_access] key_rtype_kind: %d, key_str: %s, hash_index=%lu,", key_rtype->kind, key_str,
            hash_index);
@@ -115,7 +115,7 @@ bool map_access(n_map_t *m, void *key_ref, void *value_ref) {
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回
-    uint64_t value_size = rt_rtype_out_size(m->value_index);
+    uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
 
     DEBUGF("[runtime.map_access] value_base=%p, find hash_value=%lu,data_index=%lu,value_size=%lu success",
            m->value_data,
@@ -133,12 +133,12 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
         map_grow(m);
     }
 
-    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
+    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
 
-    rtype_t *key_rtype = rt_find_rtype(m->key_index);
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     char *key_str = rtype_value_str(key_rtype, key_ref);
-    rtype_t *value_rtype = rt_find_rtype(m->value_index);
+    rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
 
     char *debug_value_str = "type_not_support";
     if (is_number(value_rtype->kind) || value_rtype->kind == TYPE_STRING) {
@@ -163,8 +163,8 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
 
     set_data_index(m, hash_index, data_index);
 
-    uint64_t key_size = rt_rtype_out_size(m->key_index);
-    uint64_t value_size = rt_rtype_out_size(m->value_index);
+    uint64_t key_size = rt_rtype_out_size(m->key_rtype_hash);
+    uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
     DEBUGF("[runtime.map_assign] assign success data_index=%lu, hash_value=%lu",
            data_index,
            m->hash_table[hash_index])
@@ -180,7 +180,7 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
  * @return
  */
 void map_delete(n_map_t *m, void *key_ref) {
-    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_index, key_ref);
+    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
     m->length--;

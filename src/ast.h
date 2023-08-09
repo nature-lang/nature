@@ -458,7 +458,7 @@ typedef struct ast_fndef_t {
     type_t type; // 类型冗余一份
 
     // 泛型解析时临时使用
-    slice_t *generic_params; // ast_typedef_stmt
+    slice_t *generic_params; // ast_type_alias_stmt
     table_t *exists_generic_params;  // 避免 generic_types 重复写入
 
     // 默认为 null, 当前函数为泛型 fn 时才会有值，local fn 同样有值且和 global fn 同值
