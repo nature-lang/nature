@@ -10,7 +10,6 @@
 static void test_basic() {
     char *raw = exec_output();
 
-
     char *str = "9\n10\n";
 
     assert_string_equal(raw, str);

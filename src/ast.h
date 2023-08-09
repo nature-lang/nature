@@ -475,7 +475,7 @@ typedef struct ast_fndef_t {
     int line;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
-type_t *select_formal_param(type_fn_t *type_fn, uint8_t index);
+type_t *select_formal_param(type_fn_t *type_fn, uint8_t index, bool is_spread_param);
 
 //bool type_compare(type_t left, type_t right);
 

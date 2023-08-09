@@ -8,7 +8,7 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-type_t *select_formal_param(type_fn_t *type_fn, uint8_t index) {
+type_t *select_formal_param(type_fn_t *type_fn, uint8_t index, bool is_spread_param) {
     if (type_fn->rest && index >= type_fn->formal_types->length - 1) {
         // rest handle
         type_t *last_param_type = ct_list_value(type_fn->formal_types, type_fn->formal_types->length - 1);
@@ -16,7 +16,11 @@ type_t *select_formal_param(type_fn_t *type_fn, uint8_t index) {
         // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
         assert(last_param_type->kind == TYPE_LIST);
 
-//        type_list_t *type_list = last_param_type->list;
+        // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
+        if (is_spread_param) {
+            return last_param_type;
+        }
+
         return &last_param_type->list->element_type;
     }
 
