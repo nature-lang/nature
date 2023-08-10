@@ -36,8 +36,6 @@ fn libc_encode(any v):cptr {}
 
 fn libc_decode(cptr p, any v) {}
 
-fn libc_htons(u16 host):u16 {}
-
 fn sleep(int second) {}
 
 fn runtime_gc() {}
@@ -84,3 +82,27 @@ fn syscall_wait(int pid):int {}
 fn syscall_getcwd():string {}
 
 fn std_args():[string] {}
+
+fn libc_htons(u16 host):u16 {}
+
+// 时间处理 /* ISO C `broken-down time' structure.  */
+type libc_tm_t = struct {
+    i32 tm_sec
+    i32 tm_min
+    i32 tm_hour
+    i32 tm_mday
+    i32 tm_mon
+    i32 tm_year
+    i32 tm_wday
+    i32 tm_yday
+    i32 tm_isdst
+    i64 tm_gmtoff
+    string tm_zone
+}
+
+fn libc_localtime(i64 timestamp):libc_tm_t {}
+
+// 将 time_info_t 转换为时间戳
+fn libc_mktime(libc_tm_t timeinfo):i64 {}
+
+fn libc_strftime(libc_tm_t timeinfo, cptr format):string {}

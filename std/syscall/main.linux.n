@@ -17,6 +17,18 @@ int STDIN_FILENO = 0
 int STDOUT_FILENO = 1
 int STDERR_FILENO = 2
 
+int CLOCK_REALTIME = 0
+int CLOCK_MONOTONIC = 1
+int CLOCK_PROCESS_CPUTIME_ID = 2
+int CLOCK_THREAD_CPUTIME_ID = 3
+int CLOCK_MONOTONIC_RAW = 4
+int CLOCK_REALTIME_COARSE = 5
+int CLOCK_MONOTONIC_COARSE = 6
+int CLOCK_BOOTTIME = 7
+int CLOCK_REALTIME_ALARM = 8
+int CLOCK_BOOTTIME_ALARM = 9
+int CLOCK_TAI = 11
+
 // 系统调用编码
 int SYS_READ = 0
 int SYS_WRITE = 1
@@ -623,7 +635,7 @@ fn listen(int sockfd, int backlog) {
 
 // 相应 client sockfd 和 client sockaddr
 fn accept(int sockfd, sockaddr_t addr):int {
-    var p =  libc.encode(addr)
+    var p = libc.encode(addr)
     var len = 16
     ptr<int> len_ptr = &len
 
@@ -640,4 +652,16 @@ fn recvfrom(int sockfd, [u8] buf, int flags):int {
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
     return call6(SYS_SENDTO, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+}
+
+fn clock_gettime(int clock_id):timespec_t {
+    // struct.raw() 读取 struct 数据段
+    var result = timespec_t {}
+    var p = libc.encode(result)
+
+    call6(SYS_CLOCK_GETTIME, clock_id as cptr, p, 0, 0, 0, 0)
+
+    libc.decode(p, result)
+
+    return result
 }

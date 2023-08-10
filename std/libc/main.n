@@ -9,3 +9,17 @@ fn decode(cptr p, any v) {
 fn htons(u16 host):u16 {
     return libc_htons(host)
 }
+
+type tm_t = libc_tm_t
+
+fn localtime(i64 timestamp):tm_t {
+    return libc_localtime(timestamp)
+}
+
+fn mktime(tm_t timeinfo):i64 {
+    return libc_mktime(timeinfo)
+}
+
+fn strftime(libc_tm_t timeinfo, string format):string {
+    return libc_strftime(timeinfo, format.raw())
+}

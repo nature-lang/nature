@@ -14,3 +14,7 @@ result = syscall.call6(syscall.SYS_READ, fd as cptr, buf.raw(), buf.len() as cpt
 print('read result: ', result, '\n') // \0 占用了 string 的空间？
 print('buf: ', buf as string, '!!!', '\n')
 
+
+// clock_gettime
+var t = syscall.clock_gettime(syscall.CLOCK_REALTIME)
+println('sec:', t.sec > 1691651852, 'nsec:', t.nsec > 0)

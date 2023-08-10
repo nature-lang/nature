@@ -1,3 +1,4 @@
-fn log(string msg) {
+fn log(string msg, ...[string] args) {
+
     println('log: ', msg)
 }

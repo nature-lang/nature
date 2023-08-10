@@ -27,32 +27,30 @@ bool is_std_package(char *package) {
  * import foo.bar => foo is package.name, so import workdir/bar.n
  * import foo => import foo.foo => import workdir/foo.n
  * @param package_dir
- * @param import_package  foo.bar.car 每一段都是一个字符串,放在了 import packages 中
+ * @param ast_import_package  foo.bar.car 每一段都是一个字符串,放在了 import packages 中
  * @return
  */
-char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *import_package) {
+char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package) {
     assert(package_dir);
-    assert(import_package);
-    assert(import_package->count > 0);
+    assert(ast_import_package);
+    assert(ast_import_package->count > 0);
 
+    char *entry = "main";
+    toml_datum_t datum = toml_string_in(package_conf, "entry");
+    if (datum.ok) {
+        entry = datum.u.s;
+    }
+    assertf(!ends_with(entry, ".n"), "entry cannot end with .n, entry '%s'", entry);
+
+    // 判断 temp 是否是一个文件夹
     char *temp = package_dir;
-    if (import_package->count == 1) {
-        // 默认 entry 为 main, 可以通过 entry 手动指定
-        char *entry = "main";
+    for (int i = 1; i < ast_import_package->count; ++i) {
+        temp = path_join(temp, ast_import_package->take[i]);
+    }
 
-        toml_datum_t datum = toml_string_in(package_conf, "entry");
-        if (datum.ok) {
-            entry = datum.u.s;
-        }
-
+    if (dir_exists(temp)) {
+        // 拼接文件后缀
         temp = path_join(temp, entry);
-
-        // entry 不能 .n 结尾, 会导致无法跨平台使用
-        assertf(!ends_with(temp, ".n"), "cannot end with .n, entry=%s", entry);
-    } else {
-        for (int i = 1; i < import_package->count; ++i) {
-            temp = path_join(temp, import_package->take[i]);
-        }
     }
 
     // os + arch 文件

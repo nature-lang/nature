@@ -355,6 +355,7 @@ typedef uint8_t n_bool_t;
 typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
 typedef int64_t n_int_t;
+typedef int64_t n_int64_t;
 typedef uint64_t n_uint_t;
 typedef uint64_t n_cptr_t;
 typedef uint32_t n_u32_t;

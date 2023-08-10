@@ -682,6 +682,7 @@ static type_t infer_struct_new(module_t *m, ast_struct_new_t *ast) {
         struct_property_t *struct_property = ct_list_value(ast->properties, i);
         struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
 
+        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->key);
 
         table_set(exists, struct_property->key, struct_property);
 

@@ -299,6 +299,7 @@ static type_t parser_single_type(module_t *m) {
         type_struct_t *type_struct = NEW(type_struct_t);
         type_struct->properties = ct_list_new(sizeof(struct_property_t));
         parser_must(m, TOKEN_LEFT_CURLY);
+        m->in_type_struct = true;
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item = {
@@ -316,6 +317,7 @@ static type_t parser_single_type(module_t *m) {
             parser_must_stmt_end(m);
         }
 
+        m->in_type_struct = false;
         result.kind = TYPE_STRUCT;
         result.struct_ = type_struct;
         return result;
@@ -1290,6 +1292,12 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_fndef_t *fndef = ast_fndef_new(parser_peek(m)->line, parser_peek(m)->column);
 
     parser_must(m, TOKEN_FN);
+
+    if (m->in_type_struct) {
+        PARSER_ASSERTF(parser_is(m, TOKEN_LEFT_PAREN),
+                       "fn defined in struct cannot contain name");
+    }
+
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *name_token = parser_advance(m);
         fndef->symbol_name = name_token->literal;

@@ -55,6 +55,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         if (stmt->assert_type != AST_STMT_IMPORT) {
             break;
         }
+        SET_LINE_COLUMN(stmt);
 
         ast_import_t *ast_import = stmt->value;
 
@@ -74,6 +75,8 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     // import handle
     for (int i = 0; i < m->stmt_list->count; ++i) {
         ast_stmt_t *stmt = m->stmt_list->take[i];
+        SET_LINE_COLUMN(stmt);
+
         if (stmt->assert_type == AST_STMT_IMPORT) {
             continue;
         }

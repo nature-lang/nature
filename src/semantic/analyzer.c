@@ -101,7 +101,9 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         analyzer_import_std(m, package, import);
     } else {
         // 一旦引入了包管理, 同名包优先级 current > dep > std
-        ANALYZER_ASSERTF(m->package_conf, "module %s not found package.toml", m->ident);
+        ANALYZER_ASSERTF(m->package_conf,
+                         "cannot 'import %s', not found package.toml", package);
+
         // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
         if (is_current_package(m->package_conf, package)) {
             // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
@@ -284,6 +286,7 @@ static void analyzer_type(module_t *m, type_t *type) {
 
     if (type->kind == TYPE_STRUCT) {
         type_struct_t *struct_decl = type->struct_;
+        m->in_type_struct = true;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
             analyzer_type(m, &item->type);
@@ -299,6 +302,7 @@ static void analyzer_type(module_t *m, type_t *type) {
                 analyzer_expr(m, item->right);
             }
         }
+        m->in_type_struct = false;
     }
 }
 
@@ -622,15 +626,17 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    ANALYZER_ASSERTF(m->analyzer_global, "local fndef should be defined in global");
-    slice_push(m->analyzer_global->local_children, fndef);
-    // 反向关系
-    fndef->global_parent = m->analyzer_global;
+    fndef->is_local = true;
+
+    if (m->analyzer_global) {
+        slice_push(m->analyzer_global->local_children, fndef);
+        fndef->global_parent = m->analyzer_global;
+    }
 
     // 更新 m->analyzer_current
     analyzer_current_init(m, fndef);
 
-    // 函数名称重复声明检测,
+    // 函数名称重复声明检测
     if (fndef->symbol_name == NULL) {
         fndef->symbol_name = ANONYMOUS_FN_NAME;
     } else {
@@ -709,11 +715,11 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     // 退出当前 current
     m->analyzer_current = m->analyzer_current->parent;
 
-    assert(m->analyzer_current);
-
     // 如果当前函数是定层函数，退出后 m->analyzer_current is null
     // 不过顶层函数也不存在 closure 引用的情况，直接注册到符号表中退出就行了
     if (free_var_count > 0) {
+        assert(m->analyzer_current);
+
         fndef->closure_name = fndef->symbol_name;
         fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME); // 二进制中的 label name
 
@@ -737,14 +743,17 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         // 符号就是普通的 symbol fn 符号，现在可以注册到符号表中了
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
 
-        // 仅加入到作用域，符号表就不需要重复添加了
-        local_ident_t *parent_fn_local = NEW(local_ident_t);
-        parent_fn_local->ident = fn_local->ident;
-        parent_fn_local->unique_ident = fn_local->unique_ident;
-        parent_fn_local->depth = m->analyzer_current->scope_depth;
-        parent_fn_local->decl = fn_local->decl;
-        parent_fn_local->type = SYMBOL_FN;
-        slice_push(m->analyzer_current->locals, parent_fn_local);
+        if (m->analyzer_current) {
+            // 仅加入到作用域，符号表就不需要重复添加了
+            local_ident_t *parent_fn_local = NEW(local_ident_t);
+            parent_fn_local->ident = fn_local->ident;
+            parent_fn_local->unique_ident = fn_local->unique_ident;
+            parent_fn_local->depth = m->analyzer_current->scope_depth;
+            parent_fn_local->decl = fn_local->decl;
+            parent_fn_local->type = SYMBOL_FN;
+            slice_push(m->analyzer_current->locals, parent_fn_local);
+        }
+
     }
 }
 
@@ -1097,6 +1106,12 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_call(m, expr->value);
         }
         case AST_FNDEF: {
+            // 在 type struct 中定义的 fn 需要手动加入到 xxx 中
+            // 否则后续的 infer 阶段不会处理到该函数
+            // 内部作用域中的 struct fn 则不需要担心这个问题， fndef->local_children 会记录该函数
+            if (m->in_type_struct && m->analyzer_current == NULL) {
+                slice_push(m->ast_fndefs, expr->value);
+            }
             return analyzer_local_fndef(m, expr->value);
         }
         default:

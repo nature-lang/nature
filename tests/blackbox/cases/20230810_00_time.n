@@ -1,0 +1,28 @@
+import libc
+import std.time
+
+var ti = libc.localtime(1691656611)
+// 51 36 8 10 7 123 4 221 0 0 UTC
+println(ti.tm_sec, ti.tm_min, ti.tm_hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst, ti.tm_gmtoff, ti.tm_zone)
+
+var tp = libc.tm_t {
+    tm_year = 122,
+    tm_mon = 7,
+    tm_mday = 9,
+    tm_hour = 17,
+    tm_min = 30,
+    tm_sec = 52
+}
+
+// 1660066252
+var timestamp = libc.mktime(tp)
+println('timestamp:', timestamp)
+
+// format 测试
+var datetime = libc.strftime(tp, '%Y-%m-%d %H:%M:%S')
+println('datetime:', datetime)
+
+// time 库测试
+var t = time.now()
+println(t.timestamp() > 1691665760)
+println(t.datetime().len())

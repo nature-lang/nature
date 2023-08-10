@@ -325,6 +325,7 @@ typedef struct {
  * }
  */
 typedef struct {
+    char *ident; // ident 冗余
     // parser 阶段是 typedef ident
     // infer 完成后是 typeuse_struct
     type_t type;

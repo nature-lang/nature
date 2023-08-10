@@ -1,5 +1,6 @@
 #include "generic.h"
 #include "utils/table.h"
+#include "src/error.h"
 
 /**
  * @param t
@@ -157,7 +158,7 @@ generic_cartesian_product(ast_fndef_t *fndef, list_t *products, slice_t *generic
  * @param fndef
  * @return slice_t of ast_fndef_t
  */
-static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
+static slice_t *generic_global_fndef(module_t *m, ast_fndef_t *fndef) {
     slice_t *result = slice_new();
 
     fndef->exists_generic_params = table_new();
@@ -166,6 +167,11 @@ static slice_t *generic_global_fndef(ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl_t *var = ct_list_value(fndef->formals, i);
         generic_params_collect(fndef, var->type);
+    }
+
+    if (fndef->is_local && fndef->generic_params->count > 0) {
+        dump_errorf(m, CT_STAGE_GENERIC, fndef->line, fndef->column,
+                    "cannot use generic params in local function");
     }
 
     // 非泛型 global fn, 此时 generic_assign 为 null
@@ -239,7 +245,8 @@ void generic(module_t *m) {
     slice_t *ast_fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
-        slice_concat(ast_fndefs, generic_global_fndef(fndef));
+        slice_concat(ast_fndefs, generic_global_fndef(m, fndef));
     }
+
     m->ast_fndefs = ast_fndefs;
 }

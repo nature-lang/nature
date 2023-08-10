@@ -290,6 +290,8 @@ static inline lir_operand_t *label_operand(char *ident, bool is_local) {
 }
 
 static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
+    assert(ident);
+
     symbol_t *s = symbol_table_get(ident);
     assertf(s, "notfound symbol=%s", ident);
     assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);

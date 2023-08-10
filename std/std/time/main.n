@@ -1,0 +1,28 @@
+import syscall
+import libc
+
+type time_t = struct {
+    i64 sec
+    i64 nsec
+    libc.tm_t tm
+    var timestamp = fn(self s):i64 {
+        return s.sec
+    }
+    var datetime = fn(self s):string {
+        return libc.strftime(s.tm, '%Y-%m-%d %H:%M:%S')
+    }
+}
+
+// 将 time_t 使用当前时间进行初始化
+fn now():time_t {
+    var sys_time = syscall.clock_gettime(syscall.CLOCK_REALTIME)
+    var t = time_t {
+        sec = sys_time.sec,
+        nsec = sys_time.nsec,
+        tm = libc.localtime(sys_time.sec)
+    }
+
+    return t
+}
+
+
