@@ -22,6 +22,8 @@
 #define END_IF_IDENT "if_end"
 #define IF_ALTERNATE_IDENT "if_alternate"
 #define IF_CONTINUE_IDENT "if_continue"
+#define LOGICAL_OR_IDENT "logical_or_end"
+#define LOGICAL_AND_IDENT "logical_and_end"
 
 #define CATCH_ERROR_IDENT "catch_error"
 #define CATCH_END_IDENT "catch_end"

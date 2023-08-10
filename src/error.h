@@ -5,6 +5,12 @@
 
 #define ERROR_STR_SIZE 1024
 
+#define SET_LINE_COLUMN(src) { \
+    assert(src->line > 0);      \
+    m->current_line = src->line;\
+    m->current_column = src->column;\
+}
+
 #define LINEAR_ASSERTF(cond, fmt, ...) { \
     if (!(cond)) { \
         dump_errorf(m, CT_STAGE_LINEAR, m->current_line, m->current_column, fmt, ##__VA_ARGS__); \

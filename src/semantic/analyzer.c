@@ -421,7 +421,7 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
         }
 
         if (str_equal(local->ident, ident)) {
-            ANALYZER_ASSERTF(false, "redeclare ident=%s", ident);
+            ANALYZER_ASSERTF(false, "redeclare ident '%s'", ident);
         }
     }
 
@@ -682,7 +682,11 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         free_var_count++;
 
         // 封装成 ast_expr 更利于 compiler
-        ast_expr_t expr;
+        ast_expr_t expr = {
+                .line = fndef->line,
+                .column = fndef->column,
+        };
+
         // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
         if (free_var->is_local) {
             // ast_ident 表达式
@@ -1199,10 +1203,14 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_stmt_t *temp_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
             assign->left = (ast_expr_t) {
+                    .line = stmt->line,
+                    .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
                     .value = ast_new_ident(var_decl->ident),
             };
             assign->right = vardef->right;
+            temp_stmt->line = stmt->line;
+            temp_stmt->column = stmt->column;
             temp_stmt->assert_type = AST_STMT_ASSIGN;
             temp_stmt->value = assign;
             slice_push(var_assign_list, temp_stmt);
@@ -1252,10 +1260,14 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     call->left = (ast_expr_t) {
             .assert_type = AST_EXPR_IDENT,
             .value = ast_new_ident(s->ident), // module.init
+            .line = 1,
+            .column = 0,
     };
     call->actual_params = ct_list_new(sizeof(ast_expr_t));
     call_stmt->assert_type = AST_CALL;
     call_stmt->value = call;
+    call_stmt->line = 1;
+    call_stmt->column = 0;
     m->call_init_stmt = call_stmt;
 
     // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef body 进行符号定位与改写

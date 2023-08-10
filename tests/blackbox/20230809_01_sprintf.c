@@ -9,10 +9,8 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
-
-    char *str = "9\n10\n";
+    char *str = "hello world, nice: 12, %, float: 3.141500\n"
+                "err msg=this is failed, count=253 len= 33\n";
 
     assert_string_equal(raw, str);
 }

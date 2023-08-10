@@ -83,6 +83,14 @@ static ast_stmt_t *stmt_new(module_t *m) {
     return result;
 }
 
+
+static ast_expr_t *expr_new_ptr(module_t *m) {
+    ast_expr_t *result = NEW(ast_expr_t);
+    result->line = parser_peek(m)->line;
+    result->column = parser_peek(m)->column;
+    return result;
+}
+
 static ast_expr_t expr_new(module_t *m) {
     ast_expr_t result = {
             .line = parser_peek(m)->line,
@@ -299,7 +307,7 @@ static type_t parser_single_type(module_t *m) {
             };
 
             if (parser_consume(m, TOKEN_EQUAL)) {
-                ast_expr_t *temp_expr = NEW(ast_expr_t);
+                ast_expr_t *temp_expr = expr_new_ptr(m);
                 *temp_expr = parser_expr(m);
                 item.right = temp_expr;
             }
@@ -1076,10 +1084,10 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     binary_expr->operator = token_to_ast_op[t->type];
     binary_expr->left = left;
 
-    assign_stmt->right = (ast_expr_t) {
-            .assert_type = AST_EXPR_BINARY,
-            .value = binary_expr
-    };
+    assign_stmt->right = expr_new(m);
+    assign_stmt->right.assert_type = AST_EXPR_BINARY;
+    assign_stmt->right.value = binary_expr;
+
     result->assert_type = AST_STMT_ASSIGN;
     result->value = assign_stmt;
     return result;
@@ -1150,7 +1158,8 @@ static ast_stmt_t *parser_return_stmt(module_t *m) {
         !parser_is(m, TOKEN_STMT_EOF) &&
         !parser_is(m, TOKEN_RIGHT_CURLY)) {
         ast_expr_t temp = parser_expr(m);
-        stmt->expr = NEW(ast_expr_t);
+
+        stmt->expr = expr_new_ptr(m);
         memcpy(stmt->expr, &temp, sizeof(ast_expr_t));
     }
     result->assert_type = AST_STMT_RETURN;
@@ -1509,10 +1518,9 @@ static ast_stmt_t *parser_tuple_destr_stmt(module_t *m) {
     ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
 
     // assign_stmt
-    ast_expr_t left_expr = {
-            .assert_type = AST_EXPR_TUPLE_DESTR,
-            .value = parser_tuple_destr(m)
-    };
+    ast_expr_t left_expr = expr_new(m);
+    left_expr.assert_type = AST_EXPR_TUPLE_DESTR;
+    left_expr.value = parser_tuple_destr(m);
 
     assign_stmt->left = left_expr;
     // tuple destr 必须立刻赋值
@@ -1739,7 +1747,7 @@ static ast_expr_t parser_struct_new_expr(module_t *m) {
             struct_property_t item = {0};
             item.key = parser_must(m, TOKEN_IDENT)->literal;
             parser_must(m, TOKEN_EQUAL);
-            item.right = NEW(ast_expr_t);
+            item.right = expr_new_ptr(m);
             *((ast_expr_t *) item.right) = parser_expr(m);
 
             ct_list_push(struct_new->properties, &item);

@@ -39,7 +39,7 @@ fn sprintf(string fmt, ...[any] args):string {
         }
 
         // c 不再 format 字符中，提示异常
-        if !{ascii('v')}.has(c) {
+        if !{ascii('v')}.has(c) || arg_index == args.len() {
             result.push(ascii('%'))
             result.push(ascii('!'))
             result.push(c)

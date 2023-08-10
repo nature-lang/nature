@@ -94,8 +94,8 @@ typedef enum {
     AST_OP_EE, // ==
     AST_OP_NE, // !=
 
-    AST_OP_AND_AND,
-    AST_OP_OR_OR,
+    AST_OP_AND_AND, // &&
+    AST_OP_OR_OR,  // ||
 
 } ast_expr_op_t;
 
@@ -119,6 +119,8 @@ static string ast_expr_op_str[] = {
         [AST_OP_GE] = ">=",  // >=
         [AST_OP_EE] = "==", // ==
         [AST_OP_NE] = "!=", // !=
+        [AST_OP_OR_OR] = "||",
+        [AST_OP_AND_AND] = "&&",
 
         [AST_OP_NOT] = "!", // unary !right
         [AST_OP_NEG] = "-", // unary -right
@@ -493,22 +495,24 @@ static ast_expr_t *ast_expr_copy(ast_expr_t *temp);
 
 static ast_call_t *ast_call_copy(ast_call_t *temp);
 
-static inline ast_expr_t *ast_ident_expr(char *literal) {
+static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);
     expr->assert_type = AST_EXPR_IDENT;
     expr->value = ast_new_ident(literal);
+    expr->line = line;
+    expr->column = column;
     return expr;
 }
 
-static inline ast_expr_t *ast_int_expr(uint64_t number) {
-    ast_expr_t *expr = NEW(ast_expr_t);
-    expr->assert_type = AST_EXPR_LITERAL;
-    ast_literal_t *literal = NEW(ast_literal_t);
-    literal->kind = TYPE_INT;
-    literal->value = itoa(number);
-    expr->value = literal;
-    return expr;
-}
+//static inline ast_expr_t *ast_int_expr(uint64_t number) {
+//    ast_expr_t *expr = NEW(ast_expr_t);
+//    expr->assert_type = AST_EXPR_LITERAL;
+//    ast_literal_t *literal = NEW(ast_literal_t);
+//    literal->kind = TYPE_INT;
+//    literal->value = itoa(number);
+//    expr->value = literal;
+//    return expr;
+//}
 
 static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) {
     ast_expr_t *result = NEW(ast_expr_t);

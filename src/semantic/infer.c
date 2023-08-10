@@ -371,6 +371,8 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
         }
 
             // 逻辑运算符
+        case AST_OP_OR_OR:
+        case AST_OP_AND_AND:
         case AST_OP_LT:
         case AST_OP_LE:
         case AST_OP_GT:
@@ -845,7 +847,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
 
-        call->left = *ast_ident_expr(RT_CALL_STRING_LENGTH);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_LENGTH);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_INT);
 
@@ -858,7 +860,7 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
 
-        call->left = *ast_ident_expr(RT_CALL_STRING_RAW);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_RAW);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_CPTR);
         return type_basic_new(TYPE_CPTR);
@@ -890,7 +892,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left); // list operand
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA)); // value operand
 
-        call->left = *ast_ident_expr(RT_CALL_LIST_PUSH);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_PUSH);
         infer_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
         call->return_type = type_basic_new(TYPE_VOID);
 
@@ -905,7 +907,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left); // list operand
 
-        call->left = *ast_ident_expr(RT_CALL_LIST_LENGTH);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_LENGTH);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_INT);
 
@@ -919,7 +921,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left); // list operand
 
-        call->left = *ast_ident_expr(RT_CALL_LIST_CAPACITY);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_CAPACITY);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_INT);
 
@@ -933,7 +935,7 @@ static type_t infer_list_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left); // list operand
 
-        call->left = *ast_ident_expr(RT_CALL_LIST_RAW);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_RAW);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_CPTR);
 
@@ -962,7 +964,7 @@ static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
-        call->left = *ast_ident_expr(RT_CALL_MAP_DELETE);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_DELETE);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_VOID);
 
@@ -975,7 +977,7 @@ static type_t infer_map_select_call(module_t *m, ast_call_t *call) {
         call->actual_params = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->actual_params, &s->left);
 
-        call->left = *ast_ident_expr(RT_CALL_MAP_LENGTH);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_LENGTH);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_INT);
 
@@ -998,7 +1000,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
-        call->left = *ast_ident_expr(RT_CALL_SET_DELETE);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_DELETE);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_VOID);
 
@@ -1015,7 +1017,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
-        call->left = *ast_ident_expr(RT_CALL_SET_ADD);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_ADD);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_BOOL);
 
@@ -1031,7 +1033,7 @@ static type_t infer_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->actual_params, &s->left);
         ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
 
-        call->left = *ast_ident_expr(RT_CALL_SET_CONTAINS);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_CONTAINS);
         infer_left_expr(m, &call->left);
         call->return_type = type_basic_new(TYPE_BOOL);
 
@@ -1473,8 +1475,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
 
 
 static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
-    m->current_line = stmt->line;
-    m->current_column = stmt->column;
+    SET_LINE_COLUMN(stmt);
 
     switch (stmt->assert_type) {
         case AST_VAR_DECL: {
@@ -1533,8 +1534,7 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
-    m->current_line = expr->line;
-    m->current_column = expr->column;
+    SET_LINE_COLUMN(expr);
 
     type_t type;
     switch (expr->assert_type) {
@@ -1582,8 +1582,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
-    m->current_line = expr->line;
-    m->current_column = expr->column;
+    SET_LINE_COLUMN(expr);
 
     // 表达式已经 infer 过了就不要重复 infer 了
     if (expr->type.kind > 0) {

@@ -401,7 +401,8 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
             ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
             assign_stmt->left = *element;
             // temp is ident， 把 ident 解析出来
-            assign_stmt->right = *ast_ident_expr(((lir_var_t *) temp->value)->ident);
+            assign_stmt->right = *ast_ident_expr(m->current_line, m->current_column,
+                                                 ((lir_var_t *) temp->value)->ident);
             linear_assign(m, assign_stmt);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             linear_tuple_destr(m, element->value, temp);
@@ -461,7 +462,6 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     // map assign list[0] = 1
     if (left.assert_type == AST_EXPR_LIST_ACCESS) {
-
         return linear_list_assign(m, stmt);
     }
 
@@ -646,8 +646,8 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
     // cond -> for_end
     lir_operand_t *cond_target = linear_expr(m, ast->cond);
-    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, for_end_operand);
-    OP_PUSH(cmp_goto);
+    lir_op_t *beq = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, for_end_operand);
+    OP_PUSH(beq);
 
     // continue
     OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
@@ -821,10 +821,66 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
     return return_target;
 }
 
+static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr) {
+    assert(expr.type.kind == TYPE_BOOL);
+    // 编译 left, 如果 left 为 true,则直接返回 true
+    ast_binary_expr_t *logical_expr = expr.value;
+    lir_operand_t *logic_end_operand = label_operand(make_unique_ident(m, LOGICAL_OR_IDENT), true);
+
+    lir_operand_t *result_target = temp_var_operand(m, expr.type);
+
+    // xxx left -> result
+    lir_operand_t *left_target = linear_expr(m, logical_expr->left);
+    OP_PUSH(lir_op_move(result_target, left_target));
+
+    // beq result,true -> logic_or_end
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), result_target, logic_end_operand));
+
+    // mov right -> result
+    lir_operand_t *right_target = linear_expr(m, logical_expr->right);
+    OP_PUSH(lir_op_move(result_target, right_target));
+
+    // logic_end:
+    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, logic_end_operand));
+    return result_target;
+}
+
+
+static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr) {
+    assert(expr.type.kind == TYPE_BOOL);
+    // 编译 left, 如果 left 为 true,则直接返回 true
+    ast_binary_expr_t *logical_expr = expr.value;
+
+    lir_operand_t *logic_end_operand = label_operand(make_unique_ident(m, LOGICAL_AND_IDENT), true);
+
+    lir_operand_t *result_target = temp_var_operand(m, expr.type);
+
+    // xxx left -> result
+    lir_operand_t *left_target = linear_expr(m, logical_expr->left);
+    OP_PUSH(lir_op_move(result_target, left_target));
+
+    // beq result,true -> logic_or_end
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), result_target, logic_end_operand));
+
+    // mov right -> result
+    lir_operand_t *right_target = linear_expr(m, logical_expr->right);
+    OP_PUSH(lir_op_move(result_target, right_target));
+
+    // logic_end:
+    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, logic_end_operand));
+    return result_target;
+}
 
 static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr) {
     ast_binary_expr_t *binary_expr = expr.value;
 
+    // 特殊 binary 处理
+    if (binary_expr->operator == AST_OP_OR_OR) {
+        return linear_logical_or(m, expr);
+    }
+    if (binary_expr->operator == AST_OP_AND_AND) {
+        return linear_logical_and(m, expr);
+    }
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right);
@@ -868,7 +924,6 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr) {
 
         return result_target;
     }
-
 
     OP_PUSH(lir_op_new(operator, left_target, right_target, result_target));
 
@@ -1375,11 +1430,11 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr) {
     // make tuple target return
     assertf(result_operand->assert_type == LIR_OPERAND_VAR, "linear expr result operand must lir var");
     lir_var_t *var = result_operand->value;
-    ast_expr_t *result_expr = ast_ident_expr(var->ident);
+    ast_expr_t *result_expr = ast_ident_expr(expr.line, expr.column, var->ident);
     result_expr->type = var->type;
 
     // temp error ident
-    ast_expr_t *err_expr = ast_ident_expr(((lir_var_t *) errort_operand->value)->ident);
+    ast_expr_t *err_expr = ast_ident_expr(expr.line, expr.column, ((lir_var_t *) errort_operand->value)->ident);
     err_expr->type = ((lir_var_t *) errort_operand->value)->type;
 
     // (call(), error_operand())

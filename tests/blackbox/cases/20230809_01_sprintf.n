@@ -1,3 +1,6 @@
 import std
 
-std.printf('hello %v, nice: %v, %%, float: %v', 'world', 12, 3.14)
+std.printf('hello %v, nice: %v, %%, float: %v\n', 'world', 12, 3.1415, 233)
+
+var s = std.sprintf('err msg=%v, count=%v', 'this is failed', 253)
+println(s, 'len=', s.len())
