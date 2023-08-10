@@ -8,7 +8,10 @@
 #include <arpa/inet.h>
 
 static void test_basic() {
-    char *raw = exec_output();
+    slice_t *args = slice_new();
+    slice_push(args, &"node");
+    slice_push(args, &"-v");
+    char *raw = exec_with_args(args);
 
     printf("%s", raw);
 //    char *str = "";

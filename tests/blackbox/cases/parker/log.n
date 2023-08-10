@@ -1,4 +1,34 @@
-fn log(string msg, ...[string] args) {
+import std
+import syscall
+import std.time
 
-    println('log: ', msg)
+bool verbose = false
+
+fn set_verbose() {
+    var args = std.args()
+    var last = args[args.len() - 1]
+    if last == '-v' {
+        verbose = true
+        logf('verbose enabled')
+    } 
+}
+
+fn logf(string fmt, ...[any] args) {
+    if !verbose {
+        return
+    }
+    var msg = std.sprintf(fmt, ...args)
+    var t = time.now()
+    std.printf('log=\'%v\' time=\'%v\'\n', msg, t.datetime())
+}
+
+fn assertf(bool cond, string fmt, ...[any] args) {
+    if !cond {
+        var msg = std.sprintf(fmt, ...args)
+
+        var t = time.now()
+        std.printf("failed='%v' time='%v'\n", msg, t.datetime())
+
+        syscall.exit(1)
+    }
 }

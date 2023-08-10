@@ -740,6 +740,8 @@ void elf_resolve_common_symbols(elf_context *ctx) {
         if (sym->st_shndx != SHN_COMMON) {
             continue;
         }
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+
         // 数据段的符号值一般是 .data 段的起始位置 st_value 前进
         sym->st_value = elf_section_data_forward(ctx->bss_section, sym->st_size, sym->st_value);
         // 修正符号定义段为 bss
@@ -977,9 +979,12 @@ void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t 
         // rel 引用的符号在符号表的索引，在没有修正之前就是 UNDEF, 不过 load elf 的时候已经进行了不停的修正，所以这里已经不会是 undef 了
         int sym_index = ELF64_R_SYM(rel->r_info);
         sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index]; // 符号
+
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+
         int type = ELF64_R_TYPE(rel->r_info); // code 就是重定位的类型
         addr_t target = sym->st_value; // 符号定义的位置
-        target += rel->r_addend; // 为啥定义符号的位置要加上 rel->addend? 定位到结束位置？
+        target += rel->r_addend; // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
 
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
@@ -1400,14 +1405,14 @@ uint64_t collect_fndef_list(elf_context *ctx) {
                 bitmap_set(f->gc_bits, (stack_slot / POINTER_SIZE) - 1);
             }
 
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
-                   fn->symbol_name,
-                   var->ident,
-                   type_kind_str[var->type.kind],
-                   type_sizeof(var->type),
-                   type_need_gc(var->type),
-                   (stack_slot / POINTER_SIZE) - 1,
-                   stack_slot);
+//            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
+//                   fn->symbol_name,
+//                   var->ident,
+//                   type_kind_str[var->type.kind],
+//                   type_sizeof(var->type),
+//                   type_need_gc(var->type),
+//                   (stack_slot / POINTER_SIZE) - 1,
+//                   stack_slot);
 
         }
         strcpy(f->name, c->symbol_name);

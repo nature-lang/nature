@@ -1,6 +1,0 @@
-import syscall
-
-fn assert(bool cond, string msg) {
-    println('failed: ', msg)
-    syscall.exit(1)
-}

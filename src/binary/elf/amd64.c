@@ -24,7 +24,7 @@ static bool is_imm_operand(asm_operand_t *operand) {
  * call rel32 // e8 00 00 00 00
  * jmp rel32 // e9 00 00 00 00
  * movsd  0x0(%rip),%xmm0 //  f2 0f 10 05 00 00 00 00
- *
+ * rex mov WORD PTR [rip+0x0],0x2551 // 0x66, 0x40, 0xC7, 0x05, 0x00, 0x00, 0x00, 0x00, 0x51, 0x25
  * movb $0x18,0x0(%rip) // 40 c6 05 00 00 00 00 18 由于包含 imm 部分，所以 rip offset 不能是直接减去 4，还需要剪掉 imm 部分的宽度。
  * @param inst_count
  * @return
@@ -376,7 +376,6 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
             diff = (int64_t) (val - addr);
             if (diff < -2147483648LL || diff > 2147483647LL) {
                 error_exit("[amd64_relocate]internal error: relocation failed");
-
             }
             // 小端写入
             add32le(ptr, diff);
@@ -604,9 +603,13 @@ void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
                     section_offset += temp->data_count;
 
                     // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
+                    // 计算重定位的起点信息
                     uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
+                    int64_t addend = (int64_t) (*temp->offset + temp->data_count) - (int64_t) rel_offset;
+
+                    // addend = 下一条指令的起始位置 - rel_offset
                     temp->elf_rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
-                                                     rel_offset, R_X86_64_PC32, (int) sym_index, -4);
+                                                     rel_offset, R_X86_64_PC32, (int) sym_index, -addend);
 
                     continue;
 

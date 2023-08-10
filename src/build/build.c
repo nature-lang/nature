@@ -372,17 +372,12 @@ static void build_compiler(slice_t *modules) {
 
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
-
             debug_lir(c);
 
             // 构造 cfg
             cfg(c);
 
             debug_block_lir(c, "cfg");
-        }
-
-        for (int j = 0; j < m->closures->count; ++j) {
-            closure_t *c = m->closures->take[j];
 
             // 构造 ssa
             ssa(c);
