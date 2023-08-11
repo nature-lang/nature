@@ -39,7 +39,7 @@ typedef enum {
     CT_STAGE_PARSER,
     CT_STAGE_ANALYZER,
     CT_STAGE_GENERIC,
-    CT_STAGE_INFER,
+    CT_STAGE_CHECKING,
     CT_STAGE_LINEAR,
     CT_STAGE_CFG, // return check 是基于 cfg 的
 
@@ -150,7 +150,7 @@ typedef struct {
     char *package_dir;
     toml_table_t *package_conf;
 
-    // parser/analyzer/infer/compiler 阶段的所有异常都写入到这里
+    // parser/analyzer/checking/compiler 阶段的所有异常都写入到这里
     slice_t *ct_errors;
 
 //    bool entry; // 入口
@@ -176,9 +176,9 @@ typedef struct {
     int current_line;
     int current_column;
 
-    // infer
-    ast_fndef_t *infer_current; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
-    table_t *type_actual_params; // 临时存储 infer alias 时传递的实参
+    // checking
+    ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
+    table_t *type_actual_params; // 临时存储 checking alias 时传递的实参
 
     // compiler
     struct closure_t *linear_current;

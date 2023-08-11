@@ -1,8 +1,7 @@
 import std
 import syscall
 import parker.log as * 
-
-// var runner_name = 'runner'
+import parker.util
 
 set_verbose()
 
@@ -14,12 +13,21 @@ assertf(args.len() > 1, 'args failed')
 var exec_path = args[0]
 logf('exec_path: %v', exec_path)
 
-// var main_name = args[1]
-
-
-// - 从参数中读取需要打包的主进程(以后的版本可以做进程解析)
+var main_name = args[1]
+logf('main name: %v', main_name)
 
 // - 读取当前工作目录, 确定需要打包的目录
+var workdir = syscall.getcwd()
+
+var main_path = std.sprintf('%v/%v', workdir, main_name)
+
+// - 检查文件是否存在
+assertf(util.file_exists(main_path), 'file=%v notfound', main_path)
+
+// - 压缩工作目录
+
+
+
 
 
 

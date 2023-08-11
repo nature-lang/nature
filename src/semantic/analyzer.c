@@ -1107,7 +1107,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_FNDEF: {
             // 在 type struct 中定义的 fn 需要手动加入到 xxx 中
-            // 否则后续的 infer 阶段不会处理到该函数
+            // 否则后续的 checking 阶段不会处理到该函数
             // 内部作用域中的 struct fn 则不需要担心这个问题， fndef->local_children 会记录该函数
             if (m->in_type_struct && m->analyzer_current == NULL) {
                 slice_push(m->ast_fndefs, expr->value);

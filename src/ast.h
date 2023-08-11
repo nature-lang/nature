@@ -327,7 +327,7 @@ typedef struct {
 typedef struct {
     char *ident; // ident 冗余
     // parser 阶段是 typedef ident
-    // infer 完成后是 typeuse_struct
+    // checking 完成后是 typeuse_struct
     type_t type;
 
     list_t *properties; // struct_property_t
@@ -529,7 +529,7 @@ static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) 
 }
 
 /**
- * 已经 infer 过了
+ * 已经 checking 过了
  * @param expr
  * @param target_type
  * @return

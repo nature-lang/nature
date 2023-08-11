@@ -1,0 +1,6 @@
+import syscall
+
+fn file_exists(string path):bool {
+    var (_, err) =  try syscall.stat(path)
+    return !err.has
+}

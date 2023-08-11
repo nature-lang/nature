@@ -6,7 +6,8 @@ static char *std_packages[] = {
         "std",
         "syscall",
         "strings",
-        "libc"
+        "libc",
+        "time"
         // 添加其他 std package
 };
 

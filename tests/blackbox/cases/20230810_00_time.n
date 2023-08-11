@@ -1,5 +1,5 @@
 import libc
-import std.time
+import time
 
 var ti = libc.localtime(1691656611)
 // 51 36 8 10 7 123 4 221 0 0 UTC

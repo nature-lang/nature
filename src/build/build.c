@@ -1,6 +1,6 @@
 #include "build.h"
 #include "src/cross.h"
-#include "src/semantic/infer.h"
+#include "src/semantic/checking.h"
 #include "src/linear.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
@@ -279,15 +279,15 @@ static void import_builtin() {
     // nature_root
     char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
     assertf(file_exists(source_path), "builtin.n not found");
-    // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 infer 都能够使用
+    // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 checking 都能够使用
     module_t *builtin_module = module_build(NULL, source_path, MODULE_TYPE_BUILTIN);
 
     analyzer(builtin_module, builtin_module->stmt_list);
 
     generic(builtin_module);
 
-    // infer type
-    infer(builtin_module);
+    // checking type
+    checking(builtin_module);
 }
 
 static slice_t *build_modules() {
@@ -361,11 +361,11 @@ static slice_t *build_modules() {
 }
 
 static void build_compiler(slice_t *modules) {
-    // infer + compiler
+    // checking + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
         // 类型推断
-        infer(m);
+        checking(m);
 
         // 编译为 lir
         linear(m);

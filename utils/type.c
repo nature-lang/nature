@@ -725,7 +725,7 @@ bool type_compare(type_t left, type_t right) {
             type_kind_str[left.kind],
             type_kind_str[right.kind]);
 
-    assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type unknown cannot infer");
+    assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type unknown cannot checking");
 
     if (is_gen_any(left) || is_gen_any(right)) {
         return true;
