@@ -39,9 +39,16 @@ void dump_errors(module_t *m) {
         return;
     }
 
-    char *temp_dir = path_dir(m->package_dir);
-    char *filepath = str_replace(m->source_path, temp_dir, "");
-    filepath = ltrim(filepath, "/");
+    char *filepath = "";
+
+    if (m->package_dir) {
+        char *temp_dir = path_dir(m->package_dir);
+        filepath = str_replace(m->source_path, temp_dir, "");
+        filepath = ltrim(filepath, "/");
+    } else {
+        filepath = m->source_path;
+    }
+
 
     // 将所有的错误按格式输出即可
     for (int i = 0; i < m->ct_errors->count; ++i) {

@@ -11,6 +11,7 @@
 
 // module_path + path + ident
 static inline char *ident_with_module(char *module_ident, char *ident) {
+    // template 是没有 module_ident 的
     if (!module_ident) {
         return ident;
     }

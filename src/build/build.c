@@ -15,12 +15,20 @@
 #include "config.h"
 #include "utils/custom_links.h"
 #include "src/semantic/generic.h"
-#include "src/error.h"
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <assert.h>
+
+static char *std_templates[] = {
+        "builtin.n",
+        "libc.n",
+        "syscall.n"
+};
+
+// char*, 支持 .o 或者 .a 文件后缀
+static slice_t *linker_libs;
 
 /**
  * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
@@ -155,28 +163,35 @@ static void build_linker(slice_t *modules) {
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
         elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
-    fd = check_open(custom_link_object_path(), O_RDONLY | O_BINARY);
-    elf_load_object_file(ctx, fd, 0);
 
+    // 将相关符号都加入来
+    slice_push(linker_libs, custom_link_object_path());
+    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
+    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
+    slice_push(linker_libs, lib_file_path(LIBUCONTEXT_FILE));
+    slice_push(linker_libs, lib_file_path(LIBC_FILE));
+    for (int i = 0; i < linker_libs->count; ++i) {
+        char *path = linker_libs->take[i];
+        fd = check_open(path, O_RDONLY | O_BINARY);
 
-    // crt1.o (包含入口 label _start, 其进行初始化后会调用 main label)
-    fd = check_open(lib_file_path(LIB_START_FILE), O_RDONLY | O_BINARY);
-    elf_load_object_file(ctx, fd, 0);
+        if (ends_with(path, ".o")) {
+            elf_load_object_file(ctx, fd, 0);
+            continue;
+        }
 
-    // libruntime.a
-    fd = check_open(lib_file_path(LIB_RUNTIME_FILE), O_RDONLY | O_BINARY);
-    elf_load_archive(ctx, fd);
+        if (ends_with(path, ".a")) {
+            elf_load_archive(ctx, fd);
+            continue;
+        }
 
-    // libucontext.a
-    fd = check_open(lib_file_path(LIBUCONTEXT_FILE), O_RDONLY | O_BINARY);
-    elf_load_archive(ctx, fd);
+        assertf(false, "cannot linker file '%s'", path);
+    }
 
-    // libc.a (runtime 依赖了 c 标准库)
-    fd = check_open(lib_file_path(LIBC_FILE), O_RDONLY | O_BINARY);
-    elf_load_archive(ctx, fd);
-
+    // - core
     executable_file_format(ctx);
 
+
+    // - core
     elf_output(ctx);
     if (!file_exists(output)) {
         error_exit("[linker] linker failed");
@@ -213,6 +228,8 @@ static void build_init(char *build_entry) {
     ct_rtype_data = NULL;
     ct_rtype_count = 0;
     ct_rtype_size = 0;
+
+    linker_libs = slice_new();
 }
 
 static void config_print() {
@@ -275,37 +292,65 @@ static void build_assembler(slice_t *modules) {
     assembler_custom_links();
 }
 
-static void import_builtin() {
-    // nature_root
-    char *source_path = path_join(NATURE_ROOT, "std/builtin/builtin.n");
-    assertf(file_exists(source_path), "builtin.n not found");
-    // build 中包含 analyzer 已经将相关 symbol 写入了, 无论是后续都 analyzer 或者 checking 都能够使用
-    module_t *builtin_module = module_build(NULL, source_path, MODULE_TYPE_BUILTIN);
+static void build_temps(toml_table_t *package_conf) {
+    slice_t *templates = slice_new();
 
-    analyzer(builtin_module, builtin_module->stmt_list);
+    // 都已经在 libruntime.a 中都实现了, 所以不需要做 impl 配置了
+    char *template_dir = path_join(NATURE_ROOT, "std/templates");
+    // 将 nature_root 中的 template 文件先都注册进来
+    for (int i = 0; i < sizeof(std_templates) / sizeof(std_templates[0]); ++i) {
+        char *name = std_templates[i];
+        char *source_path = path_join(template_dir, name);
+        assertf(file_exists(source_path), "template file=%s not found, please reinstall nature", source_path);
 
-    generic(builtin_module);
+        template_t *t = NEW(template_t);
+        t->path = source_path;
+        t->impl = NULL;
+        slice_push(templates, t);
+    }
 
-    // checking type
-    checking(builtin_module);
+    if (package_conf) {
+        slice_t *src_templates = package_templates(package_conf);
+        if (src_templates && src_templates > 0) {
+            slice_concat(templates, src_templates);
+        }
+    }
+
+    slice_t *modules = slice_new(); // module_t*
+    // 开始编译 templates, impl 实现注册到 build.c 中即可
+    for (int i = 0; i < templates->count; ++i) {
+        template_t *t = templates->take[i];
+        if (t->impl) {
+            assertf(ends_with(t->path, ".a"), "only support .a file");
+            slice_push(linker_libs, t->impl);
+        }
+
+        // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/checking 逻辑)
+        module_t *temp_module = module_build(NULL, t->path, MODULE_TYPE_TEMP);
+        slice_push(modules, temp_module);
+    }
+
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        analyzer(m, m->stmt_list);
+
+        generic(m);
+
+        checking(m);
+    }
+
 }
 
-static slice_t *build_modules() {
+static slice_t *build_modules(toml_table_t *package_conf) {
     assertf(strlen(SOURCE_PATH) > 0, "SOURCE_PATH empty");
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
 
 
-    toml_table_t *main_package = NULL;
-    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
-    if (file_exists(package_file)) {
-        main_package = package_parser(package_file);
-    }
-
     ast_import_t main_import = {
             .package_dir = WORKDIR,
-            .package_conf = main_package,
+            .package_conf = package_conf,
             .module_ident = FN_MAIN_NAME,
     };
 
@@ -410,10 +455,19 @@ void build(char *build_entry) {
     // debug
     config_print();
 
-    // 导入自建模块
-    import_builtin();
+    // 导入自建模块 build templates
 
-    slice_t *modules = build_modules();
+
+    // 解析 package_conf
+    toml_table_t *package_conf = NULL;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        package_conf = package_parser(package_file);
+    }
+
+    build_temps(package_conf);
+
+    slice_t *modules = build_modules(package_conf);
 
     // 编译(所有的模块都编译完成后再统一进行汇编与链接)
     build_compiler(modules);

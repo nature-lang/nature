@@ -1,0 +1,5 @@
+cptr gzopen(cptr fname, cptr mode)
+
+cptr gzwrite(cptr outfile, cptr buf, int len)
+
+int gzclose(cptr outfile)

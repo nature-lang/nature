@@ -52,9 +52,9 @@ typedef enum {
 
 
 typedef enum {
-    MODULE_TYPE_MAIN = 1,
-    MODULE_TYPE_COMMON = 2,
-    MODULE_TYPE_BUILTIN = 3
+    MODULE_TYPE_MAIN = 1, // 入口文件
+    MODULE_TYPE_COMMON = 2, // 标准 module
+    MODULE_TYPE_TEMP = 3 // nt
 } module_type_t;
 
 typedef struct {

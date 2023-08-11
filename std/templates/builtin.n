@@ -1,0 +1,44 @@
+type t0 = gen any
+
+// 这里都 string 是 nature string 类型
+type errort = struct {
+    string msg
+    bool has
+}
+
+fn print(...[any] args)
+
+fn println(...[any] args)
+
+fn set(...[t0] keys):{t0}
+
+// 比如 [t0] 类型的 list 只能接收 t0 类型的 v
+fn list_push([t0] list, ptr<t0> v)
+
+fn list_length([t0] list):int
+
+fn list_capacity([t0] list):int
+
+// 引用 data 部分,且对于复合没有展开操作
+fn list_raw([t0] list):cptr
+
+fn map_delete({t0:t0} map, ptr<t0> key)
+
+fn map_length({t0:t0} map):int
+
+fn set_contains({t0} set, ptr<t0> key):bool
+
+fn set_add({t0} set, ptr<t0> key):bool
+
+fn set_delete({t0} set, ptr<t0> key)
+
+fn sleep(int second)
+
+fn runtime_gc()
+
+fn runtime_malloc_bytes():i64
+
+// rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
+fn string_length(string s):int
+
+fn string_raw(string s):cptr

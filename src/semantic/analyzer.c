@@ -1177,6 +1177,61 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     }
 }
 
+static void analyzer_temp(module_t *m, slice_t *stmt_list) {
+    // var_decl blocks
+    slice_t *fn_list = slice_new();
+
+    // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
+    for (int i = 0; i < stmt_list->count; ++i) {
+        ast_stmt_t *stmt = stmt_list->take[i];
+        SET_LINE_COLUMN(stmt);
+
+        if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
+            ast_type_alias_stmt_t *type_alias = stmt->value;
+            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
+            slice_push(m->global_symbols, s);
+
+            // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module ident
+            analyzer_type(m, &type_alias->type);
+            continue;
+        }
+
+        if (stmt->assert_type == AST_FNDEF) {
+            ast_fndef_t *fndef = stmt->value;
+            // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
+            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+
+            slice_push(m->global_symbols, s);
+            continue;
+        }
+
+        ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
+    }
+
+
+    // 所有的符号都已经注册完毕，此时进行简单的处理即可
+    for (int i = 0; i < fn_list->count; ++i) {
+        ast_fndef_t *fndef = fn_list->take[i];
+
+        // m->ast_fndefs 包含了当前 module 中的所有函数，嵌套定义的函数都进行了平铺
+        slice_push(m->ast_fndefs, fndef);
+
+        analyzer_type(m, &fndef->return_type);
+        // 函数形参处理
+        for (int j = 0; j < fndef->formals->length; ++j) {
+            ast_var_decl_t *param = ct_list_value(fndef->formals, j);
+
+            analyzer_type(m, &param->type);
+
+            local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
+
+            param->ident = param_local->unique_ident;
+        }
+    }
+}
+
 /**
  * - 模块中的函数都是全局函数，将会在全局函数维度支持泛型函数与函数重载，由于在 analyzer 阶段还在收集所有的符号
  *   所以无法确定全局的 unique ident，因此将会用一个链表结构，将所有的在当前作用域下的同名的函数都 append 进去
@@ -1335,6 +1390,8 @@ void analyzer(module_t *m, slice_t *stmt_list) {
 
     if (m->type == MODULE_TYPE_MAIN) {
         analyzer_main(m, stmt_list);
+    } else if (m->type == MODULE_TYPE_TEMP) {
+        analyzer_temp(m, stmt_list);
     } else {
         analyzer_module(m, stmt_list);
     }

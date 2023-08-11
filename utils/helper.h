@@ -179,7 +179,7 @@ static inline bool str_equal(char *a, char *b) {
 
 static int inline check_open(char *filepath, int flag) {
     int fd = open(filepath, flag);
-    assertf(fd != -1, "cannot open file=%s", filepath);
+    assertf(fd != -1, "cannot open/found file=%s", filepath);
     return fd;
 }
 

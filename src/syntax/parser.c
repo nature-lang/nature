@@ -1477,12 +1477,15 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
 static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     ast_fndef_t *fndef = ast_fndef_new(parser_peek(m)->line, parser_peek(m)->column);
+    result->assert_type = AST_FNDEF;
+    result->value = fndef;
 
     parser_must(m, TOKEN_FN);
     // stmt 中 name 不允许省略
     token_t *name_token = parser_must(m, TOKEN_IDENT);
     fndef->symbol_name = name_token->literal;
     parser_formals(m, fndef);
+
     // 可选返回参数
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
@@ -1490,10 +1493,14 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
         fndef->return_type = type_basic_new(TYPE_VOID);
     }
 
-    fndef->body = parser_block(m);
+    if (m->type == MODULE_TYPE_TEMP) {
+        // 绝对不可能是 {
+        PARSER_ASSERTF(!parser_is(m, TOKEN_LEFT_CURLY), "temp module not support fn body");
 
-    result->assert_type = AST_FNDEF;
-    result->value = fndef;
+        return result;
+    }
+
+    fndef->body = parser_block(m);
     return result;
 }
 
@@ -1595,6 +1602,22 @@ static ast_stmt_t *parser_stmt(module_t *m) {
 
     PARSER_ASSERTF(false, "cannot parser stmt with = '%s'", parser_peek(m)->literal);
     exit(1);
+}
+
+/**
+ * template 文件只能包含 type 和 fn 两种表达式
+ * @param m
+ * @return
+ */
+static ast_stmt_t *parser_template_stmt(module_t *m) {
+    if (parser_is(m, TOKEN_FN)) {
+        return parser_fndef_stmt(m);
+    } else if (parser_is(m, TOKEN_TYPE)) {
+        return parser_type_alias_stmt(m);
+    }
+
+    PARSER_ASSERTF(false, "cannot parser stmt with = '%s' in template file", parser_peek(m)->literal);
+    exit(EXIT_FAILURE);
 }
 
 static parser_rule rules[] = {
@@ -1781,6 +1804,8 @@ static ast_expr_t parser_expr_with_precedence(module_t *m) {
  * @return
  */
 static ast_expr_t parser_expr(module_t *m) {
+    PARSER_ASSERTF(m->type != MODULE_TYPE_TEMP, "template file cannot contains expr");
+
     // struct new
     if (parser_is_struct_new_expr(m)) {
         return parser_struct_new_expr(m);
@@ -1813,8 +1838,12 @@ slice_t *parser(module_t *m, linked_t *token_list) {
             debug_parser_stmt(stmt_type);
         }
 #endif
-
-        ast_stmt_t *stmt = parser_stmt(m);
+        ast_stmt_t *stmt;
+        if (m->type == MODULE_TYPE_TEMP) {
+            stmt = parser_template_stmt(m);
+        } else {
+            stmt = parser_stmt(m);
+        }
 
         slice_push(block_stmt, stmt);
         parser_must_stmt_end(m);
