@@ -8,11 +8,18 @@
  */
 static linked_t *unhandled_new(closure_t *c) {
     linked_t *unhandled = linked_new();
+    table_t *exists = table_new();
     // 遍历所有变量,根据 interval from 进行排序
     for (int i = 0; i < c->var_defs->count; ++i) {
-        interval_t *item = table_get(c->interval_table, ((lir_var_t *) c->var_defs->take[i])->ident);
+        lir_var_t *var = c->var_defs->take[i];
+        if (table_exist(exists, var->ident)) {
+            assertf(false, "duplicate var %s register interval", var->ident);
+        }
 
+        interval_t *item = table_get(c->interval_table, var->ident);
         assert(item);
+
+        table_set(exists, var->ident, var);
 
         sort_to_unhandled(unhandled, item);
     }
@@ -210,12 +217,13 @@ static void set_pos(int *list, uint8_t index, int position) {
 static void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int before_pos) {
     int split_pos;
     interval_t *child = i;
-    if (before_pos > 0) {
+    if (before_pos > i->first_range->from) {
         // spill current before current first use position
         split_pos = interval_find_optimal_split_pos(c, i, before_pos);
         child = interval_split_at(c, i, split_pos);
     }
 
+    // 必须要分配寄存器的部分
     use_pos_t *must_pos = interval_must_reg_pos(child);
     if (must_pos) {
         split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
@@ -255,6 +263,7 @@ void allocate_walk(closure_t *c) {
 
     while (a->unhandled->count != 0) {
         a->current = (interval_t *) linked_pop(a->unhandled);
+        assertf(a->current->assigned == 0, "interval must not assigned");
 
         // handle active
         handle_active(a);
@@ -371,7 +380,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
             continue;
         }
 
-        int pos = interval_next_intersection(a->current, select);
+        int pos = interval_next_intersect(a->current, select);
         assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
@@ -421,7 +430,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     int use_pos[UINT8_MAX] = {0}; // use_pos 一定小于等于 block_pos
     int block_pos[UINT8_MAX] = {0}; // 设置 block pos 的同时需要隐式设置 use pos
     memset(use_pos, -1, sizeof(use_pos));
-    memset(block_pos, -1, sizeof(block_pos));
+    memset(block_pos, -1, sizeof(block_pos)); // 用于记录寄存器从什么时候开始 block
 
     for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
@@ -440,6 +449,8 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         if (select->alloc_type != a->current->alloc_type) {
             continue;
         }
+
+        assert(a->current->index != select->index);
 
         // 固定间隔本身就是 short range 了，但如果还在 current pos is active,so will set that block and use to 0
         if (select->fixed) {
@@ -461,8 +472,9 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         if (select->alloc_type != a->current->alloc_type) {
             continue;
         }
+        assert(a->current->index != select->index);
 
-        pos = interval_next_intersection(a->current, select);
+        pos = interval_next_intersect(a->current, select);
         assert(pos);
 
         if (select->fixed) {
@@ -497,24 +509,37 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         // assign spill slot to current
         spill_interval(c, a, a->current, 0);
     } else if (block_pos[reg_id] > a->current->last_range->to) {
+        // block_pos 是由于 fixed 强制使用而产生的 pos, 此时寄存器必须要溢出
         // 一般都会进入到这一条件中
         // reg_id 对应的寄存器的空闲时间 大于 current.first_use 但是小于 current->last_range->to
         // 不过 block_use[reg_id] 则是大于 current->last_range->to，所以可以将整个寄存器直接分配给 current， 不用考虑 block 的问题
         // 所有和 current intersecting 的 interval 都需要在 current start 之前 split 并且 spill 到内存中
-        // 当然，如果 child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
+        // 当然，如果 spilt child interval 存在 use pos 必须要加载 reg, 则需要二次 spilt into unhandled
         LINKED_FOR(a->active) {
             interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
+
+            // 检查 i 与 current 是否存在交集，如果存在交集 i 才需要进行在 first_from 之前进行 spill
+            if (!interval_is_intersect(a->current, i)) {
+                continue;
+            }
+
+            // 寄存器分配给了 current, 所以需要将 i 在 first_form 之前的部分 spill 到内存中
             // first_use 表示必须在 first_use 之前 spill, 否则会影响 current 使用 reg_id
             spill_interval(c, a, i, first_from);
         }
+
         LINKED_FOR(a->inactive) {
             interval_t *i = LINKED_VALUE();
             if (i->assigned != reg_id) {
                 continue;
             }
+            if (!interval_is_intersect(a->current, i)) {
+                continue;
+            }
+
             spill_interval(c, a, i, first_from);
         }
 

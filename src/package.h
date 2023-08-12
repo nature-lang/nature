@@ -127,7 +127,7 @@ static inline slice_t *package_templates(toml_table_t *conf) {
         if (!temp) {
             continue;
         }
-        toml_datum_t datum = toml_string_in(conf, "path");
+        toml_datum_t datum = toml_string_in(temp, "path");
         if (!datum.ok) {
             continue;
         }
@@ -138,10 +138,10 @@ static inline slice_t *package_templates(toml_table_t *conf) {
 
         // 如果是 c 语言标准库中的函数已经实现了，就不需要专门搞进来了
         char *impl = NULL;
-        datum = toml_string_in(conf, "impl");
+        datum = toml_string_in(temp, "impl");
         if (datum.ok) {
             impl = datum.u.s;
-            assertf(ends_with(path, ".a"), "templates impl only support .a, index=%d, actual '%s'", i, impl);
+            assertf(ends_with(impl, ".a"), "templates impl only support .a, index=%d, actual '%s'", i, impl);
             assertf(file_exists(impl), "templates impl '%s' notfound", impl);
         }
 

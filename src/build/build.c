@@ -321,7 +321,7 @@ static void build_temps(toml_table_t *package_conf) {
     for (int i = 0; i < templates->count; ++i) {
         template_t *t = templates->take[i];
         if (t->impl) {
-            assertf(ends_with(t->path, ".a"), "only support .a file");
+            assertf(ends_with(t->impl, ".a"), "only support .a file");
             slice_push(linker_libs, t->impl);
         }
 

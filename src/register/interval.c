@@ -561,6 +561,22 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
     return false;
 }
 
+
+bool interval_is_intersect(interval_t *current, interval_t *select) {
+    assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
+    assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
+
+    int position = current->first_range->from;
+    while (position < current->last_range->to) {
+        if (interval_covered(select, position, false)) {
+            return true;
+        }
+        position++;
+    }
+
+    return false;
+}
+
 /**
  * 1. 如果重合则返回第一个重合的点
  * 2. 如果遍历到 current->last_to 都不重合则继续像后遍历，直到遇到第一被 select covert 位置
@@ -570,7 +586,7 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
  * @param select
  * @return
  */
-int interval_next_intersection(interval_t *current, interval_t *select) {
+int interval_next_intersect(interval_t *current, interval_t *select) {
     assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
     assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
