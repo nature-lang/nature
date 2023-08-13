@@ -374,10 +374,10 @@ static type_t parser_single_type(module_t *m) {
         // 参数处理
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             // parser actual params
-            result.alias->actual_params = ct_list_new(sizeof(type_t));
+            result.alias->args = ct_list_new(sizeof(type_t));
             do {
                 type_t item = parser_type(m);
-                ct_list_push(result.alias->actual_params, &item);
+                ct_list_push(result.alias->args, &item);
             } while (parser_consume(m, TOKEN_COMMA));
 
             parser_must(m, TOKEN_RIGHT_ANGLE);
@@ -746,7 +746,7 @@ static ast_expr_t parser_select(module_t *m, ast_expr_t left) {
 }
 
 
-static void parser_actual_param(module_t *m, ast_call_t *call) {
+static void parser_arg(module_t *m, ast_call_t *call) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     // 无调用参数
@@ -760,7 +760,7 @@ static void parser_actual_param(module_t *m, ast_call_t *call) {
         }
 
         ast_expr_t expr = parser_expr(m);
-        ct_list_push(call->actual_params, &expr);
+        ct_list_push(call->args, &expr);
 
         if (call->spread) {
             PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
@@ -775,17 +775,17 @@ static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr) {
     ast_expr_t result = expr_new(m);
 
     ast_call_t *call_stmt = NEW(ast_call_t);
-    call_stmt->actual_params = ct_list_new(sizeof(ast_expr_t));
+    call_stmt->args = ct_list_new(sizeof(ast_expr_t));
     call_stmt->left = left_expr;
 
     // param handle
-    parser_actual_param(m, call_stmt);
+    parser_arg(m, call_stmt);
 
     // 如果 left_expr 是 ident ,且 == set, 那么将其转化成 ast_set_new
     if (left_expr.assert_type == AST_EXPR_IDENT &&
         str_equal(((ast_ident *) left_expr.value)->literal, RT_CALL_SET_CALL_IDENT)) {
         ast_set_new_t *set_new = NEW(ast_set_new_t);
-        set_new->elements = call_stmt->actual_params;
+        set_new->elements = call_stmt->args;
         result.assert_type = AST_EXPR_SET_NEW;
         result.value = set_new;
         return result;

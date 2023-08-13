@@ -8,7 +8,7 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-type_t *select_formal_param(type_fn_t *type_fn, uint8_t index, bool is_spread_param) {
+type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     if (type_fn->rest && index >= type_fn->formal_types->length - 1) {
         // rest handle
         type_t *last_param_type = ct_list_value(type_fn->formal_types, type_fn->formal_types->length - 1);
@@ -17,7 +17,7 @@ type_t *select_formal_param(type_fn_t *type_fn, uint8_t index, bool is_spread_pa
         assert(last_param_type->kind == TYPE_LIST);
 
         // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
-        if (is_spread_param) {
+        if (is_spread) {
             return last_param_type;
         }
 
@@ -106,7 +106,7 @@ static type_struct_t *type_struct_copy(type_struct_t *temp) {
 static type_alias_t *type_alias_copy(type_alias_t *temp) {
     type_alias_t *alias = COPY_NEW(type_alias_t, temp);
     alias->ident = strdup(temp->ident);
-    alias->actual_params = ct_list_type_copy(temp->actual_params);
+    alias->args = ct_list_type_copy(temp->args);
     return alias;
 }
 
@@ -540,7 +540,7 @@ static ast_call_t *ast_call_copy(ast_call_t *temp) {
     ast_call_t *call = COPY_NEW(ast_call_t, temp);
     call->return_type = type_copy(temp->return_type);
     call->left = *ast_expr_copy(&temp->left);
-    call->actual_params = ast_list_expr_copy(temp->actual_params);
+    call->args = ast_list_expr_copy(temp->args);
     call->catch = temp->catch;
     call->spread = temp->spread;
     return call;

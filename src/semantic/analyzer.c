@@ -214,10 +214,10 @@ static void analyzer_type(module_t *m, type_t *type) {
         // local ident 或者当前 module 下的全局 ident
         type_alias->ident = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
 
-        if (type_alias->actual_params) {
+        if (type_alias->args) {
             // actual param 处理
-            for (int i = 0; i < type_alias->actual_params->length; ++i) {
-                type_t *temp = ct_list_value(type_alias->actual_params, i);
+            for (int i = 0; i < type_alias->args->length; ++i) {
+                type_t *temp = ct_list_value(type_alias->args, i);
                 analyzer_type(m, temp);
             }
         }
@@ -397,9 +397,9 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     analyzer_expr(m, &call->left);
 
     // 实参 unique 改写
-    for (int i = 0; i < call->actual_params->length; ++i) {
-        ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
-        analyzer_expr(m, actual_param);
+    for (int i = 0; i < call->args->length; ++i) {
+        ast_expr_t *arg = ct_list_value(call->args, i);
+        analyzer_expr(m, arg);
     }
 }
 
@@ -1333,7 +1333,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             .line = 1,
             .column = 0,
     };
-    call->actual_params = ct_list_new(sizeof(ast_expr_t));
+    call->args = ct_list_new(sizeof(ast_expr_t));
     call_stmt->assert_type = AST_CALL;
     call_stmt->value = call;
     call_stmt->line = 1;

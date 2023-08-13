@@ -267,7 +267,7 @@ struct type_alias_t {
     char *import_as; // 可能为 null (foo.bar)
     char *ident; // 类型名称 type my_int = int
     // 可以包含多个实际参数,实际参数由类型组成
-    list_t *actual_params; // type_t*
+    list_t *args; // type_t*
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢

@@ -51,7 +51,7 @@ string lir_operand_to_string(lir_operand_t *operand) {
             return lir_addr_to_string((lir_indirect_addr_t *) operand->value);
         }
         case LIR_OPERAND_ACTUAL_PARAMS: {
-            return lir_actual_param_to_string((slice_t *) operand->value);
+            return lir_arg_to_string((slice_t *) operand->value);
         }
         case LIR_OPERAND_CLOSURE_VARS:
         case LIR_OPERAND_VARS:
@@ -127,14 +127,14 @@ char *lir_addr_to_string(lir_indirect_addr_t *operand_addr) {
     return buf;
 }
 
-char *lir_formal_param_to_string(slice_t *formal_params) {
+char *lir_formal_to_string(slice_t *formals) {
     string buf = mallocz(DEBUG_STR_COUNT);
     string params = mallocz(DEBUG_STR_COUNT);
-    for (int i = 0; i < formal_params->count; ++i) {
-        string src = lir_var_to_string(formal_params->take[i]);
+    for (int i = 0; i < formals->count; ++i) {
+        string src = lir_var_to_string(formals->take[i]);
         strcat(params, src);
         free(src);
-        if (i < formal_params->count - 1) {
+        if (i < formals->count - 1) {
             strcat(params, ",");
         }
     }
@@ -146,15 +146,15 @@ char *lir_formal_param_to_string(slice_t *formal_params) {
 }
 
 
-char *lir_actual_param_to_string(slice_t *actual_params) {
+char *lir_arg_to_string(slice_t *args) {
     string buf = mallocz(DEBUG_STR_COUNT);
     string params = mallocz(DEBUG_STR_COUNT);
-    for (int i = 0; i < actual_params->count; ++i) {
-        string src = lir_operand_to_string(actual_params->take[i]);
+    for (int i = 0; i < args->count; ++i) {
+        string src = lir_operand_to_string(args->take[i]);
         strcat(params, src);
         free(src);
 
-        if (i < actual_params->count - 1) {
+        if (i < args->count - 1) {
             strcat(params, ",");
         }
     }

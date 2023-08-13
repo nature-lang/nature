@@ -481,9 +481,9 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     }
 
     if (operand->assert_type == LIR_OPERAND_FORMAL_PARAMS) {
-        slice_t *formal_params = operand->value;
-        for (int i = 0; i < formal_params->count; ++i) { // 这里都是 def flag
-            lir_var_t *var = formal_params->take[i];
+        slice_t *formals = operand->value;
+        for (int i = 0; i < formals->count; ++i) { // 这里都是 def flag
+            lir_var_t *var = formals->take[i];
             var->flag |= FLAG(LIR_FLAG_DEF);
         }
         return;

@@ -56,12 +56,12 @@ static uint32_t fn_params_hash(type_fn_t *fn) {
 
 /**
  * 当函数名称中存在多个函数时，将会通过简单的无类型转换进行函数匹配 (允许 single -> union type)
- * @param actual_params
+ * @param args
  * @param s
  * @return
  */
 static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
-    list_t *actual_params = call->actual_params;
+    list_t *args = call->args;
     assert(s->type == SYMBOL_FN);
     assert(s->fndefs);
     assert(s->fndefs->count > 0);
@@ -89,12 +89,12 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
         type_t type_fn = fndef->type;
         if (type_fn.fn->rest) {
             // 实参的数量大于等于 type_fn.params.length - 1
-            if (actual_params->length < (type_fn.fn->formal_types->length - 1)) {
+            if (args->length < (type_fn.fn->formal_types->length - 1)) {
                 continue;
             }
         } else {
             //数量必须相等
-            if (actual_params->length != type_fn.fn->formal_types->length) {
+            if (args->length != type_fn.fn->formal_types->length) {
                 continue;
             }
         }
@@ -105,10 +105,10 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
     fndefs = temps;
 
     // 开始匹配
-    for (int i = 0; i < actual_params->length; ++i) {
-        ast_expr_t *expr = ct_list_value(actual_params, i);
+    for (int i = 0; i < args->length; ++i) {
+        ast_expr_t *expr = ct_list_value(args, i);
         type_t actual_type = checking_right_expr(m, expr, type_basic_new(TYPE_UNKNOWN));
-        bool is_spread_param = call->spread && (i == actual_params->length - 1);
+        bool is_spread = call->spread && (i == args->length - 1);
 
         // ast_fndef
         temps = slice_new();
@@ -117,7 +117,7 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
             type_t type_fn = fndef->type;
 
             // 会对 rest 进行自动解构
-            type_t *formal_type = select_formal_param(type_fn.fn, i, is_spread_param);
+            type_t *formal_type = select_formal(type_fn.fn, i, is_spread);
             if (!formal_type) {
                 continue;
             }
@@ -843,10 +843,10 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
 
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         // 参数核验
-        CHECKING_ASSERTF(call->actual_params->length == 0, "string len param failed");
+        CHECKING_ASSERTF(call->args->length == 0, "string len param failed");
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_LENGTH);
         checking_left_expr(m, &call->left);
@@ -856,10 +856,10 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 0, "string c_string param failed");
+        CHECKING_ASSERTF(call->args->length == 0, "string c_string param failed");
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_RAW);
         checking_left_expr(m, &call->left);
@@ -883,15 +883,15 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
 
     if (str_equal(s->key, LIST_PUSH_KEY)) {
         // push 对参数需要与 list element type 一致，否则抛出异常
-        CHECKING_ASSERTF(call->actual_params->length == 1, "list push param failed");
-        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
+        CHECKING_ASSERTF(call->args->length == 1, "list push param failed");
+        ast_expr_t *expr = ct_list_value(call->args, 0);
         checking_right_expr(m, expr, list_type->element_type);
 
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
         // 参数重写
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // list operand
-        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA)); // value operand
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left); // list operand
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA)); // value operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_PUSH);
         checking_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
@@ -902,11 +902,11 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 0, "list length not param");
+        CHECKING_ASSERTF(call->args->length == 0, "list length not param");
 
         // 改写
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // list operand
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left); // list operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_LENGTH);
         checking_left_expr(m, &call->left);
@@ -916,11 +916,11 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_CAP_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 0, "list length not param");
+        CHECKING_ASSERTF(call->args->length == 0, "list length not param");
 
         // 改写
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // list operand
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left); // list operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_CAPACITY);
         checking_left_expr(m, &call->left);
@@ -930,11 +930,11 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 0, "list length not param");
+        CHECKING_ASSERTF(call->args->length == 0, "list length not param");
 
         // 改写
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left); // list operand
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left); // list operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_RAW);
         checking_left_expr(m, &call->left);
@@ -957,13 +957,13 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
     type_map_t *map_type = s->left.type.map; // 已经进行过类型推导了
     if (str_equal(s->key, MAP_DELETE_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 1, "map.delete param failed");
-        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
+        CHECKING_ASSERTF(call->args->length == 1, "map.delete param failed");
+        ast_expr_t *expr = ct_list_value(call->args, 0);
         checking_right_expr(m, expr, map_type->key_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
-        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_DELETE);
         checking_left_expr(m, &call->left);
@@ -973,10 +973,10 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, MAP_LENGTH_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 0, "map.length not param");
+        CHECKING_ASSERTF(call->args->length == 0, "map.length not param");
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_LENGTH);
         checking_left_expr(m, &call->left);
@@ -993,13 +993,13 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
     type_set_t *set_type = s->left.type.set; // 已经进行过类型推导了
     if (str_equal(s->key, SET_DELETE_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 1, "set.delete param failed");
-        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
+        CHECKING_ASSERTF(call->args->length == 1, "set.delete param failed");
+        ast_expr_t *expr = ct_list_value(call->args, 0);
         checking_right_expr(m, expr, set_type->element_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
-        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_DELETE);
         checking_left_expr(m, &call->left);
@@ -1009,14 +1009,14 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, SET_ADD_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 1, "set.add param failed");
-        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
+        CHECKING_ASSERTF(call->args->length == 1, "set.add param failed");
+        ast_expr_t *expr = ct_list_value(call->args, 0);
         checking_right_expr(m, expr, set_type->element_type);
 
         // s = left.key() 这里到 left 才是目标即可
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
-        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_ADD);
         checking_left_expr(m, &call->left);
@@ -1026,13 +1026,13 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     }
 
     if (str_equal(s->key, SET_HAS_KEY)) {
-        CHECKING_ASSERTF(call->actual_params->length == 1, "set.contains param failed");
-        ast_expr_t *expr = ct_list_value(call->actual_params, 0);
+        CHECKING_ASSERTF(call->args->length == 1, "set.contains param failed");
+        ast_expr_t *expr = ct_list_value(call->args, 0);
         checking_right_expr(m, expr, set_type->element_type);
 
-        call->actual_params = ct_list_new(sizeof(ast_expr_t));
-        ct_list_push(call->actual_params, &s->left);
-        ct_list_push(call->actual_params, ast_unary(expr, AST_OP_LA));
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        ct_list_push(call->args, &s->left);
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_CONTAINS);
         checking_left_expr(m, &call->left);
@@ -1048,23 +1048,23 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
-        CHECKING_ASSERTF(call->actual_params->length == target_type_fn->formal_types->length, "call params count failed");
+        CHECKING_ASSERTF(call->args->length == target_type_fn->formal_types->length, "call params count failed");
     }
 
-    for (int i = 0; i < call->actual_params->length; ++i) {
-        bool is_spread_param = call->spread && (i == call->actual_params->length - 1);
+    for (int i = 0; i < call->args->length; ++i) {
+        bool is_spread = call->spread && (i == call->args->length - 1);
 
         // first param from formal
-        type_t *formal_type = select_formal_param(target_type_fn, i, is_spread_param);
+        type_t *formal_type = select_formal(target_type_fn, i, is_spread);
 
         if (i == 0 && formal_type->kind == TYPE_SELF) {
             // select first param 是 checking 自己伪造的，所以这里不需要在进行校验了
             continue;
         }
 
-        ast_expr_t *actual_param = ct_list_value(call->actual_params, i);
+        ast_expr_t *arg = ct_list_value(call->args, i);
 
-        checking_right_expr(m, actual_param, *formal_type);
+        checking_right_expr(m, arg, *formal_type);
     }
 }
 
@@ -1103,11 +1103,11 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     }
 
     // formal 的首个参数是 self, 且 self 未经过推断
-    list_t *actual_params = call->actual_params;
-    call->actual_params = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(call->actual_params, &struct_select->left);
-    for (int i = 0; i < actual_params->length; ++i) {
-        ct_list_push(call->actual_params, ct_list_value(actual_params, i));
+    list_t *args = call->args;
+    call->args = ct_list_new(sizeof(ast_expr_t));
+    ct_list_push(call->args, &struct_select->left);
+    for (int i = 0; i < args->length; ++i) {
+        ct_list_push(call->args, ct_list_value(args, i));
     }
     checking_call_params(m, call, type_fn);
     return type_fn->return_type;
@@ -1813,10 +1813,10 @@ static type_t generic_specialization(module_t *m, char *ident) {
 
 static type_t type_formal_specialization(module_t *m, type_t t) {
     assert(t.kind == TYPE_FORMAL);
-    assert(m->type_actual_params);
+    assert(m->type_args);
 
     // 实参可以没有 reduction
-    type_t *type = table_get(m->type_actual_params, t.formal->ident);
+    type_t *type = table_get(m->type_args, t.formal->ident);
     return reduction_type(m, *type);
 }
 
@@ -1837,14 +1837,14 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
     // 判断是否包含 param, 如果包含 param 则需要每一次 reduction 都进行处理
     if (type_alias_stmt->formals) {
-        assert(t.alias->actual_params);
-        assert(t.alias->actual_params->length == type_alias_stmt->formals->length);
+        assert(t.alias->args);
+        assert(t.alias->args->length == type_alias_stmt->formals->length);
 
-        m->type_actual_params = table_new();
-        for (int i = 0; i < t.alias->actual_params->length; ++i) {
-            type_t *actual_param = ct_list_value(t.alias->actual_params, i);
-            ast_ident *formal_param = ct_list_value(type_alias_stmt->formals, i);
-            table_set(m->type_actual_params, formal_param->literal, actual_param);
+        m->type_args = table_new();
+        for (int i = 0; i < t.alias->args->length; ++i) {
+            type_t *arg = ct_list_value(t.alias->args, i);
+            ast_ident *formal = ct_list_value(type_alias_stmt->formals, i);
+            table_set(m->type_args, formal->literal, arg);
         }
 
         return reduction_type(m, type_copy(type_alias_stmt->type));

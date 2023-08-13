@@ -178,7 +178,7 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_actual_params; // 临时存储 checking alias 时传递的实参
+    table_t *type_args; // 临时存储 checking alias 时传递的实参
 
     // compiler
     struct closure_t *linear_current;
@@ -325,7 +325,7 @@ typedef enum {
     LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_INDIRECT_ADDR,
-    LIR_OPERAND_VARS, // 与 pyi_body, formal_params 一样都是 slice_t + lir_var
+    LIR_OPERAND_VARS, // 与 pyi_body, formals 一样都是 slice_t + lir_var
     LIR_OPERAND_CLOSURE_VARS,  // 无法通过 extract 函数提取出来，也不是提取出来，仅仅是为了临时存储使用
 } lir_operand_type_t;
 
@@ -368,7 +368,7 @@ typedef enum {
     LIR_OPCODE_RT_CALL,
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
     LIR_OPCODE_LABEL,
-    LIR_OPCODE_FN_BEGIN, // output 为 formal_params 操作数
+    LIR_OPCODE_FN_BEGIN, // output 为 formals 操作数
     LIR_OPCODE_FN_END, // 无操作数
 
     LIR_OPCODE_ENV_CAPTURE,
@@ -399,8 +399,8 @@ typedef struct lir_op_t {
 
 /**
  * 1. cfg 需要专门构造一个结尾 basic block 么，用来处理函数返回值等？其一定位于 blocks[count - 1]
- * 形参有一条专门的指令 lir_formal_param 编译这条指令的时候处理形参即可
- * lir_formal_param 在寄存器分配阶段已经分配了合适的 stack or reg, 所以依次遍历处理即可
+ * 形参有一条专门的指令 lir_formal 编译这条指令的时候处理形参即可
+ * lir_formal 在寄存器分配阶段已经分配了合适的 stack or reg, 所以依次遍历处理即可
  * 如果函数的返回值大于 8 个字节，则需要引用传递返回, ABI 规定形参 1 为引用返回地址
  * 假如形参和所有局部变量占用的总长为 N Byte, 那么 -n(rbp) 处存储的就是最后一个形参的位置(向上存储)
  * 所以还是需要 closure_t 增加一个字段记录大值地址响应值, 从而可以正常返回

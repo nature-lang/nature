@@ -7,9 +7,9 @@
  */
 static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
     if (t.kind == TYPE_ALIAS) {
-        if (t.alias->actual_params) {
-            for (int i = 0; i < t.alias->actual_params->length; ++i) {
-                type_t *temp = ct_list_value(t.alias->actual_params, i);
+        if (t.alias->args) {
+            for (int i = 0; i < t.alias->args->length; ++i) {
+                type_t *temp = ct_list_value(t.alias->args, i);
                 generic_params_collect(fndef, *temp);
             }
 

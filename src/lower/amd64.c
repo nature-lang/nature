@@ -27,16 +27,16 @@ static lir_operand_t *select_return_reg(lir_operand_t *operand) {
  * mov var -> rdi
  * mov var -> rax
  * @param c
- * @param actual_params
+ * @param args
  * @return
  */
-static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
+static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
     linked_t *operations = linked_new();
     linked_t *push_operations = linked_new();
     int push_length = 0;
     uint8_t used[2] = {0};
-    for (int i = 0; i < actual_params->count; ++i) {
-        lir_operand_t *param_operand = actual_params->take[i];
+    for (int i = 0; i < args->count; ++i) {
+        lir_operand_t *param_operand = args->take[i];
         type_kind type_kind = operand_type_kind(param_operand);
         reg_t *reg = amd64_fn_param_next_reg(used, type_kind);
         if (reg) {
@@ -85,22 +85,22 @@ static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params)
 /**
  * 寄存器选择进行了 fit 匹配
  * @param c
- * @param formal_params
+ * @param formals
  * @return
  */
-static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
+static linked_t *amd64_formals_lower(closure_t *c, slice_t *formals) {
     linked_t *operations = linked_new();
     uint8_t used[2] = {0};
     // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
     int16_t stack_param_slot = 16; // ret addr + push rsp
-    for (int _i = 0; _i < (formal_params)->count; ++_i) {
-        lir_var_t *var = formal_params->take[_i];
+    for (int _i = 0; _i < (formals)->count; ++_i) {
+        lir_var_t *var = formals->take[_i];
         lir_operand_t *source = NULL;
         reg_t *reg = amd64_fn_param_next_reg(used, var->type.kind);
         if (reg) {
             source = operand_new(LIR_OPERAND_REG, reg);
 
-            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
+            if (c->fn_runtime_operand != NULL && _i == formals->count - 1) {
                 c->fn_runtime_reg = reg->index;
             }
         } else {
@@ -108,7 +108,7 @@ static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params)
             // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
             stack->size = type_kind_sizeof(var->type.kind);
             stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
-            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
+            if (c->fn_runtime_operand != NULL && _i == formals->count - 1) {
                 c->fn_runtime_stack = stack->slot;
             }
 
@@ -254,7 +254,7 @@ static linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     // lower call actual params
-    linked_t *temps = amd64_actual_params_lower(c, op->second->value);
+    linked_t *temps = amd64_args_lower(c, op->second->value);
     linked_concat(list, temps);
     op->second->value = slice_new();
 
@@ -277,7 +277,7 @@ static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     // mov rsi -> formal param 1
     // mov rdi -> formal param 2
     // ....
-    linked_t *temps = amd64_formal_params_lower(c, op->output->value);
+    linked_t *temps = amd64_formals_lower(c, op->output->value);
     linked_node *current = linked_last(temps);
     while (current && current->value != NULL) {
         linked_push(list, current->value);

@@ -766,13 +766,13 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
             assertf(rest_list_type->kind == TYPE_LIST, "rest param must list type");
 
             // actual 的参数个数与 formal 的参数一致，并且 actual last type(must list) == formal last type 一致。
-            if (call->actual_params->length == type_fn->formal_types->length &&
-                (call->actual_params->length - 1) == i) {
-                ast_expr_t *last_actual_param = ct_list_value(call->actual_params, i);
+            if (call->args->length == type_fn->formal_types->length &&
+                (call->args->length - 1) == i) {
+                ast_expr_t *last_arg = ct_list_value(call->args, i);
 
                 // last param
-                if (type_compare(*rest_list_type, last_actual_param->type)) {
-                    lir_operand_t *actual_operand = linear_expr(m, *last_actual_param);
+                if (type_compare(*rest_list_type, last_arg->type)) {
+                    lir_operand_t *actual_operand = linear_expr(m, *last_arg);
                     slice_push(params, actual_operand);
                     break;
                 }
@@ -781,12 +781,12 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
             lir_operand_t *rest_target = linear_zero_list(m, *rest_list_type);
 
-            for (int j = i; j < call->actual_params->length; ++j) {
-                ast_expr_t *actual_param = ct_list_value(call->actual_params, j);
-                lir_operand_t *rest_actual_param = linear_expr(m, *actual_param);
+            for (int j = i; j < call->args->length; ++j) {
+                ast_expr_t *arg = ct_list_value(call->args, j);
+                lir_operand_t *rest_arg = linear_expr(m, *arg);
 
                 // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
-                lir_operand_t *param_ref = lea_operand_pointer(m, rest_actual_param);
+                lir_operand_t *param_ref = lea_operand_pointer(m, rest_arg);
                 OP_PUSH(rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, param_ref));
             }
 
@@ -795,7 +795,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr) {
         }
 
         // 普通情况参数处理
-        ast_expr_t *actual = ct_list_value(call->actual_params, i);
+        ast_expr_t *actual = ct_list_value(call->args, i);
         lir_operand_t *actual_operand = linear_expr(m, *actual);
         slice_push(params, actual_operand);
     }
