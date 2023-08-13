@@ -1,6 +1,7 @@
 #include "amd64.h"
 #include "src/cross.h"
 #include "src/register/amd64.h"
+#include "amd64_abi.h"
 
 static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
@@ -36,8 +37,8 @@ static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
     int push_length = 0;
     uint8_t used[2] = {0};
     for (int i = 0; i < args->count; ++i) {
-        lir_operand_t *param_operand = args->take[i];
-        type_kind type_kind = operand_type_kind(param_operand);
+        lir_operand_t *arg = args->take[i];
+        type_kind type_kind = operand_type_kind(arg);
         reg_t *reg = amd64_fn_param_next_reg(used, type_kind);
         if (reg) {
             // 再全尺寸模式下清空 reg 避免因为 reg 空间占用导致的异常问题
@@ -47,14 +48,14 @@ static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
             }
 
             // TODO 使用 movzx 或者 movsx 可以做尺寸不匹配到 mov, 就不用做上面到 CLR 了
-            lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
+            lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), arg);
 
             linked_push(operations, op);
         } else {
             // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
-            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
+            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, arg, NULL, NULL);
             linked_push(push_operations, push_op);
             push_length += QWORD;
         }

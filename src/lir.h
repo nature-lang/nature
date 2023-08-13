@@ -191,15 +191,6 @@ typedef struct {
 
 struct lir_operand_t {
     lir_operand_type_t assert_type;
-    // TODO 统一替换成 union
-//    union {
-//        lir_var_t var;
-//        lir_stack_t stack;
-//        lir_indirect_addr_t indirect_addr;
-//        lir_symbol_label_t symbol_label;
-//        lir_symbol_var_t symbol_var;
-//        lir_imm_t imm;
-//    };
 
     void *value;
     lir_flag_t pos; // 在 opcode 中的位置信息
