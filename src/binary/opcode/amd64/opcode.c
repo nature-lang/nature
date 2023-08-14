@@ -1212,7 +1212,7 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte) {
     return flag;
 }
 
-asm_keys_t operand_low_to_high(operand_type t) {
+asm_keys_t operand_low_to_high(inst_operand_type t) {
     asm_keys_t res = {
             .count = 0,
     };
@@ -1456,7 +1456,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
         return res;
     }
 
-    error_exit("cannot identify operand_type index: %d", t);
+    error_exit("cannot identify lir_operand_type index: %d", t);
     return res;
 }
 

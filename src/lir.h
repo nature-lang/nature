@@ -533,30 +533,34 @@ static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_LEA, src, NULL, dst);
 }
 
-static inline type_kind operand_type_kind(lir_operand_t *operand) {
+static inline type_t lir_operand_type(lir_operand_t *operand) {
     assert(operand->assert_type != LIR_OPERAND_REG);
 
     if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
-        return var->type.kind;
+        return var->type;
     }
 
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        return addr->type.kind;
+        return addr->type;
     }
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *s = operand->value;
-        return s->kind;
+        return type_basic_new(s->kind);
     }
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
-        return imm->kind;
+        return type_basic_new(imm->kind);
     }
 
-    return TYPE_UNKNOWN;
+    return type_basic_new(TYPE_UNKNOWN);
+}
+
+static inline type_kind operand_type_kind(lir_operand_t *operand) {
+    return lir_operand_type(operand).kind;
 }
 
 /**
@@ -633,6 +637,23 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
 }
 
 /**
+ * @param m
+ * @param operand
+ * @param offset
+ * @param type
+ * @return
+ */
+static inline lir_operand_t *indirect_addr_operand(module_t *m, lir_operand_t *base, uint64_t offset, type_t type) {
+    assert(type.kind > 0);
+    lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
+    addr->base = base;
+    addr->offset = offset;
+    addr->type = type;
+
+    return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
+}
+
+/**
  * 临时变量是否影响变量入栈？
  * @param type
  * @return
@@ -664,11 +685,6 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     // symbol label 是一个指针，memory_fn_t 中存储的就是这个指针的值，所以需要将其取出来，然后再复制给一个栈临时变量。
     if (operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
         assert(false);
-//        lir_symbol_label_t *symbol = operand->value;
-        // temp_operand 是 type_fn, 就像 type_string, type_array 一样
-//        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(TYPE_FN));
-//        OP_PUSH(lir_op_lea(temp_operand, operand));
-//        var_operand = temp_operand;
     }
 
     assertf(var_operand->assert_type == LIR_OPERAND_VAR || var_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||

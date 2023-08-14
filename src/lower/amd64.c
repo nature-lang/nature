@@ -55,6 +55,7 @@ static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
             // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
             // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
             // 不过 call 之前需要保证 rsp 16 byte 对齐
+            // TODO push 目标是一个浮点数怎么处理？
             lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, arg, NULL, NULL);
             linked_push(push_operations, push_op);
             push_length += QWORD;
@@ -432,6 +433,9 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         linked_push(operations, op);
     }
+
+    // TODO 再次遍历对 mov big data 进行 lower
+
     block->operations = operations;
 }
 

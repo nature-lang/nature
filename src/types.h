@@ -395,6 +395,9 @@ typedef struct lir_op_t {
     lir_operand_t *second; // 参数2
     lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
+
+    // TODO def_regs, 可以预定一些 reg
+    // TODO use_regs
 } lir_op_t;
 
 /**

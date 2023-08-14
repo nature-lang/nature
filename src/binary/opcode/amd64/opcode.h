@@ -76,7 +76,7 @@ typedef enum {
     OPERAND_TYPE_YMM1,
     OPERAND_TYPE_YMM2,
     OPERAND_TYPE_YMM2M128,
-} operand_type;
+} inst_operand_type;
 
 typedef enum {
     ENCODING_TYPE_MODRM_RM = 1,
@@ -141,7 +141,7 @@ typedef struct {
  * 机器码指令参数结构
  */
 typedef struct {
-    operand_type type;
+    inst_operand_type type;
     encoding_type encoding; // 编码函数,将汇编参数编码成指令参数
     uint8_t size;
 } opcode_operand_t; // reg 64
@@ -227,7 +227,7 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
  *
  * 接受一个 code(int) 响应一个 n code + size 的字符串列表
  */
-asm_keys_t operand_low_to_high(operand_type t);
+asm_keys_t operand_low_to_high(inst_operand_type t);
 
 void opcode_tree_build(inst_t *inst);
 
