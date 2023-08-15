@@ -335,7 +335,7 @@ void interval_build(closure_t *c) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->alloc_type = type_base_trans_alloc(var->type.kind);
+        interval->alloc_type = type_kind_trans_alloc(var->type.kind);
         table_set(c->interval_table, var->ident, interval);
     }
 

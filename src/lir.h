@@ -63,6 +63,7 @@
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
+#define RT_CALL_LIST_NEXT_ADDR "list_next_addr"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
 #define RT_CALL_MAP_NEW "map_new"
@@ -193,7 +194,6 @@ typedef struct {
 
 struct lir_operand_t {
     lir_operand_type_t assert_type;
-
     void *value;
     lir_flag_t pos; // 在 opcode 中的位置信息
 };
@@ -263,7 +263,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 
     ast_var_decl_t *global_var = s->ast_value;
     var->type = global_var->type;
-    var->flag |= type_base_trans_alloc(global_var->type.kind);
+    var->flag |= type_kind_trans_alloc(global_var->type.kind);
 
     return var;
 }
@@ -558,15 +558,15 @@ static inline type_t lir_operand_type(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *s = operand->value;
-        return type_basic_new(s->kind);
+        return type_kind_new(s->kind);
     }
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
-        return type_basic_new(imm->kind);
+        return type_kind_new(imm->kind);
     }
 
-    return type_basic_new(TYPE_UNKNOWN);
+    return type_kind_new(TYPE_UNKNOWN);
 }
 
 static inline type_kind operand_type_kind(lir_operand_t *operand) {
@@ -708,7 +708,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         // 确保参数入栈
-        lir_operand_t *temp_operand = temp_var_operand(m, type_basic_new(imm->kind));
+        lir_operand_t *temp_operand = temp_var_operand(m, type_kind_new(imm->kind));
         OP_PUSH(lir_op_move(temp_operand, operand));
         src_operand = temp_operand;
     }
@@ -722,8 +722,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
             src_operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", src_operand->assert_type);
 
-    lir_var_t *var = src_operand->value;
-    lir_operand_t *value_ref = temp_var_operand(m, type_basic_new(TYPE_CPTR));
+    lir_operand_t *value_ref = temp_var_operand(m, type_kind_new(TYPE_CPTR));
     OP_PUSH(lir_op_lea(value_ref, src_operand));
     return value_ref;
 }
@@ -924,6 +923,20 @@ static inline void lir_stack_alloc(module_t *m, closure_t *c, type_t t, lir_oper
     lir_operand_t *src_operand = stack_operand(m, -c->stack_offset, size);
 
     OP_PUSH(lir_op_lea(dst_operand, src_operand));
+}
+
+static inline void lir_set_var_notnull(lir_operand_t *operand) {
+    assert(operand);
+    assertf(operand->assert_type == LIR_OPERAND_VAR, "operand is not var");
+    lir_var_t *var = operand->value;
+    var->is_null = false;
+}
+
+static inline bool lir_isnull_var(lir_operand_t *operand) {
+    assert(operand);
+    assertf(operand->assert_type == LIR_OPERAND_VAR, "operand is not var");
+    lir_var_t *var = operand->value;
+    return var->is_null;
 }
 
 #endif //NATURE_SRC_LIR_H_

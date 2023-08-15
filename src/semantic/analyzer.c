@@ -1315,7 +1315,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // 添加 init fn
     ast_fndef_t *fn_init = ast_fndef_new(0, 0);
     fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
-    fn_init->return_type = type_basic_new(TYPE_VOID);
+    fn_init->return_type = type_kind_new(TYPE_VOID);
     fn_init->formals = ct_list_new(sizeof(ast_var_decl_t));
     fn_init->body = var_assign_list;
 
@@ -1360,7 +1360,7 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
     ast_fndef_t *fndef = ast_fndef_new(0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->body = slice_new();
-    fndef->return_type = type_basic_new(TYPE_VOID);
+    fndef->return_type = type_kind_new(TYPE_VOID);
     fndef->formals = ct_list_new(sizeof(ast_var_decl_t));
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt_t *stmt = stmt_list->take[i];

@@ -205,6 +205,9 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
     envs->values[env_index] = upvalue;
 }
 
+/*
+ * ref 原来指向 value, 现在进行 closure 指向自身
+ */
 void env_closure(uint64_t stack_addr) {
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);

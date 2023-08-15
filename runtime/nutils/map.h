@@ -7,13 +7,13 @@
 
 n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index);
 
-bool map_access(n_map_t *m, void *key_ref, void *value_ref);
-
 uint64_t map_length(n_map_t *l);
 
 void map_grow(n_map_t *m);
 
-void map_assign(n_map_t *m, void *key_ref, void *value_ref);
+n_cptr_t map_assign(n_map_t *m, void *key_ref);
+
+n_cptr_t map_access(n_map_t *m, void *key_ref);
 
 void map_delete(n_map_t *m, void *key_ref);
 

@@ -341,7 +341,7 @@ static type_t parser_single_type(module_t *m) {
         if (parser_consume(m, TOKEN_COLON)) {
             typeuse_fn->return_type = parser_type(m);
         } else {
-            typeuse_fn->return_type = type_basic_new(TYPE_VOID);
+            typeuse_fn->return_type = type_kind_new(TYPE_VOID);
         }
         result.kind = TYPE_FN;
         result.fn = typeuse_fn;
@@ -1028,13 +1028,13 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     // for k,v in map {}
     if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COMMA) || parser_next_is(m, 1, TOKEN_IN))) {
         ast_for_iterator_stmt_t *for_iterator_stmt = NEW(ast_for_iterator_stmt_t);
-        for_iterator_stmt->first.type = type_basic_new(TYPE_UNKNOWN);
+        for_iterator_stmt->first.type = type_kind_new(TYPE_UNKNOWN);
         for_iterator_stmt->first.ident = parser_must(m, TOKEN_IDENT)->literal;
 
         if (parser_consume(m, TOKEN_COMMA)) {
             for_iterator_stmt->second = NEW(ast_var_decl_t);
             // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
-            for_iterator_stmt->second->type = type_basic_new(TYPE_UNKNOWN);
+            for_iterator_stmt->second->type = type_kind_new(TYPE_UNKNOWN);
             for_iterator_stmt->second->ident = parser_must(m, TOKEN_IDENT)->literal;
         }
 
@@ -1308,7 +1308,7 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
     } else {
-        fndef->return_type = type_basic_new(TYPE_VOID);
+        fndef->return_type = type_kind_new(TYPE_VOID);
     }
 
     fndef->body = parser_block(m);
@@ -1390,7 +1390,7 @@ static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m) {
         } else {
             token_t *ident_token = parser_must(m, TOKEN_IDENT);
             ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-            var_decl->type = type_basic_new(TYPE_UNKNOWN);
+            var_decl->type = type_kind_new(TYPE_UNKNOWN);
             var_decl->ident = ident_token->literal;
             expr.assert_type = AST_VAR_DECL;
             expr.value = var_decl;
@@ -1490,7 +1490,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
     } else {
-        fndef->return_type = type_basic_new(TYPE_VOID);
+        fndef->return_type = type_kind_new(TYPE_VOID);
     }
 
     if (m->type == MODULE_TYPE_TEMP) {

@@ -236,7 +236,7 @@ typedef struct type_t {
 // 反而更好处理？
 struct type_list_t {
     type_t element_type;
-    uint64_t length;
+//    uint64_t length;
 };
 
 // p<value_type>
@@ -354,10 +354,11 @@ typedef uint8_t n_bool_t;
 
 typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
+typedef addr_t n_cptr_t;
+
 typedef int64_t n_int_t;
 typedef int64_t n_int64_t;
 typedef uint64_t n_uint_t;
-typedef uint64_t n_cptr_t;
 typedef uint32_t n_u32_t;
 typedef uint16_t n_u16_t;
 
@@ -522,7 +523,7 @@ static inline bool is_list_u8(type_t t) {
     return true;
 }
 
-static inline type_t type_basic_new(type_kind kind) {
+static inline type_t type_kind_new(type_kind kind) {
     type_t result = {
             .status = REDUCTION_STATUS_DONE,
             .kind = kind,
@@ -645,18 +646,18 @@ static inline bool union_type_contains(type_t union_type, type_t sub) {
 static inline type_t number_type_lift(type_kind left, type_kind right) {
     assertf(is_number(left) && is_number(right), "type lift kind must number");
     if (left == right) {
-        return type_basic_new(left);
+        return type_kind_new(left);
     }
 
     if (is_float(left) || is_float(right)) {
-        return type_basic_new(TYPE_FLOAT64);
+        return type_kind_new(TYPE_FLOAT64);
     }
 
     if (left >= right) {
-        return type_basic_new(left);
+        return type_kind_new(left);
     }
 
-    return type_basic_new(right);
+    return type_kind_new(right);
 }
 
 static bool integer_range_check(type_kind kind, int64_t i) {

@@ -15,7 +15,7 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
            length);
 
     // - 创建一个 typeuse_array_t 结构
-    type_t type_array = type_basic_new(TYPE_ARRAY);
+    type_t type_array = type_kind_new(TYPE_ARRAY);
     type_array.array = NEW(type_array_t);
     type_array.array->element_rtype = *element_rtype;
     type_array.array->length = length;

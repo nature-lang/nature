@@ -107,7 +107,7 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
     // 开始匹配
     for (int i = 0; i < args->length; ++i) {
         ast_expr_t *expr = ct_list_value(args, i);
-        type_t actual_type = checking_right_expr(m, expr, type_basic_new(TYPE_UNKNOWN));
+        type_t actual_type = checking_right_expr(m, expr, type_kind_new(TYPE_UNKNOWN));
         bool is_spread = call->spread && (i == args->length - 1);
 
         // ast_fndef
@@ -321,7 +321,7 @@ static bool type_confirmed(type_t t) {
  */
 static type_t checking_binary(module_t *m, ast_binary_expr_t *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    type_t left_type = checking_right_expr(m, &expr->left, type_basic_new(TYPE_UNKNOWN));
+    type_t left_type = checking_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
     type_t right_type = checking_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
@@ -379,7 +379,7 @@ static type_t checking_binary(module_t *m, ast_binary_expr_t *expr) {
         case AST_OP_GE:
         case AST_OP_EE:
         case AST_OP_NE: {
-            return type_basic_new(TYPE_BOOL);
+            return type_kind_new(TYPE_BOOL);
         }
         default: {
             CHECKING_ASSERTF(false, "unknown operator");
@@ -438,7 +438,7 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         }
     }
 
-    checking_right_expr(m, &as_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
+    checking_right_expr(m, &as_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
     if (as_expr->src_operand.type.kind == TYPE_UNION) {
         CHECKING_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
@@ -468,9 +468,9 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
 }
 
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = checking_right_expr(m, &is_expr->src_operand, type_basic_new(TYPE_UNKNOWN));
+    type_t t = checking_right_expr(m, &is_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
-    return type_basic_new(TYPE_BOOL);
+    return type_kind_new(TYPE_BOOL);
 }
 
 /**
@@ -481,10 +481,10 @@ static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
 static type_t checking_unary(module_t *m, ast_unary_expr_t *expr) {
     if (expr->operator == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
-        return checking_right_expr(m, &expr->operand, type_basic_new(TYPE_BOOL));
+        return checking_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
-    type_t type = checking_right_expr(m, &expr->operand, type_basic_new(TYPE_UNKNOWN));
+    type_t type = checking_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
     if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
         CHECKING_ASSERTF(false, "neg operand must applies to int or float type");
@@ -547,11 +547,11 @@ static type_t checking_ident(module_t *m, ast_ident *ident) {
  * @return 
  */
 static type_t checking_list_new(module_t *m, ast_list_new_t *list_new, type_t target_type) {
-    type_t result = type_basic_new(TYPE_LIST);
+    type_t result = type_kind_new(TYPE_LIST);
 
     type_list_t *type_list = NEW(type_list_t);
     // 初始化时类型未知
-    type_list->element_type = type_basic_new(TYPE_UNKNOWN);
+    type_list->element_type = type_kind_new(TYPE_UNKNOWN);
 
     if (target_type.kind == TYPE_LIST) {
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
@@ -568,7 +568,7 @@ static type_t checking_list_new(module_t *m, ast_list_new_t *list_new, type_t ta
     // target 类型不确定时，则按 list 首个元素类型进行推导
     if (type_list->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(list_new->elements, 0);
-        type_list->element_type = checking_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
+        type_list->element_type = checking_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < list_new->elements->length; ++i) {
@@ -585,11 +585,11 @@ static type_t checking_list_new(module_t *m, ast_list_new_t *list_new, type_t ta
  * @return
  */
 static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type) {
-    type_t result = type_basic_new(TYPE_MAP);
+    type_t result = type_kind_new(TYPE_MAP);
 
     type_map_t *type_map = NEW(type_map_t);
-    type_map->key_type = type_basic_new(TYPE_UNKNOWN);
-    type_map->value_type = type_basic_new(TYPE_UNKNOWN);
+    type_map->key_type = type_kind_new(TYPE_UNKNOWN);
+    type_map->value_type = type_kind_new(TYPE_UNKNOWN);
 
     if (target_type.kind == TYPE_MAP) {
         // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
@@ -606,8 +606,8 @@ static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t targe
     // 基于首个元素进行类型推断
     if (type_map->key_type.kind == TYPE_UNKNOWN) {
         ast_map_element_t *item = ct_list_value(map_new->elements, 0);
-        type_map->key_type = checking_right_expr(m, &item->key, type_basic_new(TYPE_UNKNOWN));
-        type_map->value_type = checking_right_expr(m, &item->value, type_basic_new(TYPE_UNKNOWN));
+        type_map->key_type = checking_right_expr(m, &item->key, type_kind_new(TYPE_UNKNOWN));
+        type_map->value_type = checking_right_expr(m, &item->value, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < map_new->elements->length; ++i) {
@@ -625,10 +625,10 @@ static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t targe
  * @return
  */
 static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t target_type) {
-    type_t result = type_basic_new(TYPE_SET);
+    type_t result = type_kind_new(TYPE_SET);
 
     type_set_t *type_set = NEW(type_set_t);
-    type_set->element_type = type_basic_new(TYPE_UNKNOWN);
+    type_set->element_type = type_kind_new(TYPE_UNKNOWN);
 
     // 右值如果有推荐的类型，则基于推荐类型做 checking, 此时可能会触发类型转换
     if (target_type.kind == TYPE_SET) {
@@ -643,7 +643,7 @@ static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t targe
     // target 类型不确定则按首个元素类型进行推导
     if (type_set->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(set_new->elements, 0);
-        type_set->element_type = checking_right_expr(m, item_expr, type_basic_new(TYPE_UNKNOWN));
+        type_set->element_type = checking_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < set_new->elements->length; ++i) {
@@ -738,7 +738,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_LIST) {
-        type_t key_type = checking_right_expr(m, &access->key, type_basic_new(TYPE_INT));
+        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         // ast_access -> ast_list_access
         ast_list_access_t *list_access = NEW(ast_list_access_t);
@@ -756,7 +756,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_TUPLE) {
-        type_t key_type = checking_right_expr(m, &access->key, type_basic_new(TYPE_INT));
+        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         CHECKING_ASSERTF(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
 
@@ -850,9 +850,9 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_LENGTH);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_INT);
+        call->return_type = type_kind_new(TYPE_INT);
 
-        return type_basic_new(TYPE_INT);
+        return type_kind_new(TYPE_INT);
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
@@ -863,8 +863,8 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_RAW);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_CPTR);
-        return type_basic_new(TYPE_CPTR);
+        call->return_type = type_kind_new(TYPE_CPTR);
+        return type_kind_new(TYPE_CPTR);
     }
 
     CHECKING_ASSERTF(false, "string select call '%s' not support", s->key);
@@ -891,14 +891,16 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
         // 参数重写
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left); // list operand
+
+        // TODO la 是什么意思？
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA)); // value operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_PUSH);
         checking_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
-        call->return_type = type_basic_new(TYPE_VOID);
+        call->return_type = type_kind_new(TYPE_VOID);
 
         // list_push() 返回 void
-        return type_basic_new(TYPE_VOID);
+        return type_kind_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
@@ -910,9 +912,9 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_LENGTH);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_INT);
+        call->return_type = type_kind_new(TYPE_INT);
 
-        return type_basic_new(TYPE_INT);
+        return type_kind_new(TYPE_INT);
     }
 
     if (str_equal(s->key, BUILTIN_CAP_KEY)) {
@@ -924,9 +926,9 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_CAPACITY);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_INT);
+        call->return_type = type_kind_new(TYPE_INT);
 
-        return type_basic_new(TYPE_INT);
+        return type_kind_new(TYPE_INT);
     }
 
     if (str_equal(s->key, BUILTIN_RAW_KEY)) {
@@ -938,9 +940,9 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_RAW);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_CPTR);
+        call->return_type = type_kind_new(TYPE_CPTR);
 
-        return type_basic_new(TYPE_CPTR);
+        return type_kind_new(TYPE_CPTR);
     }
 
     CHECKING_ASSERTF(false, "list not field '%s'", s->key);
@@ -967,9 +969,9 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_DELETE);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_VOID);
+        call->return_type = type_kind_new(TYPE_VOID);
 
-        return type_basic_new(TYPE_VOID);
+        return type_kind_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, MAP_LENGTH_KEY)) {
@@ -980,9 +982,9 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_LENGTH);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_INT);
+        call->return_type = type_kind_new(TYPE_INT);
 
-        return type_basic_new(TYPE_INT);
+        return type_kind_new(TYPE_INT);
     }
 
     CHECKING_ASSERTF(false, "map not field '%s'", s->key);
@@ -1003,9 +1005,9 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_DELETE);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_VOID);
+        call->return_type = type_kind_new(TYPE_VOID);
 
-        return type_basic_new(TYPE_VOID);
+        return type_kind_new(TYPE_VOID);
     }
 
     if (str_equal(s->key, SET_ADD_KEY)) {
@@ -1020,9 +1022,9 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_ADD);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_BOOL);
+        call->return_type = type_kind_new(TYPE_BOOL);
 
-        return type_basic_new(TYPE_BOOL);
+        return type_kind_new(TYPE_BOOL);
     }
 
     if (str_equal(s->key, SET_HAS_KEY)) {
@@ -1036,9 +1038,9 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_CONTAINS);
         checking_left_expr(m, &call->left);
-        call->return_type = type_basic_new(TYPE_BOOL);
+        call->return_type = type_kind_new(TYPE_BOOL);
 
-        return type_basic_new(TYPE_BOOL);
+        return type_kind_new(TYPE_BOOL);
     }
 
     CHECKING_ASSERTF(false, "set not field '%s'", s->key);
@@ -1125,7 +1127,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
         ast_select_t *select = call->left.value;
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-        checking_right_expr(m, &select->left, type_basic_new(TYPE_UNKNOWN));
+        checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
         // self 还原成 struct
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->checking_current;
@@ -1197,7 +1199,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
  * @return
  */
 static type_t checking_try(module_t *m, ast_try_t *try) {
-    type_t return_type = checking_right_expr(m, &try->expr, type_basic_new(TYPE_UNKNOWN));
+    type_t return_type = checking_right_expr(m, &try->expr, type_kind_new(TYPE_UNKNOWN));
 
     // 当表达式没有返回值时进行特殊处理
     type_t errort = type_new(TYPE_ALIAS, NULL);
@@ -1209,7 +1211,7 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
         return errort;
     }
 
-    type_t t = type_basic_new(TYPE_TUPLE);
+    type_t t = type_kind_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(type_t));
     ct_list_push(t.tuple->elements, &return_type);
@@ -1275,14 +1277,14 @@ static void checking_assign(module_t *m, ast_assign_stmt_t *stmt) {
 }
 
 static void checking_if(module_t *m, ast_if_stmt_t *stmt) {
-    checking_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
+    checking_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
     checking_body(m, stmt->consequent);
     checking_body(m, stmt->alternate);
 }
 
 static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
-    checking_right_expr(m, &stmt->condition, type_basic_new(TYPE_BOOL));
+    checking_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
     checking_body(m, stmt->body);
 }
@@ -1293,7 +1295,7 @@ static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
  */
 static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 checking_right_expr 的类型一定是已经被还原过的
-    type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_basic_new(TYPE_UNKNOWN));
+    type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
                   "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
 
@@ -1319,7 +1321,7 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
             // list
             first->type = type_list->element_type;
         } else {
-            first->type = type_basic_new(TYPE_INT);
+            first->type = type_kind_new(TYPE_INT);
         }
 
     }
@@ -1340,7 +1342,7 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
 
 static void checking_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     checking_stmt(m, stmt->init);
-    checking_right_expr(m, &stmt->cond, type_basic_new(TYPE_BOOL));
+    checking_right_expr(m, &stmt->cond, type_kind_new(TYPE_BOOL));
     checking_stmt(m, stmt->update);
     checking_body(m, stmt->body);
 }
@@ -1370,7 +1372,7 @@ static void checking_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 static type_t checking_literal(module_t *m, ast_literal_t *literal) {
-    return reduction_type(m, type_basic_new(literal->kind));
+    return reduction_type(m, type_kind_new(literal->kind));
 }
 
 static type_t checking_env_access(module_t *m, ast_env_access_t *expr) {
@@ -1381,7 +1383,7 @@ static type_t checking_env_access(module_t *m, ast_env_access_t *expr) {
 }
 
 static void checking_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
-    checking_right_expr(m, &throw_stmt->error, type_basic_new(TYPE_STRING));
+    checking_right_expr(m, &throw_stmt->error, type_kind_new(TYPE_STRING));
 }
 
 /**
@@ -1391,7 +1393,7 @@ static void checking_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
  * @return
  */
 static type_t checking_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
-    type_t t = type_basic_new(TYPE_TUPLE);
+    type_t t = type_kind_new(TYPE_TUPLE);
     t.tuple = NEW(type_tuple_t);
     t.tuple->elements = ct_list_new(sizeof(type_t));
     for (int i = 0; i < destr->elements->length; ++i) {
@@ -1438,7 +1440,7 @@ static void checking_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type
 
 static void checking_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
-    type_t t = checking_right_expr(m, &stmt->right, type_basic_new(TYPE_UNKNOWN));
+    type_t t = checking_right_expr(m, &stmt->right, type_kind_new(TYPE_UNKNOWN));
     assert(t.kind == TYPE_TUPLE);
 
     checking_var_tuple_destr(m, stmt->tuple_destr, t);
@@ -1451,13 +1453,13 @@ static void checking_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) 
  * @return
  */
 static type_t checking_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t target_type) {
-    type_t t = type_basic_new(TYPE_TUPLE);
+    type_t t = type_kind_new(TYPE_TUPLE);
     type_tuple_t *tuple_type = NEW(type_tuple_t);
     tuple_type->elements = ct_list_new(sizeof(type_t));
     t.tuple = tuple_type;
     CHECKING_ASSERTF(tuple_new->elements->length > 0, "tuple elements empty");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
-        type_t element_target_type = type_basic_new(TYPE_UNKNOWN);
+        type_t element_target_type = type_kind_new(TYPE_UNKNOWN);
         if (target_type.kind == TYPE_TUPLE) {
             type_t *temp = ct_list_value(target_type.tuple->elements, i);
             element_target_type = *temp;

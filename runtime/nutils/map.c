@@ -95,7 +95,7 @@ n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) 
  * @param key_ref
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
-bool map_access(n_map_t *m, void *key_ref, void *value_ref) {
+n_cptr_t map_access(n_map_t *m, void *key_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -124,11 +124,10 @@ bool map_access(n_map_t *m, void *key_ref, void *value_ref) {
            value_size);
 
     void *src = m->value_data + value_size * data_index; // 单位字节
-    memmove(value_ref, src, value_size);
-    return true;
+    return (n_cptr_t) src;
 }
 
-void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
+n_cptr_t map_assign(n_map_t *m, void *key_ref) {
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
     }
@@ -140,14 +139,9 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
     char *key_str = rtype_value_str(key_rtype, key_ref);
     rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
 
-    char *debug_value_str = "type_not_support";
-    if (is_number(value_rtype->kind) || value_rtype->kind == TYPE_STRING) {
-        debug_value_str = rtype_value_str(value_rtype, value_ref);
-    }
-    DEBUGF("[runtime.map_assign] key_rtype_kind: %d, key_str: %s, value_str: %s, hash_index=%lu,",
+    DEBUGF("[runtime.map_assign] key_rtype_kind: %d, key_str: %s, hash_index=%lu,",
            key_rtype->kind,
            key_str,
-           debug_value_str,
            hash_index);
 
     uint64_t data_index = 0;
@@ -171,7 +165,7 @@ void map_assign(n_map_t *m, void *key_ref, void *value_ref) {
 
     // push to key list and value list
     memmove(m->key_data + key_size * data_index, key_ref, key_size);
-    memmove(m->value_data + value_size * data_index, value_ref, value_size);
+    return (n_cptr_t) (m->value_data + value_size * data_index);
 }
 
 /**

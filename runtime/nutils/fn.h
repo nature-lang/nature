@@ -8,7 +8,7 @@
 table_t *env_table;
 
 typedef struct {
-    value_casting value;
+    value_casting value; // TODO 对于 array/struct 值处理有困难
     void *ref;
 } upvalue_t;
 

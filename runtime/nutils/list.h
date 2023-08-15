@@ -9,7 +9,7 @@
 
 n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity);
 
-void* list_element_addr(n_list_t *l, uint64_t index);
+n_cptr_t list_element_addr(n_list_t *l, uint64_t index);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -37,6 +37,8 @@ void *list_raw(n_list_t *l);
  * @param value
  */
 void list_push(n_list_t *l, void *ref);
+
+n_cptr_t list_next_addr(n_list_t *l);
 
 /**
  * slice 不会修改原数组

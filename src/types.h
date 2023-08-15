@@ -270,6 +270,8 @@ typedef struct {
 
     flag_t flag;
     type_t type;
+
+    bool is_null;  // 只初始化，没有做过 clv 等赋值操作时，默认为 null
 } lir_var_t;
 
 typedef struct {

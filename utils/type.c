@@ -373,6 +373,7 @@ uint8_t type_kind_sizeof(type_kind t) {
 
 /**
  * TODO 目前阶段最大的数据类型也就是指针了
+ * TODO 数组和 struct 需要特殊处理
  * @param t
  * @return
  */

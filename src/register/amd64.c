@@ -169,7 +169,7 @@ void amd64_reg_init() {
 }
 
 reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
-    uint8_t alloc_type = type_base_trans_alloc(kind);
+    uint8_t alloc_type = type_kind_trans_alloc(kind);
     uint8_t size = type_kind_sizeof(kind);
 
     return reg_find(alloc_type, index, size);
