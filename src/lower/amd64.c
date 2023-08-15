@@ -62,7 +62,7 @@ static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
         }
     }
     // 由于使用了 push 指令操作了堆栈，可能导致堆栈不对齐，所以需要操作一下堆栈对齐
-    uint64_t diff_length = align(push_length, 16) - push_length;
+    uint64_t diff_length = align_up(push_length, 16) - push_length;
 
     // sub rsp - 1 = rsp
     // 先 sub 再 push, 保证 rsp 16 byte 对齐

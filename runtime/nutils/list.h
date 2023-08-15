@@ -9,6 +9,8 @@
 
 n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity);
 
+void* list_element_addr(n_list_t *l, uint64_t index);
+
 /**
  * 返回 index 对应的 array 处的内存位置
  * @param l

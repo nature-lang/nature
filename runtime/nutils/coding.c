@@ -65,14 +65,14 @@ static uint64_t struct_spread_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, 
         rtype_t *element_rtype = rt_find_rtype(hash);
         uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-        n_offset = align(n_offset, element_size);
+        n_offset = align_up(n_offset, element_size);
 
         uint64_t c_align = element_rtype->align;
         if (c_align == 0) {
             c_align = element_size;
         }
 
-        uint64_t new_c_offset = align(c_offset, c_align);
+        uint64_t new_c_offset = align_up(c_offset, c_align);
         autobuf_padding(buf, new_c_offset - c_offset);
         c_offset = new_c_offset;
 
@@ -226,8 +226,8 @@ static uint64_t struct_decode(uint8_t *cptr, n_struct_t *s, rtype_t *struct_rtyp
             c_align = element_size;
         }
 
-        n_offset = align(n_offset, element_size);
-        uint64_t new_c_offset = align(c_offset, c_align);
+        n_offset = align_up(n_offset, element_size);
+        uint64_t new_c_offset = align_up(c_offset, c_align);
 
         // 现在移动 cptr 到合适的位置 (需要记录当前的位置值,才能继续做移动)
         cptr += (new_c_offset - c_offset);

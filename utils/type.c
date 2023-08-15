@@ -250,7 +250,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
             max = item_size;
         }
         // 按 offset 对齐
-        offset = align(offset, item_size);
+        offset = align_up(offset, item_size);
         // 计算 element_rtype
         rtype_t element_rtype = ct_reflect_type(property->type);
         str = str_connect(str, itoa(element_rtype.hash));
@@ -262,7 +262,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
         element_hash_list[i] = element_rtype.hash;
     }
-    uint64_t size = align(offset, max);
+    uint64_t size = align_up(offset, max);
 
 
     rtype_t rtype = {
@@ -305,7 +305,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
             max = item_size;
         }
         // 按 offset 对齐
-        offset = align(offset, item_size);
+        offset = align_up(offset, item_size);
         // 计算 element_rtype
         rtype_t rtype = ct_reflect_type(*element_type);
         str = str_connect(str, itoa(rtype.hash));
@@ -318,7 +318,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
         }
         offset += item_size;
     }
-    uint64_t size = align(offset, max);
+    uint64_t size = align_up(offset, max);
 
 
     rtype_t rtype = {
@@ -462,12 +462,12 @@ rtype_t ct_reflect_type(type_t t) {
 }
 
 uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
-    size = align(size, ptr_size);
+    size = align_up(size, ptr_size);
 
     uint64_t gc_bits_size = size / ptr_size;
 
     // 8bit  = 1byte, 再次对齐
-    gc_bits_size = align(gc_bits_size, 8);
+    gc_bits_size = align_up(gc_bits_size, 8);
 
     return gc_bits_size;
 }
@@ -550,7 +550,7 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
         uint64_t item_size = type_sizeof(p->type);
-        offset = align(offset, item_size);
+        offset = align_up(offset, item_size);
         if (str_equal(p->key, key)) {
             // found
             return offset;
@@ -578,7 +578,7 @@ uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     for (int i = 0; i < t->elements->length; ++i) {
         type_t *typedecl = ct_list_value(t->elements, i);
         uint64_t item_size = type_sizeof(*typedecl);
-        offset = align(offset, item_size);
+        offset = align_up(offset, item_size);
 
         if (i == index) {
             // found

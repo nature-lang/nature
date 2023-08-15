@@ -446,7 +446,7 @@ typedef struct closure_t {
     linked_t *operations; // 指令列表
 
     // gc 使用
-    int64_t stack_offset; // 初始值为 0，用于寄存器分配时的栈区 slot 分配, 按栈规则对其
+    int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0.
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
     uint64_t fn_runtime_reg;
     uint64_t fn_runtime_stack;

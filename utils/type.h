@@ -573,6 +573,10 @@ static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
 }
 
+static inline bool is_alloc_stack(type_t t) {
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_STRING;
+}
+
 /**
  * 可以直接使用 0 进行填充的值，通常就是简单类型
  * @param t

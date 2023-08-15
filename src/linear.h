@@ -7,7 +7,7 @@
 #include "utils/linked.h"
 #include "utils/slice.h"
 
-typedef lir_operand_t *(*linear_expr_fn)(module_t *m, ast_expr_t expr);
+typedef lir_operand_t *(*linear_expr_fn)(module_t *m, ast_expr_t expr, lir_operand_t *target);
 
 void linear(module_t *m);
 
@@ -15,7 +15,7 @@ static void linear_body(module_t *m, slice_t *body);
 
 static void linear_stmt(module_t *m, ast_stmt_t *stmt);
 
-static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr);
+static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *target);
 
 static void linear_assign(module_t *m, ast_assign_stmt_t *stmt);
 

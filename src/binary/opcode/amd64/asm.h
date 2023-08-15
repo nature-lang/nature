@@ -178,9 +178,8 @@ typedef struct {
     double value;
 } asm_float64_t;
 
-// TODO offset?
 typedef struct {
-    reg_t *base; // 决定了宽度
+    reg_t *base;
     reg_t *index;
     uint8_t scale;
 } asm_sib_reg_t;

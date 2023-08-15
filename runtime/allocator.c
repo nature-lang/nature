@@ -386,7 +386,7 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
-    assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align", find_addr);
+    assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align_up", find_addr);
 
     // 更新相关的 chunks 为使用状态
     chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
@@ -438,7 +438,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     arena_hint_t *hint = mheap->arena_hints;
 
     // size 对齐
-    uint64_t alloc_size = align((int64_t) *size, ARENA_SIZE);
+    uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     void *v = NULL;
     while (true) {
@@ -501,7 +501,7 @@ static void mheap_clear_spans(mspan_t *span) {
  */
 static void mheap_grow(uint64_t pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
-    uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
+    uint64_t size = align_up(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
 
     addr_t cursor = memory->mheap->current_arena.cursor;
     addr_t end = memory->mheap->current_arena.end;

@@ -243,7 +243,7 @@ static inline char *file_read(char *path) {
 }
 
 
-static inline int64_t align(int64_t n, int64_t align) {
+static inline int64_t align_up(int64_t n, int64_t align) {
     return (n + align - 1) & (~(align - 1));
 }
 
@@ -446,7 +446,7 @@ static inline void *sys_memory_map(void *hint, uint64_t size) {
 
 static inline void *mallocz_big(size_t size) {
     int page_size = getpagesize();
-    size = align(size, page_size);
+    size = align_up(size, page_size);
     void *ptr = sys_memory_map(NULL, size);
     return ptr;
 }
