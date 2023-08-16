@@ -156,7 +156,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = custom_var_operand(c->module, i->var->type, "child")->value;
+        lir_var_t *var = unique_var_operand(c->module, i->var->type, "child")->value;
         // 加入到 global 中
         slice_push(c->var_defs, var);
 

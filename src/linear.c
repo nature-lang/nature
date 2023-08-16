@@ -3,6 +3,7 @@
 #include "linear.h"
 #include "src/debug/debug.h"
 #include "src/error.h"
+#include "utils/linked.h"
 
 lir_opcode_t ast_op_convert[] = {
         [AST_OP_ADD] = LIR_OPCODE_ADD,
@@ -35,8 +36,14 @@ lir_opcode_t ast_op_convert[] = {
  * @param src
  * @return
  */
-static lir_operand_t *linear_super_move(module_t *m, type_t expr_type, lir_operand_t *dst, lir_operand_t *src) {
+static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src) {
+    if (is_alloc_stack(t)) {
+        linked_t *temps = lir_memory_mov(m, t, dst, src);
+        linked_concat(m->linear_current->operations, temps);
+        return dst;
+    }
 
+    OP_PUSH(lir_op_move(dst, src));
     return dst;
 }
 
@@ -233,6 +240,30 @@ static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
 }
 
 /**
+ * 对于小于 8byte 类型的变量，可以直接将其值存储在 虚拟寄存器中.
+ * 对于大于 8byte 类型的变量 (比如 struct/array) 通常需要在栈上申请空间, 虚拟寄存器中存储的是对应的栈地址
+ * int a;
+ * float b;
+ * person a;
+ * @param c
+ * @param var_decl
+ * @return
+ */
+static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
+    lir_operand_t *operand = var_operand(m, var_decl->ident);
+    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, operand));
+
+    if (is_alloc_stack(var_decl->type)) {
+        // Allocate enough space and store the address of the allocated space in dst.
+        lir_stack_alloc(m, m->linear_current, var_decl->type, operand);
+        lir_set_var_notnull(operand);
+    }
+
+
+    return operand;
+}
+
+/**
  * @param m
  * @param expr
  * @return
@@ -373,15 +404,11 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
  * @param stmt
  */
 static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
-    // 如果 left 是 var
-    lir_operand_t *src = linear_expr(m, stmt->right, NULL);
-    lir_operand_t *dst = linear_ident(m, stmt->left, NULL); // ident
-    OP_PUSH(lir_op_move(dst, src));
+    assert(stmt->left.assert_type == AST_EXPR_IDENT);
+    lir_operand_t *dst = linear_expr(m, stmt->left, NULL); // ident
+    linear_expr(m, stmt->right, dst);
 }
 
-
-//
-//
 /**
  * 将 tuple 按递归解析赋值给 tuple_destr 中声明的所有 var
  * 递归将导致优先从左侧进行展开, 需要注意的是，仅支持 left 表达式，且需要走 assign
@@ -389,44 +416,33 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
  * @param destr
  * @param tuple_target
  */
-static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target) {
-    uint64_t offset = 0;
+static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target, uint64_t offset) {
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(destr->elements, i);
-        // tuple_operand 对应到当前 index 到值
         uint64_t item_size = type_sizeof(element->type);
         offset = align_up((int64_t) offset, (int64_t) item_size);
 
-        lir_operand_t *temp = clv_temp_var_operand(m, element->type);
-        lir_operand_t *dst_ref = lea_operand_pointer(m, temp);
+        if (can_assign(element->assert_type)) {
+            // src 中已经保存了右值的具体值。可以用来 move
+            lir_operand_t *src = indirect_addr_operand(m, element->type, tuple_target, offset);
+            if (is_alloc_stack(element->type)) {
+                src = lea_operand_pointer(m, src);
+                lir_set_var_notnull(src);
+            }
 
-        OP_PUSH(rt_call(RT_CALL_MEMORY_MOVE,
-                        NULL,
-                        5,
-                        dst_ref,
-                        int_operand(0),
-                        tuple_target,
-                        int_operand(offset),
-                        int_operand(item_size)));
+            // 使用一个 temp_var 接收右值(走普通 mov, struct/array 不进行临时值生成)
+            lir_operand_t *temp_var = temp_var_operand(m, element->type);
+            OP_PUSH(lir_op_move(temp_var, src));
 
-        // temp 用与临时存储 tuple 中的值，下面则是真正的使用该临时值
-        if (element->assert_type == AST_VAR_DECL) {
-            // var_decl 独有
-            ast_var_decl_t *var_decl = element->value;
-            lir_operand_t *dst = var_operand(m, var_decl->ident);
-            OP_PUSH(lir_op_move(dst, temp));
 
-        } else if (can_assign(element->assert_type)) {
-            assert(temp->assert_type == LIR_OPERAND_VAR);
-            // element 是左值
             ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
             assign_stmt->left = *element;
-            // temp is ident， 把 ident 解析出来
             assign_stmt->right = *ast_ident_expr(m->current_line, m->current_column,
-                                                 ((lir_var_t *) temp->value)->ident);
+                                                 ((lir_var_t *) temp_var->value)->ident);
             linear_assign(m, assign_stmt);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
-            linear_tuple_destr(m, element->value, temp);
+            ast_tuple_destr_t *tuple_destr = element->value;
+            linear_tuple_destr(m, tuple_destr, tuple_target, offset);
         } else {
             assertf(false, "var tuple destr must var/tuple_destr");
         }
@@ -442,7 +458,48 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
 static void linear_tuple_destr_stmt(module_t *m, ast_assign_stmt_t *stmt) {
     ast_tuple_destr_t *destr = stmt->left.value;
     lir_operand_t *tuple_target = linear_expr(m, stmt->right, NULL);
-    linear_tuple_destr(m, destr, tuple_target);
+    linear_tuple_destr(m, destr, tuple_target, 0);
+}
+
+
+/**
+ * var (a, b, (c, d))
+ * @param m
+ * @param destr
+ * @param tuple_target
+ */
+static void
+linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target, uint64_t offset) {
+    for (int i = 0; i < destr->elements->length; ++i) {
+        // 这里的 element 指的是左侧值的 element(一般都是 ident, 或者 access/select)
+        ast_expr_t *element = ct_list_value(destr->elements, i);
+        uint64_t item_size = type_sizeof(element->type);
+
+        offset = align_up((int64_t) offset, (int64_t) item_size);
+
+        if (element->assert_type == AST_VAR_DECL) {
+            // 为 var 申请足够的空间
+            ast_var_decl_t *var_decl = element->value;
+            lir_operand_t *dst = linear_var_decl(m, var_decl);
+
+            // 计算 tuple target 对应的 offset 并生成 indirect
+            lir_operand_t *src = indirect_addr_operand(m, element->type, tuple_target, offset);
+            if (is_alloc_stack(element->type)) {
+                src = lea_operand_pointer(m, src);
+                lir_set_var_notnull(src);
+            }
+
+            linear_super_move(m, element->type, dst, src);
+        } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
+            ast_tuple_destr_t *tuple_destr = element->value;
+
+            linear_var_tuple_destr(m, tuple_destr, tuple_target, offset);
+        } else {
+            assertf(false, "var tuple destr must var/tuple_destr");
+        }
+
+        offset += item_size;
+    }
 }
 
 /**
@@ -452,9 +509,9 @@ static void linear_tuple_destr_stmt(module_t *m, ast_assign_stmt_t *stmt) {
  * @return
  */
 static void linear_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt_t *var_tuple_def) {
-    // 理论上只需要不停的 move 就行了
     lir_operand_t *tuple_target = linear_expr(m, var_tuple_def->right, NULL);
-    linear_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target);
+
+    linear_var_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target, 0);
 }
 
 /**
@@ -466,14 +523,7 @@ static void linear_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt_t *var
  * @return
  */
 static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
-    lir_operand_t *dst = var_operand(m, stmt->var_decl.ident);
-    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, dst)); // 保证了栈/reg 空间的干净和整洁
-
-    if (is_alloc_stack(stmt->var_decl.type)) {
-        // Allocate enough space and store the address of the allocated space in dst.
-        lir_stack_alloc(m, m->linear_current, stmt->var_decl.type, dst);
-        lir_set_var_notnull(dst);
-    }
+    lir_operand_t *dst = linear_var_decl(m, &stmt->var_decl);
 
     linear_expr(m, stmt->right, dst);
 }
@@ -527,21 +577,6 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
 }
 
 /**
- * 类似这样仅做了声明没有立即赋值，这里进行空赋值,从而能够保障有内存空间分配.
- * int a;
- * float b;
- * @param c
- * @param var_decl
- * @return
- */
-static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    lir_operand_t *operand = var_operand(m, var_decl->ident);
-//    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, operand));
-    return operand;
-}
-
-
-/**
  * rt_call get count => count
  * for_iterator:
  *  cmp_goto count == 0 to end for
@@ -562,7 +597,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     uint64_t rtype_hash = ct_find_rtype_hash(ast->iterate.type);
 
     // cursor 初始值
-    lir_operand_t *cursor_operand = custom_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
+    lir_operand_t *cursor_operand = unique_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1))); // cursor 初始值 = --
 
     // make label
@@ -711,13 +746,11 @@ static void linear_break(module_t *m, ast_break_t *stmt) {
 
 static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
-        lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
-        // return void_expr() 时, m->linear_current->return_operand 是 null
-        if (m->linear_current->return_operand) {
-            OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
-        }
+        assertf(m->linear_current->return_operand, "return operand must not be null");
 
-        // 用来做可达分析
+        linear_expr(m, *ast->expr, m->linear_current->return_operand);
+
+        // 保留用来做 return check
         OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
     }
 
@@ -775,7 +808,6 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         base_target = linear_expr(m, call->left, NULL);
     }
 
-
     slice_t *params = slice_new();
     type_fn_t *type_fn = call->left.type.fn;
     assert(type_fn);
@@ -820,7 +852,6 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         ast_expr_t *actual_expr = ct_list_value(call->args, i);
         lir_operand_t *actual_operand = linear_expr(m, *actual_expr, NULL);
         assert(actual_operand->assert_type == LIR_OPERAND_VAR);
-
         slice_push(params, actual_operand);
     }
 
@@ -869,6 +900,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
 
 static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     assert(expr.type.kind == TYPE_BOOL);
+
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
@@ -980,8 +1012,6 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
             imm->bool_value = !imm->bool_value;
-            OP_PUSH(lir_op_move(target, first));
-
             return linear_super_move(m, expr.type, target, first);
         }
 
@@ -1734,7 +1764,6 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
 
     if (target == NULL) {
         target = clv_temp_var_operand(m, expr.type);
-
     }
 
     return fn(m, expr, target);
@@ -1792,11 +1821,13 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
 
-    // 返回值处理
+    // 返回值处理, 让 cfg 保证单一出口
     if (fndef->return_type.kind != TYPE_VOID) {
-        c->return_operand = custom_var_operand(m, fndef->return_type, "$result");
-        // 初始化空值, 让 use-def 关系完整，避免 ssa 生成异常
-        OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, c->return_operand));
+        c->return_operand = unique_var_operand(m, fndef->return_type, "$result");
+        ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
+        var_decl->type = fndef->return_type;
+        var_decl->ident = var_unique_ident(m, TEMP_RESULT);
+        c->return_operand = linear_var_decl(m, var_decl);
     }
 
     linear_body(m, fndef->body);

@@ -9,6 +9,7 @@
 #include "src/symbol/symbol.h"
 #include "src/register/register.h"
 
+#define TEMP_RESULT "result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "l"
@@ -159,7 +160,7 @@ typedef struct {
  */
 typedef struct {
     lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
-    uint64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
+    int64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
     type_t type;// lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
@@ -653,8 +654,18 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
  * @param type
  * @return
  */
-static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir_operand_t *base, uint64_t offset) {
+static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir_operand_t *base, int64_t offset) {
     assert(type.kind > 0);
+
+    // 技术性合并
+    if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = base->value;
+        base = addr->base;
+        offset = addr->offset + offset;
+    }
+
+    assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
+            "indirect addr only support var operand");
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
     addr->base = base;
     addr->offset = offset;
@@ -689,7 +700,7 @@ indexed_addr_operand(module_t *m, type_t type, lir_operand_t *base, lir_operand_
  * @param type
  * @return
  */
-static inline lir_operand_t *custom_var_operand(module_t *m, type_t type, char *ident) {
+static inline lir_operand_t *unique_var_operand(module_t *m, type_t type, char *ident) {
     string result = var_unique_ident(m, ident);
 
     symbol_table_set_var(result, type);
@@ -938,5 +949,7 @@ static inline bool lir_isnull_var(lir_operand_t *operand) {
     lir_var_t *var = operand->value;
     return var->is_null;
 }
+
+linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);
 
 #endif //NATURE_SRC_LIR_H_

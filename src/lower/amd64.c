@@ -264,9 +264,13 @@ static linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         linked_push(list, op);
     } else {
         lir_operand_t *reg_operand = select_return_reg(op->output);
+        // call
         linked_push(list, lir_op_new(op->code, op->first, op->second, reg_operand));
+        // mov rax -> output
         linked_push(list, lir_op_move(op->output, reg_operand));
     }
+
+    // TODO 归还栈空间！
 
     return list;
 }

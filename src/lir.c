@@ -1,5 +1,7 @@
 #include "cross.h"
 #include "utils/stack.h"
+#include "lir.h"
+
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
     closure_t *c = NEW(closure_t);
@@ -46,4 +48,42 @@ lir_operand_t *reg_operand(uint8_t index, type_kind kind) {
     reg_t *reg = cross_reg_select(index, kind);
     assert(reg);
     return operand_new(LIR_OPERAND_REG, reg);
+}
+
+linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src) {
+    linked_t *result = linked_new();
+    uint16_t remind = type_sizeof(t);
+    uint16_t offset = 0;
+    while (remind > 0) {
+        uint16_t count = 0;
+        uint16_t item_size = 0; // unit byte
+        type_kind kind;
+        if (remind >= QWORD) {
+            kind = TYPE_UINT64;
+            item_size = QWORD;
+        } else if (remind >= DWORD) {
+            kind = TYPE_UINT32;
+            item_size = DWORD;
+        } else if (remind >= WORD) {
+            kind = TYPE_UINT16;
+            item_size = WORD;
+        } else {
+            kind = TYPE_UINT8;
+            item_size = BYTE;
+        }
+
+        count = remind / item_size;
+        for (int i = 0; i < count; ++i) {
+            lir_operand_t *temp_var = temp_var_operand(m, type_kind_new(kind));
+            lir_operand_t *temp_src = indirect_addr_operand(m, type_kind_new(kind), src, offset);
+            lir_operand_t *temp_dst = indirect_addr_operand(m, type_kind_new(kind), dst, offset);
+            linked_push(result, lir_op_move(temp_var, temp_src));
+            linked_push(result, lir_op_move(temp_dst, temp_var));
+            offset += item_size;
+        }
+
+        remind -= count * item_size;
+    }
+
+    return result;
 }

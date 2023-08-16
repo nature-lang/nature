@@ -635,8 +635,9 @@ static slice_t *amd64_native_label(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
+
     // 进行最终的对齐, linux amd64 中栈一般都是是按 16byte 对齐的
-    c->stack_offset = align_up(c->stack_offset, ALIGN_SIZE);
+    c->stack_offset = align_up(c->stack_offset, STACK_ALIGN_SIZE);
 
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针

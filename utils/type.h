@@ -312,6 +312,7 @@ struct type_struct_t {
     char *ident;
 //    uint8_t count;
 //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    uint8_t align;
     list_t *properties; // struct_property_t
 };
 

@@ -444,11 +444,12 @@ typedef struct closure_t {
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
+    type_t type;
 
     linked_t *operations; // 指令列表
 
     // gc 使用
-    int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0.
+    int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0. rsp 在函数的入口点之前应该始终保持 16byte 对齐
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
     uint64_t fn_runtime_reg;
     uint64_t fn_runtime_stack;
