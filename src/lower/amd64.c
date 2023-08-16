@@ -13,14 +13,14 @@ static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_ope
 
 static lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
-    if (kind == TYPE_FLOAT || kind == TYPE_FLOAT64) {
+    if (kind == TYPE_FLOAT64) {
         return operand_new(LIR_OPERAND_REG, xmm0s64);
     }
     if (kind == TYPE_FLOAT32) {
         return operand_new(LIR_OPERAND_REG, xmm0s32);
     }
 
-    return reg_operand(rax->index, kind);
+    return lir_reg_operand(rax->index, kind);
 }
 
 /**
@@ -329,7 +329,7 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     // second to cl/rcx
-    lir_operand_t *fit_cx_operand = reg_operand(cl->index, operand_type_kind(op->second));
+    lir_operand_t *fit_cx_operand = lir_reg_operand(cl->index, operand_type_kind(op->second));
     linked_push(list, lir_op_move(fit_cx_operand, op->second));
 
     type_kind kind = operand_type_kind(op->output);
@@ -337,7 +337,7 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了
-    lir_operand_t *cl_operand = reg_operand(cl->index, TYPE_UINT8);
+    lir_operand_t *cl_operand = lir_reg_operand(cl->index, TYPE_UINT8);
     // sar/sal
     linked_push(list, lir_op_new(op->code, temp, cl_operand, temp));
     linked_push(list, lir_op_move(op->output, temp));
@@ -348,8 +348,8 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    lir_operand_t *ax_operand = reg_operand(rax->index, operand_type_kind(op->output));
-    lir_operand_t *dx_operand = reg_operand(rdx->index, operand_type_kind(op->output));
+    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
+    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {

@@ -25,4 +25,6 @@ string lir_arg_to_string(slice_t *args);
 
 string lir_vars_to_string(slice_t *vars);
 
+string lir_regs_to_string(slice_t *regs);
+
 #endif //NATURE_SRC_DEBUG_DEBUG_LIR_H_

@@ -59,6 +59,9 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_PHI_BODY: {
             return lir_vars_to_string(operand->value);
         }
+        case LIR_OPERAND_REGS: {
+            return lir_regs_to_string(operand->value);
+        }
         default: {
             assertf(0, "unknown operand type: %d", operand->assert_type);
         }
@@ -182,6 +185,28 @@ char *lir_vars_to_string(slice_t *vars) {
     }
 
     sprintf(buf, "VARS(%s)", params);
+    free(params);
+
+    return buf;
+}
+
+char *lir_regs_to_string(slice_t *regs) {
+    if (regs->count == 0) {
+        return "REGS()";
+    }
+
+    string buf = mallocz(DEBUG_STR_COUNT * (regs->count + 1));
+    string params = mallocz(DEBUG_STR_COUNT * regs->count);
+    for (int i = 0; i < regs->count; ++i) {
+        string src = lir_operand_reg_to_string(regs->take[i]);
+        strcat(params, src);
+
+        if (i < regs->count - 1) {
+            strcat(params, ",");
+        }
+    }
+
+    sprintf(buf, "REGS(%s)", params);
     free(params);
 
     return buf;

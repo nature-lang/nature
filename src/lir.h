@@ -269,7 +269,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     return var;
 }
 
-lir_operand_t *reg_operand(uint8_t index, type_kind kind);
+lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind);
 
 static inline lir_operand_t *stack_operand(module_t *m, int64_t slot, uint64_t size) {
     lir_stack_t *stack = NEW(lir_stack_t);
@@ -357,6 +357,14 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
             slice_push(result, operand_new(LIR_OPERAND_VAR, var));
+        }
+    }
+
+    if (flag & FLAG(LIR_OPERAND_REG) && operand->assert_type == LIR_OPERAND_REGS) {
+        slice_t *regs = operand->value;
+        for (int i = 0; i < regs->count; ++i) {
+            reg_t *reg = regs->take[i];
+            slice_push(result, operand_new(LIR_OPERAND_REG, reg));
         }
     }
 

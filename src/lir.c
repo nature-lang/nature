@@ -44,7 +44,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     return c;
 }
 
-lir_operand_t *reg_operand(uint8_t index, type_kind kind) {
+lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
     reg_t *reg = cross_reg_select(index, kind);
     assert(reg);
     return operand_new(LIR_OPERAND_REG, reg);

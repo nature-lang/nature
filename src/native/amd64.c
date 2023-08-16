@@ -580,11 +580,11 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     slice_push(operations, ASM_INST("call", { first }));
 
     // 4. 响应处理(取出响应值传递给 result), result 已经固定分配了 rax/xmm0 寄存器,所以 move result to rax 不是必要的
-    if (op->output != NULL) {
-        assert(op->output->assert_type == LIR_OPERAND_REG);
-        reg_t *reg = op->output->value;
-        assert(reg->index == 0); // rax or xmm0 index == 0
-    }
+//    if (op->output != NULL) {
+//        assert(op->output->assert_type == LIR_OPERAND_REG);
+//        reg_t *reg = op->output->value;
+//        assert(reg->index == 0); // rax or xmm0 index == 0
+//    }
 
     return operations;
 }

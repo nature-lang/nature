@@ -328,6 +328,7 @@ typedef enum {
     LIR_OPERAND_IMM,
     LIR_OPERAND_INDIRECT_ADDR,
     LIR_OPERAND_VARS, // 与 pyi_body, formals 一样都是 slice_t + lir_var
+    LIR_OPERAND_REGS, // 与 pyi_body, formals 一样都是 slice_t + reg_t
     LIR_OPERAND_CLOSURE_VARS,  // 无法通过 extract 函数提取出来，也不是提取出来，仅仅是为了临时存储使用
 } lir_operand_type_t;
 

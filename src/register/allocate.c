@@ -37,17 +37,17 @@ static linked_t *inactive_new(closure_t *c) {
     // 遍历所有固定寄存器生成 fixed_interval
     for (int i = 1; i < cross_alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
-        interval_t *item = table_get(c->interval_table, reg->name);
-        assert(item && "physic reg interval not found");
+        interval_t *interval = table_get(c->interval_table, reg->name);
+        assert(interval && "physic reg interval not found");
 
         // 如果一个物理寄存器从未被使用过,就没有 ranges
         // 所以也不需要写入到 inactive 中进行处理
-        if (item->first_range == NULL) {
+        if (interval->first_range == NULL) {
             continue;
         }
 
         // free_pos = int_max
-        linked_push(inactive, item);
+        linked_push(inactive, interval);
     }
 
     return inactive;
@@ -176,6 +176,10 @@ static void handle_active(allocate_t *a) {
     }
 }
 
+/**
+ * 包含 fixed interval
+ * @param a
+ */
 static void handle_inactive(allocate_t *a) {
     int position = a->current->first_range->from;
     linked_node *current = a->inactive->front;
