@@ -94,7 +94,7 @@ static lir_operand_t *linear_zero_set(module_t *m, type_t t, lir_operand_t *targ
  * @return
  */
 static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *target) {
-    lir_operand_t *zero_fn_operand = label_operand(RT_CALL_ZERO_FN, false);
+    lir_operand_t *zero_fn_operand = lir_label_operand(RT_CALL_ZERO_FN, false);
 
     OP_PUSH(lir_op_lea(target, zero_fn_operand));
     return target;
@@ -111,7 +111,7 @@ static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *t
     uint64_t rtype_hash = ct_find_rtype_hash(t);
 
     if (lir_isnull_var(target)) {
-        lir_stack_alloc(m, m->linear_current, t, target);
+        lir_stack_alloc(m->linear_current, t, target);
     }
 
     assert(target);
@@ -216,7 +216,7 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     if (s->type != SYMBOL_FN) {
         return NULL;
     }
-    return label_operand(ident->literal, s->is_local);
+    return lir_label_operand(ident->literal, s->is_local);
 }
 
 static void linear_error_handle(module_t *m) {
@@ -229,7 +229,7 @@ static void linear_error_handle(module_t *m) {
     OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_error, 0));
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
                        bool_operand(true), has_error,
-                       label_operand(error_target_label, true)));
+                       lir_label_operand(error_target_label, true)));
 }
 
 static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
@@ -250,15 +250,14 @@ static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
  * @return
  */
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    lir_operand_t *operand = var_operand(m, var_decl->ident);
+    lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
     OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, operand));
 
     if (is_alloc_stack(var_decl->type)) {
         // Allocate enough space and store the address of the allocated space in dst.
-        lir_stack_alloc(m, m->linear_current, var_decl->type, operand);
+        lir_stack_alloc(m->linear_current, var_decl->type, operand);
         lir_set_var_notnull(operand);
     }
-
 
     return operand;
 }
@@ -673,7 +672,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
     stack_push(m->linear_current->for_start_labels, for_start->output);
     stack_push(m->linear_current->for_end_labels, for_end_operand);
 
@@ -701,7 +700,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
     lir_op_t *for_update = lir_op_unique_label(m, FOR_UPDATE_IDENT);
-    lir_operand_t *for_end_operand = label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
     stack_push(m->linear_current->for_start_labels, for_update->output);
     stack_push(m->linear_current->for_end_labels, for_end_operand);
 
@@ -754,7 +753,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
         OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
     }
 
-    OP_PUSH(lir_op_bal(label_operand(m->linear_current->end_label, false)));
+    OP_PUSH(lir_op_bal(lir_label_operand(m->linear_current->end_label, false)));
 }
 
 static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
@@ -763,8 +762,8 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
 
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
-    lir_operand_t *end_label_operand = label_operand(make_unique_ident(m, END_IF_IDENT), true);
-    lir_operand_t *alternate_label_operand = label_operand(make_unique_ident(m, IF_ALTERNATE_IDENT), true);
+    lir_operand_t *end_label_operand = lir_label_operand(make_unique_ident(m, END_IF_IDENT), true);
+    lir_operand_t *alternate_label_operand = lir_label_operand(make_unique_ident(m, IF_ALTERNATE_IDENT), true);
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
@@ -879,7 +878,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     assert(expr.type.kind == TYPE_BOOL);
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
-    lir_operand_t *logic_end_operand = label_operand(make_unique_ident(m, LOGICAL_OR_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_OR_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_src = linear_expr(m, logical_expr->left, NULL);
@@ -904,7 +903,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
-    lir_operand_t *logic_end_operand = label_operand(make_unique_ident(m, LOGICAL_AND_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_AND_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_target = linear_expr(m, logical_expr->left, NULL);
@@ -1286,7 +1285,7 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
     type_t t = ast->type;
 
     if (lir_isnull_var(target)) {
-        lir_stack_alloc(m, m->linear_current, expr.type, target);
+        lir_stack_alloc(m->linear_current, expr.type, target);
     }
 
 
@@ -1636,7 +1635,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
     lir_operand_t *label_addr_operand = temp_var_operand(m, fndef->type);
     OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
-    lir_operand_t *result = var_operand(m, fndef->closure_name);
+    lir_operand_t *result = lir_var_operand(m, fndef->closure_name);
     OP_PUSH(rt_call(RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand));
 
     return linear_super_move(m, fndef->type, target, result);
@@ -1656,7 +1655,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
 
     // ret
-    OP_PUSH(lir_op_bal(label_operand(m->linear_current->end_label, false)));
+    OP_PUSH(lir_op_bal(lir_label_operand(m->linear_current->end_label, false)));
 }
 
 static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
@@ -1814,31 +1813,28 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     //if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
     if (fndef->closure_name) {
         // 直接使用 fn->closure_name 作为 runtime name?
-        lir_operand_t *fn_runtime_operand = var_operand(m, fndef->closure_name);
+        lir_operand_t *fn_runtime_operand = lir_var_operand(m, fndef->closure_name);
         slice_push(params, fn_runtime_operand->value);
         c->fn_runtime_operand = fn_runtime_operand;
     }
 
-    OP_PUSH(lir_op_result(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
+    OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
 
-    // 返回值处理, 让 cfg 保证单一出口
+    // 返回值 operand 也 push 到 params1 里面，方便处理
     if (fndef->return_type.kind != TYPE_VOID) {
-        c->return_operand = unique_var_operand(m, fndef->return_type, "$result");
-        ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-        var_decl->type = fndef->return_type;
-        var_decl->ident = var_unique_ident(m, TEMP_RESULT);
-        c->return_operand = linear_var_decl(m, var_decl);
+        c->return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
+        OP_PUSH(lir_op_output(LIR_OPCODE_NOP, c->return_operand));
     }
 
     linear_body(m, fndef->body);
 
     // bal end_label
-    OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
+    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
     // TODO error handle... example with stack
-    OP_PUSH(lir_op_bal(label_operand(c->end_label, true)));
+    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
 
     OP_PUSH(lir_op_label(c->end_label, true));
@@ -1850,8 +1846,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         c->closure_var_table = table_new();
     }
 
-    // lower 的时候需要进行特殊的处理
-    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));
+    // lower 的时候需要进行特殊的处理(return_operand 有点多余了。)
+    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, NULL, NULL, NULL));
 
     return c;
 }

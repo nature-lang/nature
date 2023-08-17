@@ -14,7 +14,7 @@ static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target
     ast_literal_t *literal = expr->value;
 
     CHECKING_ASSERTF(is_integer(literal->kind), "type inconsistency, expect integer, actual: %s",
-                  type_kind_str[literal->kind]);
+                     type_kind_str[literal->kind]);
 
     int64_t i = atoll(literal->value);
 
@@ -328,28 +328,28 @@ static type_t checking_binary(module_t *m, ast_binary_expr_t *expr) {
     if (is_number(left_type.kind)) {
         // 右值也必须是 number
         CHECKING_ASSERTF(is_number(right_type.kind),
-                      "binary operator '%s' only support number operand, actual '%s %s %s'",
-                      ast_expr_op_str[expr->operator],
-                      type_kind_str[left_type.kind],
-                      ast_expr_op_str[expr->operator],
-                      type_kind_str[right_type.kind]);
+                         "binary operator '%s' only support number operand, actual '%s %s %s'",
+                         ast_expr_op_str[expr->operator],
+                         type_kind_str[left_type.kind],
+                         ast_expr_op_str[expr->operator],
+                         type_kind_str[right_type.kind]);
     }
 
     if (left_type.kind == TYPE_STRING) {
         // 右值必须是 string
         CHECKING_ASSERTF(right_type.kind == TYPE_STRING,
-                      "binary operator '%s' only support string operand, actual '%s %s %s'",
-                      ast_expr_op_str[expr->operator],
-                      type_kind_str[left_type.kind],
-                      ast_expr_op_str[expr->operator],
-                      type_kind_str[right_type.kind]);
+                         "binary operator '%s' only support string operand, actual '%s %s %s'",
+                         ast_expr_op_str[expr->operator],
+                         type_kind_str[left_type.kind],
+                         ast_expr_op_str[expr->operator],
+                         type_kind_str[right_type.kind]);
     }
 
     // 位运算只能支持整形
     if (is_integer_operator(expr->operator)) {
         CHECKING_ASSERTF(is_integer(left_type.kind) && is_integer(right_type.kind),
-                      "binary operator '%s' only integer operand",
-                      ast_expr_op_str[expr->operator]);
+                         "binary operator '%s' only integer operand",
+                         ast_expr_op_str[expr->operator]);
     }
 
     // 暂时取消类型隐式转换，而是使用左值的类型作为目标类型
@@ -444,8 +444,8 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
 
         // target_type 必须包含再 union 中
         CHECKING_ASSERTF(union_type_contains(as_expr->src_operand.type, target_type),
-                      "type = %s not contains in union type",
-                      type_kind_str[target_type.kind]);
+                         "type = %s not contains in union type",
+                         type_kind_str[target_type.kind]);
         return target_type;
     }
 
@@ -463,7 +463,8 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
-    CHECKING_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting", type_kind_str[target_type.kind]);
+    CHECKING_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting",
+                     type_kind_str[target_type.kind]);
     return target_type;
 }
 
@@ -493,7 +494,7 @@ static type_t checking_unary(module_t *m, ast_unary_expr_t *expr) {
     // &var
     if (expr->operator == AST_OP_LA) {
         CHECKING_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                      "cannot take the address of an literal or call");
+                         "cannot take the address of an literal or call");
         return type_ptrof(type);
     }
 
@@ -782,7 +783,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     CHECKING_ASSERTF(false, "access only support must map/list/tuple, cannot '%s'",
-                  type_kind_str[left_type.kind]);
+                     type_kind_str[left_type.kind]);
     exit(1);
 }
 
@@ -1297,7 +1298,7 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 checking_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
-                  "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
+                     "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
 
     rewrite_var_decl(m, &stmt->first);
 
@@ -1416,7 +1417,7 @@ static type_t checking_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
 static void checking_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t t) {
     type_tuple_t *tuple_type = t.tuple;
     CHECKING_ASSERTF(destr->elements->length == tuple_type->elements->length,
-                  "tuple destr length != tuple operand length");
+                     "tuple destr length != tuple operand length");
 
     // 挨个对比
     for (int i = 0; i < destr->elements->length; ++i) {
@@ -1698,12 +1699,12 @@ static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_t
     // single type to union type (必须保留)
     if (target_type.kind == TYPE_UNION && expr->type.kind != TYPE_UNION) {
         CHECKING_ASSERTF(union_type_contains(target_type, expr->type), "union type not contains '%s'",
-                      type_kind_str[expr->type.kind]);
+                         type_kind_str[expr->type.kind]);
         *expr = ast_type_as(*expr, target_type);
     }
 
     CHECKING_ASSERTF(type_compare(target_type, expr->type), "type inconsistency, expect=%s, actual=%s",
-                  type_kind_str[target_type.kind], type_kind_str[expr->type.kind]);
+                     type_kind_str[target_type.kind], type_kind_str[expr->type.kind]);
     return expr->type;
 }
 
@@ -1753,18 +1754,18 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
         CHECKING_ASSERTF(is_number(t.map->key_type.kind) ||
-                      t.map->key_type.kind == TYPE_STRING ||
-                      t.map->key_type.kind == TYPE_GEN,
-                      "map key only support number/string");
+                         t.map->key_type.kind == TYPE_STRING ||
+                         t.map->key_type.kind == TYPE_GEN,
+                         "map key only support number/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         CHECKING_ASSERTF(is_number(t.set->element_type.kind) ||
-                      t.set->element_type.kind == TYPE_STRING ||
-                      t.set->element_type.kind == TYPE_GEN,
-                      "set element only support number/string");
+                         t.set->element_type.kind == TYPE_STRING ||
+                         t.set->element_type.kind == TYPE_GEN,
+                         "set element only support number/string");
         return t;
     }
 
@@ -1807,7 +1808,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  */
 static type_t generic_specialization(module_t *m, char *ident) {
     CHECKING_ASSERTF(m->checking_current->generic_assign,
-                  "generic assign failed, use type gen must in global fn");
+                     "generic assign failed, use type gen must in global fn");
     type_t *assign = table_get(m->checking_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);

@@ -372,12 +372,28 @@ uint8_t type_kind_sizeof(type_kind t) {
 }
 
 /**
- * TODO 目前阶段最大的数据类型也就是指针了
- * TODO 数组和 struct 需要特殊处理
  * @param t
  * @return
  */
 uint16_t type_sizeof(type_t t) {
+    if (t.kind == TYPE_STRUCT) {
+        type_struct_t *s = t.struct_;
+        int64_t size = 0;
+        for (int i = 0; i < s->properties->length; ++i) {
+            struct_property_t *p = ct_list_value(s->properties, i);
+            uint64_t item_size = type_sizeof(p->type);
+
+            size = align_up(size, item_size);
+            size += item_size;
+        }
+
+        return size;
+    }
+
+    if (t.kind == TYPE_ARRAY) {
+        return t.array->length * type_sizeof(t.array->element_type);
+    }
+
     return type_kind_sizeof(t.kind);
 }
 

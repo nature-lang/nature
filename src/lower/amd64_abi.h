@@ -11,8 +11,7 @@ typedef enum {
 //    AMD64_MODE_X87 // 不认识，暂时忽略
 } amd64_class_t;
 
-// 基于 operand 类型判断 arg 应该通过寄存器传递还是通过栈传递给 caller
-int64_t amd64_arg_classify(closure_t *c, lir_operand_t *arg, amd64_class_t *lo, amd64_class_t *hi);
+int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint64_t offset);
 
 /**
  * 返回 lir 指令列表

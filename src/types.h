@@ -374,6 +374,8 @@ typedef enum {
     LIR_OPCODE_FN_BEGIN, // output 为 formals 操作数
     LIR_OPCODE_FN_END, // 无操作数
 
+    LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
+
     LIR_OPCODE_ENV_CAPTURE,
     LIR_OPCODE_ENV_CLOSURE,
 } lir_opcode_t;
@@ -452,6 +454,9 @@ typedef struct closure_t {
     // gc 使用
     int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0. rsp 在函数的入口点之前应该始终保持 16byte 对齐
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
+
+    // runtime 参数可能保存在 stack 也可能保存在 reg 中。
+    // 无论保存在哪里，其都是一个 8byte 的 pointer
     uint64_t fn_runtime_reg;
     uint64_t fn_runtime_stack;
     void *fn_runtime_operand; // lir_operand_t

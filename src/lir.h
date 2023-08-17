@@ -271,7 +271,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 
 lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind);
 
-static inline lir_operand_t *stack_operand(module_t *m, int64_t slot, uint64_t size) {
+static inline lir_operand_t *lir_stack_operand(module_t *m, int64_t slot, uint64_t size) {
     lir_stack_t *stack = NEW(lir_stack_t);
     stack->slot = slot;
     stack->size = size;
@@ -279,12 +279,12 @@ static inline lir_operand_t *stack_operand(module_t *m, int64_t slot, uint64_t s
     return operand_new(LIR_OPERAND_STACK, stack);
 }
 
-static inline lir_operand_t *var_operand(module_t *m, char *ident) {
+static inline lir_operand_t *lir_var_operand(module_t *m, char *ident) {
     lir_var_t *var = lir_var_new(m, ident);
     return operand_new(LIR_OPERAND_VAR, var);
 }
 
-static inline lir_operand_t *label_operand(char *ident, bool is_local) {
+static inline lir_operand_t *lir_label_operand(char *ident, bool is_local) {
     lir_symbol_label_t *label = NEW(lir_symbol_label_t);
     label->ident = ident;
     label->is_local = is_local;
@@ -299,7 +299,7 @@ static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
     assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);
 
     // 构造 label
-    return label_operand(ident, s->is_local);
+    return lir_label_operand(ident, s->is_local);
 }
 
 static inline lir_operand_t *symbol_var_operand(char *ident, type_kind kind) {
@@ -312,7 +312,7 @@ static inline lir_operand_t *symbol_var_operand(char *ident, type_kind kind) {
 
 static inline lir_operand_t *lir_copy_label_operand(lir_operand_t *l) {
     lir_symbol_label_t *label = l->value;
-    return label_operand(label->ident, label->is_local);
+    return lir_label_operand(label->ident, label->is_local);
 }
 
 static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64_t flag) {
@@ -527,12 +527,12 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
     return op;
 }
 
-static inline lir_op_t *lir_op_result(lir_opcode_t code, lir_operand_t *result) {
+static inline lir_op_t *lir_op_output(lir_opcode_t code, lir_operand_t *result) {
     return lir_op_new(code, NULL, NULL, result);
 }
 
 static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
-    return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, label_operand(ident, is_local));
+    return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(ident, is_local));
 }
 
 static inline lir_op_t *lir_op_unique_label(module_t *m, char *ident) {
@@ -623,7 +623,7 @@ static inline lir_op_t *rt_call(char *name, lir_operand_t *result, int arg_count
     }
     va_end(args);
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
-    return lir_op_new(LIR_OPCODE_RT_CALL, label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result);
 }
 
 static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {
@@ -637,7 +637,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
     }
     va_end(args);
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
-    return lir_op_new(LIR_OPCODE_CALL, label_operand(name, false), call_params_operand, result);
+    return lir_op_new(LIR_OPCODE_CALL, lir_label_operand(name, false), call_params_operand, result);
 }
 
 /**
@@ -924,24 +924,32 @@ static inline int64_t var_stack_slot(closure_t *c, lir_var_t *var) {
     return *i->stack_slot;
 }
 
-static inline void lir_stack_alloc(module_t *m, closure_t *c, type_t t, lir_operand_t *dst_operand) {
+/**
+ * 返回 stack, 可以用来直接 push 值进去
+ * @param c
+ * @param t
+ * @param dst_operand
+ * @return
+ */
+static inline lir_operand_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
+    module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
+    assert(is_alloc_stack(t));
 
     uint64_t size = type_sizeof(t);
-    lir_stack_t *stack = NEW(lir_stack_t);
-    c->stack_offset += size;
+    c->stack_offset += align_up(size, QWORD);
 
-    uint64_t align = size;
-    if (align > 8) {
-        align = 8;
-    }
-
-    c->stack_offset += size;
-    c->stack_offset = align_up(c->stack_offset, align);
-
-    lir_operand_t *src_operand = stack_operand(m, -c->stack_offset, size);
+    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
 
     OP_PUSH(lir_op_lea(dst_operand, src_operand));
+
+    return src_operand;
+}
+
+static inline lir_operand_t *lir_stack_offset(module_t *m, lir_operand_t *operand, int64_t offset) {
+    assert(operand->assert_type == LIR_OPERAND_STACK);
+    lir_stack_t *stack = operand->value;
+    return lir_stack_operand(m, stack->slot + offset, stack->size);
 }
 
 static inline void lir_set_var_notnull(lir_operand_t *operand) {

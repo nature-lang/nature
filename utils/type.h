@@ -277,7 +277,7 @@ struct type_alias_t {
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct type_array_t {
     uint64_t length;
-//    type_t element_type;
+    type_t element_type; // 这个必须要有呀
     rtype_t element_rtype;
 };
 
@@ -576,7 +576,7 @@ static inline bool can_type_casting(type_kind kind) {
 }
 
 static inline bool is_alloc_stack(type_t t) {
-    return t.kind == TYPE_STRUCT || t.kind == TYPE_STRING;
+    return t.kind == TYPE_STRUCT;
 }
 
 /**
