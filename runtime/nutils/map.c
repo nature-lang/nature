@@ -56,7 +56,7 @@ void map_grow(n_map_t *m) {
         }
 
         // rehash
-        map_assign(m, key_ref, value_ref);
+        map_assign(m, key_ref);
     }
 }
 
@@ -137,7 +137,6 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     char *key_str = rtype_value_str(key_rtype, key_ref);
-    rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
 
     DEBUGF("[runtime.map_assign] key_rtype_kind: %d, key_str: %s, hash_index=%lu,",
            key_rtype->kind,

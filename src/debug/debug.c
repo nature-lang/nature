@@ -147,6 +147,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_RT_CALL]="R_CALL",
         [LIR_OPCODE_CLR] ="CLR    ",
         [LIR_OPCODE_CLV] ="CLV    ",
+        [LIR_OPCODE_NOP] ="NOP    ",
         [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",

@@ -60,14 +60,7 @@ static inline bool is_builtin_call(char *ident) {
     }
 
     return str_equal(ident, "print") ||
-           str_equal(ident, "println") ||
-           str_equal(ident, "list_push") ||
-           str_equal(ident, "list_length") ||
-           str_equal(ident, "map_delete") ||
-           str_equal(ident, "map_length") ||
-           str_equal(ident, "set_contains") ||
-           str_equal(ident, "set_add") ||
-           str_equal(ident, "set_delete");
+           str_equal(ident, "println");
 }
 
 symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);

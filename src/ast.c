@@ -9,9 +9,9 @@ ast_ident *ast_new_ident(char *literal) {
 }
 
 type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
-    if (type_fn->rest && index >= type_fn->formal_types->length - 1) {
+    if (type_fn->rest && index >= type_fn->param_types->length - 1) {
         // rest handle
-        type_t *last_param_type = ct_list_value(type_fn->formal_types, type_fn->formal_types->length - 1);
+        type_t *last_param_type = ct_list_value(type_fn->param_types, type_fn->param_types->length - 1);
 
         // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
         assert(last_param_type->kind == TYPE_LIST);
@@ -24,11 +24,11 @@ type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
         return &last_param_type->list->element_type;
     }
 
-    if (index >= type_fn->formal_types->length) {
+    if (index >= type_fn->param_types->length) {
         return NULL;
     }
 
-    return ct_list_value(type_fn->formal_types, index);
+    return ct_list_value(type_fn->param_types, index);
 }
 
 static list_t *ct_list_type_copy(list_t *temp_list) {
@@ -55,7 +55,7 @@ static type_union_t *type_union_copy(type_union_t *temp) {
 static type_fn_t *type_fn_copy(type_fn_t *temp) {
     type_fn_t *fn = COPY_NEW(type_fn_t, temp);
     fn->name = strdup(temp->name);
-    fn->formal_types = ct_list_type_copy(temp->formal_types);
+    fn->param_types = ct_list_type_copy(temp->param_types);
     fn->return_type = type_copy(temp->return_type);
     return fn;
 }

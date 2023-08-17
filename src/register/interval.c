@@ -413,6 +413,7 @@ void interval_build(closure_t *c) {
                     }
                 }
             }
+
             // add reg hint for move
             if (op->code == LIR_OPCODE_MOVE) {
                 interval_t *hint_interval = operand_interval(c, op->first);

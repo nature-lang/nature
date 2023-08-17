@@ -11,124 +11,6 @@ static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_ope
     return lir_reset_operand(temp, operand->pos);
 }
 
-static lir_operand_t *select_return_reg(lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    if (kind == TYPE_FLOAT64) {
-        return operand_new(LIR_OPERAND_REG, xmm0s64);
-    }
-    if (kind == TYPE_FLOAT32) {
-        return operand_new(LIR_OPERAND_REG, xmm0s32);
-    }
-
-    return lir_reg_operand(rax->index, kind);
-}
-
-/**
- * call actual params handle
- * mov var -> rdi
- * mov var -> rax
- * @param c
- * @param args
- * @return
- */
-static linked_t *amd64_args_lower(closure_t *c, slice_t *args) {
-    linked_t *operations = linked_new();
-    linked_t *push_operations = linked_new();
-    int push_length = 0;
-    uint8_t used[2] = {0};
-    for (int i = 0; i < args->count; ++i) {
-        lir_operand_t *arg = args->take[i];
-        type_kind type_kind = operand_type_kind(arg);
-        reg_t *reg = amd64_fn_param_next_reg(used, type_kind);
-        if (reg) {
-            // 再全尺寸模式下清空 reg 避免因为 reg 空间占用导致的异常问题
-            if (reg->size < QWORD && is_integer(type_kind)) {
-                linked_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
-                                                   operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
-            }
-
-            // TODO 使用 movzx 或者 movsx 可以做尺寸不匹配到 mov, 就不用做上面到 CLR 了
-            lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), arg);
-
-            linked_push(operations, op);
-        } else {
-            // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
-            // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
-            // 不过 call 之前需要保证 rsp 16 byte 对齐
-            // TODO push 目标是一个浮点数怎么处理？
-            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, arg, NULL, NULL);
-            linked_push(push_operations, push_op);
-            push_length += QWORD;
-        }
-    }
-    // 由于使用了 push 指令操作了堆栈，可能导致堆栈不对齐，所以需要操作一下堆栈对齐
-    uint64_t diff_length = align_up(push_length, 16) - push_length;
-
-    // sub rsp - 1 = rsp
-    // 先 sub 再 push, 保证 rsp 16 byte 对齐
-    if (diff_length > 0) {
-        lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
-                                         operand_new(LIR_OPERAND_REG, rsp),
-                                         int_operand(diff_length),
-                                         operand_new(LIR_OPERAND_REG, rsp));
-        linked_push(push_operations, binary_op);
-    }
-
-    // 倒序 push operations 追加到 operations 中
-    linked_node *current = linked_last(push_operations);
-    while (current && current->value) {
-        linked_push(operations, current->value);
-        current = current->prev;
-    }
-
-    return operations;
-}
-
-/**
- * 寄存器选择进行了 fit 匹配
- * @param c
- * @param formals
- * @return
- */
-static linked_t *amd64_formals_lower(closure_t *c, slice_t *formals) {
-    linked_t *operations = linked_new();
-    uint8_t used[2] = {0};
-    // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
-    int16_t stack_param_slot = 16; // ret addr + push rsp
-    for (int _i = 0; _i < (formals)->count; ++_i) {
-        lir_var_t *var = formals->take[_i];
-        lir_operand_t *source = NULL;
-        reg_t *reg = amd64_fn_param_next_reg(used, var->type.kind);
-        if (reg) {
-            source = operand_new(LIR_OPERAND_REG, reg);
-
-            if (c->fn_runtime_operand != NULL && _i == formals->count - 1) {
-                c->fn_runtime_reg = reg->index;
-            }
-        } else {
-            lir_stack_t *stack = NEW(lir_stack_t);
-            // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
-            stack->size = type_kind_sizeof(var->type.kind);
-            stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
-            if (c->fn_runtime_operand != NULL && _i == formals->count - 1) {
-                c->fn_runtime_stack = stack->slot;
-            }
-
-            // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了
-            // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
-            stack_param_slot += QWORD; // 固定 8 bit， 不过 8byte 会造成 stack_slot align exception
-
-            source = operand_new(LIR_OPERAND_STACK, stack);
-        }
-
-        lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_VAR, var), source);
-        linked_push(operations, op);
-    }
-
-    return operations;
-}
-
-
 static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     // var 才能分配 reg, 正常来说肯定是，如果不是就需要做 convert
@@ -182,10 +64,10 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
                 symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f64_value;
+                symbol->value = (uint8_t * ) & imm->f64_value;
             } else if (imm->kind == TYPE_FLOAT32) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f32_value;
+                symbol->value = (uint8_t * ) & imm->f32_value;
             } else {
                 assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
@@ -249,57 +131,6 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         linked_push(list, rt_call(RT_CALL_ENV_CLOSURE, NULL, 0));
     }
 
-    return list;
-}
-
-static linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-
-    // lower call actual params
-    linked_t *temps = amd64_args_lower(c, op->second->value);
-    linked_concat(list, temps);
-    op->second->value = slice_new();
-
-    if (op->output == NULL) {
-        linked_push(list, op);
-    } else {
-        lir_operand_t *reg_operand = select_return_reg(op->output);
-        // call
-        linked_push(list, lir_op_new(op->code, op->first, op->second, reg_operand));
-        // mov rax -> output
-        linked_push(list, lir_op_move(op->output, reg_operand));
-    }
-
-    // TODO 归还栈空间！
-
-    return list;
-}
-
-static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    linked_push(list, op);
-
-    // fn begin
-    // mov rsi -> formal param 1
-    // mov rdi -> formal param 2
-    // ....
-    linked_t *temps = amd64_formals_lower(c, op->output->value);
-    linked_node *current = linked_last(temps);
-    while (current && current->value != NULL) {
-        linked_push(list, current->value);
-        current = current->prev;
-    }
-    op->output->value = slice_new();
-
-    return list;
-}
-
-static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    // 1.1 return 指令需要将返回值放到 rax 中
-    lir_operand_t *reg_operand = select_return_reg(op->first);
-    linked_push(list, lir_op_move(reg_operand, op->first));
-    linked_push(list, lir_op_new(op->code, reg_operand, NULL, NULL));
     return list;
 }
 
@@ -401,10 +232,12 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_concat(operations, amd64_lower_fn_begin(c, op));
             continue;
         }
-        if (op->code == LIR_OPCODE_FN_END && op->first != NULL) {
+
+        if (op->code == LIR_OPCODE_FN_END) {
             linked_concat(operations, amd64_lower_fn_end(c, op));
             continue;
         }
+
         if (lir_op_factor(op) && is_integer(operand_type_kind(op->output))) {
             // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));
@@ -437,8 +270,6 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         linked_push(operations, op);
     }
-
-    // TODO 再次遍历对 mov big data 进行 lower
 
     block->operations = operations;
 }

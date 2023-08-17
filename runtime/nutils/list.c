@@ -169,8 +169,16 @@ n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
     return merged;
 }
 
+n_cptr_t list_element_addr(n_list_t *l, uint64_t index) {
+    if (index >= l->length) {
+        char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
+        DEBUGF("[runtime.list_element_addr] has err %s", msg);
+        rt_processor_attach_errort(msg);
+        return 0;
+    }
 
-
-
-
-
+    uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
+    // 计算 offset
+    uint64_t offset = element_size * index; // (size unit byte) * index
+    return (n_cptr_t) l->data + offset;
+}

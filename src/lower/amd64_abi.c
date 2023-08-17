@@ -2,7 +2,7 @@
 #include "src/register/amd64.h"
 #include "src/cross.h"
 
-static lir_operand_t *select_return_reg(lir_operand_t *operand) {
+lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     if (kind == TYPE_FLOAT64) {
         return operand_new(LIR_OPERAND_REG, xmm0s64);
@@ -14,11 +14,10 @@ static lir_operand_t *select_return_reg(lir_operand_t *operand) {
     return lir_reg_operand(rax->index, kind);
 }
 
-static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
+linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
     if (!c->return_operand) {
-        linked_push(result, op);
-        return result;
+        goto END;
     }
 
     lir_operand_t *return_operand = c->return_operand;
@@ -29,6 +28,7 @@ static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
     if (count == 0) {
         // 参数已经通过内存给到了目标, 按照规约，还需要将 return_operand 中的值 move 到 rax 中
         linked_push(result, lir_op_move(operand_new(LIR_OPERAND_REG, rax), return_operand));
+        goto END;
         return result;
     }
 
@@ -69,6 +69,9 @@ static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
 
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
+
+    END:
+    linked_push(result, op);
 
     return result;
 }
@@ -137,7 +140,6 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             // 结构体由于 caller 已经申请了 stack 空间，所以参数中直接使用该空间的地址即可
             // 而不需要进行重复的 copy 和 stack 空间申请
             lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type));
-            stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
             if (param_type.kind == TYPE_STRUCT) {
@@ -147,6 +149,13 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             } else {
                 linked_push(result, lir_op_move(dst_param, src));
             }
+
+            // 最后一个参数是 fn_runtime_operand 参数，将其记录下来
+            if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
+                c->fn_runtime_stack = stack_param_slot;  // 最后一个参数所在的栈的起点
+            }
+
+            stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
         } else {
             if (param_type.kind == TYPE_STRUCT) {
                 // 为 var 申请低保空间
@@ -188,16 +197,23 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 assertf(count == 1, "the normal type uses only one register");
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
+                uint8_t reg_index;
                 if (lo == AMD64_CLASS_INTEGER) {
                     // 查找合适大小的 reg 进行 mov
-                    uint8_t reg_index = int_reg_indices[int_reg_index++];
+                    reg_index = int_reg_indices[int_reg_index++];
                     lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, param_type.kind));
                 } else if (lo == AMD64_CLASS_SSE) {
-                    uint8_t reg_index = sse_reg_indices[sse_reg_index++];
+                    reg_index = sse_reg_indices[sse_reg_index++];
                     lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, param_type.kind));
                 } else {
                     assert(false);
                 }
+
+                // fn runtime operand 就是一个 type_fn 类型的指针
+                if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
+                    c->fn_runtime_reg = reg_index;
+                }
+
 
                 linked_push(result, lir_op_move(dst_param, lo_reg_operand));
             }
@@ -207,13 +223,17 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
     return result;
 }
 
-static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
+linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
+    linked_push(result, op);
+
     amd64_class_t lo, hi = AMD64_CLASS_NO;
+    slice_t *params = op->output->value;
 
     if (c->return_operand) {
         type_t return_type = lir_operand_type(c->return_operand);
         int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
+        // 在 fn begin 中进行 return operand 的初始化
         if (count == 0) {
             lir_operand_t *return_operand = c->return_operand;
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
@@ -222,7 +242,6 @@ static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assertf(var->type.kind == TYPE_STRUCT, "only struct can use stack pass");
             var->type = type_ptrof(var->type);
 
-            slice_t *params = op->output->value;
             slice_insert(params, 0, var);
         } else {
             if (is_alloc_stack(return_type)) {
@@ -233,8 +252,9 @@ static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
         }
     }
 
-    linked_concat(result, amd64_lower_params(c, op->output->value));
+    linked_concat(result, amd64_lower_params(c, params));
 
+    op->output->value = slice_new();
     return result;
 }
 
@@ -260,29 +280,53 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg = args->take[i];
         type_t arg_type = lir_operand_type(arg);
-        *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
 
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
-        if (count == 0) { // 返回 0 就是需要内存传递
+        if (count == 0) { // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
+            *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
             onstack[i] = 1;
             continue;
-        }
-
-        if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
-            onstack[i] = 0;
-            sse_reg_count++;
-        } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
-            onstack[i] = 0;
-            int_reg_count++;
-        }
-
-        if (count == 2) {
-            if (hi == AMD64_CLASS_SSE && sse_reg_count <= 8) {
+        } else if (count == 1) {
+            if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
                 onstack[i] = 0;
                 sse_reg_count++;
-            } else if (hi == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
+            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
                 onstack[i] = 0;
                 int_reg_count++;
+            } else {
+                *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+                onstack[i] = 1;
+                continue;
+            }
+        } else if (count == 2) {
+            bool lo_to_reg = false;
+            uint8_t *lo_reg_count;
+            bool hi_to_reg = false;
+            uint8_t *hi_reg_count;
+            if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
+                lo_to_reg = true;
+                lo_reg_count = &sse_reg_count;
+            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
+                lo_to_reg = true;
+                lo_reg_count = &int_reg_count;
+            }
+
+            if (hi == AMD64_CLASS_SSE && sse_reg_count <= 8) {
+                hi_to_reg = true;
+                hi_reg_count = &sse_reg_count;
+            } else if (hi == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
+                hi_to_reg = true;
+                hi_reg_count = &int_reg_count;
+            }
+
+            if (hi_to_reg && lo_to_reg) {
+                onstack[i] = 1;
+                (*lo_reg_count) += 1;
+                (*hi_reg_count) += 1;
+            } else {
+                *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+                onstack[i] = 1;
+                continue;
             }
         }
     }
@@ -407,8 +451,8 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     amd64_class_t lo, hi = AMD64_CLASS_NO;
     int64_t count = 0;
     if (call_result) {
-        type_t call_type = lir_operand_type(call_result);
-        count = amd64_type_classify(call_type, &lo, &hi, 0);
+        type_t result_type = lir_operand_type(call_result);
+        count = amd64_type_classify(result_type, &lo, &hi, 0);
         if (count == 0) {
             type_t call_result_type = lir_operand_type(call_result);
             assert(call_result_type.kind == TYPE_STRUCT);
@@ -428,7 +472,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         return result;
     }
 
-    type_t call_type = lir_operand_type(call_result);
+    type_t result_type = lir_operand_type(call_result);
 
     // call 指令 存在返回值， 现在需要处理相关的返回值,首先返回值必须通过 rax/rdi 返回
     lir_operand_t *lo_src_reg;
@@ -441,7 +485,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         lo_kind = TYPE_FLOAT64;
     }
 
-    if (call_type.kind == TYPE_STRUCT) {
+    if (result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令
 
         slice_t *output_regs = slice_new();
@@ -468,7 +512,10 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     } else {
         assert(count == 1);
         reg_t *lo_reg = lo_src_reg->value;
-        lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, call_type.kind));
+        lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, result_type.kind));
+
+        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg));
+
         linked_push(result, lir_op_move(call_result, lo_src_reg));
     }
 

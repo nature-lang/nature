@@ -245,6 +245,10 @@ alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var)
         return ALLOC_KIND_SHOULD;
     }
 
+    if (op->code == LIR_OPCODE_NOP) {
+        return ALLOC_KIND_SHOULD;
+    }
+
     // phi 也属于 def, 所以必须分配寄存器
     return ALLOC_KIND_MUST;
 }

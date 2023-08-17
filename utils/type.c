@@ -210,8 +210,8 @@ static rtype_t rtype_fn(type_fn_t *t) {
     char *str = itoa(TYPE_FN);
     rtype_t return_rtype = ct_reflect_type(t->return_type);
     str = str_connect(str, itoa(return_rtype.hash));
-    for (int i = 0; i < t->formal_types->length; ++i) {
-        type_t *typeuse = ct_list_value(t->formal_types, i);
+    for (int i = 0; i < t->param_types->length; ++i) {
+        type_t *typeuse = ct_list_value(t->param_types, i);
         rtype_t formal_type = ct_reflect_type(*typeuse);
         str = str_connect(str, itoa(formal_type.hash));
     }
@@ -820,13 +820,13 @@ bool type_compare(type_t left, type_t right) {
         }
 
         // TODO rest 支持
-        if (left_type_fn->formal_types->length != right_type_fn->formal_types->length) {
+        if (left_type_fn->param_types->length != right_type_fn->param_types->length) {
             return false;
         }
 
-        for (int i = 0; i < left_type_fn->formal_types->length; ++i) {
-            type_t *left_formal_type = ct_list_value(left_type_fn->formal_types, i);
-            type_t *right_formal_type = ct_list_value(right_type_fn->formal_types, i);
+        for (int i = 0; i < left_type_fn->param_types->length; ++i) {
+            type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
+            type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
             if (!type_compare(*left_formal_type, *right_formal_type)) {
                 return false;
             }

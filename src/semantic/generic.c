@@ -74,8 +74,8 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
         // 可选的返回类型
         generic_params_collect(fndef, fn->return_type);
 
-        for (int i = 0; i < fn->formal_types->length; ++i) {
-            type_t *formal_type = ct_list_value(fn->formal_types, i);
+        for (int i = 0; i < fn->param_types->length; ++i) {
+            type_t *formal_type = ct_list_value(fn->param_types, i);
             generic_params_collect(fndef, *formal_type);
         }
         return;

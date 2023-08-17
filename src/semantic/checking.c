@@ -45,8 +45,8 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
 
 static uint32_t fn_params_hash(type_fn_t *fn) {
     char *str = itoa(TYPE_FN);
-    for (int i = 0; i < fn->formal_types->length; ++i) {
-        type_t *t = ct_list_value(fn->formal_types, i);
+    for (int i = 0; i < fn->param_types->length; ++i) {
+        type_t *t = ct_list_value(fn->param_types, i);
         rtype_t r = ct_reflect_type(*t);
         str = str_connect(str, itoa(r.hash));
     }
@@ -89,12 +89,12 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
         type_t type_fn = fndef->type;
         if (type_fn.fn->rest) {
             // 实参的数量大于等于 type_fn.params.length - 1
-            if (args->length < (type_fn.fn->formal_types->length - 1)) {
+            if (args->length < (type_fn.fn->param_types->length - 1)) {
                 continue;
             }
         } else {
             //数量必须相等
-            if (args->length != type_fn.fn->formal_types->length) {
+            if (args->length != type_fn.fn->param_types->length) {
                 continue;
             }
         }
@@ -1051,7 +1051,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
-        CHECKING_ASSERTF(call->args->length == target_type_fn->formal_types->length, "call params count failed");
+        CHECKING_ASSERTF(call->args->length == target_type_fn->param_types->length, "call params count failed");
     }
 
     for (int i = 0; i < call->args->length; ++i) {
@@ -1099,7 +1099,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     type_fn_t *type_fn = p->type.fn;
     call->return_type = type_fn->return_type;
 
-    type_t *first = ct_list_value(type_fn->formal_types, 0);
+    type_t *first = ct_list_value(type_fn->param_types, 0);
     if (first->kind != TYPE_SELF) {
         checking_call_params(m, call, type_fn);
         return type_fn->return_type;
@@ -1784,8 +1784,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type(m, fn->return_type);
-        for (int i = 0; i < fn->formal_types->length; ++i) {
-            type_t *formal_type = ct_list_value(fn->formal_types, i);
+        for (int i = 0; i < fn->param_types->length; ++i) {
+            type_t *formal_type = ct_list_value(fn->param_types, i);
             *formal_type = reduction_type(m, *formal_type);
         }
 
@@ -1984,7 +1984,7 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
     type_fn_t *f = NEW(type_fn_t);
 
     f->name = fndef->symbol_name;
-    f->formal_types = ct_list_new(sizeof(type_t));
+    f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
     fndef->return_type = f->return_type;
 
@@ -1996,7 +1996,7 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
 
         var->type = reduction_type(m, var->type);
 
-        ct_list_push(f->formal_types, &var->type);
+        ct_list_push(f->param_types, &var->type);
     }
 
     f->rest = fndef->rest_param;

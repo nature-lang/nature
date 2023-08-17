@@ -326,7 +326,7 @@ struct type_struct_t {
 struct type_fn_t {
     char *name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
-    list_t *formal_types; // type_t
+    list_t *param_types; // type_t
     bool rest;
 };
 // 类型描述信息 end

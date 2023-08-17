@@ -430,6 +430,8 @@ static void build_compiler(slice_t *modules) {
             // lir 向 arch 靠拢
             cross_lower(c);
 
+            debug_block_lir(c, "lower");
+
             // 线性扫描寄存器分配
             reg_alloc(c);
 

@@ -334,10 +334,10 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         return result;
     }
 
-    if (operand->assert_type == LIR_OPERAND_ACTUAL_PARAMS) {
-        slice_t *operands = operand->value;
-        for (int i = 0; i < operands->count; ++i) {
-            lir_operand_t *o = operands->take[i];
+    if (operand->assert_type == LIR_OPERAND_ARGS) {
+        slice_t *args = operand->value;
+        for (int i = 0; i < args->count; ++i) {
+            lir_operand_t *o = args->take[i];
             assert(o->assert_type == LIR_OPERAND_VAR ||
                    o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
                    o->assert_type == LIR_OPERAND_IMM ||
@@ -352,7 +352,7 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
     if (flag & FLAG(LIR_OPERAND_VAR) &&
         (operand->assert_type == LIR_OPERAND_PHI_BODY ||
          operand->assert_type == LIR_OPERAND_VARS ||
-         operand->assert_type == LIR_OPERAND_FORMAL_PARAMS)) {
+         operand->assert_type == LIR_OPERAND_PARAMS)) {
         slice_t *vars = operand->value;
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
@@ -432,7 +432,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         return new_operand;
     }
 
-    if (new_operand->assert_type == LIR_OPERAND_ACTUAL_PARAMS) {
+    if (new_operand->assert_type == LIR_OPERAND_ARGS) {
         slice_t *new_value = slice_new();
 
         slice_t *operands = operand->value;
@@ -490,7 +490,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->assert_type == LIR_OPERAND_FORMAL_PARAMS) {
+    if (operand->assert_type == LIR_OPERAND_PARAMS) {
         slice_t *formals = operand->value;
         for (int i = 0; i < formals->count; ++i) { // 这里都是 def flag
             lir_var_t *var = formals->take[i];
@@ -529,6 +529,10 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
 
 static inline lir_op_t *lir_op_output(lir_opcode_t code, lir_operand_t *result) {
     return lir_op_new(code, NULL, NULL, result);
+}
+
+static inline lir_op_t *lir_op_nop(lir_operand_t *result) {
+    return lir_op_new(LIR_OPCODE_NOP, NULL, NULL, result);
 }
 
 static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
@@ -613,16 +617,16 @@ static inline void lir_set_quick_op(basic_block_t *block) {
 
 
 static inline lir_op_t *rt_call(char *name, lir_operand_t *result, int arg_count, ...) {
-    slice_t *params_operand = slice_new();
+    slice_t *operand_args = slice_new();
 
     va_list args;
     va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t*);
-        slice_push(params_operand, param);
+        slice_push(operand_args, param);
     }
     va_end(args);
-    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
+    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
     return lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result);
 }
 
@@ -636,7 +640,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
         slice_push(params_operand, param);
     }
     va_end(args);
-    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ACTUAL_PARAMS, params_operand);
+    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, params_operand);
     return lir_op_new(LIR_OPCODE_CALL, lir_label_operand(name, false), call_params_operand, result);
 }
 

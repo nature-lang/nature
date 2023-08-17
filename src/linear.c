@@ -108,7 +108,6 @@ static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *targe
  */
 static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *target) {
     lir_operand_t *result = temp_var_operand(m, t);
-    uint64_t rtype_hash = ct_find_rtype_hash(t);
 
     if (lir_isnull_var(target)) {
         lir_stack_alloc(m->linear_current, t, target);
@@ -239,6 +238,13 @@ static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
     return temp;
 }
 
+static lir_operand_t *nop_temp_var_operand(module_t *m, type_t type) {
+    assert(type.kind > 0);
+    lir_operand_t *temp = temp_var_operand(m, type);
+    OP_PUSH(lir_op_new(LIR_OPCODE_NOP, NULL, NULL, temp));
+    return temp;
+}
+
 /**
  * 对于小于 8byte 类型的变量，可以直接将其值存储在 虚拟寄存器中.
  * 对于大于 8byte 类型的变量 (比如 struct/array) 通常需要在栈上申请空间, 虚拟寄存器中存储的是对应的栈地址
@@ -251,8 +257,6 @@ static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
  */
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
-    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, operand));
-
     if (is_alloc_stack(var_decl->type)) {
         // Allocate enough space and store the address of the allocated space in dst.
         lir_stack_alloc(m->linear_current, var_decl->type, operand);
@@ -747,6 +751,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
         assertf(m->linear_current->return_operand, "return operand must not be null");
 
+        // 这里算是一个 mov 操作了
         linear_expr(m, *ast->expr, m->linear_current->return_operand);
 
         // 保留用来做 return check
@@ -812,14 +817,14 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     assert(type_fn);
 
     // call 所有的参数都丢到 params 变量中
-    for (int i = 0; i < type_fn->formal_types->length; ++i) {
-        if (type_fn->rest && i >= type_fn->formal_types->length - 1) {
+    for (int i = 0; i < type_fn->param_types->length; ++i) {
+        if (type_fn->rest && i >= type_fn->param_types->length - 1) {
             // rest 超载情况处理
-            type_t *rest_list_type = ct_list_value(type_fn->formal_types, i);
+            type_t *rest_list_type = ct_list_value(type_fn->param_types, i);
             assertf(rest_list_type->kind == TYPE_LIST, "rest param must list type");
 
             // actual 的参数个数与 formal 的参数一致，并且 actual last type(must list) == formal last type 一致。
-            if (call->args->length == type_fn->formal_types->length &&
+            if (call->args->length == type_fn->param_types->length &&
                 (call->args->length - 1) == i) {
                 ast_expr_t *last_arg = ct_list_value(call->args, i);
 
@@ -832,15 +837,15 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             }
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
-            lir_operand_t *rest_target = linear_zero_list(m, *rest_list_type, NULL);
+            lir_operand_t *rest_target = linear_zero_list(m, *rest_list_type, temp_var_operand(m, *rest_list_type));
 
             for (int j = i; j < call->args->length; ++j) {
                 ast_expr_t *arg = ct_list_value(call->args, j);
                 lir_operand_t *rest_arg = linear_expr(m, *arg, NULL);
 
                 // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
-                lir_operand_t *param_ref = lea_operand_pointer(m, rest_arg);
-                OP_PUSH(rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, param_ref));
+                lir_operand_t *rest_arg_ref = lea_operand_pointer(m, rest_arg);
+                OP_PUSH(rt_call(RT_CALL_LIST_PUSH, NULL, 2, rest_target, rest_arg_ref));
             }
 
             slice_push(params, rest_target);
@@ -855,13 +860,14 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     // 使用一个 int_operand(0) 预留出 fn_runtime 所需的空间,这里不需要也不能判断出 target 是否有空间引用，所以统一预留
-    // call 本身不需要做任何的调整
+    // 比如 [fn():int] 这样的 list 引用下的, list[0]() 无法通过类型判断出 list[0] 是否引用的外部环境，是否需要预留 fn_runtime 空间,用于环境改写。
+    // 统一预留空间在最后一个参数基本不会有什么影响
     slice_push(params, int_operand(0));
 
 
     // call base_target,params -> target
     lir_op_t *call_op = lir_op_new(LIR_OPCODE_CALL, base_target,
-                                   operand_new(LIR_OPERAND_ACTUAL_PARAMS, params), target);
+                                   operand_new(LIR_OPERAND_ARGS, params), target);
 
     // 触发 call 指令, 结果存储在 target 指令中
     OP_PUSH(call_op);
@@ -1379,6 +1385,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // 数值类型转换
     if (is_number(as_expr->target_type.kind) && is_number(as_expr->src_operand.type.kind)) {
         lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
+
+        OP_PUSH(lir_op_nop(target)); // 如何清理多余的 nop 指令？
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
 
@@ -1406,7 +1414,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // union assert
     if (as_expr->src_operand.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
-        // 需要先预留好空间等待值 copy
+        OP_PUSH(lir_op_nop(target));
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref));
@@ -1762,7 +1770,7 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
     assertf(fn, "ast right not support");
 
     if (target == NULL) {
-        target = clv_temp_var_operand(m, expr.type);
+        target = temp_var_operand(m, expr.type); // 仅仅声明，未做任何的初始化
     }
 
     return fn(m, expr, target);
@@ -1818,7 +1826,7 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         c->fn_runtime_operand = fn_runtime_operand;
     }
 
-    OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_FORMAL_PARAMS, params)));
+    OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
 
     // 返回值 operand 也 push 到 params1 里面，方便处理
     if (fndef->return_type.kind != TYPE_VOID) {

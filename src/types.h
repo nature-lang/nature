@@ -322,8 +322,8 @@ typedef enum {
     LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
     LIR_OPERAND_STACK,
     LIR_OPERAND_PHI_BODY,
-    LIR_OPERAND_FORMAL_PARAMS,
-    LIR_OPERAND_ACTUAL_PARAMS,
+    LIR_OPERAND_PARAMS,
+    LIR_OPERAND_ARGS,
     LIR_OPERAND_SYMBOL_LABEL, // 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_INDIRECT_ADDR,

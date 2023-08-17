@@ -133,11 +133,11 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 static type_t analyzer_type_fn(ast_fndef_t *fndef) {
     type_fn_t *f = NEW(type_fn_t);
     f->name = fndef->symbol_name;
-    f->formal_types = ct_list_new(sizeof(type_t));
+    f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = fndef->return_type;
     for (int i = 0; i < fndef->formals->length; ++i) {
         ast_var_decl_t *var = ct_list_value(fndef->formals, i);
-        ct_list_push(f->formal_types, &var->type);
+        ct_list_push(f->param_types, &var->type);
     }
     f->rest = fndef->rest_param;
     type_t result = type_new(TYPE_FN, f);
@@ -278,8 +278,8 @@ static void analyzer_type(module_t *m, type_t *type) {
     if (type->kind == TYPE_FN) {
         type_fn_t *type_fn = type->fn;
         analyzer_type(m, &type_fn->return_type);
-        for (int i = 0; i < type_fn->formal_types->length; ++i) {
-            type_t *t = ct_list_value(type_fn->formal_types, i);
+        for (int i = 0; i < type_fn->param_types->length; ++i) {
+            type_t *t = ct_list_value(type_fn->param_types, i);
             analyzer_type(m, t);
         }
     }

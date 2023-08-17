@@ -243,8 +243,6 @@ static type_t parser_single_type(module_t *m) {
             int length = atoi(t->literal);
 
             PARSER_ASSERTF(length > 0, "list len must > 0")
-
-            type_list->length = length;
         }
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
@@ -326,14 +324,14 @@ static type_t parser_single_type(module_t *m) {
     // fn(int, int):int f
     if (parser_consume(m, TOKEN_FN)) {
         type_fn_t *typeuse_fn = NEW(type_fn_t);
-        typeuse_fn->formal_types = ct_list_new(sizeof(type_t));
+        typeuse_fn->param_types = ct_list_new(sizeof(type_t));
 
         parser_must(m, TOKEN_LEFT_PAREN);
         if (!parser_consume(m, TOKEN_RIGHT_PAREN)) {
             // 包含参数类型
             do {
                 type_t t = parser_type(m);
-                ct_list_push(typeuse_fn->formal_types, &t);
+                ct_list_push(typeuse_fn->param_types, &t);
             } while (parser_consume(m, TOKEN_COMMA));
             parser_consume(m, TOKEN_RIGHT_PAREN);
         }

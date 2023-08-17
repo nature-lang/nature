@@ -257,6 +257,11 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
     assert(false);
 }
 
+static slice_t *amd64_native_nop(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+    return operations;
+}
+
 /**
  * -0x18(%rbp) = indirect addr
  * @param op
@@ -716,6 +721,7 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
 amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_CLR] = amd64_native_clr,
         [LIR_OPCODE_CLV] = amd64_native_clv,
+        [LIR_OPCODE_NOP] = amd64_native_nop,
         [LIR_OPCODE_CALL] = amd64_native_call,
         [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
