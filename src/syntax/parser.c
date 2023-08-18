@@ -1670,7 +1670,7 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     // 读取表达式前缀
     parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
 
-    PARSER_ASSERTF(prefix_fn, "cannot parser ident='%s'", parser_peek(m)->literal)
+    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s'", parser_peek(m)->literal)
 
     ast_expr_t expr = prefix_fn(m); // advance
 

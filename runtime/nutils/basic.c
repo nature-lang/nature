@@ -339,12 +339,12 @@ void processor_attach_errort(n_string_t *msg) {
     p->errort = errort;
 }
 
-n_errort *processor_remove_errort() {
+n_errort processor_remove_errort() {
     processor_t *p = processor_get();
     n_errort *errort = p->errort;
     p->errort = n_errort_new("", 0);
     DEBUGF("[runtime.processor_remove_errort] remove errort: %p", errort);
-    return errort;
+    return *errort;
 }
 
 uint8_t processor_has_errort() {

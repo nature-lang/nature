@@ -15,16 +15,16 @@ fn one(bool need):int {
     return 2
 }
 
-var (s, one_err) = try one(true)
-if one_err.has {
-    print('one(true) has err:', one_err.msg, '\n')
+var (s, err) = try one(true)
+if err.has {
+    print('one(true) has err:', err.msg, '\n')
 } else {
     print('one(true) not err, s=', s, '\n')
 }
 
-var (s1, one_err1) = try one(false)
-if one_err1.has {
-    print('one(false) has err:', one_err1.msg, '\n')
+var (s1, err) = try one(false)
+if err.has {
+    print('one(false) has err:', err.msg, '\n')
 } else {
     print('one(false) not err, s1=', s1, '\n')
 }

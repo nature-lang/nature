@@ -133,15 +133,15 @@ static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *t
     assert(target);
     assert(target->assert_type == LIR_OPERAND_VAR);
 
-    // 相关属性全都赋予 zero 值
+    uint64_t offset = 0;
     for (int i = 0; i < t.struct_->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t.struct_->properties, i);
-        uint64_t offset = type_struct_offset(t.struct_, p->key);
 
+        uint16_t item_size = type_sizeof(p->type);
+        offset = align_up(offset, item_size);
 
         lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
         if (is_alloc_stack(p->type)) {
-            // foo.bar = person {}
             dst = lea_operand_pointer(m, dst);
         }
 
@@ -273,6 +273,7 @@ static lir_operand_t *nop_temp_var_operand(module_t *m, type_t type) {
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
     if (is_alloc_stack(var_decl->type)) {
+        // 这没有申请空间
         // Allocate enough space and store the address of the allocated space in dst.
         lir_stack_alloc(m->linear_current, var_decl->type, operand);
     }
@@ -388,14 +389,14 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *map_target = linear_expr(m, map_access->left, NULL);
 
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, map_access->key, NULL));
-    lir_operand_t *value_target = temp_var_operand(m, type_kind_new(TYPE_CPTR));
-    OP_PUSH(rt_call(RT_CALL_MAP_ASSIGN, value_target, 2, map_target, key_ref));
+    lir_operand_t *dst = temp_var_operand(m, type_kind_new(TYPE_CPTR));
+    OP_PUSH(rt_call(RT_CALL_MAP_ASSIGN, dst, 2, map_target, key_ref));
     if (!is_alloc_stack(stmt->right.type)) {
-        value_target = indirect_addr_operand(m, stmt->right.type, value_target, 0);
+        dst = indirect_addr_operand(m, stmt->right.type, dst, 0);
     }
 
 
-    linear_expr(m, stmt->right, value_target);
+    linear_expr(m, stmt->right, dst);
 }
 
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -497,11 +498,11 @@ linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tup
         offset = align_up((int64_t) offset, (int64_t) item_size);
 
         if (element->assert_type == AST_VAR_DECL) {
-            // 为 var 申请足够的空间
+            // 由于存在 var 的赋值，所以这里存在重复的空间申请。这是没有问题的
             ast_var_decl_t *var_decl = element->value;
             lir_operand_t *dst = linear_var_decl(m, var_decl);
 
-            // 计算 tuple target 对应的 offset 并生成 indirect
+            // 将 tuple 中的值 mov 到新的 var 空间中
             lir_operand_t *src = indirect_addr_operand(m, element->type, tuple_target, offset);
             if (is_alloc_stack(element->type)) {
                 src = lea_operand_pointer(m, src);
@@ -527,6 +528,8 @@ linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tup
  * @return
  */
 static void linear_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt_t *var_tuple_def) {
+    // - 左侧的值如果是一个 tuple_def 是否需要申请空间？ 原则上不用，右侧值会申请足够的空间, 然后将
+    // addr 返回回来，所以 tuple_target 中保存的就是一个指针地址。
     lir_operand_t *tuple_target = linear_expr(m, var_tuple_def->right, NULL);
 
     linear_var_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target, 0);
@@ -630,6 +633,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // key 和 value 需要进行一次初始化
     lir_operand_t *first_target = linear_var_decl(m, &ast->first);
+    OP_PUSH(lir_op_nop(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
     lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
 
     // 单值遍历清空下, 对于 list 调用 next value,
@@ -662,8 +666,9 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // gen value
     if (ast->second) {
-        lir_operand_t *value_target = linear_var_decl(m, ast->second);
-        lir_operand_t *value_ref = lea_operand_pointer(m, value_target);
+        lir_operand_t *second_target = linear_var_decl(m, ast->second);
+        OP_PUSH(lir_op_nop(second_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        lir_operand_t *value_ref = lea_operand_pointer(m, second_target);
 
         OP_PUSH(rt_call(
                 RT_CALL_ITERATOR_TAKE_VALUE, NULL, 4,
@@ -1146,7 +1151,7 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     uint64_t size = type_sizeof(expr.type);
 
     if (!target) {
-        target = temp_var_operand(m, expr.type);
+        target = nop_temp_var_operand(m, expr.type);
     }
 
     lir_operand_t *target_ref = target;
@@ -1259,18 +1264,18 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     ast_struct_select_t *ast = expr.value;
 
     lir_operand_t *struct_target = linear_expr(m, ast->left, NULL);
-    type_t t = ast->left.type;
+    type_t type_struct = ast->left.type;
 
-    uint64_t offset = type_struct_offset(t.struct_, ast->key);
+    uint64_t offset = type_struct_offset(type_struct.struct_, ast->key);
     // 先找到存放地址(可以用 indirect addr 算出来, 也可以直接用加法算出来？)
     // 总之先找到存放数据的 addr(这里直接计算出了)
-    lir_operand_t *src = indirect_addr_operand(m, t, struct_target, offset);
+    lir_operand_t *src = indirect_addr_operand(m, expr.type, struct_target, offset);
     // 如果是结构体的话，src 中存储的应该是指向的 addr
-    if (is_alloc_stack(t)) {
+    if (is_alloc_stack(expr.type)) {
         src = lea_operand_pointer(m, src);
     }
 
-    return linear_super_move(m, t, target, src);
+    return linear_super_move(m, expr.type, target, src);
 }
 
 /**
@@ -1373,7 +1378,7 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
         uint64_t item_size = type_sizeof(element->type);
 
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
-        offset = align_up((int64_t) offset, (int64_t) item_size);
+        offset = align_up(offset, item_size);
 
         // 基于 target 计算 addr
         lir_operand_t *dst = indirect_addr_operand(m, element->type, target, offset);
@@ -1481,65 +1486,84 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     exit(1);
 }
 
+/**
+ * @param m
+ * @param expr
+ * @param target
+ * @return
+ */
 static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_try_t *try = expr.value;
+
+    symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
+    assert(s);
+    ast_type_alias_stmt_t *errort_alias_stmt = s->ast_value;
+    assertf(errort_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
+
+    if (try->expr.type.kind == TYPE_VOID) {
+        // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
+        char *catch_end_label = make_unique_ident(m, CATCH_END_IDENT);
+        m->linear_current->catch_error_label = catch_end_label;
+
+        lir_operand_t *result_operand = linear_expr(m, try->expr, NULL);
+        m->linear_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+
+        // catch_error_label:  try expr 会跳转到这里
+        OP_PUSH(lir_op_label(catch_end_label, true));
+
+        // 提取 error 出来
+        lir_operand_t *errort_operand = target;
+        if (!errort_operand) {
+            errort_operand = temp_var_operand(m, errort_alias_stmt->type);
+            lir_stack_alloc(m->linear_current, errort_alias_stmt->type, errort_operand);
+        }
+
+        OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
+        return errort_operand;
+    }
+
+    // 1. 直接调用 rt_call_tuple_new 创建 tuple 空间, 然后再做 mov 操作
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
+    }
+    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
+    OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash)));
+
+    // result handle
+    lir_operand_t *result_operand = indirect_addr_operand(m, try->expr.type, target, 0);
+    if (is_alloc_stack(try->expr.type)) {
+        result_operand = lea_operand_pointer(m, result_operand);
+    }
 
     // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
     char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
     m->linear_current->catch_error_label = catch_error_label;
-    lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
-
-    symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
-    assert(s);
-
-    ast_type_alias_stmt_t *type_alias_stmt = s->ast_value;
-    assertf(type_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
-
-    lir_operand_t *result_operand = linear_expr(m, try->expr, NULL);
+    linear_expr(m, try->expr, result_operand);
     m->linear_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
 
-    // bal -> catch_end
+    // bal to catch_end
+    lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
     OP_PUSH(lir_op_bal(catch_end_label->output));
 
     // catch_error_label: ------------------------------------------------------------------------------------------------------
     OP_PUSH(lir_op_label(catch_error_label, true));
 
-    if (try->expr.type.kind != TYPE_VOID) {
-        // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 0 值
-        linear_zero_operand(m, try->expr.type, result_operand);
-    }
+    // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 zero 值
+    linear_zero_operand(m, try->expr.type, result_operand);
 
     // catch_end_label: ------------------------------------------------------------------------------------------------------
     OP_PUSH(catch_end_label);
-    // errort_operand 可能为空的 struct 或者非空
-    lir_operand_t *errort_operand = temp_var_operand(m, type_alias_stmt->type);
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
-    if (try->expr.type.kind == TYPE_VOID) {
-        return errort_operand;
+
+    // 根据 size + ali计算 offset
+    int64_t offset = type_tuple_offset(expr.type.tuple, 1);
+    lir_operand_t *errort_operand = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
+    if (is_alloc_stack(errort_alias_stmt->type)) {
+        errort_operand = lea_operand_pointer(m, errort_operand);
     }
 
-    // result label 和 error label 此时都是非 null 的值，将他们写入到 tuple 中即可
-    // make tuple target return
-    assertf(result_operand->assert_type == LIR_OPERAND_VAR, "linear expr result operand must lir var");
-    lir_var_t *var = result_operand->value;
-    ast_expr_t *result_expr = ast_ident_expr(expr.line, expr.column, var->ident);
-    result_expr->type = var->type;
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
 
-    // temp error ident
-    ast_expr_t *err_expr = ast_ident_expr(expr.line, expr.column, ((lir_var_t *) errort_operand->value)->ident);
-    err_expr->type = ((lir_var_t *) errort_operand->value)->type;
-
-    // (call(), error_operand())
-    ast_tuple_new_t *tuple = NEW(ast_tuple_new_t);
-    tuple->elements = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(tuple->elements, result_expr);
-    ct_list_push(tuple->elements, err_expr);
-
-    return linear_tuple_new(m, (ast_expr_t) {
-            .type = expr.type,
-            .assert_type = AST_EXPR_TUPLE_NEW,
-            .value = tuple
-    }, target);
+    return target;
 }
 
 /**

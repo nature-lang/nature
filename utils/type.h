@@ -312,7 +312,7 @@ struct type_struct_t {
     char *ident;
 //    uint8_t count;
 //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
-    uint8_t align;
+    uint8_t align; // struct 的最大对齐 size 缓存
     list_t *properties; // struct_property_t
 };
 
@@ -483,7 +483,7 @@ uint64_t type_struct_offset(type_struct_t *s, char *key);
 
 struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
-uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
+int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
@@ -506,7 +506,7 @@ static inline bool kind_in_heap(type_kind kind) {
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
            kind == TYPE_TUPLE ||
-           kind == TYPE_STRUCT ||
+           //           kind == TYPE_STRUCT ||
            kind == TYPE_FN;
 }
 
@@ -576,7 +576,7 @@ static inline bool can_type_casting(type_kind kind) {
 }
 
 static inline bool is_alloc_stack(type_t t) {
-    return t.kind == TYPE_STRUCT;
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_ARRAY;
 }
 
 /**

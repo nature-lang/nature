@@ -3,7 +3,7 @@
 #include "src/register/amd64.h"
 #include "amd64_abi.h"
 
-static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(kind));
 
@@ -64,10 +64,10 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
                 symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t * ) & imm->f64_value;
+                symbol->value = (uint8_t *) &imm->f64_value;
             } else if (imm->kind == TYPE_FLOAT32) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t * ) & imm->f32_value;
+                symbol->value = (uint8_t *) &imm->f32_value;
             } else {
                 assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
@@ -184,7 +184,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {
-        op->second = amd64_convert_to_var(c, list, op->second);
+        op->second = amd64_convert_first_to_temp(c, list, op->second);
     }
 
     // mov first -> rax
@@ -250,14 +250,21 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
-            op->first = amd64_convert_to_var(c, operations, op->first);
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }
 
         // lea symbol_label -> var 等都是允许的，主要是应对 imm int
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
-            op->first = amd64_convert_to_var(c, operations, op->first);
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
+            linked_push(operations, op);
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_MOVE && op->first->assert_type != LIR_OPERAND_VAR &&
+            op->output->assert_type != LIR_OPERAND_VAR) {
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }

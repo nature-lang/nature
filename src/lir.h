@@ -499,6 +499,15 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
+    if (operand->assert_type == LIR_OPERAND_REGS) {
+        slice_t *regs = operand->value;
+        for (int i = 0; i < regs->count; ++i) { // 这里都是 def flag
+            reg_t *reg = regs->take[i];
+            reg->flag |= FLAG(LIR_FLAG_DEF);
+        }
+        return;
+    }
+
     // 剩下的都是 use 直接提取出来即可
     slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
@@ -745,9 +754,14 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
             src_operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", src_operand->assert_type);
 
-    lir_operand_t *value_ref = temp_var_operand(m, type_kind_new(TYPE_CPTR));
-    OP_PUSH(lir_op_lea(value_ref, src_operand));
-    return value_ref;
+    type_t t = lir_operand_type(operand);
+    if (!is_alloc_stack(t)) {
+        t = type_ptrof(t);
+    }
+
+    lir_operand_t *temp_ref = temp_var_operand(m, t);
+    OP_PUSH(lir_op_lea(temp_ref, src_operand));
+    return temp_ref;
 }
 
 

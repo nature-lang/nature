@@ -997,40 +997,40 @@ void amd64_opcode_init() {
     opcode_tree_build(&pop_rm64);
 
     // 整形算数运算
-    opcode_tree_build(&add_rm8_imm8);
     opcode_tree_build(&add_rex_rm8_imm8);
+    opcode_tree_build(&add_rm8_imm8);
     opcode_tree_build(&add_rm16_imm16);
     opcode_tree_build(&add_rm32_imm32);
     opcode_tree_build(&add_rm64_imm32);
-    opcode_tree_build(&add_rm8_r8);
     opcode_tree_build(&add_rex_rm8_r8);
+    opcode_tree_build(&add_rm8_r8);
     opcode_tree_build(&add_rm16_r16);
     opcode_tree_build(&add_rm32_r32);
     opcode_tree_build(&add_rm64_r64);
-    opcode_tree_build(&add_r8_rm8);
     opcode_tree_build(&add_rex_r8_rm8);
+    opcode_tree_build(&add_r8_rm8);
     opcode_tree_build(&add_r16_rm16);
     opcode_tree_build(&add_r32_rm32);
     opcode_tree_build(&add_r64_rm64);
 
-    opcode_tree_build(&sub_rm8_imm8);
     opcode_tree_build(&sub_rex_rm8_imm8);
+    opcode_tree_build(&sub_rm8_imm8);
     opcode_tree_build(&sub_rm16_imm16);
     opcode_tree_build(&sub_rm32_imm32);
     opcode_tree_build(&sub_rm64_imm32);
-    opcode_tree_build(&sub_rm8_r8);
     opcode_tree_build(&sub_rex_rm8_r8);
+    opcode_tree_build(&sub_rm8_r8);
     opcode_tree_build(&sub_rm16_r16);
     opcode_tree_build(&sub_rm32_r32);
     opcode_tree_build(&sub_rm64_r64);
-    opcode_tree_build(&sub_r8_rm8);
     opcode_tree_build(&sub_rex_r8_rm8);
+    opcode_tree_build(&sub_r8_rm8);
     opcode_tree_build(&sub_r16_rm16);
     opcode_tree_build(&sub_r32_rm32);
     opcode_tree_build(&sub_r64_rm64);
 
-    opcode_tree_build(&idiv_rm8);
     opcode_tree_build(&idiv_rex_rm8);
+    opcode_tree_build(&idiv_rm8);
     opcode_tree_build(&idiv_rm16);
     opcode_tree_build(&idiv_rm32);
     opcode_tree_build(&idiv_rm64);
@@ -1041,15 +1041,15 @@ void amd64_opcode_init() {
 
 
     // mov reg -> rm
-    opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rex_rm8_r8);
+    opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rm16_r16);
     opcode_tree_build(&mov_rm32_r32);
     opcode_tree_build(&mov_rm64_r64);
 
     // mov rm -> reg
-    opcode_tree_build(&mov_r8_rm8);
     opcode_tree_build(&mov_rex_r8_rm8);
+    opcode_tree_build(&mov_r8_rm8);
     opcode_tree_build(&mov_r16_rm16);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_r32_rm32);
@@ -1068,32 +1068,22 @@ void amd64_opcode_init() {
     opcode_tree_build(&mov_rm32_imm32);
     opcode_tree_build(&mov_rm64_imm32);
 
-    opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rex_rm8_imm8);
+    opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rm16_imm16);
     opcode_tree_build(&cmp_rm32_imm32);
     opcode_tree_build(&cmp_rm64_imm32);
-    opcode_tree_build(&cmp_rm8_r8);
     opcode_tree_build(&cmp_rex_rm8_r8);
+    opcode_tree_build(&cmp_rm8_r8);
     opcode_tree_build(&cmp_rm16_r16);
     opcode_tree_build(&cmp_rm32_r32);
     opcode_tree_build(&cmp_r64_rm64);
-    opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_rex_r8_rm8);
+    opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_r16_rm16);
     opcode_tree_build(&cmp_r32_rm32);
     opcode_tree_build(&cmp_r64_rm64);
 
-    opcode_tree_build(&seta_rm8);
-    opcode_tree_build(&setae_rm8);
-    opcode_tree_build(&setb_rm8);
-    opcode_tree_build(&setbe_rm8);
-    opcode_tree_build(&setg_rm8);
-    opcode_tree_build(&setge_rm8);
-    opcode_tree_build(&setl_rm8);
-    opcode_tree_build(&setle_rm8);
-    opcode_tree_build(&sete_rm8);
-    opcode_tree_build(&setne_rm8);
     opcode_tree_build(&seta_rex_rm8);
     opcode_tree_build(&setae_rex_rm8);
     opcode_tree_build(&setb_rex_rm8);
@@ -1104,43 +1094,53 @@ void amd64_opcode_init() {
     opcode_tree_build(&setle_rex_rm8);
     opcode_tree_build(&sete_rex_rm8);
     opcode_tree_build(&setne_rex_rm8);
+    opcode_tree_build(&seta_rm8);
+    opcode_tree_build(&setae_rm8);
+    opcode_tree_build(&setb_rm8);
+    opcode_tree_build(&setbe_rm8);
+    opcode_tree_build(&setg_rm8);
+    opcode_tree_build(&setge_rm8);
+    opcode_tree_build(&setl_rm8);
+    opcode_tree_build(&setle_rm8);
+    opcode_tree_build(&sete_rm8);
+    opcode_tree_build(&setne_rm8);
 
-    opcode_tree_build(&neg_rm8);
     opcode_tree_build(&neg_rex_rm8);
+    opcode_tree_build(&neg_rm8);
     opcode_tree_build(&neg_rm16);
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
 
     // 位运算
-    opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rex_rm8);
+    opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rm16);
     opcode_tree_build(&not_rm32);
     opcode_tree_build(&not_rm64);
 
-    opcode_tree_build(&xor_rm8_imm8);
     opcode_tree_build(&xor_rex_rm8_imm8);
+    opcode_tree_build(&xor_rm8_imm8);
     opcode_tree_build(&xor_rm16_imm16);
     opcode_tree_build(&xor_rm32_imm32);
     opcode_tree_build(&xor_rm64_imm32);
-    opcode_tree_build(&xor_rm8_r8);
     opcode_tree_build(&xor_rex_rm8_r8);
+    opcode_tree_build(&xor_rm8_r8);
     opcode_tree_build(&xor_rm16_r16);
     opcode_tree_build(&xor_rm32_r32);
     opcode_tree_build(&xor_rm64_r64);
-    opcode_tree_build(&xor_r8_rm8);
     opcode_tree_build(&xor_rex_r8_rm8);
+    opcode_tree_build(&xor_r8_rm8);
     opcode_tree_build(&xor_r16_rm16);
     opcode_tree_build(&xor_r32_rm32);
     opcode_tree_build(&xor_r64_rm64);
 
-    opcode_tree_build(&or_rm8_imm8);
     opcode_tree_build(&or_rex_rm8_imm8);
+    opcode_tree_build(&or_rm8_imm8);
     opcode_tree_build(&or_rm16_imm16);
     opcode_tree_build(&or_rm32_imm32);
     opcode_tree_build(&or_rm64_imm32);
-    opcode_tree_build(&or_rm8_r8);
     opcode_tree_build(&or_rex_rm8_r8);
+    opcode_tree_build(&or_rm8_r8);
     opcode_tree_build(&or_rm16_r16);
     opcode_tree_build(&or_rm32_r32);
     opcode_tree_build(&or_rm64_r64);
@@ -1150,29 +1150,29 @@ void amd64_opcode_init() {
     opcode_tree_build(&or_r32_rm32);
     opcode_tree_build(&or_r64_rm64);
 
-    opcode_tree_build(&and_rm8_imm8);
     opcode_tree_build(&and_rex_rm8_imm8);
+    opcode_tree_build(&and_rm8_imm8);
     opcode_tree_build(&and_rm16_imm16);
     opcode_tree_build(&and_rm32_imm32);
     opcode_tree_build(&and_rm64_imm32);
-    opcode_tree_build(&and_rm8_r8);
     opcode_tree_build(&and_rex_rm8_r8);
+    opcode_tree_build(&and_rm8_r8);
     opcode_tree_build(&and_rm16_r16);
     opcode_tree_build(&and_rm32_r32);
     opcode_tree_build(&and_rm64_r64);
-    opcode_tree_build(&and_r8_rm8);
     opcode_tree_build(&and_rex_r8_rm8);
+    opcode_tree_build(&and_r8_rm8);
     opcode_tree_build(&and_r16_rm16);
     opcode_tree_build(&and_r32_rm32);
     opcode_tree_build(&and_r64_rm64);
 
-    opcode_tree_build(&sal_rm8_cl);
     opcode_tree_build(&sal_rex_rm8_cl);
+    opcode_tree_build(&sal_rm8_cl);
     opcode_tree_build(&sal_rm16_cl);
     opcode_tree_build(&sal_rm32_cl);
     opcode_tree_build(&sal_rm64_cl);
-    opcode_tree_build(&sar_rm8_cl);
     opcode_tree_build(&sar_rex_rm8_cl);
+    opcode_tree_build(&sar_rm8_cl);
     opcode_tree_build(&sar_rm16_cl);
     opcode_tree_build(&sar_rm32_cl);
     opcode_tree_build(&sar_rm64_cl);
@@ -1839,7 +1839,7 @@ static void set_disp(amd64_inst_format_t *format, reg_t *reg, uint8_t *disps, ui
     for (int i = 0; i < count; i++) {
         format->disps[j++] = disps[i];
     };
-    format->disp_count = count;
+    format->disp_count = j;
 }
 
 static void set_imm(amd64_inst_format_t *format, uint8_t *imms, uint8_t count) {
@@ -2026,7 +2026,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 format->modrm->rm = r->reg->index;
 
                 uint8_t temp[4] = {0};
-                uint8_t count = 1;
+                uint8_t count = 0;
                 set_disp(format, r->reg, temp, count);
 
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {

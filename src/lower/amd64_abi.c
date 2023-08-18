@@ -22,7 +22,8 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
 
     lir_operand_t *return_operand = c->return_operand;
     type_t t = lir_operand_type(return_operand);
-    amd64_class_t lo, hi = AMD64_CLASS_NO;
+    amd64_class_t lo = AMD64_CLASS_NO;
+    amd64_class_t hi = AMD64_CLASS_NO;
     int64_t count = amd64_type_classify(t, &lo, &hi, 0);
 
     if (count == 0) {
@@ -85,7 +86,8 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
     linked_t *result = linked_new();
 
-    amd64_class_t lo, hi = AMD64_CLASS_NO;
+    amd64_class_t lo = AMD64_CLASS_NO;
+    amd64_class_t hi = AMD64_CLASS_NO;
     uint8_t *onstack = mallocz(param_vars->count + 1);
 
     int64_t stack_param_slot = 16; // by rbp, rest addr 和 push rsp 占用了 16 个字节
@@ -243,7 +245,8 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
     linked_push(result, op);
 
-    amd64_class_t lo, hi = AMD64_CLASS_NO;
+    amd64_class_t lo = AMD64_CLASS_NO;
+    amd64_class_t hi = AMD64_CLASS_NO;
     slice_t *params = op->output->value;
 
     if (c->return_operand) {
@@ -282,7 +285,8 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg_size) {
     linked_t *result = linked_new();
 
-    amd64_class_t lo, hi = AMD64_CLASS_NO;
+    amd64_class_t lo = AMD64_CLASS_NO;
+    amd64_class_t hi = AMD64_CLASS_NO;
     uint8_t *onstack = mallocz(args->count + 1);
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
 
@@ -451,18 +455,18 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
     return result;
 }
 
-
 linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
     lir_operand_t *call_result = op->output;
     slice_t *args = op->second->value;
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
 
-    amd64_class_t lo, hi = AMD64_CLASS_NO;
+    amd64_class_t lo, hi;
     int64_t count = 0;
     if (call_result) {
         type_t result_type = lir_operand_type(call_result);
 
+        lo = hi = AMD64_CLASS_NO;
         count = amd64_type_classify(result_type, &lo, &hi, 0);
         if (count == 0) {
             type_t call_result_type = lir_operand_type(call_result);
@@ -504,10 +508,25 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     if (result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令
         slice_t *output_regs = slice_new();
-        slice_push(output_regs, lo_src_reg);
+        slice_push(output_regs, lo_src_reg->value); // 不能延后处理，会导致 flag 设置异常！
         lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
 
+        lir_operand_t *hi_src_reg;
+        type_kind hi_kind;
+        if (count == 2) {
+            if (hi == AMD64_CLASS_INTEGER) {
+                hi_src_reg = operand_new(LIR_OPERAND_REG, rdx);
+                hi_kind = TYPE_UINT64;
+            } else {
+                hi_src_reg = operand_new(LIR_OPERAND_REG, xmm1s64);
+                hi_kind = TYPE_FLOAT64;
+            }
+            slice_push(output_regs, hi_src_reg->value);
+        }
+
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, new_output));
+
+        // 调用完成后进行栈归还
         if (stack_arg_size > 0) {
             linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
         }
@@ -515,17 +534,8 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         // 从 reg 中将返回值 mov 到 call_result 上
         lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 0);
         linked_push(result, lir_op_move(dst, lo_src_reg));
-
         if (count == 2) {
-            lir_operand_t *hi_src_reg;
-            if (hi == AMD64_CLASS_INTEGER) {
-                hi_src_reg = operand_new(LIR_OPERAND_REG, rdx);
-            } else {
-                hi_src_reg = operand_new(LIR_OPERAND_REG, xmm1s64);
-            }
-
-            slice_push(output_regs, hi_src_reg);
-            dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 8);
+            dst = indirect_addr_operand(c->module, type_kind_new(hi_kind), call_result, QWORD);
             linked_push(result, lir_op_move(dst, hi_src_reg));
         }
     } else {
@@ -570,13 +580,14 @@ static amd64_class_t amd64_classify_merge(amd64_class_t a, amd64_class_t b) {
 }
 
 int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint64_t offset) {
-    if (type_sizeof(t) > 16) {
+    uint16_t size = type_sizeof(t);
+
+    if (size > 16) {
         return 0;
     }
 
-    assert(offset <= 16); // 主要是 struct 会产生 offset
     if (is_float(t.kind)) {
-        if (offset <= 8) {
+        if (offset < 8) {
             *lo = amd64_classify_merge(*lo, AMD64_CLASS_SSE);
         } else {
             *hi = amd64_classify_merge(*hi, AMD64_CLASS_SSE);
@@ -584,18 +595,31 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
     } else if (t.kind == TYPE_STRUCT) {
         // 遍历 struct 的每一个属性进行分类
         type_struct_t *type_struct = t.struct_;
-        offset = align_up(offset, type_struct->align); // 启示地址对齐
+        offset = align_up(offset, type_struct->align); // 开始地址对齐
 
         for (int i = 0; i < type_struct->properties->length; i++) {
             struct_property_t *p = ct_list_value(type_struct->properties, i);
             type_t element_type = p->type;
+            uint16_t element_size = type_sizeof(element_type);
+            uint16_t element_align = element_size;
+            if (p->type.kind == TYPE_STRUCT) {
+                element_align = p->type.struct_->align;
+            }
 
-            // 内部元素对齐
-            offset = align_up(offset, type_sizeof(element_type));
-            amd64_type_classify(element_type, lo, hi, offset);
+            // 每个元素地址对齐
+            offset = align_up(offset, element_align);
+            int64_t count = amd64_type_classify(element_type, lo, hi, offset);
+            if (count == 0) {
+                return 0;
+            }
+
+            offset += element_size;
         }
+
+        // 最终 size 对齐
+        offset = align_up(offset, type_struct->align);
     } else {
-        if (offset <= 8) {
+        if (offset < 8) {
             *lo = amd64_classify_merge(*lo, AMD64_CLASS_INTEGER);
         } else {
             *hi = amd64_classify_merge(*hi, AMD64_CLASS_INTEGER);

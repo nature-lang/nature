@@ -262,13 +262,21 @@ alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var)
  * @return
  */
 alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
+//    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE) && op->code != LIR_OPCODE_LEA) {
+    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
+        return ALLOC_KIND_MUST;
+    }
+
     // lea 指令的 use 一定是 first, 所以不需要重复判断
     if (op->code == LIR_OPCODE_LEA) {
         return ALLOC_KIND_NOT;
     }
 
     if (op->code == LIR_OPCODE_MOVE) {
-        if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
+            op->output->assert_type == LIR_OPERAND_STACK ||
+            op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
             return ALLOC_KIND_MUST;
         }
     }
@@ -296,12 +304,6 @@ alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var)
             return ALLOC_KIND_MUST;
         }
     }
-
-    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
-    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
-        return ALLOC_KIND_MUST;
-    }
-
     return ALLOC_KIND_SHOULD;
 }
 

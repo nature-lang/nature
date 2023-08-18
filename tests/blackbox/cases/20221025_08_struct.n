@@ -11,6 +11,6 @@ var foo = people {
 
 foo.c = 11
 
-print('foo.a = ', foo.a, '\n')
-print('foo.b = ', foo.b, '\n')
-print('foo.c = ', foo.c, '\n')
+println('foo.a =', foo.a)
+println('foo.b =', foo.b)
+println('foo.c =', foo.c)

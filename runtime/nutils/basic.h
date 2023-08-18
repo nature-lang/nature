@@ -37,7 +37,7 @@ void zero_fn();
 
 void processor_attach_errort(n_string_t *msg);
 
-n_errort *processor_remove_errort();
+n_errort processor_remove_errort();
 
 uint8_t processor_has_errort();
 

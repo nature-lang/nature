@@ -236,7 +236,6 @@ static rtype_t rtype_fn(type_fn_t *t) {
 static rtype_t rtype_struct(type_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
     uint64_t offset = 0;
-    uint64_t max = 0;
     uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
 
@@ -245,26 +244,26 @@ static rtype_t rtype_struct(type_struct_t *t) {
     // 记录需要 gc 的 key 的
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *property = ct_list_value(t->properties, i);
+
         uint16_t item_size = type_sizeof(property->type);
-        if (item_size > max) {
-            max = item_size;
-        }
+
         // 按 offset 对齐
         offset = align_up(offset, item_size);
+
         // 计算 element_rtype
         rtype_t element_rtype = ct_reflect_type(property->type);
+
         str = str_connect(str, itoa(element_rtype.hash));
         bool need_gc = type_need_gc(property->type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
-        offset += item_size;
 
+        offset += item_size;
         element_hash_list[i] = element_rtype.hash;
     }
-    uint64_t size = align_up(offset, max);
 
-
+    uint64_t size = align_up(offset, t->align);
     rtype_t rtype = {
             .size = size,
             .hash = hash_string(str),
@@ -371,23 +370,39 @@ uint8_t type_kind_sizeof(type_kind t) {
     }
 }
 
+static uint16_t type_struct_sizeof(type_struct_t *s) {
+    uint16_t size = 0;
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
+
+        uint16_t element_size;
+        uint8_t element_align;
+        if (p->type.kind == TYPE_STRUCT) {
+            element_size = type_struct_sizeof(p->type.struct_);
+            element_align = p->type.struct_->align; // 一般是 struct 中的最大值
+        } else {
+            element_size = type_sizeof(p->type);
+            element_align = element_size;
+        }
+
+        size = align_up(size, element_align);
+        size += element_size;
+    }
+
+    // struct 整体按照 max_align 对齐
+    size = align_up(size, s->align);
+
+
+    return size;
+}
+
 /**
  * @param t
  * @return
  */
 uint16_t type_sizeof(type_t t) {
     if (t.kind == TYPE_STRUCT) {
-        type_struct_t *s = t.struct_;
-        int64_t size = 0;
-        for (int i = 0; i < s->properties->length; ++i) {
-            struct_property_t *p = ct_list_value(s->properties, i);
-            uint64_t item_size = type_sizeof(p->type);
-
-            size = align_up(size, item_size);
-            size += item_size;
-        }
-
-        return size;
+        return type_struct_sizeof(t.struct_);
     }
 
     if (t.kind == TYPE_ARRAY) {
@@ -590,7 +605,7 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key) {
 }
 
 
-uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
+int64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     uint64_t offset = 0;
     for (int i = 0; i < t->elements->length; ++i) {
         type_t *typedecl = ct_list_value(t->elements, i);

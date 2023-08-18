@@ -1712,12 +1712,24 @@ static type_t reduction_struct(module_t *m, type_t t) {
     CHECKING_ASSERTF(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_kind_str[t.kind]);
 
     type_struct_t *s = t.struct_;
+    int align = 0;
 
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
         if (p->type.kind != TYPE_UNKNOWN) {
             p->type = reduction_type(m, p->type);
+        }
+
+        int item_align;
+        if (p->type.kind == TYPE_STRUCT) {
+            item_align = p->type.struct_->align;
+        } else {
+            item_align = type_sizeof(p->type);
+        }
+
+        if (item_align > align) {
+            align = item_align;
         }
 
         // 包含默认值
@@ -1733,7 +1745,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
         CHECKING_ASSERTF(type_confirmed(p->type), "struct property=%s type cannot confirmed", p->key);
         // 至此左值已经都是固定类型了, 如果存在 self 则 self 类型保持不变,self 不需要在这里处理
     }
-
+    t.struct_->align = align;
     return t;
 }
 

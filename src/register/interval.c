@@ -4,6 +4,18 @@
 #include "assert.h"
 #include "src/debug/debug.h"
 
+static bool block_covered(closure_t *c, int position) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *first = linked_first(b->operations)->value;
+        lir_op_t *last = OP(b->last_op);
+        if (first->id <= position && position < last->id) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 static bool interval_need_move(interval_t *from, interval_t *to) {
     if (from->assigned && to->assigned && from->assigned == to->assigned) {
@@ -228,11 +240,12 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
 }
 
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
+    // 正序遍历 block, 这里存在一个边界，应该插在前面，还是插在后面的问题
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
         lir_op_t *first = linked_first(block->operations)->value;
         lir_op_t *last = OP(block->last_op);
-        if (first->id < insert_id && insert_id < last->id) {
+        if (first->id <= insert_id && insert_id < last->id) {
             block_insert_mov(block, insert_id, src_i, dst_i, false);
             return;
         }
@@ -259,10 +272,6 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     }
 
     return NULL;
-}
-
-static bool in_range(interval_range_t *range, int position) {
-    return range->from <= position && position < range->to;
 }
 
 // 大值在栈顶被优先处理 block_to_stack
@@ -426,6 +435,7 @@ void interval_build(closure_t *c) {
             // interval by output params, so it contain opcode phi
             // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
+            // TODO 找不到 regs!
             slice_t *def_operands = extract_op_operands(op,
                                                         FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
                                                         FLAG(LIR_FLAG_DEF), false);
@@ -525,10 +535,7 @@ bool range_covered(interval_range_t *range, int position, bool is_input) {
     }
 
     // range to 不包含在 range 里面
-    if (range->from <= position && position < range->to) {
-        return true;
-    }
-    return false;
+    return range->from <= position && position < range->to;
 }
 
 bool interval_expired(interval_t *i, int position, bool is_input) {
@@ -626,9 +633,27 @@ int interval_next_intersect(interval_t *current, interval_t *select) {
     return select_first_cover;
 }
 
-// 在 before 前挑选一个最佳的位置进行 split
+/**
+ * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
+ * - 尽量不要在 for 循环内部的 block 中进行切分
+ * @param c
+ * @param current
+ * @param before
+ * @return
+ */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
-    return before - 1;
+    // 如果 before 是对应的 op_id 是 label，则直接选择 before, before - 1 是一个无法使用的中间地带
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *label_op = linked_first(b->operations)->value;
+        assert(label_op->id != before);
+//        if (label_op->id == before) {
+//            return before + 1; // 这会导致 first op 变更
+//        }
+    }
+
+    int id = before - 1;
+    return id;
 }
 
 /**
@@ -918,7 +943,7 @@ void resolve_data_flow(closure_t *c) {
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
                 assert(parent_interval);
 
-                // 判断是否在 form->to edge 最终的 interval TODO last_op + 1?
+                // 判断是否在 form->to edge 最终的 interval  TODO 是否需要 last_op + 1?
                 interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id + 1, false);
 
                 //  如果 live var interval 刚好是在 to->first_op 中到 use 作为声明周期到则需要特殊处理
@@ -932,7 +957,8 @@ void resolve_data_flow(closure_t *c) {
                     }
                 }
 
-                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id, is_use);
+                lir_op_t *first_op = OP(linked_first(to->operations));
+                interval_t *to_interval = interval_child_at(parent_interval, first_op->id, is_use);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
