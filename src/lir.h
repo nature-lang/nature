@@ -64,7 +64,7 @@
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
-#define RT_CALL_LIST_NEXT_ADDR "list_next_addr"
+#define RT_CALL_LIST_ITERATOR "list_iterator"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
 #define RT_CALL_MAP_NEW "map_new"
@@ -954,20 +954,6 @@ static inline lir_operand_t *lir_stack_offset(module_t *m, lir_operand_t *operan
     assert(operand->assert_type == LIR_OPERAND_STACK);
     lir_stack_t *stack = operand->value;
     return lir_stack_operand(m, stack->slot + offset, stack->size);
-}
-
-static inline void lir_set_var_notnull(lir_operand_t *operand) {
-    assert(operand);
-    assertf(operand->assert_type == LIR_OPERAND_VAR, "operand is not var");
-    lir_var_t *var = operand->value;
-    var->is_null = false;
-}
-
-static inline bool lir_isnull_var(lir_operand_t *operand) {
-    assert(operand);
-    assertf(operand->assert_type == LIR_OPERAND_VAR, "operand is not var");
-    lir_var_t *var = operand->value;
-    return var->is_null;
 }
 
 linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);

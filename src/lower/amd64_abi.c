@@ -97,27 +97,41 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
         lir_var_t *var = param_vars->take[i];
         type_t param_type = var->type;
 
+        lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(param_type, &lo, &hi, 0);
         if (count == 0) {
             onstack[i] = 1;
             continue;
-        }
-
-        if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
-            onstack[i] = 0;
-            sse_reg_count++;
-        } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
-            onstack[i] = 0;
-            int_reg_count++;
-        }
-
-        if (count == 2) {
-            if (hi == AMD64_CLASS_SSE && sse_reg_count <= 8) {
+        } else if (count == 1) {
+            if (lo == AMD64_CLASS_SSE && sse_reg_count + 1 <= 8) {
                 onstack[i] = 0;
                 sse_reg_count++;
-            } else if (hi == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
+            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count + 1 <= 6) {
                 onstack[i] = 0;
                 int_reg_count++;
+            } else {
+                onstack[i] = 1;
+                continue;
+            }
+        } else if (count == 2) {
+            if (lo == hi) {
+                if (lo == AMD64_CLASS_SSE && sse_reg_count + 2 <= 8) {
+                    onstack[i] = 0;
+                    sse_reg_count += 2;
+                } else if (lo == AMD64_CLASS_INTEGER && int_reg_count + 2 <= 6) {
+                    onstack[i] = 0;
+                    int_reg_count += 2;
+                } else {
+                    onstack[i] = 1;
+                }
+            } else {
+                if (sse_reg_count + 1 <= 8 && int_reg_count + 1 <= 6) {
+                    onstack[i] = 0;
+                    sse_reg_count++;
+                    int_reg_count++;
+                } else {
+                    onstack[i] = 1;
+                }
             }
         }
     }
@@ -132,6 +146,8 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
         type_t param_type = var->type;
+
+        lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(param_type, &lo, &hi, 0);
         lir_operand_t *dst_param = operand_new(LIR_OPERAND_VAR, var);
 
@@ -247,7 +263,6 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             if (is_alloc_stack(return_type)) {
                 // 直接申请空间，然后写入到虚拟寄存器中即可
                 lir_stack_alloc(c, return_type, c->return_operand);
-                lir_set_var_notnull(c->return_operand);
             }
         }
     }
@@ -267,7 +282,6 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg_size) {
     linked_t *result = linked_new();
 
-
     amd64_class_t lo, hi = AMD64_CLASS_NO;
     uint8_t *onstack = mallocz(args->count + 1);
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
@@ -281,16 +295,17 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
         lir_operand_t *arg = args->take[i];
         type_t arg_type = lir_operand_type(arg);
 
+        lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
         if (count == 0) { // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
             *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
             onstack[i] = 1;
             continue;
         } else if (count == 1) {
-            if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
+            if (lo == AMD64_CLASS_SSE && sse_reg_count + 1 <= 8) {
                 onstack[i] = 0;
                 sse_reg_count++;
-            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
+            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count + 1 <= 6) {
                 onstack[i] = 0;
                 int_reg_count++;
             } else {
@@ -299,34 +314,26 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
                 continue;
             }
         } else if (count == 2) {
-            bool lo_to_reg = false;
-            uint8_t *lo_reg_count;
-            bool hi_to_reg = false;
-            uint8_t *hi_reg_count;
-            if (lo == AMD64_CLASS_SSE && sse_reg_count <= 8) {
-                lo_to_reg = true;
-                lo_reg_count = &sse_reg_count;
-            } else if (lo == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
-                lo_to_reg = true;
-                lo_reg_count = &int_reg_count;
-            }
-
-            if (hi == AMD64_CLASS_SSE && sse_reg_count <= 8) {
-                hi_to_reg = true;
-                hi_reg_count = &sse_reg_count;
-            } else if (hi == AMD64_CLASS_INTEGER && int_reg_count <= 6) {
-                hi_to_reg = true;
-                hi_reg_count = &int_reg_count;
-            }
-
-            if (hi_to_reg && lo_to_reg) {
-                onstack[i] = 1;
-                (*lo_reg_count) += 1;
-                (*hi_reg_count) += 1;
+            if (lo == hi) {
+                if (lo == AMD64_CLASS_SSE && sse_reg_count + 2 <= 8) {
+                    onstack[i] = 0;
+                    sse_reg_count += 2;
+                } else if (lo == AMD64_CLASS_INTEGER && int_reg_count + 2 <= 6) {
+                    onstack[i] = 0;
+                    int_reg_count += 2;
+                } else {
+                    onstack[i] = 1;
+                    *stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
+                }
             } else {
-                *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
-                onstack[i] = 1;
-                continue;
+                if (sse_reg_count + 1 <= 8 && int_reg_count + 1 <= 6) {
+                    onstack[i] = 0;
+                    sse_reg_count++;
+                    int_reg_count++;
+                } else {
+                    onstack[i] = 1;
+                    *stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
+                }
             }
         }
     }
@@ -346,6 +353,7 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
         lir_operand_t *arg = args->take[i];
         type_t arg_type = lir_operand_type(arg);
 
+        lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
 
         if (onstack[i] == 0) {
@@ -378,6 +386,8 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg = args->take[i];
         type_t arg_type = lir_operand_type(arg);
+
+        lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
         if (onstack[i] == 1) {
             continue;
@@ -452,6 +462,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     int64_t count = 0;
     if (call_result) {
         type_t result_type = lir_operand_type(call_result);
+
         count = amd64_type_classify(result_type, &lo, &hi, 0);
         if (count == 0) {
             type_t call_result_type = lir_operand_type(call_result);
@@ -469,6 +480,11 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // 没有返回值，或者返回值通过参数进行了传输
     if (count == 0) {
         linked_push(result, op);
+
+        if (stack_arg_size > 0) {
+            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
+        }
+
         return result;
     }
 
@@ -487,11 +503,14 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     if (result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令
-
         slice_t *output_regs = slice_new();
         slice_push(output_regs, lo_src_reg);
         lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
+
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, new_output));
+        if (stack_arg_size > 0) {
+            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
+        }
 
         // 从 reg 中将返回值 mov 到 call_result 上
         lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 0);
@@ -515,6 +534,9 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, result_type.kind));
 
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg));
+        if (stack_arg_size > 0) {
+            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
+        }
 
         linked_push(result, lir_op_move(call_result, lo_src_reg));
     }

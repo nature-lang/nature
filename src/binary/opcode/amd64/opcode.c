@@ -1826,10 +1826,13 @@ static void parser_ext(amd64_inst_format_t *format, opcode_ext ext) {
     }
 }
 
-static void set_disp(amd64_inst_format_t *format, string reg, uint8_t *disps, uint8_t count) {
-    // 特殊 register 处理
+static void set_disp(amd64_inst_format_t *format, reg_t *reg, uint8_t *disps, uint8_t count) {
+    // 特殊 register 处理, 由于 [rsp] 这样的编码在使用 modr/m 的 rm 部分使用 100 表示 rsp 寄存器基址
+    // 但是由于 mod = 0b00，r/m=0b100 表示引导 sib 字段。所以需要 sib 部分进行重新进行寄存器引导。
+    // reg 部分依旧有效, 0x24 = 00,100,100 , 档 sib 的 index 部分 = 0b100 时不存在变值寄存器，用来特殊引导 [base] 这样的形式。
+    //  [rsp] 就可以用于引导这种形式。
     int j = 0;
-    if (strcmp(reg, "rsp") == 0) {
+    if (reg && reg->index == 4) { // 4 表示 rsp/esp
         format->disps[j++] = 0x24;
     }
 
@@ -1988,7 +1991,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_DWORD_DISP;
                 }
 
-                set_disp(format, r->reg->name, temp, count);
+                set_disp(format, r->reg, temp, count);
 
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
                     format->rex_prefix->b = r->reg->index > 7;
@@ -2021,6 +2024,11 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
 
                 format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
                 format->modrm->rm = r->reg->index;
+
+                uint8_t temp[4] = {0};
+                uint8_t count = 1;
+                set_disp(format, r->reg, temp, count);
+
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
                     format->rex_prefix->b = r->reg->index > 7;
                 }
@@ -2051,7 +2059,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 // 32 to uint8 []
                 uint8_t temp[4];
                 int32_to_uint8(r->disp, temp);
-                set_disp(format, "", temp, 4);
+                set_disp(format, NULL, temp, 4);
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
                 if (format->modrm == NULL) {
                     format->modrm = new_modrm();
@@ -2063,7 +2071,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 // 小端处理
                 uint8_t temp[4];
                 int32_to_uint8(r->disp, temp);
-                set_disp(format, "", temp, 4);
+                set_disp(format, NULL, temp, 4);
             } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
                 asm_sib_reg_t *sib_reg = asm_operand->value;
                 if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
@@ -2083,7 +2091,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     if (sib_reg->base->index == 13) {
                         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
                         uint8_t temp[1] = {0};
-                        set_disp(format, sib_reg->base->name, temp, 0);
+                        set_disp(format, sib_reg->base, temp, 0);
                     }
                 }
             }

@@ -38,7 +38,7 @@ void *list_raw(n_list_t *l);
  */
 void list_push(n_list_t *l, void *ref);
 
-n_cptr_t list_next_addr(n_list_t *l);
+n_cptr_t list_iterator(n_list_t *l);
 
 /**
  * slice 不会修改原数组

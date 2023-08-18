@@ -127,6 +127,8 @@ static asm_operand_t *lir_operand_trans(closure_t *c, slice_t *operations, lir_o
         // 虽然栈的增长方向是相反的，但是数据存储总是正向的
         reg_t *reg = base->value;
         asm_operand_t *asm_operand;
+
+        // TODO rbps/ebp 等寄存器不能使用 indirect_reg, 例如: 0:  4c 8b 45 00    mov    r8,QWORD PTR [rbp+0x0]
         if (indirect->offset == 0) {
             asm_operand = INDIRECT_REG(reg, type_kind_sizeof(indirect->type.kind));
         } else {
