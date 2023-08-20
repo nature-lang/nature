@@ -625,7 +625,7 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     fndef->symbol_name = temp->symbol_name;
     fndef->closure_name = temp->closure_name;
     fndef->return_type = type_copy(temp->return_type);
-    fndef->formals = ast_fn_formals_copy(temp->formals);
+    fndef->params = ast_fn_formals_copy(temp->params);
     fndef->type = type_copy(temp->type);
     fndef->capture_exprs = temp->capture_exprs;
     fndef->body = ast_body_copy(temp->body);

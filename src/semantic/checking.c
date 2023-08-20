@@ -694,6 +694,7 @@ static type_t checking_struct_new(module_t *m, ast_struct_new_t *ast) {
         struct_property->type = expect_property->type;
     }
 
+    // default 处理，需要和上面一样进行类型还原
     list_t *default_properties = ast->type.struct_->properties;
     for (int i = 0; i < default_properties->length; ++i) {
         struct_property_t *d = ct_list_value(default_properties, i);
@@ -1736,6 +1737,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
         if (p->right) {
             // 推断右值表达式类型(默认值推导)
             type_t right_type = checking_right_expr(m, p->right, p->type);
+
             if (p->type.kind == TYPE_UNKNOWN) {
                 CHECKING_ASSERTF(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
                 p->type = right_type;
@@ -2000,14 +2002,13 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->return_type = reduction_type(m, fndef->return_type);
     fndef->return_type = f->return_type;
 
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *var = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var = ct_list_value(fndef->params, i);
         if (var->type.kind == TYPE_SELF) {
             CHECKING_ASSERTF(i == 0 && fndef->self_struct, "only use self in fn first param");
         }
 
         var->type = reduction_type(m, var->type);
-
         ct_list_push(f->param_types, &var->type);
     }
 
@@ -2041,8 +2042,8 @@ static bool checking_fndef(module_t *m, ast_fndef_t *fndef) {
 
 
     // rewrite_formals ident
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *var_decl = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
         rewrite_var_decl(m, var_decl);
     }
 

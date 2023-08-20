@@ -970,6 +970,43 @@ static inline lir_operand_t *lir_stack_offset(module_t *m, lir_operand_t *operan
     return lir_stack_operand(m, stack->slot + offset, stack->size);
 }
 
+/**
+ * 必须包含一个寄存器
+ * @param op
+ * @return
+ */
+static inline bool lir_can_mov(lir_op_t *op) {
+    if (op->first && op->first->assert_type == LIR_OPERAND_VAR) {
+        return true;
+    }
+
+    if (op->output && op->output->assert_type == LIR_OPERAND_VAR) {
+        return true;
+    }
+
+    if (op->first && op->first->assert_type == LIR_OPERAND_REG) {
+        return true;
+    }
+
+    if (op->output && op->output->assert_type == LIR_OPERAND_REG) {
+        return true;
+    }
+
+    return false;
+}
+
+static inline bool lir_can_lea(lir_op_t *op) {
+    if (op->output && op->output->assert_type == LIR_OPERAND_VAR) {
+        return true;
+    }
+
+    if (op->output && op->output->assert_type == LIR_OPERAND_REG) {
+        return true;
+    }
+
+    return false;
+}
+
 linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);
 
 #endif //NATURE_SRC_LIR_H_

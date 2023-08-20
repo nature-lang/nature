@@ -164,8 +164,8 @@ static slice_t *generic_global_fndef(module_t *m, ast_fndef_t *fndef) {
     fndef->exists_generic_params = table_new();
     fndef->generic_params = slice_new();
 
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *var = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var = ct_list_value(fndef->params, i);
         generic_params_collect(fndef, var->type);
     }
 

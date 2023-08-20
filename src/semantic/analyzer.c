@@ -135,8 +135,8 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
     f->name = fndef->symbol_name;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = fndef->return_type;
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *var = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var = ct_list_value(fndef->params, i);
         ct_list_push(f->param_types, &var->type);
     }
     f->rest = fndef->rest_param;
@@ -286,7 +286,6 @@ static void analyzer_type(module_t *m, type_t *type) {
 
     if (type->kind == TYPE_STRUCT) {
         type_struct_t *struct_decl = type->struct_;
-        m->in_type_struct = true;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
             analyzer_type(m, &item->type);
@@ -296,13 +295,19 @@ static void analyzer_type(module_t *m, type_t *type) {
                 ast_expr_t *expr = item->right;
                 if (expr->assert_type == AST_FNDEF) {
                     ast_fndef_t *fndef = expr->value;
-                    fndef->self_struct = type;
+
+                    fndef->self_struct = type; // 记录当前 fn 首个参数可以使用的 self 的原始 type
+
+                    // 在全局 struct 内部定义的 fndef 需要手动加入到 m->ast_fndefs(这是 global fndefs) 中, 作为全局 global fn 处理
+                    if (m->analyzer_current == NULL) {
+                        slice_push(m->ast_fndefs, fndef);
+                    }
                 }
+
 
                 analyzer_expr(m, item->right);
             }
         }
-        m->in_type_struct = false;
     }
 }
 
@@ -544,8 +549,8 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_begin_scope(m);
 
     // 函数形参处理
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *param = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *param = ct_list_value(fndef->params, i);
 
         // type 中引用了 typedef ident 到话,同样需要更新引用
         analyzer_type(m, &param->type);
@@ -659,8 +664,8 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_begin_scope(m);
 
     // 函数形参处理
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *param = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *param = ct_list_value(fndef->params, i);
 
         // type 中引用了 typedef ident 到话,同样需要更新引用
         analyzer_type(m, &param->type);
@@ -1106,12 +1111,6 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_call(m, expr->value);
         }
         case AST_FNDEF: {
-            // 在 type struct 中定义的 fn 需要手动加入到 xxx 中
-            // 否则后续的 checking 阶段不会处理到该函数
-            // 内部作用域中的 struct fn 则不需要担心这个问题， fndef->local_children 会记录该函数
-            if (m->in_type_struct && m->analyzer_current == NULL) {
-                slice_push(m->ast_fndefs, expr->value);
-            }
             return analyzer_local_fndef(m, expr->value);
         }
         default:
@@ -1220,8 +1219,8 @@ static void analyzer_temp(module_t *m, slice_t *stmt_list) {
 
         analyzer_type(m, &fndef->return_type);
         // 函数形参处理
-        for (int j = 0; j < fndef->formals->length; ++j) {
-            ast_var_decl_t *param = ct_list_value(fndef->formals, j);
+        for (int j = 0; j < fndef->params->length; ++j) {
+            ast_var_decl_t *param = ct_list_value(fndef->params, j);
 
             analyzer_type(m, &param->type);
 
@@ -1316,7 +1315,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     ast_fndef_t *fn_init = ast_fndef_new(0, 0);
     fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
     fn_init->return_type = type_kind_new(TYPE_VOID);
-    fn_init->formals = ct_list_new(sizeof(ast_var_decl_t));
+    fn_init->params = ct_list_new(sizeof(ast_var_decl_t));
     fn_init->body = var_assign_list;
 
     // 加入到全局符号表，等着调用就好了
@@ -1361,7 +1360,7 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->body = slice_new();
     fndef->return_type = type_kind_new(TYPE_VOID);
-    fndef->formals = ct_list_new(sizeof(ast_var_decl_t));
+    fndef->params = ct_list_new(sizeof(ast_var_decl_t));
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt_t *stmt = stmt_list->take[i];
 

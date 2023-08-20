@@ -297,7 +297,6 @@ static type_t parser_single_type(module_t *m) {
         type_struct_t *type_struct = NEW(type_struct_t);
         type_struct->properties = ct_list_new(sizeof(struct_property_t));
         parser_must(m, TOKEN_LEFT_CURLY);
-        m->in_type_struct = true;
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item = {
@@ -308,6 +307,12 @@ static type_t parser_single_type(module_t *m) {
             if (parser_consume(m, TOKEN_EQUAL)) {
                 ast_expr_t *temp_expr = expr_new_ptr(m);
                 *temp_expr = parser_expr(m);
+                if (temp_expr->assert_type == AST_FNDEF) {
+                    ast_fndef_t *fn = temp_expr->value;
+                    PARSER_ASSERTF(fn->symbol_name == NULL,
+                                   "fn defined in struct cannot contain name");
+                }
+
                 item.right = temp_expr;
             }
 
@@ -315,7 +320,6 @@ static type_t parser_single_type(module_t *m) {
             parser_must_stmt_end(m);
         }
 
-        m->in_type_struct = false;
         result.kind = TYPE_STRUCT;
         result.struct_ = type_struct;
         return result;
@@ -466,7 +470,7 @@ static ast_var_decl_t *parser_var_decl(module_t *m) {
 
 static void parser_formals(module_t *m, ast_fndef_t *fn_decl) {
     parser_must(m, TOKEN_LEFT_PAREN);
-    fn_decl->formals = ct_list_new(sizeof(ast_var_decl_t));
+    fn_decl->params = ct_list_new(sizeof(ast_var_decl_t));
     // not formal params
     if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
         return;
@@ -479,7 +483,7 @@ static void parser_formals(module_t *m, ast_fndef_t *fn_decl) {
 
         // ref 本身就是堆上的地址，所以只需要把堆上的地址交给数组就可以了
         ast_var_decl_t *ref = parser_var_decl(m);
-        ct_list_push(fn_decl->formals, ref);
+        ct_list_push(fn_decl->params, ref);
 
         if (fn_decl->rest_param) {
             PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
@@ -1290,11 +1294,6 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_fndef_t *fndef = ast_fndef_new(parser_peek(m)->line, parser_peek(m)->column);
 
     parser_must(m, TOKEN_FN);
-
-    if (m->in_type_struct) {
-        PARSER_ASSERTF(parser_is(m, TOKEN_LEFT_PAREN),
-                       "fn defined in struct cannot contain name");
-    }
 
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *name_token = parser_advance(m);

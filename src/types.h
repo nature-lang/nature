@@ -163,7 +163,6 @@ typedef struct {
 
     // parser
     parser_cursor_t p_cursor;
-    bool in_type_struct;
 
     slice_t *stmt_list;
     table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 type param

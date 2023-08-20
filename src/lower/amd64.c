@@ -3,12 +3,11 @@
 #include "src/register/amd64.h"
 #include "amd64_abi.h"
 
-static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(kind));
+static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
+    lir_operand_t *temp = temp_var_operand(c->module, lir_operand_type(first));
 
-    linked_push(list, lir_op_move(temp, operand));
-    return lir_reset_operand(temp, operand->pos);
+    linked_push(list, lir_op_move(temp, first));
+    return lir_reset_operand(temp, first->pos);
 }
 
 static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
@@ -262,8 +261,19 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_MOVE && op->first->assert_type != LIR_OPERAND_VAR &&
-            op->output->assert_type != LIR_OPERAND_VAR) {
+        if (op->code == LIR_OPCODE_LEA && !lir_can_lea(op)) {
+            // lea first output
+            // ---- change to
+            // lea first -> temp_var
+            // mov temp_var -> output
+            lir_operand_t *temp = temp_var_operand(c->module, lir_operand_type(op->output));
+            linked_push(operations, lir_op_lea(temp, op->first));
+            linked_push(operations, lir_op_move(op->output, temp));
+
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;

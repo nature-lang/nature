@@ -459,6 +459,7 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
             assign_stmt->left = *element;
             assign_stmt->right = *ast_ident_expr(m->current_line, m->current_column,
                                                  ((lir_var_t *) temp_var->value)->ident);
+            assign_stmt->right.type = element->type;
             linear_assign(m, assign_stmt);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             ast_tuple_destr_t *tuple_destr = element->value;
@@ -769,10 +770,11 @@ static void linear_break(module_t *m, ast_break_t *stmt) {
 
 static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
-        assertf(m->linear_current->return_operand, "return operand must not be null");
-
-        // 这里算是一个 mov 操作了
-        linear_expr(m, *ast->expr, m->linear_current->return_operand);
+        lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
+        // return void_expr() 时, m->linear_current->return_operand 是 null
+        if (m->linear_current->return_operand) {
+            OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
+        }
 
         // 保留用来做 return check
         OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
@@ -1869,8 +1871,13 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 编译 fn param -> lir_var_t*
     slice_t *params = slice_new();
-    for (int i = 0; i < fndef->formals->length; ++i) {
-        ast_var_decl_t *var_decl = ct_list_value(fndef->formals, i);
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
+        assert(var_decl->type.status == REDUCTION_STATUS_DONE);
+        if (var_decl->type.kind == TYPE_SELF) {
+            assert(fndef->self_struct->status == REDUCTION_STATUS_DONE);
+            var_decl->type = *fndef->self_struct;
+        }
 
         slice_push(params, lir_var_new(m, var_decl->ident));
     }

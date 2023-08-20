@@ -434,7 +434,7 @@ typedef struct ast_fndef_t {
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *closure_name;
     type_t return_type;
-    list_t *formals; // ast_var_decl_t*
+    list_t *params; // ast_var_decl_t*
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余
@@ -458,6 +458,7 @@ typedef struct ast_fndef_t {
 
     // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type
     type_t *self_struct;
+
     type_t type; // 类型冗余一份
 
     // 泛型解析时临时使用
