@@ -123,11 +123,8 @@ static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *targe
  * @return
  */
 static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *target) {
-    lir_operand_t *result = temp_var_operand(m, t);
-
     if (!target) {
         target = temp_var_operand(m, t);
-        lir_stack_alloc(m->linear_current, t, target);
     }
 
     assert(target);
@@ -148,7 +145,7 @@ static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *t
         linear_zero_operand(m, p->type, dst);
     }
 
-    return result;
+    return target;
 }
 
 /**
@@ -272,7 +269,7 @@ static lir_operand_t *nop_temp_var_operand(module_t *m, type_t type) {
  */
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
-    if (is_alloc_stack(var_decl->type)) {
+    if (var_decl->type.kind == TYPE_STRUCT) {
         // 这没有申请空间
         // Allocate enough space and store the address of the allocated space in dst.
         lir_stack_alloc(m->linear_current, var_decl->type, operand);
@@ -329,11 +326,19 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     exit(1);
 }
 
+/**
+ * - 一旦将 addr 地址暴露出来，如果在 linear_expr 中存在 list push 操作就会造成 list.data 整体迁移，导致 addr 地址失效
+ * - 应该总是优先编译右值，然后将右值 move 到左值中，避免出现 addr grow 的问题
+ * @param m
+ * @param stmt
+ */
 static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_list_access_t *list_access = stmt->left.value;
     lir_operand_t *list_target = linear_expr(m, list_access->left, NULL);
     lir_operand_t *index_target = linear_expr(m, list_access->index, NULL);
     type_t t = stmt->right.type;
+
+    lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
     // target 中保存的是一个指针数据，指向的类型是 right.type
     lir_operand_t *target = temp_var_operand(m, type_kind_new(TYPE_CPTR));
@@ -343,9 +348,7 @@ static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
         target = indirect_addr_operand(m, t, target, 0);
     }
 
-    // TODO 如果这期间的函数是 xxx
-
-    linear_expr(m, stmt->right, target);
+    linear_super_move(m, t, target, src);
 }
 
 static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -439,33 +442,37 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
  * @param destr
  * @param tuple_target
  */
-static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target, uint64_t offset) {
+static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target) {
+    uint64_t offset = 0;
+
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(destr->elements, i);
         uint64_t item_size = type_sizeof(element->type);
-        offset = align_up((int64_t) offset, (int64_t) item_size);
+        offset = align_up(offset, item_size);
+
+        // src 中已经保存了右值的具体值。可以用来 move
+        lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
+        if (is_alloc_stack(element->type)) {
+            element_src_operand = lea_operand_pointer(m, element_src_operand);
+        }
 
         if (can_assign(element->assert_type)) {
-            // src 中已经保存了右值的具体值。可以用来 move
-            lir_operand_t *src = indirect_addr_operand(m, element->type, tuple_target, offset);
-            if (is_alloc_stack(element->type)) {
-                src = lea_operand_pointer(m, src);
-            }
-
             // 使用一个 temp_var 接收右值(走普通 mov, struct/array 不进行临时值生成)
-            lir_operand_t *temp_var = temp_var_operand(m, element->type);
-            OP_PUSH(lir_op_move(temp_var, src));
+            // 主要是为了得到 ident, 方便模拟表达式试过
+            lir_operand_t *temp_var = temp_var_operand_without_stack(m, element->type);
+            OP_PUSH(lir_op_move(temp_var, element_src_operand));
 
+            char *ident = ((lir_var_t *) temp_var->value)->ident;
 
             ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
             assign_stmt->left = *element;
-            assign_stmt->right = *ast_ident_expr(m->current_line, m->current_column,
-                                                 ((lir_var_t *) temp_var->value)->ident);
+            assign_stmt->right = *ast_ident_expr(m->current_line, m->current_column, ident);
             assign_stmt->right.type = element->type;
             linear_assign(m, assign_stmt);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             ast_tuple_destr_t *tuple_destr = element->value;
-            linear_tuple_destr(m, tuple_destr, tuple_target, offset);
+
+            linear_tuple_destr(m, tuple_destr, element_src_operand);
         } else {
             assertf(false, "var tuple destr must var/tuple_destr");
         }
@@ -481,7 +488,7 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
 static void linear_tuple_destr_stmt(module_t *m, ast_assign_stmt_t *stmt) {
     ast_tuple_destr_t *destr = stmt->left.value;
     lir_operand_t *tuple_target = linear_expr(m, stmt->right, NULL);
-    linear_tuple_destr(m, destr, tuple_target, 0);
+    linear_tuple_destr(m, destr, tuple_target);
 }
 
 
@@ -491,31 +498,32 @@ static void linear_tuple_destr_stmt(module_t *m, ast_assign_stmt_t *stmt) {
  * @param destr
  * @param tuple_target
  */
-static void
-linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target, uint64_t offset) {
+static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operand_t *tuple_target) {
+    uint64_t offset = 0;
+
     for (int i = 0; i < destr->elements->length; ++i) {
         // 这里的 element 指的是左侧值的 element(一般都是 ident, 或者 access/select)
         ast_expr_t *element = ct_list_value(destr->elements, i);
         uint64_t item_size = type_sizeof(element->type);
 
-        offset = align_up((int64_t) offset, (int64_t) item_size);
+        offset = align_up(offset, item_size);
+
+        // 将 tuple 中的值 mov 到新的 var 空间中
+        lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
+        if (is_alloc_stack(element->type)) {
+            element_src_operand = lea_operand_pointer(m, element_src_operand);
+        }
 
         if (element->assert_type == AST_VAR_DECL) {
             // 由于存在 var 的赋值，所以这里存在重复的空间申请。这是没有问题的
             ast_var_decl_t *var_decl = element->value;
             lir_operand_t *dst = linear_var_decl(m, var_decl);
 
-            // 将 tuple 中的值 mov 到新的 var 空间中
-            lir_operand_t *src = indirect_addr_operand(m, element->type, tuple_target, offset);
-            if (is_alloc_stack(element->type)) {
-                src = lea_operand_pointer(m, src);
-            }
-
-            linear_super_move(m, element->type, dst, src);
+            linear_super_move(m, element->type, dst, element_src_operand);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             ast_tuple_destr_t *tuple_destr = element->value;
 
-            linear_var_tuple_destr(m, tuple_destr, tuple_target, offset);
+            linear_var_tuple_destr(m, tuple_destr, element_src_operand);
         } else {
             assertf(false, "var tuple destr must var/tuple_destr");
         }
@@ -535,7 +543,7 @@ static void linear_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt_t *var
     // addr 返回回来，所以 tuple_target 中保存的就是一个指针地址。
     lir_operand_t *tuple_target = linear_expr(m, var_tuple_def->right, NULL);
 
-    linear_var_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target, 0);
+    linear_var_tuple_destr(m, var_tuple_def->tuple_destr, tuple_target);
 }
 
 /**
@@ -1095,6 +1103,12 @@ static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_opera
         src = indirect_addr_operand(m, expr.type, src, 0);
     }
 
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
+    }
+
+    // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
+    // 所以对于 struct 的 access,这里的 target 不应该为 null
     target = linear_super_move(m, expr.type, target, src);
 
     // 可能会存在数组越界的错误需要拦截处理
@@ -1327,7 +1341,6 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
 
     if (!target) {
         target = temp_var_operand(m, t);
-        lir_stack_alloc(m->linear_current, expr.type, target);
     }
 
     // struct_new 不产生新的空间，只是将值给到 target
@@ -1519,7 +1532,6 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
         lir_operand_t *errort_operand = target;
         if (!errort_operand) {
             errort_operand = temp_var_operand(m, errort_alias_stmt->type);
-            lir_stack_alloc(m->linear_current, errort_alias_stmt->type, errort_operand);
         }
 
         OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));

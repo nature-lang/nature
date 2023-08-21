@@ -4,7 +4,6 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    return;
     // 对 raw 按 \n 分割，并转化成数组
     int64_t *number = take_numbers(raw, 9);
     assert_true(number[0] > 100000 && number[0] < 200000); // 144320

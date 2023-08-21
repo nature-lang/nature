@@ -58,8 +58,6 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
 }
 
 /**
- * 其返回值在 value_ref 中， value_ref 是数组中存放的值，而不是存放的值的起始地址
- * 考虑到未来可能会有超过 8byte 大小的值，操作 lir move 困难，所以在 runtime 中进行 move
  * @param l
  * @param index
  * @param value_ref

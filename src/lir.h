@@ -654,6 +654,39 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 }
 
 /**
+ * 返回 stack, 可以用来直接 push 值进去
+ * @param c
+ * @param t
+ * @param dst_operand
+ * @return
+ */
+static inline lir_operand_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
+    module_t *m = c->module;
+    assert(dst_operand->assert_type == LIR_OPERAND_VAR);
+    assert(is_alloc_stack(t));
+
+    uint64_t size = type_sizeof(t);
+    c->stack_offset += align_up(size, QWORD);
+
+    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
+
+    OP_PUSH(lir_op_lea(dst_operand, src_operand));
+
+    return src_operand;
+}
+
+static inline lir_operand_t *temp_var_operand_without_stack(module_t *m, type_t type) {
+    assert(type.kind > 0);
+
+    string result = var_unique_ident(m, TEMP_IDENT);
+
+    symbol_table_set_var(result, type);
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
+
+    return target;
+}
+
+/**
  * 临时变量是否影响变量入栈？
  * @param type
  * @return
@@ -664,8 +697,14 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     string result = var_unique_ident(m, TEMP_IDENT);
 
     symbol_table_set_var(result, type);
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
-    return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
+    // 如果 type 是一个 struct, 则为 struct 申请足够的空间
+    if (type.kind == TYPE_STRUCT) {
+        lir_stack_alloc(m->linear_current, type, target);
+    }
+
+    return target;
 }
 
 /**
@@ -678,11 +717,11 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
 static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir_operand_t *base, int64_t offset) {
     assert(type.kind > 0);
 
-    // 技术性合并
-    if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr = base->value;
-        base = addr->base;
-        offset = addr->offset + offset;
+    if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
+        type_t base_type = lir_operand_type(base);
+        lir_operand_t *temp = temp_var_operand(m, base_type);
+        OP_PUSH(lir_op_move(temp, base));
+        base = temp;
     }
 
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
@@ -940,28 +979,6 @@ static inline int64_t var_stack_slot(closure_t *c, lir_var_t *var) {
     assert(i->stack_slot);
     assert(*i->stack_slot != 0);
     return *i->stack_slot;
-}
-
-/**
- * 返回 stack, 可以用来直接 push 值进去
- * @param c
- * @param t
- * @param dst_operand
- * @return
- */
-static inline lir_operand_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
-    module_t *m = c->module;
-    assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_alloc_stack(t));
-
-    uint64_t size = type_sizeof(t);
-    c->stack_offset += align_up(size, QWORD);
-
-    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
-
-    OP_PUSH(lir_op_lea(dst_operand, src_operand));
-
-    return src_operand;
 }
 
 static inline lir_operand_t *lir_stack_offset(module_t *m, lir_operand_t *operand, int64_t offset) {

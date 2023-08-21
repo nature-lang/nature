@@ -854,97 +854,97 @@ inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASH
 
 
 // float mov ------------------------------------------------------------------------------------------------------
-inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                   {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}
                           }
 };
-inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_m64 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
                          }
 };
-inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0x0F2, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}
                              }
 };
-inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm1_xmm2 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                   {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}
                           }
 };
-inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm1_m32 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}
 };
-inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0xF3, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}
 };
 
 // float 算数运算 ------------------------------------------------------------------------------------------------------
-inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0xF2, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0xF3, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0, {0xF2, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0xF2, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0, {0xF3, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0xF3, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0, {0xF2, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0, {0xF3, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t comisd = {"cmp", "comisd", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
                          {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                  }
 };
-inst_t comiss = {"cmp", "comiss", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+inst_t comiss = {"cmp", "comiss", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
                          {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
@@ -1599,8 +1599,23 @@ inst_t *opcode_select(asm_operation_t operation) {
 
     for (int i = 0; i < operation.count; ++i) {
         asm_operand_t *operand = operation.operands[i];
+        reg_t *reg = NULL;
+        reg_t *reg2 = NULL;
         if (operand->type == ASM_OPERAND_TYPE_REG) {
-            reg_t *reg = operand->value;
+            reg = operand->value;
+        } else if (operand->type == ASM_OPERAND_TYPE_DISP_REG) {
+            asm_disp_reg_t *disp = operand->value;
+            reg = disp->reg;
+        } else if (operand->type == ASM_OPERAND_TYPE_INDIRECT_REG) {
+            asm_indirect_reg_t *indirect = operand->value;
+            reg = indirect->reg;
+        } else if (operand->type == ASM_OPERAND_TYPE_SIB_REG) {
+            asm_sib_reg_t *sib = operand->value;
+            reg = sib->base;
+            reg2 = sib->index;
+        }
+
+        if (reg) {
             if (is_high_eight_reg(reg)) {
                 has_high_eight_reg = true;
             }
@@ -1608,6 +1623,15 @@ inst_t *opcode_select(asm_operation_t operation) {
                 has64_reg = true;
             }
         }
+        if (reg2) {
+            if (is_high_eight_reg(reg2)) {
+                has_high_eight_reg = true;
+            }
+            if (has_64_reg(reg2)) {
+                has64_reg = true;
+            }
+        }
+
 
         // 生成 key
         string key = itoa(asm_operand_to_key(operand->type, operand->size));
@@ -1636,7 +1660,8 @@ inst_t *opcode_select(asm_operation_t operation) {
         }
 
         if (has64_reg && !has_64_extension(inst->extensions)) {
-            // 找一个空闲到位置， 主动带上 EXT_REX ,暂时不需要这样到安全限制,默认就是优先支持 rex
+            // 找一个空闲到位置， 主动带上 EXT_REX, 暂时不需要这样到安全限制
+            // 只要包含 rex ext, 就能够激活 rex.b/w 等标识的编译，看起来是一个安全机制
             for (int j = 0; j < 4; ++j) {
                 if (!inst->extensions[j]) {
                     inst->extensions[j] = OPCODE_EXT_REX;
