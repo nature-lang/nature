@@ -41,6 +41,7 @@ static void linear_prehandle(closure_t *c) {
     // collect var defs
     int next_id = 0;
     table_t *var_table = table_new();
+    c->var_defs = slice_new();
 
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
@@ -115,7 +116,7 @@ void reg_alloc(closure_t *c) {
 
     interval_block_order(c);
 
-    debug_block_lir(c, "ssa/lower/mark_number");
+    debug_block_lir(c, "mark_number");
 
     interval_build(c);
 

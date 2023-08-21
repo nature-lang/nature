@@ -420,7 +420,7 @@ typedef struct closure_t {
     slice_t *blocks; // 根据解析顺序得到, 在 linear scan 时进行了排序
 
     // ssa
-    slice_t *ssa_globals; // 存活周期 >= 2 个 basic block 的 var
+    slice_t *ssa_globals; // 存活周期 >= 2 个 basic block 的 var, 基于次进行最小限度的放置 phi
     table_t *ssa_globals_table; // 存活周期 >= 2 个 basic block 的 var
     table_t *ssa_var_blocks; // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
     table_t *ssa_var_block_exists; // 是否已经添加过，避免 var+block_name 的重复添加

@@ -460,7 +460,6 @@ void interval_build(closure_t *c) {
                 }
             }
 
-
             // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
             if (op->code != LIR_OPCODE_PHI) {
                 slice_t *use_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),

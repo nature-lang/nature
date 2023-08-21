@@ -20,7 +20,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         goto END;
     }
 
-    lir_operand_t *return_operand = c->return_operand;
+    lir_operand_t *return_operand = op->first;
     type_t t = lir_operand_type(return_operand);
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
@@ -72,6 +72,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
     }
 
     END:
+    op->first = NULL;
     linked_push(result, op);
 
     return result;
@@ -461,30 +462,11 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     slice_t *args = op->second->value;
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
 
-    amd64_class_t lo, hi;
-    int64_t count = 0;
-    if (call_result) {
-        type_t result_type = lir_operand_type(call_result);
-
-        lo = hi = AMD64_CLASS_NO;
-        count = amd64_type_classify(result_type, &lo, &hi, 0);
-        if (count == 0) {
-            type_t call_result_type = lir_operand_type(call_result);
-            assert(call_result_type.kind == TYPE_STRUCT);
-            // 需要通过内存传递，要占用一个 arg 咯
-            slice_insert(args, 0, call_result);
-        }
-    }
-
-    int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
-    linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
-
-    op->second->value = slice_new();
-
-    // 没有返回值，或者返回值通过参数进行了传输
-    if (count == 0) {
-        linked_push(result, op);
-
+    if (!call_result) {
+        int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
+        linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
+        op->second->value = slice_new();
+        linked_push(result, op); // call op
         if (stack_arg_size > 0) {
             linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
         }
@@ -493,6 +475,41 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     type_t result_type = lir_operand_type(call_result);
+
+    // 进行 call result 的栈空间申请, 此时已经不会触发 ssa 了
+    if (result_type.kind == TYPE_STRUCT) {
+        assert(call_result->assert_type == LIR_OPERAND_VAR);
+        uint64_t size = type_sizeof(result_type);
+        c->stack_offset += align_up(size, QWORD);
+        lir_operand_t *src_operand = lir_stack_operand(c->module, -c->stack_offset, size);
+
+        linked_push(result, lir_op_lea(call_result, src_operand));
+    }
+
+    amd64_class_t lo = AMD64_CLASS_NO;
+    amd64_class_t hi = AMD64_CLASS_NO;
+    int64_t count = amd64_type_classify(result_type, &lo, &hi, 0);
+    if (count == 0) {
+        type_t call_result_type = lir_operand_type(call_result);
+        assert(call_result_type.kind == TYPE_STRUCT);
+        slice_insert(args, 0, call_result);
+    }
+
+    int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
+    linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
+    op->second->value = slice_new();
+
+    // 参数通过栈传递
+    if (count == 0) {
+        lir_operand_t *output_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(rax->index, TYPE_UINT64));
+        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, output_reg));
+        if (stack_arg_size > 0) {
+            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
+        }
+
+        linked_push(result, lir_op_move(call_result, output_reg));
+        return result;
+    }
 
     // call 指令 存在返回值， 现在需要处理相关的返回值,首先返回值必须通过 rax/rdi 返回
     lir_operand_t *lo_src_reg;
@@ -504,6 +521,9 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         lo_src_reg = operand_new(LIR_OPERAND_REG, xmm0s64);
         lo_kind = TYPE_FLOAT64;
     }
+
+    // ~~ call_result 需要做替换，为了后续 interval 阶段能够正确收集 var def, 所以手动添加一下 def ~~ 上面的 lea 做了
+    // linked_push(result, lir_op_nop(call_result));
 
     if (result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令

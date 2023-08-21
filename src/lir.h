@@ -775,31 +775,30 @@ static inline lir_operand_t *unique_var_operand(module_t *m, type_t type, char *
  * @return
  */
 static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *operand) {
-    lir_operand_t *src_operand = operand;
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         // 确保参数入栈
         lir_operand_t *temp_operand = temp_var_operand(m, type_kind_new(imm->kind));
         OP_PUSH(lir_op_move(temp_operand, operand));
-        src_operand = temp_operand;
+        operand = temp_operand;
     }
 
     // symbol label 是一个指针，memory_fn_t 中存储的就是这个指针的值，所以需要将其取出来，然后再复制给一个栈临时变量。
     assert(operand->assert_type != LIR_OPERAND_SYMBOL_LABEL);
 
-    assertf(src_operand->assert_type == LIR_OPERAND_VAR ||
-            src_operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-            src_operand->assert_type == LIR_OPERAND_SYMBOL_LABEL ||
-            src_operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
-            "only support lea var/symbol/addr, actual=%d", src_operand->assert_type);
+    assertf(operand->assert_type == LIR_OPERAND_VAR ||
+            operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+            operand->assert_type == LIR_OPERAND_SYMBOL_LABEL ||
+            operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+            "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
     if (!is_alloc_stack(t)) {
         t = type_ptrof(t);
     }
 
-    lir_operand_t *temp_ref = temp_var_operand(m, t);
-    OP_PUSH(lir_op_lea(temp_ref, src_operand));
+    lir_operand_t *temp_ref = temp_var_operand_without_stack(m, t);
+    OP_PUSH(lir_op_lea(temp_ref, operand));
     return temp_ref;
 }
 

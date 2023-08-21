@@ -782,6 +782,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
         lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
         // return void_expr() 时, m->linear_current->return_operand 是 null
+        // TODO 这里直接接使用了普通 move, 而不是 super move?
         if (m->linear_current->return_operand) {
             OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
         }
@@ -896,22 +897,17 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     slice_push(params, int_operand(0));
 
 
-    if (!target) {
-        target = temp_var_operand(m, expr.type);
-    }
+    lir_operand_t *temp = temp_var_operand_without_stack(m, expr.type);
     // call base_target,params -> target
-    lir_op_t *call_op = lir_op_new(LIR_OPCODE_CALL, base_target,
-                                   operand_new(LIR_OPERAND_ARGS, params), target);
-
-    // 触发 call 指令, 结果存储在 target 指令中
-    OP_PUSH(call_op);
+    OP_PUSH(lir_op_new(LIR_OPCODE_CALL,
+                       base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
 
     // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
     if (!is_builtin_call(type_fn->name)) {
         linear_error_handle(m);
     }
 
-    return target;
+    return linear_super_move(m, expr.type, target, temp);
 }
 
 static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -1517,31 +1513,29 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
     ast_type_alias_stmt_t *errort_alias_stmt = s->ast_value;
     assertf(errort_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
 
+    // 1. 直接调用 rt_call_tuple_new 创建 tuple 空间, 然后再做 mov 操作
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
+    }
+
     if (try->expr.type.kind == TYPE_VOID) {
         // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
         char *catch_end_label = make_unique_ident(m, CATCH_END_IDENT);
         m->linear_current->catch_error_label = catch_end_label;
 
-        lir_operand_t *result_operand = linear_expr(m, try->expr, NULL);
+        linear_expr(m, try->expr, NULL);
+
         m->linear_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
 
         // catch_error_label:  try expr 会跳转到这里
         OP_PUSH(lir_op_label(catch_end_label, true));
 
-        // 提取 error 出来
-        lir_operand_t *errort_operand = target;
-        if (!errort_operand) {
-            errort_operand = temp_var_operand(m, errort_alias_stmt->type);
-        }
+        lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
+        OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_src, 0));
 
-        OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
-        return errort_operand;
+        return linear_super_move(m, errort_alias_stmt->type, target, errort_src);
     }
 
-    // 1. 直接调用 rt_call_tuple_new 创建 tuple 空间, 然后再做 mov 操作
-    if (!target) {
-        target = temp_var_operand(m, expr.type);
-    }
     uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
     OP_PUSH(rt_call(RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash)));
 
@@ -1572,12 +1566,13 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
 
     // 根据 size + ali计算 offset
     int64_t offset = type_tuple_offset(expr.type.tuple, 1);
-    lir_operand_t *errort_operand = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
-    if (is_alloc_stack(errort_alias_stmt->type)) {
-        errort_operand = lea_operand_pointer(m, errort_operand);
-    }
+    lir_operand_t *temp = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
+    lir_operand_t *errort_target = lea_operand_pointer(m, temp);
 
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_operand, 0));
+    lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_src, 0));
+
+    linear_super_move(m, errort_alias_stmt->type, errort_target, errort_src);
 
     return target;
 }
@@ -1934,8 +1929,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         c->closure_var_table = table_new();
     }
 
-    // lower 的时候需要进行特殊的处理(return_operand 有点多余了。)
-    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, NULL, NULL, NULL));
+    // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)
+    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));
 
     return c;
 }

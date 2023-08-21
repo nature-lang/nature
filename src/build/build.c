@@ -427,6 +427,8 @@ static void build_compiler(slice_t *modules) {
             // 构造 ssa
             ssa(c);
 
+            debug_block_lir(c, "ssa");
+
             // lir 向 arch 靠拢
             cross_lower(c);
 

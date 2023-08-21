@@ -1,16 +1,3 @@
 import 'user.n'
 
-user.register('xiaowei', 'hahaha123')
-
-user.register('xiaoyou', 'nanana456')
-
-var err = try user.register('xiaoyou', 'nanana789')
-if err.has {
-	println(err.msg)
-}
-
-
 var foo = user.find('xiaoyou')
-print(foo.username, '-', foo.password, '\n')
-
-print('current user count=', user.list.len(), '\n')
