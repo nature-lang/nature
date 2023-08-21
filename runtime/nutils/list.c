@@ -114,7 +114,8 @@ void *list_raw(n_list_t *l) {
  * @param ref
  */
 void list_push(n_list_t *l, void *ref) {
-//    DEBUGF("[list_push] current_length=%lu", l->length);
+    DEBUGF("[list_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
+           (uint64_t) fetch_int_value((addr_t) ref, 8));
 
     if (l->length == l->capacity) {
         DEBUGF("[list_push] current_length=%lu == capacity, trigger grow, next capacity=%lu",
@@ -181,6 +182,8 @@ n_cptr_t list_element_addr(n_list_t *l, uint64_t index) {
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
+
+    DEBUGF("[list_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset))
     return (n_cptr_t) l->data + offset;
 }
 

@@ -1405,14 +1405,14 @@ uint64_t collect_fndef_list(elf_context *ctx) {
                 bitmap_set(f->gc_bits, (stack_slot / POINTER_SIZE) - 1);
             }
 
-//            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
-//                   fn->symbol_name,
-//                   var->ident,
-//                   type_kind_str[var->type.kind],
-//                   type_sizeof(var->type),
-//                   type_need_gc(var->type),
-//                   (stack_slot / POINTER_SIZE) - 1,
-//                   stack_slot);
+            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
+                   fn->symbol_name,
+                   var->ident,
+                   type_kind_str[var->type.kind],
+                   type_sizeof(var->type),
+                   type_need_gc(var->type),
+                   (stack_slot / POINTER_SIZE) - 1,
+                   stack_slot);
 
         }
         strcpy(f->name, c->symbol_name);

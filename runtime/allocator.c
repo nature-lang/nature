@@ -877,6 +877,7 @@ void memory_init() {
 }
 
 mspan_t *span_of(uint64_t addr) {
+//    DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
     assertf(arena, "not found arena by addr: %p", addr);

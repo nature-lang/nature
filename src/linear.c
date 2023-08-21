@@ -343,6 +343,8 @@ static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
         target = indirect_addr_operand(m, t, target, 0);
     }
 
+    // TODO 如果这期间的函数是 xxx
+
     linear_expr(m, stmt->right, target);
 }
 
@@ -1126,7 +1128,7 @@ static lir_operand_t *linear_list_new(module_t *m, ast_expr_t expr, lir_operand_
         lir_operand_t *item_target = temp_var_operand(m, type_kind_new(TYPE_CPTR));
         OP_PUSH(rt_call(RT_CALL_LIST_ITERATOR, item_target, 1, target));
         if (!is_alloc_stack(item_expr->type)) {
-            item_target = indirect_addr_operand(m, t, item_target, 0);
+            item_target = indirect_addr_operand(m, t.list->element_type, item_target, 0);
         }
 
         // 空间已经足够，将值放进去即可

@@ -39,11 +39,11 @@ static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
  * @param fn_addr
  * @return
  */
-static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime) {
+static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
     // 将 imm64 移动到寄存器 rax 中
     codes[0] = 0x48;
     codes[1] = 0xB8;
-    memcpy(&codes[2], &fn_runtime, sizeof(uint64_t)); // 2 ~ 8
+    memcpy(&codes[2], &fn_runtime_ptr, sizeof(uint64_t)); // 2 ~ 8
     // 将寄存器 rax 中的值移动到 [rbp+stack_offset] 的地址中
     codes[10] = 0x48;
     codes[11] = 0x89;
@@ -53,9 +53,9 @@ static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64
     return 14;
 }
 
-static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime) {
+static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
     // RDI = 7、RSI = 6、RDX = 2、RCX = 1、R8 = 8、R9 = 9
-    uint8_t *imm = (uint8_t *) (&fn_runtime);
+    uint8_t *imm = (uint8_t *) (&fn_runtime_ptr);
     switch (reg_index) {
         case 7: { // rdi
             codes[0] = 0x48;
@@ -93,21 +93,21 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
     }
 
     // 将地址按 little-endian 方式存储
-    memcpy(&codes[2], &fn_runtime, sizeof(uint64_t));
+    memcpy(&codes[2], &fn_runtime_ptr, sizeof(uint64_t));
 
     return 10;
 }
 
-static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr_t fn_addr) {
+static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, addr_t fn_addr) {
     uint8_t codes[100] = {0};
     uint64_t size = 0;
 
     uint8_t temp_codes[50];
     uint8_t count;
     if (fndef->fn_runtime_reg > 0) {
-        count = gen_mov_reg_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime);
+        count = gen_mov_reg_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime_ptr);
     } else {
-        count = gen_mov_stack_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime);
+        count = gen_mov_stack_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime_ptr);
     }
     for (int i = 0; i < count; ++i) {
         codes[size++] = temp_codes[i];
@@ -117,7 +117,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
         codes[size++] = temp_codes[i];
     }
 
-    memcpy(fn_runtime->closure_jit_codes, codes, size);
+    memcpy(fn_runtime_ptr->closure_jit_codes, codes, size);
 }
 
 #else

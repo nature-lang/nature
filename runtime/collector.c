@@ -61,7 +61,7 @@ static void scan_stack(memory_t *m) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
         if (!fn) {
-            DEBUGF("[runtime_gc.scan_stack] fn not found,frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
+            DEBUGF("[runtime_gc.scan_stack] fn not found by return addr, frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
                    frame_base,
                    return_addr);
             frame_base += POINTER_SIZE;
@@ -90,7 +90,7 @@ static void scan_stack(memory_t *m) {
         int i = 0;
         while (cursor > frame_top) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime_gc.scan_stack] bit_i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,fetch_int_value=0x%lx",
+            DEBUGF("[runtime_gc.scan_stack] fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,stack_value(to_int64)=0x%lx",
                    i, cursor, is_ptr,
                    fetch_int_value(cursor, 8))
             if (is_ptr) {
@@ -177,17 +177,30 @@ static void grey_list_work(memory_t *m) {
 
             // get mspan by ptr
             mspan_t *span = span_of(addr);
+
             //  get span index
             uint64_t obj_index = (addr - span->base) / span->obj_size;
+
+            // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
+            // 计算 addr 所在的 obj 的起始地址
+            addr = span->base + (obj_index * span->obj_size);
+
+            DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, spanclass_has_ptr=%d, span=0x%lx, "
+                   "spanclass=%d, obj_index=%lu, span->obj_size=%lu",
+                   addr, spanclass_has_ptr(span->spanclass), span->base, span->spanclass, obj_index, span->obj_size);
 
             // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
             if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
                 // already marks black
+                DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, span=0x%lx, obj_index=%lu marked, will continue",
+                       addr, span->base, obj_index);
                 continue;
             }
 
+
             // - black: The gc bits corresponding to obj are marked 1
             mark_obj_black(span, obj_index);
+
 
             // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
             if (!spanclass_has_ptr(span->spanclass)) {
@@ -208,9 +221,9 @@ static void grey_list_work(memory_t *m) {
                     // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
                     addr_t heap_addr = fetch_addr_value(temp_addr);
 
-                    DEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx temp_addr=0x%lx fetch_heap_value=0x%lx,"
-                           "obj_size=%ld, bit_index=%lu",
-                           addr, temp_addr, heap_addr, span->obj_size, bit_index);
+                    DEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
+                           "obj_size=%ld, bit_index=%lu, in_heap=%d",
+                           addr, temp_addr, heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
                     if (in_heap(heap_addr)) {
                         linked_push(temp_grey_list, (void *) heap_addr);
                     }
