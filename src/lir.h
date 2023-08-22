@@ -660,7 +660,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
  * @param dst_operand
  * @return
  */
-static inline lir_operand_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
+static inline lir_operand_t *lir_stack_alloc(closure_t *c, linked_t *list, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
     assert(is_alloc_stack(t));
@@ -670,7 +670,7 @@ static inline lir_operand_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand
 
     lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
 
-    OP_PUSH(lir_op_lea(dst_operand, src_operand));
+    linked_push(list, lir_op_lea(dst_operand, src_operand));
 
     return src_operand;
 }
@@ -701,7 +701,23 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
     if (type.kind == TYPE_STRUCT) {
-        lir_stack_alloc(m->linear_current, type, target);
+        lir_stack_alloc(m->linear_current, m->linear_current->operations, type, target);
+    }
+
+    return target;
+}
+
+static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list, type_t type) {
+    assert(type.kind > 0);
+
+    string result = var_unique_ident(c->module, TEMP_IDENT);
+
+    symbol_table_set_var(result, type);
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(c->module, result));
+
+    // 如果 type 是一个 struct, 则为 struct 申请足够的空间
+    if (type.kind == TYPE_STRUCT) {
+        lir_stack_alloc(c, list, type, target);
     }
 
     return target;

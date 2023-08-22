@@ -177,7 +177,7 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_args; // 临时存储 checking alias 时传递的实参
+    table_t *type_args; // 临时存储 checking alias 时传递的实参(TODO 如果存在多层次嵌套，则需要使用栈来存储)
 
     // compiler
     struct closure_t *linear_current;

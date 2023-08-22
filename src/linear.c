@@ -272,7 +272,7 @@ static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     if (var_decl->type.kind == TYPE_STRUCT) {
         // 这没有申请空间
         // Allocate enough space and store the address of the allocated space in dst.
-        lir_stack_alloc(m->linear_current, var_decl->type, operand);
+        lir_stack_alloc(m->linear_current, m->linear_current->operations, var_decl->type, operand);
     }
 
     return operand;

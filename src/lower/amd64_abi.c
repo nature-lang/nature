@@ -162,7 +162,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
             if (param_type.kind == TYPE_STRUCT) {
-                lir_operand_t *src_ref = temp_var_operand(c->module, type_kind_new(TYPE_CPTR));
+                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_CPTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
             } else {
@@ -177,40 +177,50 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
         } else {
             if (param_type.kind == TYPE_STRUCT) {
-                // 为 var 申请低保空间
-                lir_operand_t *dst_stack = lir_stack_alloc(c, param_type, dst_param);
+                lir_stack_alloc(c, result, param_type, dst_param);
 
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
+                type_kind lo_kind;
                 if (lo == AMD64_CLASS_INTEGER) {
                     // 查找合适大小的 reg 进行 mov
                     uint8_t reg_index = int_reg_indices[int_reg_index++];
-                    lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                    lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                    lo_kind = TYPE_UINT64;
                 } else if (lo == AMD64_CLASS_SSE) {
                     uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                    lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                    lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                    lo_kind = TYPE_FLOAT64;
                 } else {
                     assert(false);
                 }
 
-                linked_push(result, lir_op_move(dst_stack, lo_reg_operand));
+                lir_operand_t *lo_dst = indirect_addr_operand(c->module,
+                                                              type_kind_new(lo_kind), dst_param, 0);
+
+                linked_push(result, lir_op_move(lo_dst, lo_reg_operand));
 
                 if (count == 2) {
                     // 从寄存器中将数据移入到低保空间
                     lir_operand_t *hi_reg_operand;
+                    type_kind hi_kind;
                     if (hi == AMD64_CLASS_INTEGER) {
                         // 查找合适大小的 reg 进行 mov
                         uint8_t reg_index = int_reg_indices[int_reg_index++];
-                        hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                        hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                        hi_kind = TYPE_UINT64;
                     } else if (hi == AMD64_CLASS_SSE) {
                         uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                        hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                        hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                        hi_kind = TYPE_FLOAT64;
                     } else {
                         assert(false);
                     }
 
-                    dst_stack = lir_stack_offset(c->module, dst_stack, QWORD);
-                    linked_push(result, lir_op_move(dst_stack, hi_reg_operand));
+                    lir_operand_t *hi_dst = indirect_addr_operand(c->module,
+                                                                  type_kind_new(lo_kind), dst_param, QWORD);
+
+                    linked_push(result, lir_op_move(hi_dst, hi_reg_operand));
                 }
             } else {
                 assertf(count == 1, "the normal type uses only one register");
@@ -268,7 +278,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             if (is_alloc_stack(return_type)) {
                 // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
                 // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
-                lir_stack_alloc(c, return_type, c->return_operand);
+                lir_stack_alloc(c, result, return_type, c->return_operand);
             }
         }
     }
@@ -425,10 +435,10 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
                 if (hi == AMD64_CLASS_INTEGER) {
                     // 查找合适大小的 reg 进行 mov
                     uint8_t reg_index = int_reg_indices[int_reg_index++];
-                    hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                    hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
                 } else if (hi == AMD64_CLASS_SSE) {
                     uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                    hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                    hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
                 } else {
                     assert(false);
                 }
