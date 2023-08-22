@@ -43,7 +43,7 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
     expr->type = target_type;
 }
 
-static uint32_t fn_params_hash(type_fn_t *fn) {
+static uint32_t fn_param_types_hash(type_fn_t *fn) {
     char *str = itoa(TYPE_FN);
     for (int i = 0; i < fn->param_types->length; ++i) {
         type_t *t = ct_list_value(fn->param_types, i);
@@ -137,7 +137,7 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
     temps = slice_new();
     for (int i = 0; i < fndefs->count; ++i) {
         ast_fndef_t *fndef = fndefs->take[i];
-        uint32_t hash = fn_params_hash(fndef->type.fn);
+        uint32_t hash = fn_param_types_hash(fndef->type.fn);
         if (table_exist(fn_params_table, itoa(hash))) {
             continue;
         }
@@ -154,14 +154,20 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
 }
 
 /**
- * 所有的 fndef 都将从这里进入，一旦 reduction 完成，就能基于入参快速计算出唯一标识
+ * 所有的 fndef 都将从这里进入，一旦 reduction 完成，就能基于 param 快速计算出唯一标识
  * @param m
  * @param fndef
  * @param t
  */
-static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
+static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef, char *hash) {
     assert(fndef->type.status == REDUCTION_STATUS_DONE);
+    // fndef->params_hash 已经注册完毕，不需要重复注册
     if (fndef->params_hash) {
+        assert(str_equal(fndef->params_hash, hash));
+        return true;
+    }
+
+    if (!hash || str_equal(hash, "")) {
         return true;
     }
 
@@ -169,22 +175,27 @@ static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     assert(s);
     assert(s->fndefs && s->fndefs->count > 0);
 
-    // 函数名称全局唯一，没必要进行符号表的改写
+    // symbol_name 在 symbol_table 中唯一，不会冲突，所以没有必要进行改写
     if (s->fndefs->count == 1) {
         return true;
     }
 
     if (!fndef->is_local) {
-        fndef->params_hash = itoa(fn_params_hash(fndef->type.fn));
+        fndef->params_hash = hash;
+//        fndef->params_hash = itoa(fn_param_types_hash(fndef->type.fn));
     } else {
+        // fndef 内部还会有 fndef, 此时内部的 local fndef 直接继承 global parent 的 params_hash
+
         // local fn 直接适用 parent 的 hash 即可, 这么做也是为了兼容 generic 的情况
         // 否则 local fn 根据不会存在同名的情况, 另外 local fn 的调用作用域仅仅在当前函数内
         assert(fndef->global_parent);
         assert(strlen(fndef->global_parent->params_hash) > 0);
 
         fndef->params_hash = fndef->global_parent->params_hash;
+
+        // 如果 local fndef 引用了外部环境，是一个 closure, closure name 同样寻要基于 params hash 进行改写, 并将新的 symbol 写入到全局符号表中
         if (fndef->closure_name) {
-            fndef->closure_name = str_connect_by(fndef->closure_name, fndef->params_hash, ".");
+            fndef->closure_name = str_connect_by(fndef->closure_name, fndef->params_hash, GEN_REWRITE_SEPARATOR);
 
             ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
             var_decl->ident = fndef->closure_name;
@@ -196,30 +207,11 @@ static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     fndef->symbol_name = str_connect_by(fndef->symbol_name, fndef->params_hash, GEN_REWRITE_SEPARATOR);
 
     if (symbol_table_get(fndef->symbol_name)) {
-        // exists
         return false;
     }
 
     symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);
     return true;
-}
-
-static char *rewrite_ident_def(module_t *m, char *old) {
-    assert(m->checking_current);
-    if (!m->checking_current->params_hash) {
-        return old;
-    }
-
-    symbol_t *s = symbol_table_get(old);
-    assert(s->is_local);
-    assert(s->type != SYMBOL_FN);
-
-    char *ident = str_connect_by(old, m->checking_current->params_hash, GEN_REWRITE_SEPARATOR);
-
-    s->ident = ident;
-    symbol_table_set(ident, s->type, s->ast_value, s->is_local);
-
-    return ident;
 }
 
 static char *rewrite_ident_use(module_t *m, char *old) {
@@ -251,7 +243,8 @@ static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     }
 
     var_decl->ident = str_connect_by(var_decl->ident, m->checking_current->params_hash, GEN_REWRITE_SEPARATOR);
-    // 只有 local var decl 才需要进行 rewrite
+
+    // 进行符号表重新添加
     symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
 }
 
@@ -666,11 +659,14 @@ static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t targe
  *  age = 1
  * }
  *
+ * type<arg1,arg2> {
+ * }
+ *
  * @param ast
  * @return
  */
 static type_t checking_struct_new(module_t *m, ast_struct_new_t *ast) {
-    // person to struct
+    // 对于有参数的 struct 需要具备类型复制的能力
     ast->type = reduction_type(m, ast->type);
 
     CHECKING_ASSERTF(ast->type.kind == TYPE_STRUCT, "ident not struct, cannot struct new");
@@ -1178,7 +1174,9 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
 
             assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
 
-            rewrite_fndef(m, f); // 从泛型名称改为具体名称
+            char *hash = itoa(fn_param_types_hash(f->type.fn));
+
+            rewrite_fndef(m, f, hash); // 从泛型名称改为具体名称
 
             ident->literal = f->symbol_name; // 引用函数的新的符号
         }
@@ -1855,7 +1853,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
     ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
-    // 判断是否包含 param, 如果包含 param 则需要每一次 reduction 都进行处理
+    // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
     if (type_alias_stmt->formals) {
         assert(t.alias->args);
         assert(t.alias->args->length == type_alias_stmt->formals->length);
@@ -1867,7 +1865,10 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
             table_set(m->type_args, formal->literal, arg);
         }
 
-        return reduction_type(m, type_copy(type_alias_stmt->type));
+        // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
+        type_t alias_type_value = type_copy(m, type_alias_stmt->type);
+
+        return reduction_type(m, alias_type_value);
     }
 
 
@@ -2037,12 +2038,12 @@ static bool checking_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn->symbol 进行重写, 携带上 param_hash，且不用担心重复的问题
     // checking expr 中 fndef 确实会重复调用 checking_fn_decl 进行重复的推断
-    bool success = rewrite_fndef(m, fndef);
+    // 当然并不是所有的 fn 都是基于参数生成的 hash, 在 type struct 中的 fn 则是根据 type arg 生成 hash
+    char *hash = itoa(fn_param_types_hash(t.fn));
+    bool success = rewrite_fndef(m, fndef, hash);
     if (!success) {
-        // 主要是参数类型重复导致了符号表的重复注册
         return false;
     }
-
 
     // rewrite_formals ident
     for (int i = 0; i < fndef->params->length; ++i) {
@@ -2078,6 +2079,7 @@ void checking(module_t *m) {
     m->checking_current = NULL;
     m->current_line = 0;
     m->current_column = 0;
+    m->checking_temp_fndefs = slice_new();;
 
     // - 全局变量中也包含类型信息需要进行还原处理
     for (int j = 0; j < m->global_symbols->count; ++j) {
@@ -2103,6 +2105,11 @@ void checking(module_t *m) {
             slice_push(fndefs, fndef);
         }
     }
+
+    // TODO
+    // - checking_temp_fndefs 是 type_param 中对函数复制所产生的函数
+    // 类似于泛型，所以同样需要进行展开处理. ast_fndef 现在依旧被 struct_new 关联
+    // 所以直接改动 fndefs->symbol_name 可以直接被 struct_new 识别到
 
     m->ast_fndefs = fndefs;
 }

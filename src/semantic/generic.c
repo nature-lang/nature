@@ -212,9 +212,7 @@ static slice_t *generic_global_fndef(module_t *m, ast_fndef_t *fndef) {
                 new_fndef = temps->take[j];
             } else {
                 // 这里进行了深度 copy, 所有的表达式之间不会再有关联关系
-                new_fndef = ast_fndef_copy(temps->take[j]);
-                // 将 new fn 添加到 symbol table 中 (依旧使用原始的名称, 方便使用者可以定位函数信息)
-                symbol_table_set(new_fndef->symbol_name, SYMBOL_FN, new_fndef, fndef->is_local);
+                new_fndef = ast_fndef_copy(m, temps->take[j]);
             }
 
 

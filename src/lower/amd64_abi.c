@@ -368,14 +368,15 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
     // 优先处理需要通过 stack 传递的参数,将他们都 push 或者 mov 到栈里面(越考右的参数越优先入栈)
     for (int i = args->count - 1; i >= 0; i--) {
         lir_operand_t *arg = args->take[i];
-        type_t arg_type = lir_operand_type(arg);
-
-        lo = hi = AMD64_CLASS_NO;
-        int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
 
         if (onstack[i] == 0) {
             continue;
         }
+
+        type_t arg_type = lir_operand_type(arg);
+
+        lo = hi = AMD64_CLASS_NO;
+        int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
 
         uint16_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
 
@@ -415,36 +416,42 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
         if (arg_type.kind == TYPE_STRUCT) {
             // 将 arg 中的数据 mov 到 lo/hi 寄存器中
             lir_operand_t *lo_reg_operand;
+            type_kind lo_kind;
             if (lo == AMD64_CLASS_INTEGER) {
                 // 查找合适大小的 reg 进行 mov
                 uint8_t reg_index = int_reg_indices[int_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                lo_kind = TYPE_UINT64;
             } else if (lo == AMD64_CLASS_SSE) {
                 uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                lo_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                lo_kind = TYPE_FLOAT64;
             } else {
                 assert(false);
             }
 
             // arg 是第一个内存地址，现在需要读取其 indirect addr
-            lir_operand_t *src_operand = indirect_addr_operand(c->module, arg_type, arg, 0);
+            lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(lo_kind), arg, 0);
             linked_push(result, lir_op_move(lo_reg_operand, src_operand));
 
             if (count == 2) {
                 lir_operand_t *hi_reg_operand;
+                type_kind hi_kind;
                 if (hi == AMD64_CLASS_INTEGER) {
                     // 查找合适大小的 reg 进行 mov
                     uint8_t reg_index = int_reg_indices[int_reg_index++];
                     hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_UINT64));
+                    hi_kind = TYPE_UINT64;
                 } else if (hi == AMD64_CLASS_SSE) {
                     uint8_t reg_index = sse_reg_indices[sse_reg_index++];
                     hi_reg_operand = operand_new(LIR_OPERAND_REG, amd64_reg_select(reg_index, TYPE_FLOAT64));
+                    hi_kind = TYPE_FLOAT64;
                 } else {
                     assert(false);
                 }
 
                 // arg 是第一个内存地址，现在需要读取其 indirect addr
-                src_operand = indirect_addr_operand(c->module, arg_type, arg, QWORD);
+                src_operand = indirect_addr_operand(c->module, type_kind_new(hi_kind), arg, QWORD);
                 linked_push(result, lir_op_move(hi_reg_operand, src_operand));
             }
         } else {
@@ -502,6 +509,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     amd64_class_t hi = AMD64_CLASS_NO;
     int64_t count = amd64_type_classify(result_type, &lo, &hi, 0);
 
+    // call result to args
     // count == 0 标识参数通过栈进行传递，但是需要注意的是此时传递并的是一个指针，而不是整个 struct
     // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {

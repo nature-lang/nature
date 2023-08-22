@@ -448,11 +448,11 @@ typedef struct ast_fndef_t {
 
     /**
      * 由于 global 函数能够进行重载，以及泛型，所以在一个模块下可能会存在多个同名的 global 函数
-     * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 依旧是同名的函数
-     * 这里的同名主要体现在 symbol table 中。
+     * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 下的所有 local ident 都会在
+     * symbol table 中冲突
      *
      * params_hash 是基于 global fn params 计算出的唯一标识，所有的 global fn 的唯一标识都将 with params_hash，然后将 with 后的
-     * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。
+     * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。这也避免了冲突
      */
     char *params_hash;
 
@@ -484,18 +484,6 @@ type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread);
 //bool type_compare(type_t left, type_t right);
 
 ast_ident *ast_new_ident(char *literal);
-
-ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp);
-
-type_t type_copy(type_t temp);
-
-static slice_t *ast_body_copy(slice_t *body);
-
-static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp);
-
-static ast_expr_t *ast_expr_copy(ast_expr_t *temp);
-
-static ast_call_t *ast_call_copy(ast_call_t *temp);
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);

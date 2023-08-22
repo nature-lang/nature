@@ -165,7 +165,7 @@ typedef struct {
     parser_cursor_t p_cursor;
 
     slice_t *stmt_list;
-    table_t *parser_type_formals; // 辅助记录 ident 是 alias 还是 type param
+    table_t *parser_type_params; // 辅助记录 ident 是 alias 还是 type param, type alias 嵌套就会出问题！
 
     // analyzer
     analyzer_fndef_t *analyzer_current;
@@ -177,7 +177,7 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_args; // 临时存储 checking alias 时传递的实参(TODO 如果存在多层次嵌套，则需要使用栈来存储)
+    table_t *type_args; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
 
     // compiler
     struct closure_t *linear_current;
@@ -195,6 +195,8 @@ typedef struct {
 
     // ast_fndef
     slice_t *ast_fndefs;
+
+    slice_t *checking_temp_fndefs; // checking 阶段，type param 可能还会产生 temp_fndefs
 
     // closure_t
     slice_t *closures; // 包含 lir, 无论是 local 还是 global 都会在这里进行注册
@@ -540,6 +542,18 @@ typedef struct {
     char *output; // 完整路径名称
     uint8_t output_type;
 } elf_context;
+
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+
+type_t type_copy(module_t *m, type_t temp);
+
+static slice_t *ast_body_copy(module_t *m, slice_t *body);
+
+static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp);
+
+static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
+
+static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
 
 #endif //NATURE_TYPES_H

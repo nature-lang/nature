@@ -266,6 +266,7 @@ struct type_formal_t {
 struct type_alias_t {
     char *import_as; // 可能为 null (foo.bar)
     char *ident; // 类型名称 type my_int = int
+
     // 可以包含多个实际参数,实际参数由类型组成
     list_t *args; // type_t*
 };

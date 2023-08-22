@@ -842,7 +842,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     // global ident call optimize to 'call symbol'
     lir_operand_t *base_target = global_fn_symbol(m, call->left);
     if (!base_target) {
-        base_target = linear_expr(m, call->left, NULL);
+        lir_operand_t *temp_operand = temp_var_operand(m, call->left.type);
+        base_target = linear_expr(m, call->left, temp_operand);
     }
 
     slice_t *params = slice_new();
