@@ -109,7 +109,10 @@ n_cptr_t map_access(n_map_t *m, void *key_ref) {
                hash_value,
                hash_value_empty(hash_value),
                hash_value_deleted(hash_value));
-        return false;
+
+        char *msg = dsprintf("key [%s] not found in map", key_str);
+        rt_processor_attach_errort(msg);
+        return 0;
     }
 
     uint64_t data_index = get_data_index(m, hash_index);

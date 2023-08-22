@@ -782,9 +782,9 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
         lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
         // return void_expr() 时, m->linear_current->return_operand 是 null
-        // TODO 这里直接接使用了普通 move, 而不是 super move?
         if (m->linear_current->return_operand) {
-            OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
+//            OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
+            linear_super_move(m, ast->expr->type, m->linear_current->return_operand, src);
         }
 
         // 保留用来做 return check
@@ -897,7 +897,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     slice_push(params, int_operand(0));
 
 
-    lir_operand_t *temp = temp_var_operand_without_stack(m, expr.type);
+    lir_operand_t *temp = NULL;
+    if (type_fn->return_type.kind != TYPE_VOID) {
+        temp = temp_var_operand_without_stack(m, expr.type);
+    }
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL,
                        base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
@@ -907,7 +910,11 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         linear_error_handle(m);
     }
 
-    return linear_super_move(m, expr.type, target, temp);
+    if (temp) {
+        return linear_super_move(m, expr.type, target, temp);
+    }
+
+    return target;
 }
 
 static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -1099,18 +1106,16 @@ static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_opera
         src = indirect_addr_operand(m, expr.type, src, 0);
     }
 
+    // 可能会存在数组越界的错误需要拦截处理
+    linear_error_handle(m);
+
     if (!target) {
         target = temp_var_operand(m, expr.type);
     }
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
-    target = linear_super_move(m, expr.type, target, src);
-
-    // 可能会存在数组越界的错误需要拦截处理
-    linear_error_handle(m);
-
-    return target;
+    return linear_super_move(m, expr.type, target, src);
 }
 
 /**
@@ -1206,6 +1211,12 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
     OP_PUSH(rt_call(RT_CALL_MAP_ACCESS, value_target, 2, map_target, key_ref));
     if (!is_alloc_stack(expr.type)) {
         value_target = indirect_addr_operand(m, expr.type, value_target, 0);
+    }
+
+    linear_error_handle(m);
+
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
     }
 
     return linear_super_move(m, expr.type, target, value_target);
@@ -1905,8 +1916,11 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 返回值 operand 也 push 到 params1 里面，方便处理
     if (fndef->return_type.kind != TYPE_VOID) {
-        c->return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
-        OP_PUSH(lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+        lir_operand_t *return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
+        lir_op_t *op = lir_op_output(LIR_OPCODE_NOP, return_operand);
+        OP_PUSH(op);
+        // 这里直接引用了 op->output->value, 在 ssa rename 时，c->return_operand 可以联动改名
+        c->return_operand = op->output;
     }
 
     linear_body(m, fndef->body);

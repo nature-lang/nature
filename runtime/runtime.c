@@ -20,6 +20,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     if (rtype->kind == TYPE_STRING) {
         n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
+        assertf(n_str && n_str->length > 0, "fetch addr by data ref '%p' err", data_ref);
         return (char *) string_raw(n_str);
     }
 

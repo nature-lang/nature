@@ -567,7 +567,6 @@ uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size) {
         return ptr_size;
     }
 
-    assert(rtype->size <= ptr_size); // 当前版本总是小于等于 8
     return rtype->size;
 }
 

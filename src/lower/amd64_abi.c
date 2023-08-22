@@ -253,19 +253,21 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     if (c->return_operand) {
         type_t return_type = lir_operand_type(c->return_operand);
         int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
-        // 在 fn begin 中进行 return operand 的初始化
+
         if (count == 0) {
+            // rsi 中保存了地址指针，现在需要走普通 mov 做一次 mov 处理就行了
             lir_operand_t *return_operand = c->return_operand;
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
             return_operand = lir_operand_copy(return_operand);
             lir_var_t *var = return_operand->value;
             assertf(var->type.kind == TYPE_STRUCT, "only struct can use stack pass");
+            // 这里必须使用 ptr, 如果使用 struct，lower params 就会识别异常
             var->type = type_ptrof(var->type);
-
             slice_insert(params, 0, var);
         } else {
             if (is_alloc_stack(return_type)) {
-                // 直接申请空间，然后写入到虚拟寄存器中即可
+                // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
+                // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
                 lir_stack_alloc(c, return_type, c->return_operand);
             }
         }
@@ -476,7 +478,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     type_t result_type = lir_operand_type(call_result);
 
-    // 进行 call result 的栈空间申请, 此时已经不会触发 ssa 了
+    // 进行 call result 的栈空间申请, 此时已经不会触发 ssa 了，可
     if (result_type.kind == TYPE_STRUCT) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
         uint64_t size = type_sizeof(result_type);
@@ -489,10 +491,18 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
     int64_t count = amd64_type_classify(result_type, &lo, &hi, 0);
+
+    // count == 0 标识参数通过栈进行传递，但是需要注意的是此时传递并的是一个指针，而不是整个 struct
+    // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {
         type_t call_result_type = lir_operand_type(call_result);
+        assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
         assert(call_result_type.kind == TYPE_STRUCT);
-        slice_insert(args, 0, call_result);
+
+        lir_operand_t *temp_arg = lir_operand_copy(call_result);
+        lir_var_t *temp_var = temp_arg->value;
+        temp_var->type = type_ptrof(temp_var->type);
+        slice_insert(args, 0, temp_arg);
     }
 
     int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原

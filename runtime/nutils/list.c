@@ -112,6 +112,7 @@ void *list_raw(n_list_t *l) {
  * @param ref
  */
 void list_push(n_list_t *l, void *ref) {
+    assertf(ref > 0, "ref=%p must be a valid address", ref);
     DEBUGF("[list_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
            (uint64_t) fetch_int_value((addr_t) ref, 8));
 

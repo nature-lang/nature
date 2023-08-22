@@ -887,6 +887,7 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
         // push 对参数需要与 list element type 一致，否则抛出异常
         CHECKING_ASSERTF(call->args->length == 1, "list push param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
+
         checking_right_expr(m, expr, list_type->element_type);
 
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
@@ -894,8 +895,8 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left); // list operand
 
-        // TODO la 是什么意思？
-        ct_list_push(call->args, ast_unary(expr, AST_OP_LA)); // value operand
+        // value operand, load address
+        ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_PUSH);
         checking_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型
@@ -1074,7 +1075,7 @@ static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *targe
 
 /**
  * if call first param type is self
- * fn struct.call(param1) -> struct.key(struct, param1) 即可
+ * struct.call(param1) -> struct.call(struct, param1) 即可
  * @param m
  * @param call
  * @return
@@ -1443,7 +1444,9 @@ static void checking_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type
 static void checking_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
     type_t t = checking_right_expr(m, &stmt->right, type_kind_new(TYPE_UNKNOWN));
-    assert(t.kind == TYPE_TUPLE);
+
+    CHECKING_ASSERTF(t.kind == TYPE_TUPLE, "cannot assign type '%s' to tuple",
+                     type_kind_str[t.kind]);
 
     checking_var_tuple_destr(m, stmt->tuple_destr, t);
 }

@@ -793,9 +793,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
-    if (!is_alloc_stack(t)) {
-        t = type_ptrof(t);
-    }
+    t = type_ptrof(t);
 
     lir_operand_t *temp_ref = temp_var_operand_without_stack(m, t);
     OP_PUSH(lir_op_lea(temp_ref, operand));
