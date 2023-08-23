@@ -170,6 +170,7 @@ typedef struct {
     // analyzer
     analyzer_fndef_t *analyzer_current;
     ast_fndef_t *analyzer_global;
+    bool analyzer_in_type_param;
 
     // 编译器前端统一使用
     int current_line;

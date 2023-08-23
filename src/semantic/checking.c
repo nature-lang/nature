@@ -1851,11 +1851,13 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         for (int i = 0; i < t.alias->args->length; ++i) {
             type_t *arg = ct_list_value(t.alias->args, i);
             ast_ident *param = ct_list_value(type_alias_stmt->params, i);
-            table_set(m->type_param_table, param->literal, param);
+            table_set(m->type_param_table, param->literal, arg);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
+
+        // TODO 这里不包含对 copy 后的 fn 的处理吗？？
         alias_value_type = reduction_type(m, alias_value_type);
 
         // reduction 完成 完成，取消 type_args
@@ -1863,7 +1865,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         m->type_param_table = NULL;
         m->type_param_list = NULL;
 
-        return t;
+        return alias_value_type;
     }
 
 
@@ -2137,6 +2139,7 @@ void checking(module_t *m) {
 
         rewrite_fndef(m, fndef);
 
+        // TODO body 中存在 type_param 没有解析，所以还是需要 type_param_table(跟随 fn)
         checking_fndef(m, fndef);
 
         slice_push(fndefs, fndef);

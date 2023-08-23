@@ -288,25 +288,24 @@ static void analyzer_type(module_t *m, type_t *type) {
         type_struct_t *struct_decl = type->struct_;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
+
             analyzer_type(m, &item->type);
 
             // 可选右值解析
             if (item->right) {
+                analyzer_expr(m, item->right);
+
                 ast_expr_t *expr = item->right;
                 if (expr->assert_type == AST_FNDEF) {
                     ast_fndef_t *fndef = expr->value;
                     fndef->self_struct = type; // 记录当前 fn 首个参数可以使用的 self 的原始 type
 
-                    // 在全局 struct 内部定义的 fndef 需要手动加入到
-                    // m->ast_fndefs(这是 global fndefs) 中, 作为全局 global fn 处理
-                    if (m->analyzer_current == NULL) {
-                        // TODO 如果当前 type 是 alias 且携带 param, 则 fn 是一个 template, 不需要放到 ast_fndefs 中
+                    // analyzer_current 为 null 标识当前 fn 是 global type alias 中的 fn
+                    // in_type_param 标识当前 fn 是一个模版，不需要加入到 ast_fndefs 中
+                    if (m->analyzer_current == NULL && !m->analyzer_in_type_param) {
                         slice_push(m->ast_fndefs, fndef);
                     }
                 }
-
-
-                analyzer_expr(m, item->right);
             }
         }
     }
@@ -632,11 +631,14 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    fndef->is_local = true;
 
     if (m->analyzer_global) {
         slice_push(m->analyzer_global->local_children, fndef);
         fndef->global_parent = m->analyzer_global;
+        fndef->is_local = true;
+    } else {
+        assert(m->analyzer_current == NULL);
+        fndef->is_local = false;
     }
 
     // 更新 m->analyzer_current
@@ -1297,8 +1299,12 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             slice_push(m->global_symbols, s);
 
+            if (type_alias->params->length > 0) {
+                m->analyzer_in_type_param = true;
+            }
             // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module ident
             analyzer_type(m, &type_alias->type);
+            m->analyzer_in_type_param = false;
             continue;
         }
 
