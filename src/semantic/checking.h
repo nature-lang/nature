@@ -9,6 +9,8 @@
 
 #define GEN_REWRITE_SEPARATOR "@"
 
+void pre_checking(module_t *m);
+
 void checking(module_t *m);
 
 void checking_var_decl(module_t *m, ast_var_decl_t *var_decl);

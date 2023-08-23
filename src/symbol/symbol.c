@@ -6,7 +6,7 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 
     // 符号重复注册
     if (s) {
-        assertf(type == SYMBOL_FN && is_local == false, "symbol=%s duplicate set", ident);
+        assertf(type == SYMBOL_FN, "symbol=%s duplicate set", ident);
         assert(s->fndefs);
         assert(s->fndefs->count > 0);
         slice_push(s->fndefs, ast_value);

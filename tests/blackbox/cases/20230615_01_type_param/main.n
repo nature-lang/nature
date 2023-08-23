@@ -1,0 +1,16 @@
+import 'mod.n'
+
+// struct box
+var b = mod.box<i8, i16> {
+    width = 5,
+    length = 10
+}
+
+println(b.area())
+
+var car = mod.box<f32, f32> {
+    width = 5.1,
+    length = 10.1
+}
+// println('float area=', car.area())
+// println('float area=', car.width * car.length)

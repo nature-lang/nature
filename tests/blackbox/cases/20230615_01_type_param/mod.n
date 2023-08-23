@@ -1,0 +1,7 @@
+type box<t0, t1> = struct {
+	t0 width
+	t1 length
+	var area = fn(self s):t0 {
+	    return s.width * s.length as t0
+	}
+}

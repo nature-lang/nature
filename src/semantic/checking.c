@@ -43,10 +43,10 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
     expr->type = target_type;
 }
 
-static uint32_t fn_param_types_hash(type_fn_t *fn) {
+static uint32_t fn_param_types_hash(list_t *param_types) {
     char *str = itoa(TYPE_FN);
-    for (int i = 0; i < fn->param_types->length; ++i) {
-        type_t *t = ct_list_value(fn->param_types, i);
+    for (int i = 0; i < param_types->length; ++i) {
+        type_t *t = ct_list_value(param_types, i);
         rtype_t r = ct_reflect_type(*t);
         str = str_connect(str, itoa(r.hash));
     }
@@ -73,19 +73,12 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
 
     slice_t *fndefs = s->fndefs;
 
-    // fndefs 进行类型还原
-    ast_fndef_t *origin = m->checking_current;
-    for (int i = 0; i < fndefs->count; ++i) {
-        ast_fndef_t *fndef = fndefs->take[i];
-        m->checking_current = fndef;
-        checking_fn_decl(m, fndef);
-    }
-    m->checking_current = origin;
-
     // 基于参数数量进行一次过滤
     slice_t *temps = slice_new();
     for (int i = 0; i < fndefs->count; ++i) {
         ast_fndef_t *fndef = fndefs->take[i];
+        assert(fndef->type.status == REDUCTION_STATUS_DONE);
+
         type_t type_fn = fndef->type;
         if (type_fn.fn->rest) {
             // 实参的数量大于等于 type_fn.params.length - 1
@@ -137,12 +130,14 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
     temps = slice_new();
     for (int i = 0; i < fndefs->count; ++i) {
         ast_fndef_t *fndef = fndefs->take[i];
-        uint32_t hash = fn_param_types_hash(fndef->type.fn);
-        if (table_exist(fn_params_table, itoa(hash))) {
+
+        assert(fndef->params_hash);
+        // 根据类型 hash 进行去冲
+        if (table_exist(fn_params_table, fndef->params_hash)) {
             continue;
         }
 
-        table_set(fn_params_table, itoa(hash), fndef);
+        table_set(fn_params_table, fndef->params_hash, fndef);
         slice_push(temps, fndef);
     }
     fndefs = temps;
@@ -159,15 +154,10 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
  * @param fndef
  * @param t
  */
-static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef, char *hash) {
+static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     assert(fndef->type.status == REDUCTION_STATUS_DONE);
     // fndef->params_hash 已经注册完毕，不需要重复注册
     if (fndef->params_hash) {
-        assert(str_equal(fndef->params_hash, hash));
-        return true;
-    }
-
-    if (!hash || str_equal(hash, "")) {
         return true;
     }
 
@@ -180,9 +170,11 @@ static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef, char *hash) {
         return true;
     }
 
+    // 泛型函数必须存在 param_types， length 可以为 0
+    assert(fndef->hash_param_types);
+
     if (!fndef->is_local) {
-        fndef->params_hash = hash;
-//        fndef->params_hash = itoa(fn_param_types_hash(fndef->type.fn));
+        fndef->params_hash = itoa(fn_param_types_hash(fndef->hash_param_types));
     } else {
         // fndef 内部还会有 fndef, 此时内部的 local fndef 直接继承 global parent 的 params_hash
 
@@ -1168,15 +1160,10 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
 
         CHECKING_ASSERTF(s, "symbol '%s' not found", ident->literal);
 
-        // 可能存在泛型参数匹配
         if (s->type == SYMBOL_FN && s->fndefs->count > 1) {
             ast_fndef_t *f = fn_match(m, call, s);
-
             assert(!f->closure_name); // 仅 global 函数可能会出现同名的情况
-
-            char *hash = itoa(fn_param_types_hash(f->type.fn));
-
-            rewrite_fndef(m, f, hash); // 从泛型名称改为具体名称
+            assert(f->type.kind == TYPE_FN);
 
             ident->literal = f->symbol_name; // 引用函数的新的符号
         }
@@ -1829,12 +1816,12 @@ static type_t generic_specialization(module_t *m, char *ident) {
     return reduction_type(m, *assign);
 }
 
-static type_t type_formal_specialization(module_t *m, type_t t) {
-    assert(t.kind == TYPE_FORMAL);
-    assert(m->type_args);
+static type_t type_param_specialization(module_t *m, type_t t) {
+    assert(t.kind == TYPE_PARAM);
+    assert(m->type_param_table);
 
     // 实参可以没有 reduction
-    type_t *type = table_get(m->type_args, t.formal->ident);
+    type_t *type = table_get(m->type_param_table, t.param->ident);
     return reduction_type(m, *type);
 }
 
@@ -1854,21 +1841,29 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
-    if (type_alias_stmt->formals) {
-        assert(t.alias->args);
-        assert(t.alias->args->length == type_alias_stmt->formals->length);
+    if (type_alias_stmt->params) {
+        assert(t.alias->args); // alias 有 param, 则实例化时必须携带 args
+        assert(t.alias->args->length == type_alias_stmt->params->length);
 
-        m->type_args = table_new();
+        m->type_param_table = table_new();
+        m->type_param_list = t.alias->args;
+
         for (int i = 0; i < t.alias->args->length; ++i) {
             type_t *arg = ct_list_value(t.alias->args, i);
-            ast_ident *formal = ct_list_value(type_alias_stmt->formals, i);
-            table_set(m->type_args, formal->literal, arg);
+            ast_ident *param = ct_list_value(type_alias_stmt->params, i);
+            table_set(m->type_param_table, param->literal, param);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
-        type_t alias_type_value = type_copy(m, type_alias_stmt->type);
+        type_t alias_value_type = type_copy(m, type_alias_stmt->type);
+        alias_value_type = reduction_type(m, alias_value_type);
 
-        return reduction_type(m, alias_type_value);
+        // reduction 完成 完成，取消 type_args
+        // reduction 期间的 fn 也进行了相关的 copy 操作。
+        m->type_param_table = NULL;
+        m->type_param_list = NULL;
+
+        return t;
     }
 
 
@@ -1956,8 +1951,8 @@ static type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
-    if (t.kind == TYPE_FORMAL) {
-        t = type_formal_specialization(m, t);
+    if (t.kind == TYPE_PARAM) {
+        t = type_param_specialization(m, t);
         goto STATUS_DONE;
     }
 
@@ -2032,18 +2027,9 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
  * @param m
  * @param fndef
  */
-static bool checking_fndef(module_t *m, ast_fndef_t *fndef) {
-    // fndef params 已经进行了 reduction, 会同步影响到 symbol table 中的 fn
-    type_t t = checking_fn_decl(m, fndef);
-
-    // generic 阶段已经进行了平铺处理，所以这里会将遍历到所有的 fn->symbol 进行重写, 携带上 param_hash，且不用担心重复的问题
-    // checking expr 中 fndef 确实会重复调用 checking_fn_decl 进行重复的推断
-    // 当然并不是所有的 fn 都是基于参数生成的 hash, 在 type struct 中的 fn 则是根据 type arg 生成 hash
-    char *hash = itoa(fn_param_types_hash(t.fn));
-    bool success = rewrite_fndef(m, fndef, hash);
-    if (!success) {
-        return false;
-    }
+static void checking_fndef(module_t *m, ast_fndef_t *fndef) {
+    assert(fndef->type.kind == TYPE_FN && fndef->type.status == REDUCTION_STATUS_DONE);
+    type_t t = fndef->type;
 
     // rewrite_formals ident
     for (int i = 0; i < fndef->params->length; ++i) {
@@ -2072,7 +2058,35 @@ static bool checking_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // body checking
     checking_body(m, fndef->body);
-    return true;
+}
+
+/**
+ * 对左右的 fn param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
+ * @param m
+ */
+void pre_checking(module_t *m) {
+    // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
+    slice_t *fndefs = slice_new();
+    for (int i = 0; i < m->ast_fndefs->count; ++i) {
+        ast_fndef_t *fndef = m->ast_fndefs->take[i];
+
+        m->checking_current = fndef;
+        m->current_line = fndef->line;
+        m->current_column = fndef->column;
+
+        checking_fn_decl(m, fndef);
+
+        // 已经 reduction param_types 已经 reduction 完成了
+        fndef->hash_param_types = fndef->type.fn->param_types;
+
+        // 从泛型名称改为具体名称(主要提现在符号表上和 elf 最终符号的变更)
+        // 可能会有泛型类型重复导致的 fn 重复生成(如 i64 和 int 就会重复生成), 所以进行去重
+        bool success = rewrite_fndef(m, fndef);
+        if (success) {
+            slice_push(fndefs, fndef);
+        }
+    }
+    m->ast_fndefs = fndefs;
 }
 
 void checking(module_t *m) {
@@ -2095,21 +2109,38 @@ void checking(module_t *m) {
     slice_t *fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
-        m->checking_current = fndef;
 
+        assert(fndef->type.kind == TYPE_FN);
+
+        m->checking_current = fndef;
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
-        bool success = checking_fndef(m, fndef);
-        if (success) {
-            slice_push(fndefs, fndef);
-        }
+        checking_fndef(m, fndef);
+        slice_push(fndefs, fndef);
     }
 
-    // TODO
     // - checking_temp_fndefs 是 type_param 中对函数复制所产生的函数
     // 类似于泛型，所以同样需要进行展开处理. ast_fndef 现在依旧被 struct_new 关联
     // 所以直接改动 fndefs->symbol_name 可以直接被 struct_new 识别到
+    for (int i = 0; i < m->checking_temp_fndefs->count; ++i) {
+        ast_fndef_t *fndef = m->checking_temp_fndefs->take[i];
+        m->checking_current = fndef;
+        m->current_line = fndef->line;
+        m->current_column = fndef->column;
+
+        // reduction
+        for (int j = 0; j < fndef->hash_param_types->length; ++j) {
+            type_t *t = ct_list_value(fndef->hash_param_types, i);
+            *t = reduction_type(m, *t);
+        }
+
+        rewrite_fndef(m, fndef);
+
+        checking_fndef(m, fndef);
+
+        slice_push(fndefs, fndef);
+    }
 
     m->ast_fndefs = fndefs;
 }

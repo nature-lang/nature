@@ -355,8 +355,8 @@ static type_t parser_single_type(module_t *m) {
 
         // type formal 快速处理, foo<formal1, formal2>
         if (m->parser_type_params && table_exist(m->parser_type_params, first->literal)) {
-            result.kind = TYPE_FORMAL;
-            result.formal = type_formal_new(first->literal);
+            result.kind = TYPE_PARAM;
+            result.param = type_formal_new(first->literal);
             return result;
         }
 
@@ -408,13 +408,13 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
 
-        type_alias_stmt->formals = ct_list_new(sizeof(ast_ident));
+        type_alias_stmt->params = ct_list_new(sizeof(ast_ident));
         m->parser_type_params = table_new();
 
         do {
             token_t *ident = parser_advance(m);
             ast_ident *temp = ast_new_ident(ident->literal);
-            ct_list_push(type_alias_stmt->formals, temp);
+            ct_list_push(type_alias_stmt->params, temp);
 
             table_set(m->parser_type_params, ident->literal, ident);
         } while (parser_consume(m, TOKEN_COMMA));

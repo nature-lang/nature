@@ -84,7 +84,7 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
-    TYPE_FORMAL, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
+    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
     TYPE_SELF,
     TYPE_GEN,
     TYPE_UNION,
@@ -174,7 +174,7 @@ typedef uint8_t type_bool_t;
  */
 typedef struct type_alias_t type_alias_t;
 
-typedef struct type_formal_t type_formal_t;
+typedef struct type_param_t type_param_t;
 
 typedef struct {
     bool any; // any gen
@@ -219,7 +219,7 @@ typedef struct type_t {
         type_struct_t *struct_;
         type_fn_t *fn;
         type_alias_t *alias; // 这个其实是自定义类型的 ident
-        type_formal_t *formal;
+        type_param_t *param;
         type_gen_t *gen; // type t0 = gen i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
         type_union_t *union_;
@@ -259,7 +259,7 @@ struct type_string_t {
 };
 
 // type foo<formal> = fn(formal, int):formal
-struct type_formal_t {
+struct type_param_t {
     char *ident;
 };
 
@@ -455,7 +455,7 @@ bool type_need_gc(type_t t);
 
 type_t type_ptrof(type_t t);
 
-type_formal_t *type_formal_new(char *literal);
+type_param_t *type_formal_new(char *literal);
 
 type_alias_t *type_alias_new(char *literal, char *import_as);
 

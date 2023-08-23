@@ -177,7 +177,8 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_args; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+    table_t *type_param_table; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+    list_t *type_param_list;
 
     // compiler
     struct closure_t *linear_current;

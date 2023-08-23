@@ -295,11 +295,12 @@ static void analyzer_type(module_t *m, type_t *type) {
                 ast_expr_t *expr = item->right;
                 if (expr->assert_type == AST_FNDEF) {
                     ast_fndef_t *fndef = expr->value;
-
                     fndef->self_struct = type; // 记录当前 fn 首个参数可以使用的 self 的原始 type
 
-                    // 在全局 struct 内部定义的 fndef 需要手动加入到 m->ast_fndefs(这是 global fndefs) 中, 作为全局 global fn 处理
+                    // 在全局 struct 内部定义的 fndef 需要手动加入到
+                    // m->ast_fndefs(这是 global fndefs) 中, 作为全局 global fn 处理
                     if (m->analyzer_current == NULL) {
+                        // TODO 如果当前 type 是 alias 且携带 param, 则 fn 是一个 template, 不需要放到 ast_fndefs 中
                         slice_push(m->ast_fndefs, fndef);
                     }
                 }
@@ -1047,8 +1048,12 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 // type foo = int
-// TODO stmt->formals 是否需要处理？
 static void analyzer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
+    // local type alias 不允许携带 param
+    if (stmt->params || stmt->params->length > 0) {
+        ANALYZER_ASSERTF(false, "local type alias cannot with params");
+    }
+
     analyzer_redeclare_check(m, stmt->ident);
     analyzer_type(m, &stmt->type);
 

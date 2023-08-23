@@ -336,6 +336,8 @@ static void build_temps(toml_table_t *package_conf) {
 
         generic(m);
 
+        pre_checking(m);
+
         checking(m);
     }
 
@@ -387,6 +389,8 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
         // generic => ast_fndef(global+local flat)
         generic(m);
+
+        pre_checking(m);
     }
 
     // register all module init to main module body

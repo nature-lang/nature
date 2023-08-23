@@ -509,8 +509,8 @@ uint8_t *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-type_formal_t *type_formal_new(char *literal) {
-    type_formal_t *t = NEW(type_formal_t);
+type_param_t *type_formal_new(char *literal) {
+    type_param_t *t = NEW(type_param_t);
     t->ident = literal;
     return t;
 }

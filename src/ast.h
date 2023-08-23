@@ -422,7 +422,7 @@ typedef struct {
  */
 typedef struct {
     string ident; // my_int (自定义的类型名称)
-    list_t *formals; // ast_ident*|null
+    list_t *params; // ast_ident*|null
     type_t type; // int (类型)
 } ast_type_alias_stmt_t;
 
@@ -446,6 +446,7 @@ typedef struct ast_fndef_t {
     // local_ident_t* 当前函数中是否存在被 child 引用的变量
     slice_t *be_capture_locals;
 
+    list_t *hash_param_types; // 用来计算 params_hash, 如果是 null 就不需要计算, 未 reduction
     /**
      * 由于 global 函数能够进行重载，以及泛型，所以在一个模块下可能会存在多个同名的 global 函数
      * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 下的所有 local ident 都会在

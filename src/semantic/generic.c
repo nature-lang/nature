@@ -185,7 +185,7 @@ static slice_t *generic_global_fndef(module_t *m, ast_fndef_t *fndef) {
         return result;
     }
 
-    // 泛型 global 函数处理
+    // 泛型 global 函数处理(包括 local 函数)
     slice_t *temps = slice_new();
     slice_push(temps, fndef);
     if (fndef->local_children && fndef->local_children->count > 0) {
@@ -211,10 +211,11 @@ static slice_t *generic_global_fndef(module_t *m, ast_fndef_t *fndef) {
             if (i == products->length - 1) {
                 new_fndef = temps->take[j];
             } else {
+                // 这里包括 local fn 和 global fn
                 // 这里进行了深度 copy, 所有的表达式之间不会再有关联关系
                 new_fndef = ast_fndef_copy(m, temps->take[j]);
             }
-
+            // TODO set param_hash
 
             slice_push(fndefs, new_fndef);
             slice_push(result, new_fndef);
