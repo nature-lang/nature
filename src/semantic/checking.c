@@ -1854,6 +1854,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     CHECKING_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
     CHECKING_ASSERTF(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
 
+    // 此时的 symbol 可能是其他 module 中声明的符号
     ast_type_alias_stmt_t *type_alias_stmt = symbol->ast_value;
 
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
@@ -1861,6 +1862,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         assert(t.alias->args); // alias 有 param, 则实例化时必须携带 args
         assert(t.alias->args->length == type_alias_stmt->params->length);
 
+        // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         m->type_param_table = table_new();
         m->type_param_list = t.alias->args;
 
@@ -1873,6 +1875,9 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
 
+        // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 checking_fn_decl 而不会处理 fn body 部分
+        // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续  checking_fndef 时解析 param 异常
+        // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
         alias_value_type = reduction_type(m, alias_value_type);
 
         // reduction 完成 完成，取消 type_args
@@ -2143,11 +2148,16 @@ void checking(module_t *m) {
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
+        assertf(fndef->type_param_table,
+                "temp fndefs from type_alias<param>->struct->fn copy, so type_param_table must be not null");
+
         // reduction
         for (int j = 0; j < fndef->hash_param_types->length; ++j) {
             type_t *t = ct_list_value(fndef->hash_param_types, i);
             *t = reduction_type(m, *t);
         }
+
+        m->type_param_table = fndef->type_param_table;
 
         rewrite_fndef(m, fndef);
 

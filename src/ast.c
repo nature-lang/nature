@@ -642,7 +642,9 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     if (m->checking_temp_fndefs) {
         // checking 阶段只有 type alias param 时的 type_copy 才会产生，此时一定存在 type_param_list
         assertf(m->type_param_list, "fn in type alias param struct, but m->type_param_list is null");
+        assertf(m->type_param_table, "fn in type alias param struct, but m->type_param_table is null");
         fndef->hash_param_types = m->type_param_list;
+        fndef->type_param_table = m->type_param_table;
         slice_push(m->checking_temp_fndefs, fndef);
     }
 

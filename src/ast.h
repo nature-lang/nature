@@ -439,6 +439,9 @@ typedef struct ast_fndef_t {
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余
 
+    // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
+    table_t *type_param_table; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+
     // ast_expr, 当前 fn body 中引用的外部的环境
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
     // 则需要将当前作用域中的变量打包成 env 丢给 child fn

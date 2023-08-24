@@ -5,3 +5,6 @@ type box<t0, t1> = struct {
 	    return s.width * s.length as t0
 	}
 }
+
+// nullable
+type nullable<t> = t|null

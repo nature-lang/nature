@@ -1051,7 +1051,7 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 // type foo = int
 static void analyzer_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
     // local type alias 不允许携带 param
-    if (stmt->params || stmt->params->length > 0) {
+    if (stmt->params && stmt->params->length > 0) {
         ANALYZER_ASSERTF(false, "local type alias cannot with params");
     }
 
@@ -1298,7 +1298,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             slice_push(m->global_symbols, s);
 
-            if (type_alias->params->length > 0) {
+            if (type_alias->params && type_alias->params->length > 0) {
                 m->analyzer_in_type_param = true;
             }
             // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module ident
