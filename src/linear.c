@@ -407,6 +407,7 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
     type_t t = struct_access->left.type;
+    assert(t.kind == TYPE_STRUCT);
 
     lir_operand_t *struct_target = linear_expr(m, struct_access->left, NULL);
 
@@ -1291,6 +1292,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
 
     lir_operand_t *struct_target = linear_expr(m, ast->left, NULL);
     type_t type_struct = ast->left.type;
+    assert(type_struct.kind == TYPE_STRUCT);
 
     uint64_t offset = type_struct_offset(type_struct.struct_, ast->key);
     // 先找到存放地址(可以用 indirect addr 算出来, 也可以直接用加法算出来？)
@@ -1417,6 +1419,10 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
     }
 
     return target;
+}
+
+static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
 }
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -1844,6 +1850,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
+        [AST_EXPR_NEW] = linear_new_expr,
 };
 
 

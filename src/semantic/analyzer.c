@@ -1006,6 +1006,10 @@ static void analyzer_list_new(module_t *m, ast_list_new_t *expr) {
     }
 }
 
+static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
+    analyzer_type(m, &expr->type);
+}
+
 static void analyzer_try(module_t *m, ast_try_t *expr) {
     analyzer_expr(m, &expr->expr);
 }
@@ -1082,6 +1086,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_TRY: {
             return analyzer_try(m, expr->value);
+        }
+        case AST_EXPR_NEW: {
+            return analyzer_new_expr(m, expr->value);
         }
         case AST_EXPR_STRUCT_NEW: {
             return analyzer_struct_new(m, expr->value);

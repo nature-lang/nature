@@ -1316,6 +1316,16 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     return result;
 }
 
+static ast_expr_t parser_new_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_NEW);
+    ast_new_expr_t *new_expr = NEW(ast_new_expr_t);
+    new_expr->type = parser_type(m);
+    result.assert_type = AST_EXPR_NEW;
+    result.value = new_expr;
+    return result;
+}
+
 static ast_expr_t parser_try_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_TRY);
@@ -1816,6 +1826,11 @@ static ast_expr_t parser_expr(module_t *m) {
     // fn def
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_expr(m);
+    }
+
+    // new
+    if (parser_is(m, TOKEN_NEW)) {
+        return parser_new_expr(m);
     }
 
     return parser_expr_with_precedence(m);

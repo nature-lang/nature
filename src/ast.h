@@ -17,6 +17,8 @@ typedef enum {
     AST_EXPR_AS,
     AST_EXPR_IS,
 
+    AST_EXPR_NEW, // new person
+
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
@@ -153,6 +155,10 @@ typedef struct {
 typedef struct {
     char *literal;
 } ast_ident;
+
+typedef struct {
+    type_t type;
+} ast_new_expr_t;
 
 /**
  * a as int

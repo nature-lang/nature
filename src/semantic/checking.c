@@ -453,8 +453,17 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
     return target_type;
 }
 
+static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
+    new_expr->type = reduction_type(m, new_expr->type);
+    // 只有结构体可以使用 new
+    CHECKING_ASSERTF(new_expr->type.kind == TYPE_STRUCT, "only struct type can use new");
+
+    return type_ptrof(new_expr->type);
+}
+
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
+    is_expr->target_type = reduction_type(m, is_expr->target_type);
     CHECKING_ASSERTF(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
 }
@@ -799,6 +808,13 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         select->left.type = reduction_type(m, *current->self_struct);
     }
 
+    if (select->left.type.kind == TYPE_POINTER) {
+        type_t value_type = select->left.type.pointer->value_type;
+        if (value_type.kind == TYPE_STRUCT) {
+            select->left.type = value_type;
+        }
+    }
+
     // ast_access to ast_struct_access
     if (select->left.type.kind == TYPE_STRUCT) {
         // 经过上面对 checking_right_expr, 这里对 type 一定是 reduction 的
@@ -1128,6 +1144,13 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
             select->left.type = reduction_type(m, *current->self_struct);
         }
 
+        // ptr struct 也还原成 struct
+        if (select->left.type.kind == TYPE_POINTER) {
+            type_t value_type = select->left.type.pointer->value_type;
+            if (value_type.kind == TYPE_STRUCT) {
+                select->left.type = value_type;
+            }
+        }
 
         type_kind select_left_kind = select->left.type.kind;
 
@@ -1590,6 +1613,10 @@ static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_t
         }
         case AST_EXPR_IS: {
             type = checking_is_expr(m, expr->value);
+            break;
+        }
+        case AST_EXPR_NEW: {
+            type = checking_new_expr(m, expr->value);
             break;
         }
         case AST_EXPR_BINARY: {

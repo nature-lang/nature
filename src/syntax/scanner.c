@@ -374,7 +374,7 @@ token_e scanner_ident(char *word, int length) {
                         return scanner_rest(word, length, 1, 2, "ny", TOKEN_ANY);
                     }
                     case 'r': {
-                        return scanner_rest(word, length, 1, 3, "ray", TOKEN_ANY);
+                        return scanner_rest(word, length, 1, 3, "ray", TOKEN_ARRAY);
                     }
                 }
             }
@@ -445,7 +445,13 @@ token_e scanner_ident(char *word, int length) {
             return scanner_rest(word, length, 1, 2, "et", TOKEN_LET);
         }
         case 'n':
-            return scanner_rest(word, length, 1, 3, "ull", TOKEN_NULL);
+            switch (word[1]) {
+                case 'u': // null
+                    return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
+                case 'e': // new
+                    return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
+
+            }
         case 'p':
             return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
         case 's': { // self,string,struct
