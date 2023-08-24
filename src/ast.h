@@ -354,7 +354,7 @@ typedef struct {
 } ast_select_t;
 
 typedef struct {
-    ast_expr_t left;
+    ast_expr_t left; // type is ptr<struct> or struct
     string key;
     struct_property_t *property; // 冗余方便计算
 } ast_struct_select_t;
@@ -466,8 +466,8 @@ typedef struct ast_fndef_t {
      */
     char *params_hash;
 
-    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type
-    type_t *self_struct;
+    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
+    type_t *self_struct_ptr;
 
     type_t type; // 类型冗余一份
 

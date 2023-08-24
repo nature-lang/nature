@@ -351,6 +351,13 @@ void runtime_gc();
  */
 void *runtime_malloc(uint64_t size, rtype_t *rtype);
 
+/**
+ * 代码段调用
+ * @return
+ */
+void *gc_malloc(uint64_t rtype_hash);
+
+
 uint64_t runtime_malloc_bytes();
 
 mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);

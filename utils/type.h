@@ -85,7 +85,7 @@ typedef enum {
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
-    TYPE_SELF,
+    TYPE_SELF, // ptr<struct>
     TYPE_GEN,
     TYPE_UNION,
 
@@ -608,6 +608,10 @@ static inline bool is_origin_type(type_t t) {
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING ||
            t.kind == TYPE_VOID;
+}
+
+static inline bool is_struct_ptr(type_t t) {
+    return t.kind == TYPE_POINTER && t.pointer->value_type.kind == TYPE_STRUCT;
 }
 
 static inline bool is_reduction_type(type_t t) {

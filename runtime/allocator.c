@@ -895,7 +895,6 @@ addr_t mstack_new(uint64_t size) {
     return (addr_t) base;
 }
 
-
 /**
  * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
  * @param size
@@ -955,5 +954,10 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
 
 uint64_t runtime_malloc_bytes() {
     return allocated_bytes;
+}
+
+void *gc_malloc(uint64_t rtype_hash) {
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
+    return runtime_malloc(rtype->size, rtype);
 }
 

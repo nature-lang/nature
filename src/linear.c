@@ -1423,6 +1423,13 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
+    if (!target) {
+        target = temp_var_operand_without_stack(m, expr.type); // 必定是一个指针类型
+    }
+
+    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
+    OP_PUSH(rt_call(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
+    return target;
 }
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -1903,8 +1910,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
         if (var_decl->type.kind == TYPE_SELF) {
-            assert(fndef->self_struct->status == REDUCTION_STATUS_DONE);
-            var_decl->type = *fndef->self_struct;
+            assert(fndef->self_struct_ptr->status == REDUCTION_STATUS_DONE);
+            var_decl->type = *fndef->self_struct_ptr;
         }
 
         slice_push(params, lir_var_new(m, var_decl->ident));

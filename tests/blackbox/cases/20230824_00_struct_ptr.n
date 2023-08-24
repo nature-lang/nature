@@ -1,0 +1,23 @@
+type person = struct {
+    string name // offset 0
+    int age // offset 8
+    string from // offset 16
+    u8 gender // offset 24
+    var set_age = fn(self s, int now) { // offset 32
+        s.age = now
+    }
+    // var get_name = fn(self s):string {
+    //    return s.name
+    // }
+}
+
+var p = person {
+//    name = 'hualaka',
+//    from = 'china',
+//    gender = 1
+}
+
+
+// println(p.name, p.from, p.get_name())
+p.set_age(24)
+// println(p.age)

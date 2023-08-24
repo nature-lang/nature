@@ -802,29 +802,30 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
     // self_select -> instance_select
     if (select->left.type.kind == TYPE_SELF) {
         ast_fndef_t *current = m->checking_current;
-        CHECKING_ASSERTF(current->self_struct, "use 'self' in struct outside");
+        CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
 
         // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
-        select->left.type = reduction_type(m, *current->self_struct);
+        select->left.type = reduction_type(m, *current->self_struct_ptr);
     }
 
-    if (select->left.type.kind == TYPE_POINTER) {
+    type_t left_type = select->left.type;
+    if (left_type.kind == TYPE_POINTER) {
         type_t value_type = select->left.type.pointer->value_type;
         if (value_type.kind == TYPE_STRUCT) {
-            select->left.type = value_type;
+            left_type = value_type;
         }
     }
 
     // ast_access to ast_struct_access
-    if (select->left.type.kind == TYPE_STRUCT) {
+    if (left_type.kind == TYPE_STRUCT) {
         // 经过上面对 checking_right_expr, 这里对 type 一定是 reduction 的
-        type_struct_t *type_struct = select->left.type.struct_;
+        type_struct_t *type_struct = left_type.struct_;
         struct_property_t *p = type_struct_property(type_struct, select->key);
         CHECKING_ASSERTF(p, "type %s struct no property '%s'", type_struct->ident, select->key);
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
-        struct_select->left = select->left;
+        struct_select->left = select->left; // 可能是 pointer<struct> 也可能是 struct
         struct_select->key = select->key;
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
@@ -1087,11 +1088,17 @@ static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *targe
 static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     ast_select_t *s = call->left.value;
 
-    type_struct_t *type_struct = s->left.type.struct_; // 已经进行过类型推导了
+    type_struct_t *type_struct;
+    if (is_struct_ptr(s->left.type)) {
+        type_struct = s->left.type.pointer->value_type.struct_;
+    } else {
+        type_struct = s->left.type.struct_; // 已经进行过类型推导了
+    }
+
     struct_property_t *p = type_struct_property(type_struct, s->key);
     CHECKING_ASSERTF(p, "type %s struct no property '%s'", type_struct->ident, s->key);
 
-    // call left 改写
+    // call left 改写成 struct select
     ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
     struct_select->left = s->left;
     struct_select->key = s->key;
@@ -1106,6 +1113,8 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     call->return_type = type_fn->return_type;
 
     type_t *first = ct_list_value(type_fn->param_types, 0);
+
+    // 按照普通 foo.bar(param) 的方式 checking 返回即可
     if (first->kind != TYPE_SELF) {
         checking_call_params(m, call, type_fn);
         return type_fn->return_type;
@@ -1138,10 +1147,10 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
         // self 还原成 struct
         if (select->left.type.kind == TYPE_SELF) {
             ast_fndef_t *current = m->checking_current;
-            CHECKING_ASSERTF(current->self_struct, "use 'self' in struct outside");
+            CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
 
             // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
-            select->left.type = reduction_type(m, *current->self_struct);
+            select->left.type = reduction_type(m, *current->self_struct_ptr);
         }
 
         // ptr struct 也还原成 struct
@@ -1170,9 +1179,10 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
             return checking_string_select_call(m, call);
         }
 
-        if (select_left_kind == TYPE_STRUCT) {
+        if (select_left_kind == TYPE_STRUCT || is_struct_ptr(select->left.type)) {
             return checking_struct_select_call(m, call);
         }
+
 
         CHECKING_ASSERTF(false, "select dot call not support type=%s", type_kind_str[select_left_kind]);
     }
@@ -1774,8 +1784,8 @@ static type_t reduction_struct(module_t *m, type_t t) {
         ast_expr_t *expr = p->right;
         if (expr->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = expr->value;
-            fndef->self_struct = NEW(type_t);
-            *fndef->self_struct = type_new(TYPE_STRUCT, t.struct_);
+            fndef->self_struct_ptr = NEW(type_t);
+            *fndef->self_struct_ptr = type_ptrof(type_new(TYPE_STRUCT, t.struct_));
         }
     }
 
@@ -2057,6 +2067,7 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
             CHECKING_ASSERTF(i == 0, "only use self in fn first param");
         }
 
+        // 这里直接将 self 定义为 done, 而不是转换为 struct, 避免出现 reduction 死循环
         var->type = reduction_type(m, var->type);
         ct_list_push(f->param_types, &var->type);
     }

@@ -224,7 +224,7 @@ static ast_as_expr_t *ast_as_expr_copy(module_t *m, ast_as_expr_t *temp) {
 }
 
 
-static ast_is_expr_t *ast_new_expr_copy(module_t *m, ast_new_expr_t *temp) {
+static ast_new_expr_t *ast_new_expr_copy(module_t *m, ast_new_expr_t *temp) {
     ast_new_expr_t *new_expr = COPY_NEW(ast_new_expr_t, temp);
     new_expr->type = type_copy(m, temp->type);
     return new_expr;

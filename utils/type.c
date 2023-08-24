@@ -580,13 +580,21 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
     uint64_t offset = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
-        uint64_t item_size = type_sizeof(p->type);
-        offset = align_up(offset, item_size);
+
+        int item_align;
+        if (p->type.kind == TYPE_STRUCT) {
+            item_align = p->type.struct_->align;
+        } else {
+            item_align = type_sizeof(p->type);
+        }
+
+        offset = align_up(offset, item_align);
         if (str_equal(p->key, key)) {
             // found
             return offset;
         }
-        offset += item_size;
+
+        offset += type_sizeof(p->type);;
     }
 
     assertf(false, "key=%s not found in struct", key);

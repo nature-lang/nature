@@ -136,6 +136,8 @@
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 
+#define RT_CALL_GC_MALLOC "gc_malloc"
+
 #define RT_CALL_PROCESSOR_ATTACH_ERRORT "processor_attach_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
