@@ -540,7 +540,9 @@ static inline type_t type_kind_new(type_kind kind) {
 static inline type_t type_new(type_kind kind, void *value) {
     type_t result = {
             .kind = kind,
-            .value = value
+            .value = value,
+            .in_heap = kind_in_heap(kind),
+            .status = REDUCTION_STATUS_DONE,
     };
     return result;
 }

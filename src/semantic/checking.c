@@ -1710,17 +1710,6 @@ static type_t reduction_struct(module_t *m, type_t t) {
             p->type = reduction_type(m, p->type);
         }
 
-        int item_align;
-        if (p->type.kind == TYPE_STRUCT) {
-            item_align = p->type.struct_->align;
-        } else {
-            item_align = type_sizeof(p->type);
-        }
-
-        if (item_align > align) {
-            align = item_align;
-        }
-
         // 包含默认值
         if (p->right) {
             // 推断右值表达式类型(默认值推导)
@@ -1732,10 +1721,37 @@ static type_t reduction_struct(module_t *m, type_t t) {
             }
         }
 
+        int item_align;
+        if (p->type.kind == TYPE_STRUCT) {
+            item_align = p->type.struct_->align;
+        } else {
+            item_align = type_sizeof(p->type);
+        }
+
+        if (item_align > align) {
+            align = item_align;
+        }
+
         CHECKING_ASSERTF(type_confirmed(p->type), "struct property=%s type cannot confirmed", p->key);
         // 至此左值已经都是固定类型了, 如果存在 self 则 self 类型保持不变,self 不需要在这里处理
     }
     t.struct_->align = align;
+
+    // 将已经还原完成的 struct 赋值给 fn 使用
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
+        if (!p->right) {
+            continue;
+        }
+
+        ast_expr_t *expr = p->right;
+        if (expr->assert_type == AST_FNDEF) {
+            ast_fndef_t *fndef = expr->value;
+            fndef->self_struct = NEW(type_t);
+            *fndef->self_struct = type_new(TYPE_STRUCT, t.struct_);
+        }
+    }
+
     return t;
 }
 
@@ -1857,7 +1873,6 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
 
-        // TODO 这里不包含对 copy 后的 fn 的处理吗？？
         alias_value_type = reduction_type(m, alias_value_type);
 
         // reduction 完成 完成，取消 type_args
@@ -1986,7 +2001,8 @@ static type_t reduction_type(module_t *m, type_t t) {
 }
 
 /**
- * 对参数和返回值进行了类型推导，不包含 body
+ * 对参数和返回值进行了类型推导，其中 self 对应的 struct 还没有 reduction 还没有处理完成
+ * 所以无法对 self 进行 struct 还原。
  * @param m
  * @param fndef
  */
@@ -2006,7 +2022,7 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var = ct_list_value(fndef->params, i);
         if (var->type.kind == TYPE_SELF) {
-            CHECKING_ASSERTF(i == 0 && fndef->self_struct, "only use self in fn first param");
+            CHECKING_ASSERTF(i == 0, "only use self in fn first param");
         }
 
         var->type = reduction_type(m, var->type);
@@ -2052,10 +2068,6 @@ static void checking_fndef(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *env_expr = ct_list_value(fndef->capture_exprs, i);
         checking_left_expr(m, env_expr);
-    }
-
-    if (fndef->self_struct) {
-        *fndef->self_struct = reduction_type(m, *fndef->self_struct);
     }
 
     // body checking
@@ -2139,7 +2151,6 @@ void checking(module_t *m) {
 
         rewrite_fndef(m, fndef);
 
-        // TODO body 中存在 type_param 没有解析，所以还是需要 type_param_table(跟随 fn)
         checking_fndef(m, fndef);
 
         slice_push(fndefs, fndef);

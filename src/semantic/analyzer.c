@@ -298,7 +298,6 @@ static void analyzer_type(module_t *m, type_t *type) {
                 ast_expr_t *expr = item->right;
                 if (expr->assert_type == AST_FNDEF) {
                     ast_fndef_t *fndef = expr->value;
-                    fndef->self_struct = type; // 记录当前 fn 首个参数可以使用的 self 的原始 type
 
                     // analyzer_current 为 null 标识当前 fn 是 global type alias 中的 fn
                     // in_type_param 标识当前 fn 是一个模版，不需要加入到 ast_fndefs 中
