@@ -275,6 +275,12 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
+    if (type->kind == TYPE_POINTER) {
+        type_pointer_t *pointer = type->pointer;
+        analyzer_type(m, &pointer->value_type);
+        return;
+    }
+
     if (type->kind == TYPE_FN) {
         type_fn_t *type_fn = type->fn;
         analyzer_type(m, &type_fn->return_type);

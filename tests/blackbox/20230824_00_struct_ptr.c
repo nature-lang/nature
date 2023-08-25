@@ -10,9 +10,14 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    printf("%s", raw);
-    return;
-    char *str = "";
+    char *str = "1 china hualaka\n"
+                "24\n"
+                "wanglufei japan 2 19\n"
+                "hualaka china 1 24 24\n"
+                "in test fn, p.name is hualaka\n"
+                "in test fn, p3.name is hualaka\n"
+                "rewrite by p3 rewrite by p3\n"
+                "55  !\n";
     assert_string_equal(raw, str);
 }
 

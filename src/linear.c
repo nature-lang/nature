@@ -122,21 +122,23 @@ static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *targe
  * @param t
  * @return
  */
-static lir_operand_t *linear_zero_struct(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_struct_fill_zero(module_t *m, type_t t, lir_operand_t *target, table_t *exists) {
     if (!target) {
         target = temp_var_operand(m, t);
     }
 
     assert(target);
     assert(target->assert_type == LIR_OPERAND_VAR);
+    assert(t.kind == TYPE_STRUCT);
 
-    uint64_t offset = 0;
     for (int i = 0; i < t.struct_->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t.struct_->properties, i);
 
-        uint16_t item_size = type_sizeof(p->type);
-        offset = align_up(offset, item_size);
+        if (exists && table_exist(exists, p->key)) {
+            continue;
+        }
 
+        uint64_t offset = type_struct_offset(t.struct_, p->key);
         lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
         if (is_alloc_stack(p->type)) {
             dst = lea_operand_pointer(m, dst);
@@ -179,7 +181,7 @@ static lir_operand_t *linear_zero_tuple(module_t *m, type_t t, lir_operand_t *ta
 }
 
 static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *target) {
-    if (is_origin_type(t)) {
+    if (is_clv_zero_type(t)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, target));
         return target;
     }
@@ -205,7 +207,7 @@ static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *
     }
 
     if (t.kind == TYPE_STRUCT) {
-        return linear_zero_struct(m, t, target);
+        return linear_struct_fill_zero(m, t, target, NULL);
     }
 
     if (t.kind == TYPE_TUPLE) {
@@ -1086,6 +1088,18 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     // &var
     if (unary_expr->operator == AST_OP_LA) {
+        // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
+        if (is_alloc_stack(unary_expr->operand.type)) {
+            if (!target) {
+                target = temp_var_operand(m, expr.type); // pointer target
+            }
+
+            assert(lir_operand_type(target).kind == TYPE_POINTER);
+
+            OP_PUSH(lir_op_move(target, first));
+            return target;
+        }
+
         lir_operand_t *src_operand = lea_operand_pointer(m, first);
         return linear_super_move(m, expr.type, target, src_operand);
     }
@@ -1304,6 +1318,10 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
 
     lir_operand_t *struct_target = linear_expr(m, ast->instance, NULL);
     type_t type_struct = ast->instance.type;
+    if (is_struct_ptr(type_struct)) {
+        type_struct = type_struct.pointer->value_type;
+    }
+
     assert(type_struct.kind == TYPE_STRUCT);
 
     uint64_t offset = type_struct_offset(type_struct.struct_, ast->key);
@@ -1370,8 +1388,11 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
     assert(target->assert_type == LIR_OPERAND_VAR);
 
     // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
+    table_t *exists = table_new();
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *p = ct_list_value(ast->properties, i);
+
+        table_set(exists, p->key, p);
 
         // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
         uint64_t offset = type_struct_offset(t.struct_, p->key);
@@ -1387,6 +1408,8 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
 
         linear_expr(m, *property_expr, dst);
     }
+
+    linear_struct_fill_zero(m, t, target, exists);
 
     return target;
 }
@@ -1439,8 +1462,38 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
         target = temp_var_operand_without_stack(m, expr.type); // 必定是一个指针类型
     }
 
-    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
+    ast_new_expr_t *new_expr = expr.value;
+
+    uint64_t rtype_hash = ct_find_rtype_hash(new_expr->type);
     OP_PUSH(rt_call(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
+
+    // 目前只有 struct 可以 new
+    assert(new_expr->type.kind == TYPE_STRUCT);
+
+    // 附加数据处理
+    type_struct_t *type_struct = new_expr->type.struct_;
+    table_t *exists = table_new();
+    for (int i = 0; i < new_expr->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(new_expr->properties, i);
+
+        table_set(exists, p->key, p);
+        // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
+        uint64_t offset = type_struct_offset(type_struct, p->key);
+
+        assertf(p->right, "struct new property_expr value empty");
+        ast_expr_t *property_expr = p->right;
+
+        lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
+        if (is_alloc_stack(p->type)) {
+            // foo.bar = person {}
+            dst = lea_operand_pointer(m, dst);
+        }
+
+        linear_expr(m, *property_expr, dst);
+    }
+
+    linear_struct_fill_zero(m, new_expr->type, target, exists);
+
     return target;
 }
 

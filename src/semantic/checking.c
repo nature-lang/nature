@@ -455,8 +455,23 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
 
 static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
     new_expr->type = reduction_type(m, new_expr->type);
-    // 只有结构体可以使用 new
+
+    // 目前只有结构体可以使用 new
     CHECKING_ASSERTF(new_expr->type.kind == TYPE_STRUCT, "only struct type can use new");
+
+    new_expr->properties = ct_list_new(sizeof(struct_property_t));
+
+    table_t *exists = table_new();
+    list_t *default_properties = new_expr->type.struct_->properties;
+    for (int i = 0; i < default_properties->length; ++i) {
+        struct_property_t *d = ct_list_value(default_properties, i);
+        if (!d->right || table_exist(exists, d->key)) {
+            continue;
+        }
+
+        ct_list_push(new_expr->properties, d);
+    }
+
 
     return type_ptrof(new_expr->type);
 }
@@ -811,6 +826,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         select->left.type = *current->self_struct_ptr;
     }
 
+    // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
     if (left_type.kind == TYPE_POINTER) {
         type_t value_type = select->left.type.pointer->value_type;
@@ -1126,7 +1142,16 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     // formal 的首个参数是 self, 且 self 未经过推断
     list_t *args = call->args;
     call->args = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(call->args, &struct_select->instance);
+
+    // 在 person.set_age() 的示例中， person 虽然是 struct, 但是传参给 self 时，需要变成一个 ptr<struct> 传递
+    ast_expr_t *self_replace = &struct_select->instance;
+
+    if (self_replace->type.kind == TYPE_STRUCT) {
+        self_replace = ast_unary(self_replace, AST_OP_LA);
+//        self_replace->type = type_ptrof(self_replace->type);
+    }
+
+    ct_list_push(call->args, self_replace);
     for (int i = 0; i < args->length; ++i) {
         ct_list_push(call->args, ct_list_value(args, i));
     }
@@ -1159,14 +1184,6 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
 
             // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
             select->left.type = *current->self_struct_ptr;
-        }
-
-        // ptr struct 也还原成 struct
-        if (select->left.type.kind == TYPE_POINTER) {
-            type_t value_type = select->left.type.pointer->value_type;
-            if (value_type.kind == TYPE_STRUCT) {
-                select->left.type = value_type;
-            }
         }
 
         type_kind select_left_kind = select->left.type.kind;

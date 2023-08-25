@@ -158,6 +158,9 @@ typedef struct {
 
 typedef struct {
     type_t type;
+    union { // type 是 struct 时可以携带一定的参数, 该参数目前不开放给用户，但是可以方便编译器添加默认值
+        list_t *properties; // *struct_property_t
+    };
 } ast_new_expr_t;
 
 /**

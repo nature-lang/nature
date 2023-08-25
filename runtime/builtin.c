@@ -16,6 +16,11 @@ static void print_arg(n_union_t *arg) {
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
         n_string_t *s = arg->value.ptr_value; // 字符串的内存视角
+        if (s->length == 0) { // 什么也不需要输出
+            DEBUGF("[runtime.print_arg] string length is 0 not write, ")
+            return;
+        }
+
         DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu",
                s, s->length, s->data, strlen((char *) s->data));
         VOID write(STDOUT_FILENO, s->data, strlen((char *) s->data));

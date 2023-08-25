@@ -610,6 +610,15 @@ static inline bool is_origin_type(type_t t) {
            t.kind == TYPE_VOID;
 }
 
+static inline bool is_clv_zero_type(type_t t) {
+    return is_integer(t.kind) ||
+           is_float(t.kind) ||
+           t.kind == TYPE_CPTR ||
+           t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
+           t.kind == TYPE_VOID;
+}
+
 static inline bool is_struct_ptr(type_t t) {
     return t.kind == TYPE_POINTER && t.pointer->value_type.kind == TYPE_STRUCT;
 }
