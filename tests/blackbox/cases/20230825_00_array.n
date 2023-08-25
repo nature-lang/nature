@@ -1,0 +1,6 @@
+array<int,5> a1 = []
+a1[0] = 12
+
+var b = a1[0]
+var b1 = a1[5]
+println(b, b1, a1[0])

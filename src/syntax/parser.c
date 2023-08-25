@@ -238,16 +238,32 @@ static type_t parser_single_type(module_t *m) {
         type_list_t *type_list = NEW(type_list_t);
         type_list->element_type = parser_type(m);
 
-        if (parser_consume(m, TOKEN_COMMA)) {
-            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
-            int length = atoi(t->literal);
-
-            PARSER_ASSERTF(length > 0, "list len must > 0")
-        }
+//        if (parser_consume(m, TOKEN_COMMA)) {
+//            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
+//            int length = atoi(t->literal);
+//
+//            PARSER_ASSERTF(length > 0, "list len must > 0")
+//        }
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
         result.list = type_list;
+        return result;
+    }
+
+    // array<int>
+    if (parser_consume(m, TOKEN_ARRAY)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_array_t *type_array = NEW(type_array_t);
+        type_array->element_type = parser_type(m);
+        parser_consume(m, TOKEN_COMMA);
+        token_t *t = parser_must(m, TOKEN_LITERAL_INT);
+        int length = atoi(t->literal);
+        PARSER_ASSERTF(length > 0, "array len must > 0")
+        type_array->length = length;
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_ARRAY;
+        result.array = type_array;
         return result;
     }
 
