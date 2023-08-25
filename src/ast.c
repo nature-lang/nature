@@ -272,7 +272,7 @@ static ast_tuple_access_t *ast_tuple_access_copy(module_t *m, ast_tuple_access_t
 
 static ast_struct_select_t *ast_struct_select_copy(module_t *m, ast_struct_select_t *temp) {
     ast_struct_select_t *select = COPY_NEW(ast_struct_select_t, temp);
-    select->left = *ast_expr_copy(m, &temp->left);
+    select->instance = *ast_expr_copy(m, &temp->instance);
     select->key = strdup(temp->key);
     return select;
 }

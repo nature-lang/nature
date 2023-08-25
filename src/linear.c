@@ -404,16 +404,28 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 }
 
+/**
+ * struct.foo
+ * ptr<struct>.foo
+ * 在 struct_target 的编译上的返回结果都是一个指针地址，只不过一个是栈指针地址一个是堆指针地址，所以他们使用一样的 linear 处理方式
+ * @param m
+ * @param stmt
+ */
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
-    type_t t = struct_access->left.type;
-    assert(t.kind == TYPE_STRUCT);
+    type_t type_struct;
+    if (is_struct_ptr(struct_access->instance.type)) {
+        type_struct = struct_access->instance.type.pointer->value_type;
+    } else {
+        type_struct = struct_access->instance.type;
+    }
 
-    lir_operand_t *struct_target = linear_expr(m, struct_access->left, NULL);
+    assert(type_struct.kind == TYPE_STRUCT);
+    uint64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
-    uint64_t offset = type_struct_offset(t.struct_, struct_access->key);
-    lir_operand_t *dst = indirect_addr_operand(m, t, struct_target, offset);
-    if (is_alloc_stack(stmt->right.type)) {
+    lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
+    lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
+    if (is_alloc_stack(stmt->left.type)) {
         dst = lea_operand_pointer(m, dst);
     }
 
@@ -1290,8 +1302,8 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_struct_select_t *ast = expr.value;
 
-    lir_operand_t *struct_target = linear_expr(m, ast->left, NULL);
-    type_t type_struct = ast->left.type;
+    lir_operand_t *struct_target = linear_expr(m, ast->instance, NULL);
+    type_t type_struct = ast->instance.type;
     assert(type_struct.kind == TYPE_STRUCT);
 
     uint64_t offset = type_struct_offset(type_struct.struct_, ast->key);

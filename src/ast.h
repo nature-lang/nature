@@ -354,7 +354,7 @@ typedef struct {
 } ast_select_t;
 
 typedef struct {
-    ast_expr_t left; // type is ptr<struct> or struct
+    ast_expr_t instance; // type is ptr<struct> or struct
     string key;
     struct_property_t *property; // 冗余方便计算
 } ast_struct_select_t;

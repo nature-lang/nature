@@ -20,4 +20,4 @@ var p = person {
 
 // println(p.name, p.from, p.get_name())
 p.set_age(24)
-// println(p.age)
+//println(p.age)
