@@ -104,7 +104,7 @@ static rtype_t rtype_list(type_list_t *t) {
  * @return
  */
 rtype_t rtype_array(type_array_t *t) {
-    rtype_t element_rtype = t->element_rtype;
+    rtype_t element_rtype = reflect_type(t->element_type);
     uint64_t element_size = rtype_out_size(&element_rtype, POINTER_SIZE);
 
     char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
@@ -113,6 +113,7 @@ rtype_t rtype_array(type_array_t *t) {
             .size = element_size * t->length,
             .hash = hash,
             .kind = TYPE_ARRAY,
+            .length = t->length,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
     bool need_gc = element_rtype.last_ptr > 0; // element 包含指针数据
@@ -127,6 +128,39 @@ rtype_t rtype_array(type_array_t *t) {
 
     return rtype;
 }
+
+
+/**
+ * runtime 中使用的基于 element_rtype 生成的 rtype
+ * @param element_rtype
+ * @param length
+ * @return
+ */
+rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
+    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+
+    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, length, element_rtype->hash);
+    uint32_t hash = hash_string(str);
+    rtype_t rtype = {
+            .size = element_size * length,
+            .hash = hash,
+            .kind = TYPE_ARRAY,
+            .length = length,
+    };
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
+    if (need_gc) {
+        rtype.last_ptr = element_size * length;
+
+        // need_gc 暗示了 8byte 对齐了
+        for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
+            bitmap_set(rtype.gc_bits, i);
+        }
+    }
+
+    return rtype;
+}
+
 
 /**
  * hash = type_kind + key_rtype.hash + value_rtype.hash
@@ -269,7 +303,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
             .hash = hash_string(str),
             .kind = TYPE_STRUCT,
             .gc_bits = malloc_gc_bits(size),
-            .element_count = t->properties->length,
+            .length = t->properties->length,
             .element_hashes = element_hash_list,
     };
 
@@ -535,7 +569,7 @@ rtype_t *rtype_push(rtype_t rtype) {
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
-    ct_rtype_size += (rtype.element_count * sizeof(uint64_t));
+    ct_rtype_size += (rtype.length * sizeof(uint64_t));
     ct_rtype_count += 1;
 
     return ct_list_value(ct_rtype_list, index);
@@ -815,6 +849,15 @@ bool type_compare(type_t left, type_t right) {
         type_list_t *left_list_decl = left.list;
         type_list_t *right_list_decl = right.list;
         return type_compare(left_list_decl->element_type, right_list_decl->element_type);
+    }
+
+    if (left.kind == TYPE_ARRAY) {
+        type_array_t *left_array_decl = left.array;
+        type_array_t *right_array_decl = right.array;
+        if (left_array_decl->length != right_array_decl->length) {
+            return false;
+        }
+        return type_compare(left_array_decl->element_type, right_array_decl->element_type);
     }
 
     if (left.kind == TYPE_TUPLE) {

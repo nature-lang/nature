@@ -55,12 +55,12 @@ static uint64_t struct_spread_to_buf(n_struct_t *s, uint64_t struct_rtype_hash, 
     rtype_t *rtype = rt_find_rtype(struct_rtype_hash);
 
     DEBUGF("[runtime.struct_spread_to_buf] struct_rtype_hash: %lu, element_count: %hu", struct_rtype_hash,
-           rtype->element_count);
+           rtype->length);
 
     uint64_t n_offset = 0;
     uint64_t c_offset = 0;
 
-    for (int i = 0; i < rtype->element_count; ++i) {
+    for (int i = 0; i < rtype->length; ++i) {
         uint64_t hash = rtype->element_hashes[i];
         rtype_t *element_rtype = rt_find_rtype(hash);
         uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
@@ -134,7 +134,7 @@ static void *struct_encode(n_struct_t *s, uint64_t struct_rtype_hash) {
     DEBUGF("[runtime.struct_encode] struct_rtype_hash: %lu", struct_rtype_hash);
 
     rtype_t *rtype = rt_find_rtype(struct_rtype_hash);
-    if (rtype->element_count == 0) {
+    if (rtype->length == 0) {
         DEBUGF("[runtime.struct_encode] rtype->element_count == 0");
         return NULL;
     }
@@ -216,7 +216,7 @@ static uint64_t struct_decode(uint8_t *cptr, n_struct_t *s, rtype_t *struct_rtyp
     // struct 的对齐, 需要
     uint64_t n_offset = 0;
     uint64_t c_offset = 0;
-    for (int i = 0; i < struct_rtype->element_count; ++i) {
+    for (int i = 0; i < struct_rtype->length; ++i) {
         uint64_t hash = struct_rtype->element_hashes[i];
         rtype_t *element_rtype = rt_find_rtype(hash);
         uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);

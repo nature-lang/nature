@@ -1522,11 +1522,12 @@ uint8_t *rtypes_serialize() {
     for (int i = 0; i < ct_rtype_list->length; ++i) {
         rtype_t *r = ct_list_value(ct_rtype_list, i);
 
-        if (r->element_count > 0) {
-            memmove(p, r->element_hashes, r->element_count * sizeof(uint64_t));
+        // array 占用了 length 字段，但是程element_hashes 是没有值的。
+        if (r->length > 0 && r->element_hashes) {
+            memmove(p, r->element_hashes, r->length * sizeof(uint64_t));
         }
 
-        p += r->element_count * sizeof(uint64_t);
+        p += r->length * sizeof(uint64_t);
     }
 
     return data;

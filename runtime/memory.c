@@ -71,8 +71,8 @@ void rtypes_deserialize() {
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
 
-        if (r->element_count > 0) {
-            uint64_t size = r->element_count * sizeof(uint64_t);
+        if (r->length > 0) {
+            uint64_t size = r->length * sizeof(uint64_t);
             r->element_hashes = (uint64_t *) gc_bits_offset;
             gc_bits_offset += size;
         }

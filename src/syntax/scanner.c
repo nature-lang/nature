@@ -371,10 +371,10 @@ token_e scanner_ident(char *word, int length) {
             if (length > 1) {
                 switch (word[1]) {
                     case 'n': {
-                        return scanner_rest(word, length, 1, 2, "ny", TOKEN_ANY);
+                        return scanner_rest(word, length, 2, 1, "y", TOKEN_ANY);
                     }
                     case 'r': {
-                        return scanner_rest(word, length, 1, 3, "ray", TOKEN_ARRAY);
+                        return scanner_rest(word, length, 2,1, "r", TOKEN_ARRAY);
                     }
                 }
             }

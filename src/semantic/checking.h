@@ -21,6 +21,8 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef);
 
 static void checking_stmt(module_t *m, ast_stmt_t *stmt);
 
+static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type);
+
 static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_type);
 
 static type_t checking_left_expr(module_t *m, ast_expr_t *expr);

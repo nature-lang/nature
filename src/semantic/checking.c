@@ -389,62 +389,37 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    // e.g. [] as [u8,5]
-    // empty list handle
-    if (as_expr->src_operand.assert_type == AST_EXPR_LIST_NEW) {
-        ast_list_new_t *list_new_expr = as_expr->src_operand.value;
-        if (list_new_expr->elements->length == 0 && target_type.kind == TYPE_LIST) {
-            expr->type = target_type;
-            expr->assert_type = as_expr->src_operand.assert_type;
-            expr->value = as_expr->src_operand.value;
-            return target_type;
-        }
+    // 此处进行了类型的约束
+    type_t src_type = checking_expr(m, &as_expr->src, target_type);
+    as_expr->src.type = src_type;
+
+    // 如果此时 src type 和 dst type 一致，则直接跳过，不做任何报错
+    if (type_compare(src_type, target_type)) {
+        return target_type;
     }
 
-    // {} as {u8}
-    if (as_expr->src_operand.assert_type == AST_EXPR_SET_NEW) {
-        ast_set_new_t *set_new_expr = as_expr->src_operand.value;
-        if (set_new_expr->elements->length == 0 && target_type.kind == TYPE_SET) {
-            expr->type = target_type;
-            expr->assert_type = as_expr->src_operand.assert_type;
-            expr->value = as_expr->src_operand.value;
-            return target_type;
-        }
-    }
-
-    // {} as {u8:string}
-    if (as_expr->src_operand.assert_type == AST_EXPR_MAP_NEW) {
-        ast_map_new_t *map_new_expr = as_expr->src_operand.value;
-        if (map_new_expr->elements->length == 0 && target_type.kind == TYPE_MAP) {
-            expr->type = target_type;
-            expr->assert_type = as_expr->src_operand.assert_type;
-            expr->value = as_expr->src_operand.value;
-            return target_type;
-        }
-    }
-
-    checking_right_expr(m, &as_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
-    if (as_expr->src_operand.type.kind == TYPE_UNION) {
+    if (as_expr->src.type.kind == TYPE_UNION) {
         CHECKING_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
         // target_type 必须包含再 union 中
-        CHECKING_ASSERTF(union_type_contains(as_expr->src_operand.type, target_type),
+        CHECKING_ASSERTF(union_type_contains(as_expr->src.type, target_type),
                          "type = %s not contains in union type",
                          type_kind_str[target_type.kind]);
         return target_type;
     }
 
     // 特殊类型转换 string -> list u8
-    if (as_expr->src_operand.type.kind == TYPE_STRING && is_list_u8(target_type)) {
+    if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(target_type)) {
         return target_type;
     }
 
     // list u8 -> string
-    if (is_list_u8(as_expr->src_operand.type) && target_type.kind == TYPE_STRING) {
+    if (is_list_u8(as_expr->src.type) && target_type.kind == TYPE_STRING) {
         return target_type;
     }
 
-    if (!is_float(as_expr->src_operand.type.kind) && target_type.kind == TYPE_CPTR) {
+    // 除了 float 以外所有类型都可以转换成 cptr
+    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_CPTR) {
         return target_type;
     }
 
@@ -556,7 +531,32 @@ static type_t checking_ident(module_t *m, ast_ident *ident) {
  * @param list_new
  * @return 
  */
-static type_t checking_list_new(module_t *m, ast_list_new_t *list_new, type_t target_type) {
+static type_t checking_list_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_list_new_t *list_new = expr->value;
+
+    if (target_type.kind == TYPE_ARRAY) {
+        expr->assert_type = AST_EXPR_ARRAY_NEW; // 直接进行表达式类型的改写(list_new 和 array_new 同构,所以可以这么做)
+
+        // 严格限定类型为 array
+        type_t result = type_kind_new(TYPE_ARRAY);
+        type_array_t *type_array = NEW(type_array_t);
+
+        type_array->element_type = target_type.array->element_type;
+        type_array->length = target_type.array->length;
+
+        result.array = type_array;
+        if (list_new->elements->length == 0) {
+            return result;
+        }
+
+        for (int i = 0; i < list_new->elements->length; ++i) {
+            ast_expr_t *item_expr = ct_list_value(list_new->elements, i);
+            checking_right_expr(m, item_expr, type_array->element_type);
+        }
+
+        return result;
+    }
+
     type_t result = type_kind_new(TYPE_LIST);
 
     type_list_t *type_list = NEW(type_list_t);
@@ -588,6 +588,22 @@ static type_t checking_list_new(module_t *m, ast_list_new_t *list_new, type_t ta
 
     return result;
 }
+
+static type_t checking_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    // 必须要 target 引导，才能确定具体的类型
+    CHECKING_ASSERTF(target_type.kind > 0, "map key/value type cannot confirm");
+
+    CHECKING_ASSERTF(target_type.kind == TYPE_MAP || target_type.kind == TYPE_SET,
+                     "{} cannot ref type %s", type_kind_str[target_type.kind]);
+    if (target_type.kind == TYPE_MAP) {
+        expr->assert_type = AST_EXPR_MAP_NEW;
+    } else if (target_type.kind == TYPE_SET) {
+        expr->assert_type = AST_EXPR_SET_NEW;
+    }
+
+    return target_type;
+}
+
 
 /**
  * {key: value, key(): value(), key[1]: value[1]}
@@ -767,6 +783,21 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
         expr->value = list_access;
 
         return type_list->element_type;
+    }
+
+    if (left_type.kind == TYPE_ARRAY) {
+        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
+
+        ast_array_access_t *array_access = NEW(ast_array_access_t);
+
+        type_array_t *type_array = left_type.array;
+        array_access->left = access->left;
+        array_access->index = access->key;
+        array_access->element_type = type_array->element_type;
+        expr->assert_type = AST_EXPR_ARRAY_ACCESS;
+        expr->value = array_access;
+
+        return type_array->element_type;
     }
 
     if (left_type.kind == TYPE_TUPLE) {
@@ -1624,6 +1655,81 @@ static type_t checking_left_expr(module_t *m, ast_expr_t *expr) {
 }
 
 /**
+ * 通过 target_type 对进行约束，但是不会强制进行比较
+ * @return
+ */
+static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+    SET_LINE_COLUMN(expr);
+    if (expr->type.kind > 0) {
+        return expr->type;
+    }
+    switch (expr->assert_type) {
+        case AST_EXPR_AS: {
+            return checking_as_expr(m, expr);
+        }
+        case AST_EXPR_IS: {
+            return checking_is_expr(m, expr->value);
+        }
+        case AST_EXPR_NEW: {
+            return checking_new_expr(m, expr->value);
+        }
+        case AST_EXPR_BINARY: {
+            return checking_binary(m, expr->value);
+        }
+        case AST_EXPR_UNARY: {
+            return checking_unary(m, expr->value);
+        }
+        case AST_EXPR_IDENT: {
+            return checking_ident(m, expr->value);
+        }
+        case AST_EXPR_LIST_NEW: {
+            return checking_list_new(m, expr, target_type);
+        }
+        case AST_EXPR_EMPTY_CURLY_NEW: {
+            return checking_empty_curly_new(m, expr, target_type);
+        }
+        case AST_EXPR_MAP_NEW: {
+            return checking_map_new(m, expr->value, target_type);
+        }
+        case AST_EXPR_SET_NEW: {
+            return checking_set_new(m, expr->value, target_type);
+        }
+        case AST_EXPR_TUPLE_NEW: {
+            return checking_tuple_new(m, expr->value, target_type);
+        }
+        case AST_EXPR_STRUCT_NEW: {
+            return checking_struct_new(m, expr->value);
+        }
+        case AST_EXPR_ACCESS: {
+            // 这里需要做类型改写，确定具体的访问类型所以传递整个表达式
+            return checking_access(m, expr);
+        }
+        case AST_EXPR_SELECT: {
+            return checking_select(m, expr);
+        }
+        case AST_CALL: {
+            return checking_call(m, expr->value);
+        }
+        case AST_EXPR_TRY: {
+            return checking_try(m, expr->value);
+        }
+        case AST_FNDEF: {
+            return checking_fn_decl(m, expr->value);
+        }
+        case AST_EXPR_LITERAL: {
+            return checking_literal(m, expr->value);
+        }
+        case AST_EXPR_ENV_ACCESS: {
+            return checking_env_access(m, expr->value);
+        }
+        default: {
+            CHECKING_ASSERTF(false, "unknown operand %d", expr->assert_type);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+/**
  * 大部分表达式都有一个 target 目标，如果需要做 implicit 类型转换，则需要将 target type 给到当前 operand
  * 如果 operand 没发转换成 target type, 则可以丢出类型不一致的报错
  *
@@ -1640,86 +1746,7 @@ static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_t
         return expr->type;
     }
 
-    type_t type;
-    switch (expr->assert_type) {
-        case AST_EXPR_AS: {
-            type = checking_as_expr(m, expr);
-            break;
-        }
-        case AST_EXPR_IS: {
-            type = checking_is_expr(m, expr->value);
-            break;
-        }
-        case AST_EXPR_NEW: {
-            type = checking_new_expr(m, expr->value);
-            break;
-        }
-        case AST_EXPR_BINARY: {
-            type = checking_binary(m, expr->value);
-            break;
-        }
-        case AST_EXPR_UNARY: {
-            type = checking_unary(m, expr->value);
-            break;
-        }
-        case AST_EXPR_IDENT: {
-            type = checking_ident(m, expr->value);
-            break;
-        }
-        case AST_EXPR_LIST_NEW: {
-            type = checking_list_new(m, expr->value, target_type);
-            break;
-        }
-        case AST_EXPR_MAP_NEW: {
-            type = checking_map_new(m, expr->value, target_type);
-            break;
-        }
-        case AST_EXPR_SET_NEW: {
-            type = checking_set_new(m, expr->value, target_type);
-            break;
-        }
-        case AST_EXPR_TUPLE_NEW: {
-            type = checking_tuple_new(m, expr->value, target_type);
-            break;
-        }
-        case AST_EXPR_STRUCT_NEW: {
-            type = checking_struct_new(m, expr->value);
-            break;
-        }
-        case AST_EXPR_ACCESS: {
-            // 这里需要做类型改写，确定具体的访问类型所以传递整个表达式
-            type = checking_access(m, expr);
-            break;
-        }
-        case AST_EXPR_SELECT: {
-            type = checking_select(m, expr);
-            break;
-        }
-        case AST_CALL: {
-            type = checking_call(m, expr->value);
-            break;
-        }
-        case AST_EXPR_TRY: {
-            type = checking_try(m, expr->value);
-            break;
-        }
-        case AST_FNDEF: {
-            type = checking_fn_decl(m, expr->value);
-            break;
-        }
-        case AST_EXPR_LITERAL: {
-            type = checking_literal(m, expr->value);
-            break;
-        }
-        case AST_EXPR_ENV_ACCESS: {
-            type = checking_env_access(m, expr->value);
-            break;
-        }
-        default: {
-            CHECKING_ASSERTF(false, "unknown operand %d", expr->assert_type);
-            exit(1);
-        }
-    }
+    type_t type = checking_expr(m, expr, target_type);
 
     // 这里已经对表达式 type 做了调整
     target_type = reduction_type(m, target_type);
@@ -1827,6 +1854,12 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_LIST) {
         type_list_t *type_list = t.list;
         type_list->element_type = reduction_type(m, type_list->element_type);
+        return t;
+    }
+
+    if (t.kind == TYPE_ARRAY) {
+        type_array_t *type_array = t.array;
+        type_array->element_type = reduction_type(m, type_array->element_type);
         return t;
     }
 

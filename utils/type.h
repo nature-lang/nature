@@ -156,7 +156,7 @@ typedef struct {
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 
     uint8_t align; // struct/list 最终对齐的字节数
-    uint16_t element_count; // struct/tuple 类型的长度
+    uint16_t length; // struct/tuple/array 类型的长度
     uint64_t *element_hashes; // struct/tuple 每个类型的种类
 } rtype_t;
 
@@ -442,6 +442,7 @@ rtype_t rtype_base(type_kind kind);
 
 rtype_t rtype_array(type_array_t *t);
 
+
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
  * 后续 nature 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
@@ -490,6 +491,9 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
 
+rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
+
+
 /**
  * 一般标量类型其值默认会存储在 stack 中
  * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
@@ -503,7 +507,7 @@ static inline bool kind_in_heap(type_kind kind) {
     return kind == TYPE_UNION ||
            kind == TYPE_STRING ||
            kind == TYPE_LIST ||
-           kind == TYPE_ARRAY ||
+           //           kind == TYPE_ARRAY ||
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
            kind == TYPE_TUPLE ||
@@ -627,6 +631,7 @@ static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
            || t.kind == TYPE_LIST
+           || t.kind == TYPE_ARRAY
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET
            || t.kind == TYPE_FN

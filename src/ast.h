@@ -21,6 +21,7 @@ typedef enum {
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_LIST_ACCESS,
+    AST_EXPR_ARRAY_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
 
     AST_EXPR_STRUCT_SELECT,
@@ -31,6 +32,8 @@ typedef enum {
     AST_EXPR_ENV_ACCESS,
 
     AST_EXPR_LIST_NEW, // [1, 2, 3]
+    AST_EXPR_ARRAY_NEW, // [1, 2, 3]
+    AST_EXPR_EMPTY_CURLY_NEW, // {}
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
     AST_EXPR_SET_NEW, // {1, 2, 3, 4}
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
@@ -168,7 +171,7 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t src_operand; // 将表达式转换成 target_type
+    ast_expr_t src; // 将表达式转换成 target_type
 } ast_as_expr_t;
 
 /**
@@ -370,7 +373,7 @@ typedef struct {
     type_t element_type; // 访问的 value 的类型
     ast_expr_t left;
     ast_expr_t index;
-} ast_list_access_t;
+} ast_list_access_t, ast_array_access_t;
 
 typedef struct {
     type_t element_type; // index 对应的 value 的 type
@@ -395,8 +398,7 @@ typedef struct {
 // [1,a.b, call()]
 typedef struct {
     list_t *elements; // ast_expr
-//    type_t type; // list的类型 (类型推导截断冗余)
-} ast_list_new_t;
+} ast_list_new_t, ast_array_new_t;
 
 typedef struct {
     ast_expr_t key;
@@ -404,14 +406,10 @@ typedef struct {
 } ast_map_element_t;
 
 // {key: value}
-typedef struct {
-    list_t *elements; // ast_map_element
-} ast_map_new_t;
-
 // var s = {1, 2, 3, call(), xxx}
 typedef struct {
-    list_t *elements; // 值为 ast_expr
-} ast_set_new_t;
+    list_t *elements; // ast_map_element or ast_expr
+} ast_map_new_t, ast_set_new_t, ast_empty_curly_new_t;
 
 // var s = (1, 2, 2.14, 1.15, true)
 typedef struct {
@@ -541,7 +539,7 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_as_expr_t *convert = NEW(ast_as_expr_t);
-    convert->src_operand = expr;
+    convert->src = expr;
     convert->target_type = target_type;
 
     result->assert_type = AST_EXPR_AS;

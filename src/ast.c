@@ -218,7 +218,7 @@ static ast_env_access_t *ast_env_access_copy(module_t *m, ast_env_access_t *temp
 
 static ast_as_expr_t *ast_as_expr_copy(module_t *m, ast_as_expr_t *temp) {
     ast_as_expr_t *as_expr = COPY_NEW(ast_as_expr_t, temp);
-    as_expr->src_operand = *ast_expr_copy(m, &temp->src_operand);
+    as_expr->src = *ast_expr_copy(m, &temp->src);
     as_expr->target_type = type_copy(m, temp->target_type);
     return as_expr;
 }
@@ -401,6 +401,10 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         }
         case AST_EXPR_LIST_ACCESS: {
             expr->value = ast_list_access_copy(m, temp->value);
+            break;
+        }
+        case AST_EXPR_EMPTY_CURLY_NEW: {
+            expr->value = temp->value;
             break;
         }
         case AST_EXPR_MAP_NEW: {

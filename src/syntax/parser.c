@@ -588,7 +588,7 @@ static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     parser_must(m, TOKEN_AS);
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->target_type = parser_single_type(m);
-    as_expr->src_operand = left;
+    as_expr->src = left;
     result.assert_type = AST_EXPR_AS;
     result.value = as_expr;
     return result;
@@ -958,6 +958,10 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
+    if (parser_is(m, TOKEN_ARRAY)) {
+        return true;
+    }
+
     // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
     if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return true;
@@ -1257,12 +1261,11 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
     // xxx a = {}
     parser_must(m, TOKEN_LEFT_CURLY);
     if (parser_consume(m, TOKEN_RIGHT_CURLY)) {
-        // {} 默认是字典
-        ast_map_new_t *map_new = NEW(ast_map_new_t);
-        map_new->elements = ct_list_new(sizeof(ast_map_element_t));
+        ast_empty_curly_new_t *empty_new = NEW(ast_empty_curly_new_t);
+        empty_new->elements = ct_list_new(sizeof(ast_map_element_t));
 
-        result.assert_type = AST_EXPR_MAP_NEW;
-        result.value = map_new;
+        result.assert_type = AST_EXPR_EMPTY_CURLY_NEW;
+        result.value = empty_new;
         return result;
     }
 

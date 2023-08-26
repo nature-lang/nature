@@ -67,6 +67,8 @@
 #define RT_CALL_LIST_ITERATOR "list_iterator"
 #define RT_CALL_LIST_CONCAT "linked_concat"
 
+#define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
+
 #define RT_CALL_MAP_NEW "map_new"
 #define RT_CALL_MAP_ACCESS "map_access"
 #define RT_CALL_MAP_ASSIGN "map_assign"
@@ -693,7 +695,7 @@ static inline lir_operand_t *temp_var_operand_without_stack(module_t *m, type_t 
  * @param type
  * @return
  */
-static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
+static inline lir_operand_t *temp_var_operand_with_stack(module_t *m, type_t type) {
     assert(type.kind > 0);
 
     string result = var_unique_ident(m, TEMP_IDENT);
@@ -702,7 +704,7 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (type.kind == TYPE_STRUCT) {
+    if (is_alloc_stack(type)) {
         lir_stack_alloc(m->linear_current, m->linear_current->operations, type, target);
     }
 
@@ -718,7 +720,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(c->module, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (type.kind == TYPE_STRUCT) {
+    if (is_alloc_stack(type)) {
         lir_stack_alloc(c, list, type, target);
     }
 
@@ -737,7 +739,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
 
     if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
         type_t base_type = lir_operand_type(base);
-        lir_operand_t *temp = temp_var_operand(m, base_type);
+        lir_operand_t *temp = temp_var_operand_with_stack(m, base_type);
         OP_PUSH(lir_op_move(temp, base));
         base = temp;
     }
@@ -796,7 +798,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         // 确保参数入栈
-        lir_operand_t *temp_operand = temp_var_operand(m, type_kind_new(imm->kind));
+        lir_operand_t *temp_operand = temp_var_operand_with_stack(m, type_kind_new(imm->kind));
         OP_PUSH(lir_op_move(temp_operand, operand));
         operand = temp_operand;
     }

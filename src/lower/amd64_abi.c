@@ -30,7 +30,6 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         // 参数已经通过内存给到了目标, 按照规约，还需要将 return_operand 中的值 move 到 rax 中
         linked_push(result, lir_op_move(operand_new(LIR_OPERAND_REG, rax), return_operand));
         goto END;
-        return result;
     }
 
     lir_operand_t *lo_dst_reg = NULL;
@@ -63,6 +62,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         }
     } else {
         assert(count == 1);
+        assertf(t.kind != TYPE_ARRAY, "array type must be pointer type");
 
         // 由于需要直接 mov， 所以还是需要选择合适的大小
         reg_t *lo_reg = lo_dst_reg->value;
@@ -161,7 +161,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type));
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
-            if (param_type.kind == TYPE_STRUCT) {
+            if (is_alloc_stack(param_type)) {
                 lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_CPTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
@@ -223,6 +223,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                     linked_push(result, lir_op_move(hi_dst, hi_reg_operand));
                 }
             } else {
+                assertf(param_type.kind != TYPE_ARRAY, "array type must be pointer type");
                 assertf(count == 1, "the normal type uses only one register");
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
@@ -270,14 +271,16 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
             return_operand = lir_operand_copy(return_operand);
             lir_var_t *var = return_operand->value;
-            assertf(var->type.kind == TYPE_STRUCT, "only struct can use stack pass");
+            assertf(is_alloc_stack(var->type), "only struct can use stack pass");
             // 这里必须使用 ptr, 如果使用 struct，lower params 就会识别异常
             var->type = type_ptrof(var->type);
             slice_insert(params, 0, var);
         } else {
+            assertf(return_type.kind != TYPE_ARRAY, "array type must be pointer type");
+
+            // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
+            // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
             if (is_alloc_stack(return_type)) {
-                // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
-                // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
                 lir_stack_alloc(c, result, return_type, c->return_operand);
             }
         }
@@ -380,7 +383,7 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
 
         uint16_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
 
-        if (arg_type.kind == TYPE_STRUCT) {
+        if (is_alloc_stack(arg_type)) {
             assert(arg->assert_type == LIR_OPERAND_VAR);
             // 通过 sub 预留足够的 stack 空间, 然后将 arg(var 中保存从是地址信息)
             linked_push(result,
@@ -496,7 +499,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     type_t result_type = lir_operand_type(call_result);
 
     // 进行 call result 的栈空间申请, 此时已经不会触发 ssa 了，可
-    if (result_type.kind == TYPE_STRUCT) {
+    if (is_alloc_stack(result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
         uint64_t size = type_sizeof(result_type);
         c->stack_offset += align_up(size, QWORD);
@@ -515,7 +518,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     if (count == 0) {
         type_t call_result_type = lir_operand_type(call_result);
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(call_result_type.kind == TYPE_STRUCT);
+        assert(is_alloc_stack(call_result_type));
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
@@ -523,6 +526,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         slice_insert(args, 0, temp_arg);
     }
 
+    // -------------------- lower args ------------------------
     int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
     linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
     op->second->value = slice_new();
@@ -538,6 +542,8 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         linked_push(result, lir_op_move(call_result, output_reg));
         return result;
     }
+
+    // -- 返回值通过 reg 传递
 
     // call 指令 存在返回值， 现在需要处理相关的返回值,首先返回值必须通过 rax/rdi 返回
     lir_operand_t *lo_src_reg;
@@ -632,6 +638,10 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
 
     if (size > 16) {
         return 0;
+    }
+
+    if (t.kind == TYPE_ARRAY) {
+        return 0; // 总是通过栈传递
     }
 
     if (is_float(t.kind)) {

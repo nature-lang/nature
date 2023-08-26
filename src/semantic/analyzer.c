@@ -574,7 +574,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
 static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_type(m, &as_expr->target_type);
-    analyzer_expr(m, &as_expr->src_operand);
+    analyzer_expr(m, &as_expr->src);
 }
 
 
@@ -596,9 +596,9 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
 
     ast_as_expr_t *as_expr = let_stmt->expr.value;
 
-    ANALYZER_ASSERTF(as_expr->src_operand.assert_type == AST_EXPR_IDENT,
+    ANALYZER_ASSERTF(as_expr->src.assert_type == AST_EXPR_IDENT,
                      "variables must be used for 'as' in the expression");
-    ast_ident *ident = as_expr->src_operand.value;
+    ast_ident *ident = as_expr->src.value;
     char *old = strdup(ident->literal);
 
     analyzer_expr(m, &let_stmt->expr);

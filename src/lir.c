@@ -74,7 +74,7 @@ linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_
 
         count = remind / item_size;
         for (int i = 0; i < count; ++i) {
-            lir_operand_t *temp_var = temp_var_operand(m, type_kind_new(kind));
+            lir_operand_t *temp_var = temp_var_operand_with_stack(m, type_kind_new(kind));
             lir_operand_t *temp_src = indirect_addr_operand(m, type_kind_new(kind), src, offset);
             lir_operand_t *temp_dst = indirect_addr_operand(m, type_kind_new(kind), dst, offset);
             linked_push(result, lir_op_move(temp_var, temp_src));

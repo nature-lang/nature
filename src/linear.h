@@ -19,6 +19,8 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
 
 static void linear_assign(module_t *m, ast_assign_stmt_t *stmt);
 
+static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_operand_t *target);
+
 static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *target);
 
 #endif //NATURE_SRC_linear_H_
