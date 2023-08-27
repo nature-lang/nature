@@ -63,6 +63,8 @@ static type_fn_t *type_fn_copy(module_t *m, type_fn_t *temp) {
 static type_list_t *type_list_copy(module_t *m, type_list_t *temp) {
     type_list_t *list = COPY_NEW(type_list_t, temp);
     list->element_type = type_copy(m, temp->element_type);
+    list->len = temp->len;
+    list->cap = temp->cap;
     return list;
 }
 

@@ -6,7 +6,8 @@ int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as cptr, raw
 
 // read
 var fd = syscall.open('./mock/stat.txt', syscall.O_RDONLY, 0666)
-var buf = [] as [u8,100] // 预先申请好了空间, 便于 syscall 中将相应的值回写
+
+var buf = [] as [u8;100] // 预先申请好了空间, 便于 syscall 中将相应的值回写
 print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
 
 result = syscall.call6(syscall.SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)

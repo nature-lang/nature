@@ -231,12 +231,15 @@ typedef struct type_t {
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } type_t;
 
-// list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
-// 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
-// 反而更好处理？
+/**
+ * [int]
+ * [int;12]
+ * [int;12;24]
+ */
 struct type_list_t {
     type_t element_type;
-//    uint64_t length;
+    uint64_t len;
+    uint64_t cap;
 };
 
 // p<value_type>

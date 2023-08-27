@@ -482,8 +482,13 @@ int SOCK_RDM = 0x4
 int SOCK_SEQPACKET = 0x5
 int SOCK_STREAM = 0x1
 
-type timespec_t = syscall_timespec_t
-type stat_t = syscall_stat_t
+fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
+    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
+}
+
+fn open(string filename, int flags, u32 perm):int {
+    return call6(SYS_OPEN, filename.raw(), flags as cptr, perm as cptr, 0, 0, 0)
+}
 
 fn read(int fd, [u8] buf):int {
     return call6(SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
@@ -491,10 +496,6 @@ fn read(int fd, [u8] buf):int {
 
 fn write(int fd, [u8] buf):int {
     return call6(SYS_WRITE, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
-}
-
-fn open(string filename, int flags, u32 perm):int {
-    return call6(SYS_OPEN, filename.raw(), flags as cptr, perm as cptr, 0, 0, 0)
 }
 
 fn close(int fd) {
@@ -517,12 +518,48 @@ fn exec(string path, [string] argv, [string] envp) {
     return syscall_exec(path, argv, envp)
 }
 
+type timespec_t = struct {
+    i64 sec
+    i64 nsec
+}
+
+type stat_t = struct {
+    u64 dev
+    u64 ino
+    u64 nlink
+    u32 mode
+    u32 uid
+    u32 gid
+    u32 __pad0
+    u64 rdev
+    i64 size
+    i64 blksize
+    i64 blocks
+    timespec_t atim
+    timespec_t mtim
+    timespec_t ctim
+    arr<i64,3> __unused
+}
+
 fn stat(string filename):stat_t {
-    return syscall_stat(filename)
+    var st = stat_t{
+        dev = 56,
+        ino = 24
+    }
+
+    // as cptr 等同于 c 中的 *stat_t
+    call6(SYS_STAT, filename.raw(), st as cptr, 0, 0, 0, 0)
+
+    return st
 }
 
 fn fstat(int fd):stat_t {
-    return syscall_fstat(fd)
+    var st = stat_t{}
+
+    // call6 的错误处理在 runtime 中已经做过了k
+    call6(SYS_FSTAT, fd as cptr, st as cptr, 0, 0, 0, 0)
+
+    return st
 }
 
 fn mkdir(string path, u32 mode) {
@@ -549,6 +586,12 @@ fn getppid():int {
     return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
 }
 
+fn getcwd():string {
+    var buf = [] as [u8;1024] // 1024 是 path max
+    call6(SYS_GETCWD, buf.raw(), buf.len() as cptr, 0, 0, 0, 0)
+    return buf as string
+}
+
 fn kill(int pid, int sig) {
     call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
 }
@@ -573,22 +616,20 @@ fn chmod(string path, u32 mode) {
     call6(SYS_CHMOD, path.raw(), mode as cptr, 0, 0, 0, 0)
 }
 
-fn getcwd():string {
-    return syscall_getcwd()
+fn clock_gettime(int clock_id):timespec_t {
+    var result = timespec_t{}
+
+    call6(SYS_CLOCK_GETTIME, clock_id as cptr, result as cptr, 0, 0, 0, 0)
+
+    return result
 }
 
-fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
-    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
-}
-
-
-// socket 相关
-type sockaddr_in = struct { // linux_amd64 占用 8 个字节
+// net --------------
+type sockaddr_in = struct {
     u16 sin_family
     u16 sin_port
     u32 sin_addr
-
-    [u8,8] sin_zero
+    arr<u8,8> sin_zero
 }
 
 type sockaddr_in6 = struct {
@@ -597,15 +638,15 @@ type sockaddr_in6 = struct {
     u16 sin6_port
     u32 sin6_flowinfo
     // ipv6 address(128-bit)
-    [u32,4] sin6_addr
+    arr<u32,4> sin6_addr
     u32 sin6_scope_id
 }
 
 type sockaddr_un = struct {
     u8 sun_len
     u8 sun_family
-    // 108 byte
-    [u8,104] sun_path
+    //  char sun_path[108];
+    arr<u8,108> sun_path
 }
 
 fn socket(int domain, int t, int protocol):int {
@@ -617,15 +658,13 @@ type sockaddr_t = gen sockaddr_in|sockaddr_un
 
 fn bind(int sockfd, sockaddr_t addr) {
     // 将 nature struct 转换为 c struct
-     cptr p = libc.encode(addr)
      var len = 16 as cptr // in 和 unix 长度为 16byte
-     call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+     call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
 
 fn bind(int sockfd, sockaddr_in6 addr) {
-    cptr p = libc.encode(addr)
     var len = 28 as cptr
-    call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+    call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
 
 // backlog 表示最大的监听长度
@@ -634,15 +673,11 @@ fn listen(int sockfd, int backlog) {
 }
 
 // 相应 client sockfd 和 client sockaddr
-fn accept(int sockfd, sockaddr_t addr):int {
-    var p = libc.encode(addr)
+fn accept(int sockfd, ptr<sockaddr_t> addr):int {
     var len = 16
     ptr<int> len_ptr = &len
+    int fd = call6(SYS_ACCEPT, sockfd as cptr, addr as cptr, len_ptr as cptr, 0, 0, 0)
 
-    int fd = call6(SYS_ACCEPT, sockfd as cptr, p, len_ptr as cptr, 0, 0, 0)
-
-    // 将 p 中的值赋值给 addr, p 会被垃圾回收回收
-    libc.decode(p, addr)
     return fd
 }
 
@@ -652,16 +687,4 @@ fn recvfrom(int sockfd, [u8] buf, int flags):int {
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
     return call6(SYS_SENDTO, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
-}
-
-fn clock_gettime(int clock_id):timespec_t {
-    // struct.raw() 读取 struct 数据段
-    var result = timespec_t {}
-    var p = libc.encode(result)
-
-    call6(SYS_CLOCK_GETTIME, clock_id as cptr, p, 0, 0, 0, 0)
-
-    libc.decode(p, result)
-
-    return result
 }

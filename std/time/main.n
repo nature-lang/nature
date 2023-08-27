@@ -1,15 +1,16 @@
 import syscall
-import libc
 
 type time_t = struct {
     i64 sec
     i64 nsec
-    libc.tm_t tm
+    ptr<libc_tm_t> tm
     var timestamp = fn(self s):i64 {
         return s.sec
     }
     var datetime = fn(self s):string {
-        return libc.strftime(s.tm, '%Y-%m-%d %H:%M:%S')
+        var buf = [] as [u8;100]
+        strftime(buf.raw(), buf.len(), '%Y-%m-%d %H:%M:%S'.raw(), s.tm)
+        return buf as string
     }
 }
 
@@ -19,7 +20,7 @@ fn now():time_t {
     var t = time_t {
         sec = sys_time.sec,
         nsec = sys_time.nsec,
-        tm = libc.localtime(sys_time.sec)
+        tm = localtime(&sys_time.sec)
     }
 
     return t

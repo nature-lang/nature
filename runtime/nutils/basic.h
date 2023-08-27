@@ -56,7 +56,4 @@ static inline n_list_t *list_u8_new(uint64_t length, uint64_t capacity) {
 
 n_list_t *std_args();
 
-
-n_u16_t libc_htons(n_u16_t host);
-
 #endif //NATURE_BASIC_H

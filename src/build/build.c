@@ -22,9 +22,9 @@
 #include <assert.h>
 
 static char *std_templates[] = {
-        "builtin.n",
-        "libc.n",
-        "syscall.n"
+        "builtin.temp.n",
+        "libc.temp.n",
+        "syscall.temp.n"
 };
 
 // char*, 支持 .o 或者 .a 文件后缀

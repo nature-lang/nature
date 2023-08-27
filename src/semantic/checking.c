@@ -567,6 +567,8 @@ static type_t checking_list_new(module_t *m, ast_expr_t *expr, type_t target_typ
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_list->element_type = target_type.list->element_type;
+        type_list->len = target_type.list->len;
+        type_list->cap = target_type.list->cap;
     }
 
     result.list = type_list;

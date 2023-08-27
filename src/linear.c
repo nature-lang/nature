@@ -65,7 +65,7 @@ static lir_operand_t *linear_zero_list(module_t *m, type_t t, lir_operand_t *tar
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
     OP_PUSH(rt_call(RT_CALL_LIST_NEW, target, 4,
-                    rtype_hash, element_index, int_operand(0), int_operand(0)));
+                    rtype_hash, element_index, int_operand(t.list->len), int_operand(t.list->cap)));
     return target;
 }
 
@@ -1719,7 +1719,13 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     // anybody to cptr
     if (as_expr->target_type.kind == TYPE_CPTR) {
-        OP_PUSH(rt_call(RT_CALL_CPTR_CASTING, target, 1, input));
+        // 如果类型长度匹配直接进行 mov 即可
+        if (type_sizeof(as_expr->src.type) < POINTER_SIZE) {
+            OP_PUSH(rt_call(RT_CALL_CPTR_CASTING, target, 1, input));
+        } else {
+            // struct/arr 直接这样 mov 就是传递指针了。
+            OP_PUSH(lir_op_move(target, input));
+        }
         return target;
     }
 

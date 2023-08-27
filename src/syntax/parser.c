@@ -238,12 +238,19 @@ static type_t parser_single_type(module_t *m) {
         type_list_t *type_list = NEW(type_list_t);
         type_list->element_type = parser_type(m);
 
-//        if (parser_consume(m, TOKEN_COMMA)) {
-//            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
-//            int length = atoi(t->literal);
-//
-//            PARSER_ASSERTF(length > 0, "list len must > 0")
-//        }
+        if (parser_consume(m, TOKEN_SEMICOLON)) {
+            token_t *token = parser_must(m, TOKEN_LITERAL_INT);
+            int len = atoi(token->literal);
+            PARSER_ASSERTF(len > 0, "list len must > 0")
+            type_list->len = len;
+
+            if (parser_consume(m, TOKEN_SEMICOLON)) {
+                token = parser_must(m, TOKEN_LITERAL_INT);
+                int cap = atoi(token->literal);
+                PARSER_ASSERTF(cap > 0, "list cap must > 0")
+                type_list->cap = cap;
+            }
+        }
 
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_LIST;
