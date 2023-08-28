@@ -406,7 +406,15 @@ typedef struct {
 } n_union_t;
 
 typedef struct {
+    n_string_t *path;
+    n_string_t *ident;
+    n_int_t line;
+    n_int_t column;
+} n_trace_t;
+
+typedef struct {
     n_string_t *msg;
+    n_list_t *traces; // element is n_trace_t
     uint8_t has;
 } n_errort;
 

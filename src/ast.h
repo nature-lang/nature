@@ -486,6 +486,10 @@ typedef struct ast_fndef_t {
     // analyzer 时赋值
     bool is_local; // 是否是全局函数
 
+
+    // dump error
+    char *fn_name;
+    char *rel_path;
     int column;
     int line;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
@@ -575,8 +579,9 @@ static inline bool can_assign(ast_type_t t) {
     return false;
 }
 
-static inline ast_fndef_t *ast_fndef_new(int line, int column) {
+static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->rel_path = rel_path;
     fndef->symbol_name = NULL;
     fndef->closure_name = NULL;
     fndef->line = line;

@@ -35,11 +35,11 @@ void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offs
 
 void zero_fn();
 
-void processor_attach_errort(n_string_t *msg);
+void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_errort processor_remove_errort();
 
-uint8_t processor_has_errort();
+uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_list_t *string_to_list(n_string_t *str);
 

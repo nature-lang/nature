@@ -325,16 +325,21 @@ void zero_fn() {
     rt_processor_attach_errort("zero_fn");
 }
 
-
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
-void processor_attach_errort(n_string_t *msg) {
-    DEBUGF("[runtime.processor_attach_errort] msg=%s", msg->data)
+void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
+    DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld",
+           msg->data, path, line, column);
     processor_t *p = processor_get();
 
-    rtype_t *errort_rtype = gc_rtype(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_errort *errort = runtime_malloc(errort_rtype->size, errort_rtype);
-    errort->has = 1;
-    errort->msg = msg;
+    n_errort *errort = n_errort_new(msg, true);
+
+    n_trace_t trace = {
+            .path = string_new(path, strlen(path)),
+            .ident = string_new(fn_name, strlen(fn_name)),
+            .line = line,
+            .column = column,
+    };
+    list_push(errort->traces, &trace);
 
     p->errort = errort;
 }
@@ -342,14 +347,26 @@ void processor_attach_errort(n_string_t *msg) {
 n_errort processor_remove_errort() {
     processor_t *p = processor_get();
     n_errort *errort = p->errort;
-    p->errort = n_errort_new("", 0);
+    p->errort = n_errort_new(string_new("", 0), 0);
     DEBUGF("[runtime.processor_remove_errort] remove errort: %p", errort);
     return *errort;
 }
 
-uint8_t processor_has_errort() {
+uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column) {
     processor_t *p = processor_get();
     DEBUGF("[runtime.processor_has_errort] errort?  %d", p->errort->has)
+
+    if (p->errort->has) {
+        // 添加栈信息
+        n_trace_t trace = {
+                .path = string_new(path, strlen(path)),
+                .ident = string_new(fn_name, strlen(fn_name)),
+                .line = line,
+                .column = column,
+        };
+
+        list_push(p->errort->traces, &trace);
+    }
 
     return p->errort->has;
 }

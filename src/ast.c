@@ -652,6 +652,11 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->type = type_copy(m, temp->type);
     fndef->capture_exprs = temp->capture_exprs;
     fndef->body = ast_body_copy(m, temp->body);
+    fndef->fn_name = temp->fn_name;
+    fndef->rel_path = temp->rel_path;
+    fndef->column = temp->column;
+    fndef->line = temp->line;
+
 
     // 将 new fn 添加到 symbol table 中 (依旧使用原始的名称, 方便使用者可以定位函数信息)
     symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);

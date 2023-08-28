@@ -1416,6 +1416,9 @@ uint64_t collect_fndef_list(elf_context *ctx) {
 
         }
         strcpy(f->name, c->symbol_name);
+        strcpy(f->rel_path, c->fndef->rel_path);
+        f->line = c->fndef->line;
+        f->column = c->fndef->column;
 
         f->base = 0; // 等待符号重定位
         assert(c->text_count > 0);

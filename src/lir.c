@@ -37,10 +37,9 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->loop_headers = slice_new();
 
     c->interval_count = cross_alloc_reg_count() + 1;
-    c->line = fndef->line;
-    c->column = fndef->column;
 
     fndef->closure = c;
+    c->fndef = fndef;
     return c;
 }
 

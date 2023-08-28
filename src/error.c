@@ -39,22 +39,11 @@ void dump_errors(module_t *m) {
         return;
     }
 
-    char *filepath = "";
-
-    if (m->package_dir) {
-        char *temp_dir = path_dir(m->package_dir);
-        filepath = str_replace(m->source_path, temp_dir, "");
-        filepath = ltrim(filepath, "/");
-    } else {
-        filepath = m->source_path;
-    }
-
-
     // 将所有的错误按格式输出即可
     for (int i = 0; i < m->ct_errors->count; ++i) {
         ct_error_t *error = m->ct_errors->take[i];
 #ifdef ASSERT_ERROR
-        assertf(false, "%s:%d:%d: %s\n", filepath, error->line, error->column, error->msg);
+        assertf(false, "%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
 #else
         printf("%s:%d:%d: %s\n", filepath, error->line, error->column, error->msg);
 #endif

@@ -283,16 +283,24 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return lir_label_operand(ident->literal, s->is_local);
 }
 
-static void linear_error_handle(module_t *m) {
+static void linear_has_error(module_t *m) {
     char *error_target_label = m->linear_current->error_label;
+
+    // 存在 catch error
     if (m->linear_current->catch_error_label) {
         error_target_label = m->linear_current->catch_error_label;
     }
 
     lir_operand_t *has_error = temp_var_operand_with_stack(m, type_kind_new(TYPE_BOOL));
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_error, 0));
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ,
-                       bool_operand(true), has_error,
+
+    lir_operand_t *path_operand = string_operand(m->rel_path);
+    lir_operand_t *fn_name_operand = string_operand(m->linear_current->symbol_name);
+    lir_operand_t *line_operand = int_operand(m->current_line);
+    lir_operand_t *column_operand = int_operand(m->current_column);
+
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_HAS_ERRORT, has_error,
+                    4, path_operand, fn_name_operand, line_operand, column_operand));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error,
                        lir_label_operand(error_target_label, true)));
 }
 
@@ -986,7 +994,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
     // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
     if (!is_builtin_call(type_fn->name)) {
-        linear_error_handle(m);
+        linear_has_error(m);
     }
 
     if (temp) {
@@ -1198,7 +1206,7 @@ static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_opera
     }
 
     // 可能会存在数组越界的错误需要拦截处理
-    linear_error_handle(m);
+    linear_has_error(m);
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1269,7 +1277,7 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     }
 
     // 可能会存在数组越界的错误处理
-    linear_error_handle(m);
+    linear_has_error(m);
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
@@ -1375,7 +1383,7 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
         value_target = indirect_addr_operand(m, expr.type, value_target, 0);
     }
 
-    linear_error_handle(m);
+    linear_has_error(m);
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1701,7 +1709,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref));
-        linear_error_handle(m);
+        linear_has_error(m);
         return target;
     }
 
@@ -1964,14 +1972,20 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
 
     assert(stmt->error.type.kind == TYPE_STRING);
     lir_operand_t *msg_operand = linear_expr(m, stmt->error, NULL);
+    lir_operand_t *path_operand = string_operand(m->rel_path);
+    lir_operand_t *fn_name_operand = string_operand(m->linear_current->symbol_name);
+    lir_operand_t *line_operand = int_operand(m->current_line);
+    lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    OP_PUSH(rt_call(RT_CALL_PROCESSOR_ATTACH_ERRORT, NULL, 1, msg_operand));
+    OP_PUSH(rt_call(RT_CALL_PROCESSOR_THROW_ERRORT, NULL, 5,
+                    msg_operand, path_operand, fn_name_operand, line_operand, column_operand));
+
 
     // 插入 return 标识(用来做 return check 的，check 完会清除的)
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
 
-    // ret
+    // bal to end label
     OP_PUSH(lir_op_bal(lir_label_operand(m->linear_current->end_label, false)));
 }
 
@@ -2088,7 +2102,6 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
 static void linear_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
         ast_stmt_t *stmt = body->take[i];
-        m->linear_line = stmt->line;
 #ifdef DEBUG_linear
         debug_stmt("linear", *stmt);
 #endif
@@ -2114,7 +2127,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // label name 使用 symbol_name!
     OP_PUSH(lir_op_label(fndef->symbol_name, false));
-
 
     // 编译 fn param -> lir_var_t*
     slice_t *params = slice_new();
@@ -2157,7 +2169,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->error_label, true));
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
-    // TODO error handle... example with stack
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
 

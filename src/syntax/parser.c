@@ -1317,13 +1317,14 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
  */
 static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
-    ast_fndef_t *fndef = ast_fndef_new(parser_peek(m)->line, parser_peek(m)->column);
+    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, parser_peek(m)->line, parser_peek(m)->column);
 
     parser_must(m, TOKEN_FN);
 
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *name_token = parser_advance(m);
         fndef->symbol_name = name_token->literal;
+        fndef->fn_name = fndef->symbol_name;
     }
 
     parser_formals(m, fndef);
@@ -1509,7 +1510,7 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
  */
 static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
-    ast_fndef_t *fndef = ast_fndef_new(parser_peek(m)->line, parser_peek(m)->column);
+    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, parser_peek(m)->line, parser_peek(m)->column);
     result->assert_type = AST_FNDEF;
     result->value = fndef;
 
@@ -1517,6 +1518,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     // stmt 中 name 不允许省略
     token_t *name_token = parser_must(m, TOKEN_IDENT);
     fndef->symbol_name = name_token->literal;
+    fndef->fn_name = fndef->symbol_name;
     parser_formals(m, fndef);
 
     // 可选返回参数

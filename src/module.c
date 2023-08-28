@@ -36,6 +36,13 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
+    if (m->package_dir) {
+        char *temp_dir = path_dir(m->package_dir);
+        m->rel_path = str_replace(m->source_path, temp_dir, "");
+        m->rel_path = ltrim(m->rel_path, "/");
+    } else {
+        m->rel_path = m->source_path;
+    }
 
     assertf(file_exists(source_path), "source file=%s not found", source_path);
 

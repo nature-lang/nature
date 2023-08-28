@@ -652,6 +652,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     // 函数名称重复声明检测
     if (fndef->symbol_name == NULL) {
         fndef->symbol_name = ANONYMOUS_FN_NAME;
+        fndef->fn_name = ANONYMOUS_FN_NAME;
     } else {
         analyzer_redeclare_check(m, fndef->symbol_name);
     }
@@ -1335,8 +1336,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     }
 
     // 添加 init fn
-    ast_fndef_t *fn_init = ast_fndef_new(0, 0);
+    ast_fndef_t *fn_init = ast_fndef_new(m->rel_path, 0, 0);
     fn_init->symbol_name = ident_with_module(m->ident, FN_INIT_NAME);
+    fn_init->fn_name = fn_init->symbol_name;
     fn_init->return_type = type_kind_new(TYPE_VOID);
     fn_init->params = ct_list_new(sizeof(ast_var_decl_t));
     fn_init->body = var_assign_list;
@@ -1379,8 +1381,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
  * @param stmt_list
  */
 static void analyzer_main(module_t *m, slice_t *stmt_list) {
-    ast_fndef_t *fndef = ast_fndef_new(0, 0);
+    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, 0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
+    fndef->fn_name = fndef->symbol_name;
     fndef->body = slice_new();
     fndef->return_type = type_kind_new(TYPE_VOID);
     fndef->params = ct_list_new(sizeof(ast_var_decl_t));

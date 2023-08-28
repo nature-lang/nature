@@ -717,7 +717,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
         } else if (arg_kind == TYPE_GC_NOSCAN) {
 //            bitmap_clear(rtype.gc_bits, i);
         } else {
-            assertf(false, "gc rtype kind exception");
+            assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
         }
     }
     va_end(valist);

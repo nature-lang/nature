@@ -145,6 +145,7 @@ typedef struct {
     char *source_path; // 文件完整路径(外面丢进来的)
     char *source_dir; // 文件所在目录,去掉 xxx.n
     string ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
+    char *rel_path; // 从 root 计算出来的相对路径
 
     // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
     char *package_dir;
@@ -183,7 +184,6 @@ typedef struct {
 
     // compiler
     struct closure_t *linear_current;
-    int linear_line;
 
     // call init stmt
     ast_stmt_t *call_init_stmt;  // analyzer 阶段写入
@@ -474,8 +474,7 @@ typedef struct closure_t {
     slice_t *asm_symbols; // asm_global_symbol_t
     module_t *module;
 
-    int line;
-    int column;
+    ast_fndef_t *fndef;
 } closure_t;
 
 /**

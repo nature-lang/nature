@@ -21,8 +21,11 @@ typedef struct {
     uint64_t fn_runtime_reg; //  0 表示不在
     uint64_t fn_runtime_stack; // 0 就啥也不是，
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
-    uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits
-    char name[80];
+    uint64_t line;
+    uint64_t column;
+    char name[80]; // 函数名称
+    char rel_path[256];  // 文件路径 TODO 可以像 elf 文件一样做 str 段优化。
+    uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits TODO 做成数据段优化
 } fndef_t;
 
 

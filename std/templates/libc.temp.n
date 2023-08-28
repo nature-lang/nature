@@ -17,7 +17,7 @@ type libc_tm_t = struct {
     cptr tm_zone
 }
 
-// 标准库函数
+// 标准库函数, 返回值是静态值，不用处理 gc 但是线程不安全
 fn localtime(ptr<i64> timestamp):ptr<libc_tm_t>
 
 // 将 time_info_t 转换为时间戳
