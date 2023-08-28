@@ -340,20 +340,13 @@ struct type_fn_t {
 
 typedef struct {
     uint8_t *data;
-    // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
-    // 内存优化时可以优化掉这个参数
-    uint64_t element_rtype_hash;
-    uint64_t capacity; // 预先申请的容量大小
     uint64_t length; // 实际占用的位置的大小
-} n_list_t;
+    uint64_t capacity; // 预先申请的容量大小
+    uint64_t element_rtype_hash;
+} n_list_t, n_string_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
 typedef addr_t n_pointer_t;
-
-typedef struct {
-    uint8_t *data; // [uint8_t] 标识 uint 数组
-    uint64_t length; // 不包含 \0 的字符串长度
-} n_string_t;
 
 typedef uint8_t n_bool_t;
 

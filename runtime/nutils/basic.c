@@ -227,6 +227,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_LIST) {
         n_list_t *list = iterator;
+        assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
+                list, list->length, list->capacity, list->data);
         uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld",
                list->length,
@@ -369,24 +371,6 @@ uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t co
     }
 
     return p->errort->has;
-}
-
-/**
- * string -> [u8]
- * @param str
- * @return
- */
-n_list_t *string_to_list(n_string_t *str) {
-    DEBUGF("[runtime.string_to_list] str=%p, str->data=%p, str->length=%lu", str, str->data, str->length)
-    n_list_t *list = list_u8_new(str->length, str->length);
-    list->data = str->data;
-
-    return list;
-}
-
-n_string_t *list_to_string(n_list_t *list) {
-    DEBUGF("[runtime.list_to_string] list=%p, list->data=%p, list->length=%lu", list, list->data, list->length)
-    return string_new(list->data, list->length);
 }
 
 n_cptr_t cptr_casting(value_casting v) {

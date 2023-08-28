@@ -21,16 +21,19 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
         data[length] = '\0';
 
         // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
-        string_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+        string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     } else {
         // 空字符串特殊处理
-        string_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+        string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     }
 
+    assert(element_rtype->hash > 0);
     DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
     n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
     str->data = data;
     str->length = length;
+    str->capacity = length;
+    str->element_rtype_hash = element_rtype->hash;
     memmove(str->data, raw_string, length);
 
     DEBUGF("[string_new] success, string_data=%p", str);
@@ -49,8 +52,9 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
 
     uint64_t length = a->length + b->length;
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
-    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_array_t *data = rt_array_new(element_rtype, length + 1);
+    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    n_array_t *data = rt_array_new(element_rtype, length + 1); // +1 预留 '\0' 空间
+
 
     // 将 str copy 到 data 中
     memmove(data, a->data, a->length);
@@ -60,6 +64,9 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
     str->length = length;
     str->data = data;
+    str->length = length;
+    str->capacity = length;
+    str->element_rtype_hash = element_rtype->hash;
     return str;
 }
 

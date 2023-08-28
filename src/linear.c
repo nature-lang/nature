@@ -729,7 +729,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // key 和 value 需要进行一次初始化
     lir_operand_t *first_target = linear_var_decl(m, &ast->first);
-    OP_PUSH(lir_op_nop(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+    OP_PUSH(lir_op_nop_def(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
     lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
 
     // 单值遍历清空下, 对于 list 调用 next value,
@@ -763,7 +763,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     // gen value
     if (ast->second) {
         lir_operand_t *second_target = linear_var_decl(m, ast->second);
-        OP_PUSH(lir_op_nop(second_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        OP_PUSH(lir_op_nop_def(second_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
         lir_operand_t *value_ref = lea_operand_pointer(m, second_target);
 
         OP_PUSH(rt_call(
@@ -1677,7 +1677,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_number(as_expr->target_type.kind) && is_number(as_expr->src.type.kind)) {
         lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
 
-        OP_PUSH(lir_op_nop(target)); // 如何清理多余的 nop 指令？
+        OP_PUSH(lir_op_nop_def(target)); // 如何清理多余的 nop 指令？
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
 
@@ -1705,7 +1705,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // union assert
     if (as_expr->src.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
-        OP_PUSH(lir_op_nop(target));
+        OP_PUSH(lir_op_nop_def(target));
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         OP_PUSH(rt_call(RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref));
@@ -1715,13 +1715,13 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     // string -> list u8
     if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(as_expr->target_type)) {
-        OP_PUSH(rt_call(RT_CALL_STRING_TO_LIST, target, 1, input));
+        OP_PUSH(lir_op_move(target, input));
         return target;
     }
 
     // list u8 -> string
     if (is_list_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
-        OP_PUSH(rt_call(RT_CALL_LIST_TO_STRING, target, 1, input));
+        OP_PUSH(lir_op_move(target, input));
         return target;
     }
 
@@ -1731,7 +1731,6 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         if (type_sizeof(as_expr->src.type) < POINTER_SIZE) {
             OP_PUSH(rt_call(RT_CALL_CPTR_CASTING, target, 1, input));
         } else {
-            // struct/arr 直接这样 mov 就是传递指针了。
             OP_PUSH(lir_op_move(target, input));
         }
         return target;

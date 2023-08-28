@@ -41,18 +41,7 @@ n_errort processor_remove_errort();
 
 uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_list_t *string_to_list(n_string_t *str);
-
-n_string_t *list_to_string(n_list_t *list);
-
 n_cptr_t cptr_casting(value_casting v);
-
-static inline n_list_t *list_u8_new(uint64_t length, uint64_t capacity) {
-    rtype_t *list_rtype = gc_rtype(TYPE_LIST, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
-
-    return list_new(list_rtype->hash, element_rtype->hash, length, capacity);
-}
 
 n_list_t *std_args();
 

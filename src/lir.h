@@ -92,9 +92,6 @@
 #define RT_CALL_NUMBER_CASTING "number_casting"
 #define RT_CALL_CPTR_CASTING "cptr_casting"
 
-#define RT_CALL_STRING_TO_LIST "string_to_list"
-#define RT_CALL_LIST_TO_STRING "list_to_string"
-
 /**
  * 将 single 类型转换为 union 类型
  */
@@ -544,8 +541,12 @@ static inline lir_op_t *lir_op_output(lir_opcode_t code, lir_operand_t *result) 
     return lir_op_new(code, NULL, NULL, result);
 }
 
-static inline lir_op_t *lir_op_nop(lir_operand_t *result) {
-    return lir_op_new(LIR_OPCODE_NOP, NULL, NULL, result);
+static inline lir_op_t *lir_op_nop_def(lir_operand_t *def) {
+    return lir_op_new(LIR_OPCODE_NOP, NULL, NULL, def);
+}
+
+static inline lir_op_t *lir_op_nop_use(lir_operand_t *use) {
+    return lir_op_new(LIR_OPCODE_NOP, use, NULL, NULL);
 }
 
 static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
