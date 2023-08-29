@@ -165,6 +165,7 @@ static void build_linker(slice_t *modules) {
     }
 
     // 将相关符号都加入来
+    slice_push(linker_libs, lib_file_path(LIBZ_FILE));
     slice_push(linker_libs, custom_link_object_path());
     slice_push(linker_libs, lib_file_path(LIB_START_FILE));
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
@@ -292,43 +293,14 @@ static void build_assembler(slice_t *modules) {
     assembler_custom_links();
 }
 
-static void build_temps(toml_table_t *package_conf) {
-    slice_t *templates = slice_new();
-
-    // 都已经在 libruntime.a 中都实现了, 所以不需要做 impl 配置了
-    char *template_dir = path_join(NATURE_ROOT, "std/templates");
-    // 将 nature_root 中的 template 文件先都注册进来
-    for (int i = 0; i < sizeof(std_templates) / sizeof(std_templates[0]); ++i) {
-        char *name = std_templates[i];
-        char *source_path = path_join(template_dir, name);
-        assertf(file_exists(source_path), "template file=%s not found, please reinstall nature", source_path);
-
-        template_t *t = NEW(template_t);
-        t->path = source_path;
-        t->impl = NULL;
-        slice_push(templates, t);
-    }
-
-    if (package_conf) {
-        slice_t *src_templates = package_templates(package_conf);
-        if (src_templates && src_templates > 0) {
-            slice_concat(templates, src_templates);
-        }
-    }
-
+static void build_temps(slice_t *templates) {
     slice_t *modules = slice_new(); // module_t*
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
-        template_t *t = templates->take[i];
-        // TODO 按架构匹配
-
-        if (t->impl) {
-            assertf(ends_with(t->impl, ".a"), "only support .a file");
-            slice_push(linker_libs, t->impl);
-        }
+        char *full_path = templates->take[i];
 
         // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/checking 逻辑)
-        module_t *temp_module = module_build(NULL, t->path, MODULE_TYPE_TEMP);
+        module_t *temp_module = module_build(NULL, full_path, MODULE_TYPE_TEMP);
         slice_push(modules, temp_module);
     }
 
@@ -342,7 +314,23 @@ static void build_temps(toml_table_t *package_conf) {
 
         checking(m);
     }
+}
 
+static void build_std_temps() {
+    slice_t *templates = slice_new();
+
+    // 都已经在 libruntime.a 中都实现了, 所以不需要做 impl 配置了
+    char *template_dir = path_join(NATURE_ROOT, "std/templates");
+    // 将 nature_root 中的 template 文件先都注册进来
+    for (int i = 0; i < sizeof(std_templates) / sizeof(std_templates[0]); ++i) {
+        char *name = std_templates[i];
+        char *source_path = path_join(template_dir, name);
+        assertf(file_exists(source_path), "template file=%s not found, please reinstall nature", source_path);
+
+        slice_push(templates, source_path);
+    }
+
+    build_temps(templates);
 }
 
 static slice_t *build_modules(toml_table_t *package_conf) {
@@ -358,12 +346,19 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             .module_ident = FN_MAIN_NAME,
     };
 
+    slice_t *temps = package_templates(package_conf);
+    if (temps && temps->count > 0) {
+        build_temps(temps);
+    }
+
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
 
     slice_push(modules, main);
 
     linked_t *work_list = linked_new();
     linked_push(work_list, main);
+
+    table_t *temps_handled = table_new();
 
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);
@@ -374,6 +369,17 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 continue;
             }
 
+            // 在 build module 之前，需要将当前 module 所在的 package.toml 中的 templates 中包含的全局符号注册到符号表中
+            if (import->package_conf && !table_exist(temps_handled, import->package_dir)) {
+                temps = package_templates(import->package_conf);
+                if (temps && temps->count > 0) {
+                    build_temps(temps);
+                }
+
+                table_set(temps_handled, import->package_dir, import);
+            }
+
+            // new module dep all imports handled
             module_t *new_module = module_build(import, import->full_path, MODULE_TYPE_COMMON);
             linked_push(work_list, new_module);
             slice_push(modules, new_module);
@@ -471,12 +477,21 @@ void build(char *build_entry) {
     char *package_file = path_join(WORKDIR, PACKAGE_TOML);
     if (file_exists(package_file)) {
         package_conf = package_parser(package_file);
+
+        // [links] 注册
+        slice_t *links = package_links(package_conf);
+        if (links) {
+            for (int i = 0; i < links->count; ++i) {
+                char *link_path = links->take[i];
+                slice_push(linker_libs, link_path);
+            }
+        }
     }
 
-    // TODO 这只能编译自己的 temps，编译不了 import 里面的 temps
-    build_temps(package_conf);
+    build_std_temps();
 
     slice_t *modules = build_modules(package_conf);
+
 
     // 编译(所有的模块都编译完成后再统一进行汇编与链接)
     build_compiler(modules);

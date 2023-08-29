@@ -116,13 +116,18 @@ rtype_t rtype_array(type_array_t *t) {
             .length = t->length,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
+
     bool need_gc = element_rtype.last_ptr > 0; // element 包含指针数据
     if (need_gc) {
         rtype.last_ptr = element_size * t->length;
-
         // need_gc 暗示了 8byte 对齐了
+        uint16_t element_length = element_size / POINTER_SIZE;
+
         for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
-            bitmap_set(rtype.gc_bits, i);
+            uint16_t element_index = i % element_length;
+            if (bitmap_test(element_rtype.gc_bits, element_index)) {
+                bitmap_set(rtype.gc_bits, i);
+            }
         }
     }
 

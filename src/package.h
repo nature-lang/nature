@@ -5,16 +5,13 @@
 #include "utils/assertf.h"
 #include "utils/linked.h"
 #include "utils/slice.h"
+#include "build/config.h"
+
 
 #define PACKAGE_TOML "package.toml"
 #define TYPE_GIT "git"
 #define TYPE_LOCAL "local"
 #define PACKAGE_SOURCE_INFIX ".nature/package/sources"
-
-typedef struct {
-    char *path;
-    char *impl;
-} template_t;
 
 bool is_std_package(char *package);
 
@@ -103,9 +100,9 @@ static inline char *package_dep_local_dir(toml_table_t *conf, char *package) {
 /**
  * name = "test"
  * templates = [
- *       { path = "temps/helper.temp.n", impl = "temps/test.a" }
- *       { path = "temps/builtin.temp.n", impl = "temps/test.o" }
- *       { path = "temps/builtin.temp.n", impl = "temps/test.llm" }
+ *       "temps/helper.temp.n",
+ *       "temps/builtin.temp.n",
+ *       "temps/builtin.temp.n"
  *   ]
  * @param conf
  * @return
@@ -123,11 +120,7 @@ static inline slice_t *package_templates(toml_table_t *conf) {
 
     size_t len = toml_array_nelem(temps);
     for (int i = 0; i < len; ++i) {
-        toml_table_t *temp = toml_table_at(temps, i);
-        if (!temp) {
-            continue;
-        }
-        toml_datum_t datum = toml_string_in(temp, "path");
+        toml_datum_t datum = toml_string_at(temps, i);
         if (!datum.ok) {
             continue;
         }
@@ -135,20 +128,33 @@ static inline slice_t *package_templates(toml_table_t *conf) {
         assertf(ends_with(path, ".n"), "templates path must end with .n, index=%d, actual '%s'", i, path);
         assertf(file_exists(path), "templates path '%s' notfound", path);
 
+        slice_push(result, path);
+    }
 
-        // 如果是 c 语言标准库中的函数已经实现了，就不需要专门搞进来了
-        char *impl = NULL;
-        datum = toml_string_in(temp, "impl");
-        if (datum.ok) {
-            impl = datum.u.s;
-            assertf(ends_with(impl, ".a"), "templates impl only support .a, index=%d, actual '%s'", i, impl);
-            assertf(file_exists(impl), "templates impl '%s' notfound", impl);
+    return result;
+}
+
+static slice_t *package_links(toml_table_t *package_conf) {
+    if (!package_conf) {
+        return NULL;
+    }
+    toml_table_t *link_table = toml_table_in(package_conf, "links");
+    if (!link_table) {
+        return NULL;
+    }
+    slice_t *result = slice_new();
+
+    char *os_arch = dsprintf("%s_%s", os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    for (int i = 0; i < toml_table_ntab(link_table); ++i) {
+        const char *key = toml_key_in(link_table, i);
+        toml_table_t *table = toml_table_in(link_table, key);
+
+        toml_datum_t datum = toml_string_in(table, os_arch);
+        if (!datum.ok) {
+            continue;
         }
-
-        template_t *item = NEW(template_t);
-        item->path = path;
-        item->impl = impl;
-        slice_push(result, item);
+        char *path = datum.u.s;
+        slice_push(result, path);
     }
 
     return result;

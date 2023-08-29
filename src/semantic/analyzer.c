@@ -847,7 +847,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
     ident->literal = temp_ast_ident->literal;
     expr->value = ident;
 
-    // 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的 local)
+    // - 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的 local)
     slice_t *locals = m->analyzer_current->locals;
     for (int i = locals->count - 1; i >= 0; --i) {
         local_ident_t *local = locals->take[i];
@@ -857,7 +857,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         }
     }
 
-    // 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env_n[free_var_index] 进行改写
+    // - 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env[free_var_index] 进行改写
     symbol_type_t type = SYMBOL_VAR;
     int8_t free_var_index = analyzer_resolve_free(m->analyzer_current, &ident->literal, &type);
     if (free_var_index != -1) {
@@ -877,7 +877,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         return;
     }
 
-    // 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
+    // - 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
     char *temp = ident_with_module(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, temp);
@@ -886,14 +886,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         return;
     }
 
-    // 最后还要判断是不是 println/print/set 等 builtin 类型的不带前缀的全局符号
-    s = table_get(symbol_table, ident->literal);
-    if (s != NULL) {
-        // 不需要改写使用的名称了
-        return;
-    }
-
-    // import xxx as * 产生的全局符号
+    // - import xxx as * 产生的全局符号
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
         if (str_equal(import->as, "*")) {
@@ -903,6 +896,13 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
                 return;
             }
         }
+    }
+
+    // - templates 产生的全局符号
+    s = table_get(symbol_table, ident->literal);
+    if (s != NULL) {
+        // 不需要改写使用的名称了
+        return;
     }
 
     ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ident->literal);
