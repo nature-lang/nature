@@ -1,0 +1,7 @@
+fn encode() {
+    println('i am encode')
+}
+
+fn decode() {
+    println('i am decode')
+}

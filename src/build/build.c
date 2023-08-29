@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <assert.h>
+#include <dirent.h>
 
 static char *std_templates[] = {
         "builtin.temp.n",
@@ -316,19 +317,28 @@ static void build_temps(slice_t *templates) {
     }
 }
 
+/**
+ * std temp 自动注册
+ */
 static void build_std_temps() {
     slice_t *templates = slice_new();
 
-    // 都已经在 libruntime.a 中都实现了, 所以不需要做 impl 配置了
-    char *template_dir = path_join(NATURE_ROOT, "std/templates");
-    // 将 nature_root 中的 template 文件先都注册进来
-    for (int i = 0; i < sizeof(std_templates) / sizeof(std_templates[0]); ++i) {
-        char *name = std_templates[i];
-        char *source_path = path_join(template_dir, name);
-        assertf(file_exists(source_path), "template file=%s not found, please reinstall nature", source_path);
+    char *template_dir = path_join(NATURE_ROOT, "std/temps");
 
-        slice_push(templates, source_path);
+    DIR *dir = opendir(template_dir);
+    assertf(dir, "cannot found std dir %s", template_dir);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
+            char *name = entry->d_name;
+            char *temp_path = path_join(template_dir, name);
+
+            slice_push(templates, temp_path);
+        }
     }
+    closedir(dir);
+
 
     build_temps(templates);
 }

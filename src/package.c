@@ -1,26 +1,39 @@
 #include "package.h"
 #include "utils/slice.h"
+#include "utils/table.h"
 #include "build/config.h"
+#include <dirent.h>
 
-static char *std_packages[] = {
-        "std",
-        "syscall",
-        "strings",
-        "libc",
-        "time"
-        // 添加其他 std package
-};
+static table_t *std_package_table;
 
 bool is_std_package(char *package) {
-    // 遍历 std package 数组
-    for (size_t i = 0; i < sizeof(std_packages) / sizeof(std_packages[0]); i++) {
-        // 使用 strcmp 函数比较字符串是否相等
-        if (strcmp(package, std_packages[i]) == 0) {
-            return true; // 找到匹配的 std package
+    // 扫描 nature root 下的所有 文件，并注册到全局变量 std_packages 中
+    if (std_package_table) {
+        return table_exist(std_package_table, package);
+    }
+
+    std_package_table = table_new();
+
+    // 遍历 NATURE_ROOT 下的 std 目录下的所有文件夹
+    char *std_dir = path_join(NATURE_ROOT, "std");
+    DIR *dir = opendir(std_dir);
+    assertf(dir, "cannot found std dir %s", std_dir);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR) {
+            if (!str_equal(entry->d_name, ".") &&
+                !str_equal(entry->d_name, "..") &&
+                !str_equal(entry->d_name, "temps")) {
+                char *dirname = strdup(entry->d_name);
+                table_set(std_package_table, dirname, (void *) 1);
+            }
         }
     }
 
-    return false; // 没有找到匹配的 std package
+    closedir(dir);
+
+    return table_exist(std_package_table, package);
 }
 
 /**
