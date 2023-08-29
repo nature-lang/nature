@@ -339,7 +339,7 @@ static void _runtime_gc() {
     DEBUG_STACK();
     processor_t *_p = processor_get();
 
-    // 2. 遍历 gc roots
+    // 遍历 gc roots
     // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
     // - 初始化 gc 状态
     assertf(linked_empty(memory->grey_list), "grey list not cleanup");

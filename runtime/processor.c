@@ -60,15 +60,17 @@ void processor_dump_errort(n_errort *errort) {
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
-    char *temp = "stack backtrace:\n";
-    VOID write(STDOUT_FILENO, temp, strlen(temp));
-    for (int i = 1; i < errort->traces->length; ++i) {
-        n_trace_t trace = {};
-        list_access(errort->traces, i, &trace);
-        temp = dsprintf("%s\n\tat %s:%d:%d\n",
-                        (char *) trace.ident->data,
-                        (char *) trace.path->data,
-                        trace.line, trace.column);
+    if (errort->traces->length > 1) {
+        char *temp = "stack backtrace:\n";
         VOID write(STDOUT_FILENO, temp, strlen(temp));
+        for (int i = 1; i < errort->traces->length; ++i) {
+            n_trace_t trace = {};
+            list_access(errort->traces, i, &trace);
+            temp = dsprintf("%s\n\tat %s:%d:%d\n",
+                            (char *) trace.ident->data,
+                            (char *) trace.path->data,
+                            trace.line, trace.column);
+            VOID write(STDOUT_FILENO, temp, strlen(temp));
+        }
     }
 }

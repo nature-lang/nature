@@ -176,7 +176,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     cursor += 1;
-    if (iterator_rtype->kind == TYPE_LIST) {
+    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
         n_list_t *list = iterator;
         DEBUGF("[runtime.iterator_next_key] list=%p, kind is list, len=%lu, cap=%lu, data_base=%p, cursor=%ld",
                list,
@@ -225,7 +225,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     cursor += 1;
-    if (iterator_rtype->kind == TYPE_LIST) {
+    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
         n_list_t *list = iterator;
         assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
                 list, list->length, list->capacity, list->data);
@@ -271,7 +271,7 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     assertf(rtype_hash > 0, "rtype hash is empty");
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
-    if (iterator_rtype->kind == TYPE_LIST) {
+    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
         n_list_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
                iterator,

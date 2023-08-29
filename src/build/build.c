@@ -320,6 +320,8 @@ static void build_temps(toml_table_t *package_conf) {
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
         template_t *t = templates->take[i];
+        // TODO 按架构匹配
+
         if (t->impl) {
             assertf(ends_with(t->impl, ".a"), "only support .a file");
             slice_push(linker_libs, t->impl);
@@ -372,9 +374,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 continue;
             }
 
-            module_t *new_module = module_build(import,
-                                                import->full_path,
-                                                MODULE_TYPE_COMMON);
+            module_t *new_module = module_build(import, import->full_path, MODULE_TYPE_COMMON);
             linked_push(work_list, new_module);
             slice_push(modules, new_module);
             table_set(module_table, import->full_path, new_module);
@@ -473,6 +473,7 @@ void build(char *build_entry) {
         package_conf = package_parser(package_file);
     }
 
+    // TODO 这只能编译自己的 temps，编译不了 import 里面的 temps
     build_temps(package_conf);
 
     slice_t *modules = build_modules(package_conf);

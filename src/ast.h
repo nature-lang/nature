@@ -391,7 +391,7 @@ typedef struct {
 
 // foo.bar[key()], bar[]
 typedef struct {
-    ast_expr_t left;
+    ast_expr_t left; // string/list/map/set/tuple
     ast_expr_t key;
 } ast_access_t;
 

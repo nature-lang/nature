@@ -5,5 +5,10 @@ description = "parker all"
 license = "MIT"
 type = "bin" # lib or bin
 
+templates = [
+    { path = "temps/zlib.n", impl = "temps/libz_linux_amd64.a", os = "linux", arch = "amd64" }, # .a 和架构相关
+    { path = "temps/zlib.n", impl = "temps/libz_linux_arm64.a", os = "linux", arch = "arm64" }
+]
+
 [dependencies]
 

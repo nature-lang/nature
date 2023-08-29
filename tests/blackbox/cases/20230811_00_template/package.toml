@@ -6,7 +6,7 @@ license = "MIT"
 type = "bin" # lib or bin
 
 templates = [
-    { path = "temps/zlib.n", impl = "temps/libz.a" } # .a 和架构相关
+    { path = "temps/zlib.n", impl = "temps/libz.a", os = "linux", arch = "amd64" } # .a 和架构相关
 ]
 
 [dependencies]

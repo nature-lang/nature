@@ -408,6 +408,7 @@ static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
     if (!is_alloc_stack(t)) {
         target = indirect_addr_operand(m, t, target, 0);
     }
+    linear_has_error(m);
 
     linear_super_move(m, t, target, src);
 }
@@ -733,7 +734,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
 
     // 单值遍历清空下, 对于 list 调用 next value,
-    if (!ast->second && ast->iterate.type.kind == TYPE_LIST) {
+    if (!ast->second && (ast->iterate.type.kind == TYPE_LIST || ast->iterate.type.kind == TYPE_STRING)) {
         OP_PUSH(rt_call(
                 RT_CALL_ITERATOR_NEXT_VALUE,
                 cursor_operand,

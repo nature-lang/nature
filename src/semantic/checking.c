@@ -769,22 +769,26 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
         return type_map->value_type;
     }
 
-    if (left_type.kind == TYPE_LIST) {
+    if (left_type.kind == TYPE_LIST || left_type.kind == TYPE_STRING) {
         type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         // ast_access -> ast_list_access
         ast_list_access_t *list_access = NEW(ast_list_access_t);
 
-        type_list_t *type_list = left_type.list;
+        type_t element_type = type_kind_new(TYPE_UINT8);
+        if (left_type.kind == TYPE_LIST) {
+            element_type = left_type.list->element_type;
+        }
 
         // 参数改写
         list_access->left = access->left;
         list_access->index = access->key;
-        list_access->element_type = type_list->element_type;
+        list_access->element_type = element_type;
+
         expr->assert_type = AST_EXPR_LIST_ACCESS;
         expr->value = list_access;
 
-        return type_list->element_type;
+        return element_type;
     }
 
     if (left_type.kind == TYPE_ARRAY) {
@@ -1375,8 +1379,9 @@ static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
 static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 checking_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
-    CHECKING_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST,
-                     "for in iterate type must be map/list, actual=%s", type_kind_str[iterate_type.kind]);
+    CHECKING_ASSERTF(
+            iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_LIST || iterate_type.kind == TYPE_STRING,
+            "for in iterate type must be map/list/string, actual=%s", type_kind_str[iterate_type.kind]);
 
     rewrite_var_decl(m, &stmt->first);
 
@@ -1392,6 +1397,12 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *type_map = iterate_type.map;
         first->type = type_map->key_type;
+    } else if (iterate_type.kind == TYPE_STRING) {
+        if (!second) {
+            first->type = type_kind_new(TYPE_UINT8);
+        } else {
+            first->type = type_kind_new(TYPE_INT);
+        }
     } else {
         type_list_t *type_list = iterate_type.list;
 
@@ -1409,6 +1420,8 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         if (iterate_type.kind == TYPE_MAP) {
             type_map_t *map_decl = iterate_type.map;
             second->type = map_decl->value_type;
+        } else if (iterate_type.kind == TYPE_STRING) {
+            second->type = type_kind_new(TYPE_UINT8);
         } else {
             type_list_t *list_decl = iterate_type.list;
             second->type = list_decl->element_type;
