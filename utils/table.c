@@ -133,6 +133,7 @@ table_t *table_new() {
 }
 
 bool table_exist(table_t *t, char *key) {
+    assert(t);
     if (t->count == 0) {
         return false;
     }

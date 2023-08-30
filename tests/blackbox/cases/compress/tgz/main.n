@@ -1,9 +1,108 @@
 import syscall
+import std
 
-// 将 src 中的所有文件和文件夹压缩到 dst 目录中, 可能会抛出异常
-fn encode(string tgz_path, string source_path, string workdir) {
-    // 判断 source_path 是一个文件夹还是一个文件
-    println('i am encode')
+i32 ARCHIVE_EOF = 1
+i32 ARCHIVE_OK = 0
+
+i32 ARCHIV_RETRY = -10
+i32 ARCHIVE_WARN = -20
+
+i32 ARCHIVE_FAILED = -25
+i32 ARCHIVE_FATAL = -30
+
+fn encode(string workdir, string tgz_path, [string] sources) {
+    if workdir.len() == 0 {
+        throw 'workdir is empty'
+    }
+
+    if tgz_path.len() == 0 {
+        throw 'tgz_path is empty'
+    }
+
+    if sources.len() == 0 {
+        throw 'sources is empty'
+    }
+
+    // string old = syscall.getcwd()
+    // syscall.chdir(workdir)
+
+    // 初始化 archive
+    var a = archive_write_new()
+
+    // 添加 gzip 方式压缩
+    archive_write_add_filter_gzip(a)
+
+    // 归档格式为 ustar 格式
+    archive_write_set_format_ustar(a)
+
+    // 写入目标文件
+    archive_write_open_filename(a, tgz_path.raw())
+
+    var buf = [] as [u8;16384]
+
+    for source in sources {
+        var disk = archive_read_disk_new()
+        i32 r = archive_read_disk_open(disk, source.raw())
+        if r != 0 {
+            throw std.sprintf('read path %v failed', source)
+        }
+
+        for true {
+            var entry = archive_entry_new()
+
+            r = archive_read_next_header2(disk, entry)
+
+            if r == ARCHIVE_EOF {
+                break
+            }
+
+            if r != ARCHIVE_OK {
+                throw libc_string_new(archive_error_string(disk))
+            }
+
+            archive_read_disk_descend(disk)
+
+            // debug
+            std.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))
+
+            r = archive_write_header(a, entry)
+
+            // ignore error
+            // if r < ARCHIVE_OK {
+            //    throw libc_string_new(archive_error_string(a))
+            //}
+
+            if r == ARCHIVE_FATAL {
+                throw libc_string_new(archive_error_string(a))
+            }
+
+            // success
+            if r > ARCHIVE_FAILED {
+                cptr raw = archive_entry_sourcepath(entry)
+
+                // 目录也可以被打开，但是不能进行 read
+                var fd = syscall.open(libc_string_new(raw), syscall.O_RDONLY, 0666)
+                var (len, _) = try syscall.read(fd, buf)
+                for len > 0 {
+                     archive_write_data(a, buf.raw(), len)
+                     len = syscall.read(fd, buf)
+                }
+                syscall.close(fd)
+            }
+
+            archive_entry_free(entry)
+        }
+
+        // 当前 read 已经处理完成
+        archive_read_close(disk)
+        archive_read_free(disk) 
+    }
+    // 全局 write 写入完成
+    archive_write_close(a)
+    archive_write_free(a)
+
+    // 工作目录复原(defer 确实是很好用的一个功能)
+    // syscall.chdir(old)
 }
 
 fn decode(string tgz_path, string output_path) {
