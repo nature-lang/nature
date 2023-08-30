@@ -1,0 +1,11 @@
+import syscall
+
+// 将 src 中的所有文件和文件夹压缩到 dst 目录中, 可能会抛出异常
+fn encode(string tgz_path, string source_path, string workdir) {
+    // 判断 source_path 是一个文件夹还是一个文件
+    println('i am encode')
+}
+
+fn decode(string tgz_path, string output_path) {
+    println('i am decode')
+}

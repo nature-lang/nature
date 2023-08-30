@@ -1,0 +1,5 @@
+import compress.tgz
+
+tgz.encode()
+
+tgz.decode()

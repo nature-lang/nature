@@ -17,6 +17,7 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
     ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
+    import->use_links = true; // std 默认可以加载其中的 links
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
 }
@@ -41,9 +42,11 @@ static void analyzer_import_dep(module_t *m, char *package, ast_import_t *import
         exit(1);
     }
 
+
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
     ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
+    import->use_links = package_dep_bool_in(m->package_conf, package, "use_links");
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
 }

@@ -323,6 +323,7 @@ typedef struct {
     char *full_path;
     toml_table_t *package_conf;
     char *package_dir; // 这也是 import module 的 workdir
+    bool use_links;
 
     char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;

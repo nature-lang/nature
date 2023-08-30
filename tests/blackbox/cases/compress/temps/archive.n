@@ -1,0 +1,14 @@
+type archive_t = cptr
+type archive_entry_t = cptr
+
+fn archive_write_new():archive_t
+
+fn archive_write_add_filter_gzip(archive_t a)
+
+fn archive_write_set_format_ustar(archive_t a)
+
+fn archive_write_open_filename(archive_t a, cptr filename)
+
+
+
+

@@ -166,7 +166,6 @@ static void build_linker(slice_t *modules) {
     }
 
     // 将相关符号都加入来
-    slice_push(linker_libs, lib_file_path(LIBZ_FILE));
     slice_push(linker_libs, custom_link_object_path());
     slice_push(linker_libs, lib_file_path(LIB_START_FILE));
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
@@ -356,10 +355,26 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             .module_ident = FN_MAIN_NAME,
     };
 
-    slice_t *temps = package_templates(package_conf);
+    // main temps 注册
+    slice_t *temps = package_templates(main_import.package_dir, main_import.package_conf);
     if (temps && temps->count > 0) {
         build_temps(temps);
     }
+
+    // main [links] 注册
+    slice_t *links = package_links(main_import.package_dir, main_import.package_conf);
+    if (links && links->count > 0) {
+        for (int i = 0; i < links->count; ++i) {
+            char *link_path = links->take[i];
+            slice_push(linker_libs, link_path);
+        }
+    }
+
+    table_t *temps_handled = table_new();
+    table_t *links_handled = table_new();
+    table_set(temps_handled, main_import.package_dir, (void *) 1);
+    table_set(links_handled, main_import.package_dir, (void *) 1);
+
 
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
 
@@ -367,9 +382,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     linked_t *work_list = linked_new();
     linked_push(work_list, main);
-
-    table_t *temps_handled = table_new();
-
     while (work_list->count > 0) {
         module_t *m = linked_pop(work_list);
 
@@ -381,12 +393,24 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
             // 在 build module 之前，需要将当前 module 所在的 package.toml 中的 templates 中包含的全局符号注册到符号表中
             if (import->package_conf && !table_exist(temps_handled, import->package_dir)) {
-                temps = package_templates(import->package_conf);
+                temps = package_templates(import->package_dir, import->package_conf);
                 if (temps && temps->count > 0) {
                     build_temps(temps);
                 }
 
                 table_set(temps_handled, import->package_dir, import);
+            }
+
+            if (import->use_links && !table_exist(links_handled, import->package_dir)) {
+                links = package_links(import->package_dir, import->package_conf);
+                if (links && links->count > 0) {
+                    for (int i = 0; i < links->count; ++i) {
+                        char *link_path = links->take[i];
+                        slice_push(linker_libs, link_path);
+                    }
+                }
+
+                table_set(links_handled, import->package_dir, import);
             }
 
             // new module dep all imports handled
@@ -487,15 +511,6 @@ void build(char *build_entry) {
     char *package_file = path_join(WORKDIR, PACKAGE_TOML);
     if (file_exists(package_file)) {
         package_conf = package_parser(package_file);
-
-        // [links] 注册
-        slice_t *links = package_links(package_conf);
-        if (links) {
-            for (int i = 0; i < links->count; ++i) {
-                char *link_path = links->take[i];
-                slice_push(linker_libs, link_path);
-            }
-        }
     }
 
     build_std_temps();

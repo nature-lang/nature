@@ -47,7 +47,6 @@ static inline bool is_dep_package(toml_table_t *conf, char *package) {
     return toml_table_in(deps, package) != NULL;
 }
 
-
 static inline char *package_dep_str_in(toml_table_t *conf, char *package, char *key) {
     toml_table_t *deps = toml_table_in(conf, "dependencies");
     if (!deps) {
@@ -65,6 +64,25 @@ static inline char *package_dep_str_in(toml_table_t *conf, char *package, char *
     }
 
     return datum.u.s;
+}
+
+static inline bool package_dep_bool_in(toml_table_t *conf, char *package, char *key) {
+    toml_table_t *deps = toml_table_in(conf, "dependencies");
+    if (!deps) {
+        return false;
+    }
+
+    toml_table_t *dep = toml_table_in(deps, package);
+    if (!dep) {
+        return false;
+    }
+
+    toml_datum_t datum = toml_bool_in(dep, key);
+    if (!datum.ok) {
+        return false;
+    }
+
+    return datum.u.b;
 }
 
 static inline char *package_dep_git_dir(toml_table_t *conf, char *package) {
@@ -107,7 +125,7 @@ static inline char *package_dep_local_dir(toml_table_t *conf, char *package) {
  * @param conf
  * @return
  */
-static inline slice_t *package_templates(toml_table_t *conf) {
+static inline slice_t *package_templates(char *package_dir, toml_table_t *conf) {
     if (!conf) {
         return NULL;
     }
@@ -125,7 +143,15 @@ static inline slice_t *package_templates(toml_table_t *conf) {
             continue;
         }
         char *path = datum.u.s;
+
+        // 只能使用相对路径
+        assertf(path[0] != '.', "cannot use package %s temps path=%s begin with '.'", package_dir, path);
+        assertf(path[0] != '/', "cannot use package %s temps absolute path=%s", package_dir, path);
         assertf(ends_with(path, ".n"), "templates path must end with .n, index=%d, actual '%s'", i, path);
+
+        // 基于 package conf 所在目录生成绝对路劲
+        path = path_join(package_dir, path);
+
         assertf(file_exists(path), "templates path '%s' notfound", path);
 
         slice_push(result, path);
@@ -134,7 +160,7 @@ static inline slice_t *package_templates(toml_table_t *conf) {
     return result;
 }
 
-static slice_t *package_links(toml_table_t *package_conf) {
+static slice_t *package_links(char *package_dir, toml_table_t *package_conf) {
     if (!package_conf) {
         return NULL;
     }
@@ -154,6 +180,16 @@ static slice_t *package_links(toml_table_t *package_conf) {
             continue;
         }
         char *path = datum.u.s;
+
+        // 只能使用相对路径
+        assertf(path[0] != '.', "cannot use package %s temps path=%s begin with '.'", package_dir, path);
+        assertf(path[0] != '/', "cannot use package %s temps absolute path=%s", package_dir, path);
+
+        // 基于 package conf 所在目录生成绝对路劲
+        path = path_join(package_dir, path);
+
+        assertf(file_exists(path), "templates path '%s' notfound", path);
+
         slice_push(result, path);
     }
 
