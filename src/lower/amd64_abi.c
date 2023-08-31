@@ -294,11 +294,18 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
 /**
  * call test(arg1, aeg2, ...) -> result
+ * 使用到的寄存器需要手机起来，放到 call->second 保持 reg 的声明返回健康
  * @param c
  * @param op
  * @return
  */
-static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg_size) {
+static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg_size) {
+    slice_t *args = op->second->value; // exprs
+
+    // 进行 op 替换(重新set flag 即可)
+    slice_t *use_regs = slice_new(); // reg_t*
+
+
     linked_t *result = linked_new();
 
     amd64_class_t lo = AMD64_CLASS_NO;
@@ -436,6 +443,7 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
             // arg 是第一个内存地址，现在需要读取其 indirect addr
             lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(lo_kind), arg, 0);
             linked_push(result, lir_op_move(lo_reg_operand, src_operand));
+            slice_push(use_regs, lo_reg_operand->value);
 
             if (count == 2) {
                 lir_operand_t *hi_reg_operand;
@@ -456,6 +464,7 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
                 // arg 是第一个内存地址，现在需要读取其 indirect addr
                 src_operand = indirect_addr_operand(c->module, type_kind_new(hi_kind), arg, QWORD);
                 linked_push(result, lir_op_move(hi_reg_operand, src_operand));
+                slice_push(use_regs, hi_reg_operand->value);
             }
         } else {
             assertf(count == 1, "the normal type uses only one register");
@@ -472,8 +481,13 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
                 assert(false);
             }
             linked_push(result, lir_op_move(lo_reg_operand, arg));
+            slice_push(use_regs, lo_reg_operand->value);
         }
     }
+
+    // 重新生成 op->second
+    op->second = operand_new(LIR_OPERAND_REGS, use_regs);
+    set_operand_flag(op->second);
 
     return result;
 }
@@ -481,13 +495,11 @@ static linked_t *amd6_lower_args(closure_t *c, slice_t *args, int64_t *stack_arg
 linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
     lir_operand_t *call_result = op->output;
-    slice_t *args = op->second->value;
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
 
     if (!call_result) {
         int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
-        linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
-        op->second->value = slice_new();
+        linked_concat(result, amd64_lower_args(c, op, &stack_arg_size));
         linked_push(result, op); // call op
         if (stack_arg_size > 0) {
             linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
@@ -523,13 +535,12 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
         temp_var->type = type_ptrof(temp_var->type);
-        slice_insert(args, 0, temp_arg);
+        slice_insert(op->second->value, 0, temp_arg);
     }
 
     // -------------------- lower args ------------------------
     int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
-    linked_concat(result, amd6_lower_args(c, args, &stack_arg_size));
-    op->second->value = slice_new();
+    linked_concat(result, amd64_lower_args(c, op, &stack_arg_size));
 
     // 参数通过栈传递
     if (count == 0) {

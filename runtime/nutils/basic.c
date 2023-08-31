@@ -357,7 +357,10 @@ n_errort processor_remove_errort() {
 
 uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column) {
     processor_t *p = processor_get();
-    DEBUGF("[runtime.processor_has_errort] errort?  %d", p->errort->has)
+    DEBUGF("[runtime.processor_has_errort] errort? %d, fn_name: %s, line: %ld, column: %ld", p->errort->has, fn_name,
+           line, column)
+    assert(line >= 0 && line < 1000000);
+    assert(column >= 0 && column < 1000000);
 
     if (p->errort->has) {
         // 添加栈信息

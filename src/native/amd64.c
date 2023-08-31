@@ -603,7 +603,7 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     asm_operand_t *first = lir_operand_trans(c, op, op->first);
 
     // 2. 参数处理  lir_ope code->second; lower 之后参数都按实际处理过了
-    assert(((slice_t *) op->second->value)->count == 0);
+//    assert(((slice_t *) op->second->value)->count == 0);
     // lower 阶段已经处理过了
 
 //    // TODO 调用变长参数函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长参数函数？

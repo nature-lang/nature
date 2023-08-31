@@ -1,7 +1,4 @@
 import compress.tgz
 
-var tgz_path = 'mockdir.tar.gz'
-var sources = ['sub', 'nice.n', 'test.txt']
-var workdir = 'mockdir'
-
-tgz.encode(workdir, tgz_path, sources)
+tgz.decode('mockdir', 'mockdir.tar.gz')
+println('decode success')

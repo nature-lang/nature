@@ -63,10 +63,11 @@ void processor_dump_errort(n_errort *errort) {
     if (errort->traces->length > 1) {
         char *temp = "stack backtrace:\n";
         VOID write(STDOUT_FILENO, temp, strlen(temp));
-        for (int i = 1; i < errort->traces->length; ++i) {
+        for (int i = 0; i < errort->traces->length; ++i) {
             n_trace_t trace = {};
             list_access(errort->traces, i, &trace);
-            temp = dsprintf("%s\n\tat %s:%d:%d\n",
+            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n",
+                            i,
                             (char *) trace.ident->data,
                             (char *) trace.path->data,
                             trace.line, trace.column);

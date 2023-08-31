@@ -417,6 +417,8 @@ void interval_build(closure_t *c) {
                 for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
+
+                    // 所有的寄存器将在这里溢出
                     if (interval != NULL) {
                         interval_add_range(c, interval, op->id, op->id + 1);
                     }
@@ -435,7 +437,6 @@ void interval_build(closure_t *c) {
             // interval by output params, so it contain opcode phi
             // 可能存在变量定义却未使用的情况, 此时直接加 op->id, op->id_1 即可
             // ssa 完成后会拿一个 pass 进行不活跃的变量进行清除
-            // TODO 找不到 regs!
             slice_t *def_operands = extract_op_operands(op,
                                                         FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
                                                         FLAG(LIR_FLAG_DEF), false);
@@ -450,7 +451,13 @@ void interval_build(closure_t *c) {
                 if (interval->first_range == NULL) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
-                    interval->first_range->from = op->id; // 范围缩小，同样适用于固定寄存器
+                    // 范围缩写
+                    if (interval->first_range->from < op->id) {
+                        interval->first_range->from = op->id;
+                    } else {
+                        // 同样是仅定义未使用，或者重复定义(reg 情况)
+                        interval_add_range(c, interval, op->id, op->id + 1); // 进
+                    }
                 }
 
                 if (!interval->fixed) {
@@ -470,6 +477,7 @@ void interval_build(closure_t *c) {
                     if (!interval) {
                         continue;
                     }
+                    // 添加基于 block from 的 range
                     interval_add_range(c, interval, block_from, op->id);
 
                     if (!interval->fixed) {

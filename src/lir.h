@@ -503,19 +503,11 @@ static inline void set_operand_flag(lir_operand_t *operand) {
         return;
     }
 
-    if (operand->assert_type == LIR_OPERAND_REGS) {
-        slice_t *regs = operand->value;
-        for (int i = 0; i < regs->count; ++i) { // 这里都是 def flag
-            reg_t *reg = regs->take[i];
-            reg->flag |= FLAG(LIR_FLAG_DEF);
-        }
-        return;
-    }
-
     // 剩下的都是 use 直接提取出来即可
     slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
+        o->pos = operand->pos; // 继承父级的 pos
         set_operand_flag(o); // 符合嵌入的全部定义成 USE
     }
 }

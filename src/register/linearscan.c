@@ -112,9 +112,9 @@ static void linear_prehandle(closure_t *c) {
  * @param c
  */
 void reg_alloc(closure_t *c) {
-    linear_prehandle(c);
-
     interval_block_order(c);
+
+    linear_prehandle(c);
 
     debug_block_lir(c, "mark_number");
 

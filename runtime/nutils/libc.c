@@ -1,7 +1,13 @@
 #include "libc.h"
 #include "string.h"
+#include "runtime/processor.h"
 
 n_string_t *libc_string_new(n_cptr_t raw_string) {
+    if (!raw_string) {
+        rt_processor_attach_errort("raw string is empty");
+        return NULL;
+    }
+
     char *str = (char *) raw_string;
 
     return string_new(str, strlen(str));

@@ -232,8 +232,6 @@ bool scanner_skip_space(module_t *m) {
             }
             case '\n': { // 开启新的一行
                 scanner_guard_advance(m);
-                m->s_cursor.line++;
-                m->s_cursor.column = 1;
                 has_new = true;
                 break;
             }
@@ -293,6 +291,12 @@ char scanner_guard_advance(module_t *m) {
     m->s_cursor.guard++;
     m->s_cursor.length++;
     m->s_cursor.column++;
+
+    if (m->s_cursor.guard[-1] == '\n') {
+        m->s_cursor.line++;
+        m->s_cursor.column = 0;
+    }
+
     return m->s_cursor.guard[-1]; // [] 访问的为值
 }
 
@@ -374,7 +378,7 @@ token_e scanner_ident(char *word, int length) {
                         return scanner_rest(word, length, 2, 1, "y", TOKEN_ANY);
                     }
                     case 'r': {
-                        return scanner_rest(word, length, 2,1, "r", TOKEN_ARRAY);
+                        return scanner_rest(word, length, 2, 1, "r", TOKEN_ARRAY);
                     }
                 }
             }
