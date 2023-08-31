@@ -967,6 +967,46 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
         return type_kind_new(TYPE_VOID);
     }
 
+    if (str_equal(s->key, LIST_SLICE_KEY)) {
+        // n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t end);
+
+        CHECKING_ASSERTF(call->args->length == 2, "list slice param exception");
+        ast_expr_t *first_arg = ct_list_value(call->args, 0);
+        ast_expr_t *second_arg = ct_list_value(call->args, 1);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        checking_right_expr(m, first_arg, type_kind_new(TYPE_INT));
+        checking_right_expr(m, second_arg, type_kind_new(TYPE_INT));
+
+        // 由于会产生新的 list, 所以需要把 rtype_hash 丢进去
+        uint64_t rtype_hash = ct_find_rtype_hash(s->left.type);
+        ct_list_push(call->args, ast_int_expr(first_arg->line, first_arg->column, rtype_hash));
+        ct_list_push(call->args, &s->left); // list operand
+        ct_list_push(call->args, first_arg);
+        ct_list_push(call->args, second_arg);
+
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_SLICE);
+        checking_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型 type_fn
+        call->return_type = s->left.type;
+        return call->return_type;
+    }
+
+    if (str_equal(s->key, LIST_CONCAT_KEY)) {
+        CHECKING_ASSERTF(call->args->length == 1, "list concat param exception");
+
+        ast_expr_t *first_arg = ct_list_value(call->args, 0);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+
+        checking_right_expr(m, first_arg, s->left.type);
+        uint64_t rtype_hash = ct_find_rtype_hash(s->left.type);
+        ct_list_push(call->args, ast_int_expr(first_arg->line, first_arg->column, rtype_hash));
+        ct_list_push(call->args, &s->left); // list operand
+        ct_list_push(call->args, first_arg);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_CONCAT);
+        checking_left_expr(m, &call->left); // 对 ident 进行推导计算出其类型 type_fn
+        call->return_type = s->left.type;
+        return call->return_type;
+    }
+
     if (str_equal(s->key, BUILTIN_LEN_KEY)) {
         CHECKING_ASSERTF(call->args->length == 0, "list length not param");
 

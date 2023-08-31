@@ -28,3 +28,5 @@ fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
 
 // cptr = char*
 fn libc_string_new(cptr s):string
+
+fn libc_string_replace(string str, string old, string new_str):string

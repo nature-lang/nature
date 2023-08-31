@@ -1,0 +1,11 @@
+import std
+
+var a1 = std.path_join('/test/hello/world/', './nice.tar.gz')
+println(a1)
+var a2 = std.path_join('/test/hello/world', './nice.tar.gz')
+println(a2)
+var a3 = std.path_join('/test/hello/world', 'nice.tar.gz')
+println(a3)
+
+var s = libc_string_replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
+println(s)

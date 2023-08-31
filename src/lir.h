@@ -41,6 +41,9 @@
 #define BUILTIN_DEL_KEY "del" // list.del()
 
 #define LIST_PUSH_KEY "push"
+#define LIST_POP_KEY "pop"
+#define LIST_SLICE_KEY "slice"
+#define LIST_CONCAT_KEY "concat"
 #define LIST_LENGTH_KEY "len"
 #define LIST_CAPACITY_KEY "cap" // list.cap vs list.cap()
 
@@ -59,13 +62,13 @@
 #define RT_CALL_LIST_ACCESS "list_access"
 #define RT_CALL_LIST_ELEMENT_ADDR "list_element_addr"
 #define RT_CALL_LIST_ASSIGN "list_assign"
-#define RT_CALL_LIST_SPLICE "list_slice"
+#define RT_CALL_LIST_SLICE "list_slice"
 #define RT_CALL_LIST_RAW "list_raw"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
 #define RT_CALL_LIST_ITERATOR "list_iterator"
-#define RT_CALL_LIST_CONCAT "linked_concat"
+#define RT_CALL_LIST_CONCAT "list_concat"
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
 

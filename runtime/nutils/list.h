@@ -49,7 +49,7 @@ n_cptr_t list_iterator(n_list_t *l);
  * @param end
  * @return 返回切片后的数据
  */
-n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t end);
+n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t end);
 
 /**
  * 合并 a 和 b 两个 list 到一个新的 list 中

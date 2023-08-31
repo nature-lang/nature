@@ -6,9 +6,9 @@
 #include "src/lir.h"
 
 // -------- reg start -----------
-table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
-slice_t *regs;
-reg_t *alloc_regs[UINT8_MAX];
+extern table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
+extern slice_t *regs;
+extern reg_t *alloc_regs[UINT8_MAX];
 
 void amd64_reg_init();
 

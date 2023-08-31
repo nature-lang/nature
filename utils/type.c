@@ -1,5 +1,4 @@
 #include "type.h"
-#include "src/cross.h"
 #include "assertf.h"
 #include "helper.h"
 #include "bitmap.h"
@@ -792,7 +791,7 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
 }
 
 /**
- * 比较前都已经还原为原始类型了
+ * reduction 阶段就应该完成 cross left kind 的定位
  * @param left
  * @param right
  * @return
@@ -809,7 +808,7 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (cross_kind_trans(left.kind) != cross_kind_trans(right.kind)) {
+    if (left.kind != right.kind) {
         return false;
     }
 

@@ -23,3 +23,9 @@ char BUILD_OUTPUT_NAME[PATH_MAX] = "main";
 char SOURCE_PATH[PATH_MAX] = "";
 char BUILD_OUTPUT_DIR[PATH_MAX] = "";
 char BUILD_OUTPUT[PATH_MAX] = "";
+
+char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
+char *BASE_NS; // 最后一级目录的名称，也可以自定义
+char *TEMP_DIR; // 链接临时目录
+
+char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分

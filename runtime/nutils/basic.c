@@ -2,6 +2,7 @@
 #include "runtime/memory.h"
 #include "runtime/processor.h"
 #include "string.h"
+#include "list.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
     switch (_kind) { \

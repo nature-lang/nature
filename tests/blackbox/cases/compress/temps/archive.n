@@ -25,6 +25,8 @@ fn archive_write_header(archive_t a, archive_entry_t entry):i32
 
 fn archive_entry_pathname(archive_entry_t entry):cptr
 
+fn archive_entry_set_pathname(archive_entry_t entry, cptr pathname)
+
 fn archive_entry_sourcepath(archive_entry_t entry):cptr
 
 fn archive_entry_free(archive_entry_t entry)

@@ -1,6 +1,29 @@
 #include "symbol.h"
 #include "utils/helper.h"
 
+// 临时表，用来临时记录, key = ident, value is any
+table_t *can_import_symbol_table;
+
+/**
+ * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
+ * 1. 模块名 + fn名称
+ * 2. 作用域不同时允许同名的符号(局部变量)，也进行唯一性处理
+ *
+ * 符号的来源有
+ * 1. 局部变量与全局变量
+ * 2. 函数
+ * 3. 自定义 type, 例如 type foo = int
+ */
+table_t *symbol_table;
+
+slice_t *symbol_fn_list;
+
+slice_t *symbol_closure_list;
+
+slice_t *symbol_var_list;
+
+slice_t *symbol_typedef_list;
+
 static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     symbol_t *s = table_get(symbol_table, ident);
 

@@ -10,6 +10,10 @@ i32 ARCHIVE_WARN = -20
 i32 ARCHIVE_FAILED = -25
 i32 ARCHIVE_FATAL = -30
 
+/**
+ * @sources 是具体的文件夹或者目录名称，不支持按通配符号，如 * 或者 . 来匹配所有文件
+ * @workdir 表示具体的工作目录, 相关 sources 都是在 workdir 中被找到的
+ */
 fn encode(string workdir, string tgz_path, [string] sources) {
     if workdir.len() == 0 {
         throw 'workdir is empty'
@@ -42,7 +46,10 @@ fn encode(string workdir, string tgz_path, [string] sources) {
 
     for source in sources {
         var disk = archive_read_disk_new()
-        i32 r = archive_read_disk_open(disk, source.raw())
+
+        var full_path = std.path_join(workdir, source)
+
+        i32 r = archive_read_disk_open(disk, full_path.raw())
         if r != 0 {
             throw std.sprintf('read path %v failed', source)
         }
@@ -61,6 +68,12 @@ fn encode(string workdir, string tgz_path, [string] sources) {
             }
 
             archive_read_disk_descend(disk)
+
+            var pathname =  libc_string_new(archive_entry_pathname(entry))
+
+            // custom path name 从 path 中去掉 workdir!
+            var custom = libc_string_replace(pathname, workdir + '/', '')
+            archive_entry_set_pathname(entry, custom.raw())
 
             // debug
             std.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))

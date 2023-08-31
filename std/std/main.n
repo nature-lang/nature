@@ -1,5 +1,44 @@
 import std.util as *
 
+fn path_join(string dst, string src):string {
+    if src.len() == 0 {
+        return dst
+    }
+
+    if dst.len() == 0 {
+        return src
+    }
+
+    // src 是绝对路径时不进行拼接
+    if src[0] == ascii('/') {
+        return src
+    }
+
+    var dst_list = dst as [u8]
+    var len = dst_list.len()
+
+    // 去掉结尾的 /
+    if dst_list[len - 1] == ascii('/') {
+        dst_list = dst_list.slice(0, len - 1)
+    }
+
+    var result = ''
+
+    // ./
+    if src[0] == ascii('.') && src[1] == ascii('/') {
+        for int i = 1; i < src.len(); i+=1 {
+            dst_list.push(src[i])
+        }
+
+        result = dst_list as string
+    } else {
+        // ../ not handle, direct join
+        result = dst_list as string + '/' + src
+    }
+
+    return result
+}
+
 // 读取命令行参数
 fn args():[string] {
     return std_args()

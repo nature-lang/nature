@@ -1,0 +1,8 @@
+name = "strings"
+version = "0.1.0"
+authors = ["weiwenhao <1101140857@qq.com>"]
+description = "strings handle package"
+license = "MIT"
+type = "lib"
+
+[dependencies]

@@ -5,6 +5,8 @@
 #include "src/register/amd64.h"
 #include <assert.h>
 
+amd64_opcode_tree_node_t *opcode_tree_root;
+
 inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
                 {}
 };

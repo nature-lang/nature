@@ -90,3 +90,40 @@ char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, sli
 
     return full_path;
 }
+
+slice_t *package_links(char *package_dir, toml_table_t *package_conf) {
+    if (!package_conf) {
+        return NULL;
+    }
+    toml_table_t *link_table = toml_table_in(package_conf, "links");
+    if (!link_table) {
+        return NULL;
+    }
+    slice_t *result = slice_new();
+
+    char *os_arch = dsprintf("%s_%s", os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    for (int i = 0; i < toml_table_ntab(link_table); ++i) {
+        const char *key = toml_key_in(link_table, i);
+        toml_table_t *table = toml_table_in(link_table, key);
+
+        toml_datum_t datum = toml_string_in(table, os_arch);
+        if (!datum.ok) {
+            continue;
+        }
+        char *path = datum.u.s;
+
+        // 只能使用相对路径
+        assertf(path[0] != '.', "cannot use package %s temps path=%s begin with '.'", package_dir, path);
+        assertf(path[0] != '/', "cannot use package %s temps absolute path=%s", package_dir, path);
+
+        // 基于 package conf 所在目录生成绝对路劲
+        path = path_join(package_dir, path);
+
+        assertf(file_exists(path), "templates path '%s' notfound", path);
+
+        slice_push(result, path);
+    }
+
+    return result;
+}
+

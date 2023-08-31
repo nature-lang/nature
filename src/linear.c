@@ -925,6 +925,8 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
 static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_call_t *call = expr.value;
 
+    // 如果左侧值是 expr.select, 则进行如 list.select 这样的特殊处理
+
     // global ident call optimize to 'call symbol'
     lir_operand_t *base_target = global_fn_symbol(m, call->left);
     if (!base_target) {

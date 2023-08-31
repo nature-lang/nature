@@ -128,14 +128,25 @@ void list_push(n_list_t *l, void *ref) {
 }
 
 /**
- * 不影响原有的的 list，而是返回一个 slice 之后的新的 list
+ * 不支持负数索引
  * @param rtype_hash
  * @param l
- * @param start
- * @param end
+ * @param start 起始 index [start, end)
+ * @param end 结束 index
  * @return
  */
-n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t end) {
+n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t end) {
+    // start end 检测
+    if (start >= l->length ||
+        end > l->length ||
+        start < 0 ||
+        end < 0) {
+        char *msg = dsprintf("slice [%d:%d] out of list with length %d", start, end, l->length);
+        DEBUGF("[runtime.list_slice] has err %s", msg);
+        rt_processor_attach_errort(msg);
+        return 0;
+    }
+
     DEBUGF("[list_slice] rtype_hash=%lu, start=%lu, end=%lu", rtype_hash, start, end);
     uint64_t length = end - start;
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
@@ -149,22 +160,28 @@ n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, uint64_t start, uint64_t 
     return sliced_list;
 }
 
+/**
+ * 不影响原来的 list，而是返回一个新的 list
+ * @param rtype_hash
+ * @param a
+ * @param b
+ * @return
+ */
 n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
     DEBUGF("[list_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
     assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two lists are different");
     uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
     uint64_t length = a->length + b->length;
     n_list_t *merged = list_new(rtype_hash, a->element_rtype_hash, length, length);
+    DEBUGF("[list_concat] a->len=%lu, b->len=%lu", a->length, b->length);
 
     // 合并 a
-    void *dst = merged->data + (merged->length - 1 * element_size);
+    void *dst = merged->data;
     memmove(dst, a->data, a->length * element_size);
-    merged->length + a->length;
 
     // 合并 b
-    dst = merged->data + (merged->length - 1 * element_size);
+    dst = merged->data + (a->length * element_size);
     memmove(dst, b->data, b->length * element_size);
-    merged->length + a->length;
 
     return merged;
 }
@@ -201,3 +218,4 @@ n_cptr_t list_iterator(n_list_t *l) {
     DEBUGF("[list_iterator] addr=%lx", addr);
     return addr;
 }
+

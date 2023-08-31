@@ -1,6 +1,5 @@
 #include "test.h"
 #include <stdio.h>
-#include "utils/slice.h"
 
 
 static void test_slice_base() {

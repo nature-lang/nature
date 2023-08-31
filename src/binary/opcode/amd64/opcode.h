@@ -196,7 +196,7 @@ typedef struct {
     int count;
 } asm_keys_t;
 
-amd64_opcode_tree_node_t *opcode_tree_root; // key = root
+extern amd64_opcode_tree_node_t *opcode_tree_root; // key = root
 
 uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
 

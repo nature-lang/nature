@@ -13,7 +13,7 @@
 #define ENV_IDENT "env"
 
 // 临时表，用来临时记录, key = ident, value is any
-table_t *can_import_symbol_table;
+extern table_t *can_import_symbol_table;
 
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
@@ -25,15 +25,15 @@ table_t *can_import_symbol_table;
  * 2. 函数
  * 3. 自定义 type, 例如 type foo = int
  */
-table_t *symbol_table;
+extern table_t *symbol_table;
 
-slice_t *symbol_fn_list;
+extern slice_t *symbol_fn_list;
 
-slice_t *symbol_closure_list;
+extern slice_t *symbol_closure_list;
 
-slice_t *symbol_var_list;
+extern slice_t *symbol_var_list;
 
-slice_t *symbol_typedef_list;
+extern slice_t *symbol_typedef_list;
 
 typedef enum {
     SYMBOL_VAR,
