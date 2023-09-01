@@ -17,6 +17,8 @@ i32 ARCHIVE_EXTRACT_UNLINK = 0x0010
 i32 ARCHIVE_EXTRACT_ACL = 0x0020
 i32 ARCHIVE_EXTRACT_FFLAGS = 0x0040
 
+bool verbose = false
+
 
 /**
  * @sources 是具体的文件夹或者目录名称，不支持按通配符号，如 * 或者 . 来匹配所有文件
@@ -84,7 +86,9 @@ fn encode(string workdir, string tgz_path, [string] sources) {
             archive_entry_set_pathname(entry, custom.raw())
 
             // debug
-            std.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))
+            if verbose {
+                std.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))
+            }
 
             r = archive_write_header(a, entry)
 
@@ -140,6 +144,8 @@ fn decode(string workdir, string tgz_path) {
 
     // 添加 gzip 方式解压
     archive_read_support_filter_gzip(a)
+    // 添加 tar 格式解压
+    archive_read_support_format_tar(a)
 
     var r = archive_read_open_filename(a, tgz_path.raw(), 10240)
     if r > 0 {
@@ -158,9 +164,15 @@ fn decode(string workdir, string tgz_path) {
             throw libc_string_new(archive_error_string(a))
         }
 
-        std.printf('x %v', libc_string_new(archive_entry_pathname(entry)))
+        var old = libc_string_new(archive_entry_pathname(entry))
 
-        // TODO set entry pathname with workdir
+        // 链接 workdir
+        var custom = std.path_join(workdir, old)
+        archive_entry_set_pathname(entry, custom.raw())
+
+        if verbose {
+            std.printf('x %v\n', libc_string_new(archive_entry_pathname(entry)))
+        }
 
         r = archive_write_header(ext, entry)
         if r == ARCHIVE_OK {
