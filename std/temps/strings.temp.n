@@ -1,0 +1,1 @@
+fn strstr(cptr haystack, cptr needle):cptr

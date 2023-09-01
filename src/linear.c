@@ -1692,7 +1692,6 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-
     // bool 类型转换
     if (as_expr->target_type.kind == TYPE_BOOL) {
         OP_PUSH(rt_call(RT_CALL_BOOL_CASTING, target, 2, int_operand(input_rtype_hash), input));
@@ -1724,9 +1723,10 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    // list u8 -> string
+    // list u8 -> string push a '\0'
     if (is_list_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
-        OP_PUSH(lir_op_move(target, input));
+        // OP_PUSH(lir_op_move(target, input));
+        OP_PUSH(rt_call(RT_CALL_LIST_TO_STRING, target, 1, input));
         return target;
     }
 
@@ -1738,6 +1738,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         } else {
             OP_PUSH(lir_op_move(target, input));
         }
+        return target;
+    }
+
+    if (as_expr->src.type.kind == TYPE_CPTR) {
+        assertf(as_expr->target_type.kind == TYPE_UINT64, "cptr only support as uint/uint64");
+        OP_PUSH(lir_op_move(target, input));
         return target;
     }
 

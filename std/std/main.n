@@ -78,7 +78,7 @@ fn sprintf(string fmt, ...[any] args):string {
         }
 
         // c 不再 format 字符中，提示异常
-        if !{ascii('v')}.has(c) || arg_index == args.len() {
+        if !{ascii('v'), ascii('c')}.has(c) || arg_index == args.len() {
             result.push(ascii('%'))
             result.push(ascii('!'))
             result.push(c)
@@ -87,6 +87,11 @@ fn sprintf(string fmt, ...[any] args):string {
 
         any arg = args[arg_index]
         arg_index += 1
+
+        if c == ascii('c') {
+            result.push(arg as u8)
+            continue
+        }
 
         // 各种类型的值进行 string 处理
         if c == ascii('v') {

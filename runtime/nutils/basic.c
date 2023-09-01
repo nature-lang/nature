@@ -381,6 +381,16 @@ n_cptr_t cptr_casting(value_casting v) {
     return v.u64_value;
 }
 
+// 进行类型的转换，但是不进行值 copy, 这里需要处理一下 '\0' 问题
+n_string_t *list_to_string(n_list_t *list) {
+    DEBUGF("[runtime.list_to_string] list=%p, list->data=%p, list->length=%lu", list, list->data, list->length)
+
+    int a = '\0';
+    list_push(list, &a);
+    list->length -= 1; // length 不记录 '\0'
+    return list;
+}
+
 n_list_t *std_args() {
     // 初始化一个 string 类型的数组
     rtype_t *list_rtype = gc_rtype(TYPE_LIST, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);

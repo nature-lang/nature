@@ -137,17 +137,22 @@ void list_push(n_list_t *l, void *ref) {
  */
 n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t end) {
     // start end 检测
-    if (start >= l->length ||
-        end > l->length ||
-        start < 0 ||
-        end < 0) {
+    if (start >= l->length || end > l->length || start < 0 || end < 0) {
         char *msg = dsprintf("slice [%d:%d] out of list with length %d", start, end, l->length);
         DEBUGF("[runtime.list_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
-    DEBUGF("[list_slice] rtype_hash=%lu, start=%lu, end=%lu", rtype_hash, start, end);
+    if (start > end) {
+        char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
+        DEBUGF("[runtime.list_slice] has err %s", msg);
+        rt_processor_attach_errort(msg);
+        return 0;
+    }
+
+    DEBUGF("[list_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu",
+           rtype_hash, l->element_rtype_hash, start, end);
     uint64_t length = end - start;
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     n_list_t *sliced_list = list_new(rtype_hash, l->element_rtype_hash, length, length);

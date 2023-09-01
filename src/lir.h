@@ -94,6 +94,7 @@
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
 #define RT_CALL_CPTR_CASTING "cptr_casting"
+#define RT_CALL_LIST_TO_STRING "list_to_string"
 
 /**
  * 将 single 类型转换为 union 类型
