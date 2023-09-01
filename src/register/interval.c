@@ -351,7 +351,7 @@ void interval_build(closure_t *c) {
     // 倒序遍历顺序基本块基本块
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *block = c->blocks->take[i];
-        // 计算当前 block 中到 lives
+        // 计算当前 block 的 lives
         slice_t *lives = slice_new();
         table_t *live_table = table_new();
 
@@ -384,7 +384,7 @@ void interval_build(closure_t *c) {
         int block_from = OP(linked_first(block->operations))->id;
         int block_to = OP(block->last_op)->id + 2; // +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
 
-        // lives in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
+        // lives(out) in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
         // 后续遇到 def 时会缩减长度， add_range 会对 range 进行合并,上面的 +2 是合并的基础
         for (int k = 0; k < lives->count; ++k) {
             lir_var_t *var = lives->take[k];
@@ -601,7 +601,7 @@ bool interval_is_intersect(interval_t *current, interval_t *select) {
  * @param select
  * @return
  */
-int interval_next_intersect(interval_t *current, interval_t *select) {
+int interval_next_intersect(closure_t *c, interval_t *current, interval_t *select) {
     assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
     assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
@@ -609,6 +609,7 @@ int interval_next_intersect(interval_t *current, interval_t *select) {
 
     int64_t end = max(current->last_range->to, select->last_range->to);
 
+    int result = 0;
     int select_first_cover = -1;
     // first covert select position
     while (position < end) {
@@ -620,12 +621,14 @@ int interval_next_intersect(interval_t *current, interval_t *select) {
         }
 
         if (cover_current && cover_select) {
-            return position;
+            result = position;
+            goto END;
         }
 
         // 已经超过了 current 表示不可能存在交集，此时找到 select 在 current->last_to 之后都最后一个使用位置即可
         if (position > current->last_range->to && cover_select) {
-            return position;
+            result = position;
+            goto END;
         }
         position++;
     }
@@ -633,11 +636,44 @@ int interval_next_intersect(interval_t *current, interval_t *select) {
     assertf(select_first_cover >= 0, "select range not found any intersection from=%d to=%d",
             current->first_range->from,
             end);
+
+    result = select_first_cover;
+    // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
+
+    END:
+
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
     // current ---              ----
     // select         ---
-    return select_first_cover;
+    assert(result > 0);
+
+    // result 位于 label 时，这是一个不可用位置，所以增加其覆盖范围。便于更加正确的计算 reg 的生命周期
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *label_op = linked_first(b->operations)->value;
+
+        if (label_op->id < result) {
+            break;
+        }
+
+        // 计算交集的时候刻意避免了 before = label 的位置
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
+        if (label_op->id == result) {
+            assert(i > 0);
+            b = c->blocks->take[i - 1];
+
+
+            if (b->succs->count == 1) {
+                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+            } else {
+                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+                return OP(b->last_op)->id - 3;
+            }
+        }
+    }
+
+    return result;
 }
 
 /**
@@ -650,12 +686,25 @@ int interval_next_intersect(interval_t *current, interval_t *select) {
  */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
     // 如果 before 是对应的 op_id 是 label，则直接选择 before, before - 1 是一个无法使用的中间地带
-    for (int i = 0; i < c->blocks->count; ++i) {
+    // TODO 整体逻辑已经移动到了 interval_next_intersect
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *b = c->blocks->take[i];
         lir_op_t *label_op = linked_first(b->operations)->value;
+
         assert(label_op->id != before);
+        // 计算交集的时候刻意避免了 before = label 的位置
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
 //        if (label_op->id == before) {
-//            return before + 1; // 这会导致 first op 变更
+//            assert(i > 0);
+//            b = c->blocks->take[i - 1];
+//
+//
+//            if (b->succs->count == 1) {
+//                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+//            } else {
+//                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+//                return OP(b->last_op)->id - 3;
+//            }
 //        }
     }
 
@@ -1129,16 +1178,16 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         r->insert_block = from;
 
         lir_op_t *last_op = from->last_op->value;
-        if (lir_op_branch(last_op)) {
+        if (lir_op_branch(last_op)) { // 只有一个 succ, 说明只有一个 branch op, 直接插入到 branch op 之前即可
             // insert before last op
             r->insert_id = last_op->id - 1;
         } else {
-            r->insert_id = last_op->id + 1;
+            r->insert_id = last_op->id + 1; // ? 好像没有这种情况
         }
 
     } else {
         r->insert_block = to;
-        r->insert_id = OP(to->first_op)->id - 1;
+        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个之类之前
     }
 }
 

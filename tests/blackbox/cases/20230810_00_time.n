@@ -6,6 +6,11 @@ ptr<libc_tm_t> ti = localtime(&timestamp)
 // 修改成 strings.new() -- 基于重载解析多种类型的 new
 string tz = libc_string_new(ti.tm_zone)
 
+var hour = ti.tm_hour
+if tz == 'CST' {
+    hour -= 8
+}
+
 // 51 36 8 10 7 123 4 221 0 0 UTC
 println(ti.tm_sec, ti.tm_min, ti.tm_hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst)
 

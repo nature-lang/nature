@@ -391,7 +391,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
             continue;
         }
 
-        int pos = interval_next_intersect(a->current, select);
+        int pos = interval_next_intersect(c, a->current, select);
         assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
@@ -485,7 +485,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         }
         assert(a->current->index != select->index);
 
-        pos = interval_next_intersect(a->current, select);
+        pos = interval_next_intersect(c, a->current, select);
         assert(pos);
 
         if (select->fixed) {

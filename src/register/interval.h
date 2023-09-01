@@ -89,7 +89,7 @@ bool interval_covered(interval_t *i, int position, bool is_input);
  * @param select
  * @return
  */
-int interval_next_intersect(interval_t *current, interval_t *select);
+int interval_next_intersect(closure_t *c, interval_t *current, interval_t *select);
 
 bool interval_is_intersect(interval_t *current, interval_t *select);
 
