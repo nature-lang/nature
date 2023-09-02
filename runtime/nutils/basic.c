@@ -80,6 +80,16 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     }
 }
 
+n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
+    if (np == 0) {
+        DEBUGF("[null_pointer_assert] null pointer")
+        rt_processor_attach_errort("null pointer assert");
+        return 0;
+    }
+
+    return np;
+}
+
 /**
  * 如果断言异常则在 processor 中附加上错误
  * @param mu
@@ -379,16 +389,6 @@ uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t co
 
 n_cptr_t cptr_casting(value_casting v) {
     return v.u64_value;
-}
-
-// 进行类型的转换，但是不进行值 copy, 这里需要处理一下 '\0' 问题
-n_string_t *list_to_string(n_list_t *list) {
-    DEBUGF("[runtime.list_to_string] list=%p, list->data=%p, list->length=%lu", list, list->data, list->length)
-
-    int a = '\0';
-    list_push(list, &a);
-    list->length -= 1; // length 不记录 '\0'
-    return list;
 }
 
 n_list_t *std_args() {

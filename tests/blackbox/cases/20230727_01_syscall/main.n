@@ -12,7 +12,7 @@ syscall.seek(fd, 0, syscall.SEEK_SET)
 
 var buf = [] as [u8;20]
 var len = syscall.read(fd, buf)
-print('read len: ', len, ', data: ', buf as string, '\n')
+print('read len: ', len, ', data: ', libc_string_fit(buf as string), '\n')
 
 syscall.close(fd)
 syscall.unlink(file)

@@ -673,6 +673,8 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
             uint16_t element_align = element_size;
             if (p->type.kind == TYPE_STRUCT) {
                 element_align = p->type.struct_->align;
+            } else if (p->type.kind == TYPE_ARRAY) {
+                element_align = type_sizeof(p->type.array->element_type);
             }
 
             // 每个元素地址对齐

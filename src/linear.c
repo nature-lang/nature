@@ -64,8 +64,16 @@ static lir_operand_t *linear_zero_list(module_t *m, type_t t, lir_operand_t *tar
 
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
+    lir_operand_t *len_operand = int_operand(0);
+    if (t.list->len) {
+        len_operand = linear_expr(m, *((ast_expr_t *) t.list->len), NULL);
+    }
+    lir_operand_t *cap_operand = int_operand(0);
+    if (t.list->cap) {
+        cap_operand = linear_expr(m, *((ast_expr_t *) t.list->cap), NULL);
+    }
     OP_PUSH(rt_call(RT_CALL_LIST_NEW, target, 4,
-                    rtype_hash, element_index, int_operand(t.list->len), int_operand(t.list->cap)));
+                    rtype_hash, element_index, len_operand, cap_operand));
     return target;
 }
 
@@ -1645,13 +1653,22 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->src_operand.type.kind == TYPE_UNION);
+    assert(is_expr->src_operand.type.kind == TYPE_UNION || is_expr->src_operand.type.kind == TYPE_NULLABLE_POINTER);
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
     }
 
     lir_operand_t *operand = linear_expr(m, is_expr->src_operand, NULL);
+
+    if (is_expr->src_operand.type.kind == TYPE_NULLABLE_POINTER) {
+        // is target 只能只能判断是否为 null
+        LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
+                       "cptr<type> is only support null, example: cptr<int> is null");
+        OP_PUSH(lir_op_new(LIR_OPCODE_SEE, operand, int_operand(0), target));
+        return target;
+    }
+
     uint64_t target_rtype_hash = ct_find_rtype_hash(is_expr->target_type);
     OP_PUSH(rt_call(RT_CALL_UNION_IS, target, 2, operand, int_operand(target_rtype_hash)));
 
@@ -1717,6 +1734,20 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+    // nullable pointer assert
+    if (as_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
+        if (as_expr->target_type.kind == TYPE_CPTR) {
+            OP_PUSH(lir_op_move(target, input));
+            return target;
+        }
+
+        // 只能转换为 ptr<type>, checking 已经判断完成
+        assert(as_expr->target_type.kind == TYPE_POINTER);
+        OP_PUSH(rt_call(RT_CALL_NULL_POINTER_ASSERT, target, 1, input));
+        linear_has_error(m);
+        return target;
+    }
+
     // string -> list u8
     if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(as_expr->target_type)) {
         OP_PUSH(lir_op_move(target, input));
@@ -1725,8 +1756,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     // list u8 -> string push a '\0'
     if (is_list_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
-        // OP_PUSH(lir_op_move(target, input));
-        OP_PUSH(rt_call(RT_CALL_LIST_TO_STRING, target, 1, input));
+        OP_PUSH(lir_op_move(target, input));
         return target;
     }
 

@@ -266,6 +266,13 @@ static void analyzer_type(module_t *m, type_t *type) {
     if (type->kind == TYPE_LIST) {
         type_list_t *list = type->list;
         analyzer_type(m, &list->element_type);
+        if (list->len) {
+            analyzer_expr(m, list->len);
+        }
+
+        if (list->cap) {
+            analyzer_expr(m, list->cap);
+        }
         return;
     }
 
@@ -278,7 +285,7 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_POINTER) {
+    if (type->kind == TYPE_POINTER || type->kind == TYPE_NULLABLE_POINTER) {
         type_pointer_t *pointer = type->pointer;
         analyzer_type(m, &pointer->value_type);
         return;
@@ -1226,6 +1233,7 @@ static void analyzer_temp(module_t *m, slice_t *stmt_list) {
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
 
             slice_push(m->global_symbols, s);
+            slice_push(fn_list, fndef);
             continue;
         }
 
@@ -1241,8 +1249,13 @@ static void analyzer_temp(module_t *m, slice_t *stmt_list) {
         slice_push(m->ast_fndefs, fndef);
 
         analyzer_type(m, &fndef->return_type);
+
         // 函数形参处理
         for (int j = 0; j < fndef->params->length; ++j) {
+            analyzer_current_init(m, fndef);
+            m->analyzer_global = fndef;
+            fndef->is_local = false;
+
             ast_var_decl_t *param = ct_list_value(fndef->params, j);
 
             analyzer_type(m, &param->type);

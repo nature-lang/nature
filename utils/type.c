@@ -31,6 +31,24 @@ static rtype_t rtype_bool() {
     return rtype_base(TYPE_BOOL);
 }
 
+static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
+    rtype_t value_rtype = reflect_type(t->value_type);
+
+    char *str = fixed_sprintf("%d_%lu", TYPE_NULLABLE_POINTER, value_rtype.hash);
+    uint32_t hash = hash_string(str);
+    rtype_t rtype = {
+            .size =  sizeof(n_pointer_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_NULLABLE_POINTER,
+    };
+    // 计算 gc_bits
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
+
+    return rtype;
+}
+
 /**
  * hash = type_kind + element_type_hash
  * @param t
@@ -281,18 +299,25 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
     // 记录需要 gc 的 key 的
     for (int i = 0; i < t->properties->length; ++i) {
-        struct_property_t *property = ct_list_value(t->properties, i);
+        struct_property_t *p = ct_list_value(t->properties, i);
 
-        uint16_t item_size = type_sizeof(property->type);
+        uint16_t item_size = type_sizeof(p->type);
+
+        int item_align = item_size;
+        if (p->type.kind == TYPE_STRUCT) {
+            item_align = p->type.struct_->align;
+        } else if (p->type.kind == TYPE_ARRAY) {
+            item_align = type_sizeof(p->type.array->element_type);
+        }
 
         // 按 offset 对齐
-        offset = align_up(offset, item_size);
+        offset = align_up(offset, item_align);
 
         // 计算 element_rtype
-        rtype_t element_rtype = ct_reflect_type(property->type);
+        rtype_t element_rtype = ct_reflect_type(p->type);
 
         str = str_connect(str, itoa(element_rtype.hash));
-        bool need_gc = type_need_gc(property->type);
+        bool need_gc = type_need_gc(p->type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
@@ -301,7 +326,8 @@ static rtype_t rtype_struct(type_struct_t *t) {
         element_hash_list[i] = element_rtype.hash;
     }
 
-    uint64_t size = align_up(offset, t->align);
+    uint16_t size = align_up(offset, t->align);
+
     rtype_t rtype = {
             .size = size,
             .hash = hash_string(str),
@@ -408,19 +434,20 @@ uint8_t type_kind_sizeof(type_kind t) {
     }
 }
 
-static uint16_t type_struct_sizeof(type_struct_t *s) {
+uint16_t type_struct_sizeof(type_struct_t *s) {
+    assert(s->align > 0);
     uint16_t size = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        uint16_t element_size;
-        uint8_t element_align;
+        uint16_t element_size = type_sizeof(p->type);
+        uint8_t element_align = element_size;
         if (p->type.kind == TYPE_STRUCT) {
             element_size = type_struct_sizeof(p->type.struct_);
             element_align = p->type.struct_->align; // 一般是 struct 中的最大值
-        } else {
+        } else if (p->type.kind == TYPE_ARRAY) {
             element_size = type_sizeof(p->type);
-            element_align = element_size;
+            element_align = type_sizeof(p->type.array->element_type);
         }
 
         size = align_up(size, element_align);
@@ -461,6 +488,15 @@ type_t type_ptrof(type_t t) {
     return result;
 }
 
+type_t type_nullable_ptrof(type_t t) {
+    type_t result;
+    result.status = t.status;
+
+    result.kind = TYPE_NULLABLE_POINTER;
+    result.pointer = NEW(type_pointer_t);
+    result.pointer->value_type = t;
+    return result;
+}
 
 /**
  * 仅做 reflect, 不写入任何 table 中
@@ -479,6 +515,9 @@ rtype_t reflect_type(type_t t) {
             break;
         case TYPE_POINTER:
             rtype = rtype_pointer(t.pointer);
+            break;
+        case TYPE_NULLABLE_POINTER:
+            rtype = rtype_nullable_pointer(t.pointer);
             break;
         case TYPE_LIST:
             rtype = rtype_list(t.list);
@@ -619,20 +658,23 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        int item_align;
+        int element_size = type_sizeof(p->type);
+        int element_align;
         if (p->type.kind == TYPE_STRUCT) {
-            item_align = p->type.struct_->align;
+            element_align = p->type.struct_->align;
+        } else if (p->type.kind == TYPE_ARRAY) {
+            element_align = type_sizeof(p->type.array->element_type);
         } else {
-            item_align = type_sizeof(p->type);
+            element_align = element_size;
         }
 
-        offset = align_up(offset, item_align);
+        offset = align_up(offset, element_align);
         if (str_equal(p->key, key)) {
             // found
             return offset;
         }
 
-        offset += type_sizeof(p->type);;
+        offset += element_size;
     }
 
     assertf(false, "key=%s not found in struct", key);
@@ -928,7 +970,7 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_POINTER) {
+    if (left.kind == TYPE_POINTER || left.kind == TYPE_NULLABLE_POINTER) {
         type_t left_pointer = left.pointer->value_type;
         type_t right_pointer = right.pointer->value_type;
         return type_compare(left_pointer, right_pointer);

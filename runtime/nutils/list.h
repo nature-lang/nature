@@ -29,7 +29,7 @@ uint64_t list_length(n_list_t *l);
 
 uint64_t list_capacity(n_list_t *l);
 
-void *list_raw(n_list_t *l);
+void *list_ref(n_list_t *l);
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中

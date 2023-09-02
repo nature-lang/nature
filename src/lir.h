@@ -35,7 +35,7 @@
 
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
-#define BUILTIN_RAW_KEY "raw" // list.raw()
+#define BUILTIN_REF_KEY "ref" // list.ref()
 #define BUILTIN_LEN_KEY "len" // list.len()
 #define BUILTIN_CAP_KEY "cap" // list.cap()
 #define BUILTIN_DEL_KEY "del" // list.del()
@@ -63,7 +63,7 @@
 #define RT_CALL_LIST_ELEMENT_ADDR "list_element_addr"
 #define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SLICE "list_slice"
-#define RT_CALL_LIST_RAW "list_raw"
+#define RT_CALL_LIST_REF "list_ref"
 #define RT_CALL_LIST_LENGTH "list_length"
 #define RT_CALL_LIST_CAPACITY "list_capacity"
 #define RT_CALL_LIST_PUSH "list_push"
@@ -94,7 +94,6 @@
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
 #define RT_CALL_CPTR_CASTING "cptr_casting"
-#define RT_CALL_LIST_TO_STRING "list_to_string"
 
 /**
  * 将 single 类型转换为 union 类型
@@ -110,6 +109,8 @@
  * 将 union 断言为 single 类型
  */
 #define RT_CALL_UNION_ASSERT "union_assert"
+
+#define RT_CALL_NULL_POINTER_ASSERT "null_pointer_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 
@@ -135,7 +136,7 @@
 #define RT_CALL_STRING_GT "string_gt"
 #define RT_CALL_STRING_GE "string_ge"
 #define RT_CALL_STRING_LENGTH "string_length"
-#define RT_CALL_STRING_RAW "string_raw" // 默认引用传递
+#define RT_CALL_STRING_REF "string_ref" // 默认引用传递
 
 #define RT_CALL_MEMORY_MOVE "memory_move"
 

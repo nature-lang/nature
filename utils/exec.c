@@ -37,8 +37,7 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
     close(fd[1]);
 
-    char *buf = malloc(4096);
-    memset(buf, 0, 4096);
+    char *buf = mallocz(4096);
 
     full_read(fd[0], buf, 4096);
 

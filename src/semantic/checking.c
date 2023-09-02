@@ -408,6 +408,18 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
+    if (as_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
+        // 只能 as 为 ptr<t>
+        CHECKING_ASSERTF(target_type.kind == TYPE_POINTER || target_type.kind == TYPE_CPTR,
+                         "nullable pointer only support as ptr<type> or cptr");
+        if (target_type.kind == TYPE_POINTER) {
+            CHECKING_ASSERTF(type_compare(target_type.pointer->value_type, as_expr->src.type.pointer->value_type),
+                             "pointer value not equal");
+        }
+
+        return target_type;
+    }
+
     // 特殊类型转换 string -> list u8
     if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(target_type)) {
         return target_type;
@@ -454,7 +466,8 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    CHECKING_ASSERTF(t.kind == TYPE_UNION, "only any/union type can use 'is' keyword");
+    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NULLABLE_POINTER,
+                     "only any/union/cptr<type> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
 }
 
@@ -918,13 +931,13 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
         return type_kind_new(TYPE_INT);
     }
 
-    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
+    if (str_equal(s->key, BUILTIN_REF_KEY)) {
         CHECKING_ASSERTF(call->args->length == 0, "string c_string param failed");
 
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);
 
-        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_RAW);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_REF);
         checking_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_CPTR);
         return type_kind_new(TYPE_CPTR);
@@ -1035,14 +1048,14 @@ static type_t checking_list_select_call(module_t *m, ast_call_t *call) {
         return type_kind_new(TYPE_INT);
     }
 
-    if (str_equal(s->key, BUILTIN_RAW_KEY)) {
+    if (str_equal(s->key, BUILTIN_REF_KEY)) {
         CHECKING_ASSERTF(call->args->length == 0, "list length not param");
 
         // 改写
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left); // list operand
 
-        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_RAW);
+        call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_LIST_REF);
         checking_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_CPTR);
 
@@ -1250,7 +1263,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
-        // self 还原成 ptr<struct>
+        // 将 self 还原成 ptr<struct>
         if (select->left.type.kind == TYPE_SELF) {
             // 当前 fn body 中出现了 self.foo() 这样的 call 表达式，则说明当前 fn 必须定义在 struct 中
             ast_fndef_t *current = m->checking_current;
@@ -1868,6 +1881,8 @@ static type_t reduction_struct(module_t *m, type_t t) {
         int item_align;
         if (p->type.kind == TYPE_STRUCT) {
             item_align = p->type.struct_->align;
+        } else if (p->type.kind == TYPE_ARRAY) {
+            item_align = type_sizeof(p->type.array->element_type);
         } else {
             item_align = type_sizeof(p->type);
         }
@@ -1900,7 +1915,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
 }
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
-    if (t.kind == TYPE_POINTER) {
+    if (t.kind == TYPE_POINTER || t.kind == TYPE_NULLABLE_POINTER) {
         type_pointer_t *type_pointer = t.pointer;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         return t;
@@ -1909,6 +1924,13 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_LIST) {
         type_list_t *type_list = t.list;
         type_list->element_type = reduction_type(m, type_list->element_type);
+        if (type_list->len) {
+            ((ast_expr_t *) type_list->len)->type = checking_right_expr(m, type_list->len, type_kind_new(TYPE_INT64));
+        }
+
+        if (type_list->cap) {
+            ((ast_expr_t *) type_list->cap)->type = checking_right_expr(m, type_list->cap, type_kind_new(TYPE_INT64));
+        }
         return t;
     }
 

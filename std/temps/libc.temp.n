@@ -23,10 +23,19 @@ fn localtime(ptr<i64> timestamp):ptr<libc_tm_t>
 // 将 time_info_t 转换为时间戳
 fn mktime(ptr<libc_tm_t> time_info):i64
 
-// strftime(buf.raw(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
+// strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
 fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
+
+
+// --- 自定义在 runtime/libc 模块中的函数
 
 // cptr = char*
 fn libc_string_new(cptr s):string
 
 fn libc_string_replace(string str, string old, string new_str):string
+
+fn libc_string_fit(string str):string
+
+// 读取 errno 中的错误信息
+fn libc_strerror():string
+

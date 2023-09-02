@@ -102,7 +102,7 @@ uint64_t list_capacity(n_list_t *l) {
     return l->capacity;
 }
 
-void *list_raw(n_list_t *l) {
+void *list_ref(n_list_t *l) {
     return l->data;
 }
 

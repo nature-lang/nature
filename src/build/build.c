@@ -311,8 +311,6 @@ static void build_temps(slice_t *templates) {
         generic(m);
 
         pre_checking(m);
-
-        checking(m);
     }
 }
 

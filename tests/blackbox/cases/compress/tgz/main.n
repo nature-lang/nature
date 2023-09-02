@@ -1,5 +1,6 @@
 import syscall
 import std
+import std.path
 
 i32 ARCHIVE_EOF = 1
 i32 ARCHIVE_OK = 0
@@ -50,16 +51,16 @@ fn encode(string workdir, string tgz_path, [string] sources) {
     archive_write_set_format_ustar(a)
 
     // 写入目标文件
-    archive_write_open_filename(a, tgz_path.raw())
+    archive_write_open_filename(a, tgz_path.ref())
 
     var buf = [] as [u8;16384]
 
     for source in sources {
         var disk = archive_read_disk_new()
 
-        var full_path = std.path_join(workdir, source)
+        var full_path = path.join(workdir, source)
 
-        i32 r = archive_read_disk_open(disk, full_path.raw())
+        i32 r = archive_read_disk_open(disk, full_path.ref())
         if r != 0 {
             throw std.sprintf('read path %v failed', source)
         }
@@ -83,7 +84,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
 
             // custom path name 从 path 中去掉 workdir!
             var custom = libc_string_replace(pathname, workdir + '/', '')
-            archive_entry_set_pathname(entry, custom.raw())
+            archive_entry_set_pathname(entry, custom.ref())
 
             // debug
             if verbose {
@@ -109,7 +110,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
                 var fd = syscall.open(libc_string_new(raw), syscall.O_RDONLY, 0666)
                 var (len, _) = try syscall.read(fd, buf)
                 for len > 0 {
-                     archive_write_data(a, buf.raw(), len)
+                     archive_write_data(a, buf.ref(), len)
                      len = syscall.read(fd, buf)
                 }
                 syscall.close(fd)
@@ -147,7 +148,7 @@ fn decode(string workdir, string tgz_path) {
     // 添加 tar 格式解压
     archive_read_support_format_tar(a)
 
-    var r = archive_read_open_filename(a, tgz_path.raw(), 10240)
+    var r = archive_read_open_filename(a, tgz_path.ref(), 10240)
     if r > 0 {
         throw libc_string_new(archive_error_string(a))
     }
@@ -167,8 +168,8 @@ fn decode(string workdir, string tgz_path) {
         var old = libc_string_new(archive_entry_pathname(entry))
 
         // 链接 workdir
-        var custom = std.path_join(workdir, old)
-        archive_entry_set_pathname(entry, custom.raw())
+        var custom = path.join(workdir, old)
+        archive_entry_set_pathname(entry, custom.ref())
 
         if verbose {
             std.printf('x %v\n', libc_string_new(archive_entry_pathname(entry)))

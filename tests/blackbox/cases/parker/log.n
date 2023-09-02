@@ -19,7 +19,7 @@ fn logf(string fmt, ...[any] args) {
     }
     var msg = std.sprintf(fmt, ...args)
     var t = time.now()
-    std.printf('log=%v time=%v\n', msg, t.datetime())
+    std.printf('log: %v time: %v\n', msg, t.datetime())
 }
 
 fn assertf(bool cond, string fmt, ...[any] args) {
@@ -27,7 +27,7 @@ fn assertf(bool cond, string fmt, ...[any] args) {
         var msg = std.sprintf(fmt, ...args)
 
         var t = time.now()
-        std.printf("failed=%v time=%v\n", msg, t.datetime())
+        std.printf("failed: %v time:%v\n", msg, t.datetime())
 
         syscall.exit(1)
     }

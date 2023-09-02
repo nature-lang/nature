@@ -1,14 +1,14 @@
 import syscall
 import std
 
-// 基于 c 字符串创建一个 nature 字符串
-fn from_raw(cptr raw):string {
-    return libc_string_new(raw)
+// 基于 c 字符串创建一个 nature 字符串 
+fn from(cptr p):string {
+    return libc_string_new(p)
 }
 
-fn find_char(string s, u8 char, int offset):int {
+fn find_char(string s, u8 char, int after):int {
     for k,v in s {
-        if k < offset {
+        if k < after {
             continue
         }
 
@@ -19,7 +19,7 @@ fn find_char(string s, u8 char, int offset):int {
     return -1
 }
 
-fn find(string s, string sub, int offset):int {
+fn find(string s, string sub, int after):int {
     var n = sub.len()
 
     if (n == 0) {
@@ -27,17 +27,40 @@ fn find(string s, string sub, int offset):int {
     }
 
     if (n == 1) {
-        return find_char(s, sub[0], offset)
+        return find_char(s, sub[0], after)
     }
 
-    cptr base = s.raw()
-    cptr temp =  strstr((base as uint + offset as uint) as cptr, sub.raw())
+    cptr base = s.ref()
+    cptr temp =  strstr((base as uint + after as uint) as cptr, sub.ref())
     if temp == 0 {
         return -1
     }
 
     uint index = temp as uint - base as uint
     return index as int
+}
+
+fn reverse(string s):string {
+    var result = [] as [u8;s.len()]
+
+    for i,c in s {
+        result[s.len() - 1 - i] = c
+    }
+
+    return result as string
+}
+
+// 从右侧开始查找，且 index < before 的 sub str
+fn rfind(string s, string sub, int before):int {
+    s = reverse(s)
+    sub = reverse(sub)
+
+    var index = find(s, sub, s.len() - before)
+    if index == -1 {
+        return index
+    }
+
+    return s.len() - index - sub.len()
 }
 
 fn ends_with(string s, string ends):bool {

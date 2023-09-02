@@ -1,8 +1,11 @@
 import std
+import std.path
 import syscall
 import parker.log as * 
 import parker.util
+import compress.tgz
 
+tgz.verbose = true
 set_verbose()
 
 var args = std.args()
@@ -10,24 +13,47 @@ var args = std.args()
 // - 读取当前程序所在目录，找到 runner 程序
 assertf(args.len() > 1, 'args failed')
 
+// 可能是一个绝对路径也可以是一个相对 path
 var exec_path = args[0]
 logf('exec_path: %v', exec_path)
 
-var main_name = args[1]
-logf('main name: %v', main_name)
+var target_name = args[1]
 
 // - 读取当前工作目录, 确定需要打包的目录
 var workdir = syscall.getcwd()
+logf('workdir: %v, target: %v', workdir, target_name)
 
-var main_path = std.sprintf('%v/%v', workdir, main_name)
+var target_path = path.join(workdir, target_name)
 
 // - 检查文件是否存在
-assertf(util.file_exists(main_path), 'file=%v notfound', main_path)
+assertf(path.exists(target_path), 'file=%v notfound', target_path)
+logf('target_path: %v found', target_path)
 
-// - 压缩工作目录
+// - 遍历当前工作目录中的所有文件，进行压缩
+var sources = std.listdir(workdir)
 
+// - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
+var tgz_name = std.sprintf('%v.tar.gz', target_name)
 
+// .target_name 将 target_name 写入到文件 .target_name 中随压缩包一起压缩
+var fd = syscall.open('.target_name', syscall.O_RDWR | syscall.O_CREAT, 0755)
+syscall.write(fd, target_name as [u8])
+syscall.close(fd)
 
+tgz.encode(workdir, tgz_name, sources)
 
+logf('encode to tgz_name %v in %v', tgz_name, workdir)
 
+// 使用 st size 计算文件的大小
+var st = syscall.stat(tgz_name)
+var tgz_size = st.size // byte
+logf('tgz=%v, size=%v', tgz_name, tgz_size)
+
+// 如果存在环境变量 RUNNER_PATH, 则有限读取环境变量
+
+// append to runner (/usr/loca/)
+var runner_path = path.dir(exec_path)
+runner_path = path.join(runner_path, 'runner')
+assertf(path.exists(runner_path), 'runner file=%v notfound', runner_path)
+logf('runner_path=%v found', runner_path)
 

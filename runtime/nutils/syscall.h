@@ -9,6 +9,6 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp);
 
 n_u32_t syscall_wait(n_int_t pid);
 
-n_string_t *syscall_errno();
+n_string_t *libc_strerror();
 
 #endif //NATURE_SYSCALL_H

@@ -116,7 +116,7 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
-        || parser_is(m, TOKEN_CPTR)
+        //        || parser_is(m, TOKEN_CPTR)
         || parser_is(m, TOKEN_NULL)
         || parser_is(m, TOKEN_SELF)
         || parser_is(m, TOKEN_INT)
@@ -221,7 +221,24 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // ptr<int>
+    if (parser_consume(m, TOKEN_CPTR)) {
+        // cptr<type>
+        if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+            type_null_pointer_t *type_null_pointer = NEW(type_null_pointer_t);
+            type_null_pointer->value_type = parser_type(m);
+            parser_must(m, TOKEN_RIGHT_ANGLE);
+
+            result.kind = TYPE_NULLABLE_POINTER;
+            result.pointer = type_null_pointer;
+            return result;
+        }
+
+        result.kind = TYPE_CPTR;
+        result.value = NULL;
+        return result;
+    }
+
+    // ptr<type>
     if (parser_consume(m, TOKEN_POINTER)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_pointer_t *type_pointer = NEW(type_pointer_t);
@@ -238,17 +255,14 @@ static type_t parser_single_type(module_t *m) {
         type_list_t *type_list = NEW(type_list_t);
         type_list->element_type = parser_type(m);
 
+        // as [type;expr]
         if (parser_consume(m, TOKEN_SEMICOLON)) {
-            token_t *token = parser_must(m, TOKEN_LITERAL_INT);
-            int len = atoi(token->literal);
-            PARSER_ASSERTF(len > 0, "list len must > 0")
-            type_list->len = len;
+            type_list->len = expr_new_ptr(m);
+            *(ast_expr_t *) type_list->len = parser_expr(m);
 
             if (parser_consume(m, TOKEN_SEMICOLON)) {
-                token = parser_must(m, TOKEN_LITERAL_INT);
-                int cap = atoi(token->literal);
-                PARSER_ASSERTF(cap > 0, "list cap must > 0")
-                type_list->cap = cap;
+                type_list->cap = expr_new_ptr(m);
+                *(ast_expr_t *) type_list->cap = parser_expr(m);
             }
         }
 
@@ -949,6 +963,10 @@ static bool is_for_tradition_stmt(module_t *m) {
 static bool is_type_begin_stmt(module_t *m) {
     // var/any/int/float/bool/string
     if (parser_basic_token_type(m)) {
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_CPTR)) {
         return true;
     }
 

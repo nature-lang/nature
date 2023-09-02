@@ -31,7 +31,7 @@ fn list_slice(int rtype_hash, [t0] list, int start, int end):[t0]
 fn list_concat(int rtype_hash, [t0] a, [t0] b):[t0]
 
 // 引用 data 部分,且对于复合没有展开操作
-fn list_raw([t0] list):cptr
+fn list_ref([t0] list):cptr
 
 fn map_delete({t0:t0} map, ptr<t0> key)
 
@@ -52,4 +52,4 @@ fn runtime_malloc_bytes():i64
 // rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
 fn string_length(string s):int
 
-fn string_raw(string s):cptr
+fn string_ref(string s):cptr

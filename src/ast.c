@@ -63,8 +63,8 @@ static type_fn_t *type_fn_copy(module_t *m, type_fn_t *temp) {
 static type_list_t *type_list_copy(module_t *m, type_list_t *temp) {
     type_list_t *list = COPY_NEW(type_list_t, temp);
     list->element_type = type_copy(m, temp->element_type);
-    list->len = temp->len;
-    list->cap = temp->cap;
+    list->len = ast_expr_copy(m, temp->len);
+    list->cap = ast_expr_copy(m, temp->cap);
     return list;
 }
 
@@ -179,13 +179,16 @@ type_t type_copy(module_t *m, type_t temp) {
             type.union_ = type_union_copy(m, temp.union_);
             break;
         }
+        case TYPE_NULLABLE_POINTER:
         case TYPE_POINTER: {
             type.pointer = type_pointer_copy(m, temp.pointer);
             break;
         }
         default:
-            // Optionally handle other types or error out.
             break;
+            // Optionally handle other types or error out., int/uint/...
+//            assertf(false, "not support type kind=%s", type_kind_str[temp.kind]);
+//            exit(EXIT_FAILURE);
 
     }
     return type;

@@ -45,8 +45,8 @@ if tz == 'CST' {
 
 // format 测试(需要一个 100 空间的 buf)
 var buf = [] as [u8;100]
-strftime(buf.raw(), buf.len(), '%Y-%m-%d %H:%M:%S'.raw(), &tp)
-println('datetime:', buf as string)
+strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), &tp)
+println('datetime:', libc_string_fit(buf as string), '!!!')
 
 // time 库测试
 var t = time.now()

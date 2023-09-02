@@ -244,6 +244,10 @@ static inline char *file_read(char *path) {
 
 
 static inline int64_t align_up(int64_t n, int64_t align) {
+    if (align == 0) {
+        return n;
+    }
+
     return (n + align - 1) & (~(align - 1));
 }
 

@@ -5,7 +5,7 @@
 
 n_string_t *string_new(void *raw_string, uint64_t length);
 
-void *string_raw(n_string_t *n_str);
+void *string_ref(n_string_t *n_str);
 
 n_string_t *string_concat(n_string_t *a, n_string_t *b);
 

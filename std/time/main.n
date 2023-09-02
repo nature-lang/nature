@@ -1,4 +1,5 @@
 import syscall
+import strings
 
 type time_t = struct {
     i64 sec
@@ -8,9 +9,15 @@ type time_t = struct {
         return s.sec
     }
     var datetime = fn(self s):string {
-        var buf = [] as [u8;100]
-        strftime(buf.raw(), buf.len(), '%Y-%m-%d %H:%M:%S'.raw(), s.tm)
-        return buf as string
+        var buf = [] as [u8;80] // 必须预留足够大的空间,才能正常引用
+        strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), s.tm)
+
+        var result = buf as string
+
+        // length cut by '\0'
+        libc_string_fit(result)
+
+        return result
     }
 }
 
@@ -25,5 +32,3 @@ fn now():time_t {
 
     return t
 }
-
-

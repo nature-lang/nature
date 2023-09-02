@@ -5,7 +5,7 @@ var output = 'output.gz'
 
 var fd = syscall.open(input, syscall.O_RDONLY, 0666)
 
-var gzfile = gzopen(output.raw(), 'wb'.raw())
+var gzfile = gzopen(output.ref(), 'wb'.ref())
 
 var buf = [] as [u8;4096]
 for true {
@@ -15,7 +15,7 @@ for true {
     }
 
     // gzwrite
-    int write_len = gzwrite(gzfile, buf.raw(), len)
+    int write_len = gzwrite(gzfile, buf.ref(), len)
     if write_len != len {
         syscall.close(fd)
         gzclose(gzfile)

@@ -22,8 +22,8 @@ static void print_arg(n_union_t *arg) {
         }
 
         DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu",
-               s, s->length, s->data, strlen((char *) s->data));
-        VOID write(STDOUT_FILENO, s->data, strlen((char *) s->data));
+               s, s->length, s->data, s->length);
+        VOID write(STDOUT_FILENO, s->data, s->length);
         return;
     }
     if (arg->rtype->kind == TYPE_FLOAT64 || arg->rtype->kind == TYPE_FLOAT) {

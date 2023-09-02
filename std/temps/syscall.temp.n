@@ -7,4 +7,6 @@ fn syscall_wait(int pid):int
 
 fn syscall_getcwd():string
 
-fn syscall_errno():string
+fn getenv(cptr key):cptr
+
+fn setenv(cptr key, cptr value, i32 overwrite):i32

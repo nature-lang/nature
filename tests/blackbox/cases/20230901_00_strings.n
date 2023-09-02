@@ -62,3 +62,13 @@ println(s8)
 
 println(strings.replace('hello world hello nice to meet you hello', 'hello', 'hualaka'))
 println(strings.replace('hello world hello nice to meet you hello', 'hello', ''))
+
+// reverse
+var s9 = 'helloworld'
+println(s9, 'reverse: ', strings.reverse(s9))
+
+// rfind
+var s10 = 'helloxworldxworld'
+println('rfind wo:', strings.rfind(s10, 'wo', s10.len())) // 12 v
+println('rfind wo:', strings.rfind(s10, 'wo', 12)) // 6 v
+println('rfind wo:', strings.rfind(s10, 'r', s10.len())) // 6 v

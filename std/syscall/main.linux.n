@@ -487,15 +487,15 @@ fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
 }
 
 fn open(string filename, int flags, u32 perm):int {
-    return call6(SYS_OPEN, filename.raw(), flags as cptr, perm as cptr, 0, 0, 0)
+    return call6(SYS_OPEN, filename.ref(), flags as cptr, perm as cptr, 0, 0, 0)
 }
 
 fn read(int fd, [u8] buf):int {
-    return call6(SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
+    return call6(SYS_READ, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
 }
 
 fn write(int fd, [u8] buf):int {
-    return call6(SYS_WRITE, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
+    return call6(SYS_WRITE, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
 }
 
 fn close(int fd) {
@@ -503,7 +503,7 @@ fn close(int fd) {
 }
 
 fn unlink(string path) {
-    call6(SYS_UNLINK, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_UNLINK, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn seek(int fd, int offset, int whence):int {
@@ -548,7 +548,7 @@ fn stat(string filename):stat_t {
     }
 
     // as cptr 等同于 c 中的 *stat_t
-    call6(SYS_STAT, filename.raw(), st as cptr, 0, 0, 0, 0)
+    call6(SYS_STAT, filename.ref(), st as cptr, 0, 0, 0, 0)
 
     return st
 }
@@ -563,15 +563,15 @@ fn fstat(int fd):stat_t {
 }
 
 fn mkdir(string path, u32 mode) {
-    call6(SYS_MKDIR, path.raw(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_MKDIR, path.ref(), mode as cptr, 0, 0, 0, 0)
 }
 
 fn rmdir(string path) {
-    call6(SYS_RMDIR, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_RMDIR, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn rename(string oldpath, string newpath) {
-    call6(SYS_RENAME, oldpath.raw(), newpath.raw(), 0, 0, 0, 0)
+    call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
 }
 
 fn exit(int status) {
@@ -588,8 +588,8 @@ fn getppid():int {
 
 fn getcwd():string {
     var buf = [] as [u8;1024] // 1024 是 path max
-    call6(SYS_GETCWD, buf.raw(), buf.len() as cptr, 0, 0, 0, 0)
-    return buf as string
+    call6(SYS_GETCWD, buf.ref(), buf.len() as cptr, 0, 0, 0, 0)
+    return libc_string_fit(buf as string)
 }
 
 fn kill(int pid, int sig) {
@@ -601,19 +601,19 @@ fn wait(int pid):int {
 }
 
 fn chdir(string path) {
-    call6(SYS_CHDIR, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_CHDIR, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn chroot(string path) {
-    call6(SYS_CHROOT, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_CHROOT, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn chown(string path, u32 uid, u32 gid) {
-    call6(SYS_CHOWN, path.raw(), uid as cptr, gid as cptr, 0, 0, 0)
+    call6(SYS_CHOWN, path.ref(), uid as cptr, gid as cptr, 0, 0, 0)
 }
 
 fn chmod(string path, u32 mode) {
-    call6(SYS_CHMOD, path.raw(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_CHMOD, path.ref(), mode as cptr, 0, 0, 0, 0)
 }
 
 fn clock_gettime(int clock_id):timespec_t {
@@ -682,9 +682,25 @@ fn accept(int sockfd, ptr<sockaddr_t> addr):int {
 }
 
 fn recvfrom(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_RECVFROM, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_RECVFROM, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
 }
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_SENDTO, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
+}
+
+fn get_env(string key):string {
+    cptr ref = getenv(key.ref())
+    if ref == 0 {
+        return ''
+    }
+
+    return libc_string_new(ref)
+}
+
+fn set_env(string key, string value) {
+    var result = setenv(key.ref(), value.ref(), 1)
+    if result != 0 {
+        throw 'setenv error'
+    }
 }

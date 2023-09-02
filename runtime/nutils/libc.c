@@ -1,6 +1,13 @@
 #include "libc.h"
 #include "string.h"
+#include "errno.h"
 #include "runtime/processor.h"
+#include <dirent.h>
+
+typedef struct {
+    int64_t a;
+    uint8_t b[5];
+} st;
 
 n_string_t *libc_string_new(n_cptr_t raw_string) {
     if (!raw_string) {
@@ -19,4 +26,15 @@ n_string_t *libc_string_replace(n_string_t *str, n_string_t *old, n_string_t *ne
     n_string_t *result = libc_string_new((n_cptr_t) temp);
     free(temp);
     return result;
+}
+
+n_string_t *libc_strerror() {
+    char *msg = strerror(errno);
+    n_string_t *s = string_new(msg, strlen(msg));
+    return s;
+}
+
+n_string_t *libc_string_fit(n_string_t *str) {
+    str->length = strlen((char *) str->data);
+    return str;
 }

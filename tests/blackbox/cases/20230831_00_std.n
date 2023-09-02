@@ -1,11 +1,30 @@
 import std
+import std.path
 
-var a1 = std.path_join('/test/hello/world/', './nice.tar.gz')
+var a1 = path.join('/test/hello/world/', './nice.tar.gz')
 println(a1)
-var a2 = std.path_join('/test/hello/world', './nice.tar.gz')
+var a2 = path.join('/test/hello/world', './nice.tar.gz')
 println(a2)
-var a3 = std.path_join('/test/hello/world', 'nice.tar.gz')
+var a3 = path.join('/test/hello/world', 'nice.tar.gz')
 println(a3)
 
 var s = libc_string_replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
 println(s)
+
+// test list dir
+var list = std.listdir('mock')
+println("std.listdir of mock len", list.len())
+for v in list {
+    println('item: ', v)
+}
+
+// path.dir
+println(path.dir('/test/hello'))
+println(path.dir('/test/hello/'))
+println(path.dir('/test'))
+println(path.dir('test'))
+println(path.dir(''))
+
+println(path.exists('./mock'))
+println(path.exists('./mock/stat.txt'))
+println(path.exists('notfound.txt'))

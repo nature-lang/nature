@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 
 static void test_basic() {
+    WORKDIR = path_join(WORKDIR, "testdir");
     slice_t *args = slice_new();
     slice_push(args, &"node");
     slice_push(args, &"-v");
@@ -19,5 +20,5 @@ static void test_basic() {
 }
 
 int main(void) {
-    TEST_BASIC
+    TEST_WITH_PACKAGE
 }

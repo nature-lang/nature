@@ -19,7 +19,7 @@
  * @param envp
  */
 void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
-    char *p_str = string_raw(path);
+    char *p_str = string_ref(path);
 
     // args 转换成 char* 格式并给到 execve
     char **c_args = mallocz(sizeof(char *) * argv->length + 1);
@@ -30,7 +30,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
             return;
         }
 
-        char *c_arg = string_raw(arg);
+        char *c_arg = string_ref(arg);
         c_args[i] = c_arg;
     }
     c_args[argv->length] = NULL; // 最后一个元素为 NULL
@@ -44,7 +44,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
             return;
         }
 
-        char *c_env = string_raw(env);
+        char *c_env = string_ref(env);
         c_envs[i] = c_env;
     }
     c_envs[envp->length] = NULL;
@@ -80,8 +80,3 @@ n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_u
     return (n_int_t) result;
 }
 
-n_string_t *syscall_errno() {
-    char *msg = strerror(errno);
-    n_string_t *s = string_new(msg, strlen(msg));
-    return s;
-}

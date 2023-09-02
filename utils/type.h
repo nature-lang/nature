@@ -77,6 +77,10 @@ typedef enum {
     TYPE_FN,
     TYPE_POINTER,
 
+    // 允许为 null 的指针， cptr<type>, 可以通过 is 断言，可以通过 as 转换。
+    // 其是一种特殊的 union 类型，可以理解为 nullable<ptr<type>> 类型。
+    // 其在内存表现上与原来 type 的内存大小一致, 后续优化成统一的 nullable<type>
+    TYPE_NULLABLE_POINTER,
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
     TYPE_CPTR, // 表示通用的指针，通常用于与 c 进行交互, 关键字 cptr
@@ -139,6 +143,7 @@ static string type_kind_str[] = {
         [TYPE_TUPLE] = "tuple",
         [TYPE_FN] = "fn",
         [TYPE_POINTER] = "pointer", // ptr<type>
+        [TYPE_NULLABLE_POINTER] = "nullable_pointer", // ptr<type>
         [TYPE_CPTR] = "cptr", // p<type>
         [TYPE_NULL] = "null",
         [TYPE_SELF] = "self",
@@ -190,7 +195,7 @@ typedef struct type_string_t type_string_t; // 类型不完全声明
 
 typedef struct type_list_t type_list_t;
 
-typedef struct type_pointer_t type_pointer_t;
+typedef struct type_pointer_t type_pointer_t, type_null_pointer_t;
 
 typedef struct type_array_t type_array_t;
 
@@ -238,11 +243,11 @@ typedef struct type_t {
  */
 struct type_list_t {
     type_t element_type;
-    uint64_t len;
-    uint64_t cap;
+    void *len; // ast_expr*
+    void *cap; // ast_expr*
 };
 
-// p<value_type>
+// ptr<value_type>
 struct type_pointer_t {
     type_t value_type;
 };
@@ -346,7 +351,7 @@ typedef struct {
 } n_list_t, n_string_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
-typedef addr_t n_pointer_t;
+typedef addr_t n_pointer_t, n_nullable_pointer_t;
 
 typedef uint8_t n_bool_t;
 
@@ -435,6 +440,8 @@ uint64_t ct_find_rtype_hash(type_t t);
  */
 uint8_t type_kind_sizeof(type_kind t);
 
+uint16_t type_struct_sizeof(type_struct_t *s);
+
 /**
  * 类型在内存中(stack,array,var,reg) 中占用的大小,单位 byte
  * @param t
@@ -459,6 +466,8 @@ rtype_t rtype_array(type_array_t *t);
 bool type_need_gc(type_t t);
 
 type_t type_ptrof(type_t t);
+
+type_t type_nullable_ptrof(type_t t);
 
 type_param_t *type_formal_new(char *literal);
 
@@ -639,7 +648,8 @@ static inline bool is_reduction_type(type_t t) {
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET
            || t.kind == TYPE_FN
-           || t.kind == TYPE_POINTER;
+           || t.kind == TYPE_POINTER
+           || t.kind == TYPE_NULLABLE_POINTER;
 }
 
 static inline bool is_qword_int(type_kind kind) {
