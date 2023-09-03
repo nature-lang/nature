@@ -7,6 +7,17 @@ import (
 	"runtime"
 )
 
+func assertf(cond bool, format string, a ...any) {
+	if cond {
+		return
+	}
+	_, file, line, _ := runtime.Caller(1)
+	fmt.Printf("panic in %s:%d ", filepath.Base(file), line)
+	fmt.Printf(format, a...)
+	fmt.Println()
+	os.Exit(1)
+}
+
 func throw(format string, a ...any) {
 	_, file, line, _ := runtime.Caller(1)
 	fmt.Printf("panic in %s:%d ", filepath.Base(file), line)

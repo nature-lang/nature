@@ -11,6 +11,8 @@
 n_string_t *string_new(void *raw_string, uint64_t length) {
     DEBUGF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
 
+    runtime_judge_gc();
+
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
     uint64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
@@ -61,6 +63,8 @@ void *string_ref(n_string_t *n_str) {
 
 n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
+
+    runtime_judge_gc();
 
     uint64_t length = a->length + b->length;
     uint64_t capacity = length + 1;

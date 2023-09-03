@@ -498,8 +498,11 @@ fn read(int fd, cptr buf, int len):int {
     return call6(SYS_READ, fd as cptr, buf, len as cptr, 0, 0, 0)
 }
 
-fn write(int fd, [u8] buf):int {
-    return call6(SYS_WRITE, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
+fn write(int fd, [u8] buf, int len):int {
+    if buf.len() < len {
+        throw 'buf len less than expect len'
+    }
+    return call6(SYS_WRITE, fd as cptr, buf.ref(), len as cptr, 0, 0, 0)
 }
 
 fn close(int fd) {

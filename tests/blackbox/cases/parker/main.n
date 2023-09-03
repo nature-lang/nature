@@ -30,15 +30,32 @@ var target_path = path.join(workdir, target_name)
 assertf(path.exists(target_path), 'file=%v notfound', target_path)
 logf('target_path: %v found', target_path)
 
-// - 遍历当前工作目录中的所有文件，进行压缩
-var sources = std.listdir(workdir)
-
 // - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
 var tgz_name = std.sprintf('%v.tar.gz', target_name)
 
+// new target_name + 'd' fd, node -> noded
+var output_name = std.sprintf('%vd', target_name)
+
+
+// - 遍历当前工作目录中的所有文件，进行压缩
+var sources = std.listdir(workdir)
+
+[string] temp = []
+
+// 跳过, target_name + .tar_gz and target_name + d
+for s in sources {
+    if {tgz_name, output_name}.has(s) {
+        logf('tgz encode source %v will continue', s)
+        continue
+    }
+
+    temp.push(s)
+}
+sources = temp
+
 // .target_name 将 target_name 写入到文件 .target_name 中随压缩包一起压缩
 var fd = syscall.open('.target_name', syscall.O_RDWR | syscall.O_CREAT, 0755)
-syscall.write(fd, target_name as [u8])
+syscall.write(fd, target_name as [u8], target_name.len())
 syscall.close(fd)
 
 tgz.encode(workdir, tgz_name, sources)
@@ -72,9 +89,27 @@ var st = syscall.stat(tgz_name)
 var tgz_size = st.size // byte
 logf('tgz %v size=%v', tgz_name, tgz_size)
 
-// new target_name + 'd' fd
+// open and create
+var output_fd = syscall.open(output_name, syscall.O_CREAT | syscall.O_RDWR | syscall.O_TRUNC, 0755)
 
 // - append runner
+var runner_fd = syscall.open(runner_path, syscall.O_RDONLY, 0666)
+
+var buf = [] as [u8;102400]
+var readsum = 0
+for true {
+    var len = syscall.read(runner_fd, buf)
+    readsum += len
+    if len == 0 {
+        logf('read runner success, len: %v byte', readsum)
+        break
+    }
+
+    syscall.write(output_fd, buf, len)
+
+    // logf('read item len: %v and write to output file', len)
+}
+logf('write runner to output success, size=%v', readsum)
 
 // - append tgz
 

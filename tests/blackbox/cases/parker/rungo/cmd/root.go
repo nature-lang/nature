@@ -28,7 +28,7 @@ var exampleCmd = &cobra.Command{
 var rootCmd = &cobra.Command{
 	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
-		// 直接 run
+		src.Run()
 	},
 }
 

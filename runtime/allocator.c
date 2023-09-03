@@ -485,11 +485,16 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
+    DEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
+           span->pages_count);
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
+        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
+               (void *) arena->base, page_index)
+
         arena->spans[page_index] = NULL;
         page_index += 1;
     }
@@ -884,7 +889,7 @@ mspan_t *span_of(uint64_t addr) {
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
-    assertf(span, "not found span by page_index: %d", page_index);
+    assertf(span, "not found span by page_index: %d, arena->base: %p", page_index, arena->base);
     return span;
 }
 
@@ -901,21 +906,35 @@ addr_t mstack_new(uint64_t size) {
  * @param rtype 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
  * @return
  */
+void *runtime_gc_malloc(uint64_t size, rtype_t *rtype) {
+    runtime_judge_gc();
+
+    return runtime_malloc(size, rtype);
+}
+
+void runtime_judge_gc() {
+    if (allocated_bytes > next_gc_bytes) {
+        uint64_t before_bytes = allocated_bytes;
+        DEBUGF("[runtime_judge_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+               next_gc_bytes);
+        runtime_gc();
+        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
+        DEBUGF("[runtime_judge_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
+               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
+    } else {
+        DEBUGF("[runtime_judge_gc] no need for gc")
+    }
+}
+
+/**
+ * 不会触发 gc
+ * @return
+ */
 void *runtime_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
     } else {
         DEBUGF("[runtime_malloc] size=%ld, type is null", size);
-    }
-
-    if (allocated_bytes > next_gc_bytes) {
-        uint64_t before_bytes = allocated_bytes;
-        DEBUGF("[runtime_malloc.auto_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
-               next_gc_bytes);
-        runtime_gc();
-        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
-        DEBUGF("[runtime_malloc.auto_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
-               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
     }
 
 
@@ -958,6 +977,6 @@ uint64_t runtime_malloc_bytes() {
 
 void *gc_malloc(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
-    return runtime_malloc(rtype->size, rtype);
+    return runtime_gc_malloc(rtype->size, rtype);
 }
 

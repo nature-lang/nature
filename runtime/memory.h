@@ -22,7 +22,7 @@
 
 #define MSTACK_SIZE (8 * 1024 * 1024) // 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
-#define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个page
+#define  ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个 page
 
 #define ARENA_BITS_COUNT 2097152 // 1byte = 8bit 可以索引 4*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
 
@@ -168,7 +168,9 @@ typedef struct {
     // 当 obj 是一个大对象时这很有效
     uint8_t bits[ARENA_BITS_COUNT];
 
+    // 每个 arena 包含 64M 内存，被划分成 8192个 page, 每个 page 8K
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
+    // 可以是一个 span 存在于多个 page_index 中, 一个 span 的最小内存是 8k, 所以一个 page 最多只能存储一个 span.
     mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8k, 所以 pages 的数量是固定的
 
     addr_t base;
@@ -345,6 +347,16 @@ void runtime_gc();
 
 /**
  * 分配入口
+ * @param size
+ * @param rtype
+ * @return
+ */
+void *runtime_gc_malloc(uint64_t size, rtype_t *rtype);
+
+void runtime_judge_gc();
+
+/**
+ * 不会进行 gc
  * @param size
  * @param rtype
  * @return

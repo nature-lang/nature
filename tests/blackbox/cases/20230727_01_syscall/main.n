@@ -4,7 +4,7 @@ var file = 'mock/write.txt'
 
 var fd = syscall.open(file, syscall.O_CREAT | syscall.O_RDWR, 0666)
 
-var write_bytes = syscall.write(fd, 'hello world' as [u8])
+var write_bytes = syscall.write(fd, 'hello world' as [u8], 11)
 
 print('write bytes: ', write_bytes, '\n')
 

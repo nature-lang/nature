@@ -1,3 +1,5 @@
+type t1 = gen any
+
 fn std_args():[string]
 
 fn htons(u16 host):u16
@@ -35,6 +37,9 @@ fn libc_string_new(cptr s):string
 fn libc_string_replace(string str, string old, string new_str):string
 
 fn libc_string_fit(string str):string
+
+// 类似与 fit, 强制设定 list 的 len, 当前的 len 需要大于设置的值
+fn libc_list_fit_len([t1] list, int new_len)
 
 // 读取 errno 中的错误信息
 fn libc_strerror():string

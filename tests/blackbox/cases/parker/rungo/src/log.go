@@ -11,7 +11,7 @@ var (
 	Verbose = false
 )
 
-func log(format string, a ...any) {
+func logf(format string, a ...any) {
 	if !Verbose {
 		return
 	}

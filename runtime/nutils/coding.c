@@ -121,7 +121,7 @@ static void *list_encode(n_list_t *l, uint64_t rtype_hash) {
 
     autobuf_t *buf = autobuf_new(l->length * element_size);
     list_spread_to_buf(l, rtype_hash, buf);
-    void *p = runtime_malloc(buf->len, NULL);
+    void *p = runtime_gc_malloc(buf->len, NULL);
     memmove(p, buf->data, buf->len);
     autobuf_free(buf);
 
@@ -146,7 +146,7 @@ static void *struct_encode(n_struct_t *s, uint64_t struct_rtype_hash) {
     assertf(buf->len >= rtype->size, "buf->len: %lu, rtype->size: %lu", buf->len, rtype->size);
     DEBUGF("[runtime.struct_encode] buf->len: %lu", buf->len);
 
-    void *p = runtime_malloc(buf->len, NULL);
+    void *p = runtime_gc_malloc(buf->len, NULL);
     memmove(p, buf->data, buf->len);
     autobuf_free(buf);
 
