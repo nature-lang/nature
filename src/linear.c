@@ -1651,17 +1651,30 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
     return target;
 }
 
-static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->src_operand.type.kind == TYPE_UNION || is_expr->src_operand.type.kind == TYPE_NULLABLE_POINTER);
+static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_sizeof_expr_t *ast = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
     }
 
-    lir_operand_t *operand = linear_expr(m, is_expr->src_operand, NULL);
+    uint16_t size = type_sizeof(ast->target_type);
 
-    if (is_expr->src_operand.type.kind == TYPE_NULLABLE_POINTER) {
+    OP_PUSH(lir_op_move(target, int_operand(size)));
+    return target;
+}
+
+static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_is_expr_t *is_expr = expr.value;
+    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_NULLABLE_POINTER);
+
+    if (!target) {
+        target = temp_var_operand_with_stack(m, expr.type);
+    }
+
+    lir_operand_t *operand = linear_expr(m, is_expr->src, NULL);
+
+    if (is_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
         // is target 只能只能判断是否为 null
         LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
                        "cptr<type> is only support null, example: cptr<int> is null");
@@ -2123,6 +2136,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
+        [AST_EXPR_SIZEOF] = linear_sizeof_expr,
         [AST_EXPR_NEW] = linear_new_expr,
 };
 

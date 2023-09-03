@@ -458,10 +458,14 @@ token_e scanner_ident(char *word, int length) {
             }
         case 'p':
             return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
-        case 's': { // self,string,struct
-            if (word[1] == 'e') {
-                return scanner_rest(word, length, 2, 2, "lf", TOKEN_SELF);
+        case 's': { // self,string,struct,sizeof
+            switch (word[1]) {
+                case 'e':
+                    return scanner_rest(word, length, 2, 2, "lf", TOKEN_SELF);
+                case 'i':
+                    return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
             }
+
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
                 switch (word[3]) {
                     case 'i':
@@ -627,18 +631,40 @@ bool scanner_at_stmt_end(module_t *m) {
         return false;
     }
 
-    // 前置非空白字符
-    if (m->s_cursor.space_prev != ','
-        && m->s_cursor.space_prev != '('
-        && m->s_cursor.space_prev != '['
-        && m->s_cursor.space_prev != '='
-        && m->s_cursor.space_prev != '{'
-//           && m->s_cursor.space_next != '{'
-            ) {
-        return true;
+    // var b = (
+    if (m->s_cursor.space_prev == '(') {
+        return false;
     }
 
-    return false;
+    // var a = [
+    if (m->s_cursor.space_prev == '[') {
+        return false;
+    }
+
+    // if xxx {
+    if (m->s_cursor.space_prev == '{') {
+        return false;
+    }
+
+    if (m->s_cursor.space_prev == '=') {
+        return false;
+    }
+
+    if (m->s_cursor.space_prev == ',') {
+        return false;
+    }
+
+    // var a = true ||
+    if (m->s_cursor.space_prev == '|') {
+        return false;
+    }
+
+    // var a = true &&
+    if (m->s_cursor.space_prev == '|') {
+        return false;
+    }
+
+    return true;
 }
 
 bool scanner_is_space(char c) {

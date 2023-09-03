@@ -67,7 +67,7 @@ typedef enum {
     TOKEN_THROW, TOKEN_TRY, TOKEN_CATCH, TOKEN_SELF, TOKEN_CONTINUE, TOKEN_BREAK,
     TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR, TOKEN_LET,
-    TOKEN_IS, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
+    TOKEN_IS, TOKEN_SIZEOF, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
     TOKEN_FN,
     TOKEN_IMPORT, TOKEN_RETURN,
     TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
@@ -168,8 +168,11 @@ static string token_str[] = {
         [TOKEN_GEN] = "gen",
 
         [TOKEN_IMPORT] = "import",
+
+        // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
+        [TOKEN_SIZEOF] = "sizeof",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",

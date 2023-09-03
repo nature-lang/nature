@@ -235,9 +235,15 @@ static ast_new_expr_t *ast_new_expr_copy(module_t *m, ast_new_expr_t *temp) {
     return new_expr;
 }
 
+static ast_sizeof_expr_t *ast_sizeof_expr_copy(module_t *m, ast_sizeof_expr_t *temp) {
+    ast_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_sizeof_expr_t, temp);
+    sizeof_expr->target_type = type_copy(m, temp->target_type);
+    return sizeof_expr;
+}
+
 static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
-    is_expr->src_operand = *ast_expr_copy(m, &temp->src_operand);
+    is_expr->src = *ast_expr_copy(m, &temp->src);
     is_expr->target_type = type_copy(m, temp->target_type);
     return is_expr;
 }
@@ -466,6 +472,10 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         }
         case AST_EXPR_IS: {
             expr->value = ast_is_expr_copy(m, temp->value);
+            break;
+        }
+        case AST_EXPR_SIZEOF: {
+            expr->value = ast_sizeof_expr_copy(m, temp->value);
             break;
         }
         case AST_EXPR_SELECT: {

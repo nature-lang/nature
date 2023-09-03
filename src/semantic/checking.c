@@ -464,11 +464,17 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 }
 
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = checking_right_expr(m, &is_expr->src_operand, type_kind_new(TYPE_UNKNOWN));
+    type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
     CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NULLABLE_POINTER,
                      "only any/union/cptr<type> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
+}
+
+
+static type_t checking_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
+    sizeof_expr->target_type = reduction_type(m, sizeof_expr->target_type);
+    return type_kind_new(TYPE_INT);
 }
 
 /**
@@ -1737,6 +1743,9 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_EXPR_IS: {
             return checking_is_expr(m, expr->value);
+        }
+        case AST_EXPR_SIZEOF: {
+            return checking_sizeof_expr(m, expr->value);
         }
         case AST_EXPR_NEW: {
             return checking_new_expr(m, expr->value);

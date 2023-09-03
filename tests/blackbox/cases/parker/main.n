@@ -1,5 +1,6 @@
 import std
 import std.path
+import std.elf
 import syscall
 import parker.log as * 
 import parker.util
@@ -44,16 +45,39 @@ tgz.encode(workdir, tgz_name, sources)
 
 logf('encode to tgz_name %v in %v', tgz_name, workdir)
 
+
+// 如果存在环境变量 RUNNER_PATH, 则有优先读取环境变量
+var runner_dir =  syscall.get_env('RUNNER_DIR')
+if runner_dir == '' {
+    runner_dir = path.dir(exec_path)
+}
+
+// 优先根据 target_path 的类型进行自动选择，默认选择 runner_linux_amd64 进行压缩(可能是一个 shell, 不存在 elf 判断)
+// 计算 arch 并拼接出 runner 完整路径
+var runner_ident = 'runner_linux_amd64'
+var (arch, err) = try elf.arch(target_path)
+if err.has {
+    logf('elf target err: %v', err.msg)
+} else {
+    runner_ident = std.sprintf('runner_linux_%v', arch)
+}
+
+var runner_path = path.join(runner_dir, runner_ident)
+
+assertf(path.exists(runner_path), 'runner file=%v notfound', runner_path)
+logf('runner_path=%v found', runner_path)
+
 // 使用 st size 计算文件的大小
 var st = syscall.stat(tgz_name)
 var tgz_size = st.size // byte
-logf('tgz=%v, size=%v', tgz_name, tgz_size)
+logf('tgz %v size=%v', tgz_name, tgz_size)
 
-// 如果存在环境变量 RUNNER_PATH, 则有限读取环境变量
+// new target_name + 'd' fd
 
-// append to runner (/usr/loca/)
-var runner_path = path.dir(exec_path)
-runner_path = path.join(runner_path, 'runner')
-assertf(path.exists(runner_path), 'runner file=%v notfound', runner_path)
-logf('runner_path=%v found', runner_path)
+// - append runner
+
+// - append tgz
+
+// - append size
+
 

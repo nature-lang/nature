@@ -1,5 +1,6 @@
 import std
 import std.path
+import std.elf
 
 var a1 = path.join('/test/hello/world/', './nice.tar.gz')
 println(a1)
@@ -11,7 +12,9 @@ println(a3)
 var s = libc_string_replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
 println(s)
 
-// test list dir
+// test list dir (build in fn?) parser handle?
+var size = 12 + sizeof(dirent_t) - 24
+println('dirent_t size', size)
 var list = std.listdir('mock')
 println("std.listdir of mock len", list.len())
 for v in list {
@@ -28,3 +31,8 @@ println(path.dir(''))
 println(path.exists('./mock'))
 println(path.exists('./mock/stat.txt'))
 println(path.exists('notfound.txt'))
+
+
+// elf.arch
+var arch = elf.arch('mock/file')
+println('mock/file elf arch is', arch)

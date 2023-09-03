@@ -16,6 +16,7 @@ typedef enum {
     AST_EXPR_IDENT,
     AST_EXPR_AS,
     AST_EXPR_IS,
+    AST_EXPR_SIZEOF,
 
     AST_EXPR_NEW, // new person
 
@@ -172,15 +173,11 @@ typedef struct {
 typedef struct {
     type_t target_type;
     ast_expr_t src; // 将表达式转换成 target_type
-} ast_as_expr_t;
+} ast_as_expr_t, ast_is_expr_t;
 
-/**
- * a is int, a must any or union
- */
 typedef struct {
     type_t target_type;
-    ast_expr_t src_operand; // 将表达式转换成 target_type
-} ast_is_expr_t;
+} ast_sizeof_expr_t;
 
 // 一元表达式
 typedef struct {

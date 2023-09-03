@@ -8,7 +8,11 @@
 #include <arpa/inet.h>
 
 static void test_basic() {
-    WORKDIR = path_join(WORKDIR, "testdir");
+    WORKDIR = path_join(WORKDIR, "tests/mockdir");
+
+    // 添加环境变量
+    setenv("RUNNER_PATH", "/usr/local/bin/node", 1);
+
     slice_t *args = slice_new();
     slice_push(args, &"node");
     slice_push(args, &"-v");

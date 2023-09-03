@@ -494,6 +494,10 @@ fn read(int fd, [u8] buf):int {
     return call6(SYS_READ, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
 }
 
+fn read(int fd, cptr buf, int len):int {
+    return call6(SYS_READ, fd as cptr, buf, len as cptr, 0, 0, 0)
+}
+
 fn write(int fd, [u8] buf):int {
     return call6(SYS_WRITE, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
 }

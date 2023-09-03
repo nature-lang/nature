@@ -587,10 +587,13 @@ static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_expr(m, &as_expr->src);
 }
 
+static void analyzer_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
+    analyzer_type(m, &sizeof_expr->target_type);
+}
 
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     analyzer_type(m, &is_expr->target_type);
-    analyzer_expr(m, &is_expr->src_operand);
+    analyzer_expr(m, &is_expr->src);
 }
 
 
@@ -1099,6 +1102,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_as_expr(m, expr->value);
         }
         case AST_EXPR_IS: {
+            return analyzer_is_expr(m, expr->value);
+        }
+        case AST_EXPR_SIZEOF: {
             return analyzer_is_expr(m, expr->value);
         }
         case AST_EXPR_TRY: {

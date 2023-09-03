@@ -615,12 +615,24 @@ static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     return result;
 }
 
+static ast_expr_t parser_sizeof_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_SIZEOF);
+    parser_must(m, TOKEN_LEFT_PAREN);
+    ast_sizeof_expr_t *is_expr = NEW(ast_sizeof_expr_t);
+    is_expr->target_type = parser_single_type(m);
+    parser_must(m, TOKEN_RIGHT_PAREN);
+    result.assert_type = AST_EXPR_SIZEOF;
+    result.value = is_expr;
+    return result;
+}
+
 static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_IS);
     ast_is_expr_t *is_expr = NEW(ast_is_expr_t);
     is_expr->target_type = parser_single_type(m);
-    is_expr->src_operand = left;
+    is_expr->src = left;
     result.assert_type = AST_EXPR_IS;
     result.value = is_expr;
     return result;
@@ -1707,6 +1719,7 @@ static parser_rule rules[] = {
 
         [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_IS] = {NULL, parser_is_expr, PRECEDENCE_TYPE_CAST},
+        [TOKEN_SIZEOF] = {parser_sizeof_expr, NULL, PRECEDENCE_NULL},
 
         // 以 ident 开头的前缀表达式
         [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
