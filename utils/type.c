@@ -696,14 +696,24 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     uint64_t offset = 0;
     for (int i = 0; i < t->elements->length; ++i) {
         type_t *typedecl = ct_list_value(t->elements, i);
-        uint64_t item_size = type_sizeof(*typedecl);
-        offset = align_up(offset, item_size);
+
+        int element_size = type_sizeof(*typedecl);
+        int element_align;
+        if (typedecl->kind == TYPE_STRUCT) {
+            element_align = typedecl->struct_->align;
+        } else if (typedecl->kind == TYPE_ARRAY) {
+            element_align = type_sizeof(typedecl->array->element_type);
+        } else {
+            element_align = element_size;
+        }
+
+        offset = align_up(offset, element_align);
 
         if (i == index) {
             // found
             return offset;
         }
-        offset += item_size;
+        offset += element_size;
     }
 
     return 0;

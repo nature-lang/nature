@@ -340,21 +340,12 @@ uint64_t rt_rtype_out_size(uint32_t rtype_hash);
 fndef_t *find_fn(addr_t addr);
 
 /**
- * gc 入口
+ * 强制 gc
  * @return
  */
 void runtime_gc();
 
-
-/**
- * 分配入口
- * @param size
- * @param rtype
- * @return
- */
-void *runtime_gc_malloc(uint64_t size, rtype_t *rtype);
-
-void runtime_judge_gc();
+void runtime_auto_gc();
 
 /**
  * 不会进行 gc
@@ -362,7 +353,7 @@ void runtime_judge_gc();
  * @param rtype
  * @return
  */
-void *runtime_malloc(uint64_t size, rtype_t *rtype);
+void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype);
 
 /**
  * 代码段调用
@@ -371,7 +362,7 @@ void *runtime_malloc(uint64_t size, rtype_t *rtype);
 void *gc_malloc(uint64_t rtype_hash);
 
 // 测试使用，强制开启立刻 gc
-void runtime_force_gc();
+void runtime_set_force_gc();
 
 uint64_t runtime_malloc_bytes();
 

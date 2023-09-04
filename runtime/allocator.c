@@ -485,14 +485,15 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
-    DEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
+    TDEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
            span->pages_count);
+
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
+        TDEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
                (void *) arena->base, page_index)
 
         arena->spans[page_index] = NULL;
@@ -901,48 +902,14 @@ addr_t mstack_new(uint64_t size) {
 }
 
 /**
- * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
- * @param size
- * @param rtype 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
- * @return
- */
-void *runtime_gc_malloc(uint64_t size, rtype_t *rtype) {
-    runtime_judge_gc();
-
-    return runtime_malloc(size, rtype);
-}
-
-void runtime_judge_gc() {
-    DEBUGF("[runtime_judge_gc] allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
-
-    if (force_gc) {
-        DEBUGF("[runtime_judge_gc] enabled force gc")
-        runtime_gc();
-        return;
-    }
-
-    if (allocated_bytes > next_gc_bytes) {
-        uint64_t before_bytes = allocated_bytes;
-        DEBUGF("[runtime_judge_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
-               next_gc_bytes);
-        runtime_gc();
-        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
-        DEBUGF("[runtime_judge_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
-               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
-    } else {
-        DEBUGF("[runtime_judge_gc] no need for gc")
-    }
-}
-
-/**
  * 不会触发 gc
  * @return
  */
-void *runtime_malloc(uint64_t size, rtype_t *rtype) {
+void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
-        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
+        DEBUGF("[runtime_rtype_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
     } else {
-        DEBUGF("[runtime_malloc] size=%ld, type is null", size);
+        DEBUGF("[runtime_rtype_malloc] size=%ld, type is null", size);
     }
 
 
@@ -983,12 +950,34 @@ uint64_t runtime_malloc_bytes() {
     return allocated_bytes;
 }
 
-void *gc_malloc(uint64_t rtype_hash) {
-    rtype_t *rtype = rt_find_rtype(rtype_hash);
-    return runtime_gc_malloc(rtype->size, rtype);
+void runtime_auto_gc() {
+    DEBUGF("[runtime_auto_gc] allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
+
+    if (force_gc) {
+        DEBUGF("[runtime_auto_gc] enabled force gc")
+        runtime_gc();
+        return;
+    }
+
+    if (allocated_bytes > next_gc_bytes) {
+        uint64_t before_bytes = allocated_bytes;
+        DEBUGF("[runtime_auto_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+               next_gc_bytes);
+        runtime_gc();
+        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
+        DEBUGF("[runtime_auto_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
+               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
+    } else {
+        DEBUGF("[runtime_auto_gc] no need for gc")
+    }
 }
 
-void runtime_force_gc() {
+void *runtime_malloc(uint64_t rtype_hash) {
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
+    return runtime_rtype_malloc(rtype->size, rtype);
+}
+
+void runtime_set_force_gc() {
     force_gc = true;
 }
 

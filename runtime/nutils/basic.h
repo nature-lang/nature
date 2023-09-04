@@ -31,8 +31,6 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 
 void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref);
 
-void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size);
-
 void zero_fn();
 
 void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);

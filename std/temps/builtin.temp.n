@@ -47,7 +47,7 @@ fn sleep(int second)
 
 fn runtime_gc()
 
-fn runtime_force_gc()
+fn runtime_set_force_gc()
 
 fn runtime_malloc_bytes():i64
 

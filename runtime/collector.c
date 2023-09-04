@@ -33,7 +33,7 @@ fndef_t *find_fn(addr_t addr) {
 static void scan_runtime(memory_t *m) {
     processor_t *p = processor_get();
     assertf(in_heap((addr_t) p->errort), "[scan_runtime] processor.errort not in heap");
-    DEBUGF("[runtime_gc.scan_runtime] add errort=%p to grey list", p->errort);
+    TDEBUGF("[runtime_gc.scan_runtime] add errort=%p to grey list", p->errort);
     linked_push(m->grey_list, p->errort);
 }
 
@@ -47,11 +47,11 @@ static void scan_stack(memory_t *m) {
     addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
     uint64_t stack_top = mode.stack_base + mode.stack_size;
 
-    DEBUGF("[runtime.scan_stack] frame_base(BP)=0x%lx, stack_top(max)=0x%lx, stack_base(min)=0x%lx", frame_base,
+    TDEBUGF("[runtime.scan_stack] frame_base(BP)=0x%lx, stack_top(max)=0x%lx, stack_base(min)=0x%lx", frame_base,
            stack_top, mode.stack_base);
     assertf(frame_base >= mode.stack_base && frame_base < stack_top, "stack overflow");
 
-    DEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx",
+    TDEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx",
            mode.stack_base,
            stack_top,
            frame_base);
@@ -61,13 +61,13 @@ static void scan_stack(memory_t *m) {
         addr_t return_addr = (addr_t) fetch_addr_value(frame_base + POINTER_SIZE);
         fndef_t *fn = find_fn(return_addr);
         if (!fn) {
-            DEBUGF("[runtime_gc.scan_stack] fn not found by return addr, frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
+            TDEBUGF("[runtime_gc.scan_stack] fn not found by return addr, frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
                    frame_base,
                    return_addr);
             frame_base += POINTER_SIZE;
             continue;
         } else {
-            DEBUGF("[runtime_gc.scan_stack] fn found by return addr, frame_base=0x%lx, return_addr=0x%lx, fn_name=%s",
+            TDEBUGF("[runtime_gc.scan_stack] fn found by return addr, frame_base=0x%lx, return_addr=0x%lx, fn_name=%s",
                    frame_base,
                    return_addr,
                    fn->name);
@@ -78,7 +78,7 @@ static void scan_stack(memory_t *m) {
         addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base -> prev frame_base ->  return_addr > stack
         frame_base = frame_top + fn->stack_size; // frame_base
 
-        DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
+        TDEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
                "(min)frame_top=0x%lx,(big)frame_base=0x%lx",
                fn->name,
                fn->base,
@@ -93,9 +93,9 @@ static void scan_stack(memory_t *m) {
         // frame_base = rbp-0. bit=0 存储的是(rbp-8 ~ rbp-0) 处的值
         addr_t cursor = frame_base - POINTER_SIZE;
         int i = 0;
-        while (cursor > frame_top) {
+        while (cursor >= frame_top) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,stack_value(to_int64)=0x%lx",
+            TDEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,stack_value(to_int64)=0x%lx",
                    fn->name,
                    i, cursor, is_ptr,
                    fetch_int_value(cursor, 8))
@@ -114,7 +114,7 @@ static void scan_stack(memory_t *m) {
         }
     }
 
-    DEBUGF("[runtime_gc.scan_stack] completed, frame_base=0x%lx", frame_base);
+    TDEBUGF("[runtime_gc.scan_stack] completed, frame_base=0x%lx", frame_base);
 }
 
 static void scan_symdefs(memory_t *m) {
@@ -191,7 +191,7 @@ static void grey_list_work(memory_t *m) {
             // 计算 addr 所在的 obj 的起始地址
             addr = span->base + (obj_index * span->obj_size);
 
-            DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, spanclass_has_ptr=%d, span=0x%lx, "
+            TDEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, spanclass_has_ptr=%d, span=0x%lx, "
                    "spanclass=%d, obj_index=%lu, span->obj_size=%lu",
                    addr, spanclass_has_ptr(span->spanclass), span->base, span->spanclass, obj_index, span->obj_size);
 
@@ -227,7 +227,7 @@ static void grey_list_work(memory_t *m) {
                     // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
                     addr_t heap_addr = fetch_addr_value(temp_addr);
 
-                    DEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
+                    TDEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
                            "obj_size=%ld, bit_index=%lu, in_heap=%d",
                            addr, temp_addr, heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
                     if (in_heap(heap_addr)) {

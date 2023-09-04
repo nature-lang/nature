@@ -832,16 +832,6 @@ static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr) {
     // param handle
     parser_arg(m, call_stmt);
 
-    // 如果 left_expr 是 ident ,且 == set, 那么将其转化成 ast_set_new
-    if (left_expr.assert_type == AST_EXPR_IDENT &&
-        str_equal(((ast_ident *) left_expr.value)->literal, RT_CALL_SET_CALL_IDENT)) {
-        ast_set_new_t *set_new = NEW(ast_set_new_t);
-        set_new->elements = call_stmt->args;
-        result.assert_type = AST_EXPR_SET_NEW;
-        result.value = set_new;
-        return result;
-    }
-
     result.assert_type = AST_CALL;
     result.value = call_stmt;
 

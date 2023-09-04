@@ -135,7 +135,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_union_t *mu = runtime_malloc(sizeof(n_union_t), union_rtype);
+    n_union_t *mu = runtime_rtype_malloc(sizeof(n_union_t), union_rtype);
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu,
@@ -146,7 +146,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
-    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+    TDEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
            mu->value.i64_value);
 
     return mu;
@@ -318,20 +318,6 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 
     assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
     exit(0);
-}
-
-
-/**
- * dst offset 按字节记
- * @param dst
- * @param dst_offset
- * @param src
- * @param size
- */
-void memory_move(uint8_t *dst, uint64_t dst_offset, void *src, uint64_t src_offset, uint64_t size) {
-    DEBUGF("[runtime.memory_move] dst=%p, dst_offset=%lu, src=%p, src_offset=%lu, size=%lu",
-           dst, dst_offset, src, src_offset, size);
-    memmove(dst + dst_offset, src + src_offset, size);
 }
 
 void zero_fn() {

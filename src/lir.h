@@ -59,9 +59,7 @@
 // RT = runtime
 // CT = compile time
 #define RT_CALL_LIST_NEW "list_new"
-#define RT_CALL_LIST_ACCESS "list_access"
 #define RT_CALL_LIST_ELEMENT_ADDR "list_element_addr"
-#define RT_CALL_LIST_ASSIGN "list_assign"
 #define RT_CALL_LIST_SLICE "list_slice"
 #define RT_CALL_LIST_REF "list_ref"
 #define RT_CALL_LIST_LENGTH "list_length"
@@ -78,18 +76,14 @@
 #define RT_CALL_MAP_LENGTH "map_length"
 #define RT_CALL_MAP_DELETE "map_delete"
 
-#define RT_CALL_SET_CALL_IDENT "set"
 #define RT_CALL_SET_NEW "set_new"
 #define RT_CALL_SET_ADD "set_add" // 往集合中添加元素
 #define RT_CALL_SET_CONTAINS "set_contains" // s.contain()
 #define RT_CALL_SET_DELETE "set_delete" // 将元素从 set 中移除
 
-#define RT_CALL_STRUCT_NEW "struct_new"
 
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"
-#define RT_CALL_TUPLE_ASSIGN "tuple_assign"
-#define RT_CALL_TUPLE_ACCESS "tuple_access"
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
@@ -138,9 +132,9 @@
 #define RT_CALL_STRING_LENGTH "string_length"
 #define RT_CALL_STRING_REF "string_ref" // 默认引用传递
 
-#define RT_CALL_MEMORY_MOVE "memory_move"
+#define RT_CALL_RUNTIME_MALLOC "runtime_malloc"
 
-#define RT_CALL_GC_MALLOC "gc_malloc"
+#define RT_CALL_RUNTIME_AUTO_GC "runtime_auto_gc"
 
 #define RT_CALL_PROCESSOR_THROW_ERRORT "processor_throw_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
@@ -149,6 +143,28 @@
 #define OP(_node) ((lir_op_t*)_node->value)
 
 #define OP_PUSH(_op) linked_push(m->linear_current->operations, _op)
+
+static char *lir_need_gc_call[] = {
+        RT_CALL_LIST_NEW,
+        RT_CALL_LIST_SLICE,
+        RT_CALL_LIST_PUSH,
+        RT_CALL_LIST_ITERATOR,
+        RT_CALL_LIST_CONCAT,
+        RT_CALL_MAP_NEW,
+        RT_CALL_MAP_ACCESS,
+        RT_CALL_MAP_DELETE,
+        RT_CALL_SET_NEW,
+        RT_CALL_SET_ADD,
+        RT_CALL_SET_DELETE,
+        RT_CALL_TUPLE_NEW,
+        RT_CALL_UNION_CASTING,
+        RT_CALL_FN_NEW,
+        RT_CALL_ENV_NEW,
+        RT_CALL_ENV_ASSIGN,
+        RT_CALL_ENV_CLOSURE,
+        RT_CALL_STRING_NEW,
+        RT_CALL_RUNTIME_MALLOC
+};
 
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
@@ -627,7 +643,7 @@ static inline void lir_set_quick_op(basic_block_t *block) {
 }
 
 
-static inline lir_op_t *rt_call(char *name, lir_operand_t *result, int arg_count, ...) {
+static inline lir_op_t *rt_call(module_t *m, char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *operand_args = slice_new();
 
     va_list args;
@@ -638,7 +654,18 @@ static inline lir_op_t *rt_call(char *name, lir_operand_t *result, int arg_count
     }
     va_end(args);
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
-    return lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result);
+    OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result));
+
+    // 直接进行 check gc
+    int gc_call_len = sizeof(lir_need_gc_call) / sizeof(char *);
+    for (int i = 0; i < gc_call_len; ++i) {
+        if (!str_equal(name, lir_need_gc_call[i])) {
+            continue;
+        }
+
+        OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_RUNTIME_AUTO_GC, false),
+                           operand_new(LIR_OPERAND_ARGS, slice_new()), NULL));
+    }
 }
 
 static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {

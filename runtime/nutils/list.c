@@ -8,8 +8,6 @@
 void list_grow(n_list_t *l) {
     l->capacity = l->capacity * 2;
 
-    runtime_judge_gc();
-
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     n_array_t *new_array_data = rt_array_new(element_rtype, l->capacity);
     memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
@@ -49,13 +47,15 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
     // - 进行内存申请,申请回来一段内存是 memory_list_t 大小的内存, memory_list_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 list_data + 1 时会按照 sizeof(memory_list_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_list_t *list_data = runtime_gc_malloc(list_rtype->size, list_rtype);
+    n_list_t *list_data = runtime_rtype_malloc(list_rtype->size, list_rtype);
     list_data->capacity = capacity;
     list_data->length = length;
     list_data->element_rtype_hash = element_rtype_hash;
     list_data->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[runtime.list_new] success, list: %p, data: %p", list_data, list_data->data);
+    // 尝试清空 data
+
+    TDEBUGF("[runtime.list_new] success, list: %p, data: %p", list_data, list_data->data);
 
     return list_data;
 }

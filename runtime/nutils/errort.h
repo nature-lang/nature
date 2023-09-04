@@ -19,7 +19,7 @@ static inline n_errort *n_errort_new(n_string_t *msg, uint8_t has) {
     n_list_t *traces = list_new(list_rtype->hash, element_rtype->hash, 0, 0);
 
     rtype_t *errort_rtype = gc_rtype(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_errort *errort = runtime_gc_malloc(errort_rtype->size, errort_rtype);
+    n_errort *errort = runtime_rtype_malloc(errort_rtype->size, errort_rtype);
     errort->msg = msg;
     errort->traces = traces;
     errort->has = has;

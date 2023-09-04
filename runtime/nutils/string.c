@@ -11,8 +11,6 @@
 n_string_t *string_new(void *raw_string, uint64_t length) {
     DEBUGF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
 
-    runtime_judge_gc();
-
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
     uint64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
@@ -32,14 +30,14 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     assert(element_rtype->hash > 0);
 
     DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
-    n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = runtime_rtype_malloc(string_rtype->size, string_rtype);
     str->data = data;
     str->length = length;
     str->capacity = capacity;
     str->element_rtype_hash = element_rtype->hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string_data=%p", str);
+    DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
     return str;
 }
 
@@ -64,8 +62,6 @@ void *string_ref(n_string_t *n_str) {
 n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
 
-    runtime_judge_gc();
-
     uint64_t length = a->length + b->length;
     uint64_t capacity = length + 1;
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
@@ -77,7 +73,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     memmove(data, a->data, a->length);
     memmove(data + a->length, b->data, b->length);
 
-    n_string_t *str = runtime_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = runtime_rtype_malloc(string_rtype->size, string_rtype);
     str->length = length;
     str->data = data;
     str->length = length;

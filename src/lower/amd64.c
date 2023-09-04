@@ -127,7 +127,12 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         stack->size = type_kind_sizeof(var->type.kind);
         lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
         linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
-        linked_push(list, rt_call(RT_CALL_ENV_CLOSURE, NULL, 0));
+
+        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL,
+                                     lir_label_operand(RT_CALL_ENV_CLOSURE, false),
+                                     operand_new(LIR_OPERAND_ARGS, slice_new()),
+                                     NULL));
+
     }
 
     return list;

@@ -8,8 +8,9 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
     assertf(element_rtype, "element_rtype is null");
     assertf(element_rtype->size > 0, "element_rtype size is zero");
 
-    DEBUGF("[rt_array_new] element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), length=%lu",
+    DEBUGF("[rt_array_new] element_rtype.size=%lu(outsize: %lu), element_rtype.kind=%s(need_gc=%d), length=%lu",
            element_rtype->size,
+           rtype_out_size(element_rtype, POINTER_SIZE),
            type_kind_str[element_rtype->kind],
            element_rtype->last_ptr > 0,
            length);
@@ -18,15 +19,18 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
     rtype_t rtype = rt_rtype_array(element_rtype, length);
 
     // - 基于 rtype 进行 malloc 的申请调用, 这里进行的是堆内存申请，所以需要的就是其在在堆内存中占用的空间大小
-    void *addr = runtime_malloc(rtype.size, &rtype);
-    DEBUGF("[rt_array_new] success, base=%p, element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), array_rtype_size=%lu(length=%lu),rtype_kind=%s",
-           addr,
-           element_rtype->size,
-           type_kind_str[element_rtype->kind],
-           element_rtype->last_ptr > 0,
-           rtype.size,
-           length,
-           type_kind_str[rtype.kind])
+    void *addr = runtime_rtype_malloc(rtype.size, &rtype);
+    TDEBUGF("[rt_array_new] success, base=%p, element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), array_rtype_size=%lu(length=%lu),rtype_kind=%s",
+            addr,
+            element_rtype->size,
+            type_kind_str[element_rtype->kind],
+            element_rtype->last_ptr > 0,
+            rtype.size,
+            length,
+            type_kind_str[rtype.kind])
+
+    // 尝试清空 array
+//    memset(addr, 0, rtype.size);
 
     return addr;
 }
