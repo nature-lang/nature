@@ -889,7 +889,7 @@ mspan_t *span_of(uint64_t addr) {
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
-    assertf(span, "not found span by page_index: %d, arena->base: %p", page_index, arena->base);
+    assertf(span, "not found span by page_index: %d, arena->base: %p, addr: %p", page_index, arena->base, addr);
     return span;
 }
 
@@ -913,6 +913,14 @@ void *runtime_gc_malloc(uint64_t size, rtype_t *rtype) {
 }
 
 void runtime_judge_gc() {
+    DEBUGF("[runtime_judge_gc] allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
+
+    if (force_gc) {
+        DEBUGF("[runtime_judge_gc] enabled force gc")
+        runtime_gc();
+        return;
+    }
+
     if (allocated_bytes > next_gc_bytes) {
         uint64_t before_bytes = allocated_bytes;
         DEBUGF("[runtime_judge_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
@@ -978,5 +986,9 @@ uint64_t runtime_malloc_bytes() {
 void *gc_malloc(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     return runtime_gc_malloc(rtype->size, rtype);
+}
+
+void runtime_force_gc() {
+    force_gc = true;
 }
 

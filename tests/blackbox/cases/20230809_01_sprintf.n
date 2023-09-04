@@ -8,3 +8,12 @@ println(s, 'len=', s.len())
 
 string str =  time.now().datetime()
 std.printf('err msg=%v, %v, count=%v\n', 'time in', str,253)
+
+std.printf('%0d\n', -12)
+std.printf('%0d\n', 12)
+
+std.printf('|%5d|\n', -12)
+std.printf('|%5d|\n', 12)
+
+std.printf('|%010d|\n', -12)
+std.printf('|%010d|\n', 12)

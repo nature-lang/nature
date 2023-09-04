@@ -17,37 +17,91 @@ fn sprintf(string fmt, ...[any] args):string {
 
     for i < end {
         u8 c = sources[i]
+        i += 1 // 跳过 % 字符串
         if c != ascii('%') {
             result.push(c)
-            i += 1
             continue
         }
 
-        i += 1 // 跳过 % 字符串
-        
         // 最后一个字符是一个 %, 但是没有后续字符了
         if i == end {
             continue
         }
 
+        // 宽度字符解析, 如 %018， %18 这两种模式的宽度和填充字符解析
+        var fill = ' '
+        var width = 0 as u8
+
+        if sources[i] == ascii('0') {
+            fill = '0'
+            i+=1
+        } 
+
+        for true {
+            if sources[i] < ascii('0') || sources[i] > ascii('9') {
+                break
+            }
+
+            width = width * 10 + (sources[i] - ascii('0'))
+            i += 1
+        }
+
         c = sources[i]
-        i+=1 // 跳过 c 字符
+        i+=1
 
         if c == ascii('%') {
             result.push(ascii('%'))
             continue
         }
 
+        if arg_index == args.len() {
+             result.push(ascii('%'))
+             result.push(ascii('!'))
+             result.push(c)
+             continue
+        }
+
         // c 不再 format 字符中，提示异常
-        if !{ascii('v'), ascii('c')}.has(c) || arg_index == args.len() {
+        if !{ascii('v'), ascii('c'), ascii('d')}.has(c) {
             result.push(ascii('%'))
-            result.push(ascii('!'))
+            result.push(ascii('?'))
             result.push(c)
             continue
         }
 
         any arg = args[arg_index]
         arg_index += 1
+
+        if c == ascii('d') {
+            string s = ''
+            if arg is int {
+                 s = itos(arg as int, fill, width)
+            }  else if arg is i8 {
+                 s = itos(arg as i8, fill, width)
+            }  else if arg is i16 {
+                 s = itos(arg as i16, fill, width)
+            } else if arg is i32 {
+                 s = itos(arg as i32, fill, width)
+            } else if arg is i64 {
+                 s = itos(arg as i64, fill, width)
+            } else if arg is uint {
+                 s = itos(arg as uint, fill, width)
+            } else if arg is u8 {
+                 s = itos(arg as u8, fill, width)
+            }  else if arg is u16 {
+                 s = itos(arg as u16, fill, width)
+            } else if arg is u32 {
+                 s = itos(arg as u32, fill, width)
+            } else if arg is u64 {
+                 s = itos(arg as u64, fill, width)
+            }
+
+            for c in s { 
+                result.push(c)
+            }
+
+            continue
+        }
 
         if c == ascii('c') {
             result.push(arg as u8)
@@ -96,8 +150,7 @@ fn sprintf(string fmt, ...[any] args):string {
                 s = '%!v'
             }
 
-            // length 并不是准确的 len?
-            for c in s as [u8] { // c 是一个新的值，不会和上面的 c 冲突
+            for c in s { 
                 result.push(c)
             }
 

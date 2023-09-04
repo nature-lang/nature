@@ -66,12 +66,17 @@ static void scan_stack(memory_t *m) {
                    return_addr);
             frame_base += POINTER_SIZE;
             continue;
+        } else {
+            DEBUGF("[runtime_gc.scan_stack] fn found by return addr, frame_base=0x%lx, return_addr=0x%lx, fn_name=%s",
+                   frame_base,
+                   return_addr,
+                   fn->name);
         }
 
         // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
         // 由于栈向下增长，所以此处 top 小于 base, 且取值则是向上增加
-        addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base > prev frame_base >  return_addr > stack
-        frame_base = frame_top + fn->stack_size;
+        addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base -> prev frame_base ->  return_addr > stack
+        frame_base = frame_top + fn->stack_size; // frame_base
 
         DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
                "(min)frame_top=0x%lx,(big)frame_base=0x%lx",
@@ -90,7 +95,8 @@ static void scan_stack(memory_t *m) {
         int i = 0;
         while (cursor > frame_top) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime_gc.scan_stack] fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,stack_value(to_int64)=0x%lx",
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d ,stack_value(to_int64)=0x%lx",
+                   fn->name,
                    i, cursor, is_ptr,
                    fetch_int_value(cursor, 8))
             if (is_ptr) {

@@ -84,35 +84,55 @@ var runner_path = path.join(runner_dir, runner_ident)
 assertf(path.exists(runner_path), 'runner file=%v notfound', runner_path)
 logf('runner_path=%v found', runner_path)
 
-// 使用 st size 计算文件的大小
-var st = syscall.stat(tgz_name)
-var tgz_size = st.size // byte
-logf('tgz %v size=%v', tgz_name, tgz_size)
-
 // open and create
 var output_fd = syscall.open(output_name, syscall.O_CREAT | syscall.O_RDWR | syscall.O_TRUNC, 0755)
 
 // - append runner
 var runner_fd = syscall.open(runner_path, syscall.O_RDONLY, 0666)
 
+// 通用读取和写入 buf
 var buf = [] as [u8;102400]
 var readsum = 0
+
 for true {
     var len = syscall.read(runner_fd, buf)
     readsum += len
     if len == 0 {
-        logf('read runner success, len: %v byte', readsum)
         break
     }
 
     syscall.write(output_fd, buf, len)
-
     // logf('read item len: %v and write to output file', len)
 }
+syscall.close(runner_fd)
 logf('write runner to output success, size=%v', readsum)
 
 // - append tgz
+var tgz_fd = syscall.open(tgz_name, syscall.O_RDONLY, 0666)
+readsum = 0
 
-// - append size
+for true {
+    var len = syscall.read(tgz_fd, buf)
+    readsum += len
+    if len == 0 {
+        break
+    }
 
+    syscall.write(output_fd, buf, len)
+}
+syscall.close(tgz_fd)
+logf('append tgz to output success, size=%v', readsum)
+// TODO tgz size = readsum
 
+// - append size(ascii) to output
+// 使用 st size 计算文件的大小
+var st = syscall.stat(tgz_name)
+var tgz_size = st.size // byte
+// logf('stat tgz %v get size=%d', tgz_name, tgz_size)
+logf('stat tgz %d get size=%d', 124, 123)
+
+var tgz_size_str = std.sprintf('%08d', 123) 
+syscall.write(output_fd, tgz_size_str as [u8], tgz_size_str.len())
+logf('tag_size to output success, size_str=%v', tgz_size_str)
+
+logf('runner make successful')

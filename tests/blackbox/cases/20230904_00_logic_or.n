@@ -1,0 +1,36 @@
+import std
+import std.util
+import time
+
+// 启用快速强制 gc
+runtime_force_gc()
+
+fn logf(string fmt, ...[any] args) {
+    var msg = std.sprintf(fmt, ...args)
+    var t = time.now()
+    std.printf('log: %v time: %v\n', msg, t.datetime())
+}
+
+int len = 2
+int arg_index = 0
+u8 c = 118
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+    println('进来了!')
+}
+
+var a = [] as [u8;102400]
+
+a = [] as [u8;1]
+
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+    println('进来了!')
+}
+
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+    println('进来了!')
+}
+
+logf('hello33 %v', 'world33')
+var s = 'hello44 %v' // 这里会触发 string new, 但是绝对是在 main 中。
+logf(s, 'world44')
+logf('hello55 %v, %v', 'world55', 'haha55')

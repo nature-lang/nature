@@ -22,6 +22,10 @@ fn reverse([numbert] list) {
 }
 
 fn itos(integert i):string {
+    return itos(i, '0', 0 as u8)
+}
+
+fn itos(integert i, string fill, u8 width):string {
     var base = 10
     var is_neg = false
 
@@ -30,11 +34,21 @@ fn itos(integert i):string {
         i = -i // 转换为正数
     }
 
+    var result = [] as [u8]
+
     if i == 0 {
-        return '0'
+        if width == 0 {
+            return '0'
+        }
+
+        // 填充 width 个数的 0， 并返回
+        for u8 i = 0; i < width; i+=1 {
+            result.push(ascii(fill))
+        }
+
+        return result as string
     }
 
-    var result = [] as [u8]
 
     // 按 base 进行转换
     for i != 0 {
@@ -44,8 +58,30 @@ fn itos(integert i):string {
         i = i / 10
     }
 
+    u8 result_width = result.len() as u8
     if is_neg {
-        result.push(ascii('-'))
+        result_width += 1
+    }
+
+    if fill == ' ' {
+        if is_neg {
+            result.push(ascii('-'))
+        }
+        // 填充 ' '
+        for width > result_width {
+           result.push(ascii(fill))        
+           result_width += 1
+        } 
+    } else {
+        // fill == '0'
+        for width > result_width {
+           result.push(ascii(fill))        
+           result_width += 1
+        }
+
+        if is_neg {
+            result.push(ascii('-'))
+        }
     }
 
     // 数组反转

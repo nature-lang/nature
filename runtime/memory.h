@@ -55,8 +55,9 @@
 #define DEFAULT_NEXT_GC_BYTES  (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
-uint64_t allocated_bytes; // 当前分配的内存空间
-uint64_t next_gc_bytes; // 下一次 gc 的内存量
+extern uint64_t allocated_bytes; // 当前分配的内存空间
+extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
+extern bool force_gc; // runtime_judge_gc 总是立刻进行 gc
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
@@ -369,6 +370,8 @@ void *runtime_malloc(uint64_t size, rtype_t *rtype);
  */
 void *gc_malloc(uint64_t rtype_hash);
 
+// 测试使用，强制开启立刻 gc
+void runtime_force_gc();
 
 uint64_t runtime_malloc_bytes();
 

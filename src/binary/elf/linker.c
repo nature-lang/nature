@@ -1424,16 +1424,16 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         assert(c->text_count > 0);
         f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
-//        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
-//               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-//               f->name,
-//               f->base,
-//               f->size,
-//               f->stack_size,
-//               f->fn_runtime_stack,
-//               f->fn_runtime_reg,
-//               f->stack_size / POINTER_SIZE,
-//               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+               f->name,
+               f->base,
+               f->size,
+               f->stack_size,
+               f->fn_runtime_stack,
+               f->fn_runtime_reg,
+               f->stack_size / POINTER_SIZE,
+               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 

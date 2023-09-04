@@ -16,13 +16,22 @@ static void test_basic() {
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 
     char *raw = exec_output();
+//    printf("%s", raw);
+//    return;
+
     char actual[4096] = {0};
     memmove(actual, raw, 4096);
 
     char expect[4096] = {0};
     sprintf(expect, "hello world, nice: 12, %%, float: 3.141500\n"
                     "err msg=this is failed, count=253 len= 33\n"
-                    "err msg=time in, %s, count=253\n", time_buf);
+                    "err msg=time in, %s, count=253\n"
+                    "-12\n"
+                    "12\n"
+                    "|  -12|\n"
+                    "|   12|\n"
+                    "|-000000012|\n"
+                    "|0000000012|\n", time_buf);
 
     int res = memcmp(expect, actual, 4096);
     assert_true(res == 0);
