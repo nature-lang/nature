@@ -12,7 +12,7 @@ if tz == 'CST' {
 }
 
 // 51 36 8 10 7 123 4 221 0 0 UTC
-println(ti.tm_sec, ti.tm_min, ti.tm_hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst)
+println(ti.tm_sec, ti.tm_min, hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst)
 
 // 受到时区不同略有不同
 if tz == 'CST' {

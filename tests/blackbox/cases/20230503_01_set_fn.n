@@ -1,4 +1,4 @@
-{int} s = set()
+{int} s = {}
 s.add(1)
 s.add(2)
 

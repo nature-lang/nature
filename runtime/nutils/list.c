@@ -55,7 +55,7 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
 
     // 尝试清空 data
 
-    TDEBUGF("[runtime.list_new] success, list: %p, data: %p", list_data, list_data->data);
+    DEBUGF("[runtime.list_new] success, list: %p, data: %p", list_data, list_data->data);
 
     return list_data;
 }

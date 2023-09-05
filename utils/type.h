@@ -206,6 +206,7 @@ typedef struct type_set_t type_set_t;
 // (int, int, float)
 typedef struct {
     list_t *elements; //  type_t
+    uint8_t align; // 最大对齐
 } type_tuple_t;
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
@@ -287,7 +288,6 @@ struct type_alias_t {
 struct type_array_t {
     uint64_t length;
     type_t element_type; // 这个必须要有呀
-    rtype_t element_rtype;
 };
 
 /**

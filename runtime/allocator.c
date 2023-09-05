@@ -485,16 +485,16 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
-    TDEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
-           span->pages_count);
+    DEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
+            span->pages_count);
 
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        TDEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
-               (void *) arena->base, page_index)
+        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
+                (void *) arena->base, page_index)
 
         arena->spans[page_index] = NULL;
         page_index += 1;
@@ -901,6 +901,13 @@ addr_t mstack_new(uint64_t size) {
     return (addr_t) base;
 }
 
+void *runtime_zero_malloc(uint64_t size, rtype_t *rtype) {
+    void *ptr = runtime_rtype_malloc(size, rtype);
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+
 /**
  * 不会触发 gc
  * @return
@@ -921,6 +928,7 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
     // 2. 大型内存分配(大于>32KB)
     return (void *) large_malloc(size, rtype);
 }
+
 
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = NEW(mspan_t);

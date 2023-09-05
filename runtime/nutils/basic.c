@@ -146,7 +146,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
-    TDEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
            mu->value.i64_value);
 
     return mu;
@@ -347,7 +347,7 @@ n_errort processor_remove_errort() {
     processor_t *p = processor_get();
     n_errort *errort = p->errort;
     p->errort = n_errort_new(string_new("", 0), 0);
-    DEBUGF("[runtime.processor_remove_errort] remove errort: %p", errort);
+    DEBUGF("[runtime.processor_remove_errort] remove errort: %p, has? %d", errort, errort->has);
     return *errort;
 }
 

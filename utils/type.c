@@ -301,9 +301,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
 
-        uint16_t item_size = type_sizeof(p->type);
+        uint16_t element_size = type_sizeof(p->type);
 
-        int item_align = item_size;
+        int item_align = element_size;
         if (p->type.kind == TYPE_STRUCT) {
             item_align = p->type.struct_->align;
         } else if (p->type.kind == TYPE_ARRAY) {
@@ -322,7 +322,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
             need_gc_offsets[need_gc_count++] = offset;
         }
 
-        offset += item_size;
+        offset += element_size;
         element_hash_list[i] = element_rtype.hash;
     }
 
@@ -357,31 +357,35 @@ static rtype_t rtype_struct(type_struct_t *t) {
 static rtype_t rtype_tuple(type_tuple_t *t) {
     char *str = itoa(TYPE_TUPLE);
     uint64_t offset = 0;
-    uint64_t max = 0;
     uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
     // 记录需要 gc 的 key 的
     for (uint64_t i = 0; i < t->elements->length; ++i) {
         type_t *element_type = ct_list_value(t->elements, i);
-        uint16_t item_size = type_sizeof(*element_type);
-        if (item_size > max) {
-            max = item_size;
+
+        uint16_t element_size = type_sizeof(*element_type);
+        int item_align = element_size;
+        if (element_type->kind == TYPE_STRUCT) {
+            item_align = element_type->struct_->align;
+        } else if (element_type->kind == TYPE_ARRAY) {
+            item_align = type_sizeof(element_type->array->element_type);
         }
+
         // 按 offset 对齐
-        offset = align_up(offset, item_size);
+        offset = align_up(offset, item_align);
         // 计算 element_rtype
         rtype_t rtype = ct_reflect_type(*element_type);
         str = str_connect(str, itoa(rtype.hash));
 
         // 如果存在 heap 中就是需要 gc
-        // TODO element_type size > 8 处理
         bool need_gc = type_need_gc(*element_type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
-        offset += item_size;
+
+        offset += element_size;
     }
-    uint64_t size = align_up(offset, max);
+    uint64_t size = align_up(offset, t->align);
 
 
     rtype_t rtype = {

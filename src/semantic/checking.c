@@ -1971,10 +1971,25 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_TUPLE) {
         type_tuple_t *tuple = t.tuple;
         CHECKING_ASSERTF(tuple->elements->length > 0, "tuple element empty");
+        int align = 0;
         for (int i = 0; i < tuple->elements->length; ++i) {
-            type_t *use = ct_list_value(tuple->elements, i);
-            *use = reduction_type(m, *use);
+            type_t *element = ct_list_value(tuple->elements, i);
+            *element = reduction_type(m, *element);
+
+            int item_align;
+            if (element->kind == TYPE_STRUCT) {
+                item_align = element->struct_->align;
+            } else if (element->kind == TYPE_ARRAY) {
+                item_align = type_sizeof(element->array->element_type);
+            } else {
+                item_align = type_sizeof(*element);
+            }
+
+            if (item_align > align) {
+                align = item_align;
+            }
         }
+        tuple->align = align;
         return t;
     }
 

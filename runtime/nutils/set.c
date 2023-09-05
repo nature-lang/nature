@@ -85,7 +85,7 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
     set_data->key_data = rt_array_new(key_rtype, set_data->capacity);
     set_data->hash_table = runtime_rtype_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
 
-    TDEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p",
+    DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p",
            set_data, set_data->key_rtype_hash, set_data->key_data);
     return set_data;
 }

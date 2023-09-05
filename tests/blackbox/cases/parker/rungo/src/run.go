@@ -25,11 +25,11 @@ func extractTgz() {
 	fd, err := syscall.Open(path, os.O_RDONLY, 0666)
 	assertf(err == nil, "open path %v err: %v", path, err)
 
-	// 使用 seek 读取 fd 对应文件的最后 8 个字节
-	_, err = syscall.Seek(fd, -8, io.SeekEnd)
+	// 使用 seek 读取 fd 对应文件的最后 16 个字节
+	_, err = syscall.Seek(fd, -16, io.SeekEnd)
 	assertf(err == nil, "seek path %v err: %v", path, err)
 
-	buf := make([]byte, 8)
+	buf := make([]byte, 16)
 	length, err := syscall.Read(fd, buf)
 	assertf(err == nil, "read path %v err: %v", path, err)
 

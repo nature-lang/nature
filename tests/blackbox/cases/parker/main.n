@@ -122,16 +122,11 @@ for true {
 }
 syscall.close(tgz_fd)
 logf('append tgz to output success, size=%v', readsum)
-// TODO tgz size = readsum
 
-// - append size(ascii) to output
-// 使用 st size 计算文件的大小
-var st = syscall.stat(tgz_name)
-var tgz_size = st.size // byte
-// logf('stat tgz %v get size=%d', tgz_name, tgz_size)
-logf('stat tgz %d get size=%d', 124, 123)
+var tgz_size = readsum
+logf('stat tgz %v get size=%d', tgz_name, tgz_size)
 
-var tgz_size_str = std.sprintf('%08d', 123) 
+var tgz_size_str = std.sprintf('%016d', tgz_size) 
 syscall.write(output_fd, tgz_size_str as [u8], tgz_size_str.len())
 logf('tag_size to output success, size_str=%v', tgz_size_str)
 

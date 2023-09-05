@@ -347,6 +347,8 @@ void runtime_gc();
 
 void runtime_auto_gc();
 
+void *runtime_zero_malloc(uint64_t size, rtype_t *rtype);
+
 /**
  * 不会进行 gc
  * @param size

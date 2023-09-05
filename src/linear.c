@@ -536,8 +536,17 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
 
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(destr->elements, i);
-        uint64_t item_size = type_sizeof(element->type);
-        offset = align_up(offset, item_size);
+
+        uint16_t element_size = type_sizeof(element->type);
+
+        uint16_t item_align = element_size;
+        if (element->type.kind == TYPE_STRUCT) {
+            item_align = element->type.struct_->align;
+        } else if (element->type.kind == TYPE_ARRAY) {
+            item_align = type_sizeof(element->type.array->element_type);
+        }
+
+        offset = align_up(offset, item_align);
 
         // src 中已经保存了右值的具体值。可以用来 move
         lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
@@ -565,7 +574,7 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
         } else {
             assertf(false, "var tuple destr must var/tuple_destr");
         }
-        offset += item_size;
+        offset += element_size;
     }
 }
 
@@ -593,9 +602,16 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
     for (int i = 0; i < destr->elements->length; ++i) {
         // 这里的 element 指的是左侧值的 element(一般都是 ident, 或者 access/select)
         ast_expr_t *element = ct_list_value(destr->elements, i);
-        uint64_t item_size = type_sizeof(element->type);
+        uint16_t element_size = type_sizeof(element->type);
 
-        offset = align_up(offset, item_size);
+        uint16_t item_align = element_size;
+        if (element->type.kind == TYPE_STRUCT) {
+            item_align = element->type.struct_->align;
+        } else if (element->type.kind == TYPE_ARRAY) {
+            item_align = type_sizeof(element->type.array->element_type);
+        }
+
+        offset = align_up(offset, item_align);
 
         // 将 tuple 中的值 mov 到新的 var 空间中
         lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
@@ -617,7 +633,7 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
             assertf(false, "var tuple destr must var/tuple_destr");
         }
 
-        offset += item_size;
+        offset += element_size;
     }
 }
 
@@ -1589,10 +1605,16 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
     for (int i = 0; i < ast->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(ast->elements, i);
 
-        uint64_t item_size = type_sizeof(element->type);
+        uint64_t element_size = type_sizeof(element->type);
+        int item_align = element_size;
+        if (element->type.kind == TYPE_STRUCT) {
+            item_align = element->type.struct_->align;
+        } else if (element->type.kind == TYPE_ARRAY) {
+            item_align = type_sizeof(element->type.array->element_type);
+        }
 
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
-        offset = align_up(offset, item_size);
+        offset = align_up(offset, item_align);
 
         // 基于 target 计算 addr
         lir_operand_t *dst = indirect_addr_operand(m, element->type, target, offset);
@@ -1602,7 +1624,7 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 
         linear_expr(m, *element, dst);
 
-        offset += item_size;
+        offset += element_size;
     }
 
     return target;
@@ -1858,6 +1880,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
     // catch_end_label: ------------------------------------------------------------------------------------------------------
     OP_PUSH(catch_end_label);
 
+    // remove errort 返回一个 struct errort, 其可能有值，也能是 0 值
     // 根据 size + ali计算 offset
     int64_t offset = type_tuple_offset(expr.type.tuple, 1);
     lir_operand_t *temp = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
@@ -1889,7 +1912,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
         lir_operand_t *imm_c_string_operand = string_operand(literal->value);
         lir_operand_t *imm_len_operand = int_operand(strlen(literal->value));
-        rt_call(m,RT_CALL_STRING_NEW, target, 2, imm_c_string_operand, imm_len_operand);
+        rt_call(m, RT_CALL_STRING_NEW, target, 2, imm_c_string_operand, imm_len_operand);
         return target;
     }
 
