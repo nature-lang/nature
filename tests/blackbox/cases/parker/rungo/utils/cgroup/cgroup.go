@@ -2,6 +2,7 @@ package cgroup
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"rungo/utils/helper"
@@ -89,21 +90,30 @@ func (c *Cgroup) Register(pid int) error {
 
 func (c *Cgroup) Clear() error {
 	// 读取 cgroup path 中的所有 pid
-	data, err := os.ReadFile(c.CgroupProcsPath)
+	raw, err := os.ReadFile(c.CgroupProcsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read PIDs from cgroup: %s", err)
 	}
 
-	pids := strings.Split(strings.TrimSpace(string(data)), "\n")
-	for _, pidStr := range pids {
-		pid, err := strconv.Atoi(pidStr)
-		if err != nil {
-			return fmt.Errorf("failed to convert PID to integer: %s", err)
-		}
+	str := strings.TrimSpace(string(raw))
+	if str == "" {
+		log.Printf("no pids in cgroup: %s", c.CgroupProcsPath)
+	} else {
+		log.Printf("read pids from cgroup: %s", str)
+		pids := strings.Split(str, "\n")
+		for _, pidStr := range pids {
+			if pidStr == "" {
+				continue
+			}
+			pid, err := strconv.Atoi(pidStr)
+			if err != nil {
+				return fmt.Errorf("failed to convert PID to integer: %s", err)
+			}
 
-		// 强制 kill 进程
-		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
-			return fmt.Errorf("failed to kill PID %d: %s", pid, err)
+			// 强制 kill 进程
+			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+				return fmt.Errorf("failed to kill PID %d: %s", pid, err)
+			}
 		}
 	}
 

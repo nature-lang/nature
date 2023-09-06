@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"rungo/utils/cgroup"
+	"rungo/utils/helper"
 	"strconv"
 	"syscall"
 )
@@ -92,20 +93,24 @@ func runTargetWithCgroup(target string, cgroupId string) (*exec.Cmd, int) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr.Cloneflags = syscall.CLONE_NEWNS // 继承父进程的 mount ns
 	if err := cmd.Start(); err != nil {
 		assertf(false, "failed to run command: %s", err)
 	}
 
-	logf("start success", cmd.Args, cmd.Process.Pid)
+	logf("start fork success, %+v, %v", cmd.Args, cmd.Process.Pid)
 
 	return cmd, cmd.Process.Pid
 }
 
 func runTargetWithFork() {
+	Verbose = true
+	log.Printf("runTargetWithFork start, args: %+v\n", os.Args)
+
 	assertf(len(os.Args) > 2, "args len: %d exception", len(os.Args))
 
 	// 读取当前
-	targetName := os.Args[1]
+	targetPath := os.Args[1]
 	cgroupId := os.Args[2]
 
 	cg, err := cgroup.New(cgroupId)
@@ -120,9 +125,19 @@ func runTargetWithFork() {
 	if len(os.Args) > 3 {
 		args = os.Args[3:]
 	}
+	// 将配置 exec 中显示的名称(直接使用 target name)
+	targetName := path.Base(targetPath)
+	args = append([]string{targetName}, args...)
+	logf("will exec, targetPath: %s, args: %+v", targetPath, args)
+
+	if helper.PathExists(targetPath) {
+		logf("targetPath: %s found", targetPath)
+	} else {
+		assertf(false, "targetPath: %s not exists, cannot exec", targetPath)
+	}
 
 	// 执行子进程
-	err = syscall.Exec(targetName, args, os.Environ())
+	err = syscall.Exec(targetPath, args, os.Environ())
 	assertf(err == nil, "exec err: %v", err)
 }
 

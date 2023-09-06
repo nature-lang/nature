@@ -1,11 +1,20 @@
 import std.util as *
+import syscall
 
-// 读取命令行参数
 fn args():[string] {
     return std_args()
 }
 
-// 字符串格式化
+// read current exe path by read link /proc/self/exe
+fn exe():string {
+    var buf = [] as [u8;4096]
+    var len = syscall.readlink('/proc/self/exe', buf)
+
+    var result = buf as string
+    libc_string_fit(result)
+    return result
+}
+
 fn sprintf(string fmt, ...[any] args):string {
     var end = fmt.len()
     var result = [] as [u8]
@@ -17,13 +26,12 @@ fn sprintf(string fmt, ...[any] args):string {
 
     for i < end {
         u8 c = sources[i]
-        i += 1 // 跳过 % 字符串
+        i += 1
         if c != ascii('%') {
             result.push(c)
             continue
         }
 
-        // 最后一个字符是一个 %, 但是没有后续字符了
         if i == end {
             continue
         }

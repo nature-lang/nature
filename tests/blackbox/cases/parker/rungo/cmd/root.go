@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"github.com/spf13/cobra"
 	"os"
+	"os/signal"
 	"rungo/src"
 )
 
@@ -29,8 +29,12 @@ var exampleCmd = &cobra.Command{
 var rootCmd = &cobra.Command{
 	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := context.Background()
-		src.Run(ctx)
+
+		c := make(chan os.Signal)
+		// 没有参数表示监听所有信号
+		signal.Notify(c)
+
+		src.Run(c)
 	},
 }
 

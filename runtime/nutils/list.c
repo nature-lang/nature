@@ -47,17 +47,15 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
     // - 进行内存申请,申请回来一段内存是 memory_list_t 大小的内存, memory_list_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 list_data + 1 时会按照 sizeof(memory_list_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_list_t *list_data = runtime_rtype_malloc(list_rtype->size, list_rtype);
-    list_data->capacity = capacity;
-    list_data->length = length;
-    list_data->element_rtype_hash = element_rtype_hash;
-    list_data->data = rt_array_new(element_rtype, capacity);
+    n_list_t *list = runtime_rtype_malloc(list_rtype->size, list_rtype);
+    list->capacity = capacity;
+    list->length = length;
+    list->element_rtype_hash = element_rtype_hash;
+    list->data = rt_array_new(element_rtype, capacity);
 
-    // 尝试清空 data
+    DEBUGF("[runtime.list_new] success, list: %p, data: %p", list, list->data);
 
-    DEBUGF("[runtime.list_new] success, list: %p, data: %p", list_data, list_data->data);
-
-    return list_data;
+    return list;
 }
 
 /**
@@ -131,7 +129,7 @@ void list_push(n_list_t *l, void *ref) {
 }
 
 /**
- * 不支持负数索引
+ * 在原有 array data 上进行切割
  * @param rtype_hash
  * @param l
  * @param start 起始 index [start, end)
@@ -157,13 +155,16 @@ n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t en
     DEBUGF("[list_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu",
            rtype_hash, l->element_rtype_hash, start, end);
     uint64_t length = end - start;
+
+    rtype_t *list_rtype = rt_find_rtype(rtype_hash);
+    assertf(list_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    n_list_t *sliced_list = runtime_rtype_malloc(list_rtype->size, list_rtype);
+    sliced_list->capacity = length;
+    sliced_list->length = length;
+    sliced_list->element_rtype_hash = l->element_rtype_hash;
+
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
-    n_list_t *sliced_list = list_new(rtype_hash, l->element_rtype_hash, length, length);
-
-    void *src = l->data + start * element_size;
-
-    // memmove
-    memmove(sliced_list->data, src, element_size * length);
+    sliced_list->data = l->data + start * element_size;
 
     return sliced_list;
 }

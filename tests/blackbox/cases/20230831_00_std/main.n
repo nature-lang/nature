@@ -2,6 +2,10 @@ import std
 import std.path
 import std.elf
 
+var exepath =  std.exe()
+println('exe path is', exepath, '!!!')
+return
+
 var a1 = path.join('/test/hello/world/', './nice.tar.gz')
 println(a1)
 var a2 = path.join('/test/hello/world', './nice.tar.gz')
