@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"github.com/spf13/cobra"
 	"os"
@@ -28,7 +29,8 @@ var exampleCmd = &cobra.Command{
 var rootCmd = &cobra.Command{
 	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
-		src.Run()
+		ctx := context.Background()
+		src.Run(ctx)
 	},
 }
 
