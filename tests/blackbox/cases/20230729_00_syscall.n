@@ -7,7 +7,7 @@ if err.has {
 
 if pid > 0 {
     // 主进程, wait 阻塞, 并读取返回值
-    var status = syscall.wait(pid)
+    var status = syscall.wait(pid, 0)
     print('wait status: ', status, '\n')
 } else {
     // 子进程通过 exec 调用 sleep

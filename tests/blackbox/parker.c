@@ -9,11 +9,11 @@
 
 static void test_basic() {
     // 添加环境变量
-    char *runner_dir = path_join(WORKDIR, "tests/runner_path");
+    char *runner_path = path_join(WORKDIR, "tests/runner_dir/runner");
 
     WORKDIR = path_join(WORKDIR, "tests/mockdir");
 
-    setenv("RUNNER_DIR", runner_dir, 1);
+    setenv("RUNNER_PATH", runner_path, 1);
 
     slice_t *args = slice_new();
     slice_push(args, &"node");

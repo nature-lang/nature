@@ -12,8 +12,9 @@ print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
 
 result = syscall.call6(syscall.SYS_READ, fd as cptr, buf.ref(), buf.len() as cptr, 0, 0, 0)
 
-print('read result: ', result, '\n') // \0 占用了 string 的空间？
-print('buf: ', libc_string_fit(buf as string), '!!!', '\n')
+print('read result: ', result, '\n')
+buf = buf.slice(0, result)
+print('buf: ', buf as string, '!!!', '\n')
 
 
 // clock_gettime

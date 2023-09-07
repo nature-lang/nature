@@ -6,8 +6,10 @@ import parker.log as *
 import parker.util
 import compress.tgz
 
-tgz.verbose = true
-set_verbose()
+if util.arg_verbose() {
+    tgz.verbose = true
+    set_verbose()
+}
 
 var args = std.args()
 
@@ -15,7 +17,7 @@ var args = std.args()
 assertf(args.len() > 1, 'args failed')
 
 // 可能是一个绝对路径也可以是一个相对 path
-var exec_path = args[0]
+var exec_path = std.exe()
 logf('exec_path: %v', exec_path)
 
 var target_name = args[1]
@@ -64,22 +66,11 @@ logf('encode to tgz_name %v in %v', tgz_name, workdir)
 
 
 // 如果存在环境变量 RUNNER_PATH, 则有优先读取环境变量
-var runner_dir =  syscall.get_env('RUNNER_DIR')
-if runner_dir == '' {
-    runner_dir = path.dir(exec_path)
+var runner_path =  syscall.get_env('RUNNER_PATH')
+if runner_path == '' {
+    var parker_dir = path.dir(exec_path)
+    runner_path = path.join(parker_dir, 'runner')
 }
-
-// 优先根据 target_path 的类型进行自动选择，默认选择 runner_linux_amd64 进行压缩(可能是一个 shell, 不存在 elf 判断)
-// 计算 arch 并拼接出 runner 完整路径
-var runner_ident = 'runner_linux_amd64'
-var (arch, err) = try elf.arch(target_path)
-if err.has {
-    logf('elf target err: %v', err.msg)
-} else {
-    runner_ident = std.sprintf('runner_linux_%v', arch)
-}
-
-var runner_path = path.join(runner_dir, runner_ident)
 
 assertf(path.exists(runner_path), 'runner file=%v notfound', runner_path)
 logf('runner_path=%v found', runner_path)

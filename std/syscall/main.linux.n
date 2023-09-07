@@ -599,16 +599,25 @@ fn getppid():int {
 
 fn getcwd():string {
     var buf = [] as [u8;1024] // 1024 是 path max
-    call6(SYS_GETCWD, buf.ref(), buf.len() as cptr, 0, 0, 0, 0)
-    return libc_string_fit(buf as string)
+    var len = call6(SYS_GETCWD, buf.ref(), buf.len() as cptr, 0, 0, 0, 0)
+
+    buf = buf.slice(0, len - 1) // -1 is remove '\0'
+
+    return buf as string
 }
 
 fn kill(int pid, int sig) {
     call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
 }
 
-fn wait(int pid):int {
-    return syscall_wait(pid)
+fn wait(int pid, int option):int {
+    var status = 0
+    int result = waitpid(pid, &status, option)
+    if result == -1 {
+        throw libc_strerror()
+    }
+
+    return status
 }
 
 fn chdir(string path) {

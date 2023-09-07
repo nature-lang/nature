@@ -10,9 +10,8 @@ fn exe():string {
     var buf = [] as [u8;4096]
     var len = syscall.readlink('/proc/self/exe', buf)
 
-    var result = buf as string
-    libc_string_fit(result)
-    return result
+    buf = buf.slice(0, len)
+    return buf as string
 }
 
 fn sprintf(string fmt, ...[any] args):string {
@@ -102,6 +101,8 @@ fn sprintf(string fmt, ...[any] args):string {
                  s = itos(arg as u32, fill, width)
             } else if arg is u64 {
                  s = itos(arg as u64, fill, width)
+            }  else {
+                 s = '%!d'
             }
 
             for c in s { 
@@ -111,7 +112,28 @@ fn sprintf(string fmt, ...[any] args):string {
             continue
         }
 
+        if c == ascii('s') {
+            string s = ''
+            if arg is string {
+                s = arg as string
+            } else {
+                s = '%!s'
+            }
+            for c in s {
+                result.push(c)
+            }
+
+            continue
+        }
+
         if c == ascii('c') {
+            if !(arg is u8) {
+                result.push(ascii('%'))
+                result.push(ascii('!'))
+                result.push(ascii('c'))
+                continue
+            }
+
             result.push(arg as u8)
             continue
         }

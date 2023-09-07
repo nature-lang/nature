@@ -9,17 +9,12 @@ type time_t = struct {
         return s.sec
     }
     var datetime = fn(self s):string {
-        var buf = [] as [u8;80] // 必须预留足够大的空间,才能正常引用
+        var buf = [] as [u8;100] // 必须预留足够大的空间,才能正常引用
 
-        // TODO 根据返回值进行长度截取
-        strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), s.tm)
+        var len = strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), s.tm)
+        buf = buf.slice(0, len)
 
-        var result = buf as string
-
-        // length cut by '\0'
-        libc_string_fit(result)
-
-        return result
+        return buf as string
     }
 }
 

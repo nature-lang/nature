@@ -28,6 +28,8 @@ fn mktime(ptr<libc_tm_t> time_info):i64
 // strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
 fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
 
+// 通过空值 options 实现阻塞和非阻塞模式
+fn waitpid(int pid, ptr<int> status, int options):int
 
 // --- 自定义在 runtime/libc 模块中的函数
 
@@ -36,11 +38,5 @@ fn libc_string_new(cptr s):string
 
 fn libc_string_replace(string str, string old, string new_str):string
 
-fn libc_string_fit(string str):string
-
-// 类似与 fit, 强制设定 list 的 len, 当前的 len 需要大于设置的值
-fn libc_list_fit_len([t1] list, int new_len)
-
 // 读取 errno 中的错误信息
 fn libc_strerror():string
-

@@ -3,8 +3,6 @@ fn syscall_call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a
 
 fn syscall_exec(string path, [string] argv, [string] envp)
 
-fn syscall_wait(int pid):int
-
 fn syscall_getcwd():string
 
 fn getenv(cptr key):cptr

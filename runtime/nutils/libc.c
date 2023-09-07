@@ -33,18 +33,3 @@ n_string_t *libc_strerror() {
     n_string_t *s = string_new(msg, strlen(msg));
     return s;
 }
-
-n_string_t *libc_string_fit(n_string_t *str) {
-    str->length = strlen((char *) str->data);
-    return str;
-}
-
-void libc_list_fit_len(n_list_t *list, n_int_t new_len) {
-    if (list->length < new_len) {
-        char *msg = dsprintf("cannot set len %d to list(len: %d)", new_len, list->length);
-        rt_processor_attach_errort(msg);
-        return;
-    }
-
-    list->length = new_len;
-}

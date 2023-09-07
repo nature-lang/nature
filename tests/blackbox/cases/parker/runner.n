@@ -1,0 +1,35 @@
+import std
+import std.path
+import std.elf
+import syscall
+import parker.log as *
+import parker.util
+import compress.tgz
+
+var version = '0.1.0'
+
+if util.arg_verbose() {
+    tgz.verbose = true
+    set_verbose()
+}
+
+logf('runner version: %s', version)
+
+// - read exe path
+
+// - extract tgz by exe
+
+// - mount namespace
+
+// - write tgz to mount ns
+
+// - un tgz file
+
+// - read target
+
+// - cgroup new
+
+// - run target with cgroup
+
+// - listen sig or wait cmd
+
