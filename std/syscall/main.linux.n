@@ -610,14 +610,14 @@ fn kill(int pid, int sig) {
     call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
 }
 
-fn wait(int pid, int option):int {
+fn wait(int pid, int option):(int, int) {
     var status = 0
     int result = waitpid(pid, &status, option)
     if result == -1 {
         throw libc_strerror()
     }
 
-    return status
+    return (result, status)
 }
 
 fn chdir(string path) {

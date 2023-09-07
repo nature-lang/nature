@@ -4,6 +4,7 @@ import std.elf
 import syscall
 import parker.log as *
 import parker.util
+import parker.croup
 import compress.tgz
 
 var version = '0.1.0'
@@ -13,23 +14,46 @@ if util.arg_verbose() {
     set_verbose()
 }
 
-logf('runner version: %s', version)
+logf('runner start version: %s', version)
 
 // - read exe path
+var exe_path = std.exe()
+var workdir = path.dir(exe_path)
+logf('workdir=%s', workdir)
 
 // - extract tgz by exe
+var tgz_buf = util.extract_tgz(exe_path)
 
 // - mount namespace
+mount_ns(workdir)
 
 // - write tgz to mount ns
+tgz_path = path.join(workdir, 'parker.tag.gz')
+var tgz_fd = syscall.open(tgz_path, syscall.O_RDONLY | syscall.O_CREAT, 0644)
+var err = try syscall.write(tgz_fd, tgz_buf, tgz_buf.len())
+assertf(!err.has, 'write tgz to %s failed, err=%s', tgz_path, err.msg)
 
 // - un tgz file
+tgz.decode(workdir, tgz_path)
+logf('tgz decode success')
 
 // - read target
+var target_path = util.read_target(workdir)
+logf('read target_path success', target_apth)
 
 // - cgroup new
+var cg = cgroup.new()
 
 // - run target with cgroup
+var pid = utils.run_target(cg, target_path)
 
 // - listen sig or wait cmd
+for true {
+     syscall.wait(pid, 1)
+
+
+    // 休眠 ms
+    usleep(100000);
+}
+
 

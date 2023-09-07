@@ -1,4 +1,5 @@
 import std
+import parker.cgroup
 
 fn arg_verbose() {
     var args = std.args()
@@ -12,3 +13,27 @@ fn arg_verbose() {
     return false
 }
 
+// 返回完整的 tgz 数据
+fn extract_tgz(string path):[u8] {
+
+}
+
+// 在 workdir 创建 mount 空间
+fn mount_ns(string workdir) {
+
+}
+    
+fn read_target(string workdir):string {
+
+}
+
+fn run_target(cgroup.cgroup_t cg, string target_path):int {
+    
+}
+
+// 创建一个能够拦截所有信号且非阻塞的 fd
+fn sig_notify():i32 {
+    var mask = new sigset_t // ptr<sigset_t>
+    sigfillset(mask) // 注册所有信号
+    sigprocmask(0, mast, )
+}

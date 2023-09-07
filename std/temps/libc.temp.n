@@ -31,8 +31,50 @@ fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
 // 通过空值 options 实现阻塞和非阻塞模式
 fn waitpid(int pid, ptr<int> status, int options):int
 
-// --- 自定义在 runtime/libc 模块中的函数
+// --- signal 相关 <sys/signalfd.h> 和 <signal.h>
+type sigset_t = struct {
+    arr<u64,16> __val
+}
 
+type signalfd_siginfo_t = struct {
+    u32 ssi_signo
+    i32 ssi_errno
+    i32 ssi_code
+    u32 ssi_pid
+    u32 ssi_uid
+    i32 ssi_fd
+    u32 ssi_tid
+    u32 ssi_band
+    u32 ssi_overrun
+    u32 ssi_trapno
+    i32 ssi_status
+    i32 ssi_int
+    u64 ssi_ptr
+    u64 ssi_utime
+    u64 ssi_stime
+    u64 ssi_addr
+    u16 ssi_addr_lsb
+    u32 __pad2
+    i32 ssi_syscall
+    u64 ssi_call_addr
+    u32 ssi_arch
+    arr<u8,48> __pad
+}
+
+fn sigemptyset(ptr<sigset_t> sigset):i32
+
+fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
+
+fn sigfillset(ptr<sigset_t> sigset):i32
+
+// cptr 接受 null 和
+fn sigprocmask(i32 how, ptr<sigset_t> sigset, cptr<sigset_t> oldset):i32
+
+fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
+
+fn usleep(u32 usec):i32
+
+// --- 自定义在 runtime/libc 模块中的函数
 // cptr = char*
 fn libc_string_new(cptr s):string
 

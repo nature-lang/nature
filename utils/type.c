@@ -864,6 +864,9 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
+    // TODO null to cptr
+
+
     if (left.kind != right.kind) {
         return false;
     }
