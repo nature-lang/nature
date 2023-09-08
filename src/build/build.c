@@ -317,27 +317,18 @@ static void build_temps(slice_t *templates) {
 /**
  * std temp 自动注册
  */
-static void build_std_temps() {
-    slice_t *templates = slice_new();
-
+static void import_builtin_temp() {
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
+    char *full_path = path_join(template_dir, "builtin_temp.n");
+    assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
 
-    DIR *dir = opendir(template_dir);
-    assertf(dir, "cannot found std dir %s", template_dir);
+    module_t *m = module_build(NULL, full_path, MODULE_TYPE_TEMP);
 
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {
-            char *name = entry->d_name;
-            char *temp_path = path_join(template_dir, name);
+    analyzer(m, m->stmt_list);
 
-            slice_push(templates, temp_path);
-        }
-    }
-    closedir(dir);
+    generic(m);
 
-
-    build_temps(templates);
+    pre_checking(m);
 }
 
 static slice_t *build_modules(toml_table_t *package_conf) {
@@ -345,21 +336,23 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
+    slice_t *temps = slice_new();
+
+    // builtin_temp.n
+    char *template_dir = path_join(NATURE_ROOT, "std/temps");
+    char *full_path = path_join(template_dir, "builtin_temp.n");
+    assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
+    slice_push(temps, full_path);
 
 
+    // main build
     ast_import_t main_import = {
             .package_dir = WORKDIR,
             .package_conf = package_conf,
             .module_ident = FN_MAIN_NAME,
     };
 
-    // main temps 注册
-    slice_t *temps = package_templates(main_import.package_dir, main_import.package_conf);
-    if (temps && temps->count > 0) {
-        build_temps(temps);
-    }
-
-    // main [links] 注册
+    // main [links] 自动注册
     slice_t *links = package_links(main_import.package_dir, main_import.package_conf);
     if (links && links->count > 0) {
         for (int i = 0; i < links->count; ++i) {
@@ -368,35 +361,25 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
 
-    table_t *temps_handled = table_new();
     table_t *links_handled = table_new();
-    table_set(temps_handled, main_import.package_dir, (void *) 1);
     table_set(links_handled, main_import.package_dir, (void *) 1);
 
-
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
-
     slice_push(modules, main);
 
     linked_t *work_list = linked_new();
     linked_push(work_list, main);
+
+    table_t *import_temp_table = table_new();
+
     while (work_list->count > 0) {
+        // module_build time has perfected import
         module_t *m = linked_pop(work_list);
 
         for (int j = 0; j < m->imports->count; ++j) {
             ast_import_t *import = m->imports->take[j];
             if (table_exist(module_table, import->full_path)) {
                 continue;
-            }
-
-            // 在 build module 之前，需要将当前 module 所在的 package.toml 中的 templates 中包含的全局符号注册到符号表中
-            if (import->package_conf && !table_exist(temps_handled, import->package_dir)) {
-                temps = package_templates(import->package_dir, import->package_conf);
-                if (temps && temps->count > 0) {
-                    build_temps(temps);
-                }
-
-                table_set(temps_handled, import->package_dir, import);
             }
 
             if (import->use_links && !table_exist(links_handled, import->package_dir)) {
@@ -411,24 +394,41 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 table_set(links_handled, import->package_dir, import);
             }
 
+            if (import->module_type == MODULE_TYPE_TEMP) {
+                assertf(import->full_path, "import temp path empty");
+
+                if (!table_exist(import_temp_table, import->full_path)) {
+                    table_set(import_temp_table, import->full_path, import);
+                    slice_push(temps, import->full_path);
+                }
+                continue;
+            }
+
             // new module dep all imports handled
-            module_t *new_module = module_build(import, import->full_path, MODULE_TYPE_COMMON);
+            module_t *new_module = module_build(import, import->full_path, import->module_type);
+
+            // temp 预先处理
+
             linked_push(work_list, new_module);
-            slice_push(modules, new_module);
             table_set(module_table, import->full_path, new_module);
+            slice_push(modules, new_module);
         }
     }
 
-    // 遍历所有 module 开始进行 analyzer 和 import
+    // temps 没有依赖关系，可以进行预先构建
+    build_temps(temps);
+
+    // modules contains
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
+        assert(m->type != MODULE_TYPE_TEMP);
+
         // analyzer => ast_fndefs(global)
+        // analyzer 需要将符号注册完成，否则在 pre_checking 时找不到相关的符号
         analyzer(m, m->stmt_list);
 
         // generic => ast_fndef(global+local flat)
         generic(m);
-
-        pre_checking(m);
     }
 
     // register all module init to main module body
@@ -448,9 +448,15 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 }
 
 static void build_compiler(slice_t *modules) {
+    // pre_checking 对函数头进行 reduction, 让 checking 中的 fn_match 到准确位置
+    for (int i = 0; i < modules->count; ++i) {
+        pre_checking(modules->take[i]);
+    }
+
     // checking + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
+
         // 类型推断
         checking(m);
 
@@ -501,17 +507,12 @@ void build(char *build_entry) {
     // debug
     config_print();
 
-    // 导入自建模块 build templates
-
-
     // 解析 package_conf
     toml_table_t *package_conf = NULL;
     char *package_file = path_join(WORKDIR, PACKAGE_TOML);
     if (file_exists(package_file)) {
         package_conf = package_parser(package_file);
     }
-
-    build_std_temps();
 
     slice_t *modules = build_modules(package_conf);
 

@@ -1,5 +1,6 @@
 import syscall
 import strings
+import libc_temp
 
 type time_t = struct {
     i64 sec

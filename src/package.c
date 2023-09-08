@@ -3,8 +3,10 @@
 #include "utils/table.h"
 #include "build/config.h"
 #include <dirent.h>
+#include "utils/helper.h"
 
 static table_t *std_package_table;
+static table_t *std_temp_package_table;
 
 bool is_std_package(char *package) {
     // 扫描 nature root 下的所有 文件，并注册到全局变量 std_packages 中
@@ -34,6 +36,72 @@ bool is_std_package(char *package) {
     closedir(dir);
 
     return table_exist(std_package_table, package);
+}
+
+bool is_std_temp_package(char *package) {
+    // 扫描 nature root 下的所有 文件，并注册到全局变量 std_packages 中
+    if (std_temp_package_table) {
+        return table_exist(std_temp_package_table, package);
+    }
+
+    std_temp_package_table = table_new();
+
+    // 遍历 NATURE_ROOT 下的 std 目录下的所有文件夹
+    char *std_dir = path_join(NATURE_ROOT, "std");
+    char *temp_dir = path_join(std_dir, "temps");
+
+    DIR *dir = opendir(temp_dir);
+    assertf(dir, "cannot found temp dir %s", temp_dir);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
+            char *filename = strdup(entry->d_name);
+
+            filename = rtrim(filename, ".n");
+
+            table_set(std_temp_package_table, filename, (void *) 1);
+        }
+    }
+
+    closedir(dir);
+
+
+    return table_exist(std_temp_package_table, package);
+}
+
+char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package) {
+    assert(package_dir);
+    assert(ast_import_package);
+    assert(ast_import_package->count == 2);
+
+    // import package.test_temp
+    char *temp_name = ast_import_package->take[1];
+    assertf(temp_name, "import temp package exception");
+
+    // package_conf 中查找 temp_name
+    toml_table_t *temp_table = toml_table_in(package_conf, "templates");
+    if (!temp_table) {
+        return NULL;
+    }
+
+    toml_table_t *temp_entry_table = toml_table_in(temp_table, temp_name);
+    if (!temp_entry_table) {
+        return NULL;
+    }
+
+    // entry path  string
+    toml_datum_t datum = toml_string_in(temp_entry_table, "path");
+    assertf(datum.ok, "%s entry 'path' not found", temp_name);
+
+    char *path = datum.u.s;
+    assertf(path[0] != '.', "cannot use package %s temps path=%s begin with '.'", package_dir, path);
+    assertf(path[0] != '/', "cannot use package %s temps absolute path=%s", package_dir, path);
+    assertf(ends_with(path, ".n"), "cannot use package %s temps path=%s not end with .n", package_dir, path);
+
+    path = path_join(package_dir, path);
+
+    return path;
 }
 
 /**
@@ -119,7 +187,7 @@ slice_t *package_links(char *package_dir, toml_table_t *package_conf) {
         // 基于 package conf 所在目录生成绝对路劲
         path = path_join(package_dir, path);
 
-        assertf(file_exists(path), "templates path '%s' notfound", path);
+        assertf(file_exists(path), "link path '%s' notfound", path);
 
         slice_push(result, path);
     }

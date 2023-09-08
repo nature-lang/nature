@@ -1,4 +1,5 @@
 import syscall
+import package.zlib_temp
 
 var input = 'mock/input.txt'
 var output = 'output.gz'

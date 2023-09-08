@@ -5,7 +5,7 @@ description = "Your package description"
 license = "MIT"
 type = "bin" # lib or bin
 
-templates = []
+[templates]
 
 # 支持 .o 或者 .a link 文件, key 中需要包含 .a 或者 .o 从而能够方便的进行类型识别，从而判断不同的 key
 # 填写相对路劲是，以当前编译的工作目录为基准。

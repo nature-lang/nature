@@ -1,6 +1,7 @@
 import syscall
 import std
 import std.path
+import compress.archive_temp
 
 i32 ARCHIVE_EOF = 1
 i32 ARCHIVE_OK = 0

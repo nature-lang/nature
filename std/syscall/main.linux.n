@@ -1,4 +1,8 @@
 import libc
+import libc_temp
+import dirent_temp
+import syscall_temp
+import strings_temp
 
 int O_RDONLY = 0x0  // 只读模式
 int O_WRONLY = 0x1  // 只写模式

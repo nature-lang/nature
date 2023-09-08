@@ -311,12 +311,13 @@ typedef struct {
 typedef struct {
     // file or package one of the two
     char *file; // import 'xxx' or
-    slice_t *package; // a.b.c.d package 字符串数组
+    slice_t *ast_package; // a.b.c.d package 字符串数组
     char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
     // 通过上面的 file 或者 package 解析出的完整 package 路径
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
     // 对应的 package.toml
+    uint8_t module_type;
     char *full_path;
     toml_table_t *package_conf;
     char *package_dir; // 这也是 import module 的 workdir

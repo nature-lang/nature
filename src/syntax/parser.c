@@ -1224,7 +1224,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     parser_advance(m);
     ast_import_t *stmt = malloc(sizeof(ast_import_t));
     stmt->file = NULL;
-    stmt->package = slice_new();
+    stmt->ast_package = slice_new();
     stmt->as = NULL;
     stmt->full_path = NULL;
     stmt->module_ident = NULL;
@@ -1234,10 +1234,10 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
         stmt->file = token->literal;
     } else {
         PARSER_ASSERTF(token->type == TOKEN_IDENT, "import token must string");
-        slice_push(stmt->package, token->literal);
+        slice_push(stmt->ast_package, token->literal);
         while (parser_consume(m, TOKEN_DOT)) {
             token = parser_must(m, TOKEN_IDENT);
-            slice_push(stmt->package, token->literal);
+            slice_push(stmt->ast_package, token->literal);
         }
     }
 

@@ -22,6 +22,22 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     import->package_conf = package_parser(package_conf_path);
 }
 
+static char *std_temp_full_path(module_t *m, char *package, ast_import_t *import) {
+    // /usr/local/nature/std
+    ANALYZER_ASSERTF(NATURE_ROOT, "NATURE_ROOT not found");
+
+    char *temp_dir = path_join(NATURE_ROOT, "std");
+    temp_dir = path_join(temp_dir, "temps");
+
+    char *full_path = path_join(temp_dir, package);
+
+    // 结尾添加 .n 找到具体的文件
+    full_path = str_connect(full_path, ".n");
+    assertf(file_exists(full_path), "cannot find temp file %s", full_path);
+
+    return full_path;
+}
+
 /**
  * 基于 m->package_tol 完善 import
  * @param m
@@ -57,12 +73,49 @@ static void analyzer_body(module_t *m, slice_t *body) {
     }
 }
 
+// temp
+void analyzer_import_temp(module_t *m, ast_import_t *import) {
+    ANALYZER_ASSERTF(import->ast_package->count > 0, "import exception");
+    char *package = import->ast_package->take[0];
+    import->module_type = MODULE_TYPE_TEMP;
+    import->as = "";
+
+    if (is_std_temp_package(package)) {
+        assertf(import->ast_package->count == 1, "import std temp module exception");
+        import->full_path = std_temp_full_path(m, package, import);
+    } else {
+        ANALYZER_ASSERTF(import->ast_package->count == 2, "import temp module '%s' notfound", package);
+        ANALYZER_ASSERTF(m->package_conf,
+                         "cannot 'import %s', not found package.toml", package);
+
+        // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
+        if (is_current_package(m->package_conf, package)) {
+            //
+            // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
+            import->package_dir = m->package_dir;
+            import->package_conf = m->package_conf;
+        } else if (is_dep_package(m->package_conf, package)) {
+            analyzer_import_dep(m, package, import);
+        } else {
+            ANALYZER_ASSERTF(false, "import package %s not found", package);
+        }
+
+        // 基于 import->package_conf 和 dir 定位到具体的 temp 文件
+        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir,
+                                                         import->ast_package);
+
+        assertf(file_exists(import->full_path), "templates path '%s' notfound", import->full_path);
+
+    }
+}
+
 /**
  * 目前必须以 .n 结尾
  * @param importer_dir
  * @param import
  */
 void analyzer_import(module_t *m, ast_import_t *import) {
+    // - import file
     if (import->file) {
         // import->path 必须以 .n 结尾
         ANALYZER_ASSERTF(ends_with(import->file, ".n"), "import file suffix must .n");
@@ -92,14 +145,23 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
         import->package_conf = m->package_conf;
         import->package_dir = m->package_dir;
-
         import->module_ident = module_unique_ident(import);
+        import->module_type = MODULE_TYPE_COMMON;
         return;
     }
 
-    ANALYZER_ASSERTF(import->package->count > 0, "import exception");
-    char *package = import->package->take[0];
 
+    ANALYZER_ASSERTF(import->ast_package->count > 0, "import exception");
+    char *package = import->ast_package->take[0];
+    char *module = import->ast_package->take[import->ast_package->count - 1];
+
+    // - import temp 判断结尾是否是 _temp, 如果是 _temp 表示这是一个 temp 文件
+    if (ends_with(module, "_temp")) {
+        analyzer_import_temp(m, import);
+        return;
+    }
+
+    // - import module
     if (!m->package_conf && is_std_package(package)) {
         analyzer_import_std(m, package, import);
     } else {
@@ -122,13 +184,14 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     }
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
-    import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->package);
+    import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->ast_package);
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as) {
-        import->as = import->package->take[import->package->count - 1];
+        import->as = import->ast_package->take[import->ast_package->count - 1];
     }
 
+    import->module_type = MODULE_TYPE_COMMON;
     // package 模式下的 ident 应该基于 package module?
     import->module_ident = module_unique_ident(import);
 }
@@ -169,6 +232,31 @@ static char *analyzer_resolve_type(module_t *m, analyzer_fndef_t *current, strin
             return global_ident; // 完善 type 都访问名称
         }
 
+        // - import xxx as * 产生的全局符号
+        // - import temp 中的符号
+        for (int i = 0; i < m->imports->count; ++i) {
+            ast_import_t *import = m->imports->take[i];
+
+            if (import->module_type == MODULE_TYPE_TEMP) {
+                assert(import_temp_symbol_table);
+                assert(import->full_path);
+                table_t *temp_symbol_table = table_get(import_temp_symbol_table, import->full_path);
+                if (table_exist(temp_symbol_table, ident)) {
+                    // temp global Symbol does not require symbol rewriting
+                    return ident;
+                }
+            } else if (import->module_type == MODULE_TYPE_COMMON) {
+                if (str_equal(import->as, "*")) {
+                    // 改写成完整符号
+                    char *temp = ident_with_module(import->module_ident, ident);
+                    if (table_exist(can_import_symbol_table, temp)) {
+                        return temp;
+                    }
+                }
+            }
+        }
+
+        // builtin 中的全局类型
         s = table_get(symbol_table, ident);
         if (s != NULL) {
             // 不需要改写使用的名称了
@@ -900,21 +988,34 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
     }
 
     // - import xxx as * 产生的全局符号
+    // - import temp 中的符号
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
-        if (str_equal(import->as, "*")) {
-            temp = ident_with_module(import->module_ident, ident->literal);
-            if (table_exist(can_import_symbol_table, temp)) {
-                ident->literal = temp;
+
+        if (import->module_type == MODULE_TYPE_TEMP) {
+            assert(import_temp_symbol_table);
+            assert(import->full_path);
+            table_t *temp_symbol_table = table_get(import_temp_symbol_table, import->full_path);
+            if (table_exist(temp_symbol_table, ident->literal)) {
+                // temp global Symbol does not require symbol rewriting
                 return;
+            }
+        } else if (import->module_type == MODULE_TYPE_COMMON) {
+            if (str_equal(import->as, "*")) {
+                temp = ident_with_module(import->module_ident, ident->literal);
+                if (table_exist(can_import_symbol_table, temp)) {
+                    ident->literal = temp;
+                    return;
+                }
             }
         }
     }
 
-    // - templates 产生的全局符号
+
+    // - builtin 产生的全局符号
     s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
-        // 不需要改写使用的名称了
+        // builtin global Symbol does not require symbol rewriting
         return;
     }
 

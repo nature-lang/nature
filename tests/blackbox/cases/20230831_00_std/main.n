@@ -1,6 +1,8 @@
 import std
 import std.path
 import std.elf
+import libc_temp
+import dirent_temp
 
 var exepath =  std.exe()
 println('exe path is', exepath, '!!!')

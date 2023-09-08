@@ -1,5 +1,9 @@
 import std.util as *
 import syscall
+import libc_temp
+import dirent_temp
+import syscall_temp
+import strings_temp
 
 fn args():[string] {
     return std_args()

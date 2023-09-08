@@ -57,6 +57,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     // parser
     m->stmt_list = parser(m, m->token_list);
 
+    // analyzer import 预处理
     for (int i = 0; i < m->stmt_list->count; ++i) {
         ast_stmt_t *stmt = m->stmt_list->take[i];
         if (stmt->assert_type != AST_STMT_IMPORT) {
@@ -74,51 +75,81 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         table_set(m->import_table, ast_import->as, ast_import);
     }
 
-    if (type != MODULE_TYPE_COMMON) {
+    if (type == MODULE_TYPE_MAIN) {
         return m;
     }
 
-    // 全局 table 记录 import 下的所有符号, type 为 common 时才进行记录
-    // import handle
-    for (int i = 0; i < m->stmt_list->count; ++i) {
-        ast_stmt_t *stmt = m->stmt_list->take[i];
-        SET_LINE_COLUMN(stmt);
+    if (type == MODULE_TYPE_TEMP) {
+        table_t *temp_symbol_table = table_new();
+        for (int i = 0; i < m->stmt_list->count; ++i) {
+            ast_stmt_t *stmt = m->stmt_list->take[i];
+            SET_LINE_COLUMN(stmt);
 
-        if (stmt->assert_type == AST_STMT_IMPORT) {
-            continue;
+            if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
+                ast_type_alias_stmt_t *type_alias = stmt->value;
+
+                char *global_ident = ident_with_module(m->ident, type_alias->ident);
+                table_set(temp_symbol_table, global_ident, type_alias);
+                continue;
+            }
+
+            if (stmt->assert_type == AST_FNDEF) {
+                ast_fndef_t *fndef = stmt->value;
+                // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
+                char *global_ident = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+                table_set(temp_symbol_table, global_ident, fndef);
+                continue;
+            }
+
+            ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
         }
 
-        if (stmt->assert_type == AST_VAR_DECL) {
-            ast_var_decl_t *var_decl = stmt->value;
-            char *global_ident = ident_with_module(m->ident, var_decl->ident);
-            table_set(can_import_symbol_table, global_ident, var_decl);
-            continue;
-        }
+        table_set(import_temp_symbol_table, m->source_path, temp_symbol_table);
+    }
 
-        if (stmt->assert_type == AST_STMT_VARDEF) {
-            ast_vardef_stmt_t *vardef = stmt->value;
-            ast_var_decl_t *var_decl = &vardef->var_decl;
-            char *global_ident = ident_with_module(m->ident, var_decl->ident);
-            table_set(can_import_symbol_table, global_ident, var_decl);
-            continue;
-        }
+    if (type == MODULE_TYPE_COMMON) {
+        // 全局 table 记录 import 下的所有符号, type 为 common 时才进行记录
+        // import handle
+        for (int i = 0; i < m->stmt_list->count; ++i) {
+            ast_stmt_t *stmt = m->stmt_list->take[i];
+            SET_LINE_COLUMN(stmt);
 
-        if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
-            ast_type_alias_stmt_t *type_alias = stmt->value;
-            char *global_ident = ident_with_module(m->ident, type_alias->ident);
-            table_set(can_import_symbol_table, global_ident, type_alias);
-            continue;
-        }
+            if (stmt->assert_type == AST_STMT_IMPORT) {
+                continue;
+            }
 
-        if (stmt->assert_type == AST_FNDEF) {
-            ast_fndef_t *fndef = stmt->value;
-            // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            char *global_ident = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
-            table_set(can_import_symbol_table, global_ident, fndef);
-            continue;
-        }
+            if (stmt->assert_type == AST_VAR_DECL) {
+                ast_var_decl_t *var_decl = stmt->value;
+                char *global_ident = ident_with_module(m->ident, var_decl->ident);
+                table_set(can_import_symbol_table, global_ident, var_decl);
+                continue;
+            }
 
-        ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
+            if (stmt->assert_type == AST_STMT_VARDEF) {
+                ast_vardef_stmt_t *vardef = stmt->value;
+                ast_var_decl_t *var_decl = &vardef->var_decl;
+                char *global_ident = ident_with_module(m->ident, var_decl->ident);
+                table_set(can_import_symbol_table, global_ident, var_decl);
+                continue;
+            }
+
+            if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
+                ast_type_alias_stmt_t *type_alias = stmt->value;
+                char *global_ident = ident_with_module(m->ident, type_alias->ident);
+                table_set(can_import_symbol_table, global_ident, type_alias);
+                continue;
+            }
+
+            if (stmt->assert_type == AST_FNDEF) {
+                ast_fndef_t *fndef = stmt->value;
+                // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
+                char *global_ident = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+                table_set(can_import_symbol_table, global_ident, fndef);
+                continue;
+            }
+
+            ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
+        }
     }
 
     return m;

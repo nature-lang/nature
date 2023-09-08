@@ -4,6 +4,9 @@
 // 临时表，用来临时记录, key = ident, value is any
 table_t *can_import_symbol_table;
 
+table_t *import_temp_symbol_table;
+
+
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
@@ -53,6 +56,8 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 
 void symbol_init() {
     can_import_symbol_table = table_new();
+    import_temp_symbol_table = table_new();
+
     symbol_table = table_new();
     symbol_fn_list = slice_new();
     symbol_var_list = slice_new();

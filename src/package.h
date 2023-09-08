@@ -13,6 +13,10 @@
 
 bool is_std_package(char *package);
 
+bool is_std_temp_package(char *package);
+
+char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
+
 char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
 
 static inline toml_table_t *package_parser(char *file) {
@@ -111,51 +115,6 @@ static inline char *package_dep_local_dir(toml_table_t *conf, char *package) {
     path = str_connect_by(path, version, "@");
 
     return path_join(package_dir, path);
-}
-
-/**
- * name = "test"
- * templates = [
- *       "temps/helper.temp.n",
- *       "temps/builtin.temp.n",
- *       "temps/builtin.temp.n"
- *   ]
- * @param conf
- * @return
- */
-static inline slice_t *package_templates(char *package_dir, toml_table_t *conf) {
-    if (!conf) {
-        return NULL;
-    }
-
-    toml_array_t *temps = toml_array_in(conf, "templates");
-    if (!temps) {
-        return NULL;
-    }
-    slice_t *result = slice_new(); // template_t
-
-    size_t len = toml_array_nelem(temps);
-    for (int i = 0; i < len; ++i) {
-        toml_datum_t datum = toml_string_at(temps, i);
-        if (!datum.ok) {
-            continue;
-        }
-        char *path = datum.u.s;
-
-        // 只能使用相对路径
-        assertf(path[0] != '.', "cannot use package %s temps path=%s begin with '.'", package_dir, path);
-        assertf(path[0] != '/', "cannot use package %s temps absolute path=%s", package_dir, path);
-        assertf(ends_with(path, ".n"), "templates path must end with .n, index=%d, actual '%s'", i, path);
-
-        // 基于 package conf 所在目录生成绝对路劲
-        path = path_join(package_dir, path);
-
-        assertf(file_exists(path), "templates path '%s' notfound", path);
-
-        slice_push(result, path);
-    }
-
-    return result;
 }
 
 slice_t *package_links(char *package_dir, toml_table_t *package_conf);

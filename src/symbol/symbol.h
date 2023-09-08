@@ -15,6 +15,9 @@
 // 临时表，用来临时记录, key = ident, value is any
 extern table_t *can_import_symbol_table;
 
+// key = temp_ident, value = table_t, 记录了 temp 中的所有符号
+extern table_t *import_temp_symbol_table;
+
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
