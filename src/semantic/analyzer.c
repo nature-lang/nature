@@ -1366,10 +1366,6 @@ static void analyzer_temp(module_t *m, slice_t *stmt_list) {
             ast_var_decl_t *param = ct_list_value(fndef->params, j);
 
             analyzer_type(m, &param->type);
-
-            local_ident_t *param_local = local_ident_new(m, SYMBOL_VAR, param, param->ident);
-
-            param->ident = param_local->unique_ident;
         }
     }
 }

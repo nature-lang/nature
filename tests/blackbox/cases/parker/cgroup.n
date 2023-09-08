@@ -1,1 +1,44 @@
-type cgroup_t = struct {}
+import std.path
+import parker.util
+
+int version1 = 1
+int version2 = 2
+string v1_default_system = 'freezer'
+string procs_system = 'cgroup.procs'
+string parker_dir = 'parker'
+
+type cgroup_t = struct {
+    string id
+    u8 version
+    string path
+    string procs_path
+}
+
+fn new():cgroup_t {
+    if !path.exists('/sys/fs/cgroup') {
+        throw 'cgroup new err=' + 'path /sys/fs/cgroup not found'
+    }
+    
+    u8 version = 0
+    
+    if path.exists('/sys/fs/cgroup/cgroup.controllers') {
+        version = version2
+    }  else if path.exists(path.join("/sys/fs/cgroup", v1_default_system)) {
+        version = version1
+    } else {
+        throw 'cannot detect cgroup version'
+    }
+
+    var id = util.rand_letter(32)
+    
+    var cgroup_path = ''
+    if version == version1 {
+        cgroup_path = path.join('/sys/fs/cgroup', v1_default_system, parker_dir, id)
+    } else {
+        cgroup_path = path.join('/sys/fs/cgroup', parker_dir, id)
+    }
+
+    var procs_path = path.join(cgroup_path, procs_system)
+
+    // mkdir all
+}

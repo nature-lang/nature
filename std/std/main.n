@@ -1,4 +1,5 @@
 import std.util as *
+import std.path
 import syscall
 import libc_temp
 import dirent_temp
@@ -73,7 +74,7 @@ fn sprintf(string fmt, ...[any] args):string {
         }
 
         // c 不再 format 字符中，提示异常
-        if !{ascii('v'), ascii('c'), ascii('d')}.has(c) {
+        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s')}.has(c) {
             result.push(ascii('%'))
             result.push(ascii('?'))
             result.push(c)
@@ -225,4 +226,23 @@ fn listdir(string path):[string] {
     }
 
     return result
+}
+
+// use strings.split(dir, '/')
+// join and syscall.mkdir(dir, mode)
+fn mkdirs(string dir, u32 mode) {
+    if dir == '' {
+        throw 'dir is empty'
+    }
+
+    if path.exists(dir) {
+        return
+    }
+
+    // path not found will create
+    var parent_dir = path.dir(dir)
+    mkdirs(parent_dir, mode)
+
+    // parent dir is create, will create dir
+    syscall.mkdir(dir, mode)
 }

@@ -4,6 +4,65 @@ import dirent_temp
 import syscall_temp
 import strings_temp
 
+int MS_ACTIVE = 0x40000000
+int MS_ASYNC = 0x1
+int MS_BIND = 0x1000
+int MS_DIRSYNC = 0x80
+int MS_INVALIDATE = 0x2
+int MS_I_VERSION = 0x800000
+int MS_KERNMOUNT = 0x400000
+int MS_MANDLOCK = 0x40
+int MS_MGC_MSK = 0xffff0000
+int MS_MGC_VAL = 0xc0ed0000
+int MS_MOVE = 0x2000
+int MS_NOATIME = 0x400
+int MS_NODEV = 0x4
+int MS_NODIRATIME = 0x800
+int MS_NOEXEC = 0x8
+int MS_NOSUID = 0x2
+int MS_NOUSER = -0x80000000
+int MS_POSIXACL = 0x10000
+int MS_PRIVATE = 0x40000
+int MS_RDONLY = 0x1
+int MS_REC = 0x4000
+int MS_RELATIME = 0x200000
+int MS_REMOUNT = 0x20
+int MS_RMT_MASK = 0x800051
+int MS_SHARED = 0x100000
+int MS_SILENT = 0x8000
+int MS_SLAVE = 0x80000
+int MS_STRICTATIME = 0x1000000
+int MS_SYNC = 0x4
+int MS_SYNCHRONOUS = 0x10
+int MS_UNBINDABLE = 0x20000
+
+// unshare 可选值
+int CLONE_NEWTIME = 0x00000080
+int CLONE_VM = 0x00000100
+int CLONE_FS = 0x00000200
+int CLONE_FILES = 0x00000400
+int CLONE_SIGHAND = 0x00000800
+int CLONE_PIDFD = 0x00001000
+int CLONE_PTRACE = 0x00002000
+int CLONE_VFORK = 0x00004000
+int CLONE_PARENT = 0x00008000
+int CLONE_THREAD = 0x00010000
+int CLONE_NEWNS = 0x00020000
+int CLONE_SYSVSEM = 0x00040000
+int CLONE_SETTLS = 0x00080000
+int CLONE_PARENT_SETTID = 0x00100000
+int CLONE_CHILD_CLEARTID = 0x00200000
+int CLONE_DETACHED = 0x00400000
+int CLONE_UNTRACED = 0x00800000
+int CLONE_CHILD_SETTID = 0x01000000
+int CLONE_NEWCGROUP = 0x02000000
+int CLONE_NEWUTS = 0x04000000
+int CLONE_NEWIPC = 0x08000000
+int CLONE_NEWUSER = 0x10000000
+int CLONE_NEWPID = 0x20000000
+int CLONE_NEWNET = 0x40000000
+int CLONE_IO = 0x80000000
+
 int O_RDONLY = 0x0  // 只读模式
 int O_WRONLY = 0x1  // 只写模式
 int O_RDWR   = 0x2  // 读写模式
@@ -529,6 +588,8 @@ fn fork():int {
     return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
 }
 
+// path is full path
+// argv[0] = /proc/:pid/comm
 fn exec(string path, [string] argv, [string] envp) {
     return syscall_exec(path, argv, envp)
 }
@@ -713,6 +774,10 @@ fn sendto(int sockfd, [u8] buf, int flags):int {
     return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
 }
 
+fn get_envs():[string] {
+    return libc_get_envs()
+}
+
 fn get_env(string key):string {
     cptr ref = getenv(key.ref())
     if ref == 0 {
@@ -727,4 +792,16 @@ fn set_env(string key, string value) {
     if result != 0 {
         throw 'setenv error'
     }
+}
+
+fn unshare(int flags) {
+    call6(SYS_UNSHARE, flags as cptr, 0, 0, 0, 0, 0)
+}
+
+fn mount(string source, string target, string fs_type, u32 flags, string data) {
+    call6(SYS_MOUNT, source.ref(), target.ref(), fs_type.ref(), flags as cptr, data.ref(), 0)
+}
+
+fn umount(string target, u32 flags) {
+    call6(SYS_UMOUNT2, target.ref(), flags as cptr, 0, 0, 0, 0)
 }

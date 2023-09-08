@@ -6,6 +6,7 @@ import parker.log as *
 import parker.util
 import parker.croup
 import compress.tgz
+import libc_temp
 
 var version = '0.1.0'
 
@@ -45,15 +46,36 @@ logf('read target_path success', target_apth)
 var cg = cgroup.new()
 
 // - run target with cgroup
-var pid = utils.run_target(cg, target_path)
+var pid = util.run_target(cg, target_path)
+
+var sigfd = util.sig_notify()
 
 // - listen sig or wait cmd
+var sig_info = signalfd_siginfo_t{}
 for true {
-     syscall.wait(pid, 1)
+    var (result, status) = syscall.wait(pid, 1)
+    if result != 0 { // pid  is down       
+        logf('pid %d is exit status=%d', pid, status)
 
+        // clear cgroup dir
+        cg.clear()
+        break
+    }
 
-    // 休眠 ms
+    var (len, err) = try syscall.read(sigfd, sig_info as cptr, sizeof(signalfd_siginfo_t))
+    // sig to the pid process but no operation is done
+    // Resource temporarily unavailable
+    if err.has && err.msg != 'Resource temporarily unavailable' {
+        assertf(false, 'read sigfd %d err=%s', sigfd, err.msg)
+    } else {
+        // sync the received sig to the pid
+        syscall.kill(pid, sig_info.ssi_signo)
+        logf('send sig=%d to pid=%d', sig_info.ssi_signo, pid)
+    }
+
+    // sleep 100ms
     usleep(100000);
 }
 
+logf('successful and exit')
 

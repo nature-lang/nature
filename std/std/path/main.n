@@ -7,7 +7,27 @@ fn exists(string path):bool {
    return !err.has
 }
 
-// 参考 golang 的 path.dir
+// refer golang path.base
+fn base(string path):string {
+    if path == '' {
+        return '.'
+    }
+
+    path = strings.rtrim(path, ['/'])
+
+    if path == '' {
+        return '/'
+    }
+
+    var i = strings.rfind(path, "/", path.len())
+    if i == -1 {
+        return path
+    }
+
+    return strings.slice(path, i + 1, path.len())
+}
+
+// ref golang path.dir
 fn dir(string path):string {
   if path == '' {
      return '.'
@@ -29,6 +49,14 @@ fn dir(string path):string {
   }
 
   return strings.slice(path, 0, i)
+}
+
+fn join(string dst, ...[string] list):string {
+    for src in list {
+        dst = join(dst, src)
+    }
+
+    return dst
 }
 
 fn join(string dst, string src):string {

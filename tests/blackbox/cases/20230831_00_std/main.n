@@ -3,10 +3,7 @@ import std.path
 import std.elf
 import libc_temp
 import dirent_temp
-
-var exepath =  std.exe()
-println('exe path is', exepath, '!!!')
-return
+import strings
 
 var a1 = path.join('/test/hello/world/', './nice.tar.gz')
 println(a1)
@@ -42,3 +39,17 @@ println(path.exists('notfound.txt'))
 // elf.arch
 var arch = elf.arch('mock/file')
 println('mock/file elf arch is', arch)
+
+// path.base
+println('path.base----------------------')
+println(path.base('/test/hello'))
+println(path.base('/test/hello/'))
+println(path.base('/test/hello//'))
+println(path.base('/test'))
+println(path.base('test'))
+println(path.base(''))
+println(path.base('/'))
+println(path.base('//'))
+
+// sprintf
+std.printf('!%s!%s%s', 'test str', '', 'hello')

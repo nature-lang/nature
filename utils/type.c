@@ -848,32 +848,42 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
 
 /**
  * reduction 阶段就应该完成 cross left kind 的定位
- * @param left
- * @param right
+ * @param dst
+ * @param src
  * @return
  */
-bool type_compare(type_t left, type_t right) {
-    assertf(left.status == REDUCTION_STATUS_DONE && right.status == REDUCTION_STATUS_DONE,
+bool type_compare(type_t dst, type_t src) {
+    assertf(dst.status == REDUCTION_STATUS_DONE && src.status == REDUCTION_STATUS_DONE,
             "type not origin, left: '%s', right: '%s'",
-            type_kind_str[left.kind],
-            type_kind_str[right.kind]);
+            type_kind_str[dst.kind],
+            type_kind_str[src.kind]);
 
-    assertf(left.kind != TYPE_UNKNOWN && right.kind != TYPE_UNKNOWN, "type unknown cannot checking");
+    assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot checking");
 
-    if (is_gen_any(left) || is_gen_any(right)) {
+    if (is_gen_any(dst) || is_gen_any(src)) {
         return true;
     }
 
-    // TODO null to cptr
+    if (dst.kind == TYPE_NULLABLE_POINTER) {
+        if (src.kind == TYPE_NULL) {
+            return true;
+        }
+
+        if (src.kind == TYPE_POINTER) {
+            type_t dst_ptr = dst.pointer->value_type;
+            type_t src_ptr = src.pointer->value_type;
+            return type_compare(dst_ptr, src_ptr);
+        }
+    }
 
 
-    if (left.kind != right.kind) {
+    if (dst.kind != src.kind) {
         return false;
     }
 
-    if (left.kind == TYPE_UNION) {
-        type_union_t *left_union_decl = left.union_;
-        type_union_t *right_union_decl = right.union_;
+    if (dst.kind == TYPE_UNION) {
+        type_union_t *left_union_decl = dst.union_;
+        type_union_t *right_union_decl = src.union_;
 
         if (left_union_decl->any) {
             return true;
@@ -882,9 +892,9 @@ bool type_compare(type_t left, type_t right) {
         return type_union_compare(left_union_decl, right_union_decl);
     }
 
-    if (left.kind == TYPE_MAP) {
-        type_map_t *left_map_decl = left.map;
-        type_map_t *right_map_decl = right.map;
+    if (dst.kind == TYPE_MAP) {
+        type_map_t *left_map_decl = dst.map;
+        type_map_t *right_map_decl = src.map;
 
         if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
             return false;
@@ -897,9 +907,9 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_SET) {
-        type_set_t *left_decl = left.set;
-        type_set_t *right_decl = right.set;
+    if (dst.kind == TYPE_SET) {
+        type_set_t *left_decl = dst.set;
+        type_set_t *right_decl = src.set;
 
         if (!type_compare(left_decl->element_type, right_decl->element_type)) {
             return false;
@@ -908,24 +918,24 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_LIST) {
-        type_list_t *left_list_decl = left.list;
-        type_list_t *right_list_decl = right.list;
+    if (dst.kind == TYPE_LIST) {
+        type_list_t *left_list_decl = dst.list;
+        type_list_t *right_list_decl = src.list;
         return type_compare(left_list_decl->element_type, right_list_decl->element_type);
     }
 
-    if (left.kind == TYPE_ARRAY) {
-        type_array_t *left_array_decl = left.array;
-        type_array_t *right_array_decl = right.array;
+    if (dst.kind == TYPE_ARRAY) {
+        type_array_t *left_array_decl = dst.array;
+        type_array_t *right_array_decl = src.array;
         if (left_array_decl->length != right_array_decl->length) {
             return false;
         }
         return type_compare(left_array_decl->element_type, right_array_decl->element_type);
     }
 
-    if (left.kind == TYPE_TUPLE) {
-        type_tuple_t *left_tuple = left.tuple;
-        type_tuple_t *right_tuple = right.tuple;
+    if (dst.kind == TYPE_TUPLE) {
+        type_tuple_t *left_tuple = dst.tuple;
+        type_tuple_t *right_tuple = src.tuple;
 
         if (left_tuple->elements->length != right_tuple->elements->length) {
             return false;
@@ -940,9 +950,9 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_FN) {
-        type_fn_t *left_type_fn = left.fn;
-        type_fn_t *right_type_fn = right.fn;
+    if (dst.kind == TYPE_FN) {
+        type_fn_t *left_type_fn = dst.fn;
+        type_fn_t *right_type_fn = src.fn;
         if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
             return false;
         }
@@ -962,9 +972,9 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_STRUCT) {
-        type_struct_t *left_struct = left.struct_;
-        type_struct_t *right_struct = right.struct_;
+    if (dst.kind == TYPE_STRUCT) {
+        type_struct_t *left_struct = dst.struct_;
+        type_struct_t *right_struct = src.struct_;
         if (left_struct->properties->length != right_struct->properties->length) {
             return false;
         }
@@ -987,9 +997,9 @@ bool type_compare(type_t left, type_t right) {
         return true;
     }
 
-    if (left.kind == TYPE_POINTER || left.kind == TYPE_NULLABLE_POINTER) {
-        type_t left_pointer = left.pointer->value_type;
-        type_t right_pointer = right.pointer->value_type;
+    if (dst.kind == TYPE_POINTER || dst.kind == TYPE_NULLABLE_POINTER) {
+        type_t left_pointer = dst.pointer->value_type;
+        type_t right_pointer = src.pointer->value_type;
         return type_compare(left_pointer, right_pointer);
     }
 

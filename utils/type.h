@@ -475,7 +475,7 @@ type_alias_t *type_alias_new(char *literal, char *import_as);
 
 type_kind to_gc_kind(type_kind kind);
 
-bool type_compare(type_t left, type_t right);
+bool type_compare(type_t dst, type_t src);
 
 
 /**

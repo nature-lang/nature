@@ -67,12 +67,19 @@ fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
 
 fn sigfillset(ptr<sigset_t> sigset):i32
 
-// cptr 接受 null 和
 fn sigprocmask(i32 how, ptr<sigset_t> sigset, cptr<sigset_t> oldset):i32
 
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 
 fn usleep(u32 usec):i32
+
+fn strtol(cptr str, cptr endptr, i32 base):i64
+
+fn prctl(int option, u64 arg2, u64 arg3, u64 arg4, u64 arg5):int
+
+fn srand(u32 seed)
+
+fn rand():int
 
 // --- 自定义在 runtime/libc 模块中的函数
 // cptr = char*
@@ -82,3 +89,8 @@ fn libc_string_replace(string str, string old, string new_str):string
 
 // 读取 errno 中的错误信息
 fn libc_strerror():string
+
+// 读取当前全局的 errno 编码
+fn libc_errno():int
+
+fn libc_get_envs():[string]
