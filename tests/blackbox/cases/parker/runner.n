@@ -31,7 +31,7 @@ mount_ns(workdir)
 // - write tgz to mount ns
 tgz_path = path.join(workdir, 'parker.tag.gz')
 var tgz_fd = syscall.open(tgz_path, syscall.O_RDONLY | syscall.O_CREAT, 0644)
-var err = try syscall.write(tgz_fd, tgz_buf, tgz_buf.len())
+var err = try syscall.write(tgz_fd, tgz_buf)
 assertf(!err.has, 'write tgz to %s failed, err=%s', tgz_path, err.msg)
 
 // - un tgz file

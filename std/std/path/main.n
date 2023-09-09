@@ -53,13 +53,13 @@ fn dir(string path):string {
 
 fn join(string dst, ...[string] list):string {
     for src in list {
-        dst = join(dst, src)
+        dst = _join(dst, src)
     }
 
     return dst
 }
 
-fn join(string dst, string src):string {
+fn _join(string dst, string src):string {
     if src.len() == 0 {
         return dst
     }
@@ -96,4 +96,13 @@ fn join(string dst, string src):string {
     }
 
     return result
+}
+
+fn isdir(string path):bool {
+   var (s, err) =  try syscall.stat(path)
+    if err.has {
+         return false
+    }
+
+    return (s.mode & 0170000) == (0040000)
 }

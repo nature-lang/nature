@@ -246,3 +246,31 @@ fn mkdirs(string dir, u32 mode) {
     // parent dir is create, will create dir
     syscall.mkdir(dir, mode)
 }
+
+// use remove file
+fn remove(string full_path) {
+    if !path.exists(full_path) {
+        return
+    }
+
+    syscall.unlink(full_path)
+}
+
+fn rmdir(string dir, bool recursive) {
+    if !recursive {
+        return syscall.rmdir(dir)
+    }
+
+    var list = listdir(dir)
+    for item in list {
+        var fullpath = path.join(dir, item)
+        if path.isdir(fullpath) {
+            rmdir(fullpath, true) // 递归删除其中的所有文件
+        } else {
+            remove(fullpath)
+        }
+    }
+
+    // sub already remove, remove self
+    syscall.rmdir(dir)
+}

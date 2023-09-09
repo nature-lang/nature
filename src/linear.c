@@ -1935,7 +1935,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         char *convert_endptr;
         int64_t i = strtoll(literal->value, &convert_endptr, 0);
         if (*convert_endptr != '\0') {
-            assertf(false, "covert '%s' to number failed in %s", literal->value, convert_endptr);
+            LINEAR_ASSERTF(false, "covert '%s' to number failed", literal->value)
         }
 
         lir_imm_t *imm_operand = NEW(lir_imm_t);

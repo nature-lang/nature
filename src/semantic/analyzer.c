@@ -936,16 +936,10 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
     return -1;
 }
 
-/**
- *
- * @param m
- * @param expr
- */
-static void analyzer_ident(module_t *m, ast_expr_t *expr) {
-    ast_ident *temp_ast_ident = expr->value;
+static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
+    ast_ident *temp = expr->value;
     // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
-    ast_ident *ident = NEW(ast_ident);
-    ident->literal = temp_ast_ident->literal;
+    ast_ident *ident = ast_new_ident(temp->literal);
     expr->value = ident;
 
     // - 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的 local)
@@ -954,7 +948,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         local_ident_t *local = locals->take[i];
         if (str_equal(local->ident, ident->literal)) {
             ident->literal = local->unique_ident;
-            return;
+            return true;
         }
     }
 
@@ -964,7 +958,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
     if (free_var_index != -1) {
         // free 不一定是 var, 可能是 fn, 如果是 fn 只要改名了就行
         if (type != SYMBOL_VAR) {
-            return;
+            return true;
         }
 
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
@@ -975,8 +969,27 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         // 外部到 ident 可能已经修改了名字,这里进行冗于记录
         env_access->unique_ident = ident->literal;
         expr->value = env_access;
+        return true;
+    }
+
+    return false;
+
+}
+
+/**
+ *
+ * @param m
+ * @param expr
+ */
+static void analyzer_ident(module_t *m, ast_expr_t *expr) {
+    bool local_analyzer = analyzer_local_ident(m, expr);
+    if (local_analyzer) {
         return;
     }
+
+    // analyzer_local_ident The ident rebuild has already been done, it is good to use it here
+    // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
+    ast_ident *ident = expr->value;
 
     // - 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
@@ -1035,6 +1048,10 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
 static void analyzer_select(module_t *m, ast_expr_t *expr) {
     ast_select_t *select = expr->value;
     if (select->left.assert_type == AST_EXPR_IDENT) {
+        if (analyzer_local_ident(m, &select->left)) {
+            return;
+        }
+
         // 这里将全局名称改写后并不能直接去符号表中查找，
         // 但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
         ast_ident *ident = select->left.value;

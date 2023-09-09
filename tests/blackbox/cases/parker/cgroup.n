@@ -12,6 +12,21 @@ type cgroup_t = struct {
     u8 version
     string path
     string procs_path
+    var register = fn(self s, int pid) {
+        var pid_str = std.sprintf('%d\n', pid)
+        var fd = syscall.open(s.procs_path, syscall.O_WRONLY|syscall.O_APPEND, 0)
+
+        syscall.write(fd, pid_str as [u8])
+        syscall.close(fd)
+    }
+    var clear = fn(self s) {
+        var fd = syscall.open(s.procs_path, syscall.O_WRONLY, 0)
+
+        var stat = syscall.fstat(fd)
+
+        var buf = [] as [u8;stat.size]
+
+    }
 }
 
 fn new():cgroup_t {
@@ -41,4 +56,12 @@ fn new():cgroup_t {
     var procs_path = path.join(cgroup_path, procs_system)
 
     // mkdir all
+    std.mkdirs(cgroup_path)
+
+    return cgroup_t {
+        id: id,
+        version: version,
+        path: cgroup_path,
+        procs_path: procs_path
+    }
 }
