@@ -286,6 +286,7 @@ static rtype_t rtype_fn(type_fn_t *t) {
 
 /**
  * hash = type_kind + key type hash
+ * TODO 计算有问题, 使用 autobuf 进行一个递归的完整的设置才行
  * @param t
  * @return
  */
@@ -483,12 +484,16 @@ uint16_t type_sizeof(type_t t) {
 
 
 type_t type_ptrof(type_t t) {
-    type_t result;
+    type_t result = {0};
     result.status = t.status;
 
     result.kind = TYPE_POINTER;
     result.pointer = NEW(type_pointer_t);
     result.pointer->value_type = t;
+    result.origin_ident = NULL;
+    result.line = t.line;
+    result.column = t.column;
+    result.in_heap = kind_in_heap(t.kind);
     return result;
 }
 
@@ -604,9 +609,16 @@ type_alias_t *type_alias_new(char *literal, char *import_module_ident) {
 }
 
 bool type_need_gc(type_t t) {
+    // type_array 和 type_struct 的 var 就是一个 pointer， 所以总是需要 gc
+    // stack 中的数据，gc 是无法扫描的
+//    if (is_alloc_stack(t)) {
+//        return true;
+//    }
+
     if (t.in_heap) {
         return true;
     }
+
     return false;
 }
 

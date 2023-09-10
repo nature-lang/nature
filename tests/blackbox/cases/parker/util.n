@@ -113,7 +113,7 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
 }
 
 // 创建一个能够拦截所有信号且非阻塞的 fd
-fn sig_notify():i32 {
+fn sig_notify():int {
     var mask_ptr = new sigset_t // ptr<sigset_t>
     sigfillset(mask_ptr) // 注册所有信号
 
@@ -127,7 +127,7 @@ fn sig_notify():i32 {
         throw libc_strerror()
     }
     
-    return sigfd
+    return sigfd as int
 }
 
 fn rand_letter(int len):string {

@@ -9,6 +9,8 @@
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
+    assertf(rtype, "rtype is null");
+    assertf(data_ref, "data_ref is null");
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
     DEBUGF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu",
            type_kind_str[rtype->kind], data_ref, data_size);

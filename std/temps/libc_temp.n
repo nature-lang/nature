@@ -71,6 +71,8 @@ fn sigprocmask(i32 how, ptr<sigset_t> sigset, cptr<sigset_t> oldset):i32
 
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 
+fn sleep(int second)
+
 fn usleep(u32 usec):i32
 
 fn strtol(cptr str, cptr endptr, i32 base):i64

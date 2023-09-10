@@ -15,17 +15,12 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
     uint64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
-    n_array_t *data = NULL;
-    rtype_t *string_rtype;
-    if (length > 0) {
-        data = rt_array_new(element_rtype, capacity);
-        // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
-        string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    } else {
-        // 如果是空字符串则不需要申请 data 部分的内存空间
-        string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-        capacity = 0;
-    }
+
+    n_array_t *data = rt_array_new(element_rtype, capacity);
+    // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
+    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                     TYPE_GC_NOSCAN);
+
 
     assert(element_rtype->hash > 0);
 
@@ -47,8 +42,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
  * @return
  */
 void *string_ref(n_string_t *n_str) {
-    DEBUGF("[runtime.string_ref] length=%lu, data=%p, last is 0?  %d", n_str->length, n_str->data,
-           n_str->data[n_str->length] == '\0');
+    DEBUGF("[runtime.string_ref] length=%lu, data=%p", n_str->length, n_str->data);
 
     // 结尾添加 '\0' 字符
     int a = '\0';

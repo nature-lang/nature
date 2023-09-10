@@ -1394,6 +1394,8 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         size_with_bits += sizeof(fndef_t);
         size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 
+        // TODO 申请的栈空间的指针情况未记录
+
         // 按从 base ~ top 的入栈顺序写入
         for (int i = 0; i < c->stack_vars->count; ++i) {
             lir_var_t *var = c->stack_vars->take[i];
@@ -1405,10 +1407,10 @@ uint64_t collect_fndef_list(elf_context *ctx) {
                 bitmap_set(f->gc_bits, (stack_slot / POINTER_SIZE) - 1);
             }
 
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
+            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
                    fn->symbol_name,
                    var->ident,
-                   type_kind_str[var->type.kind],
+                   type_format(var->type),
                    type_sizeof(var->type),
                    type_need_gc(var->type),
                    (stack_slot / POINTER_SIZE) - 1,

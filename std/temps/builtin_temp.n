@@ -52,8 +52,6 @@ fn set_add({t0} s, ptr<t0> key):bool
 
 fn set_delete({t0} set, ptr<t0> key)
 
-fn sleep(int second)
-
 fn runtime_gc()
 
 fn runtime_set_force_gc()

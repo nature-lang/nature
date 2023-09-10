@@ -2,6 +2,8 @@ import std
 import std.path
 import parker.util
 import syscall
+import strings
+import parker.log as *
 
 u8 version1 = 1
 u8 version2 = 2
@@ -22,13 +24,40 @@ type cgroup_t = struct {
         syscall.close(fd)
     }
     var clear = fn(self s) {
-        var fd = syscall.open(s.procs_path, syscall.O_WRONLY, 0)
+        logf('s.procs_path is "%s"', s.procs_path)
 
+        var (fd, err) = try syscall.open(s.procs_path, syscall.O_RDONLY, 0)
+        if err.has {
+            throw std.sprintf('open procs path="%s" failed: %s', s.procs_path, err.msg)
+        }
         var stat = syscall.fstat(fd)
-
         var buf = vec<u8>{len=stat.size}
+        var len = syscall.read(fd, buf)
+        if len == 0 {
+            logf('no pids in cgroup=%s', s.procs_path)
+        } else {
+            logf('read pids from cgroup, %s', buf as string)
+            var pids = strings.split(buf as string, '\n')
 
+            for pid_str in pids {
+                // str to int
+                var pid = strtol(pid_str.ref(), 0, 10)
+                if pid == 0 {
+                    throw std.sprintf('pid str %s to int failed', pid_str)
+                }
+                
+                // kill by pid
+                var err = try syscall.kill(pid, syscall.SIGKILL)
+                if err.has {
+                    logf('kill pid %d failed %s', pid, err.msg)
+                }
+            }
+        }
+    
+       // 清理 cgroup 目录
+       std.rmdir(s.path, true)
     }
+
 }
 
 fn make():cgroup_t {

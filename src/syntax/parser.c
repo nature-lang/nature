@@ -199,6 +199,7 @@ static type_t parser_single_type(module_t *m) {
             .status = REDUCTION_STATUS_UNDO,
             .line = parser_peek(m)->line,
             .column = parser_peek(m)->column,
+            .origin_ident = NULL,
     };
 
     // any 特殊处理

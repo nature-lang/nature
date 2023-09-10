@@ -106,6 +106,10 @@ static void scan_stack(memory_t *m) {
                 if (in_heap(addr)) {
                     // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                     linked_push(m->grey_list, (void *) addr);
+                } else {
+                    DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, addr=%p not heap addr, will skip",
+                           fn->name,
+                           i, (void *) addr)
                 }
             }
 
@@ -264,7 +268,7 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
             allocated_bytes -= span->obj_size;
 
 #ifdef DEBUG
-            DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_add=0x%lx, allocator_bytes=%ld",
+            DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld",
                    span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
 
             // 将对应位置的内存设置为 0

@@ -123,4 +123,4 @@ var tgz_size_str = std.sprintf('%016d', tgz_size)
 syscall.write(output_fd, tgz_size_str as [u8])
 logf('tag_size to output success, size_str=%v', tgz_size_str)
 
-logf('runner make successful')
+logf('runner %s make successful', path.join(workdir, output_name))

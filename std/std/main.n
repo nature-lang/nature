@@ -267,7 +267,8 @@ fn rmdir(string dir, bool recursive) {
         if path.isdir(fullpath) {
             rmdir(fullpath, true) // 递归删除其中的所有文件
         } else {
-            remove(fullpath)
+            // rm file 可能存在权限不足的错误，暂时不做错误判断，直接跳过即可
+            var err = try remove(fullpath)
         }
     }
 
