@@ -10,9 +10,9 @@ type time_t = struct {
         return s.sec
     }
     var datetime = fn(self s):string {
-        var buf = [] as [u8;100] // 必须预留足够大的空间,才能正常引用
+        var buf = vec<u8>{len=100} // 必须预留足够大的空间,才能正常引用
 
-        var len = strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), s.tm)
+        var len = strftime(buf.ref(), buf.len, '%Y-%m-%d %H:%M:%S'.ref(), s.tm)
         buf = buf.slice(0, len)
 
         return buf as string

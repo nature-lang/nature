@@ -27,15 +27,15 @@ bool verbose = false
  * @workdir 表示具体的工作目录, 相关 sources 都是在 workdir 中被找到的
  */
 fn encode(string workdir, string tgz_path, [string] sources) {
-    if workdir.len() == 0 {
+    if workdir.len == 0 {
         throw 'workdir is empty'
     }
 
-    if tgz_path.len() == 0 {
+    if tgz_path.len == 0 {
         throw 'tgz_path is empty'
     }
 
-    if sources.len() == 0 {
+    if sources.len == 0 {
         throw 'sources is empty'
     }
 
@@ -54,7 +54,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
     // 写入目标文件
     archive_write_open_filename(a, tgz_path.ref())
 
-    var buf = [] as [u8;16384]
+    var buf = vec<u8>{len=16384}
 
     for source in sources {
         var disk = archive_read_disk_new()
@@ -135,7 +135,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
 
 // 在指定目录将 tgz path 进行解压
 fn decode(string workdir, string tgz_path) {
-    if tgz_path.len() == 0 {
+    if tgz_path.len == 0 {
         throw 'tgz_path is empty'
     }
 

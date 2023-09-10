@@ -58,7 +58,8 @@ typedef enum {
     TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT, TOKEN_UINT,
     TOKEN_U8, TOKEN_U16, TOKEN_U32, TOKEN_U64,
     TOKEN_I8, TOKEN_I16, TOKEN_I32, TOKEN_I64,
-    TOKEN_F32, TOKEN_F64, TOKEN_ARRAY, TOKEN_NEW,
+    TOKEN_F32, TOKEN_F64, TOKEN_NEW,
+    TOKEN_ARR, TOKEN_VEC, TOKEN_MAP, TOKEN_TUP, TOKEN_SET,
 
     // KEYWORDS.
     TOKEN_POINTER, // ptr<
@@ -125,6 +126,11 @@ static string token_str[] = {
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
 
+        [TOKEN_ARR] = "arr",
+        [TOKEN_VEC] = "vec",
+        [TOKEN_MAP] = "map",
+        [TOKEN_SET] = "set",
+        [TOKEN_TUP] = "tup",
         [TOKEN_POINTER] = "ptr",
         [TOKEN_CPTR] = "cptr",
         [TOKEN_TRUE] = "true",

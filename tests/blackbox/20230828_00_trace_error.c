@@ -9,7 +9,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "err msg: index out of list [24] with length 12\n"
+    char *str = "err msg: index out of vec [24] with length 12\n"
                 "err trace len: 2\n"
                 "err trace first: 20230828_00_trace_error/foo/bar.n 20230828_00_trace_error.foo.bar.car 18 19\n"
                 "\n"

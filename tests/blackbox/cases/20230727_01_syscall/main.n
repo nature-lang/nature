@@ -10,7 +10,7 @@ print('write bytes: ', write_bytes, '\n')
 
 syscall.seek(fd, 0, syscall.SEEK_SET)
 
-var buf = [] as [u8;20]
+var buf = vec<u8>{len=20}
 var len = syscall.read(fd, buf)
 buf = buf.slice(0, len)
 print('read len: ', len, ', data: ', buf as string, '\n')

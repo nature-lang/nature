@@ -2,7 +2,7 @@
 #define NATURE_BASIC_H
 
 #include "utils/type.h"
-#include "list.h"
+#include "vec.h"
 
 #define INT_SIZE sizeof(int64_t)
 
@@ -41,6 +41,6 @@ uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t co
 
 n_cptr_t cptr_casting(value_casting v);
 
-n_list_t *std_args();
+n_vec_t *std_args();
 
 #endif //NATURE_BASIC_H

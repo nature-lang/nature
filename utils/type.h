@@ -68,7 +68,7 @@ typedef enum {
 
     // 复合类型
     TYPE_STRING,
-    TYPE_LIST,
+    TYPE_VEC,
     TYPE_ARRAY,
     TYPE_MAP, // value = 20
     TYPE_SET,
@@ -112,7 +112,7 @@ static string type_kind_str[] = {
         [TYPE_GC_ENV_VALUES] = "env_values",
         [TYPE_GC_UPVALUE] = "upvalue",
 
-        [TYPE_ARRAY] = "array",
+        [TYPE_ARRAY] = "arr",
 
         [TYPE_GEN] = "gen",
         [TYPE_UNION] = "union",
@@ -137,10 +137,10 @@ static string type_kind_str[] = {
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_ALIAS] = "type_alias",
-        [TYPE_LIST] = "list",
+        [TYPE_VEC] = "vec",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
-        [TYPE_TUPLE] = "tuple",
+        [TYPE_TUPLE] = "tup",
         [TYPE_FN] = "fn",
         [TYPE_POINTER] = "pointer", // ptr<type>
         [TYPE_NULLABLE_POINTER] = "nullable_pointer", // ptr<type>
@@ -193,7 +193,7 @@ typedef struct {
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
-typedef struct type_list_t type_list_t;
+typedef struct type_vec_t type_vec_t;
 
 typedef struct type_pointer_t type_pointer_t, type_null_pointer_t;
 
@@ -217,7 +217,7 @@ typedef struct type_fn_t type_fn_t;
 typedef struct type_t {
     union {
         void *value;
-        type_list_t *list;
+        type_vec_t *vec;
         type_array_t *array;
         type_map_t *map;
         type_set_t *set;
@@ -232,6 +232,7 @@ typedef struct type_t {
     };
     type_kind kind;
     reduction_status_t status;
+    char *origin_ident; // 当 type.kind == ALIAS/FORMAL 时，此处缓存一下 alias/formal ident, 用于 dump error
     int line;
     int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
@@ -239,13 +240,11 @@ typedef struct type_t {
 
 /**
  * [int]
- * [int;12]
- * [int;12;24]
+ * [int]
+ * [int]
  */
-struct type_list_t {
+struct type_vec_t {
     type_t element_type;
-    void *len; // ast_expr*
-    void *cap; // ast_expr*
 };
 
 // ptr<value_type>
@@ -348,7 +347,7 @@ typedef struct {
     uint64_t length; // 实际占用的位置的大小
     uint64_t capacity; // 预先申请的容量大小
     uint64_t element_rtype_hash;
-} n_list_t, n_string_t;
+} n_vec_t, n_string_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
 typedef addr_t n_pointer_t, n_nullable_pointer_t;
@@ -412,7 +411,7 @@ typedef struct {
 
 typedef struct {
     n_string_t *msg;
-    n_list_t *traces; // element is n_trace_t
+    n_vec_t *traces; // element is n_trace_t
     uint8_t has;
 } n_errort;
 
@@ -471,12 +470,13 @@ type_t type_nullable_ptrof(type_t t);
 
 type_param_t *type_formal_new(char *literal);
 
-type_alias_t *type_alias_new(char *literal, char *import_as);
+type_alias_t *type_alias_new(char *literal, char *import_module_ident);
 
 type_kind to_gc_kind(type_kind kind);
 
 bool type_compare(type_t dst, type_t src);
 
+char *type_format(type_t t);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -519,7 +519,7 @@ static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION ||
            kind == TYPE_STRING ||
-           kind == TYPE_LIST ||
+           kind == TYPE_VEC ||
            //           kind == TYPE_ARRAY ||
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
@@ -529,13 +529,13 @@ static inline bool kind_in_heap(type_kind kind) {
 }
 
 static inline bool is_list_u8(type_t t) {
-    if (t.kind != TYPE_LIST) {
+    if (t.kind != TYPE_VEC) {
         return false;
     }
 
-    assert(t.list);
+    assert(t.vec);
 
-    if (t.list->element_type.kind != TYPE_UINT8) {
+    if (t.vec->element_type.kind != TYPE_UINT8) {
         return false;
     }
 
@@ -643,7 +643,7 @@ static inline bool is_struct_ptr(type_t t) {
 static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
-           || t.kind == TYPE_LIST
+           || t.kind == TYPE_VEC
            || t.kind == TYPE_ARRAY
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET

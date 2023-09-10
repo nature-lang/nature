@@ -14,19 +14,19 @@ fn logf(string fmt, ...[any] args) {
 int len = 2
 int arg_index = 0
 u8 c = 118
-if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')
 }
 
-var a = [] as [u8;102400]
+var a = vec<u8>{len=102400}
 
-a = [] as [u8;1]
+a = vec<u8>{len=1}
 
-if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')
 }
 
-if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.has(c) || arg_index == len || 1 < 0 {
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')
 }
 

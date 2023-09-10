@@ -13,4 +13,4 @@ if err.has {
 var foo = user.find('xiaoyou')
 println(foo.username, '-', foo.password)
 
-println('current user count=', user.list.len())
+println('current user count=', user.list.len)

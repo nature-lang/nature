@@ -2,7 +2,7 @@
 #include "runtime/memory.h"
 #include "runtime/processor.h"
 #include "string.h"
-#include "list.h"
+#include "vec.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value) { \
     switch (_kind) { \
@@ -187,16 +187,16 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     cursor += 1;
-    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
-        n_list_t *list = iterator;
-        DEBUGF("[runtime.iterator_next_key] list=%p, kind is list, len=%lu, cap=%lu, data_base=%p, cursor=%ld",
+    if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
+        n_vec_t *list = iterator;
+        DEBUGF("[runtime.iterator_next_key] list=%p, kind is vec, len=%lu, cap=%lu, data_base=%p, cursor=%ld",
                list,
                list->length,
                list->capacity,
                list->data, cursor);
 
         if (cursor >= list->length) {
-            DEBUGF("[runtime.iterator_next_key] cursor('%ld') == list.length('%ld') end", cursor, list->length);
+            DEBUGF("[runtime.iterator_next_key] cursor('%ld') == vec.length('%ld') end", cursor, list->length);
             return -1;
         }
 
@@ -236,8 +236,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
     cursor += 1;
-    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
-        n_list_t *list = iterator;
+    if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
+        n_vec_t *list = iterator;
         assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
                 list, list->length, list->capacity, list->data);
         uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
@@ -282,8 +282,8 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     assertf(rtype_hash > 0, "rtype hash is empty");
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
-    if (iterator_rtype->kind == TYPE_LIST || iterator_rtype->kind == TYPE_STRING) {
-        n_list_t *list = iterator;
+    if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
+        n_vec_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
                iterator,
                list->length,
@@ -338,7 +338,7 @@ void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t 
             .line = line,
             .column = column,
     };
-    list_push(errort->traces, &trace);
+    vec_push(errort->traces, &trace);
 
     p->errort = errort;
 }
@@ -367,7 +367,7 @@ uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t co
                 .column = column,
         };
 
-        list_push(p->errort->traces, &trace);
+        vec_push(p->errort->traces, &trace);
     }
 
     return p->errort->has;
@@ -377,17 +377,17 @@ n_cptr_t cptr_casting(value_casting v) {
     return v.u64_value;
 }
 
-n_list_t *std_args() {
+n_vec_t *std_args() {
     // 初始化一个 string 类型的数组
-    rtype_t *list_rtype = gc_rtype(TYPE_LIST, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_list_t *list = list_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
+    n_vec_t *list = vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
         DEBUGF("[std_args] command_argv[%d]='%s'\n", i, command_argv[i]);
         n_string_t *str = string_new(command_argv[i], strlen(command_argv[i]));
-        list_assign(list, i, &str);
+        vec_assign(list, i, &str);
     }
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu",

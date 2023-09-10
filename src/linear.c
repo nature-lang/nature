@@ -57,22 +57,24 @@ static lir_operand_t *linear_zero_string(module_t *m, type_t t, lir_operand_t *t
 }
 
 
-static lir_operand_t *linear_zero_list(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *
+linear_zero_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_stack(m, t);
     }
 
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
-    lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.list->element_type));
+    lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.vec->element_type));
     lir_operand_t *len_operand = int_operand(0);
-    if (t.list->len) {
-        len_operand = linear_expr(m, *((ast_expr_t *) t.list->len), NULL);
-    }
     lir_operand_t *cap_operand = int_operand(0);
-    if (t.list->cap) {
-        cap_operand = linear_expr(m, *((ast_expr_t *) t.list->cap), NULL);
+    if (len) {
+        len_operand = len;
     }
-    rt_call(m, RT_CALL_LIST_NEW, target, 4,
+    if (cap) {
+        cap_operand = cap;
+    }
+
+    rt_call(m, RT_CALL_VEC_NEW, target, 4,
             rtype_hash, element_index, len_operand, cap_operand);
     return target;
 }
@@ -115,7 +117,7 @@ static void linear_zero_stack(module_t *m, lir_operand_t *target, uint64_t size)
     }
 }
 
-static lir_operand_t *linear_zero_array(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_zero_arr(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_stack(m, t);
     }
@@ -243,12 +245,12 @@ static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *
         return linear_zero_string(m, t, target);
     }
 
-    if (t.kind == TYPE_LIST) {
-        return linear_zero_list(m, t, target);
+    if (t.kind == TYPE_VEC) {
+        return linear_zero_vec(m, t, NULL, NULL, target);
     }
 
     if (t.kind == TYPE_ARRAY) {
-        return linear_zero_array(m, t, target);
+        return linear_zero_arr(m, t, target);
     }
 
     if (t.kind == TYPE_MAP) {
@@ -406,7 +408,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
  * @param stmt
  */
 static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
-    ast_list_access_t *list_access = stmt->left.value;
+    ast_vec_access_t *list_access = stmt->left.value;
     lir_operand_t *list_target = linear_expr(m, list_access->left, NULL);
     lir_operand_t *index_target = linear_expr(m, list_access->index, NULL);
     type_t t = stmt->right.type;
@@ -416,7 +418,7 @@ static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // target 中保存的是一个指针数据，指向的类型是 right.type
     lir_operand_t *target = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
 
-    rt_call(m, RT_CALL_LIST_ELEMENT_ADDR, target, 2, list_target, index_target);
+    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, target, 2, list_target, index_target);
     if (!is_alloc_stack(t)) {
         target = indirect_addr_operand(m, t, target, 0);
     }
@@ -677,7 +679,7 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_expr_t left = stmt->left;
 
     // map assign list[0] = 1
-    if (left.assert_type == AST_EXPR_LIST_ACCESS) {
+    if (left.assert_type == AST_EXPR_VEC_ACCESS) {
         return linear_list_assign(m, stmt);
     }
 
@@ -758,7 +760,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
 
     // 单值遍历清空下, 对于 list 调用 next value,
-    if (!ast->second && (ast->iterate.type.kind == TYPE_LIST || ast->iterate.type.kind == TYPE_STRING)) {
+    if (!ast->second && (ast->iterate.type.kind == TYPE_VEC || ast->iterate.type.kind == TYPE_STRING)) {
         rt_call(m,
                 RT_CALL_ITERATOR_NEXT_VALUE,
                 cursor_operand,
@@ -967,7 +969,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         if (type_fn->rest && i >= type_fn->param_types->length - 1) {
             // rest 超载情况处理
             type_t *rest_list_type = ct_list_value(type_fn->param_types, i);
-            assertf(rest_list_type->kind == TYPE_LIST, "rest param must list type");
+            assertf(rest_list_type->kind == TYPE_VEC, "rest param must list type");
 
             // actual 的参数个数与 formal 的参数一致，并且 actual last type(must list) == formal last type 一致。
             if (call->args->length == type_fn->param_types->length &&
@@ -983,8 +985,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             }
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
-            lir_operand_t *rest_target = linear_zero_list(m, *rest_list_type,
-                                                          temp_var_operand_with_stack(m, *rest_list_type));
+            lir_operand_t *rest_target = linear_zero_vec(m, *rest_list_type, NULL, NULL, NULL);
 
             for (int j = i; j < call->args->length; ++j) {
                 ast_expr_t *arg = ct_list_value(call->args, j);
@@ -992,7 +993,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
                 // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
                 lir_operand_t *rest_arg_ref = lea_operand_pointer(m, rest_arg);
-                rt_call(m, RT_CALL_LIST_PUSH, NULL, 2, rest_target, rest_arg_ref);
+                rt_call(m, RT_CALL_VEC_PUSH, NULL, 2, rest_target, rest_arg_ref);
             }
 
             slice_push(params, rest_target);
@@ -1221,13 +1222,13 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
  * string s = list[1]
  */
 static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_list_access_t *ast = expr.value;
+    ast_vec_access_t *ast = expr.value;
 
     lir_operand_t *list_target = linear_expr(m, ast->left, NULL);
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
     lir_operand_t *src = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
-    rt_call(m, RT_CALL_LIST_ELEMENT_ADDR, src, 2, list_target, index_target);
+    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, src, 2, list_target, index_target);
     if (!is_alloc_stack(expr.type)) {
         src = indirect_addr_operand(m, expr.type, src, 0);
     }
@@ -1258,22 +1259,33 @@ static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_opera
  * @return
  */
 static lir_operand_t *linear_list_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_list_new_t *ast = expr.value;
+    ast_vec_new_t *ast = expr.value;
     type_t t = expr.type;
 
-    target = linear_zero_list(m, t, target);
+    lir_operand_t *len_operand = NULL;
+    if (ast->len) {
+        len_operand = linear_expr(m, *ast->len, NULL);
+    }
+    lir_operand_t *cap_operand = NULL;
+    if (ast->cap) {
+        cap_operand = linear_expr(m, *ast->cap, NULL);
+    }
 
-    for (int i = 0; i < ast->elements->length; ++i) {
-        ast_expr_t *item_expr = ct_list_value(ast->elements, i);
+    target = linear_zero_vec(m, t, len_operand, cap_operand, target);
 
-        lir_operand_t *item_target = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
-        rt_call(m, RT_CALL_LIST_ITERATOR, item_target, 1, target);
-        if (!is_alloc_stack(item_expr->type)) {
-            item_target = indirect_addr_operand(m, t.list->element_type, item_target, 0);
+    if (ast->elements) {
+        for (int i = 0; i < ast->elements->length; ++i) {
+            ast_expr_t *item_expr = ct_list_value(ast->elements, i);
+
+            lir_operand_t *item_target = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
+            rt_call(m, RT_CALL_VEC_ITERATOR, item_target, 1, target);
+            if (!is_alloc_stack(item_expr->type)) {
+                item_target = indirect_addr_operand(m, t.vec->element_type, item_target, 0);
+            }
+
+            // 空间已经足够，将值放进去即可
+            linear_expr(m, *item_expr, item_target);
         }
-
-        // 空间已经足够，将值放进去即可
-        linear_expr(m, *item_expr, item_target);
     }
 
     return target;
@@ -2142,8 +2154,8 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_UNARY] = linear_unary,
         [AST_EXPR_ARRAY_NEW] = linear_array_new,
         [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
-        [AST_EXPR_LIST_NEW] = linear_list_new,
-        [AST_EXPR_LIST_ACCESS] = linear_list_access,
+        [AST_EXPR_VEC_NEW] = linear_list_new,
+        [AST_EXPR_VEC_ACCESS] = linear_list_access,
         [AST_EXPR_MAP_NEW] = linear_map_new,
         [AST_EXPR_MAP_ACCESS] = linear_map_access,
         [AST_EXPR_STRUCT_NEW] = linear_struct_new,

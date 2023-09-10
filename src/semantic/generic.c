@@ -44,8 +44,8 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
         return;
     }
 
-    if (t.kind == TYPE_LIST) {
-        generic_params_collect(fndef, t.list->element_type);
+    if (t.kind == TYPE_VEC) {
+        generic_params_collect(fndef, t.vec->element_type);
         return;
     }
 

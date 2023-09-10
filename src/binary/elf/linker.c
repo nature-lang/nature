@@ -1507,13 +1507,13 @@ uint8_t *rtypes_serialize() {
     uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
-    uint64_t size = ct_rtype_list->length * sizeof(rtype_t);
-    memmove(p, ct_rtype_list->take, size);
+    uint64_t size = ct_rtype_vec->length * sizeof(rtype_t);
+    memmove(p, ct_rtype_vec->take, size);
 
     // 移动 gc_bits
     p = p + size; // byte 类型，所以按字节移动
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i); // take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
         if (gc_bits_size) {
             memmove(p, r->gc_bits, gc_bits_size);
@@ -1522,8 +1522,8 @@ uint8_t *rtypes_serialize() {
     }
 
     // 移动 element_hashes
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i);
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i);
 
         // array 占用了 length 字段，但是程element_hashes 是没有值的。
         if (r->length > 0 && r->element_hashes) {

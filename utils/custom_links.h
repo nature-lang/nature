@@ -75,8 +75,8 @@ extern fndef_t *ct_fndef_list;
 extern uint64_t ct_rtype_count; // 从 list 中提取而来
 extern uint8_t *ct_rtype_data;
 extern uint64_t ct_rtype_size; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
-extern list_t *ct_rtype_list;
-extern table_t *ct_rtype_table; // 避免 rtype_list 重复写入
+extern list_t *ct_rtype_vec;
+extern table_t *ct_rtype_table; // 避免 rtype_vec 重复写入
 
 // 主要是需要处理 gc_bits 数据
 uint8_t *fndefs_serialize();

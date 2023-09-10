@@ -185,6 +185,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
     import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->ast_package);
+    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot find import file %s", import->full_path);
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as) {
@@ -351,16 +352,9 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_LIST) {
-        type_list_t *list = type->list;
+    if (type->kind == TYPE_VEC) {
+        type_vec_t *list = type->vec;
         analyzer_type(m, &list->element_type);
-        if (list->len) {
-            analyzer_expr(m, list->len);
-        }
-
-        if (list->cap) {
-            analyzer_expr(m, list->cap);
-        }
         return;
     }
 
@@ -1137,7 +1131,7 @@ static void analyzer_tuple_destr(module_t *m, ast_tuple_destr_t *tuple) {
 }
 
 
-static void analyzer_list_new(module_t *m, ast_list_new_t *expr) {
+static void analyzer_list_new(module_t *m, ast_vec_new_t *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_expr_t *value = ct_list_value(expr->elements, i);
         analyzer_expr(m, value);
@@ -1246,7 +1240,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_TUPLE_DESTR: {
             return analyzer_tuple_destr(m, expr->value);
         }
-        case AST_EXPR_LIST_NEW: {
+        case AST_EXPR_VEC_NEW: {
             return analyzer_list_new(m, expr->value);
         }
         case AST_EXPR_ACCESS: {

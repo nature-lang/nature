@@ -225,7 +225,7 @@ static void build_init(char *build_entry) {
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
-    ct_rtype_list = ct_list_new(sizeof(rtype_t));
+    ct_rtype_vec = ct_list_new(sizeof(rtype_t));
     ct_rtype_data = NULL;
     ct_rtype_count = 0;
     ct_rtype_size = 0;
@@ -426,9 +426,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         // analyzer => ast_fndefs(global)
         // analyzer 需要将符号注册完成，否则在 pre_checking 时找不到相关的符号
         analyzer(m, m->stmt_list);
-
-        // generic => ast_fndef(global+local flat)
-        generic(m);
     }
 
     // register all module init to main module body
@@ -450,6 +447,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 static void build_compiler(slice_t *modules) {
     // pre_checking 对函数头进行 reduction, 让 checking 中的 fn_match 到准确位置
     for (int i = 0; i < modules->count; ++i) {
+        // generic => ast_fndef(global+local flat)
+        generic(modules->take[i]);
+
         pre_checking(modules->take[i]);
     }
 

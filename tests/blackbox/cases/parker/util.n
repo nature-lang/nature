@@ -2,11 +2,13 @@ import std
 import parker.cgroup
 import libc_temp
 import std.path
-import std.time
+import time
+import syscall
+import parker.log as *
 
 string charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
-fn arg_verbose() {
+fn arg_verbose():bool {
     var flag = syscall.get_env('PARKER_VERBOSE')
     return flag != ''
 }
@@ -17,17 +19,17 @@ fn extract_tgz(string exe_path):[u8] {
 
     syscall.seek(fd, -16, syscall.SEEK_END)
 
-    var size_buf = [] as [u8;16]
-    len = syscall.read(fd, size_buf)
-    if len != size_buf.len() {
+    var size_buf = vec<u8>{len=16}
+    var len = syscall.read(fd, size_buf)
+    if len != size_buf.len {
         syscall.close(fd)
-        throw 'read fd len' + len 'exception'
+        throw std.sprintf('read fd len %d exception', len)
     }
 
     var size_str = size_buf as string
 
     // atoi
-    var size = strtol(size_str.ref(), null, 10)
+    var size = strtol(size_str.ref(), 0, 10)
     if size == 0 {
         throw 'extract tgz size is zero'
     }
@@ -37,7 +39,7 @@ fn extract_tgz(string exe_path):[u8] {
     syscall.seek(fd, -16 - size, syscall.SEEK_END)
 
     // read result
-    var result = [] as [u8;size]
+    var result = vec<u8>{len=size}
 
     len = syscall.read(fd, result)
     if len != size {
@@ -46,6 +48,8 @@ fn extract_tgz(string exe_path):[u8] {
 
     // close fd
     syscall.close(fd)
+
+    return result
 }
 
 // 在 workdir 创建 mount 空间
@@ -60,10 +64,10 @@ fn mount_ns(string workdir) {
 }
     
 fn read_target(string workdir):string {
-    target_path = path.join(workdir, '.target_name')
-    var fd = syscall.open(target_path)
+    var target_path = path.join(workdir, '.target_name')
+    var fd = syscall.open(target_path, syscall.O_RDONLY, 0)
 
-    var target_buf  = [] as [u8;1024]
+    var target_buf = vec<u8>{len=1024}
     var len = syscall.read(fd, target_buf)
     target_buf = target_buf.slice(0, len)
     
@@ -84,9 +88,9 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
     // pdeathsig 
     // 1 = PR_SET_PDEATHSIG
     // 9 = SIGKILL
-    var result = prctl(1, 9)
+    var result = prctl(1, 9, 0, 0, 0)
     if result == -1 {
-        throw std.printf('pdeathsig set err=%s', libc_strerror())
+        throw std.sprintf('set pdeathsig err=%s', libc_strerror())
     }
 
     // 读取当前进程 id
@@ -97,14 +101,15 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
     cg.register(pid)
     
     // run target with all args and env
-    var args := std.args()
+    var args = std.args()
     // args[0] 是 proc/:pid/comm, 这里替换成 target name
     var target_name = path.base(target_path)
     args[0] = target_name
 
     // 通过 exec 进行进程启动
-    syscall.exec(target_path, args, syscall.envs())
+    syscall.exec(target_path, args, syscall.get_envs())
     logf('exec cannot execute it here')
+    return 0 // 正常不会执行到这里了
 }
 
 // 创建一个能够拦截所有信号且非阻塞的 fd
@@ -125,12 +130,12 @@ fn sig_notify():i32 {
     return sigfd
 }
 
-fn rand_letter(int len) {
-    var result = [] as [u8;len]
-    srand(time.now().timestamp())
+fn rand_letter(int len):string {
+    var result = vec<u8>{len=len}
+    srand(time.now().timestamp() as u32)
 
-    for i in result {
-        int char_index = rand() % charset.len()
+    for i,v in result {
+        int char_index = rand() % charset.len
         result[i] = charset[char_index]
     }
     

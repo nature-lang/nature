@@ -61,7 +61,7 @@ type person_t = struct {
 }
 
 var p = person_t{}
-println(p.foo[0], p.foo[7], p.dog.a, p.car.a, p.egg.len(), p.bar)
+println(p.foo[0], p.foo[7], p.dog.a, p.car.a, p.egg.len, p.bar)
 
 // assign
 p.egg.push(3.1415)
@@ -70,4 +70,4 @@ p.car.b = 456
 p.foo[0] = 789
 p.foo[7] = 987
 p.bar = true
-println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len(), p.bar)
+println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len, p.bar)

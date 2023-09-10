@@ -6,7 +6,7 @@ bool verbose = false
 
 fn set_verbose() {
     var args = std.args()
-    var last = args[args.len() - 1]
+    var last = args[args.len - 1]
     if last == '-v' {
         verbose = true
         logf('verbose enabled')

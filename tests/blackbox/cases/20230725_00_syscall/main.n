@@ -15,7 +15,7 @@ if err.has {
 }
 
 // read buf is [u8]
-var buf = [] as [u8;20]
+var buf = vec<u8>{len=20}
 var (len, err) = try syscall.read(fd, buf)
 if err.has {
     return print(err.msg)

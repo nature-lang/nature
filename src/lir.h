@@ -9,6 +9,8 @@
 #include "src/symbol/symbol.h"
 #include "src/register/register.h"
 
+#define VEC_TYPE_IDENT "vec"
+
 #define TEMP_RESULT "result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
@@ -36,21 +38,21 @@
 #define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
 #define BUILTIN_REF_KEY "ref" // list.ref()
-#define BUILTIN_LEN_KEY "len" // list.len()
-#define BUILTIN_CAP_KEY "cap" // list.cap()
+//#define BUILTIN_LEN_KEY "len" // list.len()
+//#define BUILTIN_CAP_KEY "cap" // list.cap()
 #define BUILTIN_DEL_KEY "del" // list.del()
 
-#define LIST_PUSH_KEY "push"
-#define LIST_POP_KEY "pop"
-#define LIST_SLICE_KEY "slice"
-#define LIST_CONCAT_KEY "concat"
-#define LIST_LENGTH_KEY "len"
-#define LIST_CAPACITY_KEY "cap" // list.cap vs list.cap()
+#define VEC_PUSH_KEY "push"
+#define VEC_POP_KEY "pop"
+#define VEC_SLICE_KEY "slice"
+#define VEC_CONCAT_KEY "concat"
+#define VEC_LENGTH_KEY "len"
+#define VEC_CAPACITY_KEY "cap"
 
 #define MAP_DELETE_KEY "del"
-#define MAP_LENGTH_KEY "len"
+//#define MAP_LENGTH_KEY "len"
 
-#define SET_HAS_KEY "has"
+#define SET_CONTAINS_KEY "contains"
 #define SET_ADD_KEY "add"
 #define SET_DELETE_KEY "del"
 
@@ -58,15 +60,15 @@
 
 // RT = runtime
 // CT = compile time
-#define RT_CALL_LIST_NEW "list_new"
-#define RT_CALL_LIST_ELEMENT_ADDR "list_element_addr"
-#define RT_CALL_LIST_SLICE "list_slice"
-#define RT_CALL_LIST_REF "list_ref"
-#define RT_CALL_LIST_LENGTH "list_length"
-#define RT_CALL_LIST_CAPACITY "list_capacity"
-#define RT_CALL_LIST_PUSH "list_push"
-#define RT_CALL_LIST_ITERATOR "list_iterator"
-#define RT_CALL_LIST_CONCAT "list_concat"
+#define RT_CALL_VEC_NEW "vec_new"
+#define RT_CALL_VEC_ELEMENT_ADDR "vec_element_addr"
+#define RT_CALL_VEC_SLICE "vec_slice"
+#define RT_CALL_VEC_REF "vec_ref"
+#define RT_CALL_VEC_LENGTH "vec_length"
+#define RT_CALL_VEC_CAPACITY "vec_capacity"
+#define RT_CALL_VEC_PUSH "vec_push"
+#define RT_CALL_VEC_ITERATOR "vec_iterator"
+#define RT_CALL_VEC_CONCAT "vec_concat"
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
 
@@ -145,11 +147,11 @@
 #define OP_PUSH(_op) linked_push(m->linear_current->operations, _op)
 
 static char *lir_need_gc_call[] = {
-        RT_CALL_LIST_NEW,
-        RT_CALL_LIST_SLICE,
-        RT_CALL_LIST_PUSH,
-        RT_CALL_LIST_ITERATOR,
-        RT_CALL_LIST_CONCAT,
+        RT_CALL_VEC_NEW,
+        RT_CALL_VEC_SLICE,
+        RT_CALL_VEC_PUSH,
+        RT_CALL_VEC_ITERATOR,
+        RT_CALL_VEC_CONCAT,
         RT_CALL_MAP_NEW,
         RT_CALL_MAP_ACCESS,
         RT_CALL_MAP_DELETE,

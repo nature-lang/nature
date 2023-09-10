@@ -1,11 +1,11 @@
-#include "list.h"
+#include "vec.h"
 #include "utils/custom_links.h"
 #include "runtime/memory.h"
 #include "runtime/processor.h"
 #include "array.h"
 #include "struct.h"
 
-void list_grow(n_list_t *l) {
+void vec_grow(n_vec_t *l) {
     l->capacity = l->capacity * 2;
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
@@ -18,11 +18,11 @@ void list_grow(n_list_t *l) {
  * [string] 对于这样的声明，现在默认其 element 元素是存储在堆上的
  * @param rtype_hash
  * @param element_rtype_hash
- * @param length list 大小，允许为 0，当 capacity = 0 时，使用 default_capacity
+ * @param length vec 大小，允许为 0，当 capacity = 0 时，使用 default_capacity
  * @return
  */
-n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
-    DEBUGF("[runtime.list_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
+n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
+    DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
            element_rtype_hash,
            length, capacity);
 
@@ -30,32 +30,32 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
         if (length > 0) {
             capacity = length;
         } else {
-            capacity = LIST_DEFAULT_CAPACITY;
+            capacity = VEC_DEFAULT_CAPACITY;
         }
     }
 
     assertf(capacity >= length, "capacity must be greater than length");
-    DEBUGF("[runtime.list_new] length=%lu, capacity=%lu", length, capacity)
+    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity)
 
     // find rtype and element_rtype
-    rtype_t *list_rtype = rt_find_rtype(rtype_hash);
-    assertf(list_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
+    assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
 
     rtype_t *element_rtype = rt_find_rtype(element_rtype_hash);
     assertf(element_rtype, "cannot find element_rtype with hash %lu", element_rtype_hash);
 
-    // - 进行内存申请,申请回来一段内存是 memory_list_t 大小的内存, memory_list_* 就是限定这一片内存区域的结构体表示
-    // 虽然数组也这么表示，但是数组本质上只是利用了 list_data + 1 时会按照 sizeof(memory_list_t) 大小的内存区域移动
+    // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
+    // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_list_t *list = runtime_rtype_malloc(list_rtype->size, list_rtype);
-    list->capacity = capacity;
-    list->length = length;
-    list->element_rtype_hash = element_rtype_hash;
-    list->data = rt_array_new(element_rtype, capacity);
+    n_vec_t *vec = runtime_rtype_malloc(vec_rtype->size, vec_rtype);
+    vec->capacity = capacity;
+    vec->length = length;
+    vec->element_rtype_hash = element_rtype_hash;
+    vec->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[runtime.list_new] success, list: %p, data: %p", list, list->data);
+    DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
 
-    return list;
+    return vec;
 }
 
 /**
@@ -63,10 +63,10 @@ n_list_t *list_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t le
  * @param index
  * @param value_ref
  */
-void list_access(n_list_t *l, uint64_t index, void *value_ref) {
+void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
         char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
-        DEBUGF("[runtime.list_access] has err %s", msg);
+        DEBUGF("[runtime.vec_access] has err %s", msg);
         rt_processor_attach_errort(msg);
         return;
     }
@@ -84,7 +84,7 @@ void list_access(n_list_t *l, uint64_t index, void *value_ref) {
  * @param ref
  * @return
  */
-void list_assign(n_list_t *l, uint64_t index, void *ref) {
+void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
@@ -95,15 +95,15 @@ void list_assign(n_list_t *l, uint64_t index, void *ref) {
     memmove(p, ref, element_size);
 }
 
-uint64_t list_length(n_list_t *l) {
+uint64_t vec_length(n_vec_t *l) {
     return l->length;
 }
 
-uint64_t list_capacity(n_list_t *l) {
+uint64_t vec_capacity(n_vec_t *l) {
     return l->capacity;
 }
 
-void *list_ref(n_list_t *l) {
+void *vec_ref(n_vec_t *l) {
     return l->data;
 }
 
@@ -112,20 +112,20 @@ void *list_ref(n_list_t *l) {
  * @param l
  * @param ref
  */
-void list_push(n_list_t *l, void *ref) {
+void vec_push(n_vec_t *l, void *ref) {
     assertf(ref > 0, "ref=%p must be a valid address", ref);
-    DEBUGF("[list_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
+    DEBUGF("[vec_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
            (uint64_t) fetch_int_value((addr_t) ref, 8));
 
     if (l->length == l->capacity) {
-        DEBUGF("[list_push] current_length=%lu == capacity, trigger grow, next capacity=%lu",
+        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu",
                l->length,
                l->capacity * 2);
-        list_grow(l);
+        vec_grow(l);
     }
 
     uint64_t index = l->length++;
-    list_assign(l, index, ref);
+    vec_assign(l, index, ref);
 }
 
 /**
@@ -136,53 +136,53 @@ void list_push(n_list_t *l, void *ref) {
  * @param end 结束 index
  * @return
  */
-n_list_t *list_slice(uint64_t rtype_hash, n_list_t *l, int64_t start, int64_t end) {
+n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) {
     // start end 检测
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
-        char *msg = dsprintf("slice [%d:%d] out of list with length %d", start, end, l->length);
-        DEBUGF("[runtime.list_slice] has err %s", msg);
+        char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
+        DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
     if (start > end) {
         char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
-        DEBUGF("[runtime.list_slice] has err %s", msg);
+        DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
-    DEBUGF("[list_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu",
+    DEBUGF("[vec_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu",
            rtype_hash, l->element_rtype_hash, start, end);
     uint64_t length = end - start;
 
-    rtype_t *list_rtype = rt_find_rtype(rtype_hash);
-    assertf(list_rtype, "cannot find rtype with hash %lu", rtype_hash);
-    n_list_t *sliced_list = runtime_rtype_malloc(list_rtype->size, list_rtype);
-    sliced_list->capacity = length;
-    sliced_list->length = length;
-    sliced_list->element_rtype_hash = l->element_rtype_hash;
+    rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
+    assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    n_vec_t *sliced_vec = runtime_rtype_malloc(vec_rtype->size, vec_rtype);
+    sliced_vec->capacity = length;
+    sliced_vec->length = length;
+    sliced_vec->element_rtype_hash = l->element_rtype_hash;
 
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
-    sliced_list->data = l->data + start * element_size;
+    sliced_vec->data = l->data + start * element_size;
 
-    return sliced_list;
+    return sliced_vec;
 }
 
 /**
- * 不影响原来的 list，而是返回一个新的 list
+ * 不影响原来的 vec，而是返回一个新的 vec
  * @param rtype_hash
  * @param a
  * @param b
  * @return
  */
-n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
-    DEBUGF("[list_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
-    assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two lists are different");
+n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
+    DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
+    assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two vecs are different");
     uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
     uint64_t length = a->length + b->length;
-    n_list_t *merged = list_new(rtype_hash, a->element_rtype_hash, length, length);
-    DEBUGF("[list_concat] a->len=%lu, b->len=%lu", a->length, b->length);
+    n_vec_t *merged = vec_new(rtype_hash, a->element_rtype_hash, length, length);
+    DEBUGF("[vec_concat] a->len=%lu, b->len=%lu", a->length, b->length);
 
     // 合并 a
     void *dst = merged->data;
@@ -195,11 +195,11 @@ n_list_t *list_concat(uint64_t rtype_hash, n_list_t *a, n_list_t *b) {
     return merged;
 }
 
-n_cptr_t list_element_addr(n_list_t *l, uint64_t index) {
-    DEBUGF("[list_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
+n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
+    DEBUGF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
     if (index >= l->length) {
-        char *msg = dsprintf("index out of list [%d] with length %d", index, l->length);
-        DEBUGF("[runtime.list_element_addr] has err %s", msg);
+        char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
+        DEBUGF("[runtime.vec_element_addr] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
@@ -208,23 +208,23 @@ n_cptr_t list_element_addr(n_list_t *l, uint64_t index) {
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
 
-    DEBUGF("[list_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset))
+    DEBUGF("[vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset))
     return (n_cptr_t) l->data + offset;
 }
 
-n_cptr_t list_iterator(n_list_t *l) {
+n_cptr_t vec_iterator(n_vec_t *l) {
     if (l->length == l->capacity) {
-        DEBUGF("[list_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu",
+        DEBUGF("[vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu",
                l->length,
                l->capacity * 2);
-        list_grow(l);
+        vec_grow(l);
     }
     uint64_t index = l->length++;
 
-    DEBUGF("[list_iterator] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
+    DEBUGF("[vec_iterator] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
 
-    n_cptr_t addr = list_element_addr(l, index);
-    DEBUGF("[list_iterator] addr=%lx", addr);
+    n_cptr_t addr = vec_element_addr(l, index);
+    DEBUGF("[vec_iterator] addr=%lx", addr);
     return addr;
 }
 

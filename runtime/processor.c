@@ -52,7 +52,7 @@ void processor_dump_errort(n_errort *errort) {
     assert(errort->traces->length > 0);
 
     n_trace_t first_trace = {};
-    list_access(errort->traces, 0, &first_trace);
+    vec_access(errort->traces, 0, &first_trace);
     char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n",
                               (char *) errort->msg->data,
                               (char *) first_trace.path->data,
@@ -65,7 +65,7 @@ void processor_dump_errort(n_errort *errort) {
         VOID write(STDOUT_FILENO, temp, strlen(temp));
         for (int i = 0; i < errort->traces->length; ++i) {
             n_trace_t trace = {};
-            list_access(errort->traces, i, &trace);
+            vec_access(errort->traces, i, &trace);
             temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n",
                             i,
                             (char *) trace.ident->data,

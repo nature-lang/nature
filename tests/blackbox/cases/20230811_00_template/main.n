@@ -8,7 +8,7 @@ var fd = syscall.open(input, syscall.O_RDONLY, 0666)
 
 var gzfile = gzopen(output.ref(), 'wb'.ref())
 
-var buf = [] as [u8;4096]
+var buf = vec<u8>{len=4096}
 for true {
     var len = syscall.read(fd, buf)
     if len == 0 {

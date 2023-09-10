@@ -97,16 +97,16 @@ static rtype_t rtype_string() {
  * @param t
  * @return
  */
-static rtype_t rtype_list(type_list_t *t) {
+static rtype_t rtype_vec(type_vec_t *t) {
     rtype_t element_rtype = reflect_type(t->element_type);
 
-    char *str = fixed_sprintf("%d_%lu", TYPE_LIST, element_rtype.hash);
+    char *str = fixed_sprintf("%d_%lu", TYPE_VEC, element_rtype.hash);
     uint32_t hash = hash_string(str);
     rtype_t rtype = {
-            .size =  sizeof(n_list_t),
+            .size =  sizeof(n_vec_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_LIST,
+            .kind = TYPE_VEC,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -523,8 +523,8 @@ rtype_t reflect_type(type_t t) {
         case TYPE_NULLABLE_POINTER:
             rtype = rtype_nullable_pointer(t.pointer);
             break;
-        case TYPE_LIST:
-            rtype = rtype_list(t.list);
+        case TYPE_VEC:
+            rtype = rtype_vec(t.vec);
             break;
         case TYPE_ARRAY:
             rtype = rtype_array(t.array);
@@ -596,10 +596,10 @@ type_param_t *type_formal_new(char *literal) {
     return t;
 }
 
-type_alias_t *type_alias_new(char *literal, char *import_as) {
+type_alias_t *type_alias_new(char *literal, char *import_module_ident) {
     type_alias_t *t = NEW(type_alias_t);
     t->ident = literal;
-    t->import_as = import_as;
+    t->import_as = import_module_ident;
     return t;
 }
 
@@ -611,15 +611,15 @@ bool type_need_gc(type_t t) {
 }
 
 rtype_t *rtype_push(rtype_t rtype) {
-    uint64_t index = ct_rtype_list->length;
-    ct_list_push(ct_rtype_list, &rtype);
+    uint64_t index = ct_rtype_vec->length;
+    ct_list_push(ct_rtype_vec, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
     ct_rtype_size += (rtype.length * sizeof(uint64_t));
     ct_rtype_count += 1;
 
-    return ct_list_value(ct_rtype_list, index);
+    return ct_list_value(ct_rtype_vec, index);
 }
 
 /**
@@ -918,9 +918,9 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
-    if (dst.kind == TYPE_LIST) {
-        type_list_t *left_list_decl = dst.list;
-        type_list_t *right_list_decl = src.list;
+    if (dst.kind == TYPE_VEC) {
+        type_vec_t *left_list_decl = dst.vec;
+        type_vec_t *right_list_decl = src.vec;
         return type_compare(left_list_decl->element_type, right_list_decl->element_type);
     }
 
@@ -1004,4 +1004,17 @@ bool type_compare(type_t dst, type_t src) {
     }
 
     return true;
+}
+
+/**
+ * TODO 采用递归的方式展示类型信息
+ * @param t
+ * @return
+ */
+char *type_format(type_t t) {
+    if (t.origin_ident == NULL) {
+        return type_kind_str[t.kind];
+    }
+
+    return dsprintf("%s(%s)", t.origin_ident, type_kind_str[t.kind]);
 }

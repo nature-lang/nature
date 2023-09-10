@@ -20,7 +20,7 @@ fn find_char(string s, u8 char, int after):int {
 }
 
 fn find(string s, string sub, int after):int {
-    var n = sub.len()
+    var n = sub.len
 
     if (n == 0) {
         return -1
@@ -41,10 +41,10 @@ fn find(string s, string sub, int after):int {
 }
 
 fn reverse(string s):string {
-    var result = [] as [u8;s.len()]
+    var result = vec<u8>{len=s.len}
 
     for i,c in s {
-        result[s.len() - 1 - i] = c
+        result[s.len - 1 - i] = c
     }
 
     return result as string
@@ -55,20 +55,20 @@ fn rfind(string s, string sub, int before):int {
     s = reverse(s)
     sub = reverse(sub)
 
-    var index = find(s, sub, s.len() - before)
+    var index = find(s, sub, s.len - before)
     if index == -1 {
         return index
     }
 
-    return s.len() - index - sub.len()
+    return s.len - index - sub.len
 }
 
 fn ends_with(string s, string ends):bool {
-  if ends.len() > s.len() {
+  if ends.len > s.len {
     return false
   }
 
-  var start = s.len() - ends.len()
+  var start = s.len - ends.len
 
   for i, c in ends {
     if s[start+i] != c {
@@ -80,7 +80,7 @@ fn ends_with(string s, string ends):bool {
 }
 
 fn starts_with(string s, string starts):bool {
-  if (starts.len() > s.len()) {
+  if (starts.len > s.len) {
     return false
   }
 
@@ -133,16 +133,16 @@ fn split(string s, string separator):[string] {
         return result
     }
 
-    if s.len() <= separator.len() {
+    if s.len <= separator.len {
         return result
     }
 
     var i = 0
-    for i < s.len() {
+    for i < s.len {
         var found = find(s, separator, i)
         if found == -1 {
             // 剩余字符串全部切到 result 中
-            result.push(slice(s, i, s.len()))
+            result.push(slice(s, i, s.len))
             break
         }
 
@@ -151,7 +151,7 @@ fn split(string s, string separator):[string] {
         result.push(part)
 
         // 更新 i
-        i = found + separator.len()
+        i = found + separator.len
     }
 
     return result
@@ -160,17 +160,17 @@ fn split(string s, string separator):[string] {
 fn join([string] list, string separator):string {
     [u8] result = []
 
-    if list.len() == 0 {
+    if list.len == 0 {
         return ''
     }
 
     var i = 0
-    for i < list.len() {
+    for i < list.len {
         for v in list[i] {
             result.push(v)
         }
 
-        if i < list.len() - 1 {
+        if i < list.len - 1 {
             for v in separator {
                 result.push(v)
             }
@@ -183,7 +183,7 @@ fn join([string] list, string separator):string {
 }
 
 fn ascii(string c):u8 {
-    if c.len() != 1 {
+    if c.len != 1 {
         throw 'c length must equal to 1'
     }
     var list = c as [u8]
@@ -198,8 +198,8 @@ fn ltrim(string s, [string] list):string {
   }
 
   for i, c in s {
-    if !cut.has(c) {
-        return slice(s, i, s.len())
+    if !cut.contains(c) {
+        return slice(s, i, s.len)
     }
   }
 
@@ -213,8 +213,8 @@ fn rtrim(string s, [string] list):string {
         cut.add(sub[0])
     }
 
-    for int i = s.len() - 1; i >= 0; i -= 1 {
-        if !cut.has(s[i]) {
+    for int i = s.len - 1; i >= 0; i -= 1 {
+        if !cut.contains(s[i]) {
             return slice(s, 0, i + 1)
         }
     }
@@ -231,16 +231,16 @@ fn replace(string s, string sub_old, string sub_new):string {
     var result = ""
 
     // 如果 sub_old 的长度为 0，或者 s 的长度小于 sub_old，直接返回 s
-    if sub_old.len() == 0 || s.len() < sub_old.len() {
+    if sub_old.len == 0 || s.len < sub_old.len {
         return s
     }
 
     var i = 0
-    for i < s.len() {
+    for i < s.len {
         var found = find(s, sub_old, i)
 
         if found == -1 {
-            result += slice(s, i, s.len())
+            result += slice(s, i, s.len)
             break
         }
 
@@ -251,7 +251,7 @@ fn replace(string s, string sub_old, string sub_new):string {
         result += sub_new
 
         // 更新 i
-        i = found + sub_old.len()
+        i = found + sub_old.len
     }
 
     return result

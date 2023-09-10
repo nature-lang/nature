@@ -3,7 +3,7 @@
 #include "string.h"
 #include "runtime/processor.h"
 #include "errno.h"
-#include "list.h"
+#include "vec.h"
 #include "basic.h"
 #include <signal.h>
 #include <sys/wait.h>
@@ -18,14 +18,14 @@
  * @param argv
  * @param envp
  */
-void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
+void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char *p_str = string_ref(path);
 
     // args 转换成 char* 格式并给到 execve
     char **c_args = mallocz(sizeof(char *) * argv->length + 1);
     for (int i = 0; i < argv->length; ++i) {
         n_string_t *arg;
-        list_access(argv, i, &arg);
+        vec_access(argv, i, &arg);
         if (arg == NULL) {
             return;
         }
@@ -39,7 +39,7 @@ void syscall_exec(n_string_t *path, n_list_t *argv, n_list_t *envp) {
     char **c_envs = mallocz(sizeof(char *) * envp->length);
     for (int i = 0; i < envp->length; ++i) {
         n_string_t *env;
-        list_access(envp, i, &env);
+        vec_access(envp, i, &env);
         if (env == NULL) {
             return;
         }

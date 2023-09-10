@@ -1,5 +1,5 @@
-#ifndef NATURE_UTILS_LINKED_LIST_H_
-#define NATURE_UTILS_LINKED_LIST_H_
+#ifndef NATURE_UTILS_LINKED_H_
+#define NATURE_UTILS_LINKED_H_
 
 #include <stdlib.h>
 #include <stdint.h>

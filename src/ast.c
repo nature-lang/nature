@@ -14,14 +14,14 @@ type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
         type_t *last_param_type = ct_list_value(type_fn->param_types, type_fn->param_types->length - 1);
 
         // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
-        assert(last_param_type->kind == TYPE_LIST);
+        assert(last_param_type->kind == TYPE_VEC);
 
         // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
         if (is_spread) {
             return last_param_type;
         }
 
-        return &last_param_type->list->element_type;
+        return &last_param_type->vec->element_type;
     }
 
     if (index >= type_fn->param_types->length) {
@@ -54,17 +54,18 @@ static type_union_t *type_union_copy(module_t *m, type_union_t *temp) {
 
 static type_fn_t *type_fn_copy(module_t *m, type_fn_t *temp) {
     type_fn_t *fn = COPY_NEW(type_fn_t, temp);
-    fn->name = strdup(temp->name);
+    if (temp->name) {
+        fn->name = strdup(temp->name);
+    }
+
     fn->param_types = ct_list_type_copy(m, temp->param_types);
     fn->return_type = type_copy(m, temp->return_type);
     return fn;
 }
 
-static type_list_t *type_list_copy(module_t *m, type_list_t *temp) {
-    type_list_t *list = COPY_NEW(type_list_t, temp);
+static type_vec_t *type_vec_copy(module_t *m, type_vec_t *temp) {
+    type_vec_t *list = COPY_NEW(type_vec_t, temp);
     list->element_type = type_copy(m, temp->element_type);
-    list->len = ast_expr_copy(m, temp->len);
-    list->cap = ast_expr_copy(m, temp->cap);
     return list;
 }
 
@@ -138,6 +139,10 @@ static type_array_t *type_array_copy(module_t *m, type_array_t *temp) {
 
 type_t type_copy(module_t *m, type_t temp) {
     type_t type = temp;
+    if (temp.origin_ident) {
+        type.origin_ident = strdup(temp.origin_ident);
+    }
+
     switch (temp.kind) {
         case TYPE_ALIAS: {
             type.alias = type_alias_copy(m, temp.alias);
@@ -147,8 +152,8 @@ type_t type_copy(module_t *m, type_t temp) {
             type.gen = type_gen_copy(m, temp.gen);
             break;
         }
-        case TYPE_LIST: {
-            type.list = type_list_copy(m, temp.list);
+        case TYPE_VEC: {
+            type.vec = type_vec_copy(m, temp.vec);
             break;
         }
         case TYPE_ARRAY: {
@@ -268,8 +273,8 @@ static ast_map_access_t *ast_map_access_copy(module_t *m, ast_map_access_t *temp
     return access;
 }
 
-static ast_list_access_t *ast_list_access_copy(module_t *m, ast_list_access_t *temp) {
-    ast_list_access_t *access = COPY_NEW(ast_list_access_t, temp);
+static ast_vec_access_t *ast_list_access_copy(module_t *m, ast_vec_access_t *temp) {
+    ast_vec_access_t *access = COPY_NEW(ast_vec_access_t, temp);
     access->left = *ast_expr_copy(m, &temp->left);
     access->index = *ast_expr_copy(m, &temp->index);
     return access;
@@ -288,10 +293,21 @@ static ast_struct_select_t *ast_struct_select_copy(module_t *m, ast_struct_selec
     return select;
 }
 
-static ast_list_new_t *ast_list_new_copy(module_t *m, ast_list_new_t *temp) {
-    ast_list_new_t *list_new = COPY_NEW(ast_list_new_t, temp);
-    list_new->elements = ast_list_expr_copy(m, temp->elements);
-    return list_new;
+static ast_vec_new_t *ast_list_new_copy(module_t *m, ast_vec_new_t *temp) {
+    ast_vec_new_t *vec_new = COPY_NEW(ast_vec_new_t, temp);
+    if (temp->elements) {
+        vec_new->elements = ast_list_expr_copy(m, temp->elements);
+    }
+
+    if (temp->len) {
+        vec_new->len = ast_expr_copy(m, temp->len);
+    }
+
+    if (temp->cap) {
+        vec_new->cap = ast_expr_copy(m, temp->cap);
+    }
+
+    return vec_new;
 }
 
 static ast_map_new_t *ast_map_new_copy(module_t *m, ast_map_new_t *temp) {
@@ -406,11 +422,11 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_access_copy(m, temp->value);
             break;
         }
-        case AST_EXPR_LIST_NEW: {
+        case AST_EXPR_VEC_NEW: {
             expr->value = ast_list_new_copy(m, temp->value);
             break;
         }
-        case AST_EXPR_LIST_ACCESS: {
+        case AST_EXPR_VEC_ACCESS: {
             expr->value = ast_list_access_copy(m, temp->value);
             break;
         }

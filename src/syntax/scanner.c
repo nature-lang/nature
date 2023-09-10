@@ -369,20 +369,18 @@ char *scanner_number_advance(module_t *m) {
 token_e scanner_ident(char *word, int length) {
     switch (word[0]) {
         case 'a': {
-            if (length == 2 && word[1] == 's') {
-                return TOKEN_AS;
-            }
-            if (length > 1) {
-                switch (word[1]) {
-                    case 'n': {
-                        return scanner_rest(word, length, 2, 1, "y", TOKEN_ANY);
-                    }
-                    case 'r': {
-                        return scanner_rest(word, length, 2, 1, "r", TOKEN_ARRAY);
-                    }
+            switch (word[1]) {
+                case 's': {
+                    return scanner_rest(word, length, 2, 0, "", TOKEN_AS);
+                }
+                case 'n': {
+                    return scanner_rest(word, length, 2, 1, "y", TOKEN_ANY);
+                }
+                case 'r': {
+                    return scanner_rest(word, length, 2, 1, "r", TOKEN_ARR);
                 }
             }
-
+            break;
         }
         case 'b':
             switch (word[1]) {
@@ -391,6 +389,7 @@ token_e scanner_ident(char *word, int length) {
                 case 'r':
                     return scanner_rest(word, length, 2, 3, "eak", TOKEN_BREAK);
             }
+            break;
         case 'c':
             switch (word[1]) {
                 case 'o':
@@ -400,12 +399,13 @@ token_e scanner_ident(char *word, int length) {
                 case 'p': // cptr
                     return scanner_rest(word, length, 2, 2, "tr", TOKEN_CPTR);
             }
+            break;
         case 'e':
             return scanner_rest(word, length, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
             switch (word[1]) {
                 case 'n':
-                    return scanner_rest(word, length, 2, 0, "n", TOKEN_FN);
+                    return scanner_rest(word, length, 2, 0, "", TOKEN_FN);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "lse", TOKEN_FALSE);
                 case 'l':
@@ -417,14 +417,14 @@ token_e scanner_ident(char *word, int length) {
                 case 'o':
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_FOR);
             }
+            break;
         }
         case 'g':
             return scanner_rest(word, length, 1, 2, "en", TOKEN_GEN);
         case 'i': {
             if (length == 2 && word[1] == 'n') {
                 return TOKEN_IN;
-            }
-            if (length == 2 && word[1] == 's') {
+            } else if (length == 2 && word[1] == 's') {
                 return TOKEN_IS;
             }
 
@@ -444,6 +444,7 @@ token_e scanner_ident(char *word, int length) {
                 case '6':
                     return scanner_rest(word, length, 2, 1, "4", TOKEN_I64);
             }
+            break;
         }
         case 'l': {
             return scanner_rest(word, length, 1, 2, "et", TOKEN_LET);
@@ -456,12 +457,19 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
 
             }
+            break;
         case 'p':
             return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
-        case 's': { // self,string,struct,sizeof
+        case 's': { // self,string,struct,sizeof,sett
             switch (word[1]) {
                 case 'e':
-                    return scanner_rest(word, length, 2, 2, "lf", TOKEN_SELF);
+                    switch (word[2]) {
+                        case 'l':
+                            return scanner_rest(word, length, 3, 1, "f", TOKEN_SELF);
+                        case 't':
+                            return scanner_rest(word, length, 3, 1, "t", TOKEN_SET);
+                    }
+                    break;
                 case 'i':
                     return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
             }
@@ -474,26 +482,35 @@ token_e scanner_ident(char *word, int length) {
                         return scanner_rest(word, length, 4, 2, "ct", TOKEN_STRUCT);
                 }
             }
+            break;
         }
-            // tup/throw/type/true
-        case 't': {
-            if (length > 1) {
-                switch (word[1]) {
-                    case 'h':
-                        return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
-                    case 'y' :
-                        return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
-                    case 'r' : {
-                        if (length == 3 && word[2] == 'y') {
-                            return TOKEN_TRY;
-                        }
-                        return scanner_rest(word, length, 2, 2, "ue", TOKEN_TRUE);
+        case 't': { // tup/throw/type/true
+            switch (word[1]) {
+                case 'h':
+                    return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
+                case 'y': // type
+                    return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
+                case 'u': // tup
+                    return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
+                case 'r' : {
+                    switch (word[2]) {
+                        case 'y':
+                            return scanner_rest(word, length, 3, 0, "", TOKEN_TRY);
+                        case 'u':
+                            return scanner_rest(word, length, 3, 1, "e", TOKEN_TRUE);
                     }
+                    break;
                 }
             }
+            break;
         }
         case 'v': {
-            return scanner_rest(word, length, 1, 2, "ar", TOKEN_VAR);
+            switch (word[1]) {
+                case 'a':
+                    return scanner_rest(word, length, 2, 1, "r", TOKEN_VAR);
+                case 'e': // vec
+                    return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
+            }
         }
         case 'u': {
             switch (word[1]) {
@@ -508,6 +525,10 @@ token_e scanner_ident(char *word, int length) {
                 case '6':
                     return scanner_rest(word, length, 2, 1, "4", TOKEN_U64);
             }
+            break;
+        }
+        case 'm': { // map
+            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         }
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);

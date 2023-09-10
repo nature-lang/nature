@@ -21,18 +21,18 @@ typedef enum {
     AST_EXPR_NEW, // new person
 
     AST_EXPR_MAP_ACCESS,
-    AST_EXPR_LIST_ACCESS,
+    AST_EXPR_VEC_ACCESS,
     AST_EXPR_ARRAY_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
 
     AST_EXPR_STRUCT_SELECT,
-    AST_EXPR_LIST_SELECT, // [1, 2, 3].push(3)
+    AST_EXPR_VEC_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_MAP_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_SET_SELECT, // [1, 2, 3].push(3)
 
     AST_EXPR_ENV_ACCESS,
 
-    AST_EXPR_LIST_NEW, // [1, 2, 3]
+    AST_EXPR_VEC_NEW, // [1, 2, 3]
     AST_EXPR_ARRAY_NEW, // [1, 2, 3]
     AST_EXPR_EMPTY_CURLY_NEW, // {}
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
@@ -372,7 +372,7 @@ typedef struct {
     type_t element_type; // 访问的 value 的类型
     ast_expr_t left;
     ast_expr_t index;
-} ast_list_access_t, ast_array_access_t;
+} ast_vec_access_t, ast_array_access_t;
 
 typedef struct {
     type_t element_type; // index 对应的 value 的 type
@@ -397,7 +397,13 @@ typedef struct {
 // [1,a.b, call()]
 typedef struct {
     list_t *elements; // ast_expr
-} ast_list_new_t, ast_array_new_t;
+} ast_array_new_t;
+
+typedef struct {
+    list_t *elements; // ast_expr, nullable
+    ast_expr_t *len; // ast_expr, nullable
+    ast_expr_t *cap; // ast_expr, nullable
+} ast_vec_new_t;
 
 typedef struct {
     ast_expr_t key;
@@ -570,7 +576,7 @@ static inline bool can_assign(ast_type_t t) {
         t == AST_EXPR_ACCESS ||
         t == AST_EXPR_SELECT ||
         t == AST_EXPR_MAP_ACCESS ||
-        t == AST_EXPR_LIST_ACCESS ||
+        t == AST_EXPR_VEC_ACCESS ||
         t == AST_EXPR_ENV_ACCESS ||
         t == AST_EXPR_STRUCT_SELECT) {
         return true;

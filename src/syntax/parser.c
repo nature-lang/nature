@@ -210,6 +210,7 @@ static type_t parser_single_type(module_t *m) {
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
         union_type.union_->any = true;
+
         return union_type;
     }
 
@@ -252,28 +253,68 @@ static type_t parser_single_type(module_t *m) {
 
     // [int] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
-        type_list_t *type_list = NEW(type_list_t);
-        type_list->element_type = parser_type(m);
-
-        // as [type;expr]
-        if (parser_consume(m, TOKEN_SEMICOLON)) {
-            type_list->len = expr_new_ptr(m);
-            *(ast_expr_t *) type_list->len = parser_expr(m);
-
-            if (parser_consume(m, TOKEN_SEMICOLON)) {
-                type_list->cap = expr_new_ptr(m);
-                *(ast_expr_t *) type_list->cap = parser_expr(m);
-            }
-        }
-
+        type_vec_t *type_vec = NEW(type_vec_t);
+        type_vec->element_type = parser_type(m);
         parser_must(m, TOKEN_RIGHT_SQUARE);
-        result.kind = TYPE_LIST;
-        result.list = type_list;
+        result.kind = TYPE_VEC;
+        result.vec = type_vec;
         return result;
     }
 
-    // array<int>
-    if (parser_consume(m, TOKEN_ARRAY)) {
+    // map<type,type>
+    if (parser_consume(m, TOKEN_MAP)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_map_t *map = NEW(type_map_t);
+        map->key_type = parser_type(m);
+        parser_must(m, TOKEN_COMMA);
+        map->value_type = parser_type(m);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_MAP;
+        result.map = map;
+        return result;
+    }
+
+    // set<type>
+    if (parser_consume(m, TOKEN_SET)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_set_t *set = NEW(type_set_t);
+        set->element_type = parser_type(m);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_SET;
+        result.set = set;
+        return result;
+    }
+
+    // tup<...>
+    if (parser_consume(m, TOKEN_TUP)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_tuple_t *tuple = NEW(type_tuple_t);
+        tuple->elements = ct_list_new(sizeof(type_t));
+        do {
+            type_t t = parser_type(m);
+            ct_list_push(tuple->elements, &t);
+        } while (parser_consume(m, TOKEN_COMMA));
+
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_TUPLE;
+        result.tuple = tuple;
+        return result;
+    }
+
+
+    // vec<int>
+    if (parser_consume(m, TOKEN_VEC)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_vec_t *type_vec = NEW(type_vec_t);
+        type_vec->element_type = parser_type(m);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_VEC;
+        result.vec = type_vec;
+        return result;
+    }
+
+    // arr<int>
+    if (parser_consume(m, TOKEN_ARR)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_array_t *type_array = NEW(type_array_t);
         type_array->element_type = parser_type(m);
@@ -394,6 +435,7 @@ static type_t parser_single_type(module_t *m) {
         if (m->parser_type_params && table_exist(m->parser_type_params, first->literal)) {
             result.kind = TYPE_PARAM;
             result.param = type_formal_new(first->literal);
+            result.origin_ident = result.param->ident;
             return result;
         }
 
@@ -422,6 +464,7 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
+        result.origin_ident = result.alias->ident;
         return result;
     }
 
@@ -985,7 +1028,11 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_ARRAY)) {
+    if (parser_is(m, TOKEN_ARR) ||
+        parser_is(m, TOKEN_MAP) ||
+        parser_is(m, TOKEN_TUP) ||
+        parser_is(m, TOKEN_VEC) ||
+        parser_is(m, TOKEN_SET)) {
         return true;
     }
 
@@ -1259,7 +1306,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
  */
 static ast_expr_t parser_list_new(module_t *m) {
     ast_expr_t result = expr_new(m);
-    ast_list_new_t *list_new = NEW(ast_list_new_t);
+    ast_vec_new_t *list_new = NEW(ast_vec_new_t);
     list_new->elements = ct_list_new(sizeof(ast_expr_t));
     parser_must(m, TOKEN_LEFT_SQUARE);
 
@@ -1271,7 +1318,7 @@ static ast_expr_t parser_list_new(module_t *m) {
     }
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
-    result.assert_type = AST_EXPR_LIST_NEW;
+    result.assert_type = AST_EXPR_VEC_NEW;
     result.value = list_new;
 
     return result;
@@ -1728,7 +1775,8 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     // 读取表达式前缀
     parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
 
-    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s'", parser_peek(m)->literal)
+    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal,
+                   token_str[parser_peek(m)->type]);
 
     ast_expr_t expr = prefix_fn(m); // advance
 
@@ -1817,9 +1865,18 @@ static bool parser_is_struct_new_expr(module_t *m) {
         }
     }
 
+    // vec<>
+    if (parser_is(m, TOKEN_VEC)) {
+        return true;
+    }
+
     return false;
 }
 
+/**
+ * @param m
+ * @return
+ */
 static ast_expr_t parser_struct_new_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     type_t t = parser_type(m);

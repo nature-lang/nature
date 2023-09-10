@@ -43,7 +43,7 @@ var target_path = util.read_target(workdir)
 logf('read target_path success', target_apth)
 
 // - cgroup new
-var cg = cgroup.new()
+var cg = cgroup.make()
 
 // - run target with cgroup
 var pid = util.run_target(cg, target_path)

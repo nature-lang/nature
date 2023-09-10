@@ -154,7 +154,7 @@ char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, sli
 
     // 不带其他后缀
     char *full_path = str_connect(temp, ".n");
-    assertf(file_exists(full_path), "cannot find file %s", full_path);
+//    assertf(file_exists(full_path), "cannot find file %s", full_path);
 
     return full_path;
 }

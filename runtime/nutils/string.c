@@ -1,5 +1,5 @@
 #include "string.h"
-#include "list.h"
+#include "vec.h"
 #include "array.h"
 
 /**
@@ -52,7 +52,7 @@ void *string_ref(n_string_t *n_str) {
 
     // 结尾添加 '\0' 字符
     int a = '\0';
-    list_push(n_str, &a);
+    vec_push(n_str, &a);
     n_str->length -= 1;
 
     return n_str->data;
