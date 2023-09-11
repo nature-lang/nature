@@ -70,20 +70,21 @@ for true {
     // Resource temporarily unavailable
     if err.has {
         if err.msg == 'Resource temporarily unavailable' {
-            // logf('not received any sig, will sleep')
+            logf('not received any sig, will sleep')
         } else {
             assertf(false, 'read sigfd %d err=%s', sigfd, err.msg)
         }
     } else {
+        logf('read sig %d success', sig_info.ssi_signo)
         // sync the received sig to the pid
         syscall.kill(pid, sig_info.ssi_signo as int)
-        logf('send sig=%d to pid=%d', sig_info.ssi_signo, pid)
+        logf('send sig=%d to pid=%d success', sig_info.ssi_signo, pid)
     }
 
-    // sleep 100ms
-    usleep(100000)
+    // sleep 50ms
+    usleep(50000)
 
-    // logf('usleep 100ms, will next for')
+    // logf('usleep 50ms, will next for')
 }
 
 logf('successful and exit')

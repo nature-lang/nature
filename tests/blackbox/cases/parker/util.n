@@ -85,12 +85,12 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
         return pid
     }
 
-    // pdeathsig 
+    // pdeathsig
     // 1 = PR_SET_PDEATHSIG
     // 9 = SIGKILL
     var result = prctl(1, 9, 0, 0, 0)
     if result == -1 {
-        throw std.sprintf('set pdeathsig err=%s', libc_strerror())
+       throw std.sprintf('set pdeathsig err=%s', libc_strerror())
     }
 
     // 读取当前进程 id
@@ -115,10 +115,14 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
 // 创建一个能够拦截所有信号且非阻塞的 fd
 fn sig_notify():int {
     var mask_ptr = new sigset_t // ptr<sigset_t>
-    sigfillset(mask_ptr) // 注册所有信号
 
-    // 1 = SIG_BLOCK
-    if (sigprocmask(1, mask_ptr, null) == -1) {
+    // 注册所有信号
+    if sigfillset(mask_ptr)  == -1 {
+        throw libc_strerror()
+    }
+
+    // 0 = SIG_BLOCK
+    if (sigprocmask(0, mask_ptr, null) == -1) {
         throw libc_strerror()
     }
 

@@ -2,11 +2,6 @@
 #include "src/register/amd64.h"
 #include "src/cross.h"
 
-type_kind *select_type_kind(type_t t, bool is_hi) {
-    size_t size = type_sizeof(t);
-    // TODO 断言， size 必须是 2 的次方， 1， 2， 4， 8
-}
-
 lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     if (kind == TYPE_FLOAT64) {
@@ -445,6 +440,8 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                 assert(false);
             }
 
+            // arg 是一个地址指向对应的 struct 内存区域， indirect_addr 则是去内存中的值
+            // 这里使用了 uint64 的大小进行移动，所以在分配 struct 空间时，应该总是按照 align uint64 来操作
             // arg 是第一个内存地址，现在需要读取其 indirect addr
             lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(lo_kind), arg, 0);
             linked_push(result, lir_op_move(lo_reg_operand, src_operand));
@@ -513,26 +510,25 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         return result;
     }
 
-    type_t result_type = lir_operand_type(call_result);
+    type_t call_result_type = lir_operand_type(call_result);
 
     // 进行 call result 的栈空间申请,用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
-    if (is_alloc_stack(result_type)) {
+    if (is_alloc_stack(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 
-        lir_stack_alloc(c, result, result_type, call_result->value);
+        lir_stack_alloc(c, result, call_result_type, call_result);
     }
 
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
-    int64_t count = amd64_type_classify(result_type, &lo, &hi, 0);
+    int64_t count = amd64_type_classify(call_result_type, &lo, &hi, 0);
 
     // call result to args
     // count == 0 标识参数通过栈进行传递，但是需要注意的是此时传递并的是一个指针，而不是整个 struct
     // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {
-        type_t call_result_type = lir_operand_type(call_result);
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_alloc_stack(call_result_type));
+        assert(is_alloc_stack(lir_operand_type(call_result)));
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
@@ -572,7 +568,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // ~~ call_result 需要做替换，为了后续 interval 阶段能够正确收集 var def, 所以手动添加一下 def ~~ 上面的 lea 做了
     // linked_push(result, lir_op_nop(call_result));
 
-    if (result_type.kind == TYPE_STRUCT) {
+    if (call_result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令
         slice_t *output_regs = slice_new();
         slice_push(output_regs, lo_src_reg->value); // 不能延后处理，会导致 flag 设置异常！
@@ -608,7 +604,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     } else {
         assert(count == 1);
         reg_t *lo_reg = lo_src_reg->value;
-        lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, result_type.kind));
+        lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, call_result_type.kind));
 
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg));
         if (stack_arg_size > 0) {

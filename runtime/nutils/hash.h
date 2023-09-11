@@ -94,6 +94,10 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
 
         // key equal 的 slot 是最高优先且绝对正确的 slot
         void *actual_key_ref = key_data + key_index * key_size;
+
+        DEBUGF("[find_hash_slot] key_rtype=%s, actual_key_ref=%p, key_ref=%p", type_kind_str[key_rtype->kind],
+               actual_key_ref,
+               key_ref)
         if (key_equal(key_rtype, actual_key_ref, key_ref)) {
             return hash_index;
         }

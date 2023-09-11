@@ -696,24 +696,24 @@ static inline lir_operand_t *lir_stack_alloc(closure_t *c, linked_t *list, type_
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
     assert(is_alloc_stack(t));
-
     uint16_t size = type_sizeof(t);
-    uint16_t align = type_alignof(t);
 
+    // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
-    c->stack_offset = align_up(c->stack_offset, align); // 按照 8byte 对齐
+    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
     assert(rtype.size == size);
 
-    uint16_t bit_index_start = (c->stack_offset - 1) / POINTER_SIZE;
+    // 16, 0, 1
+    uint16_t bit_index_end = (c->stack_offset - 1) / POINTER_SIZE;
     uint16_t bit_index_count = size / POINTER_SIZE;
     if (bit_index_count == 0) {
         bit_index_count = 1;
     }
     for (int i = 0; i < bit_index_count; ++i) {
         bool test = bitmap_test(rtype.gc_bits, i);
-        bitmap_grow_set(c->stack_gc_bits, bit_index_start + i, test);
+        bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 
     lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);

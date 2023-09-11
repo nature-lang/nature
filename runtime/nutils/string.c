@@ -25,7 +25,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     assert(element_rtype->hash > 0);
 
     DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
-    n_string_t *str = runtime_rtype_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = runtime_zero_malloc(string_rtype->size, string_rtype);
     str->data = data;
     str->length = length;
     str->capacity = capacity;
@@ -67,7 +67,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     memmove(data, a->data, a->length);
     memmove(data + a->length, b->data, b->length);
 
-    n_string_t *str = runtime_rtype_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = runtime_zero_malloc(string_rtype->size, string_rtype);
     str->length = length;
     str->data = data;
     str->length = length;

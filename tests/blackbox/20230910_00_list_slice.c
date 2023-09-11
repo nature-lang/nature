@@ -9,9 +9,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
-    char *str = "";
+    char *str = "4455566666";
     assert_string_equal(raw, str);
 }
 

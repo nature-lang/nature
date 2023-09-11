@@ -982,7 +982,7 @@ void runtime_auto_gc() {
 
 void *runtime_malloc(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
-    return runtime_rtype_malloc(rtype->size, rtype);
+    return runtime_zero_malloc(rtype->size, rtype);
 }
 
 void runtime_set_force_gc() {

@@ -47,7 +47,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = runtime_rtype_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *vec = runtime_zero_malloc(vec_rtype->size, vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->element_rtype_hash = element_rtype_hash;
@@ -158,7 +158,7 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
 
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
     assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
-    n_vec_t *sliced_vec = runtime_rtype_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *sliced_vec = runtime_zero_malloc(vec_rtype->size, vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
     sliced_vec->element_rtype_hash = l->element_rtype_hash;

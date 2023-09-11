@@ -6,7 +6,7 @@ int count = 10
 var str = syscall.get_env('REPEAT_COUNT')
 var temp = strtol(str.ref(), 0, 10)
 if temp > 0 {
-    println('read env count success: ', temp)
+    println('read env count success:', temp)
     count = temp as int
 }
 
