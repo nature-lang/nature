@@ -20,6 +20,6 @@ type box<t0, t1> = struct {
 
 // 再外部定义一个求面积面积的函数
 type numbert2 = gen i8|i16|i32|i64|u8|u16|u32|u64|f32|f64
-fn area(box<numbert, numbert2> b):numbert {
+fn area(box<numbert,numbert2> b):numbert {
     return b.width * b.length as numbert
 }

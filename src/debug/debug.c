@@ -183,9 +183,9 @@ void debug_stmt(string type, ast_stmt_t stmt) {
  * @param c
  */
 void debug_lir(closure_t *c) {
-    if (!str_equal(c->symbol_name, "main")) {
-        return;
-    }
+//    if (!str_equal(c->symbol_name, "main")) {
+//        return;
+//    }
 
 #ifdef DEBUG_LIR
     printf("compiler closure lir: %s ---------------------------------------------------------------------\n",
@@ -226,9 +226,9 @@ void debug_lir(closure_t *c) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
-    if (!str_equal(c->symbol_name, "main")) {
-        return;
-    }
+//    if (!str_equal(c->symbol_name, "main")) {
+//        return;
+//    }
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after,

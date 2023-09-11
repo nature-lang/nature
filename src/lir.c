@@ -40,6 +40,8 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
 
     fndef->closure = c;
     c->fndef = fndef;
+
+    c->stack_gc_bits = bitmap_new(1024);
     return c;
 }
 

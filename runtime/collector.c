@@ -107,9 +107,9 @@ static void scan_stack(memory_t *m) {
                     // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
                     linked_push(m->grey_list, (void *) addr);
                 } else {
-                    DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, addr=%p not heap addr, will skip",
-                           fn->name,
-                           i, (void *) addr)
+//                    DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, addr=%p not heap addr, will skip",
+//                           fn->name,
+//                           i, (void *) addr)
                 }
             }
 

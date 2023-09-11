@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "utils/linked.h"
 #include "utils/slice.h"
+#include "utils/bitmap.h"
 #include "src/symbol/symbol.h"
 #include "binary/elf/elf.h"
 #include "utils/stack.h"
@@ -475,6 +476,7 @@ typedef struct closure_t {
     module_t *module;
 
     ast_fndef_t *fndef;
+    bitmap_t *stack_gc_bits;
 } closure_t;
 
 /**

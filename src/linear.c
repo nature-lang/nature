@@ -216,20 +216,22 @@ static lir_operand_t *linear_zero_tuple(module_t *m, type_t t, lir_operand_t *ta
 
     uint64_t offset = 0;
     for (int i = 0; i < t.tuple->elements->length; ++i) {
-        type_t *element_t = ct_list_value(t.tuple->elements, i);
+        type_t *element = ct_list_value(t.tuple->elements, i);
 
-        uint64_t item_size = type_sizeof(*element_t);
+        uint64_t element_size = type_sizeof(*element);
+        uint16_t element_align = type_alignof(*element);
+
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
-        offset = align_up((int64_t) offset, (int64_t) item_size);
+        offset = align_up(offset, element_align);
 
         // 基于 target 计算 addr
-        lir_operand_t *dst = indirect_addr_operand(m, *element_t, target, offset);
-        if (is_alloc_stack(*element_t)) {
+        lir_operand_t *dst = indirect_addr_operand(m, *element, target, offset);
+        if (is_alloc_stack(*element)) {
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_zero_operand(m, *element_t, dst);
-        offset += item_size;
+        linear_zero_operand(m, *element, dst);
+        offset += element_size;
     }
 
     return target;
@@ -438,7 +440,7 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
     type_t tuple_type = tuple_access->left.type;
     lir_operand_t *tuple_target = linear_expr(m, tuple_access->left, NULL);
 
-    uint64_t item_size = type_sizeof(tuple_access->element_type);
+    uint64_t element_size = type_sizeof(tuple_access->element_type);
     uint64_t offset = type_tuple_offset(tuple_type.tuple, tuple_access->index);
 
     lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, tuple_target, offset);
@@ -540,15 +542,9 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
         ast_expr_t *element = ct_list_value(destr->elements, i);
 
         uint16_t element_size = type_sizeof(element->type);
+        uint16_t element_align = type_alignof(element->type);
 
-        uint16_t item_align = element_size;
-        if (element->type.kind == TYPE_STRUCT) {
-            item_align = element->type.struct_->align;
-        } else if (element->type.kind == TYPE_ARRAY) {
-            item_align = type_sizeof(element->type.array->element_type);
-        }
-
-        offset = align_up(offset, item_align);
+        offset = align_up(offset, element_align);
 
         // src 中已经保存了右值的具体值。可以用来 move
         lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
@@ -606,14 +602,9 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
         ast_expr_t *element = ct_list_value(destr->elements, i);
         uint16_t element_size = type_sizeof(element->type);
 
-        uint16_t item_align = element_size;
-        if (element->type.kind == TYPE_STRUCT) {
-            item_align = element->type.struct_->align;
-        } else if (element->type.kind == TYPE_ARRAY) {
-            item_align = type_sizeof(element->type.array->element_type);
-        }
+        uint16_t element_align = type_alignof(element->type);
 
-        offset = align_up(offset, item_align);
+        offset = align_up(offset, element_align);
 
         // 将 tuple 中的值 mov 到新的 var 空间中
         lir_operand_t *element_src_operand = indirect_addr_operand(m, element->type, tuple_target, offset);
@@ -1618,15 +1609,10 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
         ast_expr_t *element = ct_list_value(ast->elements, i);
 
         uint64_t element_size = type_sizeof(element->type);
-        int item_align = element_size;
-        if (element->type.kind == TYPE_STRUCT) {
-            item_align = element->type.struct_->align;
-        } else if (element->type.kind == TYPE_ARRAY) {
-            item_align = type_sizeof(element->type.array->element_type);
-        }
+        int element_align = type_alignof(element->type);
 
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
-        offset = align_up(offset, item_align);
+        offset = align_up(offset, element_align);
 
         // 基于 target 计算 addr
         lir_operand_t *dst = indirect_addr_operand(m, element->type, target, offset);

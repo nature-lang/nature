@@ -1389,34 +1389,11 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         f->fn_runtime_reg = c->fn_runtime_reg;
         f->fn_runtime_stack = c->fn_runtime_stack;
         f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
-        f->gc_bits = malloc_gc_bits(f->stack_size);
+        f->gc_bits = c->stack_gc_bits->bits;
 
         size_with_bits += sizeof(fndef_t);
         size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 
-        // TODO 申请的栈空间的指针情况未记录
-
-        // 按从 base ~ top 的入栈顺序写入
-        for (int i = 0; i < c->stack_vars->count; ++i) {
-            lir_var_t *var = c->stack_vars->take[i];
-            int64_t stack_slot = var_stack_slot(c, var);
-            assert(stack_slot < 0);
-            stack_slot = var_stack_slot(c, var) * -1;
-            bool need = type_need_gc(var->type);
-            if (need) {
-                bitmap_set(f->gc_bits, (stack_slot / POINTER_SIZE) - 1);
-            }
-
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
-                   fn->symbol_name,
-                   var->ident,
-                   type_format(var->type),
-                   type_sizeof(var->type),
-                   type_need_gc(var->type),
-                   (stack_slot / POINTER_SIZE) - 1,
-                   stack_slot);
-
-        }
         strcpy(f->name, c->symbol_name);
         strcpy(f->rel_path, c->fndef->rel_path);
         f->line = c->fndef->line;
@@ -1426,16 +1403,34 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         assert(c->text_count > 0);
         f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
-//        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
-//               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-//               f->name,
-//               f->base,
-//               f->size,
-//               f->stack_size,
-//               f->fn_runtime_stack,
-//               f->fn_runtime_reg,
-//               f->stack_size / POINTER_SIZE,
-//               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+        // 按从 base ~ top 的入栈顺序写入
+        for (int i = 0; i < c->stack_vars->count; ++i) {
+            lir_var_t *var = c->stack_vars->take[i];
+            int64_t stack_slot = var_stack_slot(c, var);
+            assert(stack_slot < 0);
+            stack_slot = var_stack_slot(c, var) * -1;
+
+            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                   fn->symbol_name,
+                   var->ident,
+                   type_format(var->type),
+                   type_sizeof(var->type),
+                   type_is_ptr(var->type),
+                   (stack_slot / POINTER_SIZE) - 1,
+                   stack_slot);
+
+        }
+
+        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+               f->name,
+               f->base,
+               f->size,
+               f->stack_size,
+               f->fn_runtime_stack,
+               f->fn_runtime_reg,
+               f->stack_size / POINTER_SIZE,
+               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 
@@ -1480,7 +1475,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
 
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
-        symdef->need_gc = type_need_gc(var_decl->type);
+        symdef->need_gc = type_is_ptr(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小
         symdef->base = 0; // 这里引用了全局符号表段地址
         strcpy(symdef->name, var_decl->ident);

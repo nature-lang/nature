@@ -1966,14 +1966,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
             }
         }
 
-        int item_align;
-        if (p->type.kind == TYPE_STRUCT) {
-            item_align = p->type.struct_->align;
-        } else if (p->type.kind == TYPE_ARRAY) {
-            item_align = type_sizeof(p->type.array->element_type);
-        } else {
-            item_align = type_sizeof(p->type);
-        }
+        int item_align = type_alignof(p->type);
 
         if (item_align > align) {
             align = item_align;
@@ -2047,18 +2040,9 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *element = ct_list_value(tuple->elements, i);
             *element = reduction_type(m, *element);
-
-            int item_align;
-            if (element->kind == TYPE_STRUCT) {
-                item_align = element->struct_->align;
-            } else if (element->kind == TYPE_ARRAY) {
-                item_align = type_sizeof(element->array->element_type);
-            } else {
-                item_align = type_sizeof(*element);
-            }
-
-            if (item_align > align) {
-                align = item_align;
+            int element_align = type_alignof(*element);
+            if (element_align > align) {
+                align = element_align;
             }
         }
         tuple->align = align;

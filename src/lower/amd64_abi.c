@@ -2,6 +2,11 @@
 #include "src/register/amd64.h"
 #include "src/cross.h"
 
+type_kind *select_type_kind(type_t t, bool is_hi) {
+    size_t size = type_sizeof(t);
+    // TODO 断言， size 必须是 2 的次方， 1， 2， 4， 8
+}
+
 lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
     if (kind == TYPE_FLOAT64) {
@@ -510,14 +515,11 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     type_t result_type = lir_operand_type(call_result);
 
-    // 进行 call result 的栈空间申请, 此时已经不会触发 ssa 了，可
+    // 进行 call result 的栈空间申请,用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
     if (is_alloc_stack(result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
-        uint64_t size = type_sizeof(result_type);
-        c->stack_offset += align_up(size, QWORD);
-        lir_operand_t *src_operand = lir_stack_operand(c->module, -c->stack_offset, size);
 
-        linked_push(result, lir_op_lea(call_result, src_operand));
+        lir_stack_alloc(c, result, result_type, call_result->value);
     }
 
     amd64_class_t lo = AMD64_CLASS_NO;

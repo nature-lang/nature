@@ -4,6 +4,7 @@
 #include "utils/linked.h"
 #include "utils/helper.h"
 #include "utils/table.h"
+#include "utils/bitmap.h"
 #include "src/types.h"
 #include "src/module.h"
 #include "src/symbol/symbol.h"
@@ -696,8 +697,24 @@ static inline lir_operand_t *lir_stack_alloc(closure_t *c, linked_t *list, type_
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
     assert(is_alloc_stack(t));
 
-    uint64_t size = type_sizeof(t);
-    c->stack_offset += align_up(size, QWORD);
+    uint16_t size = type_sizeof(t);
+    uint16_t align = type_alignof(t);
+
+    c->stack_offset += size;
+    c->stack_offset = align_up(c->stack_offset, align); // 按照 8byte 对齐
+
+    rtype_t rtype = reflect_type(t);
+    assert(rtype.size == size);
+
+    uint16_t bit_index_start = (c->stack_offset - 1) / POINTER_SIZE;
+    uint16_t bit_index_count = size / POINTER_SIZE;
+    if (bit_index_count == 0) {
+        bit_index_count = 1;
+    }
+    for (int i = 0; i < bit_index_count; ++i) {
+        bool test = bitmap_test(rtype.gc_bits, i);
+        bitmap_grow_set(c->stack_gc_bits, bit_index_start + i, test);
+    }
 
     lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
 
