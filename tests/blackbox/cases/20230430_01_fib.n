@@ -6,5 +6,5 @@ fn fib(int n):int {
     return fib(n - 1) + fib(n - 2)
 }
 
-var result = fib(10)
+var result = fib(40)
 print('result=', result, '\n')

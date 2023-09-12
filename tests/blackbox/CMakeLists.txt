@@ -6,6 +6,7 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 aux_source_directory(. TEST_SOURCES)
 
 foreach (TEST_SOURCE ${TEST_SOURCES})
+
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
 
     add_executable(${TEST_NAME} ${TEST_SOURCE} ${SRC} ${CMD} ${UTILS})

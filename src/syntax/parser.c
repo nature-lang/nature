@@ -1270,12 +1270,8 @@ static ast_stmt_t *parser_return_stmt(module_t *m) {
 static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
-    ast_import_t *stmt = malloc(sizeof(ast_import_t));
-    stmt->file = NULL;
+    ast_import_t *stmt = NEW(ast_import_t);
     stmt->ast_package = slice_new();
-    stmt->as = NULL;
-    stmt->full_path = NULL;
-    stmt->module_ident = NULL;
 
     token_t *token = parser_advance(m);
     if (token->type == TOKEN_LITERAL_STRING) {

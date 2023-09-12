@@ -1097,7 +1097,8 @@ int tidy_section_headers(elf_context *ctx) {
 
 section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint64_t sh_flags) {
     section_t *s = NEW(section_t);
-    strncpy(s->name, name, strlen(name) + 1);
+    strncpy(s->name, name, 1024);
+
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
 //    DEBUGF("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);

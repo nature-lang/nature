@@ -4,7 +4,7 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    assert_string_equal(raw, "result=55\n");
+    assert_string_equal(raw, "result=102334155\n");
 }
 
 int main(void) {
