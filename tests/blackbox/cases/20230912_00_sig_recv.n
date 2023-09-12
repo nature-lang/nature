@@ -36,5 +36,5 @@ for int i = 0; i < 100; i+=1 {
        break
     }
 
-    usleep(1000 as u32 * 1000)
+    usleep(2000 as u32 * 1000)
 }

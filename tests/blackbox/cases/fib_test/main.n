@@ -1,0 +1,11 @@
+import 'mod.n'
+import libc_temp
+
+var start = clock()
+var result = mod.fib(40)
+var end = clock()
+
+var second = ((end as f64 - start as f64) / 1000000) as int
+println(second, result)
+
+

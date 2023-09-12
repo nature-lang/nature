@@ -45,7 +45,7 @@ void dump_errors(module_t *m) {
 #ifdef ASSERT_ERROR
         assertf(false, "%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
 #else
-        printf("%s:%d:%d: %s\n", filepath, error->line, error->column, error->msg);
+        printf("%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
 #endif
     }
 

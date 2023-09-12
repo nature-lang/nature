@@ -499,7 +499,7 @@ typedef struct section_t {
     uint64_t data_capacity; // 极限容量
     uint8_t *data; // 段二进制数据
     int sh_index; // 段表索引
-    char name[50]; // 段表名称字符串冗余
+    char name[1024]; // 段表名称字符串冗余
 
     // 排序字段
     int actual_sh_index;

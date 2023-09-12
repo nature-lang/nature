@@ -10,11 +10,12 @@ import (
 
 func init() {
 	rootCmd.AddCommand(exampleCmd)
-	rootCmd.Flags().BoolVarP(&src.Verbose, "verbose", "v", false, "verbose output")
+	//rootCmd.Flags().BoolVarP(&src.Verbose, "verbose", "v", false, "verbose output")
+	// 读取环境变量 PARKER_VERBOSE 进行配置
 }
 
 const (
-	Version = "0.1.0-beta"
+	Version = "0.1.0"
 )
 
 var exampleCmd = &cobra.Command{

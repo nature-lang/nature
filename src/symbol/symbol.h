@@ -63,6 +63,7 @@ static inline bool is_builtin_call(char *ident) {
     }
 
     return str_equal(ident, "print") ||
+           //           str_equal(ident, "fib_test.mod.fib") ||
            str_equal(ident, "println");
 }
 

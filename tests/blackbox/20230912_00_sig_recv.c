@@ -15,11 +15,13 @@ static void fork_and_kill() {
         // fork failed
         perror("fork failed");
         exit(EXIT_FAILURE);
-    } else if (pid == 0) {
+    }
+
+    if (pid == 0) {
         // Child process
         sleep(3);
 
-        execlp("pkill", "pkill", "main", (char *) NULL);
+        execlp("pkill", "pkill", "-USR2", "main", (char *) NULL);
         // If execlp fails
         perror("execlp failed");
         exit(EXIT_FAILURE);
@@ -35,8 +37,7 @@ static void test_basic() {
 //    printf("%s", raw);
     char *str = "not received any sig, will sleep\n"
                 "not received any sig, will sleep\n"
-                "not received any sig, will sleep\n"
-                "read sig 15 success\n";
+                "read sig 12 success\n";
     assert_string_equal(raw, str);
 }
 

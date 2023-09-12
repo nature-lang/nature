@@ -2148,7 +2148,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
             set_imm(format, temp, 1);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
             asm_float32_t *f = asm_operand->value;
-            uint8_t temp[4];
+            uint8_t temp[8];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
         } else {

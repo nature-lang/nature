@@ -27,12 +27,16 @@ var target_name = args[1]
 // - 读取当前工作目录, 确定需要打包的目录
 var workdir = syscall.getcwd()
 logf('workdir: %v, target: %v', workdir, target_name)
-
 var target_path = path.join(workdir, target_name)
-
 // - 检查文件是否存在
 assertf(path.exists(target_path), 'file=%v notfound', target_path)
 logf('target_path: %v found', target_path)
+
+workdir = path.dir(target_path)
+target_name = path.base(target_path)
+
+logf('new split workdir: %v, target: %v', workdir, target_name)
+
 
 // - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
 var tgz_name = std.sprintf('%v.tar.gz', target_name)

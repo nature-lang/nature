@@ -2,7 +2,6 @@ package cgroup
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"rungo/utils/helper"
@@ -97,9 +96,9 @@ func (c *Cgroup) Clear() error {
 
 	str := strings.TrimSpace(string(raw))
 	if str == "" {
-		log.Printf("no pids in cgroup: %s", c.CgroupProcsPath)
+		helper.Logf("no pids in cgroup: %s", c.CgroupProcsPath)
 	} else {
-		log.Printf("read pids from cgroup: %s", str)
+		helper.Logf("read pids from cgroup: %s", str)
 		pids := strings.Split(str, "\n")
 		for _, pidStr := range pids {
 			if pidStr == "" {

@@ -83,6 +83,8 @@ fn srand(u32 seed)
 
 fn rand():int
 
+fn clock():int
+
 // --- 自定义在 runtime/libc 模块中的函数
 // cptr = char*
 fn libc_string_new(cptr s):string

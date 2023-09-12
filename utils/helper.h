@@ -255,11 +255,12 @@ static inline int64_t align_up(int64_t n, int64_t align) {
 
 
 static inline char *path_dir(char *path) {
-    char *result = malloc(PATH_MAX);
-    strcpy(result, path);
+    char *result = mallocz(strlen(path) + 1);
+    strncpy(result, path, strlen(path));
+    result[strlen(path)] = '\0';
+
     char *ptr = strrchr(result, '/');  // 查找最后一个斜杠
     if (ptr == NULL) {
-        memset(result, 0, PATH_MAX);
         return result;
     }
 

@@ -71,8 +71,7 @@ static void build_parker() {
     assert_true(nature_root != NULL);
 
     // 从环境变量中读取 build entry
-    char *entry = "main.n";
-    assert_true(entry && "entry file is null");
+    char *entry = "parker.n";
 
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
     strcpy(BUILD_OUTPUT_NAME, "main");

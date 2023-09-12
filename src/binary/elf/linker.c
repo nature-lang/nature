@@ -894,10 +894,12 @@ elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset
 Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section,
                              uint64_t offset, int type, int sym_index, int64_t addend) {
 
-    char buf[256];
+    char buf[1024];
     section_t *rel_section = apply_section->relocate;
     if (!rel_section) {
-        snprintf(buf, sizeof(buf), REL_SECTION_FMT, apply_section->name);
+        char *temp_name = strdup(apply_section->name);
+        assert(strlen(temp_name) < sizeof(buf) - 24); // 预留出 real. 空间
+        snprintf(buf, sizeof(buf), REL_SECTION_FMT, temp_name);
 
         rel_section = elf_new_section(ctx, buf, SHT_RELA, SHF_INFO_LINK);
         rel_section->sh_entsize = sizeof(Elf64_Rela);
@@ -1095,7 +1097,7 @@ int tidy_section_headers(elf_context *ctx) {
 
 section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint64_t sh_flags) {
     section_t *s = NEW(section_t);
-    strcpy(s->name, name);
+    strncpy(s->name, name, strlen(name) + 1);
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
 //    DEBUGF("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);

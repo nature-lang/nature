@@ -1426,6 +1426,7 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
     type_t errort = type_new(TYPE_ALIAS, NULL);
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
+    errort.origin_ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     if (return_type.kind == TYPE_VOID) {

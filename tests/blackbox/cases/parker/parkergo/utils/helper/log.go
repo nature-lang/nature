@@ -1,8 +1,9 @@
-package src
+package helper
 
 import (
 	"fmt"
 	logger "log"
+	"os"
 	"path/filepath"
 	"runtime"
 )
@@ -11,8 +12,9 @@ var (
 	Verbose = false
 )
 
-func logf(format string, a ...any) {
-	if !Verbose {
+func Logf(format string, a ...any) {
+	verbose := os.Getenv("PARKER_VERBOSE")
+	if verbose == "" {
 		return
 	}
 

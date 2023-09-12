@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/docker/docker/pkg/reexec"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -18,7 +17,7 @@ import (
 )
 
 func init() {
-	log.Printf("init start, os.Args = %+v\n", os.Args)
+	//log.Printf("init start, os.Args = %+v\n", os.Args)
 	reexec.Register("runTargetWithFork", runTargetWithFork)
 	if reexec.Init() {
 		os.Exit(0)
@@ -31,7 +30,7 @@ func Run(sigChan chan os.Signal) {
 
 	// 读取 exe 所在目录作为 mountNs 目标
 	exe, err := os.Executable()
-	assertf(err == nil, "exe path err: %v", err)
+	helper.Assertf(err == nil, "exe path err: %v", err)
 	workdir := path.Dir(exe)
 
 	// - 创建 temps 挂载磁盘，并通过 mount ns 得到一个崭新的空间
@@ -40,22 +39,22 @@ func Run(sigChan chan os.Signal) {
 	// - 将 tar.gz 写入到目标文件夹
 	tgzFile := path.Join(workdir, "parker.tag.gz")
 	err = os.WriteFile(tgzFile, tgzBuf, 0644)
-	assertf(err == nil, "write tgzFile err: %v", err)
-	logf("write tgzFile success: %s, buf len: %v", tgzFile, len(tgzBuf))
+	helper.Assertf(err == nil, "write tgzFile err: %v", err)
+	helper.Logf("write tgzFile success: %s, buf len: %v", tgzFile, len(tgzBuf))
 
 	// - 进行解压
 	err = unTgz(workdir, tgzFile)
-	assertf(err == nil, "unTgz err: %v", err)
+	helper.Assertf(err == nil, "unTgz err: %v", err)
 
 	// - 读取需要启动的程序名称
 	target, err := readTargetName(workdir)
-	assertf(err == nil, "readTargetName err: %v", err)
+	helper.Assertf(err == nil, "readTargetName err: %v", err)
 
 	cg, err := cgroup.New("")
-	assertf(err == nil, "cgroup new err: %v", err)
+	helper.Assertf(err == nil, "cgroup new err: %v", err)
 
 	cmd, pid := runTargetWithCgroup(target, cg.ID)
-	logf("runTargetWithCgroup success, pid: %d", pid)
+	helper.Logf("runTargetWithCgroup success, pid: %d", pid)
 
 	cmdDone := make(chan error, 1)
 	go func() {
@@ -66,22 +65,24 @@ func Run(sigChan chan os.Signal) {
 	for {
 		select {
 		case sig := <-sigChan:
-			logf("receive signal: %s", sig.String())
+			helper.Logf("receive signal: %s", sig.String())
 
 			err = cmd.Process.Signal(sig)
-			assertf(err == nil, "send signal err: %v", err)
-			logf("signal sync child success")
+			if err != nil {
+				helper.Logf("send signal err: %v", err)
+			}
+			helper.Logf("signal sync child success")
 			continue
 		case err := <-cmdDone:
-			logf("cmd done, err: %s", err)
+			helper.Logf("cmd done, err: %s", err)
 			err = cg.Clear()
-			assertf(err == nil, "cgroup clear err: %v", err)
+			helper.Assertf(err == nil, "cgroup clear err: %v", err)
 			goto EXIT
 		}
 	}
 
 EXIT:
-	logf("exit")
+	helper.Logf("exit")
 }
 
 // - 初始化一个新的 cgroup
@@ -95,31 +96,30 @@ func runTargetWithCgroup(target string, cgroupId string) (*exec.Cmd, int) {
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr.Cloneflags = syscall.CLONE_NEWNS // 继承父进程的 mount ns
 	if err := cmd.Start(); err != nil {
-		assertf(false, "failed to run command: %s", err)
+		helper.Assertf(false, "failed to run command: %s", err)
 	}
 
-	logf("start fork success, %+v, %v", cmd.Args, cmd.Process.Pid)
+	helper.Logf("start fork success, %+v, %v", cmd.Args, cmd.Process.Pid)
 
 	return cmd, cmd.Process.Pid
 }
 
 func runTargetWithFork() {
-	Verbose = true
-	log.Printf("runTargetWithFork start, args: %+v\n", os.Args)
+	helper.Logf("runTargetWithFork start, args: %+v\n", os.Args)
 
-	assertf(len(os.Args) > 2, "args len: %d exception", len(os.Args))
+	helper.Assertf(len(os.Args) > 2, "args len: %d exception", len(os.Args))
 
 	// 读取当前
 	targetPath := os.Args[1]
 	cgroupId := os.Args[2]
 
 	cg, err := cgroup.New(cgroupId)
-	assertf(err == nil, "cgroup new err: %v", err)
+	helper.Assertf(err == nil, "cgroup new err: %v", err)
 
 	pid := syscall.Getpid()
-	logf("fork start, pid: %d", pid)
+	helper.Logf("fork start, pid: %d", pid)
 	err = cg.Register(pid)
-	assertf(err == nil, "cgroup register err: %v", err)
+	helper.Assertf(err == nil, "cgroup register err: %v", err)
 
 	args := make([]string, 0)
 	if len(os.Args) > 3 {
@@ -128,17 +128,17 @@ func runTargetWithFork() {
 	// 将配置 exec 中显示的名称(直接使用 target name)
 	targetName := path.Base(targetPath)
 	args = append([]string{targetName}, args...)
-	logf("will exec, targetPath: %s, args: %+v", targetPath, args)
+	helper.Logf("will exec, targetPath: %s, args: %+v", targetPath, args)
 
 	if helper.PathExists(targetPath) {
-		logf("targetPath: %s found", targetPath)
+		helper.Logf("targetPath: %s found", targetPath)
 	} else {
-		assertf(false, "targetPath: %s not exists, cannot exec", targetPath)
+		helper.Assertf(false, "targetPath: %s not exists, cannot exec", targetPath)
 	}
 
 	// 执行子进程
 	err = syscall.Exec(targetPath, args, os.Environ())
-	assertf(err == nil, "exec err: %v", err)
+	helper.Assertf(err == nil, "exec err: %v", err)
 }
 
 // .target_name 中包含了需要启动的进程的名称
@@ -206,46 +206,46 @@ func unTgz(workdir string, tgzFile string) error {
 }
 
 func mountNs(dir string) {
-	logf("mountNs dir: %s start", dir)
+	helper.Logf("mountNs dir: %s start", dir)
 	err := syscall.Unshare(syscall.CLONE_NEWNS)
-	assertf(err == nil, "unshare err: %v", err)
+	helper.Assertf(err == nil, "unshare err: %v", err)
 
 	err = syscall.Mount("none", "/", "", syscall.MS_REC|syscall.MS_PRIVATE, "")
-	assertf(err == nil, "mount err: %v", err)
+	helper.Assertf(err == nil, "mount err: %v", err)
 
 	// mount("tmpfs", "/root/testmount", "tmpfs", 0, NULL)
 	err = syscall.Mount("tmpfs", dir, "tmpfs", 0, "")
-	assertf(err == nil, "mount err: %v", err)
-	logf("mountNs dir: %s success", dir)
+	helper.Assertf(err == nil, "mount err: %v", err)
+	helper.Logf("mountNs dir: %s success", dir)
 }
 
 func extractTgz() []byte {
 	exe, err := os.Executable()
-	assertf(err == nil, "exe exe err: %v", err)
+	helper.Assertf(err == nil, "exe exe err: %v", err)
 
 	// 读取最后 8byte 其中记录了结尾的 size
 	fd, err := syscall.Open(exe, os.O_RDONLY, 0666)
-	assertf(err == nil, "open exe %v err: %v", exe, err)
+	helper.Assertf(err == nil, "open exe %v err: %v", exe, err)
 
 	// 使用 seek 读取 fd 对应文件的最后 16 个字节
 	_, err = syscall.Seek(fd, -16, io.SeekEnd)
-	assertf(err == nil, "seek exe %v err: %v", exe, err)
+	helper.Assertf(err == nil, "seek exe %v err: %v", exe, err)
 
 	sizeBuf := make([]byte, 16)
 	_, err = syscall.Read(fd, sizeBuf)
-	assertf(err == nil, "read exe %v err: %v", exe, err)
-	logf("read exe %v tail 16byte str: %v", exe, string(sizeBuf))
+	helper.Assertf(err == nil, "read exe %v err: %v", exe, err)
+	helper.Logf("read exe %v tail 16byte str: %v", exe, string(sizeBuf))
 
 	size, err := strconv.Atoi(string(sizeBuf))
-	assertf(err == nil, "read exe %v tail 16byte err: %v", exe, err)
-	assertf(size > 0, "read exe %v tail 16byte size is zero", exe)
+	helper.Assertf(err == nil, "read exe %v tail 16byte err: %v", exe, err)
+	helper.Assertf(size > 0, "read exe %v tail 16byte size is zero", exe)
 
 	_, err = syscall.Seek(fd, -16-int64(size), io.SeekEnd)
 
 	result := make([]byte, size)
 	n, err := syscall.Read(fd, result)
-	assertf(err == nil && n == size, "read exe %v err: %v", exe, err)
+	helper.Assertf(err == nil && n == size, "read exe %v err: %v", exe, err)
 
-	logf("extractTgz success, buf len: %d, expect size: %d", len(result), size)
+	helper.Logf("extractTgz success, buf len: %d, expect size: %d", len(result), size)
 	return result
 }
