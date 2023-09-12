@@ -118,7 +118,10 @@ for true {
     syscall.write(output_fd, buf.ref(), len)
 }
 syscall.close(tgz_fd)
-logf('append tgz to output success, size=%v', readsum)
+std.remove(tgz_name)
+std.remove('.target_name')
+logf('append tgz to output success, and remove tgz/.target_name success, size=%v', readsum)
+
 
 var tgz_size = readsum
 logf('stat tgz %v get size=%d', tgz_name, tgz_size)

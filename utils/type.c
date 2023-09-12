@@ -1029,15 +1029,57 @@ bool type_compare(type_t dst, type_t src) {
     return true;
 }
 
+char *_type_format(type_t t) {
+    if (t.kind == TYPE_VEC) {
+        // []
+        return dsprintf("vec<%s>", _type_format(t.vec->element_type));
+    }
+    if (t.kind == TYPE_ARRAY) {
+        return dsprintf("arr<%s,%d>", _type_format(t.array->element_type), t.array->length);
+    }
+    if (t.kind == TYPE_MAP) {
+        return dsprintf("map<%s,%s>", _type_format(t.map->key_type), _type_format(t.map->value_type));
+    }
+
+    if (t.kind == TYPE_SET) {
+        return dsprintf("set<%s>", _type_format(t.set->element_type));
+    }
+
+    if (t.kind == TYPE_TUPLE) {
+        // while
+//        char *str = "tup<";
+//        list_t *elements = t.tuple->elements; // type_t
+//        for (int i = 0; i < elements->length; ++i) {
+//            type_t *item = ct_list_value(elements, i);
+//            char *item_str = _type_format(*item);
+//            str = str_connect_by(str, item_str, ",");
+//        }
+        return dsprintf("tup<...>");
+    }
+
+    if (t.kind == TYPE_FN) {
+        return dsprintf("fn(...):%s", _type_format(t.fn->return_type));
+    }
+
+    if (t.kind == TYPE_POINTER) {
+        return dsprintf("ptr<%s>", _type_format(t.pointer->value_type));
+    }
+
+    if (t.kind == TYPE_NULLABLE_POINTER) {
+        return dsprintf("cptr<%s>", _type_format(t.pointer->value_type));
+    }
+
+    return type_kind_str[t.kind];
+}
+
 /**
- * TODO 采用递归的方式展示类型信息
  * @param t
  * @return
  */
 char *type_format(type_t t) {
     if (t.origin_ident == NULL) {
-        return type_kind_str[t.kind];
+        return _type_format(t);
     }
 
-    return dsprintf("%s(%s)", t.origin_ident, type_kind_str[t.kind]);
+    return dsprintf("%s(%s)", t.origin_ident, _type_format(t));
 }

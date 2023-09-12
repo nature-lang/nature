@@ -2001,7 +2001,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     // make envs
     lir_operand_t *length = int_operand(fndef->capture_exprs->length);
     // rt_call env_new(fndef->name, length)
-    lir_operand_t *env_operand = temp_var_operand_with_stack(m, type_kind_new(TYPE_INT64));
+    lir_operand_t *env_operand = temp_var_operand_with_stack(m, type_kind_new(TYPE_GC_ENV));
     rt_call(m, RT_CALL_ENV_NEW, env_operand, 1, length);
 
     slice_t *capture_vars = slice_new();

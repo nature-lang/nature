@@ -201,6 +201,8 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
         DEBUGF("[runtime.env_assign] upvalue=%p already in table", upvalue);
     }
 
+    assert(envs->values);
+
     envs->values[env_index] = upvalue;
 }
 

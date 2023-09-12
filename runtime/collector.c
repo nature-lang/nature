@@ -231,7 +231,7 @@ static void grey_list_work(memory_t *m) {
                     // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
                     addr_t heap_addr = fetch_addr_value(temp_addr);
 
-                    DEBUGF("[runtime.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
+                    DEBUGF("[runtime_gc.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
                            "obj_size=%ld, bit_index=%lu, in_heap=%d",
                            addr, temp_addr, heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
                     if (in_heap(heap_addr)) {

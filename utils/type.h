@@ -526,10 +526,12 @@ static inline bool kind_in_heap(type_kind kind) {
     return kind == TYPE_UNION ||
            kind == TYPE_STRING ||
            kind == TYPE_VEC ||
+           kind == TYPE_POINTER ||
            //           kind == TYPE_ARRAY ||
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
            kind == TYPE_TUPLE ||
+           kind == TYPE_GC_ENV ||
            //           kind == TYPE_STRUCT ||
            kind == TYPE_FN;
 }

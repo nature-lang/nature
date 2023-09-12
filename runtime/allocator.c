@@ -961,7 +961,8 @@ uint64_t runtime_malloc_bytes() {
 void runtime_auto_gc() {
     DEBUGF("[runtime_auto_gc] allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
 
-    if (force_gc) {
+    // TODO
+    if (true) {
         DEBUGF("[runtime_auto_gc] enabled force gc")
         runtime_gc();
         return;

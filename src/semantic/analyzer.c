@@ -78,6 +78,7 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
     ANALYZER_ASSERTF(import->ast_package->count > 0, "import exception");
     char *package = import->ast_package->take[0];
     import->module_type = MODULE_TYPE_TEMP;
+    import->use_links = false;
     import->as = "";
 
     if (is_std_temp_package(package)) {

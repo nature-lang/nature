@@ -69,7 +69,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
 
         analyzer_import(m, ast_import);
         assert(ast_import->as);
-        assert(ast_import->package_dir);
+//        assert(ast_import->package_dir);
 
         // 简单处理
         slice_push(m->imports, ast_import);

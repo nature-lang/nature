@@ -84,6 +84,9 @@ func main() {
 	_, err = outputFd.WriteString(tgzSizeStr)
 	helper.Assertf(err == nil, "Error writing size string to output: %v", err)
 
+	os.Remove(tgzName)
+	os.Remove(".target_name")
+
 	helper.Logf("runner %s make successful", filepath.Join(workdir, outputName))
 }
 
