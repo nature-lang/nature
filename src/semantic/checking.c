@@ -1029,7 +1029,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         // 经过上面对 checking_right_expr, 这里对 type 一定是 reduction 的
         type_struct_t *type_struct = left_type.struct_;
         struct_property_t *p = type_struct_property(type_struct, select->key);
-        CHECKING_ASSERTF(p, "type %s struct no property '%s'", type_struct->ident, select->key);
+        CHECKING_ASSERTF(p, "type %s no property '%s'", type_format(left_type), select->key);
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);

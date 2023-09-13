@@ -508,10 +508,11 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
         return result;
     }
+    // TODO call_result
 
     type_t call_result_type = lir_operand_type(call_result);
 
-    // 进行 call result 的栈空间申请,用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
+    // 进行 call result 的栈空间申请, 用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
     if (is_alloc_stack(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 

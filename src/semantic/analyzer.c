@@ -359,6 +359,12 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
+    if (type->kind == TYPE_ARRAY) {
+        type_array_t *array = type->array;
+        analyzer_type(m, &array->element_type);
+        return;
+    }
+
     if (type->kind == TYPE_TUPLE) {
         type_tuple_t *tuple = type->tuple;
         for (int i = 0; i < tuple->elements->length; ++i) {

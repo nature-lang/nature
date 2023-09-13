@@ -118,10 +118,11 @@
 #define RT_CALL_FN_NEW "fn_new"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_ENV_ASSIGN "env_assign"
+#define RT_CALL_ENV_ASSIGN "env_assign" // env_new 时对 env 的赋值栈的地址。
 #define RT_CALL_ENV_CLOSURE "env_closure"
-#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"
+#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref" // 实际代码位置对 env 的访问
 #define RT_CALL_ENV_ACCESS_REF "env_access_ref"
+#define RT_CALL_ENV_ELEMENT_ADDR "env_element_addr"
 
 #define RT_CALL_STRING_NEW "string_new"
 

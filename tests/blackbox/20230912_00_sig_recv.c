@@ -42,5 +42,5 @@ static void test_basic() {
 }
 
 int main(void) {
-    TEST_WITH_PACKAGE
+    TEST_BASIC
 }

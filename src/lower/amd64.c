@@ -125,8 +125,16 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = stack_slot;
         stack->size = type_kind_sizeof(var->type.kind);
+        // rdi param
         lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
-        linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        if (is_alloc_stack(var->type)) {
+            // stack_operand 中保存的就是一个栈地址，此时不需要进行 lea, 只是直接进行 mov 取值
+            linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        } else {
+            linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        }
+        // rsi param
+        linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rsi), int_operand(ct_find_rtype_hash(var->type))));
 
         linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL,
                                      lir_label_operand(RT_CALL_ENV_CLOSURE, false),

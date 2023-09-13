@@ -747,8 +747,15 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // key 和 value 需要进行一次初始化
     lir_operand_t *first_target = linear_var_decl(m, &ast->first);
-    OP_PUSH(lir_op_nop_def(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
-    lir_operand_t *first_ref = lea_operand_pointer(m, first_target);
+    lir_operand_t *first_ref;
+    if (is_alloc_stack(ast->first.type)) {
+        // first _target 中已经保存了相关的地址，
+        first_ref = temp_var_operand_without_stack(m, type_kind_new(TYPE_CPTR));
+        OP_PUSH(lir_op_move(first_ref, first_target));
+    } else {
+        OP_PUSH(lir_op_nop_def(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        first_ref = lea_operand_pointer(m, first_target);
+    }
 
     // 单值遍历清空下, 对于 list 调用 next value,
     if (!ast->second && (ast->iterate.type.kind == TYPE_VEC || ast->iterate.type.kind == TYPE_STRING)) {
@@ -781,6 +788,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     // gen value
     if (ast->second) {
         lir_operand_t *second_target = linear_var_decl(m, ast->second);
+        assert(!is_alloc_stack(ast->second->type));
         OP_PUSH(lir_op_nop_def(second_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
         lir_operand_t *value_ref = lea_operand_pointer(m, second_target);
 
@@ -1002,10 +1010,9 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     // 统一预留空间在最后一个参数基本不会有什么影响
     slice_push(params, int_operand(0));
 
-
     lir_operand_t *temp = NULL;
-    if (type_fn->return_type.kind != TYPE_VOID) {
-        temp = temp_var_operand_without_stack(m, expr.type);
+    if (call->return_type.kind != TYPE_VOID) {
+        temp = temp_var_operand_without_stack(m, call->return_type);
     }
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL,
@@ -1369,23 +1376,18 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *index = int_operand(ast->index);
     uint64_t size = type_sizeof(expr.type);
 
-    if (!target) {
-        target = nop_temp_var_operand(m, expr.type);
-    }
 
-    lir_operand_t *target_ref = target;
-    if (!is_alloc_stack(expr.type)) {
-        target_ref = lea_operand_pointer(m, target);
-    }
+    lir_operand_t *env_addr_ref = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
 
-    rt_call(m, RT_CALL_ENV_ACCESS_REF, NULL,
-            4,
+    rt_call(m, RT_CALL_ENV_ELEMENT_ADDR, env_addr_ref, 2,
             m->linear_current->fn_runtime_operand,
-            index,
-            target_ref,
-            int_operand(size));
+            index);
 
-    return target;
+    if (!is_alloc_stack(expr.type)) {
+        env_addr_ref = indirect_addr_operand(m, expr.type, env_addr_ref, 0);
+    }
+
+    return linear_super_move(m, expr.type, target, env_addr_ref);
 }
 
 /**
@@ -2014,7 +2016,16 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         //  加载 free var 在栈上的指针
-        lir_operand_t *stack_addr_ref = lea_operand_pointer(m, linear_expr(m, *item, NULL));
+        lir_operand_t *stack_value = linear_expr(m, *item, NULL);
+        lir_operand_t *stack_addr_ref;
+        if (is_alloc_stack(item->type)) {
+            // 直接传递 stack_value 即可(类型需要是 cptr)
+            stack_addr_ref = temp_var_operand_without_stack(m, type_kind_new(TYPE_CPTR));
+            OP_PUSH(lir_op_move(stack_addr_ref, stack_value));
+        } else {
+            stack_addr_ref = lea_operand_pointer(m, stack_value);
+        }
+
         // rt_call env_assign(fndef->name, index_operand lir_operand)
         rt_call(m, RT_CALL_ENV_ASSIGN, NULL, 4,
                 env_operand,
@@ -2107,13 +2118,15 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             return;
         }
         case AST_CALL: {
-            ast_fndef_t *fndef = stmt->value;
+            ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m, (ast_expr_t) {
                     .line = stmt->line,
-                    .assert_type = stmt->assert_type,
-                    .type = type_kind_new(TYPE_FN),
-                    .value = fndef,
+                    .column = stmt->column,
+                    .assert_type = AST_CALL,
+                    .type = call->return_type,
+                    .target_type = call->return_type,
+                    .value = call,
             }, NULL);
             return;
         }

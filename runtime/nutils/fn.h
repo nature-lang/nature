@@ -8,7 +8,7 @@
 table_t *env_table;
 
 typedef struct {
-    value_casting value; // TODO 对于 array/struct 值处理有困难
+    value_casting value;
     void *ref;
 } upvalue_t;
 
@@ -29,7 +29,9 @@ envs_t *env_new(uint64_t length);
 
 void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr_t stack_addr);
 
-void env_closure(addr_t stack_addr);
+void env_closure(addr_t stack_addr, uint64_t rtype_hash);
+
+void *env_element_addr(runtime_fn_t *fn, uint64_t index);
 
 /**
  * 访问的是 env[index] 对应的 addr 中的对应的数据并复制给 dst_ref

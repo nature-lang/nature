@@ -182,13 +182,15 @@ envs_t *env_new(uint64_t length) {
 void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr_t stack_addr) {
     rtype_t *item_rtype = rt_find_rtype(item_rtype_hash);
 
-    DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, env_index=%lu, stack_addr=0x%lx",
-           envs, type_kind_str[item_rtype->kind], env_index, stack_addr);
+    DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, rtype_size=%lu, env_index=%lu, stack_addr=0x%lx",
+           envs, type_kind_str[item_rtype->kind], item_rtype->size, env_index, stack_addr);
+
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     if (!upvalue) {
+        // TYPE_GC_NOSCAN=upvalue.value, TYPE_GC_SCAN=upvalue.ref, ref 在 closure 后会指向 value 部分
+        // 所以总是将 ref 部分设置为 scan
         DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr)
-        // create upvalue_t
-        rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(item_rtype->kind), TYPE_GC_NOSCAN);
+        rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(item_rtype->kind), TYPE_GC_SCAN);
         upvalue = runtime_zero_malloc(sizeof(upvalue_t), upvalue_rtype);
         DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash)
 
@@ -207,19 +209,30 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
 }
 
 /*
- * ref 原来指向 value, 现在进行 closure 指向自身
+ * stack 需要被回收，但是 stack addr 缺被引用了，此时需要将 stack addr 的值 copy 到 upvalue 中
  */
-void env_closure(uint64_t stack_addr) {
+void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);
+    DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, upvalue->ref=%p, rtype_hash=%lu", stack_addr,
+           upvalue,
+           upvalue->ref, rtype_hash);
 
-    // 无论值的大小，同一按 8byte copy 就是了， copy 多了也没事
-    uint64_t value = fetch_addr_value(stack_addr);
-    upvalue->value.uint_value = value;
-    upvalue->ref = &upvalue->value;
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
 
-    DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, stack_value(to_int_64)=0x%lx,", stack_addr,
-           upvalue, value);
+    if (rtype->size <= 8) {
+        uint64_t value = fetch_addr_value(stack_addr);
+        upvalue->value.uint_value = value;
+        upvalue->ref = &upvalue->value;
+    } else {
+        // 重新申请栈空间进行指向
+        void *new_value = runtime_zero_malloc(rtype->size, rtype);
+        DEBUGF("[runtime.env_closure] size gt 8byte, malloc new_value=%p", new_value);
+        memcpy(new_value, (void *) stack_addr, rtype->size);
+        upvalue->ref = new_value;
+    }
+
+    DEBUGF("[runtime.env_closure] closure success, upvalue->ref=%p stack_addr=0x%lx, ", upvalue->ref, stack_addr);
 
     table_delete(env_table, utoa(stack_addr));
 }
@@ -246,4 +259,21 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
     upvalue_t *upvalue = fn->envs->values[index];
 
     memmove(upvalue->ref, src_ref, size);
+}
+
+void *env_element_addr(runtime_fn_t *fn, uint64_t index) {
+    DEBUGF("[runtime.env_element_addr] fn_base=%p", fn)
+    assert(fn);
+    assert(index < fn->envs->length);
+
+    upvalue_t *upvalue = fn->envs->values[index];
+
+    // ref 保存了一个地址，指向了可以存储的数据的初始位置
+    // 在 closure 之前，ref 指向栈地址
+    // closure 之后，ref 指向自身的 value 部分的地址, value 部分则保存具体的值
+    // value 只能保存 8byte 空间，如果需要的值超过 8byte，则需要从堆中从新申请空间
+    DEBUGF("[runtime.env_element_addr] ref=%p, ref_to_int_value=%lu", upvalue->ref,
+           fetch_int_value((addr_t) upvalue->ref, 8));
+
+    return upvalue->ref;
 }

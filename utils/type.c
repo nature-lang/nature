@@ -1034,17 +1034,17 @@ bool type_compare(type_t dst, type_t src) {
 char *_type_format(type_t t) {
     if (t.kind == TYPE_VEC) {
         // []
-        return dsprintf("vec<%s>", _type_format(t.vec->element_type));
+        return dsprintf("vec<%s>", type_format(t.vec->element_type));
     }
     if (t.kind == TYPE_ARRAY) {
-        return dsprintf("arr<%s,%d>", _type_format(t.array->element_type), t.array->length);
+        return dsprintf("arr<%s,%d>", type_format(t.array->element_type), t.array->length);
     }
     if (t.kind == TYPE_MAP) {
-        return dsprintf("map<%s,%s>", _type_format(t.map->key_type), _type_format(t.map->value_type));
+        return dsprintf("map<%s,%s>", type_format(t.map->key_type), _type_format(t.map->value_type));
     }
 
     if (t.kind == TYPE_SET) {
-        return dsprintf("set<%s>", _type_format(t.set->element_type));
+        return dsprintf("set<%s>", type_format(t.set->element_type));
     }
 
     if (t.kind == TYPE_TUPLE) {
@@ -1060,15 +1060,15 @@ char *_type_format(type_t t) {
     }
 
     if (t.kind == TYPE_FN) {
-        return dsprintf("fn(...):%s", _type_format(t.fn->return_type));
+        return dsprintf("fn(...):%s", type_format(t.fn->return_type));
     }
 
     if (t.kind == TYPE_POINTER) {
-        return dsprintf("ptr<%s>", _type_format(t.pointer->value_type));
+        return dsprintf("ptr<%s>", type_format(t.pointer->value_type));
     }
 
     if (t.kind == TYPE_NULLABLE_POINTER) {
-        return dsprintf("cptr<%s>", _type_format(t.pointer->value_type));
+        return dsprintf("cptr<%s>", type_format(t.pointer->value_type));
     }
 
     return type_kind_str[t.kind];
