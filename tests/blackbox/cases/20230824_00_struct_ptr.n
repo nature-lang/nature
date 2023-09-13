@@ -1,21 +1,63 @@
 type person = struct {
     string name
     int age
+    string from
     u8 gender = 2
+    var set_age = fn(self s, int now) {
+        s.age = now
+    }
+    var get_name = fn(self s):string {
+        return s.name
+    }
 }
 
 var p = person {
     name = 'hualaka',
-    age = 12,
+    from = 'china',
     gender = 1
 }
 
-var p3 = &p
+println(p.gender, p.from, p.get_name())
+p.set_age(24)
+println(p.age)
 
+
+// --- ptr test
+ptr<person> p2 = new person
+p2.name = "wanglufei"
+p2.from = "japan"
+p2.set_age(19)
+
+println(p2.get_name(), p2.from, p2.gender, p2.age)
+
+// --- &person test
+var p3 = &p
+p3.set_age(24)
+println(p3.get_name(), p3.from, p3.gender, p3.age, p.age)
+
+// --- ptr param
+fn test_param(ptr<person> p3, person p) {
+    println('in test fn, p.name is', p.name)
+    println('in test fn, p3.name is', p3.name)
+}
+
+test_param(p3, p)
+
+// --- refer rewrite
 fn test_refer(ptr<person> p3, person p) {
+    p3.name = 'rewrite by p3'
     p.name = 'rewrite by p' // nop
 }
 
 test_refer(p3, p)
-
 println(p.name, p3.name)
+
+// --- test return
+fn test_return():ptr<person> {
+    var p = new person // gc_malloc, can return
+    p.age = 55
+    return p
+}
+
+var p4 = test_return()
+println(p4.age, p4.name, '!')

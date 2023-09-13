@@ -819,6 +819,14 @@ indexed_addr_operand(module_t *m, type_t type, lir_operand_t *base, lir_operand_
     return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
 
+static inline lir_operand_t *unique_var_operand_not_module(module_t *m, type_t type, char *ident) {
+    string result = make_unique_ident(m, ident); // not with module
+
+    symbol_table_set_var(result, type);
+
+    return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
+}
+
 /**
  * 临时变量是否影响变量入栈？
  * @param type

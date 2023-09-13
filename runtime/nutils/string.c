@@ -73,6 +73,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->length = length;
     str->capacity = capacity;
     str->element_rtype_hash = element_rtype->hash;
+    DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }
 

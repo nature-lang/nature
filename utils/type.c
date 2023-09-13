@@ -278,20 +278,19 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
     uint16_t last_ptr_offset = 0;
 
     for (int i = 0; i < t->length; ++i) {
-        *offset += type_sizeof(t->element_type);
-
         uint64_t last_ptr_temp_offset = 0;
         if (t->element_type.kind == TYPE_STRUCT) {
             last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits, offset, t->element_type.struct_);
         } else if (t->element_type.kind == TYPE_ARRAY) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, t->element_type.array);
         } else {
-            uint16_t bit_index = (*offset - 1) / POINTER_SIZE;
+            uint16_t bit_index = *offset / POINTER_SIZE;
             if (type_is_ptr(t->element_type)) {
                 bitmap_set(gc_bits, bit_index);
-
                 last_ptr_temp_offset = *offset;
             }
+
+            *offset += type_sizeof(t->element_type);
         }
 
         if (last_ptr_temp_offset > last_ptr_offset) {
@@ -305,15 +304,11 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
 static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_struct_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
     uint16_t last_ptr_offset = 0;
-
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
 
-        uint16_t size = type_sizeof(p->type);
-        uint16_t align = type_alignof(p->type);
-
-        *offset += size;
-        *offset = align_up(*offset, align);
+        // 属性基础地址对齐
+        *offset = align_up(*offset, type_alignof(p->type));
 
         uint64_t last_ptr_temp_offset = 0;
         if (p->type.kind == TYPE_STRUCT) {
@@ -321,18 +316,25 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
         } else if (p->type.kind == TYPE_ARRAY) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, p->type.array);
         } else {
-            uint16_t bit_index = (*offset - 1) / POINTER_SIZE;
+            // 这里就是存储位置
+            uint16_t bit_index = *offset / POINTER_SIZE;
             bool is_ptr = type_is_ptr(p->type);
             if (is_ptr) {
                 bitmap_set(gc_bits, bit_index);
                 last_ptr_temp_offset = *offset;
             }
+
+            uint16_t size = type_sizeof(p->type); // 等待存储的 struct size
+            *offset += size;
         }
 
         if (last_ptr_temp_offset > last_ptr_offset) {
             last_ptr_offset = last_ptr_temp_offset;
         }
     }
+
+    // 结构体需要整体需要对齐到 align
+    *offset = align_up(*offset, t->align);
 
     return last_ptr_offset;
 }

@@ -457,6 +457,9 @@ typedef struct closure_t {
     int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0. rsp 在函数的入口点之前应该始终保持 16byte 对齐
     slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
 
+    int64_t stack_temp_offset; // 用于函数调用时需要通过内存进行传递的参数
+    bitmap_t *stack_gc_bits;
+
     // runtime 参数可能保存在 stack 也可能保存在 reg 中。
     // 无论保存在哪里，其都是一个 8byte 的 pointer
     uint64_t fn_runtime_reg;
@@ -476,7 +479,6 @@ typedef struct closure_t {
     module_t *module;
 
     ast_fndef_t *fndef;
-    bitmap_t *stack_gc_bits;
 } closure_t;
 
 /**

@@ -34,6 +34,9 @@ func main() {
 	targetName = path.Base(targetPath)
 	helper.Logf("new workdir: %v, target name: %v", workdir, targetName)
 
+    err = os.WriteFile(".target_name", []byte(targetName), 0755)
+    helper.Assertf(err == nil, "Error writing to .target_name: %v", err)
+
 	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		helper.Assertf(false, "file=%v notfound", targetPath)
 	}
@@ -53,8 +56,7 @@ func main() {
 		}
 	}
 
-	err = os.WriteFile(".target_name", []byte(targetName), 0755)
-	helper.Assertf(err == nil, "Error writing to .target_name: %v", err)
+
 
 	err = tarGzFile(workdir, tgzName, sources)
 	helper.Assertf(err == nil, "Error creating tar.gz file: %v", err)

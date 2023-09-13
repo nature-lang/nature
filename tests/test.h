@@ -17,6 +17,10 @@
 
 #define PACKAGE_SYNC_COMMAND "npkg sync -v"
 
+static inline void exec_no_output(slice_t *args) {
+    exec_process(WORKDIR, BUILD_OUTPUT, args);
+}
+
 static inline char *exec_output() {
     return exec(WORKDIR, BUILD_OUTPUT, slice_new());
 }

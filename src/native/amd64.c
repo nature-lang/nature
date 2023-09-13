@@ -671,15 +671,29 @@ static slice_t *amd64_native_label(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    int64_t offset = c->stack_offset;
+    offset += c->stack_temp_offset;
+
     // 进行最终的对齐, linux amd64 中栈一般都是是按 16byte 对齐的
-    c->stack_offset = align_up(c->stack_offset, STACK_ALIGN_SIZE);
+    offset = align_up(offset, STACK_ALIGN_SIZE);
 
     slice_push(operations, ASM_INST("push", { REG(rbp) }));
     slice_push(operations, ASM_INST("mov", { REG(rbp), REG(rsp) })); // 保存栈指针
-    if (c->stack_offset != 0) {
-        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(c->stack_offset) }));
+    if (offset != 0) {
+        slice_push(operations, ASM_INST("sub", { REG(rsp), UINT32(offset) }));
     }
 
+//    c->stack_offset = offset;
+    // gc_bits 补 0
+    if (c->stack_temp_offset) {
+        uint16_t bits_start = c->stack_offset / POINTER_SIZE;
+        uint16_t bits_count = c->stack_temp_offset / POINTER_SIZE;
+        for (int i = 0; i < bits_count; ++i) {
+            bitmap_grow_set(c->stack_gc_bits, bits_start + i, 0);
+        }
+    }
+
+    c->stack_offset = offset;
     return operations;
 }
 

@@ -13,18 +13,19 @@ static void test_basic() {
     WORKDIR = path_join(WORKDIR, "tests/mockdir");
     char *noded_path = path_join(WORKDIR, "noded");
 
-    int res = remove(noded_path);
-//    assert_true(res == 0);
+    remove(noded_path);
 
     setenv("RUNNER_PATH", runner_path, 1);
 //    setenv("PARKER_VERBOSE", "true", 1);
-    setenv("REPEAT_COUNT", "5", 1); // 5 次可以触发 gc, 确认是否有错误
 
     slice_t *args = slice_new();
     slice_push(args, &"node");
 
-    exec_with_args(args); // exec parker with args
+    // run parker
+    exec_no_output(args); // exec parker with args
 
+    // run runner
+    setenv("REPEAT_COUNT", "5", 1); // 5 次可以触发 gc, 确认是否有错误
     char *raw = exec(WORKDIR, noded_path, slice_new());
 //    printf("%s", raw);
 //    return

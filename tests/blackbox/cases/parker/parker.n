@@ -37,6 +37,10 @@ target_name = path.base(target_path)
 
 logf('new split workdir: %v, target: %v', workdir, target_name)
 
+// .target_name 将 target_name 写入到文件 .target_name 中随压缩包一起压缩
+var target_name_fd = syscall.open('.target_name', syscall.O_RDWR | syscall.O_CREAT, 0755)
+syscall.write(target_name_fd, target_name as [u8])
+syscall.close(target_name_fd)
 
 // - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
 var tgz_name = std.sprintf('%v.tar.gz', target_name)
@@ -44,13 +48,9 @@ var tgz_name = std.sprintf('%v.tar.gz', target_name)
 // new target_name + 'd' fd, node -> noded
 var output_name = std.sprintf('%vd', target_name)
 
-
 // - 遍历当前工作目录中的所有文件，进行压缩
 var sources = std.listdir(workdir)
-
 [string] temp = []
-
-// 跳过, target_name + .tar_gz and target_name + d
 for s in sources {
     if {tgz_name, output_name}.contains(s) {
         logf('tgz encode source %v will continue', s)
@@ -60,11 +60,6 @@ for s in sources {
     temp.push(s)
 }
 sources = temp
-
-// .target_name 将 target_name 写入到文件 .target_name 中随压缩包一起压缩
-var fd = syscall.open('.target_name', syscall.O_RDWR | syscall.O_CREAT, 0755)
-syscall.write(fd, target_name as [u8])
-syscall.close(fd)
 
 tgz.encode(workdir, tgz_name, sources)
 

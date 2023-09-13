@@ -299,7 +299,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
  * @param op
  * @return
  */
-static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg_size) {
+static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
     slice_t *args = op->second->value; // exprs
 
     // 进行 op 替换(重新set flag 即可)
@@ -316,7 +316,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
     uint8_t sse_reg_count = 0;
     uint8_t int_reg_count = 0;
 
-    *stack_arg_size = 0;
+    int64_t stack_arg_size = 0;
 
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg = args->take[i];
@@ -325,7 +325,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
         lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
         if (count == 0) { // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
-            *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+            stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
             onstack[i] = 1;
             continue;
         } else if (count == 1) {
@@ -336,7 +336,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                 onstack[i] = 0;
                 int_reg_count++;
             } else {
-                *stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+                stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
                 onstack[i] = 1;
                 continue;
             }
@@ -350,7 +350,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                     int_reg_count += 2;
                 } else {
                     onstack[i] = 1;
-                    *stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
+                    stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
                 }
             } else {
                 if (sse_reg_count + 1 <= 8 && int_reg_count + 1 <= 6) {
@@ -359,50 +359,50 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                     int_reg_count++;
                 } else {
                     onstack[i] = 1;
-                    *stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
+                    stack_arg_size += align_up(type_sizeof(arg_type), QWORD);
                 }
             }
         }
     }
 
-    // 判断是否按照 16byte 对齐
-    uint64_t adjust = align_up(*stack_arg_size, STACK_ALIGN_SIZE) - *stack_arg_size;
-    if (adjust > 0) {
-        lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
-                                         rsp_operand, int_operand(adjust), rsp_operand);
-        linked_push(result, binary_op);
-        *stack_arg_size += adjust;
+    // native 时会进行 16byte 对齐
+    if (stack_arg_size > c->stack_temp_offset) {
+        c->stack_temp_offset = stack_arg_size;
     }
 
-    // - stack 临时占用的 rsp 空间，在函数调用完成后需要归还回去
+    // 最右侧参数最先入栈， sub 相当于入栈标识
+    // 如果从最左侧的第一个需要入栈的参数开始处理，则其对应的就是 rsp+0
     // 优先处理需要通过 stack 传递的参数,将他们都 push 或者 mov 到栈里面(越考右的参数越优先入栈)
-    for (int i = args->count - 1; i >= 0; i--) {
-        lir_operand_t *arg = args->take[i];
+    int64_t rsp_offset = 0;
+    for (int i = 0; i < args->count; i++) {
+        lir_operand_t *arg_operand = args->take[i];
 
         if (onstack[i] == 0) {
             continue;
         }
 
-        type_t arg_type = lir_operand_type(arg);
+        type_t arg_type = lir_operand_type(arg_operand);
 
         lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
 
-        uint16_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
+
+        lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
 
         if (is_alloc_stack(arg_type)) {
-            assert(arg->assert_type == LIR_OPERAND_VAR);
-            // 通过 sub 预留足够的 stack 空间, 然后将 arg(var 中保存从是地址信息)
-            linked_push(result,
-                        lir_op_new(LIR_OPCODE_SUB, rsp_operand, int_operand(align_size), rsp_operand));
+            assert(arg_operand->assert_type == LIR_OPERAND_VAR);
+            // lea addr to temp
+            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_CPTR));
+            linked_push(result, lir_op_lea(dst_ref, dst));
 
-            linked_t *temps = lir_memory_mov(c->module, arg_type, rsp_operand, arg);
+            linked_t *temps = lir_memory_mov(c->module, arg_type, dst_ref, arg_operand);
             linked_concat(result, temps);
         } else {
-            linked_push(result, lir_op_new(LIR_OPCODE_SUB, rsp_operand, int_operand(align_size), rsp_operand));
-            lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, 0);
-            linked_push(result, lir_op_move(dst, arg));
+            linked_push(result, lir_op_move(dst, arg_operand));
         }
+
+        uint16_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
+        rsp_offset += align_size;
     }
 
     // - 处理通过寄存器传递的参数(选择合适的寄存器。多余的部分进行 xor 清空)
@@ -415,7 +415,8 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
         lir_operand_t *arg = args->take[i];
         type_t arg_type = lir_operand_type(arg);
 
-        lo = hi = AMD64_CLASS_NO;
+        lo = AMD64_CLASS_NO;
+        hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
         if (onstack[i] == 1) {
             continue;
@@ -438,6 +439,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                 lo_kind = TYPE_FLOAT64;
             } else {
                 assert(false);
+                exit(EXIT_FAILURE);
             }
 
             // arg 是一个地址指向对应的 struct 内存区域， indirect_addr 则是去内存中的值
@@ -461,6 +463,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op, int64_t *stack_arg
                     hi_kind = TYPE_FLOAT64;
                 } else {
                     assert(false);
+                    exit(EXIT_FAILURE);
                 }
 
                 // arg 是第一个内存地址，现在需要读取其 indirect addr
@@ -500,12 +503,8 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
 
     if (!call_result) {
-        int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
-        linked_concat(result, amd64_lower_args(c, op, &stack_arg_size));
+        linked_concat(result, amd64_lower_args(c, op));
         linked_push(result, op); // call op
-        if (stack_arg_size > 0) {
-            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
-        }
 
         return result;
     }
@@ -537,16 +536,12 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // -------------------- lower args ------------------------
-    int64_t stack_arg_size = 0; // 参数 lower 占用的 stack size, 函数调用完成后需要还原
-    linked_concat(result, amd64_lower_args(c, op, &stack_arg_size));
+    linked_concat(result, amd64_lower_args(c, op));
 
     // 参数通过栈传递
     if (count == 0) {
         lir_operand_t *output_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(rax->index, TYPE_UINT64));
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, output_reg));
-        if (stack_arg_size > 0) {
-            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
-        }
 
         linked_push(result, lir_op_move(call_result, output_reg));
         return result;
@@ -589,11 +584,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, new_output));
 
-        // 调用完成后进行栈归还
-        if (stack_arg_size > 0) {
-            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
-        }
-
         // 从 reg 中将返回值 mov 到 call_result 上
         lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 0);
         linked_push(result, lir_op_move(dst, lo_src_reg));
@@ -607,9 +597,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         lo_src_reg = operand_new(LIR_OPERAND_REG, amd64_reg_select(lo_reg->index, call_result_type.kind));
 
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg));
-        if (stack_arg_size > 0) {
-            linked_push(result, lir_op_new(LIR_OPCODE_ADD, rsp_operand, int_operand(stack_arg_size), rsp_operand));
-        }
 
         linked_push(result, lir_op_move(call_result, lo_src_reg));
     }
