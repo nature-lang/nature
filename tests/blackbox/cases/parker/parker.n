@@ -8,6 +8,11 @@ import compress.tgz
 
 var version = '0.1.0'
 
+if util.arg_version() {
+    fmt.printf('version: %v\n', version)
+    return
+}
+
 if util.arg_verbose() {
     tgz.verbose = true
     set_verbose()

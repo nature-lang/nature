@@ -1,38 +1,41 @@
-.PHONY: all linux_amd64 linux_arm64 copy-version-linux_amd64 copy-version-linux_arm64
+.PHONY: all amd64 arm64 install package
 
-all: linux_amd64 linux_arm64
+TARGET_DIR=$(PWD)/build/parker/bin
 
-linux_amd64:
-	@echo "Building for linux_amd64 using nature build..."
-	mkdir -p build/linux_amd64/bin
-	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o build/linux_amd64/bin/parker parker.n
-	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o build/linux_amd64/bin/runner runner.n
-	@make copy-version-linux_amd64
+all: amd64 arm64
 
-linux_arm64:
-	@echo "Building for linux_arm64 using go build..."
-	mkdir -p build/linux_arm64/bin
-	GOOS=linux GOARCH=arm64 go build -o build/linux_arm64/bin/parker parkergo/main.go
-	GOOS=linux GOARCH=arm64 go build -o build/linux_arm64/bin/runner parkergo/runner/main.go
-	@make copy-version-linux_arm64
+amd64:
+	@echo "Building for amd64 using nature build..."
+	mkdir -p $(TARGET_DIR)
+	npkg sync
+	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o $(TARGET_DIR)/parker parker.n
+	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o $(TARGET_DIR)/runner runner.n
+	@make copy-version
 
+arm64:
+	@echo "Building for arm64 using go build..."
+	mkdir -p $(TARGET_DIR)
+	cd parkergo && go mod download
+	cd parkergo && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o $(TARGET_DIR)/parker main.go
+	cd parkergo && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o $(TARGET_DIR)/runner runner/main.go
+	@make copy-version
 
 
 install:
-ifndef TARGET
-	@echo "Please provide TARGET as an argument. E.g: make install TARGET=linux_amd64"
-	@exit 1
-endif
-	@echo "Installing for $(TARGET)..."
+	@echo "Installing..."
 	mkdir -p /usr/local/parker
-	cp -r build/$(TARGET)/* /usr/local/parker/
+	cp -r build/parker/* /usr/local/parker/
 
 package:
+	@echo "Packaging..."
+	@test "$(ARCH)" || (echo "Error: ARCH is not set. Please set it like 'make package ARCH=amd64'" && exit 1)
+	$(eval VERSION=$(shell cat VERSION))
+	cd build && tar -czvf parker-$(VERSION)-linux-$(ARCH).tar.gz parker
+	mv build/parker-$(VERSION)-linux-$(ARCH).tar.gz releases/
+	@echo "Packaging done."
 
-copy-version-linux_amd64:
-	@echo "Copying VERSION to build/linux_amd64..."
-	cp VERSION build/linux_amd64/
 
-copy-version-linux_arm64:
-	@echo "Copying VERSION to build/linux_arm64..."
-	cp VERSION build/linux_arm64/
+copy-version:
+	@echo "Copying VERSION to build..."
+	cp VERSION build/parker
+	cp LICENSE build/parker
