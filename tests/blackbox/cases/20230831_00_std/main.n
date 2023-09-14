@@ -1,6 +1,7 @@
-import std
-import std.path
-import std.elf
+import os
+import fmt
+import path
+import elf
 import libc_temp
 import dirent_temp
 import strings
@@ -18,8 +19,8 @@ println(s)
 // test list dir (build in fn?) parser handle?
 var size = 12 + sizeof(dirent_t) - 24
 println('dirent_t size', size)
-var list = std.listdir('mock')
-println("std.listdir of mock len", list.len)
+var list = os.listdir('mock')
+println("os.listdir of mock len", list.len)
 for v in list {
     println('item: ', v)
 }
@@ -52,4 +53,4 @@ println(path.base('/'))
 println(path.base('//'))
 
 // sprintf
-std.printf('!%s!%s%s', 'test str', '', 'hello')
+fmt.printf('!%s!%s%s', 'test str', '', 'hello')

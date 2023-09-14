@@ -82,7 +82,7 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
     import->as = "";
 
     if (is_std_temp_package(package)) {
-        assertf(import->ast_package->count == 1, "import std temp module exception");
+        assertf(import->ast_package->count == 1, "import os temp module exception");
         import->full_path = std_temp_full_path(m, package, import);
     } else {
         ANALYZER_ASSERTF(import->ast_package->count == 2, "import temp module '%s' notfound", package);
@@ -1407,26 +1407,17 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        if (stmt->assert_type == AST_VAR_DECL) {
-            ast_var_decl_t *var_decl = stmt->value;
-            analyzer_type(m, &var_decl->type);
-            var_decl->ident = ident_with_module(m->ident, var_decl->ident);
-
-            symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
-            slice_push(m->global_symbols, s);
-            continue;
-        }
-
         if (stmt->assert_type == AST_STMT_VARDEF) {
             ast_vardef_stmt_t *vardef = stmt->value;
             ast_var_decl_t *var_decl = &vardef->var_decl;
             analyzer_type(m, &var_decl->type);
             var_decl->ident = ident_with_module(m->ident, var_decl->ident);
+            slice_push(m->global_vardef, vardef);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             slice_push(m->global_symbols, s);
 
-            // 转换成 assign stmt，然后导入到 init 中
-            ast_stmt_t *temp_stmt = NEW(ast_stmt_t);
+            // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
+            ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
             assign->left = (ast_expr_t) {
                     .line = stmt->line,
@@ -1435,11 +1426,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     .value = ast_new_ident(var_decl->ident),
             };
             assign->right = vardef->right;
-            temp_stmt->line = stmt->line;
-            temp_stmt->column = stmt->column;
-            temp_stmt->assert_type = AST_STMT_ASSIGN;
-            temp_stmt->value = assign;
-            slice_push(var_assign_list, temp_stmt);
+            assign_stmt->line = stmt->line;
+            assign_stmt->column = stmt->column;
+            assign_stmt->assert_type = AST_STMT_ASSIGN;
+            assign_stmt->value = assign;
+            slice_push(var_assign_list, assign_stmt);
             continue;
         }
 
@@ -1469,7 +1460,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             continue;
         }
 
-        ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
+        ANALYZER_ASSERTF(false, "module stmt must be var_def/fn_decl/type_alias")
     }
 
     // 添加 init fn

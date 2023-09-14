@@ -1,5 +1,5 @@
 import strings
-import std.util as *
+import fmt.util as *
 import syscall
 
 fn exists(string path):bool {

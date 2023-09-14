@@ -1,4 +1,5 @@
-import std
+import os
+import fmt
 import libc_temp
 import syscall
 
@@ -27,12 +28,12 @@ for int i = 0; i < 100; i+=1 {
     var (len, err) = try syscall.read(sigfd as int, sig_info as cptr, sizeof(signalfd_siginfo_t))
     if err.has {
        if err.msg == 'Resource temporarily unavailable' {
-           std.printf('not received any sig, will sleep\n')
+           fmt.printf('not received any sig, will sleep\n')
        } else {
-           throw std.sprintf('read sigfd %d err=%s', sigfd, err.msg)
+           throw fmt.sprintf('read sigfd %d err=%s', sigfd, err.msg)
        }
     } else {
-       std.printf('read sig %d success\n', sig_info.ssi_signo)
+       fmt.printf('read sig %d success\n', sig_info.ssi_signo)
        break
     }
 

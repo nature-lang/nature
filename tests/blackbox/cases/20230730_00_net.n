@@ -1,5 +1,5 @@
 import syscall
-import std
+import os
 import libc_temp
 
 // 创建一个 socket

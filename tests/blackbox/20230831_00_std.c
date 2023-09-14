@@ -16,7 +16,7 @@ static void test_basic() {
                 "/test/hello/world/nice.tar.gz\n"
                 "sub/sub2\n"
                 "dirent_t size 268\n"
-                "std.listdir of mock len 4\n"
+                "os.listdir of mock len 4\n"
                 "item:  test3.txt\n"
                 "item:  file\n"
                 "item:  stat.txt\n"

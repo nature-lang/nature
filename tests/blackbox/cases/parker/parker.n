@@ -1,6 +1,6 @@
-import std
-import std.path
-import std.elf
+import os
+import fmt
+import path
 import syscall
 import parker.log as * 
 import parker.util
@@ -13,13 +13,13 @@ if util.arg_verbose() {
     set_verbose()
 }
 
-var args = std.args()
+var args = os.args()
 
 // - 读取当前程序所在目录，找到 runner 程序
 assertf(args.len > 1, 'args failed')
 
 // 可能是一个绝对路径也可以是一个相对 path
-var exec_path = std.exe()
+var exec_path = os.exe()
 logf('exec_path: %v', exec_path)
 
 var target_name = args[1]
@@ -43,13 +43,13 @@ syscall.write(target_name_fd, target_name as [u8])
 syscall.close(target_name_fd)
 
 // - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
-var tgz_name = std.sprintf('%v.tar.gz', target_name)
+var tgz_name = fmt.sprintf('%v.tar.gz', target_name)
 
 // new target_name + 'd' fd, node -> noded
-var output_name = std.sprintf('%vd', target_name)
+var output_name = fmt.sprintf('%vd', target_name)
 
 // - 遍历当前工作目录中的所有文件，进行压缩
-var sources = std.listdir(workdir)
+var sources = os.listdir(workdir)
 [string] temp = []
 for s in sources {
     if {tgz_name, output_name}.contains(s) {
@@ -113,15 +113,15 @@ for true {
     syscall.write(output_fd, buf.ref(), len)
 }
 syscall.close(tgz_fd)
-std.remove(tgz_name)
-std.remove('.target_name')
+os.remove(tgz_name)
+os.remove('.target_name')
 logf('append tgz to output success, and remove tgz/.target_name success, size=%v', readsum)
 
 
 var tgz_size = readsum
 logf('stat tgz %v get size=%d', tgz_name, tgz_size)
 
-var tgz_size_str = std.sprintf('%016d', tgz_size) 
+var tgz_size_str = fmt.sprintf('%016d', tgz_size)
 syscall.write(output_fd, tgz_size_str as [u8])
 logf('tag_size to output success, size_str=%v', tgz_size_str)
 

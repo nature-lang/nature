@@ -1,6 +1,5 @@
-import std
-import std.path
-import std.elf
+import os
+import path
 import syscall
 import parker.log as *
 import parker.util
@@ -18,7 +17,7 @@ if util.arg_verbose() {
 logf('runner start version: %s', version)
 
 // - read exe path
-var exe_path = std.exe()
+var exe_path = os.exe()
 var workdir = path.dir(exe_path)
 logf('workdir=%s', workdir)
 

@@ -1207,7 +1207,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         target = temp_var_operand_with_stack(m, expr.type);
     }
 
-    assertf(unary_expr->operator != AST_OP_IA, "not support IA op");
+    LINEAR_ASSERTF(unary_expr->operator != AST_OP_IA, "not support '*' op")
     lir_opcode_t type = ast_op_convert[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);

@@ -1,5 +1,5 @@
 import syscall
-import std
+import fmt
 
 // 基于 c 字符串创建一个 nature 字符串 
 fn from(cptr p):string {
@@ -123,7 +123,7 @@ fn split(string s, string separator):[string] {
 
     if separator == '' {
         for v in s {
-            result.push(std.sprintf('%c', v))
+            result.push(fmt.sprintf('%c', v))
         }
 
         return result

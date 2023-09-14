@@ -1,7 +1,8 @@
-import std
+import os
+import fmt
 import parker.cgroup
 import libc_temp
-import std.path
+import path
 import time
 import syscall
 import parker.log as *
@@ -23,7 +24,7 @@ fn extract_tgz(string exe_path):[u8] {
     var len = syscall.read(fd, size_buf)
     if len != size_buf.len {
         syscall.close(fd)
-        throw std.sprintf('read fd len %d exception', len)
+        throw fmt.sprintf('read fd len %d exception', len)
     }
 
     var size_str = size_buf as string
@@ -43,7 +44,7 @@ fn extract_tgz(string exe_path):[u8] {
 
     len = syscall.read(fd, result)
     if len != size {
-        throw std.sprintf('read fd result len %d != size %d', len, size)
+        throw fmt.sprintf('read fd result len %d != size %d', len, size)
     }
 
     // close fd
@@ -90,7 +91,7 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
     // 9 = SIGKILL
     var result = prctl(1, 9, 0, 0, 0)
     if result == -1 {
-       throw std.sprintf('set pdeathsig err=%s', libc_strerror())
+       throw fmt.sprintf('set pdeathsig err=%s', libc_strerror())
     }
 
     // 读取当前进程 id
@@ -101,7 +102,7 @@ fn run_target(cgroup.cgroup_t cg, string target_path):int {
     cg.register(pid)
     
     // run target with all args and env
-    var args = std.args()
+    var args = os.args()
     // args[0] 是 proc/:pid/comm, 这里替换成 target name
     var target_name = path.base(target_path)
     args[0] = target_name

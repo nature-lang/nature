@@ -42,3 +42,10 @@ print((c as [i8]).len, d.len, '\n')
 c = d
 
 print(c is [i8], c is [i16], '\n')
+
+
+// cptr
+cptr<int> a1 = null
+int b1 = 12
+a1 = &b1
+var d1 = a1 as ptr<int>

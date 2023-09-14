@@ -1,5 +1,5 @@
-import std
-import std.util
+import os
+import fmt.util
 import time
 
 runtime_set_force_gc()

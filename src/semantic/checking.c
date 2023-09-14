@@ -13,7 +13,8 @@ static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target
 
     ast_literal_t *literal = expr->value;
 
-    CHECKING_ASSERTF(is_integer(literal->kind), "type inconsistency, expect integer, actual: %s",
+    CHECKING_ASSERTF(is_integer(literal->kind), "type inconsistency, expect %s, actual: %s",
+                     type_format(target_type),
                      type_kind_str[literal->kind]);
 
     int64_t i = atoll(literal->value);
@@ -1490,6 +1491,18 @@ static void checking_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     }
 }
 
+static void checking_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
+    stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
+    type_t right_type = checking_right_expr(m, &stmt->right, stmt->var_decl.type);
+
+    if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
+        CHECKING_ASSERTF(type_confirmed(right_type), "type checkingence error, right type not confirmed");
+
+        stmt->var_decl.type = right_type;
+        return;
+    }
+}
+
 /**
  * @param stmt
  */
@@ -2271,8 +2284,11 @@ static type_t reduction_type(module_t *m, type_t t) {
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
-    t.kind = cross_kind_trans(t.kind);
     t.origin_ident = origin_name; // reduction dump error ident
+    if (t.kind == TYPE_INT || t.kind == TYPE_UINT || t.kind == TYPE_FLOAT) {
+        t.origin_ident = type_kind_str[t.kind];
+        t.kind = cross_kind_trans(t.kind);
+    }
 
     // 计算 reflect type
     ct_reflect_type(t);
@@ -2359,6 +2375,15 @@ static void checking_fndef(module_t *m, ast_fndef_t *fndef) {
  * @param m
  */
 void pre_checking(module_t *m) {
+    // - 全局变量中也包含类型信息需要进行还原处理与类型推导
+    for (int j = 0; j < m->global_vardef->count; ++j) {
+        ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
+
+        // 内部已经完成了对类型的还原，并修改了 smt->vardecl 的值
+        // 这会直接影响到全局符号表中的 vardecl
+        checking_global_vardef(m, vardef);
+    }
+
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
@@ -2388,16 +2413,6 @@ void checking(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
     m->checking_temp_fndefs = slice_new();;
-
-    // - 全局变量中也包含类型信息需要进行还原处理
-    for (int j = 0; j < m->global_symbols->count; ++j) {
-        symbol_t *s = m->global_symbols->take[j];
-        if (s->type != SYMBOL_VAR) {
-            continue;
-        }
-
-        checking_var_decl(m, s->ast_value); // 类型还原
-    }
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();

@@ -1,6 +1,7 @@
 import syscall
-import std
-import std.path
+import os
+import fmt
+import path
 import compress.archive_temp
 
 i32 ARCHIVE_EOF = 1
@@ -63,7 +64,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
 
         i32 r = archive_read_disk_open(disk, full_path.ref())
         if r != 0 {
-            throw std.sprintf('read path %v failed', source)
+            throw fmt.sprintf('read path %v failed', source)
         }
 
         for true {
@@ -89,7 +90,7 @@ fn encode(string workdir, string tgz_path, [string] sources) {
 
             // debug
             if verbose {
-                std.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))
+                fmt.printf('a %v\n', libc_string_new(archive_entry_pathname(entry)))
             }
 
             r = archive_write_header(a, entry)
@@ -173,7 +174,7 @@ fn decode(string workdir, string tgz_path) {
         archive_entry_set_pathname(entry, custom.ref())
 
         if verbose {
-            std.printf('x %v\n', libc_string_new(archive_entry_pathname(entry)))
+            fmt.printf('x %v\n', libc_string_new(archive_entry_pathname(entry)))
         }
 
         r = archive_write_header(ext, entry)

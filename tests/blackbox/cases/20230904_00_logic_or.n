@@ -1,14 +1,15 @@
-import std
-import std.util
+import os
+import fmt.util
+import fmt
 import time
 
 // 启用快速强制 gc
 runtime_set_force_gc()
 
-fn logf(string fmt, ...[any] args) {
-    var msg = std.sprintf(fmt, ...args)
+fn logf(string format, ...[any] args) {
+    var msg = fmt.sprintf(format, ...args)
     var t = time.now()
-    std.printf('log: %v time: %v\n', msg, t.datetime())
+    fmt.printf('log: %v time: %v\n', msg, t.datetime())
 }
 
 int len = 2

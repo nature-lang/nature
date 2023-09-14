@@ -198,6 +198,7 @@ static void build_linker(slice_t *modules) {
         error_exit("[linker] linker failed");
     }
 
+    remove(BUILD_OUTPUT);
     copy(BUILD_OUTPUT, output, 0755);
     DEBUGF("linker output--> %s\n", output);
     DEBUGF("build output--> %s\n", BUILD_OUTPUT);
@@ -253,14 +254,13 @@ static void build_assembler(slice_t *modules) {
 
         // symbol to var_decl(架构无关), assembler 会使用 var_decl
         // 由全局符号产生
-        for (int j = 0; j < m->global_symbols->count; ++j) {
-            symbol_t *s = m->global_symbols->take[j];
-            if (s->type != SYMBOL_VAR) {
-                continue;
-            }
-            ast_var_decl_t *var_decl = s->ast_value;
+        for (int j = 0; j < m->global_vardef->count; ++j) {
+            ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
+            assert(vardef->var_decl.type.status == REDUCTION_STATUS_DONE);
+
+            ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            symbol->name = s->ident;
+            symbol->name = var_decl->ident;
             symbol->size = type_kind_sizeof(var_decl->type.kind);
             symbol->value = NULL;
             slice_push(m->asm_global_symbols, symbol);

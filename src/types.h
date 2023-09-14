@@ -195,6 +195,7 @@ typedef struct {
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
+    slice_t *global_vardef; // 用于在 checking 阶段进行类型推导
 
     // ast_fndef
     slice_t *ast_fndefs;

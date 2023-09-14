@@ -29,6 +29,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
+    m->global_vardef = slice_new(); // ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->source_path = source_path;
     m->ast_fndefs = slice_new();

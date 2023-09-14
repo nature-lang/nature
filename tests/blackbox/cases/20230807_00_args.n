@@ -1,6 +1,6 @@
-import std
+import os
 
-var args = std.args()
+var args = os.args()
 
 for arg in args {
     println(arg)

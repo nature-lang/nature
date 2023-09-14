@@ -1,7 +1,6 @@
-name = "std"
+name = "path"
 version = "0.1.0"
 authors = ["weiwenhao <1101140857@qq.com>"]
-description = "std package"
 license = "MIT"
 type = "lib"
 

@@ -1,5 +1,6 @@
-import std
-import std.path
+import os
+import fmt
+import path
 import parker.util
 import syscall
 import strings
@@ -17,7 +18,7 @@ type cgroup_t = struct {
     string path
     string procs_path
     var register = fn(self s, int pid) {
-        var pid_str = std.sprintf('%d\n', pid)
+        var pid_str = fmt.sprintf('%d\n', pid)
         var fd = syscall.open(s.procs_path, syscall.O_WRONLY|syscall.O_APPEND, 0)
 
         syscall.write(fd, pid_str as [u8])
@@ -28,7 +29,7 @@ type cgroup_t = struct {
 
         var (fd, err) = try syscall.open(s.procs_path, syscall.O_RDONLY, 0)
         if err.has {
-            throw std.sprintf('open procs path="%s" failed: %s', s.procs_path, err.msg)
+            throw fmt.sprintf('open procs path="%s" failed: %s', s.procs_path, err.msg)
         }
         var stat = syscall.fstat(fd)
         var buf = vec<u8>{len=stat.size}
@@ -43,7 +44,7 @@ type cgroup_t = struct {
                 // str to int
                 var pid = strtol(pid_str.ref(), 0, 10)
                 if pid == 0 {
-                    throw std.sprintf('pid str %s to int failed', pid_str)
+                    throw fmt.sprintf('pid str %s to int failed', pid_str)
                 }
                 
                 // kill by pid
@@ -55,7 +56,7 @@ type cgroup_t = struct {
         }
     
        // 清理 cgroup 目录
-       std.rmdir(s.path, true)
+       os.rmdir(s.path, true)
     }
 
 }
@@ -87,7 +88,7 @@ fn make():cgroup_t {
     var procs_path = path.join(cgroup_path, procs_system)
 
     // mkdir all
-    std.mkdirs(cgroup_path, 0755)
+    os.mkdirs(cgroup_path, 0755)
 
     return cgroup_t {
         id = id,
