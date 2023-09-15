@@ -1,185 +1,288 @@
-<p align_up="center"><a href="https://nature-lang.org" target="_blank"><img src="https://raw.githubusercontent.com/weiwenhao/pictures/main/blogslogo_300.png" width="400" alt="nature Logo"></a></p>
+<p align="center"><a href="https://nature-lang.org" target="_blank"><img src="https://raw.githubusercontent.com/weiwenhao/pictures/main/blogslogo_300.png" width="400" alt="nature Logo"></a></p>
 
-# The Nature Programming Language
+# Nature Programming Language
 
-nature is a programming language that aims for simplicity and elegance in its syntax, focusing on the writing and
-reading experience of its users.
+Nature is the next-generation systems programming language and compiler, striving for elegant and concise syntax while prioritizing the writing and reading experience for developers.
 
-At the language level, nature has the following features:
+Key features of nature at the language level include:
 
-- Type system with null safety, generics, and union types
-- Static cross-compilation that allows generating executable files for target machines without relying on any
-  third-party components
-- Incremental garbage collection with support for automatic and manual memory reclamation
-- Built-in data structures like lists, maps, sets, and tuples
+- Type system, null safety, generics, union types
+- In-house compiler/assembler/linker, not reliant on llvm. Supports compilation for amd64/riscv64/wasm architectures
+- Non-intrusive interaction with C for efficient and high-performance development
+- Progressive GC, supports both automatic and manual GC
+- Built-in vec/map/set/tup data structures
 - Package and module management
-- Function labels, closures, error handling, and coroutines
-- Integration with SSA, linear scan register allocation, reflection mechanisms, assemblers, and linkers
+- Function tags/closures/error prompts/runtime stack traces/coroutines
+- Integrated SSA/linear scan register allocation/reflection/assembler & linker
 
-As the standard library gradually improves, nature can be applied to game engines and game development, scientific and
-AI computing, operating systems and IoT, and web development. Game engines will be the main focus of nature 1.0+.
+With the continual refinement of its standard library, nature is applicable for game engines and game development, scientific and AI computing, operating systems and IoT, and WEB development. The game engine will be the core focus for nature from versions 0.7.0 to 1.0+.
 
-nature is suitable for open-source creators, independent developers, as well as learning and research purposes. We hope
-that nature not only provides convenience in the language itself but also allows you to create enjoyable and interesting
-things.
+Nature is suitable for open-source authors, independent developers, as well as for learning and research. Not only do we hope you find the language convenient, but we also wish that you enjoy creating wonderful things with nature.
 
-You can find more information and documentation on the official website.
+For more information and documentation, visit our official website:
 
-Website: [https://nature-lang.org](https://nature-lang.org/)
+Official website: [https://nature-lang.org](https://nature-lang.org/)
 
 Documentation: [https://nature-lang.org/docs/getting-started/hello-world](https://nature-lang.org/docs/getting-started/hello-world)
 
-You can check the latest progress of the project and the changes in related features through the Release history.
-
-Release history: [https://github.com/nature-lang/nature/releases](https://github.com/nature-lang/nature/releases)
+> ❗️ Current version: 0.4.0-beta. Yet to integrate riscv64 wasm architecture compilation/manual GC/function tags/coroutines. All other features are integrated. **Nature is set to release its community-friendly version (0.7.0) soon. We invite you to test it out and contribute.**
 
 ## ⚙️ Installation
 
-To get started with Nature, download and extract the nature installation package from
-the [releases](https://github.com/nature-lang/nature/releases). We recommend moving the extracted nature folder
-to `/usr/local/` and adding the `/usr/local/nature/bin` directory to the system's environment variables.
+Download and unzip the nature package from [releases](https://github.com/nature-lang/nature/releases). We recommend moving the unzipped `nature` folder to `/usr/local/` and adding `/usr/local/nature/bin` to the system's environment variable.
 
-Create a main.n file with the following contents:
+Create a file named `main.n` with the following content:
 
-```nature
-print("hello nature")
-```
+```rust  
+import fmt
+
+fn fib(int n):int {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fmt.printf('fib result is %d', fib(30))
+```  
 
 Compile and execute:
 
-```shell
-# docker run --rm -it -v $PWD:/app --name nature naturelang/nature:latest sh -c 'nature build main.n && ./main'
-> nature build main.n && ./main
-hello nature
-```
+```bash  
+> nature build main.n && ./main  
+fib result is 832040
+```  
 
-Use Docker for quick compilation and execution:
+Quickly compile and execute using the docker integrated environment:
 
-```shell
-docker run --rm -it -v $PWD:/app --name nature naturelang/nature:latest sh -c 'nature build main.n && ./main'
-```
+```shell  
+docker run --rm -it -v $PWD:/app --name nature naturelang/nature:latest sh -c 'nature build main.n && ./main'  
+```  
 
-## 🌱 Release Plan
+## 🌱 Release Schedule
 
-nature follows [Semantic Versioning](https://semver.org/), where versions 0.1 to 1.0 consist of two parts:
+Nature's versioning adheres to [Semantic Versioning](https://semver.org/). Versions 0.1 ~ 1.0 have two parts:
 
-The upper part always carries the beta tag, indicating that it is not production-ready.
+The first half always has a beta indication, denoting that it's not ready for production.
 
-The lower part contains stable and backward-compatible syntax and APIs. During this stage, nature can be used for
-personal independent/open-source projects but does not provide LTS versions.
+The second half is stable with backward-compatible syntax API. By this time, nature is suitable for personal indie/open-source projects, but LTS versions aren't provided.
 
-When version 1.0 is released, nature will be officially used for open source/commercial projects and will have an LTS
-version.
+With the release of version 1.0, nature will be officially used for open-source/commercial projects and will have an LTS version.
 
-| Version     | Content                                         | Estimated Release Date |
-|-------------|-------------------------------------------------|------------------------|
-| v0.1.0-beta | Initial syntax release                          | 2023-05                |
-| v0.2.0-beta | Type system and syntax improvements             | 2023-07                |
-| v0.3.0-beta | Package management and syntax improvements      | 2023-09                |
-| v0.4.0-beta | Basic standard library and syntax improvements  | 2023-11                |
-| v0.5.0-beta | LSP development and error tracking optimization | 2024-02                |
-| v0.6.0-beta | Small test cases and bug fixes                  | 2024-04                |
-| v0.7.0      | Medium test cases and stable syntax API         | 2024-07                |
-| v0.8.0+     | Preparation for the official release            | 2024-09                |
-| v1.0.0      | Official release                                | 2025-                  |
+| Version     | Content                                      | Expected Release Date |  
+| ----------- | -------------------------------------------- | --------------------- |  
+| v0.1.0-beta | Basic syntax release                         | 2023-05               |  
+| v0.2.0-beta | Type system/Basic syntax refinement          | 2023-07               |  
+| v0.3.0-beta | Package management/Basic syntax refinement   | 2023-09               |  
+| v0.4.0-beta | Small test cases/Basic standard library      | 2023-11               |  
+| v0.5.0-beta | LSP development/Core syntax refinement       | 2024-02               |  
+| v0.6.0-beta | Medium test cases/bug fixes                  | 2024-04               |  
+| v0.7.0      | Large test cases/Stable syntax API           | 2024-07               |  
+| v0.8.0+     | Preparations for the official release        | 2024-09               |  
+| v1.0.0      | Official release                             | 2025-                 |  
+
+Current version: 0.4.0-beta. Key functionalities still being planned will be gradually integrated in upcoming versions.
+
+- Integration and optimization of essential syntaxes like switch/try
+- wasm architecture compilation
+- Coroutine support
+- Compilation for the darwin system
+- Function tags support
+- Progressive GC refinement
+- riscv architecture compilation
+- Compilation for the windows system
 
 ## 🧭 Design Philosophy
 
-There is a saying in programming languages about first-class citizens, such as functions being the first-class citizens
-in JavaScript. While functions in nature can be passed as values and used in higher-order functions, functions are not
-the primary focus in nature. So what is the most important thing in nature?
+In programming languages, there's a notion of first-class citizens. For example, in JavaScript, functions are the first-class citizens. Although in nature, functions can also be passed as values and have higher-order usages, they aren't its first-class citizens. So, what's most important for nature?
 
-Is it compilation speed? Runtime speed? Safety? Simplicity? None of these. Even though we pursue the file of simplicity,
-we will never sacrifice the convenience of developers for it.
+Compilation speed? Execution speed? Safety? Simplicity? None of these. Even though we aim for simplicity, we won't compromise on developer convenience.
 
-Therefore, the most important thing for nature is developers. It aims to provide convenience to developers, to make the
-language look pleasant and feel comfortable to write. This doesn't mean that nature lacks features like fast
-compilation, runtime speed, safety, and simplicity. We strive to strike a balance between convenience and these common
-features. However, if there is an irreconcilable conflict, the priority will be the convenience of developers rather
-than compilation speed, complexity, or simplicity.
+For nature, the developer is paramount. We prioritize offering convenience, ensuring the code is aesthetically pleasing and intuitive. That's not to say nature doesn't provide fast compilation/execution, safety, simplicity, etc. We aim to balance these attributes with user-friendliness. However, when conflicts arise, the developer's convenience takes precedence.
 
-For example, in the choice between single quotes and double quotes for strings, although most strongly-typed languages
-choose double quotes as the standard for strings, single quotes can reduce one shift key press, reducing the burden on
-the developer's pinky finger. It also makes the code more concise. The same applies to the removal of parentheses
-in `if` and `for` statements.
+For instance, despite most strong-typed languages opting for double quotes for standard strings, we chose single quotes to save a shift input, reducing strain on the pinky and offering a more concise read. The omission of brackets in 'if' and 'for' also stems from this principle.
 
-In nature, we rarely invent new syntactic sugar but instead prefer to choose well-known syntactic sugar from other
-languages. This reduces the learning and mental burden on developers. Even the abbreviations of keywords should be
-well-known. For example, using `i8` instead of `int8_t` and `fn` instead of `func`/`function` is because Rust has
-already popularized these abbreviations, which greatly reduces the potential for misunderstanding and learning burden.
+Nature rarely introduces new syntactic sugar. Instead, we often choose already-existing, widely-recognized syntactic sugar from other languages, easing the learning curve and mental load for developers. Keyword abbreviations also follow popular abbreviations, e.g., i8 instead of int8_t, fn instead of func/function. fn is a common keystroke, and Rust has already popularized fn/i8, hence it drastically reduces potential misunderstandings and learning burdens.
 
-## 🍺 Contribution Guidelines
+## 🍺 Contribution Guide
 
-There are multiple ways to contribute to nature, including but not limited to submitting bugs, sharing ideas,
-participating in community discussions, coding, improving documentation, establishing standards, contributing resources,
-and donating.
+There are many ways to contribute to nature: reporting BUGs, sharing ideas, participating in community discussions, coding, improving documentation, establishing standards, contributing resources, donations, and more.
 
-Nature is developed based on ANSI C11 and musl libc. The source code aims to be simple and readable, without using
-complex third-party libraries. File and directory names, as well as keywords, use lowercase with underscores as word
-separators, with the only exception being macro definitions, which use uppercase with underscores.
+Nature is developed based on ANSI C11 and musl libc. The codebase aims for simplicity and readability, avoiding complex third-party libraries. Filenames, directory names, and keywords all use lowercase with underscores. The only exception is macro definitions which use uppercase with underscores.
 
-For information on source code directory structure, compilation, and related resources, please refer
-to [https://nature-lang.org/docs/prologue/contribution-guide](https://nature-lang.org/docs/prologue/contribution-guide)
+For source code directory structure, compilation, and related resources, refer to [https://nature-lang.org/docs/prologue/contribution-guide](https://nature-lang.org/docs/prologue/contribution-guide).
 
-## 🐳 Community Communication
+All contributions to the standard library will eventually be merged into the main repository. Before embarking on feature development, please initiate communication via an issue for preliminary discussions and API design.
 
-For ideas and questions, it is recommended to use GitHub issues to facilitate wider attention and participation.
+## 🐳 Community Interaction
 
-Discord: [https://discord.gg/s5x542RF](https://discord.gg/s5x542RF)
+For ideas and issues, we recommend discussing on Github issues so that more people can pay attention and participate.
 
-微信: Add WeChat ID `nature-lang` and mention "申请加群"
+Github Discussion Community: [https://github.com/nature-lang/nature/discussions](https://github.com/nature-lang/nature/discussions)
 
-GitHub
-Discussion: [https://github.com/nature-lang/nature/discussions](https://github.com/nature-lang/nature/discussions)
 
-## 🍼 Code Examples
+## 🍼 Coding Example
 
-Error Handling
+Error Handling:
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630115906.png)
+```rust
+type test = struct {
+    [i8] list
+    var div = fn(int a, int b):int {
+        if b == 0 {
+            throw 'divisor cannot be zero'
+        }
+        return a / b
+    }
+}
 
-Generics
+var t = test {
+    list = [1, 2, 3, 4, 5]
+}
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132324.png)
+var (item, err) = try foo.list[8]
+if err.has {
+    println("chain access list error=", err.msg)
+}
 
-Union Types
+var (_, err) = try foo.div(10, 0)
+if err.has {
+    println("division error", err.msg)
+}
+```
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630132845.png)
+Generics:
 
-Coroutines
+```rust
+// generic fn
+type numbert = gen i8|i16|i32|i64|u8|u16|u32|u64|f32|f64
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120423.png)
+fn sum(numbert a, numbert b):numbert {
+    return a + b
+}
+fn cmp(numbert a, numbert b):bool {
+    return a > b
+}
 
-Function Labels
+// type param
+type box<t> = struct {
+    t width
+    t length
+    var area = fn(self s):t {
+        return s.width * s.length
+    }
+}
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120447.png)
+fn run() {
+    var b = box<i8> {
+        width = 5,
+        length = 10
+    }
+    println('self area=', b.area())
+}
 
-HTTP Server
+```
 
-![](https://raw.githubusercontent.com/weiwenhao/pictures/main/blogs20230630120523.png)
+Union Types:
 
-## 🫧 FAQ
+```rust
+type nullable<t> = t|null
 
-1.Why are variable and function parameter types placed before the identifier, while the return type of a function is
-placed after the identifier?
+nullable<i8> foo = 24
+if foo is null {
+    // logic...
+    return
+}
 
-Explanation about the placement of
-types: [https://github.com/nature-lang/nature/issues/7](https://github.com/nature-lang/nature/issues/7)
+// x println(foo + 12), foo is a union type, cannot use binary
 
-2.What is the meaning of the logo?
+let foo as i8
+println(foo + 12)
+```
 
-The logo represents a starship, symbolizing the "Natural Selection" in "The Three-Body Problem" novel.
+Coroutine:
 
-3.Why do language keywords include emojis?
+```rust
+var c = 🍀 fn(context c) {
+    var progress = 0
+    for int i = 0; i < 100; i += 1 {
+        progress += 1
+        c.send('progress', progress)
 
-Yes, because mojo.🔥 already did it. Emoji keywords will be a feature carried over from mojo. In future versions, newly
-introduced syntactic sugar will also use emojis as keywords as much as possible. The aim is to bring a light-hearted
-feeling to coding.
+        sleep(1)
+    }
+}
+
+for v in c.wait('progress') {
+    println("current progress=", v)
+}
+```
+
+Function Tags:
+
+```java
+@local @retry=5 
+@test 24, 10 -> 4
+@test -5, 10 -> -5
+fn rem(int dividend, int divisor):int {
+    if divisor == 0 {
+        throw 'divisor cannot be zero'
+    }
+    return dividend % divisor
+}
+
+@global @post increase_views
+fn read_blog():int {
+    // logic ...
+}
+
+@comment Based on label prompt + test for automatic code generation testing
+@prompt sum up a and b
+@test 12, 13 -> 25
+@test -5, 10 -> 5
+fn sum(int a, int b):int {}
+```
+
+HTTP Server:
+
+```js
+import http
+import http.router
+import http.resp
+
+var app = http.server()
+
+router.get('/', fn(ctx):resp {
+    return resp.string('hello world')
+})
+
+app.use(router).listen('127.0.0.1', 8000)
+```
+
+For more coding examples 👉 [cases](https://github.com/nature-lang/nature/tree/master/tests/blackbox/cases)
+
+## 📌 FAQ
+
+1.Does nature use type prefix or suffix?
+
+Nature consistently uses type prefixing, including the return type of functions. A primitive design example:
+
+`fn sum(int a, int b):int c` shows that the function return type also uses type prefixing. Omitting all idents can lead to the function type declaration `fn(int,int):int`. Typically, the return value's ident also needs to be omitted, resulting in the formal function declaration `fn sum(int a, int b):int {}`.
+
+2.What is the meaning of nature/logo?
+
+The logo represents a spaceship, symbolizing the "Natural Selection" ship from "Three-Body". The name "nature" is derived from this.
+
+3.Why isn't there any performance testing and comparison?
+
+Nature is currently in its beta phase focusing on core functionality development. There hasn't been any optimization done on the compiler backend. Hence, performance testing would be unfair and meaningless.
+
+4.How long has nature been in development?
+
+The main repository has been under development for almost 3 years. The actual time invested is close to 6 years. What I want to emphasize is that the Nature project won't be abandoned arbitrarily and will be continuously developed and maintained with vitality.
 
 ## 🪶 License
 
-This project is open-sourced software licensed under the[MIT license](https://opensource.org/licenses/MIT). as a
-programming language, source files (.n files) and compiled binary files generated during use of Nature are not subject
-to Open-source license restrictions.
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT). as a programming language, source files (.n files) and compiled binary files generated during use of Nature are not subject to Open-source license restrictions.
 
 Copyright (c) 2020-2023 WEIWENHAO, all rights reserved.
