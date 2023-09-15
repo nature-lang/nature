@@ -1,3 +1,6 @@
 [submodule "package"]
 	path = package
 	url = git@github.com:nature-lang/package.git
+[submodule "tests/blackbox/cases/parker"]
+	path = tests/blackbox/cases/parker
+	url = git@github.com:weiwenhao/parker.git
