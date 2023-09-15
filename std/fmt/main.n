@@ -1,0 +1,184 @@
+import fmt.util as *
+import path
+
+fn sprintf(string fmt, ...[any] args):string {
+    var end = fmt.len
+    var result = [] as [u8]
+
+    var sources = fmt as [u8]
+
+    int i = 0
+    int arg_index = 0
+
+    for i < end {
+        u8 c = sources[i]
+        i += 1
+        if c != ascii('%') {
+            result.push(c)
+            continue
+        }
+
+        if i == end {
+            continue
+        }
+
+        // 宽度字符解析, 如 %018， %18 这两种模式的宽度和填充字符解析
+        var fill = ' '
+        var width = 0 as u8
+
+        if sources[i] == ascii('0') {
+            fill = '0'
+            i+=1
+        } 
+
+        for true {
+            if sources[i] < ascii('0') || sources[i] > ascii('9') {
+                break
+            }
+
+            width = width * 10 + (sources[i] - ascii('0'))
+            i += 1
+        }
+
+        c = sources[i]
+        i+=1
+
+        if c == ascii('%') {
+            result.push(ascii('%'))
+            continue
+        }
+
+        if arg_index == args.len {
+             result.push(ascii('%'))
+             result.push(ascii('!'))
+             result.push(c)
+             continue
+        }
+
+        // c 不再 format 字符中，提示异常
+        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s')}.contains(c) {
+            result.push(ascii('%'))
+            result.push(ascii('?'))
+            result.push(c)
+            continue
+        }
+
+        any arg = args[arg_index]
+        arg_index += 1
+
+        if c == ascii('d') {
+            string s = ''
+            if arg is int {
+                 s = itos(arg as int, fill, width)
+            }  else if arg is i8 {
+                 s = itos(arg as i8, fill, width)
+            }  else if arg is i16 {
+                 s = itos(arg as i16, fill, width)
+            } else if arg is i32 {
+                 s = itos(arg as i32, fill, width)
+            } else if arg is i64 {
+                 s = itos(arg as i64, fill, width)
+            } else if arg is uint {
+                 s = itos(arg as uint, fill, width)
+            } else if arg is u8 {
+                 s = itos(arg as u8, fill, width)
+            }  else if arg is u16 {
+                 s = itos(arg as u16, fill, width)
+            } else if arg is u32 {
+                 s = itos(arg as u32, fill, width)
+            } else if arg is u64 {
+                 s = itos(arg as u64, fill, width)
+            }  else {
+                 s = '%!d'
+            }
+
+            for c in s { 
+                result.push(c)
+            }
+
+            continue
+        }
+
+        if c == ascii('s') {
+            string s = ''
+            if arg is string {
+                s = arg as string
+            } else {
+                s = '%!s'
+            }
+            for c in s {
+                result.push(c)
+            }
+
+            continue
+        }
+
+        if c == ascii('c') {
+            if !(arg is u8) {
+                result.push(ascii('%'))
+                result.push(ascii('!'))
+                result.push(ascii('c'))
+                continue
+            }
+
+            result.push(arg as u8)
+            continue
+        }
+
+        // 各种类型的值进行 string 处理
+        if c == ascii('v') {
+            string s = ''
+            if arg is int {
+                 s = itos(arg as int)
+            }  else if arg is i8 {
+                 s = itos(arg as i8)
+            }  else if arg is i16 {
+                 s = itos(arg as i16)
+            } else if arg is i32 {
+                 s = itos(arg as i32)
+            } else if arg is i64 {
+                 s = itos(arg as i64)
+            } else if arg is uint {
+                 s = itos(arg as uint)
+            } else if arg is u8 {
+                 s = itos(arg as u8)
+            }  else if arg is u16 {
+                 s = itos(arg as u16)
+            } else if arg is u32 {
+                 s = itos(arg as u32)
+            } else if arg is u64 {
+                 s = itos(arg as u64)
+            } else if arg is float {
+                 s = ftos(arg as float)
+            } else if arg is f64 {
+                 s = ftos(arg as f64)
+            } else if arg is f32 {
+                 s = ftos(arg as f32)
+            } else if arg is bool {
+                let arg as bool
+                if arg {
+                    s = 'true'
+                } else {
+                    s = 'false'
+                }
+            } else if arg is string {
+                s = arg as string // union 断言
+            } else {
+                s = '%!v'
+            }
+
+            for c in s { 
+                result.push(c)
+            }
+
+            continue
+        }
+    }
+
+    return result as string
+}
+
+fn printf(string fmt, ...[any] args) {
+    var str = sprintf(fmt, ...args)
+    print(str)
+}

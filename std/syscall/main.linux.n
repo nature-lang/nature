@@ -1,4 +1,67 @@
 import libc
+import libc_temp
+import dirent_temp
+import syscall_temp
+import strings_temp
+
+u32 MS_ACTIVE = 0x40000000
+u32 MS_ASYNC = 0x1
+u32 MS_BIND = 0x1000
+u32 MS_DIRSYNC = 0x80
+u32 MS_INVALIDATE = 0x2
+u32 MS_I_VERSION = 0x800000
+u32 MS_KERNMOUNT = 0x400000
+u32 MS_MANDLOCK = 0x40
+u32 MS_MGC_MSK = 0xffff0000
+u32 MS_MGC_VAL = 0xc0ed0000
+u32 MS_MOVE = 0x2000
+u32 MS_NOATIME = 0x400
+u32 MS_NODEV = 0x4
+u32 MS_NODIRATIME = 0x800
+u32 MS_NOEXEC = 0x8
+u32 MS_NOSUID = 0x2
+u32 MS_NOUSER = -0x80000000
+u32 MS_POSIXACL = 0x10000
+u32 MS_PRIVATE = 0x40000
+u32 MS_RDONLY = 0x1
+u32 MS_REC = 0x4000
+u32 MS_RELATIME = 0x200000
+u32 MS_REMOUNT = 0x20
+u32 MS_RMT_MASK = 0x800051
+u32 MS_SHARED = 0x100000
+u32 MS_SILENT = 0x8000
+u32 MS_SLAVE = 0x80000
+u32 MS_STRICTATIME = 0x1000000
+u32 MS_SYNC = 0x4
+u32 MS_SYNCHRONOUS = 0x10
+u32 MS_UNBINDABLE = 0x20000
+
+// unshare 可选值
+int CLONE_NEWTIME = 0x00000080
+int CLONE_VM = 0x00000100
+int CLONE_FS = 0x00000200
+int CLONE_FILES = 0x00000400
+int CLONE_SIGHAND = 0x00000800
+int CLONE_PIDFD = 0x00001000
+int CLONE_PTRACE = 0x00002000
+int CLONE_VFORK = 0x00004000
+int CLONE_PARENT = 0x00008000
+int CLONE_THREAD = 0x00010000
+int CLONE_NEWNS = 0x00020000
+int CLONE_SYSVSEM = 0x00040000
+int CLONE_SETTLS = 0x00080000
+int CLONE_PARENT_SETTID = 0x00100000
+int CLONE_CHILD_CLEARTID = 0x00200000
+int CLONE_DETACHED = 0x00400000
+int CLONE_UNTRACED = 0x00800000
+int CLONE_CHILD_SETTID = 0x01000000
+int CLONE_NEWCGROUP = 0x02000000
+int CLONE_NEWUTS = 0x04000000
+int CLONE_NEWIPC = 0x08000000
+int CLONE_NEWUSER = 0x10000000
+int CLONE_NEWPID = 0x20000000
+int CLONE_NEWNET = 0x40000000
+int CLONE_IO = 0x80000000
 
 int O_RDONLY = 0x0  // 只读模式
 int O_WRONLY = 0x1  // 只写模式
@@ -16,6 +79,18 @@ int SEEK_END = 2 // 移动到文件末尾
 int STDIN_FILENO = 0
 int STDOUT_FILENO = 1
 int STDERR_FILENO = 2
+
+int CLOCK_REALTIME = 0
+int CLOCK_MONOTONIC = 1
+int CLOCK_PROCESS_CPUTIME_ID = 2
+int CLOCK_THREAD_CPUTIME_ID = 3
+int CLOCK_MONOTONIC_RAW = 4
+int CLOCK_REALTIME_COARSE = 5
+int CLOCK_MONOTONIC_COARSE = 6
+int CLOCK_BOOTTIME = 7
+int CLOCK_REALTIME_ALARM = 8
+int CLOCK_BOOTTIME_ALARM = 9
+int CLOCK_TAI = 11
 
 // 系统调用编码
 int SYS_READ = 0
@@ -470,19 +545,32 @@ int SOCK_RDM = 0x4
 int SOCK_SEQPACKET = 0x5
 int SOCK_STREAM = 0x1
 
-type timespec_t = syscall_timespec_t
-type stat_t = syscall_stat_t
-
-fn read(int fd, [u8] buf):int {
-    return call6(SYS_READ, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
-}
-
-fn write(int fd, [u8] buf):int {
-    return call6(SYS_WRITE, fd as cptr, buf.raw(), buf.len() as cptr, 0, 0, 0)
+fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
+    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
 }
 
 fn open(string filename, int flags, u32 perm):int {
-    return call6(SYS_OPEN, filename.raw(), flags as cptr, perm as cptr, 0, 0, 0)
+    return call6(SYS_OPEN, filename.ref(), flags as cptr, perm as cptr, 0, 0, 0)
+}
+
+fn read(int fd, [u8] buf):int {
+    return call6(SYS_READ, fd as cptr, buf.ref(), buf.len as cptr, 0, 0, 0)
+}
+
+fn read(int fd, cptr buf, int len):int {
+    return call6(SYS_READ, fd as cptr, buf, len as cptr, 0, 0, 0)
+}
+
+fn readlink(string file, [u8] buf):int {
+    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len as cptr, 0, 0, 0)
+}
+
+fn write(int fd, [u8] buf):int {
+    return call6(SYS_WRITE, fd as cptr, buf.ref(), buf.len as cptr, 0, 0, 0)
+}
+
+fn write(int fd, cptr buf, int len):int {
+    return call6(SYS_WRITE, fd as cptr, buf, len as cptr, 0, 0, 0)
 }
 
 fn close(int fd) {
@@ -490,7 +578,7 @@ fn close(int fd) {
 }
 
 fn unlink(string path) {
-    call6(SYS_UNLINK, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_UNLINK, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn seek(int fd, int offset, int whence):int {
@@ -501,28 +589,66 @@ fn fork():int {
     return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
 }
 
+// path is full path
+// argv[0] = /proc/:pid/comm
 fn exec(string path, [string] argv, [string] envp) {
     return syscall_exec(path, argv, envp)
 }
 
+type timespec_t = struct {
+    i64 sec
+    i64 nsec
+}
+
+type stat_t = struct {
+    u64 dev
+    u64 ino
+    u64 nlink
+    u32 mode
+    u32 uid
+    u32 gid
+    u32 __pad0
+    u64 rdev
+    i64 size
+    i64 blksize
+    i64 blocks
+    timespec_t atim
+    timespec_t mtim
+    timespec_t ctim
+    arr<i64,3> __unused
+}
+
 fn stat(string filename):stat_t {
-    return syscall_stat(filename)
+    var st = stat_t{
+        dev = 56,
+        ino = 24
+    }
+
+    // as cptr 等同于 c 中的 *stat_t
+    call6(SYS_STAT, filename.ref(), st as cptr, 0, 0, 0, 0)
+
+    return st
 }
 
 fn fstat(int fd):stat_t {
-    return syscall_fstat(fd)
+    var st = stat_t{}
+
+    // call6 的错误处理在 runtime 中已经做过了k
+    call6(SYS_FSTAT, fd as cptr, st as cptr, 0, 0, 0, 0)
+
+    return st
 }
 
 fn mkdir(string path, u32 mode) {
-    call6(SYS_MKDIR, path.raw(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_MKDIR, path.ref(), mode as cptr, 0, 0, 0, 0)
 }
 
 fn rmdir(string path) {
-    call6(SYS_RMDIR, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_RMDIR, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn rename(string oldpath, string newpath) {
-    call6(SYS_RENAME, oldpath.raw(), newpath.raw(), 0, 0, 0, 0)
+    call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
 }
 
 fn exit(int status) {
@@ -537,46 +663,59 @@ fn getppid():int {
     return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
 }
 
+fn getcwd():string {
+    var buf = vec<u8>{len=1024} // 1024 是 path max
+    var len = call6(SYS_GETCWD, buf.ref(), buf.len as cptr, 0, 0, 0, 0)
+
+    buf = buf.slice(0, len - 1) // -1 is remove '\0'
+
+    return buf as string
+}
+
 fn kill(int pid, int sig) {
     call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
 }
 
-fn wait(int pid):int {
-    return syscall_wait(pid)
+fn wait(int pid, int option):(int, int) {
+    var status = 0
+    int result = waitpid(pid, &status, option)
+    if result == -1 {
+        throw libc_strerror()
+    }
+
+    return (result, status)
 }
 
 fn chdir(string path) {
-    call6(SYS_CHDIR, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_CHDIR, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn chroot(string path) {
-    call6(SYS_CHROOT, path.raw(), 0, 0, 0, 0, 0)
+    call6(SYS_CHROOT, path.ref(), 0, 0, 0, 0, 0)
 }
 
 fn chown(string path, u32 uid, u32 gid) {
-    call6(SYS_CHOWN, path.raw(), uid as cptr, gid as cptr, 0, 0, 0)
+    call6(SYS_CHOWN, path.ref(), uid as cptr, gid as cptr, 0, 0, 0)
 }
 
 fn chmod(string path, u32 mode) {
-    call6(SYS_CHMOD, path.raw(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_CHMOD, path.ref(), mode as cptr, 0, 0, 0, 0)
 }
 
-fn getcwd():string {
-    return syscall_getcwd()
+fn clock_gettime(int clock_id):timespec_t {
+    var result = timespec_t{}
+
+    call6(SYS_CLOCK_GETTIME, clock_id as cptr, result as cptr, 0, 0, 0, 0)
+
+    return result
 }
 
-fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
-    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
-}
-
-
-// socket 相关
-type sockaddr_in = struct { // linux_amd64 占用 8 个字节
+// net --------------
+type sockaddr_in = struct {
     u16 sin_family
     u16 sin_port
     u32 sin_addr
-
-    [u8,8] sin_zero
+    arr<u8,8> sin_zero
 }
 
 type sockaddr_in6 = struct {
@@ -585,15 +724,15 @@ type sockaddr_in6 = struct {
     u16 sin6_port
     u32 sin6_flowinfo
     // ipv6 address(128-bit)
-    [u32,4] sin6_addr
+    arr<u32,4> sin6_addr
     u32 sin6_scope_id
 }
 
 type sockaddr_un = struct {
     u8 sun_len
     u8 sun_family
-    // 108 byte
-    [u8,104] sun_path
+    //  char sun_path[108];
+    arr<u8,108> sun_path
 }
 
 fn socket(int domain, int t, int protocol):int {
@@ -605,15 +744,13 @@ type sockaddr_t = gen sockaddr_in|sockaddr_un
 
 fn bind(int sockfd, sockaddr_t addr) {
     // 将 nature struct 转换为 c struct
-     cptr p = libc.encode(addr)
      var len = 16 as cptr // in 和 unix 长度为 16byte
-     call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+     call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
 
 fn bind(int sockfd, sockaddr_in6 addr) {
-    cptr p = libc.encode(addr)
     var len = 28 as cptr
-    call6(SYS_BIND, sockfd as cptr, p, len, 0, 0, 0)
+    call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
 
 // backlog 表示最大的监听长度
@@ -622,22 +759,50 @@ fn listen(int sockfd, int backlog) {
 }
 
 // 相应 client sockfd 和 client sockaddr
-fn accept(int sockfd, sockaddr_t addr):int {
-    var p =  libc.encode(addr)
+fn accept(int sockfd, ptr<sockaddr_t> addr):int {
     var len = 16
     ptr<int> len_ptr = &len
+    int fd = call6(SYS_ACCEPT, sockfd as cptr, addr as cptr, len_ptr as cptr, 0, 0, 0)
 
-    int fd = call6(SYS_ACCEPT, sockfd as cptr, p, len_ptr as cptr, 0, 0, 0)
-
-    // 将 p 中的值赋值给 addr, p 会被垃圾回收回收
-    libc.decode(p, addr)
     return fd
 }
 
 fn recvfrom(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_RECVFROM, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_RECVFROM, sockfd as cptr, buf.ref(), buf.len as cptr, flags as cptr, 0, 0)
 }
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_SENDTO, sockfd as cptr, buf.raw(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len as cptr, flags as cptr, 0, 0)
+}
+
+fn get_envs():[string] {
+    return libc_get_envs()
+}
+
+fn get_env(string key):string {
+    cptr ref = getenv(key.ref())
+    if ref == 0 {
+        return ''
+    }
+
+    return libc_string_new(ref)
+}
+
+fn set_env(string key, string value) {
+    var result = setenv(key.ref(), value.ref(), 1)
+    if result != 0 {
+        throw 'setenv error'
+    }
+}
+
+fn unshare(int flags) {
+    call6(SYS_UNSHARE, flags as cptr, 0, 0, 0, 0, 0)
+}
+
+fn mount(string source, string target, string fs_type, u32 flags, string data) {
+    call6(SYS_MOUNT, source.ref(), target.ref(), fs_type.ref(), flags as cptr, data.ref(), 0)
+}
+
+fn umount(string target, u32 flags) {
+    call6(SYS_UMOUNT2, target.ref(), flags as cptr, 0, 0, 0, 0)
 }

@@ -1,0 +1,94 @@
+import path
+import syscall
+import libc_temp
+import dirent_temp
+import syscall_temp
+import strings_temp
+
+fn args():[string] {
+    return std_args()
+}
+
+// read current exe path by read link /proc/self/exe
+fn exe():string {
+    var buf = vec<u8>{len=4096}
+    var len = syscall.readlink('/proc/self/exe', buf)
+
+    buf = buf.slice(0, len)
+    return buf as string
+}
+
+// unsafe ptr
+fn listdir(string path):[string] {
+    [string] result = []
+
+    var dir = opendir(path.ref())
+    if dir == 0 {
+        throw 'opendir failed: ' + libc_strerror()
+    }
+
+    for true {
+        cptr<dirent_t> entry = readdir(dir)
+        if entry is null {
+            break
+        }
+
+        let entry as ptr<dirent_t>
+        var name = libc_string_new(entry.name as cptr)
+        if name == '.' || name == '..' {
+            continue
+        }
+
+        result.push(name)
+    }
+
+    return result
+}
+
+// use strings.split(dir, '/')
+// join and syscall.mkdir(dir, mode)
+fn mkdirs(string dir, u32 mode) {
+    if dir == '' {
+        throw 'dir is empty'
+    }
+
+    if path.exists(dir) {
+        return
+    }
+
+    // path not found will create
+    var parent_dir = path.dir(dir)
+    mkdirs(parent_dir, mode)
+
+    // parent dir is create, will create dir
+    syscall.mkdir(dir, mode)
+}
+
+// use remove file
+fn remove(string full_path) {
+    if !path.exists(full_path) {
+        return
+    }
+
+    syscall.unlink(full_path)
+}
+
+fn rmdir(string dir, bool recursive) {
+    if !recursive {
+        return syscall.rmdir(dir)
+    }
+
+    var list = listdir(dir)
+    for item in list {
+        var fullpath = path.join(dir, item)
+        if path.isdir(fullpath) {
+            rmdir(fullpath, true) // 递归删除其中的所有文件
+        } else {
+            // rm file 可能存在权限不足的错误，暂时不做错误判断，直接跳过即可
+            var err = try remove(fullpath)
+        }
+    }
+
+    // sub already remove, remove self
+    syscall.rmdir(dir)
+}

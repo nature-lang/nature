@@ -8,9 +8,9 @@ for k, v in list {
 println(foo)
 println(bar)
 
-var map = {'a': 1, 'b': 2, 'c': 3}
+var mapof = {'a': 1, 'b': 2, 'c': 3}
 var sum = 0
-for k,v in map {
+for k,v in mapof {
     sum += v
     println(k)
 }

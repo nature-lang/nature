@@ -13,7 +13,11 @@
 
 bool is_std_package(char *package);
 
-char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *import_package);
+bool is_std_temp_package(char *package);
+
+char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
+
+char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
 
 static inline toml_table_t *package_parser(char *file) {
     FILE *fp = fopen(file, "r");
@@ -45,7 +49,6 @@ static inline bool is_dep_package(toml_table_t *conf, char *package) {
     return toml_table_in(deps, package) != NULL;
 }
 
-
 static inline char *package_dep_str_in(toml_table_t *conf, char *package, char *key) {
     toml_table_t *deps = toml_table_in(conf, "dependencies");
     if (!deps) {
@@ -63,6 +66,25 @@ static inline char *package_dep_str_in(toml_table_t *conf, char *package, char *
     }
 
     return datum.u.s;
+}
+
+static inline bool package_dep_bool_in(toml_table_t *conf, char *package, char *key) {
+    toml_table_t *deps = toml_table_in(conf, "dependencies");
+    if (!deps) {
+        return false;
+    }
+
+    toml_table_t *dep = toml_table_in(deps, package);
+    if (!dep) {
+        return false;
+    }
+
+    toml_datum_t datum = toml_bool_in(dep, key);
+    if (!datum.ok) {
+        return false;
+    }
+
+    return datum.u.b;
 }
 
 static inline char *package_dep_git_dir(toml_table_t *conf, char *package) {
@@ -88,11 +110,13 @@ static inline char *package_dep_local_dir(toml_table_t *conf, char *package) {
     char *package_dir = path_join(home, PACKAGE_SOURCE_INFIX);
 
     char *version = package_dep_str_in(conf, package, "version");
-    char* path = str_replace(package, "/", ".");
+    char *path = str_replace(package, "/", ".");
     version = str_replace(version, "/", ".");
     path = str_connect_by(path, version, "@");
 
     return path_join(package_dir, path);
 }
+
+slice_t *package_links(char *package_dir, toml_table_t *package_conf);
 
 #endif //NATURE_PACKAGE_H

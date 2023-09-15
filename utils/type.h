@@ -68,7 +68,7 @@ typedef enum {
 
     // 复合类型
     TYPE_STRING,
-    TYPE_LIST,
+    TYPE_VEC,
     TYPE_ARRAY,
     TYPE_MAP, // value = 20
     TYPE_SET,
@@ -77,6 +77,10 @@ typedef enum {
     TYPE_FN,
     TYPE_POINTER,
 
+    // 允许为 null 的指针， cptr<type>, 可以通过 is 断言，可以通过 as 转换。
+    // 其是一种特殊的 union 类型，可以理解为 nullable<ptr<type>> 类型。
+    // 其在内存表现上与原来 type 的内存大小一致, 后续优化成统一的 nullable<type>
+    TYPE_NULLABLE_POINTER,
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
     TYPE_CPTR, // 表示通用的指针，通常用于与 c 进行交互, 关键字 cptr
@@ -84,8 +88,8 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
-    TYPE_FORMAL, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
-    TYPE_SELF,
+    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 formal
+    TYPE_SELF, // ptr<struct>
     TYPE_GEN,
     TYPE_UNION,
 
@@ -100,7 +104,7 @@ typedef enum {
     TYPE_GC_UPVALUE
 } type_kind;
 
-static string type_kind_string[] = {
+static string type_kind_str[] = {
         [TYPE_GC] = "gc",
         [TYPE_GC_FN] = "runtime_fn",
         [TYPE_GC_ENV] = "env",
@@ -108,7 +112,7 @@ static string type_kind_string[] = {
         [TYPE_GC_ENV_VALUES] = "env_values",
         [TYPE_GC_UPVALUE] = "upvalue",
 
-        [TYPE_ARRAY] = "array",
+        [TYPE_ARRAY] = "arr",
 
         [TYPE_GEN] = "gen",
         [TYPE_UNION] = "union",
@@ -133,12 +137,13 @@ static string type_kind_string[] = {
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
         [TYPE_ALIAS] = "type_alias",
-        [TYPE_LIST] = "list",
+        [TYPE_VEC] = "vec",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
-        [TYPE_TUPLE] = "tuple",
+        [TYPE_TUPLE] = "tup",
         [TYPE_FN] = "fn",
         [TYPE_POINTER] = "pointer", // ptr<type>
+        [TYPE_NULLABLE_POINTER] = "nullable_pointer", // ptr<type>
         [TYPE_CPTR] = "cptr", // p<type>
         [TYPE_NULL] = "null",
         [TYPE_SELF] = "self",
@@ -156,7 +161,7 @@ typedef struct {
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
 
     uint8_t align; // struct/list 最终对齐的字节数
-    uint16_t element_count; // struct/tuple 类型的长度
+    uint16_t length; // struct/tuple/array 类型的长度
     uint64_t *element_hashes; // struct/tuple 每个类型的种类
 } rtype_t;
 
@@ -174,7 +179,7 @@ typedef uint8_t type_bool_t;
  */
 typedef struct type_alias_t type_alias_t;
 
-typedef struct type_formal_t type_formal_t;
+typedef struct type_param_t type_param_t;
 
 typedef struct {
     bool any; // any gen
@@ -188,9 +193,9 @@ typedef struct {
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
-typedef struct type_list_t type_list_t;
+typedef struct type_vec_t type_vec_t;
 
-typedef struct type_pointer_t type_pointer_t;
+typedef struct type_pointer_t type_pointer_t, type_null_pointer_t;
 
 typedef struct type_array_t type_array_t;
 
@@ -201,6 +206,7 @@ typedef struct type_set_t type_set_t;
 // (int, int, float)
 typedef struct {
     list_t *elements; //  type_t
+    uint8_t align; // 最大对齐
 } type_tuple_t;
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
@@ -211,7 +217,7 @@ typedef struct type_fn_t type_fn_t;
 typedef struct type_t {
     union {
         void *value;
-        type_list_t *list;
+        type_vec_t *vec;
         type_array_t *array;
         type_map_t *map;
         type_set_t *set;
@@ -219,25 +225,29 @@ typedef struct type_t {
         type_struct_t *struct_;
         type_fn_t *fn;
         type_alias_t *alias; // 这个其实是自定义类型的 ident
-        type_formal_t *formal;
+        type_param_t *param;
         type_gen_t *gen; // type t0 = gen i8|i16|i32|i64|u8|u16|u32|u64
         type_pointer_t *pointer;
         type_union_t *union_;
     };
     type_kind kind;
     reduction_status_t status;
+    char *origin_ident; // 当 type.kind == ALIAS/FORMAL 时，此处缓存一下 alias/formal ident, 用于 dump error
+    int line;
+    int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
 } type_t;
 
-// list 如果自己持有一个动态的 data 呢？一旦 list 发生了扩容，那么需要新从新申请一个 data 区域
-// 在 runtime_malloc 中很难描述这一段数据的类型？其实其本质就是一个 fixed array 结构，所以直接搞一个 array_t 更好描述 gc_bits
-// 反而更好处理？
-struct type_list_t {
+/**
+ * [int]
+ * [int]
+ * [int]
+ */
+struct type_vec_t {
     type_t element_type;
-    uint64_t length;
 };
 
-// p<value_type>
+// ptr<value_type>
 struct type_pointer_t {
     type_t value_type;
 };
@@ -257,15 +267,16 @@ struct type_string_t {
 };
 
 // type foo<formal> = fn(formal, int):formal
-struct type_formal_t {
+struct type_param_t {
     char *ident;
 };
 
 struct type_alias_t {
-    char *import_as; // 可能为 null
+    char *import_as; // 可能为 null (foo.bar)
     char *ident; // 类型名称 type my_int = int
+
     // 可以包含多个实际参数,实际参数由类型组成
-    list_t *actual_params; // type_t*
+    list_t *args; // type_t*
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -275,8 +286,7 @@ struct type_alias_t {
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct type_array_t {
     uint64_t length;
-//    type_t element_type;
-    rtype_t element_rtype;
+    type_t element_type; // 这个必须要有呀
 };
 
 /**
@@ -310,6 +320,7 @@ struct type_struct_t {
     char *ident;
 //    uint8_t count;
 //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    uint8_t align; // struct 的最大对齐 size 缓存
     list_t *properties; // struct_property_t
 };
 
@@ -323,7 +334,7 @@ struct type_struct_t {
 struct type_fn_t {
     char *name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
-    list_t *formal_types; // type_t
+    list_t *param_types; // type_t
     bool rest;
 };
 // 类型描述信息 end
@@ -333,28 +344,23 @@ struct type_fn_t {
 
 typedef struct {
     uint8_t *data;
-    // 非必须，放进来做 rt_call 比较方便,不用再多传参数了
-    // 内存优化时可以优化掉这个参数
-    uint64_t element_rtype_hash;
-    uint64_t capacity; // 预先申请的容量大小
     uint64_t length; // 实际占用的位置的大小
-} n_list_t;
+    uint64_t capacity; // 预先申请的容量大小
+    uint64_t element_rtype_hash;
+} n_vec_t, n_string_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
-typedef addr_t n_pointer_t;
-
-typedef struct {
-    uint8_t *data; // [uint8_t] 标识 uint 数组
-    uint64_t length; // 不包含 \0 的字符串长度
-} n_string_t;
+typedef addr_t n_pointer_t, n_nullable_pointer_t;
 
 typedef uint8_t n_bool_t;
 
 typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
+typedef addr_t n_cptr_t;
+
 typedef int64_t n_int_t;
+typedef int64_t n_int64_t;
 typedef uint64_t n_uint_t;
-typedef uint64_t n_cptr_t;
 typedef uint32_t n_u32_t;
 typedef uint16_t n_u16_t;
 
@@ -370,8 +376,8 @@ typedef struct {
     uint64_t *hash_table; // key 的 hash 表结构, 存储的值是 values 表的 index, 类型是 int64
     uint8_t *key_data;
     uint8_t *value_data;
-    uint64_t key_index; // key rtype index
-    uint64_t value_index;
+    uint64_t key_rtype_hash; // key rtype index
+    uint64_t value_rtype_hash;
     uint64_t length; // 实际的元素的数量
     uint64_t capacity; // 当达到一定的负载后将会触发 rehash
 } n_map_t;
@@ -379,7 +385,7 @@ typedef struct {
 typedef struct {
     uint64_t *hash_table;
     uint8_t *key_data; // hash 冲突时进行检测使用
-    uint64_t key_index;
+    uint64_t key_rtype_hash;
     uint64_t length;
     uint64_t capacity;
 } n_set_t;
@@ -397,13 +403,25 @@ typedef struct {
 } n_union_t;
 
 typedef struct {
+    n_string_t *path;
+    n_string_t *ident;
+    n_int_t line;
+    n_int_t column;
+} n_trace_t;
+
+typedef struct {
     n_string_t *msg;
+    n_vec_t *traces; // element is n_trace_t
     uint8_t has;
 } n_errort;
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
+
+static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_struct_t *t);
+
+static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_array_t *t);
 
 rtype_t reflect_type(type_t t);
 
@@ -425,6 +443,8 @@ uint64_t ct_find_rtype_hash(type_t t);
  */
 uint8_t type_kind_sizeof(type_kind t);
 
+uint16_t type_struct_sizeof(type_struct_t *s);
+
 /**
  * 类型在内存中(stack,array,var,reg) 中占用的大小,单位 byte
  * @param t
@@ -432,9 +452,12 @@ uint8_t type_kind_sizeof(type_kind t);
  */
 uint16_t type_sizeof(type_t t);
 
+uint16_t type_alignof(type_t t);
+
 rtype_t rtype_base(type_kind kind);
 
 rtype_t rtype_array(type_array_t *t);
+
 
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
@@ -445,18 +468,21 @@ rtype_t rtype_array(type_array_t *t);
  * @param t
  * @return
  */
-bool type_need_gc(type_t t);
+bool type_is_ptr(type_t t);
 
 type_t type_ptrof(type_t t);
 
-type_formal_t *type_formal_new(char *literal);
+type_t type_nullable_ptrof(type_t t);
 
-type_alias_t *type_alias_new(char *literal, char *import_as);
+type_param_t *type_formal_new(char *literal);
+
+type_alias_t *type_alias_new(char *literal, char *import_module_ident);
 
 type_kind to_gc_kind(type_kind kind);
 
-bool type_compare(type_t left, type_t right);
+bool type_compare(type_t dst, type_t src);
 
+char *type_format(type_t t);
 
 /**
  * size 对应的 gc_bits 占用的字节数量
@@ -478,11 +504,14 @@ uint64_t type_struct_offset(type_struct_t *s, char *key);
 
 struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
-uint64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
+int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
+
+rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
+
 
 /**
  * 一般标量类型其值默认会存储在 stack 中
@@ -496,34 +525,37 @@ static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION ||
            kind == TYPE_STRING ||
-           kind == TYPE_LIST ||
-           kind == TYPE_ARRAY ||
+           kind == TYPE_VEC ||
+           kind == TYPE_POINTER ||
+           //           kind == TYPE_ARRAY ||
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
            kind == TYPE_TUPLE ||
-           kind == TYPE_STRUCT ||
+           kind == TYPE_GC_ENV ||
+           //           kind == TYPE_STRUCT ||
            kind == TYPE_FN;
 }
 
 static inline bool is_list_u8(type_t t) {
-    if (t.kind != TYPE_LIST) {
+    if (t.kind != TYPE_VEC) {
         return false;
     }
 
-    assert(t.list);
+    assert(t.vec);
 
-    if (t.list->element_type.kind != TYPE_UINT8) {
+    if (t.vec->element_type.kind != TYPE_UINT8) {
         return false;
     }
 
     return true;
 }
 
-static inline type_t type_basic_new(type_kind kind) {
+static inline type_t type_kind_new(type_kind kind) {
     type_t result = {
             .status = REDUCTION_STATUS_DONE,
             .kind = kind,
             .value = 0,
+            .origin_ident = NULL
     };
 
     result.in_heap = kind_in_heap(kind);
@@ -534,7 +566,10 @@ static inline type_t type_basic_new(type_kind kind) {
 static inline type_t type_new(type_kind kind, void *value) {
     type_t result = {
             .kind = kind,
-            .value = value
+            .value = value,
+            .in_heap = kind_in_heap(kind),
+            .status = REDUCTION_STATUS_DONE,
+            .origin_ident = NULL,
     };
     return result;
 }
@@ -557,6 +592,10 @@ static inline bool is_integer(type_kind kind) {
            kind == TYPE_UINT64;
 }
 
+static inline bool is_gen_any(type_t type) {
+    return type.kind == TYPE_GEN && type.gen->any;
+}
+
 static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }
@@ -564,6 +603,10 @@ static inline bool is_number(type_kind kind) {
 
 static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
+}
+
+static inline bool is_alloc_stack(type_t t) {
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_ARRAY;
 }
 
 /**
@@ -594,14 +637,29 @@ static inline bool is_origin_type(type_t t) {
            t.kind == TYPE_VOID;
 }
 
+static inline bool is_clv_zero_type(type_t t) {
+    return is_integer(t.kind) ||
+           is_float(t.kind) ||
+           t.kind == TYPE_CPTR ||
+           t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
+           t.kind == TYPE_VOID;
+}
+
+static inline bool is_struct_ptr(type_t t) {
+    return t.kind == TYPE_POINTER && t.pointer->value_type.kind == TYPE_STRUCT;
+}
+
 static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT
            || t.kind == TYPE_MAP
-           || t.kind == TYPE_LIST
+           || t.kind == TYPE_VEC
+           || t.kind == TYPE_ARRAY
            || t.kind == TYPE_TUPLE
            || t.kind == TYPE_SET
            || t.kind == TYPE_FN
-           || t.kind == TYPE_POINTER;
+           || t.kind == TYPE_POINTER
+           || t.kind == TYPE_NULLABLE_POINTER;
 }
 
 static inline bool is_qword_int(type_kind kind) {
@@ -634,18 +692,18 @@ static inline bool union_type_contains(type_t union_type, type_t sub) {
 static inline type_t number_type_lift(type_kind left, type_kind right) {
     assertf(is_number(left) && is_number(right), "type lift kind must number");
     if (left == right) {
-        return type_basic_new(left);
+        return type_kind_new(left);
     }
 
     if (is_float(left) || is_float(right)) {
-        return type_basic_new(TYPE_FLOAT64);
+        return type_kind_new(TYPE_FLOAT64);
     }
 
     if (left >= right) {
-        return type_basic_new(left);
+        return type_kind_new(left);
     }
 
-    return type_basic_new(right);
+    return type_kind_new(right);
 }
 
 static bool integer_range_check(type_kind kind, int64_t i) {

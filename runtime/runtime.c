@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "runtime/nutils/basic.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
@@ -8,8 +9,15 @@
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
+    assertf(rtype, "rtype is null");
+    assertf(data_ref, "data_ref is null");
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
+
+    DEBUGF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu",
+           type_kind_str[rtype->kind], data_ref, data_size);
+
     if (is_number(rtype->kind)) {
+        assertf(data_size <= 8, "not support number size > 8, but %lu", data_size);
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
         return itoa(temp);
@@ -17,10 +25,11 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     if (rtype->kind == TYPE_STRING) {
         n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        return (char *) string_raw(n_str);
+        assertf(n_str && n_str->length > 0, "fetch addr by data ref '%p' err", data_ref);
+        return (char *) string_ref(n_str);
     }
 
-    assertf(false, "not support kind=%s", type_kind_string[rtype->kind]);
+    assertf(false, "not support kind=%s", type_kind_str[rtype->kind]);
 
     return NULL;
 }
@@ -31,8 +40,11 @@ extern void main();
 /**
  * crt1.o _start -> main  -> user_main
  */
-void runtime_main() {
-    DEBUGF("[runtime_main] start")
+void runtime_main(int argc, char *argv[]) {
+    DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
+
+    command_argc = argc;
+    command_argv = argv;
 
     // - 堆内存管理初始化
     memory_init();

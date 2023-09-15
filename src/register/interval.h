@@ -85,12 +85,13 @@ bool interval_covered(interval_t *i, int position, bool is_input);
  * 寻找 current 和 select 的第一个相交点
  * position = current.first_from, 并且 position not cover by select
  * position++,直到 select 和 current 都 cover 了这个 position
- * 如果一直到 current.last_to 都没由找到相交点，则直接返回current.last_to 即可
  * @param current
  * @param select
  * @return
  */
-int interval_next_intersection(interval_t *current, interval_t *select);
+int interval_next_intersect(closure_t *c, interval_t *current, interval_t *select);
+
+bool interval_is_intersect(interval_t *current, interval_t *select);
 
 /**
  * 寻找 select interval 大于 after 的第一个 use_position

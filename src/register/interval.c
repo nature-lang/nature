@@ -4,6 +4,18 @@
 #include "assert.h"
 #include "src/debug/debug.h"
 
+static bool block_covered(closure_t *c, int position) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *first = linked_first(b->operations)->value;
+        lir_op_t *last = OP(b->last_op);
+        if (first->id <= position && position < last->id) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 static bool interval_need_move(interval_t *from, interval_t *to) {
     if (from->assigned && to->assigned && from->assigned == to->assigned) {
@@ -156,7 +168,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = custom_var_operand(c->module, i->var->type, "child")->value;
+        lir_var_t *var = unique_var_operand_not_module(c->module, i->var->type, i->var->ident)->value;
         // 加入到 global 中
         slice_push(c->var_defs, var);
 
@@ -228,11 +240,12 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
 }
 
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
+    // 正序遍历 block, 这里存在一个边界，应该插在前面，还是插在后面的问题
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
         lir_op_t *first = linked_first(block->operations)->value;
         lir_op_t *last = OP(block->last_op);
-        if (first->id < insert_id && insert_id < last->id) {
+        if (first->id <= insert_id && insert_id < last->id) {
             block_insert_mov(block, insert_id, src_i, dst_i, false);
             return;
         }
@@ -259,10 +272,6 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
     }
 
     return NULL;
-}
-
-static bool in_range(interval_range_t *range, int position) {
-    return range->from <= position && position < range->to;
 }
 
 // 大值在栈顶被优先处理 block_to_stack
@@ -335,14 +344,14 @@ void interval_build(closure_t *c) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->alloc_type = type_base_trans_alloc(var->type.kind);
+        interval->alloc_type = type_kind_trans_alloc(var->type.kind);
         table_set(c->interval_table, var->ident, interval);
     }
 
     // 倒序遍历顺序基本块基本块
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *block = c->blocks->take[i];
-        // 计算当前 block 中到 lives
+        // 计算当前 block 的 lives
         slice_t *lives = slice_new();
         table_t *live_table = table_new();
 
@@ -375,7 +384,7 @@ void interval_build(closure_t *c) {
         int block_from = OP(linked_first(block->operations))->id;
         int block_to = OP(block->last_op)->id + 2; // +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
 
-        // lives in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
+        // lives(out) in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
         // 后续遇到 def 时会缩减长度， add_range 会对 range 进行合并,上面的 +2 是合并的基础
         for (int k = 0; k < lives->count; ++k) {
             lir_var_t *var = lives->take[k];
@@ -401,19 +410,21 @@ void interval_build(closure_t *c) {
                 }
             }
 
-            // TODO 如果能够优化 runtime_call 不使用寄存器，则可以大量的减少寄存器的使用
-            //  比如将 runtime_call 优化成 inline lir
+            // TODO 内联优化将会提高寄存器分配的使用率
             // fixed all phy reg in call
             if (lir_op_call(op) || op->code == LIR_OPCODE_ENV_CLOSURE) {
                 // traverse all register
                 for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
+
+                    // 所有的寄存器将在这里溢出
                     if (interval != NULL) {
                         interval_add_range(c, interval, op->id, op->id + 1);
                     }
                 }
             }
+
             // add reg hint for move
             if (op->code == LIR_OPCODE_MOVE) {
                 interval_t *hint_interval = operand_interval(c, op->first);
@@ -440,7 +451,13 @@ void interval_build(closure_t *c) {
                 if (interval->first_range == NULL) {
                     interval_add_range(c, interval, op->id, op->id + 1);
                 } else {
-                    interval->first_range->from = op->id; // 范围缩小，同样适用于固定寄存器
+                    // 范围缩写
+                    if (interval->first_range->from < op->id) {
+                        interval->first_range->from = op->id;
+                    } else {
+                        // 同样是仅定义未使用，或者重复定义(reg 情况)
+                        interval_add_range(c, interval, op->id, op->id + 1); // 进
+                    }
                 }
 
                 if (!interval->fixed) {
@@ -449,7 +466,6 @@ void interval_build(closure_t *c) {
                     interval_add_use_pos(c, interval, op->id, cross_alloc_kind_of_def(c, op, operand->value));
                 }
             }
-
 
             // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
             if (op->code != LIR_OPCODE_PHI) {
@@ -461,6 +477,7 @@ void interval_build(closure_t *c) {
                     if (!interval) {
                         continue;
                     }
+                    // 添加基于 block from 的 range
                     interval_add_range(c, interval, block_from, op->id);
 
                     if (!interval->fixed) {
@@ -487,6 +504,7 @@ void interval_build(closure_t *c) {
 
         /**
          * 由于采取了倒序遍历的方式，loop end 已经被遍历过了，但是 header 却还没有被处理。
+         * 为 for 循环中的变量添加跨越整个声明周期的环境变量
          */
         if (block->loop.header) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
@@ -524,10 +542,7 @@ bool range_covered(interval_range_t *range, int position, bool is_input) {
     }
 
     // range to 不包含在 range 里面
-    if (range->from <= position && position < range->to) {
-        return true;
-    }
-    return false;
+    return range->from <= position && position < range->to;
 }
 
 bool interval_expired(interval_t *i, int position, bool is_input) {
@@ -561,6 +576,22 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
     return false;
 }
 
+
+bool interval_is_intersect(interval_t *current, interval_t *select) {
+    assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
+    assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
+
+    int position = current->first_range->from;
+    while (position < current->last_range->to) {
+        if (interval_covered(select, position, false)) {
+            return true;
+        }
+        position++;
+    }
+
+    return false;
+}
+
 /**
  * 1. 如果重合则返回第一个重合的点
  * 2. 如果遍历到 current->last_to 都不重合则继续像后遍历，直到遇到第一被 select covert 位置
@@ -570,7 +601,7 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
  * @param select
  * @return
  */
-int interval_next_intersection(interval_t *current, interval_t *select) {
+int interval_next_intersect(closure_t *c, interval_t *current, interval_t *select) {
     assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
     assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
@@ -578,6 +609,7 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
 
     int64_t end = max(current->last_range->to, select->last_range->to);
 
+    int result = 0;
     int select_first_cover = -1;
     // first covert select position
     while (position < end) {
@@ -589,12 +621,14 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
         }
 
         if (cover_current && cover_select) {
-            return position;
+            result = position;
+            goto END;
         }
 
         // 已经超过了 current 表示不可能存在交集，此时找到 select 在 current->last_to 之后都最后一个使用位置即可
         if (position > current->last_range->to && cover_select) {
-            return position;
+            result = position;
+            goto END;
         }
         position++;
     }
@@ -602,16 +636,80 @@ int interval_next_intersection(interval_t *current, interval_t *select) {
     assertf(select_first_cover >= 0, "select range not found any intersection from=%d to=%d",
             current->first_range->from,
             end);
+
+    result = select_first_cover;
+    // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
+
+    END:
+
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
     // current ---              ----
     // select         ---
-    return select_first_cover;
+    assert(result > 0);
+
+    // result 位于 label 时，这是一个不可用位置，所以增加其覆盖范围。便于更加正确的计算 reg 的生命周期
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *label_op = linked_first(b->operations)->value;
+
+        if (label_op->id < result) {
+            break;
+        }
+
+        // 计算交集的时候刻意避免了 before = label 的位置
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
+        if (label_op->id == result) {
+            assert(i > 0);
+            b = c->blocks->take[i - 1];
+
+
+            if (b->succs->count == 1) {
+                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+            } else {
+                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+                return OP(b->last_op)->id - 3;
+            }
+        }
+    }
+
+    return result;
 }
 
-// 在 before 前挑选一个最佳的位置进行 split
+/**
+ * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
+ * - 尽量不要在 for 循环内部的 block 中进行切分
+ * @param c
+ * @param current
+ * @param before
+ * @return
+ */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
-    return before - 1;
+    // 如果 before 是对应的 op_id 是 label，则直接选择 before, before - 1 是一个无法使用的中间地带
+    // TODO 整体逻辑已经移动到了 interval_next_intersect
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *label_op = linked_first(b->operations)->value;
+
+        assert(label_op->id != before);
+        // 计算交集的时候刻意避免了 before = label 的位置
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
+//        if (label_op->id == before) {
+//            assert(i > 0);
+//            b = c->blocks->take[i - 1];
+//
+//
+//            if (b->succs->count == 1) {
+//                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+//            } else {
+//                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+//                return OP(b->last_op)->id - 3;
+//            }
+//        }
+    }
+
+    int id = before - 1;
+    return id;
 }
 
 /**
@@ -646,7 +744,12 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
             // to 可能跨越了多个 range
             linked_node *current = linked_first(i->ranges)->succ;
             while (current->value && ((interval_range_t *) current->value)->from <= to) {
-                i->first_range->to = ((interval_range_t *) current->value)->to;
+                interval_range_t *current_interval = current->value;
+                // current_interval->to 可能也小于 to, 所以这里不能随意覆盖
+                if (current_interval->to > i->first_range->to) {
+                    i->first_range->to = current_interval->to;
+                }
+
                 linked_remove(i->ranges, current);
 
                 current = current->succ;
@@ -657,6 +760,7 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
 
 
     } else {
+        // 新的 range 和 旧的 range 无交集
         // 不重叠,则 range 插入到 ranges 的最前面
         interval_range_t *range = NEW(interval_range_t);
         range->from = from;
@@ -831,11 +935,20 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
         return;
     }
 
+    // struct 和 array 在 var 栈只真用 8byte 指针
     // 由于栈是从高向低增长的，所以需要先预留 size
-    int64_t size = type_kind_sizeof(i->var->type.kind);
+    uint16_t size = type_kind_sizeof(i->var->type.kind);
+    assertf(size <= POINTER_SIZE && size > 0, "type %s size %d exception", type_format(i->var->type), size);
+    uint16_t align = size;
+
     c->stack_offset += size;
-    c->stack_offset = align(c->stack_offset, size);
+    c->stack_offset = align_up(c->stack_offset, align);
     slice_push(c->stack_vars, i->var);
+
+    // bitmap size
+    uint16_t bit_index = (c->stack_offset - 1) / POINTER_SIZE;
+    bool is_ptr = type_is_ptr(i->var->type);
+    bitmap_grow_set(c->stack_gc_bits, bit_index, is_ptr);
 
     *i->stack_slot = -c->stack_offset; // 取负数，一般栈都是高往低向下增长
 }
@@ -895,7 +1008,7 @@ void resolve_data_flow(closure_t *c) {
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
                 assert(parent_interval);
 
-                // 判断是否在 form->to edge 最终的 interval TODO last_op + 1?
+                // 判断是否在 form->to edge 最终的 interval  TODO 是否需要 last_op + 1?
                 interval_t *from_interval = interval_child_at(parent_interval, OP(from->last_op)->id + 1, false);
 
                 //  如果 live var interval 刚好是在 to->first_op 中到 use 作为声明周期到则需要特殊处理
@@ -909,7 +1022,8 @@ void resolve_data_flow(closure_t *c) {
                     }
                 }
 
-                interval_t *to_interval = interval_child_at(parent_interval, OP(to->first_op)->id, is_use);
+                lir_op_t *first_op = OP(linked_first(to->operations));
+                interval_t *to_interval = interval_child_at(parent_interval, first_op->id, is_use);
                 // 因为 from 和 interval 是相连接的 edge,
                 // 如果from_interval != to_interval(指针对比即可)
                 // 则说明在其他 edge 上对 interval 进行了 spilt/reload
@@ -1073,16 +1187,16 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         r->insert_block = from;
 
         lir_op_t *last_op = from->last_op->value;
-        if (lir_op_branch(last_op)) {
+        if (lir_op_branch(last_op)) { // 只有一个 succ, 说明只有一个 branch op, 直接插入到 branch op 之前即可
             // insert before last op
             r->insert_id = last_op->id - 1;
         } else {
-            r->insert_id = last_op->id + 1;
+            r->insert_id = last_op->id + 1; // ? 好像没有这种情况
         }
 
     } else {
         r->insert_block = to;
-        r->insert_id = OP(to->first_op)->id - 1;
+        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个之类之前
     }
 }
 

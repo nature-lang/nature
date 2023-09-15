@@ -1,14 +1,14 @@
-var tup = (1, 'hello', true)
+var tuple = (1, 'hello', true)
 
-var first = tup[0]
+var first = tuple[0]
 
-tup[1] = 'nature'
+tuple[1] = 'nature'
 
-print(first, tup[1], tup[2], '\n')
+print(first, tuple[1], tuple[2], '\n')
 
 // tuple def
-tup[1] = 'hello'
-var (foo, bar, car) = tup
+tuple[1] = 'hello'
+var (foo, bar, car) = tuple
 print(foo, bar, car, '\n')
 
 
@@ -16,7 +16,7 @@ print(foo, bar, car, '\n')
 var a = 2
 var b = 'world'
 var c = false
-(a, b, c) = tup
+(a, b, c) = tuple
 print(a, b, c, '\n')
 
 var d = false

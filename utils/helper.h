@@ -42,6 +42,8 @@ static inline void *mallocz(size_t size) {
 //#define DEBUG_PARSER 1
 //#define DEBUG 1
 
+#define TDEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
+
 #ifdef DEBUG
 #define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
 #else
@@ -179,7 +181,7 @@ static inline bool str_equal(char *a, char *b) {
 
 static int inline check_open(char *filepath, int flag) {
     int fd = open(filepath, flag);
-    assertf(fd != -1, "cannot open file=%s", filepath);
+    assertf(fd != -1, "cannot open/found file=%s", filepath);
     return fd;
 }
 
@@ -243,17 +245,22 @@ static inline char *file_read(char *path) {
 }
 
 
-static inline int64_t align(int64_t n, int64_t align) {
+static inline int64_t align_up(int64_t n, int64_t align) {
+    if (align == 0) {
+        return n;
+    }
+
     return (n + align - 1) & (~(align - 1));
 }
 
 
 static inline char *path_dir(char *path) {
-    char *result = malloc(PATH_MAX);
-    strcpy(result, path);
+    assert(path != NULL);
+    assert(strlen(path) > 0);
+    char *result = strdup(path);
+
     char *ptr = strrchr(result, '/');  // 查找最后一个斜杠
     if (ptr == NULL) {
-        memset(result, 0, PATH_MAX);
         return result;
     }
 
@@ -446,7 +453,7 @@ static inline void *sys_memory_map(void *hint, uint64_t size) {
 
 static inline void *mallocz_big(size_t size) {
     int page_size = getpagesize();
-    size = align(size, page_size);
+    size = align_up(size, page_size);
     void *ptr = sys_memory_map(NULL, size);
     return ptr;
 }
@@ -494,6 +501,11 @@ static inline char *fullpath(char *rel) {
     }
 
     return path;
+}
+
+static inline bool str_char(char *str, char c) {
+    char *result = strchr(str, c);
+    return result != NULL;
 }
 
 #endif //NATURE_SRC_LIB_HELPER_H_

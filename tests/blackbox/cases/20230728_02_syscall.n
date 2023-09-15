@@ -45,6 +45,6 @@ if ppid > 0 {
 
 // get cwd
 var cwd = syscall.getcwd()
-if (cwd as [u8]).len() > 0 {
+if cwd.len > 0 {
     println('getcwd success')
 }

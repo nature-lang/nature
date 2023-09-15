@@ -740,6 +740,8 @@ void elf_resolve_common_symbols(elf_context *ctx) {
         if (sym->st_shndx != SHN_COMMON) {
             continue;
         }
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+
         // 数据段的符号值一般是 .data 段的起始位置 st_value 前进
         sym->st_value = elf_section_data_forward(ctx->bss_section, sym->st_size, sym->st_value);
         // 修正符号定义段为 bss
@@ -892,10 +894,12 @@ elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset
 Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section,
                              uint64_t offset, int type, int sym_index, int64_t addend) {
 
-    char buf[256];
+    char buf[1024];
     section_t *rel_section = apply_section->relocate;
     if (!rel_section) {
-        snprintf(buf, sizeof(buf), REL_SECTION_FMT, apply_section->name);
+        char *temp_name = strdup(apply_section->name);
+        assert(strlen(temp_name) < sizeof(buf) - 24); // 预留出 real. 空间
+        snprintf(buf, sizeof(buf), REL_SECTION_FMT, temp_name);
 
         rel_section = elf_new_section(ctx, buf, SHT_RELA, SHF_INFO_LINK);
         rel_section->sh_entsize = sizeof(Elf64_Rela);
@@ -977,9 +981,12 @@ void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t 
         // rel 引用的符号在符号表的索引，在没有修正之前就是 UNDEF, 不过 load elf 的时候已经进行了不停的修正，所以这里已经不会是 undef 了
         int sym_index = ELF64_R_SYM(rel->r_info);
         sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index]; // 符号
+
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+
         int type = ELF64_R_TYPE(rel->r_info); // code 就是重定位的类型
         addr_t target = sym->st_value; // 符号定义的位置
-        target += rel->r_addend; // 为啥定义符号的位置要加上 rel->addend? 定位到结束位置？
+        target += rel->r_addend; // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
 
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
@@ -1090,7 +1097,8 @@ int tidy_section_headers(elf_context *ctx) {
 
 section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint64_t sh_flags) {
     section_t *s = NEW(section_t);
-    strcpy(s->name, name);
+    strncpy(s->name, name, 1024);
+
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
 //    DEBUGF("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);
@@ -1384,10 +1392,19 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         f->fn_runtime_reg = c->fn_runtime_reg;
         f->fn_runtime_stack = c->fn_runtime_stack;
         f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
-        f->gc_bits = malloc_gc_bits(f->stack_size);
+        f->gc_bits = c->stack_gc_bits->bits;
 
         size_with_bits += sizeof(fndef_t);
         size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
+
+        strcpy(f->name, c->symbol_name);
+        strcpy(f->rel_path, c->fndef->rel_path);
+        f->line = c->fndef->line;
+        f->column = c->fndef->column;
+
+        f->base = 0; // 等待符号重定位
+        assert(c->text_count > 0);
+        f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
         // 按从 base ~ top 的入栈顺序写入
         for (int i = 0; i < c->stack_vars->count; ++i) {
@@ -1395,37 +1412,28 @@ uint64_t collect_fndef_list(elf_context *ctx) {
             int64_t stack_slot = var_stack_slot(c, var);
             assert(stack_slot < 0);
             stack_slot = var_stack_slot(c, var) * -1;
-            bool need = type_need_gc(var->type);
-            if (need) {
-                bitmap_set(f->gc_bits, (stack_slot / POINTER_SIZE) - 1);
-            }
 
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, kind=%s, size=%d, need=%d, bit_index=%ld, stack_slot=BP-%ld",
+            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
                    fn->symbol_name,
                    var->ident,
-                   type_kind_string[var->type.kind],
+                   type_format(var->type),
                    type_sizeof(var->type),
-                   type_need_gc(var->type),
+                   type_is_ptr(var->type),
                    (stack_slot / POINTER_SIZE) - 1,
                    stack_slot);
 
         }
-        strcpy(f->name, c->symbol_name);
 
-        f->base = 0; // 等待符号重定位
-        assert(c->text_count > 0);
-        f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
-
-//        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
-//               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-//               f->name,
-//               f->base,
-//               f->size,
-//               f->stack_size,
-//               f->fn_runtime_stack,
-//               f->fn_runtime_reg,
-//               f->stack_size / POINTER_SIZE,
-//               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+               f->name,
+               f->base,
+               f->size,
+               f->stack_size,
+               f->fn_runtime_stack,
+               f->fn_runtime_reg,
+               f->stack_size / POINTER_SIZE,
+               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 
@@ -1470,7 +1478,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
 
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
-        symdef->need_gc = type_need_gc(var_decl->type);
+        symdef->need_gc = type_is_ptr(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小
         symdef->base = 0; // 这里引用了全局符号表段地址
         strcpy(symdef->name, var_decl->ident);
@@ -1499,13 +1507,13 @@ uint8_t *rtypes_serialize() {
     uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
-    uint64_t size = ct_rtype_list->length * sizeof(rtype_t);
-    memmove(p, ct_rtype_list->take, size);
+    uint64_t size = ct_rtype_vec->length * sizeof(rtype_t);
+    memmove(p, ct_rtype_vec->take, size);
 
     // 移动 gc_bits
     p = p + size; // byte 类型，所以按字节移动
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i); // take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
         if (gc_bits_size) {
             memmove(p, r->gc_bits, gc_bits_size);
@@ -1514,14 +1522,15 @@ uint8_t *rtypes_serialize() {
     }
 
     // 移动 element_hashes
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i);
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i);
 
-        if (r->element_count > 0) {
-            memmove(p, r->element_hashes, r->element_count * sizeof(uint64_t));
+        // array 占用了 length 字段，但是程element_hashes 是没有值的。
+        if (r->length > 0 && r->element_hashes) {
+            memmove(p, r->element_hashes, r->length * sizeof(uint64_t));
         }
 
-        p += r->element_count * sizeof(uint64_t);
+        p += r->length * sizeof(uint64_t);
     }
 
     return data;

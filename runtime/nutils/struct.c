@@ -1,5 +1,5 @@
 #include "struct.h"
-#include "list.h"
+#include "vec.h"
 #include "runtime/memory.h"
 #include "utils/autobuf.h"
 
@@ -10,7 +10,7 @@
 n_struct_t *struct_new(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     // 参数 2 主要是去读其中的 gc_bits 记录 gc 相关数据
-    return runtime_malloc(rtype->size, rtype);
+    return runtime_zero_malloc(rtype->size, rtype);
 }
 
 /**

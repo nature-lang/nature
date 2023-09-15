@@ -1,14 +1,14 @@
 #ifndef NATURE_CROSS_H
 #define NATURE_CROSS_H
 
-#include "structs.h"
+#include "types.h"
 #include "src/build/config.h"
 #include "src/lir.h"
 
 // -------- reg start -----------
-table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
-slice_t *regs;
-reg_t *alloc_regs[UINT8_MAX];
+extern table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
+extern slice_t *regs;
+extern reg_t *alloc_regs[UINT8_MAX];
 
 void amd64_reg_init();
 
@@ -265,10 +265,6 @@ static inline type_kind cross_kind_trans(type_kind kind) {
             return TYPE_INT64;
         }
         if (kind == TYPE_UINT) {
-            return TYPE_UINT64;
-        }
-
-        if (kind == TYPE_CPTR) {
             return TYPE_UINT64;
         }
 

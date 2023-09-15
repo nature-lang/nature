@@ -30,10 +30,10 @@ static string asm_operand_to_string(asm_operand_t *operand) {
         }
         case ASM_OPERAND_TYPE_DISP_REG: {
             asm_disp_reg_t *disp = value;
-            return dsprintf("[%s%d|%d]", disp->reg->name, disp->disp, operand->size);
+            return dsprintf("[%s%+d|%d]", disp->reg->name, disp->disp, operand->size);
         }
         case ASM_OPERAND_TYPE_RIP_RELATIVE: {
-            return dsprintf("[rip%d|%d]", ((asm_rip_relative_t *) value)->disp, operand->size);
+            return dsprintf("[rip%+d|%d]", ((asm_rip_relative_t *) value)->disp, operand->size);
         }
         case ASM_OPERAND_TYPE_INDIRECT_REG: {
             return dsprintf("[%s|%d]", ((asm_indirect_reg_t *) value)->reg->name, operand->size);

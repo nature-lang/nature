@@ -16,19 +16,25 @@ typedef enum {
     AST_EXPR_IDENT,
     AST_EXPR_AS,
     AST_EXPR_IS,
+    AST_EXPR_SIZEOF,
+
+    AST_EXPR_NEW, // new person
 
     AST_EXPR_MAP_ACCESS,
-    AST_EXPR_LIST_ACCESS,
+    AST_EXPR_VEC_ACCESS,
+    AST_EXPR_ARRAY_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
 
     AST_EXPR_STRUCT_SELECT,
-    AST_EXPR_LIST_SELECT, // [1, 2, 3].push(3)
+    AST_EXPR_VEC_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_MAP_SELECT, // [1, 2, 3].push(3)
     AST_EXPR_SET_SELECT, // [1, 2, 3].push(3)
 
     AST_EXPR_ENV_ACCESS,
 
-    AST_EXPR_LIST_NEW, // [1, 2, 3]
+    AST_EXPR_VEC_NEW, // [1, 2, 3]
+    AST_EXPR_ARRAY_NEW, // [1, 2, 3]
+    AST_EXPR_EMPTY_CURLY_NEW, // {}
     AST_EXPR_MAP_NEW, // {"a": 1, "b": 2}
     AST_EXPR_SET_NEW, // {1, 2, 3, 4}
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
@@ -94,8 +100,8 @@ typedef enum {
     AST_OP_EE, // ==
     AST_OP_NE, // !=
 
-    AST_OP_AND_AND,
-    AST_OP_OR_OR,
+    AST_OP_AND_AND, // &&
+    AST_OP_OR_OR,  // ||
 
 } ast_expr_op_t;
 
@@ -119,13 +125,18 @@ static string ast_expr_op_str[] = {
         [AST_OP_GE] = ">=",  // >=
         [AST_OP_EE] = "==", // ==
         [AST_OP_NE] = "!=", // !=
+        [AST_OP_OR_OR] = "||",
+        [AST_OP_AND_AND] = "&&",
 
         [AST_OP_NOT] = "!", // unary !right
         [AST_OP_NEG] = "-", // unary -right
 };
 
 typedef struct {
-    int line; // 行号
+    int line;
+    int column;
+    bool error;
+
     ast_type_t assert_type; // 声明语句类型
     void *value;
 } ast_stmt_t;
@@ -138,6 +149,7 @@ typedef struct {
 
 typedef struct {
     int line;
+    int column;
     ast_type_t assert_type; // 表达式断言
     type_t type; // 表达式自身的类型
     type_t target_type; // 表达式赋值的目标的 type
@@ -145,30 +157,27 @@ typedef struct {
 } ast_expr_t;
 
 typedef struct {
-    size_t count; // 当前数量, unsigned int
-    size_t capacity; // 容量
-    ast_stmt_t *list;
-} ast_block_stmt;
-
-typedef struct {
     char *literal;
 } ast_ident;
+
+typedef struct {
+    type_t type;
+    union { // type 是 struct 时可以携带一定的参数, 该参数目前不开放给用户，但是可以方便编译器添加默认值
+        list_t *properties; // *struct_property_t
+    };
+} ast_new_expr_t;
 
 /**
  * a as int
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t src_operand; // 将表达式转换成 target_type
-} ast_as_expr_t;
+    ast_expr_t src; // 将表达式转换成 target_type
+} ast_as_expr_t, ast_is_expr_t;
 
-/**
- * a is int, a must any or union
- */
 typedef struct {
     type_t target_type;
-    ast_expr_t src_operand; // 将表达式转换成 target_type
-} ast_is_expr_t;
+} ast_sizeof_expr_t;
 
 // 一元表达式
 typedef struct {
@@ -187,7 +196,7 @@ typedef struct {
 typedef struct {
     type_t return_type; // call return type 冗余
     ast_expr_t left;
-    list_t *actual_params;// *ast_expr
+    list_t *args;// *ast_expr
     bool catch; // 本次 call 是否被 catch
     bool spread;
 } ast_call_t;
@@ -302,15 +311,17 @@ typedef struct {
 typedef struct {
     // file or package one of the two
     char *file; // import 'xxx' or
-    slice_t *package; // a.b.c.d package 字符串数组
+    slice_t *ast_package; // a.b.c.d package 字符串数组
     char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
     // 通过上面的 file 或者 package 解析出的完整 package 路径
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
     // 对应的 package.toml
+    uint8_t module_type;
     char *full_path;
     toml_table_t *package_conf;
     char *package_dir; // 这也是 import module 的 workdir
+    bool use_links;
 
     char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;
@@ -325,8 +336,9 @@ typedef struct {
  * }
  */
 typedef struct {
+    char *ident; // ident 冗余
     // parser 阶段是 typedef ident
-    // infer 完成后是 typeuse_struct
+    // checking 完成后是 typeuse_struct
     type_t type;
 
     list_t *properties; // struct_property_t
@@ -347,7 +359,7 @@ typedef struct {
 } ast_select_t;
 
 typedef struct {
-    ast_expr_t left;
+    ast_expr_t instance; // type is ptr<struct> or struct
     string key;
     struct_property_t *property; // 冗余方便计算
 } ast_struct_select_t;
@@ -360,7 +372,7 @@ typedef struct {
     type_t element_type; // 访问的 value 的类型
     ast_expr_t left;
     ast_expr_t index;
-} ast_list_access_t;
+} ast_vec_access_t, ast_array_access_t;
 
 typedef struct {
     type_t element_type; // index 对应的 value 的 type
@@ -378,15 +390,20 @@ typedef struct {
 
 // foo.bar[key()], bar[]
 typedef struct {
-    ast_expr_t left;
+    ast_expr_t left; // string/list/map/set/tuple
     ast_expr_t key;
 } ast_access_t;
 
 // [1,a.b, call()]
 typedef struct {
     list_t *elements; // ast_expr
-//    type_t type; // list的类型 (类型推导截断冗余)
-} ast_list_new_t;
+} ast_array_new_t;
+
+typedef struct {
+    list_t *elements; // ast_expr, nullable
+    ast_expr_t *len; // ast_expr, nullable
+    ast_expr_t *cap; // ast_expr, nullable
+} ast_vec_new_t;
 
 typedef struct {
     ast_expr_t key;
@@ -394,14 +411,10 @@ typedef struct {
 } ast_map_element_t;
 
 // {key: value}
-typedef struct {
-    list_t *elements; // ast_map_element
-} ast_map_new_t;
-
 // var s = {1, 2, 3, call(), xxx}
 typedef struct {
-    list_t *elements; // 值为 ast_expr
-} ast_set_new_t;
+    list_t *elements; // ast_map_element or ast_expr
+} ast_map_new_t, ast_set_new_t, ast_empty_curly_new_t;
 
 // var s = (1, 2, 2.14, 1.15, true)
 typedef struct {
@@ -421,7 +434,7 @@ typedef struct {
  */
 typedef struct {
     string ident; // my_int (自定义的类型名称)
-    list_t *formals; // ast_ident*|null
+    list_t *params; // ast_ident*|null
     type_t type; // int (类型)
 } ast_type_alias_stmt_t;
 
@@ -433,10 +446,13 @@ typedef struct ast_fndef_t {
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *closure_name;
     type_t return_type;
-    list_t *formals; // ast_var_decl_t*
+    list_t *params; // ast_var_decl_t*
     bool rest_param;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余
+
+    // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
+    table_t *type_param_table; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
 
     // ast_expr, 当前 fn body 中引用的外部的环境
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
@@ -445,22 +461,24 @@ typedef struct ast_fndef_t {
     // local_ident_t* 当前函数中是否存在被 child 引用的变量
     slice_t *be_capture_locals;
 
+    list_t *hash_param_types; // 用来计算 params_hash, 如果是 null 就不需要计算, 未 reduction
     /**
      * 由于 global 函数能够进行重载，以及泛型，所以在一个模块下可能会存在多个同名的 global 函数
-     * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 依旧是同名的函数
-     * 这里的同名主要体现在 symbol table 中。
+     * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 下的所有 local ident 都会在
+     * symbol table 中冲突
      *
      * params_hash 是基于 global fn params 计算出的唯一标识，所有的 global fn 的唯一标识都将 with params_hash，然后将 with 后的
-     * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。
+     * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。这也避免了冲突
      */
     char *params_hash;
 
-    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type
-    type_t *self_struct;
+    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
+    type_t *self_struct_ptr;
+
     type_t type; // 类型冗余一份
 
     // 泛型解析时临时使用
-    slice_t *generic_params; // ast_typedef_stmt
+    slice_t *generic_params; // ast_type_alias_stmt
     table_t *exists_generic_params;  // 避免 generic_types 重复写入
 
     // 默认为 null, 当前函数为泛型 fn 时才会有值，local fn 同样有值且和 global fn 同值
@@ -472,34 +490,31 @@ typedef struct ast_fndef_t {
     slice_t *local_children;
     // analyzer 时赋值
     bool is_local; // 是否是全局函数
+
+
+    // dump error
+    char *fn_name;
+    char *rel_path;
+    int column;
+    int line;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
 
-type_t *select_formal_param(type_fn_t *type_fn, uint8_t index);
+type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread);
 
 //bool type_compare(type_t left, type_t right);
 
 ast_ident *ast_new_ident(char *literal);
 
-ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp);
-
-type_t type_copy(type_t temp);
-
-static slice_t *ast_body_copy(slice_t *body);
-
-static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp);
-
-static ast_expr_t *ast_expr_copy(ast_expr_t *temp);
-
-static ast_call_t *ast_call_copy(ast_call_t *temp);
-
-static inline ast_expr_t *ast_ident_expr(char *literal) {
+static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);
     expr->assert_type = AST_EXPR_IDENT;
     expr->value = ast_new_ident(literal);
+    expr->line = line;
+    expr->column = column;
     return expr;
 }
 
-static inline ast_expr_t *ast_int_expr(uint64_t number) {
+static inline ast_expr_t *ast_int_expr(int line, int column, uint64_t number) {
     ast_expr_t *expr = NEW(ast_expr_t);
     expr->assert_type = AST_EXPR_LITERAL;
     ast_literal_t *literal = NEW(ast_literal_t);
@@ -523,7 +538,7 @@ static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) 
 }
 
 /**
- * 已经 infer 过了
+ * 已经 checking 过了
  * @param expr
  * @param target_type
  * @return
@@ -533,7 +548,7 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_as_expr_t *convert = NEW(ast_as_expr_t);
-    convert->src_operand = expr;
+    convert->src = expr;
     convert->target_type = target_type;
 
     result->assert_type = AST_EXPR_AS;
@@ -561,7 +576,7 @@ static inline bool can_assign(ast_type_t t) {
         t == AST_EXPR_ACCESS ||
         t == AST_EXPR_SELECT ||
         t == AST_EXPR_MAP_ACCESS ||
-        t == AST_EXPR_LIST_ACCESS ||
+        t == AST_EXPR_VEC_ACCESS ||
         t == AST_EXPR_ENV_ACCESS ||
         t == AST_EXPR_STRUCT_SELECT) {
         return true;
@@ -569,10 +584,13 @@ static inline bool can_assign(ast_type_t t) {
     return false;
 }
 
-static inline ast_fndef_t *ast_fndef_new() {
+static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->rel_path = rel_path;
     fndef->symbol_name = NULL;
     fndef->closure_name = NULL;
+    fndef->line = line;
+    fndef->column = column;
     fndef->local_children = slice_new();
     return fndef;
 }

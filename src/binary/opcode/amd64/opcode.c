@@ -5,6 +5,8 @@
 #include "src/register/amd64.h"
 #include <assert.h>
 
+amd64_opcode_tree_node_t *opcode_tree_root;
+
 inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
                 {}
 };
@@ -854,97 +856,97 @@ inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASH
 
 
 // float mov ------------------------------------------------------------------------------------------------------
-inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                   {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}
                           }
 };
-inst_t movsd_xmm1_m64 = {"mov", "movsd", 0, {0xF2, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1_m64 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
                          }
 };
-inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0, {0x0F2, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0x0F2, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}
                              }
 };
-inst_t movss_xmm1_xmm2 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm1_xmm2 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                           {
                                   {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                   {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}
                           }
 };
-inst_t movss_xmm1_m32 = {"mov", "movss", 0, {0xF3, 0x0F, 0x10}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm1_m32 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                          {
                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                  {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}
 };
-inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0, {0x0F3, 0x0F, 0x11}, {OPCODE_EXT_SLASHR},
+inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0xF3, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}
 };
 
 // float 算数运算 ------------------------------------------------------------------------------------------------------
-inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0, {0xF2, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0xF2, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0, {0xF3, 0x0F, 0x58}, {OPCODE_EXT_SLASHR},
+inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0xF3, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0, {0xF2, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0xF2, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0, {0xF3, 0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
+inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0xF3, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0, {0xF2, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0, {0xF3, 0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0, {0xF2, 0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                              {
                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
                              }
 };
-inst_t comisd = {"cmp", "comisd", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
                          {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                  }
 };
-inst_t comiss = {"cmp", "comiss", 0, {0x66, 0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+inst_t comiss = {"cmp", "comiss", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
                          {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
@@ -997,40 +999,40 @@ void amd64_opcode_init() {
     opcode_tree_build(&pop_rm64);
 
     // 整形算数运算
-    opcode_tree_build(&add_rm8_imm8);
     opcode_tree_build(&add_rex_rm8_imm8);
+    opcode_tree_build(&add_rm8_imm8);
     opcode_tree_build(&add_rm16_imm16);
     opcode_tree_build(&add_rm32_imm32);
     opcode_tree_build(&add_rm64_imm32);
-    opcode_tree_build(&add_rm8_r8);
     opcode_tree_build(&add_rex_rm8_r8);
+    opcode_tree_build(&add_rm8_r8);
     opcode_tree_build(&add_rm16_r16);
     opcode_tree_build(&add_rm32_r32);
     opcode_tree_build(&add_rm64_r64);
-    opcode_tree_build(&add_r8_rm8);
     opcode_tree_build(&add_rex_r8_rm8);
+    opcode_tree_build(&add_r8_rm8);
     opcode_tree_build(&add_r16_rm16);
     opcode_tree_build(&add_r32_rm32);
     opcode_tree_build(&add_r64_rm64);
 
-    opcode_tree_build(&sub_rm8_imm8);
     opcode_tree_build(&sub_rex_rm8_imm8);
+    opcode_tree_build(&sub_rm8_imm8);
     opcode_tree_build(&sub_rm16_imm16);
     opcode_tree_build(&sub_rm32_imm32);
     opcode_tree_build(&sub_rm64_imm32);
-    opcode_tree_build(&sub_rm8_r8);
     opcode_tree_build(&sub_rex_rm8_r8);
+    opcode_tree_build(&sub_rm8_r8);
     opcode_tree_build(&sub_rm16_r16);
     opcode_tree_build(&sub_rm32_r32);
     opcode_tree_build(&sub_rm64_r64);
-    opcode_tree_build(&sub_r8_rm8);
     opcode_tree_build(&sub_rex_r8_rm8);
+    opcode_tree_build(&sub_r8_rm8);
     opcode_tree_build(&sub_r16_rm16);
     opcode_tree_build(&sub_r32_rm32);
     opcode_tree_build(&sub_r64_rm64);
 
-    opcode_tree_build(&idiv_rm8);
     opcode_tree_build(&idiv_rex_rm8);
+    opcode_tree_build(&idiv_rm8);
     opcode_tree_build(&idiv_rm16);
     opcode_tree_build(&idiv_rm32);
     opcode_tree_build(&idiv_rm64);
@@ -1041,15 +1043,15 @@ void amd64_opcode_init() {
 
 
     // mov reg -> rm
-    opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rex_rm8_r8);
+    opcode_tree_build(&mov_rm8_r8);
     opcode_tree_build(&mov_rm16_r16);
     opcode_tree_build(&mov_rm32_r32);
     opcode_tree_build(&mov_rm64_r64);
 
     // mov rm -> reg
-    opcode_tree_build(&mov_r8_rm8);
     opcode_tree_build(&mov_rex_r8_rm8);
+    opcode_tree_build(&mov_r8_rm8);
     opcode_tree_build(&mov_r16_rm16);
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_r32_rm32);
@@ -1068,32 +1070,22 @@ void amd64_opcode_init() {
     opcode_tree_build(&mov_rm32_imm32);
     opcode_tree_build(&mov_rm64_imm32);
 
-    opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rex_rm8_imm8);
+    opcode_tree_build(&cmp_rm8_imm8);
     opcode_tree_build(&cmp_rm16_imm16);
     opcode_tree_build(&cmp_rm32_imm32);
     opcode_tree_build(&cmp_rm64_imm32);
-    opcode_tree_build(&cmp_rm8_r8);
     opcode_tree_build(&cmp_rex_rm8_r8);
+    opcode_tree_build(&cmp_rm8_r8);
     opcode_tree_build(&cmp_rm16_r16);
     opcode_tree_build(&cmp_rm32_r32);
     opcode_tree_build(&cmp_r64_rm64);
-    opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_rex_r8_rm8);
+    opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_r16_rm16);
     opcode_tree_build(&cmp_r32_rm32);
     opcode_tree_build(&cmp_r64_rm64);
 
-    opcode_tree_build(&seta_rm8);
-    opcode_tree_build(&setae_rm8);
-    opcode_tree_build(&setb_rm8);
-    opcode_tree_build(&setbe_rm8);
-    opcode_tree_build(&setg_rm8);
-    opcode_tree_build(&setge_rm8);
-    opcode_tree_build(&setl_rm8);
-    opcode_tree_build(&setle_rm8);
-    opcode_tree_build(&sete_rm8);
-    opcode_tree_build(&setne_rm8);
     opcode_tree_build(&seta_rex_rm8);
     opcode_tree_build(&setae_rex_rm8);
     opcode_tree_build(&setb_rex_rm8);
@@ -1104,43 +1096,53 @@ void amd64_opcode_init() {
     opcode_tree_build(&setle_rex_rm8);
     opcode_tree_build(&sete_rex_rm8);
     opcode_tree_build(&setne_rex_rm8);
+    opcode_tree_build(&seta_rm8);
+    opcode_tree_build(&setae_rm8);
+    opcode_tree_build(&setb_rm8);
+    opcode_tree_build(&setbe_rm8);
+    opcode_tree_build(&setg_rm8);
+    opcode_tree_build(&setge_rm8);
+    opcode_tree_build(&setl_rm8);
+    opcode_tree_build(&setle_rm8);
+    opcode_tree_build(&sete_rm8);
+    opcode_tree_build(&setne_rm8);
 
-    opcode_tree_build(&neg_rm8);
     opcode_tree_build(&neg_rex_rm8);
+    opcode_tree_build(&neg_rm8);
     opcode_tree_build(&neg_rm16);
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
 
     // 位运算
-    opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rex_rm8);
+    opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rm16);
     opcode_tree_build(&not_rm32);
     opcode_tree_build(&not_rm64);
 
-    opcode_tree_build(&xor_rm8_imm8);
     opcode_tree_build(&xor_rex_rm8_imm8);
+    opcode_tree_build(&xor_rm8_imm8);
     opcode_tree_build(&xor_rm16_imm16);
     opcode_tree_build(&xor_rm32_imm32);
     opcode_tree_build(&xor_rm64_imm32);
-    opcode_tree_build(&xor_rm8_r8);
     opcode_tree_build(&xor_rex_rm8_r8);
+    opcode_tree_build(&xor_rm8_r8);
     opcode_tree_build(&xor_rm16_r16);
     opcode_tree_build(&xor_rm32_r32);
     opcode_tree_build(&xor_rm64_r64);
-    opcode_tree_build(&xor_r8_rm8);
     opcode_tree_build(&xor_rex_r8_rm8);
+    opcode_tree_build(&xor_r8_rm8);
     opcode_tree_build(&xor_r16_rm16);
     opcode_tree_build(&xor_r32_rm32);
     opcode_tree_build(&xor_r64_rm64);
 
-    opcode_tree_build(&or_rm8_imm8);
     opcode_tree_build(&or_rex_rm8_imm8);
+    opcode_tree_build(&or_rm8_imm8);
     opcode_tree_build(&or_rm16_imm16);
     opcode_tree_build(&or_rm32_imm32);
     opcode_tree_build(&or_rm64_imm32);
-    opcode_tree_build(&or_rm8_r8);
     opcode_tree_build(&or_rex_rm8_r8);
+    opcode_tree_build(&or_rm8_r8);
     opcode_tree_build(&or_rm16_r16);
     opcode_tree_build(&or_rm32_r32);
     opcode_tree_build(&or_rm64_r64);
@@ -1150,29 +1152,29 @@ void amd64_opcode_init() {
     opcode_tree_build(&or_r32_rm32);
     opcode_tree_build(&or_r64_rm64);
 
-    opcode_tree_build(&and_rm8_imm8);
     opcode_tree_build(&and_rex_rm8_imm8);
+    opcode_tree_build(&and_rm8_imm8);
     opcode_tree_build(&and_rm16_imm16);
     opcode_tree_build(&and_rm32_imm32);
     opcode_tree_build(&and_rm64_imm32);
-    opcode_tree_build(&and_rm8_r8);
     opcode_tree_build(&and_rex_rm8_r8);
+    opcode_tree_build(&and_rm8_r8);
     opcode_tree_build(&and_rm16_r16);
     opcode_tree_build(&and_rm32_r32);
     opcode_tree_build(&and_rm64_r64);
-    opcode_tree_build(&and_r8_rm8);
     opcode_tree_build(&and_rex_r8_rm8);
+    opcode_tree_build(&and_r8_rm8);
     opcode_tree_build(&and_r16_rm16);
     opcode_tree_build(&and_r32_rm32);
     opcode_tree_build(&and_r64_rm64);
 
-    opcode_tree_build(&sal_rm8_cl);
     opcode_tree_build(&sal_rex_rm8_cl);
+    opcode_tree_build(&sal_rm8_cl);
     opcode_tree_build(&sal_rm16_cl);
     opcode_tree_build(&sal_rm32_cl);
     opcode_tree_build(&sal_rm64_cl);
-    opcode_tree_build(&sar_rm8_cl);
     opcode_tree_build(&sar_rex_rm8_cl);
+    opcode_tree_build(&sar_rm8_cl);
     opcode_tree_build(&sar_rm16_cl);
     opcode_tree_build(&sar_rm32_cl);
     opcode_tree_build(&sar_rm64_cl);
@@ -1212,7 +1214,7 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte) {
     return flag;
 }
 
-asm_keys_t operand_low_to_high(operand_type t) {
+asm_keys_t operand_low_to_high(inst_operand_type t) {
     asm_keys_t res = {
             .count = 0,
     };
@@ -1456,7 +1458,7 @@ asm_keys_t operand_low_to_high(operand_type t) {
         return res;
     }
 
-    error_exit("cannot identify operand_type index: %d", t);
+    error_exit("cannot identify lir_operand_type index: %d", t);
     return res;
 }
 
@@ -1599,8 +1601,23 @@ inst_t *opcode_select(asm_operation_t operation) {
 
     for (int i = 0; i < operation.count; ++i) {
         asm_operand_t *operand = operation.operands[i];
+        reg_t *reg = NULL;
+        reg_t *reg2 = NULL;
         if (operand->type == ASM_OPERAND_TYPE_REG) {
-            reg_t *reg = operand->value;
+            reg = operand->value;
+        } else if (operand->type == ASM_OPERAND_TYPE_DISP_REG) {
+            asm_disp_reg_t *disp = operand->value;
+            reg = disp->reg;
+        } else if (operand->type == ASM_OPERAND_TYPE_INDIRECT_REG) {
+            asm_indirect_reg_t *indirect = operand->value;
+            reg = indirect->reg;
+        } else if (operand->type == ASM_OPERAND_TYPE_SIB_REG) {
+            asm_sib_reg_t *sib = operand->value;
+            reg = sib->base;
+            reg2 = sib->index;
+        }
+
+        if (reg) {
             if (is_high_eight_reg(reg)) {
                 has_high_eight_reg = true;
             }
@@ -1608,6 +1625,15 @@ inst_t *opcode_select(asm_operation_t operation) {
                 has64_reg = true;
             }
         }
+        if (reg2) {
+            if (is_high_eight_reg(reg2)) {
+                has_high_eight_reg = true;
+            }
+            if (has_64_reg(reg2)) {
+                has64_reg = true;
+            }
+        }
+
 
         // 生成 key
         string key = itoa(asm_operand_to_key(operand->type, operand->size));
@@ -1636,7 +1662,8 @@ inst_t *opcode_select(asm_operation_t operation) {
         }
 
         if (has64_reg && !has_64_extension(inst->extensions)) {
-            // 找一个空闲到位置， 主动带上 EXT_REX ,暂时不需要这样到安全限制,默认就是优先支持 rex
+            // 找一个空闲到位置， 主动带上 EXT_REX, 暂时不需要这样到安全限制
+            // 只要包含 rex ext, 就能够激活 rex.b/w 等标识的编译，看起来是一个安全机制
             for (int j = 0; j < 4; ++j) {
                 if (!inst->extensions[j]) {
                     inst->extensions[j] = OPCODE_EXT_REX;
@@ -1826,17 +1853,20 @@ static void parser_ext(amd64_inst_format_t *format, opcode_ext ext) {
     }
 }
 
-static void set_disp(amd64_inst_format_t *format, string reg, uint8_t *disps, uint8_t count) {
-    // 特殊 register 处理
+static void set_disp(amd64_inst_format_t *format, reg_t *reg, uint8_t *disps, uint8_t count) {
+    // 特殊 register 处理, 由于 [rsp] 这样的编码在使用 modr/m 的 rm 部分使用 100 表示 rsp 寄存器基址
+    // 但是由于 mod = 0b00，r/m=0b100 表示引导 sib 字段。所以需要 sib 部分进行重新进行寄存器引导。
+    // reg 部分依旧有效, 0x24 = 00,100,100 , 档 sib 的 index 部分 = 0b100 时不存在变值寄存器，用来特殊引导 [base] 这样的形式。
+    //  [rsp] 就可以用于引导这种形式。
     int j = 0;
-    if (strcmp(reg, "rsp") == 0) {
+    if (reg && reg->index == 4) { // 4 表示 rsp/esp
         format->disps[j++] = 0x24;
     }
 
     for (int i = 0; i < count; i++) {
         format->disps[j++] = disps[i];
     };
-    format->disp_count = count;
+    format->disp_count = j;
 }
 
 static void set_imm(amd64_inst_format_t *format, uint8_t *imms, uint8_t count) {
@@ -1988,7 +2018,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_DWORD_DISP;
                 }
 
-                set_disp(format, r->reg->name, temp, count);
+                set_disp(format, r->reg, temp, count);
 
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
                     format->rex_prefix->b = r->reg->index > 7;
@@ -2021,6 +2051,11 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
 
                 format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
                 format->modrm->rm = r->reg->index;
+
+                uint8_t temp[4] = {0};
+                uint8_t count = 0;
+                set_disp(format, r->reg, temp, count);
+
                 if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
                     format->rex_prefix->b = r->reg->index > 7;
                 }
@@ -2051,7 +2086,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 // 32 to uint8 []
                 uint8_t temp[4];
                 int32_to_uint8(r->disp, temp);
-                set_disp(format, "", temp, 4);
+                set_disp(format, NULL, temp, 4);
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
                 if (format->modrm == NULL) {
                     format->modrm = new_modrm();
@@ -2063,7 +2098,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 // 小端处理
                 uint8_t temp[4];
                 int32_to_uint8(r->disp, temp);
-                set_disp(format, "", temp, 4);
+                set_disp(format, NULL, temp, 4);
             } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
                 asm_sib_reg_t *sib_reg = asm_operand->value;
                 if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
@@ -2083,7 +2118,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                     if (sib_reg->base->index == 13) {
                         format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
                         uint8_t temp[1] = {0};
-                        set_disp(format, sib_reg->base->name, temp, 0);
+                        set_disp(format, sib_reg->base, temp, 0);
                     }
                 }
             }
@@ -2113,7 +2148,7 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
             set_imm(format, temp, 1);
         } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
             asm_float32_t *f = asm_operand->value;
-            uint8_t temp[4];
+            uint8_t temp[8];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
         } else {

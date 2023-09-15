@@ -1,0 +1,15 @@
+var a = 12
+var b = 12 as u8
+
+var call = fn() {
+    println('hello world')
+}
+
+int c = 24
+var d = 3.1415
+var e = [1, 5, 7, 9]
+
+int e1 = 2.15 as int
+
+var f = false
+var t = true

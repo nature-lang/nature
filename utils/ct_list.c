@@ -10,7 +10,7 @@ list_t *ct_list_new(uint64_t element_size) {
     list_t *list = malloc(sizeof(list_t));
     list->element_size = element_size;
     list->length = 0;
-    list->capacity = LIST_DEFAULT_CAPACITY;
+    list->capacity = VEC_DEFAULT_CAPACITY;
     list->take = malloc(list->capacity * element_size);
 
     return list;

@@ -1,5 +1,6 @@
 import syscall
-import libc
+import os
+import libc_temp
 
 // 创建一个 socket
 int sockfd = syscall.socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
@@ -9,8 +10,8 @@ println('create socket success')
 var addr = syscall.sockaddr_in {
     sin_family = syscall.AF_INET as u16,
     sin_addr = 0x00000000,
-    sin_port = libc.htons(8080),
-    sin_zero = [] as [u8,8]
+    sin_port = htons(8080),
+    sin_zero = [] as arr<u8,8>
 }
 
 var err = try syscall.bind(sockfd, addr)
@@ -27,15 +28,16 @@ if err.has {
 println('listen success')
 
 // 接受链接
-var client_addr = syscall.sockaddr_in{} // 初始化一个空的地址，等待 callee 赋值
+var client_addr_ptr = new syscall.sockaddr_in // 初始化一个空的地址，等待 callee 赋值
 
-var (client_fd,err) = try syscall.accept(sockfd, client_addr)
+var (client_fd,err) = try syscall.accept(sockfd, client_addr_ptr)
 if err.has {
     return print('accept error: ', err.msg, '\n')
 }
 
 println('accept success')
 
+// 这里标识只接收 0 个字节即可
 var recv_buf = [] as [u8]
 syscall.recvfrom(client_fd, recv_buf, 0)
 

@@ -1,0 +1,15 @@
+type dir_t = cptr
+
+type dirent_t = struct {
+    u64 ino
+    i64 off
+    u16 reclen
+    u8 t
+    arr<u8,256> name
+}
+
+fn opendir(cptr str):dir_t
+
+fn readdir(dir_t d):cptr<dirent_t>
+
+fn closedir(dir_t d):int

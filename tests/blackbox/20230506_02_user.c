@@ -3,7 +3,9 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    assert_string_equal(raw, "The user has already registered\nxiaoyou-nanana456\ncurrent user count=2\n");
+    assert_string_equal(raw, "The user xiaoyou has already registered\n"
+                             "xiaoyou - nanana456\n"
+                             "current user count= 2\n");
 }
 
 int main(void) {

@@ -10,9 +10,7 @@ linked_t *scanner(module_t *m);
 
 void scanner_cursor_init(module_t *module);
 
-void scanner_error_init(module_t *module);
-
-void scanner_skip_space(module_t *module);
+bool scanner_skip_space(module_t *m);
 
 bool scanner_is_alpha(module_t *m, char c);
 
@@ -46,14 +44,12 @@ token_e scanner_special_char(module_t *m);
 char scanner_guard_advance(module_t *module); // guard 前进一个字符
 char *scanner_gen_word(module_t *module);
 
-bool scanner_is_at_end(module_t *module); // guard 是否遇见了 '\0'
-
-bool scanner_has_error(module_t *module);
+bool scanner_at_eof(module_t *m); // guard 是否遇见了 '\0'
 
 bool scanner_match(module_t *module, char expected);
 
 bool scanner_is_space(char c);
 
-bool scanner_is_at_stmt_end(module_t *module);
+bool scanner_at_stmt_end(module_t *m);
 
 #endif //NATURE_SRC_SCANNER_H_

@@ -19,10 +19,12 @@ string lir_imm_to_string(lir_imm_t *immediate);
 
 string lir_addr_to_string(lir_indirect_addr_t *operand_addr);
 
-string lir_formal_param_to_string(slice_t *formal_params);
+string lir_formal_to_string(slice_t *formals);
 
-string lir_actual_param_to_string(slice_t *actual_params);
+string lir_arg_to_string(slice_t *args);
 
 string lir_vars_to_string(slice_t *vars);
+
+string lir_regs_to_string(slice_t *regs);
 
 #endif //NATURE_SRC_DEBUG_DEBUG_LIR_H_

@@ -21,8 +21,11 @@ typedef struct {
     uint64_t fn_runtime_reg; //  0 表示不在
     uint64_t fn_runtime_stack; // 0 就啥也不是，
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
-    uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits
-    char name[80];
+    uint64_t line;
+    uint64_t column;
+    char name[80]; // 函数名称
+    char rel_path[256];  // 文件路径 TODO 可以像 elf 文件一样做 str 段优化。
+    uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits TODO 做成数据段优化
 } fndef_t;
 
 
@@ -44,36 +47,36 @@ extern addr_t rt_fn_main_base;
 
 extern uint64_t rt_symdef_count;
 extern symdef_t rt_symdef_data; // &rt_symdef_data 指向 .data.symdef section 所在地址
-symdef_t *rt_symdef_ptr;
+extern symdef_t *rt_symdef_ptr;
 
 extern uint64_t rt_fndef_count;
 extern fndef_t rt_fndef_data;
-fndef_t *rt_fndef_ptr;
+extern fndef_t *rt_fndef_ptr;
 
 extern uint64_t rt_rtype_count;
 extern rtype_t rt_rtype_data;
-table_t *rt_rtype_table;
+extern table_t *rt_rtype_table;
 
 
 // - symdef
-uint64_t ct_symdef_size; // 数量
-uint8_t *ct_symdef_data; // 序列化后的 data 大小
-uint64_t ct_symdef_count;
-symdef_t *ct_symdef_list;
+extern uint64_t ct_symdef_size; // 数量
+extern uint8_t *ct_symdef_data; // 序列化后的 data 大小
+extern uint64_t ct_symdef_count;
+extern symdef_t *ct_symdef_list;
 
 // - fndef
-uint64_t ct_fndef_size;
-uint8_t *ct_fndef_data;
-uint64_t ct_fndef_count;
-fndef_t *ct_fndef_list;
+extern uint64_t ct_fndef_size;
+extern uint8_t *ct_fndef_data;
+extern uint64_t ct_fndef_count;
+extern fndef_t *ct_fndef_list;
 
 
 // - rtype
-uint64_t ct_rtype_count; // 从 list 中提取而来
-uint8_t *ct_rtype_data;
-uint64_t ct_rtype_size; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
-list_t *ct_rtype_list;
-table_t *ct_rtype_table; // 避免 rtype_list 重复写入
+extern uint64_t ct_rtype_count; // 从 list 中提取而来
+extern uint8_t *ct_rtype_data;
+extern uint64_t ct_rtype_size; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
+extern list_t *ct_rtype_vec;
+extern table_t *ct_rtype_table; // 避免 rtype_vec 重复写入
 
 // 主要是需要处理 gc_bits 数据
 uint8_t *fndefs_serialize();

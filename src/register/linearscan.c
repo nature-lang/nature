@@ -40,6 +40,9 @@ static void linear_posthandle(closure_t *c) {
 static void linear_prehandle(closure_t *c) {
     // collect var defs
     int next_id = 0;
+    table_t *var_table = table_new();
+    c->var_defs = slice_new();
+
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
         linked_node *current = linked_first(block->operations);
@@ -52,7 +55,12 @@ static void linear_prehandle(closure_t *c) {
             slice_t *vars = extract_var_operands(op, FLAG(LIR_FLAG_DEF));
             for (int j = 0; j < vars->count; ++j) {
                 lir_var_t *var = vars->take[j];
+                if (table_exist(var_table, var->ident)) {
+                    continue;
+                }
+
                 slice_push(c->var_defs, var);
+                table_set(var_table, var->ident, var);
             }
 
             // mark
@@ -103,12 +111,12 @@ static void linear_prehandle(closure_t *c) {
  * ASSIGN_REG_NUM
  * @param c
  */
-void linear_scan(closure_t *c) {
-    linear_prehandle(c);
-
+void reg_alloc(closure_t *c) {
     interval_block_order(c);
 
-    debug_block_lir(c, "ssa/lower/mark_number");
+    linear_prehandle(c);
+
+    debug_block_lir(c, "mark_number");
 
     interval_build(c);
 

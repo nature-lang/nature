@@ -6,7 +6,7 @@
 
 typedef struct {
     uint8_t *data; // uint8_t 保证了加法操作一次只移动一个字节
-    uint64_t len;
+    uint64_t len; // 单位 byte
     uint64_t cap;
 } autobuf_t;
 

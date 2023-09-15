@@ -386,7 +386,7 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
-    assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align", find_addr);
+    assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align_up", find_addr);
 
     // 更新相关的 chunks 为使用状态
     chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
@@ -438,7 +438,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     arena_hint_t *hint = mheap->arena_hints;
 
     // size 对齐
-    uint64_t alloc_size = align((int64_t) *size, ARENA_SIZE);
+    uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     void *v = NULL;
     while (true) {
@@ -485,11 +485,17 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
+    DEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *) span->base, span->obj_size,
+           span->pages_count);
+
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
+        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear",
+               (void *) arena->base, page_index)
+
         arena->spans[page_index] = NULL;
         page_index += 1;
     }
@@ -501,7 +507,7 @@ static void mheap_clear_spans(mspan_t *span) {
  */
 static void mheap_grow(uint64_t pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
-    uint64_t size = align(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
+    uint64_t size = align_up(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
 
     addr_t cursor = memory->mheap->current_arena.cursor;
     addr_t end = memory->mheap->current_arena.end;
@@ -697,8 +703,8 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bitmap_clear(arena->bits, bit_index);
             bit_value = 0;
         }
-        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value=%d",
-               type_kind_string[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+//        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value=%d",
+//               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
@@ -725,7 +731,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 
     char *debug_kind = "";
     if (rtype) {
-        debug_kind = type_kind_string[rtype->kind];
+        debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF("[runtime.std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
            "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
@@ -763,7 +769,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
 
     char *debug_kind = "";
     if (rtype) {
-        debug_kind = type_kind_string[rtype->kind];
+        debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF("[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
            "addr=0x%lx, allocator_bytes=%ld",
@@ -877,13 +883,14 @@ void memory_init() {
 }
 
 mspan_t *span_of(uint64_t addr) {
+//    DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
     assertf(arena, "not found arena by addr: %p", addr);
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
-    assertf(span, "not found span by page_index: %d", page_index);
+    assertf(span, "not found span by page_index: %d, arena->base: %p, addr: %p", page_index, arena->base, addr);
     return span;
 }
 
@@ -894,28 +901,22 @@ addr_t mstack_new(uint64_t size) {
     return (addr_t) base;
 }
 
+void *runtime_zero_malloc(uint64_t size, rtype_t *rtype) {
+    void *ptr = runtime_rtype_malloc(size, rtype);
+    memset(ptr, 0, size);
+    return ptr;
+}
+
 
 /**
- * 调用 malloc 时已经将类型数据传递到了 runtime 中，obj 存储时就可以已经计算了详细的 gc_bits 能够方便的扫描出指针
- * @param size
- * @param rtype 允许为 null, 此时就是单纯的内存申请,不用考虑其中的类型
+ * 不会触发 gc
  * @return
  */
-void *runtime_malloc(uint64_t size, rtype_t *rtype) {
+void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
-        DEBUGF("[runtime_malloc] size=%ld, type_kind=%s", size, type_kind_string[rtype->kind]);
+        DEBUGF("[runtime_rtype_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
     } else {
-        DEBUGF("[runtime_malloc] size=%ld, type is null", size);
-    }
-
-    if (allocated_bytes > next_gc_bytes) {
-        uint64_t before_bytes = allocated_bytes;
-        DEBUGF("[runtime_malloc.auto_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
-               next_gc_bytes);
-        runtime_gc();
-        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
-        DEBUGF("[runtime_malloc.auto_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
-               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
+        DEBUGF("[runtime_rtype_malloc] size=%ld, type is null", size);
     }
 
 
@@ -927,6 +928,7 @@ void *runtime_malloc(uint64_t size, rtype_t *rtype) {
     // 2. 大型内存分配(大于>32KB)
     return (void *) large_malloc(size, rtype);
 }
+
 
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = NEW(mspan_t);
@@ -954,5 +956,36 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
 
 uint64_t runtime_malloc_bytes() {
     return allocated_bytes;
+}
+
+void runtime_auto_gc() {
+    DEBUGF("[runtime_auto_gc] allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
+
+    if (force_gc) {
+        DEBUGF("[runtime_auto_gc] enabled force gc")
+        runtime_gc();
+        return;
+    }
+
+    if (allocated_bytes > next_gc_bytes) {
+        uint64_t before_bytes = allocated_bytes;
+        DEBUGF("[runtime_auto_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+               next_gc_bytes);
+        runtime_gc();
+        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
+        DEBUGF("[runtime_auto_gc] gc completed, bytes %ld -> %ld, collected=%ld, next_gc=%ld",
+               before_bytes, allocated_bytes, before_bytes - allocated_bytes, next_gc_bytes);
+    } else {
+        DEBUGF("[runtime_auto_gc] no need for gc")
+    }
+}
+
+void *runtime_malloc(uint64_t rtype_hash) {
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
+    return runtime_zero_malloc(rtype->size, rtype);
+}
+
+void runtime_set_force_gc() {
+    force_gc = true;
 }
 

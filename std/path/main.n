@@ -1,0 +1,108 @@
+import strings
+import fmt.util as *
+import syscall
+
+fn exists(string path):bool {
+   var (_, err) =  try syscall.stat(path)
+   return !err.has
+}
+
+// refer golang path.base
+fn base(string path):string {
+    if path == '' {
+        return '.'
+    }
+
+    path = strings.rtrim(path, ['/'])
+
+    if path == '' {
+        return '/'
+    }
+
+    var i = strings.rfind(path, "/", path.len)
+    if i == -1 {
+        return path
+    }
+
+    return strings.slice(path, i + 1, path.len)
+}
+
+// ref golang path.dir
+fn dir(string path):string {
+  if path == '' {
+     return '.'
+  }
+
+  var last = path[path.len - 1]
+
+  if last == ascii('/') {
+     return strings.slice(path, 0, path.len-1)
+  }
+
+  var i = strings.rfind(path, '/', path.len)
+  if i == -1 {
+    return '.'
+  }
+
+  if i == 0 {
+    return '/'
+  }
+
+  return strings.slice(path, 0, i)
+}
+
+fn join(string dst, ...[string] list):string {
+    for src in list {
+        dst = _join(dst, src)
+    }
+
+    return dst
+}
+
+fn _join(string dst, string src):string {
+    if src.len == 0 {
+        return dst
+    }
+
+    if dst.len == 0 {
+        return src
+    }
+
+    // src 是绝对路径时不进行拼接
+    if src[0] == ascii('/') {
+        return src
+    }
+
+    var dst_list = dst as [u8]
+    var len = dst_list.len
+
+    // 去掉结尾的 /
+    if dst_list[len - 1] == ascii('/') {
+        dst_list = dst_list.slice(0, len - 1)
+    }
+
+    var result = ''
+
+    // ./
+    if src[0] == ascii('.') && src[1] == ascii('/') {
+        for int i = 1; i < src.len; i+=1 {
+            dst_list.push(src[i])
+        }
+
+        result = dst_list as string
+    } else {
+        // ../ not handle, direct join
+        result = dst_list as string + '/' + src
+    }
+
+    return result
+}
+
+fn isdir(string path):bool {
+   var (s, err) =  try syscall.stat(path)
+    if err.has {
+         return false
+    }
+
+    return (s.mode & 0170000) == (0040000)
+}

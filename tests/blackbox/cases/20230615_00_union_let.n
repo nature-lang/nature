@@ -20,5 +20,5 @@ a = [3 as i8, 4, 5]
 print(a is int, a is null, a is [i8], '\n')
 
 [i8] b = [3, 4, 5]
-println(b.len())
+println(b.len)
 

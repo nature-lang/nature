@@ -1,0 +1,12 @@
+fn sum(int a, ...[int] list):int {
+    int t = 0
+    for v in list {
+        t += v
+    }
+
+    return t
+}
+
+println(sum(1, 2, 3, 4))
+
+println(sum(3, ...[1, 2, 3, 4]))

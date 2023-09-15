@@ -15,21 +15,21 @@ typedef enum {
     ARCH_WASM,
 } build_param_t;
 
-build_param_t BUILD_OS;
-build_param_t BUILD_ARCH;
+extern build_param_t BUILD_OS;
+extern build_param_t BUILD_ARCH;
 
-char *NATURE_ROOT; // linux/darwin/freebsd default root
+extern char *NATURE_ROOT; // linux/darwin/freebsd default root
 
-char BUILD_OUTPUT_NAME[PATH_MAX]; // main
-char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
-char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
+extern char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
+extern char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
-char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
-char *BASE_NS; // 最后一级目录的名称，也可以自定义
-char *TEMP_DIR; // 链接临时目录
+extern char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
+extern char *BASE_NS; // 最后一级目录的名称，也可以自定义
+extern char *TEMP_DIR; // 链接临时目录
 
-char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
-char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
+extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 #define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""

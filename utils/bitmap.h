@@ -22,6 +22,13 @@ void bitmap_free(bitmap_t *b);
  */
 void bitmap_set(uint8_t *bits, uint64_t index);
 
+/**
+ * index > size / uint8_t 时，自动进行扩容
+ * @param b
+ * @param index
+ */
+void bitmap_grow_set(bitmap_t *b, uint64_t index, bool test);
+
 void bitmap_clear(uint8_t *bits, uint64_t index);
 
 bool bitmap_test(uint8_t *bits, uint64_t index);

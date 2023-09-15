@@ -58,7 +58,8 @@ typedef enum {
     TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT, TOKEN_UINT,
     TOKEN_U8, TOKEN_U16, TOKEN_U32, TOKEN_U64,
     TOKEN_I8, TOKEN_I16, TOKEN_I32, TOKEN_I64,
-    TOKEN_F32, TOKEN_F64,
+    TOKEN_F32, TOKEN_F64, TOKEN_NEW,
+    TOKEN_ARR, TOKEN_VEC, TOKEN_MAP, TOKEN_TUP, TOKEN_SET,
 
     // KEYWORDS.
     TOKEN_POINTER, // ptr<
@@ -67,7 +68,7 @@ typedef enum {
     TOKEN_THROW, TOKEN_TRY, TOKEN_CATCH, TOKEN_SELF, TOKEN_CONTINUE, TOKEN_BREAK,
     TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
     TOKEN_VAR, TOKEN_LET,
-    TOKEN_IS, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
+    TOKEN_IS, TOKEN_SIZEOF, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
     TOKEN_FN,
     TOKEN_IMPORT, TOKEN_RETURN,
     TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
@@ -125,6 +126,11 @@ static string token_str[] = {
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
 
+        [TOKEN_ARR] = "arr",
+        [TOKEN_VEC] = "vec",
+        [TOKEN_MAP] = "map",
+        [TOKEN_SET] = "set",
+        [TOKEN_TUP] = "tup",
         [TOKEN_POINTER] = "ptr",
         [TOKEN_CPTR] = "cptr",
         [TOKEN_TRUE] = "true",
@@ -168,8 +174,11 @@ static string token_str[] = {
         [TOKEN_GEN] = "gen",
 
         [TOKEN_IMPORT] = "import",
+
+        // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
+        [TOKEN_SIZEOF] = "sizeof",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",
@@ -179,9 +188,8 @@ typedef struct {
     token_e type; // 通配类型，如 var
     char *literal;
     int line;
+    int column;
 } token_t;
-
-token_t *token_new(uint8_t type, char *literal, int line);
 
 static inline bool token_complex_assign(token_e t) {
     return t == TOKEN_PERSON_EQUAL ||
@@ -195,5 +203,19 @@ static inline bool token_complex_assign(token_e t) {
            t == TOKEN_LEFT_SHIFT_EQUAL ||
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
+
+static inline token_t *token_new(uint8_t type, char *literal, int line, int column) {
+    token_t *t = malloc(sizeof(token_t));
+    t->type = type;
+    t->literal = literal;
+    t->line = line;
+    t->column = column;
+
+#ifdef DEBUG_SCANNER
+    debug_scanner(t);
+#endif
+    return t;
+}
+
 
 #endif //NATURE_SRC_SYNTAX_TOKEN_H_

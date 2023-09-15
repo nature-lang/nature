@@ -1,19 +1,19 @@
 var a = 25
 {int} s = {-32, -64, 12 + 1, 25 - a}
 
-var c0 = s.has(13)
+var c0 = s.contains(13)
 print('c0=', c0, '\n')
 
-c0 = s.has(111)
+c0 = s.contains(111)
 print('c0=', c0, '\n')
 
 s.add(111)
-var c1 = s.has(111)
+var c1 = s.contains(111)
 print('c1=', c1, '\n')
 
 s.del(13)
 
-c1 = s.has(13)
+c1 = s.contains(13)
 print('c1=', c1, '\n')
 
 
@@ -121,4 +121,4 @@ s.add(99)
 s.add(100)
 
 
-print(s.has(90), s.has(101), '\n')
+print(s.contains(90), s.contains(101), '\n')

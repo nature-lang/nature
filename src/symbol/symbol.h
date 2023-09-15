@@ -12,6 +12,12 @@
 //#define BUILTIN_ERRORT "errort"
 #define ENV_IDENT "env"
 
+// 临时表，用来临时记录, key = ident, value is any
+extern table_t *can_import_symbol_table;
+
+// key = temp_ident, value = table_t, 记录了 temp 中的所有符号
+extern table_t *import_temp_symbol_table;
+
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
@@ -22,15 +28,15 @@
  * 2. 函数
  * 3. 自定义 type, 例如 type foo = int
  */
-table_t *symbol_table;
+extern table_t *symbol_table;
 
-slice_t *symbol_fn_list;
+extern slice_t *symbol_fn_list;
 
-slice_t *symbol_closure_list;
+extern slice_t *symbol_closure_list;
 
-slice_t *symbol_var_list;
+extern slice_t *symbol_var_list;
 
-slice_t *symbol_typedef_list;
+extern slice_t *symbol_typedef_list;
 
 typedef enum {
     SYMBOL_VAR,
@@ -57,25 +63,19 @@ static inline bool is_builtin_call(char *ident) {
     }
 
     return str_equal(ident, "print") ||
-           str_equal(ident, "println") ||
-           str_equal(ident, "list_push") ||
-           str_equal(ident, "list_length") ||
-           str_equal(ident, "map_delete") ||
-           str_equal(ident, "map_length") ||
-           str_equal(ident, "set_contains") ||
-           str_equal(ident, "set_add") ||
-           str_equal(ident, "set_delete");
+           //           str_equal(ident, "fib_test.mod.fib") ||
+           str_equal(ident, "println");
 }
 
-symbol_t *symbol_table_set(char* ident, symbol_type_t type, void *ast_value, bool is_local);
+symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);
 
-symbol_t *symbol_table_get(char* ident);
+symbol_t *symbol_table_get(char *ident);
 
-symbol_t *symbol_table_get_noref(char* ident);
+symbol_t *symbol_table_get_noref(char *ident);
 
-void symbol_table_delete(char* ident);
+void symbol_table_delete(char *ident);
 
-void symbol_table_set_var(char* unique_ident, type_t type);
+void symbol_table_set_var(char *unique_ident, type_t type);
 
 void symbol_init();
 

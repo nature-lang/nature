@@ -17,8 +17,8 @@ string ast_type_to_str[] = {
         [AST_EXPR_SELECT]="AST_EXPR_SELECT",
         [AST_EXPR_MAP_ACCESS]="AST_EXPR_TYPE_ACCESS_MAP",
         [AST_EXPR_MAP_NEW]="AST_EXPR_TYPE_NEW_MAP",
-        [AST_EXPR_LIST_ACCESS]="AST_EXPR_TYPE_ACCESS_LIST",
-        [AST_EXPR_LIST_NEW]="AST_EXPR_TYPE_NEW_LIST",
+        [AST_EXPR_VEC_ACCESS]="AST_EXPR_TYPE_ACCESS_LIST",
+        [AST_EXPR_VEC_NEW]="AST_EXPR_TYPE_NEW_LIST",
 //    [AST_EXPR_TYPE_LIST_DECL]="AST_EXPR_TYPE_LIST_DECL",
         [AST_VAR_DECL]="AST_VAR_DECL",
         [AST_STMT_VARDEF]="AST_STMT_VAR_DECL_ASSIGN",
@@ -147,6 +147,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_RT_CALL]="R_CALL",
         [LIR_OPCODE_CLR] ="CLR    ",
         [LIR_OPCODE_CLV] ="CLV    ",
+        [LIR_OPCODE_NOP] ="NOP    ",
         [LIR_OPCODE_RETURN]="RETURN ",
         [LIR_OPCODE_LABEL]="LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
@@ -182,6 +183,10 @@ void debug_stmt(string type, ast_stmt_t stmt) {
  * @param c
  */
 void debug_lir(closure_t *c) {
+//    if (!str_equal(c->symbol_name, "main")) {
+//        return;
+//    }
+
 #ifdef DEBUG_LIR
     printf("compiler closure lir: %s ---------------------------------------------------------------------\n",
            c->symbol_name);
@@ -221,6 +226,9 @@ void debug_lir(closure_t *c) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
+//    if (!str_equal(c->symbol_name, "main")) {
+//        return;
+//    }
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after,
@@ -239,6 +247,52 @@ void debug_interval(closure_t *c) {
 #ifdef DEBUG_INTERVAL
     DEBUGF("closure=%s interval ------------------------------------------------------------------------",
            c->symbol_name);
+    for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
+        reg_t *reg = alloc_regs[reg_id];
+        interval_t *interval = table_get(c->interval_table, reg->name);
+        assert(interval);
+        int parent_index = 0;
+        char *parent_ident = "";
+        int64_t stack_slot = 0;
+        char *ranges = "";
+        char *use_pos = "";
+        char *type_str = "int";
+        if (interval->alloc_type == LIR_FLAG_ALLOC_FLOAT) {
+            type_str = "float";
+        }
+
+        if (interval->parent) {
+            parent_index = interval->parent->index;
+            parent_ident = interval->parent->var->ident;
+        }
+
+        if (interval->stack_slot) {
+            stack_slot = *interval->stack_slot;
+        }
+
+        LINKED_FOR(interval->ranges) {
+            interval_range_t *r = LINKED_VALUE();
+            char *temp_range = dsprintf("[%d,%d)\t", r->from, r->to);
+            ranges = str_connect(ranges, temp_range);
+        }
+        LINKED_FOR(interval->use_pos_list) {
+            use_pos_t *u = LINKED_VALUE();
+            char *temp_use = dsprintf("%d-%d\t", u->value, u->kind);
+            use_pos = str_connect(use_pos, temp_use);
+        }
+
+        DEBUGF("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+               interval->index,
+               reg->name,
+               parent_index,
+               parent_ident,
+               interval->assigned,
+               type_str,
+               stack_slot,
+               ranges,
+               use_pos);
+    }
+
     for (int i = 0; i < c->var_defs->count; ++i) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
@@ -273,7 +327,7 @@ void debug_interval(closure_t *c) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-        DEBUGF("index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+        DEBUGF("var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
                interval->index,
                interval->var->ident,
                parent_index,

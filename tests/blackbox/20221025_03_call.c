@@ -6,7 +6,8 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    assert_string_equal(raw, "foo=5");
+    assert_string_equal(raw, "foo= 5\n"
+                             "sums(...)= 53\n");
 }
 
 int main(void) {

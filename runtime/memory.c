@@ -1,11 +1,21 @@
 #include "memory.h"
 
+uint64_t allocated_bytes = 0; // 当前分配的内存空间
+uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
+bool force_gc = 0; // runtime_judge_gc 总是立刻进行 gc
+
 rtype_t *rt_find_rtype(uint32_t rtype_hash) {
     return table_get(rt_rtype_table, itoa(rtype_hash));
 }
 
 uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
-    return rtype_out_size(rt_find_rtype(rtype_hash), POINTER_SIZE);
+    assertf(rtype_hash > 0, "rtype_hash empty");
+
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
+
+    assertf(rtype, "cannot find rtype by hash %d", rtype_hash);
+
+    return rtype_out_size(rtype, POINTER_SIZE);
 }
 
 void fndefs_deserialize() {
@@ -65,8 +75,8 @@ void rtypes_deserialize() {
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
 
-        if (r->element_count > 0) {
-            uint64_t size = r->element_count * sizeof(uint64_t);
+        if (r->length > 0) {
+            uint64_t size = r->length * sizeof(uint64_t);
             r->element_hashes = (uint64_t *) gc_bits_offset;
             gc_bits_offset += size;
         }

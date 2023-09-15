@@ -1,132 +1,14 @@
 #include "amd64.h"
 #include "src/cross.h"
 #include "src/register/amd64.h"
+#include "amd64_abi.h"
 
-static lir_operand_t *amd64_convert_to_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->var_defs, temp->value);
+static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
+    lir_operand_t *temp = temp_var_operand_with_stack(c->module, lir_operand_type(first));
 
-    linked_push(list, lir_op_move(temp, operand));
-    return lir_reset_operand(temp, operand->pos);
+    linked_push(list, lir_op_move(temp, first));
+    return lir_reset_operand(temp, first->pos);
 }
-
-static lir_operand_t *select_return_reg(lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    if (kind == TYPE_FLOAT || kind == TYPE_FLOAT64) {
-        return operand_new(LIR_OPERAND_REG, xmm0s64);
-    }
-    if (kind == TYPE_FLOAT32) {
-        return operand_new(LIR_OPERAND_REG, xmm0s32);
-    }
-
-    return reg_operand(rax->index, kind);
-}
-
-/**
- * call actual params handle
- * mov var -> rdi
- * mov var -> rax
- * @param c
- * @param actual_params
- * @return
- */
-static linked_t *amd64_actual_params_lower(closure_t *c, slice_t *actual_params) {
-    linked_t *operations = linked_new();
-    linked_t *push_operations = linked_new();
-    int push_length = 0;
-    uint8_t used[2] = {0};
-    for (int i = 0; i < actual_params->count; ++i) {
-        lir_operand_t *param_operand = actual_params->take[i];
-        type_kind type_kind = operand_type_kind(param_operand);
-        reg_t *reg = amd64_fn_param_next_reg(used, type_kind);
-        if (reg) {
-            // 再全尺寸模式下清空 reg 避免因为 reg 空间占用导致的异常问题
-            if (reg->size < QWORD && is_integer(type_kind)) {
-                linked_push(operations, lir_op_new(LIR_OPCODE_CLR, NULL, NULL,
-                                                   operand_new(LIR_OPERAND_REG, covert_alloc_reg(reg))));
-            }
-
-            // TODO 使用 movzx 或者 movsx 可以做尺寸不匹配到 mov, 就不用做上面到 CLR 了
-            lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_REG, reg), param_operand);
-
-            linked_push(operations, op);
-        } else {
-            // 参数在栈空间中总是 8byte 使用,所以给定任意参数 n, 在不知道其 size 的情况行也能取出来
-            // 不需要 move, 直接走 push 指令即可, 这里虽然操作了 rsp，但是 rbp 是没有变化的
-            // 不过 call 之前需要保证 rsp 16 byte 对齐
-            lir_op_t *push_op = lir_op_new(LIR_OPCODE_PUSH, param_operand, NULL, NULL);
-            linked_push(push_operations, push_op);
-            push_length += QWORD;
-        }
-    }
-    // 由于使用了 push 指令操作了堆栈，可能导致堆栈不对齐，所以需要操作一下堆栈对齐
-    uint64_t diff_length = align(push_length, 16) - push_length;
-
-    // sub rsp - 1 = rsp
-    // 先 sub 再 push, 保证 rsp 16 byte 对齐
-    if (diff_length > 0) {
-        lir_op_t *binary_op = lir_op_new(LIR_OPCODE_SUB,
-                                         operand_new(LIR_OPERAND_REG, rsp),
-                                         int_operand(diff_length),
-                                         operand_new(LIR_OPERAND_REG, rsp));
-        linked_push(push_operations, binary_op);
-    }
-
-    // 倒序 push operations 追加到 operations 中
-    linked_node *current = linked_last(push_operations);
-    while (current && current->value) {
-        linked_push(operations, current->value);
-        current = current->prev;
-    }
-
-    return operations;
-}
-
-/**
- * 寄存器选择进行了 fit 匹配
- * @param c
- * @param formal_params
- * @return
- */
-static linked_t *amd64_formal_params_lower(closure_t *c, slice_t *formal_params) {
-    linked_t *operations = linked_new();
-    uint8_t used[2] = {0};
-    // 16byte 起点, 因为 call 和 push rbp 占用了16 byte空间, 当参数寄存器用完的时候，就会使用 stack offset 了
-    int16_t stack_param_slot = 16; // ret addr + push rsp
-    for (int _i = 0; _i < (formal_params)->count; ++_i) {
-        lir_var_t *var = formal_params->take[_i];
-        lir_operand_t *source = NULL;
-        reg_t *reg = amd64_fn_param_next_reg(used, var->type.kind);
-        if (reg) {
-            source = operand_new(LIR_OPERAND_REG, reg);
-
-            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
-                c->fn_runtime_reg = reg->index;
-            }
-        } else {
-            lir_stack_t *stack = NEW(lir_stack_t);
-            // caller 虽然使用了 pushq 指令进栈，但是实际上并不需要使用这么大的空间,
-            stack->size = type_kind_sizeof(var->type.kind);
-            stack->slot = stack_param_slot; // caller push 入栈的参数的具体位置
-            if (c->fn_runtime_operand != NULL && _i == formal_params->count - 1) {
-                c->fn_runtime_stack = stack->slot;
-            }
-
-            // 如果是 c 的话会有 16byte,但 nature 最大也就 8byte 了
-            // 固定 QWORD(caller float 也是 8 byte，只是不直接使用 push)
-            stack_param_slot += QWORD; // 固定 8 bit， 不过 8byte 会造成 stack_slot align exception
-
-            source = operand_new(LIR_OPERAND_STACK, stack);
-        }
-
-        lir_op_t *op = lir_op_move(operand_new(LIR_OPERAND_VAR, var), source);
-        linked_push(operations, op);
-    }
-
-    return operations;
-}
-
 
 static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
@@ -186,7 +68,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
                 symbol->size = type_kind_sizeof(imm->kind);
                 symbol->value = (uint8_t *) &imm->f32_value;
             } else {
-                assertf(false, "not support type %s", type_kind_string[imm->kind]);
+                assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
 
 
@@ -197,8 +79,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
 
             if (imm->kind == TYPE_RAW_STRING) {
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand(c->module, type_basic_new(TYPE_RAW_STRING));
-                slice_push(c->var_defs, var_operand->value);
+                lir_operand_t *var_operand = temp_var_operand_with_stack(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 
@@ -213,8 +94,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
         } else if (is_qword_int(imm->kind)) {
             // 大数值必须通过 reg 转化
             type_kind kind = operand_type_kind(imm_operand);
-            lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-            slice_push(c->var_defs, temp->value);
+            lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
 
             linked_push(list, lir_op_move(temp, imm_operand));
             temp = lir_reset_operand(temp, imm_operand->pos);
@@ -245,58 +125,24 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = stack_slot;
         stack->size = type_kind_sizeof(var->type.kind);
+        // rdi param
         lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
-        linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
-        linked_push(list, rt_call(RT_CALL_ENV_CLOSURE, NULL, 0));
+        if (is_alloc_stack(var->type)) {
+            // stack_operand 中保存的就是一个栈地址，此时不需要进行 lea, 只是直接进行 mov 取值
+            linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        } else {
+            linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+        }
+        // rsi param
+        linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rsi), int_operand(ct_find_rtype_hash(var->type))));
+
+        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL,
+                                     lir_label_operand(RT_CALL_ENV_CLOSURE, false),
+                                     operand_new(LIR_OPERAND_ARGS, slice_new()),
+                                     NULL));
+
     }
 
-    return list;
-}
-
-static linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-
-    // lower call actual params
-    linked_t *temps = amd64_actual_params_lower(c, op->second->value);
-    linked_concat(list, temps);
-    op->second->value = slice_new();
-
-    if (op->output == NULL) {
-        linked_push(list, op);
-    } else {
-        lir_operand_t *reg_operand = select_return_reg(op->output);
-        linked_push(list, lir_op_new(op->code, op->first, op->second, reg_operand));
-        linked_push(list, lir_op_move(op->output, reg_operand));
-    }
-
-    return list;
-}
-
-static linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    linked_push(list, op);
-
-    // fn begin
-    // mov rsi -> formal param 1
-    // mov rdi -> formal param 2
-    // ....
-    linked_t *temps = amd64_formal_params_lower(c, op->output->value);
-    linked_node *current = linked_last(temps);
-    while (current && current->value != NULL) {
-        linked_push(list, current->value);
-        current = current->prev;
-    }
-    op->output->value = slice_new();
-
-    return list;
-}
-
-static linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    // 1.1 return 指令需要将返回值放到 rax 中
-    lir_operand_t *reg_operand = select_return_reg(op->first);
-    linked_push(list, lir_op_move(reg_operand, op->first));
-    linked_push(list, lir_op_new(op->code, reg_operand, NULL, NULL));
     return list;
 }
 
@@ -313,8 +159,7 @@ static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     // 通过一个临时 var, 领 first = output = reg, 从而将三元转换成二元表达式
     type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->var_defs, temp->value);
+    lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
 
     linked_push(list, lir_op_move(temp, op->first));
     linked_push(list, lir_op_new(op->code, temp, op->second, temp));
@@ -327,16 +172,15 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     // second to cl/rcx
-    lir_operand_t *fit_cx_operand = reg_operand(cl->index, operand_type_kind(op->second));
+    lir_operand_t *fit_cx_operand = lir_reg_operand(cl->index, operand_type_kind(op->second));
     linked_push(list, lir_op_move(fit_cx_operand, op->second));
 
     type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand(c->module, type_basic_new(kind));
-    slice_push(c->var_defs, temp->value);
+    lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了
-    lir_operand_t *cl_operand = reg_operand(cl->index, TYPE_UINT8);
+    lir_operand_t *cl_operand = lir_reg_operand(cl->index, TYPE_UINT8);
     // sar/sal
     linked_push(list, lir_op_new(op->code, temp, cl_operand, temp));
     linked_push(list, lir_op_move(op->output, temp));
@@ -347,12 +191,12 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    lir_operand_t *ax_operand = reg_operand(rax->index, operand_type_kind(op->output));
-    lir_operand_t *dx_operand = reg_operand(rdx->index, operand_type_kind(op->output));
+    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
+    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {
-        op->second = amd64_convert_to_var(c, list, op->second);
+        op->second = amd64_convert_first_to_temp(c, list, op->second);
     }
 
     // mov first -> rax
@@ -400,10 +244,12 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             linked_concat(operations, amd64_lower_fn_begin(c, op));
             continue;
         }
-        if (op->code == LIR_OPCODE_FN_END && op->first != NULL) {
+
+        if (op->code == LIR_OPCODE_FN_END) {
             linked_concat(operations, amd64_lower_fn_end(c, op));
             continue;
         }
+
         if (lir_op_factor(op) && is_integer(operand_type_kind(op->output))) {
             // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));
@@ -416,14 +262,32 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
-            op->first = amd64_convert_to_var(c, operations, op->first);
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }
 
         // lea symbol_label -> var 等都是允许的，主要是应对 imm int
         if (op->code == LIR_OPCODE_LEA && op->first->assert_type == LIR_OPERAND_IMM) {
-            op->first = amd64_convert_to_var(c, operations, op->first);
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
+            linked_push(operations, op);
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_LEA && !lir_can_lea(op)) {
+            // lea first output
+            // ---- change to
+            // lea first -> temp_var
+            // mov temp_var -> output
+            lir_operand_t *temp = temp_var_operand_with_stack(c->module, lir_operand_type(op->output));
+            linked_push(operations, lir_op_lea(temp, op->first));
+            linked_push(operations, lir_op_move(op->output, temp));
+
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
+            op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }
@@ -436,6 +300,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         linked_push(operations, op);
     }
+
     block->operations = operations;
 }
 

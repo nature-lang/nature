@@ -1,0 +1,83 @@
+runtime_set_force_gc()
+
+type atm_t = struct {
+    string name
+    string address
+    f32 amount
+    int count
+    string bank
+}
+
+fn make_atm():fn(f32):atm_t {
+    var atm = atm_t{
+        name = 'high park',
+        address = 'shenzhen',
+        amount = 1000,
+        count = 0,
+        bank = 'china bank'
+    }
+
+    return fn(f32 amount):atm_t {
+        atm.amount -= amount
+        return atm
+    }
+}
+
+var atm1_draw = make_atm()
+println(atm1_draw(100).amount)
+println(atm1_draw(100).amount)
+
+var atm2_draw = make_atm()
+println(atm2_draw(100).amount)
+println(atm2_draw(100).amount)
+
+// --- list struct
+var list = vec<atm_t>{}
+list.push(atm_t{
+    amount = 100
+})
+list.push(atm_t{
+    amount = 200
+})
+list.push(atm_t{
+    amount = 300
+})
+list.push(atm_t{
+    amount = 400
+})
+
+var list2 = vec<atm_t>{len=100}
+
+for item in list {
+    println(item.amount)
+    item.amount = 1000
+}
+
+for item in list {
+    println(item.amount)
+}
+
+// --- array
+arr<atm_t,8> array = []
+
+array[0] = atm_t{
+    amount = 100
+}
+
+array[3] = atm_t{
+    amount = 400
+}
+
+array[5] = atm_t{
+    amount = 600
+}
+
+array[7] = atm_t{
+    amount = 800
+}
+
+var list3 = vec<atm_t>{len=200}
+
+for int i=0; i < 8; i+=1 {
+    println(array[i].amount)
+}

@@ -1,0 +1,258 @@
+import syscall
+import fmt
+
+// 基于 c 字符串创建一个 nature 字符串 
+fn from(cptr p):string {
+    return libc_string_new(p)
+}
+
+fn find_char(string s, u8 char, int after):int {
+    for k,v in s {
+        if k < after {
+            continue
+        }
+
+        if v == char {
+            return k
+        }
+    }
+    return -1
+}
+
+fn find(string s, string sub, int after):int {
+    var n = sub.len
+
+    if (n == 0) {
+        return -1
+    }
+
+    if (n == 1) {
+        return find_char(s, sub[0], after)
+    }
+
+    cptr base = s.ref()
+    cptr temp =  strstr((base as uint + after as uint) as cptr, sub.ref())
+    if temp == 0 {
+        return -1
+    }
+
+    uint index = temp as uint - base as uint
+    return index as int
+}
+
+fn reverse(string s):string {
+    var result = vec<u8>{len=s.len}
+
+    for i,c in s {
+        result[s.len - 1 - i] = c
+    }
+
+    return result as string
+}
+
+// 从右侧开始查找，且 index < before 的 sub str
+fn rfind(string s, string sub, int before):int {
+    s = reverse(s)
+    sub = reverse(sub)
+
+    var index = find(s, sub, s.len - before)
+    if index == -1 {
+        return index
+    }
+
+    return s.len - index - sub.len
+}
+
+fn ends_with(string s, string ends):bool {
+  if ends.len > s.len {
+    return false
+  }
+
+  var start = s.len - ends.len
+
+  for i, c in ends {
+    if s[start+i] != c {
+      return false
+    }
+  }
+
+  return true
+}
+
+fn starts_with(string s, string starts):bool {
+  if (starts.len > s.len) {
+    return false
+  }
+
+  for i, c in starts {
+    if s[i] != c {
+      return false
+    }
+  }
+
+  return true
+}
+
+fn contains(string s, string sub):bool {
+    return find(s, sub) != -1
+}
+
+fn finish(string s, string cap):string {
+    if ends_with(s, cap) {
+        return s
+    }
+
+    return s + cap
+}
+
+// 查找 s 的子串 sub, 如果找不到则返回 0
+fn find(string s, string sub):int {
+    return find(s, sub, 0)
+}
+
+// 不包含 end
+fn slice(string s, int start, int end):string {
+    var list = s as [u8]
+    list = list.slice(start, end)
+    return list as string
+}
+
+// 字符串 split
+fn split(string s, string separator):[string] {
+    [string] result = []
+
+    if separator == '' {
+        for v in s {
+            result.push(fmt.sprintf('%c', v))
+        }
+
+        return result
+    }
+
+    if s == '' {
+        return result
+    }
+
+    if s.len <= separator.len {
+        return result
+    }
+
+    var i = 0
+    for i < s.len {
+        var found = find(s, separator, i)
+        if found == -1 {
+            // 剩余字符串全部切到 result 中
+            result.push(slice(s, i, s.len))
+            break
+        }
+
+        // 找到字符串，取前部分子串
+        var part = slice(s, i, found)
+        result.push(part)
+
+        // 更新 i
+        i = found + separator.len
+    }
+
+    return result
+}
+
+fn join([string] list, string separator):string {
+    [u8] result = []
+
+    if list.len == 0 {
+        return ''
+    }
+
+    var i = 0
+    for i < list.len {
+        for v in list[i] {
+            result.push(v)
+        }
+
+        if i < list.len - 1 {
+            for v in separator {
+                result.push(v)
+            }
+        }
+
+        i = i + 1
+    }
+
+    return result as string
+}
+
+fn ascii(string c):u8 {
+    if c.len != 1 {
+        throw 'c length must equal to 1'
+    }
+    var list = c as [u8]
+    return list[0]
+}
+
+fn ltrim(string s, [string] list):string {
+  // string to cut
+  {u8} cut = {}
+  for sub in list {
+    cut.add(sub[0])
+  }
+
+  for i, c in s {
+    if !cut.contains(c) {
+        return slice(s, i, s.len)
+    }
+  }
+
+  return ''
+}
+
+fn rtrim(string s, [string] list):string {
+    // string to cut
+    {u8} cut = {}
+    for sub in list {
+        cut.add(sub[0])
+    }
+
+    for int i = s.len - 1; i >= 0; i -= 1 {
+        if !cut.contains(s[i]) {
+            return slice(s, 0, i + 1)
+        }
+    }
+
+    return ''
+}
+
+fn trim(string s, [string] list):string {
+    return ltrim(rtrim(s, list), list)
+}
+
+// 将所有的 sub_old 替换为 sub_new
+fn replace(string s, string sub_old, string sub_new):string {
+    var result = ""
+
+    // 如果 sub_old 的长度为 0，或者 s 的长度小于 sub_old，直接返回 s
+    if sub_old.len == 0 || s.len < sub_old.len {
+        return s
+    }
+
+    var i = 0
+    for i < s.len {
+        var found = find(s, sub_old, i)
+
+        if found == -1 {
+            result += slice(s, i, s.len)
+            break
+        }
+
+        // 将未匹配部分添加到结果中
+        result += slice(s, i, found)
+
+        // 加上替换字符串
+        result += sub_new
+
+        // 更新 i
+        i = found + sub_old.len
+    }
+
+    return result
+}

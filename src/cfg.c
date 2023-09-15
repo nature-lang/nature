@@ -1,11 +1,72 @@
 #include "cfg.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
 #include <assert.h>
 
-/**
- * 删除不可达代码块
- */
 static void cfg_pruning(closure_t *c) {
+
+    table_t *exists = table_new();
+    linked_t *q = linked_new();
+
+    basic_block_t *entry = c->blocks->take[0];
+    linked_push(q, entry);
+    table_set(exists, entry->name, entry);
+
+    while (!linked_empty(q)) {
+        basic_block_t *b = linked_pop(q);
+
+        for (int i = 0; i < b->succs->count; i++) {
+            basic_block_t *succ = b->succs->take[i];
+            if (!table_exist(exists, succ->name)) {
+                table_set(exists, succ->name, succ);
+                linked_push(q, succ);
+            }
+        }
+    }
+
+    // 处理删除块的关系
+    slice_t *new_blocks = slice_new();
+
+    for (int i = 0; i < c->blocks->count; i++) {
+        basic_block_t *b = c->blocks->take[i];
+        if (!table_exist(exists, b->name)) {
+            // b->name 此时是需要删除的 block
+            // 从 preds 删除
+            for (int j = 0; j < b->preds->count; j++) {
+                basic_block_t *pred = b->preds->take[j];
+
+                for (int k = 0; k < pred->succs->count; k++) {
+                    if (((basic_block_t *) pred->succs->take[k])->id == b->id) {
+                        slice_remove(pred->succs, k);
+                        break;
+                    }
+                }
+            }
+
+            // 从 succs 中删除
+            for (int j = 0; j < b->succs->count; j++) {
+                basic_block_t *succ = b->succs->take[j];
+
+                for (int k = 0; k < succ->preds->count; k++) {
+                    if (((basic_block_t *) succ->preds->take[k])->id == b->id) {
+                        slice_remove(succ->preds, k);
+                        break;
+                    }
+                }
+            }
+        } else {
+            slice_push(new_blocks, b);
+        }
+    }
+
+    // 替换blocks
+    c->blocks = new_blocks;
+}
+
+/**
+ * 使用广度优先遍历, 按照 succs 遍历所有 block 并加入到 table 中, 二次遍历将不在 table 中的 block 进行删除
+ */
+static void cfg_pruning_bak(closure_t *c) {
     slice_t *blocks = slice_new();
     slice_push(blocks, c->blocks->take[0]);
     for (int i = 1; i < c->blocks->count; ++i) {
@@ -39,7 +100,7 @@ static void broken_critical_edges(closure_t *c) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
                 lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
                 lir_operand_t *label = label_op->output;
-                lir_op_t *bal_op = lir_op_bal(label_operand(b->name, true));
+                lir_op_t *bal_op = lir_op_bal(lir_label_operand(b->name, true));
 
                 lir_symbol_label_t *symbol_label = label->value;
                 basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
@@ -123,7 +184,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
 
     // end_label 是最后到 label 如果都不包含 opcode return, 则存在一条不包含 return 的线路
     if (str_equal(b->name, c->end_label)) {
-        assertf(false, "fn %s missing return", c->symbol_name);
+        dump_errorf(c->module, CT_STAGE_CFG, c->fndef->line, c->fndef->column, "fn %s missing return", c->symbol_name);
     }
 
     // 当前 block 没有找到 return, 递归寻找 succ
@@ -173,7 +234,7 @@ static void cfg_build(closure_t *c) {
 
                 // 所有指令块必须以 bal 结尾
                 if (last_op->code != LIR_OPCODE_BAL) {
-                    lir_op_t *temp_op = lir_op_bal(label_operand(new_block->name, true));
+                    lir_op_t *temp_op = lir_op_bal(lir_label_operand(new_block->name, true));
                     linked_push(current_block->operations, temp_op);
                 }
             }

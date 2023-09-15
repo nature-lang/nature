@@ -2,7 +2,7 @@
 var list = [1, 2, 3]
 var (item, err) = try list[5]
 if err.has {
-    print('catch list index err=', err.msg, '\n')
+    print('catch vec index err=', err.msg, '\n')
 }
 println(item)
 
@@ -35,7 +35,7 @@ print(foo.list[1], foo.div(10, 5), '\n')
 // 异常处理
 var (a2, err2) = try foo.list[8]
 if err2.has {
-    print('chain access list err=', err2.msg, '\n')
+    print('chain access vec err=', err2.msg, '\n')
 }
 
 var (a3, err3) = try foo.div(10, 0)

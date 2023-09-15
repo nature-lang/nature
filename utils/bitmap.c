@@ -1,6 +1,7 @@
 #include "bitmap.h"
 #include "helper.h"
 
+// size 的单位是 byte
 bitmap_t *bitmap_new(uint64_t size) {
     bitmap_t *b = NEW(bitmap_t);
 
@@ -41,16 +42,33 @@ int bitmap_set_count(bitmap_t *b) {
 }
 
 char *bitmap_to_str(uint8_t *bits, uint64_t count) {
-    char *result = malloc(count);
-    result[count - 1] = '\0';
+    char *result = mallocz(count + 1);
     for (int i = 0; i < count; ++i) {
-        if(bitmap_test(bits, i)) {
+        if (bitmap_test(bits, i)) {
             result[i] = '1';
         } else {
             result[i] = '0';
         };
     }
+    result[count] = '\0';
     return result;
 }
 
+// 如果 index 超过了
+void bitmap_grow_set(bitmap_t *b, uint64_t index, bool test) {
+    uint16_t need_size = index / 8;
+    if (need_size > b->size) {
+        uint8_t *new_bits = mallocz(need_size * 2);
+        memcpy(new_bits, b->bits, b->size);
+        free(b->bits);
+        b->bits = new_bits;
+        b->size = need_size * 2;
+    }
+
+    if (test) {
+        bitmap_set(b->bits, index);
+    } else {
+        bitmap_clear(b->bits, index);
+    }
+}
 

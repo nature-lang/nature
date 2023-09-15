@@ -9,7 +9,7 @@
 #include "src/binary/elf/elf.h"
 #include "utils/slice.h"
 #include "utils/table.h"
-#include "src/structs.h"
+#include "src/types.h"
 
 #define SEC_TACK(_sh_index) ((section_t *) ctx->sections->take[_sh_index])
 

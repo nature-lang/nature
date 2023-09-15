@@ -16,6 +16,8 @@ typedef struct stack {
 
 ct_stack_t *stack_new();
 
+void *stack_top(ct_stack_t *s);
+
 void *stack_pop(ct_stack_t *s); // 出栈 value
 void stack_push(ct_stack_t *s, void *value); // 入栈
 bool stack_empty(ct_stack_t *s);

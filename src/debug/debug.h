@@ -8,7 +8,7 @@
 #include "src/register/interval.h"
 #include "src/register/allocate.h"
 
-string lir_opcode_to_string[UINT8_MAX];
+extern string lir_opcode_to_string[UINT8_MAX];
 
 #define DEBUG_STR_COUNT 1024
 
@@ -18,7 +18,7 @@ string lir_opcode_to_string[UINT8_MAX];
 
 //#define DEBUG_ANALYZER
 
-//#define DEBUG_INFER
+//#define DEBUG_CHECKING
 
 //#define DEBUG_COMPILER
 

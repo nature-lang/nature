@@ -231,7 +231,7 @@ void ssa_add_phi(closure_t *c) {
         table_t *inserted = table_new(); // key is block name
 
         linked_t *work_list = table_get(c->ssa_var_blocks, var->ident);
-        assert(work_list);
+        assertf(work_list, "var '%s' has use, but lack def");
         while (!linked_empty(work_list)) {
             basic_block_t *var_def_block = linked_pop(work_list);
             for (int j = 0; j < var_def_block->df->count; ++j) {
@@ -408,6 +408,12 @@ void ssa_use_def(closure_t *c) {
             vars = extract_var_operands(op, FLAG(LIR_FLAG_DEF));
             for (int i = 0; i < vars->count; ++i) {
                 lir_var_t *var = vars->take[i];
+                // 记录所有的定值。
+                if (!table_exist(exist_global_vars, var->ident)) {
+                    slice_push(c->var_defs, var);
+                    table_set(exist_global_vars, var->ident, var);
+                }
+
                 if (!table_exist(exist_def, var->ident)) {
                     slice_push(def, var);
                     table_set(exist_use, var->ident, var);
@@ -497,8 +503,8 @@ void ssa_rename(closure_t *c) {
     table_t *stack_table = table_new(); // use 使用，判断使用的变量的名称
 
     // 遍历所有变量,进行初始化
-    SLICE_FOR(c->ssa_globals) {
-        lir_var_t *var = SLICE_VALUE(c->ssa_globals);
+    SLICE_FOR(c->var_defs) {
+        lir_var_t *var = SLICE_VALUE(c->var_defs);
         uint8_t *number = NEW(uint8_t);
         *number = 0;
 
@@ -534,9 +540,6 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         slice_t *vars = extract_var_operands(op, FLAG(LIR_FLAG_USE));
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
-            if (!table_exist(c->ssa_globals_table, var->old)) {
-                continue;
-            }
 
             var_number_stack *stack = table_get(stack_table, var->old);
             assert(stack);
@@ -547,9 +550,6 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         vars = extract_var_operands(op, FLAG(LIR_FLAG_DEF));
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
-            if (!table_exist(c->ssa_globals_table, var->old)) {
-                continue;
-            }
 
             uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
