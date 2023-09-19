@@ -200,24 +200,6 @@ let foo as i8
 println(foo + 12)
 ```
 
-Coroutine:
-
-```rust
-var c = 🍀 fn(context c) {
-    var progress = 0
-    for int i = 0; i < 100; i += 1 {
-        progress += 1
-        c.send('progress', progress)
-
-        sleep(1)
-    }
-}
-
-for v in c.wait('progress') {
-    println("current progress=", v)
-}
-```
-
 Function Tags:
 
 ```java
