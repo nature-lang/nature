@@ -11,7 +11,7 @@ static void test_basic() {
     // 添加环境变量
     char *runner_path = path_join(WORKDIR, "tests/runnerdir/runner");
     WORKDIR = path_join(WORKDIR, "tests/mockdir");
-    char *noded_path = path_join(WORKDIR, "noded");
+    char *noded_path = path_join(WORKDIR, "node-c");
 
     remove(noded_path);
 

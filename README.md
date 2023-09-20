@@ -2,7 +2,7 @@
 
 # Nature Programming Language
 
-Nature is the next-generation systems programming language and compiler, striving for elegant and concise syntax while prioritizing the writing and reading experience for developers.
+Nature is the modern systems programming language and compiler, striving for elegant and concise syntax while prioritizing the writing and reading experience for developers.
 
 Key features of nature at the language level include:
 
