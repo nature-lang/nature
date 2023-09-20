@@ -128,8 +128,6 @@ github 讨论社区: [https://github.com/nature-lang/nature/discussions](https:/
 
 ## 🍼 编码示例
 
-## 🍼 编码示例
-
 
 错误处理
 
