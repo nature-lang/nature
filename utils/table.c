@@ -40,6 +40,7 @@ void *table_get(table_t *t, string key) {
 }
 
 bool table_set(table_t *t, char *key, void *value) {
+    key = strdup(key); // 由于需要内部使用，所以不依赖外部的 key
     if (t->count + 1 > t->capacity * TABLE_MAX_LOAD) {
         int capacity = GROW_CAPACITY(t->capacity);
         table_adjust(t, capacity);
@@ -60,11 +61,7 @@ bool table_set(table_t *t, char *key, void *value) {
 
 void table_adjust(table_t *t, int capacity) {
     // 创建一个新的 entries 并初始化
-    table_entry *entries = (table_entry *) malloc(sizeof(table_entry) * capacity);
-    for (int i = 0; i < capacity; ++i) {
-        entries[i].key = NULL;
-        entries[i].value = NULL;
-    }
+    table_entry *entries = mallocz(sizeof(table_entry) * capacity);
 
     t->count = 0;
     for (int i = 0; i < t->capacity; i++) {
@@ -127,7 +124,7 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
 }
 
 table_t *table_new() {
-    table_t *t = malloc(sizeof(table_t));
+    table_t *t = mallocz(sizeof(table_t));
     table_init(t);
     return t;
 }

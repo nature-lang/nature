@@ -8,7 +8,7 @@
 //  exit(code);
 //
 //  va_list args;
-//  char *buf = malloc(sizeof(char) * ERROR_STR_COUNT);
+//  char *buf = mallocz(sizeof(char) * ERROR_STR_COUNT);
 //  va_start(args, format);
 //  vsprintf(buf, format, args);
 //  va_end(args);

@@ -24,14 +24,23 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
-static inline void *mallocz(size_t size) {
-    void *ptr;
-    ptr = malloc(size);
-    if (size) {
-        memset(ptr, 0, size);
-    }
-    return ptr;
-}
+#define TDEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
+
+#undef free
+#define free(ptr) ({ \
+    if (ptr) { \
+        free(ptr);   \
+    } \
+})
+
+
+#define mallocz(size) ({ \
+    void *_ptr = malloc(size); \
+    if (size) { \
+        memset(_ptr, 0, size); \
+    } \
+    _ptr; \
+})
 
 #define GROW_CAPACITY(capacity) \
   ((capacity) < 8 ? 8 : (capacity)*2)
@@ -43,7 +52,6 @@ static inline void *mallocz(size_t size) {
 //#define DEBUG_PARSER 1
 //#define DEBUG 1
 
-#define TDEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
 
 #ifdef DEBUG
 #define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
@@ -53,7 +61,7 @@ static inline void *mallocz(size_t size) {
 
 
 #define COPY_NEW(_type, src) ({ \
-    _type *dst = malloc(sizeof(_type)); \
+    _type *dst = mallocz(sizeof(_type)); \
     memcpy(dst, src, sizeof(_type));    \
     dst;                               \
 })
@@ -138,16 +146,6 @@ static inline char *dsprintf(char *format, ...) {
     return realloc(buf, count + 1);
 }
 
-static inline char *fixed_sprintf(char *format, ...) {
-    char *buf = mallocz(2000);
-    va_list args;
-    va_start(args, format);
-    int count = vsprintf(buf, format, args);
-    va_end(args);
-
-    return realloc(buf, count + 1);
-}
-
 static inline int64_t max(int64_t a, int64_t b) {
     if (a > b) {
         return a;
@@ -170,7 +168,7 @@ static inline char *itoa(int64_t n) {
 
 static inline char *utoa(uint64_t n) {
     int length = snprintf(NULL, 0, "%lu", n);
-    char *str = malloc(length + 1);
+    char *str = mallocz(length + 1);
     snprintf(str, length + 1, "%lu", n);
 
     return str;
@@ -186,10 +184,20 @@ static int inline check_open(char *filepath, int flag) {
     return fd;
 }
 
-static inline char *str_connect(char *a, char *b) {
+static inline char *str_connect_free(char *a, char *b) {
     size_t dst_len = strlen(a);
     size_t src_len = strlen(b);
     char *buf = malloc(dst_len + src_len + 1);
+    sprintf(buf, "%s%s", a, b);
+    free(a);
+    free(b);
+    return buf;
+}
+
+static inline char *str_connect(char *a, char *b) {
+    size_t dst_len = strlen(a);
+    size_t src_len = strlen(b);
+    char *buf = mallocz(dst_len + src_len + 1);
     sprintf(buf, "%s%s", a, b);
     return buf;
 }
@@ -226,7 +234,7 @@ static inline char *file_read(char *path) {
     size_t fileSize = ftell(file);
     rewind(file);
 
-    char *buffer = (char *) malloc(fileSize + 1);
+    char *buffer = (char *) mallocz(fileSize + 1);
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
         exit(74);
@@ -327,7 +335,7 @@ static inline char *ltrim(char *str, char *sub) {
     size_t res_len = len - count * sub_len + 1;
 
     // Allocate memory for the resulting trimmed string
-    char *res = malloc(res_len);
+    char *res = mallocz(res_len);
 
     // Copy the characters after the leading occurrences of the substring to the result
     memcpy(res, str + count * sub_len, res_len - 1);
@@ -340,7 +348,7 @@ static inline char *ltrim(char *str, char *sub) {
 
 static inline char *get_workdir() {
     int size = 256;
-    char *buf = malloc(size);
+    char *buf = mallocz(size);
     VOID getcwd(buf, size);
     return buf;
 }
@@ -427,7 +435,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
         ins = tmp + len_rep;
     }
 
-    tmp = result = malloc(strlen(str) + (len_with - len_rep) * count + 1);
+    tmp = result = mallocz(strlen(str) + (len_with - len_rep) * count + 1);
 
     if (!result)
         return NULL;
@@ -478,7 +486,7 @@ static inline void sys_memory_remove(void *addr, uint64_t size) {
 #endif
 
 static inline int64_t *take_numbers(char *str, uint64_t count) {
-    int64_t *numbers = malloc(count * sizeof(int64_t));
+    int64_t *numbers = mallocz(count * sizeof(int64_t));
     int i = 0;
     char *token;
     token = strtok(str, "\n");
@@ -496,7 +504,7 @@ static inline char *homedir() {
 }
 
 static inline char *fullpath(char *rel) {
-    char *path = (char *) malloc(PATH_MAX * sizeof(char));
+    char *path = (char *) mallocz(PATH_MAX * sizeof(char));
     if (!realpath(rel, path)) {
         return NULL;
     }

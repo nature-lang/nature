@@ -10,7 +10,7 @@ static uint16_t linked_count(linked_t *l) {
 }
 
 linked_t *linked_new() {
-    linked_t *l = malloc(sizeof(linked_t));
+    linked_t *l = mallocz(sizeof(linked_t));
     l->count = 0;
 
     linked_node *empty = linked_new_node();
@@ -232,6 +232,7 @@ void linked_free(linked_t *l) {
     while (l->count > 0) {
         linked_pop_free(l);
     }
+
     // 清理 empty_node
     free(l->front);
 

@@ -1,19 +1,20 @@
 #include <assert.h>
 #include "slice.h"
 #include "stdlib.h"
+#include "helper.h"
 
 slice_t *slice_new() {
-    slice_t *s = malloc(sizeof(slice_t));
+    slice_t *s = mallocz(sizeof(slice_t));
     s->count = 0;
-    s->take = malloc(sizeof(void *) * 8);
+    s->take = mallocz(sizeof(void *) * 8);
     s->capacity = 8;
     return s;
 }
 
 slice_t *slice_capacity_new(int capacity) {
-    slice_t *s = malloc(sizeof(slice_t));
+    slice_t *s = mallocz(sizeof(slice_t));
     s->count = 0;
-    s->take = malloc(sizeof(void *) * capacity);
+    s->take = mallocz(sizeof(void *) * capacity);
     s->capacity = capacity;
     return s;
 }

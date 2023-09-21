@@ -27,7 +27,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
         n_string_t *arg;
         vec_access(argv, i, &arg);
         if (arg == NULL) {
-            return;
+            continue;
         }
 
         char *c_arg = string_ref(arg);
@@ -36,15 +36,17 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     c_args[argv->length] = NULL; // 最后一个元素为 NULL
 
     // envs
+    DEBUGF("[syscall_exec] envp->length=%lu", envp->length);
     char **c_envs = mallocz(sizeof(char *) * envp->length);
     for (int i = 0; i < envp->length; ++i) {
         n_string_t *env;
         vec_access(envp, i, &env);
         if (env == NULL) {
-            return;
+            continue;
         }
 
         char *c_env = string_ref(env);
+        DEBUGF("[syscall_exec] c_env=%p, data=%s, strlen=%lu", (void *) c_env, c_env, strlen(c_env));
         c_envs[i] = c_env;
     }
     c_envs[envp->length] = NULL;

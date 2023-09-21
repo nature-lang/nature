@@ -1,5 +1,6 @@
 #include "ct_list.h"
 #include "assertf.h"
+#include "helper.h"
 
 void ct_list_grow(list_t *l) {
     l->capacity = l->capacity * 2;
@@ -11,7 +12,7 @@ list_t *ct_list_new(uint64_t element_size) {
     list->element_size = element_size;
     list->length = 0;
     list->capacity = VEC_DEFAULT_CAPACITY;
-    list->take = malloc(list->capacity * element_size);
+    list->take = mallocz(list->capacity * element_size);
 
     return list;
 }

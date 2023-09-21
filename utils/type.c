@@ -34,8 +34,9 @@ static rtype_t rtype_bool() {
 static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = fixed_sprintf("%d_%lu", TYPE_NULLABLE_POINTER, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_NULLABLE_POINTER, value_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size =  sizeof(n_pointer_t),
             .hash = hash,
@@ -57,8 +58,9 @@ static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
 static rtype_t rtype_pointer(type_pointer_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = fixed_sprintf("%d_%lu", TYPE_POINTER, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_POINTER, value_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size =  sizeof(n_pointer_t),
             .hash = hash,
@@ -100,8 +102,9 @@ static rtype_t rtype_string() {
 static rtype_t rtype_vec(type_vec_t *t) {
     rtype_t element_rtype = reflect_type(t->element_type);
 
-    char *str = fixed_sprintf("%d_%lu", TYPE_VEC, element_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_VEC, element_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size =  sizeof(n_vec_t),
             .hash = hash,
@@ -124,8 +127,9 @@ rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = reflect_type(t->element_type);
     uint64_t element_size = type_sizeof(t->element_type);
 
-    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
+    char *str = dsprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size = element_size * t->length,
             .hash = hash,
@@ -150,8 +154,9 @@ rtype_t rtype_array(type_array_t *t) {
 rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_ARRAY, length, element_rtype->hash);
+    char *str = dsprintf("%d_%lu_%lu", TYPE_ARRAY, length, element_rtype->hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size = element_size * length,
             .hash = hash,
@@ -182,8 +187,9 @@ static rtype_t rtype_map(type_map_t *t) {
     rtype_t key_rtype = reflect_type(t->key_type);
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = fixed_sprintf("%d_%lu_%lu", TYPE_MAP, key_rtype.hash, value_rtype.hash);
+    char *str = dsprintf("%d_%lu_%lu", TYPE_MAP, key_rtype.hash, value_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size =  sizeof(n_map_t),
             .hash = hash,
@@ -206,8 +212,9 @@ static rtype_t rtype_map(type_map_t *t) {
 static rtype_t rtype_set(type_set_t *t) {
     rtype_t key_rtype = reflect_type(t->element_type);
 
-    char *str = fixed_sprintf("%d_%lu", TYPE_SET, key_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_SET, key_rtype.hash);
     uint32_t hash = hash_string(str);
+    free(str);
     rtype_t rtype = {
             .size =  sizeof(n_set_t),
             .hash = hash,
@@ -353,7 +360,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
     uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits, &offset, t);
 
-    uint64_t *element_hash_list = malloc(sizeof(uint64_t) * t->properties->length);
+    uint64_t *element_hash_list = mallocz(sizeof(uint64_t) * t->properties->length);
     // 记录需要 gc 的 key 的
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
@@ -772,12 +779,15 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     va_start(valist, count);
     for (int i = 0; i < count; i++) {
         type_kind arg_kind = va_arg(valist, type_kind);
-        str = str_connect(str, itoa(arg_kind));
+        str = str_connect_free(str, itoa(arg_kind));
     }
     va_end(valist);
 
     uint64_t hash = hash_string(str);
-    rtype_t *rtype = table_get(rt_rtype_table, itoa(hash));
+    free(str);
+    str = itoa(hash);
+    rtype_t *rtype = table_get(rt_rtype_table, str);
+    free(str);
     if (rtype) {
         return rtype;
     }
@@ -809,8 +819,9 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
 
     rtype->hash = hash;
     rtype->in_heap = kind_in_heap(kind);
-
-    table_set(rt_rtype_table, itoa(rtype->hash), rtype);
+    str = itoa(rtype->hash);
+    table_set(rt_rtype_table, str, rtype);
+    free(str);
     return rtype;
 }
 
@@ -821,9 +832,12 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
  */
 rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     // 更简单的计算一下 hash 即可 array, len + scan 计算即可
-    char *str = fixed_sprintf("%d_%lu_%lu", kind, length, TYPE_POINTER);
+    char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_POINTER);
     uint64_t hash = hash_string(str);
-    rtype_t *rtype = table_get(rt_rtype_table, itoa(hash));
+    free(str);
+    str = itoa(hash);
+    rtype_t *rtype = table_get(rt_rtype_table, str);
+    free(str);
     if (rtype) {
         return rtype;
     }
@@ -836,7 +850,9 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
     rtype->hash = hash;
     rtype->in_heap = true;
-    table_set(rt_rtype_table, itoa(rtype->hash), rtype);
+    str = itoa(rtype->hash);
+    table_set(rt_rtype_table, str, rtype);
+    free(str);
     return rtype;
 }
 

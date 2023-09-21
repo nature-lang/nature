@@ -45,9 +45,12 @@ void *string_ref(n_string_t *n_str) {
     DEBUGF("[runtime.string_ref] length=%lu, data=%p", n_str->length, n_str->data);
 
     // 结尾添加 '\0' 字符
+//    if (n_str->data[n_str->length] != '\0') {
     int a = '\0';
     vec_push(n_str, &a);
     n_str->length -= 1;
+//    }
+
 
     return n_str->data;
 
