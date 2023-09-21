@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 
 #include "assertf.h"
+#include "errno.h"
 
 #define string char *
 #define STRING_EOF '\0'
@@ -465,7 +466,7 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
 #ifdef __LINUX
 
 static inline void sys_memory_remove(void *addr, uint64_t size) {
-    madvise(addr, size, MADV_REMOVE);
+    madvise(addr, size, MADV_DONTNEED);
 }
 
 #else

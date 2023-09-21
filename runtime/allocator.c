@@ -40,29 +40,38 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
     uint64_t find_max = 0;
     for (uint64_t i = *start; i < *end; ++i) {
         page_summary_t s = summaries[i];
-        find_max += s.start;
+        find_max += s.start; // 左侧 + 新的 s 的 start
         if (find_max >= pages_count) {
-            // 找到了
             find = true;
             find_end = i;
             break;
         }
 
+        // 当前 chunk 中间存在更大的 max 区域, 此时从当前 chunk 开始从新计算 find_max
         if (s.max > find_max) {
             find_max = s.max;
             find_start = i;
         }
+
+        // find max 超过了需求熟练
         if (find_max >= pages_count) {
-            // 找到了
+            // 找到了完整的空闲位置
             find = true;
             find_end = i;
             break;
         }
 
-        // 目前的空间都不满足条件，判断当前空间是否是完整空闲，非完整的空闲，必须要中断了
+        // 目前的空间都不满足条件，判断当前空间是否是整个空闲(s.end = max_pages_count 表示全空闲)
+        // 如果非完整的空闲，则会导致连续性中断, 此时从 s.end 从新开始计算
         if (s.end != max_pages_count) {
-            find_start = i;
-            find_max = s.end;
+            if (s.end > 0) {
+                find_start = i; // 已经从 i 开始记录
+                find_max = s.end;
+            } else {
+                // s.end == 0, 表示当前 chunk 完全不可用，此时充值 find_max, 并且更新 find_start 为下一个块
+                find_start = i + 1;
+                find_max = 0;
+            }
         }
     }
     *start = find_start;
@@ -307,6 +316,8 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
             bit_end = CHUNK_BITS_COUNT - 1;
         }
 
+        DEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu",
+               index, (void *) chunk->blocks, bit_start, bit_end);
         for (uint64_t i = bit_start; i <= bit_end; ++i) {
             if (v) {
                 bitmap_set((uint8_t *) chunk->blocks, i);
@@ -353,6 +364,8 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         }
     }
 
+    DEBUGF("[runtime.page_alloc_find] find continuous pages, start: %lu, end: %lu", start, end);
+
     // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end 中的任意一个位置)
     addr_t find_addr = 0;
     if (start == end) {
@@ -378,18 +391,27 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         // 计算 find_addr
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
 
+        DEBUGF("[runtime.page_alloc_find] find addr=%p, start == end, start: %lu, chunk_base: %p, bit start: %lu, bit end: %lu",
+               (void *) find_addr, start, chunk->blocks, bit_start, bit_end);
+
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
-        // 跨越多个块
+        // start ~ end 这一段连续的内存空间跨越多个 chunk
         page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
         page_summary_t start_summary = l5_summaries[start];
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
+        DEBUGF("[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
+               " end: %lu, bit start: %lu",
+               (void *) find_addr, start, start_summary.start, start_summary.max, start_summary.end, end, bit_start);
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
     assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align_up", find_addr);
 
     // 更新相关的 chunks 为使用状态
     chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
+
+    DEBUGF("[runtime.page_alloc_find] find_addr: %p, page_count: %lu, size: %lu",
+           (void *) find_addr, pages_count, pages_count * ALLOC_PAGE_SIZE);
 
     return find_addr;
 }
@@ -442,6 +464,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
 
     void *v = NULL;
     while (true) {
+        allocated_total_bytes += alloc_size;
         v = sys_memory_map((void *) hint->addr, alloc_size);
         if (v == (void *) hint->addr) {
             // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
@@ -464,6 +487,9 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
         mheap->arenas[i] = arena;
         slice_push(mheap->arena_indexes, (void *) i);
     }
+
+    // 虚拟内存映射并不会真的写入到内存，必须触发内存页中断才行
+    DEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu", allocated_total_bytes);
 
     *size = alloc_size;
     return v;
@@ -638,9 +664,12 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
         uncache_span(mcentral, mspan);
     }
 
-    // cache
+    // 从 mcentral 中读取一个 span 进行读取
     mspan = cache_span(mcentral);
     mcache->alloc[spanclass] = mspan;
+    DEBUGF("[runtime.mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu",
+           mcentral, spanclass, mspan->spanclass, (void *) mspan->base, (void *) mspan->end, mspan->obj_size,
+           mspan->alloc_count);
     return mspan;
 }
 
@@ -824,7 +853,15 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     // arena.bits 保存了当前 span 中的指针 bit, 当下一次当前内存被分配时会覆盖写入
     // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
 
+    remove_total_bytes += span->pages_count * ALLOC_PAGE_SIZE;
+
     // 将物理内存归还给操作系统
+    DEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=0x%lx, span.pages_count=%ld, remove_size=%lu",
+           remove_total_bytes / 1024 / 1024,
+           span->base,
+           span->pages_count,
+           span->pages_count * ALLOC_PAGE_SIZE);
+
     sys_memory_remove((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
 }
 
