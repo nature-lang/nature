@@ -7,7 +7,7 @@
 #define TABLE_MAX_LOAD 0.75
 
 typedef struct {
-    string key;
+    char *key;
     void *value;
 } table_entry;
 

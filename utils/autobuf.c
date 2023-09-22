@@ -5,7 +5,7 @@ autobuf_t *autobuf_new(uint64_t cap) {
     autobuf_t *buf = NEW(autobuf_t);
     assertf(buf, "Memory allocation for autobuf_t failed");
 
-    buf->data = malloc(cap);
+    buf->data = mallocz(cap);
     assertf(buf->data, "Memory allocation for autobuf_t failed");
 
     buf->len = 0; // Initially, the length is zero

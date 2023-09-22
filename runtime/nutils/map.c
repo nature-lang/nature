@@ -114,6 +114,7 @@ n_cptr_t map_access(n_map_t *m, void *key_ref) {
         return 0;
     }
 
+    free((void *) key_str);
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回
@@ -144,6 +145,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
            key_rtype->kind,
            key_str,
            hash_index);
+    free((void *) key_str);
 
     uint64_t data_index = 0;
     if (hash_value_empty(hash_value)) {

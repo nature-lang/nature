@@ -1,11 +1,17 @@
 #include "memory.h"
+#include "stdlib.h"
 
+uint64_t remove_total_bytes = 0; // 当前回收到物理内存中的总空间
+uint64_t allocated_total_bytes = 0; // 当前分配的总空间
 uint64_t allocated_bytes = 0; // 当前分配的内存空间
 uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
 bool force_gc = 0; // runtime_judge_gc 总是立刻进行 gc
 
 rtype_t *rt_find_rtype(uint32_t rtype_hash) {
-    return table_get(rt_rtype_table, itoa(rtype_hash));
+    char *str = itoa(rtype_hash);
+    rtype_t *result = table_get(rt_rtype_table, str);
+    free(str);
+    return result;
 }
 
 uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
@@ -82,8 +88,9 @@ void rtypes_deserialize() {
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
-        table_set(rt_rtype_table, itoa(r->hash), r);
-
+        char *str = itoa(r->hash);
+        table_set(rt_rtype_table, str, r);
+        free(str);
     }
 
 

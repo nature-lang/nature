@@ -31,19 +31,25 @@ static bool self_is_imm_dom(slice_t *be_doms, basic_block_t *self, uint64_t awai
 
 /**
  * 计算 block 中的直接支配者
- * @param be_doms
- * @param block
+ * @param doms
+ * @param self
  * @return
  */
-static basic_block_t *calc_imm_domer(slice_t *be_doms, basic_block_t *await) {
-    for (int i = 0; i < be_doms->count; ++i) {
-        basic_block_t *self = be_doms->take[i];
+static basic_block_t *calc_imm_domer(slice_t *doms, basic_block_t *self) {
+    for (int i = 0; i < doms->count; ++i) {
+        basic_block_t *dom = doms->take[i];
+
+        // self 不能作为自己的的最近支配节点
+        if (dom->id == self->id) {
+            continue;
+        }
+
         // 判断 item 是否被除了 [await->id 和 self->id 以外的所有 id 所支配]
-        if (self_is_imm_dom(be_doms, self, await->id)) {
-            return self;
+        if (self_is_imm_dom(doms, dom, self->id)) {
+            return dom;
         }
     }
-    assertf(false, "block=%s must have one imm dom", await->name);
+    assertf(false, "block=%s must have one imm dom", self->name);
     exit(1);
 }
 
@@ -121,7 +127,7 @@ void ssa_domers(closure_t *c) {
 /**
  * 计算最近支配点
  * 在支配 p 的点中，若一个支配点 i (i != p)， i 被 p 剩下其他的所有的支配点支配，则称 i 为 p 的最近支配点 imm_domer
- * B0 没有 imm_domer
+ * B0 没有 imm_domer, 其他所有节点至少一个一个除了自身意外的最小支配者！
  * imm_domer 一定是父节点中的某一个
  * @param c
  */

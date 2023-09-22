@@ -55,6 +55,8 @@
 #define DEFAULT_NEXT_GC_BYTES  (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
+extern uint64_t remove_total_bytes; // 当前回收到物理内存中的总空间
+extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern uint64_t allocated_bytes; // 当前分配的内存空间
 extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
 extern bool force_gc; // runtime_judge_gc 总是立刻进行 gc

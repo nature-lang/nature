@@ -267,13 +267,8 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-#ifdef DEBUG
             DEBUGF("[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld",
                    span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
-
-            // 将对应位置的内存设置为 0
-            memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
-#endif
 
         }
     }
@@ -287,7 +282,7 @@ static void sweep_span(linked_t *full, linked_t *partial, mspan_t *span) {
     span->alloc_count = bitmap_set_count(span->alloc_bits);
 
     if (span->alloc_count == 0) {
-        DEBUGF("span free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
+        DEBUGF("[sweep_span] span free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
         mheap_free_span(memory->mheap, span);
         free_mspan_meta(span);
         return;

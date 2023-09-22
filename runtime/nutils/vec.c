@@ -89,6 +89,7 @@ void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+    DEBUGF("[runtime.vec_assign] element_size=%lu", element_size);
     // 计算 offset
     uint64_t offset = rtype_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->data + offset;

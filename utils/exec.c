@@ -109,7 +109,7 @@ char *command_output(const char *work_dir, const char *command) {
     char buffer[128];
     size_t size = 0;
     size_t capacity = 128;
-    result = (char *) malloc(capacity * sizeof(char));
+    result = (char *) mallocz(capacity * sizeof(char));
     if (!result) {
         perror("malloc");
         pclose(pipe);
