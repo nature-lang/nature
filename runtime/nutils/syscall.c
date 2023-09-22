@@ -22,7 +22,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char *p_str = string_ref(path);
 
     // args 转换成 char* 格式并给到 execve
-    char **c_args = mallocz(sizeof(char *) * argv->length + 1);
+    char **c_args = mallocz(sizeof(char *) * (argv->length + 1));
     for (int i = 0; i < argv->length; ++i) {
         n_string_t *arg;
         vec_access(argv, i, &arg);
@@ -37,7 +37,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
 
     // envs
     DEBUGF("[syscall_exec] envp->length=%lu", envp->length);
-    char **c_envs = mallocz(sizeof(char *) * envp->length);
+    char **c_envs = mallocz(sizeof(char *) * (envp->length + 1));
     for (int i = 0; i < envp->length; ++i) {
         n_string_t *env;
         vec_access(envp, i, &env);
