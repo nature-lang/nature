@@ -140,12 +140,12 @@ var t = test {
     list = [1, 2, 3, 4, 5]
 }
 
-var (item, err) = try foo.list[8]
+var (item, err) = try t.list[8]
 if err.has {
     println("chain access list error=", err.msg)
 }
 
-var (_, err) = try foo.div(10, 0)
+var (_, err) = try t.div(10, 0)
 if err.has {
     println("division error", err.msg)
 }
