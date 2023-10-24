@@ -1,0 +1,18 @@
+import matplotlib.pyplot as plt
+
+# Sample temperature data for 12 months
+monthly_temperatures = [12.3, 13.1, 14.2, 16.4, 18.9, 21.5, 23.8, 24.6, 23.1, 19.8, 16.3, 13.7]
+
+# Calculate the annual average temperature
+annual_average_temperature = sum(monthly_temperatures) / len(monthly_temperatures)
+
+# Create a bar chart to visualize monthly temperatures
+months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+plt.bar(months, monthly_temperatures)
+plt.xlabel('Month')
+plt.ylabel('Temperature (°C)')
+plt.title('Monthly Average Temperatures')
+plt.show()
+
+# Display the annual average temperature
+print(f'Annual Average Temperature: {annual_average_temperature:.2f} °C')
