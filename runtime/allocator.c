@@ -895,9 +895,7 @@ void memory_init() {
         mcentral_t *item = &mheap->centrals[i];
         item->spanclass = i;
         item->partial_swept = linked_new();
-//        item.partial_unswept = linked_new();
         item->full_swept = linked_new();
-//        item.full_unswept = linked_new();
     }
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用

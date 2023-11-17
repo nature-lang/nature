@@ -3,6 +3,7 @@
 bin
 release/
 tmp/
+.vscode
 .idea
 .DS_store
 test.text

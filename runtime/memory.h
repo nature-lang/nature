@@ -222,6 +222,7 @@ typedef struct processor_t {
     mmode_t system_mode;
     mcache_t mcache;
     n_errort *errort;
+    pthread_t *thread;
 } processor_t;
 
 typedef struct {

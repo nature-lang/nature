@@ -34,9 +34,8 @@
     makecontext(&_new.ctx, _fn, 0); \
     swapcontext(&_old.ctx, &_new.ctx);                     \
 
-
-uint64_t processor_count; // 逻辑处理器数量,当前版本默认为 1 以单核的方式运行
-processor_t *processor_list;
+extern int cpu_count;
+extern processor_t *processor_list;
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

@@ -1,5 +1,7 @@
 #include "runtime.h"
 #include "runtime/nutils/basic.h"
+#include "sysmon.h"
+#include "coroutine.h"
 
 /**
  * ref 可能是栈上，数组中，全局变量中存储的 rtype 中的值
@@ -47,34 +49,37 @@ extern void main();
  * crt1.o _start -> main  -> user_main
  */
 void runtime_main(int argc, char *argv[]) {
+    // - read arg
     DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
-
     command_argc = argc;
     command_argv = argv;
 
-    // - 堆内存管理初始化
+    // - heap memory init
     memory_init();
     DEBUGF("[runtime_main] memory init success")
 
-    // - processor 初始化(包括当前执行栈记录,用户栈生成)
-    DEBUGF("[runtime_main] rt_rtype_table base=%p", rt_rtype_table);
+    // - coroutine init
+    // Monitor thread
+    sysmon_run();
     processor_init();
+
+    DEBUGF("[runtime_main] rt_rtype_table base=%p", rt_rtype_table);
     DEBUGF("[runtime_main] processor init success")
 
     // - 初始化 stack return addr 为 main
-    processor_t *p = processor_get();
+//    processor_t *p = processor_get();
 
-    DEBUGF("[runtime_main] current processor %p, will switch to user main call, user_stack=%lx", p,
-           p->user_mode.stack_base);
+//    DEBUGF("[runtime_main] current processor %p, will switch to user main call, user_stack=%lx", p,
+//           p->user_mode.stack_base);
     // 切换到用户栈并执行目标函数(寄存器等旧数据会存到 p->system_mode)
-    MODE_CALL(p->user_mode, p->system_mode, main);
+//    MODE_CALL(p->user_mode, p->system_mode, main);
 
-    // 检查错误
-    DEBUGF("[runtime_main] has errort? %d", p->errort->has);
-    if (p->errort->has) {
-        processor_dump_errort(p->errort);
-        exit(1);
-    }
+    // 全局错误检查？ 不再需要了
+//    DEBUGF("[runtime_main] has errort? %d", p->errort->has);
+//    if (p->errort->has) {
+//        processor_dump_errort(p->errort);
+//        exit(1);
+//    }
 
     DEBUGF("[runtime_main] user code run completed,will exit");
 }
