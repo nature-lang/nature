@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ucontext.h>
+#include "aco/aco.h"
 
 #include "utils/custom_links.h"
 #include "utils/helper.h"
@@ -11,6 +12,7 @@
 #include "utils/linked.h"
 #include "utils/bitmap.h"
 #include "sizeclass.h"
+
 
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
@@ -208,22 +210,6 @@ typedef struct {
     } current_arena;
 } mheap_t;
 
-
-/**
- * linux 线程由自己的系统栈，多个线程就有多个 system stack
- * 由于进入到 runtime 的大多数情况中都需要切换栈区，所以必须知道当前线程的栈区
- * 如果 processor 是第一个线程，那么其 system_stack 和 linux main stack 相同,
- * copy linux stack 时并不需要精准的范围，base 地址直接使用当前 rsp, end 地址使用自定义大小比如 64kb 就行了
- * 关键是切换到 user stack 时记录下 rsp 和 rbp pointer
- */
-typedef struct processor_t {
-    mmode_t temp_mode;
-    mmode_t user_mode;
-    mmode_t system_mode;
-    mcache_t mcache;
-    n_errort *errort;
-    pthread_t *thread;
-} processor_t;
 
 typedef struct {
     mheap_t *mheap;

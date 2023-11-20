@@ -34,9 +34,6 @@
     makecontext(&_new.ctx, _fn, 0); \
     swapcontext(&_old.ctx, &_new.ctx);                     \
 
-extern int cpu_count;
-extern processor_t *processor_list;
-
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
  * 第一版总是返回 processor_main

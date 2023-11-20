@@ -1,4 +1,5 @@
 #include "processor.h"
+#include "basic.h"
 
 #include <uv.h>
 
@@ -6,39 +7,53 @@ int cpu_count;
 processor_t *processor_list;
 
 /**
- * 从 current rsp 中截取大概 64KB 作为 process main 的 system_stack, 起点直接从
- * rsp 开始算
+ * 阻塞特定时间的网络 io 时间, 如果有 io 事件就绪则立即返回
+ * uv_run 有三种模式
+ * UV_RUN_DEFAULT: 持续阻塞不返回
+ * UV_RUN_ONCE: 处理至少活跃的 fd 后返回, 如果没有活跃的 fd 则一直阻塞 (基于此 + uv_timer 实现延迟阻塞)
+ * UV_RUN_NOWAIT: 不阻塞, 如果没有事件就绪则立即返回
+ * @param timeout_ms
+ * @return
  */
-static void processor_main_init(processor_t *p) {
-    // 初始化系统栈与上下文
-    mmode_t *mode = &p->system_mode;
-    mode->stack_base = (addr_t)mode->ctx.uc_stack.ss_sp;
-    mode->stack_size = (addr_t)mode->ctx.uc_stack.ss_size;  // getcontext 给的 0
+static void *io_run(uint64_t timeout_ms) {
 
-    mode = &p->user_mode;
-    mode->stack_size = MSTACK_SIZE;
-    mode->stack_base = (addr_t)sys_memory_map((void *)0x4000000000, MSTACK_SIZE);
-    //    mode->ctx.uc_stack.ss_size = MSTACK_SIZE;
-    //    mode->ctx.uc_stack.ss_sp = (void *) mode->stack_base;
+}
 
-    // 临时栈
-    mode = &p->temp_mode;
-    mode->stack_size = MSTACK_SIZE;
-    mode->stack_base = (addr_t)sys_memory_map((void *)0x5000000000, MSTACK_SIZE);
-    //    mode->ctx.uc_stack.ss_size = MSTACK_SIZE;
-    //    mode->ctx.uc_stack.ss_sp = (void *) mode->stack_base;
+/**
+ * 检测 coroutine 当前是否需要单独线程调度，如果不需要单独线程则直接在当前线程进行 aco_resume
+ */
+static void coroutine_run(processor_t *p, coroutine_t *c) {
 
-    p->errort = n_errort_new(string_new("", 0), 0);
 }
 
 // handle by thread
 static void *processor_run(void *arg) {
-    int i = *(int *)arg;
+    int i = *(int *) arg;
     free(arg);
 
     processor_t *p = &processor_list[i];
 
-    // 对 p 进行调度处理(p 上面可能还没有 co)
+    // 对 p 进行调度处理(p 上面可能还没有 coroutine)
+    while (true) {
+        // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
+        io_run(100);
+
+        // - 处理 coroutine (找到 io 可用的 goroutine)
+        LINKED_FOR(p->runnable_list) {
+            coroutine_t *co = LINKED_VALUE();
+            assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
+            coroutine_run(p, co);
+        }
+
+        if (need_stw()) {
+            p->safe_point = true;
+            while (need_stw()) {
+                usleep(50); // 每 50ms 检测一次 STW 是否解除
+            }
+        }
+
+        // TODO 判断安全退出
+    }
 }
 
 void processor_init() {
@@ -90,8 +105,8 @@ void processor_dump_errort(n_errort *errort) {
 
     n_trace_t first_trace = {};
     vec_access(errort->traces, 0, &first_trace);
-    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *)errort->msg->data,
-                              (char *)first_trace.path->data, first_trace.line, first_trace.column);
+    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *) errort->msg->data,
+                              (char *) first_trace.path->data, first_trace.line, first_trace.column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
@@ -101,7 +116,7 @@ void processor_dump_errort(n_errort *errort) {
         for (int i = 0; i < errort->traces->length; ++i) {
             n_trace_t trace = {};
             vec_access(errort->traces, i, &trace);
-            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *)trace.ident->data, (char *)trace.path->data,
+            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
                             trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
