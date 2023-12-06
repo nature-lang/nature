@@ -5,3 +5,4 @@ TabWidth: 4
 ColumnLimit: 120
 SpacesBeforeTrailingComments: 1
 #AlignTrailingComments: false # 对齐连续行的注释
+AllowShortFunctionsOnASingleLine: false

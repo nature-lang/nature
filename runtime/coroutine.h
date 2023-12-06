@@ -5,12 +5,11 @@
 
 void co_init();
 
-void co_run(processor_t *p, coroutine_t *c);
+void co_run();
 
 /**
  * 读取当前线程的 processor_t
  */
-void co_yield();
+void co_yield ();
 
-
-#endif //NATURE_COROUTINE_H
+#endif // NATURE_COROUTINE_H

@@ -1,38 +1,65 @@
 #ifndef NATURE_PROCESSOR_H
 #define NATURE_PROCESSOR_H
 
-#include "memory.h"
-#include "nutils/errort.h"
-#include <stdio.h>
 #include <stdint.h>
+#include <uv.h>
 
-#define STACK_TOP() ({\
-    uint64_t addr = 0; \
-    __asm__ __volatile__("movq %%rsp, %[addr]" :  [addr] "=r"(addr) : ); \
-    addr;})           \
+#include "basic.h"
+#include "nutils/errort.h"
 
-#define STACK_FRAME_BASE() ({\
-    uint64_t addr = 0; \
-    __asm__ __volatile__("movq %%rbp, %[addr]" :  [addr] "=r"(addr) : ); \
-    addr;})\
+extern int cpu_count;
+extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
+extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
+extern uv_key_t local_processor_key;
 
-#define DEBUG_STACK()  {\
-    processor_t *_p = processor_get(); \
-    mmode_t _s = _p->user_mode;      \
-    DEBUGF("\nFN: %s", __func__);                   \
-    DEBUGF("user_stack:  base=0x%lx, size=0x%lx, ctx_sp=%p, bp=0x%lx", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp, extract_frame_base(_s)); \
-    _s = _p->temp_mode; \
-    DEBUGF("temp_stack:  base=0x%lx, size=0x%lx, ctx_sp=%p, bp=0x%lx", _s.stack_base, _s.stack_size, _s.ctx.uc_stack.ss_sp, extract_frame_base(_s)); \
-    DEBUGF("actual:  top=%lx, frame=%lx\n", STACK_TOP(), STACK_FRAME_BASE());                                    \
-} \
+// 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
+bool processor_need_stw();
 
-#define MODE_CALL(_new, _old, _fn) \
-    getcontext(&_new.ctx);                                 \
-    _new.ctx.uc_stack.ss_sp = (void *) _new.stack_base; \
-    _new.ctx.uc_stack.ss_size = _new.stack_size; \
-    _new.ctx.uc_link = &_old.ctx; \
-    makecontext(&_new.ctx, _fn, 0); \
-    swapcontext(&_old.ctx, &_new.ctx);                     \
+/**
+ *  processor 停止调度
+ */
+bool processor_need_stop();
+
+/**
+ * 阻塞特定时间的网络 io 时间, 如果有 io 事件就绪则立即返回
+ * uv_run 有三种模式
+ * UV_RUN_DEFAULT: 持续阻塞不返回, 可以使用 uv_stop 安全退出
+ * UV_RUN_ONCE: 处理至少活跃的 fd 后返回, 如果没有活跃的 fd 则一直阻塞
+ * UV_RUN_NOWAIT: 不阻塞, 如果没有事件就绪则立即返回
+ * @param timeout_ms
+ * @return
+ */
+int io_run(processor_t *p, uint64_t timeout_ms);
+
+/**
+ * processor_int 会调用 io_init 初始化当前线程中的时间循环模型
+ */
+void io_init();
+
+/**
+ * 一个阻塞的循环调度器，不停的从当前 share_processor 中读取 runnable_list 进行处理，处理完成后通过 io_run 阻塞一段时间
+ * 每一次循环结束会调用 need_stw 判断是否需要 STW
+ *
+ * 处理 coroutine 可能会存在阻塞的情况, 1. 阻塞系统调用 2. tempcall 3. for 循环处理
+ */
+void processor_run(processor_t *p);
+
+/**
+ * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
+ * 每个 share_processor 可以通过 void* arg 直接找到自己的 share_processor_t 对象
+ */
+void processor_init();
+
+/**
+ * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
+ */
+void coroutine_dispatch(coroutine_t *co);
+
+/**
+ * 有 processor_run 调用
+ * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
+ */
+void coroutine_run(processor_t *p, coroutine_t *co);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
