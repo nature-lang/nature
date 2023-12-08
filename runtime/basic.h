@@ -9,7 +9,6 @@
 
 typedef enum {
     CO_STATUS_SYSCALL,  // 陷入系统调用
-    CO_STATUS_TEMPCALL, // 陷入 temp call
     CO_STATUS_RUNNABLE, // 允许被调度
     CO_STATUS_RUNNING,  // 正在运行
     CO_STATUS_WAITING,  // 等待 IO 事件就绪
@@ -24,6 +23,9 @@ typedef struct coroutine_t {
     aco_t* aco;
     processor_t* p; // 当前 coroutine 绑定的 p
     void* result;   // coroutine 如果存在返回值，相关的值会放在 result 中
+    // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
+    // 1. solo coroutine 2. coroutine in block syscall
+    uv_thread_t thread_id;
 } coroutine_t;
 
 /**
@@ -34,13 +36,13 @@ struct processor_t {
     void* mcache;            // 线程维度无锁内存分配器
     uv_loop_t* uv_loop;      // uv loop 事件循环
     n_errort* errort;        // 当前线程
-    pthread_t* thread;       // 当前 processor 绑定的 pthread 线程
+    uv_thread_t thread_id;   // 当前 processor 绑定的 pthread 线程
     coroutine_t* coroutine;  // 当前正在调度的 coroutine
     uint64_t started_at;     // 协程调度开始时间
     linked_t* co_list;       // 当前 processor 下的 coroutine 列表
     linked_t* runnable_list; // 当 io 时间就绪后会移动到 runnable_list 等待调度
     bool share;
-    bool safe_point;         // 当前是否处于安全点
+    bool safe_point; // 当前是否处于安全点
 };
 
-#endif //NATURE_BASIC_H
+#endif // NATURE_BASIC_H

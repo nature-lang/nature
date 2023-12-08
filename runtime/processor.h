@@ -11,6 +11,7 @@ extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
 extern uv_key_t local_processor_key;
+extern uv_key_t local_coroutine_key;
 
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
 bool processor_need_stw();
@@ -19,6 +20,12 @@ bool processor_need_stw();
  *  processor 停止调度
  */
 bool processor_need_stop();
+
+/**
+ * 判断 p->thread_id 是否和当前线程的 id 相同
+ * @return
+ */
+bool processor_own(processor_t *p);
 
 /**
  * 阻塞特定时间的网络 io 时间, 如果有 io 事件就绪则立即返回
@@ -42,7 +49,7 @@ void io_init();
  *
  * 处理 coroutine 可能会存在阻塞的情况, 1. 阻塞系统调用 2. tempcall 3. for 循环处理
  */
-void processor_run(processor_t *p);
+void processor_run(void *p);
 
 /**
  * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
@@ -68,10 +75,12 @@ void coroutine_run(processor_t *p, coroutine_t *co);
  */
 processor_t *processor_get();
 
-void processor_init();
-
 void rt_processor_attach_errort(char *msg);
 
 void processor_dump_errort(n_errort *errort);
+
+void pre_block_syscall();
+
+void post_block_syscall();
 
 #endif //NATURE_PROCESSOR_H

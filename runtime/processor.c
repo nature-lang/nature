@@ -3,6 +3,7 @@
 #include <uv.h>
 
 #include "basic.h"
+#include "builtin.h"
 #include "utils/assertf.h"
 
 int cpu_count;
@@ -10,6 +11,7 @@ slice_t* share_processor_list; // 共享协程列表的数量一般就等于线�
 slice_t* solo_processor_list;  // 独享协程列表其实就是多线程
 
 uv_key_t local_processor_key;
+uv_key_t local_coroutine_key;
 
 void uv_stop_callback(uv_timer_t* timer) {
     uv_stop(timer->loop);
@@ -40,14 +42,12 @@ void coroutine_run(processor_t* p, coroutine_t* co) {
     co->status = CO_STATUS_RUNNING;
     p->coroutine = co;
 
+    uv_key_set(&local_coroutine_key, co);
+
     // 将 RIP 指针移动用户代码片段中
     DEBUGF("[runtime.coroutine_run] aco_resume will start, co=%p, aco=%p", co, co->aco);
     aco_resume(co->aco);
-    DEBUGF("[runtime.coroutine_run] aco_yield completed, co=%p, aco=%p", co, co->aco);
-
-    if (co->status != CO_STATUS_DEAD) {
-        co->status = CO_STATUS_WAITING;
-    }
+    DEBUGF("[runtime.coroutine_run] aco_yield completed, co=%p, aco=%p, status=%d", co, co->aco, co->status);
 }
 
 void io_init(processor_t* p) {
@@ -58,8 +58,9 @@ void io_init(processor_t* p) {
 }
 
 // handle by thread
-void processor_run(processor_t* p) {
-    DEBUGF("[runtime.share_process_run] processor=%p", p);
+void processor_run(void* raw) {
+    DEBUGF("[runtime.share_process_run] processor=%p", raw);
+    processor_t* p = raw;
 
     // 初始化事件循环
     io_init(p);
@@ -77,6 +78,13 @@ void processor_run(processor_t* p) {
             coroutine_t* co = LINKED_VALUE();
             assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
             coroutine_run(p, co);
+
+            if (!processor_own(p)) {
+                DEBUGF("[runtime.share_process_run] processor=%p, not own, thread_id=%ld, will exit this thread", p,
+                       p->thread_id);
+
+                goto EXIT;
+            }
         }
 
         if (processor_need_stw()) {
@@ -91,6 +99,9 @@ void processor_run(processor_t* p) {
             return;
         }
     }
+
+EXIT:
+    DEBUGF("thread %lu exited", uv_thread_self());
 }
 
 void coroutine_dispatch(coroutine_t* co) {
@@ -98,12 +109,11 @@ void coroutine_dispatch(coroutine_t* co) {
         processor_t* p = NEW(processor_t);
         slice_push(solo_processor_list, p);
 
-        p->thread = NEW(pthread_t);
-        if (pthread_create(p->thread, NULL, processor_run, p) != 0) {
+        if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assertf(false, "pthread_create failed %s", strerror(errno));
         }
 
-        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread=%p", p->thread);
+        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", p->thread_id);
         return;
     }
 
@@ -131,6 +141,7 @@ void processor_init() {
 
     // - 初始化线程维度遍历
     uv_key_create(&local_processor_key);
+    uv_key_create(&local_coroutine_key);
 
     DEBUGF("[runtime.processor_init] cpu_count=%d", cpu_count);
 
@@ -143,19 +154,21 @@ void processor_init() {
         slice_push(share_processor_list, p);
 
         // 创建一个新的线程用来处理
-        p->thread = NEW(pthread_t);
-
-        if (pthread_create(p->thread, NULL, processor_run, p) != 0) {
+        if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assertf(false, "pthread_create failed %s", strerror(errno));
         }
 
-        DEBUGF("[runtime.processor_init] processor create, index=%d, thread=%p", i, p->thread);
+        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, p->thread_id);
     }
 }
 
 processor_t* processor_get() {
     processor_t* p = uv_key_get(&local_processor_key);
     return p;
+}
+
+coroutine_t* coroutine_get() {
+    return uv_key_get(&local_coroutine_key);
 }
 
 void rt_processor_attach_errort(char* msg) {
@@ -189,4 +202,55 @@ void processor_dump_errort(n_errort* errort) {
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
     }
+}
+
+void pre_block_syscall() {
+    processor_t* p = processor_get();
+    coroutine_t* c = coroutine_get();
+    c->status = CO_STATUS_SYSCALL;
+
+    // solo coroutine 占用整个线程，所以即使是阻塞的 syscall 也不需要进行什么操作
+    if (c->solo) {
+        return;
+    }
+
+    // 接下来 coroutine 将会独占当前线程, 将 thread 绑定在 coroutine 上
+    c->thread_id = p->thread_id;
+
+    // 创建一个新的线程用于其他 processor 调度
+    if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
+        assertf(false, "pthread_create failed %s", strerror(errno));
+    }
+}
+
+void post_block_syscall() {
+    coroutine_t* co = coroutine_get();
+    processor_t* p = processor_get();
+
+    if (co->solo) {
+        // 只有独享线程在遇到阻塞调用时需要延迟处理 stw, 共享线程遇到阻塞 io 时会启动一个新的线程进行处理
+        // 处理完成后直接就退出了，不需要担心后续的操作
+        if (processor_need_stw()) {
+            p->safe_point = true;
+            while (processor_need_stw()) {
+                usleep(50); // 每 50ms 检测一次 STW 是否解除
+            }
+        }
+        co->status = CO_STATUS_RUNNING; // coroutine 继续运行
+        return;
+    }
+
+    // block syscall thread 必定已经解绑。
+    assert(co->thread_id != p->thread_id);
+
+    co->thread_id = 0;
+    co->status = CO_STATUS_RUNNABLE;
+    linked_push(p->runnable_list, co);
+
+    // 让出当前线程控制权即可, processor_run 会做后续的处理
+    aco_yield();
+}
+
+bool processor_own(processor_t* p) {
+    return uv_thread_self() == p->thread_id;
 }
