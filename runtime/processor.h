@@ -6,6 +6,7 @@
 
 #include "basic.h"
 #include "nutils/errort.h"
+#include "nutils/vec.h"
 
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
@@ -38,10 +39,6 @@ bool processor_own(processor_t *p);
  */
 int io_run(processor_t *p, uint64_t timeout_ms);
 
-/**
- * processor_int 会调用 io_init 初始化当前线程中的时间循环模型
- */
-void io_init();
 
 /**
  * 一个阻塞的循环调度器，不停的从当前 share_processor 中读取 runnable_list 进行处理，处理完成后通过 io_run 阻塞一段时间
@@ -57,6 +54,16 @@ void processor_run(void *p);
  */
 void processor_init();
 
+processor_t *processor_new();
+
+/**
+ * @param fn
+ * @param args 元素的类型是 n_union_t 联合类型
+ * @param solo
+ * @return
+ */
+coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo);
+
 /**
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
  */
@@ -66,7 +73,7 @@ void coroutine_dispatch(coroutine_t *co);
  * 有 processor_run 调用
  * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
  */
-void coroutine_run(processor_t *p, coroutine_t *co);
+void coroutine_resume(processor_t *p, coroutine_t *co);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
@@ -83,4 +90,4 @@ void pre_block_syscall();
 
 void post_block_syscall();
 
-#endif //NATURE_PROCESSOR_H
+#endif // NATURE_PROCESSOR_H

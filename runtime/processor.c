@@ -35,35 +35,36 @@ int io_run(processor_t* p, uint64_t timeout_ms) {
 /**
  * 检测 coroutine 当前是否需要单独线程调度，如果不需要单独线程则直接在当前线程进行 aco_resume
  */
-void coroutine_run(processor_t* p, coroutine_t* co) {
+void coroutine_resume(processor_t* p, coroutine_t* co) {
     assertf(co->aco, "coroutine aco not init");
     assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
 
+    // resume 之前需要确保 main_co 的指向
+    if (co->aco == NULL) {
+        aco_share_stack_t* sstk = aco_share_stack_new(0); // 使用默认栈大小
+        assert(sstk);
+        co->aco = aco_create(p->main_aco, sstk, 0, co->fn, NULL);
+    } else {
+        // 直接切换 main_aco, 用于切换
+        co->aco->main_co = p->main_aco;
+    }
+
     co->status = CO_STATUS_RUNNING;
+    p->co_started_at = uv_hrtime();
     p->coroutine = co;
 
     uv_key_set(&local_coroutine_key, co);
 
     // 将 RIP 指针移动用户代码片段中
-    DEBUGF("[runtime.coroutine_run] aco_resume will start, co=%p, aco=%p", co, co->aco);
+    DEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p", co, co->aco);
     aco_resume(co->aco);
-    DEBUGF("[runtime.coroutine_run] aco_yield completed, co=%p, aco=%p, status=%d", co, co->aco, co->status);
-}
-
-void io_init(processor_t* p) {
-    uv_loop_t* loop = NEW(uv_loop_t);
-    uv_loop_init(loop);
-
-    p->uv_loop = loop;
+    DEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d", co, co->aco, co->status);
 }
 
 // handle by thread
 void processor_run(void* raw) {
     DEBUGF("[runtime.share_process_run] processor=%p", raw);
     processor_t* p = raw;
-
-    // 初始化事件循环
-    io_init(p);
 
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&local_processor_key, p);
@@ -77,7 +78,7 @@ void processor_run(void* raw) {
         LINKED_FOR(p->runnable_list) {
             coroutine_t* co = LINKED_VALUE();
             assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
-            coroutine_run(p, co);
+            coroutine_resume(p, co);
 
             if (!processor_own(p)) {
                 DEBUGF("[runtime.share_process_run] processor=%p, not own, thread_id=%ld, will exit this thread", p,
@@ -106,7 +107,7 @@ EXIT:
 
 void coroutine_dispatch(coroutine_t* co) {
     if (co->solo) {
-        processor_t* p = NEW(processor_t);
+        processor_t* p = processor_new();
         slice_push(solo_processor_list, p);
 
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
@@ -116,6 +117,9 @@ void coroutine_dispatch(coroutine_t* co) {
         DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", p->thread_id);
         return;
     }
+
+    // goroutine 第一个状态就是 runnable
+    assert(co->status == CO_STATUS_RUNNABLE);
 
     // 遍历 shared_processor_list 找到 co_list->count 最小的 processor
     processor_t* min_p = NULL;
@@ -150,7 +154,7 @@ void processor_init() {
     solo_processor_list = slice_new();
 
     for (int i = 0; i < cpu_count; ++i) {
-        processor_t* p = NEW(processor_t);
+        processor_t* p = processor_new();
         slice_push(share_processor_list, p);
 
         // 创建一个新的线程用来处理
@@ -175,7 +179,7 @@ void rt_processor_attach_errort(char* msg) {
     DEBUGF("[runtime.rt_processor_attach_errort] msg=%s", msg);
     processor_t* p = processor_get();
     n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
-    p->errort = errort;
+    //    p->errort = errort;
 }
 
 void processor_dump_errort(n_errort* errort) {
@@ -253,4 +257,33 @@ void post_block_syscall() {
 
 bool processor_own(processor_t* p) {
     return uv_thread_self() == p->thread_id;
+}
+
+coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo) {
+    coroutine_t* co = NEW(coroutine_t);
+    co->solo = solo;
+    co->status = CO_STATUS_RUNNABLE;
+    co->args = args;
+    co->aco = NULL;
+    co->p = NULL;
+    co->result = NULL;
+    co->thread_id = 0;
+
+    return co;
+}
+
+processor_t* processor_new() {
+    processor_t* p = NEW(processor_t);
+
+    uv_loop_t* loop = NEW(uv_loop_t);
+    uv_loop_init(loop);
+    p->uv_loop = loop;
+    p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
+    p->thread_id = 0;
+    //    p->errort = n_errort_new(string_new("", 0), 0);
+    p->coroutine = NULL;
+    p->co_started_at = 0;
+    p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
+
+    return p;
 }
