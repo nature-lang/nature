@@ -43,4 +43,6 @@ n_cptr_t cptr_casting(value_casting v);
 
 n_vec_t *std_args();
 
+char *rtype_value_str(rtype_t *rtype, void *data_ref);
+
 #endif //NATURE_BASIC_H

@@ -213,8 +213,9 @@ typedef struct coroutine_t {
     processor_t *p; // 当前 coroutine 绑定的 p
     n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
+
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
-    // 1. solo coroutine 2. coroutine in block syscall
+    // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
     uv_thread_t thread_id;
 } coroutine_t;
 
@@ -232,7 +233,7 @@ struct processor_t {
     coroutine_t *coroutine; // 当前正在调度的 coroutine
     uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
     linked_t *co_list;       // 当前 processor 下的 coroutine 列表
-    linked_t *runnable_list; // 当 io 时间就绪后会移动到 runnable_list 等待调度
+    linked_t *runnable_list; // 可以直接进行调度的 coroutine
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
 };

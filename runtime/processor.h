@@ -14,6 +14,8 @@ extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
 extern uv_key_t local_processor_key;
 extern uv_key_t local_coroutine_key;
 
+void thread_handle_sigurg(int sig);
+
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
 bool processor_need_stw();
 
@@ -38,7 +40,6 @@ bool processor_own(processor_t *p);
  * @return
  */
 int io_run(processor_t *p, uint64_t timeout_ms);
-
 
 /**
  * 一个阻塞的循环调度器，不停的从当前 share_processor 中读取 runnable_list 进行处理，处理完成后通过 io_run 阻塞一段时间
@@ -74,6 +75,8 @@ void coroutine_dispatch(coroutine_t *co);
  * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
+
+void coroutine_yield(co_status_t status);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

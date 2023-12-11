@@ -66,6 +66,19 @@ void processor_run(void* raw) {
     DEBUGF("[runtime.share_process_run] processor=%p", raw);
     processor_t* p = raw;
 
+    // 初始化 aco 和 main_co
+    aco_thread_init(NULL);
+    p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
+    assert(p->main_aco);
+
+    // 注册线程信号监听， 用于抢占式调度
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = thread_handle_sigurg;
+    if (sigaction(SIGURG, &sa, NULL) == -1) {
+        assertf(false, "sigaction failed");
+    }
+
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&local_processor_key, p);
 
@@ -75,11 +88,18 @@ void processor_run(void* raw) {
         io_run(p, 5);
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
-        LINKED_FOR(p->runnable_list) {
-            coroutine_t* co = LINKED_VALUE();
+        while (true) {
+            coroutine_t* co = linked_pop(p->runnable_list);
+            if (!co) {
+                // runnable list 已经处理完成
+                break;
+            }
+
             assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
             coroutine_resume(p, co);
 
+            // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
+            // 则此处不需要在进行后续的处理， 直接退出当前线程即可
             if (!processor_own(p)) {
                 DEBUGF("[runtime.share_process_run] processor=%p, not own, thread_id=%ld, will exit this thread", p,
                        p->thread_id);
@@ -278,7 +298,7 @@ processor_t* processor_new() {
     uv_loop_t* loop = NEW(uv_loop_t);
     uv_loop_init(loop);
     p->uv_loop = loop;
-    p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
+    //    p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
     p->thread_id = 0;
     //    p->errort = n_errort_new(string_new("", 0), 0);
     p->coroutine = NULL;
@@ -286,4 +306,32 @@ processor_t* processor_new() {
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
 
     return p;
+}
+
+void thread_handle_sigurg(int sig) {
+    DEBUGF("[runtime.thread_handle_sigurg] sig=%d", sig);
+
+    // 由于是被抢占，所以当前 coroutine 可以直接继续运行，而不需要等待什么 io 就绪
+    coroutine_yield(CO_STATUS_RUNNABLE);
+
+    DEBUGF("[runtime.thread_handle_sigurg] aco_resume, coroutine=%p", coroutine_get());
+}
+
+void coroutine_yield(co_status_t status) {
+    // 读取当前线程正在运行的 coroutine
+    coroutine_t* co = coroutine_get();
+    assert(co);
+
+    processor_t* p = processor_get();
+    assert(p);
+
+    // 如果是抢占式调度 status 应该是 runnable, 表示 coroutine 可以被立即调度
+    // 如果是等待网络 io status 应该是 waiting 表示等待 io 事件就绪
+    co->status = status;
+
+    if (status == CO_STATUS_RUNNABLE) {
+        linked_push(p->runnable_list, co);
+    }
+
+    aco_yield1(co->aco);
 }
