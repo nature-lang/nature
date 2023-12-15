@@ -1,14 +1,5 @@
 type t0 = gen any
 
-// type vect<t1> = struct {
-//     u64 len
-//     u64 cap
-//     fn(t1) push
-//     fn(int, int):[t1] slice
-//     fn([t1]):[t1] concat
-//     fn():cptr ref
-// }
-
 type tracet = struct {
     string path
     string ident

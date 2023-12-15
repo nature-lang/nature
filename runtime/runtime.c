@@ -47,7 +47,9 @@ void runtime_main(int argc, char *argv[]) {
     coroutine_dispatch(coroutine_new((void *)runtime_main, NULL, false));
 
     // 开启调度 GC 监控线程(单独开一个线程进行监控)
-    sysmon_run();
+    // 启用一个新的线程来运行 sysmon_run
+    uv_thread_t sysmon_thread_id;
+    uv_thread_create(&sysmon_thread_id, sysmon_run, NULL);
 
     // 阻塞等待多线程模型执行
     wait_processor();
