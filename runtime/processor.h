@@ -76,7 +76,7 @@ void coroutine_dispatch(coroutine_t *co);
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
 
-void coroutine_yield(co_status_t status);
+void coroutine_yield_with_status(co_status_t status);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

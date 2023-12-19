@@ -1,15 +1,17 @@
 #include "module.h"
-#include "utils/table.h"
-#include "utils/helper.h"
+
+#include <assert.h>
+#include <string.h>
+
+#include "src/build/config.h"
 #include "src/error.h"
-#include "src/syntax/scanner.h"
-#include "src/syntax/parser.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/generic.h"
-#include "src/build/config.h"
-#include <string.h>
-#include <assert.h>
+#include "src/syntax/parser.h"
+#include "src/syntax/scanner.h"
 #include "utils/assertf.h"
+#include "utils/helper.h"
+#include "utils/table.h"
 
 /**
  * @param source_path
@@ -70,7 +72,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
 
         analyzer_import(m, ast_import);
         assert(ast_import->as);
-//        assert(ast_import->package_dir);
 
         // 简单处理
         slice_push(m->imports, ast_import);
@@ -81,7 +82,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         return m;
     }
 
-    if (type == MODULE_TYPE_TEMP) {
+    if (type == MODULE_TYPE_TPL) {
         table_t *temp_symbol_table = table_new();
         for (int i = 0; i < m->stmt_list->count; ++i) {
             ast_stmt_t *stmt = m->stmt_list->take[i];
@@ -106,7 +107,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
         }
 
-        table_set(import_temp_symbol_table, m->source_path, temp_symbol_table);
+        table_set(import_tpl_symbol_table, m->source_path, temp_symbol_table);
     }
 
     if (type == MODULE_TYPE_COMMON) {
@@ -156,4 +157,3 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
 
     return m;
 }
-

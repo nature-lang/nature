@@ -1,0 +1,9 @@
+import coroutine_temp
+
+fn create(fn_t f, [any] args, uint64 flags):coroutine_t {
+    return coroutine_create(f, args, flags)
+}
+
+fn run(fn_t f, [any] args, uint64 flags):coroutine_t {
+    return coroutine_run(f, args, flags)
+}

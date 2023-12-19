@@ -281,6 +281,7 @@ bool processor_own(processor_t* p) {
 
 coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo) {
     coroutine_t* co = NEW(coroutine_t);
+    co->fn = fn;
     co->solo = solo;
     co->status = CO_STATUS_RUNNABLE;
     co->args = args;
@@ -312,12 +313,12 @@ void thread_handle_sigurg(int sig) {
     DEBUGF("[runtime.thread_handle_sigurg] sig=%d", sig);
 
     // 由于是被抢占，所以当前 coroutine 可以直接继续运行，而不需要等待什么 io 就绪
-    coroutine_yield(CO_STATUS_RUNNABLE);
+    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
 
     DEBUGF("[runtime.thread_handle_sigurg] aco_resume, coroutine=%p", coroutine_get());
 }
 
-void coroutine_yield(co_status_t status) {
+void coroutine_yield_with_status(co_status_t status) {
     // 读取当前线程正在运行的 coroutine
     coroutine_t* co = coroutine_get();
     assert(co);

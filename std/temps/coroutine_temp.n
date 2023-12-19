@@ -1,0 +1,5 @@
+fn coroutine_create(fn_t f, [any] args, uint64 flags):cptr
+
+fn coroutine_run(fn_t f, [any] args, uint64 flags):cptr
+
+fn coroutine_yield()

@@ -34,14 +34,14 @@ static rtype_t rtype_bool() {
 static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = dsprintf("%d_%lu", TYPE_NULLABLE_POINTER, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_NPTR, value_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size =  sizeof(n_pointer_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_NULLABLE_POINTER,
+            .kind = TYPE_NPTR,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -58,14 +58,14 @@ static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
 static rtype_t rtype_pointer(type_pointer_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = dsprintf("%d_%lu", TYPE_POINTER, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_PTR, value_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size =  sizeof(n_pointer_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_POINTER,
+            .kind = TYPE_PTR,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -127,13 +127,13 @@ rtype_t rtype_array(type_array_t *t) {
     rtype_t element_rtype = reflect_type(t->element_type);
     uint64_t element_size = type_sizeof(t->element_type);
 
-    char *str = dsprintf("%d_%lu_%lu", TYPE_ARRAY, t->length, element_rtype.hash);
+    char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, t->length, element_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size = element_size * t->length,
             .hash = hash,
-            .kind = TYPE_ARRAY,
+            .kind = TYPE_ARR,
             .length = t->length,
             .gc_bits = malloc_gc_bits(rtype.size)
     };
@@ -154,13 +154,13 @@ rtype_t rtype_array(type_array_t *t) {
 rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    char *str = dsprintf("%d_%lu_%lu", TYPE_ARRAY, length, element_rtype->hash);
+    char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size = element_size * length,
             .hash = hash,
-            .kind = TYPE_ARRAY,
+            .kind = TYPE_ARR,
             .length = length,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -288,7 +288,7 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
         uint64_t last_ptr_temp_offset = 0;
         if (t->element_type.kind == TYPE_STRUCT) {
             last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits, offset, t->element_type.struct_);
-        } else if (t->element_type.kind == TYPE_ARRAY) {
+        } else if (t->element_type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, t->element_type.array);
         } else {
             uint16_t bit_index = *offset / POINTER_SIZE;
@@ -320,7 +320,7 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
         uint64_t last_ptr_temp_offset = 0;
         if (p->type.kind == TYPE_STRUCT) {
             last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits, offset, p->type.struct_);
-        } else if (p->type.kind == TYPE_ARRAY) {
+        } else if (p->type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, p->type.array);
         } else {
             // 这里就是存储位置
@@ -498,7 +498,7 @@ uint16_t type_sizeof(type_t t) {
         return type_struct_sizeof(t.struct_);
     }
 
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return t.array->length * type_sizeof(t.array->element_type);
     }
 
@@ -510,7 +510,7 @@ uint16_t type_alignof(type_t t) {
         assert(t.struct_->align > 0);
         return t.struct_->align;
     }
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return type_sizeof(t.array->element_type);
     }
 
@@ -521,7 +521,7 @@ type_t type_ptrof(type_t t) {
     type_t result = {0};
     result.status = t.status;
 
-    result.kind = TYPE_POINTER;
+    result.kind = TYPE_PTR;
     result.pointer = NEW(type_pointer_t);
     result.pointer->value_type = t;
     result.origin_ident = NULL;
@@ -535,7 +535,7 @@ type_t type_nullable_ptrof(type_t t) {
     type_t result;
     result.status = t.status;
 
-    result.kind = TYPE_NULLABLE_POINTER;
+    result.kind = TYPE_NPTR;
     result.pointer = NEW(type_pointer_t);
     result.pointer->value_type = t;
     return result;
@@ -556,16 +556,16 @@ rtype_t reflect_type(type_t t) {
         case TYPE_STRING:
             rtype = rtype_string();
             break;
-        case TYPE_POINTER:
+        case TYPE_PTR:
             rtype = rtype_pointer(t.pointer);
             break;
-        case TYPE_NULLABLE_POINTER:
+        case TYPE_NPTR:
             rtype = rtype_nullable_pointer(t.pointer);
             break;
         case TYPE_VEC:
             rtype = rtype_vec(t.vec);
             break;
-        case TYPE_ARRAY:
+        case TYPE_ARR:
             rtype = rtype_array(t.array);
             break;
         case TYPE_MAP:
@@ -832,7 +832,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
  */
 rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     // 更简单的计算一下 hash 即可 array, len + scan 计算即可
-    char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_POINTER);
+    char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_PTR);
     uint64_t hash = hash_string(str);
     free(str);
     str = itoa(hash);
@@ -905,12 +905,12 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
-    if (dst.kind == TYPE_NULLABLE_POINTER) {
+    if (dst.kind == TYPE_NPTR) {
         if (src.kind == TYPE_NULL) {
             return true;
         }
 
-        if (src.kind == TYPE_POINTER) {
+        if (src.kind == TYPE_PTR) {
             type_t dst_ptr = dst.pointer->value_type;
             type_t src_ptr = src.pointer->value_type;
             return type_compare(dst_ptr, src_ptr);
@@ -965,7 +965,7 @@ bool type_compare(type_t dst, type_t src) {
         return type_compare(left_list_decl->element_type, right_list_decl->element_type);
     }
 
-    if (dst.kind == TYPE_ARRAY) {
+    if (dst.kind == TYPE_ARR) {
         type_array_t *left_array_decl = dst.array;
         type_array_t *right_array_decl = src.array;
         if (left_array_decl->length != right_array_decl->length) {
@@ -1038,7 +1038,7 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
-    if (dst.kind == TYPE_POINTER || dst.kind == TYPE_NULLABLE_POINTER) {
+    if (dst.kind == TYPE_PTR || dst.kind == TYPE_NPTR) {
         type_t left_pointer = dst.pointer->value_type;
         type_t right_pointer = src.pointer->value_type;
         return type_compare(left_pointer, right_pointer);
@@ -1052,7 +1052,7 @@ char *_type_format(type_t t) {
         // []
         return dsprintf("vec<%s>", type_format(t.vec->element_type));
     }
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return dsprintf("arr<%s,%d>", type_format(t.array->element_type), t.array->length);
     }
     if (t.kind == TYPE_MAP) {
@@ -1079,11 +1079,11 @@ char *_type_format(type_t t) {
         return dsprintf("fn(...):%s", type_format(t.fn->return_type));
     }
 
-    if (t.kind == TYPE_POINTER) {
+    if (t.kind == TYPE_PTR) {
         return dsprintf("ptr<%s>", type_format(t.pointer->value_type));
     }
 
-    if (t.kind == TYPE_NULLABLE_POINTER) {
+    if (t.kind == TYPE_NPTR) {
         return dsprintf("cptr<%s>", type_format(t.pointer->value_type));
     }
 

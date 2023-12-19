@@ -39,7 +39,7 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
     }
 
     // 复合类型进行递归处理
-    if (t.kind == TYPE_POINTER) {
+    if (t.kind == TYPE_PTR) {
         generic_params_collect(fndef, t.pointer->value_type);
         return;
     }

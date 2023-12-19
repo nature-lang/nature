@@ -156,7 +156,7 @@ type_t type_copy(module_t *m, type_t temp) {
             type.vec = type_vec_copy(m, temp.vec);
             break;
         }
-        case TYPE_ARRAY: {
+        case TYPE_ARR: {
             type.array = type_array_copy(m, temp.array);
             break;
         }
@@ -184,8 +184,8 @@ type_t type_copy(module_t *m, type_t temp) {
             type.union_ = type_union_copy(m, temp.union_);
             break;
         }
-        case TYPE_NULLABLE_POINTER:
-        case TYPE_POINTER: {
+        case TYPE_NPTR:
+        case TYPE_PTR: {
             type.pointer = type_pointer_copy(m, temp.pointer);
             break;
         }

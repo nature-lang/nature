@@ -1,4 +1,19 @@
-type t0 = gen any
+// type ptr<t> = *t
+
+// type c_ptr = uint
+
+// type n_ptr<t> = *t|null
+
+// type any = ...|...
+
+// type all_t = c_ptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+
+
+// type fn_t = c_ptr // 同上
+
+
+// TODO 删除
+type all_t = gen any // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
 
 type tracet = struct {
     string path
@@ -17,31 +32,31 @@ fn print(...[any] args)
 
 fn println(...[any] args)
 
-//fn set(...[t0] keys):{t0}
+//fn set(...[all_t] keys):{all_t}
 
-// 比如 [t0] 类型的 vec 只能接收 t0 类型的 v
-fn vec_push([t0] list, ptr<t0> v)
+// 比如 [all_t] 类型的 vec 只能接收 all_t 类型的 v
+fn vec_push([all_t] list, ptr<all_t> v)
 
-fn vec_length([t0] list):int
+fn vec_length([all_t] list):int
 
-fn vec_capacity([t0] list):int
+fn vec_capacity([all_t] list):int
 
-fn vec_slice(int rtype_hash, [t0] list, int start, int end):[t0]
+fn vec_slice(int rtype_hash, [all_t] list, int start, int end):[all_t]
 
-fn vec_concat(int rtype_hash, [t0] a, [t0] b):[t0]
+fn vec_concat(int rtype_hash, [all_t] a, [all_t] b):[all_t]
 
 // 引用 data 部分,且对于复合没有展开操作
-fn vec_ref([t0] list):cptr
+fn vec_ref([all_t] list):cptr
 
-fn map_delete({t0:t0} m, ptr<t0> key)
+fn map_delete({all_t:all_t} m, ptr<all_t> key)
 
-fn map_length({t0:t0} m):int
+fn map_length({all_t:all_t} m):int
 
-fn set_contains({t0} s, ptr<t0> key):bool
+fn set_contains({all_t} s, ptr<all_t> key):bool
 
-fn set_add({t0} s, ptr<t0> key):bool
+fn set_add({all_t} s, ptr<all_t> key):bool
 
-fn set_delete({t0} set, ptr<t0> key)
+fn set_delete({all_t} set, ptr<all_t> key)
 
 fn runtime_gc()
 

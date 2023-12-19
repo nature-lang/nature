@@ -409,11 +409,11 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
-    if (as_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
+    if (as_expr->src.type.kind == TYPE_NPTR) {
         // 只能 as 为 ptr<t>
-        CHECKING_ASSERTF(target_type.kind == TYPE_POINTER || target_type.kind == TYPE_CPTR,
+        CHECKING_ASSERTF(target_type.kind == TYPE_PTR || target_type.kind == TYPE_CPTR,
                          "nullable pointer only support as ptr<type> or cptr");
-        if (target_type.kind == TYPE_POINTER) {
+        if (target_type.kind == TYPE_PTR) {
             CHECKING_ASSERTF(type_compare(target_type.pointer->value_type, as_expr->src.type.pointer->value_type),
                              "pointer value not equal");
         }
@@ -467,7 +467,7 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NULLABLE_POINTER,
+    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR,
                      "only any/union/cptr<type> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
 }
@@ -504,7 +504,7 @@ static type_t checking_unary(module_t *m, ast_unary_expr_t *expr) {
 
     // *var
     if (expr->operator == AST_OP_IA) {
-        CHECKING_ASSERTF(type.kind == TYPE_POINTER, "cannot dereference non-pointer type");
+        CHECKING_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type");
         return type.pointer->value_type;
     }
 
@@ -554,11 +554,11 @@ static type_t checking_ident(module_t *m, ast_ident *ident) {
 static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_vec_new_t *ast = expr->value;
 
-    if (target_type.kind == TYPE_ARRAY) {
+    if (target_type.kind == TYPE_ARR) {
         expr->assert_type = AST_EXPR_ARRAY_NEW; // 直接进行表达式类型的改写(list_new 和 array_new 同构,所以可以这么做)
 
         // 严格限定类型为 array
-        type_t result = type_kind_new(TYPE_ARRAY);
+        type_t result = type_kind_new(TYPE_ARR);
         type_array_t *type_array = NEW(type_array_t);
 
         type_array->element_type = target_type.array->element_type;
@@ -848,7 +848,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
         return element_type;
     }
 
-    if (left_type.kind == TYPE_ARRAY) {
+    if (left_type.kind == TYPE_ARR) {
         type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         ast_array_access_t *array_access = NEW(ast_array_access_t);
@@ -1010,7 +1010,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
 
         // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
         assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE &&
-               current->self_struct_ptr->kind == TYPE_POINTER);
+               current->self_struct_ptr->kind == TYPE_PTR);
 
         // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
         select->left.type = *current->self_struct_ptr;
@@ -1018,7 +1018,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
 
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
-    if (left_type.kind == TYPE_POINTER) {
+    if (left_type.kind == TYPE_PTR) {
         type_t value_type = select->left.type.pointer->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
@@ -1356,7 +1356,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
             CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
             // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
             assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE &&
-                   current->self_struct_ptr->kind == TYPE_POINTER);
+                   current->self_struct_ptr->kind == TYPE_PTR);
 
             // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
             select->left.type = *current->self_struct_ptr;
@@ -2010,7 +2010,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
 }
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
-    if (t.kind == TYPE_POINTER || t.kind == TYPE_NULLABLE_POINTER) {
+    if (t.kind == TYPE_PTR || t.kind == TYPE_NPTR) {
         type_pointer_t *type_pointer = t.pointer;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         return t;
@@ -2022,7 +2022,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return t;
     }
 
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         type_array_t *type_array = t.array;
         type_array->element_type = reduction_type(m, type_array->element_type);
         return t;

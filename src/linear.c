@@ -251,7 +251,7 @@ static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *
         return linear_zero_vec(m, t, NULL, NULL, target);
     }
 
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return linear_zero_arr(m, t, target);
     }
 
@@ -1191,7 +1191,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
                 target = temp_var_operand_with_stack(m, expr.type); // pointer target
             }
 
-            assert(lir_operand_type(target).kind == TYPE_POINTER);
+            assert(lir_operand_type(target).kind == TYPE_PTR);
 
             OP_PUSH(lir_op_move(target, first));
             return target;
@@ -1686,7 +1686,7 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_NULLABLE_POINTER);
+    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_NPTR);
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1694,7 +1694,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     lir_operand_t *operand = linear_expr(m, is_expr->src, NULL);
 
-    if (is_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
+    if (is_expr->src.type.kind == TYPE_NPTR) {
         // is target 只能只能判断是否为 null
         LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
                        "cptr<type> is only support null, example: cptr<int> is null");
@@ -1768,14 +1768,14 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // nullable pointer assert
-    if (as_expr->src.type.kind == TYPE_NULLABLE_POINTER) {
+    if (as_expr->src.type.kind == TYPE_NPTR) {
         if (as_expr->target_type.kind == TYPE_CPTR) {
             OP_PUSH(lir_op_move(target, input));
             return target;
         }
 
         // 只能转换为 ptr<type>, checking 已经判断完成
-        assert(as_expr->target_type.kind == TYPE_POINTER);
+        assert(as_expr->target_type.kind == TYPE_PTR);
         rt_call(m, RT_CALL_NULL_POINTER_ASSERT, target, 1, input);
         linear_has_error(m);
         return target;

@@ -62,7 +62,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         }
     } else {
         assert(count == 1);
-        assertf(t.kind != TYPE_ARRAY, "array type must be pointer type");
+        assertf(t.kind != TYPE_ARR, "array type must be pointer type");
 
         // 由于需要直接 mov， 所以还是需要选择合适的大小
         reg_t *lo_reg = lo_dst_reg->value;
@@ -223,7 +223,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                     linked_push(result, lir_op_move(hi_dst, hi_reg_operand));
                 }
             } else {
-                assertf(param_type.kind != TYPE_ARRAY, "array type must be pointer type");
+                assertf(param_type.kind != TYPE_ARR, "array type must be pointer type");
                 assertf(count == 1, "the normal type uses only one register");
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
@@ -276,7 +276,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             var->type = type_ptrof(var->type);
             slice_insert(params, 0, var);
         } else {
-            assertf(return_type.kind != TYPE_ARRAY, "array type must be pointer type");
+            assertf(return_type.kind != TYPE_ARR, "array type must be pointer type");
 
             // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
             // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
@@ -637,7 +637,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         return 0;
     }
 
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return 0; // 总是通过栈传递
     }
 
@@ -659,7 +659,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
             uint16_t element_align = element_size;
             if (p->type.kind == TYPE_STRUCT) {
                 element_align = p->type.struct_->align;
-            } else if (p->type.kind == TYPE_ARRAY) {
+            } else if (p->type.kind == TYPE_ARR) {
                 element_align = type_sizeof(p->type.array->element_type);
             }
 
