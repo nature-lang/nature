@@ -1,9 +1,21 @@
 import coroutine_temp
 
-fn create(fn_t f, [any] args, uint64 flags):coroutine_t {
-    return coroutine_create(f, args, flags)
+type coroutine_t = struct{
+    i32 status
 }
 
-fn run(fn_t f, [any] args, uint64 flags):coroutine_t {
-    return coroutine_run(f, args, flags)
+fn create(fn_t f, [any] args, u64 flags):coroutine_t {
+    var r_co = coroutine_create(f, args, flags)
+
+    return coroutine_t{
+        status = r_co.status
+    }
+}
+
+fn run(fn_t f, [any] args, u64 flags):coroutine_t {
+    var r_co = coroutine_run(f, args, flags)
+
+    return coroutine_t{
+        status = r_co.status
+    }
 }

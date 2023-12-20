@@ -1,6 +1,7 @@
 #include "amd64_abi.h"
-#include "src/register/amd64.h"
+
 #include "src/cross.h"
+#include "src/register/amd64.h"
 
 lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
@@ -71,7 +72,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
 
-    END:
+END:
     op->first = NULL;
     linked_push(result, op);
 
@@ -171,7 +172,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
             // 最后一个参数是 fn_runtime_operand 参数，将其记录下来
             if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                c->fn_runtime_stack = stack_param_slot;  // 最后一个参数所在的栈的起点
+                c->fn_runtime_stack = stack_param_slot; // 最后一个参数所在的栈的起点
             }
 
             stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
@@ -195,8 +196,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                     assert(false);
                 }
 
-                lir_operand_t *lo_dst = indirect_addr_operand(c->module,
-                                                              type_kind_new(lo_kind), dst_param, 0);
+                lir_operand_t *lo_dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), dst_param, 0);
 
                 linked_push(result, lir_op_move(lo_dst, lo_reg_operand));
 
@@ -217,8 +217,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                         assert(false);
                     }
 
-                    lir_operand_t *hi_dst = indirect_addr_operand(c->module,
-                                                                  type_kind_new(lo_kind), dst_param, QWORD);
+                    lir_operand_t *hi_dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), dst_param, QWORD);
 
                     linked_push(result, lir_op_move(hi_dst, hi_reg_operand));
                 }
@@ -243,7 +242,6 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
                     c->fn_runtime_reg = reg_index;
                 }
-
 
                 linked_push(result, lir_op_move(dst_param, lo_reg_operand));
             }
@@ -304,7 +302,6 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
     // 进行 op 替换(重新set flag 即可)
     slice_t *use_regs = slice_new(); // reg_t*
-
 
     linked_t *result = linked_new();
 
@@ -385,7 +382,6 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
-
 
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
 
@@ -604,7 +600,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     return result;
 }
-
 
 static amd64_class_t amd64_classify_merge(amd64_class_t a, amd64_class_t b) {
     if (a == b) {

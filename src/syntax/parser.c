@@ -117,11 +117,10 @@ static bool parser_must_stmt_end(module_t *m) {
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
         //        || parser_is(m, TOKEN_CPTR)
-        || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_I8) ||
-        parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) || parser_is(m, TOKEN_UINT) ||
-        parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) || parser_is(m, TOKEN_U64) ||
-        parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) || parser_is(m, TOKEN_BOOL) ||
-        parser_is(m, TOKEN_STRING)) {
+        || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) ||
+        parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) || parser_is(m, TOKEN_UINT) || parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) ||
+        parser_is(m, TOKEN_U32) || parser_is(m, TOKEN_U64) || parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) ||
+        parser_is(m, TOKEN_BOOL) || parser_is(m, TOKEN_STRING)) {
         return true;
     }
     return false;
@@ -491,25 +490,20 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     result->assert_type = AST_STMT_TYPE_ALIAS;
     result->value = type_alias_stmt;
 
-    // type number = generic i8|i16|i32|i64
+    // type number = gen i8|i16|i32|i64|u8|u16|u32|u64
     if (parser_consume(m, TOKEN_GEN)) {
         type_t gen = {
             .status = REDUCTION_STATUS_UNDO,
             .kind = TYPE_GEN,
         };
+
         gen.gen = NEW(type_gen_t);
         gen.gen->elements = ct_list_new(sizeof(type_t));
         do {
             type_t item = parser_single_type(m); // 至少包含一个约束
-            if (item.kind == TYPE_UNION && item.union_->any) {
-                gen.gen->any = true;
-            }
             ct_list_push(gen.gen->elements, &item);
         } while (parser_consume(m, TOKEN_OR));
 
-        if (gen.gen->any) {
-            PARSER_ASSERTF(gen.gen->elements->length == 1, "generic any must only one constraint");
-        }
         type_alias_stmt->type = gen;
         return result;
     }
@@ -524,8 +518,7 @@ static ast_var_decl_t *parser_var_decl(module_t *m) {
 
     // 变量名称必须为 ident
     token_t *var_ident = parser_advance(m);
-    PARSER_ASSERTF(var_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident",
-                   var_ident->literal);
+    PARSER_ASSERTF(var_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", var_ident->literal);
 
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
     var_decl->type = var_type;
@@ -930,8 +923,7 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
 }
 
 static bool prev_token_is_type(token_t *prev) {
-    return prev->type == TOKEN_LEFT_PAREN || prev->type == TOKEN_LEFT_CURLY || prev->type == TOKEN_COLON ||
-           prev->type == TOKEN_COMMA;
+    return prev->type == TOKEN_LEFT_PAREN || prev->type == TOKEN_LEFT_CURLY || prev->type == TOKEN_COLON || prev->type == TOKEN_COMMA;
 }
 
 // for {{}};{};{{}}. {for ; ; }
@@ -989,10 +981,6 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_CPTR)) {
-        return true;
-    }
-
     if (parser_is(m, TOKEN_ANY)) {
         return true;
     }
@@ -1006,8 +994,7 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
-        parser_is(m, TOKEN_SET)) {
+    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) || parser_is(m, TOKEN_SET)) {
         return true;
     }
 
@@ -1022,8 +1009,7 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // package.ident foo = xxx
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
-        parser_next_is(m, 3, TOKEN_IDENT)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_IDENT)) {
         return true;
     }
 
@@ -1033,8 +1019,7 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // package.ident|i8 foo = xxx
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
-        parser_next_is(m, 3, TOKEN_OR)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_OR)) {
         return true;
     }
 
@@ -1044,8 +1029,7 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // person.foo<[i8]>
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
-        parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         return true;
     }
 
@@ -1733,8 +1717,7 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     // 读取表达式前缀
     parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
 
-    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal,
-                   token_str[parser_peek(m)->type]);
+    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal, token_str[parser_peek(m)->type]);
 
     ast_expr_t expr = prefix_fn(m); // advance
 
@@ -1803,8 +1786,7 @@ static bool parser_is_struct_new_expr(module_t *m) {
     }
 
     // foo.bar {},
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
-        parser_next_is(m, 3, TOKEN_LEFT_CURLY)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_CURLY)) {
         return true;
     }
 
@@ -1815,8 +1797,7 @@ static bool parser_is_struct_new_expr(module_t *m) {
         }
     }
 
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
-        parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         if (is_struct_param_new_prefix(parser_next(m, 3))) {
             return true;
         }

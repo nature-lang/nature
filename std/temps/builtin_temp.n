@@ -11,10 +11,6 @@
 
 // type fn_t = c_ptr // 同上
 
-
-// TODO 删除
-type all_t = gen any // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
-
 type tracet = struct {
     string path
     string ident

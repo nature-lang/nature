@@ -1,12 +1,12 @@
 import coroutine as co
 import libc_temp
 
-co.run(fn() {
+co.run(fn(){
     for true {
         print("co: sleeping...")
         sleep(1)
     }
-})
+}, [], 0)
 
 // main for sleep
 for true {

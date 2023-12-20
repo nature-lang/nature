@@ -1,5 +1,5 @@
-#ifndef NATURE_BASIC_H
-#define NATURE_BASIC_H
+#ifndef NATURE_NUTILS_BASIC_H
+#define NATURE_NUTILS_BASIC_H
 
 #include "utils/type.h"
 #include "vec.h"

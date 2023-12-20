@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <uv.h>
 
-#include "basic.h"
 #include "nutils/errort.h"
 #include "nutils/vec.h"
+#include "runtime.h"
 
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
@@ -14,15 +14,19 @@ extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
 extern uv_key_t local_processor_key;
 extern uv_key_t local_coroutine_key;
 
+extern bool processor_stw; // 全局 STW 标识
+
 void thread_handle_sigurg(int sig);
 
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
-bool processor_need_stw();
+bool processor_get_stw();
+
+void processor_set_stw();
 
 /**
  *  processor 停止调度
  */
-bool processor_need_stop();
+bool processor_get_stop();
 
 /**
  * 判断 p->thread_id 是否和当前线程的 id 相同
@@ -84,10 +88,6 @@ void coroutine_yield_with_status(co_status_t status);
  * @return
  */
 processor_t *processor_get();
-
-void rt_processor_attach_errort(char *msg);
-
-void processor_dump_errort(n_errort *errort);
 
 void pre_block_syscall();
 

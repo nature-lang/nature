@@ -36,6 +36,7 @@ extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 #define LIB_START_FILE "crt1.o"
 #define LIB_RUNTIME_FILE "libruntime.a"
 #define LIBC_FILE "libc.a"
+#define LIBUV_FILE "libuv.a"
 #define LIBUCONTEXT_FILE "libucontext.a"
 #define LINKER_OUTPUT "a.out"
 

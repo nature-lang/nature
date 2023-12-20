@@ -1,7 +1,7 @@
 #ifndef NATURE_RUNTIME_HASH_H
 #define NATURE_RUNTIME_HASH_H
 
-#include "runtime/runtime.h"
+#include "nutils.h"
 #include "runtime/memory.h"
 #include "utils/type.h"
 
@@ -40,11 +40,10 @@ static inline uint64_t extract_data_index(uint64_t hash_value) {
     return hash_value << 2 >> 2;
 }
 
-
 static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
     char *str = rtype_value_str(rtype, key_ref);
     uint64_t result = hash_string(str);
-    free((void *) str);
+    free((void *)str);
     return result;
 }
 
@@ -53,8 +52,8 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
     char *actual_str = rtype_value_str(rtype, actual);
     char *expect_str = rtype_value_str(rtype, expect);
     bool result = str_equal(actual_str, expect_str);
-    free((void *) actual_str);
-    free((void *) expect_str);
+    free((void *)actual_str);
+    free((void *)expect_str);
     return result;
 }
 
@@ -64,8 +63,7 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
  * @param key_ref
  * @return
  */
-static inline uint64_t
-find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_rtype_hash, void *key_ref) {
+static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_rtype_hash, void *key_ref) {
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_rtype_hash);
     assertf(key_rtype, "cannot find rtype by hash=%d", key_rtype_hash);
@@ -83,9 +81,8 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
     while (true) {
         uint64_t hash_value = hash_table[hash_index];
         uint64_t key_index = extract_data_index(hash_value);
-        DEBUGF("[find_hash_slot] key_data=%p, key_size=%ld, hash_index=%lu, hash_value=%lu, key_index=%lu",
-               key_data, key_size, hash_index, hash_value, key_index)
-
+        DEBUGF("[find_hash_slot] key_data=%p, key_size=%ld, hash_index=%lu, hash_value=%lu, key_index=%lu", key_data, key_size, hash_index,
+               hash_value, key_index)
 
         // 遇到了 empty 表示当前 key 是第一次插入到 hash 表，此时应该是插入到第一个遇到的 empty 或者 deleted slot
         // 谁先出现就用谁
@@ -94,15 +91,13 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
         }
 
         if (hash_value_deleted(hash_value) && first_deleted_index == -1) {
-            first_deleted_index = (int64_t) hash_index;
+            first_deleted_index = (int64_t)hash_index;
         }
 
         // key equal 的 slot 是最高优先且绝对正确的 slot
         void *actual_key_ref = key_data + key_index * key_size;
 
-        DEBUGF("[find_hash_slot] key_rtype=%s, actual_key_ref=%p, key_ref=%p", type_kind_str[key_rtype->kind],
-               actual_key_ref,
-               key_ref)
+        DEBUGF("[find_hash_slot] key_rtype=%s, actual_key_ref=%p, key_ref=%p", type_kind_str[key_rtype->kind], actual_key_ref, key_ref)
         if (key_equal(key_rtype, actual_key_ref, key_ref)) {
             return hash_index;
         }
@@ -111,5 +106,4 @@ find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint6
     }
 }
 
-
-#endif //NATURE_HASH_H
+#endif // NATURE_HASH_H

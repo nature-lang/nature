@@ -1,5 +1,16 @@
-fn coroutine_create(fn_t f, [any] args, uint64 flags):cptr
+type r_coroutine_t = struct{
+    i32 status
+    bool solo
+    cptr aco
+    cptr fn
+    cptr p
+    cptr args
+    cptr result
+    u64 thread_id
+}
 
-fn coroutine_run(fn_t f, [any] args, uint64 flags):cptr
+fn coroutine_create(fn_t f, [any] args, u64 flags):ptr<r_coroutine_t>
+
+fn coroutine_run(fn_t f, [any] args, u64 flags):ptr<r_coroutine_t>
 
 fn coroutine_yield()

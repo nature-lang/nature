@@ -1,7 +1,7 @@
 #ifndef NATURE_NUTILS_COROUTINE_H
 #define NATURE_NUTILS_COROUTINE_H
 
-#include "runtime/basic.h"
+#include "runtime/runtime.h"
 
 typedef void (*co_fn)();
 

@@ -153,11 +153,11 @@ static string type_kind_str[] = {
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
-    uint64_t index;  // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
-    uint64_t size;   //  无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
-    uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
-                     // pointer 数据
-    uint64_t hash;   // 做类型推断时能够快速判断出类型是否相等
+    uint64_t index;    // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
+    uint64_t size;     //  无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
+    uint8_t in_heap;   // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
+                       // pointer 数据
+    uint64_t hash;     // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind;    // 类型的种类
     uint8_t *gc_bits;  // 类型 bit 数据(按 uint8 对齐)
@@ -567,12 +567,8 @@ static inline bool is_float(type_kind kind) {
 }
 
 static inline bool is_integer(type_kind kind) {
-    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 ||
-           kind == TYPE_UINT || kind == TYPE_UINT8 || kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
-}
-
-static inline bool is_gen_any(type_t type) {
-    return type.kind == TYPE_GEN && type.gen->any;
+    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 || kind == TYPE_UINT || kind == TYPE_UINT8 ||
+           kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
 }
 
 static inline bool is_number(type_kind kind) {
@@ -602,13 +598,12 @@ static inline bool is_zero_type(type_t t) {
  * @return
  */
 static inline bool is_origin_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_NULL ||
-           t.kind == TYPE_BOOL || t.kind == TYPE_STRING || t.kind == TYPE_VOID;
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_NULL || t.kind == TYPE_BOOL || t.kind == TYPE_STRING ||
+           t.kind == TYPE_VOID || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 
 static inline bool is_clv_zero_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_NULL ||
-           t.kind == TYPE_BOOL || t.kind == TYPE_VOID;
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_NULL || t.kind == TYPE_BOOL || t.kind == TYPE_VOID;
 }
 
 static inline bool is_struct_ptr(type_t t) {
@@ -616,8 +611,8 @@ static inline bool is_struct_ptr(type_t t) {
 }
 
 static inline bool is_reduction_type(type_t t) {
-    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR ||
-           t.kind == TYPE_TUPLE || t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_NPTR;
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR || t.kind == TYPE_TUPLE || t.kind == TYPE_SET ||
+           t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_NPTR;
 }
 
 static inline bool is_qword_int(type_kind kind) {

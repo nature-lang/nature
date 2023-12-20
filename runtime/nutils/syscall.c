@@ -1,15 +1,17 @@
 #include "syscall.h"
-#include "fcntl.h"
-#include "string.h"
-#include "runtime/processor.h"
-#include "errno.h"
-#include "vec.h"
-#include "basic.h"
-#include <signal.h>
-#include <sys/wait.h>
-#include <sys/socket.h>
-#include <unistd.h>
+
 #include <arpa/inet.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include "errno.h"
+#include "fcntl.h"
+#include "nutils.h"
+#include "runtime/processor.h"
+#include "string.h"
+#include "vec.h"
 
 // 基于 execve 进行改造
 /**

@@ -426,6 +426,9 @@ static void analyzer_type(module_t *m, type_t *type) {
     }
 }
 
+/**
+ * ptr/cptr/nptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
+ */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     assert(type->kind == TYPE_ALIAS);
     type_alias_t *type_alias = type->alias;

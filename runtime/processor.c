@@ -2,16 +2,25 @@
 
 #include <uv.h>
 
-#include "basic.h"
 #include "builtin.h"
+#include "runtime.h"
 #include "utils/assertf.h"
 
 int cpu_count;
+bool processor_stw;
 slice_t* share_processor_list; // 共享协程列表的数量一般就等于线程数量
 slice_t* solo_processor_list;  // 独享协程列表其实就是多线程
 
 uv_key_t local_processor_key;
 uv_key_t local_coroutine_key;
+
+bool processor_get_stw() {
+    return processor_stw;
+}
+
+void processor_set_stw() {
+    processor_stw = true;
+}
 
 void uv_stop_callback(uv_timer_t* timer) {
     uv_stop(timer->loop);
@@ -101,28 +110,27 @@ void processor_run(void* raw) {
             // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
             // 则此处不需要在进行后续的处理， 直接退出当前线程即可
             if (!processor_own(p)) {
-                DEBUGF("[runtime.share_process_run] processor=%p, not own, thread_id=%ld, will exit this thread", p,
-                       p->thread_id);
-
+                DEBUGF("[runtime.share_process_run] processor=%p, not own, thread_id=%lu, will exit this thread", p,
+                       (uint64_t)p->thread_id);
                 goto EXIT;
             }
         }
 
-        if (processor_need_stw()) {
+        if (processor_get_stw()) {
             p->safe_point = true;
-            while (processor_need_stw()) {
+            while (processor_get_stw()) {
                 usleep(50); // 每 50ms 检测一次 STW 是否解除
             }
         }
 
-        if (processor_need_stop()) {
+        if (processor_get_stop()) {
             DEBUGF("[runtime.share_process_run] processor=%p, need stop", p);
             return;
         }
     }
 
 EXIT:
-    DEBUGF("thread %lu exited", uv_thread_self());
+    DEBUGF("thread %lu exited", (uint64_t)uv_thread_self());
 }
 
 void coroutine_dispatch(coroutine_t* co) {
@@ -134,7 +142,7 @@ void coroutine_dispatch(coroutine_t* co) {
             assertf(false, "pthread_create failed %s", strerror(errno));
         }
 
-        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", p->thread_id);
+        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t)p->thread_id);
         return;
     }
 
@@ -182,7 +190,7 @@ void processor_init() {
             assertf(false, "pthread_create failed %s", strerror(errno));
         }
 
-        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, p->thread_id);
+        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, (uint64_t)p->thread_id);
     }
 }
 
@@ -197,8 +205,8 @@ coroutine_t* coroutine_get() {
 
 void rt_processor_attach_errort(char* msg) {
     DEBUGF("[runtime.rt_processor_attach_errort] msg=%s", msg);
-    processor_t* p = processor_get();
-    n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
+    //    processor_t* p = processor_get();
+    //    n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
     //    p->errort = errort;
 }
 
@@ -210,8 +218,8 @@ void processor_dump_errort(n_errort* errort) {
 
     n_trace_t first_trace = {};
     vec_access(errort->traces, 0, &first_trace);
-    char* dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char*)errort->msg->data,
-                              (char*)first_trace.path->data, first_trace.line, first_trace.column);
+    char* dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char*)errort->msg->data, (char*)first_trace.path->data, first_trace.line,
+                              first_trace.column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
@@ -221,8 +229,7 @@ void processor_dump_errort(n_errort* errort) {
         for (int i = 0; i < errort->traces->length; ++i) {
             n_trace_t trace = {};
             vec_access(errort->traces, i, &trace);
-            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char*)trace.ident->data, (char*)trace.path->data,
-                            trace.line, trace.column);
+            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char*)trace.ident->data, (char*)trace.path->data, trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
     }
@@ -254,9 +261,9 @@ void post_block_syscall() {
     if (co->solo) {
         // 只有独享线程在遇到阻塞调用时需要延迟处理 stw, 共享线程遇到阻塞 io 时会启动一个新的线程进行处理
         // 处理完成后直接就退出了，不需要担心后续的操作
-        if (processor_need_stw()) {
+        if (processor_get_stw()) {
             p->safe_point = true;
-            while (processor_need_stw()) {
+            while (processor_get_stw()) {
                 usleep(50); // 每 50ms 检测一次 STW 是否解除
             }
         }
@@ -335,4 +342,12 @@ void coroutine_yield_with_status(co_status_t status) {
     }
 
     aco_yield1(co->aco);
+}
+
+/**
+ * TODO 读取全局变量判断是否需要 stop
+ * @return
+ */
+bool processor_get_stop() {
+    return true;
 }

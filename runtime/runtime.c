@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include "processor.h"
-#include "runtime/nutils/basic.h"
+#include "runtime/nutils/nutils.h"
 #include "sysmon.h"
 
 // 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了

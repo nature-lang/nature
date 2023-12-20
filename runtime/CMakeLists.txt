@@ -10,6 +10,9 @@ include(../cmake/cross.cmake)
 
 set(CMAKE_C_STANDARD 11)
 
+# 启用汇编支持
+ENABLE_LANGUAGE(ASM)
+
 set(LIB_OUTPUT_PREFIX ../lib)
 
 # release 时的编译优化等级
@@ -23,14 +26,19 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     #    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
 endif ()
 
+include_directories(../include)
 include_directories(../)
 aux_source_directory(../utils UTILS)
 FILE(GLOB_RECURSE RUNTIMES ./*c)
 
 message("runtime os: ${CMAKE_SYSTEM_NAME} arch: ${CMAKE_SYSTEM_PROCESSOR}")
-add_library(runtime STATIC ${UTILS} ${RUNTIMES}
-        nutils/coroutine.c
-        nutils/coroutine.h)
+add_library(runtime STATIC ${UTILS} ${RUNTIMES} aco/acosw.S)
+
 set_target_properties(runtime PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR})
+
+# 链接 libuv
+target_link_libraries(runtime uv)
+
+
 message("runtime register success")

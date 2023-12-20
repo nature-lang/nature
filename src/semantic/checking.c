@@ -1,8 +1,22 @@
-#include <string.h>
 #include "checking.h"
-#include "src/error.h"
+
+#include <string.h>
+
 #include "analyzer.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
+
+static bool can_assign_to_union(type_t t) {
+    if (t.kind == TYPE_UNION) {
+        return false;
+    }
+
+    if (t.kind == TYPE_VOID) {
+        return false;
+    }
+
+    return true;
+}
 
 static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
     CHECKING_ASSERTF(expr->assert_type == AST_EXPR_LITERAL, "integer casting only support literal");
@@ -13,12 +27,10 @@ static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target
 
     ast_literal_t *literal = expr->value;
 
-    CHECKING_ASSERTF(is_integer(literal->kind), "type inconsistency, expect %s, actual: %s",
-                     type_format(target_type),
+    CHECKING_ASSERTF(is_integer(literal->kind), "type inconsistency, expect %s, actual: %s", type_format(target_type),
                      type_kind_str[literal->kind]);
 
     int64_t i = atoll(literal->value);
-
 
     CHECKING_ASSERTF(integer_range_check(cross_kind_trans(target_kind), i), "integer out of range");
 
@@ -33,7 +45,6 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
     ast_literal_t *literal = expr->value;
 
     CHECKING_ASSERTF(is_number(literal->kind), "type inconsistency");
-
 
     type_kind target_kind = cross_kind_trans(target_type.kind);
     double f = atof(literal->value);
@@ -87,7 +98,7 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
                 continue;
             }
         } else {
-            //数量必须相等
+            // 数量必须相等
             if (args->length != type_fn.fn->param_types->length) {
                 continue;
             }
@@ -186,7 +197,8 @@ static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
 
         fndef->params_hash = fndef->global_parent->params_hash;
 
-        // 如果 local fndef 引用了外部环境，是一个 closure, closure name 同样寻要基于 params hash 进行改写, 并将新的 symbol 写入到全局符号表中
+        // 如果 local fndef 引用了外部环境，是一个 closure, closure name 同样寻要基于 params hash 进行改写, 并将新的 symbol
+        // 写入到全局符号表中
         if (fndef->closure_name) {
             fndef->closure_name = str_connect_by(fndef->closure_name, fndef->params_hash, GEN_REWRITE_SEPARATOR);
 
@@ -240,7 +252,6 @@ static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     // 进行符号表重新添加
     symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
 }
-
 
 static void checking_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
@@ -403,8 +414,7 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         CHECKING_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
         // target_type 必须包含再 union 中
-        CHECKING_ASSERTF(union_type_contains(as_expr->src.type, target_type),
-                         "type = %s not contains in union type",
+        CHECKING_ASSERTF(union_type_contains(as_expr->src.type, target_type), "type = %s not contains in union type",
                          type_format(target_type));
         return target_type;
     }
@@ -436,8 +446,7 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
-    CHECKING_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting",
-                     type_format(target_type));
+    CHECKING_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting", type_format(target_type));
     return target_type;
 }
 
@@ -460,18 +469,15 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
         ct_list_push(new_expr->properties, d);
     }
 
-
     return type_ptrof(new_expr->type);
 }
 
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR,
-                     "only any/union/cptr<type> type can use 'is' keyword");
+    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR, "only any/union/cptr<type> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
 }
-
 
 static type_t checking_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
     sizeof_expr->target_type = reduction_type(m, sizeof_expr->target_type);
@@ -484,26 +490,26 @@ static type_t checking_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) 
  * @return
  */
 static type_t checking_unary(module_t *m, ast_unary_expr_t *expr) {
-    if (expr->operator == AST_OP_NOT) {
+    if (expr->operator== AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return checking_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
     type_t type = checking_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
-    if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
+    if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
         CHECKING_ASSERTF(false, "neg operand must applies to int or float type");
     }
 
     // &var
-    if (expr->operator == AST_OP_LA) {
+    if (expr->operator== AST_OP_LA) {
         CHECKING_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                          "cannot take the address of an literal or call");
         return type_ptrof(type);
     }
 
     // *var
-    if (expr->operator == AST_OP_IA) {
+    if (expr->operator== AST_OP_IA) {
         CHECKING_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type");
         return type.pointer->value_type;
     }
@@ -549,7 +555,7 @@ static type_t checking_ident(module_t *m, ast_ident *ident) {
  * 这里如果有问题直接就退出了
  * [a, b(), c[1], d.foo]
  * @param list_new
- * @return 
+ * @return
  */
 static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_vec_new_t *ast = expr->value;
@@ -614,8 +620,7 @@ static type_t checking_empty_curly_new(module_t *m, ast_expr_t *expr, type_t tar
     // 必须要 target 引导，才能确定具体的类型
     CHECKING_ASSERTF(target_type.kind > 0, "map key/value type cannot confirm");
 
-    CHECKING_ASSERTF(target_type.kind == TYPE_MAP || target_type.kind == TYPE_SET,
-                     "{} cannot ref type %s", type_format(target_type));
+    CHECKING_ASSERTF(target_type.kind == TYPE_MAP || target_type.kind == TYPE_SET, "{} cannot ref type %s", type_format(target_type));
     if (target_type.kind == TYPE_MAP) {
         expr->assert_type = AST_EXPR_MAP_NEW;
     } else if (target_type.kind == TYPE_SET) {
@@ -624,7 +629,6 @@ static type_t checking_empty_curly_new(module_t *m, ast_expr_t *expr, type_t tar
 
     return target_type;
 }
-
 
 /**
  * {key: value, key(): value(), key[1]: value[1]}
@@ -889,8 +893,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
         return *type;
     }
 
-    CHECKING_ASSERTF(false, "access only support must map/list/tuple, cannot '%s'",
-                     type_format(left_type));
+    CHECKING_ASSERTF(false, "access only support must map/list/tuple, cannot '%s'", type_format(left_type));
     exit(1);
 }
 
@@ -911,7 +914,6 @@ static type_t checking_vec_select(module_t *m, ast_expr_t *expr) {
 
         return type_kind_new(TYPE_INT);
     }
-
 
     if (str_equal(s->key, "cap")) {
         ast_call_t *call = NEW(ast_call_t);
@@ -949,7 +951,6 @@ static type_t checking_map_select(module_t *m, ast_expr_t *expr) {
 
         return type_kind_new(TYPE_INT);
     }
-
 
     CHECKING_ASSERTF(false, "map no property '%s'", s->key);
     exit(EXIT_FAILURE);
@@ -1009,8 +1010,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
 
         // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
-        assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE &&
-               current->self_struct_ptr->kind == TYPE_PTR);
+        assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE && current->self_struct_ptr->kind == TYPE_PTR);
 
         // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
         select->left.type = *current->self_struct_ptr;
@@ -1164,7 +1164,6 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
     exit(EXIT_FAILURE);
 }
 
-
 /**
  * 需要做值改写,所以这里需要将
  * @param m
@@ -1253,7 +1252,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
-        CHECKING_ASSERTF(call->args->length == target_type_fn->param_types->length, "call params count failed");
+        CHECKING_ASSERTF(call->args->length == target_type_fn->param_types->length, "number of call args not match declaration");
     }
 
     for (int i = 0; i < call->args->length; ++i) {
@@ -1324,7 +1323,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
 
     if (self_replace->type.kind == TYPE_STRUCT) {
         self_replace = ast_unary(self_replace, AST_OP_LA);
-//        self_replace->type = type_ptrof(self_replace->type);
+        //        self_replace->type = type_ptrof(self_replace->type);
     }
 
     ct_list_push(call->args, self_replace);
@@ -1355,8 +1354,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
             ast_fndef_t *current = m->checking_current;
             CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
             // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
-            assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE &&
-                   current->self_struct_ptr->kind == TYPE_PTR);
+            assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE && current->self_struct_ptr->kind == TYPE_PTR);
 
             // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
             select->left.type = *current->self_struct_ptr;
@@ -1383,7 +1381,6 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
         if (select_left_kind == TYPE_STRUCT || is_struct_ptr(select->left.type)) {
             return checking_struct_select_call(m, call);
         }
-
 
         CHECKING_ASSERTF(false, "select dot call not support type=%s", type_kind_str[select_left_kind]);
     }
@@ -1442,7 +1439,6 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
     return t;
 }
 
-
 /**
  * 仅声明不再被允许，所有的变量都必须在初始化时进行赋值操作
  * int a;
@@ -1452,10 +1448,7 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
 void checking_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
-    if (type.kind == TYPE_UNKNOWN ||
-        type.kind == TYPE_VOID ||
-        type.kind == TYPE_NULL ||
-        type.kind == TYPE_SELF) {
+    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL || type.kind == TYPE_SELF) {
         CHECKING_ASSERTF(false, "variable declaration cannot use type '%s'", type_format(type));
     }
 
@@ -1531,9 +1524,8 @@ static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
 static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 checking_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
-    CHECKING_ASSERTF(
-            iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING,
-            "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
+    CHECKING_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING,
+                     "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
 
     rewrite_var_decl(m, &stmt->first);
 
@@ -1565,7 +1557,6 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         } else {
             first->type = type_kind_new(TYPE_INT);
         }
-
     }
 
     if (second) {
@@ -1579,7 +1570,6 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
             second->type = list_decl->element_type;
         }
     }
-
 
     checking_body(m, stmt->body);
 }
@@ -1621,7 +1611,7 @@ static type_t checking_literal(module_t *m, ast_literal_t *literal) {
 
 static type_t checking_env_access(module_t *m, ast_env_access_t *expr) {
     ast_ident ident = {
-            .literal = expr->unique_ident,
+        .literal = expr->unique_ident,
     };
     return checking_ident(m, &ident);
 }
@@ -1659,8 +1649,7 @@ static type_t checking_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
  */
 static void checking_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t t) {
     type_tuple_t *tuple_type = t.tuple;
-    CHECKING_ASSERTF(destr->elements->length == tuple_type->elements->length,
-                     "tuple destr length != tuple operand length");
+    CHECKING_ASSERTF(destr->elements->length == tuple_type->elements->length, "tuple destr length != tuple operand length");
 
     // 挨个对比
     for (int i = 0; i < destr->elements->length; ++i) {
@@ -1686,12 +1675,10 @@ static void checking_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) 
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
     type_t t = checking_right_expr(m, &stmt->right, type_kind_new(TYPE_UNKNOWN));
 
-    CHECKING_ASSERTF(t.kind == TYPE_TUPLE, "cannot assign type '%s' to tuple",
-                     type_format(t));
+    CHECKING_ASSERTF(t.kind == TYPE_TUPLE, "cannot assign type '%s' to tuple", type_format(t));
 
     checking_var_tuple_destr(m, stmt->tuple_destr, t);
 }
-
 
 /**
  * @param m
@@ -1721,7 +1708,6 @@ static type_t checking_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t
 
     return t;
 }
-
 
 static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
     SET_LINE_COLUMN(stmt);
@@ -1918,22 +1904,16 @@ static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_t
 
     type_t type = checking_expr(m, expr, target_type);
 
-    // 这里已经对表达式 type 做了调整
     target_type = reduction_type(m, target_type);
     expr->type = reduction_type(m, type);
     expr->target_type = target_type;
 
-    // TYPE_UNKNOWN 表示需要进行类型推断
+    // TYPE_UNKNOWN 表示需要进行类型推断，此时什么都不做，交给调用者进行判断
     if (target_type.kind == TYPE_UNKNOWN) {
         return expr->type;
     }
 
-    if (target_type.kind == TYPE_VOID && expr->type.kind == TYPE_VOID) {
-        return expr->type;
-    }
-
-    CHECKING_ASSERTF(expr->type.kind != TYPE_VOID, "cannot assign type void to %s", type_format(target_type));
-
+    // - 对一些特殊类型进行预处理再进入 type_compare
     // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
     // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
     if ((is_integer(target_type.kind) || target_type.kind == TYPE_CPTR) && expr->assert_type == AST_EXPR_LITERAL) {
@@ -1945,14 +1925,15 @@ static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_t
     }
 
     // single type to union type (必须保留)
-    if (target_type.kind == TYPE_UNION && expr->type.kind != TYPE_UNION) {
-        CHECKING_ASSERTF(union_type_contains(target_type, expr->type), "union type not contains '%s'",
-                         type_format(expr->type));
+    if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {
+        CHECKING_ASSERTF(union_type_contains(target_type, expr->type), "union type not contains '%s'", type_format(expr->type));
+
         *expr = ast_type_as(*expr, target_type);
     }
 
-    CHECKING_ASSERTF(type_compare(target_type, expr->type), "type inconsistency, expect=%s, actual=%s",
-                     type_format(target_type), type_format(expr->type));
+    if (!type_compare(target_type, expr->type)) {
+        CHECKING_ASSERTF(false, "type inconsistency, expect=%s, actual=%s", type_format(target_type), type_format(expr->type));
+    }
     return expr->type;
 }
 
@@ -2031,18 +2012,17 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_MAP) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
-        CHECKING_ASSERTF(is_number(t.map->key_type.kind) ||
-                         t.map->key_type.kind == TYPE_STRING ||
-                         t.map->key_type.kind == TYPE_GEN,
+
+        CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_GEN ||
+                             t.map->key_type.kind == TYPE_ALL_T,
                          "map key only support number/string");
         return t;
     }
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
-        CHECKING_ASSERTF(is_number(t.set->element_type.kind) ||
-                         t.set->element_type.kind == TYPE_STRING ||
-                         t.set->element_type.kind == TYPE_GEN,
+        CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_GEN ||
+                             t.map->key_type.kind == TYPE_ALL_T,
                          "set element only support number/string");
         return t;
     }
@@ -2091,8 +2071,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  * @param t
  */
 static type_t generic_specialization(module_t *m, char *ident) {
-    CHECKING_ASSERTF(m->checking_current->generic_assign,
-                     "generic assign failed, use type gen must in global fn");
+    CHECKING_ASSERTF(m->checking_current->generic_assign, "generic assign failed, use type gen must in global fn");
     type_t *assign = table_get(m->checking_current->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);
@@ -2107,7 +2086,6 @@ static type_t type_param_specialization(module_t *m, type_t t) {
     return reduction_type(m, *type);
 }
 
-
 static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
     CHECKING_ASSERTF(alias->args->length == 1, "vec must have one type arg");
 
@@ -2121,7 +2099,6 @@ static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
     return result;
 }
 
-
 /**
  * custom_type a = ...
  * custom_type 此时就是一个 type_alias
@@ -2132,9 +2109,9 @@ static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
 static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
 
-//    if (str_equal(alias->ident, VEC_TYPE_IDENT)) {
-//        return reduction_type_alias_vec(m, alias);
-//    }
+    //    if (str_equal(alias->ident, VEC_TYPE_IDENT)) {
+    //        return reduction_type_alias_vec(m, alias);
+    //    }
 
     symbol_t *symbol = symbol_table_get(alias->ident);
     CHECKING_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
@@ -2175,12 +2152,10 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         return alias_value_type;
     }
 
-
     // 引用了 gen 类型的 alias, 现在需要进行泛型特化
-    if (type_alias_stmt->type.kind == TYPE_GEN && !type_alias_stmt->type.gen->any) {
+    if (type_alias_stmt->type.kind == TYPE_GEN) {
         return generic_specialization(m, type_alias_stmt->ident);
     }
-
 
     // 检查右值是否 reduce 完成
     if (type_alias_stmt->type.status == REDUCTION_STATUS_DONE) {
@@ -2244,6 +2219,7 @@ static type_t reduction_type(module_t *m, type_t t) {
         return t;
     }
 
+    // 泛型类型还原
     if (t.kind == TYPE_GEN) {
         t = reduction_generic_type(m, t);
         goto STATUS_DONE;
@@ -2281,7 +2257,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     CHECKING_ASSERTF(false, "cannot parser type %s", type_format(t));
-    STATUS_DONE:
+STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_name; // reduction dump error ident
@@ -2412,7 +2388,8 @@ void checking(module_t *m) {
     m->checking_current = NULL;
     m->current_line = 0;
     m->current_column = 0;
-    m->checking_temp_fndefs = slice_new();;
+    m->checking_temp_fndefs = slice_new();
+    ;
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();
@@ -2438,8 +2415,7 @@ void checking(module_t *m) {
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
-        assertf(fndef->type_param_table,
-                "temp fndefs from type_alias<param>->struct->fn copy, so type_param_table must be not null");
+        assertf(fndef->type_param_table, "temp fndefs from type_alias<param>->struct->fn copy, so type_param_table must be not null");
 
         // reduction
         for (int j = 0; j < fndef->hash_param_types->length; ++j) {

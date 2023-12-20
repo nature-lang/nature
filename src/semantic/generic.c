@@ -25,10 +25,6 @@ static void generic_params_collect(ast_fndef_t *fndef, type_t t) {
             return;
         }
 
-        if (type_alias_stmt->type.gen->any) {
-            return;
-        }
-
         if (table_exist(fndef->exists_generic_params, symbol->ident)) {
             return;
         }
