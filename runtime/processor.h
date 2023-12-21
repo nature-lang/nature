@@ -14,7 +14,8 @@ extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
 extern uv_key_t local_processor_key;
 extern uv_key_t local_coroutine_key;
 
-extern bool processor_stw; // 全局 STW 标识
+extern bool processor_need_stw;  // 全局 STW 标识
+extern bool processor_need_exit; // 全局 STW 标识
 
 void thread_handle_sigurg(int sig);
 
@@ -26,7 +27,9 @@ void processor_set_stw();
 /**
  *  processor 停止调度
  */
-bool processor_get_stop();
+bool processor_get_exit();
+
+void processor_set_exit();
 
 /**
  * 判断 p->thread_id 是否和当前线程的 id 相同
@@ -60,6 +63,8 @@ void processor_run(void *p);
 void processor_init();
 
 processor_t *processor_new();
+
+void processor_free(processor_t *);
 
 /**
  * @param fn

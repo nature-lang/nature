@@ -143,6 +143,8 @@
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
 #define RT_CALL_PROCESSOR_HAS_ERRORT "processor_has_errort"
 
+#define RT_CALL_PROCESSOR_SET_EXIT "processor_set_exit"
+
 #define OP(_node) ((lir_op_t *)_node->value)
 
 #define OP_PUSH(_op) linked_push(m->linear_current->operations, _op)

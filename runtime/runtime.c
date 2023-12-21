@@ -1,9 +1,10 @@
 #include "runtime.h"
 
-#include <signal.h>
-#include <unistd.h>
+// #include <signal.h>
+// #include <unistd.h>
+#include <stdio.h>
 
-#include "processor.h"
+// #include "processor.h"
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
 
@@ -24,6 +25,8 @@ static void wait_processor() {
             break;
         }
     }
+
+    DEBUGF("[wait_processor] all processor thread exit");
 }
 
 /**
@@ -40,17 +43,17 @@ void runtime_main(int argc, char *argv[]) {
     DEBUGF("[runtime_main] memory init success")
 
     // - coroutine init
-    // Monitor thread
     processor_init();
+    DEBUGF("[runtime_main] processor init success");
 
     // - 提取 main 进行 coroutine 创建调度
-    coroutine_dispatch(coroutine_new((void *)runtime_main, NULL, false));
+    coroutine_t *main_co = coroutine_new((void *)main, NULL, false);
+    coroutine_dispatch(main_co);
 
     // 开启调度 GC 监控线程(单独开一个线程进行监控)
     // 启用一个新的线程来运行 sysmon_run
     uv_thread_t sysmon_thread_id;
     uv_thread_create(&sysmon_thread_id, sysmon_run, NULL);
-
     // 阻塞等待多线程模型执行
     wait_processor();
 

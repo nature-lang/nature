@@ -14,7 +14,6 @@
 #include "utils/linked.h"
 #include "utils/slice.h"
 
-
 extern uint64_t remove_total_bytes;    // 当前回收到物理内存中的总空间
 extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern uint64_t allocated_bytes;       // 当前分配的内存空间
@@ -28,7 +27,7 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
 
 static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
-memory_t *memory;
+extern memory_t *memory;
 
 /**
  * 最后一位如果为 1 表示 no ptr, 0 表示 has ptr
@@ -71,8 +70,7 @@ static inline bool in_heap(addr_t addr) {
 static inline addr_t safe_heap_addr(addr_t addr) {
     assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx", addr, ARENA_HINT_BASE);
 
-    assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr,
-            memory->mheap->current_arena.end);
+    assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr, memory->mheap->current_arena.end);
     return addr;
 }
 

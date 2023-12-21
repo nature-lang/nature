@@ -166,7 +166,6 @@ static void build_linker(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIB_START_FILE));
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBUCONTEXT_FILE));
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];

@@ -7,7 +7,8 @@
 #include "utils/assertf.h"
 
 int cpu_count;
-bool processor_stw;
+bool processor_need_stw;
+bool processor_need_exit;
 slice_t* share_processor_list; // 共享协程列表的数量一般就等于线程数量
 slice_t* solo_processor_list;  // 独享协程列表其实就是多线程
 
@@ -15,11 +16,11 @@ uv_key_t local_processor_key;
 uv_key_t local_coroutine_key;
 
 bool processor_get_stw() {
-    return processor_stw;
+    return processor_need_stw;
 }
 
 void processor_set_stw() {
-    processor_stw = true;
+    processor_need_stw = true;
 }
 
 void uv_stop_callback(uv_timer_t* timer) {
@@ -123,13 +124,14 @@ void processor_run(void* raw) {
             }
         }
 
-        if (processor_get_stop()) {
+        if (processor_get_exit()) {
             DEBUGF("[runtime.share_process_run] processor=%p, need stop", p);
-            return;
+            goto EXIT;
         }
     }
 
 EXIT:
+    processor_free(p);
     DEBUGF("thread %lu exited", (uint64_t)uv_thread_self());
 }
 
@@ -159,6 +161,7 @@ void coroutine_dispatch(coroutine_t* co) {
     }
 
     assert(min_p);
+    DEBUGF("[runtime.coroutine_dispatch] min_p=%p, co_list=%p, runnable_list=%p", min_p, min_p->co_list, min_p->runnable_list);
 
     linked_push(min_p->co_list, co);
     linked_push(min_p->runnable_list, co);
@@ -312,6 +315,8 @@ processor_t* processor_new() {
     p->coroutine = NULL;
     p->co_started_at = 0;
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
+    p->runnable_list = linked_new();
+    p->co_list = linked_new();
 
     return p;
 }
@@ -345,9 +350,18 @@ void coroutine_yield_with_status(co_status_t status) {
 }
 
 /**
- * TODO 读取全局变量判断是否需要 stop
  * @return
  */
-bool processor_get_stop() {
-    return true;
+bool processor_get_exit() {
+    return processor_need_exit;
+}
+void processor_set_exit() {
+    processor_need_exit = true;
+}
+
+void processor_free(processor_t* p) {
+    linked_free(p->runnable_list);
+    linked_free(p->co_list);
+
+    aco_destroy(p->main_aco);
 }
