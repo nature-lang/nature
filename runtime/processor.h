@@ -72,7 +72,7 @@ void processor_free(processor_t *);
  * @param solo
  * @return
  */
-coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo);
+coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main);
 
 /**
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor

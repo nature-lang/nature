@@ -51,6 +51,8 @@
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
+typedef void (*void_fn_t)(void);
+
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
  */
@@ -205,8 +207,9 @@ typedef enum {
 typedef struct processor_t processor_t;
 
 typedef struct coroutine_t {
-    co_status_t status;
+    bool main; // 是否是 main 函数
     bool solo; // 当前协程需要独享线程
+    co_status_t status;
     aco_t *aco;
     void *fn;       // fn 指向
     processor_t *p; // 当前 coroutine 绑定的 p
@@ -239,10 +242,8 @@ struct processor_t {
 
 void runtime_main(int argc, char *argv[]);
 
-
 void rt_processor_attach_errort(char *msg);
 
 void processor_dump_errort(n_errort *errort);
-
 
 #endif // NATURE_BASIC_H

@@ -15,6 +15,19 @@ slice_t* solo_processor_list;  // 独享协程列表其实就是多线程
 uv_key_t local_processor_key;
 uv_key_t local_coroutine_key;
 
+static void coroutine_wrapper() {
+    coroutine_t* co = aco_get_arg();
+
+    // 调用并处理请求参数 TODO 改成内嵌汇编实现，需要 #ifdef 判定不通架构
+    ((void_fn_t)co->fn)();
+
+    if (co->main) {
+        // 通知所有协程退出
+        processor_set_exit();
+    }
+    aco_exit();
+}
+
 bool processor_get_stw() {
     return processor_need_stw;
 }
@@ -53,7 +66,7 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
     if (co->aco == NULL) {
         aco_share_stack_t* sstk = aco_share_stack_new(0); // 使用默认栈大小
         assert(sstk);
-        co->aco = aco_create(p->main_aco, sstk, 0, co->fn, NULL);
+        co->aco = aco_create(p->main_aco, sstk, 0, coroutine_wrapper, co);
     } else {
         // 直接切换 main_aco, 用于切换
         co->aco->main_co = p->main_aco;
@@ -67,7 +80,9 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
 
     // 将 RIP 指针移动用户代码片段中
     DEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p", co, co->aco);
+
     aco_resume(co->aco);
+
     DEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d", co, co->aco, co->status);
 }
 
@@ -289,7 +304,7 @@ bool processor_own(processor_t* p) {
     return uv_thread_self() == p->thread_id;
 }
 
-coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo) {
+coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
     coroutine_t* co = NEW(coroutine_t);
     co->fn = fn;
     co->solo = solo;
@@ -299,6 +314,7 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo) {
     co->p = NULL;
     co->result = NULL;
     co->thread_id = 0;
+    co->main = main;
 
     return co;
 }

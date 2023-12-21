@@ -47,7 +47,7 @@ void runtime_main(int argc, char *argv[]) {
     DEBUGF("[runtime_main] processor init success");
 
     // - 提取 main 进行 coroutine 创建调度
-    coroutine_t *main_co = coroutine_new((void *)main, NULL, false);
+    coroutine_t *main_co = coroutine_new((void *)main, NULL, false, true);
     coroutine_dispatch(main_co);
 
     // 开启调度 GC 监控线程(单独开一个线程进行监控)
