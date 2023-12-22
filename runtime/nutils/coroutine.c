@@ -4,7 +4,7 @@
 
 coroutine_t *coroutine_create(void *fn, n_vec_t *args, uint64_t flag) {
     bool solo = FLAG(CO_FLAG_SOLO) & flag;
-    return coroutine_new(fn, args, solo);
+    return coroutine_new(fn, args, solo, false);
 }
 
 coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag) {

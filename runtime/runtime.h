@@ -238,6 +238,7 @@ struct processor_t {
     linked_t *runnable_list; // 可以直接进行调度的 coroutine
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
+    bool exit;               // 是否已经退出
 };
 
 void runtime_main(int argc, char *argv[]);

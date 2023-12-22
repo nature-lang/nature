@@ -11,8 +11,8 @@
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
-extern uv_key_t local_processor_key;
-extern uv_key_t local_coroutine_key;
+extern uv_key_t tls_processor_key;
+extern uv_key_t tls_coroutine_key;
 
 extern bool processor_need_stw;  // 全局 STW 标识
 extern bool processor_need_exit; // 全局 STW 标识

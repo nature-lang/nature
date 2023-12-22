@@ -11,19 +11,25 @@
 // 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了
 extern int main();
 
+/**
+ * 如果所有的共享协程都已退出，则 runtime 退出
+ */
 static void wait_processor() {
-    bool change;
+    bool all_exit;
     while (true) {
-        change = false;
+        all_exit = true;
         SLICE_FOR(share_processor_list) {
             processor_t *p = SLICE_VALUE(share_processor_list);
-            uv_thread_join(&p->thread_id);
-            change = true;
+            if (p->exit == false) {
+                all_exit = false;
+            }
         }
 
-        if (!change) {
+        if (all_exit) {
             break;
         }
+
+        uv_sleep(20);
     }
 
     DEBUGF("[wait_processor] all processor thread exit");

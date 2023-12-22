@@ -178,13 +178,10 @@ uv_key_t aco_gtls_last_word_fp;
 uv_key_t aco_gtls_fpucw_mxcsr;
 
 void aco_thread_init(aco_cofuncp_t last_word_co_fp) {
-    // 初始化 TLS
-    uv_key_create(&aco_gtls_co);
-    uv_key_create(&aco_gtls_last_word_fp);
-    uv_key_create(&aco_gtls_fpucw_mxcsr);
-
     void *fpucw = uv_key_get(&aco_gtls_fpucw_mxcsr);
     aco_save_fpucw_mxcsr(&fpucw);
+    // 必须使用 uv_key_set 写入
+    uv_key_set(&aco_gtls_fpucw_mxcsr, fpucw);
 
     if ((void *)last_word_co_fp != NULL) {
         uv_key_set(&aco_gtls_last_word_fp, (void *)last_word_co_fp);
@@ -326,6 +323,7 @@ aco_t *aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_st
         p->reg[ACO_REG_IDX_RETADDR] = (void *)fp;
         p->reg[ACO_REG_IDX_SP] = p->share_stack->align_retptr;
 #ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+        //        printf("ACO_REG_IDX_FPU=%p, thread_id=%lu\n", uv_key_get(&aco_gtls_fpucw_mxcsr), (uint64_t)uv_thread_self());
         p->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
 #endif
 #else

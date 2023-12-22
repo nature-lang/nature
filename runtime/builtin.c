@@ -1,7 +1,9 @@
 #include "builtin.h"
-#include <unistd.h>
-#include <stdio.h>
+
 #include <assert.h>
+#include <stdio.h>
+#include <unistd.h>
+
 #include "runtime/memory.h"
 
 static char sprint_buf[1024];
@@ -11,12 +13,9 @@ static char *space = " ";
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(n_union_t *arg) {
     assertf(arg, "[runtime.print_arg] arg is null");
-    DEBUGF("[runtime.print_arg] arg addr: %p", arg);
+    DEBUGF("[runtime.print_arg] arg addr=%p", arg);
     assertf(arg->rtype, "[runtime.print_arg] arg->rtype is null");
-    DEBUGF("[runtime.print_arg] arg->rtype: %p, arg->value: %lu", arg->rtype, arg->value.i64_value);
-
-    DEBUGF("[runtime.print_arg] memory_any_t any_base=%p, kind=%s, value_i64_casting=%ld", arg,
-           type_kind_str[arg->rtype->kind], arg->value.i64_value);
+    DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -28,16 +27,17 @@ static void print_arg(n_union_t *arg) {
             return;
         }
 
-        DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu",
-               s, s->length, s->data, s->length);
+        DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
         VOID write(STDOUT_FILENO, s->data, s->length);
         return;
     }
+
     if (arg->rtype->kind == TYPE_FLOAT64 || arg->rtype->kind == TYPE_FLOAT) {
         int n = sprintf(sprint_buf, "%f", arg->value.f64_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
+
     if (arg->rtype->kind == TYPE_FLOAT32) {
         int n = sprintf(sprint_buf, "%f", arg->value.f32_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);
@@ -108,16 +108,16 @@ static void print_arg(n_union_t *arg) {
 void print(n_vec_t *args, bool with_space) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
-    addr_t base = (addr_t) args->data; // 把 data 中存储的值赋值给 p
+    addr_t base = (addr_t)args->data; // 把 data 中存储的值赋值给 p
     uint64_t element_size = rt_rtype_out_size(args->element_rtype_hash);
-    DEBUGF("[runtime.print] memory_list_t base=%p,length=%lu, array_data_base=%lx, element_size=%lu",
-           args, args->length, base, element_size);
+    DEBUGF("[runtime.print] memory_list_t base=%p,length=%lu, array_data_base=%lx, element_size=%lu", args, args->length, base,
+           element_size);
 
     for (int i = 0; i < args->length; ++i) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
-        n_union_t **value = (void *) p;
+        n_union_t **value = (void *)p;
 
         DEBUGF("[runtime.print] arg i=%d, p=0x%lx, p_value=%p ", i, p, *value);
         print_arg(*value);
