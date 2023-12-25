@@ -24,6 +24,7 @@ static void coroutine_wrapper() {
     if (co->main) {
         // 通知所有协程退出
         processor_set_exit();
+        DEBUGF("[runtime.coroutine_wrapper] main coroutine exit, set processor_need_exit=true");
     }
 
     // 退出协程，设置协程退出标识
@@ -78,6 +79,7 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
 
     p->co_started_at = uv_hrtime();
     p->coroutine = co;
+    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
@@ -121,7 +123,7 @@ void processor_run(void* raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
-            coroutine_t* co = linked_pop(p->runnable_list);
+            coroutine_t* co = linked_pop_free(p->runnable_list);
             if (!co) {
                 // runnable list 已经处理完成
                 break;
@@ -167,9 +169,14 @@ EXIT:
 void coroutine_dispatch(coroutine_t* co) {
     DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
 
+    // - 协程独享线程
     if (co->solo) {
         processor_t* p = processor_new();
         slice_push(solo_processor_list, p);
+
+        //        co->p = p; // coroutine_resume 阶段在进行绑定
+        linked_push(p->co_list, co);
+        linked_push(p->runnable_list, co);
 
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assertf(false, "pthread_create failed %s", strerror(errno));
@@ -205,6 +212,10 @@ void processor_init() {
     uv_cpu_info_t* info;
     uv_cpu_info(&info, &cpu_count);
     uv_free_cpu_info(info, cpu_count);
+
+    // - 初始化全局标识
+    processor_need_exit = false;
+    processor_need_stw = false;
 
     // - 初始化线程维度遍历
     uv_key_create(&tls_processor_key);

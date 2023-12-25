@@ -13,6 +13,11 @@ coroutine_t *coroutine_create(void *fn, n_vec_t *args, uint64_t flag);
 
 coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag);
 
+void coroutine_sleep(int64_t ms);
+
 void coroutine_yield();
+
+// ------------ libuv 的一些回调 -----------------------
+static void uv_on_timer(uv_timer_t *timer);
 
 #endif // NATURE_COROUTINE_H

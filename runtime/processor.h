@@ -94,6 +94,8 @@ void coroutine_yield_with_status(co_status_t status);
  */
 processor_t *processor_get();
 
+coroutine_t* coroutine_get();
+
 void pre_block_syscall();
 
 void post_block_syscall();

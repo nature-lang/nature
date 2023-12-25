@@ -1,21 +1,27 @@
 import coroutine_temp
 
+var SOLO = 1 << 1
+
 type coroutine_t = struct{
     i32 status
 }
 
-fn create(fn_t f, [any] args, u64 flags):coroutine_t {
-    var r_co = coroutine_create(f, args, flags)
+fn create(fn_t f, [any] args, int flags):coroutine_t {
+    var rt_co = coroutine_create(f, args, flags)
 
     return coroutine_t{
-        status = r_co.status
+        status = rt_co.status
     }
 }
 
-fn run(fn_t f, [any] args, u64 flags):coroutine_t {
-    var r_co = coroutine_run(f, args, flags)
+fn run(fn_t f, [any] args, int flags):coroutine_t {
+    var rt_co = coroutine_run(f, args, flags)
 
     return coroutine_t{
-        status = r_co.status
+        status = rt_co.status
     }
+}
+
+fn sleep(int ms) {
+    coroutine_sleep(ms)
 }

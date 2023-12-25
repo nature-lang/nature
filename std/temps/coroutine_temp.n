@@ -1,4 +1,4 @@
-type r_coroutine_t = struct{
+type rt_coroutine_t = struct{
     i32 status
     bool solo
     cptr aco
@@ -9,8 +9,10 @@ type r_coroutine_t = struct{
     u64 thread_id
 }
 
-fn coroutine_create(fn_t f, [any] args, u64 flags):ptr<r_coroutine_t>
+fn coroutine_create(fn_t f, [any] args, int flags):ptr<rt_coroutine_t>
 
-fn coroutine_run(fn_t f, [any] args, u64 flags):ptr<r_coroutine_t>
+fn coroutine_run(fn_t f, [any] args, int flags):ptr<rt_coroutine_t>
 
 fn coroutine_yield()
+
+fn coroutine_sleep(int ms)
