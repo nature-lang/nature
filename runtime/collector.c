@@ -2,13 +2,32 @@
 #include "processor.h"
 
 /**
- * TODO current is AMD64
- * amd64 下，5 表示 rbp 寄存器的值，这里表示最后一次切换后，rbp 寄存器中的值
- * @param mode
- * @return
+ * grey 的本质就是等待处理，此时需要将 obj 放到 grey list 中
+ * span gcmark_bits + grep_list 共同组成了三种颜色
+ * 白色: gc_mark_bits 为 0
+ * 黑色: 不在 grey_list 里面，并且 gc_mark_bits 为 1
+ * 灰色: 在 grey_list 中, gc_mark_bits 为 0
+ *
+ * 处理 obj 之前会检测 gcmark_bits 是否标记，所以 grey 之前必须将 gcmark_bits 标记为 0
+ * @param obj
  */
-static addr_t extract_frame_base(mmode_t mode) {
-    return mode.ctx.uc_mcontext.gregs[10];
+void shade_obj_grey(void *obj) {
+    addr_t addr = (addr_t)obj;
+    // 不在堆内存中
+    if (!in_heap(addr)) {
+        DEBUGF("[runtime_gc.shade_obj_grey] addr=%p not in heap", obj)
+        return;
+    }
+
+    // get mspan by ptr
+    mspan_t *span = span_of(addr);
+
+    //  get span index
+    uint64_t obj_index = (addr - span->base) / span->obj_size;
+
+    bitmap_set(span->gcmark_bits->bits, obj_index);
+
+    linked_push(memory->grey_list, obj);
 }
 
 /**
@@ -199,6 +218,7 @@ static void grey_list_work(memory_t *m) {
             }
 
             // - black: The gc bits corresponding to obj are marked 1
+            // 后续一定会扫描当前 obj 的所有 field
             mark_obj_black(span, obj_index);
 
             // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
@@ -207,7 +227,7 @@ static void grey_list_work(memory_t *m) {
                 continue;
             }
 
-            // scan object
+            // scan object field
             // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
             // ++i 此时按指针跨度增加
             int index = 0;
@@ -372,5 +392,8 @@ void __attribute__((optimize(0))) runtime_gc() {
     DEBUGF("[runtime_gc] start")
     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
     processor_t *p = processor_get();
+
+    // TODO 切换到系统栈进行 GC，避免使用协程栈干扰
+
     DEBUGF("[runtime_gc] completed")
 }

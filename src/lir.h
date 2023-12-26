@@ -71,6 +71,8 @@
 #define RT_CALL_VEC_ITERATOR "vec_iterator"
 #define RT_CALL_VEC_CONCAT "vec_concat"
 
+#define RT_CALL_WRITE_BARRIER "write_barrier"
+
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
 
 #define RT_CALL_MAP_NEW "map_new"

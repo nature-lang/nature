@@ -408,3 +408,24 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     return NULL;
 }
+
+void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
+    rtype_t *rtype = rt_find_rtype(rtype_hash);
+
+    if (!gc_barrier()) {
+        memmove(slot, new_obj, rtype->size);
+        return;
+    }
+
+    // yuasa 写屏障 shade slot
+    shade_obj_grey(slot);
+
+    // Dijkstra 写屏障
+    coroutine_t *co = coroutine_get();
+    if (!co->is_black) {
+        // shade new_obj
+        shade_obj_grey(new_obj);
+    }
+
+    memmove(slot, new_obj, rtype->size)
+}

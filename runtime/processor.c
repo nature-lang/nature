@@ -342,6 +342,7 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
     coroutine_t* co = NEW(coroutine_t);
     co->fn = fn;
     co->solo = solo;
+    co->is_black = false;
     co->status = CO_STATUS_RUNNABLE;
     co->args = args;
     co->aco = NULL;

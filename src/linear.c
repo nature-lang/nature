@@ -21,6 +21,9 @@ lir_opcode_t ast_op_convert[] = {
 };
 
 /**
+ * - 识别 dst(target) 是否为 null
+ * - 如果是栈类型的数据，比如 struct/arr 则进行整片内存区域的 copy
+ * - 进行普通的 <= 8byte move inst
  * @param m
  * @param expr_type
  * @param dst
@@ -369,7 +372,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
         ast_var_decl_t *var = s->ast_value;
         if (s->is_local) {
             lir_operand_t *src = operand_new(LIR_OPERAND_VAR, lir_var_new(m, ident->literal));
-            return linear_super_move(m, expr.type, target, src); // 这移动到 target 不太对呀, 这里明明是想使用
+            return linear_super_move(m, expr.type, target, src);
         } else {
             lir_symbol_var_t *symbol = NEW(lir_symbol_var_t);
             symbol->ident = ident->literal;
@@ -388,10 +391,10 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
  * @param m
  * @param stmt
  */
-static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
-    ast_vec_access_t *list_access = stmt->left.value;
-    lir_operand_t *list_target = linear_expr(m, list_access->left, NULL);
-    lir_operand_t *index_target = linear_expr(m, list_access->index, NULL);
+static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
+    ast_vec_access_t *vec_access = stmt->left.value;
+    lir_operand_t *vec_target = linear_expr(m, vec_access->left, NULL);
+    lir_operand_t *index_target = linear_expr(m, vec_access->index, NULL);
     type_t t = stmt->right.type;
 
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
@@ -399,7 +402,7 @@ static void linear_list_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // target 中保存的是一个指针数据，指向的类型是 right.type
     lir_operand_t *target = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
 
-    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, target, 2, list_target, index_target);
+    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, target, 2, vec_target, index_target);
     if (!is_alloc_stack(t)) {
         target = indirect_addr_operand(m, t, target, 0);
     }
@@ -460,8 +463,8 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
 }
 
 /**
- * struct.foo
- * ptr<struct>.foo
+ * foo.bar
+ * ptr<foo>.bar
  * 在 struct_target 的编译上的返回结果都是一个指针地址，只不过一个是栈指针地址一个是堆指针地址，所以他们使用一样的 linear 处理方式
  * @param m
  * @param stmt
@@ -469,6 +472,8 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
     type_t type_struct;
+
+    // 自动解构
     if (is_struct_ptr(struct_access->instance.type)) {
         type_struct = struct_access->instance.type.pointer->value_type;
     } else {
@@ -479,12 +484,32 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     uint64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
     lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
-    lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
-    if (is_alloc_stack(stmt->left.type)) {
-        dst = lea_operand_pointer(m, dst);
-    }
 
-    linear_expr(m, stmt->right, dst);
+    // indirect_addr -> [rax + 0x8], rax 存储的内容必须是一个内存地址, indirect addr 对于不同的指令来说含义不通
+    // 1. mov 12 -> [rax+0x8] 表示将 12 移动到 rax 移动到 rax+0x8 对应的内存地址中, 移动的大小根据声明的尺寸
+    // 2. lea [rax+0x8] -> rax 表示将 rax+0x8 计算到的内存地址存储在 rax 中
+    // 3. push [rax+0x8] 等同于 mov 表示移动数据
+    // 如果将 indirect 作为函数的参数，函数的参数在编译时默认使用 push/mov 传输，所以传输的是数据，如果需要 addr 则需要使用 lea
+    // 将地址加载出来.
+    // 由于 stmt->right 的 type 可能会超过 8byte, 所以通过 lea 将地址加载出来，再通过 lir_memory_mov 进行内存拷贝是正确的选择
+    // 当然没 lea 的另外一个原因是，其会产生一个新的变量指向 struct instance 对应的内存区域, 在编译 stmt->right 时
+    // 如果 stmt->right 是一个 arr/struct 这样的在内存中分配的区域，那么 linear 的返回值
+    lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
+    dst = lea_operand_pointer(m, dst);
+
+    if (is_alloc_stack(stmt->left.type)) {
+        linear_expr(m, stmt->right, dst); // 直接进行 move 避免中间的 copy
+    } else {
+        // ptr<foo>.bar 需要走 write_barrier
+        // 如果 src 是一个分配在 stack 中的对象则 src 已经是一个指针地址，否则其是一个具体的值
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        if (!is_alloc_stack(stmt->right.type)) {
+            src = lea_operand_pointer(m, src);
+        }
+        uint64_t rtype_hash = ct_find_rtype_hash(stmt->right.type);
+
+        rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, rtype_hash, dst, src);
+    }
 }
 
 /**
@@ -645,14 +670,14 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     // map assign list[0] = 1
     if (left.assert_type == AST_EXPR_VEC_ACCESS) {
-        return linear_list_assign(m, stmt);
+        return linear_vec_assign(m, stmt);
     }
 
     if (left.assert_type == AST_EXPR_ARRAY_ACCESS) {
         return linear_array_assign(m, stmt);
     }
 
-    // set assign m["a"] = 2
+    // set assign m['a'] = 2
     if (left.assert_type == AST_EXPR_MAP_ACCESS) {
         return linear_map_assign(m, stmt);
     }
@@ -665,7 +690,7 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
         return linear_tuple_assign(m, stmt);
     }
 
-    // struct assign p.name = "wei"
+    // struct assign p.name = 'wei'
     if (left.assert_type == AST_EXPR_STRUCT_SELECT) {
         return linear_struct_assign(m, stmt);
     }
@@ -679,7 +704,7 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
         return linear_ident_assign(m, stmt);
     }
 
-    // set[0] = 1 x 不允许这么赋值，set 只能通过 add 来添加 key
+    // 比如 set[0] = 1; 不允许这么赋值，set  .add 来添加 key
     assertf(false, "dose not support assign to %d", left.assert_type);
 }
 
@@ -1163,14 +1188,14 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
  * int a = list[0]
  * string s = list[1]
  */
-static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+static lir_operand_t *linear_vec_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_vec_access_t *ast = expr.value;
 
-    lir_operand_t *list_target = linear_expr(m, ast->left, NULL);
+    lir_operand_t *vec_target = linear_expr(m, ast->left, NULL);
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
     lir_operand_t *src = temp_var_operand_with_stack(m, type_kind_new(TYPE_CPTR));
-    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, src, 2, list_target, index_target);
+    rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, src, 2, vec_target, index_target);
     if (!is_alloc_stack(expr.type)) {
         src = indirect_addr_operand(m, expr.type, src, 0);
     }
@@ -1200,7 +1225,7 @@ static lir_operand_t *linear_list_access(module_t *m, ast_expr_t expr, lir_opera
  * @param target
  * @return
  */
-static lir_operand_t *linear_list_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_vec_new_t *ast = expr.value;
     type_t t = expr.type;
 
@@ -1262,11 +1287,18 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     return linear_super_move(m, expr.type, target, item_target);
 }
 
+/**
+ * 采用和 struct 一样的在栈上分配的方式,  target 是一个 var，其中保存了栈上的指针
+ * 最终返回值是一个中转变量，其指向了 arr 所在的内存区域。
+ * @param m
+ * @param expr
+ * @param target
+ * @return
+ */
 static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_array_new_t *ast = expr.value;
     type_t type_array = expr.type;
 
-    // 采用和 struct 一样的在栈上分配的方式,  target 是一个 var，其中保存了栈上的指针
     if (!target) {
         target = temp_var_operand_with_stack(m, type_array);
     }
@@ -1274,8 +1306,6 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
     assert(target && target->assert_type == LIR_OPERAND_VAR);
 
     uint64_t rtype_hash = ct_find_rtype_hash(type_array);
-
-    // target 目前是一个数组，和 c 交互应该转换程 pointer。走 lea 操作一下
 
     lir_operand_t *target_ref = temp_var_operand_without_stack(m, type_ptrof(type_array));
     OP_PUSH(lir_op_move(target_ref, target));
@@ -2076,8 +2106,8 @@ linear_expr_fn expr_fn_table[] = {
     [AST_EXPR_UNARY] = linear_unary,
     [AST_EXPR_ARRAY_NEW] = linear_array_new,
     [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
-    [AST_EXPR_VEC_NEW] = linear_list_new,
-    [AST_EXPR_VEC_ACCESS] = linear_list_access,
+    [AST_EXPR_VEC_NEW] = linear_vec_new,
+    [AST_EXPR_VEC_ACCESS] = linear_vec_access,
     [AST_EXPR_MAP_NEW] = linear_map_new,
     [AST_EXPR_MAP_ACCESS] = linear_map_access,
     [AST_EXPR_STRUCT_NEW] = linear_struct_new,

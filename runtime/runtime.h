@@ -216,6 +216,8 @@ typedef struct coroutine_t {
     n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
 
+    bool is_black; // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
+
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
     uv_thread_t thread_id;

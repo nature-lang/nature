@@ -14,11 +14,13 @@
 #include "utils/linked.h"
 #include "utils/slice.h"
 
+extern memory_t *memory;
 extern uint64_t remove_total_bytes;    // 当前回收到物理内存中的总空间
 extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern uint64_t allocated_bytes;       // 当前分配的内存空间
 extern uint64_t next_gc_bytes;         // 下一次 gc 的内存量
 extern bool force_gc;                  // runtime_judge_gc 总是立刻进行 gc
+extern bool _gc_barrier;               // gc 屏障开启标识
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
@@ -27,7 +29,9 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
 
 static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
-extern memory_t *memory;
+static inline bool gc_barrier() {
+    return _gc_barrier;
+}
 
 /**
  * 最后一位如果为 1 表示 no ptr, 0 表示 has ptr
@@ -163,5 +167,7 @@ uint64_t runtime_malloc_bytes();
 mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
 
 arena_hint_t *arena_hints_init();
+
+void shade_obj_grey(void *obj);
 
 #endif // NATURE_MEMORY_H

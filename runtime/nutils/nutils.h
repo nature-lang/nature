@@ -45,4 +45,6 @@ n_vec_t *std_args();
 
 char *rtype_value_str(rtype_t *rtype, void *data_ref);
 
-#endif //NATURE_BASIC_H
+void write_barrier(uint64_t rtype_hash, void *dst, void *new_obj);
+
+#endif // NATURE_BASIC_H
