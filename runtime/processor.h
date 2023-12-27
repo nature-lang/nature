@@ -22,7 +22,15 @@ void thread_handle_sigurg(int sig);
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
 bool processor_get_stw();
 
-void processor_set_stw();
+void processor_stop_the_world();
+
+void processor_start_the_world();
+
+bool processor_all_safe();
+
+void processor_wait_all_safe();
+
+void processor_wait_all_gc_work_finish();
 
 /**
  *  processor 停止调度
@@ -94,7 +102,7 @@ void coroutine_yield_with_status(co_status_t status);
  */
 processor_t *processor_get();
 
-coroutine_t* coroutine_get();
+coroutine_t *coroutine_get();
 
 void pre_block_syscall();
 

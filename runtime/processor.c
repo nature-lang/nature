@@ -36,8 +36,12 @@ bool processor_get_stw() {
     return processor_need_stw;
 }
 
-void processor_set_stw() {
+void processor_stop_the_world() {
     processor_need_stw = true;
+}
+
+void processor_start_the_world() {
+    processor_need_stw = false;
 }
 
 void uv_stop_callback(uv_timer_t* timer) {
@@ -119,7 +123,7 @@ void processor_run(void* raw) {
         //        DEBUGF("[runtime.share_process_run] handle %lu", (uint64_t)uv_thread_self());
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
-        io_run(p, 5);
+        io_run(p, WAIT_SHORT_TIME);
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
@@ -146,7 +150,7 @@ void processor_run(void* raw) {
         if (processor_get_stw()) {
             p->safe_point = true;
             while (processor_get_stw()) {
-                usleep(50); // 每 50ms 检测一次 STW 是否解除
+                usleep(WAIT_MID_TIME); // 每 50ms 检测一次 STW 是否解除
             }
         }
 
@@ -316,7 +320,7 @@ void post_block_syscall() {
         if (processor_get_stw()) {
             p->safe_point = true;
             while (processor_get_stw()) {
-                usleep(50); // 每 50ms 检测一次 STW 是否解除
+                usleep(WAIT_MID_TIME); // 每 50ms 检测一次 STW 是否解除
             }
         }
         co->status = CO_STATUS_RUNNING; // coroutine 继续运行
@@ -415,4 +419,91 @@ void processor_free(processor_t* p) {
     linked_free(p->co_list);
     aco_destroy(p->main_aco);
     free(p);
+}
+
+/**
+ * 是否所有的 processor 都到达了安全点
+ * @return
+ */
+bool processor_all_safe() {
+    SLICE_FOR(share_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        if (!p->safe_point) {
+            return false;
+        }
+    }
+
+    SLICE_FOR(solo_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        // 不是 syscall 状态，并且没有进入安全点
+        if (!p->safe_point && p->coroutine->status != CO_STATUS_SYSCALL) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void processor_wait_all_safe() {
+    while (!processor_all_safe()) {
+        usleep(WAIT_MID_TIME);
+    }
+}
+
+/**
+ * 需要等待独享和共享协程全部完成
+ */
+void processor_wait_all_gc_work_finish() {
+    DEBUGF("[runtime.processor_wait_all_gc_work_finish] start");
+
+    SLICE_FOR(share_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        while (!p->gc_work_finish) {
+            usleep(WAIT_MID_TIME);
+        }
+    }
+
+    SLICE_FOR(solo_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        while (!p->gc_work_finish) {
+            usleep(WAIT_MID_TIME);
+        }
+    }
+
+    DEBUGF("[runtime.processor_wait_all_gc_work_finish] all processor gc work finish");
+
+    // 重置 gc_work_finish 为 false，避免影响下一次 GC
+    SLICE_FOR(share_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        p->gc_work_finish = false;
+    }
+
+    SLICE_FOR(solo_processor_list) {
+        processor_t* p = SLICE_VALUE(share_processor_list);
+        if (p->exit) {
+            continue;
+        }
+
+        p->gc_work_finish = false;
+    }
 }

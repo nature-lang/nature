@@ -344,35 +344,63 @@ void mcentral_sweep(mheap_t *mheap) {
     }
 }
 
+// TODO
+static void set_gc_work_coroutine() {
+}
+
+/**
+ * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
+ */
+static void scan_global() {
+
+}
+
 /**
  * @stack system
  */
-static void _runtime_gc() {
-    DEBUGF("[_runtime_gc] stack switched, current is temp mode");
-    processor_t *_p = processor_get();
+void runtime_gc() {
+    DEBUGF("[runtime_gc] start");
 
-    // 遍历 gc roots
-    // get roots 是一组 ptr, 需要简单识别一下，如果是 root ptr, 其虽然能够进入到 grey list, 但是离开 grey list 时不需要标灰
-    // - 初始化 gc 状态
-    assertf(linked_empty(memory->grey_list), "grey list not cleanup");
+    // - gc stage: GC_START
+    gc_stage = GC_STAGE_START;
 
-    // - 遍历 global symbol list,如果是 ptr 则将 ptr 指向的内存块进行分析，然后加入到 grey 队列
-    scan_symdefs(memory);
+    processor_stop_the_world();
 
-    // - 遍历 user stack
-    scan_stack(memory);
+    // 等待所有的 processor 进入安全点
+    processor_wait_all_safe();
 
-    // - runtime grey
-    scan_runtime(memory);
+    // 开启写屏障
+    gc_barrier_start();
 
-    // 3. handle grey list until empty, all mspan gc_bits marked
-    grey_list_work(memory);
+    // 注入 GC 工作协程
+    set_gc_work_coroutine();
 
-    // 4. flush mcache to mcentral
+    // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中
+    scan_global();
+
+    processor_start_the_world();
+
+    // - gc stage: GC_MARK
+    DEBUGF("[runtime_gc] gc stage: GC_MARK")
+    gc_stage = GC_STAGE_MARK;
+    // 等待所有的 processor 都 mark 完成
+    processor_wait_all_gc_work_finish();
+
+    // - gc stage: GC_SWEEP
+    gc_stage = GC_STAGE_SWEEP;
+    DEBUGF("[runtime_gc] gc stage: GC_SWEEP")
+    processor_stop_the_world();
+
+    processor_wait_all_safe();
+
+    gc_barrier_stop();
+
+    // gc 清理
     flush_mcache();
-
-    // 5. sweep all span (iterate mcentral list)
     mcentral_sweep(memory->mheap);
+
+    gc_stage = GC_STAGE_OFF;
+    DEBUGF("[runtime_gc] gc stage: GC_OFF")
 }
 
 /**
@@ -388,12 +416,12 @@ static void _runtime_gc() {
  *    然后对 mcentral 中的 span 根据 gcmark bits 进行清扫。
  * @return
  */
-void __attribute__((optimize(0))) runtime_gc() {
-    DEBUGF("[runtime_gc] start")
-    // 获取当前线程, 其中保存了当前线程使用的虚拟栈
-    processor_t *p = processor_get();
-
-    // TODO 切换到系统栈进行 GC，避免使用协程栈干扰
-
-    DEBUGF("[runtime_gc] completed")
-}
+// void __attribute__((optimize(0))) runtime_gc() {
+//     DEBUGF("[runtime_gc] start")
+//     // 获取当前线程, 其中保存了当前线程使用的虚拟栈
+//     processor_t *p = processor_get();
+//
+//     // TODO 切换到系统栈进行 GC，避免使用协程栈干扰
+//
+//     DEBUGF("[runtime_gc] completed")
+// }

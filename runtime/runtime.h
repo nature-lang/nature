@@ -51,6 +51,10 @@
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
+#define WAIT_SHORT_TIME 10 // ms
+#define WAIT_MID_TIME 50   // ms
+#define WAIT_LONG_TIME 100 // ms
+
 typedef void (*void_fn_t)(void);
 
 /**
@@ -241,6 +245,8 @@ struct processor_t {
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
+    bool gc_work_finish;     // 是否完成了 GC WORK 的工作
+    linked_t *gc_work_list;  // gc 节点列表
 };
 
 void runtime_main(int argc, char *argv[]);

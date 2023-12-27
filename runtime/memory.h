@@ -21,6 +21,14 @@ extern uint64_t allocated_bytes;       // 当前分配的内存空间
 extern uint64_t next_gc_bytes;         // 下一次 gc 的内存量
 extern bool force_gc;                  // runtime_judge_gc 总是立刻进行 gc
 extern bool _gc_barrier;               // gc 屏障开启标识
+extern uint8_t gc_stage;               // gc 阶段
+
+typedef enum {
+    GC_STAGE_OFF, // 0 表示 gc 关闭, 这也是一个初始状态
+    GC_STAGE_START,
+    GC_STAGE_MARK,
+    GC_STAGE_SWEEP,
+} gc_stage_t;
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
@@ -31,6 +39,14 @@ static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
 static inline bool gc_barrier() {
     return _gc_barrier;
+}
+
+static inline void gc_barrier_start() {
+    _gc_barrier = true;
+}
+
+static inline void gc_barrier_stop() {
+    _gc_barrier = false;
 }
 
 /**
