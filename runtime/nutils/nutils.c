@@ -427,5 +427,5 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
         shade_obj_grey(new_obj);
     }
 
-    memmove(slot, new_obj, rtype->size)
+    memmove(slot, new_obj, rtype->size);
 }

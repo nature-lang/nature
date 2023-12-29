@@ -173,6 +173,11 @@ EXIT:
 void coroutine_dispatch(coroutine_t* co) {
     DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
 
+    // 分配 coroutine 之前需要给 coroutine 确认初始颜色
+    if (gc_stage == GC_STAGE_MARK) {
+        co->is_black = true;
+    }
+
     // - 协程独享线程
     if (co->solo) {
         processor_t* p = processor_new();
@@ -372,6 +377,8 @@ processor_t* processor_new() {
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
     p->runnable_list = linked_new();
     p->co_list = linked_new();
+    p->gc_work_finish = false;
+    p->gc_worklist = linked_new();
 
     return p;
 }

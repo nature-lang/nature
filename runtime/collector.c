@@ -1,6 +1,10 @@
 #include "memory.h"
 #include "processor.h"
 
+static void insert_gc_worklist(processor_t *p, void *ptr) {
+    linked_push(p->gc_worklist, ptr);
+}
+
 /**
  * grey 的本质就是等待处理，此时需要将 obj 放到 grey list 中
  * span gcmark_bits + grep_list 共同组成了三种颜色
@@ -27,7 +31,9 @@ void shade_obj_grey(void *obj) {
 
     bitmap_set(span->gcmark_bits->bits, obj_index);
 
-    linked_push(memory->grey_list, obj);
+    processor_t *p = processor_get();
+
+    insert_gc_worklist(p, obj);
 }
 
 /**
@@ -45,89 +51,81 @@ fndef_t *find_fn(addr_t addr) {
     return NULL;
 }
 
-/**
- * runtime 中也申请了一些内存，为了避免被清理，需要将其加入到 root grey list 中
- * @param m
- */
-static void scan_runtime(memory_t *m) {
-    processor_t *p = processor_get();
-    //    assertf(in_heap((addr_t) p->errort), "[scan_runtime] processor.errort not in heap");
-    //    DEBUGF("[runtime_gc.scan_runtime] add errort=%p to grey list", p->errort);
-    //    linked_push(m->grey_list, p->errort);
-}
-
-static void scan_stack(memory_t *m) {
+static void scan_stack_bak(memory_t *m) {
     processor_t *p = processor_get();
     //    mmode_t mode = p->user_mode;
 
     // 根据 top 确定一下当前所在函数(由于进入到 runtime, 所以 top 可能同样进入到了 runtime fn)
     // 所以第一个需要清理的 fn 应该是 frame 位置对应的 位置是 previous rbp, 再往上一个位置就是目标的位置
 
-    //    addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
-    //    uint64_t stack_top = mode.stack_base + mode.stack_size;
+    addr_t frame_base = extract_frame_base(mode); // 从大向小增长。
+    uint64_t stack_top = mode.stack_base + mode.stack_size;
 
-    //    DEBUGF("[runtime.scan_stack] frame_base(BP)=0x%lx, stack_top(max)=0x%lx, stack_base(min)=0x%lx", frame_base, stack_top,
-    //           mode.stack_base);
-    //    assertf(frame_base >= mode.stack_base && frame_base < stack_top, "stack overflow");
-    //
-    //    DEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx", mode.stack_base, stack_top, frame_base);
-    //
-    //    assert(frame_base % 8 == 0);
-    //    while (frame_base + POINTER_SIZE < stack_top) {
-    //        addr_t return_addr = (addr_t)fetch_addr_value(frame_base + POINTER_SIZE);
-    //        fndef_t *fn = find_fn(return_addr);
-    //        if (!fn) {
-    //            DEBUGF("[runtime_gc.scan_stack] fn not found by return addr, frame_base=0x%lx, return_addr=0x%lx, will + 8byte test next",
-    //                   frame_base, return_addr);
-    //            frame_base += POINTER_SIZE;
-    //            continue;
-    //        } else {
-    //            DEBUGF("[runtime_gc.scan_stack] fn found by return addr, frame_base=0x%lx, return_addr=0x%lx, fn_name=%s", frame_base,
-    //                   return_addr, fn->name);
-    //        }
-    //
-    //        // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
-    //        // 由于栈向下增长，所以此处 top 小于 base, 且取值则是向上增加
-    //        addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base -> prev frame_base ->  return_addr > stack
-    //        frame_base = frame_top + fn->stack_size;          // frame_base
-    //
-    //        DEBUGF(
-    //            "[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
-    //            "(min)frame_top=0x%lx,(big)frame_base=0x%lx",
-    //            fn->name, fn->base, fn->stack_size, fn->size, bitmap_to_str(fn->gc_bits, fn->stack_size / POINTER_SIZE), frame_top,
-    //            frame_base);
-    //
-    //        // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
-    //        // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
-    //        // frame_base = rbp-0. bit=0 存储的是(rbp-8 ~ rbp-0) 处的值
-    //        addr_t cursor = frame_base - POINTER_SIZE;
-    //        int i = 0;
-    //        while (cursor >= frame_top) {
-    //            bool is_ptr = bitmap_test(fn->gc_bits, i);
-    //            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d
-    //            ,stack_value(to_int64)=0x%lx",
-    //                   fn->name, i, cursor, is_ptr, fetch_int_value(cursor, 8))
-    //            if (is_ptr) {
-    //                // var 即使 spill 了, 但是可能由于还没有运行到函数结尾，所以可能此时这里是空值或者无效值
-    //                // 错误也没关系，只是引用了导致不会清空，但是至少不会错误清理
-    //                addr_t addr = fetch_addr_value(cursor);
-    //                if (in_heap(addr)) {
-    //                    // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-    //                    linked_push(m->grey_list, (void *)addr);
-    //                } else {
-    //                    //                    DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, addr=%p not heap addr, will
-    //                    skip",
-    //                    //                           fn->name,
-    //                    //                           i, (void *) addr)
-    //                }
-    //            }
-    //
-    //            i += 1;
-    //            cursor -= POINTER_SIZE;
-    //        }
-    //    }
-    //
-    //    DEBUGF("[runtime_gc.scan_stack] completed, frame_base=0x%lx", frame_base);
+    DEBUGF("[runtime.scan_stack] frame_base(BP)=0x%lx, stack_top(max)=0x%lx, stack_base(min)=0x%lx", frame_base, stack_top,
+           mode.stack_base);
+    assertf(frame_base >= mode.stack_base && frame_base < stack_top, "stack overflow");
+
+    DEBUGF("[runtime_gc.scan_stack] start, base=0x%lx, stack_top=0x%lx, frame_base=0x%lx", mode.stack_base, stack_top, frame_base);
+
+    assert(frame_base % 8 == 0);
+    while (frame_base + POINTER_SIZE < stack_top) {
+        addr_t return_addr = (addr_t)fetch_addr_value(frame_base + POINTER_SIZE);
+        fndef_t *fn = find_fn(return_addr);
+        if (!fn) {
+            DEBUGF("[runtime_gc.scan_stack] fn not found by return addr, frame_base=0x%lx, return_addr=0x%lx, will + 8byte test
+                   next ",
+                   frame_base,
+                   return_addr);
+            frame_base += POINTER_SIZE;
+            continue;
+        } else {
+            DEBUGF("[runtime_gc.scan_stack] fn found by return addr, frame_base=0x%lx, return_addr=0x%lx, fn_name=%s", frame_base,
+                   return_addr, fn->name);
+        }
+
+        // PTR_SIZE * 2 表示跳过 previous rbp 和 return addr
+        // 由于栈向下增长，所以此处 top 小于 base, 且取值则是向上增加
+        addr_t frame_top = frame_base + POINTER_SIZE * 2; // frame_base -> prev frame_base ->  return_addr > stack
+        frame_base = frame_top + fn->stack_size;          // frame_base
+
+        DEBUGF(
+            "[runtime_gc.scan_stack] fn_name=%s, fn=0x%lx, stack_size=%lu, fn_size=%lu, gc_bits=%s, "
+            "(min)frame_top=0x%lx,(big)frame_base=0x%lx",
+            fn->name, fn->base, fn->stack_size, fn->size, bitmap_to_str(fn->gc_bits, fn->stack_size / POINTER_SIZE), frame_top, frame_base);
+
+        // 根据 gc data 判断栈内存中存储的值是否为 ptr, 如果是的话，该 ptr 指向的对象必定是 heap。
+        // 栈内存本身的数据属于 root obj, 不需要参与三色标记, 首先按 8byte 遍历整个 free
+        // frame_base = rbp-0. bit=0 存储的是(rbp-8 ~ rbp-0) 处的值
+        addr_t cursor = frame_base - POINTER_SIZE;
+        int i = 0;
+        while (cursor >= frame_top) {
+            bool is_ptr = bitmap_test(fn->gc_bits, i);
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, cursor_stack_addr=0x%lx, is_ptr=%d
+                   ,
+                   stack_value(to_int64) = 0x % lx ",
+                                                fn->name,
+                   i, cursor, is_ptr, fetch_int_value(cursor, 8))
+            if (is_ptr) {
+                // var 即使 spill 了, 但是可能由于还没有运行到函数结尾，所以可能此时这里是空值或者无效值
+                // 错误也没关系，只是引用了导致不会清空，但是至少不会错误清理
+                addr_t addr = fetch_addr_value(cursor);
+                if (in_heap(addr)) {
+                    // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
+                    linked_push(m->grey_list, (void *)addr);
+                } else {
+                    //                    DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%d, addr=%p not heap addr, will
+                    skip ",
+                    //                           fn->name,
+                    //                           i, (void *) addr)
+                }
+            }
+
+            i += 1;
+            cursor -= POINTER_SIZE;
+        }
+    }
+
+    DEBUGF("[runtime_gc.scan_stack] completed, frame_base=0x%lx", frame_base);
 }
 
 static void scan_symdefs(memory_t *m) {
@@ -344,15 +342,121 @@ void mcentral_sweep(mheap_t *mheap) {
     }
 }
 
-// TODO
+/**
+ * save_stack 中保存着 coroutine 栈数组，其中 stack->ptr 指向了原始栈的栈顶
+ * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
+ */
+static void scan_stack(aco_t *aco) {
+    aco_save_stack_t stack = aco->save_stack;
+    if (stack.valid_sz == 0) {
+        return;
+    }
+
+    DEBUGF("[runtime_gc.scan_stack] start, stack_base=%p, stack_size=%ld", stack.ptr, stack.valid_sz);
+
+    addr_t return_addr = (addr_t)aco->reg[ACO_REG_IDX_RETADDR];
+
+    // top 是一个点，而数组是存储在一个段里面。这里就是 top ~ top+8 可以存储一个指针数据
+    addr_t top = (addr_t)stack.ptr;
+    addr_t top_cursor = 0;
+    while (top_cursor <= stack.valid_sz) {
+        fndef_t *fn = find_fn(return_addr);
+        assertf(fn, "fn not found by return addr, return_addr=0x%lx", return_addr);
+
+        // ptr_index = ptr_count - 1
+        int ptr_count = fn->stack_size / POINTER_SIZE;
+        for (int i = ptr_count - 1; i >= 0; --i) {
+            bool is_ptr = bitmap_test(fn->gc_bits, i);
+            DEBUGF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, value=0x%lx", fn->name, i, is_ptr,
+                   fetch_int_value(top_cursor, 8))
+
+            // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值或者
+            if (is_ptr) {
+                addr_t ptr = fetch_addr_value(top_cursor);
+                if (in_heap(ptr)) {
+                    // 放到当前 processor 的 grey 进行处理
+                }
+            }
+
+            top_cursor += POINTER_SIZE;
+        }
+
+        // fn->gc_bits 保存了每个 8byte 单位的内容
+        // fn stack_size 保存了当前函数使用的栈大小
+    }
+    //        for (addr_t i = (addr_t)stack.ptr; i < (addr_t)(stack.ptr + stack.valid_sz); i += POINTER_SIZE) {
+    //            // 判断
+    //        }
+}
+
+static void gc_work() {
+    processor_t *p = processor_get();
+    coroutine_t *co = coroutine_get();
+    DEBUGF("[runtime_gc.gc_work] start, processor_id=%p, co_id=%p", p, co);
+
+    // - share goroutine root and change color black
+    LINKED_FOR(p->co_list) {
+        coroutine_t *wait_co = LINKED_VALUE();
+        if (wait_co->status == CO_STATUS_DEAD) {
+            continue;
+        }
+
+        if (wait_co->is_black) {
+            continue;
+        }
+
+        //
+        aco_t *aco = wait_co->aco;
+        aco_save_stack_t stack = aco->save_stack;
+
+        // scan stack
+        // 不用扫描 reg 了，只要 coroutine 调用了 co yield, 就已经了寄存器溢出到 stack 的操作
+        //        wait_co->aco->save_stack
+    }
+
+    // - solo goroutine root and change color black
+}
+
 static void set_gc_work_coroutine() {
+    // 遍历 share processor 插入 gc coroutine
+    SLICE_FOR(share_processor_list) {
+        processor_t *p = SLICE_VALUE(share_processor_list);
+
+        coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
+
+        linked_push(p->co_list, gc_co);
+        linked_push(p->gc_worklist, gc_co);
+    }
 }
 
 /**
  * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
  */
 static void scan_global() {
+    DEBUGF("[runtime_gc.scan_symdefs] start")
 
+    processor_t *processor = share_processor_list->take[0];
+    assert(processor);
+
+    for (int i = 0; i < rt_symdef_count; ++i) {
+        symdef_t s = rt_symdef_ptr[i];
+        if (!s.need_gc) {
+            continue;
+        }
+
+        DEBUGF("[runtime.scan_symdefs] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx", s.name, s.base, s.size,
+               s.need_gc, fetch_int_value(s.base, s.size));
+
+        assertf(s.size <= 8, "temp do not support symbol size > 8byte");
+        assertf(s.base > 0, "s.base is zero,cannot fetch value by base");
+        // 触发 gc 时全局变量可能还没有进行初始化, 所以这里使用 in_heap 进行一下地址可用对判断
+        addr_t addr = fetch_addr_value(s.base);
+        if (in_heap(addr)) {
+            // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
+            // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
+            linked_push(processor->gc_worklist, (void *)addr);
+        }
+    }
 }
 
 /**
@@ -398,6 +502,8 @@ void runtime_gc() {
     // gc 清理
     flush_mcache();
     mcentral_sweep(memory->mheap);
+
+    processor_start_the_world();
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF")

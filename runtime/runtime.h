@@ -220,7 +220,9 @@ typedef struct coroutine_t {
     n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
 
-    bool is_black; // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
+    // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
+    // gc stage 是 mark 时
+    bool is_black;
 
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
@@ -246,7 +248,7 @@ struct processor_t {
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
     bool gc_work_finish;     // 是否完成了 GC WORK 的工作
-    linked_t *gc_work_list;  // gc 节点列表
+    linked_t *gc_worklist;  // gc 节点列表
 };
 
 void runtime_main(int argc, char *argv[]);
