@@ -411,10 +411,15 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
 void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
-
     if (!gc_barrier()) {
         memmove(slot, new_obj, rtype->size);
         return;
+    }
+
+    processor_t *p = processor_get();
+    // 独享线程进行 write barrier 之前需要尝试获取线程锁
+    if (!p->share) {
+        uv_mutex_lock(&p->gc_locker);
     }
 
     // yuasa 写屏障 shade slot
@@ -422,10 +427,17 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     // Dijkstra 写屏障
     coroutine_t *co = coroutine_get();
-    if (!co->is_black) {
+    if (!co->gc_black) {
         // shade new_obj
         shade_obj_grey(new_obj);
     }
 
     memmove(slot, new_obj, rtype->size);
+
+    // 判断 worklist 是否已经处理完成，如果已经处理完成则本次新增的 obj 需要当前 solo processor 进行处理
+    if (!p->share && p->gc_work_finished) {
+        // TODO 由于 share 已经不在处理 worklist, 所以此处需要自行处理 worklist
+    }
+
+    uv_mutex_unlock(&p->gc_locker);
 }

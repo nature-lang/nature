@@ -34,8 +34,8 @@ void sysmon_run() {
         }
 
         // - 监控状态处于 running solo processor, 同样需要抢占式调度
-        SLICE_FOR(solo_processor_list) {
-            processor_t *p = SLICE_VALUE(solo_processor_list);
+        LINKED_FOR(solo_processor_list) {
+            processor_t *p = LINKED_VALUE();
             if (p->exit) {
                 continue;
             }

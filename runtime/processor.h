@@ -10,12 +10,20 @@
 
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
-extern slice_t *solo_processor_list;  // 独享协程列表其实就是多线程
+extern linked_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern linked_t *global_gc_worklist;  // 全局 gc worklist
+extern uv_mutex_t *global_gc_locker;  // 全局 gc locker
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
 extern bool processor_need_stw;  // 全局 STW 标识
 extern bool processor_need_exit; // 全局 STW 标识
+
+// locker
+void *global_gc_worklist_pop();
+
+// locker
+void global_gc_worklist_push();
 
 void thread_handle_sigurg(int sig);
 
@@ -30,7 +38,7 @@ bool processor_all_safe();
 
 void processor_wait_all_safe();
 
-void processor_wait_all_gc_work_finish();
+void wait_all_gc_work_finished();
 
 /**
  *  processor 停止调度
@@ -70,7 +78,7 @@ void processor_run(void *p);
  */
 void processor_init();
 
-processor_t *processor_new();
+processor_t *processor_new(int index);
 
 void processor_free(processor_t *);
 

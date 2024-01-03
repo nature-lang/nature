@@ -29,7 +29,7 @@ void shade_obj_grey(void *obj) {
     //  get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
 
-    bitmap_set(span->gcmark_bits->bits, obj_index);
+    bitmap_clear(span->gcmark_bits->bits, obj_index);
 
     processor_t *p = processor_get();
 
@@ -346,7 +346,8 @@ void mcentral_sweep(mheap_t *mheap) {
  * save_stack 中保存着 coroutine 栈数组，其中 stack->ptr 指向了原始栈的栈顶
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
-static void scan_stack(aco_t *aco) {
+static void scan_stack(processor_t *p, coroutine_t *co) {
+    aco_t *aco = co->aco;
     aco_save_stack_t stack = aco->save_stack;
     if (stack.valid_sz == 0) {
         return;
@@ -354,39 +355,133 @@ static void scan_stack(aco_t *aco) {
 
     DEBUGF("[runtime_gc.scan_stack] start, stack_base=%p, stack_size=%ld", stack.ptr, stack.valid_sz);
 
+    // 首个 sp 对应的 fn 的 addr 直接从寄存器中读取，其余函数可以从栈中读取
     addr_t return_addr = (addr_t)aco->reg[ACO_REG_IDX_RETADDR];
+    addr_t stack_size = stack.valid_sz; // valid 标识 8byte 对齐
 
-    // top 是一个点，而数组是存储在一个段里面。这里就是 top ~ top+8 可以存储一个指针数据
-    addr_t top = (addr_t)stack.ptr;
-    addr_t top_cursor = 0;
-    while (top_cursor <= stack.valid_sz) {
+    // cursor 最终会到栈低
+    addr_t cursor = 0;
+    while (cursor <= stack_size) {
         fndef_t *fn = find_fn(return_addr);
         assertf(fn, "fn not found by return addr, return_addr=0x%lx", return_addr);
 
-        // ptr_index = ptr_count - 1
+        // 栈的方向需要处理么
+        // 查看 aco 的 memcpy 可以发现 rsp(top) 对齐了 save_stack.ptr,
+        // 原来的数组存储位置是 [sp ~ -8], 现在则是 [save_stack.ptr ~ +8]
+
+        addr_t frame_cursor = cursor;
+
         int ptr_count = fn->stack_size / POINTER_SIZE;
-        for (int i = ptr_count - 1; i >= 0; --i) {
+        for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
             DEBUGF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, value=0x%lx", fn->name, i, is_ptr,
-                   fetch_int_value(top_cursor, 8))
+                   fetch_int_value(frame_cursor, 8))
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值或者
             if (is_ptr) {
-                addr_t ptr = fetch_addr_value(top_cursor);
+                addr_t ptr = fetch_addr_value(frame_cursor);
                 if (in_heap(ptr)) {
-                    // 放到当前 processor 的 grey 进行处理
+                    insert_gc_worklist(p, (void *)ptr);
                 }
             }
 
-            top_cursor += POINTER_SIZE;
+            frame_cursor += POINTER_SIZE;
         }
 
-        // fn->gc_bits 保存了每个 8byte 单位的内容
-        // fn stack_size 保存了当前函数使用的栈大小
+        // 从栈中读取 next return addr
+        return_addr = (addr_t)fetch_addr_value(frame_cursor + POINTER_SIZE);
+
+        // 跳过 prev_rbp + return addr 进行下一次循环
+        cursor = frame_cursor + POINTER_SIZE + POINTER_SIZE;
     }
-    //        for (addr_t i = (addr_t)stack.ptr; i < (addr_t)(stack.ptr + stack.valid_sz); i += POINTER_SIZE) {
-    //            // 判断
-    //        }
+}
+
+static void handle_gc_worklist(processor_t *p) {
+    DEBUGF("[runtime_gc.handle_gc_worklist] start, processor=%p", p);
+    if (p->gc_work_finished) {
+        return;
+    }
+
+    if (p->gc_worklist->count == 0) {
+        p->gc_work_finished = true;
+        return;
+    }
+    // 每处理 N 个 ptr 就进行 yield
+    int limit_count = 0;
+    while (true) {
+        if (limit_count >= GC_WORKLIST_LIMIT) {
+            DEBUGF("[runtime_gc.handle_gc_worklist] handle_count=%d, will yield", limit_count);
+            limit_count = 0;
+            aco_yield();
+        }
+
+        if (linked_empty(p->gc_worklist)) {
+            break;
+        }
+
+        addr_t addr = (addr_t)linked_pop(p->gc_worklist);
+
+        // get mspan by ptr
+        mspan_t *span = span_of(addr);
+
+        //  get span index
+        uint64_t obj_index = (addr - span->base) / span->obj_size;
+
+        // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
+        // 计算 addr 所在的 obj 的起始地址
+        addr = span->base + (obj_index * span->obj_size);
+
+        DEBUGF(
+            "[runtime_gc.grey_list_work] addr=0x%lx, spanclass_has_ptr=%d, span=0x%lx, "
+            "spanclass=%d, obj_index=%lu, span->obj_size=%lu",
+            addr, spanclass_has_ptr(span->spanclass), span->base, span->spanclass, obj_index, span->obj_size);
+
+        // TODO 在 test + set 之间需要加一个锁，避免并发问题
+        // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
+        // 其他线程可能已经标记了该 obj
+        if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
+            // already marks black
+            DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, span=0x%lx, obj_index=%lu marked, will continue", addr, span->base, obj_index);
+            continue;
+        }
+
+        mark_obj_black(span, obj_index);
+
+        // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
+        if (!spanclass_has_ptr(span->spanclass)) {
+            // addr ~ addr+size 空间内存储的是一个标量，不需要向下扫描了
+            continue;
+        }
+
+        // scan object field
+        // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
+        // ++i 此时按指针跨度增加
+        int index = 0;
+        for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += POINTER_SIZE) {
+            arena_t *arena = take_arena(addr);
+            uint64_t bit_index = arena_bits_index(arena, temp_addr);
+            index++;
+            bool is_ptr = bitmap_test(arena->bits, bit_index);
+            if (is_ptr) {
+                // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
+                addr_t heap_addr = fetch_addr_value(temp_addr);
+
+                DEBUGF(
+                    "[runtime_gc.grey_list_work] addr is ptr,scan_base=0x%lx cursor_addr=0x%lx fetch_cursor_value=0x%lx,"
+                    "obj_size=%ld, bit_index=%lu, in_heap=%d",
+                    addr, temp_addr, heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
+
+                if (in_heap(heap_addr)) {
+                    insert_gc_worklist(p, (void *)heap_addr);
+                }
+            }
+        }
+
+        limit_count++;
+    }
+
+    p->gc_work_finished = true;
+    DEBUGF("[runtime_gc.handle_gc_worklist] completed, processor=%p", p)
 }
 
 static void gc_work() {
@@ -401,20 +496,98 @@ static void gc_work() {
             continue;
         }
 
-        if (wait_co->is_black) {
+        // gc black 标识 root 已经标记完成不需要进行处理
+        if (wait_co->gc_black) {
             continue;
         }
 
-        //
-        aco_t *aco = wait_co->aco;
-        aco_save_stack_t stack = aco->save_stack;
-
         // scan stack
         // 不用扫描 reg 了，只要 coroutine 调用了 co yield, 就已经了寄存器溢出到 stack 的操作
-        //        wait_co->aco->save_stack
+        // wait_co->aco->save_stack
+        scan_stack(p, wait_co);
+
+        wait_co->gc_black = true;
     }
 
-    // - solo goroutine root and change color black
+    DEBUGF("[runtime_gc.gc_work] share processor scan stack completed, will yield")
+    aco_yield();
+
+    // - solo goroutine root and change color black, 读取当前 share processor index
+    // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
+    LINKED_FOR(solo_processor_list) {
+        processor_t *solo_p = LINKED_VALUE();
+        int solo_index = solo_p->index;
+
+        if (solo_p->exit) {
+            continue;
+        }
+
+        int rem = solo_index % share_processor_list->count;
+        if (rem != p->index) {
+            continue;
+        }
+
+        coroutine_t *solo_co = linked_first(solo_p->co_list)->value;
+        if (solo_co->status == CO_STATUS_DEAD) {
+            continue;
+        }
+
+        if (solo_co->gc_black) {
+            continue;
+        }
+
+        uv_mutex_lock(&solo_p->gc_locker);
+
+        // 尝试获取锁，获取不到就阻塞
+        scan_stack(solo_p, solo_co);
+
+        uv_mutex_unlock(&solo_p->gc_locker);
+
+        solo_co->gc_black = true;
+    }
+
+    DEBUGF("[runtime_gc.gc_work] solo processor scan stack completed, will yield")
+    aco_yield();
+
+    // - handle work list
+    handle_gc_worklist(p);
+
+    DEBUGF("[runtime_gc.gc_work] handle processor gc work list completed, will yield")
+    aco_yield();
+
+    // - grey list work
+    LINKED_FOR(solo_processor_list) {
+        processor_t *solo_p = LINKED_VALUE();
+        int solo_index = solo_p->index;
+
+        if (solo_p->exit) {
+            continue;
+        }
+
+        int rem = solo_index % share_processor_list->count;
+        if (rem != p->index) {
+            continue;
+        }
+
+        coroutine_t *solo_co = linked_first(solo_p->co_list)->value;
+        if (solo_co->status == CO_STATUS_DEAD) {
+            continue;
+        }
+
+        if (solo_p->gc_work_finished) {
+            continue;
+        }
+
+        uv_mutex_lock(&solo_p->gc_locker);
+
+        handle_gc_worklist(p);
+
+        uv_mutex_unlock(&solo_p->gc_locker);
+    }
+
+    DEBUGF("[runtime_gc.gc_work] handle solo processor gc work list completed, will exit")
+
+    aco_exit();
 }
 
 static void set_gc_work_coroutine() {
@@ -460,6 +633,12 @@ static void scan_global() {
 }
 
 /**
+ * 处理剩余的 global gc worklist
+ */
+static void gc_mark_done() {
+}
+
+/**
  * @stack system
  */
 void runtime_gc() {
@@ -488,14 +667,18 @@ void runtime_gc() {
     DEBUGF("[runtime_gc] gc stage: GC_MARK")
     gc_stage = GC_STAGE_MARK;
     // 等待所有的 processor 都 mark 完成
-    processor_wait_all_gc_work_finish();
+    wait_all_gc_work_finished();
+
+    // - gc stage: GC_MARK_DONE
+    DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE")
+    processor_stop_the_world();
+    processor_wait_all_safe();
+
+    gc_mark_done();
 
     // - gc stage: GC_SWEEP
     gc_stage = GC_STAGE_SWEEP;
     DEBUGF("[runtime_gc] gc stage: GC_SWEEP")
-    processor_stop_the_world();
-
-    processor_wait_all_safe();
 
     gc_barrier_stop();
 

@@ -27,6 +27,7 @@ typedef enum {
     GC_STAGE_OFF, // 0 表示 gc 关闭, 这也是一个初始状态
     GC_STAGE_START,
     GC_STAGE_MARK,
+    GC_STAGE_MARK_DONE, // mark 停止是一个过程
     GC_STAGE_SWEEP,
 } gc_stage_t;
 

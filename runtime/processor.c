@@ -10,7 +10,8 @@ int cpu_count;
 bool processor_need_stw;
 bool processor_need_exit;
 slice_t* share_processor_list; // 共享协程列表的数量一般就等于线程数量
-slice_t* solo_processor_list;  // 独享协程列表其实就是多线程
+linked_t* solo_processor_list; // 独享协程列表其实就是多线程
+linked_t* global_gc_worklist;  // 独享协程列表其实就是多线程
 
 uv_key_t tls_processor_key;
 uv_key_t tls_coroutine_key;
@@ -175,15 +176,14 @@ void coroutine_dispatch(coroutine_t* co) {
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色
     if (gc_stage == GC_STAGE_MARK) {
-        co->is_black = true;
+        co->gc_black = true;
     }
 
     // - 协程独享线程
     if (co->solo) {
-        processor_t* p = processor_new();
-        slice_push(solo_processor_list, p);
+        processor_t* p = processor_new(solo_processor_list->count);
+        linked_push(solo_processor_list, p);
 
-        //        co->p = p; // coroutine_resume 阶段在进行绑定
         linked_push(p->co_list, co);
         linked_push(p->runnable_list, co);
 
@@ -239,10 +239,10 @@ void processor_init() {
 
     // - 为每一个 processor 创建对应的 thread 进行处理对应的 p
     share_processor_list = slice_capacity_new(cpu_count);
-    solo_processor_list = slice_new();
+    solo_processor_list = linked_new();
 
     for (int i = 0; i < cpu_count; ++i) {
-        processor_t* p = processor_new();
+        processor_t* p = processor_new(i);
         p->share = true;
         slice_push(share_processor_list, p);
 
@@ -296,10 +296,15 @@ void processor_dump_errort(n_errort* errort) {
     }
 }
 
+/**
+ * 所有的 temp_call 都会被座位 block syscall 进行处理
+ */
 void pre_block_syscall() {
     processor_t* p = processor_get();
     coroutine_t* c = coroutine_get();
     c->status = CO_STATUS_SYSCALL;
+
+    // TODO 进入 block call 阻塞之前, 将当前的栈信息进行 save? 从而能够保证正常的进行栈扫描
 
     // solo coroutine 占用整个线程，所以即使是阻塞的 syscall 也不需要进行什么操作
     if (c->solo) {
@@ -351,7 +356,7 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
     coroutine_t* co = NEW(coroutine_t);
     co->fn = fn;
     co->solo = solo;
-    co->is_black = false;
+    co->gc_black = false;
     co->status = CO_STATUS_RUNNABLE;
     co->args = args;
     co->aco = NULL;
@@ -363,21 +368,20 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
     return co;
 }
 
-processor_t* processor_new() {
+processor_t* processor_new(int index) {
     processor_t* p = NEW(processor_t);
 
     uv_loop_t* loop = NEW(uv_loop_t);
     uv_loop_init(loop);
     p->uv_loop = loop;
-    //    p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
+    uv_mutex_init(&p->gc_locker);
     p->thread_id = 0;
-    //    p->errort = n_errort_new(string_new("", 0), 0);
     p->coroutine = NULL;
     p->co_started_at = 0;
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
     p->runnable_list = linked_new();
     p->co_list = linked_new();
-    p->gc_work_finish = false;
+    p->gc_work_finished = false;
     p->gc_worklist = linked_new();
 
     return p;
@@ -444,8 +448,8 @@ bool processor_all_safe() {
         }
     }
 
-    SLICE_FOR(solo_processor_list) {
-        processor_t* p = SLICE_VALUE(share_processor_list);
+    LINKED_FOR(solo_processor_list) {
+        processor_t* p = LINKED_VALUE();
         if (p->exit) {
             continue;
         }
@@ -466,34 +470,38 @@ void processor_wait_all_safe() {
 }
 
 /**
- * 需要等待独享和共享协程全部完成
+ * 遍历所有的 share processor 和 solo processor 判断 gc 是否全部完成
+ * @return
  */
-void processor_wait_all_gc_work_finish() {
-    DEBUGF("[runtime.processor_wait_all_gc_work_finish] start");
-
+static bool all_gc_work_finished() {
     SLICE_FOR(share_processor_list) {
         processor_t* p = SLICE_VALUE(share_processor_list);
-        if (p->exit) {
-            continue;
-        }
-
-        while (!p->gc_work_finish) {
-            usleep(WAIT_MID_TIME);
+        if (!p->gc_work_finished) {
+            return false;
         }
     }
 
-    SLICE_FOR(solo_processor_list) {
-        processor_t* p = SLICE_VALUE(share_processor_list);
-        if (p->exit) {
-            continue;
-        }
-
-        while (!p->gc_work_finish) {
-            usleep(WAIT_MID_TIME);
+    LINKED_FOR(solo_processor_list) {
+        processor_t* p = LINKED_VALUE();
+        if (!p->gc_work_finished) {
+            return false;
         }
     }
 
-    DEBUGF("[runtime.processor_wait_all_gc_work_finish] all processor gc work finish");
+    return true;
+}
+
+/**
+ * 需要等待独享和共享协程全部完成 gc 工作
+ */
+void wait_all_gc_work_finished() {
+    DEBUGF("[runtime.wait_all_gc_work_finished] start");
+
+    while (!all_gc_work_finished()) {
+        usleep(WAIT_MID_TIME);
+    }
+
+    DEBUGF("[runtime.wait_all_gc_work_finished] all processor gc work finish");
 
     // 重置 gc_work_finish 为 false，避免影响下一次 GC
     SLICE_FOR(share_processor_list) {
@@ -502,15 +510,15 @@ void processor_wait_all_gc_work_finish() {
             continue;
         }
 
-        p->gc_work_finish = false;
+        p->gc_work_finished = false;
     }
 
-    SLICE_FOR(solo_processor_list) {
-        processor_t* p = SLICE_VALUE(share_processor_list);
+    LINKED_FOR(solo_processor_list) {
+        processor_t* p = LINKED_VALUE();
         if (p->exit) {
             continue;
         }
 
-        p->gc_work_finish = false;
+        p->gc_work_finished = false;
     }
 }

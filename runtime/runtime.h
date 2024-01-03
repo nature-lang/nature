@@ -9,6 +9,8 @@
 #include "utils/linked.h"
 #include "utils/type.h"
 
+#define GC_WORKLIST_LIMIT 1024 // 每处理 1024 个 ptr 就 yield
+
 #define ARENA_SIZE 67108864 // arena 的大小，单位 byte
 
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
@@ -196,7 +198,6 @@ typedef struct {
 
 typedef struct {
     mheap_t *mheap;
-    linked_t *grey_list;
     uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
 } memory_t;
 
@@ -222,7 +223,7 @@ typedef struct coroutine_t {
 
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时
-    bool is_black;
+    bool gc_black;
 
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
@@ -234,11 +235,13 @@ typedef struct coroutine_t {
  * 共享处理器的数量通畅等于线程的数量, 所以可以将线程维度的无锁内存分配器放置再这里
  */
 struct processor_t {
-    mcache_t mcache;         // 线程维度无锁内存分配器
-    aco_t *main_aco;         // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
-    uv_loop_t *uv_loop;      // uv loop 事件循环
-                             //    n_errort *errort;       // 当前线程中的错误？TODO 不对， coroutine
-                             //    是随便调度的，这个错误怎么可以绑定在线程上，应该绑定在协程上
+    int index;
+    mcache_t mcache;    // 线程维度无锁内存分配器
+    aco_t *main_aco;    // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
+    uv_loop_t *uv_loop; // uv loop 事件循环
+    // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
+    // 需要通过 uv_mutex_init 进行初始化
+    uv_mutex_t gc_locker;
     uv_thread_t thread_id;   // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;  // 当前正在调度的 coroutine
     uint64_t co_started_at;  // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
@@ -247,8 +250,8 @@ struct processor_t {
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
-    bool gc_work_finish;     // 是否完成了 GC WORK 的工作
-    linked_t *gc_worklist;  // gc 节点列表
+    bool gc_work_finished;   // 是否完成了 GC WORK 的工作
+    linked_t *gc_worklist;   // gc 节点列表
 };
 
 void runtime_main(int argc, char *argv[]);
