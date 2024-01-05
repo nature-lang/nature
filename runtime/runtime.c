@@ -56,12 +56,8 @@ void runtime_main(int argc, char *argv[]) {
     coroutine_t *main_co = coroutine_new((void *)main, NULL, false, true);
     coroutine_dispatch(main_co);
 
-    // 开启调度 GC 监控线程(单独开一个线程进行监控)
-    // 启用一个新的线程来运行 sysmon_run
-    uv_thread_t sysmon_thread_id;
-    uv_thread_create(&sysmon_thread_id, sysmon_run, NULL);
     // 阻塞等待多线程模型执行
-    wait_processor();
+    wait_sysmon();
 
     DEBUGF("[runtime_main] user code run completed,will exit");
 }

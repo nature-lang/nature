@@ -19,9 +19,9 @@ extern uint64_t remove_total_bytes;    // 当前回收到物理内存中的总�
 extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern uint64_t allocated_bytes;       // 当前分配的内存空间
 extern uint64_t next_gc_bytes;         // 下一次 gc 的内存量
-extern bool force_gc;                  // runtime_judge_gc 总是立刻进行 gc
-extern bool _gc_barrier;               // gc 屏障开启标识
+extern bool gc_barrier;                // gc 屏障开启标识
 extern uint8_t gc_stage;               // gc 阶段
+extern uv_mutex_t gc_stage_locker;
 
 typedef enum {
     GC_STAGE_OFF, // 0 表示 gc 关闭, 这也是一个初始状态
@@ -38,16 +38,16 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
 
 static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
 
-static inline bool gc_barrier() {
-    return _gc_barrier;
+static inline bool gc_barrier_get() {
+    return gc_barrier;
 }
 
 static inline void gc_barrier_start() {
-    _gc_barrier = true;
+    gc_barrier = true;
 }
 
 static inline void gc_barrier_stop() {
-    _gc_barrier = false;
+    gc_barrier = false;
 }
 
 /**
@@ -158,7 +158,11 @@ fndef_t *find_fn(addr_t addr);
  */
 void runtime_gc();
 
-void runtime_auto_gc();
+void runtime_eval_gc();
+
+void runtime_force_gc();
+
+void *runtime_malloc(uint64_t rtype_hash);
 
 void *runtime_zero_malloc(uint64_t size, rtype_t *rtype);
 
@@ -175,9 +179,6 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype);
  * @return
  */
 void *gc_malloc(uint64_t rtype_hash);
-
-// 测试使用，强制开启立刻 gc
-void runtime_set_force_gc();
 
 uint64_t runtime_malloc_bytes();
 

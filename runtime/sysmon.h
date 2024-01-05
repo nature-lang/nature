@@ -7,6 +7,6 @@
  * - 遍历 share_processor_list 运行时间过长，则发送抢占式信号
  * -
  */
-void sysmon_run();
+void wait_sysmon();
 
 #endif // NATURE_SYSMON_H

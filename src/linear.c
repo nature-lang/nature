@@ -278,7 +278,7 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
 }
 
 static void linear_auto_gc(module_t *m) {
-    rt_call(m, RT_CALL_RUNTIME_AUTO_GC, NULL, 0);
+    rt_call(m, RT_CALL_RUNTIME_EVAL_GC, NULL, 0);
 }
 
 static void linear_has_error(module_t *m) {

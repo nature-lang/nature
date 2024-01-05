@@ -411,7 +411,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
 void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
-    if (!gc_barrier()) {
+    if (!gc_barrier_get()) {
         memmove(slot, new_obj, rtype->size);
         return;
     }

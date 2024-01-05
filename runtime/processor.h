@@ -11,19 +11,18 @@
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern linked_t *solo_processor_list; // 独享协程列表其实就是多线程
-extern linked_t *global_gc_worklist;  // 全局 gc worklist
-extern uv_mutex_t *global_gc_locker;  // 全局 gc locker
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
+
+// processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
+extern linked_t *global_gc_worklist; // 全局 gc worklist
+extern uv_mutex_t global_gc_locker;  // 全局 gc locker
 
 extern bool processor_need_stw;  // 全局 STW 标识
 extern bool processor_need_exit; // 全局 STW 标识
 
 // locker
 void *global_gc_worklist_pop();
-
-// locker
-void global_gc_worklist_push();
 
 void thread_handle_sigurg(int sig);
 

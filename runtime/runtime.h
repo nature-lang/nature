@@ -88,6 +88,8 @@ typedef struct mspan_t {
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     bitmap_t *alloc_bits;
     bitmap_t *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
+
+    uv_mutex_t gcmark_locker;
 } mspan_t;
 
 /**
@@ -202,11 +204,11 @@ typedef struct {
 } memory_t;
 
 typedef enum {
-    CO_STATUS_SYSCALL,  // 陷入系统调用
-    CO_STATUS_RUNNABLE, // 允许被调度
-    CO_STATUS_RUNNING,  // 正在运行
-    CO_STATUS_WAITING,  // 等待 IO 事件就绪
-    CO_STATUS_DEAD,     // 死亡状态
+    CO_STATUS_RUNNABLE = 1, // 允许被调度
+    CO_STATUS_SYSCALL = 2,  // 陷入系统调用
+    CO_STATUS_RUNNING = 3,  // 正在运行
+    CO_STATUS_WAITING = 4,  // 等待 IO 事件就绪
+    CO_STATUS_DEAD = 5,     // 死亡状态
 } co_status_t;
 
 typedef struct processor_t processor_t;
@@ -236,8 +238,10 @@ typedef struct coroutine_t {
  */
 struct processor_t {
     int index;
-    mcache_t mcache;    // 线程维度无锁内存分配器
-    aco_t *main_aco;    // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
+    mcache_t mcache;                // 线程维度无锁内存分配器
+    aco_t *main_aco;                // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
+    aco_share_stack_t *share_stack; // processor 中的所有的 stack 都使用该共享栈
+
     uv_loop_t *uv_loop; // uv loop 事件循环
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
     // 需要通过 uv_mutex_init 进行初始化
@@ -251,7 +255,7 @@ struct processor_t {
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
     bool gc_work_finished;   // 是否完成了 GC WORK 的工作
-    linked_t *gc_worklist;   // gc 节点列表
+    linked_t *gc_worklist;   // gc 扫描的 ptr 节点列表
 };
 
 void runtime_main(int argc, char *argv[]);

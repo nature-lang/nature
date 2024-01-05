@@ -2,26 +2,47 @@ import coroutine as co
 import time
 
 var foo = fn(){
-    for true {
-        println("co: sleeping...", time.now().timestamp())
-        co.sleep(1000)
-    }
+    var a = vec<int>{len=10}
+    a = vec<int>{len=400}
+
+    a[0] = 1
+    a[2] = 2
+    a[4] = 4
+    a[8] = 8
+    a[16] = 16
+    a[32] = 32
+    a[64] = 64
+    a[128] = 128
+
+    var b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'wwwwwwwwwwww'
+    b = 'ccccccccccccc'
+    b = 'bbbbbbbbbbbbbb'
+    b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'hello world nice'
+
+
+    runtime_force_gc()
+
+    println('coroutine ------------- sleep 3s')
+    co.sleep(3000)
 }
 
 var bar = fn(){
     for true {
         println("solo co: sleeping...", time.now().timestamp())
-        co.sleep(1000)
+        co.sleep(100)
     }
 }
 
 // - 共享协程
 co.run(foo, [], 0)
 co.run(foo, [], 0)
-
-// - 独享协程
-co.run(bar, [], co.SOLO)
-co.run(bar, [], co.SOLO)
 
 // main for sleep
 for int i=0; i<10; i+=1 {

@@ -139,7 +139,7 @@
 
 #define RT_CALL_RUNTIME_MALLOC "runtime_malloc"
 
-#define RT_CALL_RUNTIME_AUTO_GC "runtime_auto_gc"
+#define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
 
 #define RT_CALL_PROCESSOR_THROW_ERRORT "processor_throw_errort"
 #define RT_CALL_PROCESSOR_REMOVE_ERRORT "processor_remove_errort"
@@ -641,7 +641,7 @@ static inline lir_op_t *rt_call(module_t *m, char *name, lir_operand_t *result, 
             continue;
         }
 
-        OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_RUNTIME_AUTO_GC, false),
+        OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_RUNTIME_EVAL_GC, false),
                            operand_new(LIR_OPERAND_ARGS, slice_new()), NULL));
     }
 }
