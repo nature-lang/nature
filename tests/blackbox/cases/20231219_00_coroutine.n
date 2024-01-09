@@ -1,7 +1,7 @@
 import coroutine as co
 import time
 
-var foo = fn(){
+fn foo(){
     var a = vec<int>{len=10}
     a = vec<int>{len=400}
 
@@ -29,23 +29,7 @@ var foo = fn(){
 
     runtime_force_gc()
 
-    println('coroutine ------------- sleep 3s')
     co.sleep(3000)
 }
 
-var bar = fn(){
-    for true {
-        println("solo co: sleeping...", time.now().timestamp())
-        co.sleep(100)
-    }
-}
-
-// - 共享协程
-co.run(foo, [], 0)
-co.run(foo, [], 0)
-
-// main for sleep
-for int i=0; i<10; i+=1 {
-    println("main: sleeping...", time.now().timestamp())
-    co.sleep(1000)
-}
+foo()

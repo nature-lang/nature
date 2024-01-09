@@ -48,6 +48,8 @@ void processor_start_the_world() {
 }
 
 void uv_stop_callback(uv_timer_t* timer) {
+    processor_t* p = timer->data;
+    DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
     uv_stop(timer->loop);
 }
 
@@ -63,7 +65,10 @@ int io_run(processor_t* p, uint64_t timeout_ms) {
     // 设置计时器超时回调，这将在超时后停止事件循环
     uv_timer_start(&timeout_timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
-    return uv_run(p->uv_loop, UV_RUN_DEFAULT);
+    DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
+    int result = uv_run(p->uv_loop, UV_RUN_DEFAULT);
+    DEBUGF("[runtime.io_run] uv_run end, p_index=%d", p->index);
+    return result;
 }
 
 /**
@@ -102,7 +107,7 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
 // handle by thread
 void processor_run(void* raw) {
     processor_t* p = raw;
-    DEBUGF("[runtime.share_process_run] start, processor_index=%d, addr=%p", p->index, p);
+    DEBUGF("[runtime.share_processor_run] start, p_index=%d, addr=%p", p->index, p);
 
     // 初始化 aco 和 main_co
     aco_thread_init(NULL);
@@ -123,10 +128,12 @@ void processor_run(void* raw) {
 
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
-        DEBUGF("[runtime.share_process_run] handle, processor_index=%d", p->index);
+        DEBUGF("[runtime.share_processor_run] handle, p_index=%d", p->index);
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
         io_run(p, WAIT_SHORT_TIME);
+
+        DEBUGF("[runtime.share_processor_run] io wait completed, p_index=%d", p->index);
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
@@ -135,42 +142,48 @@ void processor_run(void* raw) {
                 // runnable list 已经处理完成
                 break;
             }
-            DEBUGF("[runtime.share_process_run] will handle coroutine, processor_index=%d, co=%p, status=%d", p->index, co, co->status);
+            DEBUGF("[runtime.share_processor_run] will handle coroutine, p_index=%d, co=%p, status=%d", p->index, co, co->status);
 
             assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
             coroutine_resume(p, co);
 
+            DEBUGF("[runtime.share_processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d", p->index, co, co->status);
+
             // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
             // 则此处不需要在进行后续的处理， 直接退出当前线程即可
             if (!processor_own(p)) {
-                DEBUGF("[runtime.share_process_run] processor_index=%d, not own, thread_id=%lu, will exit this thread", p->index,
+                DEBUGF("[runtime.share_processor_run] p_index=%d, not own, thread_id=%lu, will exit this thread", p->index,
                        (uint64_t)p->thread_id);
                 goto EXIT;
             }
         }
 
+        DEBUGF("[runtime.share_processor_run] handle coroutine  list completed, p_index=%d", p->index);
+
         // - stw
         if (processor_get_stw()) {
-            DEBUGF("[runtime.share_process_run] processor_index=%d, need stw, set safe_point=true", p->index);
+            DEBUGF("[runtime.share_processor_run] need stw, set safe_point=true,  p_index=%d", p->index);
             p->safe_point = true;
+            p->no_preempt = true; // 禁止抢占
             while (processor_get_stw()) {
                 usleep(WAIT_MID_TIME); // 每 50ms 检测一次 STW 是否解除
             }
 
             p->safe_point = false;
-            DEBUGF("[runtime.share_process_run] processor_index=%d, stw completed, set safe_point=false", p->index);
+            p->no_preempt = false;
+            DEBUGF("[runtime.share_processor_run] p_index=%d, stw completed, set safe_point=false", p->index);
         }
 
         // exit
         if (processor_get_exit()) {
-            DEBUGF("[runtime.share_process_run] processor=%d, need stop, goto exit", p->index);
+            DEBUGF("[runtime.share_processor_run] processor=%d, need stop, goto exit", p->index);
             goto EXIT;
         }
     }
 
 EXIT:
     p->exit = true;
-    DEBUGF("[runtime.processor_run] processor_index=%d, thread %lu exited", p->index, (uint64_t)uv_thread_self());
+    DEBUGF("[runtime.processor_run] p_index=%d, thread %lu exited", p->index, (uint64_t)uv_thread_self());
 }
 
 void coroutine_dispatch(coroutine_t* co) {
@@ -309,7 +322,7 @@ void processor_dump_errort(n_errort* errort) {
 }
 
 /**
- * 所有的 temp_call 都会被座位 block syscall 进行处理
+ * 所有的 temp_call 都会被认为 block syscall 进行处理
  */
 void pre_block_syscall() {
     processor_t* p = processor_get();

@@ -16,7 +16,7 @@ coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag) {
 }
 
 void coroutine_yield() {
-    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
+    CO_YIELD_RUNNABLE();
 }
 
 /**
@@ -32,7 +32,7 @@ static void uv_on_timer(uv_timer_t *timer) {
     processor_t *p = c->p;
     assert(p);
 
-    DEBUGF("[runtime.coroutine_on_timer] will push to runnable_list, p=%p, c=%d", p, c->status)
+    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, c->status)
 
     linked_push(p->runnable_list, c);
 }
@@ -42,16 +42,19 @@ void coroutine_sleep(int64_t ms) {
     coroutine_t *c = coroutine_get();
 
     // - 初始化 libuv 定时器
-    uv_timer_t timer;
-    uv_timer_init(p->uv_loop, &timer);
-
-    timer.data = c;
+    uv_timer_t *timer = NEW(uv_timer_t);
+    uv_timer_init(p->uv_loop, timer);
+    timer->data = c;
 
     // 设定定时器超时时间与回调
-    uv_timer_start(&timer, uv_on_timer, ms, 0);
+    uv_timer_start(timer, uv_on_timer, ms, 0);
+
+    DEBUGF("[runtime.coroutine_sleep] start, uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", p->uv_loop, p->index, &timer,
+           fetch_addr_value((addr_t)&timer));
 
     // 退出等待 io 事件就绪
-    coroutine_yield_with_status(CO_STATUS_WAITING);
+    CO_YIELD_WAITING();
 
-    DEBUGF("coroutine sleep completed");
+    DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed");
+    free(timer);
 }

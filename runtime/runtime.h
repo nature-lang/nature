@@ -254,6 +254,7 @@ struct processor_t {
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
+    bool no_preempt;         // 为 true 时禁止抢占
     bool gc_work_finished;   // 是否完成了 GC WORK 的工作
     linked_t *gc_worklist;   // gc 扫描的 ptr 节点列表
 };

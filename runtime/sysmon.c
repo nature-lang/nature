@@ -5,15 +5,21 @@
 #include "sysmon.h"
 
 void wait_sysmon() {
-    // 每 10 * 10ms 进行 eval 一次
-    int gc_eval_count = 10;
+    // 每 50 * 10ms 进行 eval 一次
+    int gc_eval_count = 50;
 
     // 循环监控(每 10ms 监控一次)
     while (true) {
         // - 监控长时间被占用的 share processor 进行抢占式调度
         SLICE_FOR(share_processor_list) {
+            continue; // TODO 暂时不做处理
             processor_t *p = SLICE_VALUE(share_processor_list);
             if (p->exit) {
+                continue;
+            }
+
+            if (p->no_preempt) {
+                DEBUGF("[wait_sysmon] share processor_index=%d cannot preempt, will skip", p->index);
                 continue;
             }
 
@@ -26,7 +32,7 @@ void wait_sysmon() {
                 continue;
             }
 
-            DEBUGF("[wait_sysmon] share processor %p coroutine run timeout(%lu), will send SIGURG", p, co_start_at);
+            DEBUGF("[wait_sysmon] share processor_index=%d coroutine run timeout(%lu), will send SIGURG", p->index, co_start_at);
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
@@ -43,6 +49,11 @@ void wait_sysmon() {
                 // 顺便进行一个清理, 避免下次遍历再次遇到
                 processor_free(p);
                 linked_remove_free(solo_processor_list, node);
+                continue;
+            }
+
+            if (p->no_preempt) {
+                DEBUGF("[wait_sysmon] solo processor_index=%d cannot preempt, will skip", p->index);
                 continue;
             }
 

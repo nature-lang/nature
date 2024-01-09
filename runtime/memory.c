@@ -41,7 +41,7 @@ void fndefs_deserialize() {
         f->gc_bits = gc_bits_offset;
 
         DEBUGF(
-            "[fndefs_deserialize] name=%s, base=0x%lx, size=%lu, stack=%lu,"
+            "[fndefs_deserialize] name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
             "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
             f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, gc_bits_size,
             bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));

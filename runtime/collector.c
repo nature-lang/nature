@@ -171,18 +171,29 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime_gc.scan_stack] start, processor=%p, co=%p, stack_size=%zu", p, co, co->aco->save_stack.valid_sz);
+    DEBUGF("[runtime_gc.scan_stack] start, p_index=%d, co=%p, co_stack_size=%zu", p->index, co, co->aco->save_stack.valid_sz);
     aco_t *aco = co->aco;
     aco_save_stack_t stack = aco->save_stack;
     if (stack.valid_sz == 0) {
         return;
     }
 
-    DEBUGF("[runtime_gc.scan_stack] stack_base=%p, stack_size=%ld", stack.ptr, stack.valid_sz);
-
     // 首个 sp 对应的 fn 的 addr 直接从寄存器中读取，其余函数可以从栈中读取
     addr_t return_addr = (addr_t)aco->reg[ACO_REG_IDX_RETADDR];
     addr_t stack_size = stack.valid_sz; // valid 标识 8byte 对齐
+
+    // 按照 8byte DEBUG 遍历整个栈中的内容
+    DEBUGF("[runtime.scan_stack] traverse stack, start")
+    addr_t temp_cursor = (addr_t)stack.ptr;
+    int temp_i = 0;
+    int max_i = stack_size / POINTER_SIZE;
+    while (temp_i < max_i) {
+        addr_t v = fetch_addr_value((addr_t)temp_cursor);
+        DEBUGF("[runtime.scan_stack] traverse i=%d, stack.ptr=0x%lx, value=0x%lx", temp_i, temp_cursor, v);
+        temp_cursor += POINTER_SIZE;
+        temp_i += 1;
+    }
+    DEBUGF("[runtime.scan_stack] traverse stack, end")
 
     // cursor 最终会到栈低
     addr_t cursor = 0;
@@ -349,7 +360,7 @@ static void gc_work() {
     }
 
     DEBUGF("[runtime_gc.gc_work] share processor scan stack completed, will yield")
-    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
+    CO_YIELD_RUNNABLE();
 
     // - solo goroutine root and change color black, 读取当前 share processor index
     // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
@@ -388,13 +399,13 @@ static void gc_work() {
     }
 
     DEBUGF("[runtime_gc.gc_work] solo processor scan stack completed, will yield")
-    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
+    CO_YIELD_RUNNABLE();
 
     // - handle work list
     handle_gc_worklist(p);
 
     DEBUGF("[runtime_gc.gc_work] handle processor gc work list completed, will yield")
-    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
+    CO_YIELD_RUNNABLE();
 
     // - grey list work
     LINKED_FOR(solo_processor_list) {

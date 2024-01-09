@@ -118,6 +118,7 @@ struct aco_s {
     aco_cofuncp_t fp;
 
     aco_save_stack_t save_stack;
+    aco_save_stack_t temp_stack; // 进入 tpl call 时临时存储 share stack
     aco_share_stack_t *share_stack;
     aco_context_t *ctx;
 

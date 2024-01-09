@@ -427,6 +427,45 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }
 
+aco_attr_no_asan void aco_save_temp_stack(aco_t *aco) {
+    assert(aco->reg[ACO_REG_IDX_RETADDR]);
+    assert(aco->reg[ACO_REG_IDX_SP]);
+    assert(aco->share_stack->owner == aco);
+
+    aco->temp_stack.valid_sz = (uintptr_t)(aco->share_stack->align_retptr) - (uintptr_t)(aco->reg[ACO_REG_IDX_SP]);
+
+    // realloc stack
+    if (aco->temp_stack.sz < aco->temp_stack.valid_sz) {
+        free(aco->temp_stack.ptr);
+        aco->temp_stack.ptr = NULL;
+
+        while (true) {
+            // <<1 equals *2
+            aco->temp_stack.sz = aco->temp_stack.sz << 1;
+            assert(aco->temp_stack.sz > 0);
+            if (aco->temp_stack.sz >= aco->temp_stack.valid_sz) {
+                break;
+            }
+        }
+
+        aco->temp_stack.ptr = malloc(aco->temp_stack.sz);
+        assertalloc_ptr(aco->temp_stack.ptr);
+    }
+
+    // 保存栈数据
+    if (aco->temp_stack.valid_sz > 0) {
+#ifdef __x86_64__
+        aco_amd64_optimized_memcpy_drop_in(aco->temp_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
+#else
+        memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
+#endif
+    }
+
+    if (aco->temp_stack.valid_sz > aco->temp_stack.max_cpsz) {
+        aco->temp_stack.max_cpsz = aco->temp_stack.valid_sz;
+    }
+}
+
 void aco_destroy(aco_t *co) {
     assertptr(co);
     if (aco_is_main_co(co)) {

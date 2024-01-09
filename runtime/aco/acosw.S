@@ -48,6 +48,34 @@ acosw:
     #error "platform not support"
 #endif
 
+.globl aco_save_reg
+#if defined(__APPLE__)
+#else
+.type  aco_save_reg, @function
+#endif
+.intel_syntax noprefix
+aco_save_reg:
+
+#ifdef __x86_64__
+    mov     rdx,QWORD PTR [rsp]      // retaddr
+    lea     rcx,[rsp+0x8]            // rsp
+    mov     QWORD PTR [rdi+0x0], r12
+    mov     QWORD PTR [rdi+0x8], r13
+    mov     QWORD PTR [rdi+0x10],r14
+    mov     QWORD PTR [rdi+0x18],r15
+    mov     QWORD PTR [rdi+0x20],rdx // retaddr
+    mov     QWORD PTR [rdi+0x28],rcx // rsp
+    mov     QWORD PTR [rdi+0x30],rbx
+    mov     QWORD PTR [rdi+0x38],rbp
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+    fnstcw  WORD PTR  [rdi+0x40]
+    stmxcsr DWORD PTR [rdi+0x44]
+#endif
+    ret
+#else
+    #error "platform not support"
+#endif
+
 .globl aco_save_fpucw_mxcsr
 #if defined(__APPLE__)
 #else

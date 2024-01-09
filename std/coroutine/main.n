@@ -25,3 +25,7 @@ fn run(fn_t f, [any] args, int flags):coroutine_t {
 fn sleep(int ms) {
     coroutine_sleep(ms)
 }
+
+fn yield() {
+    coroutine_yield()
+}
