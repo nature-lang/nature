@@ -434,10 +434,5 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     memmove(slot, new_obj, rtype->size);
 
-    // 判断 worklist 是否已经处理完成，如果已经处理完成则本次新增的 obj 需要当前 solo processor 进行处理
-    if (!p->share && p->gc_work_finished) {
-        // TODO 由于 share 已经不在处理 worklist, 所以此处需要自行处理 worklist
-    }
-
     uv_mutex_unlock(&p->gc_locker);
 }

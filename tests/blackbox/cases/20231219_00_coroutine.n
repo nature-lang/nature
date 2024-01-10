@@ -32,18 +32,35 @@ fn foo(){
 
     runtime_force_gc()
 
-    co.sleep(3000)
-    println('co sleep done')
+    co.sleep(1000)
+    println('share sub_co done')
+}
+
+var bar = fn(){
+    var i = 2
+    for i > 0 {
+        co.sleep(1000)
+        i -= 1
+    }
+
+    println('solo sub_co done')
 }
 
 // - 共享协程
 co.run(foo, [], 0)
 co.run(foo, [], 0)
 
+// - 独享协程
+co.run(bar, [], co.SOLO)
+co.run(bar, [], co.SOLO)
+
+
 // main for sleep
-for int i=0; i<10; i+=1 {
-    println("main: sleeping...", time.now().timestamp())
-    co.sleep(1000)
+for int i=0; i<25; i+=1 {
+    co.sleep(100)
+    if i > 21 {
+        println('main_co sleep done', i)
+    }
 }
 
-println('main: done')
+println('main_co done')

@@ -38,7 +38,7 @@ static void wait_processor() {
 /**
  * crt1.o _start -> runtime_main  -> user_main
  */
-void runtime_main(int argc, char *argv[]) {
+int runtime_main(int argc, char *argv[]) {
     // - read arg
     DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;
@@ -60,4 +60,6 @@ void runtime_main(int argc, char *argv[]) {
     wait_sysmon();
 
     DEBUGF("[runtime_main] user code run completed,will exit");
+
+    return 0;
 }

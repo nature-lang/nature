@@ -918,7 +918,6 @@ void *runtime_zero_malloc(uint64_t size, rtype_t *rtype) {
 }
 
 /**
- * 不会触发 gc
  * @return
  */
 void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
@@ -928,13 +927,21 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
         DEBUGF("[runtime_rtype_malloc] size=%ld, type is null", size);
     }
 
+    void *ptr;
     if (size <= STD_MALLOC_LIMIT) {
         // 1. 标准内存分配(0~32KB)
-        return (void *)std_malloc(size, rtype);
+        ptr = (void *)std_malloc(size, rtype);
     }
 
     // 2. 大型内存分配(大于>32KB)
-    return (void *)large_malloc(size, rtype);
+    ptr = (void *)large_malloc(size, rtype);
+
+    // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
+    if (gc_barrier_get()) {
+        mark_ptr_black(ptr);
+    }
+
+    return ptr;
 }
 
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {

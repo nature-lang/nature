@@ -21,13 +21,15 @@ static void coroutine_wrapper() {
     coroutine_t* co = aco_get_arg();
     assert(co);
 
+    DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d", co, co->main);
+
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
 
     if (co->main) {
         // 通知所有协程退出
         processor_set_exit();
-        DEBUGF("[runtime.coroutine_wrapper] main coroutine exit, set processor_need_exit=true");
+        DEBUGF("[runtime.coroutine_wrapper] co=%p, main coroutine exit, set processor_need_exit=true", co);
     }
 
     // 退出协程，设置协程退出标识
@@ -80,15 +82,12 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
     assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
 
     if (co->aco == NULL) {
+        DEBUGF("[runtime.coroutine_resume] co=%p first resume, p_index_%d=%d", co, p->share, p->index);
         assert(p->share_stack);
         co->aco = aco_create(p->main_aco, p->share_stack, 0, coroutine_wrapper, co);
     }
-    //    else {
-    //        co->aco->main_co = p->main_aco;
-    //    }
 
     co->status = CO_STATUS_RUNNING;
-
     p->co_started_at = uv_hrtime();
     p->coroutine = co;
     co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
@@ -108,7 +107,7 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
 // handle by thread
 void processor_run(void* raw) {
     processor_t* p = raw;
-    DEBUGF("[runtime.share_processor_run] start, p_index=%d, addr=%p", p->index, p);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, share=%d", p->index, p, p->share);
 
     // 初始化 aco 和 main_co
     aco_thread_init(NULL);
@@ -129,41 +128,15 @@ void processor_run(void* raw) {
 
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
-        //        DEBUGF("[runtime.share_processor_run] handle, p_index=%d", p->index);
+        //        DEBUGF("[runtime.processor_run] handle, p_index=%d", p->index);
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
         io_run(p, WAIT_SHORT_TIME);
 
-        //        DEBUGF("[runtime.share_processor_run] io wait completed, p_index=%d", p->index);
-
-        // - 处理 coroutine (找到 io 可用的 goroutine)
-        while (true) {
-            coroutine_t* co = linked_pop_free(p->runnable_list);
-            if (!co) {
-                // runnable list 已经处理完成
-                break;
-            }
-            DEBUGF("[runtime.share_processor_run] will handle coroutine, p_index=%d, co=%p, status=%d", p->index, co, co->status);
-
-            assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
-            coroutine_resume(p, co);
-
-            DEBUGF("[runtime.share_processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d", p->index, co, co->status);
-
-            // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
-            // 则此处不需要在进行后续的处理， 直接退出当前线程即可
-            if (!processor_own(p)) {
-                DEBUGF("[runtime.share_processor_run] p_index=%d, not own, thread_id=%lu, will exit this thread", p->index,
-                       (uint64_t)p->thread_id);
-                goto EXIT;
-            }
-        }
-
-        //        DEBUGF("[runtime.share_processor_run] handle coroutine  list completed, p_index=%d", p->index);
-
+        //        DEBUGF("[runtime.processor_run] io wait completed, p_index=%d", p->index);
         // - stw
         if (processor_get_stw()) {
-            DEBUGF("[runtime.share_processor_run] need stw, set safe_point=true,  p_index=%d", p->index);
+            DEBUGF("[runtime.processor_run] need stw, set safe_point=true,  p_index=%d, share=%d", p->index, p->share);
             p->safe_point = true;
             p->no_preempt = true; // 禁止抢占
             while (processor_get_stw()) {
@@ -172,14 +145,42 @@ void processor_run(void* raw) {
 
             p->safe_point = false;
             p->no_preempt = false;
-            DEBUGF("[runtime.share_processor_run] p_index=%d, stw completed, set safe_point=false", p->index);
+            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, set safe_point=false, share=%d", p->index, p->share);
         }
 
         // exit
         if (processor_get_exit()) {
-            DEBUGF("[runtime.share_processor_run] processor=%d, need stop, goto exit", p->index);
+            DEBUGF("[runtime.processor_run] p_index=%d, share=%d need stop, goto exit", p->index, p->share);
             goto EXIT;
         }
+
+        // - 处理 coroutine (找到 io 可用的 goroutine)
+        while (true) {
+            coroutine_t* co = linked_pop_free(p->runnable_list);
+            if (!co) {
+                // runnable list 已经处理完成
+                break;
+            }
+            DEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d, share=%d", p->index, co, co->status,
+                   p->share);
+
+            assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
+            coroutine_resume(p, co);
+
+            DEBUGF("[runtime.processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d, share=%d", p->index, co, co->status,
+                   p->share);
+
+            // TODO 不在需要这个逻辑
+            // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
+            // 则此处不需要在进行后续的处理， 直接退出当前线程即可
+            //            if (!processor_own(p)) {
+            //                DEBUGF("[runtime.processor_run] p_index=%d, not own, thread_id=%lu, will exit this thread, share=%d",
+            //                p->index,
+            //                       (uint64_t)p->thread_id, p->share);
+            //                goto EXIT;
+            //            }
+        }
+        //        DEBUGF("[runtime.processor_run] handle coroutine  list completed, p_index=%d", p->index);
     }
 
 EXIT:
@@ -191,17 +192,16 @@ void coroutine_dispatch(coroutine_t* co) {
     DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
-    if (gc_stage >= GC_STAGE_MARK) {
+    if (gc_stage == GC_STAGE_MARK) {
         co->gc_black = true;
     }
 
     // - 协程独享线程
     if (co->solo) {
         processor_t* p = processor_new(solo_processor_list->count);
-        linked_push(solo_processor_list, p);
-
         linked_push(p->co_list, co);
         linked_push(p->runnable_list, co);
+        linked_push(solo_processor_list, p);
 
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assertf(false, "pthread_create failed %s", strerror(errno));
@@ -320,6 +320,16 @@ void processor_dump_errort(n_errort* errort) {
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
     }
+}
+
+void mark_ptr_black(void* ptr) {
+    addr_t addr = (addr_t)ptr;
+    // get mspan by ptr
+    mspan_t* span = span_of(addr);
+
+    //  get span index
+    uint64_t obj_index = (addr - span->base) / span->obj_size;
+    mark_obj_black(span, obj_index);
 }
 
 /**
@@ -498,25 +508,35 @@ void processor_free(processor_t* p) {
 bool processor_all_safe() {
     SLICE_FOR(share_processor_list) {
         processor_t* p = SLICE_VALUE(share_processor_list);
+        assert(p);
         if (p->exit) {
             continue;
         }
 
-        if (!p->safe_point) {
-            return false;
+        if (p->safe_point) {
+            continue;
         }
+
+        return false;
     }
 
     LINKED_FOR(solo_processor_list) {
         processor_t* p = LINKED_VALUE();
+        assert(p);
         if (p->exit) {
             continue;
         }
 
-        // 不是 syscall 状态，并且没有进入安全点
-        if (!p->safe_point && p->coroutine->status != CO_STATUS_SYSCALL) {
-            return false;
+        if (p->safe_point) {
+            continue;
         }
+
+        // 如果 coroutine 已经开始调度，并且处于 syscall 状态，则认为当前 solo processor 已经进入了安全点
+        if (p->coroutine && p->coroutine->status == CO_STATUS_SYSCALL) {
+            continue;
+        }
+
+        return false;
     }
 
     return true;

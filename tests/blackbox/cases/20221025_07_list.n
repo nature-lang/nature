@@ -1,4 +1,4 @@
-runtime_set_force_gc()
+runtime_force_gc()
 
 vec<u8> l = [1, 2]
 l.push(13)

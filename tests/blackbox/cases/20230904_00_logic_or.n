@@ -4,7 +4,7 @@ import fmt
 import time
 
 // 启用快速强制 gc
-runtime_set_force_gc()
+runtime_force_gc()
 
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)

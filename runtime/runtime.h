@@ -259,10 +259,11 @@ struct processor_t {
     linked_t *gc_worklist;   // gc 扫描的 ptr 节点列表
 };
 
-void runtime_main(int argc, char *argv[]);
+int runtime_main(int argc, char *argv[]);
 
 void rt_processor_attach_errort(char *msg);
 
 void processor_dump_errort(n_errort *errort);
+
 
 #endif // NATURE_BASIC_H

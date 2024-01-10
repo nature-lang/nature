@@ -76,7 +76,8 @@ static void flush_mcache() {
     DEBUGF("gc flush mcache successful")
 }
 
-static void mark_obj_black(mspan_t *span, uint64_t index) {
+void mark_obj_black(mspan_t *span, uint64_t index) {
+    // TODO 加锁
     bitmap_set(span->gcmark_bits->bits, index);
 }
 
@@ -171,8 +172,10 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime_gc.scan_stack] start, p_index=%d, co=%p, co_stack_size=%zu", p->index, co, co->aco->save_stack.valid_sz);
+    DEBUGF("[runtime_gc.scan_stack] start, p_index=%d, share=%d, co=%p, co_stack_size=%zu", p->index, p->share, co,
+           co->aco->save_stack.valid_sz);
     aco_t *aco = co->aco;
+    assert(aco);
     aco_save_stack_t stack = aco->save_stack;
     if (stack.valid_sz == 0) {
         return;
@@ -395,7 +398,13 @@ static void gc_work() {
 
         DEBUGF("[runtime_gc.gc_work] solo processor index=%d will scan stack", solo_index);
 
-        coroutine_t *solo_co = linked_first(solo_p->co_list)->value;
+        coroutine_t *solo_co = solo_p->coroutine;
+
+        // co routine 还没有开始调度
+        if (!solo_co) {
+            continue;
+        }
+
         if (solo_co->status == CO_STATUS_DEAD) {
             continue;
         }
@@ -524,7 +533,7 @@ static void gc_mark_done() {
  * @stack system
  */
 void runtime_gc() {
-    uint64_t temp = allocated_bytes;
+    uint64_t before = allocated_bytes;
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, gc stage: GC_START");
@@ -556,12 +565,13 @@ void runtime_gc() {
     // 等待所有的 processor 都 mark 完成
     wait_all_gc_work_finished();
 
+    // STW 之后再更改 GC 阶段
+    processor_stop_the_world();
+    processor_wait_all_safe();
+
     // - gc stage: GC_MARK_DONE
     gc_stage = GC_STAGE_MARK_DONE;
     DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE")
-    // 等待 STW 开始
-    processor_stop_the_world();
-    processor_wait_all_safe();
 
     gc_mark_done();
 
@@ -578,5 +588,5 @@ void runtime_gc() {
     processor_start_the_world();
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, clear=%ld", temp - allocated_bytes)
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, cleanup=%ld", before - allocated_bytes)
 }

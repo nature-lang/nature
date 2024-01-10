@@ -174,12 +174,6 @@ void *runtime_zero_malloc(uint64_t size, rtype_t *rtype);
  */
 void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype);
 
-/**
- * 代码段调用
- * @return
- */
-void *gc_malloc(uint64_t rtype_hash);
-
 uint64_t runtime_malloc_bytes();
 
 mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
@@ -187,5 +181,9 @@ mspan_t *mspan_new(addr_t base, uint64_t pages_count, uint8_t spanclass);
 arena_hint_t *arena_hints_init();
 
 void shade_obj_grey(void *obj);
+
+void mark_ptr_black(void *ptr);
+
+void mark_obj_black(mspan_t *span, uint64_t index);
 
 #endif // NATURE_MEMORY_H
