@@ -33,11 +33,11 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 
 void zero_fn();
 
-void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
+void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_errort processor_remove_errort();
+n_errort co_remove_error();
 
-uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column);
+uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_cptr_t cptr_casting(value_casting v);
 

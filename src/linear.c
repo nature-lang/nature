@@ -298,7 +298,7 @@ static void linear_has_error(module_t *m) {
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
-    push_rt_call(m, RT_CALL_PROCESSOR_HAS_ERRORT, has_error, 4, path_operand, fn_name_operand, line_operand, column_operand);
+    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand, column_operand);
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
 
@@ -1812,7 +1812,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
         OP_PUSH(lir_op_label(catch_end_label, true));
 
         lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
-        push_rt_call(m, RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_src, 0);
+        push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
 
         return linear_super_move(m, errort_alias_stmt->type, target, errort_src);
     }
@@ -1852,7 +1852,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
     lir_operand_t *errort_target = lea_operand_pointer(m, temp);
 
     lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
-    push_rt_call(m, RT_CALL_PROCESSOR_REMOVE_ERRORT, errort_src, 0);
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
 
     linear_super_move(m, errort_alias_stmt->type, errort_target, errort_src);
 
@@ -2021,7 +2021,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    push_rt_call(m, RT_CALL_PROCESSOR_THROW_ERRORT, NULL, 5, msg_operand, path_operand, fn_name_operand, line_operand, column_operand);
+    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, msg_operand, path_operand, fn_name_operand, line_operand, column_operand);
 
     // 插入 return 标识(用来做 return check 的，check 完会清除的)
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));

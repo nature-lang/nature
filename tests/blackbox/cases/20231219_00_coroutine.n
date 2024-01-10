@@ -1,12 +1,13 @@
 import coroutine as co
-import time
 
 fn foo(){
     var a = vec<int>{len=10}
-    a = vec<int>{len=400}
-    a = vec<int>{len=500}
-    a = vec<int>{len=600}
+    a = vec<int>{len=403}
+    a = vec<int>{len=1201}
+    a = vec<int>{len=512}
     a = vec<int>{len=700}
+
+    var c = {1:2, 2:3, 3:4}
 
     a[0] = 1
     a[2] = 2
@@ -14,8 +15,8 @@ fn foo(){
     a[8] = 8
     a[16] = 16
     a[32] = 32
-    a[64] = 64
     a[128] = 128
+    a[500] = 128
 
     var b = 'hello world nice'
     b = 'hello world nice'
@@ -24,16 +25,12 @@ fn foo(){
     b = 'bbbbbbbbbbbbbb'
     b = 'hello world nice'
     b = 'hello world nice'
-    b = 'hello world nice'
-    b = 'hello world nice'
-    b = 'hello world nice'
-    b = 'hello world nice'
 
 
     runtime_force_gc()
 
     co.sleep(1000)
-    println('share sub_co done')
+    print('share sub_co done\n')
 }
 
 var bar = fn(){
@@ -43,7 +40,7 @@ var bar = fn(){
         i -= 1
     }
 
-    println('solo sub_co done')
+    print('solo sub_co done\n')
 }
 
 // - 共享协程
@@ -58,7 +55,7 @@ co.run(bar, [], co.SOLO)
 // main for sleep
 for int i=0; i<25; i+=1 {
     co.sleep(100)
-    if i > 21 {
+    if i > 20 {
         println('main_co sleep done', i)
     }
 }
