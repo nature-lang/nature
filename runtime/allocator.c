@@ -977,7 +977,7 @@ void runtime_eval_gc() {
     }
 
     if (allocated_bytes < next_gc_bytes) {
-        DEBUGF("[runtime_eval_gc] no need for gc")
+        //        DEBUGF("[runtime_eval_gc] no need for gc")
         goto EXIT;
     } else {
         DEBUGF("[runtime_eval_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
@@ -990,7 +990,7 @@ void runtime_eval_gc() {
 
 EXIT:
     uv_mutex_unlock(&gc_stage_locker);
-    DEBUGF("[runtime_eval_gc] end");
+    //    DEBUGF("[runtime_eval_gc] end");
 }
 
 void runtime_force_gc() {

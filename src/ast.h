@@ -490,6 +490,7 @@ typedef struct ast_fndef_t {
     slice_t *local_children;
     // analyzer 时赋值
     bool is_local; // 是否是全局函数
+    bool is_tpl; // 是否是模板函数
 
 
     // dump error

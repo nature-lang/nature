@@ -119,10 +119,9 @@ struct aco_s {
 
     aco_save_stack_t save_stack;
     aco_save_stack_t temp_stack; // 进入 tpl call 时临时存储 share stack
+    uint64_t bp_offset;              // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
     aco_share_stack_t *share_stack;
     aco_context_t *ctx;
-
-    bool is_ready; // 等待 io 就绪可以继续执行
 };
 
 #define aco_likely(x) (__builtin_expect(!!(x), 1))

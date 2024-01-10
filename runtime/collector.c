@@ -179,34 +179,48 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     }
 
     // 首个 sp 对应的 fn 的 addr 直接从寄存器中读取，其余函数可以从栈中读取
-    addr_t return_addr = (addr_t)aco->reg[ACO_REG_IDX_RETADDR];
     addr_t stack_size = stack.valid_sz; // valid 标识 8byte 对齐
+    assert(aco->bp_offset > 0);
+    addr_t bp_offset = aco->bp_offset;
+    assert(stack_size > bp_offset);
 
-    // 按照 8byte DEBUG 遍历整个栈中的内容
+#ifdef DEBUG
     DEBUGF("[runtime.scan_stack] traverse stack, start")
-    addr_t temp_cursor = (addr_t)stack.ptr;
+    addr_t temp_cursor = ((addr_t)stack.ptr + (stack_size - bp_offset));
     int temp_i = 0;
-    int max_i = stack_size / POINTER_SIZE;
+    int max_i = bp_offset / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t)temp_cursor);
-        DEBUGF("[runtime.scan_stack] traverse i=%d, stack.ptr=0x%lx, value=0x%lx", temp_i, temp_cursor, v);
+        fndef_t *fn = find_fn(v);
+        DEBUGF("[runtime.scan_stack] traverse i=%d, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
+               fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
     DEBUGF("[runtime.scan_stack] traverse stack, end")
+#endif
 
-    // cursor 最终会到栈低
-    addr_t cursor = 0;
-    while (cursor <= stack_size) {
-        fndef_t *fn = find_fn(return_addr);
-        assertf(fn, "fn not found by return addr, return_addr=0x%lx", return_addr);
+    addr_t cursor = ((addr_t)stack.ptr + (stack_size - bp_offset));
+    addr_t ret_addr = (addr_t)fetch_addr_value(cursor + POINTER_SIZE);
+    cursor = cursor + POINTER_SIZE + POINTER_SIZE; // 指向栈帧顶部
 
-        // 栈的方向需要处理么
-        // 查看 aco 的 memcpy 可以发现 rsp(top) 对齐了 save_stack.ptr,
-        // 原来的数组存储位置是 [sp ~ -8], 现在则是 [save_stack.ptr ~ +8]
+    addr_t max = (addr_t)stack.ptr + stack_size;
+
+    int scan_fn_count = 0;
+    // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
+    while (cursor < max) {
+        fndef_t *fn = find_fn(ret_addr);
+        //        assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
+        if (!fn) {
+            DEBUGF("fn not found by ret_addr, return_addr=%p, break", (void *)ret_addr);
+            break;
+        }
+
+        scan_fn_count++;
+
+        DEBUGF("[runtime.scan_stack] fn_name=%s, ret_addr=%p", fn->name, (void *)ret_addr);
 
         addr_t frame_cursor = cursor;
-
         int ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
@@ -224,12 +238,14 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
             frame_cursor += POINTER_SIZE;
         }
 
-        // 从栈中读取 next return addr
-        return_addr = (addr_t)fetch_addr_value(frame_cursor + POINTER_SIZE);
+        // 找到下一个 return_addr
+        ret_addr = (addr_t)fetch_addr_value(frame_cursor + POINTER_SIZE);
 
         // 跳过 prev_rbp + return addr 进行下一次循环
         cursor = frame_cursor + POINTER_SIZE + POINTER_SIZE;
     }
+
+    DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p, scan_fn_count=%d", p->index, co, scan_fn_count);
 }
 
 static void handle_gc_ptr(linked_t *worklist, addr_t addr) {
@@ -492,10 +508,14 @@ static void gc_mark_done() {
     DEBUGF("[runtime_gc.gc_mark_done] start")
 
     // - handle work list
-    addr_t addr = (addr_t)global_gc_worklist_pop();
-
-    // TODO gc_mark_done 目前线程安全，所以可以不用考虑锁，但是如果后续需要 processor 处理 global worklist 则需要锁介入
-    handle_gc_ptr(global_gc_worklist, addr);
+    while (true) {
+        addr_t addr = (addr_t)global_gc_worklist_pop();
+        if (!addr) {
+            break;
+        }
+        DEBUGF("[runtime_gc.gc_mark_done] item addr=0x%lx", addr);
+        handle_gc_ptr(global_gc_worklist, addr);
+    }
 
     DEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield")
 }
@@ -504,6 +524,7 @@ static void gc_mark_done() {
  * @stack system
  */
 void runtime_gc() {
+    uint64_t temp = allocated_bytes;
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, gc stage: GC_START");
@@ -557,5 +578,5 @@ void runtime_gc() {
     processor_start_the_world();
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF")
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, clear=%ld", temp - allocated_bytes)
 }

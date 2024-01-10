@@ -19,6 +19,7 @@ uv_key_t tls_coroutine_key;
 
 static void coroutine_wrapper() {
     coroutine_t* co = aco_get_arg();
+    assert(co);
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
@@ -30,9 +31,10 @@ static void coroutine_wrapper() {
     }
 
     // 退出协程，设置协程退出标识
-    DEBUGF("[runtime.coroutine_wrapper] co=%p, aco=%p, will exit", co, co->aco);
     co->status = CO_STATUS_DEAD;
-    aco_exit();
+
+    DEBUGF("[runtime.coroutine_wrapper] will aco_exit")
+    aco_exit1(co->aco);
 }
 
 bool processor_get_stw() {
@@ -49,7 +51,7 @@ void processor_start_the_world() {
 
 void uv_stop_callback(uv_timer_t* timer) {
     processor_t* p = timer->data;
-    DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
+    //    DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
     uv_stop(timer->loop);
 }
 
@@ -65,9 +67,9 @@ int io_run(processor_t* p, uint64_t timeout_ms) {
     // 设置计时器超时回调，这将在超时后停止事件循环
     uv_timer_start(&timeout_timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
-    DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
+    //    DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
     int result = uv_run(p->uv_loop, UV_RUN_DEFAULT);
-    DEBUGF("[runtime.io_run] uv_run end, p_index=%d", p->index);
+    //    DEBUGF("[runtime.io_run] uv_run end, p_index=%d", p->index);
     return result;
 }
 
@@ -77,14 +79,13 @@ int io_run(processor_t* p, uint64_t timeout_ms) {
 void coroutine_resume(processor_t* p, coroutine_t* co) {
     assertf(co->status == CO_STATUS_RUNNABLE, "coroutine status must be runnable");
 
-    // resume 之前需要确保 main_co 的指向
     if (co->aco == NULL) {
         assert(p->share_stack);
         co->aco = aco_create(p->main_aco, p->share_stack, 0, coroutine_wrapper, co);
-    } else {
-        // 直接切换 main_aco, 用于切换
-        co->aco->main_co = p->main_aco;
     }
+    //    else {
+    //        co->aco->main_co = p->main_aco;
+    //    }
 
     co->status = CO_STATUS_RUNNING;
 
@@ -128,12 +129,12 @@ void processor_run(void* raw) {
 
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
-        DEBUGF("[runtime.share_processor_run] handle, p_index=%d", p->index);
+        //        DEBUGF("[runtime.share_processor_run] handle, p_index=%d", p->index);
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
         io_run(p, WAIT_SHORT_TIME);
 
-        DEBUGF("[runtime.share_processor_run] io wait completed, p_index=%d", p->index);
+        //        DEBUGF("[runtime.share_processor_run] io wait completed, p_index=%d", p->index);
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
@@ -158,7 +159,7 @@ void processor_run(void* raw) {
             }
         }
 
-        DEBUGF("[runtime.share_processor_run] handle coroutine  list completed, p_index=%d", p->index);
+        //        DEBUGF("[runtime.share_processor_run] handle coroutine  list completed, p_index=%d", p->index);
 
         // - stw
         if (processor_get_stw()) {
@@ -322,9 +323,39 @@ void processor_dump_errort(n_errort* errort) {
 }
 
 /**
- * 所有的 temp_call 都会被认为 block syscall 进行处理
+ * TODO target use debug, can delete
+ * @param target
  */
-void pre_block_syscall() {
+__attribute__((optimize(0))) void pre_tpl_hook(char* target) {
+    coroutine_t* c = coroutine_get();
+    aco_t* aco = c->aco;
+
+    uint64_t rbp_value;
+#ifdef __x86_64__
+    asm("mov %%rbp, %0" : "=r"(rbp_value));
+#elif
+    assertf(false, "not support");
+#endif
+
+    aco->bp_offset = (uint64_t)aco->share_stack->align_retptr - rbp_value;
+
+#ifdef DEBUG
+    addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
+    fndef_t* fn = find_fn(ret_addr);
+    if (fn) {
+        DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void*)ret_addr, fn->name, target, fn->rel_path, fn->line);
+    }
+    // 基于 share stack 计算 offset
+    DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void*)rbp_value,
+           aco->bp_offset)
+#endif
+}
+
+/**
+ * ~~所有的 temp_call 都会被认为 block syscall 进行处理~~
+ * TODO 只有打了 block tag 的 fn 才会被当成 block syscall 进行处理
+ */
+void pre_blocking_syscall() {
     processor_t* p = processor_get();
     coroutine_t* c = coroutine_get();
     c->status = CO_STATUS_SYSCALL;
@@ -344,7 +375,7 @@ void pre_block_syscall() {
     }
 }
 
-void post_block_syscall() {
+void post_blocking_syscall() {
     coroutine_t* co = coroutine_get();
     processor_t* p = processor_get();
 
@@ -352,13 +383,13 @@ void post_block_syscall() {
         // 只有独享线程在遇到阻塞调用时需要延迟处理 stw, 共享线程遇到阻塞 io 时会启动一个新的线程进行处理
         // 处理完成后直接就退出了，不需要担心后续的操作
         if (processor_get_stw()) {
-            DEBUGF("[runtime.post_block_syscall] solo processor=%p, need stw, set safe_point=true", p);
+            DEBUGF("[runtime.post_blocking_syscall] solo processor=%p, need stw, set safe_point=true", p);
             p->safe_point = true;
             while (processor_get_stw()) {
                 usleep(WAIT_MID_TIME); // 每 50ms 检测一次 STW 是否解除
             }
             p->safe_point = false;
-            DEBUGF("[runtime.post_block_syscall] solo processor=%p, stw completed, set safe_point=false", p);
+            DEBUGF("[runtime.post_blocking_syscall] solo processor=%p, stw completed, set safe_point=false", p);
         }
         co->status = CO_STATUS_RUNNING; // coroutine 继续运行
         return;

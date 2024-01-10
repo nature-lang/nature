@@ -108,8 +108,8 @@ typedef struct {
     void *decl;          // ast_var_decl,ast_type_decl_stmt,ast_new_fn
     string ident;        // 原始名称
     string unique_ident; // 唯一名称
-    int depth;       // 变量声明的深度，如果变量的 depth == depth 则说明同一作用域下重复声明
-    bool is_capture; // 是否被捕获(是否被下级引用)
+    int depth;           // 变量声明的深度，如果变量的 depth == depth 则说明同一作用域下重复声明
+    bool is_capture;     // 是否被捕获(是否被下级引用)
 } local_ident_t;
 
 /**
@@ -179,7 +179,7 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_param_table; //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+    table_t *type_param_table;     //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
     list_t *type_param_list;
 
     // compiler
@@ -227,9 +227,9 @@ typedef struct {
     bool header;
     bool end;
     bool index_map[INT8_MAX]; // 默认都是 false
-    int8_t index;  // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
-                   // innermost(最深的) loop
-    uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
+    int8_t index;             // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
+                              // innermost(最深的) loop
+    uint8_t depth;            // block 的嵌套级别,数字越高嵌套的越深
 } loop_t;
 
 typedef struct basic_block_t {
@@ -254,7 +254,7 @@ typedef struct basic_block_t {
     slice_t *live_out;
     slice_t *live_in; // ssa 阶段计算的精确 live in
                       // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *live; // reg alloc 阶段计算
+    slice_t *live;    // reg alloc 阶段计算
     // employer
     slice_t *domers;                 // 当前块被哪些基本块管辖
     struct basic_block_t *imm_domer; // 当前块的直接(最近)支配者
@@ -300,16 +300,15 @@ typedef struct interval_t {
 
     lir_var_t *var; // var 中存储着 stack slot
 
-    int64_t
-        *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
-    bool spilled;    // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
+    int64_t *stack_slot; // slot 对栈帧顶部的偏移(0), 值向上增长，比如 stack_slot = -8, size = 8，表示值存储在 (top-8) ~ top
+    bool spilled;        // 当前 interval 是否是溢出状态,去 stack_slot 中找对应的插槽
     // 当有多个空闲 register 时，优先分配 hint 对应的 register
     struct interval_t *reg_hint;
     slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
-    uint8_t assigned; // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
+    uint8_t assigned;   // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
     lir_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
-    bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
+    bool fixed;            // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
 typedef struct {
@@ -333,8 +332,8 @@ typedef enum {
                               // 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_INDIRECT_ADDR,
-    LIR_OPERAND_VARS, // 与 pyi_body, formals 一样都是 slice_t + lir_var
-    LIR_OPERAND_REGS, // 与 pyi_body, formals 一样都是 slice_t + reg_t
+    LIR_OPERAND_VARS,         // 与 pyi_body, formals 一样都是 slice_t + lir_var
+    LIR_OPERAND_REGS,         // 与 pyi_body, formals 一样都是 slice_t + reg_t
     LIR_OPERAND_CLOSURE_VARS, // 无法通过 extract 函数提取出来，也不是提取出来，仅仅是为了临时存储使用
 } lir_operand_type_t;
 
@@ -429,9 +428,9 @@ typedef struct closure_t {
     slice_t *blocks; // 根据解析顺序得到, 在 linear scan 时进行了排序
 
     // ssa
-    slice_t *ssa_globals;       // 存活周期 >= 2 个 basic block 的 var, 基于次进行最小限度的放置 phi
-    table_t *ssa_globals_table; // 存活周期 >= 2 个 basic block 的 var
-    table_t *ssa_var_blocks;    // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
+    slice_t *ssa_globals;          // 存活周期 >= 2 个 basic block 的 var, 基于次进行最小限度的放置 phi
+    table_t *ssa_globals_table;    // 存活周期 >= 2 个 basic block 的 var
+    table_t *ssa_var_blocks;       // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
     table_t *ssa_var_block_exists; // 是否已经添加过，避免 var+block_name 的重复添加
 
     table_t *closure_var_table;
@@ -459,7 +458,7 @@ typedef struct closure_t {
 
     // gc 使用
     int64_t stack_offset; // 用于栈区内存分配，基于 rbp 计算，值 > 0. rsp 在函数的入口点之前应该始终保持 16byte 对齐
-    slice_t *stack_vars;  // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
+    slice_t *stack_vars; // 与栈增长顺序一致,随着栈的增长而填入, 其存储的值为 *lir_var_t
 
     int64_t stack_temp_offset; // 用于函数调用时需要通过内存进行传递的参数
     bitmap_t *stack_gc_bits;
@@ -511,9 +510,9 @@ typedef struct section_t {
     int actual_sh_weight;
     uint64_t phdr_flags; // 第8位表示是否需要 PT_LOAD 装载到内存中
 
-    struct section_t *link; // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
+    struct section_t *link;     // 部分 section 需要 link 其他字段, 如符号表的 link 指向字符串表
     struct section_t *relocate; // 当前段指向的的重定位段,如当前段是 text,则 cross_relocate 指向 .rela.text
-    struct section_t *prev; // slice 中的上一个 section
+    struct section_t *prev;     // slice 中的上一个 section
 } section_t;
 
 typedef struct {

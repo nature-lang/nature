@@ -1383,7 +1383,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     }
 }
 
-static void analyzer_temp(module_t *m, slice_t *stmt_list) {
+static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
     // var_decl blocks
     slice_t *fn_list = slice_new();
 
@@ -1406,6 +1406,7 @@ static void analyzer_temp(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = stmt->value;
+            fndef->is_tpl = true;
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
             fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
@@ -1598,7 +1599,7 @@ void analyzer(module_t *m, slice_t *stmt_list) {
     if (m->type == MODULE_TYPE_MAIN) {
         analyzer_main(m, stmt_list);
     } else if (m->type == MODULE_TYPE_TPL) {
-        analyzer_temp(m, stmt_list);
+        analyzer_tpl(m, stmt_list);
     } else {
         analyzer_module(m, stmt_list);
     }

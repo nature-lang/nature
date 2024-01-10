@@ -4,6 +4,9 @@ import time
 fn foo(){
     var a = vec<int>{len=10}
     a = vec<int>{len=400}
+    a = vec<int>{len=500}
+    a = vec<int>{len=600}
+    a = vec<int>{len=700}
 
     a[0] = 1
     a[2] = 2
@@ -30,6 +33,17 @@ fn foo(){
     runtime_force_gc()
 
     co.sleep(3000)
+    println('co sleep done')
 }
 
-foo()
+// - 共享协程
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+
+// main for sleep
+for int i=0; i<10; i+=1 {
+    println("main: sleeping...", time.now().timestamp())
+    co.sleep(1000)
+}
+
+println('main: done')

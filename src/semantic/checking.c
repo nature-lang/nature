@@ -2286,6 +2286,7 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
     type_fn_t *f = NEW(type_fn_t);
 
     f->name = fndef->symbol_name;
+    f->tpl = fndef->is_tpl;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
     fndef->return_type = f->return_type;

@@ -1072,7 +1072,11 @@ char *_type_format(type_t t) {
     }
 
     if (t.kind == TYPE_FN) {
-        return dsprintf("fn(...):%s", type_format(t.fn->return_type));
+        if (t.fn) {
+            return dsprintf("fn(...):%s", type_format(t.fn->return_type));
+        } else {
+            return "fn";
+        }
     }
 
     if (t.kind == TYPE_PTR) {

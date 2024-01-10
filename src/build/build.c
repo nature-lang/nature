@@ -314,13 +314,13 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
-    slice_t *temps = slice_new();
+    slice_t *tpls = slice_new();
 
     // builtin_temp.n
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
     char *full_path = path_join(template_dir, "builtin_temp.n");
     assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
-    slice_push(temps, full_path);
+    slice_push(tpls, full_path);
 
     // main build
     ast_import_t main_import = {
@@ -347,7 +347,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     linked_t *work_list = linked_new();
     linked_push(work_list, main);
 
-    table_t *import_temp_table = table_new();
+    table_t *import_tpl_table = table_new();
 
     while (work_list->count > 0) {
         // module_build time has perfected import
@@ -374,9 +374,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             if (import->module_type == MODULE_TYPE_TPL) {
                 assertf(import->full_path, "import temp path empty");
 
-                if (!table_exist(import_temp_table, import->full_path)) {
-                    table_set(import_temp_table, import->full_path, import);
-                    slice_push(temps, import->full_path);
+                if (!table_exist(import_tpl_table, import->full_path)) {
+                    table_set(import_tpl_table, import->full_path, import);
+                    slice_push(tpls, import->full_path);
                 }
                 continue;
             }
@@ -392,8 +392,8 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
 
-    // temps 没有依赖关系，可以进行预先构建
-    build_tpls(temps);
+    // - tpl 没有依赖关系，可以进行预先构建
+    build_tpls(tpls);
 
     // modules contains
     for (int i = 0; i < modules->count; ++i) {

@@ -8,22 +8,22 @@
 #include "nutils/vec.h"
 #include "runtime.h"
 
-#define CO_YIELD_RUNNABLE()                \
-    do {                                      \
-        processor_t *_p = processor_get();  \
-        assert(_p);                         \
-        coroutine_t *_co = coroutine_get(); \
-        assert(_co);                        \
-        _co->status = CO_STATUS_RUNNABLE;   \
+#define CO_YIELD_RUNNABLE()                  \
+    do {                                     \
+        processor_t *_p = processor_get();   \
+        assert(_p);                          \
+        coroutine_t *_co = coroutine_get();  \
+        assert(_co);                         \
+        _co->status = CO_STATUS_RUNNABLE;    \
         linked_push(_p->runnable_list, _co); \
-        aco_yield1(_co->aco);               \
-    } while(0);
+        aco_yield1(_co->aco);                \
+    } while (0);
 
 #define CO_YIELD_WAITING()                 \
     {                                      \
         coroutine_t *co = coroutine_get(); \
         assert(co);                        \
-        co->status = CO_STATUS_WAITING;               \
+        co->status = CO_STATUS_WAITING;    \
         aco_yield1(co->aco);               \
     };
 
@@ -130,8 +130,10 @@ processor_t *processor_get();
 
 coroutine_t *coroutine_get();
 
-void pre_block_syscall();
+void pre_tpl_hook(char *target);
 
-void post_block_syscall();
+void pre_blocking_syscall();
+
+void post_blocking_syscall();
 
 #endif // NATURE_PROCESSOR_H

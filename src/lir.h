@@ -137,6 +137,8 @@
 #define RT_CALL_STRING_LENGTH "string_length"
 #define RT_CALL_STRING_REF "string_ref" // 默认引用传递
 
+#define RT_CALL_PRE_TPL_HOOK "pre_tpl_hook"
+
 #define RT_CALL_RUNTIME_MALLOC "runtime_malloc"
 
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
@@ -621,7 +623,7 @@ static inline void lir_set_quick_op(basic_block_t *block) {
     block->last_op = linked_last(block->operations);
 }
 
-static inline lir_op_t *rt_call(module_t *m, char *name, lir_operand_t *result, int arg_count, ...) {
+static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *operand_args = slice_new();
 
     va_list args;
@@ -797,7 +799,7 @@ static inline lir_operand_t *indexed_addr_operand(module_t *m, type_t type, lir_
     return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
 
-static inline lir_operand_t *unique_var_operand_not_module(module_t *m, type_t type, char *ident) {
+static inline lir_operand_t *unique_var_operand_without_module(module_t *m, type_t type, char *ident) {
     string result = make_unique_ident(m, ident); // not with module
 
     symbol_table_set_var(result, type);
