@@ -199,7 +199,8 @@ typedef struct {
 } mheap_t;
 
 typedef struct {
-    mheap_t *mheap;
+    mheap_t *mheap; // 全局 heap, 访问时需要加锁
+    uv_mutex_t locker;
     uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
 } memory_t;
 
@@ -227,6 +228,9 @@ typedef struct coroutine_t {
     // gc stage 是 mark 时
     bool gc_black;
 
+    bool is_preempt; // 当前 coroutine 是否是被强制抢占出来
+    bool no_preempt; // 当前协程不可抢占
+
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
     uv_thread_t thread_id;
@@ -242,10 +246,12 @@ struct processor_t {
     aco_t *main_aco;                // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t *share_stack; // processor 中的所有的 stack 都使用该共享栈
 
+    struct sigaction sig;
     uv_loop_t *uv_loop; // uv loop 事件循环
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
     // 需要通过 uv_mutex_init 进行初始化
     uv_mutex_t gc_locker;
+    uv_mutex_t thread_locker;
     uv_thread_t thread_id;   // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;  // 当前正在调度的 coroutine
     uint64_t co_started_at;  // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
@@ -264,6 +270,5 @@ int runtime_main(int argc, char *argv[]);
 void rt_processor_attach_errort(char *msg);
 
 void processor_dump_errort(n_errort *errort);
-
 
 #endif // NATURE_BASIC_H

@@ -10,6 +10,9 @@ include(../cmake/cross.cmake)
 
 set(CMAKE_C_STANDARD 11)
 
+add_compile_definitions(RUNTIME)
+message("add compile def RUNTIME")
+
 # 启用汇编支持
 ENABLE_LANGUAGE(ASM)
 

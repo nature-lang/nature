@@ -11,6 +11,7 @@ bool processor_need_stw;
 bool processor_need_exit;
 slice_t* share_processor_list; // 共享协程列表的数量一般就等于线程数量
 linked_t* solo_processor_list; // 独享协程列表其实就是多线程
+int solo_processor_count;      // 累计数量
 linked_t* global_gc_worklist;  // 独享协程列表其实就是多线程
 uv_mutex_t global_gc_locker;   // 全局 gc locker
 
@@ -70,9 +71,7 @@ int io_run(processor_t* p, uint64_t timeout_ms) {
     uv_timer_start(&timeout_timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
     //    DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
-    int result = uv_run(p->uv_loop, UV_RUN_DEFAULT);
-    //    DEBUGF("[runtime.io_run] uv_run end, p_index=%d", p->index);
-    return result;
+    return uv_run(p->uv_loop, UV_RUN_DEFAULT);
 }
 
 /**
@@ -87,27 +86,28 @@ void coroutine_resume(processor_t* p, coroutine_t* co) {
         co->aco = aco_create(p->main_aco, p->share_stack, 0, coroutine_wrapper, co);
     }
 
-    co->status = CO_STATUS_RUNNING;
-    p->co_started_at = uv_hrtime();
-    p->coroutine = co;
-    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
-
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
+
+    co->status = CO_STATUS_RUNNING;
+    p->coroutine = co;
+    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 
     // 将 RIP 指针移动用户代码片段中
     DEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p, p->co_started_at=%lu", co, co->aco, p->co_started_at);
 
+    p->co_started_at = uv_hrtime();
     aco_resume(co->aco);
-
-    DEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d", co, co->aco, co->status);
     p->co_started_at = 0; // 调度完成后及时清空 coroutine，避免被 sysmon thread 抢占
+
+    uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
+    DEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d, time=%lu ms", co, co->aco, co->status, time);
 }
 
 // handle by thread
 void processor_run(void* raw) {
     processor_t* p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, share=%d", p->index, p, p->share);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, share=%d, loop=%p", p->index, p, p->share, p->uv_loop);
 
     // 初始化 aco 和 main_co
     aco_thread_init(NULL);
@@ -115,11 +115,9 @@ void processor_run(void* raw) {
     assert(p->main_aco);
     p->share_stack = aco_share_stack_new(0);
 
-    // 注册线程信号监听， 用于抢占式调度
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = thread_handle_sigurg;
-    if (sigaction(SIGURG, &sa, NULL) == -1) {
+    // 注册线程信号监听, 用于抢占式调度
+    p->sig.sa_handler = thread_handle_sigurg;
+    if (sigaction(SIGURG, &p->sig, NULL) == -1) {
         assertf(false, "sigaction failed");
     }
 
@@ -129,11 +127,6 @@ void processor_run(void* raw) {
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
         //        DEBUGF("[runtime.processor_run] handle, p_index=%d", p->index);
-
-        // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
-        io_run(p, WAIT_SHORT_TIME);
-
-        //        DEBUGF("[runtime.processor_run] io wait completed, p_index=%d", p->index);
         // - stw
         if (processor_get_stw()) {
             DEBUGF("[runtime.processor_run] need stw, set safe_point=true,  p_index=%d, share=%d", p->index, p->share);
@@ -169,23 +162,29 @@ void processor_run(void* raw) {
 
             DEBUGF("[runtime.processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d, share=%d", p->index, co, co->status,
                    p->share);
-
-            // TODO 不在需要这个逻辑
-            // 当前线程如果被 block syscall 独享占用，说明 processor 已经绑定了其他线程进行工作
-            // 则此处不需要在进行后续的处理， 直接退出当前线程即可
-            //            if (!processor_own(p)) {
-            //                DEBUGF("[runtime.processor_run] p_index=%d, not own, thread_id=%lu, will exit this thread, share=%d",
-            //                p->index,
-            //                       (uint64_t)p->thread_id, p->share);
-            //                goto EXIT;
-            //            }
         }
-        //        DEBUGF("[runtime.processor_run] handle coroutine  list completed, p_index=%d", p->index);
+
+        // solo processor 退出逻辑
+        if (!p->share) {
+            // 经过上面的 resume, coroutine 必定已经绑定
+            assert(p->coroutine);
+
+            if (p->coroutine->status == CO_STATUS_DEAD) {
+                DEBUGF("[runtime.processor_run] solo processor exit, p_index=%d, co=%p, status=%d, share=%d", p->index, p->coroutine,
+                       p->coroutine->status, p->share);
+                goto EXIT;
+            }
+        }
+
+        // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
+        io_run(p, WAIT_SHORT_TIME);
     }
 
 EXIT:
     p->exit = true;
-    DEBUGF("[runtime.processor_run] p_index=%d, thread %lu exited", p->index, (uint64_t)uv_thread_self());
+    p->no_preempt = true;
+    p->thread_id = 0;
+    DEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
 }
 
 void coroutine_dispatch(coroutine_t* co) {
@@ -198,7 +197,7 @@ void coroutine_dispatch(coroutine_t* co) {
 
     // - 协程独享线程
     if (co->solo) {
-        processor_t* p = processor_new(solo_processor_list->count);
+        processor_t* p = processor_new(solo_processor_count++);
         linked_push(p->co_list, co);
         linked_push(p->runnable_list, co);
         linked_push(solo_processor_list, p);
@@ -268,7 +267,6 @@ void processor_init() {
 
     for (int i = 0; i < cpu_count; ++i) {
         processor_t* p = processor_new(i);
-        p->index = i;
         p->share = true;
         slice_push(share_processor_list, p);
 
@@ -425,6 +423,7 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
     co->fn = fn;
     co->solo = solo;
     co->gc_black = false;
+    co->no_preempt = false;
     co->status = CO_STATUS_RUNNABLE;
     co->args = args;
     co->aco = NULL;
@@ -439,10 +438,11 @@ coroutine_t* coroutine_new(void* fn, n_vec_t* args, bool solo, bool main) {
 processor_t* processor_new(int index) {
     processor_t* p = NEW(processor_t);
 
-    uv_loop_t* loop = NEW(uv_loop_t);
-    uv_loop_init(loop);
-    p->uv_loop = loop;
+    p->uv_loop = NEW(uv_loop_t);
+    uv_loop_init(p->uv_loop);
     uv_mutex_init(&p->gc_locker);
+    uv_mutex_init(&p->thread_locker);
+    p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
     p->co_started_at = 0;
@@ -451,36 +451,34 @@ processor_t* processor_new(int index) {
     p->co_list = linked_new();
     p->gc_work_finished = false;
     p->gc_worklist = linked_new();
+    p->index = index;
 
     return p;
 }
 
 void thread_handle_sigurg(int sig) {
-    DEBUGF("[runtime.thread_handle_sigurg] sig=%d, thread_id=%lu", sig, (uint64_t)uv_thread_self());
+    // void thread_handle_sigurg(uv_signal_t* handle, int sig) {
+    processor_t* p = processor_get();
+    DEBUGF("[runtime.thread_handle_sigurg] sig=%d, p_index_%d=%d, p_base=%p, p->main_aco=%p", sig, p->share, p->index, p, p->main_aco);
+
+    coroutine_t* co = p->coroutine;
+    co->is_preempt = true;
+
+    aco_t* aco = get_aco_gtls_co();
+
+    DEBUGF("[runtime.thread_handle_sigurg] p_index_%d=%d, co=%p, co->aco=%p, co->aco->main_aco=%p, tls_aco=%p yield to runnable", p->share,
+           p->index, co, co->aco, co->aco->main_co, aco);
+
+    assert(co->aco == aco);
+    assert(co->aco->main_co);
 
     // 由于是被抢占，所以当前 coroutine 可以直接继续运行，而不需要等待什么 io 就绪
-    coroutine_yield_with_status(CO_STATUS_RUNNABLE);
+    co->status = CO_STATUS_RUNNABLE;
+    linked_push(p->runnable_list, co);
+    aco_yield1(aco);
 
-    DEBUGF("[runtime.thread_handle_sigurg] aco_resume, coroutine=%p", coroutine_get());
-}
-
-void coroutine_yield_with_status(co_status_t status) {
-    processor_t* p = processor_get();
-    assert(p);
-
-    // 读取当前线程正在运行的 coroutine
-    coroutine_t* co = coroutine_get();
-    assert(co);
-
-    // 如果是抢占式调度 status 应该是 runnable, 表示 coroutine 可以被立即调度
-    // 如果是等待网络 io status 应该是 waiting 表示等待 io 事件就绪
-    co->status = status;
-
-    if (status == CO_STATUS_RUNNABLE) {
-        linked_push(p->runnable_list, co);
-    }
-
-    aco_yield1(co->aco);
+    co->is_preempt = false;
+    DEBUGF("[runtime.thread_handle_sigurg] aco_resume,  p_index_%d=%d, co=%p", p->share, p->index, co);
 }
 
 /**
@@ -495,9 +493,16 @@ void processor_set_exit() {
 }
 
 void processor_free(processor_t* p) {
+    DEBUGF("[runtime.processor_free] p_index_%d=%d, loop=%p", p->share, p->index, p->uv_loop);
     linked_free(p->runnable_list);
     linked_free(p->co_list);
     aco_destroy(p->main_aco);
+
+    assert(p->uv_loop);
+    assert(p->uv_loop->active_reqs.count == 0);
+    uv_loop_close(p->uv_loop);
+    free(p->uv_loop);
+
     free(p);
 }
 

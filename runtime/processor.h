@@ -30,6 +30,7 @@
 extern int cpu_count;
 extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern linked_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern int solo_processor_count;      // 累计数量
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
@@ -43,7 +44,7 @@ extern bool processor_need_exit; // 全局 STW 标识
 // locker
 void *global_gc_worklist_pop();
 
-void thread_handle_sigurg(int sig);
+ void thread_handle_sigurg(int sig);
 
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
 bool processor_get_stw();
@@ -118,8 +119,6 @@ void coroutine_dispatch(coroutine_t *co);
  * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
-
-void coroutine_yield_with_status(co_status_t status);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
