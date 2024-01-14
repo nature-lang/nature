@@ -29,11 +29,11 @@ void shade_obj_grey(void *obj) {
     //  get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
 
-    uv_mutex_lock(&span->gcmark_locker);
+    mutex_lock(span->gcmark_locker);
 
     bitmap_clear(span->gcmark_bits->bits, obj_index);
 
-    uv_mutex_unlock(&span->gcmark_locker);
+    mutex_unlock(span->gcmark_locker);
 
     processor_t *p = processor_get();
 
@@ -287,18 +287,18 @@ static void handle_gc_ptr(linked_t *worklist, addr_t addr) {
         "spanclass=%d, obj_index=%lu, span->obj_size=%lu",
         addr, spanclass_has_ptr(span->spanclass), span->base, span->spanclass, obj_index, span->obj_size);
 
-    uv_mutex_lock(&span->gcmark_locker);
+    mutex_lock(span->gcmark_locker);
     // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
     // 其他线程可能已经标记了该 obj
     if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
         // already marks black
         DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, span=0x%lx, obj_index=%lu marked, will continue", addr, span->base, obj_index);
-        uv_mutex_unlock(&span->gcmark_locker);
+        mutex_unlock(span->gcmark_locker);
         return;
     }
 
     mark_obj_black(span, obj_index);
-    uv_mutex_unlock(&span->gcmark_locker);
+    mutex_unlock(span->gcmark_locker);
 
     // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
     if (!spanclass_has_ptr(span->spanclass)) {
@@ -348,7 +348,7 @@ static void handle_gc_worklist(processor_t *p) {
         if (limit_count >= GC_WORKLIST_LIMIT) {
             DEBUGF("[runtime_gc.handle_gc_worklist] p_index_%d=%d, handle_count=%d, will yield", p->share, p->index, limit_count);
             limit_count = 0;
-            aco_yield();
+            co_yield_runnable(p, p->coroutine);
         }
 
         if (linked_empty(p->gc_worklist)) {
@@ -400,7 +400,7 @@ static void gc_work() {
     }
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", p->share, p->index);
-    CO_YIELD_RUNNABLE();
+    co_yield_runnable(p, co);
 
     // - solo goroutine root and change color black, 读取当前 share processor index
     // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
@@ -434,24 +434,24 @@ static void gc_work() {
             continue;
         }
 
-        uv_mutex_lock(&solo_p->gc_locker);
+        mutex_lock(solo_p->gc_locker);
 
         // 尝试获取锁，获取不到就阻塞
         scan_stack(solo_p, solo_co);
 
-        uv_mutex_unlock(&solo_p->gc_locker);
+        mutex_unlock(solo_p->gc_locker);
 
         solo_co->gc_black = true;
     }
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", p->share, p->index);
-    CO_YIELD_RUNNABLE();
+    co_yield_runnable(p, co);
 
     // - handle work list
     handle_gc_worklist(p);
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", p->share, p->index);
-    CO_YIELD_RUNNABLE();
+    co_yield_runnable(p, co);
 
     // - grey list work
     LINKED_FOR(solo_processor_list) {
@@ -476,11 +476,11 @@ static void gc_work() {
             continue;
         }
 
-        uv_mutex_lock(&solo_p->gc_locker);
+        mutex_lock(solo_p->gc_locker);
 
         handle_gc_worklist(solo_p);
 
-        uv_mutex_unlock(&solo_p->gc_locker);
+        mutex_unlock(solo_p->gc_locker);
     }
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit", p->share, p->index);
@@ -492,8 +492,7 @@ static void set_gc_work_coroutine() {
         processor_t *p = SLICE_VALUE(share_processor_list);
 
         coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
-        // 禁止抢占
-        gc_co->no_preempt = true;
+        gc_co->gc_work = true;
 
         linked_push(p->co_list, gc_co);
         linked_push(p->runnable_list, gc_co);

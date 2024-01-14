@@ -2,40 +2,13 @@
 
 #include "helper.h"
 
-#ifdef RUNTIME
-#include <uv.h>
-
-void bitmap_locker_set(bitmap_t *b, uint64_t index) {
-//    uv_mutex_lock(&b->locker);
-    bitmap_set(b->bits, index);
-//    uv_mutex_unlock(&b->locker);
-}
-
-void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
-//    uv_mutex_lock(&b->locker);
-    bitmap_clear(b->bits, index);
-//    uv_mutex_unlock(&b->locker);
-}
-#else
-void bitmap_locker_set(bitmap_t *b, uint64_t index) {
-    assert(false);
-}
-
-void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
-    assert(false);
-}
-
-#endif
-
 // size 的单位是 byte
 bitmap_t *bitmap_new(uint64_t size) {
     bitmap_t *b = NEW(bitmap_t);
 
     b->bits = mallocz(size);
     b->size = size;
-#ifdef RUNTIME
-    uv_mutex_init(&b->locker);
-#endif
+    b->locker = mutex_new();
 
     return b;
 }
@@ -43,6 +16,18 @@ bitmap_t *bitmap_new(uint64_t size) {
 void bitmap_free(bitmap_t *b) {
     free(b->bits);
     free(b);
+}
+
+void bitmap_locker_set(bitmap_t *b, uint64_t index) {
+    mutex_lock(b->locker);
+    bitmap_set(b->bits, index);
+    mutex_unlock(b->locker);
+}
+
+void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
+    mutex_lock(b->locker);
+    bitmap_clear(b->bits, index);
+    mutex_unlock(b->locker);
 }
 
 void bitmap_set(uint8_t *bits, uint64_t index) {

@@ -6,12 +6,12 @@
 #include <stdlib.h>
 #include <uv.h>
 
+#include "mutex.h"
+
 typedef struct {
-    uint8_t *bits; // 每一个元素有 8 bit
-    uint64_t size; // 位图的大小, 单位 bit
-#ifdef RUNTIME
-    uv_mutex_t locker; // TODO 优化锁的粒度
-#endif
+    uint8_t *bits;   // 每一个元素有 8 bit
+    uint64_t size;   // 位图的大小, 单位 bit
+    mutex_t *locker; // TODO 优化锁的粒度
 } bitmap_t;
 
 bitmap_t *bitmap_new(uint64_t size);

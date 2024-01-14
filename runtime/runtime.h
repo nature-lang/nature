@@ -7,6 +7,7 @@
 #include "aco/aco.h"
 #include "utils/bitmap.h"
 #include "utils/linked.h"
+#include "utils/mutex.h"
 #include "utils/type.h"
 
 #define GC_WORKLIST_LIMIT 1024 // 每处理 1024 个 ptr 就 yield
@@ -78,18 +79,18 @@ typedef struct mspan_t {
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
 
     uint64_t pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages
-                          // 是不固定的
+    // 是不固定的
     uint64_t obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1，
-                        // 也就是一个 obj 占用一个 span
-    uint64_t obj_size;  // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass
-                        // 获取，但是不兼容大对象
+    // 也就是一个 obj 占用一个 span
+    uint64_t obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass
+    // 获取，但是不兼容大对象
     uint64_t alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     bitmap_t *alloc_bits;
     bitmap_t *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
-    uv_mutex_t gcmark_locker;
+    mutex_t *gcmark_locker;
 } mspan_t;
 
 /**
@@ -200,7 +201,7 @@ typedef struct {
 
 typedef struct {
     mheap_t *mheap; // 全局 heap, 访问时需要加锁
-    uv_mutex_t locker;
+    mutex_t *locker;
     uint32_t sweepgen; // collector 中的 grep list 每一次使用前都需要清空
 } memory_t;
 
@@ -228,8 +229,8 @@ typedef struct coroutine_t {
     // gc stage 是 mark 时
     bool gc_black;
 
+    bool gc_work;    // 是否是用于 gc 的协程
     bool is_preempt; // 当前 coroutine 是否是被强制抢占出来
-    bool no_preempt; // 当前协程不可抢占
 
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
@@ -249,9 +250,9 @@ struct processor_t {
     struct sigaction sig;
     uv_loop_t *uv_loop; // uv loop 事件循环
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
-    // 需要通过 uv_mutex_init 进行初始化
-    uv_mutex_t gc_locker;
-    uv_mutex_t thread_locker;
+    mutex_t *gc_locker;
+    mutex_t *thread_locker;
+
     uv_thread_t thread_id;   // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;  // 当前正在调度的 coroutine
     uint64_t co_started_at;  // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
@@ -260,7 +261,7 @@ struct processor_t {
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
-    bool no_preempt;         // 为 true 时禁止抢占
+    bool can_preempt;        // 当前 processor 能否被抢占
     bool gc_work_finished;   // 是否完成了 GC WORK 的工作
     linked_t *gc_worklist;   // gc 扫描的 ptr 节点列表
 };

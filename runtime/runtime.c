@@ -12,30 +12,6 @@
 extern int main();
 
 /**
- * 如果所有的共享协程都已退出，则 runtime 退出
- */
-static void wait_processor() {
-    bool all_exit;
-    while (true) {
-        all_exit = true;
-        SLICE_FOR(share_processor_list) {
-            processor_t *p = SLICE_VALUE(share_processor_list);
-            if (p->exit == false) {
-                all_exit = false;
-            }
-        }
-
-        if (all_exit) {
-            break;
-        }
-
-        uv_sleep(20);
-    }
-
-    DEBUGF("[wait_processor] all processor thread exit");
-}
-
-/**
  * crt1.o _start -> runtime_main  -> user_main
  */
 int runtime_main(int argc, char *argv[]) {
@@ -53,9 +29,10 @@ int runtime_main(int argc, char *argv[]) {
     DEBUGF("[runtime_main] processor init success");
 
     // - 提取 main 进行 coroutine 创建调度
-    coroutine_t *main_co = coroutine_new((void *)main, NULL, false, true);
+    coroutine_t *main_co = coroutine_new((void *) main, NULL, false, true);
     coroutine_dispatch(main_co);
 
+    // 等待 processor init 注册完成运行后再启动 sysmon 进行抢占式调度
     // 阻塞等待多线程模型执行
     wait_sysmon();
 

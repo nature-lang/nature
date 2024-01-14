@@ -8,7 +8,6 @@
 #endif
 .intel_syntax noprefix
 acosw:
-
 #ifdef __x86_64__
 /*
     0x00                  -->                  0xff
@@ -47,6 +46,100 @@ acosw:
 #else
     #error "platform not support"
 #endif
+
+
+// ----------------------------------------------------------------------------------------
+.globl async_preempt
+#if defined(__APPLE__)
+#else
+.type  async_preempt, @function
+#endif
+async_preempt:
+#ifdef __x86_64__
+push rbp
+    mov rbp, rsp
+    pushfq
+    sub rsp, 368
+    nop
+    mov QWORD PTR [rsp], rax
+    mov QWORD PTR [rsp + 8], rcx
+    mov QWORD PTR [rsp + 16], rdx
+    mov QWORD PTR [rsp + 24], rbx
+    mov QWORD PTR [rsp + 32], rsi
+    mov QWORD PTR [rsp + 40], rdi
+    mov QWORD PTR [rsp + 48], r8
+    mov QWORD PTR [rsp + 56], r9
+    mov QWORD PTR [rsp + 64], r10
+    mov QWORD PTR [rsp + 72], r11
+    mov QWORD PTR [rsp + 80], r12
+    mov QWORD PTR [rsp + 88], r13
+    mov QWORD PTR [rsp + 96], r14
+    mov QWORD PTR [rsp + 104], r15
+#if defined(__APPLE__)
+#ifndef hasAVX
+    cmp byte ptr [internal/cpu.X86 + const_offsetX86HasAVX], 0
+    je .Lno_avx
+#endif
+    vzeroupper
+    .Lno_avx
+#endif
+    movups [rsp + 112], xmm0
+    movups [rsp + 128], xmm1
+    movups [rsp + 144], xmm2
+    movups [rsp + 160], xmm3
+    movups [rsp + 176], xmm4
+    movups [rsp + 192], xmm5
+    movups [rsp + 208], xmm6
+    movups [rsp + 224], xmm7
+    movups [rsp + 240], xmm8
+    movups [rsp + 256], xmm9
+    movups [rsp + 272], xmm10
+    movups [rsp + 288], xmm11
+    movups [rsp + 304], xmm12
+    movups [rsp + 320], xmm13
+    movups [rsp + 336], xmm14
+    movups [rsp + 352], xmm15
+    call co_preempt_yield
+    movups xmm15, [rsp + 352]
+    movups xmm14, [rsp + 336]
+    movups xmm13, [rsp + 320]
+    movups xmm12, [rsp + 304]
+    movups xmm11, [rsp + 288]
+    movups xmm10, [rsp + 272]
+    movups xmm9, [rsp + 256]
+    movups xmm8, [rsp + 240]
+    movups xmm7, [rsp + 224]
+    movups xmm6, [rsp + 208]
+    movups xmm5, [rsp + 192]
+    movups xmm4, [rsp + 176]
+    movups xmm3, [rsp + 160]
+    movups xmm2, [rsp + 144]
+    movups xmm1, [rsp + 128]
+    movups xmm0, [rsp + 112]
+    mov r15, [rsp + 104]
+    mov r14, [rsp + 96]
+    mov r13, [rsp + 88]
+    mov r12, [rsp + 80]
+    mov r11, [rsp + 72]
+    mov r10, [rsp + 64]
+    mov r9, [rsp + 56]
+    mov r8, [rsp + 48]
+    mov rdi, [rsp + 40]
+    mov rsi, [rsp + 32]
+    mov rbx, [rsp + 24]
+    mov rdx, [rsp + 16]
+    mov rcx, [rsp + 8]
+    mov rax, [rsp]
+    add rsp, 368
+    popfq
+    pop rbp
+    ret
+#else
+#error "platform not support"
+#endif
+
+
+
 
 .globl aco_save_reg
 #if defined(__APPLE__)

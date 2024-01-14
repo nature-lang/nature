@@ -53,11 +53,15 @@
 //#define DEBUG 1
 
 
-#ifdef DEBUG
-#define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
-#else
+//#ifdef DEBUG
+//#ifdef RUNTIME
+//#define DEBUGF(...) printf("[%lu]",uv_hrtime()/1000/1000);printf(__VA_ARGS__);printf("\n"); fflush(stdout);
+//#else
+//#define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
+//#endif
+//#else
 #define DEBUGF(...)
-#endif
+//#endif
 
 
 #define COPY_NEW(_type, src) ({ \

@@ -643,14 +643,18 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
  * @return
  */
 static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
+    DEBUGF("[runtime.mcachine_refill] mcache=%p, spanclass=%lu start", mcache, spanclass);
+    mutex_lock(memory->locker);
+    DEBUGF("[runtime.mcachine_refill] mcache=%p, spanclass=%lu get clock", mcache, spanclass);
+
     mspan_t *mspan = mcache->alloc[spanclass];
-    uv_mutex_lock(&memory->locker);
 
     mcentral_t *mcentral = &memory->mheap->centrals[spanclass];
 
     if (mspan) {
         // mspan to mcentral
         uncache_span(mcentral, mspan);
+        DEBUGF("[runtime.mcachine_refill] mcache=%p, spanclass=%lu uncache span success", mcache, spanclass);
     }
 
     // 从 mcentral 中读取一个 span 进行读取
@@ -659,7 +663,8 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
     DEBUGF("[runtime.mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu", mcentral, spanclass,
            mspan->spanclass, (void *)mspan->base, (void *)mspan->end, mspan->obj_size, mspan->alloc_count);
 
-    uv_mutex_unlock(&memory->locker);
+    mutex_unlock(memory->locker);
+    DEBUGF("[runtime.mcachine_refill] mcache=%p, spanclass=%lu unlocker", mcache, spanclass);
     return mspan;
 }
 
@@ -669,23 +674,26 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
  * @return
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
+    DEBUGF("[runtime.mcache_alloc] start, spanclass=%d", spanclass);
     processor_t *p = processor_get();
     mcache_t *mcache = &p->mcache;
     mspan_t *mspan = mcache->alloc[spanclass];
+
+    DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, mspan=%p", p->share, p->index, mspan);
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
     if (mspan == NULL || mspan->alloc_count == mspan->obj_count) {
         mspan = mcache_refill(mcache, spanclass);
+        DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, refill mspan=%p", p->share, p->index, mspan);
     }
 
     *span = mspan;
 
+    mutex_lock(mspan->alloc_bits->locker);
     for (int i = 0; i <= mspan->obj_count; i++) {
-        uv_mutex_lock(&mspan->alloc_bits->locker);
         bool used = bitmap_test(mspan->alloc_bits->bits, i);
         if (used) {
-            uv_mutex_unlock(&mspan->alloc_bits->locker);
             continue;
         }
         // 找到了一个空闲的 obj,计算其
@@ -693,10 +701,12 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         // 标记该节点已经被使用
         bitmap_set(mspan->alloc_bits->bits, i);
         mspan->alloc_count += 1;
-        uv_mutex_unlock(&mspan->alloc_bits->locker);
+        mutex_unlock(mspan->alloc_bits->locker);
+        DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
         return addr;
     }
-    // 没有找到
+    mutex_unlock(mspan->alloc_bits->locker);
+
     assertf(false, "out of memory: mcache_alloc");
     return 0;
 }
@@ -709,6 +719,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu", (void *)addr, size, obj_size)
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
         // 确定 arena bits base
@@ -734,15 +745,20 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 
 // 单位
 static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
+    DEBUGF("[runtime.std_malloc] start")
     bool has_ptr = rtype != NULL && rtype->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
     assert(sizeclass > 0 && spanclass > 1);
 
+    DEBUGF("[runtime.std_malloc] spanclass=%d", spanclass);
+
     mspan_t *span;
     addr_t addr = mcache_alloc(spanclass, &span);
     assertf(span, "std_malloc notfound span");
+
+    DEBUGF("[runtime.std_malloc] mcache_alloc addr=%p", (void *)addr);
 
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
@@ -773,7 +789,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
         pages_count += 1;
     }
 
-    uv_mutex_lock(&memory->locker);
+    mutex_lock(memory->locker);
     // 直接从堆中分配 span
     mspan_t *span = mheap_alloc_span(pages_count, spanclass);
     assertf(span != NULL, "out of memory");
@@ -781,7 +797,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_t *central = &memory->mheap->centrals[spanclass];
     linked_push(central->full_swept, span);
-    uv_mutex_unlock(&memory->locker);
+    mutex_unlock(memory->locker);
 
     allocated_bytes += span->obj_size;
 
@@ -847,6 +863,10 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 }
 
 void memory_init() {
+    memory = NEW(memory_t);
+    memory->sweepgen = 0;
+    memory->locker = mutex_new();
+
     // 初始化 gc 参数
     allocated_bytes = 0;
     next_gc_bytes = DEFAULT_NEXT_GC_BYTES;
@@ -891,10 +911,7 @@ void memory_init() {
     rtypes_deserialize();
     DEBUGF("[memory_init] rtypes_deserialize success")
 
-    memory = NEW(memory_t);
     memory->mheap = mheap;
-    memory->sweepgen = 0;
-    uv_mutex_init(&memory->locker);
 }
 
 mspan_t *span_of(uint64_t addr) {
@@ -940,9 +957,11 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
 
     void *ptr;
     if (size <= STD_MALLOC_LIMIT) {
+        DEBUGF("[runtime_rtype_malloc] std malloc");
         // 1. 标准内存分配(0~32KB)
         ptr = (void *)std_malloc(size, rtype);
     } else {
+        DEBUGF("[runtime_rtype_malloc] large malloc");
         // 2. 大型内存分配(大于>32KB)
         ptr = (void *)large_malloc(size, rtype);
     }
@@ -973,7 +992,7 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->end = span->base + (span->pages_count * ALLOC_PAGE_SIZE);
     span->alloc_bits = bitmap_new((int)span->obj_count);
     span->gcmark_bits = bitmap_new((int)span->obj_count);
-    uv_mutex_init(&span->gcmark_locker);
+    span->gcmark_locker = mutex_new();
 
     DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu", span->base,
            span->pages_count, span->spanclass, sizeclass, span->obj_size, span->obj_count);
@@ -986,8 +1005,9 @@ uint64_t runtime_malloc_bytes() {
 
 void runtime_eval_gc() {
     DEBUGF("[runtime_eval_gc] start locker allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
+    return; // TODO 删掉
 
-    uv_mutex_lock(&gc_stage_locker);
+    mutex_lock(gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {
         DEBUGF("[runtime_eval_gc] gc is running = %d, skip", gc_stage)
@@ -1007,12 +1027,12 @@ void runtime_eval_gc() {
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
 EXIT:
-    uv_mutex_unlock(&gc_stage_locker);
+    mutex_unlock(gc_stage_locker);
     //    DEBUGF("[runtime_eval_gc] end");
 }
 
 void runtime_force_gc() {
-    if (uv_mutex_trylock(&gc_stage_locker) != 0) {
+    if (mutex_trylock(gc_stage_locker) != 0) {
         return;
     }
 
@@ -1028,7 +1048,7 @@ void runtime_force_gc() {
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
 EXIT:
-    uv_mutex_unlock(&gc_stage_locker);
+    mutex_unlock(gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }
 

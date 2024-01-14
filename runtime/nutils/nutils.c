@@ -405,7 +405,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     // 独享线程进行 write barrier 之前需要尝试获取线程锁
     if (!p->share) {
-        uv_mutex_lock(&p->gc_locker);
+        mutex_lock(p->gc_locker);
     }
 
     // yuasa 写屏障 shade slot
@@ -421,6 +421,6 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     memmove(slot, new_obj, rtype->size);
 
     if (!p->share) {
-        uv_mutex_unlock(&p->gc_locker);
+        mutex_unlock(p->gc_locker);
     }
 }

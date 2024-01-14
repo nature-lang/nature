@@ -183,7 +183,8 @@ aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled);
 
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
-extern aco_t *aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
+extern aco_t *
+aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
 
 // aco's Global Thread Local Storage variable `co`
 // extern __thread aco_t *aco_gtls_co;

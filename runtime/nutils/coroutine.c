@@ -16,7 +16,8 @@ coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag) {
 }
 
 void coroutine_yield() {
-    CO_YIELD_RUNNABLE();
+    processor_t *p = processor_get();
+    co_yield_runnable(p, p->coroutine);
 }
 
 /**
@@ -39,12 +40,12 @@ static void uv_on_timer(uv_timer_t *timer) {
 
 void coroutine_sleep(int64_t ms) {
     processor_t *p = processor_get();
-    coroutine_t *c = coroutine_get();
+    coroutine_t *co = coroutine_get();
 
     // - 初始化 libuv 定时器
     uv_timer_t *timer = NEW(uv_timer_t);
     uv_timer_init(p->uv_loop, timer);
-    timer->data = c;
+    timer->data = co;
 
     // 设定定时器超时时间与回调
     uv_timer_start(timer, uv_on_timer, ms, 0);
@@ -53,7 +54,7 @@ void coroutine_sleep(int64_t ms) {
            fetch_addr_value((addr_t)&timer));
 
     // 退出等待 io 事件就绪
-    CO_YIELD_WAITING();
+    co_yield_waiting(p, co);
 
     DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed");
     free(timer);

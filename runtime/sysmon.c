@@ -9,7 +9,6 @@ void wait_sysmon() {
     int gc_eval_count = 50;
 
     // 循环监控(每 10ms 监控一次)
-    // TODO processor 必须在调度期间才需要考虑抢占式调度？
     while (true) {
         // - 监控长时间被占用的 share processor 进行抢占式调度
         SLICE_FOR(share_processor_list) {
@@ -18,42 +17,44 @@ void wait_sysmon() {
                 continue;
             }
 
-            if (p->no_preempt) {
+//            DEBUGF("[runtime.wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
+//            mutex_lock(p->thread_locker);
+//            DEBUGF("[runtime.wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
+
+            if (!p->can_preempt) {
                 DEBUGF("[wait_sysmon] share p_index=%d cannot preempt, will skip", p->index);
-                continue;
+                goto SHARE_NEXT;
             }
 
-            // 刚刚创建成功还没开始调度或者 processor 上还没有任何 coroutine
-            if (!p->coroutine) {
-                continue;
-            }
-
-            // 当前 processor 调度的 coroutine 禁止抢占
-            if (p->coroutine->no_preempt) {
-                continue;
-            }
+            assert(p->coroutine);
 
             uint64_t co_start_at = p->co_started_at;
             if (co_start_at == 0) {
-                continue;
+                goto SHARE_NEXT;
             }
 
             uint64_t time = (uv_hrtime() - co_start_at);
-            if (time < WAIT_SHORT_TIME / 2 * 1000 * 1000) { // 20ms
-                continue;
+            if (time < 1 * 1000 * 1000) { // 20ms
+                goto SHARE_NEXT;
             }
 
-            DEBUGF("[wait_sysmon] share p_index=%d coroutine run timeout(%lu ms), will send SIGURG", p->index, time / 1000 / 1000);
+            DEBUGF("[runtime.wait_sysmon.thread_locker] share p_index=%d coroutine run timeout(%lu ms), will send SIGURG",
+                   p->index,
+                   time / 1000 / 1000);
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
-                // 信号发送异常, 直接异常退出
-                // continue;
-                assertf(false, "error sending SIGURG to thread");
-                exit(1);
+                assertf(false, "error sending SIGURG to thread, %s", strerror(errno));
             }
 
-            DEBUGF("[wait_sysmon] share p_index=%d send SIGURG success", p->index);
+            DEBUGF("[runtime.wait_sysmon.thread_locker] share p_index=%d send SIGURG success, will continue", p->index);
+
+            // 抢占信号发送成功之后不能解锁，将解锁的工作交给线程信号处理, 如果直接解锁，在信号发送之前 coroutine 可能会发生状态切换,
+            // 导致抢占异常
+            continue;
+            SHARE_NEXT:
+//            mutex_unlock(p->thread_locker);
+            DEBUGF("[runtime.wait_sysmon.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }
 
         // - 监控状态处于 running solo processor
@@ -69,7 +70,7 @@ void wait_sysmon() {
             }
 
             // safe point 是会添加 no preempt 选项
-            if (p->no_preempt) {
+            if (!p->can_preempt) {
                 DEBUGF("[wait_sysmon] solo processor_index=%d cannot preempt, will skip", p->index);
                 continue;
             }
@@ -113,6 +114,6 @@ void wait_sysmon() {
 
         gc_eval_count--;
 
-        uv_sleep(WAIT_SHORT_TIME);
+        usleep(10 * 1000); // 1ms
     }
 }
