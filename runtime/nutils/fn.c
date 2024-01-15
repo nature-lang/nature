@@ -150,7 +150,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
            fn_runtime,
            fndef->fn_runtime_stack,
            fndef->fn_runtime_reg,
-           fn_runtime->closure_jit_codes)
+           fn_runtime->closure_jit_codes);
 
     /**
      * closure_jit_codes 就是 fn_runtime 对首个值，所以 return fn_runtime 和 fn_runtime->closure_jit_codes 没有区别
@@ -189,13 +189,13 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
     if (!upvalue) {
         // TYPE_GC_NOSCAN=upvalue.value, TYPE_GC_SCAN=upvalue.ref, ref 在 closure 后会指向 value 部分
         // 所以总是将 ref 部分设置为 scan
-        DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr)
+        DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr);
         rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(item_rtype->kind), TYPE_GC_SCAN);
         upvalue = runtime_zero_malloc(sizeof(upvalue_t), upvalue_rtype);
-        DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash)
+        DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash);
 
         table_set(env_table, utoa(stack_addr), upvalue);
-        DEBUGF("[runtime.env_assign] table set success")
+        DEBUGF("[runtime.env_assign] table set success");
 
         upvalue->ref = (void *) stack_addr;
         DEBUGF("[runtime.env_assign] upvalue %p created", upvalue);
@@ -262,7 +262,7 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 }
 
 void *env_element_addr(runtime_fn_t *fn, uint64_t index) {
-    DEBUGF("[runtime.env_element_addr] fn_base=%p", fn)
+    DEBUGF("[runtime.env_element_addr] fn_base=%p", fn);
     assert(fn);
     assert(index < fn->envs->length);
 

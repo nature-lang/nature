@@ -33,7 +33,7 @@ static void uv_on_timer(uv_timer_t *timer) {
     processor_t *p = c->p;
     assert(p);
 
-    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, c->status)
+    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, c->status);
 
     linked_push(p->runnable_list, c);
 }

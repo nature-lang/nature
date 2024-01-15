@@ -35,7 +35,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     }
 
     assertf(capacity >= length, "capacity must be greater than length");
-    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity)
+    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
@@ -209,7 +209,7 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
 
-    DEBUGF("[vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset))
+    DEBUGF("[vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
     return (n_cptr_t) l->data + offset;
 }
 

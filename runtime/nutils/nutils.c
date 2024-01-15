@@ -89,7 +89,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 
 n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
     if (np == 0) {
-        DEBUGF("[null_pointer_assert] null pointer")
+        DEBUGF("[null_pointer_assert] null pointer");
         rt_processor_attach_errort("null pointer assert");
         return 0;
     }
@@ -142,7 +142,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     n_union_t *mu = runtime_zero_malloc(sizeof(n_union_t), union_rtype);
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p", mu, value_ref,
-           &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *)fetch_addr_value((addr_t)value_ref))
+           &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *)fetch_addr_value((addr_t)value_ref));
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));

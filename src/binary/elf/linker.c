@@ -1490,7 +1490,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
     ct_symdef_count = count;
     size = ct_symdef_count * sizeof(symdef_t);
     ct_symdef_list = realloc(ct_symdef_list, size);
-    DEBUGF("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size)
+    DEBUGF("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size);
 
     return size;
 }

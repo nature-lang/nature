@@ -266,6 +266,15 @@ struct processor_t {
     linked_t *gc_worklist;   // gc 扫描的 ptr 节点列表
 };
 
+static inline void log_lock(bool lock, void *udata) {
+    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
+    if (lock) {
+        pthread_mutex_lock(locker);
+    } else {
+        pthread_mutex_unlock(locker);
+    }
+}
+
 int runtime_main(int argc, char *argv[]);
 
 void rt_processor_attach_errort(char *msg);

@@ -17,12 +17,12 @@ void wait_sysmon() {
                 continue;
             }
 
-//            DEBUGF("[runtime.wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
-//            mutex_lock(p->thread_locker);
-//            DEBUGF("[runtime.wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
+            RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
+            mutex_lock(p->thread_locker);
+            RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
 
             if (!p->can_preempt) {
-                DEBUGF("[wait_sysmon] share p_index=%d cannot preempt, will skip", p->index);
+                RDEBUGF("[wait_sysmon] share p_index=%d cannot preempt, will skip", p->index);
                 goto SHARE_NEXT;
             }
 
@@ -38,23 +38,22 @@ void wait_sysmon() {
                 goto SHARE_NEXT;
             }
 
-            DEBUGF("[runtime.wait_sysmon.thread_locker] share p_index=%d coroutine run timeout(%lu ms), will send SIGURG",
-                   p->index,
-                   time / 1000 / 1000);
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d coroutine run timeout(%lu ms), will send SIGURG", p->index,
+                    time / 1000 / 1000);
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
-                assertf(false, "error sending SIGURG to thread, %s", strerror(errno));
+                assert(false && "error sending SIGURG to thread");
             }
 
-            DEBUGF("[runtime.wait_sysmon.thread_locker] share p_index=%d send SIGURG success, will continue", p->index);
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d send SIGURG success, will continue", p->index);
 
             // 抢占信号发送成功之后不能解锁，将解锁的工作交给线程信号处理, 如果直接解锁，在信号发送之前 coroutine 可能会发生状态切换,
             // 导致抢占异常
             continue;
-            SHARE_NEXT:
-//            mutex_unlock(p->thread_locker);
-            DEBUGF("[runtime.wait_sysmon.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
+        SHARE_NEXT:
+            mutex_unlock(p->thread_locker);
+            RDEBUGF("[wait_sysmon.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }
 
         // - 监控状态处于 running solo processor
@@ -71,7 +70,7 @@ void wait_sysmon() {
 
             // safe point 是会添加 no preempt 选项
             if (!p->can_preempt) {
-                DEBUGF("[wait_sysmon] solo processor_index=%d cannot preempt, will skip", p->index);
+                RDEBUGF("[wait_sysmon] solo processor_index=%d cannot preempt, will skip", p->index);
                 continue;
             }
 
@@ -90,13 +89,13 @@ void wait_sysmon() {
                 continue;
             }
 
-            DEBUGF("[wait_sysmon] solo p_index=%d need stw(%d), will send SIGURG", p->index, processor_get_stw());
+            RDEBUGF("[wait_sysmon] solo p_index=%d need stw(%d), will send SIGURG", p->index, processor_get_stw());
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
                 // 信号发送异常, 直接异常退出
                 // continue;
-                assertf(false, "error sending SIGURG to thread");
+                assert(false && "error sending SIGURG to thread");
             }
         }
 
@@ -108,7 +107,7 @@ void wait_sysmon() {
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {
-            DEBUGF("[wait_sysmon] processor need exit, will exit");
+            RDEBUGF("[wait_sysmon] processor need exit, will exit");
             break;
         }
 

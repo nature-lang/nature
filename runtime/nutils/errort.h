@@ -23,7 +23,7 @@ static inline n_errort *n_errort_new(n_string_t *msg, uint8_t has) {
     errort->msg = msg;
     errort->traces = traces;
     errort->has = has;
-    DEBUGF("[runtime.n_errort_new] errort=%p, msg=%p, has=%d", errort, msg, has)
+    DEBUGF("[runtime.n_errort_new] errort=%p, msg=%p, has=%d", errort, msg, has);
     return errort;
 }
 

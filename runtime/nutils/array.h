@@ -27,7 +27,7 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
            element_rtype->last_ptr > 0,
            rtype.size,
            length,
-           type_kind_str[rtype.kind])
+           type_kind_str[rtype.kind]);
 
     free(rtype.gc_bits);
 

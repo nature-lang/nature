@@ -164,7 +164,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
     uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
     DEBUGF("[runtime.map_assign] assign success data_index=%lu, hash_value=%lu",
            data_index,
-           m->hash_table[hash_index])
+           m->hash_table[hash_index]);
 
     // push to key list and value list
     memmove(m->key_data + key_size * data_index, key_ref, key_size);

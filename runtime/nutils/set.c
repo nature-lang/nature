@@ -13,7 +13,7 @@ static bool _set_add(n_set_t *m, void *key_ref) {
 
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
-    DEBUGF("[runtime.set_add] hash_index=%lu, hash_value=%lu", hash_index, hash_value)
+    DEBUGF("[runtime.set_add] hash_index=%lu, hash_value=%lu", hash_index, hash_value);
 
     uint64_t key_index;
     bool added = false;
@@ -93,7 +93,7 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
            set_data, set_data->key_rtype_hash, set_data->key_data);
 
 //    for (int i = 0; i < set_data->capacity; ++i) {
-//        TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i])
+//        TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i]);
 //    }
 
     return set_data;

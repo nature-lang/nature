@@ -33,13 +33,11 @@ void co_preempt_yield();
  * @param v
  */
 static inline void set_can_preempt(processor_t *p, bool v) {
-//    DEBUGF("[runtime.set_can_preempt.thread_locker] start, p_index_%d=%d, will set can_preempt=%d", p->share, p->index,
-//           v);
+//    DEBUGF("[runtime.set_can_preempt.thread_locker] start, p_index_%d=%d, will set can_preempt=%d", p->share, p->index, v);
     mutex_lock(p->thread_locker);
     p->can_preempt = v;
     mutex_unlock(p->thread_locker);
-//    DEBUGF("[runtime.set_can_preempt.thread_locker] end, p_index_%d=%d, set can_preempt=%d success", p->share,
-//           p->index, v);
+//    DEBUGF("[runtime.set_can_preempt.thread_locker] end, p_index_%d=%d, set can_preempt=%d success", p->share, p->index, v);
 }
 
 /**
@@ -59,17 +57,15 @@ static inline void _co_yield(processor_t *p, coroutine_t *co) {
 }
 
 static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime.co_yield_runnable] start")
+    DEBUGF("[runtime.co_yield_runnable] start");
     assert(p);
     assert(co);
 
     co->status = CO_STATUS_RUNNABLE;
     linked_push(p->runnable_list, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co,
-           co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
     _co_yield(p, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
-           co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
 static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {

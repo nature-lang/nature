@@ -393,10 +393,9 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
         page_summary_t start_summary = l5_summaries[start];
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
-        DEBUGF(
-            "[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
-            " end: %lu, bit start: %lu",
-            (void *)find_addr, start, start_summary.start, start_summary.max, start_summary.end, end, bit_start);
+        DEBUGF("[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
+               " end: %lu, bit start: %lu",
+               (void *)find_addr, start, start_summary.start, start_summary.max, start_summary.end, end, bit_start);
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
     assertf(find_addr % ALLOC_PAGE_SIZE == 0, "find addr=%p not align_up", find_addr);
@@ -511,7 +510,7 @@ static void mheap_clear_spans(mspan_t *span) {
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear", (void *)arena->base, page_index)
+        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear", (void *)arena->base, page_index);
 
         arena->spans[page_index] = NULL;
         page_index += 1;
@@ -674,18 +673,18 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
  * @return
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
-    DEBUGF("[runtime.mcache_alloc] start, spanclass=%d", spanclass);
+    log_debug("[runtime.mcache_alloc] start, spanclass=%d", spanclass);
     processor_t *p = processor_get();
     mcache_t *mcache = &p->mcache;
     mspan_t *mspan = mcache->alloc[spanclass];
 
-    DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, mspan=%p", p->share, p->index, mspan);
+    log_debug("[runtime.mcache_alloc] p_index_%d=%d, mspan=%p", p->share, p->index, mspan);
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
     if (mspan == NULL || mspan->alloc_count == mspan->obj_count) {
         mspan = mcache_refill(mcache, spanclass);
-        DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, refill mspan=%p", p->share, p->index, mspan);
+        log_debug("[runtime.mcache_alloc] p_index_%d=%d, refill mspan=%p", p->share, p->index, mspan);
     }
 
     *span = mspan;
@@ -694,6 +693,8 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     for (int i = 0; i <= mspan->obj_count; i++) {
         bool used = bitmap_test(mspan->alloc_bits->bits, i);
         if (used) {
+            log_debug("[runtime.mcache_alloc] p_index_%d=%d, mspan=%p, obj_index=%d/%d, used, continue", p->share, p->index, mspan, i,
+                      mspan->obj_count);
             continue;
         }
         // 找到了一个空闲的 obj,计算其
@@ -702,7 +703,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         bitmap_set(mspan->alloc_bits->bits, i);
         mspan->alloc_count += 1;
         mutex_unlock(mspan->alloc_bits->locker);
-        DEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
+        log_debug("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
         return addr;
     }
     mutex_unlock(mspan->alloc_bits->locker);
@@ -719,7 +720,11 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu", (void *)addr, size, obj_size)
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
+
+    mutex_lock(memory->locker);
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
+
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
         // 确定 arena bits base
@@ -735,17 +740,20 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bitmap_clear(arena->bits, bit_index);
             bit_value = 0;
         }
-        //        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld,
-        //        bit_value=%d",
-        //               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+
+        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
+               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
+
+    mutex_unlock(memory->locker);
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
 }
 
 // 单位
 static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
-    DEBUGF("[runtime.std_malloc] start")
+    DEBUGF("[runtime.std_malloc] start");
     bool has_ptr = rtype != NULL && rtype->last_ptr;
 
     uint8_t sizeclass = calc_sizeclass(size);
@@ -771,10 +779,9 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    DEBUGF(
-        "[runtime.std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
-        "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
-        span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes);
+    DEBUGF("[runtime.std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
+           "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
+           span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes);
 
     return addr;
 }
@@ -805,10 +812,9 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    DEBUGF(
-        "[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
-        "addr=0x%lx, allocator_bytes=%ld",
-        span->spanclass, span->base, span->obj_size, size, debug_kind, span->base, allocated_bytes);
+    DEBUGF("[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
+           "addr=0x%lx, allocator_bytes=%ld",
+           span->spanclass, span->base, span->obj_size, size, debug_kind, span->base, allocated_bytes);
 
     return span->base;
 }
@@ -899,17 +905,17 @@ void memory_init() {
     }
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
-    DEBUGF("[memory_init] will start deserialize")
+    DEBUGF("[memory_init] will start deserialize");
     DEBUGF("[memory_init] fndef count = %lu", rt_fndef_count);
     DEBUGF("[memory_init] symdef count = %lu", rt_symdef_count);
     DEBUGF("[memory_init] rtype count = %lu", rt_rtype_count);
 
     fndefs_deserialize();
-    DEBUGF("[memory_init] fndefs_deserialize success")
+    DEBUGF("[memory_init] fndefs_deserialize success");
     symdefs_deserialize();
-    DEBUGF("[memory_init] symdefs_deserialize success")
+    DEBUGF("[memory_init] symdefs_deserialize success");
     rtypes_deserialize();
-    DEBUGF("[memory_init] rtypes_deserialize success")
+    DEBUGF("[memory_init] rtypes_deserialize success");
 
     memory->mheap = mheap;
 }
@@ -1010,12 +1016,12 @@ void runtime_eval_gc() {
     mutex_lock(gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {
-        DEBUGF("[runtime_eval_gc] gc is running = %d, skip", gc_stage)
+        DEBUGF("[runtime_eval_gc] gc is running = %d, skip", gc_stage);
         goto EXIT;
     }
 
     if (allocated_bytes < next_gc_bytes) {
-        //        DEBUGF("[runtime_eval_gc] no need for gc")
+        //        DEBUGF("[runtime_eval_gc] no need for gc");
         goto EXIT;
     } else {
         DEBUGF("[runtime_eval_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
@@ -1039,7 +1045,7 @@ void runtime_force_gc() {
     DEBUGF("[runtime_force_gc] start");
 
     if (gc_stage != GC_STAGE_OFF) {
-        DEBUGF("[runtime_force_gc] gc is running, skip")
+        DEBUGF("[runtime_force_gc] gc is running, skip");
         goto EXIT;
     }
 

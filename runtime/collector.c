@@ -19,7 +19,7 @@ void shade_obj_grey(void *obj) {
     addr_t addr = (addr_t)obj;
     // 不在堆内存中
     if (!in_heap(addr)) {
-        DEBUGF("[runtime_gc.shade_obj_grey] addr=%p not in heap", obj)
+        DEBUGF("[runtime_gc.shade_obj_grey] addr=%p not in heap", obj);
         return;
     }
 
@@ -73,7 +73,7 @@ static void flush_mcache() {
         }
     }
 
-    DEBUGF("gc flush mcache successful")
+    DEBUGF("gc flush mcache successful");
 }
 
 void mark_obj_black(mspan_t *span, uint64_t index) {
@@ -184,7 +184,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     addr_t stack_size = stack.valid_sz; // valid 标识 8byte 对齐
 
 #ifdef DEBUG
-    DEBUGF("[runtime.scan_stack] traverse stack, start")
+    DEBUGF("[runtime.scan_stack] traverse stack, start");
     addr_t temp_cursor = (addr_t)stack.ptr;
     int temp_i = 0;
     int max_i = stack_size / POINTER_SIZE;
@@ -196,7 +196,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
-    DEBUGF("[runtime.scan_stack] traverse stack, end")
+    DEBUGF("[runtime.scan_stack] traverse stack, end");
 #endif
 
     addr_t cursor = 0;
@@ -248,7 +248,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
             DEBUGF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, value=0x%lx", fn->name, i, is_ptr,
-                   fetch_int_value(frame_cursor, 8))
+                   fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值或者
             if (is_ptr) {
@@ -363,7 +363,7 @@ static void handle_gc_worklist(processor_t *p) {
     }
 
     p->gc_work_finished = true;
-    DEBUGF("[runtime_gc.handle_gc_worklist] completed, processor=%p", p)
+    DEBUGF("[runtime_gc.handle_gc_worklist] completed, processor=%p", p);
 }
 
 static void gc_work() {
@@ -503,7 +503,7 @@ static void set_gc_work_coroutine() {
  * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
  */
 static void scan_global() {
-    DEBUGF("[runtime_gc.scan_global] start")
+    DEBUGF("[runtime_gc.scan_global] start");
 
     // TODO 暂时放在第一个 share processor 中，后续可以考虑放在 global worklist 中
     processor_t *processor = share_processor_list->take[0];
@@ -529,14 +529,14 @@ static void scan_global() {
         }
     }
 
-    DEBUGF("[runtime_gc.scan_global] scan global completed")
+    DEBUGF("[runtime_gc.scan_global] scan global completed");
 }
 
 /**
  * 处理剩余的 global gc worklist, 当前已经在 STW 了
  */
 static void gc_mark_done() {
-    DEBUGF("[runtime_gc.gc_mark_done] start")
+    DEBUGF("[runtime_gc.gc_mark_done] start");
 
     // - handle work list
     while (true) {
@@ -548,7 +548,7 @@ static void gc_mark_done() {
         handle_gc_ptr(global_gc_worklist, addr);
     }
 
-    DEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield")
+    DEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield");
 }
 
 /**
@@ -564,22 +564,22 @@ void runtime_gc() {
     processor_stop_the_world();
     processor_wait_all_safe();
 
-    DEBUGF("[runtime_gc] wait all processor safe")
+    DEBUGF("[runtime_gc] wait all processor safe");
 
     // 开启写屏障
     gc_barrier_start();
 
-    DEBUGF("[runtime_gc] barrier start")
+    DEBUGF("[runtime_gc] barrier start");
 
     // 注入 GC 工作协程
     set_gc_work_coroutine();
 
-    DEBUGF("[runtime_gc] gc work coroutine injected, will start the world")
+    DEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_start_the_world();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
-    DEBUGF("[runtime_gc] gc stage: GC_MARK")
+    DEBUGF("[runtime_gc] gc stage: GC_MARK");
 
     // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中
     scan_global();
@@ -593,13 +593,13 @@ void runtime_gc() {
 
     // - gc stage: GC_MARK_DONE
     gc_stage = GC_STAGE_MARK_DONE;
-    DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE")
+    DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
 
     gc_mark_done();
 
     // - gc stage: GC_SWEEP
     gc_stage = GC_STAGE_SWEEP;
-    DEBUGF("[runtime_gc] gc stage: GC_SWEEP")
+    DEBUGF("[runtime_gc] gc stage: GC_SWEEP");
 
     gc_barrier_stop();
 
@@ -610,5 +610,5 @@ void runtime_gc() {
     processor_start_the_world();
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, cleanup=%ld", before - allocated_bytes)
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, cleanup=%ld", before - allocated_bytes);
 }

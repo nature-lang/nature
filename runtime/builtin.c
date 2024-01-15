@@ -23,7 +23,7 @@ static void print_arg(n_union_t *arg) {
         assertf(s, "[runtime.print_arg] string is null");
 
         if (s->length == 0) { // 什么也不需要输出
-            DEBUGF("[runtime.print_arg] string length is 0 not write, ")
+            DEBUGF("[runtime.print_arg] string length is 0 not write, ");
             return;
         }
 
