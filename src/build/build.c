@@ -110,7 +110,7 @@ static void assembler_custom_links() {
 
     object_file_format(ctx);
     elf_output(ctx);
-    DEBUGF(" --> assembler: %s\n", custom_link_object_path());
+    log_debug(" --> assembler: %s\n", custom_link_object_path());
 }
 
 /**
@@ -136,7 +136,7 @@ static void assembler_module(module_t *m) {
         elf_output(ctx);
 
         // 完整输出路径
-        DEBUGF(" --> assembler: %s\n", output);
+        log_debug(" --> assembler: %s\n", output);
         m->object_file = output;
         return;
     }
@@ -195,8 +195,8 @@ static void build_linker(slice_t *modules) {
 
     remove(BUILD_OUTPUT);
     copy(BUILD_OUTPUT, output, 0755);
-    DEBUGF("linker output--> %s\n", output);
-    DEBUGF("build output--> %s\n", BUILD_OUTPUT);
+    log_debug("linker output--> %s\n", output);
+    log_debug("build output--> %s\n", BUILD_OUTPUT);
 }
 
 static void build_init(char *build_entry) {
@@ -230,17 +230,17 @@ static void build_init(char *build_entry) {
 }
 
 static void config_print() {
-    DEBUGF("NATURE_ROOT: %s", NATURE_ROOT);
-    DEBUGF("BUILD_OS: %s", os_to_string(BUILD_OS));
-    DEBUGF("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
-    DEBUGF("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
-    DEBUGF("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
-    DEBUGF("BUILD_OUTPUT: %s", BUILD_OUTPUT);
-    DEBUGF("WORK_DIR: %s", WORKDIR);
-    DEBUGF("BASE_NS: %s", BASE_NS);
-    DEBUGF("TERM_DIR: %s", TEMP_DIR);
-    DEBUGF("BUILD_ENTRY: %s", BUILD_ENTRY);
-    DEBUGF("SOURCE_PATH: %s", SOURCE_PATH);
+    log_debug("NATURE_ROOT: %s", NATURE_ROOT);
+    log_debug("BUILD_OS: %s", os_to_string(BUILD_OS));
+    log_debug("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
+    log_debug("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
+    log_debug("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
+    log_debug("BUILD_OUTPUT: %s", BUILD_OUTPUT);
+    log_debug("WORK_DIR: %s", WORKDIR);
+    log_debug("BASE_NS: %s", BASE_NS);
+    log_debug("TERM_DIR: %s", TEMP_DIR);
+    log_debug("BUILD_ENTRY: %s", BUILD_ENTRY);
+    log_debug("SOURCE_PATH: %s", SOURCE_PATH);
 }
 
 static void build_assembler(slice_t *modules) {
@@ -261,7 +261,7 @@ static void build_assembler(slice_t *modules) {
             slice_push(m->asm_global_symbols, symbol);
         }
 
-        DEBUGF("[build_assembler] module=%s", m->ident);
+        log_debug("[build_assembler] module=%s", m->ident);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
 

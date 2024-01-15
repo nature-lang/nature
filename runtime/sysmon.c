@@ -34,12 +34,15 @@ void wait_sysmon() {
             }
 
             uint64_t time = (uv_hrtime() - co_start_at);
-            if (time < 1 * 1000 * 1000) { // 20ms
+            if (time < 10 * 1000 * 1000) { // 10ms
                 goto SHARE_NEXT;
             }
 
-            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d coroutine run timeout(%lu ms), will send SIGURG", p->index,
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d co=%p run timeout(%lu ms), will send SIGURG",
+                    p->index,
+                    p->coroutine,
                     time / 1000 / 1000);
+            RDEBUGF("will preempt");
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
@@ -51,7 +54,7 @@ void wait_sysmon() {
             // 抢占信号发送成功之后不能解锁，将解锁的工作交给线程信号处理, 如果直接解锁，在信号发送之前 coroutine 可能会发生状态切换,
             // 导致抢占异常
             continue;
-        SHARE_NEXT:
+            SHARE_NEXT:
             mutex_unlock(p->thread_locker);
             RDEBUGF("[wait_sysmon.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }

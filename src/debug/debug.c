@@ -245,7 +245,7 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 
 void debug_interval(closure_t *c) {
 #ifdef DEBUG_INTERVAL
-    DEBUGF("closure=%s interval ------------------------------------------------------------------------",
+    log_debug("closure=%s interval ------------------------------------------------------------------------",
            c->symbol_name);
     for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
@@ -281,7 +281,7 @@ void debug_interval(closure_t *c) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-        DEBUGF("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+        log_debug("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
                interval->index,
                reg->name,
                parent_index,
@@ -327,7 +327,7 @@ void debug_interval(closure_t *c) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-        DEBUGF("var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+        log_debug("var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
                interval->index,
                interval->var->ident,
                parent_index,

@@ -128,14 +128,14 @@ static int sort_sections(elf_context *ctx) {
 
         // 添加标识位
         if (flags != prev_flags) {
-//            DEBUGF("new segment: %s", s->name);
+//            log_debug("new segment: %s", s->name);
             prev_flags = flags;
             ++phdr_count; // 开启一个新的段, phdr_count 表示程序表的段的数量
             //  把 00000001 -8-> 10000000  第 8 位是预留位，可以随便定义
             // 此处用来标志开启了新的 segment
             flags |= 1 << 8;
         } /* start new header when flags changed or relro */
-//        DEBUGF("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
+//        log_debug("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
 
         s->phdr_flags = flags;
     }
@@ -492,7 +492,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
     for (int i = 1; i < sym_count; ++i, sym++) {
         // add symbol
         char *sym_name = strtab + sym->st_name;
-//        DEBUGF("sym_name: %s\n", sym_name);
+//        log_debug("sym_name: %s\n", sym_name);
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
             local_section_t *local = &local_sections[sym->st_shndx]; // st_shndx 定义符号的段
             if (!local->section) {
@@ -964,7 +964,7 @@ void elf_relocate_sections(elf_context *ctx) {
  * @param rel_section
  */
 void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t *rel_section) {
-//    DEBUGF("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
+//    log_debug("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
 //           rel_section->name,
 //           rel_section->sh_type,
 //           rel_section->sh_flags,
@@ -1101,7 +1101,7 @@ section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint6
 
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
-//    DEBUGF("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);
+//    log_debug("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);
 
     switch (sh_type) {
         case SHT_GNU_versym:
@@ -1258,7 +1258,7 @@ void elf_load_archive(elf_context *ctx, int fd) {
             }
 
             offset += len;
-//            DEBUGF("   -> %s\n", arhdr.ar_name);
+//            log_debug("   -> %s\n", arhdr.ar_name);
             elf_load_object_file(ctx, fd, offset);
             ++bound;
 
@@ -1413,34 +1413,35 @@ uint64_t collect_fndef_list(elf_context *ctx) {
             assert(stack_slot < 0);
             stack_slot = var_stack_slot(c, var) * -1;
 
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                   fn->symbol_name,
-                   var->ident,
-                   type_format(var->type),
-                   type_sizeof(var->type),
-                   type_is_ptr(var->type),
-                   (stack_slot / POINTER_SIZE) - 1,
-                   stack_slot);
+            log_debug(
+                    "[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                    fn->symbol_name,
+                    var->ident,
+                    type_format(var->type),
+                    type_sizeof(var->type),
+                    type_is_ptr(var->type),
+                    (stack_slot / POINTER_SIZE) - 1,
+                    stack_slot);
 
         }
 
-        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
-               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-               f->name,
-               f->base,
-               f->size,
-               f->stack_size,
-               f->fn_runtime_stack,
-               f->fn_runtime_reg,
-               f->stack_size / POINTER_SIZE,
-               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+        log_debug("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+                  "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+                  f->name,
+                  f->base,
+                  f->size,
+                  f->stack_size,
+                  f->fn_runtime_stack,
+                  f->fn_runtime_reg,
+                  f->stack_size / POINTER_SIZE,
+                  bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 
         rel_offset += sizeof(fndef_t);
     }
     ct_fndef_count = count;
-    DEBUGF("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
+    log_debug("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
     return size_with_bits;
 }
 
@@ -1490,7 +1491,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
     ct_symdef_count = count;
     size = ct_symdef_count * sizeof(symdef_t);
     ct_symdef_list = realloc(ct_symdef_list, size);
-    DEBUGF("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size);
+    log_debug("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size);
 
     return size;
 }
