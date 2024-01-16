@@ -8,19 +8,19 @@
 #include "nutils/vec.h"
 #include "runtime.h"
 
-extern int cpu_count;
-extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
-extern linked_t *solo_processor_list; // 独享协程列表其实就是多线程
-extern int solo_processor_count;      // 累计数量
-extern uv_key_t tls_processor_key;
-extern uv_key_t tls_coroutine_key;
+extern volatile int cpu_count;
+extern volatile slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
+extern volatile linked_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern volatile int solo_processor_count;      // 累计数量
+extern volatile uv_key_t tls_processor_key;
+extern volatile uv_key_t tls_coroutine_key;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
-extern linked_t *global_gc_worklist; // 全局 gc worklist
-extern mutex_t *global_gc_locker;    // 全局 gc locker
+extern volatile linked_t *global_gc_worklist; // 全局 gc worklist
+extern volatile mutex_t *global_gc_locker;    // 全局 gc locker
 
-extern bool processor_need_stw;  // 全局 STW 标识
-extern bool processor_need_exit; // 全局 STW 标识
+extern volatile bool processor_need_stw;  // 全局 STW 标识
+extern volatile bool processor_need_exit; // 全局 STW 标识
 
 extern void async_preempt() __asm__("async_preempt");
 
@@ -33,11 +33,40 @@ void co_preempt_yield();
  * @param v
  */
 static inline void set_can_preempt(processor_t *p, bool v) {
-//    DEBUGF("[runtime.set_can_preempt.thread_locker] start, p_index_%d=%d, will set can_preempt=%d", p->share, p->index, v);
+    //    DEBUGF("[runtime.set_can_preempt.thread_locker] start, p_index_%d=%d, will set can_preempt=%d", p->share, p->index, v);
     mutex_lock(p->thread_locker);
     p->can_preempt = v;
     mutex_unlock(p->thread_locker);
-//    DEBUGF("[runtime.set_can_preempt.thread_locker] end, p_index_%d=%d, set can_preempt=%d success", p->share, p->index, v);
+    //    DEBUGF("[runtime.set_can_preempt.thread_locker] end, p_index_%d=%d, set can_preempt=%d success", p->share, p->index, v);
+}
+
+static inline void runnable_push(processor_t *p, coroutine_t *co) {
+    if (p->runnable == NULL) {
+        p->runnable = co;
+        return;
+    }
+
+    p->runnable->next = co;
+}
+
+static inline void runnable_push_head(processor_t *p, coroutine_t *co) {
+    if (p->runnable == NULL) {
+        p->runnable = co;
+        return;
+    }
+
+    co->next = p->runnable;
+    p->runnable = co;
+}
+
+static inline coroutine_t *runnable_pop(processor_t *p) {
+    if (p->runnable == NULL) {
+        return NULL;
+    }
+
+    coroutine_t *co = p->runnable;
+    p->runnable = co->next;
+    return co;
 }
 
 /**
@@ -62,7 +91,7 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     assert(co);
 
     co->status = CO_STATUS_RUNNABLE;
-    linked_push(p->runnable_list, co);
+    runnable_push(p, co);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
     _co_yield(p, co);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
@@ -138,15 +167,6 @@ void coroutine_dispatch(coroutine_t *co);
  * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
-
-/**
- * 正常需要根据线程 id 返回，第一版返回 id 就行了
- * 第一版总是返回 processor_main
- * @return
- */
-processor_t *processor_get();
-
-coroutine_t *coroutine_get();
 
 void pre_tpl_hook(char *target);
 

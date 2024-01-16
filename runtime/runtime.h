@@ -235,6 +235,7 @@ typedef struct coroutine_t {
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
     uv_thread_t thread_id;
+    struct coroutine_t *next;
 } coroutine_t;
 
 /**
@@ -257,7 +258,7 @@ struct processor_t {
     coroutine_t *coroutine;  // 当前正在调度的 coroutine
     uint64_t co_started_at;  // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
     linked_t *co_list;       // 当前 processor 下的 coroutine 列表
-    linked_t *runnable_list; // 可以直接进行调度的 coroutine
+    coroutine_t *runnable; // coroutine 链表
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出
@@ -280,5 +281,19 @@ int runtime_main(int argc, char *argv[]);
 void rt_processor_attach_errort(char *msg);
 
 void processor_dump_errort(n_errort *errort);
+
+/**
+ * 正常需要根据线程 id 返回，第一版返回 id 就行了
+ * 第一版总是返回 processor_main
+ * @return
+ */
+processor_t *processor_get();
+
+coroutine_t *coroutine_get();
+
+void *safe_malloc(size_t size);
+
+void safe_free(void* ptr);
+
 
 #endif // NATURE_BASIC_H

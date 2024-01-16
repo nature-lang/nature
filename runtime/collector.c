@@ -495,7 +495,7 @@ static void set_gc_work_coroutine() {
         gc_co->gc_work = true;
 
         linked_push(p->co_list, gc_co);
-        linked_push(p->runnable_list, gc_co);
+        runnable_push(p, gc_co);
     }
 }
 

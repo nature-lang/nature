@@ -26,16 +26,16 @@ void coroutine_yield() {
  */
 static void uv_on_timer(uv_timer_t *timer) {
     DEBUGF("[runtime.coroutine_on_timer] start, timer=%p, timer->data=%p", timer, timer->data);
-    coroutine_t *c = timer->data;
+    coroutine_t *co = timer->data;
 
     // - 标记 coroutine 并推送到可调度队列中等待 processor handle
-    c->status = CO_STATUS_RUNNABLE;
-    processor_t *p = c->p;
+    processor_t *p = co->p;
     assert(p);
 
-    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, c->status);
+    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, co->status);
 
-    linked_push(p->runnable_list, c);
+    co->status = CO_STATUS_RUNNABLE;
+    runnable_push(p, co);
 }
 
 void coroutine_sleep(int64_t ms) {
