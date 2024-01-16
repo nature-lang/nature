@@ -425,7 +425,6 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     }
     uv_key_set(&aco_gtls_co, resume_co);
     acosw(resume_co->main_co, resume_co);
-    write(STDOUT_FILENO, "---1\n", 4);
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }
 

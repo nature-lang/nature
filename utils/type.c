@@ -140,38 +140,6 @@ rtype_t rtype_array(type_array_t *t) {
 }
 
 /**
- * runtime 中使用的基于 element_rtype 生成的 rtype
- * @param element_rtype
- * @param length
- * @return
- */
-rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
-    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
-
-    char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-        .size = element_size * length,
-        .hash = hash,
-        .kind = TYPE_ARR,
-        .length = length,
-    };
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
-    if (need_gc) {
-        rtype.last_ptr = element_size * length;
-
-        // need_gc 暗示了 8byte 对齐了
-        for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
-            bitmap_set(rtype.gc_bits, i);
-        }
-    }
-
-    return rtype;
-}
-
-/**
  * hash = type_kind + key_rtype.hash + value_rtype.hash
  * @param t
  * @return
@@ -756,98 +724,6 @@ type_kind to_gc_kind(type_kind kind) {
     }
 
     return TYPE_GC_NOSCAN;
-}
-
-/**
- * 生成用于 gc 的 rtype
- * @param count
- * @param ...
- * @return
- */
-rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
-    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    char *str = itoa(kind);
-
-    va_list valist;
-    /* 初始化可变参数列表 */
-    va_start(valist, count);
-    for (int i = 0; i < count; i++) {
-        type_kind arg_kind = va_arg(valist, type_kind);
-        str = str_connect_free(str, itoa(arg_kind));
-    }
-    va_end(valist);
-
-    uint64_t hash = hash_string(str);
-    free(str);
-    str = itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
-    free(str);
-    if (rtype) {
-        return rtype;
-    }
-
-    rtype = NEW(rtype_t);
-    rtype->size = count * POINTER_SIZE;
-    if (rtype->size == 0) {
-        rtype->size = type_kind_sizeof(kind);
-    }
-
-    rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
-
-    /* 初始化可变参数列表 */
-    va_start(valist, count);
-    for (int i = 0; i < count; i++) {
-        type_kind arg_kind = va_arg(valist, type_kind);
-        if (arg_kind == TYPE_GC_SCAN) {
-            bitmap_set(rtype->gc_bits, i);
-            rtype->last_ptr = (i + 1) * POINTER_SIZE;
-        } else if (arg_kind == TYPE_GC_NOSCAN) {
-            //            bitmap_clear(rtype.gc_bits, i);
-        } else {
-            assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
-        }
-    }
-    va_end(valist);
-
-    rtype->hash = hash;
-    rtype->in_heap = kind_in_heap(kind);
-    str = itoa(rtype->hash);
-    table_set(rt_rtype_table, str, rtype);
-    free(str);
-    return rtype;
-}
-
-/**
- * 默认就是不 gc 数组
- * @param count
- * @return
- */
-rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
-    // 更简单的计算一下 hash 即可 array, len + scan 计算即可
-    char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_PTR);
-    uint64_t hash = hash_string(str);
-    free(str);
-    str = itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
-    free(str);
-    if (rtype) {
-        return rtype;
-    }
-
-    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    rtype = NEW(rtype_t);
-    rtype->size = length * POINTER_SIZE;
-    rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
-    rtype->hash = hash;
-    rtype->in_heap = true;
-    str = itoa(rtype->hash);
-    table_set(rt_rtype_table, str, rtype);
-    free(str);
-    return rtype;
 }
 
 bool type_union_compare(type_union_t *left, type_union_t *right) {

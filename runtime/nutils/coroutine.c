@@ -43,7 +43,7 @@ void coroutine_sleep(int64_t ms) {
     coroutine_t *co = coroutine_get();
 
     // - 初始化 libuv 定时器
-    uv_timer_t *timer = NEW(uv_timer_t);
+    uv_timer_t *timer = SAFE_NEW(uv_timer_t);
     uv_timer_init(p->uv_loop, timer);
     timer->data = co;
 

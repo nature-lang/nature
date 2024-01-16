@@ -58,6 +58,9 @@
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
 
+#define SAFE_NEW(type) safe_mallocz(sizeof(type))
+
+
 typedef void (*void_fn_t)(void);
 
 /**
@@ -252,7 +255,7 @@ struct processor_t {
     uv_loop_t *uv_loop; // uv loop 事件循环
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
     mutex_t *gc_locker;
-    mutex_t *thread_locker;
+    mutex_t *thread_preempt_locker;
 
     uv_thread_t thread_id;   // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;  // 当前正在调度的 coroutine
@@ -268,7 +271,7 @@ struct processor_t {
 };
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {
@@ -293,7 +296,8 @@ coroutine_t *coroutine_get();
 
 void *safe_malloc(size_t size);
 
-void safe_free(void* ptr);
+void *safe_mallocz(size_t size);
 
+void safe_free(void *ptr);
 
 #endif // NATURE_BASIC_H

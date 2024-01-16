@@ -5,6 +5,7 @@
 #include "vec.h"
 #include "string.h"
 #include "runtime/memory.h"
+#include "nutils.h"
 
 /**
  * 主要用于 runtime 调用

@@ -26,27 +26,27 @@ int runtime_main(int argc, char *argv[]) {
     //    log_set_lock(log_lock, &log_locker);
 
     // - read arg
-    DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
+    RDEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;
     command_argv = argv;
 
     // - heap memory init
     memory_init();
-    DEBUGF("[runtime_main] memory init success");
+    RDEBUGF("[runtime_main] memory init success");
 
     // - coroutine init
     processor_init();
-    DEBUGF("[runtime_main] processor init success");
+    RDEBUGF("[runtime_main] processor init success");
 
-    // - 提取 main 进行 coroutine 创建调度
-    coroutine_t *main_co = coroutine_new((void *)main, NULL, false, true);
+    // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
+    coroutine_t *main_co = coroutine_new((void *) main, NULL, false, true);
     coroutine_dispatch(main_co);
+    RDEBUGF("[runtime_main] main_co dispatch success")
 
     // 等待 processor init 注册完成运行后再启动 sysmon 进行抢占式调度
-    // 阻塞等待多线程模型执行
     wait_sysmon();
 
-    DEBUGF("[runtime_main] user code run completed,will exit");
+    RDEBUGF("[runtime_main] user code run completed,will exit");
 
     return 0;
 }

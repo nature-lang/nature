@@ -3,6 +3,7 @@
 
 #include "utils/type.h"
 #include "runtime/memory.h"
+#include "nutils.h"
 
 static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
     assertf(element_rtype, "element_rtype is null");

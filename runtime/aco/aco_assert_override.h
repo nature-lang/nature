@@ -23,7 +23,7 @@ extern "C" {
 
 #define likely(x)               aco_likely(x)
 #define unlikely(x)             aco_unlikely(x)
-#define assert(EX)              aco_assert(EX)
+//#define assert(EX)              aco_assert(EX)
 #define assertptr(ptr)          aco_assertptr(ptr)
 #define assertalloc_bool(b)     aco_assertalloc_bool(b)
 #define assertalloc_ptr(ptr)    aco_assertalloc_ptr(ptr)

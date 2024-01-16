@@ -507,12 +507,6 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key);
 
 int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 
-rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
-
-rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
-
-rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
-
 /**
  * 一般标量类型其值默认会存储在 stack 中
  * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。

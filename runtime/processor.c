@@ -6,17 +6,17 @@
 #include "builtin.h"
 #include "runtime.h"
 
-volatile int cpu_count;
-volatile bool processor_need_stw;
-volatile bool processor_need_exit;
-volatile slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
-volatile linked_t *solo_processor_list; // 独享协程列表其实就是多线程
-volatile int solo_processor_count;      // 累计数量
-volatile linked_t *global_gc_worklist;  // 独享协程列表其实就是多线程
-volatile mutex_t *global_gc_locker;     // 全局 gc locker
+int cpu_count;
+bool processor_need_stw;
+bool processor_need_exit;
+slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
+linked_t *solo_processor_list; // 独享协程列表其实就是多线程
+int solo_processor_count;      // 累计数量
+linked_t *global_gc_worklist;  // 独享协程列表其实就是多线程
+mutex_t *global_gc_locker;     // 全局 gc locker
 
-volatile uv_key_t tls_processor_key;
-volatile uv_key_t tls_coroutine_key;
+uv_key_t tls_processor_key;
+uv_key_t tls_coroutine_key;
 
 /**
  * 由于采用了抢占式调度，所以不能像正常切换一样只保存 rsp/ret_addr/r12/r13/r14/r15/rbp/rbp 这几个寄存器而需要保存和恢复所有的寄存器
@@ -31,19 +31,22 @@ void co_preempt_yield() {
 
     // 已经抢占成功，无锁更新为禁止抢占, 避免被重复调用抢占。
     p->can_preempt = false;
-    mutex_unlock(p->thread_locker);
+    mutex_unlock(p->thread_preempt_locker);
 
-    RDEBUGF("[runtime.co_preempt_yield.thread_locker] mutex_unlock, p_index_%d=%d, co=%p, will yield", p->share, p->index, co);
+    RDEBUGF("[runtime.co_preempt_yield.thread_locker] mutex_unlock, p_index_%d=%d, co=%p, will yield", p->share,
+            p->index, co);
 
     co->status = CO_STATUS_RUNNABLE;
     runnable_push(p, co);
 
-    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p insert before success", co);
+    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push success", co);
+
     // 直接放到头部，可以进行优先调度，保证数据连续
     _co_yield(p, co);
 
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will return, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co, p->coroutine);
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will return, p_index_%d=%d co=%p, p->co=%p", p->share,
+           p->index, co, p->coroutine);
 }
 
 /**
@@ -58,15 +61,15 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
 #ifdef __x86_64__
     int REG_RSP = 15;
     int REG_RIP = 16;
-    int64_t *rsp = (int64_t *)ctx->uc_mcontext.gregs[REG_RSP];
+    int64_t *rsp = (int64_t *) ctx->uc_mcontext.gregs[REG_RSP];
     // return addr, 这个是 async_preempt 返回后应该去的地方
     int64_t rip = ctx->uc_mcontext.gregs[REG_RIP];
-    //    RDEBUGF("[runtime.thread_handle_sig] rip=%p",(void*)rip);
+    RDEBUGF("[runtime.thread_handle_sig] rip=%p", (void *) rip);
     rsp--;
     *rsp = rip;
 
-    ctx->uc_mcontext.gregs[REG_RSP] = (int64_t)rsp;
-    ctx->uc_mcontext.gregs[REG_RIP] = (int64_t)async_preempt;
+    ctx->uc_mcontext.gregs[REG_RSP] = (int64_t) rsp;
+    ctx->uc_mcontext.gregs[REG_RIP] = (int64_t) async_preempt;
 #elif
 #endif
 }
@@ -77,15 +80,19 @@ static void coroutine_wrapper() {
     processor_t *p = co->p;
     assert(p);
 
+    write(STDERR_FILENO, "----1\n", 6);
     DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d", co, co->main);
 
     if (!co->gc_work) {
         // 允许被抢占
         set_can_preempt(p, true);
     }
+    write(STDERR_FILENO, "----2\n", 6);
+    write(STDERR_FILENO, "----3\n", 6);
+    write(STDERR_FILENO, "----4\n", 6);
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
-    ((void_fn_t)co->fn)();
+    ((void_fn_t) co->fn)();
 
     if (co->main) {
         // 通知所有协程退出
@@ -157,29 +164,33 @@ int io_run(processor_t *p, uint64_t timeout_ms) {
  */
 void coroutine_resume(processor_t *p, coroutine_t *co) {
     assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
-    assert(co->aco);
+    if (!co->aco) {
+        coroutine_aco_init(p, co);
+    }
 
     // - 再 tls 中记录正在运行的协程
-    uv_key_set((void *)&tls_coroutine_key, co);
+    uv_key_set(&tls_coroutine_key, co);
 
     co->status = CO_STATUS_RUNNING;
     co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 
     // 将 RIP 指针移动用户代码片段中
-    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p, p->co_started_at=%lu", co, co->aco, p->co_started_at);
+    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p, p->co_started_at=%lu", co, co->aco,
+            p->co_started_at);
 
     // 获取锁成功再进行数据更新
     p->coroutine = co;
     p->co_started_at = uv_hrtime();
 
-    // 不太妙呀，栈扩容会触发 malloc，也还是不安全呀，我的天！
     aco_resume(co->aco);
 
+    assert(co->status != CO_STATUS_RUNNING);
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
     p->co_started_at = 0;
     p->coroutine = NULL;
 
-    RDEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d, time=%lu ms", co, co->aco, co->status, time);
+    RDEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, status=%d, time=%lu ms", co, co->aco,
+            co->status, time);
 }
 
 // handle by thread
@@ -192,10 +203,6 @@ static void processor_run(void *raw) {
     p->main_aco = aco_create(NULL, NULL, 0, NULL, NULL);
     assert(p->main_aco);
     p->share_stack = aco_share_stack_new(0);
-
-    if (!p->share) {
-        coroutine_aco_init(p, p->coroutine);
-    }
 
     // 注册线程信号监听, 用于抢占式调度
     // 分配备用信号栈
@@ -229,7 +236,8 @@ static void processor_run(void *raw) {
             }
 
             p->safe_point = false;
-            RDEBUGF("[runtime.processor_run] p_index=%d, stw completed, set safe_point=false, share=%d", p->index, p->share);
+            RDEBUGF("[runtime.processor_run] p_index=%d, stw completed, set safe_point=false, share=%d", p->index,
+                    p->share);
         }
 
         // exit
@@ -246,13 +254,15 @@ static void processor_run(void *raw) {
                 RDEBUGF("[runtime.processor_run] runnable is empty, p_index=%d, share=%d", p->index, p->share);
                 break;
             }
-            RDEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d, share=%d", p->index, co, co->status,
+            RDEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d, share=%d", p->index,
+                    co, co->status,
                     p->share);
 
             assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
             coroutine_resume(p, co);
 
-            RDEBUGF("[runtime.processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d, share=%d", p->index, co, co->status,
+            RDEBUGF("[runtime.processor_run] coroutine resume completed, p_index=%d, co=%p, status=%d, share=%d",
+                    p->index, co, co->status,
                     p->share);
         }
 
@@ -262,7 +272,8 @@ static void processor_run(void *raw) {
             assert(p->coroutine);
 
             if (p->coroutine->status == CO_STATUS_DEAD) {
-                RDEBUGF("[runtime.processor_run] solo processor exit, p_index=%d, co=%p, status=%d, share=%d", p->index, p->coroutine,
+                RDEBUGF("[runtime.processor_run] solo processor exit, p_index=%d, co=%p, status=%d, share=%d", p->index,
+                        p->coroutine,
                         p->coroutine->status, p->share);
                 goto EXIT;
             }
@@ -272,14 +283,15 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-EXIT:
+    EXIT:
     p->exit = true;
     p->thread_id = 0;
     RDEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
 }
 
 void coroutine_dispatch(coroutine_t *co) {
-    DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
+    DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo,
+           share_processor_list->count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
     if (gc_stage == GC_STAGE_MARK) {
@@ -297,7 +309,7 @@ void coroutine_dispatch(coroutine_t *co) {
             assert(false && "pthread_create failed");
         }
 
-        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t)p->thread_id);
+        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t) p->thread_id);
         return;
     }
 
@@ -315,9 +327,9 @@ void coroutine_dispatch(coroutine_t *co) {
     }
 
     assert(select_p);
-    DEBUGF("[runtime.coroutine_dispatch] min_p=%p, co_list=%p, runnable=%p", select_p, select_p->co_list, select_p->runnable);
+    DEBUGF("[runtime.coroutine_dispatch] min_p=%p, co_list=%p, runnable=%p", select_p, select_p->co_list,
+           select_p->runnable);
 
-    coroutine_aco_init(select_p, co);
     linked_push(select_p->co_list, co);
     runnable_push(select_p, co);
 
@@ -369,7 +381,7 @@ void processor_init() {
             assert(false && "pthread_create failed %s");
         }
 
-        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, (uint64_t)p->thread_id);
+        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
     }
 }
 
@@ -397,7 +409,8 @@ void processor_dump_errort(n_errort *errort) {
 
     n_trace_t first_trace = {};
     vec_access(errort->traces, 0, &first_trace);
-    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *)errort->msg->data, (char *)first_trace.path->data,
+    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *) errort->msg->data,
+                              (char *) first_trace.path->data,
                               first_trace.line, first_trace.column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
@@ -408,14 +421,15 @@ void processor_dump_errort(n_errort *errort) {
         for (int i = 0; i < errort->traces->length; ++i) {
             n_trace_t trace = {};
             vec_access(errort->traces, i, &trace);
-            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *)trace.ident->data, (char *)trace.path->data, trace.line, trace.column);
+            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
+                            trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
     }
 }
 
 void mark_ptr_black(void *ptr) {
-    addr_t addr = (addr_t)ptr;
+    addr_t addr = (addr_t) ptr;
     // get mspan by ptr
     mspan_t *span = span_of(addr);
 
@@ -439,22 +453,24 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     assertf(false && "not support");
 #endif
 
-    aco->bp_offset = (uint64_t)aco->share_stack->align_retptr - rbp_value;
+    aco->bp_offset = (uint64_t) aco->share_stack->align_retptr - rbp_value;
 
 #ifdef DEBUG
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
     fndef_t *fn = find_fn(ret_addr);
     if (fn) {
-        DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path, fn->line);
+        DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *) ret_addr, fn->name, target,
+               fn->rel_path, fn->line);
     }
     // 基于 share stack 计算 offset
-    DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
+    DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr,
+           (void *) rbp_value,
            aco->bp_offset);
 #endif
 }
 
 coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
-    coroutine_t *co = NEW(coroutine_t);
+    coroutine_t *co = SAFE_NEW(coroutine_t);
     co->fn = fn;
     co->solo = solo;
     co->gc_black = false;
@@ -472,12 +488,12 @@ coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
 }
 
 processor_t *processor_new(int index) {
-    processor_t *p = NEW(processor_t);
+    processor_t *p = SAFE_NEW(processor_t);
 
-    p->uv_loop = NEW(uv_loop_t);
+    p->uv_loop = SAFE_NEW(uv_loop_t);
     uv_loop_init(p->uv_loop);
     p->gc_locker = mutex_new();
-    p->thread_locker = mutex_new();
+    p->thread_preempt_locker = mutex_new();
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
@@ -488,6 +504,7 @@ processor_t *processor_new(int index) {
     p->gc_work_finished = false;
     p->gc_worklist = linked_new();
     p->index = index;
+    p->can_preempt = false;
 
     return p;
 }
@@ -639,12 +656,20 @@ void *safe_malloc(size_t size) {
         return malloc(size);
     }
 
-    mutex_lock(p->thread_locker);
+    mutex_lock(p->thread_preempt_locker);
 
     void *result = malloc(size);
 
-    mutex_unlock(p->thread_locker);
+    mutex_unlock(p->thread_preempt_locker);
     return result;
+}
+
+void *safe_mallocz(size_t size) {
+    void *ptr = safe_malloc(size);
+    if (ptr) {
+        memset(ptr, 0, size);
+    }
+    return ptr;
 }
 
 void safe_free(void *ptr) {
@@ -653,7 +678,12 @@ void safe_free(void *ptr) {
         free(ptr);
         return;
     }
-    mutex_lock(p->thread_locker);
+    mutex_lock(p->thread_preempt_locker);
     free(ptr);
-    mutex_unlock(p->thread_locker);
+    mutex_unlock(p->thread_preempt_locker);
+}
+
+uint8_t *safe_malloc_gc_bits(uint64_t size) {
+    uint64_t gc_bits_size = calc_gc_bits_size(size, POINTER_SIZE);
+    return safe_mallocz(gc_bits_size);
 }
