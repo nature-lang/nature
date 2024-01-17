@@ -25,14 +25,14 @@ void coroutine_yield() {
  * @param timer
  */
 static void uv_on_timer(uv_timer_t *timer) {
-    DEBUGF("[runtime.coroutine_on_timer] start, timer=%p, timer->data=%p", timer, timer->data);
+    RDEBUGF("[runtime.coroutine_on_timer] start, timer=%p, timer->data=%p", timer, timer->data);
     coroutine_t *co = timer->data;
 
     // - 标记 coroutine 并推送到可调度队列中等待 processor handle
     processor_t *p = co->p;
     assert(p);
 
-    DEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, co->status);
+    RDEBUGF("[runtime.uv_on_timer] will push to runnable_list, p_index=%d, c=%d", p->index, co->status);
 
     co->status = CO_STATUS_RUNNABLE;
     runnable_push(p, co);
@@ -40,7 +40,12 @@ static void uv_on_timer(uv_timer_t *timer) {
 
 void coroutine_sleep(int64_t ms) {
     processor_t *p = processor_get();
+    assert(p);
     coroutine_t *co = coroutine_get();
+    assert(co);
+
+    // 为了保证定时器完整性，提前进行不可抢占声明(co_yield_waiting 部分有重复但是影响不大)
+    set_can_preempt(p, false);
 
     // - 初始化 libuv 定时器
     uv_timer_t *timer = SAFE_NEW(uv_timer_t);
@@ -50,12 +55,12 @@ void coroutine_sleep(int64_t ms) {
     // 设定定时器超时时间与回调
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
-    DEBUGF("[runtime.coroutine_sleep] start, uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", p->uv_loop, p->index, &timer,
-           fetch_addr_value((addr_t)&timer));
+    SAFE_DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", p->uv_loop,
+                co, p->index, &timer, fetch_addr_value((addr_t) & timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);
 
-    DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed");
+    SAFE_DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed");
     safe_free(timer);
 }

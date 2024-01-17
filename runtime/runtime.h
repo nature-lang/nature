@@ -72,16 +72,12 @@
     }
 
 #define SAFE_DEBUGF(format, ...) \
-    //    do {                                                                                                \
-//        processor_t *_p = processor_get();                                                              \
-//        if (!_p) {                                                                                      \
-//            break;                                                                                      \
-//        }                                                                                               \
-//        mutex_lock(_p->thread_preempt_locker);                                                          \
-//        fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
-//        fflush(stderr);                                                                                 \
-//        mutex_unlock(_p->thread_preempt_locker);                                                        \
-//    } while (0)
+        do {                                                                                                \
+        PREEMPT_LOCK();\
+        fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+        fflush(stderr);          \
+        PREEMPT_UNLOCK();\
+    } while (0)
 
 typedef void (*void_fn_t)(void);
 
@@ -313,7 +309,7 @@ void *safe_mallocz(size_t size);
 void safe_free(void *ptr);
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {

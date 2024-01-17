@@ -20,8 +20,8 @@ void vec_grow(n_vec_t *l) {
  */
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
     SAFE_DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
-           element_rtype_hash,
-           length, capacity);
+                element_rtype_hash,
+                length, capacity);
 
     if (capacity == 0) {
         if (length > 0) {
