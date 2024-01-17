@@ -7,7 +7,6 @@
 // #include "processor.h"
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
-#include "utils/log.h"
 
 pthread_mutex_t log_locker;
 
@@ -22,8 +21,15 @@ int runtime_main(int argc, char *argv[]) {
 #ifndef DEBUG
     log_set_level(LOG_FATAL);
 #endif
-    //    pthread_mutex_init(&log_locker, NULL);
-    //    log_set_lock(log_lock, &log_locker);
+
+    // - tls 全局变量初始化
+    uv_key_create(&tls_processor_key);
+    uv_key_create(&tls_coroutine_key);
+
+    // 初始化 aco 需要的 tls 变量(不能再线程中 create)
+    uv_key_create(&aco_gtls_co);
+    uv_key_create(&aco_gtls_last_word_fp);
+    uv_key_create(&aco_gtls_fpucw_mxcsr);
 
     // - read arg
     RDEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
@@ -39,7 +45,7 @@ int runtime_main(int argc, char *argv[]) {
     RDEBUGF("[runtime_main] processor init success");
 
     // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
-    coroutine_t *main_co = coroutine_new((void *) main, NULL, false, true);
+    coroutine_t *main_co = coroutine_new((void *)main, NULL, false, true);
     coroutine_dispatch(main_co);
     RDEBUGF("[runtime_main] main_co dispatch success")
 

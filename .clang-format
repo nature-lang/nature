@@ -1,4 +1,4 @@
-BasedOnStyle: LLVM
+BasedOnStyle: Google
 UseTab: Never
 IndentWidth: 4
 TabWidth: 4

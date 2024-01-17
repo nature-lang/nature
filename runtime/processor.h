@@ -76,8 +76,9 @@ static inline coroutine_t *runnable_pop(processor_t *p) {
 static inline void _co_yield(processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
-
+    //    write(STDOUT_FILENO, "waitpreempt", 11);
     set_can_preempt(p, false); // 即将切换到 runtime，不再允许抢占
+                               //    write(STDOUT_FILENO, "notpreempt", 10);
 
     aco_yield1(co->aco);
 
@@ -93,11 +94,9 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
 
     co->status = CO_STATUS_RUNNABLE;
     runnable_push(p, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co,
-           co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
     _co_yield(p, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
-           co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
 static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {

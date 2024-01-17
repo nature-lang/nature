@@ -7,12 +7,12 @@
 
 #include "aco/aco.h"
 #include "runtime.h"
+#include "runtime/utils/safe_bitmap.h"
+#include "runtime/utils/safe_linked.h"
+#include "runtime/utils/safe_slice.h"
 #include "sizeclass.h"
-#include "utils/bitmap.h"
 #include "utils/custom_links.h"
 #include "utils/helper.h"
-#include "utils/linked.h"
-#include "utils/slice.h"
 
 extern memory_t *memory;
 extern uint64_t remove_total_bytes;    // 当前回收到物理内存中的总空间

@@ -43,7 +43,7 @@ static inline uint64_t extract_data_index(uint64_t hash_value) {
 static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
     char *str = rtype_value_str(rtype, key_ref);
     uint64_t result = hash_string(str);
-    free((void *)str);
+    safe_free((void *)str);
     return result;
 }
 
@@ -52,8 +52,8 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
     char *actual_str = rtype_value_str(rtype, actual);
     char *expect_str = rtype_value_str(rtype, expect);
     bool result = str_equal(actual_str, expect_str);
-    free((void *)actual_str);
-    free((void *)expect_str);
+    safe_free((void *)actual_str);
+    safe_free((void *)expect_str);
     return result;
 }
 

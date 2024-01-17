@@ -1,5 +1,5 @@
-#ifndef NATURE_BITMAP_H
-#define NATURE_BITMAP_H
+#ifndef NATURE_UTILS_BITMAP_H
+#define NATURE_UTILS_BITMAP_H
 
 #include <stdbool.h>
 #include <stdint.h>

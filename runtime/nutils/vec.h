@@ -3,7 +3,6 @@
 
 #include "utils/type.h"
 #include <stdint.h>
-#include "utils/autobuf.h"
 
 #define VEC_DEFAULT_CAPACITY 8
 

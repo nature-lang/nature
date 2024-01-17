@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIB_SLICE_H_
-#define NATURE_SRC_LIB_SLICE_H_
+#ifndef NATURE_UTILS_SLICE_H_
+#define NATURE_UTILS_SLICE_H_
 
 //#define SLICE_TACK(_type, _slice, _index) ((_type*) _slice->take[_index])
 

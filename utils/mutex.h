@@ -7,7 +7,7 @@
 
 typedef pthread_mutex_t mutex_t;
 
-mutex_t *mutex_new();
+mutex_t *mutex_new(bool recursive);
 
 int mutex_lock(mutex_t *mutex);
 

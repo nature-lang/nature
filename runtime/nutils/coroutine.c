@@ -57,5 +57,5 @@ void coroutine_sleep(int64_t ms) {
     co_yield_waiting(p, co);
 
     DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed");
-    free(timer);
+    safe_free(timer);
 }

@@ -1,9 +1,6 @@
 #include "vec.h"
-#include "utils/custom_links.h"
 #include "runtime/memory.h"
-#include "runtime/processor.h"
 #include "array.h"
-#include "struct.h"
 
 void vec_grow(n_vec_t *l) {
     l->capacity = l->capacity * 2;
@@ -22,7 +19,7 @@ void vec_grow(n_vec_t *l) {
  * @return
  */
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
-    DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
+    SAFE_DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
            element_rtype_hash,
            length, capacity);
 
@@ -35,7 +32,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     }
 
     assertf(capacity >= length, "capacity must be greater than length");
-    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
+    SAFE_DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
@@ -53,7 +50,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
+    SAFE_DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
 
     return vec;
 }
@@ -65,7 +62,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
  */
 void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
-        char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
+        char *msg = safe_dsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_access] has err %s", msg);
         rt_processor_attach_errort(msg);
         return;
@@ -140,14 +137,14 @@ void vec_push(n_vec_t *l, void *ref) {
 n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) {
     // start end 检测
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
-        char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
+        char *msg = safe_dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
     if (start > end) {
-        char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
+        char *msg = safe_dsprintf("invalid index values, must be low %d <= high %d", start, end);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
@@ -199,7 +196,7 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     DEBUGF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
     if (index >= l->length) {
-        char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
+        char *msg = safe_dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_element_addr] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;

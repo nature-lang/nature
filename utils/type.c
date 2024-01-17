@@ -651,7 +651,7 @@ uint64_t ct_find_rtype_hash(type_t t) {
  * @return
  */
 uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size) {
-    assertf(rtype, "rtype is null");
+    assert(rtype && "rtype is null");
 
     if (rtype->in_heap) {
         return ptr_size;

@@ -35,7 +35,7 @@ aux_source_directory(../utils UTILS)
 FILE(GLOB_RECURSE RUNTIMES ./*c aco/acosw.S)
 
 message("runtime os: ${CMAKE_SYSTEM_NAME} arch: ${CMAKE_SYSTEM_PROCESSOR}")
-add_library(runtime STATIC ${UTILS} ${RUNTIMES})
+add_library(runtime STATIC ${RUNTIMES} ${UTILS})
 
 set_target_properties(runtime PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${LIB_OUTPUT_PREFIX}/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR})

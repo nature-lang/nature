@@ -57,4 +57,6 @@ linked_node *linked_new_node();
 
 bool linked_empty(linked_t *l);
 
+uint16_t linked_count(linked_t *l);
+
 #endif // NATURE_SRC_LIB_LIST_H_

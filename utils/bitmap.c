@@ -8,7 +8,7 @@ bitmap_t *bitmap_new(uint64_t size) {
 
     b->bits = mallocz(size);
     b->size = size;
-    b->locker = mutex_new();
+    b->locker = mutex_new(false);
 
     return b;
 }

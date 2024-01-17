@@ -1,7 +1,5 @@
 #include "struct.h"
-#include "vec.h"
 #include "runtime/memory.h"
-#include "utils/autobuf.h"
 
 /**
  * @param rtype_hash

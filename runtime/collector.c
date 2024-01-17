@@ -1,8 +1,9 @@
 #include "memory.h"
 #include "processor.h"
+#include "utils/safe_linked.h"
 
 static void insert_gc_worklist(linked_t *gc_worklist, void *ptr) {
-    linked_push(gc_worklist, ptr);
+    safe_linked_push(gc_worklist, ptr);
 }
 
 /**
@@ -83,7 +84,7 @@ void mark_obj_black(mspan_t *span, uint64_t index) {
 static void free_mspan_meta(mspan_t *span) {
     bitmap_free(span->alloc_bits);
     bitmap_free(span->gcmark_bits);
-    free(span);
+    safe_free(span);
 }
 
 /**
@@ -355,7 +356,7 @@ static void handle_gc_worklist(processor_t *p) {
             break;
         }
 
-        addr_t addr = (addr_t)linked_pop(p->gc_worklist);
+        addr_t addr = (addr_t)safe_linked_pop_free(p->gc_worklist);
 
         handle_gc_ptr(p->gc_worklist, addr);
 

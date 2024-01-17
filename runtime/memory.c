@@ -13,9 +13,9 @@ mutex_t *gc_stage_locker;
 memory_t *memory;
 
 rtype_t *rt_find_rtype(uint32_t rtype_hash) {
-    char *str = itoa(rtype_hash);
+    char *str = safe_itoa(rtype_hash);
     rtype_t *result = table_get(rt_rtype_table, str);
-    free(str);
+    safe_free(str);
     return result;
 }
 
@@ -86,9 +86,9 @@ void rtypes_deserialize() {
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
-        char *str = itoa(r->hash);
+        char *str = safe_itoa(r->hash);
         table_set(rt_rtype_table, str, r);
-        free(str);
+        safe_free(str);
     }
 
     DEBUGF("[rtypes_deserialize] count=%lu", count);

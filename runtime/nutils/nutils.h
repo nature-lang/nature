@@ -1,8 +1,8 @@
 #ifndef NATURE_NUTILS_BASIC_H
 #define NATURE_NUTILS_BASIC_H
 
+#include "runtime/runtime.h"
 #include "utils/type.h"
-#include "vec.h"
 
 #define INT_SIZE sizeof(int64_t)
 

@@ -19,7 +19,9 @@ void wait_sysmon() {
 
             // TODO 使用 trylock 获取不到锁就等下一次
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
+            write(STDOUT_FILENO, "-----0\n", 7);
             mutex_lock(p->thread_preempt_locker);
+            write(STDOUT_FILENO, "-----1\n", 7);
             RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
 
             if (!p->can_preempt) {
@@ -29,6 +31,7 @@ void wait_sysmon() {
 
             assert(p->coroutine);
 
+            write(STDOUT_FILENO, "-----2\n", 7);
             uint64_t co_start_at = p->co_started_at;
             if (co_start_at == 0) {
                 goto SHARE_NEXT;
@@ -39,8 +42,7 @@ void wait_sysmon() {
                 goto SHARE_NEXT;
             }
 
-            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d co=%p run timeout(%lu ms), will send SIGURG",
-                    p->index, p->coroutine,
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d co=%p run timeout(%lu ms), will send SIGURG", p->index, p->coroutine,
                     time / 1000 / 1000);
 
             // 发送信号强制中断线程
@@ -48,12 +50,24 @@ void wait_sysmon() {
                 assert(false && "error sending SIGURG to thread");
             }
 
-            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d send SIGURG success, handle next", p->index);
+            write(STDOUT_FILENO, "-----3\n", 7);
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d send SIGURG success, wait preempt success", p->index);
+            write(STDOUT_FILENO, "-----4\n", 7);
 
-            // 抢占信号发送成功之后不能解锁，将解锁的工作交给线程信号处理, 如果直接解锁，在信号发送之前 coroutine 可能会发生状态切换,
-            // 导致抢占异常
-            continue;
-            SHARE_NEXT:
+            // 循环等待直到信号处理完成(p->can_preempt 会被设置为 false 就是成功了, 等待 10ms， 等不到就报错)
+            for (int i = 0; i <= 100; i++) {
+                if (!p->can_preempt) {
+                    RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d preempt success, will goto unlocker", p->index);
+                    goto SHARE_NEXT;
+                }
+                //                RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d wait preempt, will sleep 0.1ms", p->index);
+
+                usleep(1 * 100); // 每 0.1 ms 探测一次
+            }
+
+            // 解锁异常, 信号处理一直没有成功
+            assert(false && "error sending SIGURG to thread");
+        SHARE_NEXT:
             mutex_unlock(p->thread_preempt_locker);
             RDEBUGF("[wait_sysmon.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }
