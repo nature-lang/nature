@@ -14,12 +14,12 @@ static inline mutex_t *safe_mutex_new(bool recursive) {
         pthread_mutexattr_t attr;
         pthread_mutexattr_init(&attr);
         pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-        pthread_mutex_init(mutex, &attr);
+        pthread_mutex_init(&mutex->locker, &attr);
         pthread_mutexattr_destroy(&attr);
         return mutex;
     }
 
-    pthread_mutex_init(mutex, NULL);
+    pthread_mutex_init(&mutex->locker, NULL);
     return mutex;
 }
 

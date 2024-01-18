@@ -676,7 +676,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
     new_sym->st_shndx = sym->st_shndx;
     uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data; // 终点 - 起点 = 数量
 
-    if (name) {
+    if (name && strlen(name) > 0) {
         table_set(symtab_hash, name, (void *) sym_index);
     }
 

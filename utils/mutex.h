@@ -5,7 +5,11 @@
 
 #include "helper.h"
 
-typedef pthread_mutex_t mutex_t;
+typedef struct {
+    pthread_mutex_t locker;
+    int locker_count; // 加锁次数
+    int unlocker_count; // 解锁次数
+} mutex_t;
 
 mutex_t *mutex_new(bool recursive);
 

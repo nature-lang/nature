@@ -101,7 +101,8 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
         }
 
         // 基于 import->package_conf 和 dir 定位到具体的 temp 文件
-        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir, import->ast_package);
+        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir,
+                                                         import->ast_package);
 
         assertf(file_exists(import->full_path), "templates path '%s' notfound", import->full_path);
     }
@@ -115,6 +116,7 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
 void analyzer_import(module_t *m, ast_import_t *import) {
     // - import file
     if (import->file) {
+        assert(strlen(import->file) > 0);
         // import->path 必须以 .n 结尾
         ANALYZER_ASSERTF(ends_with(import->file, ".n"), "import file suffix must .n");
 
@@ -136,7 +138,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         // import file 模式下直接使用当前 module 携带的 package 即可,可能为 null
         // 链接  /root/base_ns/foo/bar.n
         import->full_path = path_join(m->source_dir, import->file);
-        if (!import->as) {
+        if (import->as && strlen(import->as) == 0) {
             import->as = module_as;
         }
 
@@ -183,7 +185,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     ANALYZER_ASSERTF(file_exists(import->full_path), "cannot find import file %s", import->full_path);
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
-    if (!import->as) {
+    if (import->as && strlen(import->as) == 0) {
         import->as = import->ast_package->take[import->ast_package->count - 1];
     }
 
@@ -864,8 +866,8 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
         // 封装成 ast_expr 更利于 compiler
         ast_expr_t expr = {
-            .line = fndef->line,
-            .column = fndef->column,
+                .line = fndef->line,
+                .column = fndef->column,
         };
 
         // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
@@ -980,7 +982,7 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
             }
             *ident = local->unique_ident;
             *type = local->type;
-            return (int8_t)analyzer_push_free(current, true, i, *ident, *type);
+            return (int8_t) analyzer_push_free(current, true, i, *ident, *type);
         }
     }
 
@@ -988,7 +990,7 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
     int8_t parent_free_index = analyzer_resolve_free(current->parent, ident, type);
     if (parent_free_index != -1) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
-        return (int8_t)analyzer_push_free(current, false, parent_free_index, *ident, *type);
+        return (int8_t) analyzer_push_free(current, false, parent_free_index, *ident, *type);
     }
 
     return -1;
@@ -1472,11 +1474,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
-                .line = stmt->line,
-                .column = stmt->column,
-                .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(var_decl->ident),
+            assign->left = (ast_expr_t) {
+                    .line = stmt->line,
+                    .column = stmt->column,
+                    .assert_type = AST_EXPR_IDENT,
+                    .value = ast_new_ident(var_decl->ident),
             };
             assign->right = vardef->right;
             assign_stmt->line = stmt->line;
@@ -1534,11 +1536,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
     ast_stmt_t *call_stmt = NEW(ast_stmt_t);
     ast_call_t *call = NEW(ast_call_t);
-    call->left = (ast_expr_t){
-        .assert_type = AST_EXPR_IDENT,
-        .value = ast_new_ident(s->ident), // module.init
-        .line = 1,
-        .column = 0,
+    call->left = (ast_expr_t) {
+            .assert_type = AST_EXPR_IDENT,
+            .value = ast_new_ident(s->ident), // module.init
+            .line = 1,
+            .column = 0,
     };
     call->args = ct_list_new(sizeof(ast_expr_t));
     call_stmt->assert_type = AST_CALL;

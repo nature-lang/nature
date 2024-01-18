@@ -71,11 +71,16 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         ast_import_t *ast_import = stmt->value;
 
         analyzer_import(m, ast_import);
-        assert(ast_import->as);
+
+//        assert(strlen(ast_import->as) > 0);
 
         // 简单处理
         slice_push(m->imports, ast_import);
-        table_set(m->import_table, ast_import->as, ast_import);
+
+        // import tpl 是全局导入，所以没有 tpl
+        if (ast_import->as && strlen(ast_import->as) > 0) {
+            table_set(m->import_table, ast_import->as, ast_import);
+        }
     }
 
     if (type == MODULE_TYPE_MAIN) {
