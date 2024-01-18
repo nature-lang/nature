@@ -42,7 +42,7 @@ static inline uint64_t extract_data_index(uint64_t hash_value) {
 
 static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
     char *str = rtype_value_str(rtype, key_ref);
-    uint64_t result = hash_string(str);
+    uint64_t result = safe_hash_string(str);
     safe_free((void *)str);
     return result;
 }

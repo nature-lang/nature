@@ -71,12 +71,12 @@
         mutex_unlock(_p->thread_preempt_locker); \
     }
 
-#define SAFE_DEBUGF(format, ...) \
-        do {                                                                                                \
-        PREEMPT_LOCK();\
+#define SAFE_DEBUGF(format, ...)                                                                        \
+    do {                                                                                                \
+        PREEMPT_LOCK();                                                                                 \
         fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
-        fflush(stderr);          \
-        PREEMPT_UNLOCK();\
+        fflush(stderr);                                                                                 \
+        PREEMPT_UNLOCK();                                                                               \
     } while (0)
 
 typedef void (*void_fn_t)(void);
@@ -225,8 +225,8 @@ typedef struct {
 
 typedef enum {
     CO_STATUS_RUNNABLE = 1, // 允许被调度
-    CO_STATUS_SYSCALL = 2,  // 陷入系统调用
-    CO_STATUS_RUNNING = 3,  // 正在运行
+    CO_STATUS_RUNNING = 2,  // 正在运行
+    CO_STATUS_SYSCALL = 3,  // 陷入系统调用
     CO_STATUS_WAITING = 4,  // 等待 IO 事件就绪
     CO_STATUS_DEAD = 5,     // 死亡状态
 } co_status_t;
@@ -247,8 +247,7 @@ typedef struct coroutine_t {
     // gc stage 是 mark 时
     bool gc_black;
 
-    bool gc_work;    // 是否是用于 gc 的协程
-    bool is_preempt; // 当前 coroutine 是否是被强制抢占出来
+    bool gc_work; // 是否是用于 gc 的协程
 
     // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
     // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
@@ -309,7 +308,7 @@ void *safe_mallocz(size_t size);
 void safe_free(void *ptr);
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {
@@ -371,6 +370,17 @@ static inline char *safe_itoa(int64_t n) {
 
     PREEMPT_UNLOCK();
     return str;
+}
+
+// TODO 没有特殊系统调用，原则上不需要 safe
+static inline uint32_t safe_hash_string(char *str) {
+    //    PREEMPT_LOCK();
+    if (str == NULL) {
+        return 0;
+    }
+    uint32_t result = hash_data((uint8_t *)str, strlen(str));
+    //    PREEMPT_UNLOCK();
+    return result;
 }
 
 #endif // NATURE_BASIC_H

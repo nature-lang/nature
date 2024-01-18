@@ -24,7 +24,7 @@ extern bool processor_need_exit; // 全局 STW 标识
 
 extern void async_preempt() __asm__("async_preempt");
 
-void co_preempt_yield();
+__attribute__((optimize(0))) void co_preempt_yield();
 
 /**
  * 一旦 thread_locker 被 sysmon 持有，则 can_preempt 的值无法修改
@@ -76,17 +76,8 @@ static inline coroutine_t *runnable_pop(processor_t *p) {
 static inline void _co_yield(processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
-    //    write(STDOUT_FILENO, "waitpreempt", 11);
-
-    set_can_preempt(p, false);
-
-    //    write(STDOUT_FILENO, "notpreempt", 10);
 
     aco_yield1(co->aco);
-
-    if (!co->gc_work) {
-        set_can_preempt(p, true); // 回到用户态，允许抢占
-    }
 }
 
 static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
@@ -98,16 +89,13 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
 
     co->status = CO_STATUS_RUNNABLE;
     runnable_push(p, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co,
-           co->status);
-    aco_yield1(co->aco);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 
-    if (!co->gc_work) {
-        set_can_preempt(p, true); // 回到用户态，允许抢占
-    }
+    _co_yield(p, co);
 
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
-           co->status);
+    set_can_preempt(p, true); // 回到用户态，允许抢占
+
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
 static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
@@ -119,11 +107,9 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
 
     co->status = CO_STATUS_WAITING;
 
-    aco_yield1(co->aco);
+    _co_yield(p, co);
 
-    if (!co->gc_work) {
-        set_can_preempt(p, true); // 回到用户态，允许抢占
-    }
+    set_can_preempt(p, true); // 回到用户态，允许抢占
 }
 
 // locker

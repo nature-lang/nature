@@ -3,6 +3,7 @@
 #include "runtime/memory.h"
 #include "string.h"
 #include "vec.h"
+#include "runtime/utils/safe_table.h"
 
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                       \
     {                                                                                                                                  \
@@ -443,10 +444,10 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     }
     va_end(valist);
 
-    uint64_t hash = hash_string(str);
+    uint64_t hash = safe_hash_string(str);
     safe_free(str);
     str = safe_itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
+    rtype_t *rtype = safe_table_get(rt_rtype_table, str);
     safe_free(str);
     if (rtype) {
         return rtype;
@@ -480,7 +481,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     rtype->hash = hash;
     rtype->in_heap = kind_in_heap(kind);
     str = safe_itoa(rtype->hash);
-    table_set(rt_rtype_table, str, rtype);
+    safe_table_set(rt_rtype_table, str, rtype);
     safe_free(str);
     return rtype;
 }
@@ -493,10 +494,10 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
 rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     // 更简单的计算一下 hash 即可 array, len + scan 计算即可
     char *str = safe_dsprintf("%d_%lu_%lu", kind, length, TYPE_PTR);
-    uint64_t hash = hash_string(str);
+    uint64_t hash = safe_hash_string(str);
     safe_free(str);
     str = safe_itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
+    rtype_t *rtype = safe_table_get(rt_rtype_table, str);
     safe_free(str);
     if (rtype) {
         return rtype;
@@ -511,7 +512,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     rtype->hash = hash;
     rtype->in_heap = true;
     str = safe_itoa(rtype->hash);
-    table_set(rt_rtype_table, str, rtype);
+    safe_table_set(rt_rtype_table, str, rtype);
     safe_free(str);
     return rtype;
 }
@@ -528,7 +529,7 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
     SAFE_DEBUGF("[rt_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
 
     char *str = safe_dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
-    uint32_t hash = hash_string(str);
+    uint32_t hash = safe_hash_string(str);
     safe_free(str);
     SAFE_DEBUGF("[rt_rtype_array] hash %d", hash);
     rtype_t rtype = {

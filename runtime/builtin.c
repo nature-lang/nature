@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "runtime.h"
 #include "runtime/memory.h"
 
 static char sprint_buf[1024];
@@ -106,6 +107,8 @@ static void print_arg(n_union_t *arg) {
 }
 
 void print(n_vec_t *args, bool with_space) {
+    PREEMPT_LOCK();
+
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
     addr_t base = (addr_t)args->data; // 把 data 中存储的值赋值给 p
@@ -126,6 +129,8 @@ void print(n_vec_t *args, bool with_space) {
             VOID write(STDOUT_FILENO, space, 1);
         }
     }
+
+    PREEMPT_UNLOCK();
 }
 
 void println(n_vec_t *args) {

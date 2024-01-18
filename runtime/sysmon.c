@@ -17,7 +17,6 @@ void wait_sysmon() {
                 continue;
             }
 
-            // TODO 使用 trylock 获取不到锁就等下一次
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
             write(STDOUT_FILENO, "-----0\n", 7);
             mutex_lock(p->thread_preempt_locker);
@@ -30,6 +29,11 @@ void wait_sysmon() {
             }
 
             assert(p->coroutine);
+
+            if (p->coroutine->gc_work) {
+                RDEBUGF("[wait_sysmon] share p_index=%d, co=%p is gc_work, will skip", p->index, p->coroutine);
+                goto SHARE_NEXT;
+            }
 
             write(STDOUT_FILENO, "-----2\n", 7);
             uint64_t co_start_at = p->co_started_at;
@@ -54,13 +58,12 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d send SIGURG success, wait preempt success", p->index);
             write(STDOUT_FILENO, "-----4\n", 7);
 
-            // 循环等待直到信号处理完成(p->can_preempt 会被设置为 false 就是成功了, 等待 10ms， 等不到就报错)
-            for (int i = 0; i <= 100; i++) {
+            // 循环等待直到信号处理完成(p->can_preempt 会被设置为 false 就是成功了, 等待 100 ms， 等不到就报错)
+            for (int i = 0; i <= 1000; i++) {
                 if (!p->can_preempt) {
                     RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d preempt success, will goto unlocker", p->index);
                     goto SHARE_NEXT;
                 }
-                //                RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d wait preempt, will sleep 0.1ms", p->index);
 
                 usleep(1 * 100); // 每 0.1 ms 探测一次
             }
@@ -131,4 +134,6 @@ void wait_sysmon() {
 
         usleep(1 * 1000); // 10ms
     }
+
+    RDEBUGF("[wait_sysmon] wait sysmon exit success");
 }
