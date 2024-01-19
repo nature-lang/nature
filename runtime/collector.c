@@ -47,8 +47,11 @@ void shade_obj_grey(void *obj) {
  * @return
  */
 fndef_t *find_fn(addr_t addr) {
+    assert(addr > 0);
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *fn = &rt_fndef_ptr[i];
+        assert(fn);
+
         if (fn->base <= addr && addr < (fn->base + fn->size)) {
             return fn;
         }
@@ -196,12 +199,12 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t)temp_cursor);
         fndef_t *fn = find_fn(v);
-        DEBUGF("[runtime.scan_stack] traverse i=%d, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
-               fn ? fn->name : "", fn ? fn->stack_size : 0);
+        SAFE_DEBUGF("[runtime.scan_stack] traverse i=%d, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
+                    fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
-    DEBUGF("[runtime.scan_stack] traverse stack, end");
+    SAFE_DEBUGF("[runtime.scan_stack] traverse stack, end");
 #endif
 
     addr_t cursor = 0;

@@ -19,6 +19,10 @@ mutex_t *global_gc_locker;     // 全局 gc locker
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
+__attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
+    SAFE_DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
+}
+
 /**
  * 由于采用了抢占式调度，所以不能像正常切换一样只保存 rsp/ret_addr/r12/r13/r14/r15/rbp/rbp 这几个寄存器而需要保存和恢复所有的寄存器
  */
@@ -68,9 +72,16 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     int64_t *rsp = (int64_t *)ctx->uc_mcontext.gregs[REG_RSP];
     // return addr, 这个是 async_preempt 返回后应该去的地方
     int64_t rip = ctx->uc_mcontext.gregs[REG_RIP];
-    RDEBUGF("[runtime.thread_handle_sig] rip=%p", (void *)rip);
-    rsp--;
+
+    // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
+    // 所以需要为 rsp 预留足够的栈空间给被抢占的函数, 避免后续的操作污染被抢占的函数
+    rsp -= 128; // 一个指针是 8byte, 所以这里是 128 * 8 = 1024 个字节
+
+    // push rip
+    rsp--; // 栈中预留返回地址
     *rsp = rip;
+
+    RDEBUGF("[runtime.thread_handle_sig] rip=%p save to %p", (void *)rip, rsp);
 
     ctx->uc_mcontext.gregs[REG_RSP] = (int64_t)rsp;
     ctx->uc_mcontext.gregs[REG_RIP] = (int64_t)async_preempt;
@@ -285,7 +296,7 @@ EXIT:
 }
 
 void coroutine_dispatch(coroutine_t *co) {
-    DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
+    SAFE_DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_list=%d", co, co->solo, share_processor_list->count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
     if (gc_stage == GC_STAGE_MARK) {
@@ -296,14 +307,16 @@ void coroutine_dispatch(coroutine_t *co) {
     if (co->solo) {
         processor_t *p = processor_new(solo_processor_count++);
         safe_linked_push(p->co_list, co);
+
         runnable_push(p, co);
+
         safe_linked_push(solo_processor_list, p);
 
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assert(false && "pthread_create failed");
         }
 
-        DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t)p->thread_id);
+        SAFE_DEBUGF("[runtime.coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t)p->thread_id);
         return;
     }
 
@@ -320,13 +333,19 @@ void coroutine_dispatch(coroutine_t *co) {
         }
     }
 
+    write(STDOUT_FILENO, "---cd1\n", 7);
     assert(select_p);
-    DEBUGF("[runtime.coroutine_dispatch] min_p=%p, co_list=%p, runnable=%p", select_p, select_p->co_list, select_p->runnable);
+    SAFE_DEBUGF("[runtime.coroutine_dispatch] select_p_index=%d, co_list=%p, runnable=%p", select_p->index, select_p->co_list,
+                select_p->runnable);
 
     safe_linked_push(select_p->co_list, co);
-    runnable_push(select_p, co);
 
-    DEBUGF("[runtime.coroutine_dispatch] co=%p to processor=%p", co, select_p);
+    write(STDOUT_FILENO, "---cd2\n", 7);
+
+    runnable_push(select_p, co);
+    write(STDOUT_FILENO, "---cd3\n", 7);
+
+    SAFE_DEBUGF("[runtime.coroutine_dispatch] co=%p to p_index=%d, end", co, select_p->index);
 }
 
 /**
@@ -445,11 +464,12 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
     fndef_t *fn = find_fn(ret_addr);
     if (fn) {
-        DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path, fn->line);
+        SAFE_DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path,
+                    fn->line);
     }
     // 基于 share stack 计算 offset
-    DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
-           aco->bp_offset);
+    SAFE_DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
+                aco->bp_offset);
 #endif
 
     write(STDOUT_FILENO, "pretplhook_2\n", 13);

@@ -24,6 +24,8 @@ extern bool processor_need_exit; // 全局 STW 标识
 
 extern void async_preempt() __asm__("async_preempt");
 
+__attribute__((optimize(0))) void debug_ret();
+
 __attribute__((optimize(0))) void co_preempt_yield();
 
 /**
@@ -39,14 +41,17 @@ static inline void set_can_preempt(processor_t *p, bool v) {
 }
 
 static inline void runnable_push(processor_t *p, coroutine_t *co) {
+    mutex_lock(p->thread_preempt_locker);
     if (p->runnable == NULL) {
         p->runnable = co;
+        mutex_unlock(p->thread_preempt_locker);
         return;
     }
 
-    // push 到尾部
+    // 由于需要访问全局变量 p->runnable, 如果被打断则 p->runnable 处可能会出现链表断裂
     co->next = NULL;
     p->runnable->next = co;
+    mutex_unlock(p->thread_preempt_locker);
 }
 
 static inline void runnable_push_head(processor_t *p, coroutine_t *co) {

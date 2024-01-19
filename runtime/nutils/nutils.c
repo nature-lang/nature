@@ -550,14 +550,20 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
     };
     rtype.gc_bits = safe_malloc_gc_bits(rtype.size);
     bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
+    write(STDOUT_FILENO, "___rra0\n", 8);
     if (need_gc) {
         rtype.last_ptr = element_size * length;
 
         // need_gc 暗示了 8byte 对齐了
         for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
             bitmap_set(rtype.gc_bits, i);
+            write(STDOUT_FILENO, "___rra1\n", 8);
         }
+
+        write(STDOUT_FILENO, "___rra2\n", 8);
     }
+
+    write(STDOUT_FILENO, "___rra3\n", 8);
 
     SAFE_DEBUGF("[rt_rtype_array] success");
     return rtype;

@@ -56,7 +56,7 @@ acosw:
 #endif
 async_preempt:
 #ifdef __x86_64__
-push rbp
+    push rbp
     mov rbp, rsp
     pushfq
     sub rsp, 368
@@ -100,6 +100,13 @@ push rbp
     movups [rsp + 336], xmm14
     movups [rsp + 352], xmm15
     call co_preempt_yield
+
+
+    // debug (多的不能确定，但是这里肯定是 0 了，毕竟ret 地址被覆盖了，可关键是，栈空间还是会被污染呢)
+    mov rdi, rbp
+    mov rsi, [rbp + 8] // +8 是跳过 prev rbp, 此时栈中存储的值就是 ret addr 的值
+    call debug_ret
+
     movups xmm15, [rsp + 352]
     movups xmm14, [rsp + 336]
     movups xmm13, [rsp + 320]
@@ -132,8 +139,13 @@ push rbp
     mov rax, [rsp]
     add rsp, 368
     popfq
+
     pop rbp
-    ret
+
+    // thread_handle_sig 部分预留了一些栈空间，现在需要还原成与被抢占的函数一致
+    // 但是此时栈空间还没有被污染，依旧可以从原空间中找到需要返回的 rip
+    add rsp, 1032
+    jmp [rsp+1032]
 #else
 #error "platform not support"
 #endif
