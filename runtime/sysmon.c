@@ -18,9 +18,9 @@ void wait_sysmon() {
             }
 
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
-            write(STDOUT_FILENO, "-----0\n", 7);
+//            write(STDOUT_FILENO, "-----0\n", 7);
             mutex_lock(p->thread_preempt_locker);
-            write(STDOUT_FILENO, "-----1\n", 7);
+//            write(STDOUT_FILENO, "-----1\n", 7);
             RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
 
             if (!p->can_preempt) {
@@ -35,7 +35,7 @@ void wait_sysmon() {
                 goto SHARE_NEXT;
             }
 
-            write(STDOUT_FILENO, "-----2\n", 7);
+//            write(STDOUT_FILENO, "-----2\n", 7);
             uint64_t co_start_at = p->co_started_at;
             if (co_start_at == 0) {
                 goto SHARE_NEXT;
@@ -54,9 +54,9 @@ void wait_sysmon() {
                 assert(false && "error sending SIGURG to thread");
             }
 
-            write(STDOUT_FILENO, "-----3\n", 7);
+//            write(STDOUT_FILENO, "-----3\n", 7);
             RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d send SIGURG success, wait preempt success", p->index);
-            write(STDOUT_FILENO, "-----4\n", 7);
+//            write(STDOUT_FILENO, "-----4\n", 7);
 
             // 循环等待直到信号处理完成(p->can_preempt 会被设置为 false 就是成功了, 等待 100 ms， 等不到就报错)
             for (int i = 0; i <= 1000; i++) {
