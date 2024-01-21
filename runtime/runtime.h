@@ -71,6 +71,7 @@
         mutex_unlock(_p->thread_preempt_locker); \
     }
 
+#ifdef DEBUG
 #define SAFE_DEBUGF(format, ...)                                                                        \
     do {                                                                                                \
         PREEMPT_LOCK();                                                                                 \
@@ -78,6 +79,8 @@
         fflush(stderr);                                                                                 \
         PREEMPT_UNLOCK();                                                                               \
     } while (0)
+
+#endif
 
 typedef void (*void_fn_t)(void);
 

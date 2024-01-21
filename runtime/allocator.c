@@ -1037,7 +1037,6 @@ uint64_t runtime_malloc_bytes() {
 
 void runtime_eval_gc() {
     //    DEBUGF("[runtime_eval_gc] start locker allocated_bytes=%ld, next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
-    return; // TODO 删掉
 
     mutex_lock(gc_stage_locker);
 

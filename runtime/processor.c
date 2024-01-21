@@ -27,7 +27,7 @@ __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
  * 由于采用了抢占式调度，所以不能像正常切换一样只保存 rsp/ret_addr/r12/r13/r14/r15/rbp/rbp 这几个寄存器而需要保存和恢复所有的寄存器
  */
 __attribute__((optimize(0))) void co_preempt_yield() {
-    RDEBUGF("[runtime.co_preempt_yield] start");
+    RDEBUGF("[runtime.co_preempt_yield] start, %lu", (uint64_t)uv_thread_self());
 
     processor_t *p = processor_get();
     assert(p);
@@ -342,6 +342,7 @@ void coroutine_dispatch(coroutine_t *co) {
 
     write(STDOUT_FILENO, "---cd2\n", 7);
 
+    // TODO 这里是获取被选择的 p 锁, 但是被选择的 p 可能有多层？所以难以获得？ 死锁点1
     runnable_push(select_p, co);
     write(STDOUT_FILENO, "---cd3\n", 7);
 
@@ -373,7 +374,6 @@ void processor_init() {
     global_gc_worklist = linked_new();
     global_gc_locker = mutex_new(false);
 
-    cpu_count = 1; // TODO
     for (int i = 0; i < cpu_count; ++i) {
         processor_t *p = processor_new(i);
         p->share = true;

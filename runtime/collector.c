@@ -47,7 +47,9 @@ void shade_obj_grey(void *obj) {
  * @return
  */
 fndef_t *find_fn(addr_t addr) {
-    assert(addr > 0);
+    if (addr <= 0) {
+        return NULL;
+    }
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *fn = &rt_fndef_ptr[i];
         assert(fn);

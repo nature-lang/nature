@@ -17,7 +17,7 @@ void wait_sysmon() {
                 continue;
             }
 
-            RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d", p->share, p->index);
+            RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
             write(STDOUT_FILENO, "-----0\n", 7);
             mutex_lock(p->thread_preempt_locker);
             write(STDOUT_FILENO, "-----1\n", 7);
@@ -46,8 +46,8 @@ void wait_sysmon() {
                 goto SHARE_NEXT;
             }
 
-            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d co=%p run timeout(%lu ms), will send SIGURG", p->index, p->coroutine,
-                    time / 1000 / 1000);
+            RDEBUGF("[wait_sysmon.thread_locker] share p_index=%d(%lu) co=%p run timeout(%lu ms), will send SIGURG", p->index,
+                    (uint64_t)p->thread_id, p->coroutine, time / 1000 / 1000);
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {

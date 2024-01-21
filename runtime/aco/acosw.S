@@ -145,7 +145,7 @@ async_preempt:
     // thread_handle_sig 部分预留了一些栈空间，现在需要还原成与被抢占的函数一致
     // 但是此时栈空间还没有被污染，依旧可以从原空间中找到需要返回的 rip
     add rsp, 1032
-    jmp [rsp+1032]
+    jmp [rsp - 1032]
 #else
 #error "platform not support"
 #endif

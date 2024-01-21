@@ -38,7 +38,7 @@ fn foo(){
     string d = 'hello world'
     d = 'done done'
     car()
-    // runtime_force_gc()
+    runtime_force_gc()
 
     co.sleep(1000)
     print('share sub_co done\n')
