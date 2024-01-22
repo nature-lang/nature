@@ -270,8 +270,10 @@ struct processor_t {
 
     struct sigaction sig;
     uv_loop_t *uv_loop; // uv loop 事件循环
+
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
     mutex_t *gc_locker;
+
     mutex_t *thread_preempt_locker;
 
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
@@ -311,7 +313,7 @@ void *safe_mallocz(size_t size);
 void safe_free(void *ptr);
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {
@@ -381,7 +383,7 @@ static inline uint32_t safe_hash_string(char *str) {
     if (str == NULL) {
         return 0;
     }
-    uint32_t result = hash_data((uint8_t *)str, strlen(str));
+    uint32_t result = hash_data((uint8_t *) str, strlen(str));
     //    PREEMPT_UNLOCK();
     return result;
 }
