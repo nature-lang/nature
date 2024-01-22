@@ -23,11 +23,11 @@ rtype_t *rt_find_rtype(uint32_t rtype_hash) {
 }
 
 uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
-    assertf(rtype_hash > 0, "rtype_hash empty");
+    safe_assertf(rtype_hash > 0, "rtype_hash empty");
 
     rtype_t *rtype = rt_find_rtype(rtype_hash);
 
-    assertf(rtype, "cannot find rtype by hash %d", rtype_hash);
+    safe_assertf(rtype, "cannot find rtype by hash %d", rtype_hash);
 
     return rtype_out_size(rtype, POINTER_SIZE);
 }

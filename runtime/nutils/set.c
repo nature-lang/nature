@@ -45,7 +45,7 @@ static void set_grow(n_set_t *m) {
 
     assert(m->key_rtype_hash > 0);
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-    assertf(key_rtype, "cannot find key_rtype by hash %lu", m->key_rtype_hash);
+    safe_assertf(key_rtype, "cannot find key_rtype by hash %lu", m->key_rtype_hash);
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
 
 

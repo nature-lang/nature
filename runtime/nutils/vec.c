@@ -31,15 +31,15 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
         }
     }
 
-    assertf(capacity >= length, "capacity must be greater than length");
+    safe_assertf(capacity >= length, "capacity must be greater than length");
     SAFE_DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
-    assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    safe_assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
 
     rtype_t *element_rtype = rt_find_rtype(element_rtype_hash);
-    assertf(element_rtype, "cannot find element_rtype with hash %lu", element_rtype_hash);
+    safe_assertf(element_rtype, "cannot find element_rtype with hash %lu", element_rtype_hash);
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
@@ -82,7 +82,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
-    assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
+    safe_assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
@@ -111,7 +111,7 @@ void *vec_ref(n_vec_t *l) {
  * @param ref
  */
 void vec_push(n_vec_t *l, void *ref) {
-    assertf(ref > 0, "ref=%p must be a valid address", ref);
+    safe_assertf(ref > 0, "ref=%p must be a valid address", ref);
     DEBUGF("[vec_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
            (uint64_t) fetch_int_value((addr_t) ref, 8));
 
@@ -155,7 +155,7 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
     uint64_t length = end - start;
 
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
-    assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    safe_assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
     n_vec_t *sliced_vec = runtime_zero_malloc(vec_rtype->size, vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
@@ -176,7 +176,7 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
  */
 n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
     DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
-    assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two vecs are different");
+    safe_assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two vecs are different");
     uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
     uint64_t length = a->length + b->length;
     n_vec_t *merged = vec_new(rtype_hash, a->element_rtype_hash, length, length);

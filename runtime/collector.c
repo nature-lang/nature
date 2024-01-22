@@ -541,8 +541,8 @@ static void scan_global() {
         RDEBUGF("[runtime.scan_global] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx", s.name, s.base, s.size,
                 s.need_gc, fetch_int_value(s.base, s.size));
 
-        assertf(s.size <= 8, "temp do not support symbol size > 8byte");
-        assertf(s.base > 0, "s.base is zero,cannot fetch value by base");
+        safe_assertf(s.size <= 8, "temp do not support symbol size > 8byte");
+        safe_assertf(s.base > 0, "s.base is zero,cannot fetch value by base");
         // 触发 gc 时全局变量可能还没有进行初始化, 所以这里使用 in_heap 进行一下地址可用对判断
         addr_t addr = fetch_addr_value(s.base);
         if (in_heap(addr)) {

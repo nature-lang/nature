@@ -66,7 +66,7 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
 static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_rtype_hash, void *key_ref) {
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_rtype_hash);
-    assertf(key_rtype, "cannot find rtype by hash=%d", key_rtype_hash);
+    safe_assertf(key_rtype, "cannot find rtype by hash=%d", key_rtype_hash);
     DEBUGF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind]);
 
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);

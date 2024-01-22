@@ -90,7 +90,7 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
             break;
         }
         default:
-            assertf(false, "cannot use reg_index=%s in fn param", reg_index);
+            assert(false && "cannot use reg_index=%s in fn param" && reg_index);
             exit(1);
     }
 
@@ -124,7 +124,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
 
 #else
 static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr_t fn_addr) {
-    assertf(false, "[runtime.gen_closure_jit_codes]cannot support arch");
+    safe_assertf(false, "[runtime.gen_closure_jit_codes]cannot support arch");
 }
 #endif
 
@@ -143,7 +143,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr);
-    assertf(fndef, "cannot find fn by addr=0x%lx", fn_addr);
+    safe_assertf(fndef, "cannot find fn by addr=0x%lx", fn_addr);
 
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
@@ -155,7 +155,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
      * 都是堆内存区域对首个地址, 所以将返回值当成数据参数或者时 call label 都是可以的.
      *
      */
-    assertf((void *)fn_runtime == (void *)fn_runtime->closure_jit_codes, "fn_new base must equal fn_runtime first property");
+    safe_assertf((void *)fn_runtime == (void *)fn_runtime->closure_jit_codes, "fn_new base must equal fn_runtime first property");
     return fn_runtime->closure_jit_codes;
 }
 
@@ -210,7 +210,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
  */
 void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
     upvalue_t *upvalue = safe_table_get(env_table, safe_utoa(stack_addr));
-    assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);
+    safe_assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);
     DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, upvalue->ref=%p, rtype_hash=%lu", stack_addr, upvalue, upvalue->ref,
            rtype_hash);
 

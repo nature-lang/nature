@@ -72,12 +72,12 @@
     }
 
 #ifdef DEBUG
-#define SAFE_DEBUGF(format, ...)                                                                        \
-    do {                                                                                                \
-        PREEMPT_LOCK();                                                                                 \
-        fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
-        fflush(stderr);                                                                                 \
-        PREEMPT_UNLOCK();                                                                               \
+#define SAFE_DEBUGF(format, ...)                                                                                                        \
+    do {                                                                                                                                \
+        PREEMPT_LOCK();                                                                                                                 \
+        fprintf(stderr, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+        fflush(stderr);                                                                                                                 \
+        PREEMPT_UNLOCK();                                                                                                               \
     } while (0)
 
 #endif

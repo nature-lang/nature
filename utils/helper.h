@@ -60,13 +60,13 @@
 
 // 抢占式调度与 coroutine dispatch 使用该 debug 函数
 #ifdef DEBUG
-// #define RDEBUGF(...)
-#define RDEBUGF(format, ...)                                                               \
-    printf("[%lu] RUNTIME DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+#define RDEBUGF(format, ...)                                                                                               \
+    printf("[%lu] RUNTIME DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-#define MDEBUGF(format, ...)                                                              \
-    printf("[%lu] MEMORY DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+// mdebug 在内存分配函数中不可抢占，所以总是安全的
+#define MDEBUGF(format, ...)                                                                                              \
+    printf("[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
 #define DEBUGF(format, ...) \

@@ -7,6 +7,7 @@
 
 #include "aco/aco.h"
 #include "runtime.h"
+#include "runtime/utils/safe_assertf.h"
 #include "runtime/utils/safe_bitmap.h"
 #include "runtime/utils/safe_linked.h"
 #include "runtime/utils/safe_slice.h"
@@ -74,7 +75,10 @@ static inline uint64_t arena_index(uint64_t base) {
  */
 static inline arena_t *take_arena(addr_t base) {
     arena_t *arena = memory->mheap->arenas[arena_index(base)];
-    assertf(arena, "cannot find arena by addr=0x%lx", base);
+
+    //    safe_assertf(arena, "cannot find arena by addr=0x%lx", base);
+    assert(arena && "cannot find arena by addr");
+
     return arena;
 }
 
@@ -89,9 +93,9 @@ static inline bool in_heap(addr_t addr) {
 }
 
 static inline addr_t safe_heap_addr(addr_t addr) {
-    assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx", addr, ARENA_HINT_BASE);
+    safe_assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx", addr, ARENA_HINT_BASE);
 
-    assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr, memory->mheap->current_arena.end);
+    safe_assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr, memory->mheap->current_arena.end);
     return addr;
 }
 
@@ -113,7 +117,7 @@ static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
     if (size == BYTE) {
         return *(uint8_t *)addr;
     }
-    assertf(false, "cannot fetch int value by size=%d", size);
+    safe_assertf(false, "cannot fetch int value by size=%d", size);
     exit(1);
 }
 

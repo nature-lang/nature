@@ -43,7 +43,7 @@
                 *(uint8_t *)output_ref = (uint8_t)_input_value;                                                                        \
                 return;                                                                                                                \
             default:                                                                                                                   \
-                assertf(false, "cannot convert %s to %s type", type_kind_str[input_rtype->kind], type_kind_str[output_rtype->kind]);   \
+                safe_assertf(false, "cannot convert %s to %s type", type_kind_str[input_rtype->kind], type_kind_str[output_rtype->kind]);   \
                 exit(1);                                                                                                               \
         }                                                                                                                              \
     }
@@ -73,7 +73,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
         case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
         case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
         default:
-            assertf(false, "type %s cannot ident", type_kind_str[input_rtype->kind]);
+            safe_assertf(false, "type %s cannot ident", type_kind_str[input_rtype->kind]);
             exit(1);
     }
 }
@@ -124,7 +124,7 @@ bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
 n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
-    assertf(rtype, "cannot find rtype, index = %lu", input_rtype_hash);
+    safe_assertf(rtype, "cannot find rtype, index = %lu", input_rtype_hash);
 
     DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
@@ -172,7 +172,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_hash=%lu, cursor=%ld", iterator, rtype_hash, cursor);
 
     // cursor 范围测试
-    assertf(cursor >= -1 && cursor < INT32_MAX, "cursor=%ld out of range", cursor);
+    safe_assertf(cursor >= -1 && cursor < INT32_MAX, "cursor=%ld out of range", cursor);
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
 
@@ -212,7 +212,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
         return cursor;
     }
 
-    assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
+    safe_assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
     exit(0);
 }
 
@@ -224,7 +224,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
+        safe_assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
                 list, list->length,
                 list->capacity, list->data);
         uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
@@ -255,7 +255,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
         return cursor;
     }
 
-    assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
+    safe_assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
     exit(0);
 }
 
@@ -264,8 +264,8 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
            rtype_hash, cursor,
            value_ref);
 
-    assertf(cursor != -1, "cannot iterator value");
-    assertf(rtype_hash > 0, "rtype hash is empty");
+    safe_assertf(cursor != -1, "cannot iterator value");
+    safe_assertf(rtype_hash > 0, "rtype hash is empty");
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
@@ -274,9 +274,9 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
                iterator,
                list->length, list->capacity, list->data, list->element_rtype_hash);
 
-        assertf(list->element_rtype_hash > 0, "list element rtype hash is empty");
+        safe_assertf(list->element_rtype_hash > 0, "list element rtype hash is empty");
 
-        assertf(cursor < list->length, "cursor=%d >= list->length=%d", cursor, list->length);
+        safe_assertf(cursor < list->length, "cursor=%d >= list->length=%d", cursor, list->length);
 
         uint64_t element_size = rt_rtype_out_size(list->element_rtype_hash);
 
@@ -293,13 +293,13 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
                map->length,
                map->value_data, map->value_rtype_hash, value_size);
 
-        assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor, map->length);
+        safe_assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor, map->length);
 
         memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return;
     }
 
-    assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
+    safe_assertf(false, "cannot support iterator type=%d", iterator_rtype->kind);
     exit(0);
 }
 
@@ -370,15 +370,15 @@ n_vec_t *std_args() {
  * @return
  */
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
-    assertf(rtype, "rtype is null");
-    assertf(data_ref, "data_ref is null");
+    safe_assertf(rtype, "rtype is null");
+    safe_assertf(data_ref, "data_ref is null");
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
 
     DEBUGF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
 
     if (is_number(rtype->kind)) {
-        assertf(data_size <= 8, "not support number size > 8, but %lu", data_size);
+        safe_assertf(data_size <= 8, "not support number size > 8, but %lu", data_size);
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
         return safe_itoa(temp);
@@ -386,7 +386,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     if (rtype->kind == TYPE_STRING) {
         n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        assertf(n_str && n_str->length > 0, "fetch addr by data ref '%p' err", data_ref);
+        safe_assertf(n_str && n_str->length > 0, "fetch addr by data ref '%p' err", data_ref);
 
         //        return strdup(string_ref(n_str));
         // 进行 data copy, 避免被 free
@@ -396,7 +396,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
         return str;
     }
 
-    assertf(false, "not support kind=%s", type_kind_str[rtype->kind]);
+    safe_assertf(false, "not support kind=%s", type_kind_str[rtype->kind]);
 
     return NULL;
 }
@@ -480,7 +480,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
         } else if (arg_kind == TYPE_GC_NOSCAN) {
             //            bitmap_clear(rtype.gc_bits, i);
         } else {
-            assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
+            safe_assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
         }
     }
     va_end(valist);
