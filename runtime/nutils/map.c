@@ -31,7 +31,7 @@ void map_grow(n_map_t *m) {
     uint64_t value_size = rtype_out_size(value_rtype, POINTER_SIZE);
 
     n_map_t old_map;
-    memmove(&old_map, m, sizeof(n_map_t));
+    safe_memmove(&old_map, m, sizeof(n_map_t));
 
 
     m->capacity *= 2;
@@ -167,7 +167,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
            m->hash_table[hash_index]);
 
     // push to key list and value list
-    memmove(m->key_data + key_size * data_index, key_ref, key_size);
+    safe_memmove(m->key_data + key_size * data_index, key_ref, key_size);
     return (n_cptr_t) (m->value_data + value_size * data_index);
 }
 

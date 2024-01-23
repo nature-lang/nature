@@ -224,6 +224,8 @@ aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled) {
     assert(sz > 0);
 
     size_t u_pgsz = 0;
+
+
     if (guard_page_enabled != 0) {
         // although gcc's Built-in Functions to Perform Arithmetic with
         // Overflow Checking is better, but it would require gcc >= 5.0
@@ -366,7 +368,9 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
             assert(((uintptr_t)(owner_co->share_stack->align_retptr) >= (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])) &&
                    ((uintptr_t)(owner_co->share_stack->align_highptr) - (uintptr_t)(owner_co->share_stack->align_limit) <=
                     (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])));
+
             owner_co->save_stack.valid_sz = (uintptr_t)(owner_co->share_stack->align_retptr) - (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP]);
+
             if (owner_co->save_stack.sz < owner_co->save_stack.valid_sz) {
                 safe_free(owner_co->save_stack.ptr);
                 owner_co->save_stack.ptr = NULL;

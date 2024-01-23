@@ -56,7 +56,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
            type_kind_str[output_rtype->kind], output_ref);
 
     value_casting v = {0};
-    memmove(&v, input_ref, input_rtype->size);
+    safe_memmove(&v, input_ref, input_rtype->size);
 
     switch (input_rtype->kind) {
         case TYPE_FLOAT:
@@ -105,7 +105,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     }
 
     uint64_t size = rt_rtype_out_size(target_rtype_hash);
-    memmove(value_ref, &mu->value, size);
+    safe_memmove(value_ref, &mu->value, size);
     DEBUGF(
             "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
             "values_ref: %p",
@@ -133,12 +133,12 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = runtime_zero_malloc(sizeof(n_union_t), union_rtype);
 
-    DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+    DEBUGF("[union_casting] union_base: %p, safe_memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
            &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
-    memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
+    safe_memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
     DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
            mu->value.i64_value);
 
@@ -192,7 +192,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
                list->length, key_ref,
                key_ref + INT_SIZE);
 
-        memmove(key_ref, &cursor, INT_SIZE);
+        safe_memmove(key_ref, &cursor, INT_SIZE);
         return cursor;
     }
 
@@ -208,7 +208,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
             return -1;
         }
 
-        memmove(key_ref, map->key_data + key_size * cursor, key_size);
+        safe_memmove(key_ref, map->key_data + key_size * cursor, key_size);
         return cursor;
     }
 
@@ -236,7 +236,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
             return -1;
         }
 
-        memmove(value_ref, list->data + value_size * cursor, value_size);
+        safe_memmove(value_ref, list->data + value_size * cursor, value_size);
         return cursor;
     }
 
@@ -251,7 +251,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
             return -1;
         }
 
-        memmove(value_ref, map->value_data + value_size * cursor, value_size);
+        safe_memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return cursor;
     }
 
@@ -280,7 +280,7 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 
         uint64_t element_size = rt_rtype_out_size(list->element_rtype_hash);
 
-        memmove(value_ref, list->data + element_size * cursor, element_size);
+        safe_memmove(value_ref, list->data + element_size * cursor, element_size);
         DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref,
                element_size);
         return;
@@ -295,7 +295,7 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 
         safe_assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor, map->length);
 
-        memmove(value_ref, map->value_data + value_size * cursor, value_size);
+        safe_memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return;
     }
 
@@ -380,7 +380,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     if (is_number(rtype->kind)) {
         safe_assertf(data_size <= 8, "not support number size > 8, but %lu", data_size);
         int64_t temp = 0;
-        memmove(&temp, data_ref, data_size);
+        safe_memmove(&temp, data_ref, data_size);
         return safe_itoa(temp);
     }
 
@@ -391,7 +391,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
         //        return strdup(string_ref(n_str));
         // 进行 data copy, 避免被 free
         char *str = safe_mallocz(n_str->length + 1);
-        memmove(str, n_str->data, n_str->length);
+        safe_memmove(str, n_str->data, n_str->length);
         str[n_str->length] = '\0';
         return str;
     }
@@ -404,7 +404,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     if (!gc_barrier_get()) {
-        memmove(slot, new_obj, rtype->size);
+        safe_memmove(slot, new_obj, rtype->size);
         return;
     }
 
@@ -425,7 +425,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
         shade_obj_grey(new_obj);
     }
 
-    memmove(slot, new_obj, rtype->size);
+    safe_memmove(slot, new_obj, rtype->size);
 
     if (!p->share) {
         mutex_unlock(p->gc_locker);
@@ -439,24 +439,27 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
  * @return
  */
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
+    PREEMPT_LOCK();
+
     // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    char *str = safe_itoa(kind);
+    char *str = itoa(kind);
 
     va_list valist;
     /* 初始化可变参数列表 */
     va_start(valist, count);
     for (int i = 0; i < count; i++) {
         type_kind arg_kind = va_arg(valist, type_kind);
-        str = safe_str_connect_free(str, safe_itoa(arg_kind));
+        str = safe_str_connect_free(str, itoa(arg_kind));
     }
     va_end(valist);
 
-    uint64_t hash = safe_hash_string(str);
-    safe_free(str);
-    str = safe_itoa(hash);
-    rtype_t *rtype = safe_table_get(rt_rtype_table, str);
-    safe_free(str);
+    uint64_t hash = hash_string(str);
+    free(str);
+    str = itoa(hash);
+    rtype_t *rtype = table_get(rt_rtype_table, str);
+    free(str);
     if (rtype) {
+        PREEMPT_UNLOCK();
         return rtype;
     }
 
@@ -468,7 +471,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
 
     rtype->kind = kind;
     rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    rtype->gc_bits = safe_malloc_gc_bits(count * POINTER_SIZE);
+    rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
 
     /* 初始化可变参数列表 */
     va_start(valist, count);
@@ -480,16 +483,18 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
         } else if (arg_kind == TYPE_GC_NOSCAN) {
             //            bitmap_clear(rtype.gc_bits, i);
         } else {
-            safe_assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
+            assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
         }
     }
     va_end(valist);
 
     rtype->hash = hash;
     rtype->in_heap = kind_in_heap(kind);
-    str = safe_itoa(rtype->hash);
-    safe_table_set(rt_rtype_table, str, rtype);
-    safe_free(str);
+    str = itoa(rtype->hash);
+    table_set(rt_rtype_table, str, rtype);
+    free(str);
+
+    PREEMPT_UNLOCK();
     return rtype;
 }
 
@@ -540,7 +545,9 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
     uint32_t hash = hash_string(str);
 
     SAFE_DEBUGF("[rt_rtype_array] str=%s, hash=%d", str, hash);
+
     assert(hash > 0);
+
     safe_free(str);
     rtype_t rtype = {
             .size = element_size * length,

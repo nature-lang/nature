@@ -180,4 +180,6 @@ void coroutine_resume(processor_t *p, coroutine_t *co);
 
 void pre_tpl_hook(char *target);
 
+void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
+
 #endif // NATURE_PROCESSOR_H

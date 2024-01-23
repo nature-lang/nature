@@ -7,7 +7,7 @@ void vec_grow(n_vec_t *l) {
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     n_array_t *new_array_data = rt_array_new(element_rtype, l->capacity);
-    memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
+    safe_memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
     l->data = new_array_data;
 }
 
@@ -71,7 +71,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
-    memmove(value_ref, l->data + offset, element_size);
+    safe_memmove(value_ref, l->data + offset, element_size);
 }
 
 /**
@@ -90,7 +90,7 @@ void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     // 计算 offset
     uint64_t offset = rtype_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->data + offset;
-    memmove(p, ref, element_size);
+    safe_memmove(p, ref, element_size);
 }
 
 uint64_t vec_length(n_vec_t *l) {
@@ -184,11 +184,11 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 
     // 合并 a
     void *dst = merged->data;
-    memmove(dst, a->data, a->length * element_size);
+    safe_memmove(dst, a->data, a->length * element_size);
 
     // 合并 b
     dst = merged->data + (a->length * element_size);
-    memmove(dst, b->data, b->length * element_size);
+    safe_memmove(dst, b->data, b->length * element_size);
 
     return merged;
 }

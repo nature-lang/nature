@@ -35,7 +35,7 @@ static bool _set_add(n_set_t *m, void *key_ref) {
     void *dst = m->key_data + key_size * key_index;
 
 //    DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
-    memmove(dst, key_ref, key_size);
+    safe_memmove(dst, key_ref, key_size);
     return added;
 }
 
@@ -50,7 +50,7 @@ static void set_grow(n_set_t *m) {
 
 
     n_set_t old_set = {0};
-    memmove(&old_set, m, sizeof(n_set_t));
+    safe_memmove(&old_set, m, sizeof(n_set_t));
 
     m->capacity *= 2;
     m->key_data = rt_array_new(key_rtype, m->capacity);

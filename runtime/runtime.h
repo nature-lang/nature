@@ -60,7 +60,7 @@
 
 #define SAFE_NEW(type) safe_mallocz(sizeof(type))
 
-#define PREEMPT_LOCK()                         \
+#define PREEMPT_LOCK() \
     processor_t *_p = processor_get();         \
     if (_p) {                                  \
         mutex_lock(_p->thread_preempt_locker); \
@@ -246,6 +246,8 @@ typedef struct coroutine_t {
     n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
 
+    bool is_preempt; // 是否是被抢占出来的，如果是则需要进行特殊调度
+
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时
     bool gc_black;
@@ -306,6 +308,8 @@ coroutine_t *coroutine_get();
 
 void *safe_malloc(size_t size);
 
+void *safe_memmove(void *__dest, const void *__src, size_t __n);
+
 void *safe_realloc(void *ptr, size_t size);
 
 void *safe_mallocz(size_t size);
@@ -313,7 +317,7 @@ void *safe_mallocz(size_t size);
 void safe_free(void *ptr);
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {
@@ -383,7 +387,7 @@ static inline uint32_t safe_hash_string(char *str) {
     if (str == NULL) {
         return 0;
     }
-    uint32_t result = hash_data((uint8_t *) str, strlen(str));
+    uint32_t result = hash_data((uint8_t *)str, strlen(str));
     //    PREEMPT_UNLOCK();
     return result;
 }

@@ -20,9 +20,9 @@ void wait_sysmon() {
 
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t) p->thread_id);
-//            write(STDOUT_FILENO, "-----0\n", 7);
+            //            write(STDOUT_FILENO, "-----0\n", 7);
             mutex_lock(p->thread_preempt_locker);
-//            write(STDOUT_FILENO, "-----1\n", 7);
+            //            write(STDOUT_FILENO, "-----1\n", 7);
             RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
 
             if (!p->can_preempt) {
@@ -37,7 +37,7 @@ void wait_sysmon() {
                 goto SHARE_NEXT;
             }
 
-//            write(STDOUT_FILENO, "-----2\n", 7);
+            //            write(STDOUT_FILENO, "-----2\n", 7);
             uint64_t co_start_at = p->co_started_at;
             if (co_start_at == 0) {
                 goto SHARE_NEXT;
@@ -89,7 +89,11 @@ void wait_sysmon() {
             }
 
             // - 获取抢占锁
+            RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index,
+                    (uint64_t) p->thread_id);
             mutex_lock(p->thread_preempt_locker);
+            RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d(%lu)", p->share, p->index,
+                    (uint64_t) p->thread_id);
 
             // - 判断是否可以抢占
             if (!p->can_preempt) {
@@ -123,9 +127,9 @@ void wait_sysmon() {
                 goto SOLO_NEXT;
             }
 
-
             RDEBUGF("[wait_sysmon.thread_locker] solo p_index=%d(%lu) co=%p run timeout(%lu ms), will send SIGURG",
-                    p->index, (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000);
+                    p->index,
+                    (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000);
 
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
                 assert(false && "error sending SIGURG to thread");
@@ -156,10 +160,12 @@ void wait_sysmon() {
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {
+            write(STDOUT_FILENO, "---ws_0\n", 8);
             RDEBUGF("[wait_sysmon] processor need exit, will exit");
             break;
         }
 
+        write(STDOUT_FILENO, "---ws_1\n", 8);
         gc_eval_count--;
 
         usleep(1 * 1000); // 10ms

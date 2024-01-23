@@ -118,8 +118,10 @@ struct aco_s {
     aco_cofuncp_t fp;
 
     aco_save_stack_t save_stack;
+
     aco_save_stack_t temp_stack; // 进入 tpl call 时临时存储 share stack
-    uint64_t bp_offset;              // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
+    uint64_t bp_offset;          // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
+
     aco_share_stack_t *share_stack;
     aco_context_t *ctx;
 };
@@ -183,8 +185,7 @@ aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled);
 
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
-extern aco_t *
-aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
+extern aco_t *aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
 
 // aco's Global Thread Local Storage variable `co`
 // extern __thread aco_t *aco_gtls_co;

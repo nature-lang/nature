@@ -242,7 +242,7 @@ void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t si
     DEBUGF("[runtime.env_access_ref] fn_base=%p, fn->envs_base=%p, index=%lu, dst_ref=%p, size=%lu, env_int_value=0x%lx", fn, fn->envs,
            index, dst_ref, size, fetch_int_value((addr_t)upvalue->ref, size));
 
-    memmove(dst_ref, upvalue->ref, size);
+    safe_memmove(dst_ref, upvalue->ref, size);
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
@@ -252,7 +252,7 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 
     upvalue_t *upvalue = fn->envs->values[index];
 
-    memmove(upvalue->ref, src_ref, size);
+    safe_memmove(upvalue->ref, src_ref, size);
 }
 
 void *env_element_addr(runtime_fn_t *fn, uint64_t index) {
