@@ -286,9 +286,9 @@ static void page_summary_update(addr_t base, uint64_t size) {
  * TODO 可能有越界问题,debug 时需要特别关注
  * @param base
  * @param size
- * @param v 1 表示 page使用中， 0 表示 page 空闲
+ * @param value 1 表示 page使用中， 0 表示 page 空闲
  */
-static void chunks_set(addr_t base, uint64_t size, bool v) {
+static void chunks_set(addr_t base, uint64_t size, bool value) {
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
     uint64_t end = base + size; // 假如 base = 0， size = 3, 那么申请的空间是 [0~1), [1~2), [2~3), 其中 3 是应该不属于当前空间
     for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
@@ -309,8 +309,9 @@ static void chunks_set(addr_t base, uint64_t size, bool v) {
 
         DEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu", index, (void *)chunk->blocks,
                bit_start, bit_end);
+
         for (uint64_t i = bit_start; i <= bit_end; ++i) {
-            if (v) {
+            if (value) {
                 bitmap_set((uint8_t *)chunk->blocks, i);
             } else {
                 bitmap_clear((uint8_t *)chunk->blocks, i);
@@ -580,7 +581,7 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
 static void mcentral_grow(mcentral_t *mcentral) {
     MDEBUGF("[runtime.mcentral_grow] spanclass=%d, sizeclass=%d, pages_count=%lu", mcentral->spanclass, take_sizeclass(mcentral->spanclass),
-           take_pages_count(mcentral->spanclass));
+            take_pages_count(mcentral->spanclass));
 
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
     uint64_t pages_count = take_pages_count(mcentral->spanclass);
@@ -589,10 +590,10 @@ static void mcentral_grow(mcentral_t *mcentral) {
     safe_assertf(span->obj_count > 0, "alloc span failed, span.obj_count == 0, spanclass=%d", span->spanclass);
 
     MDEBUGF("[runtime.mcentral_grow] success, spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu", span->spanclass, span->base,
-           span->alloc_count, span->obj_count);
+            span->alloc_count, span->obj_count);
 
-    // 插入到 mcentral 中
-    linked_push(mcentral->partial_swept, span);
+    // 新申请的 span 全都是空闲 obj, 直接插入到 mcentral 中
+    RT_LINKED_PUSH_HEAD(mcentral->partial_list, span);
 }
 
 /**
@@ -602,37 +603,36 @@ static void mcentral_grow(mcentral_t *mcentral) {
  */
 static mspan_t *cache_span(mcentral_t *mcentral) {
     mspan_t *span = NULL;
-    if (!linked_empty(mcentral->partial_swept)) {
+    if (mcentral->partial_list) {
         // partial 是空的，表示当前 mcentral 中已经没有任何可以使用的 mspan 了，需要去 mheap 中申请咯
-        span = linked_pop_free(mcentral->partial_swept);
+        RT_LINKED_POP_HEAD(mcentral->partial_list, &span);
         goto HAVE_SPAN;
     }
 
     // 当前 mcentral 中已经没有可以使用的 mspan 需要走 grow 逻辑
     mcentral_grow(mcentral);
-    safe_assertf(!linked_empty(mcentral->partial_swept), "out of memory: mcentral grow failed");
-    span = linked_pop_free(mcentral->partial_swept);
+    assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
+    RT_LINKED_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
 
     safe_assertf(span && span->obj_count - span->alloc_count > 0, "span unavailable, obj_count=%d, alloc_count", span->obj_count,
-            span->alloc_count);
+                 span->alloc_count);
 
     return span;
 }
 
 /**
- * 将 mspan 归还到 mcentral 队列中
+ * 将 mspan 归还到 mcentral 队列中方便后续的清理
  * @param mcentral
  * @param span
  */
 void uncache_span(mcentral_t *mcentral, mspan_t *span) {
-    //    safe_assertf(span->alloc_count == 0, "mspan alloc_count == 0");
-
+    // 如果 span 还有空闲则丢到 partial 否则丢到 full
     if (span->obj_count - span->alloc_count > 0) {
-        linked_push(mcentral->partial_swept, span);
+        RT_LINKED_PUSH_HEAD(mcentral->partial_list, span);
     } else {
-        linked_push(mcentral->full_swept, span);
+        RT_LINKED_PUSH_HEAD(mcentral->full_list, span);
     }
 }
 
@@ -662,7 +662,7 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
     mspan = cache_span(mcentral);
     mcache->alloc[spanclass] = mspan;
     MDEBUGF("[runtime.mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu", mcentral, spanclass,
-           mspan->spanclass, (void *)mspan->base, (void *)mspan->end, mspan->obj_size, mspan->alloc_count);
+            mspan->spanclass, (void *)mspan->base, (void *)mspan->end, mspan->obj_size, mspan->alloc_count);
 
     mutex_unlock(memory->locker);
     MDEBUGF("[runtime.mcachine_refill] mcache=%p, spanclass=%lu unlocker", mcache, spanclass);
@@ -699,11 +699,14 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
             //            DEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
             continue;
         }
-        // 找到了一个空闲的 obj,计算其
+
+        // 找到了一个空闲的 obj 进行分配
         addr_t addr = mspan->base + i * mspan->obj_size;
+
         // 标记该节点已经被使用
         bitmap_set(mspan->alloc_bits->bits, i);
         mspan->alloc_count += 1;
+
         mutex_unlock(mspan->alloc_bits->locker);
         MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
         return addr;
@@ -730,7 +733,6 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
-
         // 确定 arena bits base
         arena_t *arena = take_arena(addr);
 
@@ -802,13 +804,16 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     }
 
     mutex_lock(memory->locker);
+
     // 直接从堆中分配 span
     mspan_t *span = mheap_alloc_span(pages_count, spanclass);
+
     safe_assertf(span != NULL, "out of memory");
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_t *central = &memory->mheap->centrals[spanclass];
-    linked_push(central->full_swept, span);
+    RT_LINKED_PUSH_HEAD(central->full_list, span);
+
     mutex_unlock(memory->locker);
 
     allocated_bytes += span->obj_size;
@@ -906,8 +911,9 @@ void memory_init() {
     for (int i = 0; i < SPANCLASS_COUNT; i++) {
         mcentral_t *item = &mheap->centrals[i];
         item->spanclass = i;
-        item->partial_swept = linked_new();
-        item->full_swept = linked_new();
+
+        item->partial_list = NULL;
+        item->full_list = NULL;
     }
 
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
@@ -998,13 +1004,21 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
     return ptr;
 }
 
+/**
+ * TODO 死循环了怎么办。这里的 meta 数据就没有其他策略了吗？
+ * @param base
+ * @param pages_count
+ * @param spanclass
+ * @return
+ */
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = NEW(mspan_t);
     span->base = base;
+    span->next = NULL;
     span->pages_count = pages_count;
     span->spanclass = spanclass;
     uint8_t sizeclass = take_sizeclass(spanclass);
-    if (sizeclass == 0) {
+    if (sizeclass == 0) { // 使用 spanclass = 0 来管理 large_malloc
         span->obj_size = pages_count * ALLOC_PAGE_SIZE;
         span->obj_count = 1;
     } else {
@@ -1016,6 +1030,7 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->end = span->base + (span->pages_count * ALLOC_PAGE_SIZE);
     span->alloc_bits = bitmap_new((int)span->obj_count);
     span->gcmark_bits = bitmap_new((int)span->obj_count);
+    span->manual_bits = bitmap_new((int)span->obj_count);
     span->gcmark_locker = mutex_new(false);
 
     DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu", span->base,
@@ -1078,4 +1093,24 @@ EXIT:
 void *runtime_malloc(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     return runtime_zero_malloc(rtype->size, rtype);
+}
+
+void *manual_malloc(uint64_t size) {
+    void *addr = runtime_zero_malloc(size, NULL);
+
+    mspan_t *span = span_of((addr_t)addr);
+    assert(span);
+    uint64_t obj_index = ((addr_t)addr - span->base) / span->obj_size;
+    bitmap_set(span->manual_bits->bits, obj_index);
+    mark_obj_black(span, obj_index); // 避免被 gc 清理
+
+    return addr;
+}
+
+void manual_free(void *ptr) {
+    mspan_t *span = span_of((addr_t)ptr);
+    assert(span && "ptr not from manual_malloc");
+    uint64_t obj_index = ((addr_t)ptr - span->base) / span->obj_size;
+
+    bitmap_clear(span->manual_bits->bits, obj_index);
 }

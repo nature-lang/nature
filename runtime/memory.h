@@ -32,6 +32,30 @@ typedef enum {
     GC_STAGE_SWEEP,
 } gc_stage_t;
 
+// 头进
+#define RT_LINKED_PUSH_HEAD(list, item) \
+    do {                                \
+        if (list == NULL) {             \
+            list = item;                \
+            break;                      \
+        }                               \
+                                        \
+        item->next = list;              \
+        list = item;                    \
+    } while (0)
+
+// 头出
+#define RT_LINKED_POP_HEAD(list, item) \
+    do {                          \
+        if (list == NULL) {       \
+            break;                \
+        }                         \
+                                  \
+        *item = list;             \
+        list = *item->next;       \
+        *item->next = NULL;       \
+    } while (0)
+
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
     CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
@@ -95,7 +119,8 @@ static inline bool in_heap(addr_t addr) {
 static inline addr_t safe_heap_addr(addr_t addr) {
     safe_assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx", addr, ARENA_HINT_BASE);
 
-    safe_assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr, memory->mheap->current_arena.end);
+    safe_assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr,
+                 memory->mheap->current_arena.end);
     return addr;
 }
 

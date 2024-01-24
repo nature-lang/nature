@@ -9,7 +9,7 @@
 #include "utils/bitmap.h"
 
 static inline mutex_t *safe_mutex_new(bool recursive) {
-    mutex_t *mutex = SAFE_NEW(mutex_t);
+    mutex_t *mutex = MANUAL_NEW(mutex_t);
     if (recursive) {
         pthread_mutexattr_t attr;
         pthread_mutexattr_init(&attr);

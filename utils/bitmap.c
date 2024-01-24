@@ -86,3 +86,21 @@ void bitmap_grow_set(bitmap_t *b, uint64_t index, bool test) {
         bitmap_clear(b->bits, index);
     }
 }
+
+/**
+ * 将 src 中的数组 copy 到 dst 中
+ * @param dst
+ * @param src
+ */
+void bitmap_copy(bitmap_t *dst, bitmap_t *src) {
+    mutex_lock(src->locker);
+    mutex_lock(dst->locker);
+
+    assert(dst->size == src->size);
+
+    // signl safe memmove(3) Added in POSIX.1-2008 TC2
+    memmove(dst->bits, src->bits, src->size);
+
+    mutex_unlock(src->locker);
+    mutex_unlock(dst->locker);
+}

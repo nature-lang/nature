@@ -60,7 +60,9 @@
 
 #define SAFE_NEW(type) safe_mallocz(sizeof(type))
 
-#define PREEMPT_LOCK() \
+#define MANUAL_NEW(type) manual_malloc(sizeof(type))
+
+#define PREEMPT_LOCK()                         \
     processor_t *_p = processor_get();         \
     if (_p) {                                  \
         mutex_lock(_p->thread_preempt_locker); \
@@ -94,8 +96,8 @@ typedef struct {
 } mmode_t;
 
 typedef struct mspan_t {
-    //    struct mspan_t *next; // mspan 是双向链表
-    //    struct mspan_t *prev;
+    struct mspan_t *next; // mspan 是双向链表
+                          //    struct mspan_t *prev;
 
     uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
     addr_t base;       // mspan 在 arena 中的起始位置
@@ -114,6 +116,8 @@ typedef struct mspan_t {
     bitmap_t *alloc_bits;
     bitmap_t *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
+    bitmap_t *manual_bits; // 手动分配的内存区域，gcmark_bits 初始状态, 手动 malloc 和 free 内存时需要同时更新 gcmark/manual
+
     mutex_t *gcmark_locker;
 } mspan_t;
 
@@ -129,8 +133,8 @@ typedef struct {
 typedef struct {
     uint8_t spanclass;
 
-    linked_t *partial_swept; // swept 表示是否被垃圾回收清扫
-    linked_t *full_swept;
+    mspan_t *partial_list; // 还有空闲 span obj 的链表
+    mspan_t *full_list;
 } mcentral_t;
 
 typedef struct {
@@ -305,6 +309,10 @@ void processor_dump_errort(n_errort *errort);
 processor_t *processor_get();
 
 coroutine_t *coroutine_get();
+
+void *manual_malloc(uint64_t size);
+
+void manual_free(void *ptr);
 
 void *safe_malloc(size_t size);
 

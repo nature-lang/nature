@@ -44,4 +44,6 @@ int bitmap_set_count(bitmap_t *b);
 
 char *bitmap_to_str(uint8_t *bits, uint64_t count);
 
+void bitmap_copy(bitmap_t *dst, bitmap_t *src);
+
 #endif // NATURE_BITMAP_H

@@ -174,19 +174,13 @@ int io_run(processor_t *p, uint64_t timeout_ms) {
  * 检测 coroutine 当前是否需要单独线程调度，如果不需要单独线程则直接在当前线程进行 aco_resume
  */
 void coroutine_resume(processor_t *p, coroutine_t *co) {
-    write(STDOUT_FILENO, "---cr_0\n", 8);
     assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
-    write(STDOUT_FILENO, "---cr_1\n", 8);
     if (!co->aco) {
-        write(STDOUT_FILENO, "---cr_2\n", 8);
         coroutine_aco_init(p, co);
-        write(STDOUT_FILENO, "---cr_3\n", 8);
     }
 
     // - 再 tls 中记录正在运行的协程
-    write(STDOUT_FILENO, "---cr_4\n", 8);
     uv_key_set(&tls_coroutine_key, co);
-    write(STDOUT_FILENO, "---cr_5\n", 8);
     co->status = CO_STATUS_RUNNING;
     co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 

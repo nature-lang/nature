@@ -47,9 +47,15 @@ static inline void runnable_push(processor_t *p, coroutine_t *co) {
         return;
     }
 
-    // 由于需要访问全局变量 p->runnable, 如果被打断则 p->runnable 处可能会出现链表断裂
     co->next = NULL;
-    p->runnable->next = co;
+    coroutine_t *current = p->runnable;
+    while (true) {
+        if (current->next == NULL) {
+            // 到尾部了
+            current->next = co;
+            break;
+        }
+    }
 }
 
 static inline void runnable_push_head(processor_t *p, coroutine_t *co) {
