@@ -17,6 +17,19 @@ mutex_t *mutex_new(bool recursive) {
     return mutex;
 }
 
+void mutex_init(mutex_t *mutex, bool recursive) {
+    if (recursive) {
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+
+        pthread_mutex_init(&mutex->locker, &attr);
+        return;
+    }
+
+    pthread_mutex_init(&mutex->locker, NULL);
+}
+
 int mutex_lock(mutex_t *mutex) {
     int result = pthread_mutex_lock(&mutex->locker);
     mutex->locker_count++;
@@ -37,3 +50,4 @@ int mutex_destroy(mutex_t *mutex) {
     free(mutex);
     return result;
 }
+

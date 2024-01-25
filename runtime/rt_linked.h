@@ -3,7 +3,10 @@
 
 #include "fixalloc.h"
 
-// TODO 全局 alloc node 结构, 后续可以考虑更换成 processor_linked_nodealloc 来减少锁的粒度
+#define RT_LINKED_FOR(_list) for (rt_linked_node_t *_node = _list.front; _node != _list.rear; _node = _node->succ)
+#define RT_LINKED_VALUE() (_node->value)
+#define RT_LINKED_NODE() (_node)
+
 extern fixalloc_t global_nodealloc;
 extern pthread_mutex_t global_nodealloc_locker;
 
@@ -17,25 +20,39 @@ typedef struct rt_linked_node_t {
 typedef struct {
     rt_linked_node_t *front;
     rt_linked_node_t *rear;
+
     uint16_t count;
+
+    fixalloc_t *nodealloc;
+    pthread_mutex_t *nodealloc_locker;
 } rt_linked_t;
 
-static inline void rt_linked_init(rt_linked_t *l) {
+static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread_mutex_t *nodealloc_locker) {
     l->count = 0;
+    if (nodealloc == NULL) {
+        l->nodealloc = &global_nodealloc;
+    } else {
+        l->nodealloc = nodealloc;
+    }
 
-    pthread_mutex_lock(&global_nodealloc_locker);
-    rt_linked_node_t *empty = fixalloc_alloc(&global_nodealloc);
-    pthread_mutex_unlock(&global_nodealloc_locker);
+    if (nodealloc_locker == NULL) {
+        l->nodealloc_locker = &global_nodealloc_locker;
+    } else {
+        l->nodealloc_locker = nodealloc_locker;
+    }
+
+    pthread_mutex_lock(l->nodealloc_locker);
+    rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
+    pthread_mutex_unlock(l->nodealloc_locker);
 
     l->front = empty;
     l->rear = empty;
 }
 
-// 尾部 push
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
-    pthread_mutex_lock(&global_nodealloc_locker);
-    rt_linked_node_t *empty = fixalloc_alloc(&global_nodealloc);
-    pthread_mutex_unlock(&global_nodealloc_locker);
+    pthread_mutex_lock(l->nodealloc_locker);
+    rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
+    pthread_mutex_unlock(l->nodealloc_locker);
 
     empty->prev = l->rear;
 
@@ -59,9 +76,9 @@ static inline void *rt_linked_pop(rt_linked_t *l) {
     l->front->prev = NULL;
     l->count--;
 
-    pthread_mutex_lock(&global_nodealloc_locker);
-    fixalloc_free(&global_nodealloc, node);
-    pthread_mutex_unlock(&global_nodealloc_locker);
+    pthread_mutex_lock(l->nodealloc_locker);
+    fixalloc_free(l->nodealloc, node);
+    pthread_mutex_unlock(l->nodealloc_locker);
 
     return value;
 }

@@ -13,6 +13,8 @@ typedef struct {
 
 mutex_t *mutex_new(bool recursive);
 
+void mutex_init(mutex_t *mutex, bool recursive);
+
 int mutex_lock(mutex_t *mutex);
 
 int mutex_trylock(mutex_t *mutex);

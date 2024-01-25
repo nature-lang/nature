@@ -18,7 +18,7 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
     SAFE_DEBUGF("[rt_array_new] rt_rtype_array success");
 
     // - 基于 rtype 进行 malloc 的申请调用, 这里进行的是堆内存申请，所以需要的就是其在在堆内存中占用的空间大小
-    void *addr = runtime_zero_malloc(rtype.size, &rtype);
+    void *addr = rt_clr_malloc(rtype.size, &rtype);
     SAFE_DEBUGF(
         "[rt_array_new] success, base=%p, element_rtype.size=%lu, element_rtype.kind=%s(need_gc=%d), "
         "array_rtype_size=%lu(length=%lu),rtype_kind=%s",

@@ -54,7 +54,7 @@ static void set_grow(n_set_t *m) {
 
     m->capacity *= 2;
     m->key_data = rt_array_new(key_rtype, m->capacity);
-    m->hash_table = runtime_zero_malloc(sizeof(int64_t) * m->capacity, NULL);
+    m->hash_table = rt_clr_malloc(sizeof(int64_t) * m->capacity, NULL);
 
 
     // 对所有的 key 进行 rehash, i 就是 data_index
@@ -82,12 +82,12 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
     rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_index);
 
-    n_set_t *set_data = runtime_zero_malloc(set_rtype->size, set_rtype);
+    n_set_t *set_data = rt_clr_malloc(set_rtype->size, set_rtype);
     set_data->capacity = SET_DEFAULT_CAPACITY;
     set_data->length = 0;
     set_data->key_rtype_hash = key_index;
     set_data->key_data = rt_array_new(key_rtype, set_data->capacity);
-    set_data->hash_table = runtime_zero_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
+    set_data->hash_table = rt_clr_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
 
     DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p",
            set_data, set_data->key_rtype_hash, set_data->key_data);

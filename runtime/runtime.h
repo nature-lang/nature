@@ -68,12 +68,12 @@
 #define PREEMPT_LOCK()                         \
     processor_t *_p = processor_get();         \
     if (_p) {                                  \
-        mutex_lock(_p->thread_preempt_locker); \
+        mutex_lock(&_p->thread_preempt_locker); \
     }
 
 #define PREEMPT_UNLOCK()                         \
     if (_p) {                                    \
-        mutex_unlock(_p->thread_preempt_locker); \
+        mutex_unlock(&_p->thread_preempt_locker); \
     }
 
 #ifdef DEBUG
@@ -100,7 +100,7 @@ typedef struct {
 
 typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
-                          //    struct mspan_t *prev;
+    //    struct mspan_t *prev;
 
     uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
     addr_t base;       // mspan 在 arena 中的起始位置
@@ -248,24 +248,19 @@ typedef struct coroutine_t {
     bool main; // 是否是 main 函数
     bool solo; // 当前协程需要独享线程
     co_status_t status;
-    aco_t *aco;
+    aco_t aco;
     void *fn;       // fn 指向
     processor_t *p; // 当前 coroutine 绑定的 p
     n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
 
-    bool is_preempt; // 是否是被抢占出来的，如果是则需要进行特殊调度
-
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时
     bool gc_black;
 
-    bool gc_work; // 是否是用于 gc 的协程
+    bool gc_work; // 当前 coroutine 是否是吃 gc 线程
 
-    // 默认为 0， 只有当 coroutine 独占整个线程时才会存在 thread_id
-    // 1. solo coroutine 2. coroutine in block syscall 这两种情况会出现 coroutine 独占线程
-    uv_thread_t thread_id;
-    struct coroutine_t *next;
+    struct coroutine_t *next; // coroutine list
 } coroutine_t;
 
 /**
@@ -275,16 +270,17 @@ typedef struct coroutine_t {
 struct processor_t {
     int index;
     mcache_t mcache;                // 线程维度无锁内存分配器
-    aco_t *main_aco;                // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
-    aco_share_stack_t *share_stack; // processor 中的所有的 stack 都使用该共享栈
+    aco_t main_aco;                // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
+    aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
 
     struct sigaction sig;
-    uv_loop_t *uv_loop; // uv loop 事件循环
+    uv_loop_t uv_loop; // uv loop 事件循环
 
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
-    mutex_t *gc_locker;
+    mutex_t gc_locker;
 
-    mutex_t *thread_preempt_locker;
+    // 锁定时不可抢占, 不开放给 user 使用
+    mutex_t thread_preempt_locker;
 
     uv_thread_t thread_id;    // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;   // 当前正在调度的 coroutine
@@ -297,6 +293,8 @@ struct processor_t {
     bool can_preempt;         // 当前 processor 能否被抢占
     bool gc_work_finished;    // 是否完成了 GC WORK 的工作
     rt_linked_t gc_worklist; // gc 扫描的 ptr 节点列表
+
+    struct processor_t *next; // processor 链表支持
 };
 
 int runtime_main(int argc, char *argv[]);
@@ -314,9 +312,7 @@ processor_t *processor_get();
 
 coroutine_t *coroutine_get();
 
-void *manual_malloc(uint64_t size);
-
-void manual_free(void *ptr);
+void *rt_clr_malloc(uint64_t size, rtype_t *rtype);
 
 void *safe_malloc(size_t size);
 
@@ -329,7 +325,7 @@ void *safe_mallocz(size_t size);
 void safe_free(void *ptr);
 
 static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *)(udata);
+    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
     if (lock) {
         pthread_mutex_lock(locker);
     } else {
@@ -399,7 +395,7 @@ static inline uint32_t safe_hash_string(char *str) {
     if (str == NULL) {
         return 0;
     }
-    uint32_t result = hash_data((uint8_t *)str, strlen(str));
+    uint32_t result = hash_data((uint8_t *) str, strlen(str));
     //    PREEMPT_UNLOCK();
     return result;
 }

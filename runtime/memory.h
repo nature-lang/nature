@@ -32,8 +32,10 @@ typedef enum {
     GC_STAGE_SWEEP,
 } gc_stage_t;
 
+// 遍历
+
 // 头进
-#define RT_LINKED_PUSH_HEAD(list, item) \
+#define RT_LIST_PUSH_HEAD(list, item) \
     do {                                \
         if (list == NULL) {             \
             list = item;                \
@@ -45,7 +47,7 @@ typedef enum {
     } while (0)
 
 // 头出
-#define RT_LINKED_POP_HEAD(list, item) \
+#define RT_LIST_POP_HEAD(list, item) \
     do {                          \
         if (list == NULL) {       \
             break;                \
@@ -193,15 +195,13 @@ void runtime_force_gc();
 
 void *runtime_malloc(uint64_t rtype_hash);
 
-void *runtime_zero_malloc(uint64_t size, rtype_t *rtype);
-
 /**
  * 不会进行 gc
  * @param size
  * @param rtype
  * @return
  */
-void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype);
+void *rt_gc_malloc(uint64_t size, rtype_t *rtype);
 
 uint64_t runtime_malloc_bytes();
 

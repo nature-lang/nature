@@ -49,13 +49,13 @@ void coroutine_sleep(int64_t ms) {
 
     // - 初始化 libuv 定时器
     uv_timer_t *timer = SAFE_NEW(uv_timer_t);
-    uv_timer_init(p->uv_loop, timer);
+    uv_timer_init(&p->uv_loop, timer);
     timer->data = co;
 
     // 设定定时器超时时间与回调
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
-    SAFE_DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", p->uv_loop,
+    SAFE_DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", &p->uv_loop,
                 co, p->index, &timer, fetch_addr_value((addr_t) & timer));
 
     // 退出等待 io 事件就绪

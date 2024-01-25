@@ -9,24 +9,30 @@
 #include "runtime.h"
 
 extern int cpu_count;
-extern slice_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
-extern linked_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
+extern processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 extern int solo_processor_count;      // 累计数量
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
-extern linked_t *global_gc_worklist; // 全局 gc worklist
-extern mutex_t *global_gc_locker;    // 全局 gc locker
+extern rt_linked_t global_gc_worklist; // 全局 gc worklist
+extern mutex_t global_gc_locker;    // 全局 gc locker
 
 extern bool processor_need_stw;  // 全局 STW 标识
 extern bool processor_need_exit; // 全局 STW 标识
+
+extern fixalloc_t coroutine_alloc;
+extern fixalloc_t processor_alloc;
+extern mutex_t cp_alloc_locker;
 
 extern void async_preempt() __asm__("async_preempt");
 
 __attribute__((optimize(0))) void debug_ret();
 
 __attribute__((optimize(0))) void co_preempt_yield();
+
+#define PROCESSOR_FOR(list) for(processor_t *p = list; p; p = p->next)
 
 /**
  * 一旦 thread_locker 被 sysmon 持有，则 can_preempt 的值无法修改
@@ -35,9 +41,9 @@ __attribute__((optimize(0))) void co_preempt_yield();
  * @param v
  */
 static inline void set_can_preempt(processor_t *p, bool v) {
-    mutex_lock(p->thread_preempt_locker);
+    mutex_lock(&p->thread_preempt_locker);
     p->can_preempt = v;
-    mutex_unlock(p->thread_preempt_locker);
+    mutex_unlock(&p->thread_preempt_locker);
 }
 
 // TODO 使用专门的 runnable locker 保护 runnable 完整
@@ -86,7 +92,7 @@ static inline void _co_yield(processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
 
-    aco_yield1(co->aco);
+    aco_yield1(&co->aco);
 }
 
 static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
@@ -98,13 +104,15 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
 
     co->status = CO_STATUS_RUNNABLE;
     runnable_push(p, co);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co,
+           co->status);
 
     _co_yield(p, co);
 
     set_can_preempt(p, true); // 回到用户态，允许抢占
 
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
+    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
+           co->status);
 }
 
 static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
@@ -180,7 +188,7 @@ void coroutine_dispatch(coroutine_t *co);
 
 /**
  * 有 processor_run 调用
- * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create 会绑定对应的 fn)
+ * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create_init 会绑定对应的 fn)
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
 

@@ -131,7 +131,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_union_t *mu = runtime_zero_malloc(sizeof(n_union_t), union_rtype);
+    n_union_t *mu = rt_clr_malloc(sizeof(n_union_t), union_rtype);
 
     DEBUGF("[union_casting] union_base: %p, safe_memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
@@ -224,9 +224,10 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        safe_assertf(list->element_rtype_hash, "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
-                list, list->length,
-                list->capacity, list->data);
+        safe_assertf(list->element_rtype_hash,
+                     "list element rtype hash is empty, ptr: %p, len: %lu, cap: %lu, data: %p",
+                     list, list->length,
+                     list->capacity, list->data);
         uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld",
                list->length,
@@ -293,7 +294,8 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
                map->length,
                map->value_data, map->value_rtype_hash, value_size);
 
-        safe_assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor, map->length);
+        safe_assertf(cursor < map->length, "[runtime.iterator_take_value] cursor=%d >= map->length=%d", cursor,
+                     map->length);
 
         safe_memmove(value_ref, map->value_data + value_size * cursor, value_size);
         return;
@@ -412,7 +414,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
     if (!p->share) {
-        mutex_lock(p->gc_locker);
+        mutex_lock(&p->gc_locker);
     }
 
     // yuasa 写屏障 shade slot
@@ -428,7 +430,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     safe_memmove(slot, new_obj, rtype->size);
 
     if (!p->share) {
-        mutex_unlock(p->gc_locker);
+        mutex_unlock(&p->gc_locker);
     }
 }
 

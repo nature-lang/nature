@@ -26,13 +26,7 @@
 #include <unistd.h>
 #include <uv.h>
 
-#ifdef ACO_USE_VALGRIND
-#include <valgrind/valgrind.h>
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "runtime/fixalloc.h"
 
 #define ACO_VERSION_MAJOR 1
 #define ACO_VERSION_MINOR 2
@@ -57,7 +51,7 @@ typedef struct {
 } aco_context_t;
 
 typedef struct {
-    void *ptr;
+    void *ptr; // need gc mark
     size_t sz;
     size_t valid_sz;
     // max copy size in bytes
@@ -83,47 +77,23 @@ typedef struct {
     char guard_page_enabled;
     void *real_ptr;
     size_t real_sz;
-
-#ifdef ACO_USE_VALGRIND
-    unsigned long valgrind_stk_id;
-#endif
 } aco_share_stack_t;
 
 typedef void (*aco_cofuncp_t)(void);
 
 struct aco_s {
-    // cpu registers' state
-#ifdef __i386__
-#ifdef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
-    void *reg[6];
-#else
-    void *reg[8];
-#endif
-#elif __x86_64__
-#ifdef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
-    void *reg[8];
-#else
-    void *reg[9];
-#endif
-#else
-#error "platform no support yet"
-#endif
+    void *reg[9]; // amd64 试用
+
     aco_t *main_co;
     void *arg;
-    void *arg1;
-    void *arg2;
-    void *arg3;
     char is_end;
 
     aco_cofuncp_t fp;
-
     aco_save_stack_t save_stack;
-
-    aco_save_stack_t temp_stack; // 进入 tpl call 时临时存储 share stack
     uint64_t bp_offset;          // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
-
     aco_share_stack_t *share_stack;
-    aco_context_t *ctx;
+    aco_context_t ctx;
+    bool inited;
 };
 
 #define aco_likely(x) (__builtin_expect(!!(x), 1))
@@ -153,19 +123,20 @@ struct aco_s {
 #if defined(aco_attr_no_asan)
 #error "aco_attr_no_asan already defined"
 #endif
-#if defined(ACO_USE_ASAN)
-#if defined(__has_feature)
-#if __has_feature(__address_sanitizer__)
-#define aco_attr_no_asan __attribute__((__no_sanitize_address__))
-#endif
-#endif
-#if defined(__SANITIZE_ADDRESS__) && !defined(aco_attr_no_asan)
-#define aco_attr_no_asan __attribute__((__no_sanitize_address__))
-#endif
-#endif
 #ifndef aco_attr_no_asan
 #define aco_attr_no_asan
 #endif
+
+extern uv_key_t aco_gtls_co;           // aco_t*
+extern uv_key_t aco_gtls_last_word_fp; // aco_cofuncp_t
+extern uv_key_t aco_gtls_fpucw_mxcsr;  // void*
+
+static inline void aco_init() {
+    uv_key_create(&aco_gtls_co);
+    uv_key_create(&aco_gtls_last_word_fp);
+    uv_key_create(&aco_gtls_fpucw_mxcsr);
+}
+
 
 extern void aco_runtime_test(void);
 
@@ -179,20 +150,16 @@ extern void aco_funcp_protector_asm(void) __asm__("aco_funcp_protector_asm"); //
 
 extern void aco_funcp_protector(void);
 
-extern aco_share_stack_t *aco_share_stack_new(size_t sz);
-
-aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled);
+extern void *aco_share_stack_init(aco_share_stack_t *p, size_t sz);
 
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
-extern aco_t *aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
+extern void
+aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp,
+                void *arg);
 
 // aco's Global Thread Local Storage variable `co`
 // extern __thread aco_t *aco_gtls_co;
-
-extern uv_key_t aco_gtls_co;           // aco_t*
-extern uv_key_t aco_gtls_last_word_fp; // aco_cofuncp_t
-extern uv_key_t aco_gtls_fpucw_mxcsr;  // void*
 
 static inline aco_t *get_aco_gtls_co() {
     return uv_key_get(&aco_gtls_co);
@@ -246,8 +213,5 @@ extern void aco_destroy(aco_t *co);
         aco_exit1(get_aco_gtls_co()); \
     } while (0)
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif

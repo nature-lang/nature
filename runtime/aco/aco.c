@@ -161,7 +161,7 @@ static void aco_default_protector_last_word(void) {
     fprintf(stderr,
             "error: co:%p should call `aco_exit()` instead of direct "
             "`return` in co_fp:%p to finish its execution\n",
-            co, (void *)co->fp);
+            co, (void *) co->fp);
     assert(0);
 }
 
@@ -178,16 +178,17 @@ uv_key_t aco_gtls_last_word_fp;
 // #endif
 uv_key_t aco_gtls_fpucw_mxcsr;
 
+
 void aco_thread_init(aco_cofuncp_t last_word_co_fp) {
     void *fpucw = uv_key_get(&aco_gtls_fpucw_mxcsr);
     aco_save_fpucw_mxcsr(&fpucw);
     // 必须使用 uv_key_set 写入
     uv_key_set(&aco_gtls_fpucw_mxcsr, fpucw);
 
-    if ((void *)last_word_co_fp != NULL) {
-        uv_key_set(&aco_gtls_last_word_fp, (void *)last_word_co_fp);
+    if ((void *) last_word_co_fp != NULL) {
+        uv_key_set(&aco_gtls_last_word_fp, (void *) last_word_co_fp);
     } else {
-        uv_key_set(&aco_gtls_last_word_fp, (void *)aco_default_protector_last_word);
+        uv_key_set(&aco_gtls_last_word_fp, (void *) aco_default_protector_last_word);
     }
 }
 
@@ -205,16 +206,16 @@ void aco_funcp_protector(void) {
     assert(0);
 }
 
-aco_share_stack_t *aco_share_stack_new(size_t sz) {
-    return aco_share_stack_new2(sz, 1);
-}
-
 #define aco_size_t_safe_add_assert(a, b)                                                                                                   \
     do {                                                                                                                                   \
         assert((a) + (b) >= (a));                                                                                                          \
     } while (0)
 
-aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled) {
+// safe
+void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
+    assert(p);
+    memset(p, 0, sizeof(aco_share_stack_t));
+
     if (sz == 0) {
         sz = 1024 * 1024 * 2;
     }
@@ -226,136 +227,108 @@ aco_share_stack_t *aco_share_stack_new2(size_t sz, char guard_page_enabled) {
     size_t u_pgsz = 0;
 
 
-    if (guard_page_enabled != 0) {
-        // although gcc's Built-in Functions to Perform Arithmetic with
-        // Overflow Checking is better, but it would require gcc >= 5.0
-        long pgsz = sysconf(_SC_PAGESIZE);
-        // pgsz must be > 0 && a power of two
-        assert(pgsz > 0 && (((pgsz - 1) & pgsz) == 0));
-        u_pgsz = (size_t)((unsigned long)pgsz);
-        // it should be always true in real life
-        assert(u_pgsz == (unsigned long)pgsz && ((u_pgsz << 1) >> 1) == u_pgsz);
-        if (sz <= u_pgsz) {
-            sz = u_pgsz << 1;
-        } else {
-            size_t new_sz;
-            if ((sz & (u_pgsz - 1)) != 0) {
-                new_sz = (sz & (~(u_pgsz - 1)));
-                assert(new_sz >= u_pgsz);
-                aco_size_t_safe_add_assert(new_sz, (u_pgsz << 1));
-                new_sz = new_sz + (u_pgsz << 1);
-                assert(sz / u_pgsz + 2 == new_sz / u_pgsz);
-            } else {
-                aco_size_t_safe_add_assert(sz, u_pgsz);
-                new_sz = sz + u_pgsz;
-                assert(sz / u_pgsz + 1 == new_sz / u_pgsz);
-            }
-            sz = new_sz;
-            assert((sz / u_pgsz > 1) && ((sz & (u_pgsz - 1)) == 0));
-        }
-    }
-
-    aco_share_stack_t *p = (aco_share_stack_t *)safe_malloc(sizeof(aco_share_stack_t));
-    assertalloc_ptr(p);
-    memset(p, 0, sizeof(aco_share_stack_t));
-
-    if (guard_page_enabled != 0) {
-        p->real_ptr = mmap((void *)0x4000000000, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        assertalloc_bool(p->real_ptr != MAP_FAILED);
-        p->guard_page_enabled = 1;
-        assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
-
-        p->ptr = (void *)(((uintptr_t)p->real_ptr) + u_pgsz);
-        p->real_sz = sz;
-        assert(sz >= (u_pgsz << 1));
-        p->sz = sz - u_pgsz;
+    // although gcc's Built-in Functions to Perform Arithmetic with
+    // Overflow Checking is better, but it would require gcc >= 5.0
+    long pgsz = sysconf(_SC_PAGESIZE);
+    // pgsz must be > 0 && a power of two
+    assert(pgsz > 0 && (((pgsz - 1) & pgsz) == 0));
+    u_pgsz = (size_t) ((unsigned long) pgsz);
+    // it should be always true in real life
+    assert(u_pgsz == (unsigned long) pgsz && ((u_pgsz << 1) >> 1) == u_pgsz);
+    if (sz <= u_pgsz) {
+        sz = u_pgsz << 1;
     } else {
-        // p->guard_page_enabled = 0;
-        p->sz = sz;
-        p->ptr = safe_malloc(sz);
-        assertalloc_ptr(p->ptr);
+        size_t new_sz;
+        if ((sz & (u_pgsz - 1)) != 0) {
+            new_sz = (sz & (~(u_pgsz - 1)));
+            assert(new_sz >= u_pgsz);
+            aco_size_t_safe_add_assert(new_sz, (u_pgsz << 1));
+            new_sz = new_sz + (u_pgsz << 1);
+            assert(sz / u_pgsz + 2 == new_sz / u_pgsz);
+        } else {
+            aco_size_t_safe_add_assert(sz, u_pgsz);
+            new_sz = sz + u_pgsz;
+            assert(sz / u_pgsz + 1 == new_sz / u_pgsz);
+        }
+        sz = new_sz;
+        assert((sz / u_pgsz > 1) && ((sz & (u_pgsz - 1)) == 0));
     }
+
+
+    p->real_ptr = mmap((void *) 0x4000000000, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assertalloc_bool(p->real_ptr != MAP_FAILED);
+    p->guard_page_enabled = 1;
+    assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
+
+    p->ptr = (void *) (((uintptr_t) p->real_ptr) + u_pgsz);
+    p->real_sz = sz;
+    assert(sz >= (u_pgsz << 1));
+    p->sz = sz - u_pgsz;
+
 
     p->owner = NULL;
-#ifdef ACO_USE_VALGRIND
-    p->valgrind_stk_id = VALGRIND_STACK_REGISTER(p->ptr, (void *)((uintptr_t)p->ptr + p->sz));
-#endif
-#if defined(__i386__) || defined(__x86_64__)
-    uintptr_t u_p = (uintptr_t)(p->sz - (sizeof(void *) << 1) + (uintptr_t)p->ptr);
+#if defined(__x86_64__)
+    uintptr_t u_p = (uintptr_t) (p->sz - (sizeof(void *) << 1) + (uintptr_t) p->ptr);
     u_p = (u_p >> 4) << 4;
-    p->align_highptr = (void *)u_p;
-    p->align_retptr = (void *)(u_p - sizeof(void *));
-    *((void **)(p->align_retptr)) = (void *)(aco_funcp_protector_asm);
+    p->align_highptr = (void *) u_p;
+    p->align_retptr = (void *) (u_p - sizeof(void *));
+    *((void **) (p->align_retptr)) = (void *) (aco_funcp_protector_asm);
     assert(p->sz > (16 + (sizeof(void *) << 1) + sizeof(void *)));
     p->align_limit = p->sz - 16 - (sizeof(void *) << 1);
 #else
 #error "platform no support yet"
 #endif
-    return p;
 }
 
+// safe
 void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     assert(sstk != NULL && sstk->ptr != NULL);
-#ifdef ACO_USE_VALGRIND
-    VALGRIND_STACK_DEREGISTER(sstk->valgrind_stk_id);
-#endif
-    if (sstk->guard_page_enabled) {
-        assert(0 == munmap(sstk->real_ptr, sstk->real_sz));
-        sstk->real_ptr = NULL;
-        sstk->ptr = NULL;
-    } else {
-        safe_free(sstk->ptr);
-        sstk->ptr = NULL;
-    }
-    safe_free(sstk);
+    assert(0 == munmap(sstk->real_ptr, sstk->real_sz));
+    sstk->real_ptr = NULL;
+    sstk->ptr = NULL;
 }
 
-aco_t *aco_create(aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg) {
-    aco_t *p = (aco_t *)safe_malloc(sizeof(aco_t));
-    assertalloc_ptr(p);
-    memset(p, 0, sizeof(aco_t));
+void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp,
+                     void *arg) {
+    assert(aco);
+    memset(aco, 0, sizeof(aco_t));
+    aco->inited = true;
 
-    p->ctx = safe_malloc(sizeof(aco_context_t));
-    p->ctx->msg = NULL;
+    aco->ctx.msg = NULL;
 
     if (main_co != NULL) { // non-main co
-        assertptr(share_stack);
-        p->share_stack = share_stack;
+        assert(share_stack);
+        aco->share_stack = share_stack;
 
 #ifdef __x86_64__
-        p->reg[ACO_REG_IDX_RETADDR] = (void *)fp;
-        p->reg[ACO_REG_IDX_SP] = p->share_stack->align_retptr;
-#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
-        //        printf("ACO_REG_IDX_FPU=%p, thread_id=%lu\n", uv_key_get(&aco_gtls_fpucw_mxcsr), (uint64_t)uv_thread_self());
-        p->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
-#endif
+        aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
+        aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
 #else
 #error "platform no support yet"
 #endif
-        p->main_co = main_co;
-        p->arg = arg;
-        p->fp = fp;
-        if (save_stack_sz == 0) {
+        aco->main_co = main_co;
+        aco->arg = arg;
+        aco->fp = fp;
+        if (save_stack_sz == 0) { // save_stack 默认大小为 64byte
             save_stack_sz = 64;
         }
-        p->save_stack.ptr = safe_malloc(save_stack_sz);
-        assertalloc_ptr(p->save_stack.ptr);
-        p->save_stack.sz = save_stack_sz;
-#if defined(__i386__) || defined(__x86_64__)
-        p->save_stack.valid_sz = 0;
+
+        aco->save_stack.ptr = rt_clr_malloc(save_stack_sz, NULL);
+
+        assert(aco->save_stack.ptr);
+        aco->save_stack.sz = save_stack_sz;
+#if defined(__x86_64__)
+        aco->save_stack.valid_sz = 0;
 #else
 #error "platform no support yet"
 #endif
-        return p;
-    } else { // main co
-        p->main_co = NULL;
-        p->arg = arg;
-        p->fp = fp;
-        p->share_stack = NULL;
-        p->save_stack.ptr = NULL;
-        return p;
+    } else {
+        aco->main_co = NULL;
+        aco->arg = arg;
+        aco->fp = fp;
+        aco->share_stack = NULL;
+        aco->save_stack.ptr = NULL;
     }
-    assert(0);
 }
 
 aco_attr_no_asan void aco_resume(aco_t *resume_co) {
@@ -364,15 +337,17 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
         if (resume_co->share_stack->owner != NULL) {
             aco_t *owner_co = resume_co->share_stack->owner;
             assert(owner_co->share_stack == resume_co->share_stack);
-#if defined(__i386__) || defined(__x86_64__)
-            assert(((uintptr_t)(owner_co->share_stack->align_retptr) >= (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])) &&
-                   ((uintptr_t)(owner_co->share_stack->align_highptr) - (uintptr_t)(owner_co->share_stack->align_limit) <=
-                    (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])));
+#if defined(__x86_64__)
+            assert(((uintptr_t) (owner_co->share_stack->align_retptr) >= (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])) &&
+                   ((uintptr_t) (owner_co->share_stack->align_highptr) -
+                    (uintptr_t) (owner_co->share_stack->align_limit) <=
+                    (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])));
 
-            owner_co->save_stack.valid_sz = (uintptr_t)(owner_co->share_stack->align_retptr) - (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP]);
+            owner_co->save_stack.valid_sz =
+                    (uintptr_t) (owner_co->share_stack->align_retptr) - (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP]);
 
+            // 栈增长
             if (owner_co->save_stack.sz < owner_co->save_stack.valid_sz) {
-                safe_free(owner_co->save_stack.ptr);
                 owner_co->save_stack.ptr = NULL;
                 while (1) {
                     owner_co->save_stack.sz = owner_co->save_stack.sz << 1;
@@ -381,14 +356,15 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
                         break;
                     }
                 }
-                owner_co->save_stack.ptr = safe_malloc(owner_co->save_stack.sz);
-                assertalloc_ptr(owner_co->save_stack.ptr);
+                owner_co->save_stack.ptr = rt_clr_malloc(owner_co->save_stack.sz);
+                assert(owner_co->save_stack.ptr);
             }
             // TODO: optimize the performance penalty of memcpy function call
             //   for very short memory span
             if (owner_co->save_stack.valid_sz > 0) {
 #ifdef __x86_64__
-                aco_amd64_optimized_memcpy_drop_in(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->save_stack.valid_sz);
+                aco_amd64_optimized_memcpy_drop_in(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP],
+                                                   owner_co->save_stack.valid_sz);
 #else
                 memcpy(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->save_stack.valid_sz);
 #endif
@@ -404,14 +380,15 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 #endif
         }
         assert(resume_co->share_stack->owner == NULL);
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__x86_64__)
         assert(resume_co->save_stack.valid_sz <= resume_co->share_stack->align_limit - sizeof(void *));
         // TODO: optimize the performance penalty of memcpy function call
         //   for very short memory span
         if (resume_co->save_stack.valid_sz > 0) {
 #ifdef __x86_64__
-            aco_amd64_optimized_memcpy_drop_in((void *)((uintptr_t)(resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
-                                               resume_co->save_stack.ptr, resume_co->save_stack.valid_sz);
+            aco_amd64_optimized_memcpy_drop_in(
+                    (void *) ((uintptr_t) (resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
+                    resume_co->save_stack.ptr, resume_co->save_stack.valid_sz);
 #else
             memcpy((void *)((uintptr_t)(resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz), resume_co->save_stack.ptr,
                    resume_co->save_stack.valid_sz);
@@ -432,56 +409,53 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }
 
-aco_attr_no_asan void aco_save_temp_stack(aco_t *aco) {
-    assert(aco->reg[ACO_REG_IDX_RETADDR]);
-    assert(aco->reg[ACO_REG_IDX_SP]);
-    assert(aco->share_stack->owner == aco);
-
-    aco->temp_stack.valid_sz = (uintptr_t)(aco->share_stack->align_retptr) - (uintptr_t)(aco->reg[ACO_REG_IDX_SP]);
-
-    // realloc stack
-    if (aco->temp_stack.sz < aco->temp_stack.valid_sz) {
-        safe_free(aco->temp_stack.ptr);
-        aco->temp_stack.ptr = NULL;
-
-        while (true) {
-            // <<1 equals *2
-            aco->temp_stack.sz = aco->temp_stack.sz << 1;
-            assert(aco->temp_stack.sz > 0);
-            if (aco->temp_stack.sz >= aco->temp_stack.valid_sz) {
-                break;
-            }
-        }
-
-        aco->temp_stack.ptr = safe_malloc(aco->temp_stack.sz);
-        assertalloc_ptr(aco->temp_stack.ptr);
-    }
-
-    // 保存栈数据
-    if (aco->temp_stack.valid_sz > 0) {
-#ifdef __x86_64__
-        aco_amd64_optimized_memcpy_drop_in(aco->temp_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
-#else
-        memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
-#endif
-    }
-
-    if (aco->temp_stack.valid_sz > aco->temp_stack.max_cpsz) {
-        aco->temp_stack.max_cpsz = aco->temp_stack.valid_sz;
-    }
-}
+//aco_attr_no_asan void aco_save_temp_stack(aco_t *aco) {
+//    assert(aco->reg[ACO_REG_IDX_RETADDR]);
+//    assert(aco->reg[ACO_REG_IDX_SP]);
+//    assert(aco->share_stack->owner == aco);
+//
+//    aco->temp_stack.valid_sz = (uintptr_t) (aco->share_stack->align_retptr) - (uintptr_t) (aco->reg[ACO_REG_IDX_SP]);
+//
+//    // realloc stack
+//    if (aco->temp_stack.sz < aco->temp_stack.valid_sz) {
+//        safe_free(aco->temp_stack.ptr);
+//        aco->temp_stack.ptr = NULL;
+//
+//        while (true) {
+//            // <<1 equals *2
+//            aco->temp_stack.sz = aco->temp_stack.sz << 1;
+//            assert(aco->temp_stack.sz > 0);
+//            if (aco->temp_stack.sz >= aco->temp_stack.valid_sz) {
+//                break;
+//            }
+//        }
+//
+//        aco->temp_stack.ptr = safe_malloc(aco->temp_stack.sz);
+//        assertalloc_ptr(aco->temp_stack.ptr);
+//    }
+//
+//    // 保存栈数据
+//    if (aco->temp_stack.valid_sz > 0) {
+//#ifdef __x86_64__
+//        aco_amd64_optimized_memcpy_drop_in(aco->temp_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
+//#else
+//        memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
+//#endif
+//    }
+//
+//    if (aco->temp_stack.valid_sz > aco->temp_stack.max_cpsz) {
+//        aco->temp_stack.max_cpsz = aco->temp_stack.valid_sz;
+//    }
+//}
 
 void aco_destroy(aco_t *co) {
     assertptr(co);
-    if (aco_is_main_co(co)) {
-        safe_free(co);
-    } else {
+    if (!aco_is_main_co(co)) {
         if (co->share_stack->owner == co) {
             co->share_stack->owner = NULL;
             co->share_stack->align_validsz = 0;
         }
-        safe_free(co->save_stack.ptr);
+
         co->save_stack.ptr = NULL;
-        safe_free(co);
     }
 }

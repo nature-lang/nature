@@ -12,17 +12,14 @@ void wait_sysmon() {
     // 循环监控(每 10ms 监控一次)
     while (true) {
         // - 监控长时间被占用的 share processor 进行抢占式调度
-        SLICE_FOR(share_processor_list) {
-            processor_t *p = SLICE_VALUE(share_processor_list);
+        PROCESSOR_FOR(share_processor_list) {
             if (p->exit) {
                 continue;
             }
 
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t) p->thread_id);
-            //            write(STDOUT_FILENO, "-----0\n", 7);
-            mutex_lock(p->thread_preempt_locker);
-            //            write(STDOUT_FILENO, "-----1\n", 7);
+            mutex_lock(&p->thread_preempt_locker);
             RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d", p->share, p->index);
 
             if (!p->can_preempt) {
@@ -73,25 +70,32 @@ void wait_sysmon() {
             // 解锁异常, 信号处理一直没有成功
             assert(false && "error sending SIGURG to thread");
             SHARE_NEXT:
-            mutex_unlock(p->thread_preempt_locker);
+            mutex_unlock(&p->thread_preempt_locker);
             RDEBUGF("[wait_sysmon.thread_locker] share unlocker, p_index_%d=%d", p->share, p->index);
         }
 
         // - 监控状态处于 running solo processor
         // - 当需要 stw 时，如果 coroutine 在 running 阶段，则进行抢占式调用
-        LINKED_FOR(solo_processor_list) {
-            processor_t *p = LINKED_VALUE();
 
+        processor_t *prev = NULL;
+        for (processor_t *p = solo_processor_list; p; prev = p, p = p->next) {
             if (p->exit) {
                 processor_free(p);
-                safe_linked_remove_free(solo_processor_list, node);
+
+                // 从链表中移除改 p
+                if (prev) {
+                    prev->next = p->next;
+                } else {
+                    solo_processor_list = p->next;
+                }
+
                 continue;
             }
 
             // - 获取抢占锁
             RDEBUGF("[wait_sysmon.thread_locker] wait locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t) p->thread_id);
-            mutex_lock(p->thread_preempt_locker);
+            mutex_lock(&p->thread_preempt_locker);
             RDEBUGF("[wait_sysmon.thread_locker] get locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t) p->thread_id);
 
@@ -148,7 +152,7 @@ void wait_sysmon() {
             }
 
             SOLO_NEXT:
-            mutex_unlock(p->thread_preempt_locker);
+            mutex_unlock(&p->thread_preempt_locker);
             RDEBUGF("[wait_sysmon.thread_locker] solo unlocker, p_index_%d=%d", p->share, p->index);
         }
 
