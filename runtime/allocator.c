@@ -1,3 +1,4 @@
+#include "gcbits.h"
 #include "memory.h"
 #include "processor.h"
 
@@ -691,10 +692,11 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 
     *span = mspan;
 
-    mutex_lock(mspan->alloc_bits->locker);
+    pthread_mutex_lock(&mspan->alloc_locker);
+
     for (int i = 0; i <= mspan->obj_count; i++) {
         // TODO 优化一下计算起点，不能每次都用遍历法
-        bool used = bitmap_test(mspan->alloc_bits->bits, i);
+        bool used = bitmap_test(mspan->alloc_bits, i);
         if (used) {
             //            DEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
             continue;
@@ -704,15 +706,15 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         addr_t addr = mspan->base + i * mspan->obj_size;
 
         // 标记该节点已经被使用
-        bitmap_set(mspan->alloc_bits->bits, i);
+        bitmap_set(mspan->alloc_bits, i);
         mspan->alloc_count += 1;
 
-        mutex_unlock(mspan->alloc_bits->locker);
+        pthread_mutex_unlock(&mspan->alloc_locker);
         MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
         return addr;
     }
 
-    mutex_unlock(mspan->alloc_bits->locker);
+    pthread_mutex_unlock(&mspan->alloc_locker);
 
     safe_assertf(false, "out of memory: mcache_alloc");
     return 0;
@@ -916,6 +918,12 @@ void memory_init() {
         item->full_list = NULL;
     }
 
+    // - 初始化 fixalloc
+    fixalloc_init(&mheap->spanalloc, sizeof(mspan_t));
+
+    // - 初始化 gcbits
+    gcbits_areas_init();
+
     // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
     DEBUGF("[memory_init] will start deserialize");
     DEBUGF("[memory_init] fndef count = %lu", rt_fndef_count);
@@ -1005,14 +1013,16 @@ void *runtime_rtype_malloc(uint64_t size, rtype_t *rtype) {
 }
 
 /**
- * TODO 死循环了怎么办。这里的 meta 数据就没有其他策略了吗？
  * @param base
  * @param pages_count
  * @param spanclass
  * @return
  */
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
-    mspan_t *span = NEW(mspan_t);
+    // 必须要加锁正太才能使用 fixalloc
+    assert(memory->locker->locker_count > memory->locker->unlocker_count);
+    mspan_t *span = fixalloc_alloc(&memory->mheap->spanalloc);
+
     span->base = base;
     span->next = NULL;
     span->pages_count = pages_count;
@@ -1028,10 +1038,10 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     }
 
     span->end = span->base + (span->pages_count * ALLOC_PAGE_SIZE);
-    span->alloc_bits = bitmap_new((int)span->obj_count);
-    span->gcmark_bits = bitmap_new((int)span->obj_count);
-    span->manual_bits = bitmap_new((int)span->obj_count);
-    span->gcmark_locker = mutex_new(false);
+    pthread_mutex_lock(&span->gcmark_locker);
+    pthread_mutex_lock(&span->alloc_locker);
+    span->alloc_bits = gcbits_new(span->obj_count);
+    span->gcmark_bits = gcbits_new(span->obj_count);
 
     DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu", span->base,
            span->pages_count, span->spanclass, sizeclass, span->obj_size, span->obj_count);
@@ -1093,24 +1103,4 @@ EXIT:
 void *runtime_malloc(uint64_t rtype_hash) {
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     return runtime_zero_malloc(rtype->size, rtype);
-}
-
-void *manual_malloc(uint64_t size) {
-    void *addr = runtime_zero_malloc(size, NULL);
-
-    mspan_t *span = span_of((addr_t)addr);
-    assert(span);
-    uint64_t obj_index = ((addr_t)addr - span->base) / span->obj_size;
-    bitmap_set(span->manual_bits->bits, obj_index);
-    mark_obj_black(span, obj_index); // 避免被 gc 清理
-
-    return addr;
-}
-
-void manual_free(void *ptr) {
-    mspan_t *span = span_of((addr_t)ptr);
-    assert(span && "ptr not from manual_malloc");
-    uint64_t obj_index = ((addr_t)ptr - span->base) / span->obj_size;
-
-    bitmap_clear(span->manual_bits->bits, obj_index);
 }

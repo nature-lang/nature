@@ -5,6 +5,9 @@
 #include <uv.h>
 
 #include "aco/aco.h"
+#include "fixalloc.h"
+#include "gcbits.h"
+#include "rt_linked.h"
 #include "utils/bitmap.h"
 #include "utils/linked.h"
 #include "utils/mutex.h"
@@ -113,12 +116,11 @@ typedef struct mspan_t {
     uint64_t alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
-    bitmap_t *alloc_bits;
-    bitmap_t *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
+    gc_bits *alloc_bits;  // obj_count
+    gc_bits *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
-    bitmap_t *manual_bits; // 手动分配的内存区域，gcmark_bits 初始状态, 手动 malloc 和 free 内存时需要同时更新 gcmark/manual
-
-    mutex_t *gcmark_locker;
+    pthread_mutex_t alloc_locker;
+    pthread_mutex_t gcmark_locker;
 } mspan_t;
 
 /**
@@ -222,6 +224,8 @@ typedef struct {
         addr_t cursor; // 指向未被使用的地址
         addr_t end;    // 指向本次申请的终点
     } current_arena;
+
+    fixalloc_t spanalloc;
 } mheap_t;
 
 typedef struct {
@@ -282,17 +286,17 @@ struct processor_t {
 
     mutex_t *thread_preempt_locker;
 
-    uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
-    coroutine_t *coroutine; // 当前正在调度的 coroutine
-    uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
-    linked_t *co_list;      // 当前 processor 下的 coroutine 列表
-    coroutine_t *runnable;  // coroutine 链表
-    bool share;             // 默认都是共享处理器
-    bool safe_point;        // 当前是否处于安全点
-    bool exit;              // 是否已经退出
-    bool can_preempt;       // 当前 processor 能否被抢占
-    bool gc_work_finished;  // 是否完成了 GC WORK 的工作
-    linked_t *gc_worklist;  // gc 扫描的 ptr 节点列表
+    uv_thread_t thread_id;    // 当前 processor 绑定的 pthread 线程
+    coroutine_t *coroutine;   // 当前正在调度的 coroutine
+    uint64_t co_started_at;   // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
+    rt_linked_t co_list;     // 当前 processor 下的 coroutine 列表
+    coroutine_t *runnable;    // coroutine 链表
+    bool share;               // 默认都是共享处理器
+    bool safe_point;          // 当前是否处于安全点
+    bool exit;                // 是否已经退出
+    bool can_preempt;         // 当前 processor 能否被抢占
+    bool gc_work_finished;    // 是否完成了 GC WORK 的工作
+    rt_linked_t gc_worklist; // gc 扫描的 ptr 节点列表
 };
 
 int runtime_main(int argc, char *argv[]);

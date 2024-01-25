@@ -213,6 +213,6 @@ void shade_obj_grey(void *obj);
 
 void mark_ptr_black(void *ptr);
 
-void mark_obj_black(mspan_t *span, uint64_t index);
+void mark_obj_black_with_lock(mspan_t *span, uint64_t index);
 
 #endif // NATURE_MEMORY_H

@@ -1,3 +1,4 @@
+#include "fixalloc.h"
 #include "memory.h"
 #include "processor.h"
 #include "utils/safe_linked.h"
@@ -30,11 +31,11 @@ void shade_obj_grey(void *obj) {
     //  get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
 
-    mutex_lock(span->gcmark_locker);
+    pthread_mutex_lock(&span->gcmark_locker);
 
-    bitmap_clear(span->gcmark_bits->bits, obj_index);
+    bitmap_clear(span->gcmark_bits, obj_index);
 
-    mutex_unlock(span->gcmark_locker);
+    pthread_mutex_unlock(&span->gcmark_locker);
 
     processor_t *p = processor_get();
 
@@ -96,15 +97,19 @@ static void flush_mcache() {
     DEBUGF("gc flush mcache successful");
 }
 
-void mark_obj_black(mspan_t *span, uint64_t index) {
-    bitmap_locker_set(span->gcmark_bits, index);
+void mark_obj_black_with_lock(mspan_t *span, uint64_t index) {
+    pthread_mutex_lock(&span->gcmark_locker);
+    bitmap_set(span->gcmark_bits, index);
+    pthread_mutex_unlock(&span->gcmark_locker);
 }
 
 // safe
 static void free_mspan_meta(mspan_t *span) {
-    rt_bitmap_free(span->alloc_bits);
-    rt_bitmap_free(span->gcmark_bits);
-    manual_free(span);
+    mutex_lock(memory->locker);
+
+    fixalloc_free(&memory->mheap->spanalloc, span);
+
+    mutex_unlock(memory->locker);
 }
 
 /**
@@ -113,10 +118,16 @@ static void free_mspan_meta(mspan_t *span) {
  */
 static void sweep_span(mcentral_t *central, mspan_t *span) {
     // 但是此时 span 其实并没有真的被释放,只有 alloc_count = 0 时才会触发真正的释放操作, 这里记录更新一下分配的内存值
-    // TODO 耗性能操作，非必须
+
+    int alloc_count = 0;
     for (int i = 0; i < span->obj_count; ++i) {
+        if (bitmap_test(span->gcmark_bits, i)) {
+            alloc_count++;
+            continue;
+        }
+
         // 如果 gcmark_bits = 0, alloc_bits = 1, 则表明内存被释放，可以进行释放的
-        if (bitmap_test(span->alloc_bits->bits, i) && !bitmap_test(span->gcmark_bits->bits, i)) {
+        if (bitmap_test(span->alloc_bits, i) && !bitmap_test(span->gcmark_bits, i)) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
@@ -125,16 +136,10 @@ static void sweep_span(mcentral_t *central, mspan_t *span) {
                 span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
         }
     }
-    // TODO end
 
-    // gcmark bits 标记了所有正在使用中的内存 bit
-    bitmap_copy(span->alloc_bits, span->gcmark_bits);
-
-    // 初始化 gcmark bits
-    bitmap_copy(span->gcmark_bits, span->manual_bits);
-
-    // 重新计算 alloc_count
-    span->alloc_count = bitmap_set_count(span->alloc_bits);
+    span->alloc_bits = span->gcmark_bits;
+    span->gcmark_bits = gcbits_new(span->obj_count);
+    span->alloc_count = alloc_count;
 
     // span 所有的 obj 都被释放，归还内存给操作系统
     if (span->alloc_count == 0) {
@@ -313,18 +318,19 @@ static void handle_gc_ptr(linked_t *worklist, addr_t addr) {
         "spanclass=%d, obj_index=%lu, span->obj_size=%lu",
         addr, spanclass_has_ptr(span->spanclass), span->base, span->spanclass, obj_index, span->obj_size);
 
-    mutex_lock(span->gcmark_locker);
+    pthread_mutex_lock(&span->gcmark_locker);
+
     // 判断当前 span obj 是否已经被 gc bits mark,如果已经 mark 则不需要重复扫描
     // 其他线程可能已经标记了该 obj
-    if (bitmap_test(span->gcmark_bits->bits, obj_index)) {
+    if (bitmap_test(span->gcmark_bits, obj_index)) {
         // already marks black
         DEBUGF("[runtime_gc.grey_list_work] addr=0x%lx, span=0x%lx, obj_index=%lu marked, will continue", addr, span->base, obj_index);
-        mutex_unlock(span->gcmark_locker);
+        pthread_mutex_unlock(&span->gcmark_locker);
         return;
     }
 
-    mark_obj_black(span, obj_index);
-    mutex_unlock(span->gcmark_locker);
+    bitmap_set(span->gcmark_bits, obj_index);
+    pthread_mutex_unlock(&span->gcmark_locker);
 
     // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
     if (!spanclass_has_ptr(span->spanclass)) {
@@ -530,6 +536,7 @@ static void set_gc_work_coroutine() {
         gc_co->gc_work = true;
 
         linked_push(p->co_list, gc_co);
+
         runnable_push(p, gc_co);
     }
     RDEBUGF("[runtime_gc.set_gc_work_coroutine] inject gc work coroutine completed");

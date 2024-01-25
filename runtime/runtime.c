@@ -31,6 +31,10 @@ int runtime_main(int argc, char *argv[]) {
     uv_key_create(&aco_gtls_last_word_fp);
     uv_key_create(&aco_gtls_fpucw_mxcsr);
 
+    // - 初始化全局链表分配器
+    fixalloc_init(&global_nodealloc, sizeof(rt_linked_node_t));
+    pthread_mutex_init(&global_nodealloc_locker, NULL);
+
     // - read arg
     RDEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;
