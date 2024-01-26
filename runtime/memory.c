@@ -13,12 +13,10 @@ mutex_t *gc_stage_locker;
 memory_t *memory;
 
 rtype_t *rt_find_rtype(uint32_t rtype_hash) {
-    PREEMPT_LOCK();
     char *str = itoa(rtype_hash);
     rtype_t *result = table_get(rt_rtype_table, str);
     free(str);
 
-    PREEMPT_UNLOCK();
     return result;
 }
 

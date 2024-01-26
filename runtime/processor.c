@@ -40,11 +40,14 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
+    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d, co=%p, status=%d, will yield", p->share, p->index, co, co->status);
+
+    // wait sysmon 可能还没有来得及设置不可抢占，所以这里重复进行不可抢占声明
+    // 不需要加锁，wait_sysmon 不会和当前 p 竞争
     p->can_preempt = false;
+    p->co_started_at = 0;
 
-    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d, co=%p, status=%d, can_preempt=false will yield", p->share, p->index, co, co->status);
-
-    // 原来是 running 才需要 runable_push
+    // 原来是 running 才需要 push 到可执行队列钟
     if (co->status == CO_STATUS_RUNNING) {
         co->status = CO_STATUS_RUNNABLE;
         rt_linked_push(&p->runnable_list, co);
@@ -54,8 +57,9 @@ __attribute__((optimize(0))) void co_preempt_yield() {
 
     _co_yield(p, co);
 
-    // 接下来将直接 return 到用户态，且不经过 post_tpl_hook, 所以直接更新为允许抢占
-    p->can_preempt = true;
+    // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
+    enable_preempt(p);
+    co->status = CO_STATUS_RUNNING;
 
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
     DEBUGF("[runtime.co_preempt_yield] yield resume end, will return, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co, p->coroutine);
@@ -114,7 +118,7 @@ static void coroutine_wrapper() {
     }
 
     // 即将退出，不再允许抢占
-    set_can_preempt(p, false);
+    disable_preempt(p);
 
     co->status = CO_STATUS_DEAD;
     DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
@@ -153,7 +157,7 @@ void processor_start_the_world() {
 
 void uv_stop_callback(uv_timer_t *timer) {
     processor_t *p = timer->data;
-    //    DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
+    // DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
     uv_stop(timer->loop);
 }
 
@@ -169,7 +173,7 @@ int io_run(processor_t *p, uint64_t timeout_ms) {
     // 设置计时器超时回调，这将在超时后停止事件循环
     uv_timer_start(&timeout_timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
-    //    DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
+    // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
     return uv_run(&p->uv_loop, UV_RUN_DEFAULT);
 }
 
@@ -186,7 +190,7 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
-    co->status = CO_STATUS_RUNNING;
+    // co->status = CO_STATUS_RUNNING; // post_tpl_hook 和 co_preempt_yield 会切换状态
     co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 
     // 将 RIP 指针移动用户代码片段中
@@ -202,6 +206,7 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     assert(co->status != CO_STATUS_RUNNING);
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
+
     p->co_started_at = 0;
     p->coroutine = NULL;
 
@@ -217,6 +222,9 @@ static void processor_run(void *raw) {
     aco_thread_init(NULL);
     aco_create_init(&p->main_aco, NULL, NULL, 0, NULL, NULL);
     aco_share_stack_init(&p->share_stack, 0);
+
+    // 初始化 libuv
+    uv_loop_init(&p->uv_loop);
 
     // 注册线程信号监听, 用于抢占式调度
     // 分配备用信号栈
@@ -256,6 +264,7 @@ static void processor_run(void *raw) {
 
         // - exit
         if (processor_get_exit()) {
+            write(STDOUT_FILENO, "---pr_0\n", 8);
             RDEBUGF("[runtime.processor_run] p_index_%d=%d, need stop, goto exit", p->share, p->index);
             goto EXIT;
         }
@@ -274,6 +283,7 @@ static void processor_run(void *raw) {
             assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
 
             coroutine_resume(p, co);
+            assert(p->can_preempt == false);
 
             RDEBUGF("[runtime.processor_run] coroutine resume completed, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co,
                     co->status);
@@ -285,6 +295,7 @@ static void processor_run(void *raw) {
             coroutine_t *solo_co = rt_linked_first(&p->co_list)->value;
             if (solo_co->status == CO_STATUS_DEAD) {
                 RDEBUGF("[runtime.processor_run] solo processor exit, p_index=%d, co=%p, status=%d", p->index, solo_co, solo_co->status);
+                write(STDOUT_FILENO, "---pr_1\n", 8);
                 goto EXIT;
             }
         }
@@ -296,12 +307,14 @@ static void processor_run(void *raw) {
 EXIT:
     p->exit = true;
     p->thread_id = 0;
+
+    assert(p->uv_loop.active_reqs.count == 0);
+
+    uv_loop_close(&p->uv_loop);
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
 }
 
 void coroutine_dispatch(coroutine_t *co) {
-    PREEMPT_LOCK();
-
     DEBUGF("[runtime.coroutine_dispatch] co=%p, solo=%d, share_processor_count=%d", co, co->solo, cpu_count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
@@ -347,8 +360,6 @@ void coroutine_dispatch(coroutine_t *co) {
     rt_linked_push(&select_p->runnable_list, co);
 
     DEBUGF("[runtime.coroutine_dispatch] co=%p to p_index_%d=%d, end", co, select_p->share, select_p->index);
-
-    PREEMPT_UNLOCK();
 }
 
 /**
@@ -415,9 +426,9 @@ coroutine_t *coroutine_get() {
 
 void rt_processor_attach_errort(char *msg) {
     DEBUGF("[runtime.rt_processor_attach_errort] msg=%s", msg);
-    //    processor_t* p = processor_get();
-    //    n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
-    //    p->errort = errort;
+    // processor_t* p = processor_get();
+    // n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
+    // p->errort = errort;
 }
 
 void processor_dump_errort(n_errort *errort) {
@@ -450,7 +461,7 @@ void mark_ptr_black(void *ptr) {
     // get mspan by ptr
     mspan_t *span = span_of(addr);
 
-    //  get span index
+    // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
     mark_obj_black_with_lock(span, obj_index);
 }
@@ -465,7 +476,7 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     processor_t *p = processor_get();
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
-    set_can_preempt(p, false);
+    disable_preempt(p);
     co->status = CO_STATUS_SYSCALL;
 
     write(STDOUT_FILENO, "___pre_0\n", 9);
@@ -500,18 +511,18 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
     coroutine_t *co = coroutine_get();
     assert(co);
 
+    assert(p->can_preempt == false);
+
     // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入用户流程
     if (processor_get_stw()) {
         co_yield_runnable(p, co);
     }
-    // TODO 运行时间超时也进行 yield
 
     write(STDOUT_FILENO, "___pth_0\n", 9);
     DEBUGF("[runtime.post_tpl_hook] will set can_preempt=true");
-    // 已经从系统调用出来了, 设置为可以抢占，并更新相关状态, 如果当前在 STW 状态，则直接进入 STW
-    // 进入用户代码段
+
+    enable_preempt(p);
     co->status = CO_STATUS_RUNNING;
-    p->can_preempt = true;
 }
 
 coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
@@ -539,9 +550,9 @@ processor_t *processor_new(int index) {
     processor_t *p = fixalloc_alloc(&processor_alloc);
     mutex_unlock(&cp_alloc_locker);
 
-    uv_loop_init(&p->uv_loop);
+    // uv_loop_init(&p->uv_loop);
     mutex_init(&p->gc_locker, false);
-    mutex_init(&p->preempt_locker, true);
+    mutex_init(&p->disable_preempt_locker, true);
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
@@ -571,22 +582,22 @@ void processor_set_exit() {
 }
 
 void processor_free(processor_t *p) {
-    RDEBUGF("[runtime.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
+    RDEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
             &p->share_stack, p->share_stack.ptr);
 
     aco_share_stack_destroy(&p->share_stack);
     rt_linked_destroy(&p->co_list);
     aco_destroy(&p->main_aco);
 
-    RDEBUGF("[runtime.processor_free] will free uv_loop p_index_%d=%d, loop=%p", p->share, p->index, &p->uv_loop);
-    uv_loop_close(&p->uv_loop); // TODO close 会导致 segmentation fault
+    RDEBUGF("[wait_sysmon.processor_free] will free uv_loop p_index_%d=%d, loop=%p", p->share, p->index, &p->uv_loop);
+    // uv_loop_close(&p->uv_loop); // TODO close 会导致 segmentation fault
 
     int share = p->share;
     int index = p->index;
 
-    RDEBUGF("[runtime.processor_free] will free processor p_index_%d=%d", share, index);
+    RDEBUGF("[wait_sysmon.processor_free] will free processor p_index_%d=%d", share, index);
     fixalloc_free(&processor_alloc, p);
-    RDEBUGF("[runtime.processor_free] end p_index_%d=%d", share, index);
+    RDEBUGF("[wait_sysmon.processor_free] end p_index_%d=%d", share, index);
 }
 
 /**

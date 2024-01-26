@@ -25,7 +25,9 @@ static inline n_array_t *rt_array_new(rtype_t *element_rtype, uint64_t length) {
         addr, element_rtype->size, type_kind_str[element_rtype->kind], element_rtype->last_ptr > 0, rtype.size, length,
         type_kind_str[rtype.kind]);
 
+    write(STDOUT_FILENO, "---ran-0\n", 9);
     free(rtype.gc_bits);
+    write(STDOUT_FILENO, "---ran-1\n", 9);
 
     return addr;
 }

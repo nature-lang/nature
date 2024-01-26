@@ -50,8 +50,9 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
+    write(STDOUT_FILENO, "---vn-0\n", 8);
     DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
-
+    write(STDOUT_FILENO, "---vn-1\n", 8);
     return vec;
 }
 

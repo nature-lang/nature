@@ -35,15 +35,29 @@ __attribute__((optimize(0))) void co_preempt_yield();
 #define PROCESSOR_FOR(list) for (processor_t *p = list; p; p = p->next)
 
 /**
- * 一旦 thread_locker 被 sysmon 持有，则 can_preempt 的值无法修改
- * 因为采取了先修改 can_preempt 再离开 sysmon 的策略，所以此时无法切换协程
+ * 设置为可以抢占没有什么竞态关系，直接可以抢占
  * @param p
- * @param v
  */
-static inline void set_can_preempt(processor_t *p, bool v) {
-    mutex_lock(&p->preempt_locker);
-    p->can_preempt = v;
-    mutex_unlock(&p->preempt_locker);
+static inline void enable_preempt(processor_t *p) {
+    p->can_preempt = true;
+}
+
+/**
+ * 调用者希望设置为不可抢占后再进行后续的工作，如果已经是不可抢占状态则直接返回，所以当前函数可以重入
+ * 由于 sysmon 会持有锁的情况下，等待 preempt = true, 所以如果当前 p.preempt = true 想要更新为 false 时，必须要抢到锁
+ * 避免在 sysmon 抢占期间，更新 preempt = false 导致抢占异常
+ * @param p
+ */
+static inline void disable_preempt(processor_t *p) {
+    if (p->can_preempt == false) {
+        return;
+    }
+
+    assert(p->can_preempt == true);
+    // 如果 sysmon 持有了锁，则 mutex_lock 会阻塞，此时可以进行安全的抢占
+    mutex_lock(&p->disable_preempt_locker);
+    p->can_preempt = false;
+    mutex_unlock(&p->disable_preempt_locker);
 }
 
 /**
@@ -61,14 +75,11 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
 
-    //    set_can_preempt(p, false);
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_push(&p->runnable_list, co);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 
     _co_yield(p, co);
-
-    //    set_can_preempt(p, true); // 回到用户态，允许抢占
 
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }

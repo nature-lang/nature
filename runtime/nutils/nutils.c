@@ -430,8 +430,6 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
  * @return
  */
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
-    PREEMPT_LOCK();
-
     // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
     char *str = itoa(kind);
 
@@ -450,7 +448,6 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     rtype_t *rtype = table_get(rt_rtype_table, str);
     free(str);
     if (rtype) {
-        PREEMPT_UNLOCK();
         return rtype;
     }
 
@@ -485,7 +482,6 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     table_set(rt_rtype_table, str, rtype);
     free(str);
 
-    PREEMPT_UNLOCK();
     return rtype;
 }
 

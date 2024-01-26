@@ -61,16 +61,6 @@
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
 
-#define PREEMPT_LOCK()                   \
-    processor_t *_p = processor_get();   \
-    if (_p) {                            \
-        mutex_lock(&_p->preempt_locker); \
-    }
-
-#define PREEMPT_UNLOCK()                   \
-    if (_p) {                              \
-        mutex_unlock(&_p->preempt_locker); \
-    }
 
 typedef void (*void_fn_t)(void);
 
@@ -265,7 +255,7 @@ struct processor_t {
     mutex_t gc_locker;
 
     // 锁定时不可抢占, 不开放给 user 使用
-    mutex_t preempt_locker;
+    mutex_t disable_preempt_locker;
 
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine; // 当前正在调度的 coroutine

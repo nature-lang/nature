@@ -979,11 +979,9 @@ void *rt_clr_malloc(uint64_t size, rtype_t *rtype) {
 void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     processor_t *p = processor_get();
     assert(p);
-    mutex_lock(&p->preempt_locker);
+    assert(p->can_preempt == false);
 
-    MDEBUGF("[rt_gc_malloc] start get locker, p_index_%d=%d,locker_count=%d|%d", p->share, p->index, p->preempt_locker.locker_count,
-            p->preempt_locker.unlocker_count);
-    assert(p->preempt_locker.locker_count > p->preempt_locker.unlocker_count);
+    MDEBUGF("[rt_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
     if (rtype) {
         MDEBUGF("[rt_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
@@ -1007,8 +1005,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
         mark_ptr_black(ptr);
     }
 
-    MDEBUGF("[rt_gc_malloc] end will unlocker, locker_count=%d|%d", p->preempt_locker.locker_count, p->preempt_locker.unlocker_count);
-    mutex_unlock(&p->preempt_locker);
+    MDEBUGF("[rt_gc_malloc] end p_index_%d=%d, result=%p", p->share, p->index, ptr);
     return ptr;
 }
 
