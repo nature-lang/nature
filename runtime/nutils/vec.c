@@ -1,13 +1,14 @@
 #include "vec.h"
-#include "runtime/memory.h"
+
 #include "array.h"
+#include "runtime/memory.h"
 
 void vec_grow(n_vec_t *l) {
     l->capacity = l->capacity * 2;
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     n_array_t *new_array_data = rt_array_new(element_rtype, l->capacity);
-    safe_memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
+    memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
     l->data = new_array_data;
 }
 
@@ -19,9 +20,8 @@ void vec_grow(n_vec_t *l) {
  * @return
  */
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
-    SAFE_DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash,
-                element_rtype_hash,
-                length, capacity);
+    DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash, length,
+           capacity);
 
     if (capacity == 0) {
         if (length > 0) {
@@ -31,15 +31,15 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
         }
     }
 
-    safe_assertf(capacity >= length, "capacity must be greater than length");
-    SAFE_DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
+    assert(capacity >= length && "capacity must be greater than length");
+    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
-    safe_assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    assert(vec_rtype && "cannot find rtype with hash");
 
     rtype_t *element_rtype = rt_find_rtype(element_rtype_hash);
-    safe_assertf(element_rtype, "cannot find element_rtype with hash %lu", element_rtype_hash);
+    assert(element_rtype && "cannot find element_rtype with hash");
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
@@ -50,7 +50,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    SAFE_DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
+    DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
 
     return vec;
 }
@@ -62,7 +62,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
  */
 void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
-        char *msg = safe_dsprintf("index out of range [%d] with length %d", index, l->length);
+        char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_access] has err %s", msg);
         rt_processor_attach_errort(msg);
         return;
@@ -71,7 +71,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     uint64_t element_size = rt_rtype_out_size(l->element_rtype_hash);
     // 计算 offset
     uint64_t offset = element_size * index; // (size unit byte) * index
-    safe_memmove(value_ref, l->data + offset, element_size);
+    memmove(value_ref, l->data + offset, element_size);
 }
 
 /**
@@ -82,7 +82,8 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
-    safe_assertf(index <= l->length - 1, "index out of range [%d] with length %d", index, l->length);
+    //    assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
+    assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
@@ -90,7 +91,7 @@ void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     // 计算 offset
     uint64_t offset = rtype_out_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->data + offset;
-    safe_memmove(p, ref, element_size);
+    memmove(p, ref, element_size);
 }
 
 uint64_t vec_length(n_vec_t *l) {
@@ -111,14 +112,12 @@ void *vec_ref(n_vec_t *l) {
  * @param ref
  */
 void vec_push(n_vec_t *l, void *ref) {
-    safe_assertf(ref > 0, "ref=%p must be a valid address", ref);
+    assert(ref > 0 && "ref must be a valid address");
     DEBUGF("[vec_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
-           (uint64_t) fetch_int_value((addr_t) ref, 8));
+           (uint64_t)fetch_int_value((addr_t)ref, 8));
 
     if (l->length == l->capacity) {
-        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu",
-               l->length,
-               l->capacity * 2);
+        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
         vec_grow(l);
     }
 
@@ -137,25 +136,24 @@ void vec_push(n_vec_t *l, void *ref) {
 n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) {
     // start end 检测
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
-        char *msg = safe_dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
+        char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
     if (start > end) {
-        char *msg = safe_dsprintf("invalid index values, must be low %d <= high %d", start, end);
+        char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
-    DEBUGF("[vec_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu",
-           rtype_hash, l->element_rtype_hash, start, end);
+    DEBUGF("[vec_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu", rtype_hash, l->element_rtype_hash, start, end);
     uint64_t length = end - start;
 
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
-    safe_assertf(vec_rtype, "cannot find rtype with hash %lu", rtype_hash);
+    assert(vec_rtype && "cannot find rtype with hash");
     n_vec_t *sliced_vec = rt_clr_malloc(vec_rtype->size, vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
@@ -176,7 +174,7 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
  */
 n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
     DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
-    safe_assertf(a->element_rtype_hash == b->element_rtype_hash, "The types of the two vecs are different");
+    assert(a->element_rtype_hash == b->element_rtype_hash && "The types of the two vecs are different");
     uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
     uint64_t length = a->length + b->length;
     n_vec_t *merged = vec_new(rtype_hash, a->element_rtype_hash, length, length);
@@ -184,11 +182,11 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 
     // 合并 a
     void *dst = merged->data;
-    safe_memmove(dst, a->data, a->length * element_size);
+    memmove(dst, a->data, a->length * element_size);
 
     // 合并 b
     dst = merged->data + (a->length * element_size);
-    safe_memmove(dst, b->data, b->length * element_size);
+    memmove(dst, b->data, b->length * element_size);
 
     return merged;
 }
@@ -196,7 +194,7 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     DEBUGF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
     if (index >= l->length) {
-        char *msg = safe_dsprintf("index out of vec [%d] with length %d", index, l->length);
+        char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_element_addr] has err %s", msg);
         rt_processor_attach_errort(msg);
         return 0;
@@ -207,14 +205,12 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     uint64_t offset = element_size * index; // (size unit byte) * index
 
     DEBUGF("[vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
-    return (n_cptr_t) l->data + offset;
+    return (n_cptr_t)l->data + offset;
 }
 
 n_cptr_t vec_iterator(n_vec_t *l) {
     if (l->length == l->capacity) {
-        DEBUGF("[vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu",
-               l->length,
-               l->capacity * 2);
+        DEBUGF("[vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
         vec_grow(l);
     }
     uint64_t index = l->length++;
@@ -225,4 +221,3 @@ n_cptr_t vec_iterator(n_vec_t *l) {
     DEBUGF("[vec_iterator] addr=%lx", addr);
     return addr;
 }
-

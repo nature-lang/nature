@@ -37,7 +37,11 @@ int mutex_lock(mutex_t *mutex) {
 }
 
 int mutex_trylock(mutex_t *mutex) {
-    return pthread_mutex_trylock(&mutex->locker);
+    int result = pthread_mutex_trylock(&mutex->locker);
+    if (result == 0) {
+        mutex->locker_count++;
+    }
+    return result;
 }
 
 int mutex_unlock(mutex_t *mutex) {
@@ -51,3 +55,14 @@ int mutex_destroy(mutex_t *mutex) {
     return result;
 }
 
+int mutex_times_trylock(mutex_t *mutex, int times) {
+    for (int i = 0; i < times; i++) {
+        if (mutex_trylock(mutex) == 0) {
+            return 0;
+        }
+
+        usleep(1 * 1000); // 1ms
+    }
+
+    return -1;
+}

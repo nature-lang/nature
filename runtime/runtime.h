@@ -61,31 +61,16 @@
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
 
-#define SAFE_NEW(type) safe_mallocz(sizeof(type))
-
-#define MANUAL_NEW(type) manual_malloc(sizeof(type))
-
-#define PREEMPT_LOCK()                         \
-    processor_t *_p = processor_get();         \
-    if (_p) {                                  \
-        mutex_lock(&_p->thread_preempt_locker); \
+#define PREEMPT_LOCK()                   \
+    processor_t *_p = processor_get();   \
+    if (_p) {                            \
+        mutex_lock(&_p->preempt_locker); \
     }
 
-#define PREEMPT_UNLOCK()                         \
-    if (_p) {                                    \
-        mutex_unlock(&_p->thread_preempt_locker); \
+#define PREEMPT_UNLOCK()                   \
+    if (_p) {                              \
+        mutex_unlock(&_p->preempt_locker); \
     }
-
-#ifdef DEBUG
-#define SAFE_DEBUGF(format, ...)                                                                                                        \
-    do {                                                                                                                                \
-        PREEMPT_LOCK();                                                                                                                 \
-        fprintf(stderr, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
-        fflush(stderr);                                                                                                                 \
-        PREEMPT_UNLOCK();                                                                                                               \
-    } while (0)
-
-#endif
 
 typedef void (*void_fn_t)(void);
 
@@ -119,8 +104,8 @@ typedef struct mspan_t {
     gc_bits *alloc_bits;  // obj_count
     gc_bits *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
-    pthread_mutex_t alloc_locker;
-    pthread_mutex_t gcmark_locker;
+    mutex_t alloc_locker;
+    mutex_t gcmark_locker;
 } mspan_t;
 
 /**
@@ -269,7 +254,7 @@ typedef struct coroutine_t {
  */
 struct processor_t {
     int index;
-    mcache_t mcache;                // 线程维度无锁内存分配器
+    mcache_t mcache;               // 线程维度无锁内存分配器
     aco_t main_aco;                // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
 
@@ -280,18 +265,18 @@ struct processor_t {
     mutex_t gc_locker;
 
     // 锁定时不可抢占, 不开放给 user 使用
-    mutex_t thread_preempt_locker;
+    mutex_t preempt_locker;
 
-    uv_thread_t thread_id;    // 当前 processor 绑定的 pthread 线程
-    coroutine_t *coroutine;   // 当前正在调度的 coroutine
-    uint64_t co_started_at;   // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
-    rt_linked_t co_list;     // 当前 processor 下的 coroutine 列表
-    coroutine_t *runnable;    // coroutine 链表
-    bool share;               // 默认都是共享处理器
-    bool safe_point;          // 当前是否处于安全点
-    bool exit;                // 是否已经退出
-    bool can_preempt;         // 当前 processor 能否被抢占
-    bool gc_work_finished;    // 是否完成了 GC WORK 的工作
+    uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
+    coroutine_t *coroutine; // 当前正在调度的 coroutine
+    uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
+    rt_linked_t co_list;    // 当前 processor 下的 coroutine 列表
+    rt_linked_t runnable_list;
+    bool share;              // 默认都是共享处理器
+    bool safe_point;         // 当前是否处于安全点
+    bool exit;               // 是否已经退出
+    bool can_preempt;        // 当前 processor 能否被抢占
+    bool gc_work_finished;   // 是否完成了 GC WORK 的工作
     rt_linked_t gc_worklist; // gc 扫描的 ptr 节点列表
 
     struct processor_t *next; // processor 链表支持
@@ -313,91 +298,5 @@ processor_t *processor_get();
 coroutine_t *coroutine_get();
 
 void *rt_clr_malloc(uint64_t size, rtype_t *rtype);
-
-void *safe_malloc(size_t size);
-
-void *safe_memmove(void *__dest, const void *__src, size_t __n);
-
-void *safe_realloc(void *ptr, size_t size);
-
-void *safe_mallocz(size_t size);
-
-void safe_free(void *ptr);
-
-static inline void log_lock(bool lock, void *udata) {
-    pthread_mutex_t *locker = (pthread_mutex_t *) (udata);
-    if (lock) {
-        pthread_mutex_lock(locker);
-    } else {
-        pthread_mutex_unlock(locker);
-    }
-}
-
-static inline char *safe_str_connect_free(char *a, char *b) {
-    PREEMPT_LOCK();
-
-    size_t dst_len = strlen(a);
-    size_t src_len = strlen(b);
-    char *buf = malloc(dst_len + src_len + 1);
-    sprintf(buf, "%s%s", a, b);
-    free(a);
-    free(b);
-
-    PREEMPT_UNLOCK();
-    return buf;
-}
-
-static inline char *safe_dsprintf(char *format, ...) {
-    PREEMPT_LOCK();
-
-    char *buf = mallocz(1024);
-    va_list args;
-    va_start(args, format);
-    int count = vsprintf(buf, format, args);
-    va_end(args);
-
-    void *result = realloc(buf, count + 1);
-
-    PREEMPT_UNLOCK();
-    return result;
-}
-
-static inline char *safe_utoa(uint64_t n) {
-    PREEMPT_LOCK();
-
-    int length = snprintf(NULL, 0, "%lu", n);
-    char *str = mallocz(length + 1);
-    snprintf(str, length + 1, "%lu", n);
-
-    PREEMPT_UNLOCK();
-    return str;
-}
-
-static inline char *safe_itoa(int64_t n) {
-    PREEMPT_LOCK();
-
-    // 计算长度
-    int length = snprintf(NULL, 0, "%ld", n);
-
-    // 初始化 buf
-    char *str = malloc(length + 1);
-
-    // 转换
-    snprintf(str, length + 1, "%ld", n);
-
-    PREEMPT_UNLOCK();
-    return str;
-}
-
-// TODO 没有特殊系统调用，原则上不需要 safe
-static inline uint32_t safe_hash_string(char *str) {
-    //    PREEMPT_LOCK();
-    if (str == NULL) {
-        return 0;
-    }
-    uint32_t result = hash_data((uint8_t *) str, strlen(str));
-    //    PREEMPT_UNLOCK();
-    return result;
-}
 
 #endif // NATURE_BASIC_H

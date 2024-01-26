@@ -8,8 +8,7 @@ static void set_data_index(n_set_t *m, uint64_t hash_index, uint64_t data_index)
 
 // no grow
 static bool _set_add(n_set_t *m, void *key_ref) {
-    DEBUGF("[runtime.set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash, m->length,
-           m->capacity);
+    DEBUGF("[runtime.set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash, m->length, m->capacity);
 
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
@@ -34,40 +33,33 @@ static bool _set_add(n_set_t *m, void *key_ref) {
     uint64_t key_size = rt_rtype_out_size(m->key_rtype_hash);
     void *dst = m->key_data + key_size * key_index;
 
-//    DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
-    safe_memmove(dst, key_ref, key_size);
+    //    DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
+    memmove(dst, key_ref, key_size);
     return added;
 }
 
 static void set_grow(n_set_t *m) {
-    DEBUGF("[runtime.set_grow] len=%lu, cap=%lu, key_data=%p, hash_table=%p", m->length, m->capacity, m->key_data,
-           m->hash_table);
+    DEBUGF("[runtime.set_grow] len=%lu, cap=%lu, key_data=%p, hash_table=%p", m->length, m->capacity, m->key_data, m->hash_table);
 
     assert(m->key_rtype_hash > 0);
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-    safe_assertf(key_rtype, "cannot find key_rtype by hash %lu", m->key_rtype_hash);
+    assert(key_rtype && "cannot find key_rtype by hash");
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
 
-
     n_set_t old_set = {0};
-    safe_memmove(&old_set, m, sizeof(n_set_t));
+    memmove(&old_set, m, sizeof(n_set_t));
 
     m->capacity *= 2;
     m->key_data = rt_array_new(key_rtype, m->capacity);
     m->hash_table = rt_clr_malloc(sizeof(int64_t) * m->capacity, NULL);
 
-
     // 对所有的 key 进行 rehash, i 就是 data_index
     for (int data_index = 0; data_index < m->length; ++data_index) {
         void *key_ref = old_set.key_data + data_index * key_size;
 
-        uint64_t hash_index = find_hash_slot(old_set.hash_table,
-                                             old_set.capacity,
-                                             old_set.key_data,
-                                             old_set.key_rtype_hash,
-                                             key_ref);
+        uint64_t hash_index = find_hash_slot(old_set.hash_table, old_set.capacity, old_set.key_data, old_set.key_rtype_hash, key_ref);
 
-//        DEBUGF("[runtime.set_grow] find hash_index=%lu by old_set", hash_index);
+        //        DEBUGF("[runtime.set_grow] find hash_index=%lu by old_set", hash_index);
         if (hash_value_deleted(old_set.hash_table[hash_index])) {
             // 已经删除就不需要再写入到新的 hash table 中嘞
             continue;
@@ -89,12 +81,11 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
     set_data->key_data = rt_array_new(key_rtype, set_data->capacity);
     set_data->hash_table = rt_clr_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
 
-    DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p",
-           set_data, set_data->key_rtype_hash, set_data->key_data);
+    DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p", set_data, set_data->key_rtype_hash, set_data->key_data);
 
-//    for (int i = 0; i < set_data->capacity; ++i) {
-//        TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i]);
-//    }
+    //    for (int i = 0; i < set_data->capacity; ++i) {
+    //        TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i]);
+    //    }
 
     return set_data;
 }
@@ -106,11 +97,10 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
  * @return
  */
 bool set_add(n_set_t *m, void *key_ref) {
-    DEBUGF("[runtime.set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash, m->length,
-           m->capacity);
+    DEBUGF("[runtime.set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash, m->length, m->capacity);
 
     // 扩容
-    if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
+    if ((double)m->length + 1 > (double)m->capacity * HASH_MAX_LOAD) {
         set_grow(m);
     }
 

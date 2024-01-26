@@ -1,5 +1,7 @@
 #include "gcbits.h"
 
+#include "uv.h"
+
 gc_bits_arenas_t gc_bits_arenas;
 
 void gcbits_areas_init() {
@@ -60,8 +62,9 @@ gc_bits* gcbits_try_alloc(gc_bits_arena_t* arena, uintptr_t bytes_size) {
         return NULL;
     }
 
-    if (arena->free_index + bytes_size < GCBITS_CHUNK_PAYLOAD_BYTES) {
-        // 不足以生成一个 gcbits_arena
+    DEBUGF("[gcbits_try_alloc] arena=%p, free_index=%ld, bytes_size=%ld", arena, arena->free_index, bytes_size);
+
+    if (arena->free_index + bytes_size > GCBITS_CHUNK_PAYLOAD_BYTES) {
         return NULL;
     }
 

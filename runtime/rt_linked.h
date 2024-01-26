@@ -50,6 +50,7 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
 }
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
+    assert(l);
     pthread_mutex_lock(l->nodealloc_locker);
     rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
     pthread_mutex_unlock(l->nodealloc_locker);
@@ -103,6 +104,8 @@ static inline void rt_linked_destroy(rt_linked_t *l) {
     while (l->count > 0) {
         rt_linked_pop(l);
     }
+
+    fixalloc_free(l->nodealloc, l->rear);
 }
 
 #endif // NATURE_RT_LINKED_H

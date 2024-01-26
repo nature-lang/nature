@@ -47,8 +47,6 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref);
 
 void write_barrier(uint64_t rtype_hash, void *dst, void *new_obj);
 
-uint8_t *safe_malloc_gc_bits(uint64_t size);
-
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 rtype_t *gc_rtype_array(type_kind kind, uint32_t count);

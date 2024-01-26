@@ -10,7 +10,7 @@
  * @return
  */
 n_string_t *string_new(void *raw_string, uint64_t length) {
-    SAFE_DEBUGF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
+    DEBUGF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
 
     write(STDOUT_FILENO, "___sn_0\n", 8);
     // byte 数组，先手动创建一个简单类型
@@ -30,15 +30,15 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     assert(element_rtype->hash > 0);
 
     write(STDOUT_FILENO, "___sn_5\n", 8);
-    SAFE_DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
+    DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
     n_string_t *str = rt_clr_malloc(string_rtype->size, string_rtype);
     str->data = data;
     str->length = length;
     str->capacity = capacity;
     str->element_rtype_hash = element_rtype->hash;
-    safe_memmove(str->data, raw_string, length);
+    memmove(str->data, raw_string, length);
 
-    SAFE_DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
+    DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
     return str;
 }
 
@@ -73,8 +73,8 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     n_array_t *data = rt_array_new(element_rtype, capacity);
 
     // 将 str copy 到 data 中
-    safe_memmove(data, a->data, a->length);
-    safe_memmove(data + a->length, b->data, b->length);
+    memmove(data, a->data, a->length);
+    memmove(data + a->length, b->data, b->length);
 
     n_string_t *str = rt_clr_malloc(string_rtype->size, string_rtype);
     str->length = length;

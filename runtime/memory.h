@@ -7,10 +7,6 @@
 
 #include "aco/aco.h"
 #include "runtime.h"
-#include "runtime/utils/safe_assertf.h"
-#include "runtime/utils/safe_bitmap.h"
-#include "runtime/utils/safe_linked.h"
-#include "runtime/utils/safe_slice.h"
 #include "sizeclass.h"
 #include "utils/custom_links.h"
 #include "utils/helper.h"
@@ -36,26 +32,26 @@ typedef enum {
 
 // 头进
 #define RT_LIST_PUSH_HEAD(list, item) \
-    do {                                \
-        if (list == NULL) {             \
-            list = item;                \
-            break;                      \
-        }                               \
-                                        \
-        item->next = list;              \
-        list = item;                    \
+    do {                              \
+        if (list == NULL) {           \
+            list = item;              \
+            break;                    \
+        }                             \
+                                      \
+        item->next = list;            \
+        list = item;                  \
     } while (0)
 
 // 头出
 #define RT_LIST_POP_HEAD(list, item) \
-    do {                          \
-        if (list == NULL) {       \
-            break;                \
-        }                         \
-                                  \
-        *item = list;             \
-        list = *item->next;       \
-        *item->next = NULL;       \
+    do {                             \
+        if (list == NULL) {          \
+            break;                   \
+        }                            \
+                                     \
+        *item = list;                \
+        list = *item->next;          \
+        *item->next = NULL;          \
     } while (0)
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
@@ -102,7 +98,7 @@ static inline uint64_t arena_index(uint64_t base) {
 static inline arena_t *take_arena(addr_t base) {
     arena_t *arena = memory->mheap->arenas[arena_index(base)];
 
-    //    safe_assertf(arena, "cannot find arena by addr=0x%lx", base);
+    //   assertf(arena, "cannot find arena by addr=0x%lx", base);
     assert(arena && "cannot find arena by addr");
 
     return arena;
@@ -119,10 +115,8 @@ static inline bool in_heap(addr_t addr) {
 }
 
 static inline addr_t safe_heap_addr(addr_t addr) {
-    safe_assertf(addr >= ARENA_HINT_BASE, "addr=0x%lx overflow heap, heap_base=0x%lx", addr, ARENA_HINT_BASE);
-
-    safe_assertf(addr < memory->mheap->current_arena.end, "addr=0x%lx overflow heap, heap_end=0x%lx", addr,
-                 memory->mheap->current_arena.end);
+    assert(addr >= ARENA_HINT_BASE && "addr overflow heap base");
+    assert(addr < memory->mheap->current_arena.end && "addr overflow heap end");
     return addr;
 }
 
@@ -144,7 +138,7 @@ static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
     if (size == BYTE) {
         return *(uint8_t *)addr;
     }
-    safe_assertf(false, "cannot fetch int value by size=%d", size);
+    assert(false && "cannot fetch int value");
     exit(1);
 }
 

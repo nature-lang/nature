@@ -60,22 +60,22 @@
 
 // 抢占式调度与 coroutine dispatch 使用该 debug 函数
 #ifdef DEBUG
-#define RDEBUGF(format, ...)                                                                                               \
-    printf("[%lu] RUNTIME DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+
+#define RDEBUGF(format, ...)                                                                                                        \
+    fprintf(stderr, "[%lu] RUNTIME DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stderr);
+
+#define MDEBUGF(format, ...)                                                                                                       \
+    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-// mdebug 在内存分配函数中不可抢占，所以总是安全的
-#define MDEBUGF(format, ...)                                                                                              \
-    printf("[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define DEBUGF(format, ...)                                                                                                         \
+    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
-
-#define DEBUGF(format, ...) \
-    //        fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__);                                                  \
-//    fflush(stderr);
 
 #define TDEBUGF(format, ...)                                                                        \
-    fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
-    fflush(stderr);
+    fprintf(stdout, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+    fflush(stdout);
 
 #else
 #define RDEBUGF(...)
@@ -213,6 +213,17 @@ static inline char *str_connect(char *a, char *b) {
     size_t src_len = strlen(b);
     char *buf = mallocz(dst_len + src_len + 1);
     sprintf(buf, "%s%s", a, b);
+    return buf;
+}
+
+static inline char *str_connect_free(char *a, char *b) {
+    size_t dst_len = strlen(a);
+    size_t src_len = strlen(b);
+    char *buf = malloc(dst_len + src_len + 1);
+    sprintf(buf, "%s%s", a, b);
+    free(a);
+    free(b);
+
     return buf;
 }
 

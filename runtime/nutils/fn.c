@@ -2,7 +2,6 @@
 
 #include "array.h"
 #include "runtime/memory.h"
-#include "runtime/utils/safe_table.h"
 
 #ifdef __AMD64
 
@@ -124,7 +123,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
 
 #else
 static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr_t fn_addr) {
-    safe_assertf(false, "[runtime.gen_closure_jit_codes]cannot support arch");
+    assert(false && "gen_closure_jit_codes cannot support arch");
 }
 #endif
 
@@ -143,7 +142,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr);
-    safe_assertf(fndef, "cannot find fn by addr=0x%lx", fn_addr);
+    assert(fndef && "cannot find fn by addr");
 
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
@@ -155,16 +154,17 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
      * 都是堆内存区域对首个地址, 所以将返回值当成数据参数或者时 call label 都是可以的.
      *
      */
-    safe_assertf((void *)fn_runtime == (void *)fn_runtime->closure_jit_codes, "fn_new base must equal fn_runtime first property");
+    assert((void *)fn_runtime == (void *)fn_runtime->closure_jit_codes && "fn_new base must equal fn_runtime first property");
     return fn_runtime->closure_jit_codes;
 }
 
 envs_t *env_new(uint64_t length) {
     DEBUGF("[runtime.env_new] length=%lu, %p", length, env_table);
     if (env_table == NULL) {
-        env_table = safe_table_new();
+        env_table = table_new();
     }
 
+    // upvalue
     rtype_t *element_rtype = gc_rtype(TYPE_GC_ENV_VALUE, 1, TYPE_GC_SCAN);
 
     rtype_t *envs_rtype = gc_rtype(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
@@ -182,7 +182,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
     DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, rtype_size=%lu, env_index=%lu, stack_addr=0x%lx", envs,
            type_kind_str[item_rtype->kind], item_rtype->size, env_index, stack_addr);
 
-    upvalue_t *upvalue = safe_table_get(env_table, safe_utoa(stack_addr));
+    upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     if (!upvalue) {
         // TYPE_GC_NOSCAN=upvalue.value, TYPE_GC_SCAN=upvalue.ref, ref 在 closure 后会指向 value 部分
         // 所以总是将 ref 部分设置为 scan
@@ -191,7 +191,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
         upvalue = rt_clr_malloc(sizeof(upvalue_t), upvalue_rtype);
         DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash);
 
-        safe_table_set(env_table, safe_utoa(stack_addr), upvalue);
+        table_set(env_table, utoa(stack_addr), upvalue);
         DEBUGF("[runtime.env_assign] table set success");
 
         upvalue->ref = (void *)stack_addr;
@@ -209,8 +209,8 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
  * stack 需要被回收，但是 stack addr 缺被引用了，此时需要将 stack addr 的值 copy 到 upvalue 中
  */
 void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
-    upvalue_t *upvalue = safe_table_get(env_table, safe_utoa(stack_addr));
-    safe_assertf(upvalue, "not found stack addr=%p upvalue, cannot close", stack_addr);
+    upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
+    assert(upvalue && "not found stack addr upvalue, cannot close");
     DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, upvalue->ref=%p, rtype_hash=%lu", stack_addr, upvalue, upvalue->ref,
            rtype_hash);
 
@@ -230,7 +230,7 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
 
     DEBUGF("[runtime.env_closure] closure success, upvalue->ref=%p stack_addr=0x%lx, ", upvalue->ref, stack_addr);
 
-    table_delete(env_table, safe_utoa(stack_addr));
+    table_delete(env_table, utoa(stack_addr));
 }
 
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {
@@ -242,7 +242,7 @@ void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t si
     DEBUGF("[runtime.env_access_ref] fn_base=%p, fn->envs_base=%p, index=%lu, dst_ref=%p, size=%lu, env_int_value=0x%lx", fn, fn->envs,
            index, dst_ref, size, fetch_int_value((addr_t)upvalue->ref, size));
 
-    safe_memmove(dst_ref, upvalue->ref, size);
+    memmove(dst_ref, upvalue->ref, size);
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
@@ -252,7 +252,7 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 
     upvalue_t *upvalue = fn->envs->values[index];
 
-    safe_memmove(upvalue->ref, src_ref, size);
+    memmove(upvalue->ref, src_ref, size);
 }
 
 void *env_element_addr(runtime_fn_t *fn, uint64_t index) {

@@ -31,7 +31,7 @@ void map_grow(n_map_t *m) {
     uint64_t value_size = rtype_out_size(value_rtype, POINTER_SIZE);
 
     n_map_t old_map;
-    safe_memmove(&old_map, m, sizeof(n_map_t));
+    memmove(&old_map, m, sizeof(n_map_t));
 
 
     m->capacity *= 2;
@@ -109,12 +109,12 @@ n_cptr_t map_access(n_map_t *m, void *key_ref) {
                hash_value_empty(hash_value),
                hash_value_deleted(hash_value));
 
-        char *msg = safe_dsprintf("key [%s] not found in map", key_str);
+        char *msg = dsprintf("key [%s] not found in map", key_str);
         rt_processor_attach_errort(msg);
         return 0;
     }
 
-    safe_free((void *) key_str);
+    free((void *)key_str);
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回
@@ -145,7 +145,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
            key_rtype->kind,
            key_str,
            hash_index);
-    safe_free((void *) key_str);
+    free((void *)key_str);
 
     uint64_t data_index = 0;
     if (hash_value_empty(hash_value)) {
@@ -167,7 +167,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
            m->hash_table[hash_index]);
 
     // push to key list and value list
-    safe_memmove(m->key_data + key_size * data_index, key_ref, key_size);
+    memmove(m->key_data + key_size * data_index, key_ref, key_size);
     return (n_cptr_t) (m->value_data + value_size * data_index);
 }
 

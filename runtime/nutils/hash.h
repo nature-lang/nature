@@ -42,8 +42,8 @@ static inline uint64_t extract_data_index(uint64_t hash_value) {
 
 static inline uint64_t key_hash(rtype_t *rtype, void *key_ref) {
     char *str = rtype_value_str(rtype, key_ref);
-    uint64_t result = safe_hash_string(str);
-    safe_free((void *)str);
+    uint64_t result = hash_string(str);
+    free((void *)str);
     return result;
 }
 
@@ -52,8 +52,8 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
     char *actual_str = rtype_value_str(rtype, actual);
     char *expect_str = rtype_value_str(rtype, expect);
     bool result = str_equal(actual_str, expect_str);
-    safe_free((void *)actual_str);
-    safe_free((void *)expect_str);
+    free((void *)actual_str);
+    free((void *)expect_str);
     return result;
 }
 
@@ -66,7 +66,7 @@ static inline bool key_equal(rtype_t *rtype, void *actual, void *expect) {
 static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t *key_data, uint64_t key_rtype_hash, void *key_ref) {
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_rtype_hash);
-    safe_assertf(key_rtype, "cannot find rtype by hash=%d", key_rtype_hash);
+    assert(key_rtype && "cannot find rtype by hash");
     DEBUGF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind]);
 
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
