@@ -65,16 +65,16 @@
     fprintf(stderr, "[%lu] RUNTIME DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stderr);
 
-#define MDEBUGF(format, ...)                                                                                                       \
-//    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define MDEBUGF(format, ...) \
+    //    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
 //    fflush(stdout);
 
-#define DEBUGF(format, ...)                                                                                                         \
-//    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define DEBUGF(format, ...) \
+    //    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
 //    fflush(stdout);
 
-#define TDEBUGF(format, ...)                                                                        \
-    fprintf(stdout, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+#define TDEBUGF(format, ...)                                                                                                        \
+    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
 #else
@@ -110,9 +110,9 @@ static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
 static inline uint32_t hash_string(char *str) {
     assert(str);
     assert(strlen(str) > 0);
-    //    if (str == NULL) {
-    //        return 0;
-    //    }
+    // if (str == NULL) {
+    //     return 0;
+    // }
     return hash_data((uint8_t *)str, strlen(str));
 }
 
@@ -337,7 +337,7 @@ static inline char *rtrim(char *str, char *sub) {
 
     char *res = mallocz(len);
 
-    //    strncpy(res, str, len);
+    // strncpy(res, str, len);
     memcpy(res, str, len);
     res[len - 1] = '\0';
 

@@ -616,6 +616,8 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
+    TDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
+            span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
 
@@ -861,28 +863,37 @@ arena_hint_t *arena_hints_init() {
  * @param span
  */
 void mheap_free_span(mheap_t *mheap, mspan_t *span) {
+    RDEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *)span->base, span->pages_count,
+            chunk_index(span->base));
+
     // 从 page_alloc 的视角清理 span 对应的内存页
     // chunks bit = 0 表示空闲
     chunks_set(span->base, span->pages_count * ALLOC_PAGE_SIZE, 0);
 
+    RDEBUGF("[mheap_free_span] chunk set success");
+
     // 从 arena 视角清理 span
     mheap_clear_spans(span);
 
+    RDEBUGF("[mheap_free_span] mheap_clear_spans success");
     // arena.bits 保存了当前 span 中的指针 bit, 当下一次当前内存被分配时会覆盖写入
     // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
 
     remove_total_bytes += span->pages_count * ALLOC_PAGE_SIZE;
 
     // 将物理内存归还给操作系统
-    RDEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=0x%lx, span.pages_count=%ld, remove_size=%lu",
-            remove_total_bytes / 1024 / 1024, span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
+    RDEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
+            remove_total_bytes / 1024 / 1024, (void *)span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
 
     sys_memory_remove((void *)span->base, span->pages_count * ALLOC_PAGE_SIZE);
+
+    RDEBUGF("[mheap_free_span] sys_memory_remove success");
 }
 
 void memory_init() {
     memory = NEW(memory_t);
     memory->sweepgen = 0;
+    memory->gc_count = 0;
     memory->locker = mutex_new(false);
 
     // 初始化 gc 参数
@@ -943,12 +954,13 @@ mspan_t *span_of(uint64_t addr) {
     // DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
-    DEBUGF("[span_of] addr= %p", (void *)addr);
+    TDEBUGF("[span_of] addr=%p", (void *)addr);
     assert(arena && "not found arena");
 
-    // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 感觉 addr 定位 page_index
+    // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
+    TDEBUGF("[span_of] page_index=%lu, span=%p", page_index, span);
     assert(span && "not found span by page_index");
     return span;
 }
@@ -1023,6 +1035,8 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->base = base;
     span->next = NULL;
     span->pages_count = pages_count;
+    span->alloc_count = 0;
+    span->sweepgen = 0;
     span->spanclass = spanclass;
     uint8_t sizeclass = take_sizeclass(spanclass);
     if (sizeclass == 0) { // 使用 spanclass = 0 来管理 large_malloc

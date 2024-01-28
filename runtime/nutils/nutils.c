@@ -302,28 +302,28 @@ void zero_fn() {
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
-    //    DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld", msg->data, path, line, column);
-    //    processor_t *p = processor_get();
+    // DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld", msg->data, path, line, column);
+    // processor_t *p = processor_get();
     //
-    //    n_errort *errort = n_errort_new(msg, true);
+    // n_errort *errort = n_errort_new(msg, true);
     //
-    //    n_trace_t trace = {
-    //        .path = string_new(path, strlen(path)),
-    //        .ident = string_new(fn_name, strlen(fn_name)),
-    //        .line = line,
-    //        .column = column,
-    //    };
-    //    vec_push(errort->traces, &trace);
+    // n_trace_t trace = {
+    //     .path = string_new(path, strlen(path)),
+    //     .ident = string_new(fn_name, strlen(fn_name)),
+    //     .line = line,
+    //     .column = column,
+    // };
+    // vec_push(errort->traces, &trace);
     //
-    //    p->errort = errort;
+    // p->errort = errort;
 }
 
 n_errort co_remove_error() {
-    //    processor_t *p = processor_get();
-    //    n_errort *errort = p->errort;
-    //    p->errort = n_errort_new(string_new("", 0), 0);
-    //    DEBUGF("[runtime.processor_remove_errort] remove errort: %p, has? %d", errort, errort->has);
-    //    return *errort;
+    // processor_t *p = processor_get();
+    // n_errort *errort = p->errort;
+    // p->errort = n_errort_new(string_new("", 0), 0);
+    // DEBUGF("[runtime.processor_remove_errort] remove errort: %p, has? %d", errort, errort->has);
+    // return *errort;
 }
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
@@ -379,7 +379,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
         n_string_t *n_str = (void *)fetch_addr_value((addr_t)data_ref); // 读取栈中存储的值
         assert(n_str && n_str->length > 0 && "fetch addr by data ref failed");
 
-        //        return strdup(string_ref(n_str));
+        // return strdup(string_ref(n_str));
         // 进行 data copy, 避免被 free
         char *str = mallocz(n_str->length + 1);
         memmove(str, n_str->data, n_str->length);
@@ -411,7 +411,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     // Dijkstra 写屏障
     coroutine_t *co = coroutine_get();
-    if (!co->gc_black) {
+    if (co->gc_black < memory->gc_count) {
         // shade new_obj
         shade_obj_grey(new_obj);
     }
@@ -469,7 +469,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
             bitmap_set(rtype->gc_bits, i);
             rtype->last_ptr = (i + 1) * POINTER_SIZE;
         } else if (arg_kind == TYPE_GC_NOSCAN) {
-            //            bitmap_clear(rtype.gc_bits, i);
+            // bitmap_clear(rtype.gc_bits, i);
         } else {
             assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
         }

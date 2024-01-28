@@ -125,7 +125,7 @@ static void coroutine_wrapper() {
     processor_t *p = co->p;
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d", co, co->main);
+    TDEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d, gc_work=%d", co, co->main, co->gc_work);
 
     // 设置为 true 不需要抢占锁，因为之前的状态是 false, 肯定不会发生抢占，和 wait_sysmon 不冲突
     p->can_preempt = true;
@@ -143,7 +143,7 @@ static void coroutine_wrapper() {
     disable_preempt(p);
 
     co->status = CO_STATUS_DEAD;
-    DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
+    TDEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
     aco_exit1(&co->aco);
 }
 
@@ -214,11 +214,11 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
-    // co->status = CO_STATUS_RUNNING; // post_tpl_hook 和 co_preempt_yield 会切换状态
     co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
 
     // 将 RIP 指针移动用户代码片段中
-    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, aco=%p, p->co_started_at=%lu", co, &co->aco, p->co_started_at);
+    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu)", co, co->main, &co->aco,
+            co->aco.save_stack.ptr, co->aco.save_stack.sz);
 
     // 获取锁成功再进行数据更新
     p->coroutine = co;
@@ -272,9 +272,9 @@ static void processor_run(void *raw) {
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
         RDEBUGF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
-
         // - stw
         if (processor_get_stw()) {
+        STW_WAIT:
             RDEBUGF("[runtime.processor_run] need stw, set safe_point=true,  p_index_%d=%d", p->share, p->index);
             p->safe_point = true;
 
@@ -313,6 +313,12 @@ static void processor_run(void *raw) {
             coroutine_resume(p, co);
             assert(p->can_preempt == false);
 
+            if (processor_get_stw()) {
+                RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d", p->share,
+                        p->index, co, co->status);
+                goto STW_WAIT;
+            }
+
             RDEBUGF("[runtime.processor_run] coroutine resume completed, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co,
                     co->status);
         }
@@ -346,7 +352,7 @@ void coroutine_dispatch(coroutine_t *co) {
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
     if (gc_stage == GC_STAGE_MARK) {
-        co->gc_black = true;
+        co->gc_black = memory->gc_count;
     }
 
     // - 协程独享线程
@@ -541,11 +547,11 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
 
     // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入用户流程
     if (processor_get_stw()) {
+        TDEBUGF("[runtime.post_tpl_hook] co=%p, need stw will yield", co);
         co_yield_runnable(p, co);
     }
 
-    write(STDOUT_FILENO, "___pth_0\n", 9);
-    DEBUGF("[runtime.post_tpl_hook] will set can_preempt=true");
+    DEBUGF("[runtime.post_tpl_hook] co=%p, will set can_preempt=true", co);
 
     enable_preempt(p);
     co->status = CO_STATUS_RUNNING;
@@ -558,14 +564,16 @@ coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
 
     co->fn = fn;
     co->solo = solo;
-    co->gc_black = false;
+    co->gc_black = 0;
     co->status = CO_STATUS_RUNNABLE;
     co->args = args;
     co->p = NULL;
     co->result = NULL;
     co->main = main;
     co->next = NULL;
+    co->aco.inited = 0; // 标记为为初始化
 
+    TDEBUGF("[coroutine_new] co=%p new success", co);
     return co;
 }
 
