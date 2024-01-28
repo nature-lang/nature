@@ -60,6 +60,18 @@ void wait_sysmon() {
             // yield/exit 首先就设置 can_preempt = false, 这里就无法完成。所以 p->coroutine 一旦设置就无法被清空或者切换
             RDEBUGF("[wait_sysmon.share.thread_locker] try disable_preempt_locker success, p_index_%d=%d", p->share, p->index);
 
+            // 避免获取锁期间切换到 gc work 发生抢占
+            co = p->coroutine;
+            if (!co) {
+                RDEBUGF("[wait_sysmon.share.thread_locker] processor_index=%d, not co, will skip", p->index);
+                goto SHARE_UNLOCK_NEXT;
+            }
+
+            if (co->gc_work) {
+                RDEBUGF("[wait_sysmon.share.thread_locker] processor_index=%d, co=%d is gc_work, will skip", p->index, co->gc_work);
+                goto SHARE_UNLOCK_NEXT;
+            }
+
             co_start_at = p->co_started_at;
             if (co_start_at == 0) {
                 RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine, co);
@@ -73,15 +85,15 @@ void wait_sysmon() {
                 goto SHARE_UNLOCK_NEXT;
             }
 
-            RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) wait preempt", p->index, p->thread_id);
+            RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) wait preempt", p->index, (uint64_t)p->thread_id);
 
-            // while 循环等待直到可以抢占，最长等待 1s 钟
+            // 基于协作式的调度，必须要等到协程进入代码段才进行抢占, 否则一直等待，最长等待 1s 钟, 然后异常
             int wait_count = 0;
             while (!p->can_preempt) {
                 usleep(1 * 1000);
                 wait_count++;
                 if (wait_count > PREEMPT_TIMEOUT) {
-                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) deadlock", p->index, p->thread_id);
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) deadlock", p->index, (uint64_t)p->thread_id);
                     assert(false && "processor deadlock");
                 }
             }

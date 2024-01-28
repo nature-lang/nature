@@ -61,7 +61,6 @@
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
 
-
 typedef void (*void_fn_t)(void);
 
 /**
@@ -75,7 +74,7 @@ typedef struct {
 
 typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
-    //    struct mspan_t *prev;
+    // struct mspan_t *prev;
 
     uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
     addr_t base;       // mspan 在 arena 中的起始位置
@@ -147,7 +146,7 @@ typedef struct {
     // l1 = 8192
     page_summary_t *summary[PAGE_SUMMARY_LEVEL];
 
-    //    uint64_t chunk_count;
+    // uint64_t chunk_count;
 
     // 核心位图，标记自启动以来所有 page 的使用情况
     // 通过 chunks = {0} 初始化，可以确保第二维度为 null
@@ -249,6 +248,7 @@ struct processor_t {
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
 
     struct sigaction sig;
+    uv_timer_t timer;  // 辅助协程调度的定时器
     uv_loop_t uv_loop; // uv loop 事件循环
 
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
@@ -260,8 +260,11 @@ struct processor_t {
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine; // 当前正在调度的 coroutine
     uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
-    rt_linked_t co_list;    // 当前 processor 下的 coroutine 列表
+
+    mutex_t co_locker;   // coroutine list locker
+    rt_linked_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_t runnable_list;
+
     bool share;              // 默认都是共享处理器
     bool safe_point;         // 当前是否处于安全点
     bool exit;               // 是否已经退出

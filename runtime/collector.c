@@ -28,7 +28,7 @@ void shade_obj_grey(void *obj) {
     // get mspan by ptr
     mspan_t *span = span_of(addr);
 
-    //  get span index
+    // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
 
     mutex_lock(&span->gcmark_locker);
@@ -104,6 +104,8 @@ void mark_obj_black_with_lock(mspan_t *span, uint64_t index) {
 
 // safe
 static void free_mspan_meta(mspan_t *span) {
+    span->next = NULL;
+    span->base = 0;
     mutex_lock(memory->locker);
     fixalloc_free(&memory->mheap->spanalloc, span);
     mutex_unlock(memory->locker);
@@ -113,9 +115,12 @@ static void free_mspan_meta(mspan_t *span) {
  * 如果 span 清理完成后 alloc_count == 0 则将其归还给 heap
  * @param span span 是否被释放，如果释放了需要将其从 list 中抹除
  */
-static void sweep_span(mcentral_t *central, mspan_t *span) {
+static bool sweep_span(mcentral_t *central, mspan_t *span) {
     // 但是此时 span 其实并没有真的被释放,只有 alloc_count = 0 时才会触发真正的释放操作, 这里记录更新一下分配的内存值
+    assert(span);
+    assert(span->obj_count > 0 && span->obj_count <= 1024);
 
+    RDEBUGF("[sweep_span] start, span=%p, spc=%d", span, span->spanclass)
     int alloc_count = 0;
     for (int i = 0; i < span->obj_count; ++i) {
         if (bitmap_test(span->gcmark_bits, i)) {
@@ -128,24 +133,27 @@ static void sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            DEBUGF(
-                "[runtime.sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld",
-                span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
+            DEBUGF("[sweep_span] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld",
+                   span->spanclass, span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
         }
     }
 
+    RDEBUGF("[sweep_span] alloc_count=%d, obj_count=%lu, span=%p, spc=%d", alloc_count, span->obj_count, span, span->spanclass)
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
 
+    RDEBUGF("[sweep_span] reset gcmark_bits success, span=%p, spc=%d", span, span->spanclass)
+
     // span 所有的 obj 都被释放，归还内存给操作系统
     if (span->alloc_count == 0) {
-        DEBUGF("[sweep_span] span free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
-
+        RDEBUGF("[sweep_span] span will free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
         mheap_free_span(memory->mheap, span);
+        RDEBUGF("[sweep_span] span success free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
         free_mspan_meta(span);
+        RDEBUGF("[sweep_span] span success free meta, base=0x%lx, class=%d", span->base, span->spanclass);
 
-        return;
+        return true;
     }
 
     if (span->alloc_count == span->obj_count) {
@@ -153,6 +161,8 @@ static void sweep_span(mcentral_t *central, mspan_t *span) {
     } else {
         RT_LIST_PUSH_HEAD(central->partial_list, span);
     }
+
+    return false;
 }
 
 /**
@@ -166,6 +176,7 @@ static void sweep_span(mcentral_t *central, mspan_t *span) {
  * @param mheap
  */
 void mcentral_sweep(mheap_t *mheap) {
+    RDEBUGF("[runtime.mcentral_sweep] start");
     mcentral_t *centrals = mheap->centrals;
     for (int i = 0; i < SPANCLASS_COUNT; ++i) {
         mcentral_t *central = &centrals[i];
@@ -173,23 +184,39 @@ void mcentral_sweep(mheap_t *mheap) {
             continue;
         }
 
-        // new full and partial
+        RDEBUGF("[runtime.mcentral_sweep] will handle central spc=%hhu", central->spanclass);
+        // full and partial
         mspan_t *full_list = central->full_list;
         mspan_t *partial_list = central->partial_list;
 
         // 经过 sweep full -> part，或者直接清零规划给 mheap, 但是绝对不会从 part 到 full
         mspan_t *current = full_list;
+        mspan_t *next = NULL;
         while (current) {
-            sweep_span(central, current);
-            current = current->next;
+            next = current->next;
+
+            current->next = NULL;
+            RDEBUGF("[runtime.mcentral_sweep] will sweep full span, span=%p, next=%p", (void *)current, next);
+            bool swept = sweep_span(central, current);
+            RDEBUGF("[runtime.mcentral_sweep] success sweep full span, swept=%d", swept);
+
+            current = next;
         }
 
         current = partial_list;
         while (current) {
-            sweep_span(central, current);
-            current = current->next;
+            next = current->next;
+
+            current->next = NULL;
+            RDEBUGF("[runtime.mcentral_sweep] will sweep partial span, span=%p, next=%p", (void *)current, next);
+            bool swept = sweep_span(central, current);
+            RDEBUGF("[runtime.mcentral_sweep] success sweep partial span swept=%d", swept);
+
+            current = next;
         }
     }
+
+    RDEBUGF("[runtime.mcentral_sweep] start");
 }
 
 /**
@@ -197,8 +224,12 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime_gc.scan_stack] start, p_index=%d, share=%d, co=%p, co_stack_size=%zu", p->index, p->share, co,
-           co->aco.save_stack.valid_sz);
+    DEBUGF("[runtime_gc.scan_stack] start, p_index=%d, share=%d, co=%p, co_stack_size=%zu, save_stack=%p", p->index, p->share, co,
+           co->aco.save_stack.valid_sz, co->aco.save_stack);
+
+    // save_stack 也是通过 gc 申请，所以需要标记一下
+    assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
+    insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
 
     aco_save_stack_t stack = co->aco.save_stack;
     if (stack.valid_sz == 0) {
@@ -259,7 +290,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
     while (cursor < max) {
         fndef_t *fn = find_fn(ret_addr);
-        //        assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
+        // assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
         if (!fn) {
             DEBUGF("fn not found by ret_addr, return_addr=%p, break", (void *)ret_addr);
             break;
@@ -301,7 +332,7 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
     // get mspan by ptr
     mspan_t *span = span_of(addr);
 
-    //  get span index
+    // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
 
     // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
@@ -327,7 +358,7 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
     bitmap_set(span->gcmark_bits, obj_index);
     mutex_unlock(&span->gcmark_locker);
 
-    // 判断 span 是否需要进一步扫描, 可以根据 obj 所在的 spanclass 直接判断 (如果标量的话, 直接标记就行了，不需要进一步扫描)
+    // - 判断 span 是否需要进一步扫描, 可以根据 obj of spanclass 直接判断 (如果不含指针, 上面直接标记过就不会被 gc 了，不需要进一步扫描)
     if (!spanclass_has_ptr(span->spanclass)) {
         // addr ~ addr+size 空间内存储的是一个标量，不需要向下扫描了
         return;
@@ -376,6 +407,7 @@ static void handle_gc_worklist(processor_t *p) {
             DEBUGF("[runtime_gc.handle_gc_worklist] p_index_%d=%d, handle_count=%d, will yield", p->share, p->index, limit_count);
             limit_count = 0;
             co_yield_runnable(p, p->coroutine);
+            disable_preempt(p); // coroutine resume 后总是切换为不可抢占状态
         }
 
         if (p->gc_worklist.count == 0) {
@@ -393,8 +425,13 @@ static void handle_gc_worklist(processor_t *p) {
     DEBUGF("[runtime_gc.handle_gc_worklist] completed, processor=%p", p);
 }
 
+/**
+ * 由于不经过 pre/post_tpl_hook 所以需要手动管理一下 gc 状态
+ */
 static void gc_work() {
     processor_t *p = processor_get();
+    disable_preempt(p);
+
     assert(p);
     coroutine_t *co = coroutine_get();
     assert(co);
@@ -437,6 +474,7 @@ static void gc_work() {
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
+    disable_preempt(p);
 
     // - solo goroutine root and change color black, 读取当前 share processor index
     // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
@@ -476,12 +514,14 @@ static void gc_work() {
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
+    disable_preempt(p);
 
     // - handle work list
     handle_gc_worklist(p);
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
+    disable_preempt(p);
 
     // - grey list work
     solo_p = solo_processor_list;
@@ -521,14 +561,14 @@ static void gc_work() {
  */
 static void set_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
-    processor_t *p = share_processor_list;
-    while (p) {
+    PROCESSOR_FOR(share_processor_list) {
         coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
         gc_co->gc_work = true;
 
+        mutex_lock(&p->co_locker);
         rt_linked_push(&p->co_list, gc_co);
         rt_linked_push(&p->runnable_list, gc_co);
-        p = p->next;
+        mutex_unlock(&p->co_locker);
     }
 
     RDEBUGF("[runtime_gc.set_gc_work_coroutine] inject gc work coroutine completed");
@@ -642,10 +682,13 @@ void runtime_gc() {
 
     // gc 清理
     flush_mcache();
-    mcentral_sweep(memory->mheap);
+    RDEBUGF("[runtime_gc] gc flush mcache completed");
 
+    mcentral_sweep(memory->mheap);
+    RDEBUGF("[runtime_gc]mcentral_sweep completed");
     // 更新 gcbits
     gcbits_arenas_epoch();
+    RDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
 
     gc_barrier_stop();
     processor_start_the_world();

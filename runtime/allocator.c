@@ -697,7 +697,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         // TODO 优化一下计算起点，不能每次都用遍历法
         bool used = bitmap_test(mspan->alloc_bits, i);
         if (used) {
-            //            DEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
+            // DEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
             continue;
         }
 
@@ -874,8 +874,8 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     remove_total_bytes += span->pages_count * ALLOC_PAGE_SIZE;
 
     // 将物理内存归还给操作系统
-    DEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=0x%lx, span.pages_count=%ld, remove_size=%lu",
-           remove_total_bytes / 1024 / 1024, span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
+    RDEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=0x%lx, span.pages_count=%ld, remove_size=%lu",
+            remove_total_bytes / 1024 / 1024, span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
 
     sys_memory_remove((void *)span->base, span->pages_count * ALLOC_PAGE_SIZE);
 }
@@ -940,7 +940,7 @@ void memory_init() {
 }
 
 mspan_t *span_of(uint64_t addr) {
-    //    DEBUGF("[span_of] addr = %0lx", addr);
+    // DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
     DEBUGF("[span_of] addr= %p", (void *)addr);
@@ -1050,7 +1050,6 @@ uint64_t runtime_malloc_bytes() {
 }
 
 void runtime_eval_gc() {
-    return; // TODO 暂时不开启 gc
     mutex_lock(gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {
@@ -1059,7 +1058,6 @@ void runtime_eval_gc() {
     }
 
     if (allocated_bytes < next_gc_bytes) {
-        //        DEBUGF("[runtime_eval_gc] no need for gc");
         goto EXIT;
     } else {
         DEBUGF("[runtime_eval_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes, next_gc_bytes);
@@ -1072,11 +1070,9 @@ void runtime_eval_gc() {
 
 EXIT:
     mutex_unlock(gc_stage_locker);
-    //    DEBUGF("[runtime_eval_gc] end");
 }
 
 void runtime_force_gc() {
-    return; // TODO 暂时不开 gc
     if (mutex_trylock(gc_stage_locker) != 0) {
         return;
     }

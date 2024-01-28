@@ -14,6 +14,7 @@ void gcbits_areas_init() {
 }
 
 gc_bits* gcbits_new(uintptr_t bytes_size) {
+    RDEBUGF("[gcbits_new] bytes_size=%ld", bytes_size);
     uintptr_t blocks_needed = (bytes_size + 63) / 64;
     uintptr_t bytes_needed = blocks_needed * 8;
 
@@ -21,6 +22,7 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
     if (p != NULL) {
         return p;
     }
+    RDEBUGF("[gcbits_new] try alloc failed, bytes_needed=%ld", bytes_needed);
 
     pthread_mutex_lock(&gc_bits_arenas.locker);
 
@@ -30,6 +32,8 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
         pthread_mutex_unlock(&gc_bits_arenas.locker);
         return p;
     }
+
+    RDEBUGF("[gcbits_new] try alloc second failed, bytes_needed=%ld", bytes_needed);
 
     gc_bits_arena_t* fresh = gcbits_arena_new();
 
@@ -43,6 +47,8 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
         pthread_mutex_unlock(&gc_bits_arenas.locker);
         return p;
     }
+
+    RDEBUGF("[gcbits_new] try alloc third failed, bytes_needed=%ld", bytes_needed);
 
     p = gcbits_try_alloc(fresh, bytes_needed);
     assert(p && "gcbits_new: failed to alloc");
@@ -100,7 +106,7 @@ gc_bits_arena_t* gcbits_arena_new() {
     return result;
 }
 
-//  需要在 gc 结尾 flush span 之后再调用该方法
+// 需要在 gc 结尾 flush span 之后再调用该方法
 void gcbits_arenas_epoch() {
     pthread_mutex_lock(&gc_bits_arenas.locker);
 

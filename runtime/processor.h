@@ -76,7 +76,9 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     assert(co);
 
     co->status = CO_STATUS_RUNNABLE;
+    mutex_lock(&p->co_locker);
     rt_linked_push(&p->runnable_list, co);
+    mutex_unlock(&p->co_locker);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 
     _co_yield(p, co);
@@ -95,7 +97,7 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
 
     _co_yield(p, co);
 
-    //    set_can_preempt(p, true); // 回到用户态，允许抢占
+    // set_can_preempt(p, true); // 回到用户态，允许抢占
 }
 
 // locker

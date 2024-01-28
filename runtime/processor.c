@@ -50,7 +50,10 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     // 原来是 running 才需要 push 到可执行队列钟
     if (co->status == CO_STATUS_RUNNING) {
         co->status = CO_STATUS_RUNNABLE;
+
+        mutex_lock(&p->co_locker);
         rt_linked_push(&p->runnable_list, co);
+        mutex_unlock(&p->co_locker);
 
         RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push success", co);
     }
@@ -95,6 +98,25 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     ctx->uc_mcontext.gregs[REG_RIP] = (int64_t)async_preempt;
 #elif
 #endif
+}
+
+static void processor_uv_close(processor_t *p) {
+    // 关闭 uv_loop
+    RDEBUGF("[runtime.processor_uv_close] will close loop=%p, loop_req_count=%u, p_index_%d=%d", &p->uv_loop, p->uv_loop.active_reqs.count,
+            p->share, p->index);
+    uv_close((uv_handle_t *)&p->timer, NULL); // io_run 等待 close 完成！
+
+    uv_run(&p->uv_loop, UV_RUN_DEFAULT); // 等待上面注册的 uv_close 完成
+
+    int result = uv_loop_close(&p->uv_loop);
+
+    if (result != 0) {
+        RDEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index_%d=%d", result, uv_strerror(result), p->share,
+                p->index);
+        assert(false && "uv loop close failed");
+    }
+
+    RDEBUGF("[runtime.processor_uv_close] processor uv close success p_index_%d=%d", p->share, p->index);
 }
 
 static void coroutine_wrapper() {
@@ -158,6 +180,10 @@ void processor_start_the_world() {
 void uv_stop_callback(uv_timer_t *timer) {
     processor_t *p = timer->data;
     // DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
+
+    uv_timer_stop(timer);
+    // uv_close((uv_handle_t *)timer, NULL);
+
     uv_stop(timer->loop);
 }
 
@@ -166,12 +192,10 @@ void uv_stop_callback(uv_timer_t *timer) {
  */
 int io_run(processor_t *p, uint64_t timeout_ms) {
     // 初始化计时器 (这里不会发生栈切换，所以可以在栈上直接分配)
-    uv_timer_t timeout_timer;
-    uv_timer_init(&p->uv_loop, &timeout_timer);
-    timeout_timer.data = p;
+    p->timer.data = p;
 
     // 设置计时器超时回调，这将在超时后停止事件循环
-    uv_timer_start(&timeout_timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
+    uv_timer_start(&p->timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
     // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
     return uv_run(&p->uv_loop, UV_RUN_DEFAULT);
@@ -223,8 +247,9 @@ static void processor_run(void *raw) {
     aco_create_init(&p->main_aco, NULL, NULL, 0, NULL, NULL);
     aco_share_stack_init(&p->share_stack, 0);
 
-    // 初始化 libuv
+    // - 初始化 libuv
     uv_loop_init(&p->uv_loop);
+    uv_timer_init(&p->uv_loop, &p->timer);
 
     // 注册线程信号监听, 用于抢占式调度
     // 分配备用信号栈
@@ -255,7 +280,7 @@ static void processor_run(void *raw) {
 
             while (processor_get_stw()) {
                 RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw loop....", p->share, p->index);
-                usleep(WAIT_MID_TIME * 1000); // 每 50ms 检测一次 STW 是否解除
+                usleep(WAIT_SHORT_TIME * 1000); // 每 10ms 检测一次 STW 是否解除 TODO 等的事件有点长，影响运行了
             }
 
             p->safe_point = false;
@@ -271,7 +296,10 @@ static void processor_run(void *raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
+            mutex_lock(&p->co_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
+            mutex_unlock(&p->co_locker);
+
             if (!co) {
                 // runnable list 已经处理完成
                 RDEBUGF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
@@ -294,7 +322,8 @@ static void processor_run(void *raw) {
             assert(p->co_list.count == 1);
             coroutine_t *solo_co = rt_linked_first(&p->co_list)->value;
             if (solo_co->status == CO_STATUS_DEAD) {
-                RDEBUGF("[runtime.processor_run] solo processor exit, p_index=%d, co=%p, status=%d", p->index, solo_co, solo_co->status);
+                RDEBUGF("[runtime.processor_run] solo processor co exit, will exit processor run, p_index=%d, co=%p, status=%d", p->index,
+                        solo_co, solo_co->status);
                 write(STDOUT_FILENO, "---pr_1\n", 8);
                 goto EXIT;
             }
@@ -307,10 +336,8 @@ static void processor_run(void *raw) {
 EXIT:
     p->exit = true;
     p->thread_id = 0;
+    processor_uv_close(p);
 
-    assert(p->uv_loop.active_reqs.count == 0);
-
-    uv_loop_close(&p->uv_loop);
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
 }
 
@@ -344,20 +371,19 @@ void coroutine_dispatch(coroutine_t *co) {
     // - 遍历 shared_processor_list 找到 co_list->count 最小的 processor 进行调度
     processor_t *select_p = NULL;
 
-    processor_t *p = share_processor_list;
-    while (p) {
+    PROCESSOR_FOR(share_processor_list) {
         if (!select_p || p->co_list.count < select_p->co_list.count) {
             select_p = p;
         }
-
-        p = p->next;
     }
 
     assert(select_p);
     DEBUGF("[runtime.coroutine_dispatch] select_p_index_%d=%d will push co=%p", select_p->share, select_p->index, co);
 
+    mutex_lock(&select_p->co_locker);
     rt_linked_push(&select_p->co_list, co);
     rt_linked_push(&select_p->runnable_list, co);
+    mutex_unlock(&select_p->co_locker);
 
     DEBUGF("[runtime.coroutine_dispatch] co=%p to p_index_%d=%d, end", co, select_p->share, select_p->index);
 }
@@ -552,7 +578,8 @@ processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     mutex_init(&p->gc_locker, false);
-    mutex_init(&p->disable_preempt_locker, true);
+    mutex_init(&p->disable_preempt_locker, false);
+    mutex_init(&p->co_locker, false);
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
@@ -665,14 +692,12 @@ static bool all_gc_work_finished() {
         if (!p->gc_work_finished) {
             return false;
         }
-        p = p->next;
     }
 
     PROCESSOR_FOR(solo_processor_list) {
         if (!p->gc_work_finished) {
             return false;
         }
-        p = p->next;
     }
 
     return true;
@@ -685,32 +710,18 @@ void wait_all_gc_work_finished() {
     RDEBUGF("[runtime_gc.wait_all_gc_work_finished] start");
 
     while (!all_gc_work_finished()) {
-        usleep(WAIT_MID_TIME * 1000);
+        usleep(WAIT_SHORT_TIME * 1000);
     }
 
     DEBUGF("[runtime_gc.wait_all_gc_work_finished] all processor gc work finish");
 
-    // 重置 gc_work_finish 为 false，避免影响下一次 GC
-    processor_t *p = share_processor_list;
-    while (true) {
-        if (p->exit) {
-            p = p->next;
-            continue;
-        }
-
+    // 已经等到了所有的 gc_work_finish, 则重置为 false，避免影响下一次 GC 判断
+    PROCESSOR_FOR(share_processor_list) {
         p->gc_work_finished = false;
-        p = p->next;
     }
 
-    p = solo_processor_list;
-    while (p) {
-        if (p->exit) {
-            p = p->next;
-            continue;
-        }
-
+    PROCESSOR_FOR(solo_processor_list) {
         p->gc_work_finished = false;
-        p = p->next;
     }
 
     RDEBUGF("[runtime_gc.wait_all_gc_work_finished] share/solo processor to gc_work_finished=false, end");
