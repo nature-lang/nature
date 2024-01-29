@@ -413,7 +413,10 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
 }
 
 static void handle_gc_worklist(processor_t *p) {
-    RDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d, gc_worklist.count=%d", p->share, p->index, p->gc_worklist.count);
+    coroutine_t *co = coroutine_get();
+    RDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d, gc_worklist.count=%d, gc_work_co=%p", p->share, p->index,
+            p->gc_worklist.count, co);
+
     if (p->gc_work_finished) {
         return;
     }
@@ -663,9 +666,6 @@ void runtime_gc() {
     RDEBUGF("[runtime_gc] start, gc stage: GC_START");
 
     memory->gc_count += 1;
-    if (memory->gc_count >= UINT32_MAX) {
-        memory->gc_count = 0;
-    }
 
     // 等待所有的 processor 进入安全点
     processor_stop_the_world();

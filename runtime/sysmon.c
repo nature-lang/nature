@@ -88,6 +88,7 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) wait preempt", p->index, (uint64_t)p->thread_id);
 
             // 基于协作式的调度，必须要等到协程进入代码段才进行抢占, 否则一直等待，最长等待 1s 钟, 然后异常
+            // share processor run 可能在不可抢占状态下直接退出, 此时直接结束
             int wait_count = 0;
             while (!p->can_preempt) {
                 usleep(1 * 1000);
@@ -95,6 +96,12 @@ void wait_sysmon() {
                 if (wait_count > PREEMPT_TIMEOUT) {
                     RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) deadlock", p->index, (uint64_t)p->thread_id);
                     assert(false && "processor deadlock");
+                }
+
+                if (p->exit) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), processor exit, goto unlock", p->index,
+                            (uint64_t)p->thread_id);
+                    goto SHARE_UNLOCK_NEXT;
                 }
             }
 
@@ -204,7 +211,8 @@ void wait_sysmon() {
 
             // 只有 running 状态才需要进行抢占, 由于获取了锁，所以不会进入到 syscall 状态
             if (co->status != CO_STATUS_RUNNING) {
-                RDEBUGF("[wait_sysmon.solo.thread_locker] processor_index=%d, co=%d not running, will skip", p->index, co->status);
+                RDEBUGF("[wait_sysmon.solo.thread_locker] processor_index=%d, co=%p, co_status=%d not running, will skip", p->index, co,
+                        co->status);
                 goto SOLO_UNLOCK_NEXT;
             }
 
@@ -234,24 +242,26 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d send SIGURG success", p->index);
             p->can_preempt = false;
             p->co_started_at = 0;
+
         SOLO_UNLOCK_NEXT:
             mutex_unlock(&p->disable_preempt_locker);
 
+            RDEBUGF("[wait_sysmon.solo.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
+           
             prev = p;
             p = p->next;
-            RDEBUGF("[wait_sysmon.solo.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
-        }
-
-        // - GC 判断 (每 100ms 进行一次)
-        if (gc_eval_count <= 0) {
-            runtime_eval_gc();
-            gc_eval_count = WAIT_MID_TIME;
         }
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {
             RDEBUGF("[wait_sysmon] processor need exit, will exit");
             break;
+        }
+
+        // - GC 判断 (每 100ms 进行一次)
+        if (gc_eval_count <= 0) {
+            runtime_eval_gc();
+            gc_eval_count = WAIT_MID_TIME;
         }
 
         gc_eval_count--;

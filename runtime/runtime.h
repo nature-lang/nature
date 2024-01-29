@@ -206,7 +206,7 @@ typedef struct {
     mheap_t *mheap; // 全局 heap, 访问时需要加锁
     mutex_t *locker;
     uint32_t sweepgen;
-    uint32_t gc_count; // gc 循环次数
+    uint64_t gc_count; // gc 循环次数
 } memory_t;
 
 typedef enum {
@@ -231,7 +231,7 @@ typedef struct coroutine_t {
 
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
-    uint32_t gc_black;
+    uint64_t gc_black;
 
     bool gc_work; // 当前 coroutine 是否是吃 gc 线程
 
