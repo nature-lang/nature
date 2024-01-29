@@ -4,6 +4,7 @@
 #include "processor.h"
 
 static void insert_gc_worklist(rt_linked_t *gc_worklist, void *ptr) {
+    assert(span_of((addr_t)ptr) && "ptr not found in active span");
     rt_linked_push(gc_worklist, ptr);
 }
 
@@ -139,8 +140,8 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
         }
     }
 
-    RDEBUGF("[sweep_span] alloc_count=%d, obj_count=%lu, span=%p, span_base=%p, spc=%d", alloc_count, span->obj_count, span, span->base,
-            span->spanclass)
+    RDEBUGF("[sweep_span] alloc_count=%d, obj_count=%lu, span=%p, span_base=%p, spc=%d", alloc_count, span->obj_count, span,
+            (void *)span->base, span->spanclass)
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
@@ -149,11 +150,11 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
 
     // span 所有的 obj 都被释放，归还内存给操作系统
     if (span->alloc_count == 0) {
-        RDEBUGF("[sweep_span] span will free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
+        RDEBUGF("[sweep_span] span will free to heap, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
         mheap_free_span(memory->mheap, span);
-        RDEBUGF("[sweep_span] span success free to heap, base=0x%lx, class=%d", span->base, span->spanclass);
+        RDEBUGF("[sweep_span] span success free to heap, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
         free_mspan_meta(span);
-        RDEBUGF("[sweep_span] span success free meta, base=0x%lx, class=%d", span->base, span->spanclass);
+        RDEBUGF("[sweep_span] span success free meta, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
 
         return true;
     }
@@ -400,12 +401,11 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
             addr_t heap_addr = fetch_addr_value(temp_addr);
 
-            RDEBUGF(
-                "[runtime_gc.handle_gc_ptr] addr is ptr,base=%p cursor=0x%lx cursor_value=0x%lx, obj_size=%ld, bit_index=%lu, in_heap=%d",
-                (void *)addr, temp_addr, heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
+            RDEBUGF("[runtime_gc.handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
+                    (void *)addr, (void *)temp_addr, (void *)heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
 
-            // TODO 由于没有加锁必须单线程进入
             if (in_heap(heap_addr)) {
+                assert(span_of(heap_addr) && "heap_addr not belong active span");
                 insert_gc_worklist(worklist, (void *)heap_addr);
             }
         }
@@ -413,7 +413,7 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
 }
 
 static void handle_gc_worklist(processor_t *p) {
-    RDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d", p->share, p->index);
+    RDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d, gc_worklist.count=%d", p->share, p->index, p->gc_worklist.count);
     if (p->gc_work_finished) {
         return;
     }
@@ -445,7 +445,7 @@ static void handle_gc_worklist(processor_t *p) {
     }
 
     p->gc_work_finished = true;
-    DEBUGF("[runtime_gc.handle_gc_worklist] completed, processor=%p", p);
+    DEBUGF("[runtime_gc.handle_gc_worklist] completed,  p_index_%d=%d", p->share, p->index);
 }
 
 /**
@@ -525,9 +525,9 @@ static void gc_work() {
             goto SOLO_NEXT;
         }
 
-        mutex_lock(&solo_p->gc_locker);
+        mutex_lock(&solo_p->gc_barrier_locker);
         scan_stack(solo_p, solo_co);
-        mutex_unlock(&solo_p->gc_locker);
+        mutex_unlock(&solo_p->gc_barrier_locker);
 
         solo_co->gc_black = memory->gc_count;
     SOLO_NEXT:
@@ -572,9 +572,9 @@ static void gc_work() {
             goto SOLO_NEXT2;
         }
 
-        mutex_lock(&solo_p->gc_locker);
+        mutex_lock(&solo_p->gc_barrier_locker);
         handle_gc_worklist(solo_p);
-        mutex_unlock(&solo_p->gc_locker);
+        mutex_unlock(&solo_p->gc_barrier_locker);
     SOLO_NEXT2:
         solo_p = solo_p->next;
     }

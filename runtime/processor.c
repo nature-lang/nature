@@ -33,6 +33,7 @@ __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
  * 在 user_code 期间的超时抢占
  */
 __attribute__((optimize(0))) void co_preempt_yield() {
+    // 绝对不可抢占点，可以放心进行 RDEBUGF 操作
     RDEBUGF("[runtime.co_preempt_yield] start, %lu", (uint64_t)uv_thread_self());
 
     processor_t *p = processor_get();
@@ -61,11 +62,12 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     _co_yield(p, co);
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
-    enable_preempt(p);
-    co->status = CO_STATUS_RUNNING;
-
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will return, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co, p->coroutine);
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set enable_preempt, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co,
+           p->coroutine);
+
+    co->status = CO_STATUS_RUNNING;
+    enable_preempt(p);
 }
 
 /**
@@ -508,12 +510,14 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     processor_t *p = processor_get();
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
+    // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
+    write(STDOUT_FILENO, "___pre_0\n", 9);
     disable_preempt(p);
     co->status = CO_STATUS_SYSCALL;
 
-    write(STDOUT_FILENO, "___pre_0\n", 9);
-    DEBUGF("[runtime.pre_tpl_hook] will set can_preempt=false, co=%p, status=%d ,target=%s", co, co->status, target);
     write(STDOUT_FILENO, "___pre_1\n", 9);
+    DEBUGF("[runtime.pre_tpl_hook] will set can_preempt=false, co=%p, status=%d ,target=%s", co, co->status, target);
+    write(STDOUT_FILENO, "___pre_2\n", 9);
 
     aco_t *aco = &co->aco;
     uint64_t rbp_value;
@@ -553,8 +557,8 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
 
     DEBUGF("[runtime.post_tpl_hook] co=%p, will set can_preempt=true", co);
 
-    enable_preempt(p);
     co->status = CO_STATUS_RUNNING;
+    enable_preempt(p);
 }
 
 coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
@@ -585,7 +589,7 @@ processor_t *processor_new(int index) {
     mutex_unlock(&cp_alloc_locker);
 
     // uv_loop_init(&p->uv_loop);
-    mutex_init(&p->gc_locker, false);
+    mutex_init(&p->gc_barrier_locker, false);
     mutex_init(&p->disable_preempt_locker, false);
     mutex_init(&p->co_locker, false);
     p->sig.sa_flags = 0;
@@ -697,13 +701,13 @@ void processor_wait_all_safe() {
  */
 static bool all_gc_work_finished() {
     PROCESSOR_FOR(share_processor_list) {
-        if (!p->gc_work_finished) {
+        if (p->gc_work_finished == false) {
             return false;
         }
     }
 
     PROCESSOR_FOR(solo_processor_list) {
-        if (!p->gc_work_finished) {
+        if (p->gc_work_finished == false) {
             return false;
         }
     }
@@ -717,7 +721,7 @@ static bool all_gc_work_finished() {
 void wait_all_gc_work_finished() {
     RDEBUGF("[runtime_gc.wait_all_gc_work_finished] start");
 
-    while (!all_gc_work_finished()) {
+    while (all_gc_work_finished() == false) {
         usleep(WAIT_SHORT_TIME * 1000);
     }
 

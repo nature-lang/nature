@@ -497,9 +497,12 @@ static void mheap_set_spans(mspan_t *span) {
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
+    // 一个 span 可能会占用多个 page
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = span;
+        TDEBUGF("[mheap_set_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
+                (void *)span->base)
         page_index += 1;
     }
 }
@@ -512,8 +515,8 @@ static void mheap_clear_spans(mspan_t *span) {
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        DEBUGF("[runtime.mheap_clear_spans] arena->base: %p page_index=%lu clear", (void *)arena->base, page_index);
-
+        TDEBUGF("[mheap_clear_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
+                (void *)span->base)
         arena->spans[page_index] = NULL;
         page_index += 1;
     }
@@ -677,12 +680,17 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
  * @return
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
-    MDEBUGF("[runtime.mcache_alloc] start, spanclass=%d", spanclass);
+    MDEBUGF("[runtime.mcache_alloc] start, spc=%d", spanclass);
     processor_t *p = processor_get();
     mcache_t *mcache = &p->mcache;
     mspan_t *mspan = mcache->alloc[spanclass];
 
-    MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, mspan=%p", p->share, p->index, mspan);
+    if (mspan) {
+        MDEBUGF("[mcache_alloc] p_index_%d=%d, span=%p, alloc_count=%lu, obj_count=%lu", p->share, p->index, mspan, mspan->alloc_count,
+                mspan->obj_count);
+    } else {
+        MDEBUGF("[mcache_alloc] mspan is null");
+    }
 
     // 如果 mspan 中有空闲的 obj 则优先选择空闲的 obj 进行分配
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
@@ -729,10 +737,10 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    MDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
+    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
 
     mutex_lock(memory->locker);
-    MDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
+    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
@@ -750,14 +758,14 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bit_value = 0;
         }
 
-        MDEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
+        TDEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
                 type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
 
     mutex_unlock(memory->locker);
-    MDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
+    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
 }
 
 // 单位
@@ -775,7 +783,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     addr_t addr = mcache_alloc(spanclass, &span);
     assert(span && "std_malloc notfound span");
 
-    MDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
+    TDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
 
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
@@ -788,7 +796,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    MDEBUGF(
+    TDEBUGF(
         "[std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
         "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
         span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes);
@@ -825,7 +833,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    DEBUGF(
+    TDEBUGF(
         "[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
         "addr=0x%lx, allocator_bytes=%ld",
         span->spanclass, span->base, span->obj_size, size, debug_kind, span->base, allocated_bytes);

@@ -253,7 +253,7 @@ struct processor_t {
     uv_loop_t uv_loop; // uv loop 事件循环
 
     // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
-    mutex_t gc_locker;
+    mutex_t gc_barrier_locker;
 
     // 锁定时不可抢占, 不开放给 user 使用
     mutex_t disable_preempt_locker;

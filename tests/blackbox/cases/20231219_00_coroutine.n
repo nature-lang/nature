@@ -128,14 +128,37 @@ co.run(bar, [], co.SOLO)
 co.run(bar, [], co.SOLO)
 co.run(bar, [], co.SOLO)
 
-for int i=0; i < 300; i+=1 {
+for int i=0; i < 100; i+=1 {
    co.run(foo, [], 0)
 }
 
+for int i=0; i < 100; i+=1 {
+   co.run(bar, [], co.SOLO)
+}
 
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
 
-// - 独享协程
-co.run(foo, [], co.SOLO)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
+co.run(foo, [], 0)
 
 // main for sleep
 for int i=0; i<25; i+=1 {
