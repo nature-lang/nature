@@ -48,6 +48,9 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     p->can_preempt = false;
     p->co_started_at = 0;
 
+    // 设置 bp_offset = 0, 然后采取保守的方式扫描栈
+    co->aco.bp_offset = 0;
+
     // 原来是 running 才需要 push 到可执行队列钟
     if (co->status == CO_STATUS_RUNNING) {
         co->status = CO_STATUS_RUNNABLE;
@@ -127,7 +130,7 @@ static void coroutine_wrapper() {
     processor_t *p = co->p;
     assert(p);
 
-    TDEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d, gc_work=%d", co, co->main, co->gc_work);
+    DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d, gc_work=%d", co, co->main, co->gc_work);
 
     // 设置为 true 不需要抢占锁，因为之前的状态是 false, 肯定不会发生抢占，和 wait_sysmon 不冲突
     p->can_preempt = true;
@@ -141,11 +144,14 @@ static void coroutine_wrapper() {
         DEBUGF("[runtime.coroutine_wrapper] co=%p, main coroutine exit, set processor_need_exit=true", co);
     }
 
-    // 即将退出，不再允许抢占
+    // 这里都是可能的抢占点，所以 TDEBUGF 并不安全
+    // 即将退出，不再允许抢占, 此时虽然可以被抢占，但是抢占后也没有可以使用的栈了
+    // DEBUGF("[runtime.coroutine_wrapper] co=%p exited will disable_preempt, maybe preempt", co);
+
     disable_preempt(p);
 
     co->status = CO_STATUS_DEAD;
-    TDEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
+    DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
     aco_exit1(&co->aco);
 }
 
@@ -232,6 +238,9 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     assert(co->status != CO_STATUS_RUNNING);
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
+    if (p->co_started_at == 0) { // 被抢占清空,此时不计算 time 耗时
+        time = 0;
+    }
 
     p->co_started_at = 0;
     p->coroutine = NULL;
@@ -415,7 +424,6 @@ void processor_init() {
     // - 初始化全局标识
     processor_need_exit = false;
     processor_need_stw = false;
-    mutex_init(&solo_processor_stw_locker, false);
     gc_barrier = false;
     mutex_init(&gc_stage_locker, false);
     gc_stage = GC_STAGE_OFF;
@@ -548,7 +556,7 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
 
     assert(p->can_preempt == false);
 
-    // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入用户流程
+    // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入 user code
     if (processor_get_stw()) {
         TDEBUGF("[runtime.post_tpl_hook] co=%p, need stw will yield", co);
         co_yield_runnable(p, co);
@@ -642,51 +650,51 @@ void processor_free(processor_t *p) {
  * 是否所有的 processor 都到达了安全点
  * @return
  */
-bool processor_all_safe() {
-    processor_t *p = share_processor_list;
-    while (p) {
+bool processor_all_safe_or_lock() {
+    PROCESSOR_FOR(share_processor_list) {
         if (p->exit) {
-            p = p->next;
             continue;
         }
 
         if (p->safe_point) {
-            p = p->next;
             continue;
         }
 
-        RDEBUGF("[runtime.processor_all_safe] share processor p_index_%d=%d, thread_id=%lu not safe", p->share, p->index,
+        RDEBUGF("[runtime.processor_all_safe_or_lock] share processor p_index_%d=%d, thread_id=%lu not safe", p->share, p->index,
                 (uint64_t)p->thread_id);
         return false;
     }
 
-    p = solo_processor_list;
-    while (p) {
+    // safe_point 或者获取到 gc_stw_locker
+    PROCESSOR_FOR(solo_processor_list) {
         if (p->exit) {
-            p = p->next;
             continue;
         }
 
         if (p->safe_point) {
-            p = p->next;
             continue;
         }
 
-        // 如果 coroutine 已经开始调度，并且处于 syscall 状态，则认为当前 solo processor 已经进入了安全点
-        if (p->coroutine && p->coroutine->status == CO_STATUS_SYSCALL) {
-            p = p->next;
+        if (mutex_trylock(&p->gc_stw_locker) != 0) {
             continue;
         }
 
-        RDEBUGF("[runtime.processor_all_safe] solo processor p_index_%d=%d not safe", p->share, p->index);
+        RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d not safe", p->share, p->index);
         return false;
     }
 
     return true;
 }
 
-void processor_wait_all_safe() {
-    while (!processor_all_safe()) {
+void processor_stw_unlock() {
+    PROCESSOR_FOR(solo_processor_list) {
+        mutex_unlock(&p->gc_stw_locker);
+        RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d gc_stw_locker unlock", p->share, p->index);
+    }
+}
+
+void processor_wait_all_safe_or_lock() {
+    while (!processor_all_safe_or_lock()) {
         usleep(WAIT_SHORT_TIME * 1000);
         RDEBUGF("[runtime.processor_wait_all_safe] wait...");
     }

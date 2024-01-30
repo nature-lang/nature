@@ -286,7 +286,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
 
     // 如果 bp_offset == 0 一定是被抢占式调度了, 此时进行保守的 cursor 定位
     if (co->aco.bp_offset == 0) {
-        TDEBUGF("[runtime_gc.scan_stack] preempt co=%p, bp_offset=0, maybe preempt", co);
+        DEBUGF("[runtime_gc.scan_stack] preempt co=%p, bp_offset=0, maybe preempt", co);
         // 找到的第一个 fn 作为 cursor = stack.ptr + stack_size - bp_offset
         cursor = (addr_t)stack.ptr;
         while (cursor < ((addr_t)stack.ptr + stack_size)) {
@@ -301,9 +301,15 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
             }
             cursor += POINTER_SIZE;
         }
-        assert(ret_addr > 0);
+
+        // 被抢占的点可能是 coroutine_wrapper 中 usercode exit, 且没来得及配置 co->status = CO_STATUS_DEAD;
+        // 此时的典型特征就是 ret_addr = 0
+        if (ret_addr == 0) {
+            TDEBUGF("[runtime_gc.scan_stack] not found any fn, maybe in coroutine_wrapper will exit,  p_index_%d=%d, co=%p", p->share,
+                    p->index, co);
+        }
     } else {
-        TDEBUGF("[runtime_gc.scan_stack] co=%p, bp_offset=%lu, gt 0", co, co->aco.bp_offset);
+        DEBUGF("[runtime_gc.scan_stack] co=%p, bp_offset=%lu, gt 0", co, co->aco.bp_offset);
         addr_t bp_offset = co->aco.bp_offset;
         assert(bp_offset > 0);
         assert(stack_size > bp_offset);
@@ -534,6 +540,7 @@ static void gc_work() {
             goto SOLO_NEXT;
         }
 
+        // 和 stw 难道冲突了， solo 在等 stw 接触？
         mutex_lock(&solo_p->gc_stw_locker);
         scan_stack(solo_p, solo_co);
         mutex_unlock(&solo_p->gc_stw_locker);
@@ -679,7 +686,7 @@ void runtime_gc() {
 
     // 等待所有的 processor 进入安全点
     processor_stop_the_world();
-    processor_wait_all_safe();
+    processor_wait_all_safe_or_lock();
 
     RDEBUGF("[runtime_gc] wait all processor safe");
 
@@ -693,6 +700,7 @@ void runtime_gc() {
 
     RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_start_the_world();
+    processor_stw_unlock();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
@@ -707,9 +715,7 @@ void runtime_gc() {
     // STW 之后再更改 GC 阶段
     RDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
     processor_stop_the_world();
-    mutex_lock(&solo_processor_stw_locker);
-    RDEBUGF("[runtime_gc] get solo stw locker success");
-    processor_wait_all_safe();
+    processor_wait_all_safe_or_lock();
     RDEBUGF("[runtime_gc] all share processor safe");
     // -------------- STW start ----------------------------
 
@@ -737,6 +743,7 @@ void runtime_gc() {
 
     gc_barrier_stop();
     processor_start_the_world();
+    processor_stw_unlock();
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;

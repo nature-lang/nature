@@ -288,7 +288,6 @@ void aco_share_stack_destroy(aco_share_stack_t *sstk) {
 void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg) {
     assert(aco);
     memset(aco, 0, sizeof(aco_t));
-    aco->inited = true;
 
     aco->ctx.msg = NULL;
 
@@ -325,6 +324,8 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->share_stack = NULL;
         aco->save_stack.ptr = NULL;
     }
+
+    aco->inited = true;
 }
 
 aco_attr_no_asan void aco_resume(aco_t *resume_co) {
@@ -353,7 +354,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
                         break;
                     }
                 }
-                // gc malloc
+                // gc malloc TODO write_barrier
                 owner_co->save_stack.ptr = rt_clr_malloc(owner_co->save_stack.sz, NULL);
                 assert(owner_co->save_stack.ptr);
             }

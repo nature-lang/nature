@@ -252,7 +252,8 @@ struct processor_t {
     uv_timer_t timer;  // 辅助协程调度的定时器
     uv_loop_t uv_loop; // uv loop 事件循环
 
-    // 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
+    // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
+    // - solo 进入 syscall 不会进行
     mutex_t gc_stw_locker;
 
     // 锁定时不可抢占, 不开放给 user 使用

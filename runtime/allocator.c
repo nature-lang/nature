@@ -1005,11 +1005,10 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     assert(p);
     assert(p->can_preempt == false);
 
-    // TODO 如果不需要 STW 的话不就造成了多个线程冲突了么。。
     // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。
-    if (processor_get_stw() && !p->share) {
-        MDEBUGF("[rt_gc_malloc] solo need stw locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
-        mutex_lock(&solo_processor_stw_locker);
+    if (!p->share) {
+        MDEBUGF("[rt_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
+        mutex_lock(&p->gc_stw_locker);
     }
     MDEBUGF("[rt_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
@@ -1036,7 +1035,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     }
 
     if (!p->share) {
-        mutex_unlock(&solo_processor_stw_locker);
+        mutex_unlock(&p->gc_stw_locker);
     }
 
     MDEBUGF("[rt_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
@@ -1086,7 +1085,7 @@ uint64_t runtime_malloc_bytes() {
 }
 
 void runtime_eval_gc() {
-    mutex_lock(gc_stage_locker);
+    mutex_lock(&gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {
         DEBUGF("[runtime_eval_gc] gc is running = %d, skip", gc_stage);
@@ -1105,11 +1104,11 @@ void runtime_eval_gc() {
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
 EXIT:
-    mutex_unlock(gc_stage_locker);
+    mutex_unlock(&gc_stage_locker);
 }
 
 void runtime_force_gc() {
-    if (mutex_trylock(gc_stage_locker) != 0) {
+    if (mutex_trylock(&gc_stage_locker) != 0) {
         return;
     }
 
@@ -1125,7 +1124,7 @@ void runtime_force_gc() {
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
 EXIT:
-    mutex_unlock(gc_stage_locker);
+    mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }
 

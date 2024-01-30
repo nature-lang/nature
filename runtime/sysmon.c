@@ -28,7 +28,7 @@ void wait_sysmon() {
             }
 
             if (co->gc_work) {
-                RDEBUGF("[wait_sysmon.share] p_index=%d, co=%p is gc_work, will skip", p->index, p->coroutine);
+                RDEBUGF("[wait_sysmon.share] p_index=%d(%lu), co=%p is gc_work, will skip", p->index, (uint64_t)p->thread_id, p->coroutine);
                 continue;
             }
 

@@ -19,9 +19,9 @@ extern uv_key_t tls_coroutine_key;
 extern rt_linked_t global_gc_worklist; // 全局 gc worklist
 extern mutex_t global_gc_locker;       // 全局 gc locker
 
-extern bool processor_need_stw;  // 全局 STW 标识
-extern mutex_t solo_processor_stw_locker;       // stw 与 write_barrier/gc_malloc 等内存相关方法需要进行冲突锁
-extern bool processor_need_exit; // 全局 STW 标识
+extern bool processor_need_stw;           // 全局 STW 标识
+extern mutex_t solo_processor_stw_locker; // stw 与 write_barrier/gc_malloc 等内存相关方法需要进行冲突锁
+extern bool processor_need_exit;          // 全局 STW 标识
 
 extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;
@@ -111,9 +111,11 @@ void processor_stop_the_world();
 
 void processor_start_the_world();
 
-bool processor_all_safe();
+bool processor_all_safe_or_lock();
 
-void processor_wait_all_safe();
+void processor_wait_all_safe_or_lock();
+
+void processor_stw_unlock();
 
 void wait_all_gc_work_finished();
 
