@@ -1,6 +1,7 @@
 #include "nutils.h"
 
 #include "runtime/memory.h"
+#include "runtime/processor.h"
 #include "string.h"
 #include "vec.h"
 
@@ -403,7 +404,8 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
 
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
     if (!p->share) {
-        mutex_lock(&p->gc_barrier_locker);
+        mutex_lock(&solo_processor_stw_locker);
+        mutex_lock(&p->gc_stw_locker);
     }
 
     // yuasa 写屏障 shade slot
@@ -419,7 +421,8 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     memmove(slot, new_obj, rtype->size);
 
     if (!p->share) {
-        mutex_unlock(&p->gc_barrier_locker);
+        mutex_unlock(&p->gc_stw_locker);
+        mutex_unlock(&solo_processor_stw_locker);
     }
 }
 

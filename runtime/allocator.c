@@ -289,7 +289,7 @@ static void page_summary_update(addr_t base, uint64_t size) {
  * @param size
  * @param value 1 表示 page使用中， 0 表示 page 空闲
  */
-static void chunks_set(addr_t base, uint64_t size, bool value) {
+static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
     uint64_t end = base + size; // 假如 base = 0， size = 3, 那么申请的空间是 [0~1), [1~2), [2~3), 其中 3 是应该不属于当前空间
     for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
@@ -312,7 +312,7 @@ static void chunks_set(addr_t base, uint64_t size, bool value) {
                 bit_start, bit_end);
 
         for (uint64_t i = bit_start; i <= bit_end; ++i) {
-            if (value) {
+            if (value == 1) {
                 bitmap_set((uint8_t *)chunk->blocks, i);
             } else {
                 bitmap_clear((uint8_t *)chunk->blocks, i);
@@ -494,6 +494,9 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
  * @param span
  */
 static void mheap_set_spans(mspan_t *span) {
+    MDEBUGF("[mheap_set_spans] start, span=%p, base=%p, obj_size=%lu, pages_count=%lu", span, (void *)span->base, span->obj_size,
+            span->pages_count);
+
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
 
@@ -501,14 +504,15 @@ static void mheap_set_spans(mspan_t *span) {
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         arena->spans[page_index] = span;
-        TDEBUGF("[mheap_set_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
+        MDEBUGF("[mheap_set_spans] arena_base=%p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
                 (void *)span->base)
         page_index += 1;
     }
 }
 
 static void mheap_clear_spans(mspan_t *span) {
-    DEBUGF("[runtime.mheap_clear_spans] span=%p, obj_size: %lu, pages_count: %lu", (void *)span->base, span->obj_size, span->pages_count);
+    DEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *)span->base, span->obj_size,
+           span->pages_count);
 
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
@@ -771,7 +775,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 // 单位
 static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     MDEBUGF("[std_malloc] start");
-    bool has_ptr = rtype != NULL && rtype->last_ptr;
+    bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
 
     uint8_t sizeclass = calc_sizeclass(size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
@@ -1001,6 +1005,12 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     assert(p);
     assert(p->can_preempt == false);
 
+    // TODO 如果不需要 STW 的话不就造成了多个线程冲突了么。。
+    // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。
+    if (processor_get_stw() && !p->share) {
+        MDEBUGF("[rt_gc_malloc] solo need stw locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
+        mutex_lock(&solo_processor_stw_locker);
+    }
     MDEBUGF("[rt_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
     if (rtype) {
@@ -1025,7 +1035,11 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
         mark_ptr_black(ptr);
     }
 
-    MDEBUGF("[rt_gc_malloc] end p_index_%d=%d, result=%p", p->share, p->index, ptr);
+    if (!p->share) {
+        mutex_unlock(&solo_processor_stw_locker);
+    }
+
+    MDEBUGF("[rt_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
     return ptr;
 }
 

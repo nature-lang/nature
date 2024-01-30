@@ -29,14 +29,14 @@ static void uv_timer_close_cb(uv_handle_t *handle) {
  * @param timer
  */
 static void uv_on_timer(uv_timer_t *timer) {
-    RDEBUGF("[uv_on_timer] start, timer=%p, timer->data=%p", timer, timer->data);
+    RDEBUGF("[coroutine_sleep.uv_on_timer] callback start, timer=%p, timer->data=%p", timer, timer->data);
     coroutine_t *co = timer->data;
 
     // - 标记 coroutine 并推送到可调度队列中等待 processor handle
     processor_t *p = co->p;
     assert(p);
 
-    RDEBUGF("[uv_on_timer] will push to runnable_list, p_index_%d=%d, c=%d", p->share, p->index, co->status);
+    RDEBUGF("[coroutine_sleep.uv_on_timer] will push to runnable_list, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co, co->status);
 
     // timer 到时间了, push 到尾部等待调度
     co->status = CO_STATUS_RUNNABLE;
@@ -44,14 +44,14 @@ static void uv_on_timer(uv_timer_t *timer) {
     rt_linked_push(&p->runnable_list, co);
     mutex_unlock(&p->co_locker);
 
-    RDEBUGF("[uv_on_timer] will stop and clear timer=%p, p_index_%d=%d", timer, p->share, p->index);
+    RDEBUGF("[coroutine_sleep.uv_on_timer] will stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co, co->status);
 
     uv_timer_stop(timer);
 
     // 注册 close 事件而不是瞬时 close!
     uv_close((uv_handle_t *)timer, uv_timer_close_cb);
 
-    RDEBUGF("[uv_on_timer] success stop and clear timer=%p, p_index_%d=%d", timer, p->share, p->index);
+    RDEBUGF("[coroutine_sleep.uv_on_timer] success stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co, co->status);
 }
 
 void coroutine_sleep(int64_t ms) {

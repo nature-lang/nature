@@ -14,9 +14,9 @@ bool processor_need_exit;
 processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 processor_t *solo_processor_list;  // 独享协程列表其实就是多线程
 
-int solo_processor_count;       // 累计数量
-rt_linked_t global_gc_worklist; // 独享协程列表其实就是多线程
-mutex_t global_gc_locker;       // 全局 gc locker
+int solo_processor_count; // 累计数量
+rt_linked_t global_gc_worklist;
+mutex_t global_gc_locker; // 全局 gc locker
 
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
@@ -236,7 +236,7 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     p->co_started_at = 0;
     p->coroutine = NULL;
 
-    RDEBUGF("[runtime.coroutine_resume] aco_yield completed, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
+    RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
 }
 
 // handle by thread
@@ -321,7 +321,7 @@ static void processor_run(void *raw) {
                 goto STW_WAIT;
             }
 
-            RDEBUGF("[runtime.processor_run] coroutine resume completed, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co,
+            RDEBUGF("[runtime.processor_run] coroutine resume backend, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co,
                     co->status);
         }
 
@@ -342,9 +342,9 @@ static void processor_run(void *raw) {
     }
 
 EXIT:
-    p->exit = true;
-    p->thread_id = 0;
     processor_uv_close(p);
+    p->thread_id = 0;
+    p->exit = true;
 
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
 }
@@ -415,10 +415,14 @@ void processor_init() {
     // - 初始化全局标识
     processor_need_exit = false;
     processor_need_stw = false;
+    mutex_init(&solo_processor_stw_locker, false);
     gc_barrier = false;
-    gc_stage_locker = mutex_new(false);
+    mutex_init(&gc_stage_locker, false);
     gc_stage = GC_STAGE_OFF;
     solo_processor_count = 0;
+
+    rt_linked_init(&global_gc_worklist, NULL, NULL);
+    mutex_init(&global_gc_locker, false);
 
     // - 初始化 processor 和 coroutine 分配器
     fixalloc_init(&coroutine_alloc, sizeof(coroutine_t));
@@ -430,9 +434,6 @@ void processor_init() {
     // - 为每一个 processor 创建对应的 thread 进行处理对应的 p
     share_processor_list = NULL;
     solo_processor_list = NULL;
-
-    rt_linked_init(&global_gc_worklist, NULL, NULL);
-    mutex_init(&global_gc_locker, false);
 
     for (int i = 0; i < cpu_count; ++i) {
         processor_t *p = processor_new(i);
@@ -511,13 +512,8 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
     // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
-    write(STDOUT_FILENO, "___pre_0\n", 9);
     disable_preempt(p);
     co->status = CO_STATUS_SYSCALL;
-
-    write(STDOUT_FILENO, "___pre_1\n", 9);
-    DEBUGF("[runtime.pre_tpl_hook] will set can_preempt=false, co=%p, status=%d ,target=%s", co, co->status, target);
-    write(STDOUT_FILENO, "___pre_2\n", 9);
 
     aco_t *aco = &co->aco;
     uint64_t rbp_value;
@@ -528,6 +524,9 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
 #endif
 
     aco->bp_offset = (uint64_t)aco->share_stack->align_retptr - rbp_value;
+
+    DEBUGF("[runtime.pre_tpl_hook] disable_preempt success, co=%p, status=%d ,target=%s, bp_offset set %lu", co, co->status, target,
+           aco->bp_offset);
 
 #ifdef DEBUG
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
@@ -589,7 +588,7 @@ processor_t *processor_new(int index) {
     mutex_unlock(&cp_alloc_locker);
 
     // uv_loop_init(&p->uv_loop);
-    mutex_init(&p->gc_barrier_locker, false);
+    mutex_init(&p->gc_stw_locker, false);
     mutex_init(&p->disable_preempt_locker, false);
     mutex_init(&p->co_locker, false);
     p->sig.sa_flags = 0;
@@ -598,9 +597,9 @@ processor_t *processor_new(int index) {
     p->co_started_at = 0;
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
     rt_linked_init(&p->co_list, NULL, NULL);
-    rt_linked_init(&p->gc_worklist, NULL, NULL);
     rt_linked_init(&p->runnable_list, NULL, NULL);
-    p->gc_work_finished = false;
+    rt_linked_init(&p->gc_worklist, NULL, NULL);
+    p->gc_work_finished = memory->gc_count;
     p->index = index;
     p->can_preempt = false;
     p->next = NULL;
@@ -701,13 +700,7 @@ void processor_wait_all_safe() {
  */
 static bool all_gc_work_finished() {
     PROCESSOR_FOR(share_processor_list) {
-        if (p->gc_work_finished == false) {
-            return false;
-        }
-    }
-
-    PROCESSOR_FOR(solo_processor_list) {
-        if (p->gc_work_finished == false) {
+        if (p->gc_work_finished < memory->gc_count) {
             return false;
         }
     }
@@ -716,7 +709,7 @@ static bool all_gc_work_finished() {
 }
 
 /**
- * 需要等待独享和共享协程的 gc_work 全部完成 mark
+ * 需要等待独享和共享协程的 gc_work 全部完成 mark,
  */
 void wait_all_gc_work_finished() {
     RDEBUGF("[runtime_gc.wait_all_gc_work_finished] start");
@@ -726,17 +719,6 @@ void wait_all_gc_work_finished() {
     }
 
     DEBUGF("[runtime_gc.wait_all_gc_work_finished] all processor gc work finish");
-
-    // 已经等到了所有的 gc_work_finish, 则重置为 false，避免影响下一次 GC 判断
-    PROCESSOR_FOR(share_processor_list) {
-        p->gc_work_finished = false;
-    }
-
-    PROCESSOR_FOR(solo_processor_list) {
-        p->gc_work_finished = false;
-    }
-
-    RDEBUGF("[runtime_gc.wait_all_gc_work_finished] share/solo processor to gc_work_finished=false, end");
 }
 
 void *global_gc_worklist_pop() {

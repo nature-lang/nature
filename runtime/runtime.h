@@ -233,7 +233,7 @@ typedef struct coroutine_t {
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
     uint64_t gc_black;
 
-    bool gc_work; // 当前 coroutine 是否是吃 gc 线程
+    bool gc_work; // 当前 coroutine 是否是 gc coroutine
 
     struct coroutine_t *next; // coroutine list
 } coroutine_t;
@@ -252,8 +252,8 @@ struct processor_t {
     uv_timer_t timer;  // 辅助协程调度的定时器
     uv_loop_t uv_loop; // uv loop 事件循环
 
-    // 仅仅 solo processor 需要使用该锁，因为 solo processor 需要其他 share 进行 scan root 和 worklist
-    mutex_t gc_barrier_locker;
+    // 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
+    mutex_t gc_stw_locker;
 
     // 锁定时不可抢占, 不开放给 user 使用
     mutex_t disable_preempt_locker;
@@ -266,12 +266,12 @@ struct processor_t {
     rt_linked_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_t runnable_list;
 
-    bool share;              // 默认都是共享处理器
-    bool safe_point;         // 当前是否处于安全点
-    bool exit;               // 是否已经退出
-    bool can_preempt;        // 当前 processor 能否被抢占
-    bool gc_work_finished;   // 是否完成了 GC WORK 的工作
-    rt_linked_t gc_worklist; // gc 扫描的 ptr 节点列表
+    bool share;                // 默认都是共享处理器
+    bool safe_point;           // 当前是否处于安全点
+    bool exit;                 // 是否已经退出
+    bool can_preempt;          // 当前 processor 能否被抢占
+    rt_linked_t gc_worklist;   // gc 扫描的 ptr 节点列表
+    uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
 
     struct processor_t *next; // processor 链表支持
 };

@@ -88,7 +88,10 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) wait preempt", p->index, (uint64_t)p->thread_id);
 
             // 基于协作式的调度，必须要等到协程进入代码段才进行抢占, 否则一直等待，最长等待 1s 钟, 然后异常
-            // share processor run 可能在不可抢占状态下直接退出, 此时直接结束
+            // 1s 可能发生很多事情，所以需要关注一些关键的状态变化
+            // - 没有可用的 runnable, 导致一致在 processor run 循环
+            // - main exit, processor 退出
+            // - 可能调度到 gc work(但是 gc work 肯定运行不到 1s 钟)
             int wait_count = 0;
             while (!p->can_preempt) {
                 usleep(1 * 1000);
@@ -100,6 +103,12 @@ void wait_sysmon() {
 
                 if (p->exit) {
                     RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), processor exit, goto unlock", p->index,
+                            (uint64_t)p->thread_id);
+                    goto SHARE_UNLOCK_NEXT;
+                }
+
+                if (!p->coroutine) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), no coroutine and maybe exit, goto unlock", p->index,
                             (uint64_t)p->thread_id);
                     goto SHARE_UNLOCK_NEXT;
                 }
@@ -150,6 +159,8 @@ void wait_sysmon() {
                 continue;
             }
 
+            // TODO solo processor 无法抢占，只能通过锁的方式进行 STW。
+            break;
             // solo processor 仅需要 stw 的时候进行抢占
             if (!processor_get_stw()) {
                 RDEBUGF("[wait_sysmon.solo] processor_index=%d, current not need stw, will skip", p->index);
@@ -247,7 +258,7 @@ void wait_sysmon() {
             mutex_unlock(&p->disable_preempt_locker);
 
             RDEBUGF("[wait_sysmon.solo.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
-           
+
             prev = p;
             p = p->next;
         }
