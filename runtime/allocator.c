@@ -978,7 +978,6 @@ mspan_t *span_of(uint64_t addr) {
 }
 
 addr_t mstack_new(uint64_t size) {
-    // TODO 仅仅是为了方便调试，才指定了映地址
     void *base = sys_memory_map((void *)0x4000000000, size);
 
     return (addr_t)base;

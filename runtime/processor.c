@@ -26,7 +26,8 @@ fixalloc_t processor_alloc;
 mutex_t cp_alloc_locker;
 
 __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
-    DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
+    // 这里也不安全了呀，毕竟没有回去。。所以为什么会超时,为啥还需要抢占。这 co 都换新了吧
+//    DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
 }
 
 /**

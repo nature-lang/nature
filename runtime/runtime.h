@@ -57,6 +57,7 @@
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
+#define WAIT_BRIEF_TIME 10 // ms
 #define WAIT_SHORT_TIME 10 // ms
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
