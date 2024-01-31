@@ -526,6 +526,8 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
  * @return
  */
 rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
+    assert(element_rtype);
+
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
     DEBUGF("[rt_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);

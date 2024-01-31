@@ -11,6 +11,7 @@
 extern int cpu_count;
 extern processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern processor_t *solo_processor_list;  // 独享协程列表其实就是多线程
+extern mutex_t solo_processor_locker;     // 删除 solo processor 需要先获取该锁
 extern int solo_processor_count;          // 累计数量
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
@@ -19,9 +20,8 @@ extern uv_key_t tls_coroutine_key;
 extern rt_linked_t global_gc_worklist; // 全局 gc worklist
 extern mutex_t global_gc_locker;       // 全局 gc locker
 
-extern bool processor_need_stw;           // 全局 STW 标识
-extern mutex_t solo_processor_stw_locker; // stw 与 write_barrier/gc_malloc 等内存相关方法需要进行冲突锁
-extern bool processor_need_exit;          // 全局 STW 标识
+extern bool processor_need_stw;  // 全局 STW 标识
+extern bool processor_need_exit; // 全局 STW 标识
 
 extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;

@@ -58,9 +58,7 @@ void wait_sysmon() {
             }
 
             // yield/exit 首先就设置 can_preempt = false, 这里就无法完成。所以 p->coroutine 一旦设置就无法被清空或者切换
-            RDEBUGF("[wait_sysmon.share.thread_locker] try disable_preempt_locker success, p_index_%d=%d", p->share, p->index);
-
-            RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) wait preempt", p->index, (uint64_t)p->thread_id);
+            RDEBUGF("[wait_sysmon.share.thread_locker] try disable_preempt_locker success wait preempt, p_index_%d=%d", p->share, p->index);
 
             // 基于协作式的调度，必须要等到协程进入代码段才进行抢占, 否则一直等待，最长等待 1s 钟, 然后异常
             // 1s 可能发生很多事情，所以需要关注一些关键的状态变化
@@ -138,6 +136,10 @@ void wait_sysmon() {
         // solo processor 独享线程所以不需要抢占，仅仅是需要 STW 时才进行抢占，由于抢占的目的是 GC 相关, 如果当前 coroutine
         // status=syscall(tpl call) 则不需要抢占，因为在 tpl call 中是不会调整栈空间的，所以 STW 可以放心扫描已经开启写屏障。
         // 在 tpl post hook 中如果检测到 STW 此时 solo processor 延迟进入 STW 状态即可
+        RDEBUGF("[wait_sysmon.solo] wait locker");
+        mutex_lock(&solo_processor_locker);
+        RDEBUGF("[wait_sysmon.solo] get locker");
+
         processor_t *prev = NULL;
         processor_t *p = solo_processor_list;
         while (p) {
@@ -155,7 +157,7 @@ void wait_sysmon() {
                 }
 
                 processor_free(exited);
-                RDEBUGF("[wait_sysmon.solo] p=%p remove from solo processor list, prev=%p, solo_processor_list=%p", p, prev,
+                RDEBUGF("[wait_sysmon.solo] p=%p remove from solo processor list, prev=%p, solo_processor_list=%p", exited, prev,
                         solo_processor_list);
 
                 continue;
@@ -177,17 +179,17 @@ void wait_sysmon() {
             }
 
             // need stw ---
-            coroutine_t *co = p->coroutine;
-            if (!co) {
-                RDEBUGF("[wait_sysmon.solo] p_index=%d no coroutine, will skip", p->index);
-
-                prev = p;
-                p = p->next;
-                continue;
-            }
+            // coroutine_t *co = p->coroutine;
+            // if (!co) {
+            //     RDEBUGF("[wait_sysmon.solo] p_index=%d no coroutine, will skip", p->index);
+            //
+            //     prev = p;
+            //     p = p->next;
+            //     continue;
+            // }
 
             // 当前有 co 需要调度
-            RDEBUGF("[wait_sysmon.solo] need stw and runtime timeout, will get locker and preempt, p_index_%d=%d(%lu)", p->share, p->index,
+            RDEBUGF("[wait_sysmon.solo] need stw, will get locker and preempt, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t)p->thread_id);
 
             int trylock = mutex_times_trylock(&p->disable_preempt_locker, 10);
@@ -201,25 +203,42 @@ void wait_sysmon() {
 
             RDEBUGF("[wait_sysmon.solo.thread_locker] get locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
 
-            // 既然已经发生了 stw, 那 co 就不可能发生切换，除非 stw 已经停止了
-            co = p->coroutine;
-            if (processor_get_stw() && !co) {
-                RDEBUGF("[wait_sysmon.solo.thread_locker] processor_index=%d, not co, will skip", p->index);
-                goto SOLO_UNLOCK_NEXT;
+            // 等待可以抢占
+            int wait_count = 0;
+            while (!p->can_preempt) {
+                usleep(1 * 1000);
+                wait_count++;
+                if (wait_count > PREEMPT_TIMEOUT) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu) deadlock", p->index, (uint64_t)p->thread_id);
+                    assert(false && "processor deadlock");
+                }
+
+                if (p->exit) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), processor exit, goto unlock", p->index,
+                            (uint64_t)p->thread_id);
+                    goto SOLO_UNLOCK_NEXT;
+                }
+
+                coroutine_t *co = p->coroutine;
+                if (!co) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), no coroutine maybe exit, goto unlock", p->index,
+                            (uint64_t)p->thread_id);
+                    goto SOLO_UNLOCK_NEXT;
+                }
+
+                if (co->status == CO_STATUS_SYSCALL) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), goroutine in syscall, this is a safe status, goto unlock",
+                            p->index, (uint64_t)p->thread_id);
+                    goto SOLO_UNLOCK_NEXT;
+                }
             }
 
-            // 依旧在 stw, 并且 co 依旧在运行中，现在判断 co 状态是否可用，但是目前依旧没有锁阻止 co 进行切换
-            // 因为没法识别当前的 syscall 是 processor_run 还是其他的 syscall
-
-            // syscall 对于 stw 来说是一个安全的状态，因为随后的 post_tpl_hook 会拦截进行 STW
-            if (co->status == CO_STATUS_SYSCALL) {
-                RDEBUGF("[wait_sysmon.solo.thread_locker] processor_index=%d, co=%p, co_status=%d not running, will skip", p->index, co,
-                        co->status);
-                goto SOLO_UNLOCK_NEXT;
-            }
-
-            // 为什么现在必须是可抢占的状态, 因为不在 syscall 里面就是在用户代码中，那就是一个可抢占状态
+            // 当前属于可以抢占状态, 由于获取了 disable_preempt_locker, 所以此时无法在切换到 can_preempt=true
             assert(p->can_preempt == true);
+
+            // 当前是可抢占状态则必定存在一个 co, 且 stw 期间不会发生轮换
+            // 既然已经发生了 stw, 那 co 就不可能发生切换，除非 stw 已经停止了
+            assert(p->coroutine);
 
             RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu) co=%p run in user code will send SIGURG", p->index,
                     (uint64_t)p->thread_id, p->coroutine);
@@ -239,6 +258,8 @@ void wait_sysmon() {
             prev = p;
             p = p->next;
         }
+        mutex_unlock(&solo_processor_locker);
+        RDEBUGF("[wait_sysmon.solo] unlocker");
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {

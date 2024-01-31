@@ -20,7 +20,9 @@ set(LIB_OUTPUT_PREFIX ../lib)
 
 # release 时的编译优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    # NDEBUG 会屏蔽 assert
     set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    #    set(CMAKE_C_FLAGS_RELEASE "-O2")
 endif ()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)

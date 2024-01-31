@@ -519,8 +519,8 @@ static void mheap_clear_spans(mspan_t *span) {
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        TDEBUGF("[mheap_clear_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
-                (void *)span->base)
+        DEBUGF("[mheap_clear_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
+               (void *)span->base)
         arena->spans[page_index] = NULL;
         page_index += 1;
     }
@@ -623,8 +623,8 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
-    TDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
-            span->obj_count, span->alloc_count);
+    DEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
+           span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
 
@@ -741,10 +741,10 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
+    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
 
     mutex_lock(memory->locker);
-    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
+    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
@@ -762,14 +762,14 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bit_value = 0;
         }
 
-        TDEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
-                type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+        TRACEF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
+               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
 
     mutex_unlock(memory->locker);
-    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
 }
 
 // 单位
@@ -787,7 +787,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     addr_t addr = mcache_alloc(spanclass, &span);
     assert(span && "std_malloc notfound span");
 
-    TDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
+    DEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
 
     if (has_ptr) {
         // 对 arena.bits 做标记,标记是指针还是标量
@@ -800,7 +800,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    TDEBUGF(
+    DEBUGF(
         "[std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
         "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
         span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes);
@@ -837,7 +837,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    TDEBUGF(
+    DEBUGF(
         "[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
         "addr=0x%lx, allocator_bytes=%ld",
         span->spanclass, span->base, span->obj_size, size, debug_kind, span->base, allocated_bytes);
@@ -966,13 +966,13 @@ mspan_t *span_of(uint64_t addr) {
     // DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
-    TDEBUGF("[span_of] addr=%p", (void *)addr);
+    DEBUGF("[span_of] addr=%p", (void *)addr);
     assert(arena && "not found arena");
 
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
-    TDEBUGF("[span_of] page_index=%lu, span=%p", page_index, span);
+    DEBUGF("[span_of] page_index=%lu, span=%p", page_index, span);
     assert(span && "not found span by page_index");
     return span;
 }

@@ -68,12 +68,12 @@ void coroutine_sleep(int64_t ms) {
     // 设定定时器超时时间与回调
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
-    TDEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co, &p->uv_loop, p->share,
+    DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co, &p->uv_loop, p->share,
             p->index, &timer, fetch_addr_value((addr_t)&timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);
 
-    TDEBUGF("[runtime.coroutine_sleep] coroutine sleep completed resume, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co,
+    DEBUGF("[runtime.coroutine_sleep] coroutine sleep completed resume, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co,
             &p->uv_loop, p->share, p->index, &timer, fetch_addr_value((addr_t)&timer));
 }

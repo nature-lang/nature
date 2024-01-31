@@ -40,14 +40,14 @@ fn foo(){
     car()
     runtime_force_gc()
 
-    co.sleep(1000)
+    co.sleep(100)
     print('share sub_co done\n')
 }
 
 var bar = fn(){
     var i = 2
     for i > 0 {
-        co.sleep(1000)
+        co.sleep(100)
         i -= 1
     }
 
@@ -162,7 +162,7 @@ co.run(foo, [], 0)
 
 // main for sleep
 for int i=0; i<25; i+=1 {
-    co.sleep(100)
+    co.sleep(10)
     if i > 20 {
         println('main_co sleep done', i)
     }

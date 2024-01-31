@@ -83,7 +83,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
-    //    assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
+    // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
     assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
 
     rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
@@ -109,21 +109,21 @@ void *vec_ref(n_vec_t *l) {
 
 /**
  * ref 指向 element value 值所在的地址，其可能是一个栈地址，也可能是一个堆地址
- * @param l
+ * @param vec
  * @param ref
  */
-void vec_push(n_vec_t *l, void *ref) {
+void vec_push(n_vec_t *vec, void *ref) {
     assert(ref > 0 && "ref must be a valid address");
-    DEBUGF("[vec_push] current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", l->length, ref,
+    DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data, vec->length, ref,
            (uint64_t)fetch_int_value((addr_t)ref, 8));
 
-    if (l->length == l->capacity) {
-        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
-        vec_grow(l);
+    if (vec->length == vec->capacity) {
+        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
+        vec_grow(vec);
     }
 
-    uint64_t index = l->length++;
-    vec_assign(l, index, ref);
+    uint64_t index = vec->length++;
+    vec_assign(vec, index, ref);
 }
 
 /**

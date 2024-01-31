@@ -12,28 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define _GNU_SOURCE
-
 #include "aco.h"
 
-#include <stdint.h>
 #include <stdio.h>
 
 #include "runtime/runtime.h"
 
 // this header including should be at the last of the `include` directives list
-#include "aco_assert_override.h"
 
 void aco_runtime_test(void) {
 #ifdef __x86_64__
-    _Static_assert(sizeof(void *) == 8, "require 'sizeof(void*) == 8'");
-    _Static_assert(sizeof(__uint128_t) == 16, "require 'sizeof(__uint128_t) == 16'");
+    assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
+    assert(sizeof(__uint128_t) == 16 && "require 'sizeof(__uint128_t) == 16'");
 #else
 #error "platform no support yet"
 #endif
-    _Static_assert(sizeof(int) >= 4, "require 'sizeof(int) >= 4'");
     assert(sizeof(int) >= 4);
-    _Static_assert(sizeof(int) <= sizeof(size_t), "require 'sizeof(int) <= sizeof(size_t)'");
     assert(sizeof(int) <= sizeof(size_t));
 }
 
@@ -254,7 +248,7 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     }
 
     p->real_ptr = mmap((void *)0x4000000000, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    assertalloc_bool(p->real_ptr != MAP_FAILED);
+    assert(p->real_ptr != MAP_FAILED);
     p->guard_page_enabled = 1;
     assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
 
@@ -411,44 +405,44 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }
 
-// aco_attr_no_asan void aco_save_temp_stack(aco_t *aco) {
-//     assert(aco->reg[ACO_REG_IDX_RETADDR]);
-//     assert(aco->reg[ACO_REG_IDX_SP]);
-//     assert(aco->share_stack->owner == aco);
-//
-//     aco->temp_stack.valid_sz = (uintptr_t) (aco->share_stack->align_retptr) - (uintptr_t) (aco->reg[ACO_REG_IDX_SP]);
-//
-//     // realloc stack
-//     if (aco->temp_stack.sz < aco->temp_stack.valid_sz) {
-//         free(aco->temp_stack.ptr);
-//         aco->temp_stack.ptr = NULL;
-//
-//         while (true) {
-//             // <<1 equals *2
-//             aco->temp_stack.sz = aco->temp_stack.sz << 1;
-//             assert(aco->temp_stack.sz > 0);
-//             if (aco->temp_stack.sz >= aco->temp_stack.valid_sz) {
-//                 break;
-//             }
-//         }
-//
-//         aco->temp_stack.ptr = malloc(aco->temp_stack.sz);
-//         assertalloc_ptr(aco->temp_stack.ptr);
-//     }
-//
-//     // 保存栈数据
-//     if (aco->temp_stack.valid_sz > 0) {
-// #ifdef __x86_64__
-//         aco_amd64_optimized_memcpy_drop_in(aco->temp_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
-// #else
-//         memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
-// #endif
-//     }
-//
-//     if (aco->temp_stack.valid_sz > aco->temp_stack.max_cpsz) {
-//         aco->temp_stack.max_cpsz = aco->temp_stack.valid_sz;
-//     }
-// }
+aco_attr_no_asan void aco_share_to_save_stack(aco_t *aco) {
+    assert(aco->reg[ACO_REG_IDX_RETADDR]);
+    assert(aco->reg[ACO_REG_IDX_SP]);
+    assert(aco->share_stack->owner == aco);
+
+    aco->save_stack.valid_sz = (uintptr_t)(aco->share_stack->align_retptr) - (uintptr_t)(aco->reg[ACO_REG_IDX_SP]);
+
+    // realloc stack
+    if (aco->save_stack.sz < aco->save_stack.valid_sz) {
+        free(aco->save_stack.ptr);
+        aco->save_stack.ptr = NULL;
+
+        while (true) {
+            // <<1 equals *2
+            aco->save_stack.sz = aco->save_stack.sz << 1;
+            assert(aco->save_stack.sz > 0);
+            if (aco->save_stack.sz >= aco->save_stack.valid_sz) {
+                break;
+            }
+        }
+
+        aco->save_stack.ptr = rt_clr_malloc(aco->save_stack.sz, NULL);
+        assert(aco->save_stack.ptr);
+    }
+
+    // 保存栈数据
+    if (aco->save_stack.valid_sz > 0) {
+#ifdef __x86_64__
+        aco_amd64_optimized_memcpy_drop_in(aco->save_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
+#else
+        memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
+#endif
+    }
+
+    if (aco->save_stack.valid_sz > aco->save_stack.max_cpsz) {
+        aco->save_stack.max_cpsz = aco->save_stack.valid_sz;
+    }
+}
 
 void aco_destroy(aco_t *co) {
     assert(co);

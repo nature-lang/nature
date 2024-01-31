@@ -13,6 +13,7 @@ bool processor_need_exit;
 
 processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 processor_t *solo_processor_list;  // 独享协程列表其实就是多线程
+mutex_t solo_processor_locker;     // 删除 solo processor 需要先获取该锁
 
 int solo_processor_count; // 累计数量
 rt_linked_t global_gc_worklist;
@@ -27,7 +28,7 @@ mutex_t cp_alloc_locker;
 
 __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
     // 这里也不安全了呀，毕竟没有回去。。所以为什么会超时,为啥还需要抢占。这 co 都换新了吧
-//    DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
+    // DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
 }
 
 /**
@@ -373,7 +374,9 @@ void coroutine_dispatch(coroutine_t *co) {
         rt_linked_push(&p->co_list, co);
         rt_linked_push(&p->runnable_list, co);
 
+        mutex_lock(&solo_processor_locker);
         RT_LIST_PUSH_HEAD(solo_processor_list, p);
+        mutex_unlock(&solo_processor_locker);
 
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assert(false && "pthread_create failed");
@@ -427,6 +430,7 @@ void processor_init() {
     processor_need_stw = false;
     gc_barrier = false;
     mutex_init(&gc_stage_locker, false);
+    mutex_init(&solo_processor_locker, false);
     gc_stage = GC_STAGE_OFF;
     solo_processor_count = 0;
 
@@ -512,6 +516,7 @@ void mark_ptr_black(void *ptr) {
 
 /**
  * TODO target use debug, can delete
+ * yield 的入口也是这里
  * @param target
  */
 __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
@@ -537,14 +542,16 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     DEBUGF("[runtime.pre_tpl_hook] disable_preempt success, co=%p, status=%d ,target=%s, bp_offset set %lu", co, co->status, target,
            aco->bp_offset);
 
+    // TODO solo processor 需要触发将 share stack 保存在 save stack 中。否则无法扫描 save stack 的栈
+
 #ifdef DEBUG
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
     fndef_t *fn = find_fn(ret_addr);
     if (fn) {
-        DEBUGF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path, fn->line);
+        TRACEF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path, fn->line);
     }
     // 基于 share stack 计算 offset
-    DEBUGF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
+    TRACEF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
            aco->bp_offset);
 #endif
 }
@@ -559,7 +566,7 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
 
     // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入 user code
     if (processor_get_stw()) {
-        TDEBUGF("[runtime.post_tpl_hook] co=%p, need stw will yield", co);
+        DEBUGF("[runtime.post_tpl_hook] co=%p, need stw will yield", co);
         co_yield_runnable(p, co);
     }
 
@@ -585,7 +592,7 @@ coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
     co->next = NULL;
     co->aco.inited = 0; // 标记为为初始化
 
-    TDEBUGF("[coroutine_new] co=%p new success", co);
+    DEBUGF("[coroutine_new] co=%p new success", co);
     return co;
 }
 
@@ -667,6 +674,7 @@ bool processor_all_safe_or_lock() {
     }
 
     // safe_point 或者获取到 gc_stw_locker
+    mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
         if (p->exit) {
             continue;
@@ -681,17 +689,21 @@ bool processor_all_safe_or_lock() {
         }
 
         RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d not safe", p->share, p->index);
+        mutex_unlock(&solo_processor_locker);
         return false;
     }
+    mutex_unlock(&solo_processor_locker);
 
     return true;
 }
 
 void processor_stw_unlock() {
+    mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
         mutex_unlock(&p->gc_stw_locker);
         RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d gc_stw_locker unlock", p->share, p->index);
     }
+    mutex_unlock(&solo_processor_locker);
 }
 
 void processor_wait_all_safe_or_lock() {
