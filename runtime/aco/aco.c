@@ -405,7 +405,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }
 
-aco_attr_no_asan void aco_share_to_save_stack(aco_t *aco) {
+aco_attr_no_asan void aco_share_spill(aco_t *aco) {
     assert(aco->reg[ACO_REG_IDX_RETADDR]);
     assert(aco->reg[ACO_REG_IDX_SP]);
     assert(aco->share_stack->owner == aco);

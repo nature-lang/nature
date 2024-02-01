@@ -35,6 +35,15 @@ __attribute__((optimize(0))) void co_preempt_yield();
 
 #define PROCESSOR_FOR(list) for (processor_t *p = list; p; p = p->next)
 
+static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t status) {
+    assert(p);
+    assert(co);
+
+    // solo processor 在 stw 期间禁止切换 co 的状态
+    mutex_lock(&p->thread_locker);
+    co->status = status;
+    mutex_unlock(&p->thread_locker);
+}
 /**
  * 设置为可以抢占没有什么竞态关系，直接可以抢占
  * @param p
@@ -56,9 +65,9 @@ static inline void disable_preempt(processor_t *p) {
 
     assert(p->can_preempt == true);
     // 如果 sysmon 持有了锁，则 mutex_lock 会阻塞，此时可以进行安全的抢占
-    mutex_lock(&p->disable_preempt_locker);
+    mutex_lock(&p->thread_locker);
     p->can_preempt = false;
-    mutex_unlock(&p->disable_preempt_locker);
+    mutex_unlock(&p->thread_locker);
 }
 
 /**
@@ -76,14 +85,18 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
 
+    // syscall -> runnable
+    mutex_lock(&p->thread_locker);
     co->status = CO_STATUS_RUNNABLE;
-    mutex_lock(&p->co_locker);
     rt_linked_push(&p->runnable_list, co);
     mutex_unlock(&p->co_locker);
+
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 
     _co_yield(p, co);
 
+    // runnable -> syscall
+    co_set_status(p, co, CO_STATUS_SYSCALL);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
@@ -92,13 +105,13 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
     assert(co);
 
     // 这里作为一个整体，不再允许抢占
-    //    set_can_preempt(p, false);
-
-    co->status = CO_STATUS_WAITING;
+    // syscall -> waiting
+    co_set_status(p, co, CO_STATUS_WAITING);
 
     _co_yield(p, co);
 
-    // set_can_preempt(p, true); // 回到用户态，允许抢占
+    // waiting -> syscall
+    co_set_status(p, co, CO_STATUS_SYSCALL);
 }
 
 // locker
@@ -107,13 +120,13 @@ void *global_gc_worklist_pop();
 // 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
 bool processor_get_stw();
 
-void processor_stop_the_world();
+void processor_all_stop_the_world();
 
-void processor_start_the_world();
+void processor_all_start_the_world();
 
-bool processor_all_safe_or_lock();
+bool processor_all_safe();
 
-void processor_wait_all_safe_or_lock();
+void processor_all_wait_safe();
 
 void processor_stw_unlock();
 

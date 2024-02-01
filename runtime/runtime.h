@@ -57,7 +57,7 @@
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
-#define WAIT_BRIEF_TIME 10 // ms
+#define WAIT_BRIEF_TIME 1  // ms
 #define WAIT_SHORT_TIME 10 // ms
 #define WAIT_MID_TIME 50   // ms
 #define WAIT_LONG_TIME 100 // ms
@@ -254,11 +254,13 @@ struct processor_t {
     uv_loop_t uv_loop; // uv loop 事件循环
 
     // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
-    // - solo 进入 syscall 不会进行
-    mutex_t gc_stw_locker;
+    mutex_t gc_stw_locker; // solo processor 辅助判断
+    uint64_t need_stw;     // 外部声明, 内部判断 是否需要 stw
+    uint64_t safe_point;   // 内部声明, 外部判断是否已经 stw
 
-    // 锁定时不可抢占, 不开放给 user 使用
-    mutex_t disable_preempt_locker;
+    // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
+    // - 如更新 p 对应的 co 的状态等
+    mutex_t thread_locker;
 
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine; // 当前正在调度的 coroutine
@@ -269,7 +271,6 @@ struct processor_t {
     rt_linked_t runnable_list;
 
     bool share;                // 默认都是共享处理器
-    bool safe_point;           // 当前是否处于安全点
     bool exit;                 // 是否已经退出
     bool can_preempt;          // 当前 processor 能否被抢占
     rt_linked_t gc_worklist;   // gc 扫描的 ptr 节点列表

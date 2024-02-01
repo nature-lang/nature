@@ -49,20 +49,17 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     // 不需要加锁，wait_sysmon 不会和当前 p 竞争
     p->can_preempt = false;
     p->co_started_at = 0;
-
     // 设置 bp_offset = 0, 然后采取保守的方式扫描栈
     co->aco.bp_offset = 0;
 
-    // 原来是 running 才需要 push 到可执行队列钟
-    if (co->status == CO_STATUS_RUNNING) {
-        co->status = CO_STATUS_RUNNABLE;
+    // 如果是被抢占的则允许修改状态并进入到 processor_run 中, 避免发生状态没有更新导致的连续抢占
+    assert(co->status == CO_STATUS_RUNNING);
+    co->status = CO_STATUS_RUNNABLE;
+    mutex_lock(&p->co_locker);
+    rt_linked_push(&p->runnable_list, co);
+    mutex_unlock(&p->co_locker);
 
-        mutex_lock(&p->co_locker);
-        rt_linked_push(&p->runnable_list, co);
-        mutex_unlock(&p->co_locker);
-
-        RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push success", co);
-    }
+    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push success", co);
 
     _co_yield(p, co);
 
@@ -71,7 +68,8 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     DEBUGF("[runtime.co_preempt_yield] yield resume end, will set enable_preempt, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co,
            p->coroutine);
 
-    co->status = CO_STATUS_RUNNING;
+    co_set_status(p, co, CO_STATUS_RUNNING);
+
     enable_preempt(p);
 }
 
@@ -133,9 +131,12 @@ static void coroutine_wrapper() {
     assert(p);
 
     DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d, gc_work=%d", co, co->main, co->gc_work);
+    assert(co->status == CO_STATUS_RUNNABLE);
 
+    // 只要状态没有切换，就始终算是在 processor_run 的状态
     // 设置为 true 不需要抢占锁，因为之前的状态是 false, 肯定不会发生抢占，和 wait_sysmon 不冲突
-    p->can_preempt = true;
+    // 更新成 running 状态
+    co_set_status(p, co, CO_STATUS_RUNNING);
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
@@ -146,13 +147,7 @@ static void coroutine_wrapper() {
         DEBUGF("[runtime.coroutine_wrapper] co=%p, main coroutine exit, set processor_need_exit=true", co);
     }
 
-    // 这里都是可能的抢占点，所以 TDEBUGF 并不安全
-    // 即将退出，不再允许抢占, 此时虽然可以被抢占，但是抢占后也没有可以使用的栈了
-    // DEBUGF("[runtime.coroutine_wrapper] co=%p exited will disable_preempt, maybe preempt", co);
-
-    disable_preempt(p);
-
-    co->status = CO_STATUS_DEAD;
+    co_set_status(p, co, CO_STATUS_DEAD);
     DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
     aco_exit1(&co->aco);
 }
@@ -179,12 +174,30 @@ bool processor_get_stw() {
     return processor_need_stw;
 }
 
-void processor_stop_the_world() {
-    processor_need_stw = true;
+void processor_all_stop_the_world() {
+    PROCESSOR_FOR(share_processor_list) {
+        p->need_stw = true;
+    }
+
+    mutex_lock(&solo_processor_locker);
+    PROCESSOR_FOR(solo_processor_list) {
+        // TODO 获取 STW 锁才能更新？但是这个锁可以已经被锁死了，等着这里解锁？
+        // 这样就乱七八糟了。
+        p->need_stw = true;
+    }
+    mutex_unlock(&solo_processor_locker);
 }
 
-void processor_start_the_world() {
-    processor_need_stw = false;
+void processor_all_start_the_world() {
+    PROCESSOR_FOR(share_processor_list) {
+        p->need_stw = true;
+    }
+
+    mutex_lock(&solo_processor_locker);
+    PROCESSOR_FOR(solo_processor_list) {
+        p->need_stw = true;
+    }
+    mutex_unlock(&solo_processor_locker);
 }
 
 void uv_stop_callback(uv_timer_t *timer) {
@@ -230,7 +243,6 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu)", co, co->main, &co->aco,
             co->aco.save_stack.ptr, co->aco.save_stack.sz);
 
-    // 获取锁成功再进行数据更新
     p->coroutine = co;
     p->co_started_at = uv_hrtime();
 
@@ -245,7 +257,6 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     }
 
     p->co_started_at = 0;
-    p->coroutine = NULL;
 
     RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
 }
@@ -309,10 +320,10 @@ static void processor_run(void *raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
+            // TODO 也改成 thread_locker
             mutex_lock(&p->co_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
             mutex_unlock(&p->co_locker);
-
             if (!co) {
                 // runnable list 已经处理完成
                 RDEBUGF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
@@ -326,7 +337,7 @@ static void processor_run(void *raw) {
             coroutine_resume(p, co);
             assert(p->can_preempt == false);
 
-            if (processor_get_stw()) {
+            if (p->need_stw) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d", p->share,
                         p->index, co, co->status);
                 goto STW_WAIT;
@@ -527,7 +538,7 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
     // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
     disable_preempt(p);
-    co->status = CO_STATUS_SYSCALL;
+    co_set_status(p, co, CO_STATUS_SYSCALL);
 
     aco_t *aco = &co->aco;
     uint64_t rbp_value;
@@ -541,8 +552,6 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
 
     DEBUGF("[runtime.pre_tpl_hook] disable_preempt success, co=%p, status=%d ,target=%s, bp_offset set %lu", co, co->status, target,
            aco->bp_offset);
-
-    // TODO solo processor 需要触发将 share stack 保存在 save stack 中。否则无法扫描 save stack 的栈
 
 #ifdef DEBUG
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
@@ -561,18 +570,16 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
     assert(p);
     coroutine_t *co = coroutine_get();
     assert(co);
-
     assert(p->can_preempt == false);
 
-    // 阻塞的系统调用期间强行开启了 stw，此时直接退出到 yield, 不能进入 user code
-    if (processor_get_stw()) {
-        DEBUGF("[runtime.post_tpl_hook] co=%p, need stw will yield", co);
-        co_yield_runnable(p, co);
-    }
+    // 直接获取锁阻塞好了？, 改完状态再解锁？也算是安全点呀，只要获取锁了，就出不来
+    // 这比 stw 还要安全
+    // 尝试获取 stw 锁，如果获取不到，则必定是需要进入到 stw 状态
 
-    DEBUGF("[runtime.post_tpl_hook] co=%p, will set can_preempt=true", co);
-
-    co->status = CO_STATUS_RUNNING;
+    // 现在回到了 syscall 状态
+    DEBUGF("[runtime.post_tpl_hook] co=%p, will set co_status=running", co);
+    co_set_status(p, co, CO_STATUS_RUNNING);
+    DEBUGF("[runtime.post_tpl_hook] co=%p, success set co_status=running, will set can_preempt=true", co);
     enable_preempt(p);
 }
 
@@ -605,7 +612,10 @@ processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     mutex_init(&p->gc_stw_locker, false);
-    mutex_init(&p->disable_preempt_locker, false);
+    p->need_stw = 0;
+    p->safe_point = 0;
+
+    mutex_init(&p->thread_locker, false);
     mutex_init(&p->co_locker, false);
     p->sig.sa_flags = 0;
     p->thread_id = 0;
@@ -658,7 +668,7 @@ void processor_free(processor_t *p) {
  * 是否所有的 processor 都到达了安全点
  * @return
  */
-bool processor_all_safe_or_lock() {
+bool processor_all_safe() {
     PROCESSOR_FOR(share_processor_list) {
         if (p->exit) {
             continue;
@@ -684,10 +694,10 @@ bool processor_all_safe_or_lock() {
             continue;
         }
 
-        if (mutex_trylock(&p->gc_stw_locker) != 0) {
-            continue;
-        }
-
+        // 获取了锁不代表进入了安全状态,此时可能还在 user code 中, 必须要以 safe_point 为准
+        // if (mutex_trylock(&p->gc_stw_locker) != 0) {
+        //     continue;
+        // }
         RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d not safe", p->share, p->index);
         mutex_unlock(&solo_processor_locker);
         return false;
@@ -697,6 +707,16 @@ bool processor_all_safe_or_lock() {
     return true;
 }
 
+void processor_all_wait_safe() {
+    RDEBUGF("[processor_all_wait_safe] start");
+    while (!processor_all_safe()) {
+        usleep(WAIT_BRIEF_TIME * 1000);
+        // RDEBUGF("[runtime.processor_wait_all_safe] wait...");
+    }
+
+    RDEBUGF("[processor_all_wait_safe] end");
+}
+
 void processor_stw_unlock() {
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
@@ -704,15 +724,6 @@ void processor_stw_unlock() {
         RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d gc_stw_locker unlock", p->share, p->index);
     }
     mutex_unlock(&solo_processor_locker);
-}
-
-void processor_wait_all_safe_or_lock() {
-    while (!processor_all_safe_or_lock()) {
-        usleep(WAIT_SHORT_TIME * 1000);
-        RDEBUGF("[runtime.processor_wait_all_safe] wait...");
-    }
-
-    RDEBUGF("[runtime.processor_wait_all_safe] end");
 }
 
 /**

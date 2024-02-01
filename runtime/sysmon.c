@@ -8,7 +8,6 @@
 
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
-
 void wait_sysmon() {
     // 每 50 * 10ms 进行 eval 一次
     int gc_eval_count = WAIT_MID_TIME;
@@ -51,7 +50,7 @@ void wait_sysmon() {
 
             // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
             // 但是可以从 not -> can
-            int trylock = mutex_times_trylock(&p->disable_preempt_locker, 10);
+            int trylock = mutex_times_trylock(&p->thread_locker, 10);
             if (trylock == -1) {
                 RDEBUGF("[wait_sysmon.share] trylock failed, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
                 continue;
@@ -128,15 +127,16 @@ void wait_sysmon() {
             p->can_preempt = false;
             p->co_started_at = 0;
         SHARE_UNLOCK_NEXT:
-            mutex_unlock(&p->disable_preempt_locker);
+            mutex_unlock(&p->thread_locker);
             RDEBUGF("[wait_sysmon.share.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }
 
-        // - 监控状态处于 running solo processor
-        // solo processor 独享线程所以不需要抢占，仅仅是需要 STW 时才进行抢占，由于抢占的目的是 GC 相关, 如果当前 coroutine
-        // status=syscall(tpl call) 则不需要抢占，因为在 tpl call 中是不会调整栈空间的，所以 STW 可以放心扫描已经开启写屏障。
-        // 在 tpl post hook 中如果检测到 STW 此时 solo processor 延迟进入 STW 状态即可
+        // - 监控状态处于 running solo processor, 需要做的工作有
+        // 1. 遍历 solo_processor 需要先获取 solo processor lock
+        // 2. 如果 solo processor exit 需要进行清理
+        // 3. 如果 solo processor.need_stw == true, 则需要辅助 processor 进入 safe_point
         RDEBUGF("[wait_sysmon.solo] wait locker");
+        // TODO use try lock
         mutex_lock(&solo_processor_locker);
         RDEBUGF("[wait_sysmon.solo] get locker");
 
@@ -163,14 +163,9 @@ void wait_sysmon() {
                 continue;
             }
 
-            // 虽然有锁的方式了，但是普通 STW 也是需要的，避免 solo processor 在 user code 期间的 stack/reg 轮换 obj
-            // 导致 scan_stack 异常, 所以现在是三重安全
-            // - 持有 stw locker, syscall 期间如果操作了内存同样也会被拦截
-            // - 位于 syscall, 此时只要退出 syscall 就会触发 post_tpl_lock stw
-            // - yield 到 processor 进入到真实的 stw, 此处能抢占的点只有进入到 user code 时
-
-            // solo processor 仅需要 stw 的时候进行抢占
-            if (!processor_get_stw()) {
+            // solo processor 仅需要 stw 的时候进行抢占, 由于锁定了 solo_processor_locker, 所以其他线程此时
+            // 无法对 p->need_stw 进行解锁。
+            if (p->need_stw == false) {
                 RDEBUGF("[wait_sysmon.solo] processor_index=%d, current not need stw, will skip", p->index);
 
                 prev = p;
@@ -178,32 +173,57 @@ void wait_sysmon() {
                 continue;
             }
 
-            // need stw ---
-            // coroutine_t *co = p->coroutine;
-            // if (!co) {
-            //     RDEBUGF("[wait_sysmon.solo] p_index=%d no coroutine, will skip", p->index);
-            //
-            //     prev = p;
-            //     p = p->next;
-            //     continue;
-            // }
-
-            // 当前有 co 需要调度
-            RDEBUGF("[wait_sysmon.solo] need stw, will get locker and preempt, p_index_%d=%d(%lu)", p->share, p->index,
-                    (uint64_t)p->thread_id);
-
-            int trylock = mutex_times_trylock(&p->disable_preempt_locker, 10);
-            if (trylock == -1) {
-                RDEBUGF("[wait_sysmon.solo] trylock failed, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
+            // 不知道是不是自己的 stw 锁，难道需要重复解锁？什么时候解锁比较合适？processor_stop_stw() 之后？
+            // 什么时候将 safe_point 配置为 false 呢？也在 processor_stop_stw 之后？
+            if (p->safe_point) {
+                RDEBUGF("[wait_sysmon.solo] processor_index=%d, in safe_point, will skip", p->index);
 
                 prev = p;
                 p = p->next;
                 continue;
             }
 
+            RDEBUGF("[wait_sysmon.solo] need stw, will get stw locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
+
+            // 关键可能在这里，如果是 sysmon 设置的 safe_point, 那么就应该是 sysmon 自己解锁, safe_point
+            // 但是 need_stw 可能会实时更新。确实可以有两个 safe？从遍历的角度来说，这里和 all_stop_the_world 也算是不会同时更新了
+            // 就是粒度太粗了。 scan stack 时也还需要 STW。到时候就没有合适粒度的锁了。是先后？ need_stw 和 safe_point 只要有先后？
+
+            // 该锁获取后将禁止 solo p 线程
+            // 1. 使用 rt_gc_malloc 分配新的内存
+            // 2. 通过 write_barrier 产生新的 gc_work_ptr
+            // 3. 从 syscall/wait 等状态切换到 user code running 状态
+            // 4. 基于第 3 点, 此时可以判断当前 coroutine 的状态
+            // 5. stw 锁不在本次循环中释放，交给 stop stw 进行释放, sysmon 只会辅助 p 进入 safe_point
+            // 6. gc_stw_locker 的核心使用者就是 sysmon
+            RDEBUGF("[wait_sysmon.solo] will get gc_stw_locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
+            mutex_lock(&p->gc_stw_locker);
+            RDEBUGF("[wait_sysmon.solo] success get gc_stw_locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
+
+            // 该锁获取后禁止
+            // 1. 如果当前处于 user code running, 则不能切换到 syscall 状态, 也不能切换为不可抢占状态
+            RDEBUGF("[wait_sysmon.solo] will get disable_preempt_locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
+            mutex_lock(&p->thread_locker);
+            RDEBUGF("[wait_sysmon.solo.thread_locker] success get disable_preempt_locker, p_index_%d=%d(%lu)", p->share, p->index,
+                    (uint64_t)p->thread_id);
+
+            // co resume 要么从 post_tpl_hook 出来，要么从 co_preempt_yield 出来。
+            // 只需要在这两个地方出来加上 stw_locker 锁，则一定可以安全的进入 safe_point
+            coroutine_t *co = rt_linked_first(&p->co_list)->value;
+            if (co->status != CO_STATUS_RUNNING) {
+                RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu), co=%p in syscall, will set safe point", p->index,
+                        (uint64_t)p->thread_id, co);
+                p->safe_point = true;
+
+                prev = p;
+                p = p->next;
+                goto SOLO_UNLOCK_NEXT;
+            }
+
+            assert(co->status == CO_STATUS_RUNNING);
+
             RDEBUGF("[wait_sysmon.solo.thread_locker] get locker, p_index_%d=%d(%lu)", p->share, p->index, (uint64_t)p->thread_id);
 
-            // 等待可以抢占
             int wait_count = 0;
             while (!p->can_preempt) {
                 usleep(1 * 1000);
@@ -251,7 +271,7 @@ void wait_sysmon() {
             p->can_preempt = false;
             p->co_started_at = 0;
         SOLO_UNLOCK_NEXT:
-            mutex_unlock(&p->disable_preempt_locker);
+            mutex_unlock(&p->thread_locker);
 
             RDEBUGF("[wait_sysmon.solo.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
 

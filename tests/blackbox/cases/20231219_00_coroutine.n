@@ -51,7 +51,7 @@ var bar = fn(){
         i -= 1
     }
 
-    print('solo sub_co done\n')
+    println('solo sub_co done', i)
 }
 
 // - 共享协程

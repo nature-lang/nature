@@ -90,7 +90,7 @@ struct aco_s {
 
     aco_cofuncp_t fp;
     aco_save_stack_t save_stack;
-    uint64_t bp_offset;          // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
+    uint64_t bp_offset; // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
     aco_share_stack_t *share_stack;
     aco_context_t ctx;
     bool inited;
@@ -137,7 +137,6 @@ static inline void aco_init() {
     uv_key_create(&aco_gtls_fpucw_mxcsr);
 }
 
-
 extern void aco_runtime_test(void);
 
 extern void aco_thread_init(aco_cofuncp_t last_word_co_fp);
@@ -154,9 +153,7 @@ extern void *aco_share_stack_init(aco_share_stack_t *p, size_t sz);
 
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
-extern void
-aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp,
-                void *arg);
+extern void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg);
 
 // aco's Global Thread Local Storage variable `co`
 // extern __thread aco_t *aco_gtls_co;
@@ -166,6 +163,8 @@ static inline aco_t *get_aco_gtls_co() {
 }
 
 aco_attr_no_asan extern void aco_resume(aco_t *resume_co);
+
+aco_attr_no_asan void aco_share_spill(aco_t *aco);
 
 // extern void aco_yield1(aco_t* yield_co);
 #define aco_yield1(yield_co)                    \
@@ -212,6 +211,5 @@ extern void aco_destroy(aco_t *co);
     do {                              \
         aco_exit1(get_aco_gtls_co()); \
     } while (0)
-
 
 #endif

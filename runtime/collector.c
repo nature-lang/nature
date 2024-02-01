@@ -249,6 +249,15 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu)", p->share, p->index, co,
            co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz);
 
+    if (!p->share) {
+        assert(co->aco.share_stack);
+        assert(co->aco.save_stack.ptr);
+
+        // solo processor 需要扫描时主动进行溢出，bp_offset 在 pre_hook 中则已经记录
+        // TODO 如果在 syscall 中的话就还没有溢出。此时无法得到准确的 rsp 来进行栈 resume。
+        aco_share_spill(&co->aco);
+    }
+
     // save_stack 也是通过 gc 申请，所以需要标记一下
     assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
     insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
@@ -258,6 +267,8 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         DEBUGF("[runtime_gc.scan_stack] valid_sz=0, return")
         return;
     }
+
+    assert(p->share);
 
     if (co->gc_work) {
         DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
@@ -515,6 +526,7 @@ static void gc_work() {
 
     // - solo goroutine root and change color black, 读取当前 share processor index
     // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
+    // TODO 这里 need stw, 那什么时候又会解除这个 STW 呢？
     mutex_lock(&solo_processor_locker);
     processor_t *solo_p = solo_processor_list;
     while (solo_p) {
@@ -555,6 +567,12 @@ static void gc_work() {
         solo_p = solo_p->next;
     }
     mutex_unlock(&solo_processor_locker);
+
+    // TODO 这里批量解除 STW 状态， STW 又需要等？等就是冲突呀。难道要直接等 STW 完成？
+    // 还是应该继续抢占? 不等待的抢占？直接抢？但是 processor_run 在不停的活动中，太难了。
+    // 能不能直接通过 p->coroutines->first 读状态？ 不然就要 wait.
+    // 不如在 runtime_gc stw 期间直接扫描所有的  solo p 的 stack?
+    // 这样就是 STW 的时间有点长？
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
@@ -694,8 +712,8 @@ void runtime_gc() {
     memory->gc_count += 1;
 
     // 等待所有的 processor 进入安全点
-    processor_stop_the_world();
-    processor_wait_all_safe_or_lock();
+    processor_all_stop_the_world();
+    processor_all_wait_safe();
 
     RDEBUGF("[runtime_gc] wait all processor safe");
 
@@ -708,8 +726,7 @@ void runtime_gc() {
     inject_gc_work_coroutine();
 
     RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
-    processor_start_the_world();
-    processor_stw_unlock();
+    processor_all_start_the_world();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
@@ -723,8 +740,7 @@ void runtime_gc() {
 
     // STW 之后再更改 GC 阶段
     RDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
-    processor_stop_the_world();
-    processor_wait_all_safe_or_lock();
+    processor_all_stop_the_world();
     RDEBUGF("[runtime_gc] all share processor safe");
     // -------------- STW start ----------------------------
 
@@ -751,8 +767,7 @@ void runtime_gc() {
     RDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
 
     gc_barrier_stop();
-    processor_start_the_world();
-    processor_stw_unlock();
+    processor_all_start_the_world();
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
