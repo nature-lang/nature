@@ -40,10 +40,10 @@ static void uv_on_timer(uv_timer_t *timer) {
             co->status);
 
     // timer 到时间了, push 到尾部等待调度
+    mutex_lock(&p->thread_locker);
     co->status = CO_STATUS_RUNNABLE;
-    mutex_lock(&p->co_locker);
     rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->co_locker);
+    mutex_unlock(&p->thread_locker);
 
     RDEBUGF("[coroutine_sleep.uv_on_timer] will stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co,
             co->status);

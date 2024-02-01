@@ -461,7 +461,6 @@ static void handle_gc_worklist(processor_t *p) {
             DEBUGF("[runtime_gc.handle_gc_worklist] p_index_%d=%d, handle_count=%d, will yield", p->share, p->index, limit_count);
             limit_count = 0;
             co_yield_runnable(p, p->coroutine);
-            disable_preempt(p); // coroutine resume 后总是切换为不可抢占状态
         }
 
         if (p->gc_worklist.count == 0) {
@@ -483,8 +482,6 @@ static void handle_gc_worklist(processor_t *p) {
  */
 static void gc_work() {
     processor_t *p = processor_get();
-    disable_preempt(p);
-
     assert(p);
     coroutine_t *co = coroutine_get();
     assert(co);
@@ -522,17 +519,15 @@ static void gc_work() {
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
-    disable_preempt(p);
 
     // - solo goroutine root and change color black, 读取当前 share processor index
     // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
-    // TODO 这里 need stw, 那什么时候又会解除这个 STW 呢？
     mutex_lock(&solo_processor_locker);
     processor_t *solo_p = solo_processor_list;
     while (solo_p) {
         int solo_index = solo_p->index;
 
-        if (solo_p->exit) {
+        if (solo_p->status == P_STATUS_EXIT) {
             goto SOLO_NEXT;
         }
 
@@ -576,14 +571,12 @@ static void gc_work() {
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
-    disable_preempt(p);
 
     // - handle share processor work list
     handle_gc_worklist(p);
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", p->share, p->index);
     co_yield_runnable(p, co);
-    disable_preempt(p);
 
     // yield 期间可能新创建了一批 solo processor
     // - handle match solo gc worklist
@@ -591,7 +584,7 @@ static void gc_work() {
     solo_p = solo_processor_list;
     while (solo_p) {
         int solo_index = solo_p->index;
-        if (solo_p->exit) {
+        if (solo_p->status == P_STATUS_EXIT) {
             goto SOLO_NEXT2;
         }
 
@@ -638,10 +631,10 @@ static void inject_gc_work_coroutine() {
         coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
         gc_co->gc_work = true;
 
-        mutex_lock(&p->co_locker);
+        mutex_lock(&p->thread_locker);
         rt_linked_push(&p->co_list, gc_co);
         rt_linked_push(&p->runnable_list, gc_co);
-        mutex_unlock(&p->co_locker);
+        mutex_unlock(&p->thread_locker);
     }
 
     RDEBUGF("[runtime_gc.inject_gc_work_coroutine] inject gc work coroutine completed");
@@ -724,6 +717,8 @@ void runtime_gc() {
 
     // 注入 GC 工作协程, gc_worklist 用来检测状态判断 gc work 是否全部完成
     inject_gc_work_coroutine();
+
+    // 扫描 solo processor stack
 
     RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();

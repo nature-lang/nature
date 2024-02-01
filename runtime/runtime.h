@@ -218,6 +218,16 @@ typedef enum {
     CO_STATUS_DEAD = 5,     // 死亡状态
 } co_status_t;
 
+typedef enum {
+    P_STATUS_INIT = 0,
+    P_STATUS_DISPATCH = 1,
+    P_STATUS_SYSCALL = 2,
+    P_STATUS_RUNNING = 3,
+    P_STATUS_SAFE_POINT = 4,
+    P_STATUS_PREEMPT = 5,
+    P_STATUS_EXIT = 6,
+} p_status_t;
+
 typedef struct processor_t processor_t;
 
 typedef struct coroutine_t {
@@ -255,24 +265,23 @@ struct processor_t {
 
     // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
     mutex_t gc_stw_locker; // solo processor 辅助判断
-    uint64_t need_stw;     // 外部声明, 内部判断 是否需要 stw
-    uint64_t safe_point;   // 内部声明, 外部判断是否已经 stw
+    bool need_stw;         // 外部声明, 内部判断 是否需要 stw
+    bool safe_point;       // 内部声明, 外部判断是否已经 stw
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
     mutex_t thread_locker;
+    p_status_t status;
 
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine; // 当前正在调度的 coroutine
     uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
-    mutex_t co_locker;   // coroutine list locker
     rt_linked_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_t runnable_list;
 
-    bool share;                // 默认都是共享处理器
-    bool exit;                 // 是否已经退出
-    bool can_preempt;          // 当前 processor 能否被抢占
+    bool share; // 默认都是共享处理器
+
     rt_linked_t gc_worklist;   // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
 

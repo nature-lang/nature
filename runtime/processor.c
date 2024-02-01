@@ -43,34 +43,37 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
-    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d, co=%p, status=%d, will yield", p->share, p->index, co, co->status);
+    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, status=%d, will yield", p->share, p->index, p->status, co, co->status);
 
     // wait sysmon 可能还没有来得及设置不可抢占，所以这里重复进行不可抢占声明
     // 不需要加锁，wait_sysmon 不会和当前 p 竞争
-    p->can_preempt = false;
     p->co_started_at = 0;
-    // 设置 bp_offset = 0, 然后采取保守的方式扫描栈
     co->aco.bp_offset = 0;
 
-    // 如果是被抢占的则允许修改状态并进入到 processor_run 中, 避免发生状态没有更新导致的连续抢占
-    assert(co->status == CO_STATUS_RUNNING);
-    co->status = CO_STATUS_RUNNABLE;
-    mutex_lock(&p->co_locker);
-    rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->co_locker);
+    mutex_lock(&p->thread_locker);
 
-    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push success", co);
+    assert(co->status == CO_STATUS_RUNNING);
+
+    p->status = P_STATUS_PREEMPT;
+    co->status = CO_STATUS_RUNNABLE;
+    rt_linked_push(&p->runnable_list, co);
+
+    mutex_unlock(&p->thread_locker);
+    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
 
     _co_yield(p, co);
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set enable_preempt, p_index_%d=%d co=%p, p->co=%p", p->share, p->index, co,
-           p->coroutine);
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index_%d=%d(%d) co=%p, p->co=%p", p->share, p->index,
+           p->status, co, p->coroutine);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
 
-    enable_preempt(p);
+    // TODO 重新设置 co_start_at 为 10ms 之后，避免在这 10ms 内被再次抢占
+    p->co_started_at = uv_hrtime() + (WAIT_SHORT_TIME * 1000 * 1000);
+    // 可以抢占
+    processor_set_status(p, P_STATUS_RUNNING);
 }
 
 /**
@@ -130,13 +133,13 @@ static void coroutine_wrapper() {
     processor_t *p = co->p;
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] co=%p, main=%d, gc_work=%d", co, co->main, co->gc_work);
-    assert(co->status == CO_STATUS_RUNNABLE);
+    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d(%d) co=%p, main=%d, gc_work=%d", p->share, p->index, p->status, co, co->main,
+           co->gc_work);
 
-    // 只要状态没有切换，就始终算是在 processor_run 的状态
-    // 设置为 true 不需要抢占锁，因为之前的状态是 false, 肯定不会发生抢占，和 wait_sysmon 不冲突
-    // 更新成 running 状态
     co_set_status(p, co, CO_STATUS_RUNNING);
+
+    // 此时可以抢占
+    processor_set_status(p, P_STATUS_RUNNING);
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
@@ -170,10 +173,6 @@ static void coroutine_aco_init(processor_t *p, coroutine_t *co) {
     aco_create_init(&co->aco, &p->main_aco, &p->share_stack, 0, coroutine_wrapper, co);
 }
 
-bool processor_get_stw() {
-    return processor_need_stw;
-}
-
 void processor_all_stop_the_world() {
     PROCESSOR_FOR(share_processor_list) {
         p->need_stw = true;
@@ -181,8 +180,6 @@ void processor_all_stop_the_world() {
 
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        // TODO 获取 STW 锁才能更新？但是这个锁可以已经被锁死了，等着这里解锁？
-        // 这样就乱七八糟了。
         p->need_stw = true;
     }
     mutex_unlock(&solo_processor_locker);
@@ -190,12 +187,13 @@ void processor_all_stop_the_world() {
 
 void processor_all_start_the_world() {
     PROCESSOR_FOR(share_processor_list) {
-        p->need_stw = true;
+        p->need_stw = false;
     }
 
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        p->need_stw = true;
+        p->need_stw = false;
+        mutex_unlock(&p->gc_stw_locker);
     }
     mutex_unlock(&solo_processor_locker);
 }
@@ -243,21 +241,29 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu)", co, co->main, &co->aco,
             co->aco.save_stack.ptr, co->aco.save_stack.sz);
 
+    // 获取锁才能切换协程并更新状态
+    mutex_lock(&p->thread_locker);
     p->coroutine = co;
     p->co_started_at = uv_hrtime();
+    p->status = P_STATUS_SYSCALL;
+    mutex_unlock(&p->thread_locker);
 
     aco_resume(&co->aco);
 
-    RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, status=%d, gc_work=%d", co, &co->aco, co->status, co->gc_work);
+    // resume 回来后立刻进入到 dispatch 状态。
+    RDEBUGF("[runtime.coroutine_resume] resume backend, wait lock,  p_index_%d=%d(%d), co=%p, aco=%p, co_status=%d, gc_work=%d", p->share,
+            p->index, p->status, co, &co->aco, co->status, co->gc_work);
 
     assert(co->status != CO_STATUS_RUNNING);
+    mutex_lock(&p->thread_locker); // --------- atom start
+    p->co_started_at = 0;
+    p->status = P_STATUS_DISPATCH;
+    mutex_unlock(&p->thread_locker); // -------- atom end
+
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
-    if (p->co_started_at == 0) { // 被抢占清空,此时不计算 time 耗时
+    if (p->co_started_at == 0) { // 被抢占时 time 被清空,此时不计算 time 耗时
         time = 0;
     }
-
-    p->co_started_at = 0;
-
     RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
 }
 
@@ -265,6 +271,8 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 static void processor_run(void *raw) {
     processor_t *p = raw;
     RDEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, share=%d, loop=%p", p->index, p, p->share, &p->uv_loop);
+
+    processor_set_status(p, P_STATUS_DISPATCH);
 
     // 初始化 aco 和 main_co
     aco_thread_init(NULL);
@@ -297,14 +305,14 @@ static void processor_run(void *raw) {
     while (true) {
         RDEBUGF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
-        if (processor_get_stw()) {
+        if (p->need_stw) {
         STW_WAIT:
             RDEBUGF("[runtime.processor_run] need stw, set safe_point=true,  p_index_%d=%d", p->share, p->index);
             p->safe_point = true;
 
-            while (processor_get_stw()) {
+            while (p->need_stw) {
                 RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw loop....", p->share, p->index);
-                usleep(WAIT_SHORT_TIME * 1000); // 每 10ms 检测一次 STW 是否解除 TODO 等的事件有点长，影响运行了
+                usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
             p->safe_point = false;
@@ -320,10 +328,9 @@ static void processor_run(void *raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
-            // TODO 也改成 thread_locker
-            mutex_lock(&p->co_locker);
+            mutex_lock(&p->thread_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
-            mutex_unlock(&p->co_locker);
+            mutex_unlock(&p->thread_locker);
             if (!co) {
                 // runnable list 已经处理完成
                 RDEBUGF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
@@ -332,10 +339,7 @@ static void processor_run(void *raw) {
 
             RDEBUGF("[runtime.processor_run] will handle coroutine, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co, co->status);
 
-            assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
-
             coroutine_resume(p, co);
-            assert(p->can_preempt == false);
 
             if (p->need_stw) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d", p->share,
@@ -354,7 +358,6 @@ static void processor_run(void *raw) {
             if (solo_co->status == CO_STATUS_DEAD) {
                 RDEBUGF("[runtime.processor_run] solo processor co exit, will exit processor run, p_index=%d, co=%p, status=%d", p->index,
                         solo_co, solo_co->status);
-                write(STDOUT_FILENO, "---pr_1\n", 8);
                 goto EXIT;
             }
         }
@@ -366,7 +369,7 @@ static void processor_run(void *raw) {
 EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
-    p->exit = true;
+    processor_set_status(p, P_STATUS_EXIT);
 
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
 }
@@ -412,10 +415,10 @@ void coroutine_dispatch(coroutine_t *co) {
     assert(select_p);
     DEBUGF("[runtime.coroutine_dispatch] select_p_index_%d=%d will push co=%p", select_p->share, select_p->index, co);
 
-    mutex_lock(&select_p->co_locker);
+    mutex_lock(&select_p->thread_locker);
     rt_linked_push(&select_p->co_list, co);
     rt_linked_push(&select_p->runnable_list, co);
-    mutex_unlock(&select_p->co_locker);
+    mutex_unlock(&select_p->thread_locker);
 
     DEBUGF("[runtime.coroutine_dispatch] co=%p to p_index_%d=%d, end", co, select_p->share, select_p->index);
 }
@@ -537,7 +540,7 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
     // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
-    disable_preempt(p);
+    processor_set_status(p, P_STATUS_SYSCALL);
     co_set_status(p, co, CO_STATUS_SYSCALL);
 
     aco_t *aco = &co->aco;
@@ -570,7 +573,6 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
     assert(p);
     coroutine_t *co = coroutine_get();
     assert(co);
-    assert(p->can_preempt == false);
 
     // 直接获取锁阻塞好了？, 改完状态再解锁？也算是安全点呀，只要获取锁了，就出不来
     // 这比 stw 还要安全
@@ -579,8 +581,8 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
     // 现在回到了 syscall 状态
     DEBUGF("[runtime.post_tpl_hook] co=%p, will set co_status=running", co);
     co_set_status(p, co, CO_STATUS_RUNNING);
-    DEBUGF("[runtime.post_tpl_hook] co=%p, success set co_status=running, will set can_preempt=true", co);
-    enable_preempt(p);
+    DEBUGF("[runtime.post_tpl_hook] co=%p, success set co_status=running, will set processor_status", co);
+    processor_set_status(p, P_STATUS_RUNNING);
 }
 
 coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
@@ -616,7 +618,7 @@ processor_t *processor_new(int index) {
     p->safe_point = 0;
 
     mutex_init(&p->thread_locker, false);
-    mutex_init(&p->co_locker, false);
+    p->status = P_STATUS_INIT;
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
@@ -627,7 +629,6 @@ processor_t *processor_new(int index) {
     rt_linked_init(&p->gc_worklist, NULL, NULL);
     p->gc_work_finished = memory->gc_count;
     p->index = index;
-    p->can_preempt = false;
     p->next = NULL;
 
     return p;
@@ -670,7 +671,7 @@ void processor_free(processor_t *p) {
  */
 bool processor_all_safe() {
     PROCESSOR_FOR(share_processor_list) {
-        if (p->exit) {
+        if (p->status == P_STATUS_EXIT) {
             continue;
         }
 
@@ -686,7 +687,7 @@ bool processor_all_safe() {
     // safe_point 或者获取到 gc_stw_locker
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        if (p->exit) {
+        if (p->status == P_STATUS_EXIT) {
             continue;
         }
 

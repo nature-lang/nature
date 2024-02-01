@@ -1002,13 +1002,13 @@ void *rt_clr_malloc(uint64_t size, rtype_t *rtype) {
 void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     processor_t *p = processor_get();
     assert(p);
-    assert(p->can_preempt == false);
 
     // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。
     if (!p->share) {
         MDEBUGF("[rt_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
         mutex_lock(&p->gc_stw_locker);
     }
+
     MDEBUGF("[rt_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
     if (rtype) {

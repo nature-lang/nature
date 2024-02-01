@@ -35,22 +35,42 @@ __attribute__((optimize(0))) void co_preempt_yield();
 
 #define PROCESSOR_FOR(list) for (processor_t *p = list; p; p = p->next)
 
+static inline void processor_set_status(processor_t *p, p_status_t status) {
+    assert(p);
+
+    mutex_lock(&p->thread_locker);
+
+    if (!p->share && status == P_STATUS_RUNNING) {
+        // 如果想要切换到 running 状态，则还需要获取 gc_stw_locker
+        // 避免在 gc_stw_locker 期间进入到 user_code
+        mutex_lock(&p->gc_stw_locker);
+    }
+
+    p->status = status;
+
+    if (!p->share && status == P_STATUS_RUNNING) {
+        // 如果想要切换到 running 状态，则还需要获取 gc_stw_locker
+        // 避免在 gc_stw_locker 期间进入到 user_code
+        mutex_unlock(&p->gc_stw_locker);
+    }
+
+    mutex_unlock(&p->thread_locker);
+}
+
 static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t status) {
     assert(p);
     assert(co);
 
     // solo processor 在 stw 期间禁止切换 co 的状态
-    mutex_lock(&p->thread_locker);
     co->status = status;
-    mutex_unlock(&p->thread_locker);
 }
 /**
  * 设置为可以抢占没有什么竞态关系，直接可以抢占
  * @param p
  */
-static inline void enable_preempt(processor_t *p) {
-    p->can_preempt = true;
-}
+// static inline void enable_preempt(processor_t *p) {
+//     p->can_preempt = true;
+// }
 
 /**
  * 调用者希望设置为不可抢占后再进行后续的工作，如果已经是不可抢占状态则直接返回，所以当前函数可以重入
@@ -58,17 +78,17 @@ static inline void enable_preempt(processor_t *p) {
  * 避免在 sysmon 抢占期间，更新 preempt = false 导致抢占异常
  * @param p
  */
-static inline void disable_preempt(processor_t *p) {
-    if (p->can_preempt == false) {
-        return;
-    }
-
-    assert(p->can_preempt == true);
-    // 如果 sysmon 持有了锁，则 mutex_lock 会阻塞，此时可以进行安全的抢占
-    mutex_lock(&p->thread_locker);
-    p->can_preempt = false;
-    mutex_unlock(&p->thread_locker);
-}
+// static inline void disable_preempt(processor_t *p) {
+//     if (p->can_preempt == false) {
+//         return;
+//     }
+//
+//     assert(p->can_preempt == true);
+//     // 如果 sysmon 持有了锁，则 mutex_lock 会阻塞，此时可以进行安全的抢占
+//     mutex_lock(&p->thread_locker);
+//     p->can_preempt = false;
+//     mutex_unlock(&p->thread_locker);
+// }
 
 /**
  * yield 统一入口, 避免直接调用 aco_yield
@@ -89,7 +109,7 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     mutex_lock(&p->thread_locker);
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->co_locker);
+    mutex_unlock(&p->thread_locker);
 
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 
@@ -116,9 +136,6 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
 
 // locker
 void *global_gc_worklist_pop();
-
-// 调度器每一次处理都会先调用 need_stw 判断是否存在 STW 需求
-bool processor_get_stw();
 
 void processor_all_stop_the_world();
 
