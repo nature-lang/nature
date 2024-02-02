@@ -38,7 +38,7 @@ void shade_obj_grey(void *obj) {
 
     processor_t *p = processor_get();
 
-    // TODO 如果当前 processor 的 gc_work 已经完成，则需要将 obj 插入到全局工作队列中
+    // TODO 如果当前 processor 的 gc_work 已经完成，则需要将 obj 插入到全局工作队列中, 但是这里竟然从来没有触发过
     assert(p->gc_work_finished < memory->gc_count && "gc work finished, cannot insert to gc worklist");
 
     insert_gc_worklist(&p->gc_worklist, obj);
@@ -53,6 +53,7 @@ fndef_t *find_fn(addr_t addr) {
     if (addr <= 0) {
         return NULL;
     }
+
     for (int i = 0; i < rt_fndef_count; ++i) {
         fndef_t *fn = &rt_fndef_ptr[i];
         assert(fn);
@@ -246,43 +247,45 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu)", p->share, p->index, co,
-           co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz);
+    assert(co->scan_offset);
+    assert(co->scan_ret_addr);
 
-    if (!p->share) {
-        assert(co->aco.share_stack);
-        assert(co->aco.save_stack.ptr);
-
-        // solo processor 需要扫描时主动进行溢出，bp_offset 在 pre_hook 中则已经记录
-        // TODO 如果在 syscall 中的话就还没有溢出。此时无法得到准确的 rsp 来进行栈 resume。
-        aco_share_spill(&co->aco);
-    }
+    DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, scan_ret_addr=%p",
+           p->share, p->index, co, co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz, co->scan_offset,
+           (void *)co->scan_ret_addr);
 
     // save_stack 也是通过 gc 申请，所以需要标记一下
     assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
     insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
-
-    aco_save_stack_t stack = co->aco.save_stack;
-    if (stack.valid_sz == 0) {
-        DEBUGF("[runtime_gc.scan_stack] valid_sz=0, return")
-        return;
-    }
-
-    assert(p->share);
 
     if (co->gc_work) {
         DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
         return;
     }
 
-    // 首个 sp 对应的 fn 的 addr 直接从寄存器中读取，其余函数可以从栈中读取
-    size_t stack_size = stack.valid_sz; // valid 标识 8byte 对齐
+    // sp 指向了内存地址，可以从中取值
+    addr_t scan_sp;
+    uint64_t size;
+    if (p->share) {
+        aco_save_stack_t stack = co->aco.save_stack;
+        assert(stack.valid_sz > 0);
+        // 通过 + sz 指向栈底，然后 - scan_offset 回到栈顶
+        scan_sp = ((addr_t)stack.ptr + stack.valid_sz) - co->scan_offset;
+        size = stack.valid_sz;
+    } else {
+        // retptr 指向了栈底，
+        scan_sp = (addr_t)p->share_stack.align_retptr - co->scan_offset;
+        size = co->scan_offset;
+    }
+
+    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co, (void *)scan_sp, size,
+           (void *)co->scan_ret_addr);
 
 #ifdef DEBUG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    addr_t temp_cursor = (addr_t)stack.ptr;
+    addr_t temp_cursor = (addr_t)scan_sp;
     size_t temp_i = 0;
-    size_t max_i = stack_size / POINTER_SIZE;
+    size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t)temp_cursor);
         fndef_t *fn = find_fn(v);
@@ -294,47 +297,11 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
 #endif
 
-    addr_t cursor = 0;
-    addr_t ret_addr = 0;
+    addr_t cursor = scan_sp;
+    addr_t ret_addr = co->scan_ret_addr;
+    addr_t max = scan_sp + size;
 
-    // 如果 bp_offset == 0 一定是被抢占式调度了, 此时进行保守的 cursor 定位
-    if (co->aco.bp_offset == 0) {
-        DEBUGF("[runtime_gc.scan_stack] preempt co=%p, bp_offset=0, maybe preempt", co);
-        // 找到的第一个 fn 作为 cursor = stack.ptr + stack_size - bp_offset
-        cursor = (addr_t)stack.ptr;
-        while (cursor < ((addr_t)stack.ptr + stack_size)) {
-            addr_t v = fetch_addr_value(cursor);
-            fndef_t *fn = find_fn(v);
-            if (fn) {
-                DEBUGF("[runtime_gc.scan_stack] preempt co=%p, find fn, fn_name=%s, fn_base=0x%lx, fn_size=%ld", co, fn->name, fn->base,
-                       fn->size);
-                ret_addr = v;
-                cursor = cursor + POINTER_SIZE;
-                break;
-            }
-            cursor += POINTER_SIZE;
-        }
-
-        // 被抢占的点可能是 coroutine_wrapper 中 usercode exit, 且没来得及配置 co->status = CO_STATUS_DEAD;
-        // 此时的典型特征就是 ret_addr = 0
-        if (ret_addr == 0) {
-            DEBUGF("[runtime_gc.scan_stack] not found any fn, maybe in coroutine_wrapper will exit,  p_index_%d=%d, co=%p", p->share,
-                   p->index, co);
-        }
-    } else {
-        DEBUGF("[runtime_gc.scan_stack] co=%p, bp_offset=%lu, gt 0", co, co->aco.bp_offset);
-        addr_t bp_offset = co->aco.bp_offset;
-        assert(bp_offset > 0);
-        assert(stack_size > bp_offset);
-
-        cursor = ((addr_t)stack.ptr + (stack_size - bp_offset));
-        ret_addr = (addr_t)fetch_addr_value(cursor + POINTER_SIZE);
-        cursor = cursor + POINTER_SIZE + POINTER_SIZE; // 指向栈帧顶部
-
-        assert(ret_addr > 0);
-    }
-
-    addr_t max = (addr_t)stack.ptr + stack_size;
+    assert(find_fn(ret_addr) && "scan ret_addr failed");
 
     int scan_fn_count = 0;
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
@@ -481,19 +448,19 @@ static void handle_gc_worklist(processor_t *p) {
  * 由于不经过 pre/post_tpl_hook 所以需要手动管理一下 gc 状态
  */
 static void gc_work() {
-    processor_t *p = processor_get();
-    assert(p);
+    processor_t *share_p = processor_get();
+    assert(share_p);
     coroutine_t *co = coroutine_get();
     assert(co);
 
-    DEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, co=%p, co_count=%d", p->share, p->index, co, p->co_list.count);
+    DEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, co=%p, co_count=%d", share_p->share, share_p->index, co, share_p->co_list.count);
 
     // - share goroutine root and change color black
-    RT_LINKED_FOR(p->co_list) {
+    RT_LINKED_FOR(share_p->co_list) {
         coroutine_t *wait_co = RT_LINKED_VALUE();
 
-        DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_black=%lu, aco=%p", p->share, p->index, wait_co,
-               wait_co->status, wait_co->gc_black, &wait_co->aco);
+        DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_black=%lu, aco=%p", share_p->share, share_p->index,
+               wait_co, wait_co->status, wait_co->gc_black, &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
             continue;
@@ -512,114 +479,100 @@ static void gc_work() {
         // scan stack
         // 不用扫描 reg 了，只要 coroutine 调用了 co yield, 就已经了寄存器溢出到 stack 的操作
         // wait_co->aco->save_stack
-        scan_stack(p, wait_co);
+        scan_stack(share_p, wait_co);
 
         wait_co->gc_black = memory->gc_count;
     }
 
-    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", p->share, p->index);
-    co_yield_runnable(p, co);
+    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", share_p->share, share_p->index);
+    co_yield_runnable(share_p, co);
 
-    // - solo goroutine root and change color black, 读取当前 share processor index
-    // solo processor 进入 block call 之前需要进行一次 save stack 保存相关的栈信息状态用于正确 GC
-    mutex_lock(&solo_processor_locker);
-    processor_t *solo_p = solo_processor_list;
-    while (solo_p) {
-        int solo_index = solo_p->index;
-
-        if (solo_p->status == P_STATUS_EXIT) {
-            goto SOLO_NEXT;
-        }
-
-        // cpu_count 就是 share_processor_count
-        int rem = solo_index % cpu_count;
-        if (rem != p->index) {
-            goto SOLO_NEXT;
-        }
-
-        DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor index=%d will scan stack", p->share, p->index, solo_index);
-
-        coroutine_t *solo_co = rt_linked_first(&solo_p->co_list)->value;
-        if (solo_co->status == CO_STATUS_DEAD) {
-            goto SOLO_NEXT;
-        }
-
-        if (!solo_co->aco.inited) {
-            goto SOLO_NEXT;
-        }
-
-        if (solo_co->gc_black == memory->gc_count) {
-            goto SOLO_NEXT;
-        }
-
-        // 和 stw 难道冲突了， solo 在等 stw 接触？
-        mutex_lock(&solo_p->gc_stw_locker);
-        scan_stack(solo_p, solo_co);
-        mutex_unlock(&solo_p->gc_stw_locker);
-
-        solo_co->gc_black = memory->gc_count;
-    SOLO_NEXT:
-        solo_p = solo_p->next;
-    }
-    mutex_unlock(&solo_processor_locker);
-
-    // TODO 这里批量解除 STW 状态， STW 又需要等？等就是冲突呀。难道要直接等 STW 完成？
-    // 还是应该继续抢占? 不等待的抢占？直接抢？但是 processor_run 在不停的活动中，太难了。
-    // 能不能直接通过 p->coroutines->first 读状态？ 不然就要 wait.
-    // 不如在 runtime_gc stw 期间直接扫描所有的  solo p 的 stack?
-    // 这样就是 STW 的时间有点长？
-
-    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", p->share, p->index);
-    co_yield_runnable(p, co);
+    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, solo processor scan stack completed, will yield", share_p->share, share_p->index);
+    co_yield_runnable(share_p, co);
 
     // - handle share processor work list
-    handle_gc_worklist(p);
+    handle_gc_worklist(share_p);
 
-    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", p->share, p->index);
-    co_yield_runnable(p, co);
+    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", share_p->share, share_p->index);
+    co_yield_runnable(share_p, co);
 
     // yield 期间可能新创建了一批 solo processor
     // - handle match solo gc worklist
     mutex_lock(&solo_processor_locker);
-    solo_p = solo_processor_list;
-    while (solo_p) {
-        int solo_index = solo_p->index;
-        if (solo_p->status == P_STATUS_EXIT) {
-            goto SOLO_NEXT2;
+    PROCESSOR_FOR(solo_processor_list) {
+        int solo_index = p->index;
+        if (p->status == P_STATUS_EXIT) {
+            continue;
         }
 
         // solo 匹配对应的 share 进行 gc 处理
         int rem = solo_index % cpu_count;
         if (rem != p->index) {
-            goto SOLO_NEXT2;
+            continue;
         }
 
-        // 现有了 solo 没有 co?
-        coroutine_t *solo_co = rt_linked_first(&solo_p->co_list)->value;
+        // 可能一次都没有调度
+        coroutine_t *solo_co = p->coroutine;
+        if (!solo_co) {
+            continue;
+        }
         if (solo_co->status == CO_STATUS_DEAD) {
-            goto SOLO_NEXT2;
+            continue;
         }
 
         if (!solo_co->aco.inited) {
-            goto SOLO_NEXT2;
+            continue;
         }
 
         // 可能是新建的，默认会等于 gc_count
-        if (solo_p->gc_work_finished == memory->gc_count) {
-            goto SOLO_NEXT2;
+        if (p->gc_work_finished == memory->gc_count) {
+            continue;
         }
 
-        mutex_lock(&solo_p->gc_stw_locker);
-        handle_gc_worklist(solo_p);
-        solo_p->gc_work_finished = memory->gc_count;
-        mutex_unlock(&solo_p->gc_stw_locker);
-    SOLO_NEXT2:
-        solo_p = solo_p->next;
+        // 加锁可以阻塞写屏障，避免处理期间写屏障插值
+        mutex_lock(&p->thread_locker);
+        handle_gc_worklist(p);
+        p->gc_work_finished = memory->gc_count;
+        mutex_unlock(&p->thread_locker);
     }
     mutex_unlock(&solo_processor_locker);
 
-    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit", p->share, p->index);
-    p->gc_work_finished = memory->gc_count;
+    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit", share_p->share, share_p->index);
+    share_p->gc_work_finished = memory->gc_count;
+}
+
+/**
+ * 需要在 stw 期间调用，扫描所有的 solo_stack
+ */
+static void scan_solo_stack() {
+    RDEBUGF("[runtime_gc.scan_solo_stack] start");
+    mutex_lock(&solo_processor_locker);
+
+    PROCESSOR_FOR(solo_processor_list) {
+        if (p->status == P_STATUS_EXIT) {
+            continue;
+        }
+
+        coroutine_t *solo_co = rt_linked_first(&p->co_list)->value;
+        if (solo_co->status == CO_STATUS_DEAD) {
+            continue;
+        }
+
+        if (!solo_co->aco.inited) {
+            continue;
+        }
+
+        // 已经扫描过 stack 了
+        if (solo_co->gc_black == memory->gc_count) {
+            continue;
+        }
+
+        assert(p->safe_point);
+
+        scan_stack(p, solo_co);
+    }
+    mutex_unlock(&solo_processor_locker);
+    RDEBUGF("[runtime_gc.scan_solo_stack] completed");
 }
 
 /**
@@ -719,6 +672,7 @@ void runtime_gc() {
     inject_gc_work_coroutine();
 
     // 扫描 solo processor stack
+    scan_solo_stack();
 
     RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();

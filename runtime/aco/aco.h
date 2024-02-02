@@ -69,7 +69,7 @@ typedef struct {
     void *ptr;
     size_t sz;
     void *align_highptr;
-    void *align_retptr;
+    void *align_retptr; // 最大值
     size_t align_validsz;
     size_t align_limit;
     aco_t *owner;
@@ -90,7 +90,7 @@ struct aco_s {
 
     aco_cofuncp_t fp;
     aco_save_stack_t save_stack;
-    uint64_t bp_offset; // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
+    // uint64_t bp_offset; // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
     aco_share_stack_t *share_stack;
     aco_context_t ctx;
     bool inited;

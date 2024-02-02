@@ -43,36 +43,25 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
-    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, status=%d, will yield", p->share, p->index, p->status, co, co->status);
-
-    // wait sysmon 可能还没有来得及设置不可抢占，所以这里重复进行不可抢占声明
-    // 不需要加锁，wait_sysmon 不会和当前 p 竞争
-    p->co_started_at = 0;
-    co->aco.bp_offset = 0;
-
-    mutex_lock(&p->thread_locker);
+    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
+            p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
     assert(co->status == CO_STATUS_RUNNING);
-
     p->status = P_STATUS_PREEMPT;
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_push(&p->runnable_list, co);
 
-    mutex_unlock(&p->thread_locker);
     RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
-
     _co_yield(p, co);
+
+    assert(p->status == P_STATUS_RUNNABLE);
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index_%d=%d(%d) co=%p, p->co=%p", p->share, p->index,
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index_%d=%d, p_status=%d co=%p, p->co=%p", p->share, p->index,
            p->status, co, p->coroutine);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
-
-    // TODO 重新设置 co_start_at 为 10ms 之后，避免在这 10ms 内被再次抢占
-    p->co_started_at = uv_hrtime() + (WAIT_SHORT_TIME * 1000 * 1000);
-    // 可以抢占
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -84,13 +73,38 @@ __attribute__((optimize(0))) void co_preempt_yield() {
  */
 static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t *ctx = ucontext;
+    processor_t *p = processor_get();
+    assert(p);
+    coroutine_t *co = p->coroutine;
+    assert(co);
 
 #ifdef __x86_64__
+    int REG_RBP = 10;
     int REG_RSP = 15;
     int REG_RIP = 16;
-    int64_t *rsp = (int64_t *)ctx->uc_mcontext.gregs[REG_RSP];
+    uint64_t *rsp = (uint64_t *)ctx->uc_mcontext.gregs[REG_RSP];
+    uint64_t *rbp = (uint64_t *)ctx->uc_mcontext.gregs[REG_RBP];
     // return addr, 这个是 async_preempt 返回后应该去的地方
     int64_t rip = ctx->uc_mcontext.gregs[REG_RIP];
+
+    uint64_t size_mb = ((uint64_t)rbp - (uint64_t)rsp) / 1024 / 1024;
+
+    RDEBUGF("[runtime.thread_handle_sig] rip=%p, rsp=%p, rbp=%p, size_mb=%lu, co=%p, share_stack.align_retptr=%p", (void *)rip, rsp, rbp,
+            size_mb, co, co->p->share_stack.align_retptr);
+
+    // rip 已经存到了 rsp 里面,只要能定位到 bp_offset 就行了。
+    fndef_t *fn = find_fn(rip);
+    if (fn) {
+        // 基于当前 rsp scan
+        uint64_t sp_addr = (uint64_t)rsp;
+        co->scan_ret_addr = rip;
+        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - sp_addr;
+    } else {
+        // 进入了 c 被抢占, 基于 rbp 定位
+        uint64_t sp_addr = (uint64_t)rbp + POINTER_SIZE + POINTER_SIZE;
+        co->scan_ret_addr = fetch_addr_value(sp_addr - POINTER_SIZE);
+        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - sp_addr;
+    }
 
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
     // 所以需要为 rsp 预留足够的栈空间给被抢占的函数, 避免后续的操作污染被抢占的函数
@@ -100,7 +114,8 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     rsp--; // 栈中预留返回地址
     *rsp = rip;
 
-    RDEBUGF("[runtime.thread_handle_sig] rip=%p save to %p", (void *)rip, rsp);
+    RDEBUGF("[runtime.thread_handle_sig] rip=%p save to %p, co=%p, scan_ret_addr=%p, scan_offset=%lu, fn=%p", (void *)rip, rsp, co,
+            (void *)co->scan_ret_addr, co->scan_offset, fn);
 
     ctx->uc_mcontext.gregs[REG_RSP] = (int64_t)rsp;
     ctx->uc_mcontext.gregs[REG_RIP] = (int64_t)async_preempt;
@@ -137,8 +152,6 @@ static void coroutine_wrapper() {
            co->gc_work);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
-
-    // 此时可以抢占
     processor_set_status(p, P_STATUS_RUNNING);
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
@@ -193,6 +206,7 @@ void processor_all_start_the_world() {
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
         p->need_stw = false;
+        p->safe_point = false;
         mutex_unlock(&p->gc_stw_locker);
     }
     mutex_unlock(&solo_processor_locker);
@@ -233,10 +247,6 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
         coroutine_aco_init(p, co);
     }
 
-    // - 再 tls 中记录正在运行的协程
-    uv_key_set(&tls_coroutine_key, co);
-    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
-
     // 将 RIP 指针移动用户代码片段中
     RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu)", co, co->main, &co->aco,
             co->aco.save_stack.ptr, co->aco.save_stack.sz);
@@ -244,26 +254,27 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     // 获取锁才能切换协程并更新状态
     mutex_lock(&p->thread_locker);
     p->coroutine = co;
-    p->co_started_at = uv_hrtime();
-    p->status = P_STATUS_SYSCALL;
+    // - 再 tls 中记录正在运行的协程
+    uv_key_set(&tls_coroutine_key, co);
+    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
+    p->status = P_STATUS_RUNNABLE;
     mutex_unlock(&p->thread_locker);
 
     aco_resume(&co->aco);
 
     // resume 回来后立刻进入到 dispatch 状态。
-    RDEBUGF("[runtime.coroutine_resume] resume backend, wait lock,  p_index_%d=%d(%d), co=%p, aco=%p, co_status=%d, gc_work=%d", p->share,
-            p->index, p->status, co, &co->aco, co->status, co->gc_work);
+    RDEBUGF(
+        "[runtime.coroutine_resume] resume backend, wait thread locker,p_index_%d=%d(%d), co=%p, status=%d, gc_work=%d, scan_ret_addr=%p, "
+        "scan_offset=%lu",
+        p->share, p->index, p->status, co, co->status, co->gc_work, (void *)co->scan_ret_addr, co->scan_offset);
 
     assert(co->status != CO_STATUS_RUNNING);
-    mutex_lock(&p->thread_locker); // --------- atom start
+    mutex_lock(&p->thread_locker);
     p->co_started_at = 0;
     p->status = P_STATUS_DISPATCH;
-    mutex_unlock(&p->thread_locker); // -------- atom end
+    mutex_unlock(&p->thread_locker);
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
-    if (p->co_started_at == 0) { // 被抢占时 time 被清空,此时不计算 time 耗时
-        time = 0;
-    }
     RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
 }
 
@@ -314,8 +325,6 @@ static void processor_run(void *raw) {
                 RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw loop....", p->share, p->index);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
-
-            p->safe_point = false;
             RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw completed, set safe_point=false", p->share, p->index);
         }
 
@@ -543,7 +552,6 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     processor_set_status(p, P_STATUS_SYSCALL);
     co_set_status(p, co, CO_STATUS_SYSCALL);
 
-    aco_t *aco = &co->aco;
     uint64_t rbp_value;
 #ifdef __x86_64__
     asm("mov %%rbp, %0" : "=r"(rbp_value));
@@ -551,10 +559,11 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     assert(false && "not support");
 #endif
 
-    aco->bp_offset = (uint64_t)aco->share_stack->align_retptr - rbp_value;
+    co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
+    co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);
 
-    DEBUGF("[runtime.pre_tpl_hook] disable_preempt success, co=%p, status=%d ,target=%s, bp_offset set %lu", co, co->status, target,
-           aco->bp_offset);
+    DEBUGF("[runtime.pre_tpl_hook] co=%p, status=%d ,target=%s, scan_offset=%lu, ret_addr=%p", co, co->status, target, co->scan_offset,
+           (void *)co->scan_ret_addr);
 
 #ifdef DEBUG
     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
@@ -582,6 +591,7 @@ __attribute__((optimize(0))) void post_tpl_hook(char *target) {
     DEBUGF("[runtime.post_tpl_hook] co=%p, will set co_status=running", co);
     co_set_status(p, co, CO_STATUS_RUNNING);
     DEBUGF("[runtime.post_tpl_hook] co=%p, success set co_status=running, will set processor_status", co);
+
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -600,6 +610,8 @@ coroutine_t *coroutine_new(void *fn, n_vec_t *args, bool solo, bool main) {
     co->main = main;
     co->next = NULL;
     co->aco.inited = 0; // 标记为为初始化
+    co->scan_ret_addr = 0;
+    co->scan_offset = 0;
 
     DEBUGF("[coroutine_new] co=%p new success", co);
     return co;
@@ -712,7 +724,6 @@ void processor_all_wait_safe() {
     RDEBUGF("[processor_all_wait_safe] start");
     while (!processor_all_safe()) {
         usleep(WAIT_BRIEF_TIME * 1000);
-        // RDEBUGF("[runtime.processor_wait_all_safe] wait...");
     }
 
     RDEBUGF("[processor_all_wait_safe] end");

@@ -37,24 +37,34 @@ __attribute__((optimize(0))) void co_preempt_yield();
 
 static inline void processor_set_status(processor_t *p, p_status_t status) {
     assert(p);
+    assert(p->status != status);
 
+    // 特殊放通处理, share syscall -> running
+    if (p->share && p->status == P_STATUS_SYSCALL && status == P_STATUS_RUNNING) {
+        p->status = status;
+        return;
+    }
+
+    // 必须先获取 thread_locker 在获取 gc_stw_locker
     mutex_lock(&p->thread_locker);
 
+    // 特殊处理 2， solo 切换成 running 时需要获取 gc_stw_locker, 如果 gc_stw_locker 阻塞说明当前正在 stw
+    // 不允许切换到 running 状态
     if (!p->share && status == P_STATUS_RUNNING) {
-        // 如果想要切换到 running 状态，则还需要获取 gc_stw_locker
-        // 避免在 gc_stw_locker 期间进入到 user_code
         mutex_lock(&p->gc_stw_locker);
     }
 
     p->status = status;
 
     if (!p->share && status == P_STATUS_RUNNING) {
-        // 如果想要切换到 running 状态，则还需要获取 gc_stw_locker
-        // 避免在 gc_stw_locker 期间进入到 user_code
         mutex_unlock(&p->gc_stw_locker);
     }
 
     mutex_unlock(&p->thread_locker);
+
+    if (status == P_STATUS_RUNNING) {
+        p->co_started_at = uv_hrtime();
+    }
 }
 
 static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t status) {

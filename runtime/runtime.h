@@ -222,8 +222,8 @@ typedef enum {
     P_STATUS_INIT = 0,
     P_STATUS_DISPATCH = 1,
     P_STATUS_SYSCALL = 2,
-    P_STATUS_RUNNING = 3,
-    P_STATUS_SAFE_POINT = 4,
+    P_STATUS_RUNNABLE = 3,
+    P_STATUS_RUNNING = 4,
     P_STATUS_PREEMPT = 5,
     P_STATUS_EXIT = 6,
 } p_status_t;
@@ -245,6 +245,9 @@ typedef struct coroutine_t {
     uint64_t gc_black;
 
     bool gc_work; // 当前 coroutine 是否是 gc coroutine
+
+    uint64_t scan_offset;
+    uint64_t scan_ret_addr;
 
     struct coroutine_t *next; // coroutine list
 } coroutine_t;
