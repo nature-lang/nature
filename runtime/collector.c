@@ -248,7 +248,6 @@ void mcentral_sweep(mheap_t *mheap) {
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
     assert(co->scan_offset);
-    assert(co->scan_ret_addr);
 
     DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, scan_ret_addr=%p",
            p->share, p->index, co, co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz, co->scan_offset,
@@ -277,6 +276,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         scan_sp = (addr_t)p->share_stack.align_retptr - co->scan_offset;
         size = co->scan_offset;
     }
+    assert(scan_sp % POINTER_SIZE == 0);
 
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co, (void *)scan_sp, size,
            (void *)co->scan_ret_addr);
@@ -296,11 +296,30 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     }
     DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
 #endif
-
     addr_t cursor = scan_sp;
-    addr_t ret_addr = co->scan_ret_addr;
     addr_t max = scan_sp + size;
 
+    // 抢占调度，进行保守的栈扫描策略
+    if (co->scan_ret_addr == 0) {
+        DEBUGF("[runtime_gc.scan_stack] conservative scan start, p_index_%d=%d, p_status=%d, co=%p", p->share, p->index, p->status, co);
+        int scan_ptr_count = 0;
+        while (cursor < max) {
+            // 即使在 head 也可能是一个已经被回收的地址，所以需要 in_heap + span_of 双重判断
+            addr_t value = fetch_addr_value(cursor);
+            if (in_heap(value) && span_of(value)) {
+                insert_gc_worklist(&p->gc_worklist, (void *)value);
+                scan_ptr_count++;
+            }
+
+            cursor += POINTER_SIZE;
+        }
+
+        DEBUGF("[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d", p->share,
+               p->index, p->status, co, scan_ptr_count);
+        return;
+    }
+
+    addr_t ret_addr = co->scan_ret_addr;
     assert(find_fn(ret_addr) && "scan ret_addr failed");
 
     int scan_fn_count = 0;
@@ -584,10 +603,10 @@ static void inject_gc_work_coroutine() {
         coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
         gc_co->gc_work = true;
 
-        mutex_lock(&p->thread_locker);
+        mutex_lock(&p->co_locker);
         rt_linked_push(&p->co_list, gc_co);
         rt_linked_push(&p->runnable_list, gc_co);
-        mutex_unlock(&p->thread_locker);
+        mutex_unlock(&p->co_locker);
     }
 
     RDEBUGF("[runtime_gc.inject_gc_work_coroutine] inject gc work coroutine completed");

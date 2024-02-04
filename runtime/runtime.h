@@ -274,6 +274,7 @@ struct processor_t {
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
     mutex_t thread_locker;
+    mutex_t co_locker;
     p_status_t status;
 
     uv_thread_t thread_id;  // 当前 processor 绑定的 pthread 线程

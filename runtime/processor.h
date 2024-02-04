@@ -116,10 +116,10 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     assert(co);
 
     // syscall -> runnable
-    mutex_lock(&p->thread_locker);
-    co->status = CO_STATUS_RUNNABLE;
+    mutex_lock(&p->co_locker);
+    co_set_status(p, co, CO_STATUS_RUNNABLE);
     rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->thread_locker);
+    mutex_unlock(&p->co_locker);
 
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co, co->status);
 

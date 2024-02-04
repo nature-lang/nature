@@ -79,18 +79,12 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     assert(co);
 
 #ifdef __x86_64__
-    int REG_RBP = 10;
+    // int REG_RBP = 10;
     int REG_RSP = 15;
     int REG_RIP = 16;
     uint64_t *rsp = (uint64_t *)ctx->uc_mcontext.gregs[REG_RSP];
-    uint64_t *rbp = (uint64_t *)ctx->uc_mcontext.gregs[REG_RBP];
     // return addr, 这个是 async_preempt 返回后应该去的地方
     int64_t rip = ctx->uc_mcontext.gregs[REG_RIP];
-
-    uint64_t size_mb = ((uint64_t)rbp - (uint64_t)rsp) / 1024 / 1024;
-
-    RDEBUGF("[runtime.thread_handle_sig] rip=%p, rsp=%p, rbp=%p, size_mb=%lu, co=%p, share_stack.align_retptr=%p", (void *)rip, rsp, rbp,
-            size_mb, co, co->p->share_stack.align_retptr);
 
     // rip 已经存到了 rsp 里面,只要能定位到 bp_offset 就行了。
     fndef_t *fn = find_fn(rip);
@@ -100,10 +94,9 @@ static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
         co->scan_ret_addr = rip;
         co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - sp_addr;
     } else {
-        // 进入了 c 被抢占, 基于 rbp 定位
-        uint64_t sp_addr = (uint64_t)rbp + POINTER_SIZE + POINTER_SIZE;
-        co->scan_ret_addr = fetch_addr_value(sp_addr - POINTER_SIZE);
-        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - sp_addr;
+        // c 语言段被抢占，采取保守的扫描策略(使用 ret_addr = 0 来识别)
+        co->scan_ret_addr = 0;
+        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - (uint64_t)rsp;
     }
 
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
@@ -156,6 +149,9 @@ static void coroutine_wrapper() {
 
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
+
+    // 更新到 syscall 就不可抢占
+    processor_set_status(p, P_STATUS_SYSCALL);
 
     if (co->main) {
         // 通知所有协程退出
@@ -268,11 +264,10 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
         "scan_offset=%lu",
         p->share, p->index, p->status, co, co->status, co->gc_work, (void *)co->scan_ret_addr, co->scan_offset);
 
+    // running -> dispatch
     assert(co->status != CO_STATUS_RUNNING);
-    mutex_lock(&p->thread_locker);
     p->co_started_at = 0;
     p->status = P_STATUS_DISPATCH;
-    mutex_unlock(&p->thread_locker);
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
     RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
@@ -337,9 +332,9 @@ static void processor_run(void *raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         while (true) {
-            mutex_lock(&p->thread_locker);
+            mutex_lock(&p->co_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
-            mutex_unlock(&p->thread_locker);
+            mutex_unlock(&p->co_locker);
             if (!co) {
                 // runnable list 已经处理完成
                 RDEBUGF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
@@ -424,10 +419,10 @@ void coroutine_dispatch(coroutine_t *co) {
     assert(select_p);
     DEBUGF("[runtime.coroutine_dispatch] select_p_index_%d=%d will push co=%p", select_p->share, select_p->index, co);
 
-    mutex_lock(&select_p->thread_locker);
+    mutex_lock(&select_p->co_locker);
     rt_linked_push(&select_p->co_list, co);
     rt_linked_push(&select_p->runnable_list, co);
-    mutex_unlock(&select_p->thread_locker);
+    mutex_unlock(&select_p->co_locker);
 
     DEBUGF("[runtime.coroutine_dispatch] co=%p to p_index_%d=%d, end", co, select_p->share, select_p->index);
 }
@@ -630,6 +625,7 @@ processor_t *processor_new(int index) {
     p->safe_point = 0;
 
     mutex_init(&p->thread_locker, false);
+    mutex_init(&p->co_locker, false);
     p->status = P_STATUS_INIT;
     p->sig.sa_flags = 0;
     p->thread_id = 0;

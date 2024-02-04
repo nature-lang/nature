@@ -90,6 +90,13 @@ void wait_sysmon() {
                 if (p->status == P_STATUS_RUNNING) {
                     break;
                 }
+
+                if (p->status == P_STATUS_DISPATCH) {
+                    RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock", p->index,
+                            (uint64_t)p->thread_id, p->status, p->coroutine);
+                    goto SHARE_UNLOCK_NEXT;
+                }
+
                 usleep(1 * 1000);
             }
 
@@ -119,9 +126,9 @@ void wait_sysmon() {
         // 1. 遍历 solo_processor 需要先获取 solo processor lock
         // 2. 如果 solo processor exit 需要进行清理
         // 3. 如果 solo processor.need_stw == true, 则需要辅助 processor 进入 safe_point
-        RDEBUGF("[wait_sysmon.solo] wait locker");
+        RDEBUGF("[wait_sysmon.solo] wait solo_processor_locker");
         mutex_lock(&solo_processor_locker);
-        RDEBUGF("[wait_sysmon.solo] get locker, solo_p_count=%d", solo_processor_count);
+        RDEBUGF("[wait_sysmon.solo] get solo_processor_locker, solo_p_count=%d", solo_processor_count);
 
         processor_t *prev = NULL;
         processor_t *p = solo_processor_list;
@@ -269,7 +276,7 @@ void wait_sysmon() {
         }
 
         mutex_unlock(&solo_processor_locker);
-        RDEBUGF("[wait_sysmon.solo] unlocker");
+        RDEBUGF("[wait_sysmon.solo] solo_processor_locker unlock");
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {
