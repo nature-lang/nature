@@ -204,8 +204,8 @@ void wait_sysmon() {
                 continue;
             }
 
-            RDEBUGF("[wait_sysmon.solo.thread_locker] success get thread_locker, p_index_%d=%d(%lu)", p->share, p->index,
-                    (uint64_t)p->thread_id);
+            RDEBUGF("[wait_sysmon.solo.thread_locker] success get thread_locker, p_index_%d=%d(%lu), p_status=%d", p->share, p->index,
+                    (uint64_t)p->thread_id, p->status);
 
             if (p->need_stw == 0) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] not need stw, p_index_%d=%d(%lu), will goto unlock", p->share, p->index,
@@ -245,12 +245,20 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.solo.thread_locker] success get gc_stw_locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t)p->thread_id);
 
+            // syscall 符合辅助 gc 的条件。但是请记住，syscall 并不是一个稳定的状态，可能会切换到 dispatch, 所以需要对 dispatch
+            // 进行额外的判断
             if (p->status == P_STATUS_SYSCALL) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu), status=%d, co=%p in syscall, assist to safe point", p->index,
                         (uint64_t)p->thread_id, p->status, p->coroutine);
 
                 // 辅助进入 safe_pint, 仅 solo processor 需要
                 p->safe_point = p->need_stw;
+                goto SOLO_UNLOCK_NEXT;
+            }
+
+            if (p->status == P_STATUS_DISPATCH) {
+                RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu), status=%d, co=%p is dispatch, will unlock", p->index,
+                        (uint64_t)p->thread_id, p->status, p->coroutine);
                 goto SOLO_UNLOCK_NEXT;
             }
 

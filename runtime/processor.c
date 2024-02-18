@@ -265,7 +265,7 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     aco_resume(&co->aco);
 
-    // resume 回来后立刻进入到 dispatch 状态。
+    // resume 回来后立刻进入到 dispatch 状态, 此时 p->status 状态是无锁的
     RDEBUGF(
         "[runtime.coroutine_resume] resume backend, wait thread locker,p_index_%d=%d(%d), co=%p, status=%d, gc_work=%d, scan_ret_addr=%p, "
         "scan_offset=%lu",
@@ -325,7 +325,8 @@ static void processor_run(void *raw) {
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
             while (processor_safe(p)) {
-                RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw loop....", p->share, p->index);
+                RDEBUGF("[runtime.processor_run] p_index_%d=%d, need_stw=%lu, safe_point=%lu stw loop....", p->share, p->index, p->need_stw,
+                        p->safe_point);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
@@ -365,7 +366,7 @@ static void processor_run(void *raw) {
                     co->status);
         }
 
-        // solo processor exit logic
+        // solo processor exit check
         if (!p->share) {
             assert(p->co_list.count == 1);
             coroutine_t *solo_co = rt_linked_first(&p->co_list)->value;

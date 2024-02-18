@@ -254,6 +254,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
+    assert(span_of((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not found span");
     insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
 
     if (co->gc_work) {
@@ -520,36 +521,26 @@ static void gc_work() {
 
     // yield 期间可能新创建了一批 solo processor
     // - handle match solo gc worklist
-    mutex_lock(&solo_processor_locker);
+    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, will assist handle solo processor gc work list, solo count=%d, cpu_count=%d",
+           share_p->share, share_p->index, solo_processor_count, cpu_count);
+
+    // 不加 solo 锁，主要是通过 gc_worklist 判断
     PROCESSOR_FOR(solo_processor_list) {
         int solo_index = p->index;
-        if (p->status == P_STATUS_EXIT) {
-            continue;
-        }
 
         // solo 匹配对应的 share 进行 gc 处理
         int rem = solo_index % cpu_count;
-        if (rem != p->index) {
+        if (rem != share_p->index) {
+            DEBUGF("[runtime_gc.gc_work] assist solo_p_index_%d=%d not need share_p=%d handle", p->share, p->index, share_p->index);
             continue;
         }
 
-        // 可能一次都没有调度
-        coroutine_t *solo_co = p->coroutine;
-        if (!solo_co) {
-            continue;
-        }
-        if (solo_co->status == CO_STATUS_DEAD) {
+        if (p->gc_worklist.count == 0) {
+            DEBUGF("[runtime_gc.gc_work] assist solo_p_index_%d=%d gc worklist count=0, will continue", p->share, p->index);
             continue;
         }
 
-        if (!solo_co->aco.inited) {
-            continue;
-        }
-
-        // 可能是新建的，默认会等于 gc_count
-        if (p->gc_work_finished == memory->gc_count) {
-            continue;
-        }
+        DEBUGF("[runtime_gc.gc_work] assist solo_p_index_%d=%d(%lu) will handle gc work list", p->share, p->index, (uint64_t)p->thread_id);
 
         // 加锁可以阻塞写屏障，避免处理期间写屏障插值
         mutex_lock(&p->thread_locker);
@@ -557,7 +548,6 @@ static void gc_work() {
         p->gc_work_finished = memory->gc_count;
         mutex_unlock(&p->thread_locker);
     }
-    mutex_unlock(&solo_processor_locker);
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit", share_p->share, share_p->index);
     share_p->gc_work_finished = memory->gc_count;
@@ -694,7 +684,7 @@ void runtime_gc() {
     // 注入 GC 工作协程, gc_worklist 用来检测状态判断 gc work 是否全部完成
     inject_gc_work_coroutine();
 
-    // 扫描 solo processor stack
+    // 扫描 solo processor stack (stw)
     scan_solo_stack();
 
     RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
