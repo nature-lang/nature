@@ -67,6 +67,10 @@ static inline void processor_set_status(processor_t *p, p_status_t status) {
     }
 }
 
+static inline bool processor_safe(processor_t *p) {
+    return p->need_stw > 0 && p->need_stw == p->safe_point;
+}
+
 static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t status) {
     assert(p);
     assert(co);

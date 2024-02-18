@@ -183,27 +183,34 @@ static void coroutine_aco_init(processor_t *p, coroutine_t *co) {
 }
 
 void processor_all_stop_the_world() {
+    uint64_t stw_time = uv_hrtime();
     PROCESSOR_FOR(share_processor_list) {
-        p->need_stw = true;
+        p->need_stw = stw_time;
     }
 
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        p->need_stw = true;
+        p->need_stw = stw_time;
     }
     mutex_unlock(&solo_processor_locker);
 }
 
 void processor_all_start_the_world() {
     PROCESSOR_FOR(share_processor_list) {
-        p->need_stw = false;
+        p->need_stw = 0;
+        p->safe_point = 0;
+        RDEBUGF("[runtime_gc.processor_all_start_the_world] p_index_%d=%d, thread_id=%lu set safe_point=false", p->share, p->index,
+                (uint64_t)p->thread_id);
     }
 
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        p->need_stw = false;
-        p->safe_point = false;
+        p->need_stw = 0;
+        p->safe_point = 0;
         mutex_unlock(&p->gc_stw_locker);
+
+        RDEBUGF("[runtime_gc.processor_all_start_the_world] p_index_%d=%d, thread_id=%lu set safe_point=false and unlock gc_stw_locker",
+                p->share, p->index, (uint64_t)p->thread_id);
     }
     mutex_unlock(&solo_processor_locker);
 }
@@ -311,16 +318,19 @@ static void processor_run(void *raw) {
     while (true) {
         RDEBUGF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
-        if (p->need_stw) {
+        if (p->need_stw > 0) {
         STW_WAIT:
-            RDEBUGF("[runtime.processor_run] need stw, set safe_point=true,  p_index_%d=%d", p->share, p->index);
-            p->safe_point = true;
+            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw, p->share, p->index);
+            p->safe_point = p->need_stw;
 
-            while (p->need_stw) {
+            // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
+            while (processor_safe(p)) {
                 RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw loop....", p->share, p->index);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
-            RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw completed, set safe_point=false", p->share, p->index);
+
+            RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw completed, need_stw=%lu, safe_point=%lu", p->share, p->index, p->need_stw,
+                    p->safe_point);
         }
 
         // - exit
@@ -345,7 +355,7 @@ static void processor_run(void *raw) {
 
             coroutine_resume(p, co);
 
-            if (p->need_stw) {
+            if (p->need_stw > 0) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d", p->share,
                         p->index, co, co->status);
                 goto STW_WAIT;
@@ -526,6 +536,7 @@ void mark_ptr_black(void *ptr) {
     addr_t addr = (addr_t)ptr;
     // get mspan by ptr
     mspan_t *span = span_of(addr);
+    assert(span);
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
@@ -683,12 +694,12 @@ bool processor_all_safe() {
             continue;
         }
 
-        if (p->safe_point) {
+        if (processor_safe(p)) {
             continue;
         }
 
-        RDEBUGF("[runtime.processor_all_safe_or_lock] share processor p_index_%d=%d, thread_id=%lu not safe", p->share, p->index,
-                (uint64_t)p->thread_id);
+        RDEBUGF("[runtime_gc.processor_all_safe] share processor p_index_%d=%d, thread_id=%lu not safe, need_stw=%lu, safe_point=%lu",
+                p->share, p->index, (uint64_t)p->thread_id, p->need_stw, p->safe_point);
         return false;
     }
 
@@ -699,7 +710,7 @@ bool processor_all_safe() {
             continue;
         }
 
-        if (p->safe_point) {
+        if (processor_safe(p)) {
             continue;
         }
 
@@ -707,7 +718,8 @@ bool processor_all_safe() {
         // if (mutex_trylock(&p->gc_stw_locker) != 0) {
         //     continue;
         // }
-        RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d not safe", p->share, p->index);
+        RDEBUGF("[runtime_gc.processor_all_safe] solo processor p_index_%d=%d, thread_id=%lu not safe", p->share, p->index,
+                (uint64_t)p->thread_id);
         mutex_unlock(&solo_processor_locker);
         return false;
     }

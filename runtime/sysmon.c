@@ -155,7 +155,7 @@ void wait_sysmon() {
 
             // solo processor 仅需要 stw 的时候进行抢占, 由于锁定了 solo_processor_locker, 所以其他线程此时
             // 无法对 p->need_stw 进行解锁。
-            if (p->need_stw == false) {
+            if (p->need_stw == 0) {
                 RDEBUGF("[wait_sysmon.solo] processor_index=%d, current not need stw, will skip", p->index);
 
                 prev = p;
@@ -165,7 +165,7 @@ void wait_sysmon() {
 
             // 不知道是不是自己的 stw 锁，难道需要重复解锁？什么时候解锁比较合适？processor_stop_stw() 之后？
             // 什么时候将 safe_point 配置为 false 呢？也在 processor_stop_stw 之后？
-            if (p->safe_point) {
+            if (processor_safe(p)) {
                 RDEBUGF("[wait_sysmon.solo] processor_index=%d, in safe_point, will skip", p->index);
 
                 prev = p;
@@ -207,14 +207,14 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.solo.thread_locker] success get thread_locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t)p->thread_id);
 
-            if (!p->need_stw) {
+            if (p->need_stw == 0) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] not need stw, p_index_%d=%d(%lu), will goto unlock", p->share, p->index,
                         (uint64_t)p->thread_id);
 
                 goto SOLO_UNLOCK_NEXT;
             }
 
-            if (p->safe_point) {
+            if (processor_safe(p)) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] already in safe_point, p_index_%d=%d(%lu), will goto unlock", p->share, p->index,
                         (uint64_t)p->thread_id);
 
@@ -249,8 +249,8 @@ void wait_sysmon() {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu), status=%d, co=%p in syscall, assist to safe point", p->index,
                         (uint64_t)p->thread_id, p->status, p->coroutine);
 
-                // 辅助进入 safe_pint
-                p->safe_point = true;
+                // 辅助进入 safe_pint, 仅 solo processor 需要
+                p->safe_point = p->need_stw;
                 goto SOLO_UNLOCK_NEXT;
             }
 

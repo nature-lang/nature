@@ -28,6 +28,7 @@ void shade_obj_grey(void *obj) {
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
+    assert(span);
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
@@ -247,13 +248,11 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    assert(co->scan_offset);
-
     DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, scan_ret_addr=%p",
            p->share, p->index, co, co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz, co->scan_offset,
            (void *)co->scan_ret_addr);
 
-    // save_stack 也是通过 gc 申请，所以需要标记一下
+    // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
     insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
 
@@ -261,6 +260,8 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
         return;
     }
+
+    assert(co->scan_offset);
 
     // sp 指向了内存地址，可以从中取值
     addr_t scan_sp;
@@ -299,7 +300,9 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     addr_t cursor = scan_sp;
     addr_t max = scan_sp + size;
 
-    // 抢占调度，进行保守的栈扫描策略
+    // 抢占调度，由于可能在 c 语言中产生抢占，所以无法准确的定位到 nature fn
+    // c 语言代码中可能没有按照标准调用实现，所以 bp 寄存器中无法关联栈帧信息
+    // 因为进行保守的栈扫描策略, 从 sp 指针开始全量扫描。
     if (co->scan_ret_addr == 0) {
         DEBUGF("[runtime_gc.scan_stack] conservative scan start, p_index_%d=%d, p_status=%d, co=%p", p->share, p->index, p->status, co);
         int scan_ptr_count = 0;
@@ -422,8 +425,8 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
             RDEBUGF("[runtime_gc.handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
                     (void *)addr, (void *)temp_addr, (void *)heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
 
-            if (in_heap(heap_addr)) {
-                assert(span_of(heap_addr) && "heap_addr not belong active span");
+            if (in_heap(heap_addr) && span_of(heap_addr)) {
+                // assert(span_of(heap_addr) && "heap_addr not belong active span");
                 insert_gc_worklist(worklist, (void *)heap_addr);
             }
         }
@@ -586,7 +589,8 @@ static void scan_solo_stack() {
             continue;
         }
 
-        assert(p->safe_point);
+        // p 必须处于 stw 状态
+        assert(processor_safe(p));
 
         scan_stack(p, solo_co);
     }
@@ -709,7 +713,8 @@ void runtime_gc() {
     // STW 之后再更改 GC 阶段
     RDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
     processor_all_stop_the_world();
-    RDEBUGF("[runtime_gc] all share processor safe");
+    processor_all_wait_safe();
+    RDEBUGF("[runtime_gc] all processor safe");
     // -------------- STW start ----------------------------
 
     // - gc stage: GC_MARK_DONE
@@ -729,7 +734,7 @@ void runtime_gc() {
     RDEBUGF("[runtime_gc] gc flush mcache completed");
 
     mcentral_sweep(memory->mheap);
-    RDEBUGF("[runtime_gc]mcentral_sweep completed");
+    RDEBUGF("[runtime_gc] mcentral_sweep completed");
     // 更新 gcbits
     gcbits_arenas_epoch();
     RDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");

@@ -3,13 +3,20 @@
 #include "array.h"
 #include "runtime/memory.h"
 
-void vec_grow(n_vec_t *l) {
-    l->capacity = l->capacity * 2;
+void vec_grow(n_vec_t *vec) {
+    vec->capacity = vec->capacity * 2;
 
-    rtype_t *element_rtype = rt_find_rtype(l->element_rtype_hash);
-    n_array_t *new_array_data = rt_array_new(element_rtype, l->capacity);
-    memmove(new_array_data, l->data, l->capacity * rtype_out_size(element_rtype, POINTER_SIZE));
-    l->data = new_array_data;
+    rtype_t *element_rtype = rt_find_rtype(vec->element_rtype_hash);
+    n_array_t *new_data = rt_array_new(element_rtype, vec->capacity);
+
+    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+
+    DEBUGF("[vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity, new_data,
+           element_size);
+
+    memmove(new_data, vec->data, vec->length * element_size);
+
+    vec->data = new_data;
 }
 
 /**
@@ -118,7 +125,7 @@ void vec_push(n_vec_t *vec, void *ref) {
            (uint64_t)fetch_int_value((addr_t)ref, 8));
 
     if (vec->length == vec->capacity) {
-        DEBUGF("[vec_push] current_length=%lu == capacity, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
+        DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
         vec_grow(vec);
     }
 

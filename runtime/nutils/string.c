@@ -12,24 +12,18 @@
 n_string_t *string_new(void *raw_string, uint64_t length) {
     DEBUGF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
 
-    write(STDOUT_FILENO, "___sn_0\n", 8);
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
 
-    write(STDOUT_FILENO, "___sn_1\n", 8);
     uint64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
-    write(STDOUT_FILENO, "___sn_2\n", 8);
     n_array_t *data = rt_array_new(element_rtype, capacity);
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
 
-    write(STDOUT_FILENO, "___sn_3\n", 8);
     rtype_t *string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 
-    write(STDOUT_FILENO, "___sn_4\n", 8);
     assert(element_rtype->hash > 0);
 
-    write(STDOUT_FILENO, "___sn_5\n", 8);
     DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
     n_string_t *str = rt_clr_malloc(string_rtype->size, string_rtype);
     str->data = data;

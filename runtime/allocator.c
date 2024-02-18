@@ -801,9 +801,9 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF(
-        "[std_malloc] success, span.class=%d, span.base=0x%lx, span.obj_size=%ld, span.alloc_count=%ld,need_size=%ld, "
-        "type_kind=%s, addr=0x%lx, allocator_bytes=%ld",
-        span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes);
+        "[std_malloc] success, spc=%d, span.base=0x%lx, obj_size=%ld, alloc_count=%ld,need_size=%ld, type_kind=%s, addr=0x%lx, "
+        "alloc_bytes=%ld, gc_barrier=%d",
+        span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes, gc_barrier_get());
 
     return addr;
 }
@@ -972,8 +972,9 @@ mspan_t *span_of(uint64_t addr) {
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
+
     DEBUGF("[span_of] page_index=%lu, span=%p", page_index, span);
-    assert(span && "not found span by page_index");
+
     return span;
 }
 
@@ -992,6 +993,7 @@ addr_t mstack_new(uint64_t size) {
 void *rt_clr_malloc(uint64_t size, rtype_t *rtype) {
     void *ptr = rt_gc_malloc(size, rtype);
     memset(ptr, 0, size);
+    MDEBUGF("[rt_clr_malloc] addr=%p, size=%lu", ptr, size);
     return ptr;
 }
 
