@@ -357,8 +357,9 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         }
     }
 
-    MDEBUGF("[runtime.page_alloc_find] find continuous pages, start: %lu, end: %lu", start, end);
+    MDEBUGF("[runtime.page_alloc_find] find continuous pages, l5 start: %lu, end: %lu", start, end);
 
+    // start 和 chunk 表示 chunk 的 index,
     // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end
     // 中的任意一个位置)
     addr_t find_addr = 0;
@@ -390,9 +391,12 @@ static addr_t page_alloc_find(uint64_t pages_count) {
 
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
-        // start ~ end 这一段连续的内存空间跨越多个 chunk
+        // TODO bug 处理，起始位置不对，越界了一个位置！比如 bit_start 部分为什么要 + 1？首个是从 0 开始的话就会有问题!
+        // start ~ end 这一段连续的内存空间跨越多个 chunk，则 summary [start,max,end]
+        // 在跨越多个 chunk 的情况下连续空间一定由 end 标记
         page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
         page_summary_t start_summary = l5_summaries[start];
+        // summary.end 表示 chunk 尾部可用的空间
         uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
         MDEBUGF(
             "[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
@@ -494,8 +498,8 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
  * @param span
  */
 static void mheap_set_spans(mspan_t *span) {
-    MDEBUGF("[mheap_set_spans] start, span=%p, base=%p, obj_size=%lu, pages_count=%lu", span, (void *)span->base, span->obj_size,
-            span->pages_count);
+    MDEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span, (void *)span->base, span->spanclass,
+            span->obj_size, span->pages_count);
 
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
@@ -503,9 +507,15 @@ static void mheap_set_spans(mspan_t *span) {
     // 一个 span 可能会占用多个 page
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
+        // 判断当前 page_index 是否已经被其他 span 占用，如果占用了
+        MDEBUGF("[mheap_set_spans] arena_base=%p page_index=%lu will set span=%p, span_base=%p, cursor_addr=%p", (void *)arena->base,
+                page_index, span, (void *)span->base, (void *)(span->base + (i * ALLOC_PAGE_SIZE)))
+
+        if (arena->spans[page_index] != NULL) {
+            assert(false && "span overlap");
+        }
+
         arena->spans[page_index] = span;
-        MDEBUGF("[mheap_set_spans] arena_base=%p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
-                (void *)span->base)
         page_index += 1;
     }
 }
@@ -588,7 +598,7 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 }
 
 static void mcentral_grow(mcentral_t *mcentral) {
-    MDEBUGF("[runtime.mcentral_grow] spanclass=%d, sizeclass=%d, pages_count=%lu", mcentral->spanclass, take_sizeclass(mcentral->spanclass),
+    MDEBUGF("[runtime.mcentral_grow] spc=%d, szc=%d, need pages_count=%lu", mcentral->spanclass, take_sizeclass(mcentral->spanclass),
             take_pages_count(mcentral->spanclass));
 
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
@@ -597,7 +607,7 @@ static void mcentral_grow(mcentral_t *mcentral) {
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assert(span->obj_count > 0 && "alloc span failed");
 
-    MDEBUGF("[runtime.mcentral_grow] success, spanclass=%d, base=%lx, alloc_count=%lu, obj_count=%lu", span->spanclass, span->base,
+    MDEBUGF("[runtime.mcentral_grow] success, spc=%d, base=%p, alloc_count=%lu, obj_count=%lu", span->spanclass, (void *)span->base,
             span->alloc_count, span->obj_count);
 
     // 新申请的 span 全都是空闲 obj, 直接插入到 mcentral 中
@@ -623,8 +633,8 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
-    DEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
-           span->obj_count, span->alloc_count);
+    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
+            span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
 
@@ -801,9 +811,11 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF(
-        "[std_malloc] success, spc=%d, span.base=0x%lx, obj_size=%ld, alloc_count=%ld,need_size=%ld, type_kind=%s, addr=0x%lx, "
+        "[std_malloc] success, spc=%d, base=%p, obj_size=%ld, alloc_count=%ld,need_size=%ld, type_kind=%s, addr=0x%lx, "
         "alloc_bytes=%ld, gc_barrier=%d",
-        span->spanclass, span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes, gc_barrier_get());
+        span->spanclass, (void *)span->base, span->obj_size, span->alloc_count, size, debug_kind, addr, allocated_bytes, gc_barrier_get());
+
+    assert(span_of(addr) == span && "std_malloc span not match");
 
     return addr;
 }
@@ -1076,8 +1088,8 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->alloc_bits = gcbits_new(span->obj_count);
     span->gcmark_bits = gcbits_new(span->obj_count);
 
-    DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spanclass=%d, sizeclass=%d, obj_size=%lu, obj_count=%lu", span->base,
-           span->pages_count, span->spanclass, sizeclass, span->obj_size, span->obj_count);
+    DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spc=%d, szc=%d, obj_size=%lu, obj_count=%lu", span->base, span->pages_count,
+           span->spanclass, sizeclass, span->obj_size, span->obj_count);
     return span;
 }
 

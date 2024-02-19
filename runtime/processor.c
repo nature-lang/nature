@@ -1,14 +1,10 @@
 #include "processor.h"
 
 #include <ucontext.h>
-#include <uv.h>
 
-#include "builtin.h"
-#include "nutils/nutils.h"
 #include "runtime.h"
 
 int cpu_count;
-bool processor_need_stw;
 bool processor_need_exit;
 
 processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
@@ -251,8 +247,8 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     }
 
     // 将 RIP 指针移动用户代码片段中
-    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu)", co, co->main, &co->aco,
-            co->aco.save_stack.ptr, co->aco.save_stack.sz);
+    RDEBUGF("[runtime.coroutine_resume] aco_resume will start, co=%p, is_main=%d, aco=%p, save_stack=%p(%zu), p_index_%d=%d(%d)", co,
+            co->main, &co->aco, co->aco.save_stack.ptr, co->aco.save_stack.sz, p->share, p->index, p->status);
 
     // 获取锁才能切换协程并更新状态
     mutex_lock(&p->thread_locker);
@@ -263,6 +259,7 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     p->status = P_STATUS_RUNNABLE;
     mutex_unlock(&p->thread_locker);
 
+    write(STDOUT_FILENO, "---cr_1\n", 8);
     aco_resume(&co->aco);
 
     // resume 回来后立刻进入到 dispatch 状态, 此时 p->status 状态是无锁的
@@ -456,7 +453,6 @@ void processor_init() {
 
     // - 初始化全局标识
     processor_need_exit = false;
-    processor_need_stw = false;
     gc_barrier = false;
     mutex_init(&gc_stage_locker, false);
     mutex_init(&solo_processor_locker, false);

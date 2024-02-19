@@ -15,7 +15,7 @@
 
 #define GC_WORKLIST_LIMIT 1024 // 每处理 1024 个 ptr 就 yield
 
-#define ARENA_SIZE 67108864 // arena 的大小，单位 byte
+#define ARENA_SIZE 67108864 // arena 的大小，单位 byte, 64M
 
 #define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
@@ -149,7 +149,7 @@ typedef struct {
 
     // uint64_t chunk_count;
 
-    // 核心位图，标记自启动以来所有 page 的使用情况
+    // 核心位图，标记所有申请的 page 的使用情况, chunk 中每一个 bit 对应一个 page 的使用状态。
     // 通过 chunks = {0} 初始化，可以确保第二维度为 null
     page_chunk_t *chunks[PAGE_ALLOC_CHUNK_SPLIT];
 } page_alloc_t;

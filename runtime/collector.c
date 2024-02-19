@@ -140,7 +140,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            DEBUGF("[sweep_span] will seep, spc=%d, base=%p, obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld", span->spanclass,
+            DEBUGF("[sweep_span] will sweep, spc=%d, base=%p, obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld", span->spanclass,
                    (void *)span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
         }
     }
@@ -381,10 +381,11 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
 
     // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
     // 计算 addr 所在的 obj 的起始地址
+    addr_t old = addr;
     addr = span->base + (obj_index * span->obj_size);
 
-    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, span->obj_size=%lu", (void *)addr,
-            spanclass_has_ptr(span->spanclass), (void *)span->base, span->spanclass, obj_index, span->obj_size);
+    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte", (void *)addr,
+            (void *)old, spanclass_has_ptr(span->spanclass), (void *)span->base, span->spanclass, obj_index, span->obj_size);
 
     mutex_lock(&span->gcmark_locker);
 
