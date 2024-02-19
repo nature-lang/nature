@@ -391,13 +391,12 @@ static addr_t page_alloc_find(uint64_t pages_count) {
 
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
-        // TODO bug 处理，起始位置不对，越界了一个位置！比如 bit_start 部分为什么要 + 1？首个是从 0 开始的话就会有问题!
         // start ~ end 这一段连续的内存空间跨越多个 chunk，则 summary [start,max,end]
         // 在跨越多个 chunk 的情况下连续空间一定由 end 标记
         page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
         page_summary_t start_summary = l5_summaries[start];
         // summary.end 表示 chunk 尾部可用的空间
-        uint64_t bit_start = CHUNK_BITS_COUNT + 1 - start_summary.end;
+        uint64_t bit_start = CHUNK_BITS_COUNT - start_summary.end;
         MDEBUGF(
             "[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
             " end: %lu, bit start: %lu",
