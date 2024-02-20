@@ -258,7 +258,7 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     p->sz = sz - u_pgsz;
 
     p->owner = NULL;
-#if defined(__x86_64__)
+#ifdef __x86_64__
     uintptr_t u_p = (uintptr_t)(p->sz - (sizeof(void *) << 1) + (uintptr_t)p->ptr);
     u_p = (u_p >> 4) << 4;
     p->align_highptr = (void *)u_p;
@@ -274,12 +274,13 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 // safe
 void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     assert(sstk != NULL && sstk->ptr != NULL);
-    assert(0 == munmap(sstk->real_ptr, sstk->real_sz));
+    munmap(sstk->real_ptr, sstk->real_sz);
     sstk->real_ptr = NULL;
     sstk->ptr = NULL;
 }
 
-void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg) {
+__attribute__((optimize(0))) void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz,
+                                                  aco_cofuncp_t fp, void *arg) {
     assert(aco);
     memset(aco, 0, sizeof(aco_t));
 
@@ -306,7 +307,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
 
         assert(aco->save_stack.ptr);
         aco->save_stack.sz = save_stack_sz;
-#if defined(__x86_64__)
+#ifdef __x86_64__
         aco->save_stack.valid_sz = 0;
 #else
 #error "platform no support yet"
@@ -322,7 +323,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
     aco->inited = true;
 }
 
-aco_attr_no_asan void aco_resume(aco_t *resume_co) {
+__attribute__((optimize(0))) aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     assert(resume_co != NULL && resume_co->main_co != NULL && resume_co->is_end == 0);
 
     // 栈切换
@@ -331,7 +332,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
             aco_t *owner_co = resume_co->share_stack->owner;
             assert(owner_co->share_stack == resume_co->share_stack);
 
-#if defined(__x86_64__)
+#ifdef __x86_64__
             assert(((uintptr_t)(owner_co->share_stack->align_retptr) >= (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])) &&
                    ((uintptr_t)(owner_co->share_stack->align_highptr) - (uintptr_t)(owner_co->share_stack->align_limit) <=
                     (uintptr_t)(owner_co->reg[ACO_REG_IDX_SP])));
@@ -374,7 +375,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
         }
 
         assert(resume_co->share_stack->owner == NULL);
-#if defined(__x86_64__)
+#ifdef __x86_64__
         assert(resume_co->save_stack.valid_sz <= resume_co->share_stack->align_limit - sizeof(void *));
         // TODO: optimize the performance penalty of memcpy function call
         //   for very short memory span

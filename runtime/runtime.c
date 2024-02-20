@@ -19,7 +19,7 @@ extern int main();
  */
 int runtime_main(int argc, char *argv[]) {
     // - init log
-#ifndef DEBUG
+#ifndef NATURE_DEBUG
     log_set_level(LOG_FATAL);
 #endif
     // - 初始化 runtime 全局链表分配器

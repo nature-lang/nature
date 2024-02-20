@@ -140,8 +140,8 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            DEBUGF("[sweep_span] will sweep, spc=%d, base=%p, obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld", span->spanclass,
-                   (void *)span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
+            RDEBUGF("[sweep_span] will sweep, spc=%d, base=%p, obj_size=%ld, obj_addr=0x%lx, allocator_bytes=%ld", span->spanclass,
+                    (void *)span->base, span->obj_size, span->base + i * span->obj_size, allocated_bytes);
         }
     }
 
@@ -283,21 +283,22 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co, (void *)scan_sp, size,
            (void *)co->scan_ret_addr);
 
-#ifdef DEBUG
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    addr_t temp_cursor = (addr_t)scan_sp;
-    size_t temp_i = 0;
-    size_t max_i = size / POINTER_SIZE;
-    while (temp_i < max_i) {
-        addr_t v = fetch_addr_value((addr_t)temp_cursor);
-        fndef_t *fn = find_fn(v);
-        TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
-               fn ? fn->name : "", fn ? fn->stack_size : 0);
-        temp_cursor += POINTER_SIZE;
-        temp_i += 1;
-    }
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
-#endif
+    // #ifdef DEBUG
+    //     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
+    //     addr_t temp_cursor = (addr_t)scan_sp;
+    //     size_t temp_i = 0;
+    //     size_t max_i = size / POINTER_SIZE;
+    //     while (temp_i < max_i) {
+    //         addr_t v = fetch_addr_value((addr_t)temp_cursor);
+    //         fndef_t *fn = find_fn(v);
+    //         TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
+    //                fn ? fn->name : "", fn ? fn->stack_size : 0);
+    //         temp_cursor += POINTER_SIZE;
+    //         temp_i += 1;
+    //     }
+    //     DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
+    // #endif
+
     addr_t cursor = scan_sp;
     addr_t max = scan_sp + size;
 
@@ -417,6 +418,8 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += POINTER_SIZE) {
         arena_t *arena = take_arena(addr);
+        assert(arena && "cannot find arena by addr");
+
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
         index++;
         bool is_ptr = bitmap_test(arena->bits, bit_index);
@@ -667,7 +670,7 @@ void runtime_gc() {
     uint64_t before = allocated_bytes;
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    RDEBUGF("[runtime_gc] start, gc stage: GC_START");
+    TDEBUGF("[runtime_gc] start, gc stage: GC_START");
 
     memory->gc_count += 1;
 
@@ -735,5 +738,5 @@ void runtime_gc() {
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
-    RDEBUGF("[runtime_gc] gc stage: GC_OFF, cleanup=%ldKB", (before - allocated_bytes) / 1000);
+    TDEBUGF("[runtime_gc] gc stage: GC_OFF, cleanup=%ldKB", (before - allocated_bytes) / 1000);
 }

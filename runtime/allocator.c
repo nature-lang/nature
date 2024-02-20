@@ -502,6 +502,7 @@ static void mheap_set_spans(mspan_t *span) {
 
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
+    assert(arena && "cannot find arena by addr");
 
     // 一个 span 可能会占用多个 page
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
@@ -525,6 +526,7 @@ static void mheap_clear_spans(mspan_t *span) {
 
     // - 根据 span.base 定位 arena
     arena_t *arena = take_arena(span->base);
+    assert(arena && "cannot find arena by addr");
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
@@ -759,6 +761,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
         // 确定 arena bits base
         arena_t *arena = take_arena(addr);
+        assert(arena && "cannot find arena by addr");
 
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
@@ -977,8 +980,12 @@ mspan_t *span_of(uint64_t addr) {
     // DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
+    if (arena == NULL) {
+        TRACEF("[span_of] arena is null by addr=%p", (void *)addr);
+        return NULL;
+    }
+
     TRACEF("[span_of] addr=%p", (void *)addr);
-    assert(arena && "not found arena");
 
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;

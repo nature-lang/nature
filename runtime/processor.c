@@ -564,18 +564,19 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);
 
     DEBUGF("[runtime.pre_tpl_hook] co=%p, status=%d ,target=%s, scan_offset=%lu, ret_addr=%p", co, co->status, target, co->scan_offset,
-           (void *)co->scan_ret_addr);
+            (void *)co->scan_ret_addr);
 
-#ifdef DEBUG
-    addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
-    fndef_t *fn = find_fn(ret_addr);
-    if (fn) {
-        TRACEF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path, fn->line);
-    }
-    // 基于 share stack 计算 offset
-    TRACEF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
-           aco->bp_offset);
-#endif
+    // #ifdef DEBUG
+    //     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
+    //     fndef_t *fn = find_fn(ret_addr);
+    //     if (fn) {
+    //         TRACEF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path,
+    //         fn->line);
+    //     }
+    //     // 基于 share stack 计算 offset
+    //     TRACEF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
+    //            aco->bp_offset);
+    // #endif
 }
 
 __attribute__((optimize(0))) void post_tpl_hook(char *target) {

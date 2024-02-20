@@ -55,11 +55,8 @@
         dst;                                 \
     })
 
-// #define DEBUG_PARSER 1
-// #define DEBUG 1
-
 // 抢占式调度与 coroutine dispatch 使用该 debug 函数
-#ifdef DEBUG
+#ifdef NATURE_DEBUG
 
 #define RDEBUGF(format, ...) \
     //    fprintf(stderr, "[%lu] RUNTIME DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
@@ -69,9 +66,9 @@
     //    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
 //    fflush(stdout);
 
-#define DEBUGF(format, ...)                                                                                                         \
-    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
-    fflush(stdout);
+#define DEBUGF(format, ...) \
+    //    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+//    fflush(stdout);
 
 #define TRACEF(format, ...) \
     //    fprintf(stdout, "[%lu] USER_CO DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \

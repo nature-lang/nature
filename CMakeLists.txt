@@ -24,7 +24,7 @@ endif ()
 # 设置 debug 模式下编译输出
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     set(BUILD_TYPE "debug")
-    add_compile_definitions(DEBUG)
+    add_compile_definitions(NATURE_DEBUG)
     add_compile_definitions(DEBUG_LIR)
     #    add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)

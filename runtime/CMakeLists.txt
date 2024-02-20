@@ -27,8 +27,9 @@ endif ()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
-    add_compile_definitions(DEBUG)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+    # runtime debug 标志
+    add_compile_definitions(NATURE_DEBUG)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -DNDEBUG")
 endif ()
 
 include_directories(../include)

@@ -97,10 +97,6 @@ static inline uint64_t arena_index(uint64_t base) {
  */
 static inline arena_t *take_arena(addr_t base) {
     arena_t *arena = memory->mheap->arenas[arena_index(base)];
-
-    //   assertf(arena, "cannot find arena by addr=0x%lx", base);
-    assert(arena && "cannot find arena by addr");
-
     return arena;
 }
 

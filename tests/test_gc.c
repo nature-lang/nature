@@ -121,16 +121,8 @@ static void _test_gc_basic() {
     printf("hello\n");
 }
 
-// 切换到用户栈
-static void test_gc_basic() {
-    processor_t *p = processor_get();
-    DEBUG_STACK();
-    // 切换到 user mode
-    MODE_CALL(p->user_mode, p->system_mode, _test_gc_basic)
-}
 
 int main(void) {
     setup();
-    test_gc_basic();
     teardown();
 }

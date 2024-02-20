@@ -7,6 +7,8 @@ void vec_grow(n_vec_t *vec) {
     vec->capacity = vec->capacity * 2;
 
     rtype_t *element_rtype = rt_find_rtype(vec->element_rtype_hash);
+    assertf(element_rtype, "cannot find element_rtype with hash");
+
     n_array_t *new_data = rt_array_new(element_rtype, vec->capacity);
 
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
@@ -29,6 +31,9 @@ void vec_grow(n_vec_t *vec) {
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
     DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash, length,
            capacity);
+
+    assertf(rtype_hash > 0, "rtype_hash must be a valid hash");
+    assertf(element_rtype_hash > 0, "element_rtype_hash must be a valid hash");
 
     if (capacity == 0) {
         if (length > 0) {
@@ -57,7 +62,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
+    DEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
     return vec;
 }
 
@@ -119,9 +124,10 @@ void *vec_ref(n_vec_t *l) {
  */
 void vec_push(n_vec_t *vec, void *ref) {
     assert(ref > 0 && "ref must be a valid address");
+    assertf(vec->element_rtype_hash > 0, "vec=%p element_rtype_hash=%lu must be a valid hash", vec, vec->element_rtype_hash);
 
     DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data, vec->length, ref,
-            (uint64_t)fetch_int_value((addr_t)ref, 8));
+           (uint64_t)fetch_int_value((addr_t)ref, 8));
 
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
