@@ -57,9 +57,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    write(STDOUT_FILENO, "---vn-0\n", 8);
     DEBUGF("[runtime.vec_new] success, vec: %p, data: %p", vec, vec->data);
-    write(STDOUT_FILENO, "---vn-1\n", 8);
     return vec;
 }
 
@@ -121,8 +119,9 @@ void *vec_ref(n_vec_t *l) {
  */
 void vec_push(n_vec_t *vec, void *ref) {
     assert(ref > 0 && "ref must be a valid address");
+
     DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data, vec->length, ref,
-           (uint64_t)fetch_int_value((addr_t)ref, 8));
+            (uint64_t)fetch_int_value((addr_t)ref, 8));
 
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);

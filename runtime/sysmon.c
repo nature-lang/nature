@@ -40,8 +40,8 @@ void wait_sysmon() {
                 continue;
             }
 
-            RDEBUGF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000, p->share, p->index,
-                    (uint64_t)p->thread_id);
+            TRACEF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000, p->share, p->index,
+                   (uint64_t)p->thread_id);
 
             // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
             // 但是可以从 not -> can
@@ -52,7 +52,7 @@ void wait_sysmon() {
             }
 
             // yield/exit 首先就设置 can_preempt = false, 这里就无法完成。所以 p->coroutine 一旦设置就无法被清空或者切换
-            RDEBUGF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
+            TRACEF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
 
             // 判断当前是否是可抢占状态
             if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
@@ -119,16 +119,16 @@ void wait_sysmon() {
             p->status = P_STATUS_PREEMPT;
         SHARE_UNLOCK_NEXT:
             mutex_unlock(&p->thread_locker);
-            RDEBUGF("[wait_sysmon.share.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
+            TRACEF("[wait_sysmon.share.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
         }
 
         // - 监控状态处于 running solo processor, 需要做的工作有
         // 1. 遍历 solo_processor 需要先获取 solo processor lock
         // 2. 如果 solo processor exit 需要进行清理
         // 3. 如果 solo processor.need_stw == true, 则需要辅助 processor 进入 safe_point
-        RDEBUGF("[wait_sysmon.solo] wait solo_processor_locker");
+        TRACEF("[wait_sysmon.solo] wait solo_processor_locker");
         mutex_lock(&solo_processor_locker);
-        RDEBUGF("[wait_sysmon.solo] get solo_processor_locker, solo_p_count=%d", solo_processor_count);
+        TRACEF("[wait_sysmon.solo] get solo_processor_locker, solo_p_count=%d", solo_processor_count);
 
         processor_t *prev = NULL;
         processor_t *p = solo_processor_list;
@@ -284,7 +284,7 @@ void wait_sysmon() {
         }
 
         mutex_unlock(&solo_processor_locker);
-        RDEBUGF("[wait_sysmon.solo] solo_processor_locker unlock");
+        TRACEF("[wait_sysmon.solo] solo_processor_locker unlock");
 
         // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
         if (processor_get_exit()) {

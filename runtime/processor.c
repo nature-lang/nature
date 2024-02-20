@@ -67,7 +67,7 @@ __attribute__((optimize(0))) void co_preempt_yield() {
  * @param info
  * @param ucontext
  */
-static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
+__attribute__((optimize(0))) static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t *ctx = ucontext;
     processor_t *p = processor_get();
     assert(p);
@@ -259,7 +259,6 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
     p->status = P_STATUS_RUNNABLE;
     mutex_unlock(&p->thread_locker);
 
-    write(STDOUT_FILENO, "---cr_1\n", 8);
     aco_resume(&co->aco);
 
     // resume 回来后立刻进入到 dispatch 状态, 此时 p->status 状态是无锁的
@@ -333,7 +332,6 @@ static void processor_run(void *raw) {
 
         // - exit
         if (processor_get_exit()) {
-            write(STDOUT_FILENO, "---pr_0\n", 8);
             RDEBUGF("[runtime.processor_run] p_index_%d=%d, need stop, goto exit", p->share, p->index);
             goto EXIT;
         }

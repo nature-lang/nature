@@ -977,14 +977,14 @@ mspan_t *span_of(uint64_t addr) {
     // DEBUGF("[span_of] addr = %0lx", addr);
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
-    DEBUGF("[span_of] addr=%p", (void *)addr);
+    TRACEF("[span_of] addr=%p", (void *)addr);
     assert(arena && "not found arena");
 
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
     mspan_t *span = arena->spans[page_index];
 
-    DEBUGF("[span_of] page_index=%lu, span=%p", page_index, span);
+    TRACEF("[span_of] page_index=%lu, span=%p", page_index, span);
 
     return span;
 }

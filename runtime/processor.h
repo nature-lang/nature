@@ -145,6 +145,7 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
 
     // waiting -> syscall
     co_set_status(p, co, CO_STATUS_SYSCALL);
+    DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
 // locker
@@ -209,9 +210,9 @@ void coroutine_dispatch(coroutine_t *co);
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
 
-void pre_tpl_hook(char *target);
+__attribute__((optimize(0))) void pre_tpl_hook(char *target);
 
-void post_tpl_hook(char *target);
+__attribute__((optimize(0))) void post_tpl_hook(char *target);
 
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
