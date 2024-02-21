@@ -40,10 +40,16 @@ void shade_obj_grey(void *obj) {
 
     processor_t *p = processor_get();
 
-    // TODO 如果当前 processor 的 gc_work 已经完成，则需要将 obj 插入到全局工作队列中, 但是这里竟然从来没有触发过
+    // TODO gc_work_finished 完成间隙，此时新产生的 obj 也应该插入到 global 中，等等 stw 时统一处理
+    // 神奇的是现在竟然一次都没有触发这种情况，所以这里使用 assert 断言等待该情况出现后再新增 if 条件处理
     assert(p->gc_work_finished < memory->gc_count && "gc work finished, cannot insert to gc worklist");
-
-    insert_gc_worklist(&p->gc_worklist, obj);
+    if (p->share) {
+        // 不需要加锁，solo processor 此时不再往当前 worklist 中写入 obj
+        insert_gc_worklist(&p->gc_worklist, obj);
+    } else {
+        // solo to global worklist
+        insert_gc_worklist(&global_gc_worklist, obj);
+    }
 }
 
 /**
@@ -141,14 +147,13 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            TDEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *)(span->base + i * span->obj_size));
-
+            RDEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *)(span->base + i * span->obj_size));
             // TODO 直接 set 0 让 gc 问题快速暴露出来
             memset((void *)(span->base + i * span->obj_size), 0, span->obj_size);
         }
     }
 
-    RDEBUGF("[sweep_span] current alloc_count=%d, obj_count=%lu, span=%p, base=%p, spc=%d", alloc_count, span->obj_count, span,
+    TDEBUGF("[sweep_span] current alloc_count=%d, obj_count=%lu, span=%p, base=%p, spc=%d", alloc_count, span->obj_count, span,
             (void *)span->base, span->spanclass)
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
@@ -251,14 +256,28 @@ void mcentral_sweep(mheap_t *mheap) {
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
-    DEBUGF("[runtime_gc.scan_stack] start, p_index_%d=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, scan_ret_addr=%p",
-           p->share, p->index, co, co->aco.save_stack.valid_sz, co->aco.save_stack.ptr, co->aco.save_stack.sz, co->scan_offset,
-           (void *)co->scan_ret_addr);
+    TDEBUGF(
+        "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
+        "scan_ret_addr=%p",
+        p->share, p->index, (uint64_t)p->thread_id, p->status, co, co->aco.save_stack.valid_sz, co->aco.save_stack.ptr,
+        co->aco.save_stack.sz, co->scan_offset, (void *)co->scan_ret_addr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(in_heap((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not in heap");
     assert(span_of((addr_t)co->aco.save_stack.ptr) && "coroutine save stack not found span");
-    insert_gc_worklist(&p->gc_worklist, co->aco.save_stack.ptr);
+
+    assert(p->gc_work_finished < memory->gc_count && "gc work finished, cannot insert to gc worklist");
+
+    // solo processor 的 gc_worklist 无法使用，需要使用 share processor 进行辅助
+    rt_linked_t *worklist = &p->gc_worklist;
+    if (!p->share) {
+        int assist_p_index = p->index % cpu_count;
+        processor_t *assist_p = share_processor_index[assist_p_index];
+        assert(assist_p);
+        worklist = &assist_p->gc_worklist;
+    }
+
+    insert_gc_worklist(worklist, co->aco.save_stack.ptr);
 
     if (co->gc_work) {
         DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
@@ -315,11 +334,12 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
             // 即使在 head 也可能是一个已经被回收的地址，所以需要 in_heap + span_of 双重判断
             addr_t value = fetch_addr_value(cursor);
             if (in_heap(value) && span_of(value)) {
-                insert_gc_worklist(&p->gc_worklist, (void *)value);
+                insert_gc_worklist(worklist, (void *)value);
+
                 scan_ptr_count++;
             } else {
-                DEBUGF("[runtime_gc.scan_stack] conservative scan skip, cursor=%p, value=%p, in_heap=%d, span_of=%p", (void *)cursor,
-                       (void *)value, in_heap(value), span_of(value));
+                TDEBUGF("[runtime_gc.scan_stack] conservative scan skip, cursor=%p, value=%p, in_heap=%d, span_of=%p", (void *)cursor,
+                        (void *)value, in_heap(value), span_of(value));
             }
 
             cursor += POINTER_SIZE;
@@ -356,12 +376,12 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
-                addr_t ptr = fetch_addr_value(frame_cursor);
-                if (in_heap(ptr) && span_of(ptr)) {
-                    insert_gc_worklist(&p->gc_worklist, (void *)ptr);
+                addr_t value = fetch_addr_value(frame_cursor);
+                if (in_heap(value) && span_of(value)) {
+                    insert_gc_worklist(worklist, (void *)value);
                 } else {
-                    DEBUGF("[runtime_gc.scan_stack] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)frame_cursor, (void *)ptr,
-                           in_heap(ptr), span_of(ptr));
+                    TDEBUGF("[runtime_gc.scan_stack] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)frame_cursor, (void *)value,
+                            in_heap(value), span_of(value));
                 }
             }
 
@@ -375,11 +395,18 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         cursor = frame_cursor + POINTER_SIZE + POINTER_SIZE;
     }
 
-    DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p, scan_fn_count=%d", p->index, co, scan_fn_count);
+    TDEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p, scan_fn_count=%d", p->index, co, scan_fn_count);
 }
 
-static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
+/**
+ * global=true 时，需要讲新产生的指针插入到全局队列处理，也可以通过 gc_work_finished 判断
+ * @param addr
+ * @param global
+ */
+static void handle_gc_ptr(addr_t addr) {
     RDEBUGF("[handle_gc_ptr] start, addr=%p", (void *)addr);
+
+    processor_t *p = processor_get();
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
@@ -433,17 +460,24 @@ static void handle_gc_ptr(rt_linked_t *worklist, addr_t addr) {
         bool is_ptr = bitmap_test(arena->bits, bit_index);
         if (is_ptr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
-            addr_t heap_addr = fetch_addr_value(temp_addr);
+            addr_t value = fetch_addr_value(temp_addr);
 
             TRACEF("[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d", (void *)addr,
-                   (void *)temp_addr, (void *)heap_addr, span->obj_size, bit_index, in_heap(heap_addr));
+                   (void *)temp_addr, (void *)value, span->obj_size, bit_index, in_heap(value));
 
-            if (in_heap(heap_addr) && span_of(heap_addr)) {
+            if (in_heap(value) && span_of(value)) {
                 // assert(span_of(heap_addr) && "heap_addr not belong active span");
-                insert_gc_worklist(worklist, (void *)heap_addr);
+
+                if (p->gc_work_finished == memory->gc_count) {
+                    // p 已经不再处理 gc work, 所以插入到 global work 中处理，当前是 mark done stw 阶段
+                    insert_gc_worklist(&global_gc_worklist, (void *)value);
+                } else {
+                    // 不需要加锁，solo scan stack 需要在 stw 完成， solo shade obj 则写入到全局队列中
+                    insert_gc_worklist(&p->gc_worklist, (void *)value);
+                }
             } else {
-                DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)temp_addr, (void *)heap_addr,
-                       in_heap(heap_addr), span_of(heap_addr));
+                TDEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)temp_addr, (void *)value, in_heap(value),
+                        span_of(value));
             }
         }
     }
@@ -475,7 +509,7 @@ static void handle_gc_worklist(processor_t *p) {
         addr_t addr = (addr_t)rt_linked_pop(&p->gc_worklist);
 
         // handle 的同时会进一步 push
-        handle_gc_ptr(&p->gc_worklist, addr);
+        handle_gc_ptr(addr);
 
         limit_count++;
     }
@@ -535,55 +569,6 @@ static void gc_work() {
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle gc work list completed, will yield", share_p->share, share_p->index);
     co_yield_runnable(share_p, co);
 
-    // yield 期间可能新创建了一批 solo processor
-    // - handle match solo gc worklist
-    DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, will assist handle solo processor gc work list, solo count=%d, cpu_count=%d",
-           share_p->share, share_p->index, solo_processor_count, cpu_count);
-
-    // 不加 solo 锁，主要是通过 gc_worklist 判断, 如果放在了 share 里面，这里压根就没必要存在了！？
-    PROCESSOR_FOR(solo_processor_list) {
-        if (p->status == P_STATUS_EXIT) {
-            TDEBUGF("[runtime_gc.gc_work] handle_gc_worklist assist solo_p_index_%d=%d status=exit, will continue", p->share, p->index);
-            continue;
-        }
-
-        int solo_index = p->index;
-
-        // solo 匹配对应的 share 进行 gc 处理
-        int rem = solo_index % cpu_count;
-        if (rem != share_p->index) {
-            DEBUGF("[runtime_gc.gc_work] assist solo_p_index_%d=%d not need share_p=%d handle", p->share, p->index, share_p->index);
-            continue;
-        }
-
-        if (p->gc_worklist.count == 0) {
-            DEBUGF("[runtime_gc.gc_work] assist solo_p_index_%d=%d gc worklist count=0, will continue", p->share, p->index);
-            continue;
-        }
-
-        TDEBUGF("[runtime_gc.gc_work] share_p_index=%d assist solo_p_index=%d(%lu) will handle gc work list", share_p->index, p->index,
-                (uint64_t)p->thread_id);
-
-        // 加锁可以阻塞写屏障，避免处理期间写屏障插值
-        // 获取 solo processor 锁，避免遍历期间 solo processor 出现了释放
-        // TODO 多个 share 在 handle solo gc worklist 会阻塞, 要不还是别放在这里了。直接丢到 share_processor 中！
-        mutex_lock(&solo_processor_locker);
-        mutex_lock(&p->thread_locker);
-
-        // 获取锁期间可能 processor 的状态发生了变更
-        if (p->status == P_STATUS_EXIT) {
-            mutex_unlock(&p->thread_locker);
-            TDEBUGF("[runtime_gc.gc_work] handle_gc_worklist share_p_index=%d, assist solo_p_index=%d status=exit, unlock and continue",
-                    share_p->index, p->index);
-            continue;
-        }
-
-        handle_gc_worklist(p);
-        p->gc_work_finished = memory->gc_count;
-        mutex_unlock(&p->thread_locker);
-        mutex_unlock(&solo_processor_locker);
-    }
-
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit", share_p->share, share_p->index);
     share_p->gc_work_finished = memory->gc_count;
 }
@@ -592,7 +577,7 @@ static void gc_work() {
  * 需要在 stw 期间调用，扫描所有的 solo_stack
  */
 static void scan_solo_stack() {
-    RDEBUGF("[runtime_gc.scan_solo_stack] start");
+    TDEBUGF("[runtime_gc.scan_solo_stack] start");
     mutex_lock(&solo_processor_locker);
 
     PROCESSOR_FOR(solo_processor_list) {
@@ -620,7 +605,7 @@ static void scan_solo_stack() {
         scan_stack(p, solo_co);
     }
     mutex_unlock(&solo_processor_locker);
-    RDEBUGF("[runtime_gc.scan_solo_stack] completed");
+    TDEBUGF("[runtime_gc.scan_solo_stack] completed");
 }
 
 /**
@@ -679,7 +664,7 @@ static void scan_global() {
  * 处理剩余的 global gc worklist, 当前已经在 STW 了
  */
 static void gc_mark_done() {
-    RDEBUGF("[runtime_gc.gc_mark_done] start");
+    TDEBUGF("[runtime_gc.gc_mark_done] start");
 
     // - handle work list
     while (true) {
@@ -688,10 +673,10 @@ static void gc_mark_done() {
             break;
         }
         RDEBUGF("[runtime_gc.gc_mark_done] item addr=0x%lx", addr);
-        handle_gc_ptr(&global_gc_worklist, addr);
+        handle_gc_ptr(addr);
     }
 
-    RDEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield");
+    TDEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield");
 }
 
 /**
@@ -709,12 +694,12 @@ void runtime_gc() {
     processor_all_stop_the_world();
     processor_all_wait_safe();
 
-    RDEBUGF("[runtime_gc] wait all processor safe");
+    TDEBUGF("[runtime_gc] wait all processor safe");
 
     // 开启写屏障
     gc_barrier_start();
 
-    RDEBUGF("[runtime_gc] barrier start");
+    TDEBUGF("[runtime_gc] barrier start");
 
     // 注入 GC 工作协程, gc_worklist 用来检测状态判断 gc work 是否全部完成
     inject_gc_work_coroutine();
@@ -722,12 +707,12 @@ void runtime_gc() {
     // 扫描 solo processor stack (stw)
     scan_solo_stack();
 
-    RDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
+    TDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
-    RDEBUGF("[runtime_gc] gc stage: GC_MARK");
+    TDEBUGF("[runtime_gc] gc stage: GC_MARK");
 
     // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中
     scan_global();
@@ -736,15 +721,15 @@ void runtime_gc() {
     wait_all_gc_work_finished();
 
     // STW 之后再更改 GC 阶段
-    RDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
+    TDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
     processor_all_stop_the_world();
     processor_all_wait_safe();
-    RDEBUGF("[runtime_gc] all processor safe");
+    TDEBUGF("[runtime_gc] all processor safe");
     // -------------- STW start ----------------------------
 
     // - gc stage: GC_MARK_DONE
     gc_stage = GC_STAGE_MARK_DONE;
-    RDEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
+    TDEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
 
     // mark 完成期间还会存在新的 mutator barrier 产生的指针推送到 worklist 中
     // 所以必须等 STW 后进行最后的收尾
@@ -752,17 +737,17 @@ void runtime_gc() {
 
     // - gc stage: GC_SWEEP
     gc_stage = GC_STAGE_SWEEP;
-    RDEBUGF("[runtime_gc] gc stage: GC_SWEEP");
+    TDEBUGF("[runtime_gc] gc stage: GC_SWEEP");
 
     // gc 清理
     flush_mcache();
-    RDEBUGF("[runtime_gc] gc flush mcache completed");
+    TDEBUGF("[runtime_gc] gc flush mcache completed");
 
     mcentral_sweep(memory->mheap);
-    RDEBUGF("[runtime_gc] mcentral_sweep completed");
+    TDEBUGF("[runtime_gc] mcentral_sweep completed");
     // 更新 gcbits
     gcbits_arenas_epoch();
-    RDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
+    TDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
 
     gc_barrier_stop();
     processor_all_start_the_world();

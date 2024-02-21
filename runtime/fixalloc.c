@@ -37,7 +37,7 @@ void *fixalloc_alloc(fixalloc_t *f) {
         f->inuse += f->size;
         memset(v, 0, f->size);
 
-        TDEBUGF("[fixalloc_alloc] f v=%p", v);
+        DEBUGF("[fixalloc_alloc] f v=%p", v);
         return v;
     }
 
@@ -53,12 +53,12 @@ void *fixalloc_alloc(fixalloc_t *f) {
     f->inuse += f->size;
 
     memset(v, 0, f->size);
-    TDEBUGF("[fixalloc_alloc] n v=%p", v);
+    DEBUGF("[fixalloc_alloc] n v=%p", v);
     return v;
 }
 
 void fixalloc_free(fixalloc_t *f, void *p) {
-    TDEBUGF("[fixalloc_free] f=%p,v=%p", f, p);
+    DEBUGF("[fixalloc_free] f=%p,v=%p", f, p);
     f->inuse -= f->size;
 
     // TODO 清空 p 中的数据，避免存在错误引用而没有报错出来, 正式环境用不上

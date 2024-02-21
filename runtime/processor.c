@@ -479,9 +479,12 @@ void processor_init() {
 
     for (int i = 0; i < cpu_count; ++i) {
         processor_t *p = processor_new(i);
+        // 仅 share processor 需要 gc worklist
         p->share = true;
+        rt_linked_init(&p->gc_worklist, NULL, NULL);
+        p->gc_work_finished = memory->gc_count;
         share_processor_index[p->index] = p;
-       
+
         RT_LIST_PUSH_HEAD(share_processor_list, p);
 
         // 创建一个新的线程用来处理
@@ -648,8 +651,6 @@ processor_t *processor_new(int index) {
     p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
     rt_linked_init(&p->co_list, NULL, NULL);
     rt_linked_init(&p->runnable_list, NULL, NULL);
-    rt_linked_init(&p->gc_worklist, NULL, NULL);
-    p->gc_work_finished = memory->gc_count;
     p->index = index;
     p->next = NULL;
 
