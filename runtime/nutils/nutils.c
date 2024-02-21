@@ -134,19 +134,19 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
 
-    DEBUGF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
+    TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = rt_clr_malloc(sizeof(n_union_t), union_rtype);
 
-    DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p", mu, value_ref,
+    TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p", mu, value_ref,
            &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *)fetch_addr_value((addr_t)value_ref));
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
-    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype, mu->value.i64_value);
+    TRACEF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype, mu->value.i64_value);
 
     return mu;
 }
@@ -367,7 +367,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     assert(data_ref && "data_ref is null");
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
 
-    DEBUGF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref, data_size);
+    TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref, data_size);
 
     if (is_number(rtype->kind)) {
         assert(data_size <= 8 && "not support number size > 8");
@@ -530,13 +530,13 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
 
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    DEBUGF("[rt_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
+    TRACEF("[rt_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
 
     char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
 
     uint32_t hash = hash_string(str);
 
-    DEBUGF("[rt_rtype_array] str=%s, hash=%d", str, hash);
+    TRACEF("[rt_rtype_array] str=%s, hash=%d", str, hash);
 
     assert(hash > 0);
 
@@ -558,6 +558,6 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
         }
     }
 
-    DEBUGF("[rt_rtype_array] success");
+    TRACEF("[rt_rtype_array] success");
     return rtype;
 }

@@ -4,7 +4,7 @@
 
 #include "sysmon.h"
 
-#define CO_TIMEOUT (5 * 1000 * 1000)
+#define CO_TIMEOUT (10 * 1000 * 1000) // 10ms
 
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
@@ -40,8 +40,8 @@ void wait_sysmon() {
                 continue;
             }
 
-            TRACEF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000, p->share, p->index,
-                   (uint64_t)p->thread_id);
+            RDEBUGF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000, p->share, p->index,
+                    (uint64_t)p->thread_id);
 
             // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
             // 但是可以从 not -> can
@@ -52,7 +52,7 @@ void wait_sysmon() {
             }
 
             // yield/exit 首先就设置 can_preempt = false, 这里就无法完成。所以 p->coroutine 一旦设置就无法被清空或者切换
-            TRACEF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
+            RDEBUGF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
 
             // 判断当前是否是可抢占状态
             if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
@@ -86,7 +86,8 @@ void wait_sysmon() {
             }
 
             // 基于协作的原则，还是不进行强制抢占，还是使用 deadlock 进行提醒，时间可以设置久一点，500ms
-            for (int i = 0; i <= 500; i++) {
+            // TODO cpu 繁忙时的超时问题处理
+            for (int i = 0; i <= 1000; i++) {
                 if (p->status == P_STATUS_RUNNING) {
                     break;
                 }
@@ -102,7 +103,7 @@ void wait_sysmon() {
 
             // syscall 超时
             if (p->status == P_STATUS_SYSCALL) {
-                assert(false && "deadlock: syscall run timeout");
+                assertf(false, "deadlock: syscall run timeout, p_index=%d(%lu), co=%p", p->index, (uint64_t)p->thread_id, p->coroutine);
             }
 
             // 开始抢占
@@ -156,7 +157,7 @@ void wait_sysmon() {
             // solo processor 仅需要 stw 的时候进行抢占, 由于锁定了 solo_processor_locker, 所以其他线程此时
             // 无法对 p->need_stw 进行解锁。
             if (p->need_stw == 0) {
-                RDEBUGF("[wait_sysmon.solo] processor_index=%d, current not need stw, will skip", p->index);
+                TRACEF("[wait_sysmon.solo] processor_index=%d, current not need stw, will skip", p->index);
 
                 prev = p;
                 p = p->next;
@@ -300,6 +301,7 @@ void wait_sysmon() {
 
         gc_eval_count--;
 
+        // 每 5ms 进行一次 gc 验证
         usleep(WAIT_BRIEF_TIME * 5 * 1000); // 5ms
     }
 

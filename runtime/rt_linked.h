@@ -51,12 +51,16 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
     assert(l);
+    assert(l->nodealloc_locker);
+
+    // 创建一个新的 empty 节点
     pthread_mutex_lock(l->nodealloc_locker);
     rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
     pthread_mutex_unlock(l->nodealloc_locker);
 
     empty->prev = l->rear;
 
+    // 尾部插入，然后选择一个新的空白节点
     l->rear->value = value;
     l->rear->succ = empty;
 
@@ -70,8 +74,12 @@ static inline void *rt_linked_pop(rt_linked_t *l) {
         return NULL; // null 表示队列为空
     }
 
+    assertf(l->front, "l=%p front is null", l);
     rt_linked_node_t *node = l->front; // 推出头部节点
     void *value = node->value;
+
+    // 至少是一个 empty 节点而不是  null
+    assertf(node->succ, "l=%p node=%p succ is null", l, node);
 
     l->front = node->succ;
     l->front->prev = NULL;

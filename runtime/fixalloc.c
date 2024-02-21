@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <uv.h>
 
 #include "utils/helper.h"
 
@@ -26,12 +27,17 @@ void fixalloc_init(fixalloc_t *f, uintptr_t fix_size) {
 void *fixalloc_alloc(fixalloc_t *f) {
     assert(f->size > 0 && "fixalloc_alloc: uninitialized");
 
+    // TODO free_list 避免为脏地址, < 1000T
+    assert((uint64_t)f->free_list < (uint64_t)1000 * 1024 * 1024 * 1024 * 1024);
+
     // free list 主要是由 free 释放的 obj
     if (f->free_list != NULL) {
         void *v = f->free_list;
         f->free_list = f->free_list->next;
         f->inuse += f->size;
         memset(v, 0, f->size);
+
+        TDEBUGF("[fixalloc_alloc] f v=%p", v);
         return v;
     }
 
@@ -47,11 +53,16 @@ void *fixalloc_alloc(fixalloc_t *f) {
     f->inuse += f->size;
 
     memset(v, 0, f->size);
+    TDEBUGF("[fixalloc_alloc] n v=%p", v);
     return v;
 }
 
 void fixalloc_free(fixalloc_t *f, void *p) {
+    TDEBUGF("[fixalloc_free] f=%p,v=%p", f, p);
     f->inuse -= f->size;
+
+    // TODO 清空 p 中的数据，避免存在错误引用而没有报错出来, 正式环境用不上
+    memset(p, 0, f->size);
 
     // 直接改变指针结构，将 v 存放在 free_list 头部
     fixalloc_link_t *v = p;

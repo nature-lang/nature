@@ -14,9 +14,9 @@ static char *space = " ";
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(n_union_t *arg) {
     assert(arg && "[runtime.print_arg] arg is null");
-    DEBUGF("[runtime.print_arg] arg addr=%p", arg);
+    TRACEF("[runtime.print_arg] arg addr=%p", arg);
     assert(arg->rtype && "[runtime.print_arg] arg->rtype is null");
-    DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
+    TRACEF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // memory_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -28,7 +28,7 @@ static void print_arg(n_union_t *arg) {
             return;
         }
 
-        DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
+        TRACEF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
         VOID write(STDOUT_FILENO, s->data, s->length);
         return;
     }

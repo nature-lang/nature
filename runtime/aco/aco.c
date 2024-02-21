@@ -250,7 +250,8 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     p->real_ptr = mmap((void *)0x4000000000, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert(p->real_ptr != MAP_FAILED);
     p->guard_page_enabled = 1;
-    assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
+    mprotect(p->real_ptr, u_pgsz, PROT_READ);
+//    assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
 
     p->ptr = (void *)(((uintptr_t)p->real_ptr) + u_pgsz);
     p->real_sz = sz;

@@ -29,8 +29,7 @@ void vec_grow(n_vec_t *vec) {
  * @return
  */
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
-    DEBUGF("[runtime.vec_new] rtype_hash=%lu, element_hash=%lu, length=%lu, capacity=%lu", rtype_hash, element_rtype_hash, length,
-           capacity);
+    DEBUGF("[vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", rtype_hash, element_rtype_hash, length, capacity);
 
     assertf(rtype_hash > 0, "rtype_hash must be a valid hash");
     assertf(element_rtype_hash > 0, "element_rtype_hash must be a valid hash");
@@ -44,7 +43,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     }
 
     assert(capacity >= length && "capacity must be greater than length");
-    DEBUGF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
+    TRACEF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
@@ -62,7 +61,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
+    TRACEF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
     return vec;
 }
 
@@ -124,7 +123,14 @@ void *vec_ref(n_vec_t *l) {
  */
 void vec_push(n_vec_t *vec, void *ref) {
     assert(ref > 0 && "ref must be a valid address");
-    assertf(vec->element_rtype_hash > 0, "vec=%p element_rtype_hash=%lu must be a valid hash", vec, vec->element_rtype_hash);
+
+    // TODO debug 验证 gc 问题
+    if (span_of((addr_t)vec) == NULL || vec->element_rtype_hash <= 0) {
+        processor_t *p = processor_get();
+        coroutine_t *co = coroutine_get();
+        assertf(false, "vec_push failed, p_index_%d=%d(%lu), p_status=%d, co=%p vec=%p ele_rtype_hash=%lu must be a valid hash", p->share,
+                p->index, (uint64_t)p->thread_id, p->status, co, vec, vec->element_rtype_hash);
+    }
 
     DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data, vec->length, ref,
            (uint64_t)fetch_int_value((addr_t)ref, 8));
@@ -205,7 +211,7 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 }
 
 n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
-    DEBUGF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
+    TRACEF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_element_addr] has err %s", msg);

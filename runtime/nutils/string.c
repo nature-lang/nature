@@ -10,7 +10,7 @@
  * @return
  */
 n_string_t *string_new(void *raw_string, uint64_t length) {
-    DEBUGF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
+    TRACEF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
 
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
@@ -24,7 +24,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
 
     assert(element_rtype->hash > 0);
 
-    DEBUGF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
+    TRACEF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
     n_string_t *str = rt_clr_malloc(string_rtype->size, string_rtype);
     str->data = data;
     str->length = length;
@@ -32,7 +32,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     str->element_rtype_hash = element_rtype->hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
+    TRACEF("[string_new] success, string=%p, data=%p", str, str->data);
     return str;
 }
 

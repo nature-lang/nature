@@ -9,6 +9,7 @@
 #include "runtime.h"
 
 extern int cpu_count;
+extern processor_t *share_processor_index[1024];
 extern processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern processor_t *solo_processor_list;  // 独享协程列表其实就是多线程
 extern mutex_t solo_processor_locker;     // 删除 solo processor 需要先获取该锁

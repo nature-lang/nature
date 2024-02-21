@@ -19,7 +19,7 @@ fn car() {
     a[128] = 128
     a[500] = 128
 
-    println('will usleep 20ms')
+    //println('will usleep 20ms')
     // usleep(10 as u32 * 1000)
 
     var b = 'hello world nice'

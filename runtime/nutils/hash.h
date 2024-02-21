@@ -67,7 +67,7 @@ static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, u
     // - 计算 hash
     rtype_t *key_rtype = rt_find_rtype(key_rtype_hash);
     assert(key_rtype && "cannot find rtype by hash");
-    DEBUGF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind]);
+    TRACEF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind]);
 
     uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
     uint64_t hash = key_hash(key_rtype, key_ref);
@@ -81,7 +81,7 @@ static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, u
     while (true) {
         uint64_t hash_value = hash_table[hash_index];
         uint64_t key_index = extract_data_index(hash_value);
-        DEBUGF("[find_hash_slot] key_data=%p, key_size=%ld, hash_index=%lu, hash_value=%lu, key_index=%lu", key_data, key_size, hash_index,
+        TRACEF("[find_hash_slot] key_data=%p, key_size=%ld, hash_index=%lu, hash_value=%lu, key_index=%lu", key_data, key_size, hash_index,
                hash_value, key_index);
 
         // 遇到了 empty 表示当前 key 是第一次插入到 hash 表，此时应该是插入到第一个遇到的 empty 或者 deleted slot
@@ -97,7 +97,7 @@ static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, u
         // key equal 的 slot 是最高优先且绝对正确的 slot
         void *actual_key_ref = key_data + key_index * key_size;
 
-        DEBUGF("[find_hash_slot] key_rtype=%s, actual_key_ref=%p, key_ref=%p", type_kind_str[key_rtype->kind], actual_key_ref, key_ref);
+        TRACEF("[find_hash_slot] key_rtype=%s, actual_key_ref=%p, key_ref=%p", type_kind_str[key_rtype->kind], actual_key_ref, key_ref);
         if (key_equal(key_rtype, actual_key_ref, key_ref)) {
             return hash_index;
         }

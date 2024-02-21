@@ -14,7 +14,7 @@ void gcbits_areas_init() {
 }
 
 gc_bits* gcbits_new(uintptr_t bytes_size) {
-    DEBUGF("[gcbits_new] bytes_size=%ld", bytes_size);
+    TRACEF("[gcbits_new] bytes_size=%ld", bytes_size);
     uintptr_t blocks_needed = (bytes_size + 63) / 64;
     uintptr_t bytes_needed = blocks_needed * 8;
 
@@ -22,7 +22,7 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
     if (p != NULL) {
         return p;
     }
-    DEBUGF("[gcbits_new] try alloc failed, bytes_needed=%ld", bytes_needed);
+    TRACEF("[gcbits_new] try alloc failed, bytes_needed=%ld", bytes_needed);
 
     pthread_mutex_lock(&gc_bits_arenas.locker);
 
@@ -33,7 +33,7 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
         return p;
     }
 
-    DEBUGF("[gcbits_new] try alloc second failed, bytes_needed=%ld", bytes_needed);
+    TRACEF("[gcbits_new] try alloc second failed, bytes_needed=%ld", bytes_needed);
 
     gc_bits_arena_t* fresh = gcbits_arena_new();
 
@@ -48,7 +48,7 @@ gc_bits* gcbits_new(uintptr_t bytes_size) {
         return p;
     }
 
-    RDEBUGF("[gcbits_new] try alloc third failed, bytes_needed=%ld", bytes_needed);
+    TRACEF("[gcbits_new] try alloc third failed, bytes_needed=%ld", bytes_needed);
 
     p = gcbits_try_alloc(fresh, bytes_needed);
     assert(p && "gcbits_new: failed to alloc");
@@ -68,7 +68,7 @@ gc_bits* gcbits_try_alloc(gc_bits_arena_t* arena, uintptr_t bytes_size) {
         return NULL;
     }
 
-    DEBUGF("[gcbits_try_alloc] arena=%p, free_index=%ld, bytes_size=%ld", arena, arena->free_index, bytes_size);
+    TRACEF("[gcbits_try_alloc] arena=%p, free_index=%ld, bytes_size=%ld", arena, arena->free_index, bytes_size);
 
     if (arena->free_index + bytes_size > GCBITS_CHUNK_PAYLOAD_BYTES) {
         return NULL;

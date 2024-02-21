@@ -90,13 +90,22 @@ static inline uint64_t arena_index(uint64_t base) {
     return (base - ARENA_BASE_OFFSET) / ARENA_SIZE;
 }
 
+static inline bool in_heap(addr_t addr) {
+    return addr >= ARENA_HINT_BASE && addr < memory->mheap->current_arena.end;
+}
+
 /**
  * 根据内存地址找到响应的 arena
- * @param base
+ * @param addr
  * @return
  */
-static inline arena_t *take_arena(addr_t base) {
-    arena_t *arena = memory->mheap->arenas[arena_index(base)];
+static inline arena_t *take_arena(addr_t addr) {
+    if (!in_heap(addr)) {
+        return NULL;
+    }
+
+    uint64_t index = arena_index(addr);
+    arena_t *arena = memory->mheap->arenas[index];
     return arena;
 }
 
@@ -104,10 +113,6 @@ static inline uint64_t arena_bits_index(arena_t *arena, addr_t addr) {
     uint64_t ptr_count = (addr - arena->base) / POINTER_SIZE;
     uint64_t bit_index = (ptr_count / 4) * 8 + (ptr_count % 4);
     return bit_index;
-}
-
-static inline bool in_heap(addr_t addr) {
-    return addr >= ARENA_HINT_BASE && addr < memory->mheap->current_arena.end;
 }
 
 static inline addr_t safe_heap_addr(addr_t addr) {
