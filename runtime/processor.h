@@ -35,38 +35,6 @@ __attribute__((optimize(0))) void co_preempt_yield();
 
 #define PROCESSOR_FOR(list) for (processor_t *p = list; p; p = p->next)
 
-static inline void processor_set_status(processor_t *p, p_status_t status) {
-    assert(p);
-    assert(p->status != status);
-
-    // 特殊放通处理, share syscall -> running
-    if (p->share && p->status == P_STATUS_SYSCALL && status == P_STATUS_RUNNING) {
-        p->status = status;
-        return;
-    }
-
-    // 必须先获取 thread_locker 在获取 gc_stw_locker
-    mutex_lock(&p->thread_locker);
-
-    // 特殊处理 2， solo 切换成 running 时需要获取 gc_stw_locker, 如果 gc_stw_locker 阻塞说明当前正在 stw
-    // 不允许切换到 running 状态
-    if (!p->share && status == P_STATUS_RUNNING) {
-        mutex_lock(&p->gc_stw_locker);
-    }
-
-    p->status = status;
-
-    if (!p->share && status == P_STATUS_RUNNING) {
-        mutex_unlock(&p->gc_stw_locker);
-    }
-
-    mutex_unlock(&p->thread_locker);
-
-    if (status == P_STATUS_RUNNING) {
-        p->co_started_at = uv_hrtime();
-    }
-}
-
 static inline bool processor_safe(processor_t *p) {
     return p->need_stw > 0 && p->need_stw == p->safe_point;
 }
@@ -78,31 +46,6 @@ static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t st
     // solo processor 在 stw 期间禁止切换 co 的状态
     co->status = status;
 }
-/**
- * 设置为可以抢占没有什么竞态关系，直接可以抢占
- * @param p
- */
-// static inline void enable_preempt(processor_t *p) {
-//     p->can_preempt = true;
-// }
-
-/**
- * 调用者希望设置为不可抢占后再进行后续的工作，如果已经是不可抢占状态则直接返回，所以当前函数可以重入
- * 由于 sysmon 会持有锁的情况下，等待 preempt = true, 所以如果当前 p.preempt = true 想要更新为 false 时，必须要抢到锁
- * 避免在 sysmon 抢占期间，更新 preempt = false 导致抢占异常
- * @param p
- */
-// static inline void disable_preempt(processor_t *p) {
-//     if (p->can_preempt == false) {
-//         return;
-//     }
-//
-//     assert(p->can_preempt == true);
-//     // 如果 sysmon 持有了锁，则 mutex_lock 会阻塞，此时可以进行安全的抢占
-//     mutex_lock(&p->thread_locker);
-//     p->can_preempt = false;
-//     mutex_unlock(&p->thread_locker);
-// }
 
 /**
  * yield 统一入口, 避免直接调用 aco_yield
@@ -130,7 +73,7 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
     _co_yield(p, co);
 
     // runnable -> syscall
-    co_set_status(p, co, CO_STATUS_SYSCALL);
+    co_set_status(p, co, CO_STATUS_TPLCALL);
     DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
@@ -145,7 +88,7 @@ static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
     _co_yield(p, co);
 
     // waiting -> syscall
-    co_set_status(p, co, CO_STATUS_SYSCALL);
+    co_set_status(p, co, CO_STATUS_TPLCALL);
     DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co, co->status);
 }
 
@@ -211,9 +154,11 @@ void coroutine_dispatch(coroutine_t *co);
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
 
-__attribute__((optimize(0))) void pre_tpl_hook(char *target);
+__attribute__((optimize(0))) void pre_tplcall_hook(char *target);
 
-__attribute__((optimize(0))) void post_tpl_hook(char *target);
+__attribute__((optimize(0))) void post_tplcall_hook(char *target);
+
+__attribute__((optimize(0))) void post_rtcall_hook(char *target);
 
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 

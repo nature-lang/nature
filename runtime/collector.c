@@ -48,7 +48,9 @@ void shade_obj_grey(void *obj) {
         insert_gc_worklist(&p->gc_worklist, obj);
     } else {
         // solo to global worklist
+        mutex_lock(&global_gc_locker);
         insert_gc_worklist(&global_gc_worklist, obj);
+        mutex_unlock(&global_gc_locker);
     }
 }
 
@@ -109,19 +111,11 @@ static void flush_mcache() {
     DEBUGF("gc flush mcache successful");
 }
 
-void mark_obj_black_with_lock(mspan_t *span, uint64_t index) {
-    mutex_lock(&span->gcmark_locker);
-    bitmap_set(span->gcmark_bits, index);
-    mutex_unlock(&span->gcmark_locker);
-}
-
 // safe
 static void free_mspan_meta(mspan_t *span) {
     span->next = NULL;
     span->base = 0;
-    mutex_lock(memory->locker);
     fixalloc_free(&memory->mheap->spanalloc, span);
-    mutex_unlock(memory->locker);
 }
 
 /**
@@ -189,10 +183,15 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
  * - sweep 时 arena_t 的 bits 是否需要更新？
  *   空闲的 obj 进行 alloc 时一定会进行 set bits, 所以所有忙碌的 obj 的 bits 一定是有效的。
  *   空闲的 obj 的 bits 即使是脏的，三色标记时也一定无法标记到该 obj, 因为其不在引用链中
+ *
+ *   当前处于 stw，唯一可能操作 central 的就是 wait_sysmon 的 processor_free, 由于前面已经全量 uncache 过了
+ *   所以此时也不再有新的 processor free uncache 了，所以不需要再加 central 锁, memory 锁也有点多余，这里加上做个保险
  * @param mheap
  */
 void mcentral_sweep(mheap_t *mheap) {
     RDEBUGF("[mcentral_sweep] start");
+    mutex_lock(&memory->locker);
+
     mcentral_t *centrals = mheap->centrals;
     for (int i = 0; i < SPANCLASS_COUNT; ++i) {
         mcentral_t *central = &centrals[i];
@@ -248,6 +247,7 @@ void mcentral_sweep(mheap_t *mheap) {
         }
     }
 
+    mutex_unlock(&memory->locker);
     RDEBUGF("[mcentral_sweep] start");
 }
 
@@ -371,8 +371,8 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         uint64_t ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            TRACEF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, value=%p", fn->name, i, is_ptr,
-                   (void *)fetch_int_value(frame_cursor, 8));
+            TDEBUGF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, may_value=%p", fn->name, i, is_ptr,
+                    (void *)fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -470,7 +470,10 @@ static void handle_gc_ptr(addr_t addr) {
 
                 if (p->gc_work_finished == memory->gc_count) {
                     // p 已经不再处理 gc work, 所以插入到 global work 中处理，当前是 mark done stw 阶段
+                    // 即使不加锁也是安全的
+                    mutex_lock(&global_gc_locker);
                     insert_gc_worklist(&global_gc_worklist, (void *)value);
+                    mutex_unlock(&global_gc_locker);
                 } else {
                     // 不需要加锁，solo scan stack 需要在 stw 完成， solo shade obj 则写入到全局队列中
                     insert_gc_worklist(&p->gc_worklist, (void *)value);
@@ -518,7 +521,7 @@ static void handle_gc_worklist(processor_t *p) {
 }
 
 /**
- * 由于不经过 pre/post_tpl_hook 所以需要手动管理一下 gc 状态
+ * 由于不经过 pre/post_tplcall_hook 所以需要手动管理一下 gc 状态
  */
 static void gc_work() {
     processor_t *share_p = processor_get();
@@ -672,11 +675,11 @@ static void gc_mark_done() {
         if (!addr) {
             break;
         }
-        RDEBUGF("[runtime_gc.gc_mark_done] item addr=0x%lx", addr);
+        RDEBUGF("[runtime_gc.gc_mark_done] item addr=%p", addr);
         handle_gc_ptr(addr);
     }
 
-    TDEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will yield");
+    TDEBUGF("[runtime_gc.gc_mark_done] handle processor gc work list completed, will return");
 }
 
 /**
@@ -707,15 +710,16 @@ void runtime_gc() {
     // 扫描 solo processor stack (stw)
     scan_solo_stack();
 
+    // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中, 为了避免与 share_processor 冲突，所以暂时放在 stw
+    // 中完成
+    scan_global();
+
     TDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
-    TDEBUGF("[runtime_gc] gc stage: GC_MARK");
-
-    // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中
-    scan_global();
+    TDEBUGF("[runtime_gc] gc stage: GC_MARK, the world start");
 
     // 等待所有的 processor 都 mark 完成
     wait_all_gc_work_finished();
@@ -739,12 +743,14 @@ void runtime_gc() {
     gc_stage = GC_STAGE_SWEEP;
     TDEBUGF("[runtime_gc] gc stage: GC_SWEEP");
 
-    // gc 清理
+    // gc 清理 需要获取 memory_locker, 避免 wait_sysmon 中 processor_free 产生新的 uncache_span
+    // 此时已经 stw 了，所以不需要使用 memory->locker
     flush_mcache();
     TDEBUGF("[runtime_gc] gc flush mcache completed");
 
     mcentral_sweep(memory->mheap);
-    TDEBUGF("[runtime_gc] mcentral_sweep completed");
+
+    TDEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
     // 更新 gcbits
     gcbits_arenas_epoch();
     TDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");

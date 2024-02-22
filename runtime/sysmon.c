@@ -16,7 +16,7 @@ void wait_sysmon() {
     while (true) {
         // - 监控长时间被占用的 share processor 进行抢占式调度
         PROCESSOR_FOR(share_processor_list) {
-            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
+            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL) {
                 RDEBUGF("[wait_sysmon.share] p_index=%d p_status=%d cannot preempt, will skip", p->index, p->status);
                 continue;
             }
@@ -55,7 +55,7 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
 
             // 判断当前是否是可抢占状态
-            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
+            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL) {
                 RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, status=%d cannot preempt, goto unlock", p->index, p->status);
                 goto SHARE_UNLOCK_NEXT;
             }
@@ -102,7 +102,7 @@ void wait_sysmon() {
             }
 
             // syscall 超时
-            if (p->status == P_STATUS_SYSCALL) {
+            if (p->status == P_STATUS_TPLCALL) {
                 assertf(false, "deadlock: syscall run timeout, p_index=%d(%lu), co=%p", p->index, (uint64_t)p->thread_id, p->coroutine);
             }
 
@@ -174,7 +174,7 @@ void wait_sysmon() {
                 continue;
             }
 
-            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
+            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL) {
                 RDEBUGF("[wait_sysmon.solo] p->status=%d, not running/syscall, p_index=%d, will skip", p->status, p->index);
 
                 prev = p;
@@ -222,7 +222,7 @@ void wait_sysmon() {
                 goto SOLO_UNLOCK_NEXT;
             }
 
-            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_SYSCALL) {
+            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] p->status=%d, not running/syscall, p_index=%d, goto unlock", p->status, p->index);
 
                 goto SOLO_UNLOCK_NEXT;
@@ -248,7 +248,7 @@ void wait_sysmon() {
 
             // syscall 符合辅助 gc 的条件。但是请记住，syscall 并不是一个稳定的状态，可能会切换到 dispatch, 所以需要对 dispatch
             // 进行额外的判断
-            if (p->status == P_STATUS_SYSCALL) {
+            if (p->status == P_STATUS_TPLCALL) {
                 RDEBUGF("[wait_sysmon.solo.thread_locker] p_index=%d(%lu), status=%d, co=%p in syscall, assist to safe point", p->index,
                         (uint64_t)p->thread_id, p->status, p->coroutine);
 

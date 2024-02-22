@@ -137,8 +137,10 @@
 #define RT_CALL_STRING_LENGTH "string_length"
 #define RT_CALL_STRING_REF "string_ref" // 默认引用传递
 
-#define RT_CALL_PRE_TPL_HOOK "pre_tpl_hook"
-#define RT_CALL_POST_TPL_HOOK "post_tpl_hook"
+#define RT_CALL_PRE_TPLCALL_HOOK "pre_tplcall_hook"
+#define RT_CALL_POST_TPLCALL_HOOK "post_tplcall_hook"
+
+#define RT_CALL_POST_RTCALL_HOOK "post_rtcall_hook"
 
 #define RT_CALL_RUNTIME_MALLOC "runtime_malloc"
 
@@ -645,9 +647,8 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     va_end(args);
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
 
-    push_rt_call_no_hook(m, RT_CALL_PRE_TPL_HOOK, NULL, 1, string_operand(name));
     OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result));
-    push_rt_call_no_hook(m, RT_CALL_POST_TPL_HOOK, NULL, 1, string_operand(name));
+    push_rt_call_no_hook(m, RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(name));
 }
 
 static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {

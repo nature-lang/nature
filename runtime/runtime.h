@@ -109,6 +109,7 @@ typedef struct {
 
 typedef struct {
     uint8_t spanclass;
+    mutex_t locker;
 
     mspan_t *partial_list; // 还有空闲 span obj 的链表
     mspan_t *full_list;
@@ -205,7 +206,7 @@ typedef struct {
 
 typedef struct {
     mheap_t *mheap; // 全局 heap, 访问时需要加锁
-    mutex_t *locker;
+    mutex_t locker;
     uint32_t sweepgen;
     uint64_t gc_count; // gc 循环次数
 } memory_t;
@@ -213,19 +214,21 @@ typedef struct {
 typedef enum {
     CO_STATUS_RUNNABLE = 1, // 允许被调度
     CO_STATUS_RUNNING = 2,  // 正在运行
-    CO_STATUS_SYSCALL = 3,  // 陷入系统调用
-    CO_STATUS_WAITING = 4,  // 等待 IO 事件就绪
-    CO_STATUS_DEAD = 5,     // 死亡状态
+    CO_STATUS_TPLCALL = 3,  // 陷入系统调用
+    CO_STATUS_RTCALL = 4,   // 陷入系统调用
+    CO_STATUS_WAITING = 5,  // 等待 IO 事件就绪
+    CO_STATUS_DEAD = 6,     // 死亡状态
 } co_status_t;
 
 typedef enum {
     P_STATUS_INIT = 0,
     P_STATUS_DISPATCH = 1,
-    P_STATUS_SYSCALL = 2,
-    P_STATUS_RUNNABLE = 3,
-    P_STATUS_RUNNING = 4,
-    P_STATUS_PREEMPT = 5,
-    P_STATUS_EXIT = 6,
+    P_STATUS_TPLCALL = 2,
+    P_STATUS_RTCALL = 3,
+    P_STATUS_RUNNABLE = 4,
+    P_STATUS_RUNNING = 5,
+    P_STATUS_PREEMPT = 6,
+    P_STATUS_EXIT = 7,
 } p_status_t;
 
 typedef struct processor_t processor_t;
@@ -308,5 +311,23 @@ processor_t *processor_get();
 coroutine_t *coroutine_get();
 
 void *rt_clr_malloc(uint64_t size, rtype_t *rtype);
+
+void processor_set_status(processor_t *p, p_status_t status);
+
+#ifdef __x86_64__
+#define BP_VALUE()      \
+    uint64_t rbp_value; \
+    asm("mov %%rbp, %0" : "=r"(rbp_value));
+#elif
+#define BP_VALUE()      \
+    uint64_t rbp_value; \
+    assert(false && "not support");
+#endif
+
+#define PRE_RTCALL_HOOK(target)                   \
+    do {                                          \
+        processor_t *p = processor_get();         \
+        processor_set_status(p, P_STATUS_RTCALL); \
+    } while (0);
 
 #endif // NATURE_BASIC_H

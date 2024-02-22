@@ -407,6 +407,7 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
     if (!is_alloc_stack(t)) {
         target = indirect_addr_operand(m, t, target, 0);
     }
+
     linear_has_error(m);
 
     linear_super_move(m, t, target, src);
@@ -507,6 +508,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         if (!is_alloc_stack(stmt->right.type)) {
             src = lea_operand_pointer(m, src);
         }
+        // rtype_hash 用于计算 move size
         uint64_t rtype_hash = ct_find_rtype_hash(stmt->right.type);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, rtype_hash, dst, src);
@@ -871,7 +873,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
         lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
         // return void_expr() 时, m->linear_current->return_operand 是 null
         if (m->linear_current->return_operand) {
-            //            OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
+            // OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
             linear_super_move(m, ast->expr->type, m->linear_current->return_operand, src);
         }
 
@@ -987,13 +989,13 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         temp = temp_var_operand_without_stack(m, call->return_type);
     }
     if (type_fn->tpl) {
-        push_rt_call_no_hook(m, RT_CALL_PRE_TPL_HOOK, NULL, 1, string_operand(type_fn->name));
+        push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->name));
     }
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
 
     if (type_fn->tpl) {
-        push_rt_call_no_hook(m, RT_CALL_POST_TPL_HOOK, NULL, 1, string_operand(type_fn->name));
+        push_rt_call_no_hook(m, RT_CALL_POST_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->name));
     }
 
     // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
@@ -1983,7 +1985,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
             slice_push(capture_vars, lir_var_new(m, ident));
         }
 
-        //  加载 free var 在栈上的指针
+        // 加载 free var 在栈上的指针
         lir_operand_t *stack_value = linear_expr(m, *item, NULL);
         lir_operand_t *stack_addr_ref;
         if (is_alloc_stack(item->type)) {

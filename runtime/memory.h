@@ -206,8 +206,6 @@ arena_hint_t *arena_hints_init();
 
 void shade_obj_grey(void *obj);
 
-void mark_ptr_black(void *ptr);
-
-void mark_obj_black_with_lock(mspan_t *span, uint64_t index);
+void mark_ptr_black(void *value);
 
 #endif // NATURE_MEMORY_H

@@ -49,6 +49,7 @@
     }
 
 void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref) {
+    PRE_RTCALL_HOOK();
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
     DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p", type_kind_str[input_rtype->kind], input_ref,
@@ -88,6 +89,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 }
 
 n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
+    PRE_RTCALL_HOOK();
     if (np == 0) {
         DEBUGF("[null_pointer_assert] null pointer");
         rt_processor_attach_errort("null pointer assert");
@@ -104,6 +106,7 @@ n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
  * @param value_ref
  */
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
+    PRE_RTCALL_HOOK();
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld", type_kind_str[mu->rtype->kind],
                target_rtype_hash);
@@ -121,6 +124,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
+    PRE_RTCALL_HOOK();
     return mu->rtype->hash == target_rtype_hash;
 }
 
@@ -130,6 +134,7 @@ bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
  * @return
  */
 n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
+    PRE_RTCALL_HOOK();
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -158,6 +163,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
  * @return
  */
 n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value, float_value);
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     if (is_float(input_rtype->kind)) {
@@ -174,6 +180,7 @@ n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float
  * @return
  */
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_hash=%lu, cursor=%ld", iterator, rtype_hash, cursor);
 
     // cursor 范围测试
@@ -219,6 +226,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
 }
 
 int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu", iterator, rtype_hash, cursor);
 
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
@@ -258,6 +266,7 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 }
 
 void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator, rtype_hash, cursor,
            value_ref);
 
@@ -303,6 +312,7 @@ void zero_fn() {
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
+    PRE_RTCALL_HOOK();
     // DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld", msg->data, path, line, column);
     // processor_t *p = processor_get();
     //
@@ -320,6 +330,7 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
 }
 
 n_errort co_remove_error() {
+    PRE_RTCALL_HOOK();
     // processor_t *p = processor_get();
     // n_errort *errort = p->errort;
     // p->errort = n_errort_new(string_new("", 0), 0);
@@ -328,12 +339,14 @@ n_errort co_remove_error() {
 }
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
+    PRE_RTCALL_HOOK();
     // TODO 改造成 coroutine has_error
 
     return 0;
 }
 
 n_cptr_t cptr_casting(value_casting v) {
+    PRE_RTCALL_HOOK();
     return v.u64_value;
 }
 
@@ -394,6 +407,8 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 }
 
 void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
+    PRE_RTCALL_HOOK();
+
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     if (!gc_barrier_get()) {
         memmove(slot, new_obj, rtype->size);

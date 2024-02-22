@@ -577,6 +577,8 @@ static void mheap_grow(uint64_t pages_count) {
  * @return
  */
 static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
+    mutex_lock(&memory->locker);
+
     assert(pages_count > 0);
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
     // 因为有垃圾回收的存在，所以 page_alloc 中的历史上的某些部分存在空闲且连续的 pages
@@ -595,6 +597,7 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
     mspan_t *span = mspan_new(base, pages_count, spanclass);
     mheap_set_spans(span); // 大内存申请时 span 同样放到了此处管理
 
+    mutex_unlock(&memory->locker);
     return span;
 }
 
@@ -621,6 +624,8 @@ static void mcentral_grow(mcentral_t *mcentral) {
  * @return
  */
 static mspan_t *cache_span(mcentral_t *mcentral) {
+    mutex_lock(&mcentral->locker);
+
     mspan_t *span = NULL;
     if (mcentral->partial_list) {
         // partial 是空的，表示当前 mcentral 中已经没有任何可以使用的 mspan 了，需要去 mheap 中申请咯
@@ -638,7 +643,7 @@ HAVE_SPAN:
             span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
-
+    mutex_unlock(&mcentral->locker);
     return span;
 }
 
@@ -648,12 +653,16 @@ HAVE_SPAN:
  * @param span
  */
 void uncache_span(mcentral_t *mcentral, mspan_t *span) {
+    mutex_lock(&mcentral->locker);
+
     // 如果 span 还有空闲则丢到 partial 否则丢到 full
     if (span->obj_count - span->alloc_count > 0) {
         RT_LIST_PUSH_HEAD(mcentral->partial_list, span);
     } else {
         RT_LIST_PUSH_HEAD(mcentral->full_list, span);
     }
+
+    mutex_unlock(&mcentral->locker);
 }
 
 /**
@@ -664,9 +673,7 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
  * @return
  */
 static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
-    MDEBUGF("[mcache_refill] mcache=%p, spanclass=%lu start, wait locker", mcache, spanclass);
-    mutex_lock(memory->locker);
-    MDEBUGF("[mcache_refill] mcache=%p, spanclass=%lu get clock", mcache, spanclass);
+    TDEBUGF("[mcache_refill] mcache=%p, spanclass=%lu start", mcache, spanclass);
 
     mspan_t *mspan = mcache->alloc[spanclass];
 
@@ -684,8 +691,6 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
     MDEBUGF("[mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu", mcentral, spanclass,
             mspan->spanclass, (void *)mspan->base, (void *)mspan->end, mspan->obj_size, mspan->alloc_count);
 
-    mutex_unlock(memory->locker);
-    MDEBUGF("[mcache_refill] mcache=%p, spanclass=%lu unlocker", mcache, spanclass);
     return mspan;
 }
 
@@ -754,9 +759,6 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
     TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
 
-    mutex_lock(memory->locker);
-    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, lock success", (void *)addr, size, obj_size);
-
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
         // 确定 arena bits base
@@ -780,7 +782,6 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
         index += 1;
     }
 
-    mutex_unlock(memory->locker);
     TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
 }
 
@@ -801,8 +802,8 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 
     MDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
 
+    // 对 arena.bits 做标记,标记是指针还是标量, has ptr 需要借助 arena bits 进行扫描
     if (has_ptr) {
-        // 对 arena.bits 做标记,标记是指针还是标量
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
@@ -821,16 +822,14 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 }
 
 static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
-    bool no_ptr = rtype == NULL || rtype->last_ptr == 0;
-    uint8_t spanclass = make_spanclass(0, no_ptr);
+    bool has_ptr = rtype == NULL || rtype->last_ptr == 0;
+    uint8_t spanclass = make_spanclass(0, !has_ptr);
 
     // 计算需要分配的 page count(向上取整)
     uint64_t pages_count = size / ALLOC_PAGE_SIZE;
     if ((size & PAGE_MASK) != 0) {
         pages_count += 1;
     }
-
-    mutex_lock(memory->locker);
 
     // 直接从堆中分配 span
     mspan_t *span = mheap_alloc_span(pages_count, spanclass);
@@ -839,9 +838,14 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
 
     // 将 span 推送到 full swept 中，这样才能被 sweept
     mcentral_t *central = &memory->mheap->centrals[spanclass];
+    mutex_lock(&central->locker);
     RT_LIST_PUSH_HEAD(central->full_list, span);
+    mutex_unlock(&central->locker);
 
-    mutex_unlock(memory->locker);
+    // heap_arena_bits_set
+    if (has_ptr) {
+        heap_arena_bits_set(span->base, size, span->obj_size, rtype);
+    }
 
     allocated_bytes += span->obj_size;
 
@@ -918,7 +922,7 @@ void memory_init() {
     memory = NEW(memory_t);
     memory->sweepgen = 0;
     memory->gc_count = 0;
-    memory->locker = mutex_new(false);
+    mutex_init(&memory->locker, false);
 
     // 初始化 gc 参数
     allocated_bytes = 0;
@@ -945,11 +949,12 @@ void memory_init() {
 
     // - 初始化 mcentral
     for (int i = 0; i < SPANCLASS_COUNT; i++) {
-        mcentral_t *item = &mheap->centrals[i];
-        item->spanclass = i;
+        mcentral_t *central = &mheap->centrals[i];
+        central->spanclass = i;
 
-        item->partial_list = NULL;
-        item->full_list = NULL;
+        central->partial_list = NULL;
+        central->full_list = NULL;
+        mutex_init(&central->locker, false);
     }
 
     // - 初始化 fixalloc
@@ -1051,6 +1056,8 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
+        TDEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->index, p->share,
+                (uint64_t)p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }
 
@@ -1069,8 +1076,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
  * @return
  */
 mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
-    // 必须要加锁正太才能使用 fixalloc
-    assert(memory->locker->locker_count > memory->locker->unlocker_count);
+    assert(memory->locker.locker_count > memory->locker.unlocker_count);
     mspan_t *span = fixalloc_alloc(&memory->mheap->spanalloc);
 
     span->base = base;
@@ -1105,6 +1111,7 @@ uint64_t runtime_malloc_bytes() {
 }
 
 void runtime_eval_gc() {
+    PRE_RTCALL_HOOK();
     mutex_lock(&gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {
@@ -1149,6 +1156,7 @@ EXIT:
 }
 
 void *runtime_malloc(uint64_t rtype_hash) {
+    PRE_RTCALL_HOOK();
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     return rt_clr_malloc(rtype->size, rtype);
 }

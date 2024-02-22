@@ -148,7 +148,7 @@ static void coroutine_wrapper() {
     ((void_fn_t)co->fn)();
 
     // 更新到 syscall 就不可抢占
-    processor_set_status(p, P_STATUS_SYSCALL);
+    processor_set_status(p, P_STATUS_TPLCALL);
 
     if (co->main) {
         // 通知所有协程退出
@@ -537,15 +537,18 @@ void processor_dump_errort(n_errort *errort) {
     }
 }
 
-void mark_ptr_black(void *ptr) {
-    addr_t addr = (addr_t)ptr;
+void mark_ptr_black(void *value) {
+    addr_t addr = (addr_t)value;
     // get mspan by ptr
     mspan_t *span = span_of(addr);
     assert(span);
-
+    mutex_lock(&span->gcmark_locker);
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
-    mark_obj_black_with_lock(span, obj_index);
+    bitmap_set(span->gcmark_bits, obj_index);
+    TDEBUGF("[runtime.mark_ptr_black] addr=%p, span=%p, spc=%d, span_base=%p, obj_index=%lu marked", value, span, span->spanclass,
+            (void *)span->base, obj_index);
+    mutex_unlock(&span->gcmark_locker);
 }
 
 /**
@@ -553,15 +556,13 @@ void mark_ptr_black(void *ptr) {
  * yield 的入口也是这里
  * @param target
  */
-__attribute__((optimize(0))) void pre_tpl_hook(char *target) {
+__attribute__((optimize(0))) void pre_tplcall_hook(char *target) {
     coroutine_t *co = coroutine_get();
-    assert(co);
     processor_t *p = processor_get();
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
     // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
-    processor_set_status(p, P_STATUS_SYSCALL);
-    co_set_status(p, co, CO_STATUS_SYSCALL);
+    processor_set_status(p, P_STATUS_TPLCALL);
 
     uint64_t rbp_value;
 #ifdef __x86_64__
@@ -573,7 +574,7 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
     co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);
 
-    TRACEF("[pre_tpl_hook] co=%p, status=%d ,target=%s, scan_offset=%lu, ret_addr=%p", co, co->status, target, co->scan_offset,
+    TRACEF("[pre_tplcall_hook] co=%p, status=%d ,target=%s, scan_offset=%lu, ret_addr=%p", co, co->status, target, co->scan_offset,
            (void *)co->scan_ret_addr);
 
     // #ifdef DEBUG
@@ -589,21 +590,15 @@ __attribute__((optimize(0))) void pre_tpl_hook(char *target) {
     // #endif
 }
 
-__attribute__((optimize(0))) void post_tpl_hook(char *target) {
+__attribute__((optimize(0))) void post_tplcall_hook(char *target) {
     processor_t *p = processor_get();
-    assert(p);
-    coroutine_t *co = coroutine_get();
-    assert(co);
+    TRACEF("[runtime.post_tplcall_hook] p_index_%d=%d will set processor_status", p->share, p->index);
+    processor_set_status(p, P_STATUS_RUNNING);
+}
 
-    // 直接获取锁阻塞好了？, 改完状态再解锁？也算是安全点呀，只要获取锁了，就出不来
-    // 这比 stw 还要安全
-    // 尝试获取 stw 锁，如果获取不到，则必定是需要进入到 stw 状态
-
-    // 现在回到了 syscall 状态
-    TRACEF("[runtime.post_tpl_hook] co=%p, will set co_status=running", co);
-    co_set_status(p, co, CO_STATUS_RUNNING);
-
-    TRACEF("[runtime.post_tpl_hook] co=%p, success set co_status=running, will set processor_status", co);
+__attribute__((optimize(0))) void post_rtcall_hook(char *target) {
+    processor_t *p = processor_get();
+    TRACEF("[runtime.post_rtcall_hook] p_index_%d=%d will set processor_status", p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -669,21 +664,39 @@ void processor_set_exit() {
     processor_need_exit = true;
 }
 
+/**
+ * processor_free 不受 stw 影响，所以获取一下 memory locker 避免 uncache 冲突
+ * @param p
+ */
 void processor_free(processor_t *p) {
-    RDEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
+    TDEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
             &p->share_stack, p->share_stack.ptr);
 
     aco_share_stack_destroy(&p->share_stack);
     rt_linked_destroy(&p->co_list);
     aco_destroy(&p->main_aco);
 
+    // 归还 mcache span
+    for (int j = 0; j < SPANCLASS_COUNT; ++j) {
+        mspan_t *span = p->mcache.alloc[j];
+        if (!span) {
+            continue;
+        }
+
+        p->mcache.alloc[j] = NULL; // uncache
+        mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
+        uncache_span(mcentral, span);
+        TDEBUGF("[wait_sysmon.processor_free] uncache span=%p, span_base=%p, spc=%d, alloc_count=%lu", span, (void *)span->base,
+                span->spanclass, span->alloc_count);
+    }
+
     RDEBUGF("[wait_sysmon.processor_free] will free uv_loop p_index_%d=%d, loop=%p", p->share, p->index, &p->uv_loop);
     int share = p->share;
     int index = p->index;
 
-    TDEBUGF("[wait_sysmon.processor_free] will free processor p_index_%d=%d", share, index);
+    RDEBUGF("[wait_sysmon.processor_free] will free processor p_index_%d=%d", share, index);
     fixalloc_free(&processor_alloc, p);
-    TDEBUGF("[wait_sysmon.processor_free] end p_index_%d=%d", share, index);
+    TDEBUGF("[wait_sysmon.processor_free] succ free p_index_%d=%d", share, index);
 }
 
 /**
@@ -833,4 +846,36 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st) {
     // 更新 co share_stack 指向
     aco->share_stack = new_st;
     new_st->owner = aco;
+}
+
+void processor_set_status(processor_t *p, p_status_t status) {
+    assert(p);
+    assert(p->status != status);
+
+    // 特殊放通处理, share syscall -> running
+    if (p->share && p->status == P_STATUS_TPLCALL && status == P_STATUS_RUNNING) {
+        p->status = status;
+        return;
+    }
+
+    // 必须先获取 thread_locker 在获取 gc_stw_locker
+    mutex_lock(&p->thread_locker);
+
+    // 特殊处理 2， solo 切换成 running 时需要获取 gc_stw_locker, 如果 gc_stw_locker 阻塞说明当前正在 stw
+    // 不允许切换到 running 状态
+    if (!p->share && status == P_STATUS_RUNNING) {
+        mutex_lock(&p->gc_stw_locker);
+    }
+
+    p->status = status;
+
+    if (!p->share && status == P_STATUS_RUNNING) {
+        mutex_unlock(&p->gc_stw_locker);
+    }
+
+    mutex_unlock(&p->thread_locker);
+
+    if (status == P_STATUS_RUNNING) {
+        p->co_started_at = uv_hrtime();
+    }
 }

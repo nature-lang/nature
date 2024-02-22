@@ -128,6 +128,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 #endif
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs_base=%p", fn_addr, envs);
     assert(envs);
     rtype_t *fn_rtype = gc_rtype_array(TYPE_GC_FN, sizeof(runtime_fn_t) / POINTER_SIZE);
@@ -159,6 +160,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 }
 
 envs_t *env_new(uint64_t length) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_new] length=%lu, %p", length, env_table);
     if (env_table == NULL) {
         env_table = table_new();
@@ -177,6 +179,7 @@ envs_t *env_new(uint64_t length) {
 }
 
 void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr_t stack_addr) {
+    PRE_RTCALL_HOOK();
     rtype_t *item_rtype = rt_find_rtype(item_rtype_hash);
 
     DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, rtype_size=%lu, env_index=%lu, stack_addr=0x%lx", envs,
@@ -209,6 +212,7 @@ void env_assign(envs_t *envs, uint64_t item_rtype_hash, uint64_t env_index, addr
  * stack 需要被回收，但是 stack addr 缺被引用了，此时需要将 stack addr 的值 copy 到 upvalue 中
  */
 void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
+    PRE_RTCALL_HOOK();
     upvalue_t *upvalue = table_get(env_table, utoa(stack_addr));
     assert(upvalue && "not found stack addr upvalue, cannot close");
     DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, upvalue->ref=%p, rtype_hash=%lu", stack_addr, upvalue, upvalue->ref,
@@ -234,6 +238,7 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
 }
 
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_access_ref] fn_base=%p", fn);
 
     assert(index < fn->envs->length);
@@ -246,6 +251,7 @@ void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t si
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_assign_ref] fn_base=%p, index=%lu, src_ref=%p, size=%lu", fn, index, src_ref, size);
     assert(index < fn->envs->length);
     assert(fn);
@@ -256,6 +262,7 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 }
 
 void *env_element_addr(runtime_fn_t *fn, uint64_t index) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_element_addr] fn_base=%p", fn);
     assert(fn);
     assert(index < fn->envs->length);

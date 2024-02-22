@@ -47,7 +47,7 @@ int runtime_main(int argc, char *argv[]) {
     // 等待 processor init 注册完成运行后再启动 sysmon 进行抢占式调度
     wait_sysmon();
 
-    RDEBUGF("[runtime_main] user code run completed,will exit");
+    TDEBUGF("[runtime_main] user code run completed,will exit");
 
     return 0;
 }

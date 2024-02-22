@@ -71,6 +71,7 @@ static void set_grow(n_set_t *m) {
 }
 
 n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
+    PRE_RTCALL_HOOK();
     rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_index);
 
@@ -97,6 +98,7 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
  * @return
  */
 bool set_add(n_set_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash, m->length, m->capacity);
 
     // 扩容
@@ -114,6 +116,7 @@ bool set_add(n_set_t *m, void *key_ref) {
  * @return
  */
 bool set_contains(n_set_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     assert(m);
     assert(key_ref);
     assert(m->key_rtype_hash > 0);
@@ -136,6 +139,7 @@ bool set_contains(n_set_t *m, void *key_ref) {
 }
 
 void set_delete(n_set_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可

@@ -61,6 +61,7 @@ void map_grow(n_map_t *m) {
 
 
 n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) {
+    PRE_RTCALL_HOOK();
     rtype_t *map_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_index);
     rtype_t *value_rtype = rt_find_rtype(value_index);
@@ -95,6 +96,7 @@ n_map_t *map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) 
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
 n_cptr_t map_access(n_map_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -131,6 +133,7 @@ n_cptr_t map_access(n_map_t *m, void *key_ref) {
 }
 
 n_cptr_t map_assign(n_map_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
     }
@@ -177,6 +180,7 @@ n_cptr_t map_assign(n_map_t *m, void *key_ref) {
  * @return
  */
 void map_delete(n_map_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
@@ -184,5 +188,6 @@ void map_delete(n_map_t *m, void *key_ref) {
 }
 
 uint64_t map_length(n_map_t *l) {
+    PRE_RTCALL_HOOK();
     return l->length;
 }

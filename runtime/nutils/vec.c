@@ -1,9 +1,11 @@
 #include "vec.h"
 
 #include "array.h"
-#include "runtime/memory.h"
+#include "runtime/runtime.h"
 
 void vec_grow(n_vec_t *vec) {
+    PRE_RTCALL_HOOK();
+
     vec->capacity = vec->capacity * 2;
 
     rtype_t *element_rtype = rt_find_rtype(vec->element_rtype_hash);
@@ -29,6 +31,8 @@ void vec_grow(n_vec_t *vec) {
  * @return
  */
 n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t length, uint64_t capacity) {
+    PRE_RTCALL_HOOK();
+
     DEBUGF("[vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", rtype_hash, element_rtype_hash, length, capacity);
 
     assertf(rtype_hash > 0, "rtype_hash must be a valid hash");
@@ -61,7 +65,9 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    TRACEF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
+    // TODO 如果在这里被 post_tpl hook 阻塞到了 stw, 此时才开启 barrier
+    //  然后进行 scan_stack, 此时会发生什么？vec_new 出来的指针永远无法被扫描到
+    TDEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
     return vec;
 }
 
@@ -71,6 +77,8 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
  * @param value_ref
  */
 void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
+    PRE_RTCALL_HOOK();
+
     if (index >= l->length) {
         char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_access] has err %s", msg);
@@ -92,6 +100,8 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
+    PRE_RTCALL_HOOK();
+
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
     assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
 
@@ -105,14 +115,20 @@ void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
 }
 
 uint64_t vec_length(n_vec_t *l) {
+    PRE_RTCALL_HOOK();
+
     return l->length;
 }
 
 uint64_t vec_capacity(n_vec_t *l) {
+    PRE_RTCALL_HOOK();
+
     return l->capacity;
 }
 
 void *vec_ref(n_vec_t *l) {
+    PRE_RTCALL_HOOK();
+
     return l->data;
 }
 
@@ -122,6 +138,8 @@ void *vec_ref(n_vec_t *l) {
  * @param ref
  */
 void vec_push(n_vec_t *vec, void *ref) {
+    PRE_RTCALL_HOOK();
+
     assert(ref > 0 && "ref must be a valid address");
 
     // TODO debug 验证 gc 问题
@@ -153,6 +171,8 @@ void vec_push(n_vec_t *vec, void *ref) {
  * @return
  */
 n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) {
+    PRE_RTCALL_HOOK();
+
     // start end 检测
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
         char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
@@ -192,6 +212,8 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
  * @return
  */
 n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
+    PRE_RTCALL_HOOK();
+
     DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", rtype_hash, a, b);
     assert(a->element_rtype_hash == b->element_rtype_hash && "The types of the two vecs are different");
     uint64_t element_size = rt_rtype_out_size(a->element_rtype_hash);
@@ -211,6 +233,8 @@ n_vec_t *vec_concat(uint64_t rtype_hash, n_vec_t *a, n_vec_t *b) {
 }
 
 n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
+    PRE_RTCALL_HOOK();
+
     TRACEF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->element_rtype_hash, index);
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
@@ -228,6 +252,8 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
 }
 
 n_cptr_t vec_iterator(n_vec_t *l) {
+    PRE_RTCALL_HOOK();
+
     if (l->length == l->capacity) {
         DEBUGF("[vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
         vec_grow(l);

@@ -7,12 +7,13 @@
 #include "runtime.h"
 #include "runtime/memory.h"
 
-static char sprint_buf[1024];
 static char *space = " ";
 
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(n_union_t *arg) {
+    char sprint_buf[1024];
+
     assert(arg && "[runtime.print_arg] arg is null");
     TRACEF("[runtime.print_arg] arg addr=%p", arg);
     assert(arg->rtype && "[runtime.print_arg] arg->rtype is null");
@@ -28,7 +29,7 @@ static void print_arg(n_union_t *arg) {
             return;
         }
 
-        TRACEF("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
+        // TDEBUGF2("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
         VOID write(STDOUT_FILENO, s->data, s->length);
         return;
     }
