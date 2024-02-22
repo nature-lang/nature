@@ -324,10 +324,19 @@ void processor_set_status(processor_t *p, p_status_t status);
     assert(false && "not support");
 #endif
 
-#define PRE_RTCALL_HOOK(target)                   \
-    do {                                          \
-        processor_t *p = processor_get();         \
-        processor_set_status(p, P_STATUS_RTCALL); \
+#define PRE_RTCALL_HOOK(target)                                                                              \
+    do {                                                                                                     \
+        TDEBUGF("[PRE_RTCALL_HOOK] target %s", __FUNCTION__);                                                \
+        processor_t *p = processor_get();                                                                    \
+        assert(p);                                                                                           \
+        if (p->status == P_STATUS_RTCALL) {                                                                  \
+            break;                                                                                           \
+        }                                                                                                    \
+        processor_set_status(p, P_STATUS_RTCALL);                                                            \
+        BP_VALUE();                                                                                          \
+        coroutine_t *co = coroutine_get();                                                                   \
+        co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                      \
+        co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
     } while (0);
 
 #endif // NATURE_BASIC_H

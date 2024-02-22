@@ -1111,7 +1111,6 @@ uint64_t runtime_malloc_bytes() {
 }
 
 void runtime_eval_gc() {
-    PRE_RTCALL_HOOK();
     mutex_lock(&gc_stage_locker);
 
     if (gc_stage != GC_STAGE_OFF) {

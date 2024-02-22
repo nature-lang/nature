@@ -32,7 +32,6 @@ __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
  * 在 user_code 期间的超时抢占
  */
 __attribute__((optimize(0))) void co_preempt_yield() {
-    // 绝对不可抢占点，可以放心进行 RDEBUGF 操作
     RDEBUGF("[runtime.co_preempt_yield] start, %lu", (uint64_t)uv_thread_self());
 
     processor_t *p = processor_get();
@@ -40,15 +39,14 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
-    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
+    TDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
             p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
-    assert(co->status == CO_STATUS_RUNNING);
     p->status = P_STATUS_PREEMPT;
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_push(&p->runnable_list, co);
 
-    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
+    TDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
     _co_yield(p, co);
 
     assert(p->status == P_STATUS_RUNNABLE);
@@ -264,19 +262,17 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     aco_resume(&co->aco);
 
-    // resume 回来后立刻进入到 dispatch 状态, 此时 p->status 状态是无锁的
-    TRACEF(
-        "[runtime.coroutine_resume] resume backend, wait thread locker,p_index_%d=%d(%d), co=%p, status=%d, gc_work=%d, scan_ret_addr=%p, "
-        "scan_offset=%lu",
-        p->share, p->index, p->status, co, co->status, co->gc_work, (void *)co->scan_ret_addr, co->scan_offset);
+    // rtcall/tplcall 都可以无锁进入到 dispatch 状态，dispatch 状态是一个可以安全 stw 的状态
+    TRACEF("[coroutine_resume] resume backend, p_index_%d=%d(%d), co=%p, status=%d, gc_work=%d, scan_ret_addr=%p, scan_offset=%lu",
+           p->share, p->index, p->status, co, co->status, co->gc_work, (void *)co->scan_ret_addr, co->scan_offset);
 
     // running -> dispatch
     assert(co->status != CO_STATUS_RUNNING);
     p->co_started_at = 0;
-    p->status = P_STATUS_DISPATCH;
+    processor_set_status(p, P_STATUS_DISPATCH);
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
-    RDEBUGF("[runtime.coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
+    RDEBUGF("[coroutine_resume] resume backend, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time, co->gc_work);
 }
 
 // handle by thread
@@ -598,7 +594,7 @@ __attribute__((optimize(0))) void post_tplcall_hook(char *target) {
 
 __attribute__((optimize(0))) void post_rtcall_hook(char *target) {
     processor_t *p = processor_get();
-    TRACEF("[runtime.post_rtcall_hook] p_index_%d=%d will set processor_status", p->share, p->index);
+    TDEBUGF("[runtime.post_rtcall_hook] target=%s, p_index_%d=%d will set processor_status", target, p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -852,17 +848,29 @@ void processor_set_status(processor_t *p, p_status_t status) {
     assert(p);
     assert(p->status != status);
 
-    // 特殊放通处理, share syscall -> running
-    if (p->share && p->status == P_STATUS_TPLCALL && status == P_STATUS_RUNNING) {
+    // rtcall 是不稳定状态，可以随时切换到任意状态
+    if (p->status == P_STATUS_RTCALL) {
         p->status = status;
         return;
     }
 
-    // 必须先获取 thread_locker 在获取 gc_stw_locker
+    // 对于 share processor 来说， tplcall 和 rtcall 是不稳定的，需要切换走的，所以不需要被 thread_locker 锁住
+    if (p->share && p->status == P_STATUS_TPLCALL) {
+        p->status = status;
+        return;
+    }
+
+    // solo 状态下 tplcall 可以切换到 dispatch, 但是不能进入到 running
+    if (!p->share && p->status == P_STATUS_TPLCALL && status == P_STATUS_DISPATCH) {
+        p->status = status;
+        return;
+    }
+
+    // 必须先获取 thread_locker 再获取 gc_stw_locker
     mutex_lock(&p->thread_locker);
 
     // 特殊处理 2， solo 切换成 running 时需要获取 gc_stw_locker, 如果 gc_stw_locker 阻塞说明当前正在 stw
-    // 不允许切换到 running 状态
+    // 必须获取到 stw locker 才能切换到 running 状态(runnable -> running/ tpl_call -> running)
     if (!p->share && status == P_STATUS_RUNNING) {
         mutex_lock(&p->gc_stw_locker);
     }

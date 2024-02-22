@@ -58,9 +58,7 @@ static void uv_on_timer(uv_timer_t *timer) {
 
 void coroutine_sleep(int64_t ms) {
     processor_t *p = processor_get();
-    assert(p);
     coroutine_t *co = coroutine_get();
-    assert(co);
 
     // - 初始化 libuv 定时器(io_run 回调会读取 timer 的地址，所以需要在堆中分配)
     uv_timer_t *timer = NEW(uv_timer_t);

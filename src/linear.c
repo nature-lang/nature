@@ -277,10 +277,6 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return lir_label_operand(ident->literal, s->is_local);
 }
 
-static void linear_auto_gc(module_t *m) {
-    push_rt_call(m, RT_CALL_RUNTIME_EVAL_GC, NULL, 0);
-}
-
 static void linear_has_error(module_t *m) {
     char *error_target_label = m->linear_current->error_label;
     assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
