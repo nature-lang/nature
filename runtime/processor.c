@@ -43,8 +43,11 @@ __attribute__((optimize(0))) void co_preempt_yield() {
             p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
     p->status = P_STATUS_PREEMPT;
+
+    mutex_lock(&p->co_locker);
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_push(&p->runnable_list, co);
+    mutex_unlock(&p->co_locker);
 
     TDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
     _co_yield(p, co);
@@ -396,8 +399,10 @@ void coroutine_dispatch(coroutine_t *co) {
     // - 协程独享线程
     if (co->solo) {
         processor_t *p = processor_new(solo_processor_count++);
+        mutex_lock(&p->co_locker);
         rt_linked_push(&p->co_list, co);
         rt_linked_push(&p->runnable_list, co);
+        mutex_unlock(&p->co_locker);
 
         mutex_lock(&solo_processor_locker);
         RT_LIST_PUSH_HEAD(solo_processor_list, p);
@@ -594,7 +599,7 @@ __attribute__((optimize(0))) void post_tplcall_hook(char *target) {
 
 __attribute__((optimize(0))) void post_rtcall_hook(char *target) {
     processor_t *p = processor_get();
-    TDEBUGF("[runtime.post_rtcall_hook] target=%s, p_index_%d=%d will set processor_status", target, p->share, p->index);
+    DEBUGF("[runtime.post_rtcall_hook] target=%s, p_index_%d=%d will set processor_status", target, p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -691,7 +696,9 @@ void processor_free(processor_t *p) {
     int index = p->index;
 
     RDEBUGF("[wait_sysmon.processor_free] will free processor p_index_%d=%d", share, index);
+    mutex_lock(&cp_alloc_locker);
     fixalloc_free(&processor_alloc, p);
+    mutex_unlock(&cp_alloc_locker);
     TDEBUGF("[wait_sysmon.processor_free] succ free p_index_%d=%d", share, index);
 }
 
@@ -785,7 +792,10 @@ void wait_all_gc_work_finished() {
 }
 
 void *global_gc_worklist_pop() {
-    return rt_linked_pop(&global_gc_worklist);
+    mutex_lock(&global_gc_locker);
+    void *value = rt_linked_pop(&global_gc_worklist);
+    mutex_unlock(&global_gc_locker);
+    return value;
 }
 
 /**

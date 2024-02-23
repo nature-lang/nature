@@ -577,6 +577,7 @@ static void mheap_grow(uint64_t pages_count) {
  * @return
  */
 static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
+    DEBUGF("[mheap_alloc_span] pages_count=%lu, spanclass=%d", pages_count, spanclass);
     mutex_lock(&memory->locker);
 
     assert(pages_count > 0);
@@ -598,6 +599,8 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
     mheap_set_spans(span); // 大内存申请时 span 同样放到了此处管理
 
     mutex_unlock(&memory->locker);
+    DEBUGF("[mheap_alloc_span] success, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base,
+           span->spanclass, span->obj_count, span->alloc_count);
     return span;
 }
 
@@ -624,6 +627,7 @@ static void mcentral_grow(mcentral_t *mcentral) {
  * @return
  */
 static mspan_t *cache_span(mcentral_t *mcentral) {
+    MDEBUGF("[cache_span] start, will lock, mcentral=%p, spc=%d", mcentral, mcentral->spanclass);
     mutex_lock(&mcentral->locker);
 
     mspan_t *span = NULL;
@@ -644,6 +648,8 @@ HAVE_SPAN:
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
+    MDEBUGF("[cache_span] success, unlocked mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
+            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
     return span;
 }
 
@@ -653,6 +659,8 @@ HAVE_SPAN:
  * @param span
  */
 void uncache_span(mcentral_t *mcentral, mspan_t *span) {
+    MDEBUGF("[runtime.uncache_span] start, will lock mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
+            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
     mutex_lock(&mcentral->locker);
 
     // 如果 span 还有空闲则丢到 partial 否则丢到 full
@@ -663,6 +671,8 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
     }
 
     mutex_unlock(&mcentral->locker);
+    MDEBUGF("[runtime.uncache_span] success mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
+            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
 }
 
 /**
@@ -1056,7 +1066,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
-        TDEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->index, p->share,
+        TDEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->share, p->index,
                 (uint64_t)p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }

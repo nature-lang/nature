@@ -5,7 +5,12 @@
 
 static void insert_gc_worklist(rt_linked_t *gc_worklist, void *ptr) {
     assert(span_of((addr_t)ptr) && "ptr not found in active span");
-    TDEBUGF("[insert_gc_worklist] w=%p, ptr=%p", gc_worklist, ptr);
+    processor_t *p = processor_get();
+    if (p) {
+        TDEBUGF("[insert_gc_worklist] p_index_%d=%d, w=%p, ptr=%p", p->share, p->index, gc_worklist, ptr);
+    } else {
+        TDEBUGF("[insert_gc_worklist] global worklist, w=%p, ptr=%p", gc_worklist, ptr);
+    }
     rt_linked_push(gc_worklist, ptr);
 }
 
@@ -675,7 +680,7 @@ static void gc_mark_done() {
         if (!addr) {
             break;
         }
-        RDEBUGF("[runtime_gc.gc_mark_done] item addr=%p", addr);
+        RDEBUGF("[runtime_gc.gc_mark_done] item addr=%p", (void *)addr);
         handle_gc_ptr(addr);
     }
 
@@ -697,7 +702,7 @@ void runtime_gc() {
     processor_all_stop_the_world();
     processor_all_wait_safe();
 
-    TDEBUGF("[runtime_gc] wait all processor safe");
+    TDEBUGF("[runtime_gc] all processor safe");
 
     // 开启写屏障
     gc_barrier_start();

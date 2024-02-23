@@ -22,6 +22,7 @@ typedef struct {
     rt_linked_node_t *rear;
 
     uint16_t count;
+    mutex_t locker;
 
     fixalloc_t *nodealloc;
     pthread_mutex_t *nodealloc_locker;
@@ -47,6 +48,8 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
 
     l->front = empty;
     l->rear = empty;
+
+    mutex_lock(&l->locker);
 }
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
@@ -79,7 +82,10 @@ static inline void *rt_linked_pop(rt_linked_t *l) {
     void *value = node->value;
 
     // 至少是一个 empty 节点而不是  null
-    assertf(node->succ, "l=%p node=%p succ is null", l, node);
+    if (!node->succ) {
+        abort();
+        assertf(node->succ, "l=%p node=%p succ cannot null", l, node);
+    }
 
     l->front = node->succ;
     l->front->prev = NULL;
@@ -112,8 +118,10 @@ static inline void rt_linked_destroy(rt_linked_t *l) {
     while (l->count > 0) {
         rt_linked_pop(l);
     }
-
+   
+    pthread_mutex_lock(l->nodealloc_locker);
     fixalloc_free(l->nodealloc, l->rear);
+    pthread_mutex_unlock(l->nodealloc_locker);
 }
 
 #endif // NATURE_RT_LINKED_H

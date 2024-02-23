@@ -41,6 +41,7 @@ static void uv_on_timer(uv_timer_t *timer) {
     // timer 到时间了, push 到尾部等待调度
     mutex_lock(&p->co_locker);
     co->status = CO_STATUS_RUNNABLE;
+    assert(p->status != P_STATUS_EXIT);
     rt_linked_push(&p->runnable_list, co);
     mutex_unlock(&p->co_locker);
 
