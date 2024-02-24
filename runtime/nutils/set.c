@@ -33,7 +33,7 @@ static bool _set_add(n_set_t *m, void *key_ref) {
     uint64_t key_size = rt_rtype_out_size(m->key_rtype_hash);
     void *dst = m->key_data + key_size * key_index;
 
-    //    DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
+    // DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
     memmove(dst, key_ref, key_size);
     return added;
 }
@@ -52,14 +52,16 @@ static void set_grow(n_set_t *m) {
     m->capacity *= 2;
     m->key_data = rt_array_new(key_rtype, m->capacity);
     m->hash_table = rt_clr_malloc(sizeof(int64_t) * m->capacity, NULL);
+    uint64_t len = m->length;
+    m->length = 0; // 下面需要重新进行 add 操作
 
     // 对所有的 key 进行 rehash, i 就是 data_index
-    for (int data_index = 0; data_index < m->length; ++data_index) {
+    for (int data_index = 0; data_index < len; ++data_index) {
         void *key_ref = old_set.key_data + data_index * key_size;
 
         uint64_t hash_index = find_hash_slot(old_set.hash_table, old_set.capacity, old_set.key_data, old_set.key_rtype_hash, key_ref);
 
-        //        DEBUGF("[runtime.set_grow] find hash_index=%lu by old_set", hash_index);
+        // DEBUGF("[runtime.set_grow] find hash_index=%lu by old_set", hash_index);
         if (hash_value_deleted(old_set.hash_table[hash_index])) {
             // 已经删除就不需要再写入到新的 hash table 中嘞
             continue;
@@ -84,9 +86,9 @@ n_set_t *set_new(uint64_t rtype_hash, uint64_t key_index) {
 
     DEBUGF("[runtime.set_new] success, base=%p,  key_index=%lu, key_data=%p", set_data, set_data->key_rtype_hash, set_data->key_data);
 
-    //    for (int i = 0; i < set_data->capacity; ++i) {
-    //        TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i]);
-    //    }
+    // for (int i = 0; i < set_data->capacity; ++i) {
+    //     TDEBUGF("[runtime.set_new] hash_table[%d]=%lu", i, set_data->hash_table[i]);
+    // }
 
     return set_data;
 }

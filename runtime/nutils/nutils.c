@@ -5,6 +5,9 @@
 #include "string.h"
 #include "vec.h"
 
+int command_argc;
+char **command_argv;
+
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                       \
     {                                                                                                                                  \
         switch (_kind) {                                                                                                               \

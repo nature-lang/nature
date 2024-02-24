@@ -176,7 +176,8 @@ uv_key_t aco_gtls_fpucw_mxcsr;
 void aco_thread_init(aco_cofuncp_t last_word_co_fp) {
     void *fpucw = uv_key_get(&aco_gtls_fpucw_mxcsr);
     aco_save_fpucw_mxcsr(&fpucw);
-    // 必须使用 uv_key_set 写入
+
+    // 必须使用 uv_key_set 写入, 否则指针写入无效
     uv_key_set(&aco_gtls_fpucw_mxcsr, fpucw);
 
     if ((void *)last_word_co_fp != NULL) {
@@ -251,7 +252,7 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     assert(p->real_ptr != MAP_FAILED);
     p->guard_page_enabled = 1;
     mprotect(p->real_ptr, u_pgsz, PROT_READ);
-//    assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
+    // assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
 
     p->ptr = (void *)(((uintptr_t)p->real_ptr) + u_pgsz);
     p->real_sz = sz;
@@ -280,8 +281,7 @@ void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     sstk->ptr = NULL;
 }
 
-__attribute__((optimize(0))) void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz,
-                                                  aco_cofuncp_t fp, void *arg) {
+void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg) {
     assert(aco);
     memset(aco, 0, sizeof(aco_t));
 
@@ -294,6 +294,7 @@ __attribute__((optimize(0))) void aco_create_init(aco_t *aco, aco_t *main_co, ac
 #ifdef __x86_64__
         aco->reg[ACO_REG_IDX_RETADDR] = (void *)fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
+        aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
 #else
 #error "platform no support yet"
 #endif
@@ -324,7 +325,7 @@ __attribute__((optimize(0))) void aco_create_init(aco_t *aco, aco_t *main_co, ac
     aco->inited = true;
 }
 
-__attribute__((optimize(0))) aco_attr_no_asan void aco_resume(aco_t *resume_co) {
+aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     assert(resume_co != NULL && resume_co->main_co != NULL && resume_co->is_end == 0);
 
     // 栈切换

@@ -507,7 +507,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         // rtype_hash 用于计算 move size
         uint64_t rtype_hash = ct_find_rtype_hash(stmt->right.type);
 
-        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, rtype_hash, dst, src);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, int_operand(rtype_hash), dst, src);
     }
 }
 
@@ -984,7 +984,9 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     if (call->return_type.kind != TYPE_VOID) {
         temp = temp_var_operand_without_stack(m, call->return_type);
     }
-    if (type_fn->tpl) {
+
+    // rtcall 自带 pre_hook, 所以这里不需要重复处理了
+    if (!is_rtcall(type_fn->name) && type_fn->tpl) {
         push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->name));
     }
     // call base_target,params -> target

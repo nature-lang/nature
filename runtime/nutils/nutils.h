@@ -6,8 +6,8 @@
 
 #define INT_SIZE sizeof(int64_t)
 
-int command_argc;
-char **command_argv;
+extern int command_argc;
+extern char **command_argv;
 
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 

@@ -767,7 +767,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start, wait locker", (void *)addr, size, obj_size);
+    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *)addr, size, obj_size);
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
@@ -777,6 +777,8 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
+        TDEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *)temp_addr,
+                (void *)addr, obj_size);
         int bit_value;
         if (bitmap_test(rtype->gc_bits, index)) {
             bitmap_set(arena->bits, bit_index); // 1 表示为指针
@@ -786,8 +788,8 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bit_value = 0;
         }
 
-        TRACEF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
-               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+        TDEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
+                type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
@@ -832,7 +834,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
 }
 
 static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
-    bool has_ptr = rtype == NULL || rtype->last_ptr == 0;
+    bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
     uint8_t spanclass = make_spanclass(0, !has_ptr);
 
     // 计算需要分配的 page count(向上取整)
@@ -864,9 +866,9 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF(
-        "[runtime.large_malloc] success, span->class=%d, span->base=0x%lx, span->obj_size=%ld, need_size=%ld, type_kind=%s, "
-        "addr=0x%lx, allocator_bytes=%ld",
-        span->spanclass, span->base, span->obj_size, size, debug_kind, span->base, allocated_bytes);
+        "[runtime.large_malloc] success, spc=%d, span_base=%p, obj_size=%ld, need_size=%ld, type_kind=%s, "
+        "addr=%p, allocator_bytes=%ld",
+        span->spanclass, (void *)span->base, span->obj_size, size, debug_kind, (void *)span->base, allocated_bytes);
 
     return span->base;
 }

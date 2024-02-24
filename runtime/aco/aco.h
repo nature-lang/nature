@@ -153,7 +153,7 @@ extern void *aco_share_stack_init(aco_share_stack_t *p, size_t sz);
 
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
-__attribute__((optimize(0))) extern void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz,
+extern void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz,
                                                          aco_cofuncp_t fp, void *arg);
 
 // aco's Global Thread Local Storage variable `co`
@@ -163,7 +163,7 @@ static inline aco_t *get_aco_gtls_co() {
     return uv_key_get(&aco_gtls_co);
 }
 
-__attribute__((optimize(0))) aco_attr_no_asan extern void aco_resume(aco_t *resume_co);
+aco_attr_no_asan extern void aco_resume(aco_t *resume_co);
 
 aco_attr_no_asan void aco_share_spill(aco_t *aco);
 

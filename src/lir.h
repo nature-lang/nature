@@ -210,6 +210,15 @@ struct lir_operand_t {
     lir_flag_t pos; // 在 opcode 中的位置信息
 };
 
+static inline bool is_rtcall(string target) {
+    if (!target || strlen(target) == 0) {
+        return false;
+    }
+
+    return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) || str_equal(target, RT_CALL_SET_CONTAINS) ||
+           str_equal(target, RT_CALL_SET_NEW);
+}
+
 static inline lir_operand_t *int_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_INT;
