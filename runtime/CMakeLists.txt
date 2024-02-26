@@ -29,7 +29,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
     # runtime debug 标志
     add_compile_definitions(NATURE_DEBUG)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -fno-omit-frame-pointer")
 endif ()
 
 include_directories(../include)

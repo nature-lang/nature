@@ -47,7 +47,7 @@ int runtime_main(int argc, char *argv[]) {
     // 等待 processor init 注册完成运行后再启动 sysmon 进行抢占式调度
     wait_sysmon();
 
-    if (main_co->error->has) {
+    if (main_co->error && main_co->error->has) {
         coroutine_dump_error(main_co->error);
     }
 

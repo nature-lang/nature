@@ -340,23 +340,22 @@ n_errort co_remove_error() {
 
     coroutine_t *co = coroutine_get();
     n_errort *error = co->error;
-    DEBUGF("[runtime.co_remove_error] remove error: %p, has? %d", error, error->has);
+    DEBUGF("[runtime.co_remove_error] remove error: %p, has? %d", error, error ? error->has : 0);
 
-    co->error = n_error_new(string_new("", 0), 0);
+    co->error = NULL;
 
     post_rtcall_hook("co_remove_error");
     return *error;
 }
 
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
+__attribute__((optimize("O0"))) uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     PRE_RTCALL_HOOK();
 
     coroutine_t *co = coroutine_get();
-    DEBUGF("[runtime.co_has_error] errort? %d, fn_name: %s, line: %ld, column: %ld", co->error->has, fn_name, line, column)
+    DEBUGF("[runtime.co_has_error] errort? %d, fn_name: %s, line: %ld, column: %ld", co->error ? co->error->has : 0, fn_name, line, column)
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-
-    if (co->error->has) {
+    if (co->error && co->error->has) {
         // 存在异常时顺便添加调用栈信息
         n_trace_t trace = {
             .path = string_new(path, strlen(path)),
@@ -369,7 +368,7 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     }
 
     post_rtcall_hook("co_has_error");
-    return co->error->has;
+    return co->error ? co->error->has : 0;
 }
 
 n_cptr_t cptr_casting(value_casting v) {

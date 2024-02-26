@@ -23,6 +23,9 @@ fixalloc_t coroutine_alloc;
 fixalloc_t processor_alloc;
 mutex_t cp_alloc_locker;
 
+// 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了
+extern int main();
+
 __attribute__((optimize(0))) void debug_ret(uint64_t rbp, uint64_t ret_addr) {
     // 这里也不安全了呀，毕竟没有回去。。所以为什么会超时,为啥还需要抢占。这 co 都换新了吧
     // DEBUGF("[runtime.debug_ret] rbp=%p, ret_addr=%p", (void *)rbp, (void *)ret_addr);
@@ -40,7 +43,7 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     assert(co);
 
     DEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
-            p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
+           p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
     p->status = P_STATUS_PREEMPT;
 
@@ -548,7 +551,7 @@ void mark_ptr_black(void *value) {
     uint64_t obj_index = (addr - span->base) / span->obj_size;
     bitmap_set(span->gcmark_bits, obj_index);
     DEBUGF("[runtime.mark_ptr_black] addr=%p, span=%p, spc=%d, span_base=%p, obj_index=%lu marked", value, span, span->spanclass,
-            (void *)span->base, obj_index);
+           (void *)span->base, obj_index);
     mutex_unlock(&span->gcmark_locker);
 }
 
@@ -671,7 +674,7 @@ void processor_set_exit() {
  */
 void processor_free(processor_t *p) {
     DEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
-            &p->share_stack, p->share_stack.ptr);
+           &p->share_stack, p->share_stack.ptr);
 
     aco_share_stack_destroy(&p->share_stack);
     rt_linked_destroy(&p->co_list);
@@ -688,7 +691,7 @@ void processor_free(processor_t *p) {
         mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
         uncache_span(mcentral, span);
         DEBUGF("[wait_sysmon.processor_free] uncache span=%p, span_base=%p, spc=%d, alloc_count=%lu", span, (void *)span->base,
-                span->spanclass, span->alloc_count);
+               span->spanclass, span->alloc_count);
     }
 
     RDEBUGF("[wait_sysmon.processor_free] will free uv_loop p_index_%d=%d, loop=%p", p->share, p->index, &p->uv_loop);
