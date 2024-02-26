@@ -252,6 +252,8 @@ typedef struct coroutine_t {
     uint64_t scan_offset;
     uint64_t scan_ret_addr;
 
+    n_errort *error;
+
     struct coroutine_t *next; // coroutine list
 } coroutine_t;
 
@@ -297,9 +299,9 @@ struct processor_t {
 
 int runtime_main(int argc, char *argv[]);
 
-void rt_processor_attach_errort(char *msg);
+void rt_coroutine_set_error(char *msg);
 
-void processor_dump_errort(n_errort *errort);
+void coroutine_dump_error(n_errort *error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
@@ -317,7 +319,7 @@ void processor_set_status(processor_t *p, p_status_t status);
 #ifdef __x86_64__
 #define BP_VALUE()      \
     uint64_t rbp_value; \
-    asm("mov %%rbp, %0" : "=r"(rbp_value));
+    __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
 #elif
 #define BP_VALUE()      \
     uint64_t rbp_value; \
@@ -327,7 +329,9 @@ void processor_set_status(processor_t *p, p_status_t status);
 #define PRE_RTCALL_HOOK(target)                                                                              \
     do {                                                                                                     \
         processor_t *p = processor_get();                                                                    \
-        assert(p);                                                                                           \
+        if (!p) {                                                                                            \
+            break;                                                                                           \
+        }                                                                                                    \
         if (p->status == P_STATUS_RTCALL) {                                                                  \
             break;                                                                                           \
         }                                                                                                    \
@@ -335,6 +339,7 @@ void processor_set_status(processor_t *p, p_status_t status);
         DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);      \
         BP_VALUE();                                                                                          \
         coroutine_t *co = coroutine_get();                                                                   \
+        assert(co);                                                                                          \
         co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                      \
         co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
     } while (0);

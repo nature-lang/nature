@@ -67,7 +67,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
 
     // TODO 如果在这里被 post_tpl hook 阻塞到了 stw, 此时才开启 barrier
     //  然后进行 scan_stack, 此时会发生什么？vec_new 出来的指针永远无法被扫描到
-    TDEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
+    DEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
     return vec;
 }
 
@@ -82,7 +82,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
         char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_access] has err %s", msg);
-        rt_processor_attach_errort(msg);
+        rt_coroutine_set_error(msg);
         return;
     }
 
@@ -177,14 +177,14 @@ n_vec_t *vec_slice(uint64_t rtype_hash, n_vec_t *l, int64_t start, int64_t end) 
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
         char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_processor_attach_errort(msg);
+        rt_coroutine_set_error(msg);
         return 0;
     }
 
     if (start > end) {
         char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_processor_attach_errort(msg);
+        rt_coroutine_set_error(msg);
         return 0;
     }
 
@@ -239,7 +239,7 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.vec_element_addr] has err %s", msg);
-        rt_processor_attach_errort(msg);
+        rt_coroutine_set_error(msg);
         return 0;
     }
 

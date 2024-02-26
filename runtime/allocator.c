@@ -683,7 +683,7 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
  * @return
  */
 static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
-    TDEBUGF("[mcache_refill] mcache=%p, spanclass=%lu start", mcache, spanclass);
+    DEBUGF("[mcache_refill] mcache=%p, spanclass=%lu start", mcache, spanclass);
 
     mspan_t *mspan = mcache->alloc[spanclass];
 
@@ -767,7 +767,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    TDEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *)addr, size, obj_size);
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *)addr, size, obj_size);
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
@@ -777,7 +777,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
-        TDEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *)temp_addr,
+        DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *)temp_addr,
                 (void *)addr, obj_size);
         int bit_value;
         if (bitmap_test(rtype->gc_bits, index)) {
@@ -788,7 +788,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
             bit_value = 0;
         }
 
-        TDEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
+        DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
                 type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
@@ -1068,7 +1068,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
-        TDEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->share, p->index,
+        DEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->share, p->index,
                 (uint64_t)p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }

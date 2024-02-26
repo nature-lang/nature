@@ -39,7 +39,7 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
-    TDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
+    DEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
             p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
     p->status = P_STATUS_PREEMPT;
@@ -49,7 +49,7 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     rt_linked_push(&p->runnable_list, co);
     mutex_unlock(&p->co_locker);
 
-    TDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
+    DEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
     _co_yield(p, co);
 
     assert(p->status == P_STATUS_RUNNABLE);
@@ -506,32 +506,32 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rt_processor_attach_errort(char *msg) {
-    DEBUGF("[runtime.rt_processor_attach_errort] msg=%s", msg);
-    // processor_t* p = processor_get();
-    // n_errort* errort = n_errort_new(string_new(msg, strlen(msg)), 1);
-    // p->errort = errort;
+void rt_coroutine_set_error(char *msg) {
+    DEBUGF("[runtime.rt_coroutine_set_error] msg=%s", msg);
+    coroutine_t *co = coroutine_get();
+    n_errort *error = n_error_new(string_new(msg, strlen(msg)), 1);
+    co->error = error;
 }
 
-void processor_dump_errort(n_errort *errort) {
-    DEBUGF("[runtime.processor_dump_errort] errort base=%p", errort);
-    n_string_t *msg = errort->msg;
-    DEBUGF("[runtime.processor_dump_errort] memory_string len: %lu, base: %p", msg->length, msg->data);
-    assert(errort->traces->length > 0);
+void coroutine_dump_error(n_errort *error) {
+    DEBUGF("[runtime.coroutine_dump_error] errort base=%p", error);
+    n_string_t *msg = error->msg;
+    DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg->length, msg->data);
+    assert(error->traces->length > 0);
 
     n_trace_t first_trace = {};
-    vec_access(errort->traces, 0, &first_trace);
-    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *)errort->msg->data, (char *)first_trace.path->data,
-                              first_trace.line, first_trace.column);
+    vec_access(error->traces, 0, &first_trace);
+    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *)error->msg->data, (char *)first_trace.path->data, first_trace.line,
+                              first_trace.column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
-    if (errort->traces->length > 1) {
+    if (error->traces->length > 1) {
         char *temp = "stack backtrace:\n";
         VOID write(STDOUT_FILENO, temp, strlen(temp));
-        for (int i = 0; i < errort->traces->length; ++i) {
+        for (int i = 0; i < error->traces->length; ++i) {
             n_trace_t trace = {};
-            vec_access(errort->traces, i, &trace);
+            vec_access(error->traces, i, &trace);
             temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *)trace.ident->data, (char *)trace.path->data, trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }
@@ -547,7 +547,7 @@ void mark_ptr_black(void *value) {
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
     bitmap_set(span->gcmark_bits, obj_index);
-    TDEBUGF("[runtime.mark_ptr_black] addr=%p, span=%p, spc=%d, span_base=%p, obj_index=%lu marked", value, span, span->spanclass,
+    DEBUGF("[runtime.mark_ptr_black] addr=%p, span=%p, spc=%d, span_base=%p, obj_index=%lu marked", value, span, span->spanclass,
             (void *)span->base, obj_index);
     mutex_unlock(&span->gcmark_locker);
 }
@@ -567,7 +567,7 @@ __attribute__((optimize(0))) void pre_tplcall_hook(char *target) {
 
     uint64_t rbp_value;
 #ifdef __x86_64__
-    asm("mov %%rbp, %0" : "=r"(rbp_value));
+    __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
 #elif
     assert(false && "not support");
 #endif
@@ -670,7 +670,7 @@ void processor_set_exit() {
  * @param p
  */
 void processor_free(processor_t *p) {
-    TDEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
+    DEBUGF("[wait_sysmon.processor_free] start p=%p, p_index_%d=%d, loop=%p, share_stack=%p|%p", p, p->share, p->index, &p->uv_loop,
             &p->share_stack, p->share_stack.ptr);
 
     aco_share_stack_destroy(&p->share_stack);
@@ -687,7 +687,7 @@ void processor_free(processor_t *p) {
         p->mcache.alloc[j] = NULL; // uncache
         mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
         uncache_span(mcentral, span);
-        TDEBUGF("[wait_sysmon.processor_free] uncache span=%p, span_base=%p, spc=%d, alloc_count=%lu", span, (void *)span->base,
+        DEBUGF("[wait_sysmon.processor_free] uncache span=%p, span_base=%p, spc=%d, alloc_count=%lu", span, (void *)span->base,
                 span->spanclass, span->alloc_count);
     }
 
@@ -699,7 +699,7 @@ void processor_free(processor_t *p) {
     mutex_lock(&cp_alloc_locker);
     fixalloc_free(&processor_alloc, p);
     mutex_unlock(&cp_alloc_locker);
-    TDEBUGF("[wait_sysmon.processor_free] succ free p_index_%d=%d", share, index);
+    DEBUGF("[wait_sysmon.processor_free] succ free p_index_%d=%d", share, index);
 }
 
 /**

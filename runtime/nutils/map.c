@@ -112,7 +112,7 @@ n_cptr_t map_access(n_map_t *m, void *key_ref) {
                hash_value_deleted(hash_value));
 
         char *msg = dsprintf("key [%s] not found in map", key_str);
-        rt_processor_attach_errort(msg);
+        rt_coroutine_set_error(msg);
         return 0;
     }
 
