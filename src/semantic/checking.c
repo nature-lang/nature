@@ -472,6 +472,23 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
     return type_ptrof(new_expr->type);
 }
 
+static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
+    type_t t = checking_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
+
+    type_t errort = type_new(TYPE_ALIAS, NULL);
+    errort.alias = NEW(type_alias_t);
+    errort.alias->ident = ERRORT_TYPE_ALIAS;
+    errort.origin_ident = ERRORT_TYPE_ALIAS;
+    errort.status = REDUCTION_STATUS_UNDO;
+    errort = reduction_type(m, errort);
+    catch_expr->catch_err.type = errort;
+
+    rewrite_var_decl(m, &catch_expr->catch_err);
+    checking_body(m, catch_expr->catch_body);
+
+    return t;
+}
+
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
@@ -1323,7 +1340,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
 
     if (self_replace->type.kind == TYPE_STRUCT) {
         self_replace = ast_unary(self_replace, AST_OP_LA);
-        //        self_replace->type = type_ptrof(self_replace->type);
+        // self_replace->type = type_ptrof(self_replace->type);
     }
 
     ct_list_push(call->args, self_replace);
@@ -1732,6 +1749,10 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
             checking_call(m, stmt->value);
             break;
         }
+        case AST_CATCH: {
+            checking_catch(m, stmt->value);
+            break;
+        }
         case AST_STMT_IF: {
             return checking_if(m, stmt->value);
         }
@@ -1819,6 +1840,9 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     switch (expr->assert_type) {
         case AST_EXPR_AS: {
             return checking_as_expr(m, expr);
+        }
+        case AST_CATCH: {
+            return checking_catch(m, expr->value);
         }
         case AST_EXPR_IS: {
             return checking_is_expr(m, expr->value);
@@ -2109,9 +2133,9 @@ static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
 static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
 
-    //    if (str_equal(alias->ident, VEC_TYPE_IDENT)) {
-    //        return reduction_type_alias_vec(m, alias);
-    //    }
+    // if (str_equal(alias->ident, VEC_TYPE_IDENT)) {
+    //     return reduction_type_alias_vec(m, alias);
+    // }
 
     symbol_t *symbol = symbol_table_get(alias->ident);
     CHECKING_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
@@ -2390,7 +2414,6 @@ void checking(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
     m->checking_temp_fndefs = slice_new();
-    ;
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();

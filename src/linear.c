@@ -326,7 +326,7 @@ static lir_operand_t *nop_temp_var_operand(module_t *m, type_t type) {
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
     if (is_alloc_stack(var_decl->type)) {
-        // 这没有申请空间
+        // 在 stack 中额外申请一片空间
         // Allocate enough space and store the address of the allocated space in dst.
         lir_stack_alloc(m->linear_current, m->linear_current->operations, var_decl->type, operand);
     }
@@ -735,8 +735,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_op_t *for_start_label = lir_op_unique_label(m, FOR_ITERATOR_IDENT);
     lir_op_t *for_end_label = lir_op_unique_label(m, FOR_END_IDENT);
 
-    stack_push(m->linear_current->for_start_labels, for_start_label->output);
-    stack_push(m->linear_current->for_end_labels, for_end_label->output);
+    stack_push(m->linear_current->continue_labels, for_start_label->output);
+    stack_push(m->linear_current->break_labels, for_end_label->output);
 
     // set label
     OP_PUSH(for_start_label);
@@ -783,8 +783,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_bal(for_start_label->output)); // 重新进行迭代的计算
     OP_PUSH(for_end_label);
 
-    stack_pop(m->linear_current->for_start_labels);
-    stack_pop(m->linear_current->for_end_labels);
+    stack_pop(m->linear_current->continue_labels);
+    stack_pop(m->linear_current->break_labels);
 }
 
 /**
@@ -795,8 +795,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
     lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
-    stack_push(m->linear_current->for_start_labels, for_start->output);
-    stack_push(m->linear_current->for_end_labels, for_end_operand);
+    stack_push(m->linear_current->continue_labels, for_start->output);
+    stack_push(m->linear_current->break_labels, for_end_operand);
 
     OP_PUSH(for_start);
 
@@ -812,8 +812,8 @@ static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
 
     OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
 
-    stack_pop(m->linear_current->for_start_labels);
-    stack_pop(m->linear_current->for_end_labels);
+    stack_pop(m->linear_current->continue_labels);
+    stack_pop(m->linear_current->break_labels);
 }
 
 static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
@@ -823,8 +823,8 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
     lir_op_t *for_update = lir_op_unique_label(m, FOR_UPDATE_IDENT);
     lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
-    stack_push(m->linear_current->for_start_labels, for_update->output);
-    stack_push(m->linear_current->for_end_labels, for_end_operand);
+    stack_push(m->linear_current->continue_labels, for_update->output);
+    stack_push(m->linear_current->break_labels, for_end_operand);
 
     // for_tradition
     OP_PUSH(for_start);
@@ -848,19 +848,19 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     // label for_end
     OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
 
-    stack_pop(m->linear_current->for_start_labels);
-    stack_pop(m->linear_current->for_end_labels);
+    stack_pop(m->linear_current->continue_labels);
+    stack_pop(m->linear_current->break_labels);
 }
 
 static void linear_continue(module_t *m, ast_continue_t *stmt) {
-    LINEAR_ASSERTF(m->linear_current->for_start_labels->count > 0, "continue must use in for stmt")
-    lir_operand_t *label = stack_top(m->linear_current->for_start_labels);
+    LINEAR_ASSERTF(m->linear_current->continue_labels->count > 0, "continue must use in for stmt")
+    lir_operand_t *label = stack_top(m->linear_current->continue_labels);
     OP_PUSH(lir_op_bal(label));
 }
 
 static void linear_break(module_t *m, ast_break_t *stmt) {
-    assert(m->linear_current->for_end_labels->count > 0);
-    lir_operand_t *label = stack_top(m->linear_current->for_end_labels);
+    assert(m->linear_current->break_labels->count > 0);
+    lir_operand_t *label = stack_top(m->linear_current->break_labels);
     OP_PUSH(lir_op_bal(label));
 }
 
@@ -1784,8 +1784,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     exit(1);
 }
 
-static lir_operand_t *linear_catch(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_catch_expr_t *catch_expr = expr.value;
+static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_catch_t *catch_expr = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1806,8 +1806,15 @@ static lir_operand_t *linear_catch(module_t *m, ast_expr_t expr, lir_operand_t *
     // 零值处理 target
     linear_zero_operand(m, expr.type, target);
 
-    // 注册 err
-    // 进行错误处理,
+    // 为 err 赋值
+    lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
+    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+
+    stack_push(m->linear_current->continue_labels, catch_end_label->output);
+    linear_body(m, catch_expr->catch_body);
+    OP_PUSH(catch_end_label);
+
+    return target;
 }
 
 /**
@@ -2117,6 +2124,20 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
                         NULL);
             return;
         }
+        case AST_CATCH: {
+            ast_catch_t *catch = stmt->value;
+            linear_catch_expr(m,
+                              (ast_expr_t){
+                                  .line = stmt->line,
+                                  .column = stmt->column,
+                                  .assert_type = AST_CATCH,
+                                  .type = catch->try_expr.type,
+                                  .target_type = catch->try_expr.type,
+                                  .value = catch,
+                              },
+                              NULL);
+            return;
+        }
         case AST_STMT_RETURN: {
             return linear_return(m, stmt->value);
         }
@@ -2156,6 +2177,7 @@ linear_expr_fn expr_fn_table[] = {
     [AST_EXPR_IS] = linear_is_expr,
     [AST_EXPR_SIZEOF] = linear_sizeof_expr,
     [AST_EXPR_NEW] = linear_new_expr,
+    [AST_CATCH] = linear_catch_expr,
 };
 
 static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {

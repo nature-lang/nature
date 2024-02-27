@@ -116,17 +116,18 @@ static bool parser_must_stmt_end(module_t *m) {
 
 static bool parser_basic_token_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR)
-        //        || parser_is(m, TOKEN_CPTR)
-        || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) ||
-        parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) || parser_is(m, TOKEN_UINT) || parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) ||
-        parser_is(m, TOKEN_U32) || parser_is(m, TOKEN_U64) || parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) ||
-        parser_is(m, TOKEN_BOOL) || parser_is(m, TOKEN_STRING)) {
+        // || parser_is(m, TOKEN_CPTR)
+        || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_I8) ||
+        parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) || parser_is(m, TOKEN_UINT) ||
+        parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) || parser_is(m, TOKEN_U64) ||
+        parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) || parser_is(m, TOKEN_BOOL) ||
+        parser_is(m, TOKEN_STRING)) {
         return true;
     }
     return false;
 }
 
-static slice_t *parser_block(module_t *m) {
+static slice_t *parser_body(module_t *m) {
     slice_t *stmt_list = slice_new();
 
     parser_must(m, TOKEN_LEFT_CURLY); // 必须是
@@ -211,22 +212,22 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    //    if (parser_consume(m, TOKEN_CPTR)) {
-    //        // cptr<type>
-    //        if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-    //            type_null_pointer_t *type_null_pointer = NEW(type_null_pointer_t);
-    //            type_null_pointer->value_type = parser_type(m);
-    //            parser_must(m, TOKEN_RIGHT_ANGLE);
+    // if (parser_consume(m, TOKEN_CPTR)) {
+    //     // cptr<type>
+    //     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+    //         type_null_pointer_t *type_null_pointer = NEW(type_null_pointer_t);
+    //         type_null_pointer->value_type = parser_type(m);
+    //         parser_must(m, TOKEN_RIGHT_ANGLE);
     //
-    //            result.kind = TYPE_NULLABLE_POINTER;
-    //            result.pointer = type_null_pointer;
-    //            return result;
-    //        }
+    //         result.kind = TYPE_NULLABLE_POINTER;
+    //         result.pointer = type_null_pointer;
+    //         return result;
+    //     }
     //
-    //        result.kind = TYPE_CPTR;
-    //        result.value = NULL;
-    //        return result;
-    //    }
+    //     result.kind = TYPE_CPTR;
+    //     result.value = NULL;
+    //     return result;
+    // }
 
     // ptr<type>
     if (parser_consume(m, TOKEN_POINTER)) {
@@ -625,6 +626,32 @@ static ast_expr_t parser_unary(module_t *m) {
     return result;
 }
 
+/**
+ * expr catch err {
+ * }
+ * @param m
+ * @param left
+ * @return
+ */
+static ast_expr_t parser_catch_expr(module_t *m, ast_expr_t left) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_CATCH);
+    ast_catch_t *catch_expr = NEW(ast_catch_t);
+    catch_expr->try_expr = left;
+
+    token_t *error_ident = parser_advance(m);
+    PARSER_ASSERTF(error_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", error_ident->literal);
+
+    catch_expr->catch_err.ident = error_ident->literal;
+    catch_expr->catch_err.type = type_kind_new(TYPE_UNKNOWN); // 实际上就是 errort
+
+    catch_expr->catch_body = parser_body(m);
+
+    result.assert_type = AST_CATCH;
+    result.value = catch_expr;
+    return result;
+}
+
 static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_AS);
@@ -903,16 +930,16 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
     if_stmt->alternate->count = 0;
 
     parser_must(m, TOKEN_IF);
-    //    parser_must(m, TOKEN_LEFT_PAREN);
+    // parser_must(m, TOKEN_LEFT_PAREN);
     if_stmt->condition = parser_expr_with_precedence(m);
-    //    parser_must(m, TOKEN_RIGHT_PAREN);
-    if_stmt->consequent = parser_block(m);
+    // parser_must(m, TOKEN_RIGHT_PAREN);
+    if_stmt->consequent = parser_body(m);
 
     if (parser_consume(m, TOKEN_ELSE)) {
         if (parser_is(m, TOKEN_IF)) {
             if_stmt->alternate = parser_else_if(m);
         } else {
-            if_stmt->alternate = parser_block(m);
+            if_stmt->alternate = parser_body(m);
         }
     }
 
@@ -994,7 +1021,8 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) || parser_is(m, TOKEN_SET)) {
+    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
+        parser_is(m, TOKEN_SET)) {
         return true;
     }
 
@@ -1009,7 +1037,8 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // package.ident foo = xxx
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_IDENT)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_IDENT)) {
         return true;
     }
 
@@ -1019,7 +1048,8 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // package.ident|i8 foo = xxx
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_OR)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_OR)) {
         return true;
     }
 
@@ -1029,7 +1059,8 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // person.foo<[i8]>
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         return true;
     }
 
@@ -1053,7 +1084,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
 
     ast_stmt_t *result = stmt_new(m);
     parser_consume(m, TOKEN_FOR);
-    //    parser_must(m, TOKEN_LEFT_PAREN);
+    // parser_must(m, TOKEN_LEFT_PAREN);
 
     // 通过找 ; 号的形式判断, 必须要有两个 ; 才会是 tradition
     // for int i = 1; i <= 10; i+=1
@@ -1065,7 +1096,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         parser_must(m, TOKEN_SEMICOLON);
         for_tradition_stmt->update = parser_stmt(m);
 
-        for_tradition_stmt->body = parser_block(m);
+        for_tradition_stmt->body = parser_body(m);
 
         result->assert_type = AST_STMT_FOR_TRADITION;
         result->value = for_tradition_stmt;
@@ -1087,7 +1118,7 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
 
         parser_must(m, TOKEN_IN);
         for_iterator_stmt->iterate = parser_expr_with_precedence(m);
-        for_iterator_stmt->body = parser_block(m);
+        for_iterator_stmt->body = parser_body(m);
 
         result->assert_type = AST_STMT_FOR_ITERATOR;
         result->value = for_iterator_stmt;
@@ -1097,8 +1128,8 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     // for (condition) {}
     ast_for_cond_stmt_t *for_cond = NEW(ast_for_cond_stmt_t);
     for_cond->condition = parser_expr_with_precedence(m);
-    //    parser_must(m, TOKEN_RIGHT_PAREN);
-    for_cond->body = parser_block(m);
+    // parser_must(m, TOKEN_RIGHT_PAREN);
+    for_cond->body = parser_body(m);
     result->assert_type = AST_STMT_FOR_COND;
     result->value = for_cond;
     return result;
@@ -1168,6 +1199,16 @@ static ast_stmt_t *parser_ident_begin_stmt(module_t *m) {
         // call right to call stamt
         ast_stmt_t *stmt = stmt_new(m);
         stmt->assert_type = AST_CALL;
+        stmt->value = left.value;
+        return stmt;
+    }
+
+    if (left.assert_type == AST_CATCH) {
+        PARSER_ASSERTF(!parser_is(m, TOKEN_EQUAL), "catch cannot assign");
+        PARSER_ASSERTF(!parser_is(m, TOKEN_CATCH), "catch cannot immediately next catch");
+
+        ast_stmt_t *stmt = stmt_new(m);
+        stmt->assert_type = AST_CATCH;
         stmt->value = left.value;
         return stmt;
     }
@@ -1345,7 +1386,7 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
         fndef->return_type = type_kind_new(TYPE_VOID);
     }
 
-    fndef->body = parser_block(m);
+    fndef->body = parser_body(m);
 
     result.assert_type = AST_FNDEF;
     result.value = fndef;
@@ -1544,7 +1585,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
         return result;
     }
 
-    fndef->body = parser_block(m);
+    fndef->body = parser_body(m);
     return result;
 }
 
@@ -1699,6 +1740,7 @@ static parser_rule rules[] = {
     [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
     [TOKEN_IS] = {NULL, parser_is_expr, PRECEDENCE_TYPE_CAST},
     [TOKEN_SIZEOF] = {parser_sizeof_expr, NULL, PRECEDENCE_NULL},
+    [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
 
     // 以 ident 开头的前缀表达式
     [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
@@ -1786,7 +1828,8 @@ static bool parser_is_struct_new_expr(module_t *m) {
     }
 
     // foo.bar {},
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_CURLY)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_LEFT_CURLY)) {
         return true;
     }
 
@@ -1797,7 +1840,8 @@ static bool parser_is_struct_new_expr(module_t *m) {
         }
     }
 
-    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) && parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         if (is_struct_param_new_prefix(parser_next(m, 3))) {
             return true;
         }

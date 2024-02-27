@@ -154,7 +154,7 @@ typedef struct {
     // parser/analyzer/checking/compiler 阶段的所有异常都写入到这里
     slice_t *ct_errors;
 
-    //    bool entry; // 入口
+    // bool entry; // 入口
     module_type_t type;
 
     scanner_cursor_t s_cursor;
@@ -179,7 +179,7 @@ typedef struct {
 
     // checking
     ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_param_table;     //  只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+    table_t *type_param_table;     // 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
     list_t *type_param_list;
 
     // compiler
@@ -307,7 +307,7 @@ typedef struct interval_t {
     slice_t *phi_hints; // phi def interval 对应的多个 body interval,def interval 优先分配 body var 已经分配的寄存器
     uint8_t assigned;   // 分配的 reg id, 通过 alloc_regs[assigned] 可以定位唯一寄存器
 
-    lir_flag_t alloc_type; //    VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
+    lir_flag_t alloc_type; // VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
     bool fixed;            // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
 } interval_t;
 
@@ -363,8 +363,8 @@ typedef enum {
     LIR_OPCODE_SNE, // !=
 
     LIR_OPCODE_LEA, // 取地址, lea _,_ => v_1 (v_1 必须是有效的内存地址)
-    //    LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
-    //    LIR_OPCODE_SIA, // store reg(var) to indirect addr，将寄存器中的数据存入内存
+    // LIR_OPCODE_LIA, // load indirect addr to reg(var) ，将内存中的数据加载到寄存器中, amd64: mov [rax] -> rdx
+    // LIR_OPCODE_SIA, // store reg(var) to indirect addr，将寄存器中的数据存入内存
 
     LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
     LIR_OPCODE_MOVE,
@@ -444,11 +444,11 @@ typedef struct closure_t {
     char *symbol_name;
     char *closure_name;
     char *end_label;   // 函数的结束地址 label
-    char *error_label; //  遇到表达式错误时需要调整到的目标 label
+    char *error_label; // 遇到表达式错误时需要调整到的目标 label
     char *catch_error_label;
 
-    ct_stack_t *for_start_labels; // 用于 for continue lir_operand*
-    ct_stack_t *for_end_labels;   // 用于 for break lir_operand*
+    ct_stack_t *continue_labels; // 用于 for continue lir_operand*
+    ct_stack_t *break_labels;  // 用于 for break lir_operand*
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
@@ -532,7 +532,7 @@ typedef struct {
     section_t *bss_section;
     section_t *data_section;
     section_t *text_section;
-    //    section_t *rodata_section;
+    // section_t *rodata_section;
     section_t *got;
     section_t *plt;
     section_t *data_rtype_section;

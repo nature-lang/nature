@@ -42,7 +42,6 @@ typedef enum {
     AST_EXPR_TUPLE_DESTR,     // (var_a, var_b, (var_c, var_d))
     AST_EXPR_STRUCT_NEW,      // person {a = 1; b = 2}
     AST_EXPR_TRY,
-    AST_EXPR_CATCH,
     AST_EXPR_BOOM,
 
     // 抽象复合类型
@@ -67,6 +66,7 @@ typedef enum {
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPE_ALIAS,
     AST_CALL,
+    AST_CATCH,
     AST_FNDEF,            // fn def (其包含 body)
     AST_STMT_ENV_CLOSURE, // closure def
 } ast_type_t;
@@ -131,12 +131,6 @@ typedef struct {
 } ast_stmt_t;
 
 typedef struct {
-} ast_continue_t;
-
-typedef struct {
-} ast_break_t;
-
-typedef struct {
     int line;
     int column;
     ast_type_t assert_type; // 表达式断言
@@ -144,6 +138,13 @@ typedef struct {
     type_t target_type;     // 表达式赋值的目标的 type
     void *value;
 } ast_expr_t;
+
+typedef struct {
+    ast_expr_t *expr;
+} ast_continue_t;
+
+typedef struct {
+} ast_break_t;
 
 typedef struct {
     char *literal;
@@ -274,12 +275,14 @@ typedef struct {
 /**
  * int a = b[1].c() catch err {}
  * a.b = d() catch err {}
+ *
+ * expr() catch err {}
  */
 typedef struct {
     ast_expr_t try_expr;
     ast_var_decl_t catch_err;
-    slice_t *catch_handle;
-} ast_catch_expr_t;
+    slice_t *catch_body;
+} ast_catch_t;
 
 /**
  * try {
@@ -479,6 +482,7 @@ typedef struct ast_fndef_t {
     slice_t *be_capture_locals;
 
     list_t *hash_param_types; // 用来计算 params_hash, 如果是 null 就不需要计算, 未 reduction
+
     /**
      * 由于 global 函数能够进行重载，以及泛型，所以在一个模块下可能会存在多个同名的 global 函数
      * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 下的所有 local ident 都会在

@@ -3,28 +3,7 @@ fn hello() {
     throw 'world error'
 }
 
-var err = try hello()
-if err.has {
+// 这里直接被识别成了 stmt!, 这能是什么 stmt?
+hello() catch err {
     println('catch err:', err.msg)
-}
-
-fn one(bool need):int {
-    if need {
-        throw 'i am one error'
-    }
-    return 2
-}
-
-var (s, err) = try one(true)
-if err.has {
-    println('one(true) has err:', err.msg)
-} else {
-    println('one(true) not err, s=', s)
-}
-
-var (s1, err) = try one(false)
-if err.has {
-    println('one(false) has err:', err.msg)
-} else {
-    println('one(false) not err, s1=', s1)
 }
