@@ -1784,6 +1784,32 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     exit(1);
 }
 
+static lir_operand_t *linear_catch(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_catch_expr_t *catch_expr = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_stack(m, expr.type);
+    }
+
+    // 编译 expr, 有异常应该直接就跳转到 catch 了。
+    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    m->linear_current->catch_error_label = catch_error_label;
+    linear_expr(m, catch_expr->try_expr, target);
+    m->linear_current->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+
+    // 跳过错误处理部分
+    lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
+    OP_PUSH(lir_op_bal(catch_end_label->output));
+
+    OP_PUSH(lir_op_label(catch_error_label, true));
+
+    // 零值处理 target
+    linear_zero_operand(m, expr.type, target);
+
+    // 注册 err
+    // 进行错误处理,
+}
+
 /**
  * @param m
  * @param expr

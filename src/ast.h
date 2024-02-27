@@ -60,6 +60,7 @@ typedef enum {
     AST_STMT_RETURN,
     AST_STMT_IF,
     AST_STMT_THROW,
+    AST_STMT_TRY_CATCH,
     AST_STMT_LET,
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
@@ -278,7 +279,7 @@ typedef struct {
     ast_expr_t try_expr;
     ast_var_decl_t catch_err;
     slice_t *catch_handle;
-} ast_catch_t;
+} ast_catch_expr_t;
 
 /**
  * try {
