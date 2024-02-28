@@ -90,7 +90,7 @@ void ssa(closure_t *c) {
  * @param c
  */
 void ssa_domers(closure_t *c) {
-    // 初始化, domers[n0] = {l0}
+    // 初始化, domers[n0] = {l0}, 所有基本块都被 entry block 支配
     basic_block_t *basic_block;
     basic_block = c->blocks->take[0];
     slice_push(basic_block->domers, basic_block);
@@ -476,7 +476,7 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
     slice_t *dom = slice_new();
 
     // 遍历当前 block 的 preds 的 dom_list, 然后求交集
-    // 如果一个基本块支配者每一个前驱，那么其数量等于前驱的数量
+    // 如果一个基本块支配着每一个前驱，那么其数量等于前驱的数量
     uint8_t block_label_count[UINT16_MAX] = {0};
     for (int id = 0; id < c->blocks->count; ++id) {
         block_label_count[id] = 0;

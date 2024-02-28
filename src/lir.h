@@ -863,7 +863,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
 
 closure_t *lir_closure_new(ast_fndef_t *fndef);
 
-static inline basic_block_t *lir_new_basic_block(char *name, uint16_t label_index) {
+static inline basic_block_t *lir_new_block(char *name, uint16_t label_index) {
     basic_block_t *basic_block = NEW(basic_block_t);
     basic_block->name = name;
     basic_block->id = label_index;

@@ -6,4 +6,8 @@ fn hello() {
 // 这里直接被识别成了 stmt!, 这能是什么 stmt?
 hello() catch err {
     println('catch err:', err.msg)
+    continue
+    println('hello world')
 }
+
+println('hello world')
