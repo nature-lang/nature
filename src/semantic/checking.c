@@ -220,34 +220,34 @@ static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
 }
 
 static char *rewrite_ident_use(module_t *m, char *old) {
-    assert(m->checking_current);
-    if (!m->checking_current->params_hash) {
+    assert(m->current_fn);
+    if (!m->current_fn->params_hash) {
         return old;
     }
 
     assertf(!str_char(old, '@'), "repeat rewrite");
 
-    return str_connect_by(old, m->checking_current->params_hash, GEN_REWRITE_SEPARATOR);
+    return str_connect_by(old, m->current_fn->params_hash, GEN_REWRITE_SEPARATOR);
 }
 
 static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
-    assert(m->checking_current);
+    assert(m->current_fn);
     // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
-    if (!m->checking_current->params_hash) {
+    if (!m->current_fn->params_hash) {
         return;
     }
 
-    stmt->ident = str_connect_by(stmt->ident, m->checking_current->params_hash, GEN_REWRITE_SEPARATOR);
+    stmt->ident = str_connect_by(stmt->ident, m->current_fn->params_hash, GEN_REWRITE_SEPARATOR);
     symbol_table_set(stmt->ident, SYMBOL_TYPE_ALIAS, stmt, true);
 }
 
 static void rewrite_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    assert(m->checking_current);
-    if (!m->checking_current->params_hash) {
+    assert(m->current_fn);
+    if (!m->current_fn->params_hash) {
         return;
     }
 
-    var_decl->ident = str_connect_by(var_decl->ident, m->checking_current->params_hash, GEN_REWRITE_SEPARATOR);
+    var_decl->ident = str_connect_by(var_decl->ident, m->current_fn->params_hash, GEN_REWRITE_SEPARATOR);
 
     // 进行符号表重新添加
     symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, true);
@@ -484,7 +484,10 @@ static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
     catch_expr->catch_err.type = errort;
 
     rewrite_var_decl(m, &catch_expr->catch_err);
+
+    stack_push(m->current_fn->continue_target_types, &t);
     checking_body(m, catch_expr->catch_body);
+    stack_pop(m->current_fn->continue_target_types);
 
     return t;
 }
@@ -1023,7 +1026,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
 
     // self.foo 这里是通过 self 访问属性，类似与 self.foo() 中的处理
     if (select->left.type.kind == TYPE_SELF) {
-        ast_fndef_t *current = m->checking_current;
+        ast_fndef_t *current = m->current_fn;
         CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
 
         // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
@@ -1368,7 +1371,7 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
         // 将 self 还原成 ptr<struct>
         if (select->left.type.kind == TYPE_SELF) {
             // 当前 fn body 中出现了 self.foo() 这样的 call 表达式，则说明当前 fn 必须定义在 struct 中
-            ast_fndef_t *current = m->checking_current;
+            ast_fndef_t *current = m->current_fn;
             CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
             // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
             assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE && current->self_struct_ptr->kind == TYPE_PTR);
@@ -1470,7 +1473,7 @@ void checking_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     }
 
     // global var def 也会走该函数，所以需要特殊处理一下，必须携带 m->checking_current 时才进行 var_decl rewrite
-    if (m->checking_current) {
+    if (m->current_fn) {
         rewrite_var_decl(m, var_decl);
     }
 }
@@ -1531,7 +1534,10 @@ static void checking_if(module_t *m, ast_if_stmt_t *stmt) {
 static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
     checking_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
+    type_t t = type_kind_new(TYPE_VOID);
+    stack_push(m->current_fn->continue_target_types, &t);
     checking_body(m, stmt->body);
+    stack_pop(m->current_fn->continue_target_types);
 }
 
 /**
@@ -1588,14 +1594,21 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         }
     }
 
+    type_t t = type_kind_new(TYPE_VOID);
+    stack_push(m->current_fn->continue_target_types, &t);
     checking_body(m, stmt->body);
+    stack_pop(m->current_fn->continue_target_types);
 }
 
 static void checking_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     checking_stmt(m, stmt->init);
     checking_right_expr(m, &stmt->cond, type_kind_new(TYPE_BOOL));
     checking_stmt(m, stmt->update);
+
+    type_t t = type_kind_new(TYPE_VOID);
+    stack_push(m->current_fn->continue_target_types, &t);
     checking_body(m, stmt->body);
+    stack_pop(m->current_fn->continue_target_types);
 }
 
 /**
@@ -1614,11 +1627,21 @@ static void checking_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
  * @param stmt
  */
 static void checking_return(module_t *m, ast_return_stmt_t *stmt) {
-    type_t expect_type = m->checking_current->return_type;
+    type_t expect_type = m->current_fn->return_type;
     if (stmt->expr != NULL) {
         checking_right_expr(m, stmt->expr, expect_type);
     } else {
         CHECKING_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_format(expect_type));
+    }
+}
+
+static void checking_continue(module_t *m, ast_continue_t *stmt) {
+    type_t *expect_type = stack_top(m->current_fn->continue_target_types);
+    assert(expect_type);
+    if (stmt->expr != NULL) {
+        checking_right_expr(m, stmt->expr, *expect_type);
+    } else {
+        CHECKING_ASSERTF(expect_type->kind == TYPE_VOID, "continue cannot with expr");
     }
 }
 
@@ -1770,6 +1793,9 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_RETURN: {
             return checking_return(m, stmt->value);
+        }
+        case AST_STMT_CONTINUE: {
+            return checking_continue(m, stmt->value);
         }
         case AST_STMT_TYPE_ALIAS: {
             return checking_type_alias_stmt(m, stmt->value);
@@ -2095,8 +2121,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
  * @param t
  */
 static type_t generic_specialization(module_t *m, char *ident) {
-    CHECKING_ASSERTF(m->checking_current->generic_assign, "generic assign failed, use type gen must in global fn");
-    type_t *assign = table_get(m->checking_current->generic_assign, ident);
+    CHECKING_ASSERTF(m->current_fn->generic_assign, "generic assign failed, use type gen must in global fn");
+    type_t *assign = table_get(m->current_fn->generic_assign, ident);
     assert(assign);
     return reduction_type(m, *assign);
 }
@@ -2390,7 +2416,7 @@ void pre_checking(module_t *m) {
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
 
-        m->checking_current = fndef;
+        m->current_fn = fndef;
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
@@ -2410,7 +2436,7 @@ void pre_checking(module_t *m) {
 }
 
 void checking(module_t *m) {
-    m->checking_current = NULL;
+    m->current_fn = NULL;
     m->current_line = 0;
     m->current_column = 0;
     m->checking_temp_fndefs = slice_new();
@@ -2422,7 +2448,7 @@ void checking(module_t *m) {
 
         assert(fndef->type.kind == TYPE_FN);
 
-        m->checking_current = fndef;
+        m->current_fn = fndef;
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
@@ -2435,7 +2461,7 @@ void checking(module_t *m) {
     // 所以直接改动 fndefs->symbol_name 可以直接被 struct_new 识别到
     for (int i = 0; i < m->checking_temp_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->checking_temp_fndefs->take[i];
-        m->checking_current = fndef;
+        m->current_fn = fndef;
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 

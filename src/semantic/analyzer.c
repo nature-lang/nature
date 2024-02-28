@@ -738,8 +738,11 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
 static void analyzer_catch(module_t *m, ast_catch_t *catch_expr) {
     analyzer_expr(m, &catch_expr->try_expr);
+
+    analyzer_begin_scope(m);
     analyzer_var_decl(m, &catch_expr->catch_err, true);
     analyzer_body(m, catch_expr->catch_body);
+    analyzer_end_scope(m);
 }
 
 static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
@@ -1245,6 +1248,12 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     analyzer_end_scope(m);
 }
 
+static void analyzer_continue(module_t *m, ast_continue_t *stmt) {
+    if (stmt->expr != NULL) {
+        analyzer_expr(m, stmt->expr);
+    }
+}
+
 static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
     if (stmt->expr != NULL) {
         analyzer_expr(m, stmt->expr);
@@ -1386,6 +1395,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_RETURN: {
             return analyzer_return(m, stmt->value);
+        }
+        case AST_STMT_CONTINUE: {
+            return analyzer_continue(m, stmt->value);
         }
         case AST_STMT_TYPE_ALIAS: {
             return analyzer_type_alias_stmt(m, stmt->value);

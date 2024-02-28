@@ -1222,7 +1222,7 @@ static ast_stmt_t *parser_break_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_BREAK);
 
-    result->value = result;
+    result->value = NEW(ast_break_t);
     result->assert_type = AST_STMT_BREAK;
     return result;
 }
@@ -1231,7 +1231,18 @@ static ast_stmt_t *parser_continue_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_CONTINUE);
 
-    result->value = result;
+    ast_continue_t *c = NEW(ast_continue_t);
+
+    // return } 或者 ;
+    c->expr = NULL;
+    if (!parser_is(m, TOKEN_EOF) && !parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_RIGHT_CURLY)) {
+        ast_expr_t temp = parser_expr(m);
+
+        c->expr = expr_new_ptr(m);
+        memcpy(c->expr, &temp, sizeof(ast_expr_t));
+    }
+
+    result->value = c;
     result->assert_type = AST_STMT_CONTINUE;
     return result;
 }
@@ -1239,7 +1250,7 @@ static ast_stmt_t *parser_continue_stmt(module_t *m) {
 static ast_stmt_t *parser_return_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
-    ast_return_stmt_t *stmt = malloc(sizeof(ast_return_stmt_t));
+    ast_return_stmt_t *stmt = NEW(ast_return_stmt_t);
 
     // return } 或者 ;
     stmt->expr = NULL;

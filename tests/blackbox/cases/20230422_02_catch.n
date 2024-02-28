@@ -1,13 +1,36 @@
 fn hello() {
     println('hello nature')
-    throw 'world error'
+    throw 'hello error'
 }
 
-// 这里直接被识别成了 stmt!, 这能是什么 stmt?
 hello() catch err {
     println('catch err:', err.msg)
     continue
-    println('hello world')
+    continue
+    println('hello world 1')
 }
 
-println('hello world')
+fn world(bool e):int {
+    if e {
+        throw 'world error'
+    }
+    return 233
+}
+
+int foo = world(true) catch err {
+    println('catch err:', err.msg)
+    continue 12
+}
+println('foo =', foo)
+
+foo = world(false) catch err {
+    println('catch err:', err.msg)
+    continue 12
+}
+println('foo =', foo)
+
+
+// return
+hello() catch err1 {
+    throw '??' + err1.msg
+}

@@ -7,6 +7,7 @@
 #include "utils/assertf.h"
 #include "utils/ct_list.h"
 #include "utils/slice.h"
+#include "utils/stack.h"
 #include "utils/table.h"
 #include "utils/type.h"
 
@@ -513,6 +514,8 @@ typedef struct ast_fndef_t {
     bool is_local; // 是否是全局函数
     bool is_tpl;   // 是否是模板函数
 
+    ct_stack_t *continue_target_types;
+
     // dump error
     char *fn_name;
     char *rel_path;
@@ -603,6 +606,7 @@ static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
     fndef->line = line;
     fndef->column = column;
     fndef->local_children = slice_new();
+    fndef->continue_target_types = stack_new();
     return fndef;
 }
 

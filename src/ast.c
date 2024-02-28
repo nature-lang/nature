@@ -588,6 +588,12 @@ static ast_return_stmt_t *ast_return_copy(module_t *m, ast_return_stmt_t *temp) 
     return stmt;
 }
 
+static ast_continue_t *ast_continue_copy(module_t *m, ast_continue_t *temp) {
+    ast_continue_t *stmt = COPY_NEW(ast_continue_t, temp);
+    stmt->expr = ast_expr_copy(m, temp->expr);
+    return stmt;
+}
+
 static slice_t *ast_body_copy(module_t *m, slice_t *temp) {
     slice_t *body = slice_new();
     for (int i = 0; i < temp->count; ++i) {
@@ -655,6 +661,10 @@ static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp) {
         }
         case AST_CALL: {
             stmt->value = ast_call_copy(m, temp->value);
+            break;
+        }
+        case AST_STMT_CONTINUE: {
+            stmt->value = ast_continue_copy(m, temp->value);
             break;
         }
         case AST_CATCH: {

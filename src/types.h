@@ -178,12 +178,12 @@ typedef struct {
     int current_column;
 
     // checking
-    ast_fndef_t *checking_current; // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
-    table_t *type_param_table;     // 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
+    ast_fndef_t *current_fn;   // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
+    table_t *type_param_table; // 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
     list_t *type_param_list;
 
     // compiler
-    struct closure_t *linear_current;
+    struct closure_t *current_closure;
 
     // call init stmt
     ast_stmt_t *call_init_stmt; // analyzer 阶段写入
@@ -447,8 +447,9 @@ typedef struct closure_t {
     char *error_label; // 遇到表达式错误时需要调整到的目标 label
     char *catch_error_label;
 
-    ct_stack_t *continue_labels; // 用于 for continue lir_operand*
-    ct_stack_t *break_labels;  // 用于 for break lir_operand*
+    ct_stack_t *continue_labels;  // 用于 for continue lir_operand*
+    ct_stack_t *continue_targets; // default type_unknown
+    ct_stack_t *break_labels;     // 用于 for break lir_operand*
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中

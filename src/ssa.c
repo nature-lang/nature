@@ -1,9 +1,10 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
-
 #include "ssa.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "src/debug/debug.h"
 
 /**
@@ -103,7 +104,7 @@ void ssa_domers(closure_t *c) {
         for (int k = 0; k < c->blocks->count; ++k) {
             slice_push(other, c->blocks->take[k]);
         }
-        ((basic_block_t *) c->blocks->take[i])->domers = other;
+        ((basic_block_t *)c->blocks->take[i])->domers = other;
     }
 
     // 求不动点
@@ -194,8 +195,8 @@ void ssa_live(closure_t *c) {
     for (int id = 0; id < c->blocks->count; ++id) {
         slice_t *out = slice_new();
         slice_t *in = slice_new();
-        ((basic_block_t *) c->blocks->take[id])->live_out = out;
-        ((basic_block_t *) c->blocks->take[id])->live_in = in;
+        ((basic_block_t *)c->blocks->take[id])->live_out = out;
+        ((basic_block_t *)c->blocks->take[id])->live_in = in;
     }
 
     bool changed = true;
@@ -346,17 +347,17 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     }
     table_t *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
-        string ident = ((lir_var_t *) old->take[i])->ident;
+        string ident = ((lir_var_t *)old->take[i])->ident;
         table_set(var_count, ident, old->take[i]);
     }
 
     // double count 判断同一个变量出现的次数,因为可能出现 new.count > old.count 的情况
     uint8_t double_count = 0;
     for (int i = 0; i < new->count; ++i) {
-        string ident = ((lir_var_t *) new->take[i])->ident;
+        string ident = ((lir_var_t *)new->take[i])->ident;
         void *has = table_get(var_count, ident);
         if (has == NULL) {
-//            table_free(var_count);
+            // table_free(var_count);
             return true;
         }
 
@@ -364,11 +365,11 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     }
 
     if (double_count != new->count) {
-//        table_free(var_count);
+        // table_free(var_count);
         return true;
     }
 
-//    table_free(var_count);
+    // table_free(var_count);
     return false;
 }
 
@@ -436,7 +437,6 @@ void ssa_use_def(closure_t *c) {
                     linked_push(var_blocks, block);
                     table_set(c->ssa_var_block_exists, exists_key, var);
                 }
-
             }
         }
 
@@ -444,7 +444,6 @@ void ssa_use_def(closure_t *c) {
         block->def = def;
     }
 }
-
 
 /**
  * old_dom 和 new_dom list 严格按照 label 编号，从小到大排序,所以可以进行顺序比较
@@ -458,7 +457,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
     }
 
     for (int i = 0; i < old_dom->count; ++i) {
-        if (((basic_block_t *) old_dom->take[i])->id != ((basic_block_t *) new_dom->take[i])->id) {
+        if (((basic_block_t *)old_dom->take[i])->id != ((basic_block_t *)new_dom->take[i])->id) {
             return true;
         }
     }
@@ -467,7 +466,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
 }
 
 /**
- * 计算基本块 i 的支配者，如果一个基本块支配 i 的所有前驱，则该基本块一定支配 i
+ * 计算基本块 i 的支配者，如果一个基本块支配着 i 的所有前驱，则该基本块一定支配 i
  * @param c
  * @param block
  * @return
@@ -476,23 +475,24 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
     slice_t *dom = slice_new();
 
     // 遍历当前 block 的 preds 的 dom_list, 然后求交集
-    // 如果一个基本块支配着每一个前驱，那么其数量等于前驱的数量
+    // 如果一个基本块支配着 i 每一个前驱，那么其数量等于 i 前驱的数量
+    // block_label_count 记录着当前基本块支配着的节点的数量
     uint8_t block_label_count[UINT16_MAX] = {0};
     for (int id = 0; id < c->blocks->count; ++id) {
         block_label_count[id] = 0;
     }
 
     for (int i = 0; i < block->preds->count; ++i) {
-        // 找到 pred
-        slice_t *pred_dom = ((basic_block_t *) block->preds->take[i])->domers;
+        // 找到 pred 的支配者列表(包含自身)
+        slice_t *pred_dom = ((basic_block_t *)block->preds->take[i])->domers;
 
         // 遍历 pred_dom 为 label 计数
         for (int k = 0; k < pred_dom->count; ++k) {
-            block_label_count[((basic_block_t *) pred_dom->take[k])->id]++;
+            block_label_count[((basic_block_t *)pred_dom->take[k])->id]++;
         }
     }
 
-    // 如果 block 的count 和 preds_count 的数量一致则表示该基本块支配了所有的前驱
+    // 如果 block 的 count 和 preds_count 的数量一致则表示该基本块支配了所有的前驱
     // domers 严格按照 label 从小到大排序, 且 block 自身一定是支配自身的
     for (int id = 0; id < c->blocks->count; ++id) {
         if (block_label_count[id] == block->preds->count || id == block->id) {
@@ -506,7 +506,7 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 // 前序遍历各个基本块
 void ssa_rename(closure_t *c) {
     table_t *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
-    table_t *stack_table = table_new(); // use 使用，判断使用的变量的名称
+    table_t *stack_table = table_new();      // use 使用，判断使用的变量的名称
 
     // 遍历所有变量,进行初始化
     SLICE_FOR(c->var_defs) {
@@ -534,9 +534,8 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         lir_op_t *op = current->value;
         // phi body 由当前块的前驱进行编号
         if (op->code == LIR_OPCODE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_var_t *) op->output->value, var_number_table,
-                                                stack_table);
-            ssa_rename_var((lir_var_t *) op->output->value, number);
+            uint8_t number = ssa_new_var_number((lir_var_t *)op->output->value, var_number_table, stack_table);
+            ssa_rename_var((lir_var_t *)op->output->value, number);
 
             current = current->succ;
             continue;
@@ -576,7 +575,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
-//        lir_op_t *succ_op = succ_block->asm_operations->front->succ;
+        // lir_op_t *succ_op = succ_block->asm_operations->front->succ;
         linked_node *op_node = linked_first(succ_block->operations)->succ; // front is label
         while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(op_node);
@@ -648,11 +647,10 @@ uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *s
 void ssa_rename_var(lir_var_t *var, uint8_t number) {
     // 1: '\0'
     // 2: '_12'
-    char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
+    char *buf = (char *)malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
     sprintf(buf, "%s.s%d", var->ident, number);
     var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
-
 
 /**
  * @param var
@@ -661,7 +659,7 @@ void ssa_rename_var(lir_var_t *var, uint8_t number) {
  */
 bool ssa_phi_defined(lir_var_t *var, basic_block_t *block) {
     linked_node *current = block->operations->front->succ;
-    while (current->value != NULL && ((lir_op_t *) current->value)->code == LIR_OPCODE_PHI) {
+    while (current->value != NULL && ((lir_op_t *)current->value)->code == LIR_OPCODE_PHI) {
         lir_op_t *op = current->value;
         lir_var_t *phi_var = op->output->value;
         if (strcmp(phi_var->ident, var->ident) == 0) {
@@ -722,7 +720,3 @@ void live_add(table_t *t, slice_t *lives, lir_var_t *var) {
     slice_push(lives, var);
     table_set(t, var->ident, var);
 }
-
-
-
-

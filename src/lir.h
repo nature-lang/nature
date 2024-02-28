@@ -154,7 +154,7 @@
 
 #define OP(_node) ((lir_op_t *)_node->value)
 
-#define OP_PUSH(_op) linked_push(m->linear_current->operations, _op)
+#define OP_PUSH(_op) linked_push(m->current_closure->operations, _op)
 
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
@@ -744,7 +744,7 @@ static inline lir_operand_t *temp_var_operand_with_stack(module_t *m, type_t typ
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
     if (is_alloc_stack(type)) {
-        lir_stack_alloc(m->linear_current, m->linear_current->operations, type, target);
+        lir_stack_alloc(m->current_closure, m->current_closure->operations, type, target);
     }
 
     return target;
