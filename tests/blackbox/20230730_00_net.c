@@ -1,11 +1,12 @@
-#include "tests/test.h"
+#include <arpa/inet.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <arpa/inet.h>
+#include <unistd.h>
+
+#include "tests/test.h"
 
 #define BUFFER_SIZE 4096
 
@@ -39,7 +40,7 @@ static void curl() {
         server_addr.sin_port = htons(port);
         inet_pton(AF_INET, host, &(server_addr.sin_addr));
 
-        if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
             perror("connect");
             close(sockfd);
             exit(EXIT_FAILURE);
@@ -63,25 +64,26 @@ static void curl() {
             total_size += bytes_received;
 
             char *http_body = get_http_body(response);
-            DEBUGF("%s\n", http_body);
+            log_debug("%s\n", http_body);
         }
 
         close(sockfd);
         exit(0);
     }
 
-    DEBUGF("child start successful");
+    log_debug("child start successful");
 }
 
 static void test_basic() {
     curl();
 
     char *raw = exec_output();
-    char *str = "create socket success\n"
-                "bind :8080 success\n"
-                "listen success\n"
-                "accept success\n"
-                "send success, len: 78\n";
+    char *str =
+        "create socket success\n"
+        "bind :8080 success\n"
+        "listen success\n"
+        "accept success\n"
+        "send success, len: 78\n";
     assert_string_equal(raw, str);
 }
 

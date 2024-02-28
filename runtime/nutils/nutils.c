@@ -348,27 +348,29 @@ n_errort co_remove_error() {
     return *error;
 }
 
-__attribute__((optimize("O0"))) uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
+uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
+    coroutine_t *co = coroutine_get();
+    if (!co->error || co->error->has == false) {
+        return 0;
+    }
+
     PRE_RTCALL_HOOK();
 
-    coroutine_t *co = coroutine_get();
     DEBUGF("[runtime.co_has_error] errort? %d, fn_name: %s, line: %ld, column: %ld", co->error ? co->error->has : 0, fn_name, line, column)
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-    if (co->error && co->error->has) {
-        // 存在异常时顺便添加调用栈信息
-        n_trace_t trace = {
-            .path = string_new(path, strlen(path)),
-            .ident = string_new(fn_name, strlen(fn_name)),
-            .line = line,
-            .column = column,
-        };
+    // 存在异常时顺便添加调用栈信息
+    n_trace_t trace = {
+        .path = string_new(path, strlen(path)),
+        .ident = string_new(fn_name, strlen(fn_name)),
+        .line = line,
+        .column = column,
+    };
 
-        vec_push(co->error->traces, &trace);
-    }
+    vec_push(co->error->traces, &trace);
 
     post_rtcall_hook("co_has_error");
-    return co->error ? co->error->has : 0;
+    return 1;
 }
 
 n_cptr_t cptr_casting(value_casting v) {

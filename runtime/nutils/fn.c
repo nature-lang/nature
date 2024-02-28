@@ -1,7 +1,7 @@
 #include "fn.h"
 
 #include "array.h"
-#include "runtime/memory.h"
+#include "runtime/runtime.h"
 
 #ifdef __AMD64
 
@@ -235,6 +235,7 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
     DEBUGF("[runtime.env_closure] closure success, upvalue->ref=%p stack_addr=0x%lx, ", upvalue->ref, stack_addr);
 
     table_delete(env_table, utoa(stack_addr));
+    post_rtcall_hook("env_closure");
 }
 
 void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size) {

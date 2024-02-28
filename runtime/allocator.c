@@ -778,7 +778,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
         DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *)temp_addr,
-                (void *)addr, obj_size);
+               (void *)addr, obj_size);
         int bit_value;
         if (bitmap_test(rtype->gc_bits, index)) {
             bitmap_set(arena->bits, bit_index); // 1 表示为指针
@@ -789,7 +789,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
         }
 
         DEBUGF("[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
-                type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+               type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
 
         index += 1;
     }
@@ -825,7 +825,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    DEBUGF("[std_malloc] sc,spc=%d,base=%p,ac=%ld,s=%ld,k=%s,a=%p,ab=%ld,gb=%d", span->spanclass, (void *)span->base, span->alloc_count,
+    DEBUGF("[std_malloc] success, spc=%d,base=%p,alloc_count=%ld,size=%ld,kind=%s,addr=%p,alloc_bytes=%ld,gc_barrier=%d", span->spanclass, (void *)span->base, span->alloc_count,
            size, debug_kind, (void *)addr, allocated_bytes, gc_barrier_get());
 
     assert(span_of(addr) == span && "std_malloc span not match");
@@ -859,6 +859,10 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
         heap_arena_bits_set(span->base, size, span->obj_size, rtype);
     }
 
+    assert(span->obj_count == 1);
+    bitmap_set(span->alloc_bits, 0);
+    span->alloc_count += 1;
+
     allocated_bytes += span->obj_size;
 
     char *debug_kind = "";
@@ -867,8 +871,9 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     }
     DEBUGF(
         "[runtime.large_malloc] success, spc=%d, span_base=%p, obj_size=%ld, need_size=%ld, type_kind=%s, "
-        "addr=%p, allocator_bytes=%ld",
-        span->spanclass, (void *)span->base, span->obj_size, size, debug_kind, (void *)span->base, allocated_bytes);
+        "addr=%p,alloc_count=%lu,alloc_bit=%d, allocator_bytes=%ld",
+        span->spanclass, (void *)span->base, span->obj_size, size, debug_kind, (void *)span->base, span->alloc_count,
+        bitmap_test(span->alloc_bits, 0), allocated_bytes);
 
     return span->base;
 }
@@ -1069,7 +1074,7 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
         DEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->share, p->index,
-                (uint64_t)p->thread_id, p->status, ptr);
+               (uint64_t)p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }
 

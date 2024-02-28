@@ -154,12 +154,6 @@ void coroutine_dispatch(coroutine_t *co);
  */
 void coroutine_resume(processor_t *p, coroutine_t *co);
 
-__attribute__((optimize(0))) void pre_tplcall_hook(char *target);
-
-__attribute__((optimize(0))) void post_tplcall_hook(char *target);
-
-__attribute__((optimize(0))) void post_rtcall_hook(char *target);
-
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
 #endif // NATURE_PROCESSOR_H

@@ -133,7 +133,9 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     assert(span->obj_count > 0 && span->obj_count <= 1024);
     assert(span->base > 0);
 
-    RDEBUGF("[sweep_span] start, span=%p, spc=%d, base=%p, obj_size=%ld", span, span->spanclass, (void *)span->base, span->obj_size);
+    RDEBUGF("[sweep_span] start, span=%p, spc=%d, base=%p, obj_size=%ld, alloc_count=%ld, obj_count=%ld", span, span->spanclass,
+            (void *)span->base, span->obj_size, span->alloc_count, span->obj_count);
+
     int alloc_count = 0;
     for (int i = 0; i < span->obj_count; ++i) {
         if (bitmap_test(span->gcmark_bits, i)) {
@@ -141,7 +143,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             continue;
         }
 
-        // 如果 gcmark_bits = 0, alloc_bits = 1, 则表明内存被释放，可以进行释放的, TODO 这一段都属于 debug 逻辑
+        // 如果 gcmark_bits(没有被标记) = 0, alloc_bits(分配过) = 1, 则表明内存被释放，可以进行释放的, TODO 这一段都属于 debug 逻辑
         if (bitmap_test(span->alloc_bits, i) && !bitmap_test(span->gcmark_bits, i)) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
@@ -149,11 +151,14 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             RDEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *)(span->base + i * span->obj_size));
             // TODO 直接 set 0 让 gc 问题快速暴露出来
             memset((void *)(span->base + i * span->obj_size), 0, span->obj_size);
+        } else {
+            RDEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                    (void *)(span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i), bitmap_test(span->gcmark_bits, i));
         }
     }
 
     DEBUGF("[sweep_span] current alloc_count=%d, obj_count=%lu, span=%p, base=%p, spc=%d", alloc_count, span->obj_count, span,
-            (void *)span->base, span->spanclass)
+           (void *)span->base, span->spanclass)
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
@@ -301,7 +306,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
         scan_sp = ((addr_t)stack.ptr + stack.valid_sz) - co->scan_offset;
         size = stack.valid_sz;
     } else {
-        // retptr 指向了栈底，
+        // retptr 指向了栈底(最大值)
         scan_sp = (addr_t)p->share_stack.align_retptr - co->scan_offset;
         size = co->scan_offset;
     }
@@ -310,21 +315,21 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co, (void *)scan_sp, size,
            (void *)co->scan_ret_addr);
 
-    // #ifdef DEBUG
-    //     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    //     addr_t temp_cursor = (addr_t)scan_sp;
-    //     size_t temp_i = 0;
-    //     size_t max_i = size / POINTER_SIZE;
-    //     while (temp_i < max_i) {
-    //         addr_t v = fetch_addr_value((addr_t)temp_cursor);
-    //         fndef_t *fn = find_fn(v);
-    //         TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
-    //                fn ? fn->name : "", fn ? fn->stack_size : 0);
-    //         temp_cursor += POINTER_SIZE;
-    //         temp_i += 1;
-    //     }
-    //     DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
-    // #endif
+#ifdef NATURE_DEBUG
+    DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
+    addr_t temp_cursor = (addr_t)scan_sp; // 栈向下(小)增长
+    size_t temp_i = 0;
+    size_t max_i = size / POINTER_SIZE;
+    while (temp_i < max_i) {
+        addr_t v = fetch_addr_value((addr_t)temp_cursor);
+        fndef_t *fn = find_fn(v);
+        TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i, temp_cursor, v,
+               fn ? fn->name : "", fn ? fn->stack_size : 0);
+        temp_cursor += POINTER_SIZE;
+        temp_i += 1;
+    }
+    DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
+#endif
 
     addr_t cursor = scan_sp;
     addr_t max = scan_sp + size;
@@ -344,7 +349,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
                 scan_ptr_count++;
             } else {
                 DEBUGF("[runtime_gc.scan_stack] conservative scan skip, cursor=%p, value=%p, in_heap=%d, span_of=%p", (void *)cursor,
-                        (void *)value, in_heap(value), span_of(value));
+                       (void *)value, in_heap(value), span_of(value));
             }
 
             cursor += POINTER_SIZE;
@@ -370,14 +375,14 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
 
         scan_fn_count++;
 
-        DEBUGF("[runtime_gc.scan_stack] fn_name=%s, ret_addr=%p", fn->name, (void *)ret_addr);
+        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p", fn->name, (void *)ret_addr);
 
         addr_t frame_cursor = cursor;
-        uint64_t ptr_count = fn->stack_size / POINTER_SIZE;
-        for (int i = 0; i < ptr_count; ++i) {
+        int64_t ptr_count = fn->stack_size / POINTER_SIZE;
+        for (int64_t i = ptr_count - 1; i >= 0; --i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime.scan_stack] fn_name=%s, fn_gc_bits i=%d, is_ptr=%d, may_value=%p", fn->name, i, is_ptr,
-                    (void *)fetch_int_value(frame_cursor, 8));
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i, ptr_count - 1, is_ptr,
+                   (void *)fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -386,7 +391,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
                     insert_gc_worklist(worklist, (void *)value);
                 } else {
                     DEBUGF("[runtime_gc.scan_stack] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)frame_cursor, (void *)value,
-                            in_heap(value), span_of(value));
+                           in_heap(value), span_of(value));
                 }
             }
 
@@ -442,7 +447,7 @@ static void handle_gc_ptr(addr_t addr) {
 
     bitmap_set(span->gcmark_bits, obj_index);
     DEBUGF("[handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d", (void *)addr, span, (void *)span->base,
-            obj_index, bitmap_test(span->gcmark_bits, obj_index));
+           obj_index, bitmap_test(span->gcmark_bits, obj_index));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -485,7 +490,7 @@ static void handle_gc_ptr(addr_t addr) {
                 }
             } else {
                 DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *)temp_addr, (void *)value, in_heap(value),
-                        span_of(value));
+                       span_of(value));
             }
         }
     }

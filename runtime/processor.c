@@ -42,8 +42,8 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     coroutine_t *co = p->coroutine;
     assert(co);
 
-    DEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
-           p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
+    RDEBUGF("[runtime.co_preempt_yield] p_index_%d=%d(%d), co=%p, p_status=%d, scan_ret_addr=%p, scan_offset=%lu, will yield", p->share,
+            p->index, p->status, co, co->status, (void *)co->scan_ret_addr, co->scan_offset);
 
     p->status = P_STATUS_PREEMPT;
 
@@ -52,7 +52,7 @@ __attribute__((optimize(0))) void co_preempt_yield() {
     rt_linked_push(&p->runnable_list, co);
     mutex_unlock(&p->co_locker);
 
-    DEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
+    RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
     _co_yield(p, co);
 
     assert(p->status == P_STATUS_RUNNABLE);
@@ -151,7 +151,8 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
 
-    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co, co->main);
+    DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co,
+           co->main);
     processor_set_status(p, P_STATUS_RTCALL);
 
     if (co->main) {
@@ -561,7 +562,7 @@ void mark_ptr_black(void *value) {
  * yield 的入口也是这里
  * @param target
  */
-__attribute__((optimize(0))) void pre_tplcall_hook(char *target) {
+void pre_tplcall_hook(char *target) {
     coroutine_t *co = coroutine_get();
     processor_t *p = processor_get();
 
@@ -595,14 +596,14 @@ __attribute__((optimize(0))) void pre_tplcall_hook(char *target) {
     // #endif
 }
 
-__attribute__((optimize(0))) void post_tplcall_hook(char *target) {
+void post_tplcall_hook(char *target) {
     processor_t *p = processor_get();
     TRACEF("[runtime.post_tplcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running", processor_get(), target,
            p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
-__attribute__((optimize(0))) void post_rtcall_hook(char *target) {
+void post_rtcall_hook(char *target) {
     processor_t *p = processor_get();
     DEBUGF("[runtime.post_rtcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running", processor_get(), target,
            p->share, p->index);

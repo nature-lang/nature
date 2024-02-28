@@ -47,7 +47,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     }
 
     assert(capacity >= length && "capacity must be greater than length");
-    TRACEF("[runtime.vec_new] length=%lu, capacity=%lu", length, capacity);
+    TRACEF("[vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(rtype_hash);
@@ -65,9 +65,7 @@ n_vec_t *vec_new(uint64_t rtype_hash, uint64_t element_rtype_hash, uint64_t leng
     vec->element_rtype_hash = element_rtype_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    // TODO 如果在这里被 post_tpl hook 阻塞到了 stw, 此时才开启 barrier
-    //  然后进行 scan_stack, 此时会发生什么？vec_new 出来的指针永远无法被扫描到
-    DEBUGF("[runtime.vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
+    DEBUGF("[vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_rtype_hash);
     return vec;
 }
 

@@ -91,7 +91,7 @@ typedef struct mspan_t {
     uint64_t alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
-    gc_bits *alloc_bits;  // obj_count
+    gc_bits *alloc_bits;
     gc_bits *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
     mutex_t alloc_locker;
@@ -326,22 +326,28 @@ void processor_set_status(processor_t *p, p_status_t status);
     assert(false && "not support");
 #endif
 
-#define PRE_RTCALL_HOOK(target)                                                                              \
-    do {                                                                                                     \
-        processor_t *p = processor_get();                                                                    \
-        if (!p) {                                                                                            \
-            break;                                                                                           \
-        }                                                                                                    \
-        if (p->status == P_STATUS_RTCALL) {                                                                  \
-            break;                                                                                           \
-        }                                                                                                    \
-        processor_set_status(p, P_STATUS_RTCALL);                                                            \
-        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);      \
-        BP_VALUE();                                                                                          \
-        coroutine_t *co = coroutine_get();                                                                   \
-        assert(co);                                                                                          \
-        co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                      \
-        co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
+#define PRE_RTCALL_HOOK(target)                                                                               \
+    do {                                                                                                      \
+        processor_t *p = processor_get();                                                                     \
+        if (!p) {                                                                                             \
+            break;                                                                                            \
+        }                                                                                                     \
+        if (p->status == P_STATUS_RTCALL) {                                                                   \
+            break;                                                                                            \
+        }                                                                                                     \
+        processor_set_status(p, P_STATUS_RTCALL);                                                             \
+        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);       \
+        BP_VALUE();                                                                                           \
+        coroutine_t *_co = coroutine_get();                                                                   \
+        assert(_co);                                                                                          \
+        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                      \
+        _co->scan_offset = (uint64_t)p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
     } while (0);
+
+void pre_tplcall_hook(char *target);
+
+void post_tplcall_hook(char *target);
+
+void post_rtcall_hook(char *target);
 
 #endif // NATURE_BASIC_H
