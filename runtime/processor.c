@@ -136,7 +136,7 @@ static void processor_uv_close(processor_t *p) {
     RDEBUGF("[runtime.processor_uv_close] processor uv close success p_index_%d=%d", p->share, p->index);
 }
 
-static void coroutine_wrapper() {
+__attribute__((optimize("O0"))) static void coroutine_wrapper() {
     coroutine_t *co = aco_get_arg();
     assert(co);
     processor_t *p = processor_get();
@@ -151,10 +151,6 @@ static void coroutine_wrapper() {
     // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
     ((void_fn_t)co->fn)();
 
-    // 更新到 syscall 就不可抢占
-    write(STDOUT_FILENO, "----------------0\n", 18);
-    DEBUGF("[runtime.coroutine_wrapper] -----------------");
-    write(STDOUT_FILENO, "----------------1\n", 18);
     DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co, co->main);
     processor_set_status(p, P_STATUS_RTCALL);
 
@@ -865,7 +861,7 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st) {
 }
 
 void processor_set_status(processor_t *p, p_status_t status) {
-    // assert(p);
+    assert(p);
     assert(p->status != status);
 
     // rtcall 是不稳定状态，可以随时切换到任意状态

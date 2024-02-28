@@ -18,7 +18,9 @@ fn sum(int a, int b):int {
     return a + b
 }
 
-var g = sum(12, -1)
+var g = sum(12, -1) catch err {
+    println('no err')
+}
 
 bool has_err = false
 bool h = has_err
