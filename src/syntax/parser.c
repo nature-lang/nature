@@ -1917,9 +1917,9 @@ static ast_expr_t parser_expr(module_t *m) {
     }
 
     // try
-    if (parser_is(m, TOKEN_TRY)) {
-        return parser_try_expr(m);
-    }
+    // if (parser_is(m, TOKEN_TRY)) {
+    //     return parser_try_expr(m);
+    // }
 
     // fn def
     if (parser_is(m, TOKEN_FN)) {

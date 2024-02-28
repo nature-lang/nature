@@ -137,7 +137,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         // import file 模式下直接使用当前 module 携带的 package 即可,可能为 null
         // 链接  /root/base_ns/foo/bar.n
         import->full_path = path_join(m->source_dir, import->file);
-        if (import->as && strlen(import->as) == 0) {
+        if (!import->as || strlen(import->as) == 0) {
             import->as = module_as;
         }
 

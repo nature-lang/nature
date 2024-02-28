@@ -139,10 +139,10 @@ static void processor_uv_close(processor_t *p) {
 static void coroutine_wrapper() {
     coroutine_t *co = aco_get_arg();
     assert(co);
-    processor_t *p = co->p;
+    processor_t *p = processor_get();
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d(%d) co=%p, main=%d, gc_work=%d", p->share, p->index, p->status, co, co->main,
+    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, main=%d, gc_work=%d", p->share, p->index, p->status, co, co->main,
            co->gc_work);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
@@ -152,12 +152,17 @@ static void coroutine_wrapper() {
     ((void_fn_t)co->fn)();
 
     // 更新到 syscall 就不可抢占
-    processor_set_status(p, P_STATUS_TPLCALL);
+    write(STDOUT_FILENO, "----------------0\n", 18);
+    DEBUGF("[runtime.coroutine_wrapper] -----------------");
+    write(STDOUT_FILENO, "----------------1\n", 18);
+    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co, co->main);
+    processor_set_status(p, P_STATUS_RTCALL);
 
     if (co->main) {
         // 通知所有协程退出
         processor_set_exit();
-        DEBUGF("[runtime.coroutine_wrapper] co=%p, main coroutine exit, set processor_need_exit=true", co);
+        DEBUGF("[runtime.coroutine_wrapper]  p_index_%d=%d co=%p, main coroutine exit, set processor_need_exit=true", p->share, p->index,
+               co);
     }
 
     co_set_status(p, co, CO_STATUS_DEAD);
@@ -596,13 +601,15 @@ __attribute__((optimize(0))) void pre_tplcall_hook(char *target) {
 
 __attribute__((optimize(0))) void post_tplcall_hook(char *target) {
     processor_t *p = processor_get();
-    TRACEF("[runtime.post_tplcall_hook] p_index_%d=%d will set processor_status", p->share, p->index);
+    TRACEF("[runtime.post_tplcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running", processor_get(), target,
+           p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
 __attribute__((optimize(0))) void post_rtcall_hook(char *target) {
     processor_t *p = processor_get();
-    DEBUGF("[runtime.post_rtcall_hook] target=%s, p_index_%d=%d will set processor_status", target, p->share, p->index);
+    DEBUGF("[runtime.post_rtcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running", processor_get(), target,
+           p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
@@ -858,7 +865,7 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st) {
 }
 
 void processor_set_status(processor_t *p, p_status_t status) {
-    assert(p);
+    // assert(p);
     assert(p->status != status);
 
     // rtcall 是不稳定状态，可以随时切换到任意状态
