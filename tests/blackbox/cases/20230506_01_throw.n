@@ -7,30 +7,26 @@ fn rem(int dividend, int divisor):int {
 }
 
 int result = 0
-var err = errort{}
 
-// 正常情况处理
+// normal
 result = rem(10, 3)
 println(result)
 
-// 正常情况
-(result, err) = try rem(10, 4)
-if err.has {
-	println(err.msg)
-} else {
-	println(result)
+// normal
+result = rem(10, 4) catch err {
+    // default continue
+    println(err.msg)
 }
+println(result)
 
-// 异常情况
-(result, err) = try rem(10, 0)
-if err.has {
-	// error handle, errort 结构中包含 msg 字段存储了错误的信息
-	println(err.msg)
-} else {
-	println(result)
+// error handle
+result = rem(10, 0) catch err {
+    println(err.msg)
+    continue 1
 }
+println(result)
 
 
-// 异常情况不 try
+// error not handle
 result = rem(10, 0)
 println('hello world')

@@ -25,14 +25,17 @@ if sigfd == -1 {
 var sig_info = signalfd_siginfo_t{}
 
 for int i = 0; i < 100; i+=1 {
-    var (len, err) = try syscall.read(sigfd as int, sig_info as cptr, sizeof(signalfd_siginfo_t))
-    if err.has {
+    var len = syscall.read(sigfd as int, sig_info as cptr, sizeof(signalfd_siginfo_t)) catch err {
        if err.msg == 'Resource temporarily unavailable' {
            fmt.printf('not received any sig, will sleep\n')
        } else {
            throw fmt.sprintf('read sigfd %d err=%s', sigfd, err.msg)
        }
-    } else {
+
+        continue -1
+    }
+
+    if len != -1 {
        fmt.printf('read sig %d success\n', sig_info.ssi_signo)
        break
     }

@@ -4,11 +4,9 @@ user.register('xiaowei', 'hahaha123')
 
 user.register('xiaoyou', 'nanana456')
 
-var err = try user.register('xiaoyou', 'nanana789')
-if err.has {
+user.register('xiaoyou', 'nanana789') catch err {
 	println(err.msg)
 }
-
 
 var foo = user.find('xiaoyou')
 println(foo.username, '-', foo.password)

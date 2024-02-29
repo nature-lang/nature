@@ -3,8 +3,10 @@ import fmt.util as *
 import syscall
 
 fn exists(string path):bool {
-   var (_, err) =  try syscall.stat(path)
-   return !err.has
+   var _ =  syscall.stat(path) catch err {
+        return false
+   }
+   return true
 }
 
 // refer golang path.base
@@ -99,8 +101,7 @@ fn _join(string dst, string src):string {
 }
 
 fn isdir(string path):bool {
-   var (s, err) =  try syscall.stat(path)
-    if err.has {
+   var s = syscall.stat(path) catch err {
          return false
     }
 

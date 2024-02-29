@@ -436,12 +436,17 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
 void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
     PRE_RTCALL_HOOK();
+    DEBUGF("[runtime.write_barrier] rtype_hash=%lu, slot=%p, new_obj=%p", rtype_hash, slot, new_obj);
 
     rtype_t *rtype = rt_find_rtype(rtype_hash);
     if (!gc_barrier_get()) {
-        memmove(slot, new_obj, rtype->size);
+        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier, rtype_size=%lu, kind=%s",
+                rtype_out_size(rtype, POINTER_SIZE), type_kind_str[rtype->kind]);
+        memmove(slot, new_obj, rtype_out_size(rtype, POINTER_SIZE));
         return;
     }
+
+    RDEBUGF("[runtime.write_barrier] gc_barrier is true");
 
     processor_t *p = processor_get();
 
@@ -460,7 +465,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
         shade_obj_grey(new_obj);
     }
 
-    memmove(slot, new_obj, rtype->size);
+    memmove(slot, new_obj, rtype_out_size(rtype, POINTER_SIZE));
 
     if (!p->share) {
         mutex_unlock(&p->gc_stw_locker);

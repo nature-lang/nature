@@ -115,13 +115,11 @@ static bool parser_must_stmt_end(module_t *m) {
 }
 
 static bool parser_basic_token_type(module_t *m) {
-    if (parser_is(m, TOKEN_VAR)
-        // || parser_is(m, TOKEN_CPTR)
-        || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_I8) ||
-        parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) || parser_is(m, TOKEN_UINT) ||
-        parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) || parser_is(m, TOKEN_U64) ||
-        parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) || parser_is(m, TOKEN_BOOL) ||
-        parser_is(m, TOKEN_STRING)) {
+    if (parser_is(m, TOKEN_VAR) || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) ||
+        parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) ||
+        parser_is(m, TOKEN_UINT) || parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) ||
+        parser_is(m, TOKEN_U64) || parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) ||
+        parser_is(m, TOKEN_BOOL) || parser_is(m, TOKEN_STRING)) {
         return true;
     }
     return false;
@@ -211,23 +209,6 @@ static type_t parser_single_type(module_t *m) {
         result.value = NULL;
         return result;
     }
-
-    // if (parser_consume(m, TOKEN_CPTR)) {
-    //     // cptr<type>
-    //     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-    //         type_null_pointer_t *type_null_pointer = NEW(type_null_pointer_t);
-    //         type_null_pointer->value_type = parser_type(m);
-    //         parser_must(m, TOKEN_RIGHT_ANGLE);
-    //
-    //         result.kind = TYPE_NULLABLE_POINTER;
-    //         result.pointer = type_null_pointer;
-    //         return result;
-    //     }
-    //
-    //     result.kind = TYPE_CPTR;
-    //     result.value = NULL;
-    //     return result;
-    // }
 
     // ptr<type>
     if (parser_consume(m, TOKEN_POINTER)) {

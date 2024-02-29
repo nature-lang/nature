@@ -184,7 +184,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     ANALYZER_ASSERTF(file_exists(import->full_path), "cannot find import file %s", import->full_path);
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
-    if (import->as && strlen(import->as) == 0) {
+    if (!import->as || strlen(import->as) == 0) {
         import->as = import->ast_package->take[import->ast_package->count - 1];
     }
 
@@ -309,7 +309,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             // local ident 或者当前 module 下的全局 ident
             char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
             if (!unique_alias_ident) {
-                // 判断是否是特殊类型，如果是的话直接进行 type 类型改写
+                // 在类型为定义的前提下， 判断是否是特殊类型，如果是的话直接进行 type 类型改写
                 if (analyzer_special_type_rewrite(m, type)) {
                     return;
                 }
@@ -438,18 +438,26 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     if (str_equal(type_alias->ident, type_kind_str[TYPE_CPTR])) {
         type->kind = TYPE_CPTR;
         type->value = NULL;
+
+        // cptr 不能有参数
+        ANALYZER_ASSERTF(type_alias->args == NULL, "cptr cannot contains arg");
+
         return true;
     }
 
     if (str_equal(type_alias->ident, type_kind_str[TYPE_ALL_T])) {
         type->kind = TYPE_ALL_T;
         type->value = NULL;
+
+        ANALYZER_ASSERTF(type_alias->args == NULL, "all_t cannot contains arg");
         return true;
     }
 
     if (str_equal(type_alias->ident, type_kind_str[TYPE_FN_T])) {
         type->kind = TYPE_FN_T;
         type->value = NULL;
+
+        ANALYZER_ASSERTF(type_alias->args == NULL, "fn_t cannot contains arg");
         return true;
     }
 
@@ -1076,8 +1084,8 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
         if (import->module_type == MODULE_TYPE_TPL) {
             assert(import_tpl_symbol_table);
             assert(import->full_path);
-            table_t *temp_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
-            if (table_exist(temp_symbol_table, ident->literal)) {
+            table_t *tpl_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
+            if (table_exist(tpl_symbol_table, ident->literal)) {
                 // temp global Symbol does not require symbol rewriting
                 return;
             }

@@ -773,10 +773,12 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
+    // fn_t 可以匹配所在的 fn 类型
     if (dst.kind == TYPE_FN_T && src.kind == TYPE_FN) {
         return true;
     }
 
+    // nptr<t> 可以匹配 null 和 ptr<t>
     // nptr is ptr<...>|null so can access null and ptr
     if (dst.kind == TYPE_NPTR) {
         if (src.kind == TYPE_NULL) {
@@ -910,7 +912,7 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
-    if (dst.kind == TYPE_PTR || dst.kind == TYPE_NPTR) {
+    if (dst.kind == TYPE_PTR) {
         type_t left_pointer = dst.pointer->value_type;
         type_t right_pointer = src.pointer->value_type;
         return type_compare(left_pointer, right_pointer);

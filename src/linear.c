@@ -1621,7 +1621,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
     // 目前只有 struct 可以 new
     assert(new_expr->type.kind == TYPE_STRUCT);
 
-    // 附加数据处理
+    // 默认值处理
     type_struct_t *type_struct = new_expr->type.struct_;
     table_t *exists = table_new();
     for (int i = 0; i < new_expr->properties->length; ++i) {
@@ -1673,7 +1673,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (is_expr->src.type.kind == TYPE_NPTR) {
         // is target 只能只能判断是否为 null
-        LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL, "cptr<type> is only support null, example: cptr<int> is null");
+        LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL, "nptr<type> is only support null, example: nptr<int> is null");
         OP_PUSH(lir_op_new(LIR_OPCODE_SEE, operand, int_operand(0), target));
         return target;
     }

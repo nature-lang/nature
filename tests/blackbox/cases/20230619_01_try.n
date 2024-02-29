@@ -1,15 +1,13 @@
-// try list index
+// list index
 var list = [1, 2, 3]
-var (item, err) = try list[5]
-if err.has {
+var item = list[5] catch err {
     print('catch vec index err=', err.msg, '\n')
+
 }
 println(item)
 
-//  try as
 any a1 = 1 as i8
-var (i1, err1) = try a1 as i16
-if err1.has {
+var i1 = a1 as i16 catch err1 {
     print('catch type assert err=', err1.msg, '\n')
 }
 
@@ -33,13 +31,11 @@ var foo = test {
 print(foo.list[1], foo.div(10, 5), '\n')
 
 // 异常处理
-var (a2, err2) = try foo.list[8]
-if err2.has {
+var a2 = foo.list[8] catch err2 {
     print('chain access vec err=', err2.msg, '\n')
 }
 
-var (a3, err3) = try foo.div(10, 0)
-if err3.has {
+var a3 = foo.div(10, 0) catch err3 {
     print("chain access call err=", err3.msg, '\n')
 }
 

@@ -495,7 +495,7 @@ static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR, "only any/union/cptr<type> type can use 'is' keyword");
+    CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR, "only any/union/nptr<t> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
 }
 
@@ -2230,8 +2230,8 @@ static type_t reduction_union_type(module_t *m, type_t t) {
         return t;
     }
 
-    for (int i = 0; i < t.gen->elements->length; ++i) {
-        type_t *temp = ct_list_value(t.gen->elements, i);
+    for (int i = 0; i < t.union_->elements->length; ++i) {
+        type_t *temp = ct_list_value(t.union_->elements, i);
         *temp = reduction_type(m, *temp);
     }
 

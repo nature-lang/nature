@@ -74,7 +74,7 @@ typedef enum {
     TYPE_FN, // 具体的 fn 类型
     TYPE_PTR,
 
-    // 允许为 null 的指针， cptr<type>, 可以通过 is 断言，可以通过 as 转换。
+    // 允许为 null 的指针， nptr<type>, 可以通过 is 断言，可以通过 as 转换。
     // 其是一种特殊的 union 类型，可以理解为 nullable<ptr<type>> 类型。
     // 其在内存表现上与原来 type 的内存大小一致, 后续优化成统一的 nullable<type>
     TYPE_NPTR,
@@ -154,7 +154,7 @@ static string type_kind_str[] = {
 // 所有的 type 都可以转化成该结构
 typedef struct {
     uint64_t index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
-    uint64_t size;  //  无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
+    uint64_t size;  // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
                      // pointer 数据
     uint64_t hash;     // 做类型推断时能够快速判断出类型是否相等
@@ -206,7 +206,7 @@ typedef struct type_set_t type_set_t;
 
 // (int, int, float)
 typedef struct {
-    list_t *elements; //  type_t
+    list_t *elements; // type_t
     uint8_t align;    // 最大对齐
 } type_tuple_t;
 
@@ -319,8 +319,8 @@ typedef struct {
 // 呢？
 struct type_struct_t {
     char *ident;
-    //    uint8_t count;
-    //    struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
+    // uint8_t count;
+    // struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
     uint8_t align;      // struct 的最大对齐 size 缓存
     list_t *properties; // struct_property_t
 };
@@ -518,9 +518,9 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC || kind == TYPE_PTR ||
-           //           kind == TYPE_ARRAY ||
+           // kind == TYPE_ARRAY ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
-           //           kind == TYPE_STRUCT ||
+           // kind == TYPE_STRUCT ||
            kind == TYPE_FN;
 }
 
