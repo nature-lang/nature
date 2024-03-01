@@ -627,7 +627,7 @@ static void scan_solo_stack() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(share_processor_list) {
-        coroutine_t *gc_co = coroutine_new((void *)gc_work, NULL, false, false);
+        coroutine_t *gc_co = coroutine_new((void *)gc_work, false, false);
         gc_co->gc_work = true;
 
         mutex_lock(&p->co_locker);

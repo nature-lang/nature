@@ -1396,6 +1396,21 @@ static ast_expr_t parser_new_expr(module_t *m) {
     return result;
 }
 
+static ast_expr_t parser_go_expr(module_t *m) {
+    parser_must(m, TOKEN_GO);
+
+    ast_expr_t expr = parser_expr_with_precedence(m);
+    // expr 的 type 必须是 call
+    PARSER_ASSERTF(expr.assert_type == AST_CALL, "go expr must be call");
+    ast_go_t *go_expr = NEW(ast_go_t);
+    go_expr->call = expr.value;
+
+    ast_expr_t result = expr_new(m);
+    result.assert_type = AST_GO;
+    result.value = go_expr;
+    return result;
+}
+
 static ast_expr_t parser_try_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_TRY);
@@ -1897,10 +1912,10 @@ static ast_expr_t parser_expr(module_t *m) {
         return parser_struct_new_expr(m);
     }
 
-    // try
-    // if (parser_is(m, TOKEN_TRY)) {
-    //     return parser_try_expr(m);
-    // }
+    // go
+    if (parser_is(m, TOKEN_GO)) {
+        return parser_go_expr(m);
+    }
 
     // fn def
     if (parser_is(m, TOKEN_FN)) {

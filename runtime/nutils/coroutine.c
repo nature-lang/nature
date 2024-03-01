@@ -2,13 +2,13 @@
 
 #include "runtime/processor.h"
 
-coroutine_t *coroutine_create(void *fn, n_vec_t *args, uint64_t flag) {
+coroutine_t *coroutine_create(void *fn, uint64_t flag) {
     bool solo = FLAG(CO_FLAG_SOLO) & flag;
-    return coroutine_new(fn, args, solo, false);
+    return coroutine_new(fn, solo, false);
 }
 
-coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag) {
-    coroutine_t *co = coroutine_create(fn, args, flag);
+coroutine_t *coroutine_run(void *fn, uint64_t flag) {
+    coroutine_t *co = coroutine_create(fn, flag);
 
     coroutine_dispatch(co);
 

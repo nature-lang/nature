@@ -1,39 +1,17 @@
 #include <stdio.h>
 
+#include "string.h"
 #include "tests/test.h"
 #include "utils/assertf.h"
 #include "utils/exec.h"
 
 static void test_basic() {
-    return;
-    char *raw = exec_output();
-//            printf("%s", raw);
+    char* raw = exec_output();
 
-    assert_string_equal(raw,
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "share sub_co done\n"
-                        "solo sub_co done\n"
-                        "main_co sleep done 21\n"
-                        "main_co sleep done 22\n"
-                        "main_co sleep done 23\n"
-                        "main_co sleep done 24\n"
-                        "main_co done\n");
+    // 字符串中包含 "main_co done"
+    char* find = strstr(raw, "main_co done");
+
+    assert_true(find);
 }
 
 int main(void) {

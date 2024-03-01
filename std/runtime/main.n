@@ -1,11 +1,1 @@
 import coroutine_temp
-
-// lir call runtime.main.save_temp_stack
-fn save_temp_stack() {
-    var co = coroutine_get()
-
-    // 相关的寄存器此时已经保存在了 aco 中
-    aco_save_reg(co.aco)
-
-    aco_save_temp_stack(cptr aco)
-}

@@ -9,9 +9,9 @@ typedef enum {
     CO_FLAG_SOLO = 1, // 独享线程模式
 } lir_flag_t;
 
-coroutine_t *coroutine_create(void *fn, n_vec_t *args, uint64_t flag);
+coroutine_t *coroutine_create(void *fn, uint64_t flag);
 
-coroutine_t *coroutine_run(void *fn, n_vec_t *args, uint64_t flag);
+coroutine_t *coroutine_run(void *fn, uint64_t flag);
 
 void coroutine_sleep(int64_t ms);
 

@@ -67,6 +67,7 @@ typedef enum {
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPE_ALIAS,
     AST_CALL,
+    AST_GO,
     AST_CATCH,
     AST_FNDEF,            // fn def (其包含 body)
     AST_STMT_ENV_CLOSURE, // closure def
@@ -272,6 +273,10 @@ typedef struct {
 typedef struct {
     ast_expr_t expr;
 } ast_try_t;
+
+typedef struct {
+    ast_call_t* call;
+} ast_go_t;
 
 /**
  * int a = b[1].c() catch err {}

@@ -74,9 +74,9 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
     close(fd[1]);
 
-    char *buf = mallocz(4096);
+    char *buf = mallocz(8192);
 
-    full_read(fd[0], buf, 4096);
+    full_read(fd[0], buf, 8192);
 
     int exec_status;
     wait(&exec_status);

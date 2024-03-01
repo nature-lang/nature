@@ -115,6 +115,7 @@ typedef enum {
     TOKEN_FN,
     TOKEN_IMPORT,
     TOKEN_RETURN,
+    TOKEN_GO,
     TOKEN_STMT_EOF,
     TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
@@ -223,6 +224,7 @@ static string token_str[] = {
     [TOKEN_AS] = "as",
     [TOKEN_IS] = "is",
     [TOKEN_SIZEOF] = "sizeof",
+    [TOKEN_GO] = "go",
 
     [TOKEN_STMT_EOF] = ";",
     [TOKEN_EOF] = "\0",
@@ -236,9 +238,9 @@ typedef struct {
 } token_t;
 
 static inline bool token_complex_assign(token_e t) {
-    return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL ||
-           t == TOKEN_STAR_EQUAL || t == TOKEN_OR_EQUAL || t == TOKEN_AND_EQUAL || t == TOKEN_XOR_EQUAL ||
-           t == TOKEN_LEFT_SHIFT_EQUAL || t == TOKEN_RIGHT_SHIFT_EQUAL;
+    return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL || t == TOKEN_STAR_EQUAL ||
+           t == TOKEN_OR_EQUAL || t == TOKEN_AND_EQUAL || t == TOKEN_XOR_EQUAL || t == TOKEN_LEFT_SHIFT_EQUAL ||
+           t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
 
 static inline token_t *token_new(uint8_t type, char *literal, int line, int column) {

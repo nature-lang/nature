@@ -240,7 +240,7 @@ typedef struct coroutine_t {
     aco_t aco;
     void *fn;       // fn 指向
     processor_t *p; // 当前 coroutine 绑定的 p
-    n_vec_t *args;
+//    n_vec_t *args;
     void *result; // coroutine 如果存在返回值，相关的值会放在 result 中
 
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
