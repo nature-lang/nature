@@ -1,10 +1,11 @@
 #include "cfg.h"
-#include "src/debug/debug.h"
-#include "src/error.h"
+
 #include <assert.h>
 
-static void cfg_pruning(closure_t *c) {
+#include "src/debug/debug.h"
+#include "src/error.h"
 
+static void cfg_pruning(closure_t *c) {
     table_t *exists = table_new();
     linked_t *q = linked_new();
 
@@ -36,7 +37,7 @@ static void cfg_pruning(closure_t *c) {
                 basic_block_t *pred = b->preds->take[j];
 
                 for (int k = 0; k < pred->succs->count; k++) {
-                    if (((basic_block_t *) pred->succs->take[k])->id == b->id) {
+                    if (((basic_block_t *)pred->succs->take[k])->id == b->id) {
                         slice_remove(pred->succs, k);
                         break;
                     }
@@ -48,7 +49,7 @@ static void cfg_pruning(closure_t *c) {
                 basic_block_t *succ = b->succs->take[j];
 
                 for (int k = 0; k < succ->preds->count; k++) {
-                    if (((basic_block_t *) succ->preds->take[k])->id == b->id) {
+                    if (((basic_block_t *)succ->preds->take[k])->id == b->id) {
                         slice_remove(succ->preds, k);
                         break;
                     }
@@ -63,34 +64,6 @@ static void cfg_pruning(closure_t *c) {
     c->blocks = new_blocks;
 }
 
-/**
- * 使用广度优先遍历, 按照 succs 遍历所有 block 并加入到 table 中, 二次遍历将不在 table 中的 block 进行删除
- */
-static void cfg_pruning_bak(closure_t *c) {
-    slice_t *blocks = slice_new();
-    slice_push(blocks, c->blocks->take[0]);
-    for (int i = 1; i < c->blocks->count; ++i) {
-        basic_block_t *b = c->blocks->take[i];
-        if (b->preds->count > 0) {
-            slice_push(blocks, b);
-            continue;
-        }
-        // 需要删减该块, 则该块的后记也需要清除对该块对引用
-        for (int j = 0; j < b->succs->count; ++j) {
-            basic_block_t *succ = b->succs->take[j];
-            // 重新构建 succ 的 preds
-            for (int k = 0; k < succ->preds->count; ++k) {
-                basic_block_t *succ_pred = succ->preds->take[k];
-                if (succ_pred->id == b->id) {
-                    slice_remove(succ->preds, k);
-                    break;
-                }
-            }
-        }
-    }
-    c->blocks = blocks;
-}
-
 static void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *b = SLICE_VALUE(c->blocks);
@@ -103,8 +76,8 @@ static void broken_critical_edges(closure_t *c) {
                 lir_op_t *bal_op = lir_op_bal(lir_label_operand(b->name, true));
 
                 lir_symbol_label_t *symbol_label = label->value;
-                basic_block_t *new_block = lir_new_basic_block(symbol_label->ident, c->blocks->count);
-//                slice_insert(c->blocks, b->id, new_block);
+                basic_block_t *new_block = lir_new_block(symbol_label->ident, c->blocks->count);
+                // slice_insert(c->blocks, b->id, new_block);
                 slice_push(c->blocks, new_block);
                 // 添加指令
                 linked_push(new_block->operations, label_op);
@@ -145,7 +118,6 @@ static void broken_critical_edges(closure_t *c) {
                         symbol_label->ident = new_block->name;
                     }
                 }
-
             }
         }
     }
@@ -209,7 +181,7 @@ static void cfg_build(closure_t *c) {
             lir_symbol_label_t *operand_label = op->output->value;
 
             // 2. new block 添加 first_op, new block 添加到 table 中,和 c->blocks 中
-            basic_block_t *new_block = lir_new_basic_block(operand_label->ident, c->blocks->count);
+            basic_block_t *new_block = lir_new_block(operand_label->ident, c->blocks->count);
             table_set(basic_block_table, new_block->name, new_block);
             slice_push(c->blocks, new_block);
 
@@ -245,7 +217,6 @@ static void cfg_build(closure_t *c) {
             goto BLOCK_OP_PUSH;
         }
 
-
         if (lir_op_branch(op) && node->succ) {
             linked_node *succ = node->succ;
 
@@ -275,7 +246,7 @@ static void cfg_build(closure_t *c) {
             }
         }
 
-        BLOCK_OP_PUSH:
+    BLOCK_OP_PUSH:
         // 值 copy
         linked_push(current_block->operations, op);
     }
@@ -291,8 +262,8 @@ static void cfg_build(closure_t *c) {
             continue;
         }
 
-        char *name = ((lir_symbol_label_t *) last_op->output->value)->ident;
-        basic_block_t *target_block = (basic_block_t *) table_get(basic_block_table, name);
+        char *name = ((lir_symbol_label_t *)last_op->output->value)->ident;
+        basic_block_t *target_block = (basic_block_t *)table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
@@ -301,8 +272,8 @@ static void cfg_build(closure_t *c) {
         if (!lir_op_branch(second_last_op)) {
             continue;
         }
-        name = ((lir_symbol_label_t *) second_last_op->output->value)->ident;
-        target_block = (basic_block_t *) table_get(basic_block_table, name);
+        name = ((lir_symbol_label_t *)second_last_op->output->value)->ident;
+        target_block = (basic_block_t *)table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
@@ -337,9 +308,9 @@ static void cfg_build(closure_t *c) {
  *  test
  *  sub
  *  shift
- * 当遇到 label_a 时会开启一个新的 basic block, 如果再次遇到一个 label_b 也需要开启一个 branch 指令，但如果 label_a 最后一条指令不是 branch 指令，
- * 则需要添加 branch 指令到 label_a 中链接 label_a 和 label_b, 同理，如果遇到了 branch 指令(需要结束 basic block)到下一条指令不是 label，
- * 则需要添加 label 到 branch 到下一条指令中。 从而能够正确开启新的 basic block
+ * 当遇到 label_a 时会开启一个新的 basic block, 如果再次遇到一个 label_b 也需要开启一个 branch 指令，但如果 label_a 最后一条指令不是 branch
+ * 指令， 则需要添加 branch 指令到 label_a 中链接 label_a 和 label_b, 同理，如果遇到了 branch 指令(需要结束 basic block)到下一条指令不是
+ * label， 则需要添加 label 到 branch 到下一条指令中。 从而能够正确开启新的 basic block
  *
  * 为了 basic block 之间能够任意排序，即使是顺序 block，之间也需要添加 BAL 指令进行链接
  * 类似:
@@ -354,15 +325,21 @@ static void cfg_build(closure_t *c) {
 void cfg(closure_t *c) {
     cfg_build(c);
 
-    // 不可达代码块消除
+    // 不可达代码块消除(需要重新编号)
     cfg_pruning(c);
 
     broken_critical_edges(c);
 
+    // 重新编号 id, 后续 ssa 会使用该 id
+    SLICE_FOR(c->blocks) {
+        basic_block_t *b = SLICE_VALUE(c->blocks);
+        b->id = _i;
+    }
+
     // 添加入口块
     c->entry = c->blocks->take[0];
 
-//    debug_block_lir(c, "cfg_build");
+    // debug_block_lir(c, "cfg_build");
 
     // return 分析
     return_check(c, NULL, c->entry);

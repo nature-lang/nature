@@ -4,7 +4,7 @@
 // 临时表，用来临时记录, key = ident, value is any
 table_t *can_import_symbol_table;
 
-table_t *import_temp_symbol_table;
+table_t *import_tpl_symbol_table;
 
 
 /**
@@ -56,7 +56,7 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 
 void symbol_init() {
     can_import_symbol_table = table_new();
-    import_temp_symbol_table = table_new();
+    import_tpl_symbol_table = table_new();
 
     symbol_table = table_new();
     symbol_fn_list = slice_new();

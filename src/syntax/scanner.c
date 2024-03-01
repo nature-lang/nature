@@ -1,9 +1,11 @@
+#include "scanner.h"
+
 #include <stdlib.h>
 #include <string.h>
-#include "token.h"
-#include "scanner.h"
-#include "utils/autobuf.h"
+
 #include "src/error.h"
+#include "token.h"
+#include "utils/autobuf.h"
 
 /**
  * 符号表使用什么结构来存储, 链表结构
@@ -74,8 +76,7 @@ linked_t *scanner(module_t *m) {
         if (!scanner_at_eof(m)) {
             int8_t special_type = scanner_special_char(m);
             if (special_type == -1) {
-                dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
-                            "special characters are not recognized");
+                dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "special characters are not recognized");
             } else {
                 linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column));
                 continue;
@@ -94,8 +95,7 @@ linked_t *scanner(module_t *m) {
 
 char *scanner_ident_advance(module_t *m) {
     // guard = current, 向前推进 guard,并累加 length
-    while ((scanner_is_alpha(m, *m->s_cursor.guard) || scanner_is_number(m, *m->s_cursor.guard))
-           && !scanner_at_eof(m)) {
+    while ((scanner_is_alpha(m, *m->s_cursor.guard) || scanner_is_number(m, *m->s_cursor.guard)) && !scanner_at_eof(m)) {
         scanner_guard_advance(m);
     }
 
@@ -150,7 +150,7 @@ token_e scanner_special_char(module_t *m) {
         case '=':
             return scanner_match(m, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
         case '<':
-            if (scanner_match(m, '<')) { // <<
+            if (scanner_match(m, '<')) {     // <<
                 if (scanner_match(m, '=')) { // <<=
                     return TOKEN_LEFT_SHIFT_EQUAL;
                 }
@@ -165,7 +165,7 @@ token_e scanner_special_char(module_t *m) {
                 if (scanner_match(m, '=')) { // >>=
                     return TOKEN_RIGHT_SHIFT_EQUAL;
                 }
-                return TOKEN_RIGHT_SHIFT; // >>
+                return TOKEN_RIGHT_SHIFT;       // >>
             } else if (scanner_match(m, '=')) { // >=
                 return TOKEN_GREATER_EQUAL;
             }
@@ -245,8 +245,7 @@ bool scanner_skip_space(module_t *m) {
                 } else if (m->s_cursor.guard[1] == '*') {
                     while (!scanner_multi_comment_end(m)) {
                         if (scanner_at_eof(m)) {
-                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length,
-                                        "unterminated comment");
+                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length, "unterminated comment");
                         }
                         scanner_guard_advance(m);
                     }
@@ -281,7 +280,6 @@ bool scanner_is_hex_number(module_t *m, char c) {
 bool scanner_at_eof(module_t *m) {
     return *m->s_cursor.guard == '\0';
 }
-
 
 /**
  * @param m
@@ -325,8 +323,7 @@ bool scanner_is_float(module_t *m, char *word) {
 
     // 结尾不能是 .
     if (word[-1] == '.') {
-        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
-                    "floating-point numbers cannot end with '.'");
+        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "floating-point numbers cannot end with '.'");
         return false;
     }
 
@@ -335,8 +332,7 @@ bool scanner_is_float(module_t *m, char *word) {
     }
 
     if (dot_count > 1) {
-        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
-                    "floating-point number contains multiple '.'");
+        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "floating-point number contains multiple '.'");
         return false;
     }
 
@@ -358,8 +354,7 @@ char *scanner_hex_number_advance(module_t *m) {
 // 需要考虑到浮点数
 char *scanner_number_advance(module_t *m) {
     // guard = current, 向前推进 guard,并累加 length
-    while ((scanner_is_number(m, *m->s_cursor.guard) || *m->s_cursor.guard == '.') &&
-           !scanner_at_eof(m)) {
+    while ((scanner_is_number(m, *m->s_cursor.guard) || *m->s_cursor.guard == '.') && !scanner_at_eof(m)) {
         scanner_guard_advance(m);
     }
 
@@ -396,8 +391,6 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
-                case 'p': // cptr
-                    return scanner_rest(word, length, 2, 2, "tr", TOKEN_CPTR);
             }
             break;
         case 'e':
@@ -455,7 +448,6 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
                 case 'e': // new
                     return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
-
             }
             break;
         case 'p':
@@ -492,7 +484,7 @@ token_e scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
                 case 'u': // tup
                     return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
-                case 'r' : {
+                case 'r': {
                     switch (word[2]) {
                         case 'y':
                             return scanner_rest(word, length, 3, 0, "", TOKEN_TRY);
@@ -533,7 +525,7 @@ token_e scanner_ident(char *word, int length) {
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
         }
-        case (char) 0xF0: { // temp use 💥
+        case (char)0xF0: { // temp use 💥
             return scanner_rest(word, length, 1, 3, "\x9F\x92\xA5", TOKEN_BOOM);
         }
     }
@@ -587,8 +579,7 @@ char *scanner_string_advance(module_t *m, char close_char) {
                 case '\"':
                     break;
                 default:
-                    push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
-                                "unknown escape char %c", guard);
+                    push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "unknown escape char %c", guard);
             }
         }
 
@@ -604,7 +595,7 @@ char *scanner_string_advance(module_t *m, char close_char) {
 
     autobuf_push(buf, &end, 1);
 
-    return (char *) buf->data;
+    return (char *)buf->data;
 }
 
 char *scanner_gen_word(module_t *m) {
@@ -615,14 +606,8 @@ char *scanner_gen_word(module_t *m) {
     return word;
 }
 
-token_e scanner_rest(char *word,
-                     int word_length,
-                     int8_t rest_start,
-                     int8_t rest_length,
-                     char *rest,
-                     int8_t type) {
-    if (rest_start + rest_length == word_length &&
-        memcmp(word + rest_start, rest, rest_length) == 0) {
+token_e scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
+    if (rest_start + rest_length == word_length && memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;
     }
     return TOKEN_IDENT;
@@ -634,9 +619,7 @@ token_e scanner_rest(char *word,
  * @return
  */
 bool scanner_at_stmt_end(module_t *m) {
-    if (scanner_is_space(m->s_cursor.space_prev)
-        || m->s_cursor.space_prev == '\\'
-        || m->s_cursor.space_prev == STRING_EOF) {
+    if (scanner_is_space(m->s_cursor.space_prev) || m->s_cursor.space_prev == '\\' || m->s_cursor.space_prev == STRING_EOF) {
         return false;
     }
 

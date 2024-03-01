@@ -2,6 +2,7 @@
 #include "cmd/root.h"
 #include "utils/helper.h"
 #include "config/config.h"
+#include "utils/log.h"
 
 #define ARGS_BUILD "build"
 

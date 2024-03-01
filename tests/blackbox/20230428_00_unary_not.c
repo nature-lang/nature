@@ -1,5 +1,6 @@
-#include "tests/test.h"
 #include <stdio.h>
+
+#include "tests/test.h"
 
 static void test_basic() {
     char *raw = exec_output();

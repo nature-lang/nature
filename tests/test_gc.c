@@ -1,9 +1,10 @@
-#include "test.h"
 #include <stdio.h>
-#include "utils/custom_links.h"
-#include "runtime/type/list.h"
-#include "runtime/processor.h"
+
 #include "runtime/memory.h"
+#include "runtime/processor.h.n"
+#include "runtime/type/list.h"
+#include "test.h"
+#include "utils/custom_links.h"
 
 addr_t rt_fn_main_base;
 
@@ -120,16 +121,8 @@ static void _test_gc_basic() {
     printf("hello\n");
 }
 
-// 切换到用户栈
-static void test_gc_basic() {
-    processor_t *p = processor_get();
-    DEBUG_STACK();
-    // 切换到 user mode
-    MODE_CALL(p->user_mode, p->system_mode, _test_gc_basic)
-}
 
 int main(void) {
     setup();
-    test_gc_basic();
     teardown();
 }

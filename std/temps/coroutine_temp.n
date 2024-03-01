@@ -1,0 +1,24 @@
+type rt_coroutine_t = struct{
+    i32 status
+    bool solo
+    cptr aco
+    cptr fn
+    cptr p
+    cptr args
+    cptr result
+    u64 thread_id
+}
+
+fn coroutine_create(fn_t f, [any] args, int flags):ptr<rt_coroutine_t>
+
+fn coroutine_run(fn_t f, [any] args, int flags):ptr<rt_coroutine_t>
+
+fn coroutine_yield()
+
+fn coroutine_sleep(int ms)
+
+fn coroutine_get():ptr<rt_coroutine_t>
+
+fn aco_save_reg(cptr aco)
+
+fn aco_save_temp_stack(cptr aco)

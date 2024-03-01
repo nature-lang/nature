@@ -3,7 +3,6 @@
 
 #include "utils/type.h"
 #include <stdint.h>
-#include "utils/autobuf.h"
 
 #define VEC_DEFAULT_CAPACITY 8
 
@@ -33,10 +32,10 @@ void *vec_ref(n_vec_t *l);
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中
- * @param l
+ * @param vec
  * @param value
  */
-void vec_push(n_vec_t *l, void *ref);
+void vec_push(n_vec_t *vec, void *ref);
 
 n_cptr_t vec_iterator(n_vec_t *l);
 

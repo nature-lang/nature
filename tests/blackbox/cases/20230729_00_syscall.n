@@ -1,7 +1,6 @@
 import syscall
 
-var (pid, err) = try syscall.fork()
-if err.has {
+var pid = syscall.fork() catch err {
     return print('fork err: ', err.msg, '\n')
 }
 
@@ -16,17 +15,19 @@ if pid > 0 {
 
 
 // 测试主动 kill
-(pid, err) = try syscall.fork()
-if err.has {
+pid = syscall.fork() catch err {
     return print('fork err: ', err.msg, '\n')
 }
 
 if pid > 0 {
     // 主进程, wait 阻塞, 并读取返回值
-    var err = try syscall.kill(pid, syscall.SIGKILL)
-    if err.has {
+    var has_err = false
+    syscall.kill(pid, syscall.SIGKILL) catch err {
         print('kill err: ', err.msg, '\n')
-    } else {
+        has_err = true
+    }
+
+    if !has_err {
         println('kill success')
     }
 } else {

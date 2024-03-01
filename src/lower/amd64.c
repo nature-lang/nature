@@ -1,7 +1,8 @@
 #include "amd64.h"
+
+#include "amd64_abi.h"
 #include "src/cross.h"
 #include "src/register/amd64.h"
-#include "amd64_abi.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
     lir_operand_t *temp = temp_var_operand_with_stack(c->module, lir_operand_type(first));
@@ -29,11 +30,7 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
     lir_operand_t *xmm_operand = select_return_reg(op->output);
     linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
 
-
-    linked_push(list, lir_op_new(LIR_OPCODE_XOR,
-                                 op->output,
-                                 xmm_operand,
-                                 op->output));
+    linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, xmm_operand, op->output));
     return list;
 }
 
@@ -60,17 +57,16 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             symbol->name = unique_name;
             if (imm->kind == TYPE_RAW_STRING) {
                 symbol->size = strlen(imm->string_value) + 1;
-                symbol->value = (uint8_t *) imm->string_value;
+                symbol->value = (uint8_t *)imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f64_value;
+                symbol->value = (uint8_t *)&imm->f64_value;
             } else if (imm->kind == TYPE_FLOAT32) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f32_value;
+                symbol->value = (uint8_t *)&imm->f32_value;
             } else {
                 assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
-
 
             slice_push(c->asm_symbols, symbol);
             lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
@@ -136,11 +132,8 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         // rsi param
         linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rsi), int_operand(ct_find_rtype_hash(var->type))));
 
-        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL,
-                                     lir_label_operand(RT_CALL_ENV_CLOSURE, false),
-                                     operand_new(LIR_OPERAND_ARGS, slice_new()),
-                                     NULL));
-
+        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_ENV_CLOSURE, false),
+                                     operand_new(LIR_OPERAND_ARGS, slice_new()), NULL));
     }
 
     return list;
@@ -205,7 +198,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     lir_opcode_t op_code = op->code;
     lir_operand_t *result_operand = ax_operand;
     if (op->code == LIR_OPCODE_REM) {
-        op_code = LIR_OPCODE_DIV; // rem 也是基于 div 计算得到的
+        op_code = LIR_OPCODE_DIV;    // rem 也是基于 div 计算得到的
         result_operand = dx_operand; // 余数固定寄存器
     }
 

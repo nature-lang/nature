@@ -17,7 +17,12 @@ print(e, f, '\n') // truefalse
 fn sum(int a, int b):int {
     return a + b
 }
-var (g, err) = try sum(12, -1)
-bool h = err.has
-bool i = !err.has
+
+var g = sum(12, -1) catch err {
+    println('no err')
+}
+
+bool has_err = false
+bool h = has_err
+bool i = !has_err
 print(g, h, i, '\n') // 11falsetrue

@@ -67,7 +67,7 @@ fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
 
 fn sigfillset(ptr<sigset_t> sigset):i32
 
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, cptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ptr<sigset_t> sigset, nptr<sigset_t> oldset):i32
 
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 

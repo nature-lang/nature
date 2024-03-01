@@ -1,4 +1,4 @@
-runtime_set_force_gc()
+runtime_force_gc()
 
 type atm_t = struct {
     string name

@@ -28,7 +28,7 @@ fn listdir(string path):[string] {
     }
 
     for true {
-        cptr<dirent_t> entry = readdir(dir)
+        nptr<dirent_t> entry = readdir(dir)
         if entry is null {
             break
         }
@@ -85,7 +85,7 @@ fn rmdir(string dir, bool recursive) {
             rmdir(fullpath, true) // 递归删除其中的所有文件
         } else {
             // rm file 可能存在权限不足的错误，暂时不做错误判断，直接跳过即可
-            var err = try remove(fullpath)
+            remove(fullpath) catch err {}
         }
     }
 

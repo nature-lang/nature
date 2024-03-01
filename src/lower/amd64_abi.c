@@ -1,6 +1,7 @@
 #include "amd64_abi.h"
-#include "src/register/amd64.h"
+
 #include "src/cross.h"
+#include "src/register/amd64.h"
 
 lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);
@@ -62,7 +63,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         }
     } else {
         assert(count == 1);
-        assertf(t.kind != TYPE_ARRAY, "array type must be pointer type");
+        assertf(t.kind != TYPE_ARR, "array type must be pointer type");
 
         // 由于需要直接 mov， 所以还是需要选择合适的大小
         reg_t *lo_reg = lo_dst_reg->value;
@@ -71,7 +72,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
 
-    END:
+END:
     op->first = NULL;
     linked_push(result, op);
 
@@ -171,7 +172,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
             // 最后一个参数是 fn_runtime_operand 参数，将其记录下来
             if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                c->fn_runtime_stack = stack_param_slot;  // 最后一个参数所在的栈的起点
+                c->fn_runtime_stack = stack_param_slot; // 最后一个参数所在的栈的起点
             }
 
             stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
@@ -195,8 +196,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                     assert(false);
                 }
 
-                lir_operand_t *lo_dst = indirect_addr_operand(c->module,
-                                                              type_kind_new(lo_kind), dst_param, 0);
+                lir_operand_t *lo_dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), dst_param, 0);
 
                 linked_push(result, lir_op_move(lo_dst, lo_reg_operand));
 
@@ -217,13 +217,12 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                         assert(false);
                     }
 
-                    lir_operand_t *hi_dst = indirect_addr_operand(c->module,
-                                                                  type_kind_new(lo_kind), dst_param, QWORD);
+                    lir_operand_t *hi_dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), dst_param, QWORD);
 
                     linked_push(result, lir_op_move(hi_dst, hi_reg_operand));
                 }
             } else {
-                assertf(param_type.kind != TYPE_ARRAY, "array type must be pointer type");
+                assertf(param_type.kind != TYPE_ARR, "array type must be pointer type");
                 assertf(count == 1, "the normal type uses only one register");
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
@@ -243,7 +242,6 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
                     c->fn_runtime_reg = reg_index;
                 }
-
 
                 linked_push(result, lir_op_move(dst_param, lo_reg_operand));
             }
@@ -276,7 +274,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             var->type = type_ptrof(var->type);
             slice_insert(params, 0, var);
         } else {
-            assertf(return_type.kind != TYPE_ARRAY, "array type must be pointer type");
+            assertf(return_type.kind != TYPE_ARR, "array type must be pointer type");
 
             // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
             // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
@@ -304,7 +302,6 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
     // 进行 op 替换(重新set flag 即可)
     slice_t *use_regs = slice_new(); // reg_t*
-
 
     linked_t *result = linked_new();
 
@@ -385,7 +382,6 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
-
 
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
 
@@ -605,7 +601,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     return result;
 }
 
-
 static amd64_class_t amd64_classify_merge(amd64_class_t a, amd64_class_t b) {
     if (a == b) {
         return a;
@@ -637,7 +632,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         return 0;
     }
 
-    if (t.kind == TYPE_ARRAY) {
+    if (t.kind == TYPE_ARR) {
         return 0; // 总是通过栈传递
     }
 
@@ -659,7 +654,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
             uint16_t element_align = element_size;
             if (p->type.kind == TYPE_STRUCT) {
                 element_align = p->type.struct_->align;
-            } else if (p->type.kind == TYPE_ARRAY) {
+            } else if (p->type.kind == TYPE_ARR) {
                 element_align = type_sizeof(p->type.array->element_type);
             }
 

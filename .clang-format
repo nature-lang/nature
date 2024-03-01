@@ -1,0 +1,16 @@
+BasedOnStyle: Google
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 140
+SpacesBeforeTrailingComments: 1
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: 1
+
+AllowShortFunctionsOnASingleLine: None
+SpacesInParentheses: false
+SpaceBeforeParens: ControlStatements
+
+# 行注释紧跟着代码段
+AlignTrailingComments: true

@@ -1,11 +1,11 @@
 #ifndef NATURE_SET_H
 #define NATURE_SET_H
 
-#include "utils/type.h"
-#include "utils/custom_links.h"
-#include "runtime/memory.h"
 #include "array.h"
 #include "hash.h"
+#include "runtime/memory.h"
+#include "utils/custom_links.h"
+#include "utils/type.h"
 
 #define SET_DEFAULT_CAPACITY 100
 
@@ -17,4 +17,4 @@ bool set_contains(n_set_t *m, void *key_ref);
 
 void set_delete(n_set_t *m, void *key_ref);
 
-#endif //NATURE_SET_H
+#endif // NATURE_SET_H

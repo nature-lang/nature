@@ -9,8 +9,6 @@
 
 static void test_basic() {
     char *raw = exec_output();
-//    printf("%s", raw);
-//    return;
 
     char *str = "1 china hualaka\n"
                 "24\n"

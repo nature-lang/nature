@@ -44,8 +44,9 @@ c = d
 print(c is [i8], c is [i16], '\n')
 
 
-// cptr
-cptr<int> a1 = null
+// nptr
+nptr<int> a1 = null
 int b1 = 12
 a1 = &b1
 var d1 = a1 as ptr<int>
+println(d1 as cptr == &b1 as cptr)

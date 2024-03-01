@@ -1,20 +1,21 @@
 #ifndef NATURE_SRC_LIB_HELPER_H_
 #define NATURE_SRC_LIB_HELPER_H_
 
-#include <string.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <limits.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "assertf.h"
 #include "errno.h"
+#include "log.h"
 
 #define string char *
 #define STRING_EOF '\0'
@@ -24,57 +25,81 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
-#define TDEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
-
 #undef free
-#define free(ptr) ({ \
-    if (ptr) { \
-        free(ptr);   \
-    } \
-})
+#define free(ptr)      \
+    ({                 \
+        if (ptr) {     \
+            free(ptr); \
+        }              \
+    })
 
+#define mallocz(size)              \
+    ({                             \
+        void *_ptr = malloc(size); \
+        if (size) {                \
+            memset(_ptr, 0, size); \
+        }                          \
+        _ptr;                      \
+    })
 
-#define mallocz(size) ({ \
-    void *_ptr = malloc(size); \
-    if (size) { \
-        memset(_ptr, 0, size); \
-    } \
-    _ptr; \
-})
-
-#define GROW_CAPACITY(capacity) \
-  ((capacity) < 8 ? 8 : (capacity)*2)
+#define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
 
 #define NEW(type) mallocz(sizeof(type))
 
 #define FLAG(value) (1 << value)
 
-//#define DEBUG_PARSER 1
-//#define DEBUG 1
+#define COPY_NEW(_type, src)                 \
+    ({                                       \
+        _type *dst = mallocz(sizeof(_type)); \
+        memcpy(dst, src, sizeof(_type));     \
+        dst;                                 \
+    })
 
+// 抢占式调度与 coroutine dispatch 使用该 debug 函数
+#ifdef NATURE_DEBUG
 
-#ifdef DEBUG
-#define DEBUGF(...) printf(__VA_ARGS__);printf("\n"); fflush(stdout);
+#define RDEBUGF(format, ...)                                                                                                 \
+    fprintf(stderr, "[%lu] RDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stderr);
+
+#define MDEBUGF(format, ...)                                                                                                       \
+    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
+
+#define DEBUGF(format, ...)                                                                                                  \
+    fprintf(stdout, "[%lu] DDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
+
+#define TRACEF(format, ...)                                                                                                  \
+    fprintf(stdout, "[%lu] TTRACE-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
+
+#define TDEBUGF(format, ...)                                                                                                 \
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
+
 #else
+#define RDEBUGF(...)
+#define MDEBUGF(...)
 #define DEBUGF(...)
+#define TRACEF(format, ...)
+
+#define TDEBUGF(format, ...)                                                                        \
+    fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+    fflush(stderr);
+
 #endif
-
-
-#define COPY_NEW(_type, src) ({ \
-    _type *dst = mallocz(sizeof(_type)); \
-    memcpy(dst, src, sizeof(_type));    \
-    dst;                               \
-})
-
 
 static inline addr_t fetch_addr_value(addr_t addr) {
     // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
-    addr_t *p = (addr_t *) addr;
+    addr_t *p = (addr_t *)addr;
     return *p;
 }
 
-
 static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
+    assert(size > 0);
+    assert(data);
+
     uint32_t hash = 2166136261u;
     for (int i = 0; i < size; ++i) {
         hash ^= data[i];
@@ -84,10 +109,12 @@ static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
 }
 
 static inline uint32_t hash_string(char *str) {
-    if (str == NULL) {
-        return 0;
-    }
-    return hash_data((uint8_t *) str, strlen(str));
+    assert(str);
+    assert(strlen(str) > 0);
+    // if (str == NULL) {
+    //     return 0;
+    // }
+    return hash_data((uint8_t *)str, strlen(str));
 }
 
 static inline bool memory_empty(uint8_t *base, uint64_t size) {
@@ -99,9 +126,8 @@ static inline bool memory_empty(uint8_t *base, uint64_t size) {
     return true;
 }
 
-
 static inline uint16_t read16le(unsigned char *p) {
-    return p[0] | (uint16_t) p[1] << 8;
+    return p[0] | (uint16_t)p[1] << 8;
 }
 
 static inline void write16le(unsigned char *p, uint16_t x) {
@@ -110,7 +136,7 @@ static inline void write16le(unsigned char *p, uint16_t x) {
 }
 
 static inline uint32_t read32le(unsigned char *p) {
-    return read16le(p) | (uint32_t) read16le(p + 2) << 16;
+    return read16le(p) | (uint32_t)read16le(p + 2) << 16;
 }
 
 static inline void write32le(unsigned char *p, uint32_t x) {
@@ -123,7 +149,7 @@ static inline void add32le(unsigned char *p, int32_t x) {
 }
 
 static inline uint64_t read64le(unsigned char *p) {
-    return read32le(p) | (uint64_t) read32le(p + 4) << 32;
+    return read32le(p) | (uint64_t)read32le(p + 4) << 32;
 }
 
 static inline void write64le(unsigned char *p, uint64_t x) {
@@ -135,9 +161,8 @@ static inline void add64le(unsigned char *p, int64_t x) {
     write64le(p, read64le(p) + x);
 }
 
-
 static inline char *dsprintf(char *format, ...) {
-    char *buf = mallocz(2000);
+    char *buf = mallocz(1024);
     va_list args;
     va_start(args, format);
     int count = vsprintf(buf, format, args);
@@ -184,6 +209,14 @@ static int inline check_open(char *filepath, int flag) {
     return fd;
 }
 
+static inline char *str_connect(char *a, char *b) {
+    size_t dst_len = strlen(a);
+    size_t src_len = strlen(b);
+    char *buf = mallocz(dst_len + src_len + 1);
+    sprintf(buf, "%s%s", a, b);
+    return buf;
+}
+
 static inline char *str_connect_free(char *a, char *b) {
     size_t dst_len = strlen(a);
     size_t src_len = strlen(b);
@@ -191,14 +224,7 @@ static inline char *str_connect_free(char *a, char *b) {
     sprintf(buf, "%s%s", a, b);
     free(a);
     free(b);
-    return buf;
-}
 
-static inline char *str_connect(char *a, char *b) {
-    size_t dst_len = strlen(a);
-    size_t src_len = strlen(b);
-    char *buf = mallocz(dst_len + src_len + 1);
-    sprintf(buf, "%s%s", a, b);
     return buf;
 }
 
@@ -234,7 +260,7 @@ static inline char *file_read(char *path) {
     size_t fileSize = ftell(file);
     rewind(file);
 
-    char *buffer = (char *) mallocz(fileSize + 1);
+    char *buffer = (char *)mallocz(fileSize + 1);
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
         exit(74);
@@ -253,7 +279,6 @@ static inline char *file_read(char *path) {
     return buffer;
 }
 
-
 static inline int64_t align_up(int64_t n, int64_t align) {
     if (align == 0) {
         return n;
@@ -262,13 +287,12 @@ static inline int64_t align_up(int64_t n, int64_t align) {
     return (n + align - 1) & (~(align - 1));
 }
 
-
 static inline char *path_dir(char *path) {
     assert(path != NULL);
     assert(strlen(path) > 0);
     char *result = strdup(path);
 
-    char *ptr = strrchr(result, '/');  // 查找最后一个斜杠
+    char *ptr = strrchr(result, '/'); // 查找最后一个斜杠
     if (ptr == NULL) {
         return result;
     }
@@ -314,7 +338,7 @@ static inline char *rtrim(char *str, char *sub) {
 
     char *res = mallocz(len);
 
-//    strncpy(res, str, len);
+    // strncpy(res, str, len);
     memcpy(res, str, len);
     res[len - 1] = '\0';
 
@@ -374,12 +398,10 @@ static inline void *copy(char *dst, char *src, int mode) {
 }
 
 static inline bool ends_with(char *str, char *suffix) {
-    if (!str || !suffix)
-        return 0;
+    if (!str || !suffix) return 0;
     size_t lenstr = strlen(str);
     size_t lensuffix = strlen(suffix);
-    if (lensuffix > lenstr)
-        return 0;
+    if (lensuffix > lenstr) return 0;
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
@@ -409,24 +431,20 @@ static inline ssize_t full_read(int fd, void *buf, size_t count) {
     }
 }
 
-
 static inline char *str_replace(char *str, char *old, char *new) {
-    char *result; // the return string
-    char *ins;    // the next insert pointer
-    char *tmp;    // varies
-    int len_rep;  // length of old (the string to remove)
-    int len_with; // length of new (the string to replace old new)
+    char *result;  // the return string
+    char *ins;     // the next insert pointer
+    char *tmp;     // varies
+    int len_rep;   // length of old (the string to remove)
+    int len_with;  // length of new (the string to replace old new)
     int len_front; // distance between old and end of last old
-    int count;    // number of replacements
+    int count;     // number of replacements
 
     // sanity checks and initialization
-    if (!str || !old)
-        return NULL;
+    if (!str || !old) return NULL;
     len_rep = strlen(old);
-    if (len_rep == 0)
-        return NULL; // empty old causes infinite loop during count
-    if (!new)
-        new = "";
+    if (len_rep == 0) return NULL; // empty old causes infinite loop during count
+    if (!new) new = "";
     len_with = strlen(new);
 
     // count the number of replacements needed
@@ -437,8 +455,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
 
     tmp = result = mallocz(strlen(str) + (len_with - len_rep) * count + 1);
 
-    if (!result)
-        return NULL;
+    if (!result) return NULL;
 
     // first time through the loop, all the variable are set correctly
     // from here on,
@@ -494,7 +511,7 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
         // 使用 atoi 函数将字符串转换为整数，并存入数组中
         numbers[i] = atoll(token);
         i++;
-        token = strtok(NULL, "\n");  // 继续提取下一个数字
+        token = strtok(NULL, "\n"); // 继续提取下一个数字
     }
     return numbers;
 }
@@ -504,7 +521,7 @@ static inline char *homedir() {
 }
 
 static inline char *fullpath(char *rel) {
-    char *path = (char *) mallocz(PATH_MAX * sizeof(char));
+    char *path = (char *)mallocz(PATH_MAX * sizeof(char));
     if (!realpath(rel, path)) {
         return NULL;
     }
@@ -517,4 +534,4 @@ static inline bool str_char(char *str, char c) {
     return result != NULL;
 }
 
-#endif //NATURE_SRC_LIB_HELPER_H_
+#endif // NATURE_SRC_LIB_HELPER_H_

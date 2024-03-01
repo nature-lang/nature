@@ -1,7 +1,6 @@
 import 'foo/bar.n' as car
 
-var err = try car.car()
-if err.has {
+car.car() catch err {
     println('err msg:', err.msg)
     println('err trace len:', err.traces.len)
     var first = err.traces[0]

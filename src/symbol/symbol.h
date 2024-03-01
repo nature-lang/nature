@@ -16,7 +16,7 @@
 extern table_t *can_import_symbol_table;
 
 // key = temp_ident, value = table_t, 记录了 temp 中的所有符号
-extern table_t *import_temp_symbol_table;
+extern table_t *import_tpl_symbol_table;
 
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中

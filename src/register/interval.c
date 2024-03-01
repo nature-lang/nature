@@ -168,7 +168,7 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     }
 
     if (i->var) {
-        lir_var_t *var = unique_var_operand_not_module(c->module, i->var->type, i->var->ident)->value;
+        lir_var_t *var = unique_var_operand_without_module(c->module, i->var->type, i->var->ident)->value;
         // 加入到 global 中
         slice_push(c->var_defs, var);
 

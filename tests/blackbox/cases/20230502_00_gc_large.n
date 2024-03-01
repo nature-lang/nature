@@ -1,3 +1,5 @@
+import coroutine as co
+
 [int] l = [1, 2, 3, 4]
 
 fn large_allocator() {
@@ -6,7 +8,7 @@ fn large_allocator() {
         list.push(i)
     }
 
-    runtime_gc()
+    runtime_force_gc()
     println(list[380])
     println(list[2000])
 }
@@ -14,6 +16,6 @@ fn large_allocator() {
 large_allocator()
 
 println(runtime_malloc_bytes())
-runtime_gc()
+co.sleep(1000) // 等待 1s 等待 gc 完成
 println(runtime_malloc_bytes())
 println(l[2])

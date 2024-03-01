@@ -1,4 +1,5 @@
 #include "bitmap.h"
+
 #include "helper.h"
 
 // size 的单位是 byte
@@ -7,6 +8,7 @@ bitmap_t *bitmap_new(uint64_t size) {
 
     b->bits = mallocz(size);
     b->size = size;
+    b->locker = mutex_new(false);
 
     return b;
 }
@@ -14,6 +16,18 @@ bitmap_t *bitmap_new(uint64_t size) {
 void bitmap_free(bitmap_t *b) {
     free(b->bits);
     free(b);
+}
+
+void bitmap_locker_set(bitmap_t *b, uint64_t index) {
+    mutex_lock(b->locker);
+    bitmap_set(b->bits, index);
+    mutex_unlock(b->locker);
+}
+
+void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
+    mutex_lock(b->locker);
+    bitmap_clear(b->bits, index);
+    mutex_unlock(b->locker);
 }
 
 void bitmap_set(uint8_t *bits, uint64_t index) {
@@ -73,3 +87,20 @@ void bitmap_grow_set(bitmap_t *b, uint64_t index, bool test) {
     }
 }
 
+/**
+ * 将 src 中的数组 copy 到 dst 中
+ * @param dst
+ * @param src
+ */
+void bitmap_copy(bitmap_t *dst, bitmap_t *src) {
+    mutex_lock(src->locker);
+    mutex_lock(dst->locker);
+
+    assert(dst->size == src->size);
+
+    // signl safe memmove(3) Added in POSIX.1-2008 TC2
+    memmove(dst->bits, src->bits, src->size);
+
+    mutex_unlock(src->locker);
+    mutex_unlock(dst->locker);
+}

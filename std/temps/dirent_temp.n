@@ -10,6 +10,6 @@ type dirent_t = struct {
 
 fn opendir(cptr str):dir_t
 
-fn readdir(dir_t d):cptr<dirent_t>
+fn readdir(dir_t d):nptr<dirent_t>
 
 fn closedir(dir_t d):int

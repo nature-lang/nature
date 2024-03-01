@@ -1,13 +1,13 @@
-#ifndef NATURE_BASIC_H
-#define NATURE_BASIC_H
+#ifndef NATURE_NUTILS_BASIC_H
+#define NATURE_NUTILS_BASIC_H
 
+#include "runtime/runtime.h"
 #include "utils/type.h"
-#include "vec.h"
 
 #define INT_SIZE sizeof(int64_t)
 
-int command_argc;
-char **command_argv;
+extern int command_argc;
+extern char **command_argv;
 
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
@@ -33,14 +33,24 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 
 void zero_fn();
 
-void processor_throw_errort(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
+void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_errort processor_remove_errort();
+n_errort co_remove_error();
 
-uint8_t processor_has_errort(char *path, char *fn_name, n_int_t line, n_int_t column);
+uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_cptr_t cptr_casting(value_casting v);
 
 n_vec_t *std_args();
 
-#endif //NATURE_BASIC_H
+char *rtype_value_str(rtype_t *rtype, void *data_ref);
+
+void write_barrier(uint64_t rtype_hash, void *dst, void *new_obj);
+
+rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
+
+rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
+
+rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
+
+#endif // NATURE_BASIC_H
