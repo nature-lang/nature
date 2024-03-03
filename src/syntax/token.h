@@ -79,11 +79,15 @@ typedef enum {
     TOKEN_F32,
     TOKEN_F64,
     TOKEN_NEW,
+
+    // 内置复合类型
     TOKEN_ARR,
     TOKEN_VEC,
     TOKEN_MAP,
     TOKEN_TUP,
     TOKEN_SET,
+    TOKEN_CORO,
+    TOKEN_CHAN,
 
     // KEYWORDS.
     TOKEN_POINTER, // ptr
@@ -172,6 +176,8 @@ static string token_str[] = {
     [TOKEN_CONTINUE] = "continue",
     [TOKEN_BREAK] = "break",
 
+    [TOKEN_CHAN] = "chan",
+    [TOKEN_CORO] = "coro",
     [TOKEN_ARR] = "arr",
     [TOKEN_VEC] = "vec",
     [TOKEN_MAP] = "map",

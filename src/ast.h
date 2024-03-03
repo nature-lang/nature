@@ -274,10 +274,6 @@ typedef struct {
     ast_expr_t expr;
 } ast_try_t;
 
-typedef struct {
-    ast_call_t* call;
-} ast_go_t;
-
 /**
  * int a = b[1].c() catch err {}
  * a.b = d() catch err {}
@@ -527,6 +523,10 @@ typedef struct ast_fndef_t {
     int column;
     int line;
 } ast_fndef_t; // 既可以是 expression,也可以是 stmt
+
+typedef struct {
+    ast_fndef_t *fndef;
+} ast_go_t;
 
 type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread);
 

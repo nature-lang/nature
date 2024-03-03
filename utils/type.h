@@ -69,6 +69,7 @@ typedef enum {
     TYPE_ARR,
     TYPE_MAP, // value = 20
     TYPE_SET,
+    TYPE_COROUTINE_T,
     TYPE_TUPLE,
     TYPE_STRUCT,
     TYPE_FN, // 具体的 fn 类型
@@ -135,7 +136,8 @@ static string type_kind_str[] = {
     [TYPE_VOID] = "void",
     [TYPE_UNKNOWN] = "unknown",
     [TYPE_STRUCT] = "struct", // ast_struct_decl
-    [TYPE_ALIAS] = "type_alias",
+    [TYPE_ALIAS] = "alias",
+    [TYPE_COROUTINE_T] = "coroutine_t",
     [TYPE_VEC] = "vec",
     [TYPE_MAP] = "map",
     [TYPE_SET] = "set",
@@ -196,6 +198,8 @@ typedef struct type_string_t type_string_t; // 类型不完全声明
 
 typedef struct type_vec_t type_vec_t;
 
+typedef struct type_coroutine_t type_coroutine_t;
+
 typedef struct type_pointer_t type_pointer_t, type_null_pointer_t;
 
 typedef struct type_array_t type_array_t;
@@ -247,6 +251,8 @@ typedef struct type_t {
 struct type_vec_t {
     type_t element_type;
 };
+
+struct type_coroutine_t {};
 
 // ptr<value_type>
 struct type_pointer_t {

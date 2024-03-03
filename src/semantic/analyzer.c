@@ -8,6 +8,8 @@
 #include "src/error.h"
 #include "utils/helper.h"
 
+static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef);
+
 static void analyzer_import_std(module_t *m, char *package, ast_import_t *import) {
     // /usr/local/nature/std
     ANALYZER_ASSERTF(NATURE_ROOT, "NATURE_ROOT not found");
@@ -585,6 +587,10 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
         ast_expr_t *arg = ct_list_value(call->args, i);
         analyzer_expr(m, arg);
     }
+}
+
+static void analyzer_go(module_t *m, ast_go_t *go) {
+    analyzer_local_fndef(m, go->fndef);
 }
 
 /**
@@ -1343,6 +1349,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_CALL: {
             return analyzer_call(m, expr->value);
+        }
+        case AST_GO: {
+            return analyzer_go(m, expr->value);
         }
         case AST_FNDEF: {
             return analyzer_local_fndef(m, expr->value);

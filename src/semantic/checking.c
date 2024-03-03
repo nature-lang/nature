@@ -6,6 +6,7 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+static type_t checking_go(module_t *m, void *pVoid);
 static bool can_assign_to_union(type_t t) {
     if (t.kind == TYPE_UNION) {
         return false;
@@ -725,7 +726,6 @@ static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t targe
     return result;
 }
 
-// expr write
 static type_t checking_vec_struct_new(module_t *m, ast_expr_t *expr) {
     // 返回的类型是 type_vec
     ast_struct_new_t *ast = expr->value;
@@ -1919,6 +1919,9 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         case AST_EXPR_TRY: {
             return checking_try(m, expr->value);
         }
+        case AST_GO: {
+            return checking_go(m, expr->value);
+        }
         case AST_FNDEF: {
             return checking_fn_decl(m, expr->value);
         }
@@ -2395,6 +2398,15 @@ static void checking_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // body checking
     checking_body(m, fndef->body);
+}
+
+/**
+ * TODO go 的返回值类型应该是 co.ctx 类型, 该类型在 pre_checking 中已经初步确认并返回
+ * @param m
+ * @param pVoid
+ * @return
+ */
+static type_t checking_go(module_t *m, void *pVoid) {
 }
 
 /**

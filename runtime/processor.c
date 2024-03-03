@@ -148,8 +148,6 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
 
-    // 调用并处理请求参数 TODO 改成内联汇编实现，需要 #ifdef 判定不通架构
-    n_vec_t *args = co->args;
     ((void_fn_t)co->fn)();
 
     DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co,

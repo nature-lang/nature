@@ -9,6 +9,7 @@
 
 #define FN_MAIN_NAME "main"
 #define FN_INIT_NAME "init"
+#define ANONYMOUS_FN_NAME "lambda"
 //#define BUILTIN_ERRORT "errort"
 #define ENV_IDENT "env"
 

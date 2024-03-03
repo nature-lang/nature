@@ -388,9 +388,17 @@ token_e scanner_ident(char *word, int length) {
         case 'c':
             switch (word[1]) {
                 case 'o':
+                    switch (word[2]) {
+                        case 'n':
+                            return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
+                        case 'r':
+                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                    }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
+                case 'h':
+                    return scanner_rest(word, length, 2, 3, "an", TOKEN_CHAN);
             }
             break;
         case 'e':

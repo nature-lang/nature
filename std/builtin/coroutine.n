@@ -1,0 +1,19 @@
+type coro<t> = struct {
+    fn_t function // 可以匹配任意 fn 类型
+    bool thread  // 单独线程运行， 而不是普通的协程方式运行
+    t result
+}
+
+// TODO 这里应该使用一个闭包转换才能进行合适的类型匹配
+// 无法合理的解释并运行
+fp run(coro c, ...[all_t] args);
+
+fp send(coro c, any value) {
+
+}
+fp recv(coro c):any {
+
+}
+
+type chan<t> = struct {
+}

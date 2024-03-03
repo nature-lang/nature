@@ -1399,11 +1399,23 @@ static ast_expr_t parser_new_expr(module_t *m) {
 static ast_expr_t parser_go_expr(module_t *m) {
     parser_must(m, TOKEN_GO);
 
-    ast_expr_t expr = parser_expr_with_precedence(m);
+    ast_expr_t call_expr = parser_expr_with_precedence(m);
     // expr 的 type 必须是 call
-    PARSER_ASSERTF(expr.assert_type == AST_CALL, "go expr must be call");
+    PARSER_ASSERTF(call_expr.assert_type == AST_CALL, "go expr must be call");
+
+    ast_stmt_t *call_stmt = stmt_new(m);
+    call_stmt->assert_type = AST_CALL;
+    call_stmt->value = call_expr.value;
+
+    // 直接使用闭包包裹 expr, 来一个闭包自调用
+    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, parser_peek(m)->line, parser_peek(m)->column);
+    fndef->symbol_name = NULL;
+    fndef->return_type = type_kind_new(TYPE_VOID);
+    fndef->params = ct_list_new(sizeof(ast_var_decl_t));
+    slice_push(fndef->body, call_stmt);
+
     ast_go_t *go_expr = NEW(ast_go_t);
-    go_expr->call = expr.value;
+    go_expr->fndef = fndef;
 
     ast_expr_t result = expr_new(m);
     result.assert_type = AST_GO;

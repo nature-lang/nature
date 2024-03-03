@@ -389,6 +389,12 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(module_t *m, ast_tuple_destr_t *t
     return tuple_destr;
 }
 
+static ast_go_t *ast_go_copy(module_t *m, ast_go_t *temp) {
+    ast_go_t *expr = COPY_NEW(ast_go_t, temp);
+    expr->fndef = ast_fndef_copy(m, temp->fndef);
+    return expr;
+}
+
 static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
     if (temp == NULL) {
         return NULL;
@@ -466,6 +472,10 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         }
         case AST_CALL: {
             expr->value = ast_call_copy(m, temp->value);
+            break;
+        }
+        case AST_GO: {
+            expr->value = ast_go_copy(m, temp->value);
             break;
         }
         case AST_FNDEF: {
