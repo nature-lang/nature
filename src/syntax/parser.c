@@ -26,12 +26,12 @@ static token_t *parser_peek(module_t *m) {
 
 static bool parser_is(module_t *m, token_e expect) {
     token_t *t = m->p_cursor.current->value;
-    return t->type == expect;
+    return t->token == expect;
 }
 
 static bool parser_consume(module_t *m, token_e expect) {
     token_t *t = m->p_cursor.current->value;
-    if (t->type == expect) {
+    if (t->token == expect) {
         parser_advance(m);
         return true;
     }
@@ -41,7 +41,7 @@ static bool parser_consume(module_t *m, token_e expect) {
 static token_t *parser_must(module_t *m, token_e expect) {
     token_t *t = m->p_cursor.current->value;
 
-    PARSER_ASSERTF(t->type == expect, "parser error expect '%s' actual '%s'", token_str[expect], t->literal);
+    PARSER_ASSERTF(t->token == expect, "parser error expect '%s' actual '%s'", token_str[expect], t->literal);
 
     parser_advance(m);
     return t;
@@ -62,6 +62,7 @@ static linked_node *parser_next(module_t *m, int step) {
     return current;
 }
 
+// parser_next_is(0) = parser_is
 static bool parser_next_is(module_t *m, int step, token_e expect) {
     linked_node *current = m->p_cursor.current;
 
@@ -74,7 +75,7 @@ static bool parser_next_is(module_t *m, int step, token_e expect) {
     }
 
     token_t *t = current->value;
-    return t->type == expect;
+    return t->token == expect;
 }
 
 static ast_stmt_t *stmt_new(module_t *m) {
@@ -205,7 +206,7 @@ static type_t parser_single_type(module_t *m) {
     // int/float/bool/string/void/var/self
     if (parser_basic_token_type(m)) {
         token_t *type_token = parser_advance(m);
-        result.kind = token_to_kind[type_token->type];
+        result.kind = token_to_kind[type_token->token];
         result.value = NULL;
         return result;
     }
@@ -500,7 +501,7 @@ static ast_var_decl_t *parser_var_decl(module_t *m) {
 
     // 变量名称必须为 ident
     token_t *var_ident = parser_advance(m);
-    PARSER_ASSERTF(var_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", var_ident->literal);
+    PARSER_ASSERTF(var_ident->token == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", var_ident->literal);
 
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
     var_decl->type = var_type;
@@ -538,12 +539,12 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     token_t *operator_token = parser_advance(m);
 
-    parser_precedence precedence = find_rule(operator_token->type)->infix_precedence;
+    parser_precedence precedence = find_rule(operator_token->token)->infix_precedence;
     ast_expr_t right = parser_precedence_expr(m, precedence + 1);
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator= token_to_ast_op[operator_token->type];
+    binary_expr->operator= token_to_ast_op[operator_token->token];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -551,6 +552,30 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
     result.value = binary_expr;
 
     return result;
+}
+
+static left_angle_type_e confirm_left_angle_type(module_t *m, linked_node *current) {
+    token_t *t = current->value;
+    assert(t->token == TOKEN_LEFT_ANGLE);
+
+    // 1. 识别典型的类型跳过， int/float/string/bool/[]/{}/fn
+
+    // 2. 识别单个 ident 跳过
+
+    // 3. 识别 foo.bar 跳过
+
+    // 遍历到闭合点
+
+
+    int close = 1;
+}
+
+static ast_expr_t parser_left_angle(module_t *m, ast_expr_t left) {
+    assert(parser_peek(m)->token == TOKEN_LEFT_ANGLE);
+    // fn_args
+    // type_args
+    // lt
+    left_angle_type_e t = confirm_left_angle_type(m, m->p_cursor.current);
 }
 
 /**
@@ -563,9 +588,9 @@ static ast_expr_t parser_unary(module_t *m) {
     token_t *operator_token = parser_advance(m);
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
-    if (operator_token->type == TOKEN_NOT) { // !true
+    if (operator_token->token == TOKEN_NOT) { // !true
         unary_expr->operator= AST_OP_NOT;
-    } else if (operator_token->type == TOKEN_MINUS) { // -2
+    } else if (operator_token->token == TOKEN_MINUS) { // -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
             token_t *int_token = parser_advance(m);
@@ -588,14 +613,14 @@ static ast_expr_t parser_unary(module_t *m) {
         }
 
         unary_expr->operator= AST_OP_NEG;
-    } else if (operator_token->type == TOKEN_TILDE) { // ~0b2
+    } else if (operator_token->token == TOKEN_TILDE) { // ~0b2
         unary_expr->operator= AST_OP_BNOT;
-    } else if (operator_token->type == TOKEN_AND) { // &a
+    } else if (operator_token->token == TOKEN_AND) { // &a
         unary_expr->operator= AST_OP_LA;
-    } else if (operator_token->type == TOKEN_STAR) { // *a
+    } else if (operator_token->token == TOKEN_STAR) { // *a
         unary_expr->operator= AST_OP_IA;
     } else {
-        PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
+        PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->token]);
     }
 
     ast_expr_t operand = parser_precedence_expr(m, PRECEDENCE_UNARY);
@@ -621,7 +646,7 @@ static ast_expr_t parser_catch_expr(module_t *m, ast_expr_t left) {
     catch_expr->try_expr = left;
 
     token_t *error_ident = parser_advance(m);
-    PARSER_ASSERTF(error_ident->type == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", error_ident->literal);
+    PARSER_ASSERTF(error_ident->token == TOKEN_IDENT, "parser variable definitions error, '%s' not a ident", error_ident->literal);
 
     catch_expr->catch_err.ident = error_ident->literal;
     catch_expr->catch_err.type = type_kind_new(TYPE_UNKNOWN); // 实际上就是 errort
@@ -668,6 +693,7 @@ static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
 }
 
 /**
+ * 区分
  * 普通表达式 (1 + 1)
  * tuple (1, true, false)
  */
@@ -704,7 +730,7 @@ static ast_expr_t parser_literal(module_t *m) {
     ast_expr_t result = expr_new(m);
     token_t *literal_token = parser_advance(m);
     ast_literal_t *literal_expr = NEW(ast_literal_t);
-    literal_expr->kind = token_to_kind[literal_token->type];
+    literal_expr->kind = token_to_kind[literal_token->token];
     literal_expr->value = literal_token->literal; // 具体数值
 
     result.assert_type = AST_EXPR_LITERAL;
@@ -715,19 +741,19 @@ static ast_expr_t parser_literal(module_t *m) {
 
 static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
     token_t *t = current->value;
-    PARSER_ASSERTF(t->type == TOKEN_LEFT_PAREN, "tuple typedecl start left param");
+    PARSER_ASSERTF(t->token == TOKEN_LEFT_PAREN, "tuple type decl start left param");
 
     // param is left paren, so close + 1 = 1,
     int close = 1;
-    while (t->type != TOKEN_EOF) {
+    while (t->token != TOKEN_EOF) {
         current = current->succ;
         t = current->value;
 
-        if (t->type == TOKEN_LEFT_PAREN) {
+        if (t->token == TOKEN_LEFT_PAREN) {
             close++;
         }
 
-        if (t->type == TOKEN_RIGHT_PAREN) {
+        if (t->token == TOKEN_RIGHT_PAREN) {
             close--;
             if (close == 0) {
                 break;
@@ -741,7 +767,7 @@ static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
 
     // (...) ident; ) 的 下一符号如果是 ident 就表示 (...) 里面是 tuple typedecl
     t = current->succ->value;
-    if (t->type != TOKEN_IDENT) {
+    if (t->token != TOKEN_IDENT) {
         return false;
     }
 
@@ -854,7 +880,17 @@ static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr) {
 
     ast_call_t *call_stmt = NEW(ast_call_t);
     call_stmt->args = ct_list_new(sizeof(ast_expr_t));
+    call_stmt->generics_args = ct_list_new(sizeof(type_t));
     call_stmt->left = left_expr;
+
+    // call<i8,i16>()
+    if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+        do {
+            type_t t = parser_type(m);
+            ct_list_push(call_stmt->generics_args, &t);
+        } while (parser_consume(m, TOKEN_COMMA));
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+    }
 
     // param handle
     parser_arg(m, call_stmt);
@@ -931,7 +967,7 @@ static ast_stmt_t *parser_if_stmt(module_t *m) {
 }
 
 static bool prev_token_is_type(token_t *prev) {
-    return prev->type == TOKEN_LEFT_PAREN || prev->type == TOKEN_LEFT_CURLY || prev->type == TOKEN_COLON || prev->type == TOKEN_COMMA;
+    return prev->token == TOKEN_LEFT_PAREN || prev->token == TOKEN_LEFT_CURLY || prev->token == TOKEN_COLON || prev->token == TOKEN_COMMA;
 }
 
 // for {{}};{};{{}}. {for ; ; }
@@ -943,17 +979,17 @@ static bool is_for_tradition_stmt(module_t *m) {
     while (current->value) {
         token_t *t = current->value;
 
-        PARSER_ASSERTF(t->type != TOKEN_EOF, "unexpected EOF")
+        PARSER_ASSERTF(t->token != TOKEN_EOF, "unexpected EOF")
 
-        if (close == 0 && t->type == TOKEN_SEMICOLON) {
+        if (close == 0 && t->token == TOKEN_SEMICOLON) {
             semicolon_count++;
         }
 
-        if (t->type == TOKEN_LEFT_CURLY) {
+        if (t->token == TOKEN_LEFT_CURLY) {
             close++;
         }
 
-        if (t->type == TOKEN_RIGHT_CURLY) {
+        if (t->token == TOKEN_RIGHT_CURLY) {
             close--;
         }
 
@@ -1136,12 +1172,12 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
 
     // complex assign
     token_t *t = parser_advance(m);
-    PARSER_ASSERTF(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
+    PARSER_ASSERTF(token_complex_assign(t->token), "assign=%v token exception", token_str[t->token]);
 
     // 转换成逻辑运算符
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     binary_expr->right = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
-    binary_expr->operator= token_to_ast_op[t->type];
+    binary_expr->operator= token_to_ast_op[t->token];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -1254,10 +1290,10 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     stmt->ast_package = slice_new();
 
     token_t *token = parser_advance(m);
-    if (token->type == TOKEN_LITERAL_STRING) {
+    if (token->token == TOKEN_LITERAL_STRING) {
         stmt->file = token->literal;
     } else {
-        PARSER_ASSERTF(token->type == TOKEN_IDENT, "import token must string");
+        PARSER_ASSERTF(token->token == TOKEN_IDENT, "import token must string");
         slice_push(stmt->ast_package, token->literal);
         while (parser_consume(m, TOKEN_DOT)) {
             token = parser_must(m, TOKEN_IDENT);
@@ -1267,7 +1303,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
 
     if (parser_consume(m, TOKEN_AS)) { // 可选 as
         token = parser_advance(m);
-        PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_STAR, "import as must ident");
+        PARSER_ASSERTF(token->token == TOKEN_IDENT || token->token == TOKEN_STAR, "import as must ident");
         stmt->as = token->literal;
     }
     result->assert_type = AST_STMT_IMPORT;
@@ -1584,10 +1620,54 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     result->value = fndef;
 
     parser_must(m, TOKEN_FN);
+
+    // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
     // stmt 中 name 不允许省略
-    token_t *name_token = parser_must(m, TOKEN_IDENT);
-    fndef->symbol_name = name_token->literal;
-    fndef->fn_name = fndef->symbol_name;
+    token_t *token = parser_must(m, TOKEN_IDENT);
+
+    // fn string.len() {
+    // fn vec<T>.len() {
+    bool impl = false;
+    if (parser_is(m, TOKEN_DOT) || parser_is(m, TOKEN_LEFT_ANGLE)) {
+        impl = true;
+        token_t *guard = parser_advance(m);
+        // 生成 type alias
+        fndef->impl_type_alias = token->literal;
+
+        if (guard->token == TOKEN_LEFT_ANGLE) {
+            PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
+
+            fndef->impl_type_params = ct_list_new(sizeof(ast_ident));
+
+            do {
+                token_t *ident = parser_advance(m);
+                ast_ident *temp = ast_new_ident(ident->literal);
+                ct_list_push(fndef->impl_type_params, temp);
+            } while (parser_consume(m, TOKEN_COMMA));
+
+            parser_consume(m, TOKEN_RIGHT_ANGLE);
+        }
+
+        fndef->type = parser_type(m);
+    }
+
+    token = parser_must(m, TOKEN_IDENT);
+    fndef->symbol_name = token->literal;
+    fndef->fn_name = token->literal;
+
+    // fn vec_first<T, U>
+    if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+        PARSER_ASSERTF(impl == false, "impl type cannot coexist with generic functions");
+        fndef->generics_params = ct_list_new(sizeof(ast_ident));
+        do {
+            token_t *ident = parser_advance(m);
+            ast_ident *temp = ast_new_ident(ident->literal);
+            ct_list_push(fndef->generics_params, temp);
+        } while (parser_consume(m, TOKEN_COMMA));
+
+        parser_consume(m, TOKEN_RIGHT_ANGLE);
+    }
+
     parser_formals(m, fndef);
 
     // 可选返回参数
@@ -1598,7 +1678,6 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     }
 
     if (m->type == MODULE_TYPE_TPL) {
-        // 绝对不可能是 {
         PARSER_ASSERTF(!parser_is(m, TOKEN_LEFT_CURLY), "temp module not support fn body");
 
         return result;
@@ -1713,7 +1792,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
  * @param m
  * @return
  */
-static ast_stmt_t *parser_template_stmt(module_t *m) {
+static ast_stmt_t *parser_tpl_stmt(module_t *m) {
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
@@ -1776,21 +1855,21 @@ static parser_rule *find_rule(token_e token_type) {
 
 static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence) {
     // 读取表达式前缀
-    parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
+    parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->token)->prefix;
 
-    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal, token_str[parser_peek(m)->type]);
+    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal, token_str[parser_peek(m)->token]);
 
     ast_expr_t expr = prefix_fn(m); // advance
 
     // 前缀表达式已经处理完成，判断是否有中缀表达式，有则按表达式优先级进行处理, 如果 +/-/*// /. /[]  等
-    token_e token_type = parser_peek(m)->type;
+    token_e token_type = parser_peek(m)->token;
     parser_rule *infix_rule = find_rule(token_type);
     while (infix_rule->infix_precedence >= precedence) {
         parser_infix_fn infix_fn = infix_rule->infix;
 
         expr = infix_fn(m, expr);
 
-        infix_rule = find_rule(parser_peek(m)->type);
+        infix_rule = find_rule(parser_peek(m)->token);
     }
 
     return expr;
@@ -1803,7 +1882,7 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
  */
 static bool is_struct_param_new_prefix(linked_node *current) {
     token_t *t = current->value;
-    if (t->type != TOKEN_LEFT_ANGLE) {
+    if (t->token != TOKEN_LEFT_ANGLE) {
         error_exit("parser_is_struct_param_new param must start with '<'");
         return false;
     }
@@ -1811,15 +1890,15 @@ static bool is_struct_param_new_prefix(linked_node *current) {
     // param is left paren, so close + 1 = 1,
     int close = 1;
 
-    while (t->type != TOKEN_EOF) {
+    while (t->token != TOKEN_EOF) {
         current = current->succ;
         t = current->value;
 
-        if (t->type == TOKEN_LEFT_ANGLE) {
+        if (t->token == TOKEN_LEFT_ANGLE) {
             close++;
         }
 
-        if (t->type == TOKEN_RIGHT_ANGLE) {
+        if (t->token == TOKEN_RIGHT_ANGLE) {
             close--;
             if (close == 0) {
                 break;
@@ -1833,7 +1912,7 @@ static bool is_struct_param_new_prefix(linked_node *current) {
 
     // next is '{' ?
     t = current->succ->value;
-    if (t->type != TOKEN_LEFT_CURLY) {
+    if (t->token != TOKEN_LEFT_CURLY) {
         return false;
     }
 
@@ -1854,11 +1933,13 @@ static bool parser_is_struct_new_expr(module_t *m) {
 
     // foo <a, b> {}
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
+        // TODO 此时有两种情况
         if (is_struct_param_new_prefix(parser_next(m, 1))) {
             return true;
         }
     }
 
+    // foo.bar
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
         parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
         if (is_struct_param_new_prefix(parser_next(m, 3))) {
@@ -1866,7 +1947,7 @@ static bool parser_is_struct_new_expr(module_t *m) {
         }
     }
 
-    // vec<>
+    // vec<> vec 特殊处理
     if (parser_is(m, TOKEN_VEC)) {
         return true;
     }
@@ -1929,7 +2010,7 @@ static ast_expr_t parser_expr(module_t *m) {
         return parser_go_expr(m);
     }
 
-    // fn def
+    // fn def, 也能写到括号里面呀
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_expr(m);
     }
@@ -1957,7 +2038,7 @@ slice_t *parser(module_t *m, linked_t *token_list) {
 #endif
         ast_stmt_t *stmt;
         if (m->type == MODULE_TYPE_TPL) {
-            stmt = parser_template_stmt(m);
+            stmt = parser_tpl_stmt(m);
         } else {
             stmt = parser_stmt(m);
         }

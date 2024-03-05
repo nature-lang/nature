@@ -124,6 +124,12 @@ typedef enum {
     TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
 
+typedef enum {
+    LEFT_ANGLE_TYPE_FN_ARGS,
+    LEFT_ANGLE_TYPE_TYPE_ARGS,
+    LOGIC_LT,
+} left_angle_type_e;
+
 static string token_str[] = {
     [TOKEN_LEFT_PAREN] = "(",
     [TOKEN_RIGHT_PAREN] = ")",
@@ -237,7 +243,7 @@ static string token_str[] = {
 };
 
 typedef struct {
-    token_e type; // 通配类型，如 var
+    token_e token; // 通配类型，如 var
     char *literal;
     int line;
     int column;
@@ -249,9 +255,9 @@ static inline bool token_complex_assign(token_e t) {
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
 
-static inline token_t *token_new(uint8_t type, char *literal, int line, int column) {
+static inline token_t *token_new(uint8_t token, char *literal, int line, int column) {
     token_t *t = malloc(sizeof(token_t));
-    t->type = type;
+    t->token = token;
     t->literal = literal;
     t->line = line;
     t->column = column;

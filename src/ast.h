@@ -188,8 +188,8 @@ typedef struct {
 typedef struct {
     type_t return_type; // call return type 冗余
     ast_expr_t left;
-    list_t *args; // *ast_expr
-    bool catch;   // 本次 call 是否被 catch
+    list_t *generics_args; // type_t
+    list_t *args;          // *ast_expr
     bool spread;
 } ast_call_t;
 
@@ -359,6 +359,7 @@ typedef struct {
  */
 typedef struct {
     char *ident; // ident 冗余
+
     // parser 阶段是 typedef ident
     // checking 完成后是 typeuse_struct
     type_t type;
@@ -376,7 +377,7 @@ typedef struct {
 // type.b = 12; ??
 // module_name.test
 typedef struct {
-    ast_expr_t left; // left is struct
+    ast_expr_t left; // left is struct or package
     string key;
 } ast_select_t;
 
@@ -473,6 +474,16 @@ typedef struct ast_fndef_t {
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余
 
+    // ast_ident 泛型参数, fn list_first<T, U>
+    list_t *generics_params;
+
+    // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
+    slice_t *generics_assigns; // value 是一个 table，保存了具体的 param 对应的 arg 参数
+
+    // 类型扩展 fn type_alias<T>.first()
+    char *impl_type_alias;
+    list_t *impl_type_params; // ast_ident
+
     // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
     table_t *type_param_table; // 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
 
@@ -500,20 +511,22 @@ typedef struct ast_fndef_t {
 
     type_t type; // 类型冗余一份
 
-    // 泛型解析时临时使用
+    // 泛型解析时临时使用 TODO 暂时可能用不上了。
     slice_t *generic_params;        // ast_type_alias_stmt
     table_t *exists_generic_params; // 避免 generic_types 重复写入
 
     // 默认为 null, 当前函数为泛型 fn 时才会有值，local fn 同样有值且和 global fn 同值
     // key is generic->ident, value is *type_t
     table_t *generic_assign;
+
     // 默认为 null，如果是 local fn, 则指向定义的 global fn
     struct ast_fndef_t *global_parent;
     // 仅当前 fn 为 global fn 时才有可能存在 child_fndefs
     slice_t *local_children;
     // analyzer 时赋值
-    bool is_local; // 是否是全局函数
-    bool is_tpl;   // 是否是模板函数
+    bool is_local;    // 是否是全局函数
+    bool is_tpl;      // 是否是 tpl 函数
+    bool is_generics; // 是否是泛型
 
     ct_stack_t *continue_target_types;
 
@@ -612,6 +625,9 @@ static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
     fndef->column = column;
     fndef->local_children = slice_new();
     fndef->continue_target_types = stack_new();
+    fndef->generics_params = NULL;
+    fndef->impl_type_alias = NULL;
+    fndef->impl_type_params = NULL;
     return fndef;
 }
 

@@ -311,6 +311,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             // local ident 或者当前 module 下的全局 ident
             char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
             if (!unique_alias_ident) {
+                // TODO 取消特殊类型了
                 // 在类型为定义的前提下， 判断是否是特殊类型，如果是的话直接进行 type 类型改写
                 if (analyzer_special_type_rewrite(m, type)) {
                     return;
@@ -430,6 +431,7 @@ static void analyzer_type(module_t *m, type_t *type) {
 }
 
 /**
+ * TODO 当前版本暂时用不到了
  * ptr/cptr/nptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
@@ -582,6 +584,12 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     // 函数地址 unique 改写
     analyzer_expr(m, &call->left);
 
+    // call<i8,i16>()
+    for (int i = 0; i < call->generics_args->length; ++i) {
+        type_t *arg = ct_list_value(call->generics_args, i);
+        analyzer_type(m, arg);
+    }
+
     // 实参 unique 改写
     for (int i = 0; i < call->args->length; ++i) {
         ast_expr_t *arg = ct_list_value(call->args, i);
@@ -728,8 +736,20 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     m->analyzer_global = fndef;
     fndef->is_local = false;
 
+    // generics fn 需要在 pre_checking 后
+    if (fndef->generics_params || fndef->impl_type_params) {
+        fndef->is_generics = true;
+    }
+
     analyzer_type(m, &fndef->return_type);
     analyzer_begin_scope(m);
+
+    // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
+    if (fndef->impl_type_alias) {
+        char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, fndef->impl_type_alias);
+        ANALYZER_ASSERTF(false, "type alias '%s' undeclared \n", fndef->impl_type_alias);
+        fndef->impl_type_alias = unique_alias_ident;
+    }
 
     // 函数形参处理
     for (int i = 0; i < fndef->params->length; ++i) {
@@ -827,8 +847,14 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         fndef->global_parent = m->analyzer_global;
         fndef->is_local = true;
     } else {
+        // TODO 定义在类型里面的全局函数？暂时取消了, 不然搞得太乱。
         assert(m->analyzer_current == NULL);
         fndef->is_local = false;
+    }
+
+    // 闭包函数不能是类型扩展, 泛型
+    if (fndef->impl_type_alias || fndef->generics_params) {
+        ANALYZER_ASSERTF(false, "closure function cannot be generics or impl type alias");
     }
 
     // 更新 m->analyzer_current

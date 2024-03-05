@@ -617,7 +617,6 @@ static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp) {
     call->return_type = type_copy(m, temp->return_type);
     call->left = *ast_expr_copy(m, &temp->left);
     call->args = ast_list_expr_copy(m, temp->args);
-    call->catch = temp->catch;
     call->spread = temp->spread;
     return call;
 }
