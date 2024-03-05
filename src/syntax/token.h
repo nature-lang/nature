@@ -32,10 +32,10 @@ typedef enum {
     TOKEN_NOT_EQUAL,
     TOKEN_EQUAL,
     TOKEN_EQUAL_EQUAL,
-    TOKEN_GREATER_EQUAL,
-    TOKEN_LESS_EQUAL,
-    TOKEN_AND_AND,
-    TOKEN_OR_OR,
+    TOKEN_GREATER_EQUAL, // >=
+    TOKEN_LESS_EQUAL, // <=
+    TOKEN_AND_AND, // &&
+    TOKEN_OR_OR, // ||
 
     TOKEN_PLUS_EQUAL,        // +=
     TOKEN_MINUS_EQUAL,       // -=

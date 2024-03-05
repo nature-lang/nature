@@ -41,7 +41,7 @@ typedef union {
     void *ptr_value;
 } value_casting;
 
-typedef enum { REDUCTION_STATUS_UNDO = 1, REDUCTION_STATUS_DOING, REDUCTION_STATUS_DONE } reduction_status_t;
+typedef enum { REDUCTION_STATUS_UNDO = 1, REDUCTION_STATUS_DOING = 2, REDUCTION_STATUS_DONE = 3 } reduction_status_t;
 
 typedef enum {
     // 基础类型

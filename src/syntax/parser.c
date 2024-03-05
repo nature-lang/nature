@@ -554,20 +554,126 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
     return result;
 }
 
-static left_angle_type_e confirm_left_angle_type(module_t *m, linked_node *current) {
+static bool is_typical_type_expr(module_t *m) {
+    if (parser_basic_token_type(m)) {
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_ANY)) {
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_LEFT_CURLY) ||  // {int}/{int:int}
+        parser_is(m, TOKEN_LEFT_SQUARE)) { // [int]
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_POINTER)) {
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
+        parser_is(m, TOKEN_SET)) {
+        return true;
+    }
+
+    if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
+        return true;
+    }
+
+    return false;
+}
+
+static bool left_angle_is_type_args(module_t *m, linked_node *current) {
     token_t *t = current->value;
     assert(t->token == TOKEN_LEFT_ANGLE);
 
     // 1. 识别典型的类型跳过， int/float/string/bool/[]/{}/fn
+    if (is_typical_type_expr(m)) {
+        return true;
+    }
 
-    // 2. 识别单个 ident 跳过
+    // 2. 识别单个 ident 跳过, a<foo>
+    if (parser_next_is(m, 1, TOKEN_IDENT) && parser_next_is(m, 2, TOKEN_RIGHT_ANGLE)) {
+        return true;
+    }
 
-    // 3. 识别 foo.bar 跳过
+    // 3. 识别 foo.bar 跳过 a<foo.bar>
+    if (parser_next_is(m, 1, TOKEN_IDENT) && parser_next_is(m, 2, TOKEN_DOT) && parser_next_is(m, 3, TOKEN_IDENT) &&
+        parser_next_is(m, 4, TOKEN_RIGHT_ANGLE)) {
+        return true;
+    }
 
-    // 遍历到闭合点
+    // 所有单个类型参数的场景已经推断完毕, 接下来如果还是类型参数，则必须使用逗号分隔, 但是存在逗号分隔也可能不是类型参数
+    // 歧义1. call(a<b, c>(d))(e)
 
-
+    // close = 1 时记录逗号和逻辑运算符出现的次数
+    int angle_close = 1;
+    int paren_close = 0;
     int close = 1;
+
+    // call (a <b, c> (d))
+    // [a < b, c > d]
+    while (t->token != TOKEN_EOF && t->token != TOKEN_STMT_EOF) {
+        current = current->succ;
+        t = current->value;
+
+        if (t->token == TOKEN_LEFT_ANGLE) {
+            angle_close++;
+            close++;
+        }
+
+        if (t->token == TOKEN_RIGHT_ANGLE) {
+            angle_close--;
+            close--;
+        }
+
+        if (t->token == TOKEN_LEFT_PAREN) {
+            paren_close++;
+            close++;
+        }
+
+        if (t->token == TOKEN_RIGHT_PAREN) {
+            paren_close--;
+            close--;
+        }
+
+        if (t->token == TOKEN_LEFT_SQUARE) {
+            close++;
+        }
+
+        if (t->token == TOKEN_RIGHT_SQUARE) {
+            close--;
+        }
+
+        // paren 打断 call((a < b), c > (d))
+        if (paren_close < 0) {
+            return false;
+        }
+
+        // 闭合
+        if (angle_close == 0) {
+            break;
+        }
+
+        // 出现逻辑运算符
+        if (close == 1 && (t->token == TOKEN_AND_AND || t->token == TOKEN_OR_OR)) {
+            return false;
+        }
+
+        // 出现逗号, 优先判断为类型参数
+        if (close == 1 && t->token == TOKEN_COMMA) {
+            return true;
+        }
+    }
+
+    // ang 未闭合
+    if (angle_close > 0) {
+        return false;
+    }
+
+    // 已经闭合，但是没有出现逗号或者逻辑运算, 直接识别为类型参数
+    return true;
 }
 
 static ast_expr_t parser_left_angle(module_t *m, ast_expr_t left) {
@@ -575,7 +681,7 @@ static ast_expr_t parser_left_angle(module_t *m, ast_expr_t left) {
     // fn_args
     // type_args
     // lt
-    left_angle_type_e t = confirm_left_angle_type(m, m->p_cursor.current);
+    bool is_type_args = left_angle_is_type_args(m, m->p_cursor.current);
 }
 
 /**
