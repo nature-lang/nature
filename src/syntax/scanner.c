@@ -421,12 +421,7 @@ token_e scanner_ident(char *word, int length) {
             break;
         }
         case 'g':
-            switch (word[1]) {
-                case 'o':
-                    return scanner_rest(word, length, 2, 0, "", TOKEN_GO);
-                case 'e':
-                    return scanner_rest(word, length, 2, 1, "n", TOKEN_GEN);
-            }
+            return scanner_rest(word, length, 1, 1, "o", TOKEN_GO);
         case 'i': {
             if (length == 2 && word[1] == 'n') {
                 return TOKEN_IN;

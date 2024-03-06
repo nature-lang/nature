@@ -1,7 +1,9 @@
 #include "ast.h"
 
 #include "src/cross.h"
+#include "types.h"
 #include "utils/helper.h"
+
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp);
 
@@ -11,7 +13,7 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
+type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     if (type_fn->rest && index >= type_fn->param_types->length - 1) {
         // rest handle
         type_t *last_param_type = ct_list_value(type_fn->param_types, type_fn->param_types->length - 1);
@@ -151,10 +153,6 @@ type_t type_copy(module_t *m, type_t temp) {
             type.alias = type_alias_copy(m, temp.alias);
             break;
         }
-        case TYPE_GEN: {
-            type.gen = type_gen_copy(m, temp.gen);
-            break;
-        }
         case TYPE_VEC: {
             type.vec = type_vec_copy(m, temp.vec);
             break;
@@ -218,7 +216,7 @@ static ast_ident *ast_ident_copy(module_t *m, ast_ident *temp) {
 
 static ast_literal_t *ast_literal_copy(module_t *m, ast_literal_t *temp) {
     ast_literal_t *literal = COPY_NEW(ast_literal_t, temp);
-    literal->value = strdup(temp->value); // 根据实际情况复制，这里假设 value 是字符串
+    literal->value = strdup(temp->value);// 根据实际情况复制，这里假设 value 是字符串
     return literal;
 }
 
@@ -535,13 +533,13 @@ static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp) {
     ast_catch_t *catch = COPY_NEW(ast_catch_t, temp);
     catch->try_expr = *ast_expr_copy(m, &temp->try_expr);
     catch->catch_err = *ast_var_decl_copy(m, &temp->catch_err);
-    catch->catch_body = ast_body_copy(m, temp->catch_body); // 需要实现这个函数
+    catch->catch_body = ast_body_copy(m, temp->catch_body);// 需要实现这个函数
     return catch;
 }
 
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(module_t *m, ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
-    stmt->tuple_destr = ast_tuple_destr_copy(m, temp->tuple_destr); // 需要实现这个函数
+    stmt->tuple_destr = ast_tuple_destr_copy(m, temp->tuple_destr);// 需要实现这个函数
     stmt->right = *ast_expr_copy(m, &temp->right);
     return stmt;
 }
@@ -556,15 +554,15 @@ static ast_assign_stmt_t *ast_assign_copy(module_t *m, ast_assign_stmt_t *temp) 
 static ast_if_stmt_t *ast_if_copy(module_t *m, ast_if_stmt_t *temp) {
     ast_if_stmt_t *stmt = COPY_NEW(ast_if_stmt_t, temp);
     stmt->condition = *ast_expr_copy(m, &temp->condition);
-    stmt->consequent = ast_body_copy(m, temp->consequent); // 需要实现这个函数
-    stmt->alternate = ast_body_copy(m, temp->alternate);   // 需要实现这个函数
+    stmt->consequent = ast_body_copy(m, temp->consequent);// 需要实现这个函数
+    stmt->alternate = ast_body_copy(m, temp->alternate);  // 需要实现这个函数
     return stmt;
 }
 
 static ast_for_cond_stmt_t *ast_for_cond_copy(module_t *m, ast_for_cond_stmt_t *temp) {
     ast_for_cond_stmt_t *stmt = COPY_NEW(ast_for_cond_stmt_t, temp);
     stmt->condition = *ast_expr_copy(m, &temp->condition);
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -573,7 +571,7 @@ static ast_for_iterator_stmt_t *ast_for_iterator_copy(module_t *m, ast_for_itera
     stmt->iterate = *ast_expr_copy(m, &temp->iterate);
     stmt->first = *ast_var_decl_copy(m, &temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(m, temp->second) : NULL;
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -582,7 +580,7 @@ static ast_for_tradition_stmt_t *ast_tradition_copy(module_t *m, ast_for_traditi
     stmt->init = ast_stmt_copy(m, temp->init);
     stmt->cond = *ast_expr_copy(m, &temp->cond);
     stmt->update = ast_stmt_copy(m, temp->update);
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -731,3 +729,4 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
 
     return fndef;
 }
+

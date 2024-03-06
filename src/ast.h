@@ -188,7 +188,9 @@ typedef struct {
 typedef struct {
     type_t return_type; // call return type 冗余
     ast_expr_t left;
+
     list_t *generics_args; // type_t
+
     list_t *args;          // *ast_expr
     bool spread;
 } ast_call_t;
@@ -541,7 +543,7 @@ typedef struct {
     ast_fndef_t *fndef;
 } ast_go_t;
 
-type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread);
+type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread);
 
 // bool type_compare(type_t left, type_t right);
 

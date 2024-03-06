@@ -114,7 +114,6 @@ typedef enum {
     TOKEN_IS,
     TOKEN_SIZEOF,
     TOKEN_AS,
-    TOKEN_GEN,
     TOKEN_BOOM,
     TOKEN_FN,
     TOKEN_IMPORT,
@@ -227,8 +226,6 @@ static string token_str[] = {
     [TOKEN_TRY] = "try",
     [TOKEN_THROW] = "throw",
     [TOKEN_LET] = "let",
-
-    [TOKEN_GEN] = "gen",
 
     [TOKEN_IMPORT] = "import",
 

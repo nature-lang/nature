@@ -952,7 +952,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
                 ast_expr_t *last_arg = ct_list_value(call->args, i);
 
                 // last param
-                if (type_compare(*rest_list_type, last_arg->type)) {
+                if (type_compare(*rest_list_type, last_arg->type, NULL)) {
                     lir_operand_t *actual_operand = linear_expr(m, *last_arg, NULL);
                     slice_push(params, actual_operand);
                     break;
@@ -1694,7 +1694,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *input = linear_expr(m, as_expr->src, NULL);
 
     // 如果 src 和 dst 类型一致，则不需要做任何的处理
-    if (type_compare(as_expr->src.type, as_expr->target_type)) {
+    if (type_compare(as_expr->src.type, as_expr->target_type, NULL)) {
         return linear_super_move(m, expr.type, target, input);
     }
 

@@ -345,16 +345,6 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    // type number = gen int|uint
-    if (type->kind == TYPE_GEN) {
-        type_gen_t *gen = type->gen;
-        for (int i = 0; i < gen->elements->length; ++i) {
-            type_t *temp = ct_list_value(gen->elements, i);
-            analyzer_type(m, temp);
-        }
-        return;
-    }
-
     if (type->kind == TYPE_MAP) {
         type_map_t *map_decl = type->map;
         analyzer_type(m, &map_decl->key_type);
@@ -584,7 +574,6 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     // 函数地址 unique 改写
     analyzer_expr(m, &call->left);
 
-    // call<i8,i16>()
     for (int i = 0; i < call->generics_args->length; ++i) {
         type_t *arg = ct_list_value(call->generics_args, i);
         analyzer_type(m, arg);

@@ -9,10 +9,10 @@
 rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
     rtype_t rtype = {
-        .size = type_kind_sizeof(kind), // 单位 byte
-        .hash = hash,
-        .last_ptr = 0,
-        .kind = kind,
+            .size = type_kind_sizeof(kind),// 单位 byte
+            .hash = hash,
+            .last_ptr = 0,
+            .kind = kind,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
 
@@ -38,10 +38,10 @@ static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_pointer_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_NPTR,
+            .size = sizeof(n_pointer_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_NPTR,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -62,10 +62,10 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_pointer_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_PTR,
+            .size = sizeof(n_pointer_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_PTR,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -82,10 +82,10 @@ static rtype_t rtype_pointer(type_pointer_t *t) {
 static rtype_t rtype_string() {
     uint32_t hash = hash_string(itoa(TYPE_STRING));
     rtype_t rtype = {
-        .size = sizeof(n_string_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_STRING,
+            .size = sizeof(n_string_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_STRING,
     };
 
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -106,10 +106,10 @@ static rtype_t rtype_vec(type_vec_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_vec_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_VEC,
+            .size = sizeof(n_vec_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_VEC,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -131,7 +131,11 @@ rtype_t rtype_array(type_array_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = element_size * t->length, .hash = hash, .kind = TYPE_ARR, .length = t->length, .gc_bits = malloc_gc_bits(rtype.size)};
+            .size = element_size * t->length,
+            .hash = hash,
+            .kind = TYPE_ARR,
+            .length = t->length,
+            .gc_bits = malloc_gc_bits(rtype.size)};
 
     uint16_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.gc_bits, &offset, t);
@@ -152,16 +156,16 @@ static rtype_t rtype_map(type_map_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_map_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
-        .kind = TYPE_MAP,
+            .size = sizeof(n_map_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 3,// hash_table + key_data + value_data
+            .kind = TYPE_MAP,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0); // hash_table
-    bitmap_set(rtype.gc_bits, 1); // key_data
-    bitmap_set(rtype.gc_bits, 2); // value_data
+    bitmap_set(rtype.gc_bits, 0);// hash_table
+    bitmap_set(rtype.gc_bits, 1);// key_data
+    bitmap_set(rtype.gc_bits, 2);// value_data
 
     return rtype;
 }
@@ -177,15 +181,15 @@ static rtype_t rtype_set(type_set_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_set_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
-        .kind = TYPE_SET,
+            .size = sizeof(n_set_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 2,// hash_table + key_data
+            .kind = TYPE_SET,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0); // hash_table
-    bitmap_set(rtype.gc_bits, 1); // key_data
+    bitmap_set(rtype.gc_bits, 0);// hash_table
+    bitmap_set(rtype.gc_bits, 1);// key_data
 
     return rtype;
 }
@@ -199,7 +203,7 @@ static rtype_t rtype_set(type_set_t *t) {
 static rtype_t rtype_union(type_union_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_UNION));
 
-    rtype_t rtype = {.size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
+    rtype_t rtype = {.size = POINTER_SIZE * 2,// element_rtype + value(并不知道 value 的类型)
                      .hash = hash,
                      .kind = TYPE_UNION,
                      .last_ptr = POINTER_SIZE,
@@ -226,7 +230,11 @@ static rtype_t rtype_fn(type_fn_t *t) {
         str = str_connect(str, itoa(formal_type.hash));
     }
     rtype_t rtype = {
-        .size = POINTER_SIZE, .hash = hash_string(str), .kind = TYPE_FN, .last_ptr = 0, .gc_bits = malloc_gc_bits(POINTER_SIZE)};
+            .size = POINTER_SIZE,
+            .hash = hash_string(str),
+            .kind = TYPE_FN,
+            .last_ptr = 0,
+            .gc_bits = malloc_gc_bits(POINTER_SIZE)};
     rtype.last_ptr = 8;
     bitmap_set(rtype.gc_bits, 0);
 
@@ -284,7 +292,7 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
                 last_ptr_temp_offset = *offset;
             }
 
-            uint16_t size = type_sizeof(p->type); // 等待存储的 struct size
+            uint16_t size = type_sizeof(p->type);// 等待存储的 struct size
             *offset += size;
         }
 
@@ -309,13 +317,13 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
     if (t->properties->length == 0) {
         rtype_t rtype = {
-            .size = 0,
-            .hash = hash_string(str),
-            .kind = TYPE_STRUCT,
-            .gc_bits = NULL,
-            .length = t->properties->length,
-            .element_hashes = NULL,
-            .last_ptr = 0,
+                .size = 0,
+                .hash = hash_string(str),
+                .kind = TYPE_STRUCT,
+                .gc_bits = NULL,
+                .length = t->properties->length,
+                .element_hashes = NULL,
+                .last_ptr = 0,
         };
 
         return rtype;
@@ -323,7 +331,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
     uint16_t size = type_struct_sizeof(t);
 
-    uint16_t offset = 0; // 基于 offset 计算 gc bits
+    uint16_t offset = 0;// 基于 offset 计算 gc bits
     uint8_t *gc_bits = malloc_gc_bits(size);
 
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
@@ -340,13 +348,13 @@ static rtype_t rtype_struct(type_struct_t *t) {
     }
 
     rtype_t rtype = {
-        .size = size,
-        .hash = hash_string(str),
-        .kind = TYPE_STRUCT,
-        .gc_bits = gc_bits,
-        .length = t->properties->length,
-        .element_hashes = element_hash_list,
-        .last_ptr = last_ptr_offset,
+            .size = size,
+            .hash = hash_string(str),
+            .kind = TYPE_STRUCT,
+            .gc_bits = gc_bits,
+            .length = t->properties->length,
+            .element_hashes = element_hash_list,
+            .last_ptr = last_ptr_offset,
     };
 
     return rtype;
@@ -593,7 +601,7 @@ uint8_t *malloc_gc_bits(uint64_t size) {
     return mallocz(gc_bits_size);
 }
 
-type_param_t *type_formal_new(char *literal) {
+type_param_t *type_param_new(char *literal) {
     type_param_t *t = NEW(type_param_t);
     t->ident = literal;
     return t;
@@ -724,201 +732,6 @@ type_kind to_gc_kind(type_kind kind) {
     }
 
     return TYPE_GC_NOSCAN;
-}
-
-bool type_union_compare(type_union_t *left, type_union_t *right) {
-    // 因为 any 的作用域大于非 any 的作用域
-    if (right->any && !left->any) {
-        return false;
-    }
-
-    // 创建一个标记数组，用于标记left中的类型是否已经匹配
-    // 遍历right中的类型，确保每个类型都存在于left中
-    for (int i = 0; i < right->elements->length; ++i) {
-        type_t *right_type = ct_list_value(right->elements, i);
-
-        // 检查right_type是否存在于left中
-        bool type_found = false;
-        for (int j = 0; j < left->elements->length; ++j) {
-            type_t *left_type = ct_list_value(left->elements, j);
-            if (type_compare(*left_type, *right_type)) {
-                type_found = true;
-                break;
-            }
-        }
-
-        // 如果right_type不存在于left中，则释放内存并返回false
-        if (!type_found) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * reduction 阶段就应该完成 cross left kind 的定位
- * @param dst
- * @param src
- * @return
- */
-bool type_compare(type_t dst, type_t src) {
-    assertf(dst.status == REDUCTION_STATUS_DONE && src.status == REDUCTION_STATUS_DONE, "type not origin, left: '%s', right: '%s'",
-            type_kind_str[dst.kind], type_kind_str[src.kind]);
-
-    assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot checking");
-
-    // all_t 可以匹配任何类型
-    if (dst.kind == TYPE_ALL_T) {
-        return true;
-    }
-
-    // fn_t 可以匹配所在的 fn 类型
-    if (dst.kind == TYPE_FN_T && src.kind == TYPE_FN) {
-        return true;
-    }
-
-    // nptr<t> 可以匹配 null 和 ptr<t>
-    // nptr is ptr<...>|null so can access null and ptr
-    if (dst.kind == TYPE_NPTR) {
-        if (src.kind == TYPE_NULL) {
-            return true;
-        }
-
-        if (src.kind == TYPE_PTR) {
-            type_t dst_ptr = dst.pointer->value_type;
-            type_t src_ptr = src.pointer->value_type;
-            return type_compare(dst_ptr, src_ptr);
-        }
-    }
-
-    if (dst.kind != src.kind) {
-        return false;
-    }
-
-    if (dst.kind == TYPE_UNION) {
-        type_union_t *left_union_decl = dst.union_;
-        type_union_t *right_union_decl = src.union_;
-
-        if (left_union_decl->any) {
-            return true;
-        }
-
-        return type_union_compare(left_union_decl, right_union_decl);
-    }
-
-    if (dst.kind == TYPE_MAP) {
-        type_map_t *left_map_decl = dst.map;
-        type_map_t *right_map_decl = src.map;
-
-        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
-            return false;
-        }
-
-        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    if (dst.kind == TYPE_SET) {
-        type_set_t *left_decl = dst.set;
-        type_set_t *right_decl = src.set;
-
-        if (!type_compare(left_decl->element_type, right_decl->element_type)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    if (dst.kind == TYPE_VEC) {
-        type_vec_t *left_list_decl = dst.vec;
-        type_vec_t *right_list_decl = src.vec;
-        return type_compare(left_list_decl->element_type, right_list_decl->element_type);
-    }
-
-    if (dst.kind == TYPE_ARR) {
-        type_array_t *left_array_decl = dst.array;
-        type_array_t *right_array_decl = src.array;
-        if (left_array_decl->length != right_array_decl->length) {
-            return false;
-        }
-        return type_compare(left_array_decl->element_type, right_array_decl->element_type);
-    }
-
-    if (dst.kind == TYPE_TUPLE) {
-        type_tuple_t *left_tuple = dst.tuple;
-        type_tuple_t *right_tuple = src.tuple;
-
-        if (left_tuple->elements->length != right_tuple->elements->length) {
-            return false;
-        }
-        for (int i = 0; i < left_tuple->elements->length; ++i) {
-            type_t *left_item = ct_list_value(left_tuple->elements, i);
-            type_t *right_item = ct_list_value(right_tuple->elements, i);
-            if (!type_compare(*left_item, *right_item)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    if (dst.kind == TYPE_FN) {
-        type_fn_t *left_type_fn = dst.fn;
-        type_fn_t *right_type_fn = src.fn;
-        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
-            return false;
-        }
-
-        // TODO rest 支持
-        if (left_type_fn->param_types->length != right_type_fn->param_types->length) {
-            return false;
-        }
-
-        for (int i = 0; i < left_type_fn->param_types->length; ++i) {
-            type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
-            type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
-            if (!type_compare(*left_formal_type, *right_formal_type)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    if (dst.kind == TYPE_STRUCT) {
-        type_struct_t *left_struct = dst.struct_;
-        type_struct_t *right_struct = src.struct_;
-        if (left_struct->properties->length != right_struct->properties->length) {
-            return false;
-        }
-
-        for (int i = 0; i < left_struct->properties->length; ++i) {
-            struct_property_t *left_property = ct_list_value(left_struct->properties, i);
-            struct_property_t *right_property = ct_list_value(right_struct->properties, i);
-
-            // key 比较
-            if (!str_equal(left_property->key, right_property->key)) {
-                return false;
-            }
-
-            // type 比较
-            if (!type_compare(left_property->type, right_property->type)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    if (dst.kind == TYPE_PTR) {
-        type_t left_pointer = dst.pointer->value_type;
-        type_t right_pointer = src.pointer->value_type;
-        return type_compare(left_pointer, right_pointer);
-    }
-
-    return true;
 }
 
 char *_type_format(type_t t) {
