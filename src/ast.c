@@ -701,32 +701,19 @@ list_t *ast_fn_formals_copy(module_t *m, list_t *temp_formals) {
  * 深度 copy
  * @return
  */
-ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
-    ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, temp);
-    fndef->symbol_name = temp->symbol_name;
-    fndef->closure_name = temp->closure_name;
-    fndef->return_type = type_copy(m, temp->return_type);
-    fndef->params = ast_fn_formals_copy(m, temp->params);
-    fndef->type = type_copy(m, temp->type);
-    fndef->capture_exprs = temp->capture_exprs;
-    fndef->body = ast_body_copy(m, temp->body);
-    fndef->fn_name = temp->fn_name;
-    fndef->rel_path = temp->rel_path;
-    fndef->column = temp->column;
-    fndef->line = temp->line;
-
-    // 将 new fn 添加到 symbol table 中 (依旧使用原始的名称, 方便使用者可以定位函数信息)
-    symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);
-
-    if (m->checking_temp_fndefs) {
-        // checking 阶段只有 type alias param 时的 type_copy 才会产生，此时一定存在 type_param_list
-        assertf(m->type_param_list, "fn in type alias param struct, but m->type_param_list is null");
-        assertf(m->type_param_table, "fn in type alias param struct, but m->type_param_table is null");
-        fndef->hash_param_types = m->type_param_list;
-        fndef->type_param_table = m->type_param_table;
-        slice_push(m->checking_temp_fndefs, fndef);
-    }
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *tpl) {
+    ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, tpl);
+    fndef->symbol_name = tpl->symbol_name;
+    fndef->closure_name = tpl->closure_name;
+    fndef->return_type = type_copy(m, tpl->return_type);
+    fndef->params = ast_fn_formals_copy(m, tpl->params);
+    fndef->type = type_copy(m, tpl->type);
+    fndef->capture_exprs = tpl->capture_exprs;
+    fndef->body = ast_body_copy(m, tpl->body);
+    fndef->fn_name = tpl->fn_name;
+    fndef->rel_path = tpl->rel_path;
+    fndef->column = tpl->column;
+    fndef->line = tpl->line;
 
     return fndef;
 }
-

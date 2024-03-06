@@ -166,7 +166,13 @@ typedef struct {
     parser_cursor_t p_cursor;
 
     slice_t *stmt_list;
-    table_t *type_params_table;// 辅助记录 ident 是 alias 还是 type param, type alias 嵌套就会出问题！
+
+    // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 param 还是 alias, 仅仅使用到 key
+    table_t *parser_type_params_table;
+
+    // checking 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
+    // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
+    ct_stack_t *checking_type_arg_stack;
 
     // analyzer
     analyzer_fndef_t *analyzer_current;
@@ -549,7 +555,7 @@ typedef struct {
     uint8_t output_type;
 } elf_context;
 
-ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *tpl);
 
 type_t type_copy(module_t *m, type_t temp);
 

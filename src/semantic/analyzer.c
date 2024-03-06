@@ -20,7 +20,7 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
     ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
-    import->use_links = true; // std 默认可以加载其中的 links
+    import->use_links = true;// std 默认可以加载其中的 links
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
 }
@@ -127,7 +127,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         ANALYZER_ASSERTF(import->file[0] != '/', "cannot use absolute path=%s", import->file);
 
         // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
-        char *temp_as = strrchr(import->file, '/'); // foo/bar.n -> /bar.n
+        char *temp_as = strrchr(import->file, '/');// foo/bar.n -> /bar.n
         if (temp_as != NULL) {
             temp_as++;
         } else {
@@ -726,7 +726,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     fndef->is_local = false;
 
     // generics fn 需要在 pre_checking 后
-    if (fndef->generics_params || fndef->impl_type_params) {
+    if (fndef->generics_params) {
         fndef->is_generics = true;
     }
 
@@ -896,15 +896,15 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
         // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
         free_ident_t *free_var = m->analyzer_current->frees->take[i];
-        if (free_var->type != SYMBOL_VAR) { // fn label 可以直接全局访问到，不需要做 env assign
+        if (free_var->type != SYMBOL_VAR) {// fn label 可以直接全局访问到，不需要做 env assign
             continue;
         }
         free_var_count++;
 
         // 封装成 ast_expr 更利于 compiler
         ast_expr_t expr = {
-            .line = fndef->line,
-            .column = fndef->column,
+                .line = fndef->line,
+                .column = fndef->column,
         };
 
         // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
@@ -935,7 +935,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         assert(m->analyzer_current);
 
         fndef->closure_name = fndef->symbol_name;
-        fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME); // 二进制中的 label name
+        fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME);// 二进制中的 label name
 
         // 符号表内容修改为 var_decl
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
@@ -946,7 +946,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
 
         local_ident_t *parent_var_local = NEW(local_ident_t);
-        parent_var_local->ident = fn_local->ident; // 原始名称不变
+        parent_var_local->ident = fn_local->ident;// 原始名称不变
         parent_var_local->unique_ident = var_decl->ident;
         parent_var_local->depth = m->analyzer_current->scope_depth;
         parent_var_local->decl = var_decl;
@@ -1019,7 +1019,7 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
             }
             *ident = local->unique_ident;
             *type = local->type;
-            return (int8_t)analyzer_push_free(current, true, i, *ident, *type);
+            return (int8_t) analyzer_push_free(current, true, i, *ident, *type);
         }
     }
 
@@ -1027,7 +1027,7 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
     int8_t parent_free_index = analyzer_resolve_free(current->parent, ident, type);
     if (parent_free_index != -1) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
-        return (int8_t)analyzer_push_free(current, false, parent_free_index, *ident, *type);
+        return (int8_t) analyzer_push_free(current, false, parent_free_index, *ident, *type);
     }
 
     return -1;
@@ -1093,7 +1093,7 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
     char *temp = ident_with_module(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
-        ident->literal = temp; // 找到了则修改为全局名称
+        ident->literal = temp;// 找到了则修改为全局名称
         return;
     }
 
@@ -1266,7 +1266,7 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // iterate 是对变量的使用，所以其在 scope
     analyzer_expr(m, &stmt->iterate);
 
-    analyzer_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
+    analyzer_begin_scope(m);// iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
     analyzer_var_decl(m, &stmt->first, true);
     if (stmt->second) {
@@ -1465,7 +1465,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
             ast_fndef_t *fndef = stmt->value;
             fndef->is_tpl = true;
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
 
             slice_push(m->global_symbols, s);
@@ -1506,7 +1506,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // var_decl blocks
-    slice_t *var_assign_list = slice_new(); // 存放 stmt
+    slice_t *var_assign_list = slice_new();// 存放 stmt
     slice_t *fn_list = slice_new();
 
     // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
@@ -1530,10 +1530,10 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
             assign->left = (ast_expr_t){
-                .line = stmt->line,
-                .column = stmt->column,
-                .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(var_decl->ident),
+                    .line = stmt->line,
+                    .column = stmt->column,
+                    .assert_type = AST_EXPR_IDENT,
+                    .value = ast_new_ident(var_decl->ident),
             };
             assign->right = vardef->right;
             assign_stmt->line = stmt->line;
@@ -1564,7 +1564,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_fndef_t *fndef = stmt->value;
 
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
 
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             slice_push(m->global_symbols, s);
@@ -1592,10 +1592,10 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     ast_stmt_t *call_stmt = NEW(ast_stmt_t);
     ast_call_t *call = NEW(ast_call_t);
     call->left = (ast_expr_t){
-        .assert_type = AST_EXPR_IDENT,
-        .value = ast_new_ident(s->ident), // module.init
-        .line = 1,
-        .column = 0,
+            .assert_type = AST_EXPR_IDENT,
+            .value = ast_new_ident(s->ident),// module.init
+            .line = 1,
+            .column = 0,
     };
     call->args = ct_list_new(sizeof(ast_expr_t));
     call_stmt->assert_type = AST_CALL;

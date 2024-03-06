@@ -407,7 +407,7 @@ static type_t parser_single_type(module_t *m) {
 
         // --------------------------------------------------- param
         // type param1 快速处理, foo_t<param1, param1> {
-        if (m->type_params_table && table_exist(m->type_params_table, first->literal)) {
+        if (m->parser_type_params_table && table_exist(m->parser_type_params_table, first->literal)) {
             result.kind = TYPE_PARAM;
             result.param = type_param_new(first->literal);
             result.origin_ident = result.param->ident;
@@ -467,14 +467,14 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         type_alias_stmt->params = ct_list_new(sizeof(ast_ident));
 
         // 放在 module 全局表中用于辅助 parser
-        m->type_params_table = table_new();
+        m->parser_type_params_table = table_new();
 
         do {
             token_t *ident = parser_advance(m);
             ast_ident *temp = ast_new_ident(ident->literal);
             ct_list_push(type_alias_stmt->params, temp);
 
-            table_set(m->type_params_table, ident->literal, ident->literal);
+            table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
 
         parser_consume(m, TOKEN_RIGHT_ANGLE);
@@ -485,7 +485,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     result->value = type_alias_stmt;
 
     type_alias_stmt->type = parser_type(m);
-    m->type_params_table = NULL;// 右值解析完成后需要及时清空
+    m->parser_type_params_table = NULL;// 右值解析完成后需要及时清空
     return result;
 }
 
@@ -1813,14 +1813,14 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
 
         if (guard->token == TOKEN_LEFT_ANGLE) {
             PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
-            fndef->impl_type_params = ct_list_new(sizeof(ast_ident));
-            m->type_params_table = table_new();
+            fndef->generics_params = ct_list_new(sizeof(ast_ident));
+            m->parser_type_params_table = table_new();
 
             do {
                 token_t *ident = parser_advance(m);
                 ast_ident *temp = ast_new_ident(ident->literal);
-                ct_list_push(fndef->impl_type_params, temp);
-                table_set(m->type_params_table, ident->literal, ident->literal);
+                ct_list_push(fndef->generics_params, temp);
+                table_set(m->parser_type_params_table, ident->literal, ident->literal);
             } while (parser_consume(m, TOKEN_COMMA));
 
             parser_consume(m, TOKEN_RIGHT_ANGLE);
@@ -1837,13 +1837,13 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(impl == false, "impl type cannot coexist with generic functions");
         fndef->generics_params = ct_list_new(sizeof(ast_ident));
-        m->type_params_table = table_new();
+        m->parser_type_params_table = table_new();
 
         do {
             token_t *ident = parser_advance(m);
             ast_ident *temp = ast_new_ident(ident->literal);
             ct_list_push(fndef->generics_params, temp);
-            table_set(m->type_params_table, ident->literal, ident->literal);
+            table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
 
         parser_consume(m, TOKEN_RIGHT_ANGLE);

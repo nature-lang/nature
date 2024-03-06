@@ -225,12 +225,12 @@ static type_t checking_go(module_t *m, void *pVoid);
  * @param return_target_type
  * @return
  */
-static table_t *infer_generics_param(module_t *m, ast_fndef_t *tpl_fn, ast_call_t *call, type_t return_target_type) {
+static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t *call, type_t return_target_type) {
     assert(tpl_fn->is_generics);
     // 如果 call 已经给定了类型实参，则直接使用类型实参
 
     // 进行参数解析，可以顺便使用 type_compare 了！
-    table_t *generics_param_table = table_new();
+    table_t *generics_args_table = table_new();
 
     if (call->generics_args == NULL) {
         for (int i = 0; i <= call->args->length; i++) {
@@ -243,19 +243,20 @@ static table_t *infer_generics_param(module_t *m, ast_fndef_t *tpl_fn, ast_call_
             type_t *formal_type = select_fn_param(tpl_fn->type.fn, i, is_spread);
             *formal_type = reduction_type(m, *formal_type);
 
-            bool compare = type_compare(*formal_type, arg_type, generics_param_table);
+            bool compare = type_compare(*formal_type, arg_type, generics_args_table);
             CHECKING_ASSERTF(compare, "cannot infer generics type")
         }
 
-        return_target_type = reduction_type(m, return_target_type);
-        bool compare = type_compare(tpl_fn->return_type, return_target_type, generics_param_table);
-        CHECKING_ASSERTF(compare, "cannot infer generics type")
+        if (return_target_type.kind != TYPE_UNKNOWN && return_target_type.kind != TYPE_VOID) {
+            return_target_type = reduction_type(m, return_target_type);
+            bool compare = type_compare(tpl_fn->return_type, return_target_type, generics_args_table);
+            CHECKING_ASSERTF(compare, "cannot infer generics type")
+        }
 
         // 判断泛型参数是否全部推断完成
-        list_t *params = tpl_fn->generics_params ?: tpl_fn->impl_type_params;
-        for (int i = 0; i <= params->length; i++) {
-            ast_ident *param = ct_list_value(params, i);
-            CHECKING_ASSERTF(table_exist(generics_param_table, param->literal), "cannot infer generics param '%s'", param->literal);
+        for (int i = 0; i <= tpl_fn->generics_params->length; i++) {
+            ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
+            CHECKING_ASSERTF(table_exist(generics_args_table, param->literal), "cannot infer generics param '%s'", param->literal);
         }
     } else {
         // 按顺序生成 param
@@ -263,11 +264,11 @@ static table_t *infer_generics_param(module_t *m, ast_fndef_t *tpl_fn, ast_call_
             type_t *arg_type = ct_list_value(call->generics_args, i);
             *arg_type = reduction_type(m, *arg_type);
             ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
-            table_set(generics_param_table, param->literal, &arg_type);
+            table_set(generics_args_table, param->literal, &arg_type);
         }
     }
 
-    return generics_param_table;
+    return generics_args_table;
 }
 
 static bool can_assign_to_union(type_t t) {
@@ -328,6 +329,22 @@ static uint32_t fn_param_types_hash(list_t *param_types) {
     }
 
     return hash_string(str);
+}
+
+static char *generics_args_hash(ast_fndef_t *tpl_fn, table_t *arg_table) {
+    assert(tpl_fn->is_generics);
+    assert(tpl_fn->generics_params->length > 0);
+
+    char *str = itoa(TYPE_FN);
+    for (int i = 0; i < tpl_fn->generics_params->length; ++i) {
+        ast_ident *ident = ct_list_value(tpl_fn->generics_params, i);
+        type_t *t = table_get(arg_table, ident->literal);
+        assert(t);
+        rtype_t r = ct_reflect_type(*t);
+        str = str_connect(str, itoa((int64_t) r.hash));
+    }
+
+    return itoa(hash_string(str))
 }
 
 /**
@@ -432,26 +449,22 @@ static ast_fndef_t *fn_match(module_t *m, ast_call_t *call, symbol_t *s) {
  */
 static bool rewrite_fndef(module_t *m, ast_fndef_t *fndef) {
     assert(fndef->type.status == REDUCTION_STATUS_DONE);
-    // fndef->params_hash 已经注册完毕，不需要重复注册
+    // fndef->params_hash 已经注册并改写完毕，不需要重复改写
     if (fndef->params_hash) {
         return true;
     }
 
     symbol_t *s = symbol_table_get(fndef->symbol_name);
     assert(s);
-    assert(s->fndefs && s->fndefs->count > 0);
-
-    // symbol_name 在 symbol_table 中唯一，不会冲突，所以没有必要进行改写
-    if (s->fndefs->count == 1) {
-        return true;
-    }
 
     // 泛型函数必须存在 param_types， length 可以为 0
-    assert(fndef->hash_param_types);
+    assert(fndef->is_generics);
 
     if (!fndef->is_local) {
+        // 这是啥意思 global 不需要改写的意思吗？
         fndef->params_hash = itoa(fn_param_types_hash(fndef->hash_param_types));
     } else {
+        // 闭包继承 params 的 params_hash
         // fndef 内部还会有 fndef, 此时内部的 local fndef 直接继承 global parent 的 params_hash
 
         // local fn 直接适用 parent 的 hash 即可, 这么做也是为了兼容 generic 的情况
@@ -1626,7 +1639,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
  * @param call
  * @return
  */
-static type_t checking_call(module_t *m, ast_call_t *call) {
+static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     // [].push()
     // TODO 使用 exists 实现
     if (call->left.assert_type == AST_EXPR_SELECT) {
@@ -1680,14 +1693,33 @@ static type_t checking_call(module_t *m, ast_call_t *call) {
             CHECKING_ASSERTF(s, "symbol '%s' not found", ident->literal);
             CHECKING_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
 
-            ast_fndef_t *fn = s->ast_value;
-            if (!fn->is_generics) {
+            ast_fndef_t *tpl_fn = s->ast_value;
+            if (!tpl_fn->is_generics) {
                 break;// 按照正常函数编译
             }
 
-            // 只能一边推断一边
-            // TODO 参数不好比较了。参数里面可能有泛型，原本是想泛型匹配的，匹配的同时又需要 checking? 这是否有点太难了。
-            // 原先好像不需要比较的，日！
+            if (tpl_fn->generics_hash_table == NULL) {
+                tpl_fn->generics_hash_table = table_new();
+            }
+
+            // 泛型特化
+            table_t *arg_table = infer_generics_args(m, tpl_fn, call, target_type);
+            char *arg_hash = generics_args_hash(tpl_fn, arg_table);
+            ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, arg_hash);
+            if (special_fn == NULL) {
+                special_fn = ast_fndef_copy(m, tpl_fn);
+
+                // 基于 param_hash 重新生成 symbol_name
+
+                // 添加到 symbol table 中
+
+                table_set(tpl_fn->generics_hash_table, arg_hash, special_fn);
+
+                special_fn->generics_args_hash = arg_hash;
+                special_fn->generics_args = arg_table;
+            }
+
+            // TODO
         } while (0);
     }
 
@@ -2039,7 +2071,7 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
             break;
         }
         case AST_CALL: {
-            checking_call(m, stmt->value);
+            checking_call(m, stmt->value, type_kind_new(TYPE_VOID));
             break;
         }
         case AST_CATCH: {
@@ -2111,7 +2143,7 @@ static type_t checking_left_expr(module_t *m, ast_expr_t *expr) {
             break;
         }
         case AST_CALL: {
-            type = checking_call(m, expr->value);
+            type = checking_call(m, expr->value, type_kind_new(TYPE_UNKNOWN));
             break;
         }
         default: {
@@ -2184,7 +2216,7 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return checking_select(m, expr);
         }
         case AST_CALL: {
-            return checking_call(m, expr->value);
+            return checking_call(m, expr->value, target_type);
         }
         case AST_EXPR_TRY: {
             return checking_try(m, expr->value);
@@ -2448,27 +2480,24 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         assert(t.alias->args->length == type_alias_stmt->params->length);
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
-        m->type_param_table = table_new();
-        m->type_param_list = t.alias->args;
-
+        // 实参注册
+        table_t *arg_table = table_new();
         for (int i = 0; i < t.alias->args->length; ++i) {
             type_t *arg = ct_list_value(t.alias->args, i);
             ast_ident *param = ct_list_value(type_alias_stmt->params, i);
-            table_set(m->type_param_table, param->literal, arg);
+            table_set(arg_table, param->literal, arg);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
+        stack_push(m->checking_type_arg_stack, arg_table);
 
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 checking_fn_decl 而不会处理 fn body 部分
-        // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续  checking_fndef 时解析 param 异常
+        // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 checking_fndef 时解析 param 异常
         // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
         alias_value_type = reduction_type(m, alias_value_type);
 
-        // reduction 完成 完成，取消 type_args
-        // reduction 期间的 fn 也进行了相关的 copy 操作。
-        m->type_param_table = NULL;
-        m->type_param_list = NULL;
+        stack_pop(m->checking_type_arg_stack);
 
         return alias_value_type;
     }
@@ -2677,6 +2706,7 @@ void pre_checking(module_t *m) {
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
+        // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
         checking_fn_decl(m, fndef);
 
         // 已经 reduction param_types 已经 reduction 完成了
@@ -2697,6 +2727,7 @@ void checking(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
     m->checking_temp_fndefs = slice_new();
+    m->checking_type_arg_stack = stack_new();
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();
