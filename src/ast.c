@@ -704,19 +704,29 @@ list_t *ast_fn_formals_copy(module_t *m, list_t *temp_formals) {
  * 深度 copy
  * @return
  */
-ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *tpl) {
-    ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, tpl);
-    fndef->symbol_name = tpl->symbol_name;
-    fndef->closure_name = tpl->closure_name;
-    fndef->return_type = type_copy(m, tpl->return_type);
-    fndef->params = ast_fn_formals_copy(m, tpl->params);
-    fndef->type = type_copy(m, tpl->type);
-    fndef->capture_exprs = tpl->capture_exprs;
-    fndef->body = ast_body_copy(m, tpl->body);
-    fndef->fn_name = tpl->fn_name;
-    fndef->rel_path = tpl->rel_path;
-    fndef->column = tpl->column;
-    fndef->line = tpl->line;
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
+    ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, temp);
+    fndef->symbol_name = temp->symbol_name;
+    fndef->closure_name = temp->closure_name;
+    fndef->return_type = type_copy(m, temp->return_type);
+    fndef->params = ast_fn_formals_copy(m, temp->params);
+    fndef->type = type_copy(m, temp->type);
+    fndef->capture_exprs = temp->capture_exprs;
+    fndef->fn_name = temp->fn_name;
+    fndef->rel_path = temp->rel_path;
+    fndef->column = temp->column;
+    fndef->line = temp->line;
+    fndef->body = ast_body_copy(m, temp->body);
+    fndef->is_generics = false;
+    fndef->global_parent = NULL;
+    if (!fndef->is_local) {
+        m->analyzer_global = fndef;
+        fndef->local_children = slice_new();
+    } else {
+        assert(m->analyzer_global);
+        slice_push(m->analyzer_global->local_children, fndef);
+        fndef->global_parent = m->analyzer_global;
+    }
 
     return fndef;
 }

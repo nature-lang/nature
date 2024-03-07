@@ -203,7 +203,6 @@ typedef struct {
     slice_t *global_symbols;// symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 checking 阶段进行类型推导
 
-    // ast_fndef
     slice_t *ast_fndefs;
 
     slice_t *checking_temp_fndefs;// checking 阶段，type param 可能还会产生 temp_fndefs
@@ -555,7 +554,7 @@ typedef struct {
     uint8_t output_type;
 } elf_context;
 
-ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *tpl);
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
 
 type_t type_copy(module_t *m, type_t temp);
 

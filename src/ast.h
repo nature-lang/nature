@@ -524,7 +524,7 @@ typedef struct ast_fndef_t {
      * params_hash 是基于 global fn params 计算出的唯一标识，所有的 global fn 的唯一标识都将 with params_hash，然后将 with 后的
      * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。这也避免了冲突
      */
-    char *params_hash;// TODO 不实用 params_hash 了
+//    char *generics_args_hash;// TODO 不实用 params_hash 了
 
     // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
     type_t *self_struct_ptr;
@@ -541,7 +541,8 @@ typedef struct ast_fndef_t {
 
     // 默认为 null，如果是 local fn, 则指向定义的 global fn
     struct ast_fndef_t *global_parent;
-    // 仅当前 fn 为 global fn 时才有可能存在 child_fndefs
+
+    // 仅当前 fn 为 global fn 时才有可能存在一个或者多个 child_fndefs
     slice_t *local_children;
     // analyzer 时赋值
     bool is_local;   // 是否是全局函数

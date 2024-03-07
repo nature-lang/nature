@@ -406,6 +406,8 @@ static void analyzer_type(module_t *m, type_t *type) {
                 analyzer_expr(m, item->right);
 
                 ast_expr_t *expr = item->right;
+
+                // TODO 暂时不再支持默认值 fndef
                 if (expr->assert_type == AST_FNDEF) {
                     ast_fndef_t *fndef = expr->value;
 
@@ -758,6 +760,14 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
                 ct_list_push(t.alias->args, &param_type);
             }
         }
+
+        list_t *params = ct_list_new(sizeof(ast_var_decl_t));
+        ct_list_push(params, &param);
+        for (int i = 0; i < fndef->params->length; ++i) {
+            ast_var_decl_t *item = ct_list_value(fndef->params, i);
+            ct_list_push(params, item);
+        }
+        fndef->params = params;
     }
 
     // 函数形参处理
@@ -856,7 +866,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         fndef->global_parent = m->analyzer_global;
         fndef->is_local = true;
     } else {
-        // TODO 定义在类型里面的全局函数？暂时取消了, 不然搞得太乱。
+        // TODO 定义在 struct 里面的全局函数？暂时取消了, 不然搞得太乱。
         assert(m->analyzer_current == NULL);
         fndef->is_local = false;
     }
