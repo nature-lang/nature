@@ -172,7 +172,7 @@ typedef struct {
 
     // checking 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
-    ct_stack_t *checking_type_arg_stack;
+    ct_stack_t *checking_type_args_stack;
 
     // analyzer
     analyzer_fndef_t *analyzer_current;

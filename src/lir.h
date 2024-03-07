@@ -32,7 +32,7 @@
 #define CATCH_ERROR_IDENT "catch_error"
 #define CATCH_END_IDENT "catch_end"
 
-#define ERRORT_TYPE_ALIAS "errort"
+#define ERRORT_TYPE_ALIAS "error_t"
 #define ERRORT_MSG_IDENT "msg"
 #define ERRORT_IS_IDENT "is"
 

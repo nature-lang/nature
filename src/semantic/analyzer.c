@@ -734,10 +734,30 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_begin_scope(m);
 
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
+    // fn vec<t>.len() -> fn vec_len(vec<t> self)
     if (fndef->impl_type_alias) {
         char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, fndef->impl_type_alias);
         ANALYZER_ASSERTF(false, "type alias '%s' undeclared \n", fndef->impl_type_alias);
         fndef->impl_type_alias = unique_alias_ident;
+
+        // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型为 type_alias
+        ast_var_decl_t *param = NEW(ast_var_decl_t);
+        param->ident = FN_SELF_NAME;
+        type_t t = type_new(TYPE_ALIAS, type_alias_new(fndef->impl_type_alias, NULL));
+        t.status = REDUCTION_STATUS_UNDO;
+        t.origin_ident = fndef->impl_type_alias;
+        t.impl_ident = fndef->impl_type_alias;
+
+        if (fndef->generics_params) {
+            t.alias->args = ct_list_new(sizeof(type_t));
+            for (int i = 0; i < fndef->generics_params->length; ++i) {
+                ast_ident *ident = ct_list_value(fndef->generics_params, i);
+                type_t param_type = type_new(TYPE_PARAM, type_param_new(ident->literal));
+                param_type.origin_ident = ident->literal;
+                param_type.status = REDUCTION_STATUS_UNDO;
+                ct_list_push(t.alias->args, &param_type);
+            }
+        }
     }
 
     // 函数形参处理
@@ -1137,23 +1157,21 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
 }
 
 /*
- * 如果是 import_path.test 则进行符号改写, 改写成 namespace + module_name
+ * 如果是 package.test 则进行符号改写, 改写成 namespace + module_name
  * struct.key , instance? 则不做任何对处理。
  */
 static void analyzer_select(module_t *m, ast_expr_t *expr) {
     ast_select_t *select = expr->value;
-    if (select->left.assert_type == AST_EXPR_IDENT) {
-        if (analyzer_local_ident(m, &select->left)) {
-            return;
-        }
 
+    // import select 特殊处理, 直接进行符号改写
+    if (select->left.assert_type == AST_EXPR_IDENT) {
         // 这里将全局名称改写后并不能直接去符号表中查找，
         // 但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
         ast_ident *ident = select->left.value;
         ast_import_t *import = table_get(m->import_table, ident->literal);
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
-            // (不需要检测 import 服务是否存在，这在 linker 中会做的)
+            // (不需要检测 import package 是否存在，这在 linker 中会做的)
             char *unique_ident = ident_with_module(import->module_ident, select->key);
 
             // 检测 import ident 是否存在
@@ -1563,8 +1581,15 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_FNDEF) {
             ast_fndef_t *fndef = stmt->value;
 
+            char *symbol_name = fndef->symbol_name;
+
+            // fn string<>.len() -> fn string_len to symbol_table
+            if (fndef->impl_type_alias) {
+                symbol_name = str_connect_by(fndef->impl_type_alias, symbol_name, "_");
+            }
+
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_module(m->ident, symbol_name);// 全局函数改名
 
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             slice_push(m->global_symbols, s);

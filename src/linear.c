@@ -8,16 +8,27 @@
 #include "utils/linked.h"
 
 lir_opcode_t ast_op_convert[] = {
-    [AST_OP_ADD] = LIR_OPCODE_ADD,    [AST_OP_SUB] = LIR_OPCODE_SUB,    [AST_OP_MUL] = LIR_OPCODE_MUL,
-    [AST_OP_DIV] = LIR_OPCODE_DIV,    [AST_OP_REM] = LIR_OPCODE_REM,
+        [AST_OP_ADD] = LIR_OPCODE_ADD,
+        [AST_OP_SUB] = LIR_OPCODE_SUB,
+        [AST_OP_MUL] = LIR_OPCODE_MUL,
+        [AST_OP_DIV] = LIR_OPCODE_DIV,
+        [AST_OP_REM] = LIR_OPCODE_REM,
 
-    [AST_OP_LSHIFT] = LIR_OPCODE_SHL, [AST_OP_RSHIFT] = LIR_OPCODE_SHR, [AST_OP_AND] = LIR_OPCODE_AND,
-    [AST_OP_OR] = LIR_OPCODE_OR,      [AST_OP_XOR] = LIR_OPCODE_XOR,
+        [AST_OP_LSHIFT] = LIR_OPCODE_SHL,
+        [AST_OP_RSHIFT] = LIR_OPCODE_SHR,
+        [AST_OP_AND] = LIR_OPCODE_AND,
+        [AST_OP_OR] = LIR_OPCODE_OR,
+        [AST_OP_XOR] = LIR_OPCODE_XOR,
 
-    [AST_OP_LT] = LIR_OPCODE_SLT,     [AST_OP_LE] = LIR_OPCODE_SLE,     [AST_OP_GT] = LIR_OPCODE_SGT,
-    [AST_OP_GE] = LIR_OPCODE_SGE,     [AST_OP_EE] = LIR_OPCODE_SEE,     [AST_OP_NE] = LIR_OPCODE_SNE,
+        [AST_OP_LT] = LIR_OPCODE_SLT,
+        [AST_OP_LE] = LIR_OPCODE_SLE,
+        [AST_OP_GT] = LIR_OPCODE_SGT,
+        [AST_OP_GE] = LIR_OPCODE_SGE,
+        [AST_OP_EE] = LIR_OPCODE_SEE,
+        [AST_OP_NE] = LIR_OPCODE_SNE,
 
-    [AST_OP_BNOT] = LIR_OPCODE_NOT,   [AST_OP_NEG] = LIR_OPCODE_NEG,
+        [AST_OP_BNOT] = LIR_OPCODE_NOT,
+        [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
 /**
@@ -76,7 +87,7 @@ static void linear_zero_stack(module_t *m, lir_operand_t *target, uint64_t size)
     uint16_t offset = 0;
     while (remind > 0) {
         uint16_t count = 0;
-        uint16_t item_size = 0; // unit byte
+        uint16_t item_size = 0;// unit byte
         type_kind kind;
         if (remind >= QWORD) {
             kind = TYPE_UINT64;
@@ -496,7 +507,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     dst = lea_operand_pointer(m, dst);
 
     if (is_alloc_stack(stmt->left.type)) {
-        linear_expr(m, stmt->right, dst); // 直接进行 move 避免中间的 copy
+        linear_expr(m, stmt->right, dst);// 直接进行 move 避免中间的 copy
     } else {
         // ptr<foo>.bar 需要走 write_barrier
         // 如果 src 是一个分配在 stack 中的对象则 src 已经是一个指针地址，否则其是一个具体的值
@@ -522,7 +533,7 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // 右值可能是一个 struct_new, 但是这又有什么影响呢，你必须创造新的空间？
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
-    lir_operand_t *dst = linear_ident(m, stmt->left, NULL); // ident
+    lir_operand_t *dst = linear_ident(m, stmt->left, NULL);// ident
 
     linear_super_move(m, stmt->left.type, dst, src);
 }
@@ -557,7 +568,7 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
             lir_operand_t *temp_var = temp_var_operand_without_stack(m, element->type);
             OP_PUSH(lir_op_move(temp_var, element_src_operand));
 
-            char *ident = ((lir_var_t *)temp_var->value)->ident;
+            char *ident = ((lir_var_t *) temp_var->value)->ident;
 
             ast_assign_stmt_t *assign_stmt = NEW(ast_assign_stmt_t);
             assign_stmt->left = *element;
@@ -729,7 +740,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // cursor 初始值
     lir_operand_t *cursor_operand = unique_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
-    OP_PUSH(lir_op_move(cursor_operand, int_operand(-1))); // cursor 初始值 = --
+    OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));// cursor 初始值 = --
 
     // make label
     lir_op_t *for_start_label = lir_op_unique_label(m, FOR_ITERATOR_IDENT);
@@ -749,7 +760,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
         first_ref = temp_var_operand_without_stack(m, type_kind_new(TYPE_CPTR));
         OP_PUSH(lir_op_move(first_ref, first_target));
     } else {
-        OP_PUSH(lir_op_nop_def(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        OP_PUSH(lir_op_nop_def(first_target));// var_decl 没有进行初始化，所以需要进行一下 def 初始化
         first_ref = lea_operand_pointer(m, first_target);
     }
 
@@ -771,7 +782,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     if (ast->second) {
         lir_operand_t *second_target = linear_var_decl(m, ast->second);
         assert(!is_alloc_stack(ast->second->type));
-        OP_PUSH(lir_op_nop_def(second_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        OP_PUSH(lir_op_nop_def(second_target));// var_decl 没有进行初始化，所以需要进行一下 def 初始化
         lir_operand_t *value_ref = lea_operand_pointer(m, second_target);
 
         push_rt_call(m, RT_CALL_ITERATOR_TAKE_VALUE, NULL, 4, iterator_target, int_operand(rtype_hash), cursor_operand, value_ref);
@@ -780,7 +791,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     linear_body(m, ast->body);
 
     // goto for start
-    OP_PUSH(lir_op_bal(for_start_label->output)); // 重新进行迭代的计算
+    OP_PUSH(lir_op_bal(for_start_label->output));// 重新进行迭代的计算
     OP_PUSH(for_end_label);
 
     stack_pop(m->current_closure->continue_labels);
@@ -1171,7 +1182,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_alloc_stack(unary_expr->operand.type)) {
             if (!target) {
-                target = temp_var_operand_with_stack(m, expr.type); // pointer target
+                target = temp_var_operand_with_stack(m, expr.type);// pointer target
             }
 
             assert(lir_operand_type(target).kind == TYPE_PTR);
@@ -1610,7 +1621,7 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
     if (!target) {
-        target = temp_var_operand_without_stack(m, expr.type); // 必定是一个指针类型
+        target = temp_var_operand_without_stack(m, expr.type);// 必定是一个指针类型
     }
 
     ast_new_expr_t *new_expr = expr.value;
@@ -1708,7 +1719,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_number(as_expr->target_type.kind) && is_number(as_expr->src.type.kind)) {
         lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
 
-        OP_PUSH(lir_op_nop_def(target)); // 如何清理多余的 nop 指令？
+        OP_PUSH(lir_op_nop_def(target));// 如何清理多余的 nop 指令？
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         lir_operand_t *input_ref = lea_operand_pointer(m, input);
 
@@ -1801,7 +1812,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, catch_expr->try_expr, target);
-    m->current_closure->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+    m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
@@ -1855,7 +1866,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
 
         linear_expr(m, try->expr, NULL);
 
-        m->current_closure->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+        m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
 
         // catch_error_label:  try expr 会跳转到这里
         OP_PUSH(lir_op_label(catch_end_label, true));
@@ -1879,7 +1890,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
     char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, try->expr, result_operand);
-    m->current_closure->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+    m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
 
     // bal to catch_end
     lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
@@ -1962,7 +1973,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
     if (literal->kind == TYPE_FLOAT32) {
         lir_imm_t *imm_operand = NEW(lir_imm_t);
         imm_operand->kind = cross_kind_trans(literal->kind);
-        imm_operand->f32_value = (float)atof(literal->value);
+        imm_operand->f32_value = (float) atof(literal->value);
         lir_operand_t *src = operand_new(LIR_OPERAND_IMM, imm_operand);
         return linear_super_move(m, expr.type, target, src);
     }
@@ -2003,7 +2014,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (!fndef->closure_name) {
         if (!expr.target_type.kind) {
-            return NULL; // 没有表达式需要接收值
+            return NULL;// 没有表达式需要接收值
         }
 
         OP_PUSH(lir_op_lea(target, fn_symbol_operand));
@@ -2024,7 +2035,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         ast_expr_t *item = ct_list_value(fndef->capture_exprs, i);
         // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪
         if (item->assert_type == AST_EXPR_IDENT) {
-            char *ident = ((ast_ident *)item->value)->literal;
+            char *ident = ((ast_ident *) item->value)->literal;
             slice_push(capture_vars, lir_var_new(m, ident));
         }
 
@@ -2126,12 +2137,12 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
                         (ast_expr_t){
-                            .line = stmt->line,
-                            .column = stmt->column,
-                            .assert_type = AST_CALL,
-                            .type = call->return_type,
-                            .target_type = call->return_type,
-                            .value = call,
+                                .line = stmt->line,
+                                .column = stmt->column,
+                                .assert_type = AST_CALL,
+                                .type = call->return_type,
+                                .target_type = call->return_type,
+                                .value = call,
                         },
                         NULL);
             return;
@@ -2140,12 +2151,12 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
                               (ast_expr_t){
-                                  .line = stmt->line,
-                                  .column = stmt->column,
-                                  .assert_type = AST_CATCH,
-                                  .type = catch->try_expr.type,
-                                  .target_type = catch->try_expr.type,
-                                  .value = catch,
+                                      .line = stmt->line,
+                                      .column = stmt->column,
+                                      .assert_type = AST_CATCH,
+                                      .type = catch->try_expr.type,
+                                      .target_type = catch->try_expr.type,
+                                      .value = catch,
                               },
                               NULL);
             return;
@@ -2166,30 +2177,30 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
 }
 
 linear_expr_fn expr_fn_table[] = {
-    [AST_EXPR_LITERAL] = linear_literal,
-    [AST_EXPR_IDENT] = linear_ident,
-    [AST_EXPR_ENV_ACCESS] = linear_env_access,
-    [AST_EXPR_BINARY] = linear_binary,
-    [AST_EXPR_UNARY] = linear_unary,
-    [AST_EXPR_ARRAY_NEW] = linear_array_new,
-    [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
-    [AST_EXPR_VEC_NEW] = linear_vec_new,
-    [AST_EXPR_VEC_ACCESS] = linear_vec_access,
-    [AST_EXPR_MAP_NEW] = linear_map_new,
-    [AST_EXPR_MAP_ACCESS] = linear_map_access,
-    [AST_EXPR_STRUCT_NEW] = linear_struct_new,
-    [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
-    [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
-    [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
-    [AST_EXPR_SET_NEW] = linear_set_new,
-    [AST_CALL] = linear_call,
-    [AST_FNDEF] = linear_fn_decl,
-    [AST_EXPR_TRY] = linear_try,
-    [AST_EXPR_AS] = linear_as_expr,
-    [AST_EXPR_IS] = linear_is_expr,
-    [AST_EXPR_SIZEOF] = linear_sizeof_expr,
-    [AST_EXPR_NEW] = linear_new_expr,
-    [AST_CATCH] = linear_catch_expr,
+        [AST_EXPR_LITERAL] = linear_literal,
+        [AST_EXPR_IDENT] = linear_ident,
+        [AST_EXPR_ENV_ACCESS] = linear_env_access,
+        [AST_EXPR_BINARY] = linear_binary,
+        [AST_EXPR_UNARY] = linear_unary,
+        [AST_EXPR_ARRAY_NEW] = linear_array_new,
+        [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
+        [AST_EXPR_VEC_NEW] = linear_vec_new,
+        [AST_EXPR_VEC_ACCESS] = linear_vec_access,
+        [AST_EXPR_MAP_NEW] = linear_map_new,
+        [AST_EXPR_MAP_ACCESS] = linear_map_access,
+        [AST_EXPR_STRUCT_NEW] = linear_struct_new,
+        [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
+        [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
+        [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
+        [AST_EXPR_SET_NEW] = linear_set_new,
+        [AST_CALL] = linear_call,
+        [AST_FNDEF] = linear_fn_decl,
+        [AST_EXPR_TRY] = linear_try,
+        [AST_EXPR_AS] = linear_as_expr,
+        [AST_EXPR_IS] = linear_is_expr,
+        [AST_EXPR_SIZEOF] = linear_sizeof_expr,
+        [AST_EXPR_NEW] = linear_new_expr,
+        [AST_CATCH] = linear_catch_expr,
 };
 
 static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -2271,8 +2282,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));   // 方便 return check
-    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));  // 方便 return check
+    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));// bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
     if (fndef->be_capture_locals->count > 0) {

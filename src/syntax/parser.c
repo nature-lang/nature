@@ -122,7 +122,7 @@ static bool parser_must_stmt_end(module_t *m) {
 }
 
 static bool parser_basic_token_type(module_t *m) {
-    if (parser_is(m, TOKEN_VAR) || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_SELF) || parser_is(m, TOKEN_INT) ||
+    if (parser_is(m, TOKEN_VAR) || parser_is(m, TOKEN_NULL)  || parser_is(m, TOKEN_INT) ||
         parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) ||
         parser_is(m, TOKEN_UINT) || parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) ||
         parser_is(m, TOKEN_U64) || parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) ||
@@ -214,6 +214,7 @@ static type_t parser_single_type(module_t *m) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->token];
         result.value = NULL;
+        result.impl_ident = type_kind_str[result.kind];
         return result;
     }
 
@@ -226,6 +227,7 @@ static type_t parser_single_type(module_t *m) {
 
         result.kind = TYPE_PTR;
         result.pointer = type_pointer;
+        result.impl_ident = type_kind_str[TYPE_PTR];
         return result;
     }
 
@@ -236,6 +238,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_VEC;
         result.vec = type_vec;
+        result.impl_ident = type_kind_str[TYPE_VEC];
         return result;
     }
 
@@ -249,6 +252,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_MAP;
         result.map = map;
+        result.impl_ident = type_kind_str[TYPE_MAP];
         return result;
     }
 
@@ -260,6 +264,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_SET;
         result.set = set;
+        result.impl_ident = type_kind_str[TYPE_SET];
         return result;
     }
 
@@ -276,10 +281,11 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_TUPLE;
         result.tuple = tuple;
+        result.impl_ident = type_kind_str[TYPE_TUPLE];
         return result;
     }
 
-    // vec<int>
+    // vec<int> TODO 用不上了才对
     if (parser_consume(m, TOKEN_VEC)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_vec_t *type_vec = NEW(type_vec_t);
@@ -287,6 +293,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_VEC;
         result.vec = type_vec;
+        result.impl_ident = type_kind_str[TYPE_VEC];
         return result;
     }
 
@@ -303,6 +310,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_ARR;
         result.array = type_array;
+        result.impl_ident = type_kind_str[TYPE_ARR];
         return result;
     }
 
@@ -318,6 +326,7 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_PAREN);
         result.kind = TYPE_TUPLE;
         result.tuple = tuple;
+        result.impl_ident = type_kind_str[TYPE_TUPLE];
         return result;
     }
 
@@ -332,6 +341,7 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_MAP;
             result.map = map;
+            result.impl_ident = type_kind_str[TYPE_MAP];
             return result;
         } else {
             // set
@@ -340,6 +350,7 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_SET;
             result.set = set;
+            result.impl_ident = type_kind_str[TYPE_SET];
             return result;
         }
     }
@@ -373,6 +384,7 @@ static type_t parser_single_type(module_t *m) {
 
         result.kind = TYPE_STRUCT;
         result.struct_ = type_struct;
+
         return result;
     }
 
@@ -405,7 +417,7 @@ static type_t parser_single_type(module_t *m) {
     if (parser_is(m, TOKEN_IDENT)) {
         token_t *first = parser_advance(m);
 
-        // --------------------------------------------------- param
+        // --------------------------------------------param----------------------------------------------------------
         // type param1 快速处理, foo_t<param1, param1> {
         if (m->parser_type_params_table && table_exist(m->parser_type_params_table, first->literal)) {
             result.kind = TYPE_PARAM;
@@ -414,7 +426,7 @@ static type_t parser_single_type(module_t *m) {
             return result;
         }
 
-        // --------------------------------------------------- alias
+        // --------------------------------------------alias----------------------------------------------------------
         // foo.bar 形式的类型
         token_t *second = NULL;
         if (parser_consume(m, TOKEN_DOT)) {
@@ -440,7 +452,7 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
-        result.origin_ident = result.alias->ident;
+        result.impl_ident = result.alias->ident;
         return result;
     }
 

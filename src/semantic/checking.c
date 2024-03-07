@@ -344,7 +344,7 @@ static char *generics_args_hash(ast_fndef_t *tpl_fn, table_t *arg_table) {
         str = str_connect(str, itoa((int64_t) r.hash));
     }
 
-    return itoa(hash_string(str))
+    return itoa(hash_string(str));
 }
 
 /**
@@ -756,6 +756,7 @@ static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.origin_ident = ERRORT_TYPE_ALIAS;
+    errort.impl_ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     catch_expr->catch_err.type = errort;
@@ -1547,7 +1548,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     exit(1);
 }
 
-static void checking_call_params(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
+static void checking_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
     if (!target_type_fn->rest) {
         CHECKING_ASSERTF(call->args->length == target_type_fn->param_types->length, "number of call args not match declaration");
@@ -1608,7 +1609,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
 
     // 按照普通 foo.bar(param) 的方式 checking 返回即可
     if (first->kind != TYPE_SELF) {
-        checking_call_params(m, call, type_fn);
+        checking_call_args(m, call, type_fn);
         return type_fn->return_type;
     }
 
@@ -1628,7 +1629,7 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     for (int i = 0; i < args->length; ++i) {
         ct_list_push(call->args, ct_list_value(args, i));
     }
-    checking_call_params(m, call, type_fn);
+    checking_call_args(m, call, type_fn);
     return type_fn->return_type;
 }
 
@@ -1641,14 +1642,33 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
  */
 static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     // [].push()
-    // TODO 使用 exists 实现
+    // alias.push()
+    // --------------------------------------------impl type handle----------------------------------------------------------
     if (call->left.assert_type == AST_EXPR_SELECT) {
         ast_select_t *select = call->left.value;
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-        checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
-        // 将 self 还原成 ptr<struct>
-        if (select->left.type.kind == TYPE_SELF) {
+        type_t select_left_type = checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+
+        // [].push() 首先判断左值的类型，基于左值的类型，判断是否存在 impl_alias, 如果存在则直接进行改写(struct 也进行改写, 默认 impl 优先级高于 struct property)
+        type_kind select_left_kind = select_left_type.kind;
+
+        // 基于 left 进行拼装定位改写
+        char *impl_ident = select_left_type.impl_ident;
+
+        char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
+
+        // 查找对应的 fn
+        symbol_t *s = symbol_table_get(impl_symbol_name);
+        if (s != NULL) {
+            // 对 call left 进行改写，TODO self 怎么传递，数据怎么传递？还是通过 self? 只有全局函数有 self 这个概念吧
+        }
+
+        // 直接将 self 还原成 ptr<struct>
+        if (select_left_type.kind == TYPE_SELF) {
+            // TODO 现在 self 是什么类型？怎么改写, checking fn decl 应该能确定 self 的类型，类型埋在 current_fn 中即可？
+            // 还是在 analyzer 阶段进行改写，把 self 改成啥呢？改成泛型函数？或者 self 就不动？就是个 use, 在 analyzer 总归是能找到的。
+
             // 当前 fn body 中出现了 self.foo() 这样的 call 表达式，则说明当前 fn 必须定义在 struct 中
             ast_fndef_t *current = m->current_fn;
             CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
@@ -1659,7 +1679,6 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
             select->left.type = *current->self_struct_ptr;
         }
 
-        type_kind select_left_kind = select->left.type.kind;
 
         if (select_left_kind == TYPE_VEC) {
             return checking_vec_select_call(m, call);
@@ -1685,7 +1704,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     }
 
     // analyzer 阶段已经对 ident 进行了 resolve/module ident with
-    // TODO 这一段逻辑是为了泛型的 match, 后续看起来没啥必要了
+    // --------------------------------------------generics handle----------------------------------------------------------
     if (call->left.assert_type == AST_EXPR_IDENT) {
         do {
             ast_ident *ident = call->left.value;
@@ -1695,31 +1714,47 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
 
             ast_fndef_t *tpl_fn = s->ast_value;
             if (!tpl_fn->is_generics) {
-                break;// 按照正常函数编译
+                break;
             }
 
             if (tpl_fn->generics_hash_table == NULL) {
                 tpl_fn->generics_hash_table = table_new();
             }
+            if (tpl_fn->generics_special_fns == NULL) {
+                tpl_fn->generics_special_fns = slice_new();
+            }
 
             // 泛型特化
-            table_t *arg_table = infer_generics_args(m, tpl_fn, call, target_type);
-            char *arg_hash = generics_args_hash(tpl_fn, arg_table);
-            ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, arg_hash);
+            table_t *args_table = infer_generics_args(m, tpl_fn, call, target_type);
+            char *args_hash = generics_args_hash(tpl_fn, args_table);
+            ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
             if (special_fn == NULL) {
                 special_fn = ast_fndef_copy(m, tpl_fn);
 
-                // 基于 param_hash 重新生成 symbol_name
+                table_set(tpl_fn->generics_hash_table, args_hash, special_fn);
+                slice_push(tpl_fn->generics_special_fns, special_fn);
 
-                // 添加到 symbol table 中
+                special_fn->generics_args_hash = args_hash;
+                special_fn->generics_args_table = args_table;
 
-                table_set(tpl_fn->generics_hash_table, arg_hash, special_fn);
+                // rewrite special fn
+                special_fn->symbol_name = str_connect_by(special_fn->symbol_name, special_fn->generics_args_hash, GEN_REWRITE_SEPARATOR);
 
-                special_fn->generics_args_hash = arg_hash;
-                special_fn->generics_args = arg_table;
+                // 注册到全局符号表(还未基于 args_hash checking + reduction)
+                assert(!special_fn->is_local);
+                symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
+                special_fn->type.status = REDUCTION_STATUS_UNDO;
+                stack_push(m->checking_type_args_stack, args_table);
+                checking_fn_decl(m, special_fn);
+                stack_pop(m->checking_type_args_stack);
             }
 
-            // TODO
+            assert(special_fn->type.status == REDUCTION_STATUS_DONE);
+
+            // checking call args
+            checking_call_args(m, call, special_fn->type.fn);
+            call->return_type = special_fn->type.fn->return_type;
+            return call->return_type;
         } while (0);
     }
 
@@ -1728,7 +1763,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     type_t left_type = checking_left_expr(m, &call->left);
     CHECKING_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
     type_fn_t *type_fn = left_type.fn;
-    checking_call_params(m, call, type_fn);
+    checking_call_args(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
     return type_fn->return_type;
@@ -1749,6 +1784,7 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.origin_ident = ERRORT_TYPE_ALIAS;
+    errort.impl_ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     if (return_type.kind == TYPE_VOID) {
@@ -2481,23 +2517,23 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         // 实参注册
-        table_t *arg_table = table_new();
+        table_t *args_table = table_new();
         for (int i = 0; i < t.alias->args->length; ++i) {
             type_t *arg = ct_list_value(t.alias->args, i);
             ast_ident *param = ct_list_value(type_alias_stmt->params, i);
-            table_set(arg_table, param->literal, arg);
+            table_set(args_table, param->literal, arg);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
-        stack_push(m->checking_type_arg_stack, arg_table);
+        stack_push(m->checking_type_args_stack, args_table);
 
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 checking_fn_decl 而不会处理 fn body 部分
         // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 checking_fndef 时解析 param 异常
         // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
         alias_value_type = reduction_type(m, alias_value_type);
 
-        stack_pop(m->checking_type_arg_stack);
+        stack_pop(m->checking_type_args_stack);
 
         return alias_value_type;
     }
@@ -2537,7 +2573,8 @@ static type_t reduction_union_type(module_t *m, type_t t) {
 static type_t reduction_type(module_t *m, type_t t) {
     assert(t.kind > 0);
 
-    char *origin_name = t.origin_ident;
+    char *origin_ident = t.origin_ident;
+    char *impl_ident = t.impl_ident;
 
     if (t.kind == TYPE_UNKNOWN) {
         return t;
@@ -2587,9 +2624,9 @@ static type_t reduction_type(module_t *m, type_t t) {
 STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
-    t.origin_ident = origin_name;// reduction dump error ident
+    t.origin_ident = origin_ident;// reduction dump error ident
+    t.impl_ident = impl_ident;    // type impl
     if (t.kind == TYPE_INT || t.kind == TYPE_UINT || t.kind == TYPE_FLOAT) {
-        t.origin_ident = type_kind_str[t.kind];
         t.kind = cross_kind_trans(t.kind);
     }
 
@@ -2619,18 +2656,17 @@ static type_t checking_fn_decl(module_t *m, ast_fndef_t *fndef) {
     fndef->return_type = f->return_type;
 
     for (int i = 0; i < fndef->params->length; ++i) {
-        ast_var_decl_t *var = ct_list_value(fndef->params, i);
-        if (var->type.kind == TYPE_SELF) {
+        ast_var_decl_t *param = ct_list_value(fndef->params, i);
+        if (param->type.kind == TYPE_SELF) {
             CHECKING_ASSERTF(i == 0, "only use self in fn first param");
         }
 
         // 这里直接将 self 定义为 done, 而不是转换为 struct, 避免出现 reduction 死循环
-        var->type = reduction_type(m, var->type);
-        ct_list_push(f->param_types, &var->type);
+        param->type = reduction_type(m, param->type);
+        ct_list_push(f->param_types, &param->type);
     }
 
     f->rest = fndef->rest_param;
-
     type_t result = type_new(TYPE_FN, f);
     result.status = REDUCTION_STATUS_DONE;
 
@@ -2727,7 +2763,7 @@ void checking(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
     m->checking_temp_fndefs = slice_new();
-    m->checking_type_arg_stack = stack_new();
+    m->checking_type_args_stack = stack_new();
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     slice_t *fndefs = slice_new();

@@ -101,7 +101,6 @@ typedef enum {
     TOKEN_THROW,
     TOKEN_TRY,
     TOKEN_CATCH,
-    TOKEN_SELF,
     TOKEN_CONTINUE,
     TOKEN_BREAK,
     TOKEN_FOR,
@@ -194,7 +193,6 @@ static string token_str[] = {
     [TOKEN_TYPE] = "type",
     [TOKEN_NULL] = "null",
     [TOKEN_ANY] = "any",
-    [TOKEN_SELF] = "self",
     [TOKEN_STRUCT] = "struct",
 
     [TOKEN_FOR] = "for",

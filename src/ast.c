@@ -147,6 +147,9 @@ type_t type_copy(module_t *m, type_t temp) {
     if (temp.origin_ident) {
         type.origin_ident = strdup(temp.origin_ident);
     }
+    if (temp.impl_ident) {
+        type.impl_ident = strdup(temp.impl_ident);
+    }
 
     switch (temp.kind) {
         case TYPE_ALIAS: {

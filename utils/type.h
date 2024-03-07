@@ -239,7 +239,8 @@ typedef struct type_t {
     };
     type_kind kind;
     reduction_status_t status;
-    char *origin_ident;// 当 type.kind == ALIAS/FORMAL 时，此处缓存一下 alias/formal ident, 用于 dump error
+    char *origin_ident;// 当 type.kind == ALIAS/params 时，此处缓存一下 alias/formal ident, 用于 dump error
+    char *impl_ident;
     int line;
     int column;
     bool in_heap;// 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
@@ -284,8 +285,8 @@ struct type_alias_t {
     char *import_as;// 可能为 null (foo.bar)
     char *ident;    // 类型名称 type my_int = int
 
-    // 可以包含多个实际参数,实际参数由类型组成
-    list_t *args;// type_t
+    // 可以包含多个实际参数,实际参数由类型组成, 当然实际参数也可能是 generic type, 比如 fn test<T>(alias<T>) 这种情况
+    list_t *args; // type_t
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
@@ -545,7 +546,13 @@ static inline bool is_list_u8(type_t t) {
 }
 
 static inline type_t type_kind_new(type_kind kind) {
-    type_t result = {.status = REDUCTION_STATUS_DONE, .kind = kind, .value = 0, .origin_ident = NULL};
+    type_t result = {
+            .status = REDUCTION_STATUS_DONE,
+            .kind = kind,
+            .value = 0,
+            .origin_ident = NULL,
+            .impl_ident = NULL,
+    };
 
     result.in_heap = kind_in_heap(kind);
 
@@ -559,7 +566,7 @@ static inline type_t type_new(type_kind kind, void *value) {
             .in_heap = kind_in_heap(kind),
             .status = REDUCTION_STATUS_DONE,
             .origin_ident = NULL,
-    };
+            .impl_ident = NULL};
     return result;
 }
 

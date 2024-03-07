@@ -611,6 +611,7 @@ type_alias_t *type_alias_new(char *literal, char *import_module_ident) {
     type_alias_t *t = NEW(type_alias_t);
     t->ident = literal;
     t->import_as = import_module_ident;
+    t->args = NULL;
     return t;
 }
 

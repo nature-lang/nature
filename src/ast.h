@@ -491,10 +491,11 @@ typedef struct ast_fndef_t {
     // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
     //    slice_t *generics_assigns;// value 是一个 table，保存了具体的 param 对应的 arg 参数
     // 泛型 tpl 函数使用，记录当前 tpl 已经特化了的参数
-    table_t *generics_hash_table;// 避免重复写入到 generics_assigns
+    table_t *generics_hash_table; // 避免重复写入到 generics_assigns
+    slice_t *generics_special_fns;// 当前模板的特化函数列表
 
     // checking call 时具体为 generics_params 分配的 args, 不需要单独初始化
-    table_t *generics_args;
+    table_t *generics_args_table;
     char *generics_args_hash;// 基于 gen args 计算的 hash 值，可以唯一标记当前函数
 
     // ast_ident 泛型参数, fn list_first<T, U>
