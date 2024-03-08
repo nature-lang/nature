@@ -562,10 +562,6 @@ typedef struct {
     ast_fndef_t *fndef;
 } ast_go_t;
 
-type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread);
-
-// bool type_compare(type_t left, type_t right);
-
 ast_ident *ast_new_ident(char *literal);
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {

@@ -6,6 +6,58 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+
+static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
+    assert(type_fn);
+    if (type_fn->rest && index >= type_fn->param_types->length - 1) {
+        // rest handle
+        type_t *last_param_type = ct_list_value(type_fn->param_types, type_fn->param_types->length - 1);
+
+        // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
+        assert(last_param_type->kind == TYPE_VEC);
+
+        // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
+        if (is_spread) {
+            return last_param_type;
+        }
+
+        return &last_param_type->vec->element_type;
+    }
+
+    if (index >= type_fn->param_types->length) {
+        return NULL;
+    }
+
+    return ct_list_value(type_fn->param_types, index);
+}
+
+static type_t *select_tpl_fn_param(ast_fndef_t *tpl_fn, uint8_t index, bool is_spread) {
+    assert(tpl_fn->is_generics);
+    if (tpl_fn->rest_param && index >= tpl_fn->params->length - 1) {
+        ast_var_decl_t *last_param = ct_list_value(tpl_fn->params, tpl_fn->params->length - 1);
+        //        type_t *last_param_type = last_param->type;
+
+        // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
+        assert(last_param->type.kind == TYPE_VEC);
+
+        // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
+        if (is_spread) {
+            return &last_param->type;
+        }
+
+        return &last_param->type.vec->element_type;
+    }
+
+    if (index >= tpl_fn->params->length) {
+        return NULL;
+    }
+
+    ast_var_decl_t *param = ct_list_value(tpl_fn->params, index);
+
+    return &param->type;
+}
+
+
 static bool union_type_contains(type_t union_type, type_t sub) {
     assert(union_type.kind == TYPE_UNION);
     assert(sub.kind != TYPE_UNION);
@@ -60,8 +112,12 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
  * @return
  */
 bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
-    assertf(dst.status == REDUCTION_STATUS_DONE && src.status == REDUCTION_STATUS_DONE, "type not origin, left: '%s', right: '%s'",
-            type_kind_str[dst.kind], type_kind_str[src.kind]);
+    if (dst.kind != TYPE_PARAM) {
+        assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' node reduction", type_format(dst));
+    }
+    if (src.kind != TYPE_PARAM) {
+        assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' node reduction", type_format(src));
+    }
 
     assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot checking");
 
@@ -92,14 +148,17 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     // type param special
     if (dst.kind == TYPE_PARAM) {
         assert(src.status == REDUCTION_STATUS_DONE);
+        assert(generics_param_table);
+
         char *param_ident = dst.param->ident;
         type_t *target_type = table_get(generics_param_table, param_ident);
         if (target_type) {
             dst = *target_type;
         } else {
-            type_t *src_t = NEW(type_t);
-            memmove(src_t, &src, sizeof(type_t));
-            table_set(generics_param_table, param_ident, src_t);
+            target_type = NEW(type_t);
+            memmove(target_type, &src, sizeof(type_t));
+            table_set(generics_param_table, param_ident, target_type);
+            dst = *target_type;
         }
     }
 
@@ -249,15 +308,20 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
     table_t *generics_args_table = table_new();
 
     if (call->generics_args == NULL) {
-        for (int i = 0; i <= call->args->length; i++) {
+        for (int i = 0; i < call->args->length; i++) {
             bool is_spread = call->spread && (i == call->args->length - 1);
 
             ast_expr_t *arg = ct_list_value(call->args, i);
             type_t arg_type = checking_right_expr(m, arg, type_kind_new(TYPE_UNKNOWN));
 
             // 形参 type reduction
-            type_t *formal_type = select_fn_param(tpl_fn->type.fn, i, is_spread);
+            type_t *formal_type = select_tpl_fn_param(tpl_fn, i, is_spread);
+
+            // 避免脏数据污染泛型推断
+            ct_stack_t *stash_stack = m->checking_type_args_stack;
+            m->checking_type_args_stack = NULL;
             *formal_type = reduction_type(m, *formal_type);
+            m->checking_type_args_stack = stash_stack;
 
             bool compare = type_compare(*formal_type, arg_type, generics_args_table);
             CHECKING_ASSERTF(compare, "cannot infer generics type")
@@ -270,7 +334,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
         }
 
         // 判断泛型参数是否全部推断完成
-        for (int i = 0; i <= tpl_fn->generics_params->length; i++) {
+        for (int i = 0; i < tpl_fn->generics_params->length; i++) {
             ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
             CHECKING_ASSERTF(table_exist(generics_args_table, param->literal), "cannot infer generics param '%s'", param->literal);
         }
@@ -280,7 +344,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             type_t *arg_type = ct_list_value(call->generics_args, i);
             *arg_type = reduction_type(m, *arg_type);
             ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
-            table_set(generics_args_table, param->literal, &arg_type);
+            table_set(generics_args_table, param->literal, arg_type);
         }
     }
 
@@ -1739,10 +1803,15 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
 
             assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
+            // call ident 重写
+            ident->literal = special_fn->symbol_name;
+
             // checking call args
-            checking_call_args(m, call, special_fn->type.fn);
-            call->return_type = special_fn->type.fn->return_type;
-            return call->return_type;
+            type_t left_type = checking_left_expr(m, &call->left);
+            assert(left_type.kind == TYPE_FN);
+            checking_call_args(m, call, left_type.fn);
+            call->return_type = left_type.fn->return_type;
+            return left_type.fn->return_type;
         } while (0);
     }
 
@@ -2095,6 +2164,7 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
             break;
         }
         case AST_CALL: {
+            // TODO 如果 checking_call 可能有返回值，但是没有接受校验
             checking_call(m, stmt->value, type_kind_new(TYPE_VOID));
             break;
         }
@@ -2584,7 +2654,10 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     if (t.kind == TYPE_PARAM) {
-        assert(m->checking_type_args_stack);
+        if (!m->checking_type_args_stack) {
+            return t;
+        }
+
         table_t *arg_table = stack_top(m->checking_type_args_stack);
         assert(arg_table);
         t = type_param_special(m, t, arg_table);
@@ -2629,6 +2702,8 @@ STATUS_DONE:
  * @param fndef
  */
 static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
+    assert(!fndef->is_generics);
+
     if (fndef->type.status == REDUCTION_STATUS_DONE) {
         return fndef->type;
     }
@@ -2644,7 +2719,6 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
 
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *param = ct_list_value(fndef->params, i);
-        // TODO param 不需要进行 rewrite 吗？
         param->type = reduction_type(m, param->type);
         ct_list_push(f->param_types, &param->type);
     }
@@ -2752,6 +2826,7 @@ void post_checking(module_t *m) {
             ast_fndef_t *special_fn = tpl_fn->generics_special_fns->take[j];
             assert(special_fn->generics_args_hash);
             assert(special_fn->generics_args_table);
+            slice_push(fndefs, special_fn);
 
             // rewrite_fndef
             for (int k = 0; k < special_fn->local_children->count; ++k) {
@@ -2759,9 +2834,11 @@ void post_checking(module_t *m) {
                 ast_fndef_t *child = tpl_fn->local_children->take[k];
                 // rewrite 主要是继承 generics_args_hash 给到 child, 并重写了 child 的 symbol name 并注册到符号表
                 rewrite_local_fndef(m, child);
+
+                slice_push(fndefs, child);
             }
 
-            // 将 arg_table 赋值到 module 进行 infer
+            // infer
             stack_push(m->checking_type_args_stack, special_fn->generics_args_table);
             infer_fndef(m, special_fn);
 

@@ -10,6 +10,7 @@ fn list_sum<T>([T] list):T {
    	return sum
 }
 
+// 类型参数
 type box<T, U> = struct {
 	T width
 	U length

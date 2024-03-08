@@ -9,7 +9,7 @@
 #include "utils/error.h"
 
 static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr);
-
+static list_t *parser_arg(module_t *m, ast_call_t *call);
 static ast_expr_t parser_struct_new(module_t *m, type_t t);
 
 static ast_expr_t parser_infix_struct_new_expr(module_t *m, ast_expr_t left);
@@ -673,6 +673,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left, linked_
     int angle_close = 1;
     int paren_close = 0;
     int close = 1;
+    int comma_count = 0;
 
     // call (a <b, c> (d))
     // [a < b, c > d]
@@ -719,19 +720,25 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left, linked_
         }
 
         // 出现逻辑运算符
-        if (close == 1 && (t->token == TOKEN_AND_AND || t->token == TOKEN_OR_OR)) {
+        if (close == 1 && (t->token == TOKEN_AND_AND || t->token == TOKEN_OR_OR || t->token == TOKEN_AND || t->token == TOKEN_OR)) {
             return false;
         }
 
-        // 出现逗号, 优先判断为类型参数
+        // 出现逗号, 记录逗号次数
         if (close == 1 && t->token == TOKEN_COMMA) {
-            return true;
+            comma_count++;
         }
     }
 
     // ang 未闭合
     if (angle_close > 0) {
         return false;
+    }
+
+    PARSER_ASSERTF(current->succ->value != NULL, "> after empty");
+    token_t *next = current->succ->value;
+    if (comma_count > 0 && next->token != TOKEN_LEFT_PAREN && next->token != TOKEN_LEFT_CURLY) {
+        return false;// 逻辑运算
     }
 
     // 已经闭合，但是没有出现逗号或者逻辑运算, 直接识别为类型参数
@@ -767,10 +774,11 @@ static ast_expr_t parser_left_angle(module_t *m, ast_expr_t left) {
         }
 
         // 判断下一个符号
-        if (parser_consume(m, TOKEN_LEFT_PAREN)) {
+        if (parser_is(m, TOKEN_LEFT_PAREN)) {
             ast_call_t *call = NEW(ast_call_t);
             call->left = left;
             call->generics_args = generics_args;
+            call->args = parser_arg(m, call);
 
             result.assert_type = AST_CALL;
             result.value = call;

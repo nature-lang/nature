@@ -270,7 +270,7 @@ static void build_assembler(slice_t *modules) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数
             symbol_t *s = symbol_table_get_noref(c->symbol_name);
-            if (s->ref_count == 0) {
+            if (s->ref_count == 0 && !str_equal(c->symbol_name, FN_MAIN_NAME)) {
                 continue;
             }
 
