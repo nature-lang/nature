@@ -1,25 +1,26 @@
-// 定义一个 gen 类型
-type numbert = gen i8|i16|i32|i64|u8|u16|u32|u64|f32|f64
-
-fn sum(numbert a, numbert b):numbert {
+fn sum<T>(T a, T b):T {
     return a + b
 }
 
-fn list_sum([numbert] list):numbert {
-   numbert sum = 0
+fn list_sum<T>([T] list):T {
+    T sum = 0
    	for k,v in list {
    		sum += v
    	}
    	return sum
 }
 
-type box<t0, t1> = struct {
-	t0 width
-	t1 length
+type box<T, U> = struct {
+	T width
+	U length
 }
 
-// 再外部定义一个求面积面积的函数
-type numbert2 = gen i8|i16|i32|i64|u8|u16|u32|u64|f32|f64
-fn area(box<numbert,numbert2> b):numbert {
-    return b.width * b.length as numbert
+// 泛型函数
+fn area<T, U>(box<T, U> b):T {
+    return b.width * b.length as T
+}
+
+// 类型扩展
+fn box<T, U>.perimeter() {
+    return (self.width + self.length) * 2
 }

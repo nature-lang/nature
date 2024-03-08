@@ -51,7 +51,7 @@ fn set_contains({all_t} s, ptr<all_t> key):bool
 
 fn set_add({all_t} s, ptr<all_t> key):bool
 
-fn set_delete({all_t} set, ptr<all_t> key)
+fn set_delete({all_t} s, ptr<all_t> key)
 
 fn runtime_force_gc()
 

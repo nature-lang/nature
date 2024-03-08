@@ -66,11 +66,11 @@ static void assembler_custom_links() {
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     Elf64_Sym sym = {
-        .st_shndx = ctx->data_rtype_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_rtype_size,
+            .st_shndx = ctx->data_rtype_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_rtype_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
@@ -80,11 +80,11 @@ static void assembler_custom_links() {
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
     sym = (Elf64_Sym){
-        .st_shndx = ctx->data_fndef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_fndef_size,
+            .st_shndx = ctx->data_fndef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_fndef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
@@ -94,11 +94,11 @@ static void assembler_custom_links() {
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
     sym = (Elf64_Sym){
-        .st_shndx = ctx->data_symdef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_symdef_size,
+            .st_shndx = ctx->data_symdef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_symdef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
@@ -118,7 +118,7 @@ static void assembler_custom_links() {
  * @param m
  */
 static void assembler_module(module_t *m) {
-    if (BUILD_OS == OS_LINUX) { // elf 就是 linux 独有都
+    if (BUILD_OS == OS_LINUX) {// elf 就是 linux 独有都
         char *object_file_name = str_connect(m->ident, ".n.o");
         str_replace_char(object_file_name, '/', '.');
 
@@ -158,7 +158,7 @@ static void build_linker(slice_t *modules) {
         module_t *m = modules->take[i];
 
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
+        elf_load_object_file(ctx, fd, 0);// 加载并解析目标文件
     }
 
     // 将相关符号都加入来
@@ -289,7 +289,7 @@ static void build_assembler(slice_t *modules) {
 }
 
 static void build_tpls(slice_t *templates) {
-    slice_t *modules = slice_new(); // module_t*
+    slice_t *modules = slice_new();// module_t*
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
         char *full_path = templates->take[i];
@@ -324,9 +324,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     // main build
     ast_import_t main_import = {
-        .package_dir = WORKDIR,
-        .package_conf = package_conf,
-        .module_ident = FN_MAIN_NAME,
+            .package_dir = WORKDIR,
+            .package_conf = package_conf,
+            .module_ident = FN_MAIN_NAME,
     };
 
     // main [links] 自动注册
@@ -339,7 +339,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     }
 
     table_t *links_handled = table_new();
-    table_set(links_handled, main_import.package_dir, (void *)1);
+    table_set(links_handled, main_import.package_dir, (void *) 1);
 
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
     slice_push(modules, main);
@@ -422,11 +422,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 }
 
 static void build_compiler(slice_t *modules) {
-    // pre_checking 对函数头进行 reduction, 让 checking 中的 fn_match 到准确位置
     for (int i = 0; i < modules->count; ++i) {
-        // generic => ast_fndef(global+local flat)
-        generic(modules->take[i]);
-
         pre_checking(modules->take[i]);
     }
 

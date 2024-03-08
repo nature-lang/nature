@@ -80,7 +80,7 @@ typedef enum {
     TOKEN_F64,
     TOKEN_NEW,
 
-    // 内置复合类型
+    // 内置复合类型, TODO 不占用关键字, 而是使用 type
     TOKEN_ARR,
     TOKEN_VEC,
     TOKEN_MAP,

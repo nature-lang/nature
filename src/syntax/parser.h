@@ -12,6 +12,7 @@
 typedef enum {
     PRECEDENCE_NULL,// 最低优先级
     PRECEDENCE_ASSIGN,
+    PRECEDENCE_STRUCT_NEW,
     PRECEDENCE_CATCH,
     PRECEDENCE_OR_OR,    // ||
     PRECEDENCE_AND_AND,  // &&
@@ -24,10 +25,9 @@ typedef enum {
     PRECEDENCE_TERM,     // + -
     PRECEDENCE_FACTOR,   // * / %
     PRECEDENCE_TYPE_CAST,// as / is
-    PRECEDENCE_STRUCT_NEW,
-    PRECEDENCE_UNARY,  // - ! ~
-    PRECEDENCE_CALL,   // foo.bar foo["bar"] foo() foo().foo.bar 这几个表达式都是同一优先级，应该从左往右依次运算
-    PRECEDENCE_PRIMARY,// 最高优先级
+    PRECEDENCE_UNARY,    // - ! ~
+    PRECEDENCE_CALL,     // foo.bar foo["bar"] foo() foo().foo.bar 这几个表达式都是同一优先级，应该从左往右依次运算
+    PRECEDENCE_PRIMARY,  // 最高优先级
 } parser_precedence;
 
 static ast_expr_op_t token_to_ast_op[] = {

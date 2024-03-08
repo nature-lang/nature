@@ -566,6 +566,8 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
+bool type_union_compare(type_union_t *left, type_union_t *right);
+
 bool type_compare(type_t dst, type_t src, table_t *generics_param_table);
 
 #endif// NATURE_TYPES_H

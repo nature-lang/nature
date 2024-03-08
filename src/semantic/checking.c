@@ -6,6 +6,24 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+static bool union_type_contains(type_t union_type, type_t sub) {
+    assert(union_type.kind == TYPE_UNION);
+    assert(sub.kind != TYPE_UNION);
+
+    if (union_type.union_->any) {
+        return true;
+    }
+
+    for (int i = 0; i < union_type.union_->elements->length; ++i) {
+        type_t *t = ct_list_value(union_type.union_->elements, i);
+        if (type_compare(*t, sub, NULL)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool type_union_compare(type_union_t *left, type_union_t *right) {
     // 因为 any 的作用域大于非 any 的作用域
     if (right->any && !left->any) {
@@ -213,8 +231,6 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
 
     return true;
 }
-
-static type_t checking_go(module_t *m, void *pVoid);
 
 /**
  * foo(a) -> fn foo<T, U>
@@ -728,6 +744,18 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
     }
 
     return type_ptrof(new_expr->type);
+}
+
+
+/**
+ * TODO 未完成
+ * go 的返回值类型应该是 co.ctx 类型, 该类型在 pre_checking 中已经初步确认并返回
+ * @param m
+ * @param pVoid
+ * @return
+ */
+static type_t checking_go(module_t *m, ast_go_t *go) {
+    assert(false);
 }
 
 static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
@@ -1671,6 +1699,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
 
             assert(!tpl_fn->is_local);
 
+            // 首次初始化
             if (tpl_fn->generics_hash_table == NULL) {
                 tpl_fn->generics_hash_table = table_new();
             }
@@ -2668,15 +2697,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     checking_body(m, fndef->body);
 }
 
-/**
- * TODO go 的返回值类型应该是 co.ctx 类型, 该类型在 pre_checking 中已经初步确认并返回
- * @param m
- * @param pVoid
- * @return
- */
-static type_t checking_go(module_t *m, void *pVoid) {
-    assert(false);
-}
 
 /**
  * 对左右的 fn param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
@@ -2696,10 +2716,6 @@ void pre_checking(module_t *m) {
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
 
-        m->current_fn = fndef;
-        m->current_line = fndef->line;
-        m->current_column = fndef->column;
-
         assert(!fndef->is_local);
 
         if (fndef->is_generics) {
@@ -2709,6 +2725,57 @@ void pre_checking(module_t *m) {
         // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
         infer_fn_decl(m, fndef);
     }
+}
+
+void post_checking(module_t *m) {
+    // 平铺处理，以及泛型 checking 处理
+    slice_t *fndefs = slice_new();
+    for (int i = 0; i < m->ast_fndefs->count; ++i) {
+        ast_fndef_t *tpl_fn = m->ast_fndefs->take[i];
+
+        if (!tpl_fn->is_generics) {
+            slice_push(fndefs, tpl_fn);
+            for (int j = 0; j < tpl_fn->local_children->count; ++j) {
+                slice_push(fndefs, tpl_fn->local_children->take[j]);
+            }
+
+            continue;
+        }
+
+
+        if (tpl_fn->generics_special_fns == NULL) {
+            continue;
+        }
+
+        for (int j = 0; j < tpl_fn->generics_special_fns->count; ++j) {
+            // 泛型特化 checking
+            ast_fndef_t *special_fn = tpl_fn->generics_special_fns->take[j];
+            assert(special_fn->generics_args_hash);
+            assert(special_fn->generics_args_table);
+
+            // rewrite_fndef
+            for (int k = 0; k < special_fn->local_children->count; ++k) {
+                // special copy 的时候，child 也顺便 copy 完成了
+                ast_fndef_t *child = tpl_fn->local_children->take[k];
+                // rewrite 主要是继承 generics_args_hash 给到 child, 并重写了 child 的 symbol name 并注册到符号表
+                rewrite_local_fndef(m, child);
+            }
+
+            // 将 arg_table 赋值到 module 进行 infer
+            stack_push(m->checking_type_args_stack, special_fn->generics_args_table);
+            infer_fndef(m, special_fn);
+
+            for (int k = 0; k < special_fn->local_children->count; ++k) {
+                ast_fndef_t *child = special_fn->local_children->take[k];
+
+                infer_fndef(m, child);
+            }
+
+            stack_pop(m->checking_type_args_stack);
+        }
+    }
+
+    m->ast_fndefs = fndefs;
 }
 
 void checking(module_t *m) {
@@ -2732,52 +2799,6 @@ void checking(module_t *m) {
             infer_fndef(m, fn->local_children->take[j]);
         }
     }
-}
 
-void post_checking(module_t *m) {
-    // 平铺处理，以及泛型 checking 处理
-    slice_t *fndefs = slice_new();
-    for (int i = 0; i < m->ast_fndefs->count; ++i) {
-        ast_fndef_t *tpl_fn = m->ast_fndefs->take[i];
-
-        if (!tpl_fn->is_generics) {
-            slice_push(fndefs, tpl_fn);
-            for (int j = 0; j < tpl_fn->local_children->count; ++j) {
-                slice_push(fndefs, tpl_fn->local_children->take[j]);
-            }
-        }
-
-        if (tpl_fn->is_generics) {
-            continue;
-        }
-
-        for (int j = 0; j < tpl_fn->generics_special_fns->count; ++j) {
-            // 泛型特化 checking
-            ast_fndef_t *special_fn = tpl_fn->generics_special_fns->take[j];
-            assert(special_fn->generics_args_hash);
-            assert(special_fn->generics_args_table);
-
-            // rewrite_fndef
-            for (int k = 0; k < special_fn->local_children->count; ++k) {
-                // special copy 的时候，child 也顺便 copy 完成了
-                ast_fndef_t *child = tpl_fn->local_children->take[k];
-                // rewrite 主要是继承 generics_args_hash 给到 child, 并重写了 child 的 symbol name 并注册到符号表
-                rewrite_local_fndef(m, child);
-            }
-
-            // 将 arg_table 赋值到 module 进行 infer
-            stack_push(m->checking_type_args_stack, special_fn->generics_args_table);
-            infer_fndef(m, special_fn);
-
-            for (int k = 0; k < special_fn->local_children->count; ++k) {
-                ast_fndef_t *child = tpl_fn->local_children->take[k];
-
-                infer_fndef(m, child);
-            }
-
-            stack_pop(m->checking_type_args_stack);
-        }
-    }
-
-    m->ast_fndefs = fndefs;
+    post_checking(m);
 }

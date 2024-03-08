@@ -628,24 +628,6 @@ static inline bool is_qword_int(type_kind kind) {
     return kind == TYPE_INT64 || kind == TYPE_UINT64 || kind == TYPE_UINT || kind == TYPE_INT;
 }
 
-static inline bool union_type_contains(type_t union_type, type_t sub) {
-    assert(union_type.kind == TYPE_UNION);
-    assert(sub.kind != TYPE_UNION);
-
-    if (union_type.union_->any) {
-        return true;
-    }
-
-    for (int i = 0; i < union_type.union_->elements->length; ++i) {
-        type_t *t = ct_list_value(union_type.union_->elements, i);
-        if (type_compare(*t, sub, NULL)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 /**
  * @param left
  * @param right

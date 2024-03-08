@@ -576,9 +576,11 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     // 函数地址 unique 改写
     analyzer_expr(m, &call->left);
 
-    for (int i = 0; i < call->generics_args->length; ++i) {
-        type_t *arg = ct_list_value(call->generics_args, i);
-        analyzer_type(m, arg);
+    if (call->generics_args) {
+        for (int i = 0; i < call->generics_args->length; ++i) {
+            type_t *arg = ct_list_value(call->generics_args, i);
+            analyzer_type(m, arg);
+        }
     }
 
     // 实参 unique 改写
@@ -739,25 +741,26 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     // fn vec<t>.len() -> fn vec_len(vec<t> self)
     if (fndef->impl_type_alias) {
         char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, fndef->impl_type_alias);
-        ANALYZER_ASSERTF(false, "type alias '%s' undeclared \n", fndef->impl_type_alias);
+        ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type_alias);
         fndef->impl_type_alias = unique_alias_ident;
 
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型为 type_alias
-        ast_var_decl_t *param = NEW(ast_var_decl_t);
-        param->ident = FN_SELF_NAME;
-        type_t t = type_new(TYPE_ALIAS, type_alias_new(fndef->impl_type_alias, NULL));
-        t.status = REDUCTION_STATUS_UNDO;
-        t.origin_ident = fndef->impl_type_alias;
-        t.impl_ident = fndef->impl_type_alias;
+        ast_var_decl_t param = {
+                .ident = FN_SELF_NAME,
+        };
+        param.type = type_new(TYPE_ALIAS, type_alias_new(fndef->impl_type_alias, NULL));
+        param.type.status = REDUCTION_STATUS_UNDO;
+        param.type.origin_ident = fndef->impl_type_alias;
+        param.type.impl_ident = fndef->impl_type_alias;
 
         if (fndef->generics_params) {
-            t.alias->args = ct_list_new(sizeof(type_t));
+            param.type.alias->args = ct_list_new(sizeof(type_t));
             for (int i = 0; i < fndef->generics_params->length; ++i) {
                 ast_ident *ident = ct_list_value(fndef->generics_params, i);
                 type_t param_type = type_new(TYPE_PARAM, type_param_new(ident->literal));
                 param_type.origin_ident = ident->literal;
                 param_type.status = REDUCTION_STATUS_UNDO;
-                ct_list_push(t.alias->args, &param_type);
+                ct_list_push(param.type.alias->args, &param_type);
             }
         }
 
