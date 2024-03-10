@@ -12,7 +12,6 @@
 typedef enum {
     PRECEDENCE_NULL,// 最低优先级
     PRECEDENCE_ASSIGN,
-    PRECEDENCE_STRUCT_NEW,
     PRECEDENCE_CATCH,
     PRECEDENCE_OR_OR,    // ||
     PRECEDENCE_AND_AND,  // &&

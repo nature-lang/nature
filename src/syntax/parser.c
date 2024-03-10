@@ -12,7 +12,7 @@ static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr);
 static list_t *parser_arg(module_t *m, ast_call_t *call);
 static ast_expr_t parser_struct_new(module_t *m, type_t t);
 
-static ast_expr_t parser_infix_struct_new_expr(module_t *m, ast_expr_t left);
+static ast_expr_t parser_struct_new_expr(module_t *m);
 
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
@@ -522,17 +522,23 @@ static type_t ast_expr_to_type_alias(module_t *m, ast_expr_t left, list_t *gener
             .line = parser_peek(m)->line,
             .column = parser_peek(m)->column,
             .origin_ident = NULL,
-            .kind = TYPE_ALIAS};
+            .impl_ident = NULL,
+            .kind = TYPE_ALIAS,
+    };
 
     // 重新整理一下左值，整理成 type_alias_t
     if (left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = left.value;
         t.alias = type_alias_new(ident->literal, NULL);
+        t.origin_ident = ident->literal;
+        t.impl_ident = ident->literal;
     } else if (left.assert_type == AST_EXPR_SELECT) {
         ast_select_t *select = left.value;
         assert(select->left.assert_type == AST_EXPR_IDENT);
         ast_ident *select_left = select->left.value;
         t.alias = type_alias_new(select->key, select_left->literal);
+        t.origin_ident = select->key;
+        t.impl_ident = select->key;
     } else {
         assertf(false, "struct new left type exception");
     }
@@ -1387,7 +1393,8 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
 
     // 转换成逻辑运算符
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
-    binary_expr->right = parser_precedence_expr(m, PRECEDENCE_STRUCT_NEW + 1);
+    // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
+    binary_expr->right = parser_expr_with_precedence(m);
     binary_expr->operator= token_to_ast_op[t->token];
     binary_expr->left = left;
 
@@ -2005,7 +2012,7 @@ static ast_stmt_t *parser_tpl_stmt(module_t *m) {
 static parser_rule rules[] = {
         [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
         [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
-        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, parser_infix_struct_new_expr, PRECEDENCE_STRUCT_NEW},
+        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_LEFT_ANGLE] = {NULL, parser_left_angle, PRECEDENCE_CALL},
         [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
         [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
@@ -2077,7 +2084,7 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
 
 /**
  * foo < a.b, b<c.a>> {
- * 从 < 符号开始匹配，一单匹配到闭合符合则，且闭合符合的下一个符号是 {, 则说明当前是一个 struct new, 只是携带了 param
+ * 从 < 符号开始匹配，一旦匹配到闭合符合则，且闭合符合的下一个符号是 {, 则说明当前是一个 struct new, 只是携带了 param
  * @return
  */
 static bool is_struct_param_new_prefix(linked_node *current) {
@@ -2133,7 +2140,6 @@ static bool parser_is_struct_new_expr(module_t *m) {
 
     // foo <a, b> {}
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
-        // TODO 此时有两种情况
         if (is_struct_param_new_prefix(parser_next(m, 1))) {
             return true;
         }
@@ -2161,8 +2167,8 @@ static bool parser_is_struct_new_expr(module_t *m) {
  * @param left
  * @return
  */
-static ast_expr_t parser_infix_struct_new_expr(module_t *m, ast_expr_t left) {
-    type_t t = ast_expr_to_type_alias(m, left, NULL);
+static ast_expr_t parser_struct_new_expr(module_t *m) {
+    type_t t = parser_type(m);
     return parser_struct_new(m, t);
 }
 
@@ -2209,6 +2215,11 @@ static ast_expr_t parser_expr_with_precedence(module_t *m) {
  */
 static ast_expr_t parser_expr(module_t *m) {
     PARSER_ASSERTF(m->type != MODULE_TYPE_TPL, "template file cannot contains expr");
+
+    // struct new
+    if (parser_is_struct_new_expr(m)) {
+        return parser_struct_new_expr(m);
+    }
 
     // go
     if (parser_is(m, TOKEN_GO)) {

@@ -141,7 +141,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         if (src.kind == TYPE_PTR) {
             type_t dst_ptr = dst.pointer->value_type;
             type_t src_ptr = src.pointer->value_type;
-            return type_compare(dst_ptr, src_ptr, NULL);
+            return type_compare(dst_ptr, src_ptr, generics_param_table);
         }
     }
 
@@ -181,11 +181,11 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         type_map_t *left_map_decl = dst.map;
         type_map_t *right_map_decl = src.map;
 
-        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type, NULL)) {
+        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type, generics_param_table)) {
             return false;
         }
 
-        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type, NULL)) {
+        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type, generics_param_table)) {
             return false;
         }
 
@@ -196,7 +196,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         type_set_t *left_decl = dst.set;
         type_set_t *right_decl = src.set;
 
-        if (!type_compare(left_decl->element_type, right_decl->element_type, NULL)) {
+        if (!type_compare(left_decl->element_type, right_decl->element_type, generics_param_table)) {
             return false;
         }
 
@@ -206,7 +206,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_VEC) {
         type_vec_t *left_list_decl = dst.vec;
         type_vec_t *right_list_decl = src.vec;
-        return type_compare(left_list_decl->element_type, right_list_decl->element_type, NULL);
+        return type_compare(left_list_decl->element_type, right_list_decl->element_type, generics_param_table);
     }
 
     if (dst.kind == TYPE_ARR) {
@@ -215,7 +215,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         if (left_array_decl->length != right_array_decl->length) {
             return false;
         }
-        return type_compare(left_array_decl->element_type, right_array_decl->element_type, NULL);
+        return type_compare(left_array_decl->element_type, right_array_decl->element_type, generics_param_table);
     }
 
     if (dst.kind == TYPE_TUPLE) {
@@ -228,7 +228,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         for (int i = 0; i < left_tuple->elements->length; ++i) {
             type_t *left_item = ct_list_value(left_tuple->elements, i);
             type_t *right_item = ct_list_value(right_tuple->elements, i);
-            if (!type_compare(*left_item, *right_item, NULL)) {
+            if (!type_compare(*left_item, *right_item, generics_param_table)) {
                 return false;
             }
         }
@@ -238,7 +238,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_FN) {
         type_fn_t *left_type_fn = dst.fn;
         type_fn_t *right_type_fn = src.fn;
-        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type, NULL)) {
+        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type, generics_param_table)) {
             return false;
         }
 
@@ -250,7 +250,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         for (int i = 0; i < left_type_fn->param_types->length; ++i) {
             type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
             type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
-            if (!type_compare(*left_formal_type, *right_formal_type, NULL)) {
+            if (!type_compare(*left_formal_type, *right_formal_type, generics_param_table)) {
                 return false;
             }
         }
@@ -274,7 +274,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
             }
 
             // type 比较
-            if (!type_compare(left_property->type, right_property->type, NULL)) {
+            if (!type_compare(left_property->type, right_property->type, generics_param_table)) {
                 return false;
             }
         }
@@ -285,7 +285,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_PTR) {
         type_t left_pointer = dst.pointer->value_type;
         type_t right_pointer = src.pointer->value_type;
-        return type_compare(left_pointer, right_pointer, NULL);
+        return type_compare(left_pointer, right_pointer, generics_param_table);
     }
 
     return true;
@@ -327,7 +327,12 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             CHECKING_ASSERTF(compare, "cannot infer generics type")
         }
 
-        if (return_target_type.kind != TYPE_UNKNOWN && return_target_type.kind != TYPE_VOID) {
+        // 下面几个 target 类型对推导没有任何之之实质性帮助，所以直接跳过
+        if (return_target_type.kind != TYPE_UNKNOWN &&
+            return_target_type.kind != TYPE_VOID &&
+            return_target_type.kind != TYPE_UNION &&
+            return_target_type.in_heap != TYPE_NULL) {
+
             return_target_type = reduction_type(m, return_target_type);
             bool compare = type_compare(tpl_fn->return_type, return_target_type, generics_args_table);
             CHECKING_ASSERTF(compare, "cannot infer generics type")
@@ -1363,7 +1368,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
 
     checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-    // if left is list -> xxx()
+    // if left is list -> xxx() // TODO 用不上了
     if (select->left.type.kind == TYPE_VEC) {
         return checking_vec_select(m, expr);
     }
@@ -1404,6 +1409,8 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         struct_property_t *p = type_struct_property(type_struct, select->key);
         CHECKING_ASSERTF(p, "type %s no property '%s'", type_format(left_type), select->key);
 
+        p->type = reduction_type(m, p->type);
+
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
         struct_select->instance = select->left;// 可能是 pointer<struct> 也可能是 struct
@@ -1411,6 +1418,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
         expr->value = struct_select;
+
 
         return p->type;
     }
@@ -1723,9 +1731,6 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
         type_t select_left_type = checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-        // [].push() 首先判断左值的类型，基于左值的类型，判断是否存在 impl_alias, 如果存在则直接进行改写(struct 也进行改写, 默认 impl 优先级高于 struct property)
-        type_kind select_left_kind = select_left_type.kind;
-
         // 基于 left 进行拼装定位改写
         char *impl_ident = select_left_type.impl_ident;
 
@@ -1754,6 +1759,11 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
             ast_ident *ident = call->left.value;
             symbol_t *s = symbol_table_get(ident->literal);
             CHECKING_ASSERTF(s, "symbol '%s' not found", ident->literal);
+            // 可能是 local 闭包函数，此时 type 是一个 var
+            if (s->is_local) {
+                break;
+            }
+
             CHECKING_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
 
             ast_fndef_t *tpl_fn = s->ast_value;
@@ -2574,23 +2584,27 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         // 实参注册
-        table_t *args_table = table_new();
-        for (int i = 0; i < t.alias->args->length; ++i) {
-            type_t *arg = ct_list_value(t.alias->args, i);
-            ast_ident *param = ct_list_value(type_alias_stmt->params, i);
-            table_set(args_table, param->literal, arg);
+        if (m->checking_type_args_stack) {
+            table_t *args_table = table_new();
+            for (int i = 0; i < t.alias->args->length; ++i) {
+                type_t *arg = ct_list_value(t.alias->args, i);
+                ast_ident *param = ct_list_value(type_alias_stmt->params, i);
+                table_set(args_table, param->literal, arg);
+            }
+            stack_push(m->checking_type_args_stack, args_table);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
         type_t alias_value_type = type_copy(m, type_alias_stmt->type);
-        stack_push(m->checking_type_args_stack, args_table);
 
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 checking_fn_decl 而不会处理 fn body 部分
         // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 checking_fndef 时解析 param 异常
         // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
         alias_value_type = reduction_type(m, alias_value_type);
 
-        stack_pop(m->checking_type_args_stack);
+        if (m->checking_type_args_stack) {
+            stack_pop(m->checking_type_args_stack);
+        }
 
         return alias_value_type;
     }
@@ -2788,16 +2802,21 @@ void pre_checking(module_t *m) {
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
-        ast_fndef_t *fndef = m->ast_fndefs->take[i];
+        ast_fndef_t *fn = m->ast_fndefs->take[i];
 
-        assert(!fndef->is_local);
+        assert(!fn->is_local);
 
-        if (fndef->is_generics) {
+        if (fn->is_generics) {
             continue;
         }
 
         // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
-        infer_fn_decl(m, fndef);
+        infer_fn_decl(m, fn);
+
+        // infer child
+        for (int j = 0; j < fn->local_children->count; ++j) {
+            infer_fn_decl(m, fn->local_children->take[j]);
+        }
     }
 }
 

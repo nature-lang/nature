@@ -1,3 +1,5 @@
+type custom_t<T> = T
+
 fn sum<T>(T a, T b):T {
     return a + b
 }
@@ -16,12 +18,17 @@ type box<T, U> = struct {
 	U length
 }
 
+type person_t<T> = struct {
+    custom_t<i8> age
+    T name
+}
+
 // 泛型函数
 fn area<T, U>(box<T, U> b):T {
     return b.width * b.length as T
 }
 
 // 类型扩展
-fn box<T, U>.perimeter() {
-    return (self.width + self.length) * 2
+fn box<T, U>.perimeter():T {
+    return (self.width + self.length as T) * 2
 }

@@ -303,8 +303,6 @@ static void build_tpls(slice_t *templates) {
         module_t *m = modules->take[i];
         analyzer(m, m->stmt_list);
 
-        generic(m);
-
         pre_checking(m);
     }
 }

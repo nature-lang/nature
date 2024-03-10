@@ -34,3 +34,36 @@ println(e4[0], e4[1]) // true false
 
 var g4 = [(a4 < b4), a4 > (b4)]
 println(g4[0], g4[1]) // true false
+
+// 5. 类型参数与泛型函数结合
+i16 a5 = 12
+var b5 = mod.box<i16, i32>{
+    width = a5,
+    length = 12
+}
+
+var c5 = mod.area(b5)
+println(c5)
+
+// 6. 类型扩展
+var a6 = b5.perimeter()
+println(a6)
+
+
+// 7. 嵌套类型测试 1
+var a7 = mod.box<mod.custom_t<i32>, i16>{
+    width = 66,
+    length = 77
+}
+
+println(a7.width, a7.length, mod.area(a7))
+println(a7.perimeter())
+
+
+// 8. 嵌套类型测试 2
+i16 b8  = 12
+var a8 = mod.person_t<string>{
+    name = "hello",
+    age = b8 as i8
+}
+println(a8.name, a8.age)

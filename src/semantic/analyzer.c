@@ -296,22 +296,21 @@ static void analyzer_type(module_t *m, type_t *type) {
     if (type->kind == TYPE_ALIAS) {
         // import 全局模式 alias 处理, 例如 type a = package.foo, 对 package.foo 必定是其他 module 的 type alias 定义的
         type_alias_t *type_alias = type->alias;
-
         // foo.bar
         if (type_alias->import_as) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
             ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type_alias->import_as);
 
-            if (import) {
-                char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
-                // 更新 ident 指向
-                type_alias->ident = unique_ident;
-            }
+            char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
+            // 更新 ident 指向
+            type_alias->ident = unique_ident;
+
+            type_alias->import_as = NULL;
         } else {
-            // local ident 或者当前 module 下的全局 ident
+            // local ident 或者当前 module 下的全局 ident, import as * 中的全局 ident
             char *unique_alias_ident = analyzer_resolve_type(m, m->analyzer_current, type_alias->ident);
             if (!unique_alias_ident) {
-                // TODO 取消特殊类型了
+                // TODO 可以取消特殊类型了
                 // 在类型为定义的前提下， 判断是否是特殊类型，如果是的话直接进行 type 类型改写
                 if (analyzer_special_type_rewrite(m, type)) {
                     return;
@@ -321,6 +320,9 @@ static void analyzer_type(module_t *m, type_t *type) {
             }
             type_alias->ident = unique_alias_ident;
         }
+
+        // 重新基于 unique ident 更新 type impl_type_alias
+        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -642,11 +644,6 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
 
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
     analyzer_expr(m, &vardef->right);
-
-    // 如果右值是一个 try 表达式, 则不对返回的 error 类型变量进行重复声明的校验
-    if (vardef->right.assert_type != AST_EXPR_TRY) {
-        analyzer_redeclare_check(m, vardef->var_decl.ident);
-    }
 
     analyzer_type(m, &vardef->var_decl.type);
 
