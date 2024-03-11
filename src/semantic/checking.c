@@ -965,7 +965,6 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
     }
 
     type_t result = type_kind_new(TYPE_VEC);
-
     type_vec_t *type_vec = NEW(type_vec_t);
 
     // 初始化时类型未知
@@ -993,6 +992,10 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
         ast_expr_t *item_expr = ct_list_value(ast->elements, i);
         checking_right_expr(m, item_expr, type_vec->element_type);
     }
+
+    result.impl_ident = type_kind_str[TYPE_VEC];
+    result.impl_args = ct_list_new(sizeof(type_t));
+    ct_list_push(result.impl_args, &type_vec->element_type);
 
     return result;
 }
@@ -1048,6 +1051,11 @@ static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t targe
         checking_right_expr(m, &item->value, type_map->value_type);
     }
 
+    result.impl_ident = type_kind_str[TYPE_MAP];
+    result.impl_args = ct_list_new(sizeof(type_t));
+    ct_list_push(result.impl_args, &type_map->key_type);
+    ct_list_push(result.impl_args, &type_map->value_type);
+
     return result;
 }
 
@@ -1082,6 +1090,10 @@ static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t targe
         ast_expr_t *expr = ct_list_value(set_new->elements, i);
         checking_right_expr(m, expr, type_set->element_type);
     }
+
+    result.impl_ident = type_kind_str[TYPE_SET];
+    result.impl_args = ct_list_new(sizeof(type_t));
+    ct_list_push(result.impl_args, &type_set->element_type);
 
     return result;
 }
@@ -1139,16 +1151,10 @@ static type_t checking_struct_new(module_t *m, ast_expr_t *expr) {
     // 对类型进行了实例化 alias<int> -> struct{int}
     ast->type = reduction_type(m, ast->type);
 
-    // if ast->type->kind is type vec, rewrite expr to ast_list_new_t
-    // TODO 用不到了
-    if (ast->type.kind == TYPE_VEC) {
-        return checking_vec_struct_new(m, expr);
-    }
 
     CHECKING_ASSERTF(ast->type.kind == TYPE_STRUCT, "ident '%s' not struct, cannot struct new", ast->type.origin_ident);
 
     type_struct_t *type_struct = ast->type.struct_;
-
 
     // exists 记录已经存在的参数用来辅助 struct 默认参数
     table_t *exists = table_new();
@@ -1386,7 +1392,7 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
         return checking_string_select(m, expr);
     }
 
-    // self.foo 这里是通过 self 访问属性，类似与 self.foo() 中的处理
+    // self.foo 这里是通过 self 访问属性，类似与 self.foo() 中的处理 // TODO self 没有了
     if (select->left.type.kind == TYPE_SELF) {
         ast_fndef_t *current = m->current_fn;
         CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
@@ -1744,7 +1750,6 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
         // 查找对应的 fn
         symbol_t *s = symbol_table_get(impl_symbol_name);
         if (s != NULL) {
-            // 对 call left 进行改写，TODO self 怎么传递，数据怎么传递？还是通过 self? 只有全局函数有 self 这个概念吧
             call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
             // 重写 args
@@ -1754,6 +1759,8 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
                 ct_list_push(args, ct_list_value(call->args, i));
             }
             call->args = args;
+
+            call->generics_args = select_left_type.impl_args;
         }
     }
 
@@ -1785,6 +1792,8 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
             if (tpl_fn->generics_special_fns == NULL) {
                 tpl_fn->generics_special_fns = slice_new();
             }
+
+            // TODO type 已经确定了类型？！call<xxx>, 左侧值匹配匹配？impl_type 怎么匹配？ call 匹配！对，call 匹配！
 
             // 泛型特化
             table_t *args_table = infer_generics_args(m, tpl_fn, call, target_type);
@@ -2461,15 +2470,19 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return t;
     }
 
-    if (t.kind == TYPE_VEC) {
-        type_vec_t *type_vec = t.vec;
-        type_vec->element_type = reduction_type(m, type_vec->element_type);
-        return t;
-    }
-
     if (t.kind == TYPE_ARR) {
         type_array_t *type_array = t.array;
         type_array->element_type = reduction_type(m, type_array->element_type);
+        return t;
+    }
+
+    if (t.kind == TYPE_VEC) {
+        type_vec_t *type_vec = t.vec;
+        type_vec->element_type = reduction_type(m, type_vec->element_type);
+
+        t.impl_args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.impl_args, &type_vec->element_type);
+
         return t;
     }
 
@@ -2479,6 +2492,11 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
         CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T,
                          "map key only support number/string");
+
+        t.impl_args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.impl_args, &t.map->key_type);
+        ct_list_push(t.impl_args, &t.map->value_type);
+
         return t;
     }
 
@@ -2486,6 +2504,10 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T,
                          "set element only support number/string");
+
+        t.impl_args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.impl_args, &t.set->element_type);
+
         return t;
     }
 
@@ -2570,10 +2592,6 @@ static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
 static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
 
-    // if (str_equal(alias->ident, VEC_TYPE_IDENT)) {
-    //     return reduction_type_alias_vec(m, alias);
-    // }
-
     symbol_t *symbol = symbol_table_get(alias->ident);
     CHECKING_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
     CHECKING_ASSERTF(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
@@ -2591,11 +2609,19 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         // 实参注册
         if (m->checking_type_args_stack) {
             table_t *args_table = table_new();
+            t.impl_args = ct_list_new(sizeof(type_t));
+
             for (int i = 0; i < t.alias->args->length; ++i) {
                 type_t *arg = ct_list_value(t.alias->args, i);
+                *arg = reduction_type(m, *arg);
+
+                ct_list_push(t.impl_args, arg);
+
                 ast_ident *param = ct_list_value(type_alias_stmt->params, i);
                 table_set(args_table, param->literal, arg);
             }
+
+            // arg_table 也保存一份在 type 中
             stack_push(m->checking_type_args_stack, args_table);
         }
 
@@ -2900,6 +2926,4 @@ void checking(module_t *m) {
             infer_fndef(m, fn->local_children->take[j]);
         }
     }
-
-    post_checking(m);
 }

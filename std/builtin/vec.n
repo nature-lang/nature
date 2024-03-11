@@ -1,5 +1,6 @@
 import vec_temp
 
+// 暂时无法通过 struct 推导
 // type vec<T> = struct{
 //    cptr data
 //    int len
@@ -16,10 +17,10 @@ fn vec_new<T>(int len, int cap):vec<T> {
 
 fn vec<T>.push(T v) {
     ptr<T> ref = &v
-    rt_vec_push(self, ref)
+    rt_vec_push(self as cptr, ref as cptr)
 }
 
 fn vec<T>.slice(int start, int end):vec<T> {
-    return rt_vec_slice(self, start, end) as vec<T>
+    return rt_vec_slice(self as cptr, start, end) as vec<T>
 }
 

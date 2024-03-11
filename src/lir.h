@@ -62,7 +62,7 @@
 // RT = runtime
 // CT = compile time
 #define RT_CALL_VEC_NEW "rt_vec_new"
-#define RT_CALL_VEC_ELEMENT_ADDR "vec_element_addr"
+#define RT_CALL_VEC_ELEMENT_ADDR "rt_vec_element_addr"
 #define RT_CALL_VEC_SLICE "rt_vec_slice"
 #define RT_CALL_VEC_REF "rt_vec_ref"
 #define RT_CALL_VEC_LENGTH "rt_vec_length"

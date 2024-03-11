@@ -12,6 +12,8 @@
 #define ANONYMOUS_FN_NAME "lambda"
 #define FN_SELF_NAME "self"
 #define ENV_IDENT "env"
+#define TYPE_PARAM_T "T"
+#define TYPE_PARAM_U "U"
 
 // 临时表，用来临时记录, key = ident, value is any
 extern table_t *can_import_symbol_table;

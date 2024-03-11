@@ -506,7 +506,6 @@ typedef struct ast_fndef_t {
 
     // ast_ident 泛型参数, fn list_first<T, U>
     list_t *generics_params;
-
     type_t impl_type;
 
     // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
@@ -649,7 +648,6 @@ static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
     fndef->local_children = slice_new();
     fndef->continue_target_types = stack_new();
     fndef->generics_params = NULL;
-    fndef->impl_type_alias = NULL;
     return fndef;
 }
 

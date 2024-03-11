@@ -18,31 +18,6 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type);
 
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef);
 
-/**
- * @param ident
- * @return
- */
-static bool is_builtin_type_impl_alias(char *ident) {
-    return str_equal(type_kind_str[TYPE_VEC], ident) ||
-           str_equal(type_kind_str[TYPE_SET], ident) ||
-           str_equal(type_kind_str[TYPE_MAP], ident) ||
-           str_equal(type_kind_str[TYPE_BOOL], ident) ||
-           str_equal(type_kind_str[TYPE_INT8], ident) ||
-           str_equal(type_kind_str[TYPE_INT16], ident) ||
-           str_equal(type_kind_str[TYPE_INT32], ident) ||
-           str_equal(type_kind_str[TYPE_INT64], ident) ||
-           str_equal(type_kind_str[TYPE_UINT8], ident) ||
-           str_equal(type_kind_str[TYPE_UINT16], ident) ||
-           str_equal(type_kind_str[TYPE_UINT32], ident) ||
-           str_equal(type_kind_str[TYPE_UINT64], ident) ||
-           str_equal(type_kind_str[TYPE_UINT], ident) ||
-           str_equal(type_kind_str[TYPE_INT], ident) ||
-           str_equal(type_kind_str[TYPE_FLOAT32], ident) ||
-           str_equal(type_kind_str[TYPE_FLOAT64], ident) ||
-           str_equal(type_kind_str[TYPE_FLOAT], ident) ||
-           str_equal(type_kind_str[TYPE_STRING], ident);
-}
-
 char *analyzer_force_unique_ident(module_t *m) {
     if (m->ident) {
         return str_connect(m->ident, ".n.o");
@@ -922,7 +897,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // 闭包函数不能是类型扩展, 泛型
-    if (fndef->impl_type_alias || fndef->generics_params) {
+    if (fndef->impl_type.kind > 0 || fndef->generics_params) {
         ANALYZER_ASSERTF(false, "closure function cannot be generics or impl type alias");
     }
 

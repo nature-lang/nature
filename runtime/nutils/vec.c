@@ -3,7 +3,7 @@
 #include "array.h"
 #include "runtime/runtime.h"
 
-void vec_grow(n_vec_t *vec) {
+void rt_vec_grow(n_vec_t *vec) {
     PRE_RTCALL_HOOK();
 
     vec->capacity = vec->capacity * 2;
@@ -15,7 +15,7 @@ void vec_grow(n_vec_t *vec) {
 
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    DEBUGF("[vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity, new_data,
+    DEBUGF("[rt_vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity, new_data,
            element_size);
 
     memmove(new_data, vec->data, vec->length * element_size);
@@ -33,7 +33,7 @@ void vec_grow(n_vec_t *vec) {
 n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t length, int64_t capacity) {
     PRE_RTCALL_HOOK();
 
-    DEBUGF("[vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", reflect_hash, ele_reflect_hash, length, capacity);
+    DEBUGF("[rt_vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", reflect_hash, ele_reflect_hash, length, capacity);
 
     assertf(reflect_hash > 0, "reflect_hash must be a valid hash");
     assertf(ele_reflect_hash > 0, "ele_reflect_hash must be a valid hash");
@@ -47,7 +47,7 @@ n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t leng
     }
 
     assert(capacity >= length && "capacity must be greater than length");
-    TRACEF("[vec_new] length=%lu, capacity=%lu", length, capacity);
+    TRACEF("[rt_vec_new] length=%lu, capacity=%lu", length, capacity);
 
     // find rtype and element_rtype
     rtype_t *vec_rtype = rt_find_rtype(reflect_hash);
@@ -66,7 +66,7 @@ n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t leng
     vec->reflect_hash = reflect_hash;
     vec->data = rt_array_new(element_rtype, capacity);
 
-    DEBUGF("[vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_reflect_hash);
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_reflect_hash);
     return vec;
 }
 
@@ -75,12 +75,12 @@ n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t leng
  * @param index
  * @param value_ref
  */
-void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
+void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     PRE_RTCALL_HOOK();
 
     if (index >= l->length) {
         char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
-        DEBUGF("[runtime.vec_access] has err %s", msg);
+        DEBUGF("[runtime.rt_vec_access] has err %s", msg);
         rt_coroutine_set_error(msg);
         return;
     }
@@ -98,7 +98,7 @@ void vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @param ref
  * @return
  */
-void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
+void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     PRE_RTCALL_HOOK();
 
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
@@ -106,7 +106,7 @@ void vec_assign(n_vec_t *l, uint64_t index, void *ref) {
 
     rtype_t *element_rtype = rt_find_rtype(l->ele_reflect_hash);
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
-    DEBUGF("[runtime.vec_assign] element_size=%lu", element_size);
+    DEBUGF("[runtime.rt_vec_assign] element_size=%lu", element_size);
     // 计算 offset
     uint64_t offset = rtype_out_size(element_rtype, POINTER_SIZE) * index;// (size unit byte) * index
     void *p = l->data + offset;
@@ -154,11 +154,11 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
-        vec_grow(vec);
+        rt_vec_grow(vec);
     }
 
     uint64_t index = vec->length++;
-    vec_assign(vec, index, ref);
+    rt_vec_assign(vec, index, ref);
 }
 
 /**
@@ -231,13 +231,13 @@ n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b) {
     return merged;
 }
 
-n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
+n_cptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     PRE_RTCALL_HOOK();
 
-    TRACEF("[vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
+    TRACEF("[rt_vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
-        DEBUGF("[runtime.vec_element_addr] has err %s", msg);
+        DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
         rt_coroutine_set_error(msg);
         return 0;
     }
@@ -246,22 +246,22 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index) {
     // 计算 offset
     uint64_t offset = element_size * index;// (size unit byte) * index
 
-    DEBUGF("[vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
+    DEBUGF("[rt_vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
     return (n_cptr_t) l->data + offset;
 }
 
-n_cptr_t vec_iterator(n_vec_t *l) {
+n_cptr_t rt_vec_iterator(n_vec_t *l) {
     PRE_RTCALL_HOOK();
 
     if (l->length == l->capacity) {
-        DEBUGF("[vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
-        vec_grow(l);
+        DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
+        rt_vec_grow(l);
     }
     uint64_t index = l->length++;
 
-    DEBUGF("[vec_iterator] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
+    DEBUGF("[rt_vec_iterator] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
 
-    n_cptr_t addr = vec_element_addr(l, index);
-    DEBUGF("[vec_iterator] addr=%lx", addr);
+    n_cptr_t addr = rt_vec_element_addr(l, index);
+    DEBUGF("[rt_vec_iterator] addr=%lx", addr);
     return addr;
 }

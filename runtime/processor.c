@@ -524,7 +524,7 @@ void coroutine_dump_error(n_errort *error) {
     assert(error->traces->length > 0);
 
     n_trace_t first_trace = {};
-    vec_access(error->traces, 0, &first_trace);
+    rt_vec_access(error->traces, 0, &first_trace);
     char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *)error->msg->data, (char *)first_trace.path->data, first_trace.line,
                               first_trace.column);
 
@@ -535,7 +535,7 @@ void coroutine_dump_error(n_errort *error) {
         VOID write(STDOUT_FILENO, temp, strlen(temp));
         for (int i = 0; i < error->traces->length; ++i) {
             n_trace_t trace = {};
-            vec_access(error->traces, i, &trace);
+            rt_vec_access(error->traces, i, &trace);
             temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *)trace.ident->data, (char *)trace.path->data, trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }

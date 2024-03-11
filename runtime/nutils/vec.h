@@ -8,7 +8,7 @@
 
 n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t length, int64_t capacity);
 
-n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index);
+n_cptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -16,9 +16,9 @@ n_cptr_t vec_element_addr(n_vec_t *l, uint64_t index);
  * @param index
  * @return
  */
-void vec_access(n_vec_t *l, uint64_t index, void *value_ref);
+void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref);
 
-void vec_assign(n_vec_t *l, uint64_t index, void *ref);
+void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref);
 
 /**
  * @param l
@@ -37,7 +37,7 @@ void *rt_vec_ref(n_vec_t *l);
  */
 void rt_vec_push(n_vec_t *vec, void *ref);
 
-n_cptr_t vec_iterator(n_vec_t *l);
+n_cptr_t rt_vec_iterator(n_vec_t *l);
 
 /**
  * slice 不会修改原数组

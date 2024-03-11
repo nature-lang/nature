@@ -91,6 +91,10 @@ static type_kind token_to_kind[] = {
         [TOKEN_STRING] = TYPE_STRING,
         [TOKEN_VAR] = TYPE_UNKNOWN,
         [TOKEN_ANY] = TYPE_UNION,
+
+        [TOKEN_VEC] = TYPE_VEC,
+        [TOKEN_SET] = TYPE_SET,
+        [TOKEN_MAP] = TYPE_MAP,
 };
 
 typedef ast_expr_t (*parser_prefix_fn)(module_t *module);

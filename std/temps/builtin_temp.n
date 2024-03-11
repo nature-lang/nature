@@ -30,18 +30,18 @@ fn println(...[any] args)
 //fn set(...[all_t] keys):{all_t}
 
 // 比如 [all_t] 类型的 vec 只能接收 all_t 类型的 v
-fn vec_push([all_t] list, ptr<all_t> v)
+// fn vec_push([all_t] list, ptr<all_t> v)
 
-fn vec_length([all_t] list):int
+// fn vec_length([all_t] list):int
 
-fn vec_capacity([all_t] list):int
+// fn vec_capacity([all_t] list):int
 
-fn vec_slice(int rtype_hash, [all_t] list, int start, int end):[all_t]
+// fn vec_slice(int rtype_hash, [all_t] list, int start, int end):[all_t]
 
-fn vec_concat(int rtype_hash, [all_t] a, [all_t] b):[all_t]
+// fn vec_concat(int rtype_hash, [all_t] a, [all_t] b):[all_t]
 
 // 引用 data 部分,且对于复合没有展开操作
-fn vec_ref([all_t] list):cptr
+// fn vec_ref([all_t] list):cptr
 
 fn map_delete({all_t:all_t} m, ptr<all_t> key)
 

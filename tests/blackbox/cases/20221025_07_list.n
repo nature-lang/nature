@@ -1,3 +1,5 @@
 vec<u8> l = [1, 2]
+
 l.push(13)
 
+println(l[0], l[1], l[2])

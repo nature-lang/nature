@@ -388,7 +388,7 @@ n_vec_t *std_args() {
     for (int i = 0; i < command_argc; ++i) {
         DEBUGF("[std_args] command_argv[%d]='%s'\n", i, command_argv[i]);
         n_string_t *str = string_new(command_argv[i], strlen(command_argv[i]));
-        vec_assign(list, i, &str);
+        rt_vec_assign(list, i, &str);
     }
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data, list->length,

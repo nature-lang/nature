@@ -240,7 +240,10 @@ typedef struct type_t {
     type_kind kind;
     reduction_status_t status;
     char *origin_ident;// 当 type.kind == ALIAS/params 时，此处缓存一下 alias/formal ident, 用于 dump error
+
+    // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
     char *impl_ident;
+    list_t *impl_args;// type_t
     int line;
     int column;
     bool in_heap;// 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
@@ -286,7 +289,7 @@ struct type_alias_t {
     char *ident;    // 类型名称 type my_int = int
 
     // 可以包含多个实际参数,实际参数由类型组成, 当然实际参数也可能是 generic type, 比如 fn test<T>(alias<T>) 这种情况
-    list_t *args; // type_t
+    list_t *args;// type_t
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
