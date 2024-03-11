@@ -1,0 +1,9 @@
+fn rt_vec_new(int ref_hash, int ele_ref_hash, int len, int cap):cptr
+
+fn rt_vec_push(cptr list, cptr val)
+
+fn rt_vec_slice(cptr list, int start, int end):cptr
+
+fn rt_vec_concat(cptr list1, cptr list2):cptr
+
+fn rt_vec_ref(cptr list, int index):cptr

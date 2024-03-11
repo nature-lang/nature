@@ -86,7 +86,7 @@ typedef enum {
     TOKEN_MAP,
     TOKEN_TUP,
     TOKEN_SET,
-    TOKEN_CORO,
+//    TOKEN_CORO,
     TOKEN_CHAN,
 
     // KEYWORDS.
@@ -112,6 +112,7 @@ typedef enum {
     TOKEN_LET,
     TOKEN_IS,
     TOKEN_SIZEOF,
+    TOKEN_REFLECT_HASH,
     TOKEN_AS,
     TOKEN_BOOM,
     TOKEN_FN,
@@ -181,9 +182,8 @@ static string token_str[] = {
     [TOKEN_BREAK] = "break",
 
     [TOKEN_CHAN] = "chan",
-    [TOKEN_CORO] = "coro",
     [TOKEN_ARR] = "arr",
-    [TOKEN_VEC] = "vec",
+//    [TOKEN_VEC] = "vec",
     [TOKEN_MAP] = "map",
     [TOKEN_SET] = "set",
     [TOKEN_TUP] = "tup",

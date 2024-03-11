@@ -2,8 +2,8 @@
 #define NATURE_SRC_AST_ANALYZER_H_
 
 #include "src/ast.h"
-#include "src/symbol/symbol.h"
 #include "src/module.h"
+#include "src/symbol/symbol.h"
 
 
 // 符号表收集，类型检查、变量作用域检查（作用域单赋值），闭包转换,import 收集
@@ -17,12 +17,6 @@ void analyzer(module_t *m, slice_t *stmt_list);
 
 void analyzer_import(module_t *m, ast_import_t *import);
 
-static void analyzer_expr(module_t *m, ast_expr_t *expr);
+char *analyzer_force_unique_ident(module_t *m);
 
-static void analyzer_stmt(module_t *m, ast_stmt_t *stmt);
-
-static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr);
-
-static bool analyzer_special_type_rewrite(module_t *m, type_t *type);
-
-#endif //NATURE_SRC_AST_ANALYZER_H_
+#endif//NATURE_SRC_AST_ANALYZER_H_

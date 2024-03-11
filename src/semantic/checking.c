@@ -860,6 +860,11 @@ static type_t checking_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) 
     return type_kind_new(TYPE_INT);
 }
 
+static type_t checking_reflect_hash_expr(module_t *m, ast_reflect_hash_expr_t *reflect_expr) {
+    reflect_expr->target_type = reduction_type(m, reflect_expr->target_type);
+    return type_kind_new(TYPE_INT);
+}
+
 /**
  * unary
  * @param expr

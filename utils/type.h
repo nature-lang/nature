@@ -355,9 +355,10 @@ struct type_fn_t {
 
 typedef struct {
     uint8_t *data;
-    uint64_t length;  // 实际占用的位置的大小
-    uint64_t capacity;// 预先申请的容量大小
-    uint64_t element_rtype_hash;
+    int64_t length;  // 实际占用的位置的大小
+    int64_t capacity;// 预先申请的容量大小
+    int64_t ele_reflect_hash;
+    int64_t reflect_hash;
 } n_vec_t, n_string_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit

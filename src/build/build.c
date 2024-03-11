@@ -23,8 +23,6 @@
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
-static char *std_templates[] = {"builtin.temp.n", "libc.temp.n", "syscall.temp.n"};
-
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
 
@@ -119,7 +117,7 @@ static void assembler_custom_links() {
  */
 static void assembler_module(module_t *m) {
     if (BUILD_OS == OS_LINUX) {// elf 就是 linux 独有都
-        char *object_file_name = str_connect(m->ident, ".n.o");
+        char *object_file_name = analyzer_force_unique_ident(m);
         str_replace_char(object_file_name, '/', '.');
 
         char *output = path_join(TEMP_DIR, object_file_name);
@@ -261,7 +259,7 @@ static void build_assembler(slice_t *modules) {
             slice_push(m->asm_global_symbols, symbol);
         }
 
-        log_debug("[build_assembler] module=%s", m->ident);
+        log_debug("[build_assembler] module=%s", m->source_path);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
 
@@ -313,12 +311,44 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
     slice_t *tpls = slice_new();
+    slice_t *builtin_modules = slice_new();
 
-    // builtin_temp.n
+    // builtin tpl list, default import
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
     char *full_path = path_join(template_dir, "builtin_temp.n");
     assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
     slice_push(tpls, full_path);
+
+    // builtin modules
+    char *builtin_dir = path_join(NATURE_ROOT, "std/builtin");
+    // scan all builtin package, module build
+    DIR *dir = opendir(builtin_dir);
+    assertf(dir, "cannot found builtin dir %s", builtin_dir);
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // 读取该目录下的所有文件(一级目录)
+        if (entry->d_type == DT_REG) {
+            char *filename = strdup(entry->d_name);
+
+            // filename 必须以 .n 结尾
+            if (!ends_with(filename, ".n")) {
+                continue;
+            }
+
+            full_path = path_join(builtin_dir, filename);
+            slice_push(builtin_modules, full_path);
+        }
+    }
+
+    // builtin module build
+    linked_t *work_list = linked_new();
+
+    for (int i = 0; i < builtin_modules->count; ++i) {
+        char *builtin_file = builtin_modules->take[i];
+        module_t *builtin = module_build(NULL, builtin_file, MODULE_TYPE_BUILTIN);
+        slice_push(modules, builtin);
+        linked_push(work_list, builtin);
+    }
 
     // main build
     ast_import_t main_import = {
@@ -342,7 +372,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
     slice_push(modules, main);
 
-    linked_t *work_list = linked_new();
     linked_push(work_list, main);
 
     table_t *import_tpl_table = table_new();
@@ -382,8 +411,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             // new module dep all imports handled
             module_t *new_module = module_build(import, import->full_path, import->module_type);
 
-            // temp 预先处理
-
             linked_push(work_list, new_module);
             table_set(module_table, import->full_path, new_module);
             slice_push(modules, new_module);
@@ -408,13 +435,19 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     ast_fndef_t *root_fndef = main->ast_fndefs->take[0];
 
     slice_t *new_body = slice_new();
-    for (int i = 1; i < modules->count; ++i) {
+    for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
-        slice_push(new_body, m->call_init_stmt);
+        if (m->type == MODULE_TYPE_MAIN || m->type == MODULE_TYPE_TPL) {
+            continue;
+        }
+        if (m->call_init_stmt) {
+            slice_push(new_body, m->call_init_stmt);
+        }
     }
-    slice_concat(new_body, root_fndef->body);
-    root_fndef->body = new_body;
+    if (new_body) {
+        slice_concat(new_body, root_fndef->body);
+        root_fndef->body = new_body;
+    }
 
     return modules;
 }

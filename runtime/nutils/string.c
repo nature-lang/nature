@@ -30,7 +30,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_rtype_hash = element_rtype->hash;
+    str->ele_reflect_hash = element_rtype->hash;
     memmove(str->data, raw_string, length);
 
     DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
@@ -53,7 +53,7 @@ void *string_ref(n_string_t *n_str) {
 
     // 结尾添加 '\0' 字符
     int a = '\0';
-    vec_push(n_str, &a);
+    rt_vec_push(n_str, &a);
     n_str->length -= 1;
 
     return n_str->data;
@@ -78,7 +78,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_rtype_hash = element_rtype->hash;
+    str->ele_reflect_hash = element_rtype->hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }

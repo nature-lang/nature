@@ -237,8 +237,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        assert(list->element_rtype_hash && "list element rtype hash is empty");
-        uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
+        assert(list->ele_reflect_hash && "list element rtype hash is empty");
+        uint64_t value_size = rt_rtype_out_size(list->ele_reflect_hash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld", list->length,
                list->capacity, list->data, value_size, cursor);
 
@@ -280,13 +280,13 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu", iterator,
-               list->length, list->capacity, list->data, list->element_rtype_hash);
+               list->length, list->capacity, list->data, list->ele_reflect_hash);
 
-        assert(list->element_rtype_hash > 0 && "list element rtype hash is empty");
+        assert(list->ele_reflect_hash > 0 && "list element rtype hash is empty");
 
         assert(cursor < list->length && "cursor >= list->length");
 
-        uint64_t element_size = rt_rtype_out_size(list->element_rtype_hash);
+        uint64_t element_size = rt_rtype_out_size(list->ele_reflect_hash);
 
         memmove(value_ref, list->data + element_size * cursor, element_size);
         DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref, element_size);
@@ -328,7 +328,7 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
         .line = line,
         .column = column,
     };
-    vec_push(error->traces, &trace);
+    rt_vec_push(error->traces, &trace);
 
     co->error = error;
 
@@ -367,7 +367,7 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
         .column = column,
     };
 
-    vec_push(co->error->traces, &trace);
+    rt_vec_push(co->error->traces, &trace);
 
     post_rtcall_hook("co_has_error");
     return 1;
@@ -382,7 +382,7 @@ n_vec_t *std_args() {
     // 初始化一个 string 类型的数组
     rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_vec_t *list = vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
+    n_vec_t *list = rt_vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
@@ -392,7 +392,7 @@ n_vec_t *std_args() {
     }
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data, list->length,
-           list->element_rtype_hash);
+           list->ele_reflect_hash);
     return list;
 }
 

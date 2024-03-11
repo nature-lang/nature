@@ -391,8 +391,8 @@ token_e scanner_ident(char *word, int length) {
                     switch (word[2]) {
                         case 'n':
                             return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
-                        case 'r':
-                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                            //                        case 'r':
+                            //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
                     }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
@@ -525,7 +525,17 @@ token_e scanner_ident(char *word, int length) {
             return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         }
         case 'r': {
-            return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
+            switch (word[1]) {
+                case 'e': {
+                    switch (word[2]) {
+                        case 't':
+                            return scanner_rest(word, length, 3, 3, "urn", TOKEN_RETURN);
+
+                        case 'f':
+                            return scanner_rest(word, length, 3, 9, "lect_hash", TOKEN_REFLECT_HASH);
+                    }
+                }
+            }
         }
         case (char) 0xF0: {// temp use 💥
             return scanner_rest(word, length, 1, 3, "\x9F\x92\xA5", TOKEN_BOOM);

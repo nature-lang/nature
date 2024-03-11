@@ -61,15 +61,15 @@
 
 // RT = runtime
 // CT = compile time
-#define RT_CALL_VEC_NEW "vec_new"
+#define RT_CALL_VEC_NEW "rt_vec_new"
 #define RT_CALL_VEC_ELEMENT_ADDR "vec_element_addr"
-#define RT_CALL_VEC_SLICE "vec_slice"
-#define RT_CALL_VEC_REF "vec_ref"
-#define RT_CALL_VEC_LENGTH "vec_length"
-#define RT_CALL_VEC_CAPACITY "vec_capacity"
-#define RT_CALL_VEC_PUSH "vec_push"
-#define RT_CALL_VEC_ITERATOR "vec_iterator"
-#define RT_CALL_VEC_CONCAT "vec_concat"
+#define RT_CALL_VEC_SLICE "rt_vec_slice"
+#define RT_CALL_VEC_REF "rt_vec_ref"
+#define RT_CALL_VEC_LENGTH "rt_vec_length"
+#define RT_CALL_VEC_CAPACITY "rt_vec_capacity"
+#define RT_CALL_VEC_PUSH "rt_vec_push"
+#define RT_CALL_VEC_ITERATOR "rt_vec_iterator"
+#define RT_CALL_VEC_CONCAT "rt_vec_concat"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 

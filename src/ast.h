@@ -19,6 +19,7 @@ typedef enum {
     AST_EXPR_AS,
     AST_EXPR_IS,
     AST_EXPR_SIZEOF,
+    AST_EXPR_REFLECT_HASH,
 
     AST_EXPR_NEW,// new person
 
@@ -181,6 +182,11 @@ typedef struct {
 typedef struct {
     type_t target_type;
 } ast_sizeof_expr_t;
+
+typedef struct {
+    type_t target_type;
+} ast_reflect_hash_expr_t;
+
 
 // 一元表达式
 typedef struct {
@@ -500,8 +506,8 @@ typedef struct ast_fndef_t {
 
     // ast_ident 泛型参数, fn list_first<T, U>
     list_t *generics_params;
-    // 类型扩展 fn type_alias<T>.first()
-    char *impl_type_alias;
+
+    type_t impl_type;
 
     // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
     table_t *type_param_table;// 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
@@ -524,7 +530,7 @@ typedef struct ast_fndef_t {
      * params_hash 是基于 global fn params 计算出的唯一标识，所有的 global fn 的唯一标识都将 with params_hash，然后将 with 后的
      * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。这也避免了冲突
      */
-//    char *generics_args_hash;// TODO 不实用 params_hash 了
+    //    char *generics_args_hash;// TODO 不实用 params_hash 了
 
     // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
     type_t *self_struct_ptr;

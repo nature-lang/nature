@@ -14,6 +14,24 @@ static ast_expr_t parser_struct_new(module_t *m, type_t t);
 
 static ast_expr_t parser_struct_new_expr(module_t *m);
 
+static bool parser_is_impl_type(token_e token) {
+    return token == TOKEN_STRING ||
+           token == TOKEN_BOOL ||
+           token == TOKEN_INT ||
+           token == TOKEN_UINT ||
+           token == TOKEN_I8 ||
+           token == TOKEN_I16 ||
+           token == TOKEN_I32 ||
+           token == TOKEN_I64 ||
+           token == TOKEN_U8 ||
+           token == TOKEN_U16 ||
+           token == TOKEN_U32 ||
+           token == TOKEN_U64 ||
+           token == TOKEN_FLOAT ||
+           token == TOKEN_F32 ||
+           token == TOKEN_F64;
+}
+
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
     token_t *t = m->p_cursor.current->value;
@@ -294,7 +312,7 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // vec<int> TODO 用不上了才对
+    // vec<int>
     if (parser_consume(m, TOKEN_VEC)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_vec_t *type_vec = NEW(type_vec_t);
@@ -900,6 +918,18 @@ static ast_expr_t parser_sizeof_expr(module_t *m) {
     is_expr->target_type = parser_single_type(m);
     parser_must(m, TOKEN_RIGHT_PAREN);
     result.assert_type = AST_EXPR_SIZEOF;
+    result.value = is_expr;
+    return result;
+}
+
+static ast_expr_t parser_reflect_hash_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_REFLECT_HASH);
+    parser_must(m, TOKEN_LEFT_PAREN);
+    ast_reflect_hash_expr_t *is_expr = NEW(ast_reflect_hash_expr_t);
+    is_expr->target_type = parser_single_type(m);
+    parser_must(m, TOKEN_RIGHT_PAREN);
+    result.assert_type = AST_EXPR_REFLECT_HASH;
     result.value = is_expr;
     return result;
 }
@@ -1840,9 +1870,13 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
     parser_must(m, TOKEN_FN);
 
     bool set_parser_type_params_table = false;
+
+    // 整成类型中是没有 . 吧？就不能有.呀， fndef param?params 是什么 特殊 alias？
+
     // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
     // stmt 中 name 不允许省略
-    token_t *first_token = parser_must(m, TOKEN_IDENT);
+    token_t *first_token = parser_advance(m);
+
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
         m->parser_type_params_table = table_new();
@@ -1861,9 +1895,42 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
 
     if (parser_consume(m, TOKEN_DOT)) {
         token_t *token = parser_must(m, TOKEN_IDENT);
+        type_t impl_type = {
+                .status = REDUCTION_STATUS_DONE,
+                .line = parser_peek(m)->line,
+                .column = parser_peek(m)->column,
+        };
+
+        // 只接受特定类型的 impl
+        if (parser_is_impl_type(first_token->token)) {
+            impl_type.impl_ident = first_token->literal;// 关键在这里
+            impl_type.kind = token_to_kind[first_token->token];
+            impl_type.value = NULL;
+            PARSER_ASSERTF(fndef->generics_params == NULL, "impl type '%s' cannot contains generics param", first_token->token);
+        } else if (first_token->token == TOKEN_IDENT) {
+            impl_type.kind = TYPE_ALIAS;
+            impl_type.impl_ident = first_token->literal;
+            impl_type.alias = type_alias_new(first_token->literal, NULL);
+
+            if (fndef->generics_params) {
+                impl_type.alias->args = ct_list_new(sizeof(type_t));
+                for (int i = 0; i < fndef->generics_params->length; ++i) {
+                    ast_ident *ident = ct_list_value(fndef->generics_params, i);
+                    type_t param_type = type_new(TYPE_PARAM, type_param_new(ident->literal));
+                    param_type.origin_ident = ident->literal;
+                    param_type.status = REDUCTION_STATUS_UNDO;
+                    ct_list_push(impl_type.alias->args, &param_type);
+                }
+            }
+        } else {
+            PARSER_ASSERTF(false, "ident '%s' cannot impl type", first_token->literal);
+        }
+
+
+        fndef->impl_type = impl_type;
+
         fndef->symbol_name = token->literal;
         fndef->fn_name = token->literal;
-        fndef->impl_type_alias = first_token->literal;
     } else {
         fndef->symbol_name = first_token->literal;
         fndef->fn_name = first_token->literal;
@@ -2044,6 +2111,7 @@ static parser_rule rules[] = {
         [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_IS] = {NULL, parser_is_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_SIZEOF] = {parser_sizeof_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_REFLECT_HASH] = {parser_reflect_hash_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
 
         // 以 ident 开头的前缀表达式

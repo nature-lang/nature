@@ -1672,6 +1672,19 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
     return target;
 }
 
+static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_sizeof_expr_t *ast = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_stack(m, expr.type);
+    }
+
+    uint64_t hash = reflect_type(ast->target_type).hash;
+
+    OP_PUSH(lir_op_move(target, int_operand(hash)));
+    return target;
+}
+
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
     assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_NPTR);
@@ -2199,6 +2212,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
         [AST_EXPR_SIZEOF] = linear_sizeof_expr,
+        [AST_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
         [AST_EXPR_NEW] = linear_new_expr,
         [AST_CATCH] = linear_catch_expr,
 };
