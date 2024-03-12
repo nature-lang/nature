@@ -19,9 +19,9 @@ if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index
     println('进来了!')
 }
 
-var a = vec<u8>{len=102400}
+var a = vec_new<u8>(102400, 0)
 
-a = vec<u8>{len=1}
+a = vec_new<u8>(1, 0)
 
 if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')

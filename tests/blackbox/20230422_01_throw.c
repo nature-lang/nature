@@ -3,7 +3,6 @@
 #include "tests/test.h"
 
 static void test_basic() {
-    return;
     char *raw = exec_output();
     char *str =
         "hello nature\n"

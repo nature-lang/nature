@@ -5,7 +5,7 @@
 
 n_string_t *string_new(void *raw_string, uint64_t length);
 
-void *string_ref(n_string_t *n_str);
+void *rt_string_ref(n_string_t *n_str);
 
 n_string_t *string_concat(n_string_t *a, n_string_t *b);
 
@@ -21,6 +21,6 @@ n_bool_t string_gt(n_string_t *a, n_string_t *b);
 
 n_bool_t string_ge(n_string_t *a, n_string_t *b);
 
-n_int_t string_length(n_string_t *a);
+n_int_t rt_string_length(n_string_t *a);
 
 #endif //NATURE_STRING_H

@@ -6,7 +6,7 @@ fn rt_vec_slice(cptr list, int start, int end):cptr
 
 fn rt_vec_concat(cptr list1, cptr list2):cptr
 
-fn rt_vec_ref(cptr list, int index):cptr
+fn rt_vec_ref(cptr list):cptr
 
 fn rt_vec_length(cptr list):int
 
@@ -23,3 +23,5 @@ fn rt_map_delete(cptr m, cptr key)
 fn rt_map_length(cptr m):int
 
 fn rt_string_length(cptr s):int
+
+fn rt_string_ref(cptr s):cptr

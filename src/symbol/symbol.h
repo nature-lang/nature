@@ -45,7 +45,6 @@ typedef enum {
     SYMBOL_VAR,
     SYMBOL_TYPE_ALIAS,
     SYMBOL_FN,
-    SYMBOL_CLOSURE,
 } symbol_type_t;
 
 typedef struct {
@@ -53,11 +52,6 @@ typedef struct {
     bool is_local;// 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
     void *ast_value;// ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
-
-    // TODO 不再支持重载，只支持泛型
-    // 由于支持重载，所以会支持同名不同类型的函数, 但是由于在 analyzer 阶段类型仅仅收集了符号没有进行类型还原
-    // 所以所有的同名全局函数都回注册到 fndefs 中
-    slice_t *fndefs;  // ast_fndef*
     int64_t ref_count;// 引用计数
 } symbol_t;
 

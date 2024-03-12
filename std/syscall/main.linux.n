@@ -553,20 +553,12 @@ fn open(string filename, int flags, u32 perm):int {
     return call6(SYS_OPEN, filename.ref(), flags as cptr, perm as cptr, 0, 0, 0)
 }
 
-fn read(int fd, [u8] buf):int {
-    return call6(SYS_READ, fd as cptr, buf.ref(), buf.len as cptr, 0, 0, 0)
-}
-
 fn read(int fd, cptr buf, int len):int {
     return call6(SYS_READ, fd as cptr, buf, len as cptr, 0, 0, 0)
 }
 
 fn readlink(string file, [u8] buf):int {
-    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len as cptr, 0, 0, 0)
-}
-
-fn write(int fd, [u8] buf):int {
-    return call6(SYS_WRITE, fd as cptr, buf.ref(), buf.len as cptr, 0, 0, 0)
+    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len() as cptr, 0, 0, 0)
 }
 
 fn write(int fd, cptr buf, int len):int {
@@ -664,8 +656,8 @@ fn getppid():int {
 }
 
 fn getcwd():string {
-    var buf = vec<u8>{len=1024} // 1024 是 path max
-    var len = call6(SYS_GETCWD, buf.ref(), buf.len as cptr, 0, 0, 0, 0)
+    var buf = vec_new<u8>(1024, 0) // 1024 是 path max
+    var len = call6(SYS_GETCWD, buf.ref(), buf.len() as cptr, 0, 0, 0, 0)
 
     buf = buf.slice(0, len - 1) // -1 is remove '\0'
 
@@ -739,16 +731,14 @@ fn socket(int domain, int t, int protocol):int {
     return call6(SYS_SOCKET, domain as cptr, t as cptr, protocol as cptr, 0, 0, 0)
 }
 
-// 泛型与重载组合使用
-type sockaddr_t = gen sockaddr_in|sockaddr_un
-
-fn bind(int sockfd, sockaddr_t addr) {
-    // 将 nature struct 转换为 c struct
+// TODO limit <T:sockaddr_in|sockaddr_un>
+fn bind<T>(int sockfd, T addr) {
+    //  nature struct to c
      var len = 16 as cptr // in 和 unix 长度为 16byte
      call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
 
-fn bind(int sockfd, sockaddr_in6 addr) {
+fn bind6(int sockfd, sockaddr_in6 addr) {
     var len = 28 as cptr
     call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
 }
@@ -759,7 +749,7 @@ fn listen(int sockfd, int backlog) {
 }
 
 // 相应 client sockfd 和 client sockaddr
-fn accept(int sockfd, ptr<sockaddr_t> addr):int {
+fn accept<T>(int sockfd, ptr<T> addr):int {
     var len = 16
     ptr<int> len_ptr = &len
     int fd = call6(SYS_ACCEPT, sockfd as cptr, addr as cptr, len_ptr as cptr, 0, 0, 0)
@@ -768,11 +758,11 @@ fn accept(int sockfd, ptr<sockaddr_t> addr):int {
 }
 
 fn recvfrom(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_RECVFROM, sockfd as cptr, buf.ref(), buf.len as cptr, flags as cptr, 0, 0)
+    return call6(SYS_RECVFROM, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
 }
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len as cptr, flags as cptr, 0, 0)
+    return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
 }
 
 fn get_envs():[string] {

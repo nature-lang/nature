@@ -2,7 +2,7 @@ import fmt.util as *
 import path
 
 fn sprintf(string fmt, ...[any] args):string {
-    var end = fmt.len
+    var end = fmt.len()
     var result = [] as [u8]
 
     var sources = fmt as [u8]
@@ -48,7 +48,7 @@ fn sprintf(string fmt, ...[any] args):string {
             continue
         }
 
-        if arg_index == args.len {
+        if arg_index == args.len() {
              result.push(ascii('%'))
              result.push(ascii('!'))
              result.push(c)

@@ -9,8 +9,6 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
     char *str = "";
     assert_string_equal(raw, str);
 }

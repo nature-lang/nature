@@ -1580,6 +1580,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             var_decl->ident = ident_with_module(m->ident, var_decl->ident);
             slice_push(m->global_vardef, vardef);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
+            ANALYZER_ASSERTF(s, "var '%s' redeclared", var_decl->ident);
             slice_push(m->global_symbols, s);
 
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
@@ -1604,6 +1605,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
             type_alias->ident = ident_with_module(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
+            ANALYZER_ASSERTF(s, "type alias '%s' redeclared", type_alias->ident);
             slice_push(m->global_symbols, s);
 
             if (type_alias->params && type_alias->params->length > 0) {
@@ -1627,10 +1629,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
-            // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
             fndef->symbol_name = ident_with_module(m->ident, symbol_name);// 全局函数改名
-
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+            ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->symbol_name);
             slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
             continue;

@@ -1,6 +1,6 @@
 import 'mod.n' as *
 
-var foo = square {
+var foo = square{
     length = 10,
     width = 5
 }

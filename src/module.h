@@ -1,11 +1,11 @@
 #ifndef NATURE_MODULE_H
 #define NATURE_MODULE_H
 
-#include "utils/linked.h"
 #include "src/build/config.h"
-#include "utils/helper.h"
 #include "src/symbol/symbol.h"
 #include "types.h"
+#include "utils/helper.h"
+#include "utils/linked.h"
 
 extern int var_unique_count;
 
@@ -23,15 +23,22 @@ static inline char *ident_with_module(char *module_ident, char *ident) {
 
 static inline char *make_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, var_unique_count++);
+    if (m->ident) {
+        sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    } else {
+        sprintf(result, "%s_%d", ident, var_unique_count++);
+    }
     return result;
 }
 
 
 static inline char *var_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, var_unique_count++);
-
+    if (m->ident) {
+        sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    } else {
+        sprintf(result, "%s_%d", ident, var_unique_count++);
+    }
     return ident_with_module(m->ident, result);
 }
 
@@ -57,4 +64,4 @@ static inline char *module_unique_ident(ast_import_t *import) {
     return ident;
 }
 
-#endif //NATURE_MODULE_H
+#endif//NATURE_MODULE_H

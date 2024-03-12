@@ -42,9 +42,9 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
  * @param n_str
  * @return
  */
-void *string_ref(n_string_t *n_str) {
+void *rt_string_ref(n_string_t *n_str) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.string_ref] length=%lu, data=%p", n_str->length, n_str->data);
+    DEBUGF("[rt_string_ref] length=%lu, data=%p", n_str->length, n_str->data);
 
     // 空间足够，且最后一位已经是 0， 可以直接返回
     if (n_str->capacity > n_str->length && n_str->data[n_str->length] == '\0') {
@@ -83,7 +83,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     return str;
 }
 
-n_int_t string_length(n_string_t *a) {
+n_int_t rt_string_length(n_string_t *a) {
     PRE_RTCALL_HOOK();
     return (n_int_t)a->length;
 }

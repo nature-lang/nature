@@ -10,8 +10,6 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    // printf("%s", raw);
-    // return;
     char *str =
         "a sub\n"
         "a sub/sub2\n"

@@ -46,7 +46,7 @@ list.push(atm_t{
     amount = 400
 })
 
-var list2 = vec<atm_t>{len=100}
+var list2 = vec_new<atm_t>(100, 0)
 
 for item in list {
     println(item.amount)
@@ -76,7 +76,7 @@ array[7] = atm_t{
     amount = 800
 }
 
-var list3 = vec<atm_t>{len=200}
+var list3 = vec_new<atm_t>(200, 0)
 
 for int i=0; i < 8; i+=1 {
     println(array[i].amount)

@@ -30,8 +30,3 @@ fn println(...[any] args)
 fn runtime_force_gc()
 
 fn runtime_malloc_bytes():i64
-
-// rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
-fn string_length(string s):int
-
-fn string_ref(string s):cptr

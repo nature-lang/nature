@@ -35,3 +35,7 @@ fn vec<T>.len():int {
 fn vec<T>.cap():int {
     return rt_vec_capacity(self as cptr)
 }
+
+fn vec<T>.ref():cptr {
+    return rt_vec_ref(self as cptr)
+}

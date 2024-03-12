@@ -2,7 +2,6 @@
 #include <stdio.h>
 
 static void test_basic() {
-    return;
     char *raw = exec_output();
     char *str = "-902\n"
                 "999\n"

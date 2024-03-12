@@ -3,7 +3,7 @@ type floatert = gen float|f32|f64
 type numbert = gen integert|floatert
 
 fn ascii(string c):u8 {
-    if c.len != 1 {
+    if c.len() != 1 {
         throw 'c length must equal to 1'
     }
     var list = c as [u8]
@@ -13,7 +13,7 @@ fn ascii(string c):u8 {
 // 引用传递
 fn reverse([numbert] list) {
     int start = 0
-    int end = list.len - 1
+    int end = list.len() - 1
     for start < end {
         (list[start], list[end]) = (list[end], list[start])
         start += 1
@@ -58,7 +58,7 @@ fn itos(integert i, string fill, u8 width):string {
         i = i / 10
     }
 
-    u8 result_width = result.len as u8
+    u8 result_width = result.len() as u8
     if is_neg {
         result_width += 1
     }

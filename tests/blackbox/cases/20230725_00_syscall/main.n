@@ -19,8 +19,8 @@ if fd != 0 {
 }
 
 // read buf is [u8]
-var buf = vec<u8>{len=20}
-var len = syscall.read(fd, buf) catch err {
+var buf = vec_new<u8>(20, 0)
+var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
     return print(err.msg)
 }
 

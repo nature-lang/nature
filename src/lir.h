@@ -135,8 +135,8 @@
 #define RT_CALL_STRING_LE "string_le"
 #define RT_CALL_STRING_GT "string_gt"
 #define RT_CALL_STRING_GE "string_ge"
-#define RT_CALL_STRING_LENGTH "string_length"
-#define RT_CALL_STRING_REF "string_ref" // 默认引用传递
+#define RT_CALL_STRING_LENGTH "rt_string_length"
+#define RT_CALL_STRING_REF "rt_string_ref" // 默认引用传递
 
 #define RT_CALL_PRE_TPLCALL_HOOK "pre_tplcall_hook"
 #define RT_CALL_POST_TPLCALL_HOOK "post_tplcall_hook"
