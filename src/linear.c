@@ -1803,9 +1803,16 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+    // cptr to anybody without float
     if (as_expr->src.type.kind == TYPE_CPTR) {
-        assertf(as_expr->target_type.kind == TYPE_UINT64, "cptr only support as uint/uint64");
-        OP_PUSH(lir_op_move(target, input));
+        assertf(as_expr->src.type.kind != TYPE_FLOAT64, "cptr cannot casting to float");
+        assertf(as_expr->src.type.kind != TYPE_FLOAT32, "cptr cannot casting to float");
+
+        if (type_sizeof(as_expr->target_type) < POINTER_SIZE) {
+            push_rt_call(m, RT_CALL_CASTING_TO_CPTR, target, 1, input);
+        } else {
+            OP_PUSH(lir_op_move(target, input));
+        }
         return target;
     }
 

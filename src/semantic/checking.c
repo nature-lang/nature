@@ -789,6 +789,11 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
         return target_type;
     }
 
+    // 同理 cptr 可以转换除了出了 float 以外的任意类型
+    if (as_expr->src.type.kind == TYPE_CPTR && !is_float(target_type.kind)) {
+        return target_type;
+    }
+
     CHECKING_ASSERTF(can_type_casting(target_type.kind), "type = %s not support casting", type_format(target_type));
     return target_type;
 }
@@ -1380,13 +1385,13 @@ static type_t checking_select(module_t *m, ast_expr_t *expr) {
     checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
     // if left is list -> xxx() // TODO 用不上了
-    if (select->left.type.kind == TYPE_VEC) {
-        return checking_vec_select(m, expr);
-    }
+    //    if (select->left.type.kind == TYPE_VEC) {
+    //        return checking_vec_select(m, expr);
+    //    }
 
-    if (select->left.type.kind == TYPE_MAP) {
-        return checking_map_select(m, expr);
-    }
+//    if (select->left.type.kind == TYPE_MAP) {
+//        return checking_map_select(m, expr);
+//    }
 
     if (select->left.type.kind == TYPE_STRING) {
         return checking_string_select(m, expr);
@@ -2295,6 +2300,9 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_EXPR_SIZEOF: {
             return checking_sizeof_expr(m, expr->value);
+        }
+        case AST_EXPR_REFLECT_HASH: {
+            return checking_reflect_hash_expr(m, expr->value);
         }
         case AST_EXPR_NEW: {
             return checking_new_expr(m, expr->value);

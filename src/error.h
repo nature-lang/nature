@@ -29,7 +29,9 @@
     } \
 }
 
-#define PARSER_ASSERTF(condition, fmt, ...) ((condition) ?: dump_errorf(m, CT_STAGE_PARSER, parser_peek(m)->line, parser_peek(m)->column, fmt, ##__VA_ARGS__));
+#define PARSER_ASSERTF(condition, fmt, ...) { \
+        ((condition) ?: dump_errorf(m, CT_STAGE_PARSER, parser_peek(m)->line, parser_peek(m)->column, fmt, ##__VA_ARGS__)); \
+    }
 
 void push_errorf(module_t *m, ct_stage stage, int line, int column, char *format, ...);
 
@@ -44,7 +46,7 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
  * @param fmt
  * @param ...
  */
-void dump_errors(module_t *m);
+void dump_errors_exit(module_t *m);
 
 
 #endif //NATURE_ERROR_H

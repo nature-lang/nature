@@ -7,7 +7,7 @@
 #include "src/symbol/symbol.h"
 #include "types.h"
 
-#define MODULE_SUFFIX ".n"
+extern int var_unique_count;
 
 // module_path + path + ident
 static inline char *ident_with_module(char *module_ident, char *ident) {
@@ -23,14 +23,14 @@ static inline char *ident_with_module(char *module_ident, char *ident) {
 
 static inline char *make_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    sprintf(result, "%s_%d", ident, var_unique_count++);
     return result;
 }
 
 
 static inline char *var_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    sprintf(result, "%s_%d", ident, var_unique_count++);
 
     return ident_with_module(m->ident, result);
 }

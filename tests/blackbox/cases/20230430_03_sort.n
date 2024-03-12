@@ -1,5 +1,5 @@
 fn sort([int] list) {
-    var len = list.len
+    var len = list.len()
     for int i = 0; i < len - 1; i += 1 {
         for int j = 0; j < len - i - 1; j += 1 {
             if list[j] > list[j + 1] {

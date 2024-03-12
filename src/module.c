@@ -3,15 +3,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "src/build/config.h"
 #include "src/error.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/generic.h"
 #include "src/syntax/parser.h"
 #include "src/syntax/scanner.h"
-#include "utils/assertf.h"
-#include "utils/helper.h"
-#include "utils/table.h"
+
+int var_unique_count = 0;
 
 /**
  * @param source_path
@@ -27,7 +24,8 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         m->ident = import->module_ident;
     }
 
-    m->ct_errors = slice_new();
+    m->errors = slice_new();
+    m->intercept_errors = NULL;
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();

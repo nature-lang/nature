@@ -10,48 +10,22 @@
 
 // type fn_t = cptr // 同上
 
-type tracet = struct {
+type trace_t = struct {
     string path
     string ident
     int line
     int column
 }
 
-type errort = struct {
+type error_t = struct {
     string msg
-    [tracet] traces
+    [trace_t] traces
     bool has
 }
 
 fn print(...[any] args)
 
 fn println(...[any] args)
-
-//fn set(...[all_t] keys):{all_t}
-
-// 比如 [all_t] 类型的 vec 只能接收 all_t 类型的 v
-// fn vec_push([all_t] list, ptr<all_t> v)
-
-// fn vec_length([all_t] list):int
-
-// fn vec_capacity([all_t] list):int
-
-// fn vec_slice(int rtype_hash, [all_t] list, int start, int end):[all_t]
-
-// fn vec_concat(int rtype_hash, [all_t] a, [all_t] b):[all_t]
-
-// 引用 data 部分,且对于复合没有展开操作
-// fn vec_ref([all_t] list):cptr
-
-fn map_delete({all_t:all_t} m, ptr<all_t> key)
-
-fn map_length({all_t:all_t} m):int
-
-fn set_contains({all_t} s, ptr<all_t> key):bool
-
-fn set_add({all_t} s, ptr<all_t> key):bool
-
-fn set_delete({all_t} s, ptr<all_t> key)
 
 fn runtime_force_gc()
 

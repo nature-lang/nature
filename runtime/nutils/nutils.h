@@ -41,6 +41,8 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_cptr_t cptr_casting(value_casting v);
 
+value_casting casting_to_cptr(void *ptr);
+
 n_vec_t *std_args();
 
 char *rtype_value_str(rtype_t *rtype, void *data_ref);

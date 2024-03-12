@@ -1,4 +1,4 @@
-import vec_temp
+import runtime_temp
 
 // 暂时无法通过 struct 推导
 // type vec<T> = struct{
@@ -24,3 +24,14 @@ fn vec<T>.slice(int start, int end):vec<T> {
     return rt_vec_slice(self as cptr, start, end) as vec<T>
 }
 
+fn vec<T>.concat(vec<T> l2):vec<T> {
+    return rt_vec_concat(self as cptr, l2 as cptr) as vec<T>
+}
+
+fn vec<T>.len():int {
+    return rt_vec_length(self as cptr)
+}
+
+fn vec<T>.cap():int {
+    return rt_vec_capacity(self as cptr)
+}

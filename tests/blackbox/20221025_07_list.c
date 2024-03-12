@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 static void test_basic() {
-    return;
     char *raw = exec_output();
 
     assert_string_equal(raw, "1 2 13\n"

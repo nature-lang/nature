@@ -142,18 +142,19 @@ typedef struct {
  * Target district
  */
 typedef struct {
-    char *source;       // 文件内容
-    char *source_path;  // 文件完整路径(外面丢进来的)
-    char *source_dir;   // 文件所在目录,去掉 xxx.n
-    char *ident;        // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
-    char *rel_path;     // 从 root 计算出来的相对路径
+    char *source;     // 文件内容
+    char *source_path;// 文件完整路径(外面丢进来的)
+    char *source_dir; // 文件所在目录,去掉 xxx.n
+    char *ident;      // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
+    char *rel_path;   // 从 root 计算出来的相对路径
 
     // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
     char *package_dir;
     toml_table_t *package_conf;
 
     // parser/analyzer/checking/compiler 阶段的所有异常都写入到这里
-    slice_t *ct_errors;
+    slice_t *intercept_errors;
+    slice_t *errors;
 
     // bool entry; // 入口
     module_type_t type;

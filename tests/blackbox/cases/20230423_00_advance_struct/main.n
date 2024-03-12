@@ -1,0 +1,9 @@
+import 'mod.n' as *
+
+var foo = square {
+    length = 10,
+    width = 5
+}
+
+var area = foo.area()
+print('area=', area, '\n')

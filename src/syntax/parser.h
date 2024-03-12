@@ -40,7 +40,7 @@ static ast_expr_op_t token_to_ast_op[] = {
         [TOKEN_GREATER_EQUAL] = AST_OP_GE,
         [TOKEN_RIGHT_ANGLE] = AST_OP_GT,
         [TOKEN_LESS_EQUAL] = AST_OP_LE,
-        [TOKEN_LEFT_ANGLE] = AST_OP_LT,
+        [TOKEN_LESS_THAN] = AST_OP_LT,
         [TOKEN_AND_AND] = AST_OP_AND_AND,
         [TOKEN_OR_OR] = AST_OP_OR_OR,
         // 位运算

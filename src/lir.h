@@ -75,16 +75,16 @@
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
 
-#define RT_CALL_MAP_NEW "map_new"
-#define RT_CALL_MAP_ACCESS "map_access"
-#define RT_CALL_MAP_ASSIGN "map_assign"
-#define RT_CALL_MAP_LENGTH "map_length"
-#define RT_CALL_MAP_DELETE "map_delete"
+#define RT_CALL_MAP_NEW "rt_map_new"
+#define RT_CALL_MAP_ACCESS "rt_map_access"
+#define RT_CALL_MAP_ASSIGN "rt_map_assign"
+#define RT_CALL_MAP_LENGTH "rt_map_length"
+#define RT_CALL_MAP_DELETE "rt_map_delete"
 
-#define RT_CALL_SET_NEW "set_new"
-#define RT_CALL_SET_ADD "set_add"           // 往集合中添加元素
-#define RT_CALL_SET_CONTAINS "set_contains" // s.contain()
-#define RT_CALL_SET_DELETE "set_delete"     // 将元素从 set 中移除
+#define RT_CALL_SET_NEW "rt_set_new"
+#define RT_CALL_SET_ADD "rt_set_add"           // 往集合中添加元素
+#define RT_CALL_SET_CONTAINS "rt_set_contains" // s.contain()
+#define RT_CALL_SET_DELETE "rt_set_delete"     // 将元素从 set 中移除
 
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"
@@ -92,6 +92,7 @@
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
 #define RT_CALL_CPTR_CASTING "cptr_casting"
+#define RT_CALL_CASTING_TO_CPTR "casting_to_cptr"
 
 /**
  * 将 single 类型转换为 union 类型
