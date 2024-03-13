@@ -7,7 +7,7 @@ println('index of wo is ', index)
 index = strings.find(s, 'wow')
 println('index of wow is ', index)
 
-index = strings.find(s, 'wo', 7)
+index = strings.find_after(s, 'wo', 7)
 println('index after 7 of wo is ', index)
 
 

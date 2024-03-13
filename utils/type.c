@@ -489,6 +489,11 @@ uint16_t type_alignof(type_t t) {
     return type_sizeof(t);
 }
 
+/**
+ * ptr 自动机场
+ * @param t
+ * @return
+ */
 type_t type_ptrof(type_t t) {
     type_t result = {0};
     result.status = t.status;
@@ -500,6 +505,8 @@ type_t type_ptrof(type_t t) {
     result.line = t.line;
     result.column = t.column;
     result.in_heap = kind_in_heap(t.kind);
+    result.impl_ident = t.impl_ident;
+    result.impl_args = t.impl_args;
     return result;
 }
 

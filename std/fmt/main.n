@@ -69,30 +69,30 @@ fn sprintf(string fmt, ...[any] args):string {
         if c == ascii('d') {
             string s = ''
             if arg is int {
-                 s = itos(arg as int, fill, width)
+                 s = itos_with(arg as int, fill, width)
             }  else if arg is i8 {
-                 s = itos(arg as i8, fill, width)
+                 s = itos_with(arg as i8, fill, width)
             }  else if arg is i16 {
-                 s = itos(arg as i16, fill, width)
+                 s = itos_with(arg as i16, fill, width)
             } else if arg is i32 {
-                 s = itos(arg as i32, fill, width)
+                 s = itos_with(arg as i32, fill, width)
             } else if arg is i64 {
-                 s = itos(arg as i64, fill, width)
+                 s = itos_with(arg as i64, fill, width)
             } else if arg is uint {
-                 s = itos(arg as uint, fill, width)
+                 s = itos_with(arg as uint, fill, width)
             } else if arg is u8 {
-                 s = itos(arg as u8, fill, width)
+                 s = itos_with(arg as u8, fill, width)
             }  else if arg is u16 {
-                 s = itos(arg as u16, fill, width)
+                 s = itos_with(arg as u16, fill, width)
             } else if arg is u32 {
-                 s = itos(arg as u32, fill, width)
+                 s = itos_with(arg as u32, fill, width)
             } else if arg is u64 {
-                 s = itos(arg as u64, fill, width)
+                 s = itos_with(arg as u64, fill, width)
             }  else {
                  s = '%!d'
             }
 
-            for c in s { 
+            for c in s {
                 result.push(c)
             }
 

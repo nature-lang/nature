@@ -456,16 +456,13 @@ static void build_compiler(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
         pre_checking(modules->take[i]);
     }
-    for (int i = 0; i < modules->count; ++i) {
-        checking(modules->take[i]);
-    }
 
     // checking + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
         // 类型推断
-        post_checking(m);
+        checking(m);
 
         // 编译为 lir
         linear(m);

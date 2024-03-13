@@ -6,6 +6,7 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+static void infer_fndef(module_t *m, ast_fndef_t *fndef);
 
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     assert(type_fn);
@@ -302,28 +303,34 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
  */
 static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t *call, type_t return_target_type) {
     assert(tpl_fn->is_generics);
-    // 如果 call 已经给定了类型实参，则直接使用类型实参
+    if (tpl_fn->impl_type.kind > 0) {
+        // 类型扩展必定存在 generics
+        assert(call->generics_args);
+    }
 
     // 进行参数解析，可以顺便使用 type_compare 了！
     table_t *generics_args_table = table_new();
 
     if (call->generics_args == NULL) {
+        // 避免脏数据污染 tpl 导致后续的 copy 异常
+        ct_stack_t *stash_stack = m->infer_type_args_stack;
+        m->infer_type_args_stack = NULL;
+
         for (int i = 0; i < call->args->length; i++) {
             bool is_spread = call->spread && (i == call->args->length - 1);
 
             ast_expr_t *arg = ct_list_value(call->args, i);
-            type_t arg_type = checking_right_expr(m, arg, type_kind_new(TYPE_UNKNOWN));
+            type_t arg_type = infer_right_expr(m, arg, type_kind_new(TYPE_UNKNOWN));
 
             // 形参 type reduction
             type_t *formal_type = select_tpl_fn_param(tpl_fn, i, is_spread);
+            CHECKING_ASSERTF(formal_type, "too many arguments");
 
-            // 避免脏数据污染泛型推断
-            ct_stack_t *stash_stack = m->checking_type_args_stack;
-            m->checking_type_args_stack = NULL;
-            *formal_type = reduction_type(m, *formal_type);
-            m->checking_type_args_stack = stash_stack;
+            // copy 出来专用于 infer, 避免对 tpl 造成污染(tpl.status = done, 会导致后续的 copy 异常)
+            type_t temp_type = type_copy(m, *formal_type);
+            temp_type = reduction_type(m, temp_type);
 
-            bool compare = type_compare(*formal_type, arg_type, generics_args_table);
+            bool compare = type_compare(temp_type, arg_type, generics_args_table);
             CHECKING_ASSERTF(compare, "cannot infer generics type")
         }
 
@@ -332,9 +339,9 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             return_target_type.kind != TYPE_VOID &&
             return_target_type.kind != TYPE_UNION &&
             return_target_type.in_heap != TYPE_NULL) {
-
-            return_target_type = reduction_type(m, return_target_type);
-            bool compare = type_compare(tpl_fn->return_type, return_target_type, generics_args_table);
+            type_t temp_type = type_copy(m, tpl_fn->return_type);
+            temp_type = reduction_type(m, temp_type);
+            bool compare = type_compare(temp_type, return_target_type, generics_args_table);
             CHECKING_ASSERTF(compare, "cannot infer generics type")
         }
 
@@ -343,6 +350,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
             CHECKING_ASSERTF(table_exist(generics_args_table, param->literal), "cannot infer generics param '%s'", param->literal);
         }
+        m->infer_type_args_stack = stash_stack;
     } else {
         // 按顺序生成 param
         for (int i = 0; i < call->generics_args->length; i++) {
@@ -567,8 +575,8 @@ static bool type_confirmed(type_t t) {
  */
 static type_t checking_binary(module_t *m, ast_binary_expr_t *expr) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    type_t left_type = checking_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
-    type_t right_type = checking_right_expr(m, &expr->right, left_type);
+    type_t left_type = infer_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
+    type_t right_type = infer_right_expr(m, &expr->right, left_type);
 
     // 目前 binary 的两侧符号只支持 int 和 float
     if (is_number(left_type.kind)) {
@@ -651,7 +659,7 @@ static type_t checking_as_expr(module_t *m, ast_expr_t *expr) {
     as_expr->target_type = target_type;
 
     // 此处进行了类型的约束
-    type_t src_type = checking_expr(m, &as_expr->src, target_type);
+    type_t src_type = infer_expr(m, &as_expr->src, target_type);
     as_expr->src.type = src_type;
 
     // 如果此时 src type 和 dst type 一致，则直接跳过，不做任何报错
@@ -723,7 +731,7 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
         ct_list_push(new_expr->properties, d);
     }
 
-    return type_ptrof(new_expr->type);
+    return reduction_type(m, type_ptrof(new_expr->type));
 }
 
 
@@ -739,13 +747,12 @@ static type_t checking_go(module_t *m, ast_go_t *go) {
 }
 
 static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
-    type_t t = checking_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
 
     type_t errort = type_new(TYPE_ALIAS, NULL);
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.origin_ident = ERRORT_TYPE_ALIAS;
-    errort.impl_ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     catch_expr->catch_err.type = errort;
@@ -760,7 +767,7 @@ static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
 }
 
 static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = checking_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
     CHECKING_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR, "only any/union/nptr<t> type can use 'is' keyword");
     return type_kind_new(TYPE_BOOL);
@@ -784,10 +791,10 @@ static type_t checking_reflect_hash_expr(module_t *m, ast_reflect_hash_expr_t *r
 static type_t checking_unary(module_t *m, ast_unary_expr_t *expr) {
     if (expr->operator== AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
-        return checking_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
+        return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
-    type_t type = checking_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
+    type_t type = infer_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
     if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
         CHECKING_ASSERTF(false, "neg operand must applies to int or float type");
@@ -857,6 +864,7 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
 
         // 严格限定类型为 array
         type_t result = type_kind_new(TYPE_ARR);
+        result.status = REDUCTION_STATUS_UNDO;
         type_array_t *type_array = NEW(type_array_t);
 
         type_array->element_type = target_type.array->element_type;
@@ -869,13 +877,14 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
 
         for (int i = 0; i < ast->elements->length; ++i) {
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
-            checking_right_expr(m, item_expr, type_array->element_type);
+            infer_right_expr(m, item_expr, type_array->element_type);
         }
 
-        return result;
+        return reduction_type(m, result);
     }
 
     type_t result = type_kind_new(TYPE_VEC);
+    result.status = REDUCTION_STATUS_UNDO;
     type_vec_t *type_vec = NEW(type_vec_t);
 
     // 初始化时类型未知
@@ -890,25 +899,21 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
     result.vec = type_vec;
     if (ast->elements->length == 0) {
         CHECKING_ASSERTF(type_confirmed(type_vec->element_type), "list element type not confirm");
-        return result;
+        return reduction_type(m, result);
     }
 
     // target 类型不确定时，则按 list 首个元素类型进行推导
     if (type_vec->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(ast->elements, 0);
-        type_vec->element_type = checking_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
+        type_vec->element_type = infer_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < ast->elements->length; ++i) {
         ast_expr_t *item_expr = ct_list_value(ast->elements, i);
-        checking_right_expr(m, item_expr, type_vec->element_type);
+        infer_right_expr(m, item_expr, type_vec->element_type);
     }
 
-    result.impl_ident = type_kind_str[TYPE_VEC];
-    result.impl_args = ct_list_new(sizeof(type_t));
-    ct_list_push(result.impl_args, &type_vec->element_type);
-
-    return result;
+    return reduction_type(m, result);
 }
 
 static type_t checking_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -932,6 +937,7 @@ static type_t checking_empty_curly_new(module_t *m, ast_expr_t *expr, type_t tar
  */
 static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type) {
     type_t result = type_kind_new(TYPE_MAP);
+    result.status = REDUCTION_STATUS_UNDO;
 
     type_map_t *type_map = NEW(type_map_t);
     type_map->key_type = type_kind_new(TYPE_UNKNOWN);
@@ -946,28 +952,23 @@ static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t targe
     if (map_new->elements->length == 0) {
         CHECKING_ASSERTF(type_confirmed(type_map->key_type), "map key type not confirm");
         CHECKING_ASSERTF(type_confirmed(type_map->value_type), "map value type not confirm");
-        return result;
+        return reduction_type(m, result);
     }
 
     // 基于首个元素进行类型推断
     if (type_map->key_type.kind == TYPE_UNKNOWN) {
         ast_map_element_t *item = ct_list_value(map_new->elements, 0);
-        type_map->key_type = checking_right_expr(m, &item->key, type_kind_new(TYPE_UNKNOWN));
-        type_map->value_type = checking_right_expr(m, &item->value, type_kind_new(TYPE_UNKNOWN));
+        type_map->key_type = infer_right_expr(m, &item->key, type_kind_new(TYPE_UNKNOWN));
+        type_map->value_type = infer_right_expr(m, &item->value, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < map_new->elements->length; ++i) {
         ast_map_element_t *item = ct_list_value(map_new->elements, i);
-        checking_right_expr(m, &item->key, type_map->key_type);
-        checking_right_expr(m, &item->value, type_map->value_type);
+        infer_right_expr(m, &item->key, type_map->key_type);
+        infer_right_expr(m, &item->value, type_map->value_type);
     }
 
-    result.impl_ident = type_kind_str[TYPE_MAP];
-    result.impl_args = ct_list_new(sizeof(type_t));
-    ct_list_push(result.impl_args, &type_map->key_type);
-    ct_list_push(result.impl_args, &type_map->value_type);
-
-    return result;
+    return reduction_type(m, result);
 }
 
 /**
@@ -977,6 +978,7 @@ static type_t checking_map_new(module_t *m, ast_map_new_t *map_new, type_t targe
  */
 static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t target_type) {
     type_t result = type_kind_new(TYPE_SET);
+    result.status = REDUCTION_STATUS_UNDO;
 
     type_set_t *type_set = NEW(type_set_t);
     type_set->element_type = type_kind_new(TYPE_UNKNOWN);
@@ -989,51 +991,20 @@ static type_t checking_set_new(module_t *m, ast_set_new_t *set_new, type_t targe
     result.set = type_set;
     if (set_new->elements->length == 0) {
         CHECKING_ASSERTF(type_confirmed(type_set->element_type), "set element type not confirm");
-        return result;
+        return reduction_type(m, result);
     }
     // target 类型不确定则按首个元素类型进行推导
     if (type_set->element_type.kind == TYPE_UNKNOWN) {
         ast_expr_t *item_expr = ct_list_value(set_new->elements, 0);
-        type_set->element_type = checking_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
+        type_set->element_type = infer_right_expr(m, item_expr, type_kind_new(TYPE_UNKNOWN));
     }
 
     for (int i = 0; i < set_new->elements->length; ++i) {
         ast_expr_t *expr = ct_list_value(set_new->elements, i);
-        checking_right_expr(m, expr, type_set->element_type);
+        infer_right_expr(m, expr, type_set->element_type);
     }
 
-    result.impl_ident = type_kind_str[TYPE_SET];
-    result.impl_args = ct_list_new(sizeof(type_t));
-    ct_list_push(result.impl_args, &type_set->element_type);
-
-    return result;
-}
-
-static type_t checking_vec_struct_new(module_t *m, ast_expr_t *expr) {
-    // 返回的类型是 type_vec
-    ast_struct_new_t *ast = expr->value;
-    assert(ast->type.kind == TYPE_VEC);
-
-    ast_vec_new_t *vec = NEW(ast_vec_new_t);
-
-    for (int i = 0; i < ast->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(ast->properties, i);
-
-        if (str_equal(p->key, VEC_LENGTH_KEY)) {
-            vec->len = p->right;
-            checking_right_expr(m, vec->len, type_kind_new(TYPE_INT));
-        } else if (str_equal(p->key, VEC_CAPACITY_KEY)) {
-            vec->cap = p->right;
-            checking_right_expr(m, vec->cap, type_kind_new(TYPE_INT));
-        } else {
-            CHECKING_ASSERTF(false, "vec exclude property %s", p->key);
-        }
-    }
-
-    expr->assert_type = AST_EXPR_VEC_NEW;
-    expr->value = vec;
-
-    return ast->type;
+    return reduction_type(m, result);
 }
 
 /**
@@ -1062,7 +1033,6 @@ static type_t checking_struct_new(module_t *m, ast_expr_t *expr) {
     // 对类型进行了实例化 alias<int> -> struct{int}
     ast->type = reduction_type(m, ast->type);
 
-
     CHECKING_ASSERTF(ast->type.kind == TYPE_STRUCT, "ident '%s' not struct, cannot struct new", ast->type.origin_ident);
 
     type_struct_t *type_struct = ast->type.struct_;
@@ -1078,7 +1048,7 @@ static type_t checking_struct_new(module_t *m, ast_expr_t *expr) {
         table_set(exists, struct_property->key, struct_property);
 
         // struct_decl 已经是被还原过的类型了
-        checking_right_expr(m, struct_property->right, expect_property->type);
+        infer_right_expr(m, struct_property->right, expect_property->type);
 
         // type 冗余,方便计算 size (不能用来计算 offset)
         struct_property->type = expect_property->type;
@@ -1113,7 +1083,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
         type_map_t *type_map = left_type.map;
 
         // 基于 map 编译 key
-        checking_right_expr(m, &access->key, type_map->key_type);
+        infer_right_expr(m, &access->key, type_map->key_type);
 
         // 参数改写(这里照抄就行了)
         map_access->left = access->left;
@@ -1130,7 +1100,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_VEC || left_type.kind == TYPE_STRING) {
-        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
+        type_t key_type = infer_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         // ast_access -> ast_list_access
         ast_vec_access_t *list_access = NEW(ast_vec_access_t);
@@ -1152,7 +1122,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_ARR) {
-        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
+        type_t key_type = infer_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         ast_array_access_t *array_access = NEW(ast_array_access_t);
 
@@ -1167,7 +1137,7 @@ static type_t checking_access(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_TUPLE) {
-        type_t key_type = checking_right_expr(m, &access->key, type_kind_new(TYPE_INT));
+        type_t key_type = infer_right_expr(m, &access->key, type_kind_new(TYPE_INT));
 
         CHECKING_ASSERTF(access->key.assert_type = AST_EXPR_LITERAL, "tuple index field type must immediate value");
 
@@ -1288,33 +1258,9 @@ static type_t checking_string_select(module_t *m, ast_expr_t *expr) {
 static type_t checking_select(module_t *m, ast_expr_t *expr) {
     ast_select_t *select = expr->value;
 
-    checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+    infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-    // if left is list -> xxx() // TODO 用不上了
-    //    if (select->left.type.kind == TYPE_VEC) {
-    //        return checking_vec_select(m, expr);
-    //    }
-
-//    if (select->left.type.kind == TYPE_MAP) {
-//        return checking_map_select(m, expr);
-//    }
-
-    if (select->left.type.kind == TYPE_STRING) {
-        return checking_string_select(m, expr);
-    }
-
-    // self.foo 这里是通过 self 访问属性，类似与 self.foo() 中的处理 // TODO self 没有了
-    if (select->left.type.kind == TYPE_SELF) {
-        ast_fndef_t *current = m->current_fn;
-        CHECKING_ASSERTF(current->self_struct_ptr, "use 'self' in struct outside");
-
-        // 初始化 current->self_struct_ptr 的时候就已经 reduction 完成了
-        assert(current->self_struct_ptr->status == REDUCTION_STATUS_DONE && current->self_struct_ptr->kind == TYPE_PTR);
-
-        // 当前 select 必定在 fn body 中，而处理 fn body 之前， fn.self_struct 在处理 body 之前已经进行了还原
-        select->left.type = *current->self_struct_ptr;
-    }
-
+    // checking 自动解引用
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
     if (left_type.kind == TYPE_PTR) {
@@ -1390,7 +1336,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         CHECKING_ASSERTF(call->args->length == 1, "list push param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
 
-        checking_right_expr(m, expr, type_vec->element_type);
+        infer_right_expr(m, expr, type_vec->element_type);
 
         // 参数核验完成，对整个 call 进行改写, 改写成 list_push(l, value_ref)
         // 参数重写
@@ -1415,8 +1361,8 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ast_expr_t *first_arg = ct_list_value(call->args, 0);
         ast_expr_t *second_arg = ct_list_value(call->args, 1);
         call->args = ct_list_new(sizeof(ast_expr_t));
-        checking_right_expr(m, first_arg, type_kind_new(TYPE_INT));
-        checking_right_expr(m, second_arg, type_kind_new(TYPE_INT));
+        infer_right_expr(m, first_arg, type_kind_new(TYPE_INT));
+        infer_right_expr(m, second_arg, type_kind_new(TYPE_INT));
 
         // 由于会产生新的 list, 所以需要把 rtype_hash 丢进去
         uint64_t rtype_hash = ct_find_rtype_hash(s->left.type);
@@ -1437,7 +1383,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ast_expr_t *first_arg = ct_list_value(call->args, 0);
         call->args = ct_list_new(sizeof(ast_expr_t));
 
-        checking_right_expr(m, first_arg, s->left.type);
+        infer_right_expr(m, first_arg, s->left.type);
         uint64_t rtype_hash = ct_find_rtype_hash(s->left.type);
         ct_list_push(call->args, ast_int_expr(first_arg->line, first_arg->column, rtype_hash));
         ct_list_push(call->args, &s->left);// list operand
@@ -1478,7 +1424,7 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
     if (str_equal(s->key, MAP_DELETE_KEY)) {
         CHECKING_ASSERTF(call->args->length == 1, "map.delete param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
-        checking_right_expr(m, expr, map_type->key_type);
+        infer_right_expr(m, expr, map_type->key_type);
 
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);
@@ -1501,7 +1447,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     if (str_equal(s->key, SET_DELETE_KEY)) {
         CHECKING_ASSERTF(call->args->length == 1, "set.delete param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
-        checking_right_expr(m, expr, set_type->element_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);
@@ -1517,7 +1463,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     if (str_equal(s->key, SET_ADD_KEY)) {
         CHECKING_ASSERTF(call->args->length == 1, "set.add param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
-        checking_right_expr(m, expr, set_type->element_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         // s = left.key() 这里到 left 才是目标即可
         call->args = ct_list_new(sizeof(ast_expr_t));
@@ -1534,7 +1480,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
     if (str_equal(s->key, SET_CONTAINS_KEY)) {
         CHECKING_ASSERTF(call->args->length == 1, "set.contains param failed");
         ast_expr_t *expr = ct_list_value(call->args, 0);
-        checking_right_expr(m, expr, set_type->element_type);
+        infer_right_expr(m, expr, set_type->element_type);
 
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);
@@ -1563,14 +1509,9 @@ static void checking_call_args(module_t *m, ast_call_t *call, type_fn_t *target_
         // first param from formal
         type_t *formal_type = select_fn_param(target_type_fn, i, is_spread);
 
-        if (i == 0 && formal_type->kind == TYPE_SELF) {
-            // select first param 是 checking 自己伪造的，所以这里不需要在进行校验了
-            continue;
-        }
-
         ast_expr_t *arg = ct_list_value(call->args, i);
 
-        checking_right_expr(m, arg, *formal_type);
+        infer_right_expr(m, arg, *formal_type);
     }
 }
 
@@ -1636,6 +1577,61 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
     return type_fn->return_type;
 }
 
+static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t target_type, ast_fndef_t *tpl_fn) {
+    assert(!tpl_fn->is_local);
+    assert(tpl_fn->is_generics);
+
+    // 首次初始化
+    if (tpl_fn->generics_hash_table == NULL) {
+        tpl_fn->generics_hash_table = table_new();
+    }
+    if (tpl_fn->generics_special_fns == NULL) {
+        tpl_fn->generics_special_fns = slice_new();
+    }
+
+    table_t *args_table = infer_generics_args(m, tpl_fn, call, target_type);
+    char *args_hash = generics_args_hash(tpl_fn, args_table);
+    ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
+    if (special_fn) {
+        return special_fn;
+    }
+
+    // local_children 关系也已经重新构建, analyzer_global 用于辅助 local_children 重建
+    m->analyzer_global = NULL;
+    special_fn = ast_fndef_copy(m, tpl_fn);
+    special_fn->impl_type = tpl_fn->impl_type;
+
+    // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理
+    table_set(tpl_fn->generics_hash_table, args_hash, special_fn);
+    slice_push(tpl_fn->generics_special_fns, special_fn);
+
+    special_fn->generics_args_hash = args_hash;
+    special_fn->generics_args_table = args_table;
+
+    // rewrite special fn
+    special_fn->symbol_name = str_connect_by(special_fn->symbol_name, special_fn->generics_args_hash, GEN_REWRITE_SEPARATOR);
+
+    // 注册到全局符号表(还未基于 args_hash checking + reduction)
+    assert(!special_fn->is_local);
+    symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
+    special_fn->type.status = REDUCTION_STATUS_UNDO;
+
+    // 基于 args_table 进行类型特化，包含 special_fn 和 child
+    stack_push(m->infer_type_args_stack, special_fn->generics_args_table);
+    infer_fn_decl(m, special_fn);
+    linked_push(m->infer_worklist, special_fn);
+
+    for (int k = 0; k < special_fn->local_children->count; ++k) {
+        ast_fndef_t *child = tpl_fn->local_children->take[k];
+        rewrite_local_fndef(m, child);
+        infer_fn_decl(m, child);
+    }
+
+    stack_pop(m->infer_type_args_stack);
+
+    return special_fn;
+}
+
 /**
  * self.foo()
  * 由于重载的存在，对参数的 compare 变成了基于 type 的 search 的过程
@@ -1651,11 +1647,10 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
         ast_select_t *select = call->left.value;
 
         // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-        type_t select_left_type = checking_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+        type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
         // 基于 left 进行拼装定位改写
         char *impl_ident = select_left_type.impl_ident;
-
         char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
 
         // 查找对应的 fn
@@ -1663,9 +1658,16 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
         if (s != NULL) {
             call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
-            // 重写 args
             list_t *args = ct_list_new(sizeof(ast_expr_t));
-            ct_list_push(args, &select->left);
+
+            // struct to ptr
+            ast_expr_t *self_arg = &select->left;
+            if (self_arg->type.kind == TYPE_STRUCT) {
+                self_arg = ast_unary(self_arg, AST_OP_LA);
+            }
+
+            ct_list_push(args, self_arg);
+
             for (int i = 0; i < call->args->length; ++i) {
                 ct_list_push(args, ct_list_value(call->args, i));
             }
@@ -1694,48 +1696,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
                 break;
             }
 
-            assert(!tpl_fn->is_local);
-
-            // 首次初始化
-            if (tpl_fn->generics_hash_table == NULL) {
-                tpl_fn->generics_hash_table = table_new();
-            }
-            if (tpl_fn->generics_special_fns == NULL) {
-                tpl_fn->generics_special_fns = slice_new();
-            }
-
-            // TODO type 已经确定了类型？！call<xxx>, 左侧值匹配匹配？impl_type 怎么匹配？ call 匹配！对，call 匹配！
-
-            // 泛型特化
-            table_t *args_table = infer_generics_args(m, tpl_fn, call, target_type);
-            char *args_hash = generics_args_hash(tpl_fn, args_table);
-            ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
-            if (special_fn == NULL) {
-                // local_children 关系也已经重新构建
-                m->analyzer_global = NULL;
-                special_fn = ast_fndef_copy(m, tpl_fn);
-
-                // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理
-                table_set(tpl_fn->generics_hash_table, args_hash, special_fn);
-                slice_push(tpl_fn->generics_special_fns, special_fn);
-
-                special_fn->generics_args_hash = args_hash;
-                special_fn->generics_args_table = args_table;
-
-                // rewrite special fn
-                special_fn->symbol_name = str_connect_by(special_fn->symbol_name, special_fn->generics_args_hash, GEN_REWRITE_SEPARATOR);
-
-                // 注册到全局符号表(还未基于 args_hash checking + reduction)
-                assert(!special_fn->is_local);
-                symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
-                special_fn->type.status = REDUCTION_STATUS_UNDO;
-
-                // 基于 args_table 进行 fn->type 泛型初始化
-                stack_push(m->checking_type_args_stack, args_table);
-                infer_fn_decl(m, special_fn);
-                stack_pop(m->checking_type_args_stack);
-            }
-
+            ast_fndef_t *special_fn = generic_special_fn(m, call, target_type, tpl_fn);
             assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
             // call ident 重写
@@ -1769,14 +1730,13 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
  * @return
  */
 static type_t checking_try(module_t *m, ast_try_t *try) {
-    type_t return_type = checking_right_expr(m, &try->expr, type_kind_new(TYPE_UNKNOWN));
+    type_t return_type = infer_right_expr(m, &try->expr, type_kind_new(TYPE_UNKNOWN));
 
     // 当表达式没有返回值时进行特殊处理
     type_t errort = type_new(TYPE_ALIAS, NULL);
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.origin_ident = ERRORT_TYPE_ALIAS;
-    errort.impl_ident = ERRORT_TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     if (return_type.kind == TYPE_VOID) {
@@ -1825,7 +1785,7 @@ static void checking_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
     rewrite_var_decl(m, &stmt->var_decl);
 
-    type_t right_type = checking_right_expr(m, &stmt->right, stmt->var_decl.type);
+    type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
 
     // 需要进行类型推断
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
@@ -1838,7 +1798,7 @@ static void checking_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
 
 static void checking_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
-    type_t right_type = checking_right_expr(m, &stmt->right, stmt->var_decl.type);
+    type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
 
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
         CHECKING_ASSERTF(type_confirmed(right_type), "type checkingence error, right type not confirmed");
@@ -1853,18 +1813,18 @@ static void checking_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
  */
 static void checking_assign(module_t *m, ast_assign_stmt_t *stmt) {
     type_t left_type = checking_left_expr(m, &stmt->left);
-    checking_right_expr(m, &stmt->right, left_type);
+    infer_right_expr(m, &stmt->right, left_type);
 }
 
 static void checking_if(module_t *m, ast_if_stmt_t *stmt) {
-    checking_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
+    infer_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
     checking_body(m, stmt->consequent);
     checking_body(m, stmt->alternate);
 }
 
 static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
-    checking_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
+    infer_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
     type_t t = type_kind_new(TYPE_VOID);
     stack_push(m->current_fn->continue_target_types, &t);
@@ -1878,7 +1838,7 @@ static void checking_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
  */
 static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 checking_right_expr 的类型一定是已经被还原过的
-    type_t iterate_type = checking_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
+    type_t iterate_type = infer_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING,
                      "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
 
@@ -1934,7 +1894,7 @@ static void checking_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
 
 static void checking_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     checking_stmt(m, stmt->init);
-    checking_right_expr(m, &stmt->cond, type_kind_new(TYPE_BOOL));
+    infer_right_expr(m, &stmt->cond, type_kind_new(TYPE_BOOL));
     checking_stmt(m, stmt->update);
 
     type_t t = type_kind_new(TYPE_VOID);
@@ -1959,7 +1919,7 @@ static void checking_type_alias_stmt(module_t *m, ast_type_alias_stmt_t *stmt) {
 static void checking_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->current_fn->return_type;
     if (stmt->expr != NULL) {
-        checking_right_expr(m, stmt->expr, expect_type);
+        infer_right_expr(m, stmt->expr, expect_type);
     } else {
         CHECKING_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_format(expect_type));
     }
@@ -1969,7 +1929,7 @@ static void checking_continue(module_t *m, ast_continue_t *stmt) {
     type_t *expect_type = stack_top(m->current_fn->continue_target_types);
     assert(expect_type);
     if (stmt->expr != NULL) {
-        checking_right_expr(m, stmt->expr, *expect_type);
+        infer_right_expr(m, stmt->expr, *expect_type);
     } else {
         CHECKING_ASSERTF(expect_type->kind == TYPE_VOID, "continue cannot with expr");
     }
@@ -1987,7 +1947,7 @@ static type_t checking_env_access(module_t *m, ast_env_access_t *expr) {
 }
 
 static void checking_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
-    checking_right_expr(m, &throw_stmt->error, type_kind_new(TYPE_STRING));
+    infer_right_expr(m, &throw_stmt->error, type_kind_new(TYPE_STRING));
 }
 
 /**
@@ -2043,7 +2003,7 @@ static void checking_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type
 
 static void checking_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     // tuple 目前仅支持 var 形式的声明，所以此处和类型推导的形式一致
-    type_t t = checking_right_expr(m, &stmt->right, type_kind_new(TYPE_UNKNOWN));
+    type_t t = infer_right_expr(m, &stmt->right, type_kind_new(TYPE_UNKNOWN));
 
     CHECKING_ASSERTF(t.kind == TYPE_TUPLE, "cannot assign type '%s' to tuple", type_format(t));
 
@@ -2069,7 +2029,7 @@ static type_t checking_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t
         }
 
         ast_expr_t *expr = ct_list_value(tuple_new->elements, i);
-        type_t expr_type = checking_right_expr(m, expr, element_target_type);
+        type_t expr_type = infer_right_expr(m, expr, element_target_type);
 
         CHECKING_ASSERTF(type_confirmed(expr_type), "tuple element type type cannot confirmed");
 
@@ -2189,7 +2149,7 @@ static type_t checking_left_expr(module_t *m, ast_expr_t *expr) {
  * 通过 target_type 对进行约束，但是不会强制进行比较
  * @return
  */
-static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     SET_LINE_COLUMN(expr);
     if (expr->type.kind > 0) {
         return expr->type;
@@ -2281,19 +2241,18 @@ static type_t checking_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
  * @param expr
  * @return
  */
-static type_t checking_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     SET_LINE_COLUMN(expr);
 
-    // 表达式已经 checking 过了就不要重复 checking 了
-    if (expr->type.kind > 0) {
-        return expr->type;
+    // 避免重复 reduction
+    if (expr->type.kind == 0) {
+        type_t type = infer_expr(m, expr, target_type);
+
+        target_type = reduction_type(m, target_type);
+        expr->type = reduction_type(m, type);
+        expr->target_type = target_type;
     }
 
-    type_t type = checking_expr(m, expr, target_type);
-
-    target_type = reduction_type(m, target_type);
-    expr->type = reduction_type(m, type);
-    expr->target_type = target_type;
 
     // TYPE_UNKNOWN 表示需要进行类型推断，此时什么都不做，交给调用者进行判断
     if (target_type.kind == TYPE_UNKNOWN) {
@@ -2340,7 +2299,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
         // 包含默认值
         if (p->right) {
             // 推断右值表达式类型(默认值推导)
-            type_t right_type = checking_right_expr(m, p->right, p->type);
+            type_t right_type = infer_right_expr(m, p->right, p->type);
 
             if (p->type.kind == TYPE_UNKNOWN) {
                 CHECKING_ASSERTF(type_confirmed(right_type), "struct property=%s type cannot confirmed", p->key);
@@ -2381,6 +2340,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_PTR || t.kind == TYPE_NPTR) {
         type_pointer_t *type_pointer = t.pointer;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
+        t.impl_ident = type_pointer->value_type.impl_ident;
+        t.impl_args = type_pointer->value_type.impl_args;
         return t;
     }
 
@@ -2394,6 +2355,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         type_vec_t *type_vec = t.vec;
         type_vec->element_type = reduction_type(m, type_vec->element_type);
 
+        t.impl_ident = type_kind_str[TYPE_VEC];
         t.impl_args = ct_list_new(sizeof(type_t));
         ct_list_push(t.impl_args, &type_vec->element_type);
 
@@ -2404,9 +2366,10 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
 
-        CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T,
+        CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
                          "map key only support number/string");
 
+        t.impl_ident = type_kind_str[TYPE_MAP];
         t.impl_args = ct_list_new(sizeof(type_t));
         ct_list_push(t.impl_args, &t.map->key_type);
         ct_list_push(t.impl_args, &t.map->value_type);
@@ -2416,9 +2379,10 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
-        CHECKING_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T,
+        CHECKING_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING || t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
                          "set element only support number/string");
 
+        t.impl_ident = type_kind_str[TYPE_SET];
         t.impl_args = ct_list_new(sizeof(type_t));
         ct_list_push(t.impl_args, &t.set->element_type);
 
@@ -2441,7 +2405,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return t;
     }
 
-    // self 就 self 了,这里就不动 self 了,定义动时候也需要定义成 self!
     // 不能随便动名字
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
@@ -2506,6 +2469,9 @@ static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
 static type_t reduction_type_alias(module_t *m, type_t t) {
     type_alias_t *alias = t.alias;
 
+    char *impl_ident = alias->ident;
+    list_t *impl_args = NULL;
+
     symbol_t *symbol = symbol_table_get(alias->ident);
     CHECKING_ASSERTF(symbol, "type alias '%s' not found", alias->ident);
     CHECKING_ASSERTF(symbol->type == SYMBOL_TYPE_ALIAS, "'%s' is not a type", symbol->ident);
@@ -2521,22 +2487,22 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         // 实参注册
-        if (m->checking_type_args_stack) {
+        if (m->infer_type_args_stack) {
             table_t *args_table = table_new();
-            t.impl_args = ct_list_new(sizeof(type_t));
+            impl_args = ct_list_new(sizeof(type_t));
 
             for (int i = 0; i < t.alias->args->length; ++i) {
                 type_t *arg = ct_list_value(t.alias->args, i);
                 *arg = reduction_type(m, *arg);
 
-                ct_list_push(t.impl_args, arg);
+                ct_list_push(impl_args, arg);
 
                 ast_ident *param = ct_list_value(type_alias_stmt->params, i);
                 table_set(args_table, param->literal, arg);
             }
 
             // arg_table 也保存一份在 type 中
-            stack_push(m->checking_type_args_stack, args_table);
+            stack_push(m->infer_type_args_stack, args_table);
         }
 
         // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
@@ -2547,10 +2513,12 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
         // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
         alias_value_type = reduction_type(m, alias_value_type);
 
-        if (m->checking_type_args_stack) {
-            stack_pop(m->checking_type_args_stack);
+        if (m->infer_type_args_stack) {
+            stack_pop(m->infer_type_args_stack);
         }
 
+        alias_value_type.impl_ident = impl_ident;
+        alias_value_type.impl_args = impl_args;
         return alias_value_type;
     }
 
@@ -2567,6 +2535,8 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
     type_alias_stmt->type.status = REDUCTION_STATUS_DOING;// 打上正在进行的标记,避免进入死循环
     type_alias_stmt->type = reduction_type(m, type_alias_stmt->type);
+    type_alias_stmt->type.impl_ident = impl_ident;
+    type_alias_stmt->type.impl_args = impl_args;
 
     return type_alias_stmt->type;
 }
@@ -2590,15 +2560,8 @@ static type_t reduction_type(module_t *m, type_t t) {
     assert(t.kind > 0);
 
     char *origin_ident = t.origin_ident;
-    char *impl_ident = t.impl_ident;
 
     if (t.kind == TYPE_UNKNOWN) {
-        return t;
-    }
-
-    if (t.kind == TYPE_SELF) {
-        t.status = REDUCTION_STATUS_DONE;
-        t.in_heap = true;
         return t;
     }
 
@@ -2613,11 +2576,11 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     if (t.kind == TYPE_PARAM) {
-        if (!m->checking_type_args_stack) {
-            return t;
+        if (!m->infer_type_args_stack) {
+            goto STATUS_DONE;
         }
 
-        table_t *arg_table = stack_top(m->checking_type_args_stack);
+        table_t *arg_table = stack_top(m->infer_type_args_stack);
         assert(arg_table);
         t = type_param_special(m, t, arg_table);
         goto STATUS_DONE;
@@ -2630,6 +2593,8 @@ static type_t reduction_type(module_t *m, type_t t) {
 
     // 只有 typedef ident 才有中间状态的说法
     if (is_origin_type(t)) {
+        t.status = REDUCTION_STATUS_DONE;
+        t.impl_ident = type_kind_str[t.kind];
         goto STATUS_DONE;
     }
 
@@ -2644,7 +2609,6 @@ STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_ident;// reduction dump error ident
-    t.impl_ident = impl_ident;    // type impl
     if (t.kind == TYPE_INT || t.kind == TYPE_UINT || t.kind == TYPE_FLOAT) {
         t.kind = cross_kind_trans(t.kind);
     }
@@ -2661,8 +2625,6 @@ STATUS_DONE:
  * @param fndef
  */
 static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
-    assert(!fndef->is_generics);
-
     if (fndef->type.status == REDUCTION_STATUS_DONE) {
         return fndef->type;
     }
@@ -2674,11 +2636,19 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->tpl = fndef->is_tpl;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
+
     fndef->return_type = f->return_type;
 
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *param = ct_list_value(fndef->params, i);
+
         param->type = reduction_type(m, param->type);
+
+        if (fndef->impl_type.kind > 0 && i == 0 && param->type.kind == TYPE_STRUCT) {
+            // struct to ptr
+            param->type = type_ptrof(param->type);
+        }
+
         ct_list_push(f->param_types, &param->type);
     }
 
@@ -2751,6 +2721,7 @@ void pre_checking(module_t *m) {
 
         assert(!fn->is_local);
 
+        // generics fn 不能 reduction, 会导致后续 special fn copy 异常
         if (fn->is_generics) {
             continue;
         }
@@ -2765,66 +2736,14 @@ void pre_checking(module_t *m) {
     }
 }
 
-void post_checking(module_t *m) {
-    // 平铺处理，以及泛型 checking 处理
-    slice_t *fndefs = slice_new();
-    for (int i = 0; i < m->ast_fndefs->count; ++i) {
-        ast_fndef_t *tpl_fn = m->ast_fndefs->take[i];
-
-        if (!tpl_fn->is_generics) {
-            slice_push(fndefs, tpl_fn);
-            for (int j = 0; j < tpl_fn->local_children->count; ++j) {
-                slice_push(fndefs, tpl_fn->local_children->take[j]);
-            }
-
-            continue;
-        }
-
-
-        if (tpl_fn->generics_special_fns == NULL) {
-            continue;
-        }
-
-        for (int j = 0; j < tpl_fn->generics_special_fns->count; ++j) {
-            // 泛型特化 checking
-            ast_fndef_t *special_fn = tpl_fn->generics_special_fns->take[j];
-            assert(special_fn->generics_args_hash);
-            assert(special_fn->generics_args_table);
-            slice_push(fndefs, special_fn);
-
-            // rewrite_fndef
-            for (int k = 0; k < special_fn->local_children->count; ++k) {
-                // special copy 的时候，child 也顺便 copy 完成了
-                ast_fndef_t *child = tpl_fn->local_children->take[k];
-                // rewrite 主要是继承 generics_args_hash 给到 child, 并重写了 child 的 symbol name 并注册到符号表
-                rewrite_local_fndef(m, child);
-
-                slice_push(fndefs, child);
-            }
-
-            // infer
-            stack_push(m->checking_type_args_stack, special_fn->generics_args_table);
-            infer_fndef(m, special_fn);
-
-            for (int k = 0; k < special_fn->local_children->count; ++k) {
-                ast_fndef_t *child = special_fn->local_children->take[k];
-
-                infer_fndef(m, child);
-            }
-
-            stack_pop(m->checking_type_args_stack);
-        }
-    }
-
-    m->ast_fndefs = fndefs;
-}
-
 void checking(module_t *m) {
     m->current_fn = NULL;
     m->current_line = 0;
     m->current_column = 0;
-    m->checking_type_args_stack = stack_new();
+    m->infer_type_args_stack = stack_new();
+    m->infer_worklist = linked_new();
 
+    // checking_worklist
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fn = m->ast_fndefs->take[i];
@@ -2832,12 +2751,34 @@ void checking(module_t *m) {
             continue;
         }
 
+        // 已经进行了 pre checking 了
         assert(fn->type.kind == TYPE_FN);
 
+        linked_push(m->infer_worklist, fn);
+    }
+
+    m->ast_fndefs = slice_new();
+
+    // 开始进行 infer
+    while (m->infer_worklist->count > 0) {
+        ast_fndef_t *fn = linked_pop(m->infer_worklist);
+
+        if (fn->generics_args_table) {
+            stack_push(m->infer_type_args_stack, fn->generics_args_table);
+        }
+
+        // worklist 里面只放 global fn?
         infer_fndef(m, fn);
+        slice_push(m->ast_fndefs, fn);
 
         for (int j = 0; j < fn->local_children->count; ++j) {
-            infer_fndef(m, fn->local_children->take[j]);
+            ast_fndef_t *child = fn->local_children->take[j];
+            infer_fndef(m, child);
+            slice_push(m->ast_fndefs, child);
+        }
+
+        if (fn->generics_args_table) {
+            stack_pop(m->infer_type_args_stack);
         }
     }
 }

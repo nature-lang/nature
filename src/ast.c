@@ -127,6 +127,9 @@ type_t type_copy(module_t *m, type_t temp) {
     if (temp.impl_ident) {
         type.impl_ident = strdup(temp.impl_ident);
     }
+    if (temp.impl_args) {
+        type.impl_args = ct_list_type_copy(m, temp.impl_args);
+    }
 
     switch (temp.kind) {
         case TYPE_ALIAS: {

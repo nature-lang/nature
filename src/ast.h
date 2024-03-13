@@ -595,6 +595,8 @@ static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) 
     expr->operand = *target;
     expr->operator= unary_op;
 
+    result->line = target->line;
+    result->column = target->column;
     result->assert_type = AST_EXPR_UNARY;
     result->value = expr;
     result->type = type_ptrof(target->type);

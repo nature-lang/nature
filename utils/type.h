@@ -555,7 +555,7 @@ static inline type_t type_kind_new(type_kind kind) {
             .kind = kind,
             .value = 0,
             .origin_ident = NULL,
-            .impl_ident = NULL,
+            .impl_ident = type_kind_str[kind],
     };
 
     result.in_heap = kind_in_heap(kind);

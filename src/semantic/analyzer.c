@@ -351,8 +351,8 @@ static void analyzer_type(module_t *m, type_t *type) {
             type_alias->ident = unique_alias_ident;
         }
 
-        // 重新基于 unique ident 更新 type impl_type_alias
-        type->impl_ident = type_alias->ident;
+        // TODO 统一在 checking 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
+//        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -767,6 +767,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
     // fn vec<t>.len() -> fn vec_len(vec<t> self)
     if (fndef->impl_type.kind > 0) {
+        // 更新 alias
         if (fndef->impl_type.kind == TYPE_ALIAS) {
             char *unique_alias_ident = analyzer_resolve_type_alias(m, m->analyzer_current, fndef->impl_type.impl_ident);
             ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.impl_ident);
@@ -778,11 +779,13 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
 
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
+        type_t param_type = fndef->impl_type;
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
-                .type = fndef->impl_type,
+                .type = param_type,
         };
         ct_list_push(params, &param);
+
         for (int i = 0; i < fndef->params->length; ++i) {
             ast_var_decl_t *item = ct_list_value(fndef->params, i);
             ct_list_push(params, item);
@@ -1128,15 +1131,50 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     return false;
 }
 
+static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
+    // - import xxx as * 产生的全局符号
+    // - import temp 中的符号
+    for (int i = 0; i < m->imports->count; ++i) {
+        ast_import_t *import = m->imports->take[i];
+
+        if (import->module_type == MODULE_TYPE_TPL) {
+            assert(import_tpl_symbol_table);
+            assert(import->full_path);
+            table_t *tpl_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
+            if (table_exist(tpl_symbol_table, ident->literal)) {
+                // temp global Symbol does not require symbol rewriting
+                return true;
+            }
+        } else if (import->module_type == MODULE_TYPE_COMMON) {
+            if (str_equal(import->as, "*")) {
+                char *temp = ident_with_module(import->module_ident, ident->literal);
+                if (table_exist(can_import_symbol_table, temp)) {
+                    ident->literal = temp;
+                    return true;
+                }
+            }
+        }
+    }
+
+    // - builtin 产生的全局符号
+    symbol_t *s = table_get(symbol_table, ident->literal);
+    if (s != NULL) {
+        // builtin global Symbol does not require symbol rewriting
+        return true;
+    }
+
+    return false;
+}
+
 /**
  *
  * @param m
  * @param expr
  */
-static void analyzer_ident(module_t *m, ast_expr_t *expr) {
+static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     bool local_analyzer = analyzer_local_ident(m, expr);
     if (local_analyzer) {
-        return;
+        return true;
     }
 
     // analyzer_local_ident The ident rebuild has already been done, it is good to use it here
@@ -1149,41 +1187,14 @@ static void analyzer_ident(module_t *m, ast_expr_t *expr) {
     symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
         ident->literal = temp;// 找到了则修改为全局名称
-        return;
+        return true;
     }
 
-    // - import xxx as * 产生的全局符号
-    // - import temp 中的符号
-    for (int i = 0; i < m->imports->count; ++i) {
-        ast_import_t *import = m->imports->take[i];
-
-        if (import->module_type == MODULE_TYPE_TPL) {
-            assert(import_tpl_symbol_table);
-            assert(import->full_path);
-            table_t *tpl_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
-            if (table_exist(tpl_symbol_table, ident->literal)) {
-                // temp global Symbol does not require symbol rewriting
-                return;
-            }
-        } else if (import->module_type == MODULE_TYPE_COMMON) {
-            if (str_equal(import->as, "*")) {
-                temp = ident_with_module(import->module_ident, ident->literal);
-                if (table_exist(can_import_symbol_table, temp)) {
-                    ident->literal = temp;
-                    return;
-                }
-            }
-        }
+    if (analyzer_module_ident(m, ident)) {
+        return true;
     }
 
-    // - builtin 产生的全局符号
-    s = table_get(symbol_table, ident->literal);
-    if (s != NULL) {
-        // builtin global Symbol does not require symbol rewriting
-        return;
-    }
-
-    ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ident->literal);
+    return false;
 }
 
 static void analyzer_access(module_t *m, ast_access_t *access) {
@@ -1200,9 +1211,22 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
 
     // import select 特殊处理, 直接进行符号改写
     if (select->left.assert_type == AST_EXPR_IDENT) {
-        // 这里将全局名称改写后并不能直接去符号表中查找，
-        // 但是此时符号可能还没有注册完成，所以不能直接通过 symbol table 查找到
+        // 检测 ident 是否是 local ident
+        bool local_analyzer = analyzer_local_ident(m, &select->left);
+        if (local_analyzer) {
+            return;
+        }
+
         ast_ident *ident = select->left.value;
+
+        char *current_module_ident = ident_with_module(m->ident, ident->literal);
+        symbol_t *s = table_get(symbol_table, current_module_ident);
+        if (s != NULL) {
+            ident->literal = current_module_ident;// 找到了则修改为全局名称
+            return;
+        }
+
+        // import ident
         ast_import_t *import = table_get(m->import_table, ident->literal);
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
@@ -1218,6 +1242,13 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
             expr->value = ast_new_ident(unique_ident);
             return;
         }
+
+        if (analyzer_module_ident(m, ident)) {
+            return;
+        }
+
+
+        ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ident->literal);
     }
 
     // analyzer ident 会再次处理 left
@@ -1416,7 +1447,11 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
-            return analyzer_ident(m, expr);
+            bool result = analyzer_ident(m, expr);
+            if (!result) {
+                ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ((ast_ident *) expr->value)->literal);
+            }
+            return;
         }
         case AST_CALL: {
             return analyzer_call(m, expr->value);

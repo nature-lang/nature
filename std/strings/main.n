@@ -19,7 +19,7 @@ fn find_char(string s, u8 char, int after):int {
     return -1
 }
 
-fn find(string s, string sub, int after):int {
+fn find_after(string s, string sub, int after):int {
     var n = sub.len()
 
     if (n == 0) {
@@ -55,7 +55,7 @@ fn rfind(string s, string sub, int before):int {
     s = reverse(s)
     sub = reverse(sub)
 
-    var index = find(s, sub, s.len() - before)
+    var index = find_after(s, sub, s.len() - before)
     if index == -1 {
         return index
     }
@@ -107,7 +107,7 @@ fn finish(string s, string cap):string {
 
 // 查找 s 的子串 sub, 如果找不到则返回 0
 fn find(string s, string sub):int {
-    return find(s, sub, 0)
+    return find_after(s, sub, 0)
 }
 
 // 不包含 end
@@ -139,7 +139,7 @@ fn split(string s, string separator):[string] {
 
     var i = 0
     for i < s.len() {
-        var found = find(s, separator, i)
+        var found = find_after(s, separator, i)
         if found == -1 {
             // 剩余字符串全部切到 result 中
             result.push(slice(s, i, s.len()))
@@ -237,7 +237,7 @@ fn replace(string s, string sub_old, string sub_new):string {
 
     var i = 0
     for i < s.len() {
-        var found = find(s, sub_old, i)
+        var found = find_after(s, sub_old, i)
 
         if found == -1 {
             result += slice(s, i, s.len())

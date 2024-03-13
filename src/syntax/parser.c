@@ -225,6 +225,8 @@ static type_t parser_single_type(module_t *m) {
             .line = parser_peek(m)->line,
             .column = parser_peek(m)->column,
             .origin_ident = NULL,
+            .impl_ident = NULL,
+            .impl_args = NULL,
     };
 
     // any 特殊处理
@@ -258,7 +260,6 @@ static type_t parser_single_type(module_t *m) {
 
         result.kind = TYPE_PTR;
         result.pointer = type_pointer;
-        result.impl_ident = type_kind_str[TYPE_PTR];
         return result;
     }
 
@@ -269,7 +270,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_SQUARE);
         result.kind = TYPE_VEC;
         result.vec = type_vec;
-        result.impl_ident = type_kind_str[TYPE_VEC];
         return result;
     }
 
@@ -283,7 +283,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_MAP;
         result.map = map;
-        result.impl_ident = type_kind_str[TYPE_MAP];
         return result;
     }
 
@@ -295,7 +294,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_SET;
         result.set = set;
-        result.impl_ident = type_kind_str[TYPE_SET];
         return result;
     }
 
@@ -312,7 +310,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_TUPLE;
         result.tuple = tuple;
-        result.impl_ident = type_kind_str[TYPE_TUPLE];
         return result;
     }
 
@@ -324,7 +321,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_VEC;
         result.vec = type_vec;
-        result.impl_ident = type_kind_str[TYPE_VEC];
         return result;
     }
 
@@ -341,7 +337,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_ANGLE);
         result.kind = TYPE_ARR;
         result.array = type_array;
-        result.impl_ident = type_kind_str[TYPE_ARR];
         return result;
     }
 
@@ -357,7 +352,6 @@ static type_t parser_single_type(module_t *m) {
         parser_must(m, TOKEN_RIGHT_PAREN);
         result.kind = TYPE_TUPLE;
         result.tuple = tuple;
-        result.impl_ident = type_kind_str[TYPE_TUPLE];
         return result;
     }
 
@@ -372,7 +366,6 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_MAP;
             result.map = map;
-            result.impl_ident = type_kind_str[TYPE_MAP];
             return result;
         } else {
             // set
@@ -381,7 +374,6 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_CURLY);
             result.kind = TYPE_SET;
             result.set = set;
-            result.impl_ident = type_kind_str[TYPE_SET];
             return result;
         }
     }
@@ -483,7 +475,6 @@ static type_t parser_single_type(module_t *m) {
             parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
-        result.impl_ident = result.alias->ident;
         return result;
     }
 
@@ -552,14 +543,12 @@ static type_t ast_expr_to_type_alias(module_t *m, ast_expr_t left, list_t *gener
         ast_ident *ident = left.value;
         t.alias = type_alias_new(ident->literal, NULL);
         t.origin_ident = ident->literal;
-        t.impl_ident = ident->literal;
     } else if (left.assert_type == AST_EXPR_SELECT) {
         ast_select_t *select = left.value;
         assert(select->left.assert_type == AST_EXPR_IDENT);
         ast_ident *select_left = select->left.value;
         t.alias = type_alias_new(select->key, select_left->literal);
         t.origin_ident = select->key;
-        t.impl_ident = select->key;
     } else {
         assertf(false, "struct new left type exception");
     }
@@ -1930,6 +1919,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m) {
         } else {
             // table 就绪的情况下可以正确的解析 param
             impl_type = parser_single_type(m);
+            impl_type.impl_ident = first_token->literal;
         }
 
 
