@@ -6,16 +6,16 @@ type coroutine_t = struct{
     i32 status
 }
 
-fn create(fn_t f, [any] args, int flags):coroutine_t {
-    var rt_co = coroutine_create(f, args, flags)
+fn create(fn() f, int flags):coroutine_t {
+    var rt_co = coroutine_create(f, flags)
 
     return coroutine_t{
         status = rt_co.status
     }
 }
 
-fn run(fn_t f, [any] args, int flags):coroutine_t {
-    var rt_co = coroutine_run(f, args, flags)
+fn run(fn() f, int flags):coroutine_t {
+    var rt_co = coroutine_run(f, flags)
 
     return coroutine_t{
         status = rt_co.status

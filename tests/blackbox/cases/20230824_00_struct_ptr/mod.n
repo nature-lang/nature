@@ -1,0 +1,14 @@
+type person_t = struct {
+    string name
+    int age
+    string from
+    u8 gender = 2
+}
+
+fn person_t.set_age(int now) {
+    self.age = now
+}
+
+fn person_t.get_name():string {
+    return self.name
+}

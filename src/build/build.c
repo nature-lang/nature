@@ -23,8 +23,6 @@
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
-static char *std_templates[] = {"builtin.temp.n", "libc.temp.n", "syscall.temp.n"};
-
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
 
@@ -66,11 +64,11 @@ static void assembler_custom_links() {
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     Elf64_Sym sym = {
-        .st_shndx = ctx->data_rtype_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_rtype_size,
+            .st_shndx = ctx->data_rtype_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_rtype_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
@@ -80,11 +78,11 @@ static void assembler_custom_links() {
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
     sym = (Elf64_Sym){
-        .st_shndx = ctx->data_fndef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_fndef_size,
+            .st_shndx = ctx->data_fndef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_fndef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
@@ -94,11 +92,11 @@ static void assembler_custom_links() {
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
     sym = (Elf64_Sym){
-        .st_shndx = ctx->data_symdef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_symdef_size,
+            .st_shndx = ctx->data_symdef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_symdef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
@@ -118,8 +116,8 @@ static void assembler_custom_links() {
  * @param m
  */
 static void assembler_module(module_t *m) {
-    if (BUILD_OS == OS_LINUX) { // elf 就是 linux 独有都
-        char *object_file_name = str_connect(m->ident, ".n.o");
+    if (BUILD_OS == OS_LINUX) {// elf 就是 linux 独有都
+        char *object_file_name = analyzer_force_unique_ident(m);
         str_replace_char(object_file_name, '/', '.');
 
         char *output = path_join(TEMP_DIR, object_file_name);
@@ -158,7 +156,7 @@ static void build_linker(slice_t *modules) {
         module_t *m = modules->take[i];
 
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
+        elf_load_object_file(ctx, fd, 0);// 加载并解析目标文件
     }
 
     // 将相关符号都加入来
@@ -261,7 +259,7 @@ static void build_assembler(slice_t *modules) {
             slice_push(m->asm_global_symbols, symbol);
         }
 
-        log_debug("[build_assembler] module=%s", m->ident);
+        log_debug("[build_assembler] module=%s", m->source_path);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
 
@@ -270,7 +268,7 @@ static void build_assembler(slice_t *modules) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数
             symbol_t *s = symbol_table_get_noref(c->symbol_name);
-            if (s->ref_count == 0) {
+            if (s->ref_count == 0 && !str_equal(c->symbol_name, FN_MAIN_NAME)) {
                 continue;
             }
 
@@ -289,7 +287,7 @@ static void build_assembler(slice_t *modules) {
 }
 
 static void build_tpls(slice_t *templates) {
-    slice_t *modules = slice_new(); // module_t*
+    slice_t *modules = slice_new();// module_t*
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
         char *full_path = templates->take[i];
@@ -303,8 +301,6 @@ static void build_tpls(slice_t *templates) {
         module_t *m = modules->take[i];
         analyzer(m, m->stmt_list);
 
-        generic(m);
-
         pre_checking(m);
     }
 }
@@ -315,18 +311,50 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
     slice_t *tpls = slice_new();
+    slice_t *builtin_modules = slice_new();
 
-    // builtin_temp.n
+    // builtin tpl list, default import
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
     char *full_path = path_join(template_dir, "builtin_temp.n");
     assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
     slice_push(tpls, full_path);
 
+    // builtin modules
+    char *builtin_dir = path_join(NATURE_ROOT, "std/builtin");
+    // scan all builtin package, module build
+    DIR *dir = opendir(builtin_dir);
+    assertf(dir, "cannot found builtin dir %s", builtin_dir);
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // 读取该目录下的所有文件(一级目录)
+        if (entry->d_type == DT_REG) {
+            char *filename = strdup(entry->d_name);
+
+            // filename 必须以 .n 结尾
+            if (!ends_with(filename, ".n")) {
+                continue;
+            }
+
+            full_path = path_join(builtin_dir, filename);
+            slice_push(builtin_modules, full_path);
+        }
+    }
+
+    // builtin module build
+    linked_t *work_list = linked_new();
+
+    for (int i = 0; i < builtin_modules->count; ++i) {
+        char *builtin_file = builtin_modules->take[i];
+        module_t *builtin = module_build(NULL, builtin_file, MODULE_TYPE_BUILTIN);
+        slice_push(modules, builtin);
+        linked_push(work_list, builtin);
+    }
+
     // main build
     ast_import_t main_import = {
-        .package_dir = WORKDIR,
-        .package_conf = package_conf,
-        .module_ident = FN_MAIN_NAME,
+            .package_dir = WORKDIR,
+            .package_conf = package_conf,
+            .module_ident = FN_MAIN_NAME,
     };
 
     // main [links] 自动注册
@@ -339,12 +367,11 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     }
 
     table_t *links_handled = table_new();
-    table_set(links_handled, main_import.package_dir, (void *)1);
+    table_set(links_handled, main_import.package_dir, (void *) 1);
 
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
     slice_push(modules, main);
 
-    linked_t *work_list = linked_new();
     linked_push(work_list, main);
 
     table_t *import_tpl_table = table_new();
@@ -384,8 +411,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             // new module dep all imports handled
             module_t *new_module = module_build(import, import->full_path, import->module_type);
 
-            // temp 预先处理
-
             linked_push(work_list, new_module);
             table_set(module_table, import->full_path, new_module);
             slice_push(modules, new_module);
@@ -410,23 +435,25 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     ast_fndef_t *root_fndef = main->ast_fndefs->take[0];
 
     slice_t *new_body = slice_new();
-    for (int i = 1; i < modules->count; ++i) {
+    for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
-        slice_push(new_body, m->call_init_stmt);
+        if (m->type == MODULE_TYPE_MAIN || m->type == MODULE_TYPE_TPL) {
+            continue;
+        }
+        if (m->call_init_stmt) {
+            slice_push(new_body, m->call_init_stmt);
+        }
     }
-    slice_concat(new_body, root_fndef->body);
-    root_fndef->body = new_body;
+    if (new_body) {
+        slice_concat(new_body, root_fndef->body);
+        root_fndef->body = new_body;
+    }
 
     return modules;
 }
 
 static void build_compiler(slice_t *modules) {
-    // pre_checking 对函数头进行 reduction, 让 checking 中的 fn_match 到准确位置
     for (int i = 0; i < modules->count; ++i) {
-        // generic => ast_fndef(global+local flat)
-        generic(modules->take[i]);
-
         pre_checking(modules->take[i]);
     }
 

@@ -33,12 +33,12 @@ print(nat is i8, nat is null, nat is [i8], '\n')
 [i8]|[i16] b = [0 as i8]
 
 // 通过类型转换语法进行推断
-println((b as [i8]).len)
+println((b as [i8]).len())
 
 // 空数组快速确定类型
 [i8]|[i16] c = [] as [i8]
 var d = [] as [i16]
-print((c as [i8]).len, d.len, '\n')
+print((c as [i8]).len(), d.len(), '\n')
 c = d
 
 print(c is [i8], c is [i16], '\n')

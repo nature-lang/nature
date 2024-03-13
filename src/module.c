@@ -3,15 +3,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "src/build/config.h"
 #include "src/error.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/generic.h"
 #include "src/syntax/parser.h"
 #include "src/syntax/scanner.h"
-#include "utils/assertf.h"
-#include "utils/helper.h"
-#include "utils/table.h"
+
+int var_unique_count = 0;
 
 /**
  * @param source_path
@@ -27,16 +24,17 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         m->ident = import->module_ident;
     }
 
-    m->ct_errors = slice_new();
+    m->errors = slice_new();
+    m->intercept_errors = NULL;
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
-    m->global_vardef = slice_new(); // ast_vardef_stmt_t
+    m->global_vardef = slice_new();// ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->source_path = source_path;
     m->ast_fndefs = slice_new();
     m->closures = slice_new();
-    m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
+    m->asm_global_symbols = slice_new();// 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
     if (m->package_dir) {
@@ -72,8 +70,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
 
         analyzer_import(m, ast_import);
 
-//        assert(strlen(ast_import->as) > 0);
-
         // 简单处理
         slice_push(m->imports, ast_import);
 
@@ -104,7 +100,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             if (stmt->assert_type == AST_FNDEF) {
                 ast_fndef_t *fndef = stmt->value;
                 // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-                char *global_ident = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+                char *global_ident = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
                 table_set(temp_symbol_table, global_ident, fndef);
                 continue;
             }
@@ -115,7 +111,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         table_set(import_tpl_symbol_table, m->source_path, temp_symbol_table);
     }
 
-    if (type == MODULE_TYPE_COMMON) {
+    if (type == MODULE_TYPE_COMMON || type == MODULE_TYPE_BUILTIN) {
         // 全局 table 记录 import 下的所有符号, type 为 common 时才进行记录
         // import handle
         for (int i = 0; i < m->stmt_list->count; ++i) {
@@ -151,7 +147,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             if (stmt->assert_type == AST_FNDEF) {
                 ast_fndef_t *fndef = stmt->value;
                 // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-                char *global_ident = ident_with_module(m->ident, fndef->symbol_name); // 全局函数改名
+                char *global_ident = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
                 table_set(can_import_symbol_table, global_ident, fndef);
                 continue;
             }

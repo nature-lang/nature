@@ -168,7 +168,7 @@ void debug_parser_stmt(ast_type_t t) {
 }
 
 void debug_scanner(token_t *t) {
-    printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_str[t->type], t->literal);
+    printf("[DEBUG] SCANNER line:%d, %s: %s \n", t->line, token_type_to_str[t->token], t->literal);
 }
 
 void debug_stmt(string type, ast_stmt_t stmt) {

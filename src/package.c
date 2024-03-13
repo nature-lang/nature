@@ -1,9 +1,9 @@
 #include "package.h"
+#include "build/config.h"
+#include "utils/helper.h"
 #include "utils/slice.h"
 #include "utils/table.h"
-#include "build/config.h"
 #include <dirent.h>
-#include "utils/helper.h"
 
 static table_t *std_package_table;
 static table_t *std_temp_package_table;
@@ -26,6 +26,7 @@ bool is_std_package(char *package) {
         if (entry->d_type == DT_DIR) {
             if (!str_equal(entry->d_name, ".") &&
                 !str_equal(entry->d_name, "..") &&
+                !str_equal(entry->d_name, "builtin") &&
                 !str_equal(entry->d_name, "temps")) {
                 char *dirname = strdup(entry->d_name);
                 table_set(std_package_table, dirname, (void *) 1);
@@ -154,7 +155,7 @@ char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, sli
 
     // 不带其他后缀
     char *full_path = str_connect(temp, ".n");
-//    assertf(file_exists(full_path), "cannot find file %s", full_path);
+    //    assertf(file_exists(full_path), "cannot find file %s", full_path);
 
     return full_path;
 }
@@ -194,4 +195,3 @@ slice_t *package_links(char *package_dir, toml_table_t *package_conf) {
 
     return result;
 }
-

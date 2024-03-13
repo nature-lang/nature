@@ -3,10 +3,19 @@
 
 static void test_basic() {
     char *raw = exec_output();
-//    printf("%s", raw);
-//    return;
+    char *str = "-902\n"
+                "999\n"
+                "40.000000\n"
+                "false\n"
+                "true false\n"
+                "true false\n"
+                "144\n"
+                "48\n"
+                "66 77 5082\n"
+                "286\n"
+                "hello 12\n";
 
-    assert_string_equal(raw, "25\n26.000000\n6.200000\n15\n6.900000\n40\n");
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

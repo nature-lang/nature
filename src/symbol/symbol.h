@@ -1,16 +1,19 @@
 #ifndef NATURE_SRC_AST_SYMBOL_H_
 #define NATURE_SRC_AST_SYMBOL_H_
 
-#include <stdlib.h>
-#include "utils/helper.h"
-#include "utils/table.h"
-#include "utils/linked.h"
 #include "src/ast.h"
+#include "utils/helper.h"
+#include "utils/linked.h"
+#include "utils/table.h"
+#include <stdlib.h>
 
 #define FN_MAIN_NAME "main"
 #define FN_INIT_NAME "init"
-//#define BUILTIN_ERRORT "errort"
+#define ANONYMOUS_FN_NAME "lambda"
+#define FN_SELF_NAME "self"
 #define ENV_IDENT "env"
+#define TYPE_PARAM_T "T"
+#define TYPE_PARAM_U "U"
 
 // 临时表，用来临时记录, key = ident, value is any
 extern table_t *can_import_symbol_table;
@@ -42,19 +45,14 @@ typedef enum {
     SYMBOL_VAR,
     SYMBOL_TYPE_ALIAS,
     SYMBOL_FN,
-    SYMBOL_CLOSURE,
 } symbol_type_t;
 
 typedef struct {
     string ident; // 符号唯一标识
-    bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
+    bool is_local;// 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
-    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
-
-    // 由于支持重载，所以会支持同名不同类型的函数, 但是由于在 analyzer 阶段类型仅仅收集了符号没有进行类型还原
-    // 所以所有的同名全局函数都回注册到 fndefs 中
-    slice_t *fndefs; // ast_fndef*
-    int64_t ref_count; // 引用计数
+    void *ast_value;// ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
+    int64_t ref_count;// 引用计数
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {
@@ -79,4 +77,4 @@ void symbol_table_set_var(char *unique_ident, type_t type);
 
 void symbol_init();
 
-#endif //NATURE_SRC_AST_SYMBOL_H_
+#endif//NATURE_SRC_AST_SYMBOL_H_

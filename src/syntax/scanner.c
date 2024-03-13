@@ -47,10 +47,10 @@ linked_t *scanner(module_t *m) {
                 if (m->s_cursor.guard[1] == 'x' || m->s_cursor.guard[1] == 'X') {
                     word = scanner_hex_number_advance(m);
                 } else {
-                    word = scanner_number_advance(m); // 1, 1.12, 0.233
+                    word = scanner_number_advance(m);// 1, 1.12, 0.233
                 }
             } else {
-                word = scanner_number_advance(m); // 1, 1.12, 0.233
+                word = scanner_number_advance(m);// 1, 1.12, 0.233
             }
 
             // word 已经生成，通过判断 word 中是否包含 . 判断 int 开头的 word 的类型
@@ -150,8 +150,8 @@ token_e scanner_special_char(module_t *m) {
         case '=':
             return scanner_match(m, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
         case '<':
-            if (scanner_match(m, '<')) {     // <<
-                if (scanner_match(m, '=')) { // <<=
+            if (scanner_match(m, '<')) {    // <<
+                if (scanner_match(m, '=')) {// <<=
                     return TOKEN_LEFT_SHIFT_EQUAL;
                 }
                 // <<
@@ -162,14 +162,14 @@ token_e scanner_special_char(module_t *m) {
             return TOKEN_LEFT_ANGLE;
         case '>':
             if (scanner_match(m, '>')) {
-                if (scanner_match(m, '=')) { // >>=
+                if (scanner_match(m, '=')) {// >>=
                     return TOKEN_RIGHT_SHIFT_EQUAL;
                 }
-                return TOKEN_RIGHT_SHIFT;       // >>
-            } else if (scanner_match(m, '=')) { // >=
+                return TOKEN_RIGHT_SHIFT;      // >>
+            } else if (scanner_match(m, '=')) {// >=
                 return TOKEN_GREATER_EQUAL;
             }
-            return TOKEN_RIGHT_ANGLE; // >
+            return TOKEN_RIGHT_ANGLE;// >
         case '&':
             return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
         case '|':
@@ -230,7 +230,7 @@ bool scanner_skip_space(module_t *m) {
                 scanner_guard_advance(m);
                 break;
             }
-            case '\n': { // 开启新的一行
+            case '\n': {// 开启新的一行
                 scanner_guard_advance(m);
                 has_new = true;
                 break;
@@ -249,8 +249,8 @@ bool scanner_skip_space(module_t *m) {
                         }
                         scanner_guard_advance(m);
                     }
-                    scanner_guard_advance(m); // *
-                    scanner_guard_advance(m); // /
+                    scanner_guard_advance(m);// *
+                    scanner_guard_advance(m);// /
                     break;
                 } else {
                     m->s_cursor.space_next = *m->s_cursor.guard;
@@ -295,7 +295,7 @@ char scanner_guard_advance(module_t *m) {
         m->s_cursor.column = 0;
     }
 
-    return m->s_cursor.guard[-1]; // [] 访问的为值
+    return m->s_cursor.guard[-1];// [] 访问的为值
 }
 
 bool scanner_is_string(module_t *m, char s) {
@@ -340,8 +340,8 @@ bool scanner_is_float(module_t *m, char *word) {
 }
 
 char *scanner_hex_number_advance(module_t *m) {
-    scanner_guard_advance(m); // 0
-    scanner_guard_advance(m); // x or X
+    scanner_guard_advance(m);// 0
+    scanner_guard_advance(m);// x or X
 
     // guard = current, 向前推进 guard,并累加 length
     while (scanner_is_hex_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
@@ -388,9 +388,17 @@ token_e scanner_ident(char *word, int length) {
         case 'c':
             switch (word[1]) {
                 case 'o':
+                    switch (word[2]) {
+                        case 'n':
+                            return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
+                            //                        case 'r':
+                            //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                    }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
+                case 'h':
+                    return scanner_rest(word, length, 2, 3, "an", TOKEN_CHAN);
             }
             break;
         case 'e':
@@ -413,7 +421,7 @@ token_e scanner_ident(char *word, int length) {
             break;
         }
         case 'g':
-            return scanner_rest(word, length, 1, 2, "en", TOKEN_GEN);
+            return scanner_rest(word, length, 1, 1, "o", TOKEN_GO);
         case 'i': {
             if (length == 2 && word[1] == 'n') {
                 return TOKEN_IN;
@@ -444,24 +452,18 @@ token_e scanner_ident(char *word, int length) {
         }
         case 'n':
             switch (word[1]) {
-                case 'u': // null
+                case 'u':// null
                     return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
-                case 'e': // new
+                case 'e':// new
                     return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
             }
             break;
         case 'p':
             return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
-        case 's': { // self,string,struct,sizeof,sett
+        case 's': {// self,string,struct,sizeof,sett
             switch (word[1]) {
                 case 'e':
-                    switch (word[2]) {
-                        case 'l':
-                            return scanner_rest(word, length, 3, 1, "f", TOKEN_SELF);
-                        case 't':
-                            return scanner_rest(word, length, 3, 1, "t", TOKEN_SET);
-                    }
-                    break;
+                    return scanner_rest(word, length, 2, 1, "t", TOKEN_SET);
                 case 'i':
                     return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
             }
@@ -476,13 +478,13 @@ token_e scanner_ident(char *word, int length) {
             }
             break;
         }
-        case 't': { // tup/throw/type/true
+        case 't': {// tup/throw/type/true
             switch (word[1]) {
                 case 'h':
                     return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
-                case 'y': // type
+                case 'y':// type
                     return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
-                case 'u': // tup
+                case 'u':// tup
                     return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
                 case 'r': {
                     switch (word[2]) {
@@ -500,7 +502,7 @@ token_e scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'a':
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_VAR);
-                case 'e': // vec
+                case 'e':// vec
                     return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
             }
         }
@@ -519,13 +521,23 @@ token_e scanner_ident(char *word, int length) {
             }
             break;
         }
-        case 'm': { // map
+        case 'm': {// map
             return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         }
         case 'r': {
-            return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
+            switch (word[1]) {
+                case 'e': {
+                    switch (word[2]) {
+                        case 't':
+                            return scanner_rest(word, length, 3, 3, "urn", TOKEN_RETURN);
+
+                        case 'f':
+                            return scanner_rest(word, length, 3, 9, "lect_hash", TOKEN_REFLECT_HASH);
+                    }
+                }
+            }
         }
-        case (char)0xF0: { // temp use 💥
+        case (char) 0xF0: {// temp use 💥
             return scanner_rest(word, length, 1, 3, "\x9F\x92\xA5", TOKEN_BOOM);
         }
     }
@@ -535,7 +547,7 @@ token_e scanner_ident(char *word, int length) {
 
 char *scanner_string_advance(module_t *m, char close_char) {
     // 在遇到下一个闭合字符之前， 如果中间遇到了空格则忽略
-    m->s_cursor.guard++; // 跳过 open_char
+    m->s_cursor.guard++;// 跳过 open_char
     char escape_char = '\\';
 
     // 由于包含字符串处理, 所以这里不使用 scanner_gen_word 直接生成
@@ -595,7 +607,7 @@ char *scanner_string_advance(module_t *m, char close_char) {
 
     autobuf_push(buf, &end, 1);
 
-    return (char *)buf->data;
+    return (char *) buf->data;
 }
 
 char *scanner_gen_word(module_t *m) {

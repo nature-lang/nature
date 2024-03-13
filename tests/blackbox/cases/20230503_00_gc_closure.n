@@ -34,5 +34,5 @@ fn makes() {
 makes()
 
 runtime_force_gc()
-co.sleep(500) // wait gc finish
+co.sleep(500)
 println(runtime_malloc_bytes())

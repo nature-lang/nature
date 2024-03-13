@@ -116,7 +116,7 @@ void print(n_vec_t *args, bool with_space) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
     // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
     addr_t base = (addr_t)args->data; // 把 data 中存储的值赋值给 p
-    uint64_t element_size = rt_rtype_out_size(args->element_rtype_hash);
+    uint64_t element_size = rt_rtype_out_size(args->ele_reflect_hash);
 
     DEBUGF("[runtime.print] args vec=%p, len=%lu, data=%p, element_size=%lu", args, args->length, (void *)base, element_size);
 

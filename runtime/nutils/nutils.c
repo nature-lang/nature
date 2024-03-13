@@ -8,47 +8,47 @@
 int command_argc;
 char **command_argv;
 
-#define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                       \
-    {                                                                                                                                  \
-        switch (_kind) {                                                                                                               \
-            case TYPE_FLOAT:                                                                                                           \
-            case TYPE_FLOAT64:                                                                                                         \
-                *(double *)output_ref = (double)_input_value;                                                                          \
-                return;                                                                                                                \
-            case TYPE_FLOAT32:                                                                                                         \
-                *(float *)output_ref = (float)_input_value;                                                                            \
-                return;                                                                                                                \
-            case TYPE_INT:                                                                                                             \
-            case TYPE_INT64:                                                                                                           \
-                *(int64_t *)output_ref = (int64_t)_input_value;                                                                        \
-                return;                                                                                                                \
-            case TYPE_INT32:                                                                                                           \
-                *(int32_t *)output_ref = (int32_t)_input_value;                                                                        \
-                return;                                                                                                                \
-            case TYPE_INT16:                                                                                                           \
-                *(int16_t *)output_ref = (int16_t)_input_value;                                                                        \
-                DEBUGF("[runtime.number_casting] output(i16): %d, debug_input(i64): %ld", *(int16_t *)output_ref, _debug_int64_value); \
-                return;                                                                                                                \
-            case TYPE_INT8:                                                                                                            \
-                *(int8_t *)output_ref = (int8_t)_input_value;                                                                          \
-                return;                                                                                                                \
-            case TYPE_UINT:                                                                                                            \
-            case TYPE_UINT64:                                                                                                          \
-                *(uint64_t *)output_ref = (uint64_t)_input_value;                                                                      \
-                return;                                                                                                                \
-            case TYPE_UINT32:                                                                                                          \
-                *(uint32_t *)output_ref = (uint32_t)_input_value;                                                                      \
-                return;                                                                                                                \
-            case TYPE_UINT16:                                                                                                          \
-                *(uint16_t *)output_ref = (uint16_t)_input_value;                                                                      \
-                return;                                                                                                                \
-            case TYPE_UINT8:                                                                                                           \
-                *(uint8_t *)output_ref = (uint8_t)_input_value;                                                                        \
-                return;                                                                                                                \
-            default:                                                                                                                   \
-                assert(false && "cannot convert type");                                                                                \
-                exit(1);                                                                                                               \
-        }                                                                                                                              \
+#define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                        \
+    {                                                                                                                                   \
+        switch (_kind) {                                                                                                                \
+            case TYPE_FLOAT:                                                                                                            \
+            case TYPE_FLOAT64:                                                                                                          \
+                *(double *) output_ref = (double) _input_value;                                                                         \
+                return;                                                                                                                 \
+            case TYPE_FLOAT32:                                                                                                          \
+                *(float *) output_ref = (float) _input_value;                                                                           \
+                return;                                                                                                                 \
+            case TYPE_INT:                                                                                                              \
+            case TYPE_INT64:                                                                                                            \
+                *(int64_t *) output_ref = (int64_t) _input_value;                                                                       \
+                return;                                                                                                                 \
+            case TYPE_INT32:                                                                                                            \
+                *(int32_t *) output_ref = (int32_t) _input_value;                                                                       \
+                return;                                                                                                                 \
+            case TYPE_INT16:                                                                                                            \
+                *(int16_t *) output_ref = (int16_t) _input_value;                                                                       \
+                DEBUGF("[runtime.number_casting] output(i16): %d, debug_input(i64): %ld", *(int16_t *) output_ref, _debug_int64_value); \
+                return;                                                                                                                 \
+            case TYPE_INT8:                                                                                                             \
+                *(int8_t *) output_ref = (int8_t) _input_value;                                                                         \
+                return;                                                                                                                 \
+            case TYPE_UINT:                                                                                                             \
+            case TYPE_UINT64:                                                                                                           \
+                *(uint64_t *) output_ref = (uint64_t) _input_value;                                                                     \
+                return;                                                                                                                 \
+            case TYPE_UINT32:                                                                                                           \
+                *(uint32_t *) output_ref = (uint32_t) _input_value;                                                                     \
+                return;                                                                                                                 \
+            case TYPE_UINT16:                                                                                                           \
+                *(uint16_t *) output_ref = (uint16_t) _input_value;                                                                     \
+                return;                                                                                                                 \
+            case TYPE_UINT8:                                                                                                            \
+                *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
+                return;                                                                                                                 \
+            default:                                                                                                                    \
+                assert(false && "cannot convert type");                                                                                 \
+                exit(1);                                                                                                                \
+        }                                                                                                                               \
     }
 
 void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref) {
@@ -121,9 +121,9 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     uint64_t size = rt_rtype_out_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF(
-        "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
-        "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+            "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
+            "values_ref: %p",
+            mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
@@ -150,7 +150,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     n_union_t *mu = rt_clr_malloc(sizeof(n_union_t), union_rtype);
 
     TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p", mu, value_ref,
-           &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *)fetch_addr_value((addr_t)value_ref));
+           &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
@@ -237,8 +237,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        assert(list->element_rtype_hash && "list element rtype hash is empty");
-        uint64_t value_size = rt_rtype_out_size(list->element_rtype_hash);
+        assert(list->ele_reflect_hash && "list element rtype hash is empty");
+        uint64_t value_size = rt_rtype_out_size(list->ele_reflect_hash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld", list->length,
                list->capacity, list->data, value_size, cursor);
 
@@ -280,13 +280,13 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu", iterator,
-               list->length, list->capacity, list->data, list->element_rtype_hash);
+               list->length, list->capacity, list->data, list->ele_reflect_hash);
 
-        assert(list->element_rtype_hash > 0 && "list element rtype hash is empty");
+        assert(list->ele_reflect_hash > 0 && "list element rtype hash is empty");
 
         assert(cursor < list->length && "cursor >= list->length");
 
-        uint64_t element_size = rt_rtype_out_size(list->element_rtype_hash);
+        uint64_t element_size = rt_rtype_out_size(list->ele_reflect_hash);
 
         memmove(value_ref, list->data + element_size * cursor, element_size);
         DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref, element_size);
@@ -323,12 +323,12 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     n_errort *error = n_error_new(msg, true);
 
     n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
+            .path = string_new(path, strlen(path)),
+            .ident = string_new(fn_name, strlen(fn_name)),
+            .line = line,
+            .column = column,
     };
-    vec_push(error->traces, &trace);
+    rt_vec_push(error->traces, &trace);
 
     co->error = error;
 
@@ -361,13 +361,13 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     assert(column >= 0 && column < 1000000);
     // 存在异常时顺便添加调用栈信息
     n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
+            .path = string_new(path, strlen(path)),
+            .ident = string_new(fn_name, strlen(fn_name)),
+            .line = line,
+            .column = column,
     };
 
-    vec_push(co->error->traces, &trace);
+    rt_vec_push(co->error->traces, &trace);
 
     post_rtcall_hook("co_has_error");
     return 1;
@@ -378,21 +378,27 @@ n_cptr_t cptr_casting(value_casting v) {
     return v.u64_value;
 }
 
+value_casting casting_to_cptr(void *ptr) {
+    value_casting v = {0};
+    v.ptr_value = ptr;
+    return v;
+}
+
 n_vec_t *std_args() {
     // 初始化一个 string 类型的数组
     rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_vec_t *list = vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
+    n_vec_t *list = rt_vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
         DEBUGF("[std_args] command_argv[%d]='%s'\n", i, command_argv[i]);
         n_string_t *str = string_new(command_argv[i], strlen(command_argv[i]));
-        vec_assign(list, i, &str);
+        rt_vec_assign(list, i, &str);
     }
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data, list->length,
-           list->element_rtype_hash);
+           list->ele_reflect_hash);
     return list;
 }
 
@@ -418,7 +424,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        n_string_t *n_str = (void *)fetch_addr_value((addr_t)data_ref); // 读取栈中存储的值
+        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref);// 读取栈中存储的值
         assert(n_str && n_str->length > 0 && "fetch addr by data ref failed");
 
         // return strdup(string_ref(n_str));
@@ -507,7 +513,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     }
 
     rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    rtype->last_ptr = 0;// 最后一个包含指针的字节数, 使用该字段判断是否包含指针
     rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
 
     /* 初始化可变参数列表 */
@@ -555,7 +561,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     rtype = NEW(rtype_t);
     rtype->size = length * POINTER_SIZE;
     rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    rtype->last_ptr = 0;// 最后一个包含指针的字节数, 使用该字段判断是否包含指针
     rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
     rtype->hash = hash;
     rtype->in_heap = true;
@@ -590,13 +596,13 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
 
     free(str);
     rtype_t rtype = {
-        .size = element_size * length,
-        .hash = hash,
-        .kind = TYPE_ARR,
-        .length = length,
+            .size = element_size * length,
+            .hash = hash,
+            .kind = TYPE_ARR,
+            .length = length,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
+    bool need_gc = element_rtype->last_ptr > 0;// element 包含指针数据
     if (need_gc) {
         rtype.last_ptr = element_size * length;
 

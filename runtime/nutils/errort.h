@@ -17,7 +17,7 @@ static inline n_errort *n_error_new(n_string_t *msg, uint8_t has) {
     // 构造一个 trace_t
     rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    n_vec_t *traces = vec_new(list_rtype->hash, element_rtype->hash, 0, 0);
+    n_vec_t *traces = rt_vec_new(list_rtype->hash, element_rtype->hash, 0, 0);
 
     rtype_t *errort_rtype = gc_rtype(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     n_errort *errort = rt_clr_malloc(errort_rtype->size, errort_rtype);

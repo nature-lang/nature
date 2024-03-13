@@ -1,7 +1,9 @@
 #include "ast.h"
 
 #include "src/cross.h"
+#include "types.h"
 #include "utils/helper.h"
+
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp);
 
@@ -9,29 +11,6 @@ ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
     ident->literal = strdup(literal);
     return ident;
-}
-
-type_t *select_formal(type_fn_t *type_fn, uint8_t index, bool is_spread) {
-    if (type_fn->rest && index >= type_fn->param_types->length - 1) {
-        // rest handle
-        type_t *last_param_type = ct_list_value(type_fn->param_types, type_fn->param_types->length - 1);
-
-        // rest 最后一个参数的 type 不是 list 可以直接报错了, 而不是返回 NULL
-        assert(last_param_type->kind == TYPE_VEC);
-
-        // call(arg1, arg2, ...[]) -> fn call(int arg1, int arg2, ...[int] arg3)
-        if (is_spread) {
-            return last_param_type;
-        }
-
-        return &last_param_type->vec->element_type;
-    }
-
-    if (index >= type_fn->param_types->length) {
-        return NULL;
-    }
-
-    return ct_list_value(type_fn->param_types, index);
 }
 
 static list_t *ct_list_type_copy(module_t *m, list_t *temp_list) {
@@ -145,14 +124,16 @@ type_t type_copy(module_t *m, type_t temp) {
     if (temp.origin_ident) {
         type.origin_ident = strdup(temp.origin_ident);
     }
+    if (temp.impl_ident) {
+        type.impl_ident = strdup(temp.impl_ident);
+    }
+    if (temp.impl_args) {
+        type.impl_args = ct_list_type_copy(m, temp.impl_args);
+    }
 
     switch (temp.kind) {
         case TYPE_ALIAS: {
             type.alias = type_alias_copy(m, temp.alias);
-            break;
-        }
-        case TYPE_GEN: {
-            type.gen = type_gen_copy(m, temp.gen);
             break;
         }
         case TYPE_VEC: {
@@ -218,7 +199,7 @@ static ast_ident *ast_ident_copy(module_t *m, ast_ident *temp) {
 
 static ast_literal_t *ast_literal_copy(module_t *m, ast_literal_t *temp) {
     ast_literal_t *literal = COPY_NEW(ast_literal_t, temp);
-    literal->value = strdup(temp->value); // 根据实际情况复制，这里假设 value 是字符串
+    literal->value = strdup(temp->value);// 根据实际情况复制，这里假设 value 是字符串
     return literal;
 }
 
@@ -245,6 +226,12 @@ static ast_sizeof_expr_t *ast_sizeof_expr_copy(module_t *m, ast_sizeof_expr_t *t
     ast_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_sizeof_expr_t, temp);
     sizeof_expr->target_type = type_copy(m, temp->target_type);
     return sizeof_expr;
+}
+
+static ast_reflect_hash_expr_t *ast_reflect_hash_expr_copy(module_t *m, ast_reflect_hash_expr_t *temp) {
+    ast_reflect_hash_expr_t *expr = COPY_NEW(ast_reflect_hash_expr_t, temp);
+    expr->target_type = type_copy(m, temp->target_type);
+    return expr;
 }
 
 static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
@@ -389,6 +376,12 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(module_t *m, ast_tuple_destr_t *t
     return tuple_destr;
 }
 
+static ast_go_t *ast_go_copy(module_t *m, ast_go_t *temp) {
+    ast_go_t *expr = COPY_NEW(ast_go_t, temp);
+    expr->fndef = ast_fndef_copy(m, temp->fndef);
+    return expr;
+}
+
 static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
     if (temp == NULL) {
         return NULL;
@@ -468,6 +461,10 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_call_copy(m, temp->value);
             break;
         }
+        case AST_GO: {
+            expr->value = ast_go_copy(m, temp->value);
+            break;
+        }
         case AST_FNDEF: {
             expr->value = ast_fndef_copy(m, temp->value);
             break;
@@ -494,6 +491,10 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         }
         case AST_EXPR_SIZEOF: {
             expr->value = ast_sizeof_expr_copy(m, temp->value);
+            break;
+        }
+        case AST_EXPR_REFLECT_HASH: {
+            expr->value = ast_reflect_hash_expr_copy(m, temp->value);
             break;
         }
         case AST_EXPR_SELECT: {
@@ -525,13 +526,13 @@ static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp) {
     ast_catch_t *catch = COPY_NEW(ast_catch_t, temp);
     catch->try_expr = *ast_expr_copy(m, &temp->try_expr);
     catch->catch_err = *ast_var_decl_copy(m, &temp->catch_err);
-    catch->catch_body = ast_body_copy(m, temp->catch_body); // 需要实现这个函数
+    catch->catch_body = ast_body_copy(m, temp->catch_body);// 需要实现这个函数
     return catch;
 }
 
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(module_t *m, ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
-    stmt->tuple_destr = ast_tuple_destr_copy(m, temp->tuple_destr); // 需要实现这个函数
+    stmt->tuple_destr = ast_tuple_destr_copy(m, temp->tuple_destr);// 需要实现这个函数
     stmt->right = *ast_expr_copy(m, &temp->right);
     return stmt;
 }
@@ -546,15 +547,15 @@ static ast_assign_stmt_t *ast_assign_copy(module_t *m, ast_assign_stmt_t *temp) 
 static ast_if_stmt_t *ast_if_copy(module_t *m, ast_if_stmt_t *temp) {
     ast_if_stmt_t *stmt = COPY_NEW(ast_if_stmt_t, temp);
     stmt->condition = *ast_expr_copy(m, &temp->condition);
-    stmt->consequent = ast_body_copy(m, temp->consequent); // 需要实现这个函数
-    stmt->alternate = ast_body_copy(m, temp->alternate);   // 需要实现这个函数
+    stmt->consequent = ast_body_copy(m, temp->consequent);// 需要实现这个函数
+    stmt->alternate = ast_body_copy(m, temp->alternate);  // 需要实现这个函数
     return stmt;
 }
 
 static ast_for_cond_stmt_t *ast_for_cond_copy(module_t *m, ast_for_cond_stmt_t *temp) {
     ast_for_cond_stmt_t *stmt = COPY_NEW(ast_for_cond_stmt_t, temp);
     stmt->condition = *ast_expr_copy(m, &temp->condition);
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -563,7 +564,7 @@ static ast_for_iterator_stmt_t *ast_for_iterator_copy(module_t *m, ast_for_itera
     stmt->iterate = *ast_expr_copy(m, &temp->iterate);
     stmt->first = *ast_var_decl_copy(m, &temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(m, temp->second) : NULL;
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -572,7 +573,7 @@ static ast_for_tradition_stmt_t *ast_tradition_copy(module_t *m, ast_for_traditi
     stmt->init = ast_stmt_copy(m, temp->init);
     stmt->cond = *ast_expr_copy(m, &temp->cond);
     stmt->update = ast_stmt_copy(m, temp->update);
-    stmt->body = ast_body_copy(m, temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(m, temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -607,7 +608,6 @@ static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp) {
     call->return_type = type_copy(m, temp->return_type);
     call->left = *ast_expr_copy(m, &temp->left);
     call->args = ast_list_expr_copy(m, temp->args);
-    call->catch = temp->catch;
     call->spread = temp->spread;
     return call;
 }
@@ -702,22 +702,20 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->params = ast_fn_formals_copy(m, temp->params);
     fndef->type = type_copy(m, temp->type);
     fndef->capture_exprs = temp->capture_exprs;
-    fndef->body = ast_body_copy(m, temp->body);
     fndef->fn_name = temp->fn_name;
     fndef->rel_path = temp->rel_path;
     fndef->column = temp->column;
     fndef->line = temp->line;
-
-    // 将 new fn 添加到 symbol table 中 (依旧使用原始的名称, 方便使用者可以定位函数信息)
-    symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, fndef->is_local);
-
-    if (m->checking_temp_fndefs) {
-        // checking 阶段只有 type alias param 时的 type_copy 才会产生，此时一定存在 type_param_list
-        assertf(m->type_param_list, "fn in type alias param struct, but m->type_param_list is null");
-        assertf(m->type_param_table, "fn in type alias param struct, but m->type_param_table is null");
-        fndef->hash_param_types = m->type_param_list;
-        fndef->type_param_table = m->type_param_table;
-        slice_push(m->checking_temp_fndefs, fndef);
+    fndef->body = ast_body_copy(m, temp->body);
+    fndef->is_generics = false;
+    fndef->global_parent = NULL;
+    if (!fndef->is_local) {
+        m->analyzer_global = fndef;
+        fndef->local_children = slice_new();
+    } else {
+        assert(m->analyzer_global);
+        slice_push(m->analyzer_global->local_children, fndef);
+        fndef->global_parent = m->analyzer_global;
     }
 
     return fndef;

@@ -20,7 +20,7 @@ println(s)
 var size = 12 + sizeof(dirent_t) - 24
 println('dirent_t size', size)
 var list = os.listdir('mock')
-println("os.listdir of mock len", list.len)
+println("os.listdir of mock len", list.len())
 for v in list {
     println('item: ', v)
 }
