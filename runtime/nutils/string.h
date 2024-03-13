@@ -3,7 +3,7 @@
 
 #include "utils/type.h"
 
-n_string_t *string_new(void *raw_string, uint64_t length);
+n_string_t *string_new(void *raw_string, int64_t length);
 
 void *rt_string_ref(n_string_t *n_str);
 

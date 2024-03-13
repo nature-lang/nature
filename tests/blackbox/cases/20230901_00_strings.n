@@ -13,14 +13,14 @@ println('index after 7 of wo is ', index)
 
 // test split
 var list = strings.split(s, ' ')
-println('split len:', list.len)
+println('split len:', list.len())
 
 for v in list {
     println(v)
 }
 
 list = strings.split('he\noll', '')
-println('split he\\noll len:', list.len)
+println('split he\\noll len:', list.len())
 for v in list {
     print(v)
 }
@@ -69,6 +69,6 @@ println(s9, 'reverse: ', strings.reverse(s9))
 
 // rfind
 var s10 = 'helloxworldxworld'
-println('rfind wo:', strings.rfind(s10, 'wo', s10.len)) // 12 v
+println('rfind wo:', strings.rfind(s10, 'wo', s10.len())) // 12 v
 println('rfind wo:', strings.rfind(s10, 'wo', 12)) // 6 v
-println('rfind wo:', strings.rfind(s10, 'r', s10.len)) // 6 v
+println('rfind wo:', strings.rfind(s10, 'r', s10.len())) // 6 v

@@ -114,10 +114,10 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
  */
 bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind != TYPE_PARAM) {
-        assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' node reduction", type_format(dst));
+        assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
     }
     if (src.kind != TYPE_PARAM) {
-        assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' node reduction", type_format(src));
+        assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(src));
     }
 
     assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot checking");
@@ -872,7 +872,7 @@ static type_t checking_vec_new(module_t *m, ast_expr_t *expr, type_t target_type
 
         result.array = type_array;
         if (ast->elements->length == 0) {
-            return result;
+            return reduction_type(m, result);
         }
 
         for (int i = 0; i < ast->elements->length; ++i) {
@@ -1033,7 +1033,7 @@ static type_t checking_struct_new(module_t *m, ast_expr_t *expr) {
     // 对类型进行了实例化 alias<int> -> struct{int}
     ast->type = reduction_type(m, ast->type);
 
-    CHECKING_ASSERTF(ast->type.kind == TYPE_STRUCT, "ident '%s' not struct, cannot struct new", ast->type.origin_ident);
+    CHECKING_ASSERTF(ast->type.kind == TYPE_STRUCT, "'%s' not struct, cannot struct new", type_format(ast->type));
 
     type_struct_t *type_struct = ast->type.struct_;
 
@@ -1499,8 +1499,11 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
 
 static void checking_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef rest 语言，所以实参的数量大于等于形参的数量
-    if (!target_type_fn->rest) {
-        CHECKING_ASSERTF(call->args->length == target_type_fn->param_types->length, "number of call args not match declaration");
+    if (!target_type_fn->rest && call->args->length > target_type_fn->param_types->length) {
+        CHECKING_ASSERTF(false, "too many args");
+    }
+    if (!target_type_fn->rest && call->args->length < target_type_fn->param_types->length) {
+        CHECKING_ASSERTF(false, "not enough args");
     }
 
     for (int i = 0; i < call->args->length; ++i) {
@@ -1689,7 +1692,11 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
                 break;
             }
 
-            CHECKING_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
+            // 可能是全局维度的闭包函数
+            // CHECKING_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
+            if (s->type != SYMBOL_FN) {
+                break;
+            }
 
             ast_fndef_t *tpl_fn = s->ast_value;
             if (!tpl_fn->is_generics) {

@@ -2,8 +2,8 @@ import os
 import fmt.util
 import fmt
 import time
+import coroutine as co
 
-// 启用快速强制 gc
 runtime_force_gc()
 
 fn logf(string format, ...[any] args) {
@@ -30,6 +30,8 @@ if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index
 if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')
 }
+
+co.sleep(500)
 
 logf('hello33 %v', 'world33')
 var s = 'hello44 %v' // 这里会触发 string new, 但是绝对是在 main 中。

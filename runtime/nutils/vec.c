@@ -196,6 +196,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     sliced_vec->capacity = length;
     sliced_vec->length = length;
     sliced_vec->ele_reflect_hash = l->ele_reflect_hash;
+    sliced_vec->reflect_hash = l->reflect_hash;
 
     int64_t element_size = rt_rtype_out_size(l->ele_reflect_hash);
     sliced_vec->data = l->data + start * element_size;

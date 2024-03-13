@@ -9,19 +9,19 @@
  * @param length
  * @return
  */
-n_string_t *string_new(void *raw_string, uint64_t length) {
+n_string_t *string_new(void *raw_string, int64_t length) {
     PRE_RTCALL_HOOK();
     TRACEF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
 
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
 
-    uint64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
+    int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rt_array_new(element_rtype, capacity);
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
 
-    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 
     assert(element_rtype->hash > 0);
 
@@ -31,6 +31,7 @@ n_string_t *string_new(void *raw_string, uint64_t length) {
     str->length = length;
     str->capacity = capacity;
     str->ele_reflect_hash = element_rtype->hash;
+    str->reflect_hash = string_rtype->hash;
     memmove(str->data, raw_string, length);
 
     DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
@@ -63,10 +64,10 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
 
-    uint64_t length = a->length + b->length;
-    uint64_t capacity = length + 1;
+    int64_t length = a->length + b->length;
+    int64_t capacity = length + 1;
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
-    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     n_array_t *data = rt_array_new(element_rtype, capacity);
 
     // 将 str copy 到 data 中
@@ -79,6 +80,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->length = length;
     str->capacity = capacity;
     str->ele_reflect_hash = element_rtype->hash;
+    str->reflect_hash = string_rtype->hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }

@@ -19,6 +19,7 @@ fn exe():string {
 }
 
 // unsafe ptr
+// The order of return is uncertain
 fn listdir(string path):[string] {
     [string] result = []
 

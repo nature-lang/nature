@@ -9,7 +9,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "";
+    char *str = "true false\n";
     assert_string_equal(raw, str);
 }
 

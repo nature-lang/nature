@@ -2,7 +2,7 @@ import 'foo/bar.n' as car
 
 car.car() catch err {
     println('err msg:', err.msg)
-    println('err trace len:', err.traces.len)
+    println('err trace len:', err.traces.len())
     var first = err.traces[0]
     println('err trace first:', first.path, first.ident, first.line, first.column)
 }

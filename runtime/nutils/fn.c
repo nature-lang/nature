@@ -225,7 +225,7 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
         upvalue->value.uint_value = value;
         upvalue->ref = &upvalue->value;
     } else {
-        // 重新申请栈空间进行指向
+        // 如果 rtype->size > 8, 则需要从堆中申请空间存放 struct, 避免空间不足。
         void *new_value = rt_clr_malloc(rtype->size, rtype);
         DEBUGF("[runtime.env_closure] size gt 8byte, malloc new_value=%p", new_value);
         memcpy(new_value, (void *)stack_addr, rtype->size);
