@@ -38,6 +38,15 @@ linked_t *scanner(module_t *m) {
             continue;
         }
 
+        if (scanner_match(m, '@')) {
+            char *word = scanner_ident_advance(m);
+            word++;
+            token_t *t = token_new(TOKEN_MACRO_IDENT, word, m->s_cursor.line, m->s_cursor.column);
+            linked_push(list, t);
+            continue;
+        }
+
+
         // 首个字符是 0 ~ 9 则判定为数字
         if (scanner_is_number(m, *m->s_cursor.current)) {
             char *word = NULL;
@@ -72,20 +81,15 @@ linked_t *scanner(module_t *m) {
             continue;
         }
 
-        // if current is 特殊字符
-        if (!scanner_at_eof(m)) {
-            int8_t special_type = scanner_special_char(m);
-            if (special_type == -1) {
-                dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "special characters are not recognized");
-            } else {
-                linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column));
-                continue;
-            }
-        }
-
         if (scanner_at_eof(m)) {
             break;
         }
+
+        // if current is 特殊字符
+        int8_t special_type = scanner_special_char(m);
+        SCANNER_ASSERTF(special_type > 0, "special characters are not recognized");
+
+        linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column));
     }
 
     linked_push(list, token_new(TOKEN_EOF, "EOF", m->s_cursor.line, m->s_cursor.line));
@@ -102,7 +106,7 @@ char *scanner_ident_advance(module_t *m) {
     return scanner_gen_word(m);
 }
 
-token_e scanner_special_char(module_t *m) {
+token_type_t scanner_special_char(module_t *m) {
     char c = scanner_guard_advance(m);
 
     switch (c) {
@@ -141,7 +145,7 @@ token_e scanner_special_char(module_t *m) {
                     return TOKEN_ELLIPSIS;
                 }
                 // 以及吃掉了 2 个点了，没有回头路
-                return -1;
+                return 0;
             }
             return TOKEN_DOT;
         }
@@ -179,7 +183,7 @@ token_e scanner_special_char(module_t *m) {
         case '^':
             return scanner_match(m, '=') ? TOKEN_XOR_EQUAL : TOKEN_XOR;
         default:
-            return -1;
+            return 0;
     }
 }
 
@@ -361,7 +365,7 @@ char *scanner_number_advance(module_t *m) {
     return scanner_gen_word(m);
 }
 
-token_e scanner_ident(char *word, int length) {
+token_type_t scanner_ident(char *word, int length) {
     switch (word[0]) {
         case 'a': {
             switch (word[1]) {
@@ -464,8 +468,8 @@ token_e scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'e':
                     return scanner_rest(word, length, 2, 1, "t", TOKEN_SET);
-                case 'i':
-                    return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
+                    //                case 'i':
+                    //                    return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
             }
 
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
@@ -525,20 +529,7 @@ token_e scanner_ident(char *word, int length) {
             return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
         }
         case 'r': {
-            switch (word[1]) {
-                case 'e': {
-                    switch (word[2]) {
-                        case 't':
-                            return scanner_rest(word, length, 3, 3, "urn", TOKEN_RETURN);
-
-                        case 'f':
-                            return scanner_rest(word, length, 3, 9, "lect_hash", TOKEN_REFLECT_HASH);
-                    }
-                }
-            }
-        }
-        case (char) 0xF0: {// temp use 💥
-            return scanner_rest(word, length, 1, 3, "\x9F\x92\xA5", TOKEN_BOOM);
+            return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);
         }
     }
 
@@ -618,7 +609,7 @@ char *scanner_gen_word(module_t *m) {
     return word;
 }
 
-token_e scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
+token_type_t scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
     if (rest_start + rest_length == word_length && memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;
     }

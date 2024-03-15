@@ -2033,7 +2033,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
 
     if (!fndef->closure_name) {
-        if (!expr.target_type.kind) {
+        if (expr.target_type.kind == 0) {
             return NULL;// 没有表达式需要接收值
         }
 
@@ -2087,6 +2087,36 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
 
     return linear_super_move(m, fndef->type, target, result);
+}
+
+static lir_operand_t *linear_co_async(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_co_async_t *co_async = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_stack(m, expr.target_type);
+    }
+
+    lir_operand_t *flag_operand = int_operand(0);
+    if (co_async->flag_expr) {
+        linear_expr(m, *co_async->flag_expr, flag_operand);
+    }
+
+    lir_operand_t *fn_operand = linear_fn_decl(m, (ast_expr_t){
+                                                          .line = co_async->fndef->line,
+                                                          .column = co_async->fndef->column,
+                                                          .assert_type = AST_FNDEF,
+                                                          .value = co_async->fndef,
+                                                          .target_type = type_kind_new(TYPE_FN_T),
+                                                  },
+                                               NULL);
+
+    // TODO 令人遗憾的事情大概是，这里创造不出来一个 feture?
+    // 改写表达式吧，别留到 checking 了，直接导向到 builtin call?
+    push_rt_call(m, RT_CALL_COROUTINE_ASYNC, target, 2, fn_operand, flag_operand);
+
+    // 这里不应该是 rt_call， 必须一步到位才行。target 也是奇怪的东西。必须一步到位，到位。。
+
+    return target;
 }
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
@@ -2148,8 +2178,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             return linear_for_tradition(m, stmt->value);
         }
         case AST_FNDEF: {
-            linear_fn_decl(m, (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
-                           NULL);
+            linear_fn_decl(m, (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL}, NULL);
             return;
         }
         case AST_CALL: {
@@ -2214,6 +2243,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
         [AST_EXPR_SET_NEW] = linear_set_new,
         [AST_CALL] = linear_call,
+        [AST_CO_ASYNC] = linear_co_async,
         [AST_FNDEF] = linear_fn_decl,
         [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,
@@ -2257,6 +2287,7 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     // 互相关联关系
     m->current_closure = c;
     c->module = m;
+    // TODO unique label
     c->end_label = str_connect("end_", c->symbol_name);
     c->error_label = str_connect("error_", c->symbol_name);
 

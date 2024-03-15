@@ -376,9 +376,12 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(module_t *m, ast_tuple_destr_t *t
     return tuple_destr;
 }
 
-static ast_go_t *ast_go_copy(module_t *m, ast_go_t *temp) {
-    ast_go_t *expr = COPY_NEW(ast_go_t, temp);
+static ast_co_async_t *ast_co_async_copy(module_t *m, ast_co_async_t *temp) {
+    ast_co_async_t *expr = COPY_NEW(ast_co_async_t, temp);
     expr->fndef = ast_fndef_copy(m, temp->fndef);
+    if (expr->flag_expr) {
+        expr->flag_expr = ast_expr_copy(m, expr->flag_expr);
+    }
     return expr;
 }
 
@@ -461,8 +464,8 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_call_copy(m, temp->value);
             break;
         }
-        case AST_GO: {
-            expr->value = ast_go_copy(m, temp->value);
+        case AST_CO_ASYNC: {
+            expr->value = ast_co_async_copy(m, temp->value);
             break;
         }
         case AST_FNDEF: {
@@ -502,7 +505,7 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             break;
         }
         default:
-            assertf(false, "[ast_expr_copy] unknown expr");
+            assertf(false, "ast_expr_copy unknown expr");
     }
 
     return expr;

@@ -11,7 +11,7 @@ typedef enum {
 
 coroutine_t *coroutine_create(void *fn, uint64_t flag);
 
-coroutine_t *coroutine_run(void *fn, uint64_t flag);
+coroutine_t *rt_coroutine_async(void *fn, uint64_t flag);
 
 void coroutine_sleep(int64_t ms);
 

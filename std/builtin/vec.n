@@ -10,8 +10,8 @@ import runtime_temp
 // }
 
 fn vec_new<T>(int len, int cap):vec<T> {
-    int hash = reflect_hash(vec<T>)
-    int ele_hash = reflect_hash(T)
+    int hash = @reflect_hash(vec<T>)
+    int ele_hash = @reflect_hash(T)
     return rt_vec_new(hash, ele_hash, len, cap) as vec<T>
 }
 

@@ -1,5 +1,21 @@
-type coro<t> = struct {
-    fn_t function // 可以匹配任意 fn 类型
-    bool thread  // 单独线程运行， 而不是普通的协程方式运行
-    t result
+import runtime_temp
+
+type coroutine_t<T> = cptr
+
+type future_t<T> = struct{
+    coroutine_t<T> co
+    T result
+}
+
+type chan_t<T> = struct{
+}
+
+// 里的 T 没有机会给过来, 也可能有机会, 泛型是在 checking 倒出来的
+// 只要在合适的地方改写就行了, 这是方案 1, co_async, 只要把宏改写
+fn co_async<T>(fn() fn, int flag):future_t<T> {
+    var coroutine = rt_coroutine_new(fn as cptr, flag) as coroutine_t<T>
+
+    return future_t<T>{
+        coroutine = co
+    }
 }

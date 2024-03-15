@@ -352,7 +352,7 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
 
         // TODO 统一在 checking 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
-//        type->impl_ident = type_alias->ident;
+        //        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -622,8 +622,11 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     }
 }
 
-static void analyzer_go(module_t *m, ast_go_t *go) {
+static void analyzer_co_async_expr(module_t *m, ast_co_async_t *go) {
     analyzer_local_fndef(m, go->fndef);
+    if (go->flag_expr) {
+        analyzer_expr(m, go->flag_expr);
+    }
 }
 
 /**
@@ -1456,8 +1459,8 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_CALL: {
             return analyzer_call(m, expr->value);
         }
-        case AST_GO: {
-            return analyzer_go(m, expr->value);
+        case AST_CO_ASYNC: {
+            return analyzer_co_async_expr(m, expr->value);
         }
         case AST_FNDEF: {
             return analyzer_local_fndef(m, expr->value);

@@ -30,16 +30,16 @@ char *scanner_number_advance(module_t *m);
 
 char *scanner_string_advance(module_t *module, char close_char);
 
-token_e scanner_ident(char *word, int length);
+token_type_t scanner_ident(char *word, int length);
 
-token_e scanner_rest(char *word,
+token_type_t scanner_rest(char *word,
                      int word_length,
                      int8_t rest_start,
                      int8_t rest_length,
                      char *rest,
                      int8_t type);
 
-token_e scanner_special_char(module_t *m);
+token_type_t scanner_special_char(module_t *m);
 
 char scanner_guard_advance(module_t *module); // guard 前进一个字符
 char *scanner_gen_word(module_t *module);

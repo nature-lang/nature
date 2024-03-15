@@ -68,10 +68,12 @@ typedef enum {
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPE_ALIAS,
     AST_CALL,
-    AST_GO,
+    AST_CO_ASYNC,
     AST_CATCH,
     AST_FNDEF,           // fn def (其包含 body)
     AST_STMT_ENV_CLOSURE,// closure def
+
+    AST_MACRO_CALL,
 } ast_type_t;
 
 typedef enum {
@@ -211,6 +213,26 @@ typedef struct {
     list_t *args;// *ast_expr
     bool spread;
 } ast_call_t;
+
+typedef enum {
+    MACRO_ARG_KIND_STMT = 1,
+    MACRO_ARG_KIND_EXPR,
+    MACRO_ARG_KIND_TYPE,
+} ast_macro_arg_kind_t;
+
+typedef struct {
+    ast_macro_arg_kind_t kind;
+    union {
+        ast_stmt_t *stmt;
+        ast_expr_t *expr;
+        type_t *type;
+    };
+} ast_macro_arg_t;
+
+typedef struct {
+    char *ident;
+    list_t *args;// ast_macro_arg_t
+} ast_macro_call_t;
 
 // 值类型
 typedef struct {
@@ -565,7 +587,9 @@ typedef struct ast_fndef_t {
 
 typedef struct {
     ast_fndef_t *fndef;
-} ast_go_t;
+    ast_expr_t *flag_expr;
+    type_t return_type;
+} ast_co_async_t;
 
 ast_ident *ast_new_ident(char *literal);
 

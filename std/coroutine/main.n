@@ -15,7 +15,7 @@ fn create(fn() f, int flags):coroutine_t {
 }
 
 fn run(fn() f, int flags):coroutine_t {
-    var rt_co = coroutine_run(f, flags)
+    var rt_co = coroutine_async(f, flags)
 
     return coroutine_t{
         status = rt_co.status

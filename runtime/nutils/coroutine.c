@@ -7,7 +7,7 @@ coroutine_t *coroutine_create(void *fn, uint64_t flag) {
     return coroutine_new(fn, solo, false);
 }
 
-coroutine_t *coroutine_run(void *fn, uint64_t flag) {
+coroutine_t *rt_coroutine_async(void *fn, uint64_t flag) {
     coroutine_t *co = coroutine_create(fn, flag);
 
     coroutine_dispatch(co);
