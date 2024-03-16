@@ -624,6 +624,7 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
 
 static void analyzer_co_async_expr(module_t *m, ast_co_async_t *go) {
     analyzer_local_fndef(m, go->fndef);
+
     if (go->flag_expr) {
         analyzer_expr(m, go->flag_expr);
     }
@@ -918,7 +919,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         analyzer_redeclare_check(m, fndef->symbol_name);
     }
 
-    // 在内部作用域中已 symbol fn 的形式注册该 fn_name,顺便改写名称,由于不确定符号的具体类型，所以暂时不注册到符号表中
+    // 当前 fn 内部作用域中注册当前 fn 的 symbol_name 主要用于递归调用, 由于不确定符号的具体类型，所以暂时不注册到符号表中
     string unique_ident = var_unique_ident(m, fndef->symbol_name);
     local_ident_t *fn_local = NEW(local_ident_t);
     fn_local->ident = fndef->symbol_name;
@@ -987,7 +988,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
     analyzer_end_scope(m);
 
-    // 退出当前 current
+    // - 退出当前 current
     m->analyzer_current = m->analyzer_current->parent;
 
     // 如果当前函数是定层函数，退出后 m->analyzer_current is null
@@ -1006,14 +1007,14 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         symbol_table_set(fndef->closure_name, SYMBOL_VAR, var_decl, true);
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
 
+        // 原始名称不变, 可以被 analyzer_resolve 寻找到
         local_ident_t *parent_var_local = NEW(local_ident_t);
-        parent_var_local->ident = fn_local->ident;// 原始名称不变
+        parent_var_local->ident = fn_local->ident;
         parent_var_local->unique_ident = var_decl->ident;
         parent_var_local->depth = m->analyzer_current->scope_depth;
         parent_var_local->decl = var_decl;
         parent_var_local->type = SYMBOL_VAR;
         slice_push(m->analyzer_current->locals, parent_var_local);
-
     } else {
         // 符号就是普通的 symbol fn 符号，现在可以注册到符号表中了
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
@@ -1075,18 +1076,21 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
 
         // 在父级作用域找到对应的 ident
         if (strcmp(*ident, local->ident) == 0) {
-            if (local->type == SYMBOL_VAR) {
-                local->is_capture = true;
-            }
+            local->is_capture = true;
             *ident = local->unique_ident;
             *type = local->type;
+
+            // fn(没有被 closure) 不需要 push 到 free index 中，可以直接在全局符号表中找到相应的 fn
+            if (local->type == SYMBOL_FN) {
+                return -1;
+            }
             return (int8_t) analyzer_push_free(current, true, i, *ident, *type);
         }
     }
 
     // 一级 parent 没有找到，则继续向上 parent 递归查询
     int8_t parent_free_index = analyzer_resolve_free(current->parent, ident, type);
-    if (parent_free_index != -1) {
+    if (parent_free_index >= 0) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
         return (int8_t) analyzer_push_free(current, false, parent_free_index, *ident, *type);
     }
@@ -1114,12 +1118,9 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     // - 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env[free_var_index] 进行改写
     symbol_type_t type = SYMBOL_VAR;
     int8_t free_var_index = analyzer_resolve_free(m->analyzer_current, &ident->literal, &type);
-    if (free_var_index != -1) {
-        // free 不一定是 var, 可能是 fn, 如果是 fn 只要改名了就行
-        if (type != SYMBOL_VAR) {
-            return true;
-        }
-
+    if (type == SYMBOL_FN) {
+        return true;
+    } else if (free_var_index >= 0) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;

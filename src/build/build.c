@@ -18,7 +18,6 @@
 #include "src/register/linearscan.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/checking.h"
-#include "src/semantic/generic.h"
 #include "src/ssa.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"

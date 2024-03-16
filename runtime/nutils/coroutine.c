@@ -1,21 +1,13 @@
-#include "coroutine.h"
-
 #include "runtime/processor.h"
 
-coroutine_t *coroutine_create(void *fn, uint64_t flag) {
-    bool solo = FLAG(CO_FLAG_SOLO) & flag;
-    return coroutine_new(fn, solo, false);
-}
-
-coroutine_t *rt_coroutine_async(void *fn, uint64_t flag) {
-    coroutine_t *co = coroutine_create(fn, flag);
-
-    coroutine_dispatch(co);
+coroutine_t *rt_coroutine_async(void *fn, int64_t flag, int result_size) {
+    coroutine_t *co = rt_coroutine_new(fn, flag, result_size);
+    rt_coroutine_dispatch(co);
 
     return co;
 }
 
-void coroutine_yield() {
+void rt_coroutine_yield() {
     processor_t *p = processor_get();
     co_yield_runnable(p, p->coroutine);
 }
@@ -51,7 +43,7 @@ static void uv_on_timer(uv_timer_t *timer) {
     uv_timer_stop(timer);
 
     // 注册 close 事件而不是瞬时 close!
-    uv_close((uv_handle_t *)timer, uv_timer_close_cb);
+    uv_close((uv_handle_t *) timer, uv_timer_close_cb);
 
     TRACEF("[coroutine_sleep.uv_on_timer] success stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co,
            co->status);
@@ -70,7 +62,7 @@ void coroutine_sleep(int64_t ms) {
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
     DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co, &p->uv_loop, p->share,
-           p->index, &timer, fetch_addr_value((addr_t)&timer));
+           p->index, &timer, fetch_addr_value((addr_t) &timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);

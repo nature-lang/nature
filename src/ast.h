@@ -605,6 +605,8 @@ static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
 static inline ast_expr_t *ast_int_expr(int line, int column, uint64_t number) {
     ast_expr_t *expr = NEW(ast_expr_t);
     expr->assert_type = AST_EXPR_LITERAL;
+    expr->line = line;
+    expr->column = column;
     ast_literal_t *literal = NEW(ast_literal_t);
     literal->kind = TYPE_INT;
     literal->value = itoa(number);

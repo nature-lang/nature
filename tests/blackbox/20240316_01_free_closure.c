@@ -9,8 +9,10 @@ static void test_basic() {
     char *raw = exec_output();
 
     // 字符串中包含 "main_co done"
-    char *str = "1 2 4 8 4 8\n"
-                "418063755 418063755\n";
+    char *str = "1111 1111\n"
+                "1111 2222 3333\n"
+                "in third 4 44440 44441 44442\n"
+                "in third 3 44440\n";
     assert_string_equal(raw, str);
 }
 

@@ -10,12 +10,25 @@ type future_t<T> = struct{
 type chan_t<T> = struct{
 }
 
-// 里的 T 没有机会给过来, 也可能有机会, 泛型是在 checking 倒出来的
-// 只要在合适的地方改写就行了, 这是方案 1, co_async, 只要把宏改写
-fn co_async<T>(fn() fn, int flag):future_t<T> {
-    var coroutine = rt_coroutine_new(fn as cptr, flag) as coroutine_t<T>
+fn co_async<T>(fn() function, int flag):future_t<T> {
+    int result_size = @sizeof(T)
+
+    var co = rt_coroutine_async(function as cptr, flag, result_size) as coroutine_t<T>
 
     return future_t<T>{
-        coroutine = co
+        co = co
     }
+}
+
+fn co_return<T>(ptr<T> result) {
+    // println("co_return", *result)
+    rt_coroutine_return(result as cptr)
+}
+
+fn future_t<T>.await():T {
+    // register wait result loop and yield
+    rt_coroutine_yield()
+
+    // rt_coroutine_result(&self.result)
+    return self.result
 }

@@ -1195,12 +1195,31 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, src_operand);
     }
 
+    // *var
+    // int a = *b
+    // vec<2> a = *b
+    // person_t a = *b
+    // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
+    // first 是个 ptr
+    if (unary_expr->operator== AST_OP_IA) {
+        if (!target) {
+            target = temp_var_operand_with_stack(m, expr.type);
+        }
+
+        // indirect addr first, and mov
+        lir_operand_t *src = first;
+        if (!is_alloc_stack(expr.type)) {
+            src = indirect_addr_operand(m, expr.type, first, 0);
+        }
+
+        return linear_super_move(m, expr.type, target, src);
+    }
+
     // neg source -> target
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
     }
 
-    LINEAR_ASSERTF(unary_expr->operator!= AST_OP_IA, "not support '*' op")
     lir_opcode_t type = ast_op_convert[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);
@@ -2089,36 +2108,6 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     return linear_super_move(m, fndef->type, target, result);
 }
 
-static lir_operand_t *linear_co_async(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_co_async_t *co_async = expr.value;
-
-    if (!target) {
-        target = temp_var_operand_with_stack(m, expr.target_type);
-    }
-
-    lir_operand_t *flag_operand = int_operand(0);
-    if (co_async->flag_expr) {
-        linear_expr(m, *co_async->flag_expr, flag_operand);
-    }
-
-    lir_operand_t *fn_operand = linear_fn_decl(m, (ast_expr_t){
-                                                          .line = co_async->fndef->line,
-                                                          .column = co_async->fndef->column,
-                                                          .assert_type = AST_FNDEF,
-                                                          .value = co_async->fndef,
-                                                          .target_type = type_kind_new(TYPE_FN_T),
-                                                  },
-                                               NULL);
-
-    // TODO 令人遗憾的事情大概是，这里创造不出来一个 feture?
-    // 改写表达式吧，别留到 checking 了，直接导向到 builtin call?
-    push_rt_call(m, RT_CALL_COROUTINE_ASYNC, target, 2, fn_operand, flag_operand);
-
-    // 这里不应该是 rt_call， 必须一步到位才行。target 也是奇怪的东西。必须一步到位，到位。。
-
-    return target;
-}
-
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
     symbol_t *symbol = symbol_table_get(ERRORT_TYPE_ALIAS);
@@ -2243,7 +2232,6 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
         [AST_EXPR_SET_NEW] = linear_set_new,
         [AST_CALL] = linear_call,
-        [AST_CO_ASYNC] = linear_co_async,
         [AST_FNDEF] = linear_fn_decl,
         [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,

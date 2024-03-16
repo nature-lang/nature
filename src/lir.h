@@ -148,6 +148,12 @@
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
 
 #define RT_CALL_COROUTINE_ASYNC "rt_coroutine_async"
+#define RT_CALL_COROUTINE_RETURN "rt_coroutine_return"
+#define FN_COROUTINE_RETURN_VAR "result"
+
+#define BUILTIN_CALL_CO_ASYNC "co_async"
+#define BUILTIN_CALL_CO_RETURN "co_return"
+
 
 #define RT_CALL_CO_THROW_ERROR "co_throw_error"
 #define RT_CALL_CO_REMOVE_ERROR "co_remove_error"

@@ -27,5 +27,5 @@ fn sleep(int ms) {
 }
 
 fn yield() {
-    coroutine_yield()
+    rt_coroutine_yield()
 }

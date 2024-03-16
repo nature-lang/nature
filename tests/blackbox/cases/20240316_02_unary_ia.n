@@ -1,0 +1,42 @@
+// 1.
+int a = 12
+ptr<int> p = &a
+int b = *p
+println(a, &a, p, b)
+
+// 2.
+[f32] a2 = [1.2, 2.3, 3.4]
+ptr<[f32]> p2 = &a2
+[f32] b2 = *p2
+
+b2[1] = 666.6
+
+println(a2[0], a2[1], a2[2], &a2, p2, b2[0], b2[1], b2[2])
+
+// 3.
+arr<int,3> a3 = [1, 2, 3]
+ptr<arr<int,3>> p3 = &a3
+arr<int,3> b3 = *p3
+
+b3[1] = 666
+
+println(a3[0], a3[1], a3[2], &a3, p3, b3[0], b3[1], b3[2])
+
+
+// 4. test >> compatibility
+println(100000 >>  0, 100000 >> 1, 100000 >> 2, 100000 >> 3)
+
+
+// 5.
+type person_t = struct{
+    int age
+    string name
+    bool married
+}
+var a4 = person_t{age=20, name="John", married=false}
+var p4 = &a4
+var b4 = *p4
+
+b4.age = 30
+b4.married = true
+println(a4.age, a4.name, a4.married, &a4, p4, b4.age, b4.name, b4.married)

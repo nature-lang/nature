@@ -243,11 +243,16 @@ static type_t parser_single_type(module_t *m) {
     }
 
     // int/float/bool/string/void/var/self
+    // TODO 直接实现 parser int 转换为 int64
     if (parser_is_basic_type(m)) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->type];
         result.value = NULL;
         result.impl_ident = type_kind_str[result.kind];
+        if (type_token->type == TOKEN_INT || type_token->type == TOKEN_UINT || type_token->type == TOKEN_FLOAT) {
+            result.origin_ident = type_token->literal;
+        }
+
         return result;
     }
 
@@ -2050,7 +2055,6 @@ static parser_rule rules[] = {
         [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
         [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
         [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
-        [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
         [TOKEN_PERSON] = {NULL, parser_binary, PRECEDENCE_FACTOR},
         [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
         [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
@@ -2058,7 +2062,10 @@ static parser_rule rules[] = {
         [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
         [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
         [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+
+        [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
         [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+
         [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
@@ -2091,6 +2098,15 @@ static token_type_t parser_infix_token(module_t *m, ast_expr_t expr) {
     // 歧义类型特殊处理
     if (infix_token->type == TOKEN_LEFT_ANGLE && !parser_left_angle_is_type_args(m, expr)) {
         infix_token->type = TOKEN_LESS_THAN;
+    }
+
+    // 如果是连续两个 >> , 则合并起来
+    // infix token 合并
+    if (infix_token->type == TOKEN_RIGHT_ANGLE && parser_next_is(m, 1, TOKEN_RIGHT_ANGLE)) {
+        parser_advance(m);
+        infix_token = parser_peek(m);
+        infix_token->literal = ">>";
+        infix_token->type = TOKEN_RIGHT_SHIFT;// 类型改写
     }
 
     return infix_token->type;
@@ -2287,17 +2303,18 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     vardef->right = *call_expr;
     vardef_stmt->value = vardef;
 
-    // coroutine_return(&result)
+    // rt_coroutine_return(&result)
     ast_call_t *call = NEW(ast_call_t);
-    call->left = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN);
+    call->left = *ast_ident_expr(fndef->line, fndef->column, BUILTIN_CALL_CO_RETURN);
     call->args = ct_list_new(sizeof(ast_expr_t));
-    ast_expr_t *arg = NEW(ast_expr_t);
+    ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
     unary->operator= AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
-    ct_list_push(call->args, &arg);
+
+    ct_list_push(call->args, arg);
     ast_stmt_t *call_stmt = stmt_new(m);
     call_stmt->assert_type = AST_CALL;
     call_stmt->value = call;

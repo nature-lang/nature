@@ -1,0 +1,13 @@
+import coroutine as co
+
+fn sum(int a, int b):int {
+    println('in sum', a, b)
+    return a + b
+}
+
+var second = 233
+var fut = go sum(1, second)
+
+println('will sleep')
+co.sleep(500)
+println('main co done')

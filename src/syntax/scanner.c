@@ -164,16 +164,18 @@ token_type_t scanner_special_char(module_t *m) {
                 return TOKEN_LESS_EQUAL;
             }
             return TOKEN_LEFT_ANGLE;
-        case '>':
-            if (scanner_match(m, '>')) {
-                if (scanner_match(m, '=')) {// >>=
-                    return TOKEN_RIGHT_SHIFT_EQUAL;
-                }
-                return TOKEN_RIGHT_SHIFT;      // >>
-            } else if (scanner_match(m, '=')) {// >=
+        case '>': {
+            char *p = m->s_cursor.guard;
+            if (p[0] == '=') {
                 return TOKEN_GREATER_EQUAL;
             }
+
+            if (p[0] == '>' && p[1] == '=') {
+                return TOKEN_RIGHT_SHIFT_EQUAL;
+            }
+
             return TOKEN_RIGHT_ANGLE;// >
+        }
         case '&':
             return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
         case '|':

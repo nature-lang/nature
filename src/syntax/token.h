@@ -13,9 +13,9 @@ typedef enum {
     TOKEN_RIGHT_SQUARE,// []
     TOKEN_LEFT_CURLY,
     TOKEN_RIGHT_CURLY,// {}
-    TOKEN_LEFT_ANGLE,
-    TOKEN_LESS_THAN,
-    TOKEN_RIGHT_ANGLE,// <>
+    TOKEN_LEFT_ANGLE, // <
+    TOKEN_LESS_THAN,  // <
+    TOKEN_RIGHT_ANGLE,// >
 
     TOKEN_COMMA,    // ,
     TOKEN_DOT,      // .
@@ -59,7 +59,7 @@ typedef enum {
 
     // LITERALS.
     TOKEN_IDENT,
-    TOKEN_POUND, // #
+    TOKEN_POUND,// #
     TOKEN_MACRO_IDENT,
     TOKEN_LITERAL_STRING,
     TOKEN_LITERAL_FLOAT,
@@ -233,7 +233,7 @@ static string token_str[] = {
         // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
-//        [TOKEN_SIZEOF] = "sizeof",
+        //        [TOKEN_SIZEOF] = "sizeof",
         [TOKEN_GO] = "go",
 
         [TOKEN_STMT_EOF] = ";",

@@ -23,8 +23,6 @@
 #define MACRO_REFLECT_HASH "reflect_hash"
 #define MACRO_CO_ASYNC "co_async"
 
-#define FN_COROUTINE_RETURN "coroutine_return"
-#define FN_COROUTINE_RETURN_VAR "result"
 
 // 临时表，用来临时记录, key = ident, value is any
 extern table_t *can_import_symbol_table;
