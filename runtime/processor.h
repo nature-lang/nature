@@ -167,6 +167,8 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
 void coroutine_sleep(int64_t ms);
 
+void rt_coroutine_await();
+
 void rt_coroutine_yield();
 
 // ------------ libuv 的一些回调 -----------------------

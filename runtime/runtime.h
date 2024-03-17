@@ -244,6 +244,9 @@ typedef struct coroutine_t {
     void *result;  // coroutine 如果存在返回值，相关的值会放在 result 中
     int64_t result_size;
 
+    struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
+    mutex_t dead_locker;
+
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
     uint64_t gc_black;

@@ -161,7 +161,19 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
                co);
     }
 
+    // await 回调
+    mutex_lock(&co->dead_locker);
+    if (co->await_co) {
+        coroutine_t *await_co = co->await_co;
+        mutex_lock(&await_co->p->co_locker);
+        co_set_status(p, await_co, CO_STATUS_RUNNABLE);
+        rt_linked_push(&await_co->p->runnable_list, await_co);
+        mutex_unlock(&await_co->p->co_locker);
+    }
+
     co_set_status(p, co, CO_STATUS_DEAD);
+    mutex_unlock(&co->dead_locker);
+
     DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
     aco_exit1(&co->aco);
 }
@@ -910,4 +922,17 @@ void rt_coroutine_return(void *ptr) {
     assert(co->result);
     memmove(co->result, ptr, co->result_size);
     co->result = ptr;
+}
+
+void rt_coroutine_await(coroutine_t *target_co) {
+    mutex_lock(&target_co->dead_locker);
+    coroutine_t *src_co = coroutine_get();
+    if (target_co->status == CO_STATUS_DEAD) {
+        mutex_unlock(&target_co->dead_locker);
+        return;
+    }
+    target_co->await_co = src_co;
+
+    mutex_unlock(&target_co->dead_locker);
+    co_yield_waiting(src_co->p, src_co);
 }
