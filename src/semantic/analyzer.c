@@ -565,7 +565,7 @@ static void analyzer_end_scope(module_t *m) {
             break;
         }
 
-        if (local->is_capture) {
+        if (local->is_capture && local->type != SYMBOL_FN) {
             slice_push(m->analyzer_current->fndef->be_capture_locals, local);
         }
 

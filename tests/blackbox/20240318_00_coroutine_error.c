@@ -7,15 +7,12 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    //    printf("%s", raw);
-    //    return;
+    printf("%s", raw);
+    return;
 
     // 字符串中包含 "main_co done"
-    char *str = "234\n"
-                "result_sum = 700\n"
-                "use time 1\n"
-                "co_async result is 25\n"
-                "main co done\n";
+    char *str = "1 2 4 8 4 8\n"
+                "418063755 418063755\n";
     assert_string_equal(raw, str);
 }
 

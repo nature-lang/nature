@@ -1,0 +1,16 @@
+import coroutine as co
+
+fn div(i32 dividend, i32 divisor):i32 {
+    if (divisor == 0) {
+        throw 'divisor cannot be 0'
+    }
+
+    return dividend / divisor
+}
+
+var fut = @co_async((fn() {
+    println('in closure fn')
+    throw 'in closure throw err'
+})(), co.SOLO)
+
+co.sleep(500)

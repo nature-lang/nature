@@ -317,8 +317,8 @@ void zero_fn() {
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
     PRE_RTCALL_HOOK();
 
-    DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld", msg->data, path, line, column);
     coroutine_t *co = coroutine_get();
+    TDEBUGF("[runtime.co_throw_error] co=%p, msg=%s, path=%s, line=%ld, column=%ld", co, msg->data, path, line, column);
 
     n_errort *error = n_error_new(msg, true);
 
@@ -337,8 +337,9 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
 
 n_errort co_remove_error() {
     PRE_RTCALL_HOOK();
-
     coroutine_t *co = coroutine_get();
+    assert(co->error);
+
     n_errort *error = co->error;
     DEBUGF("[runtime.co_remove_error] remove error: %p, has? %d", error, error ? error->has : 0);
 

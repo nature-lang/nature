@@ -305,7 +305,7 @@ int runtime_main(int argc, char *argv[]);
 
 void rt_coroutine_set_error(char *msg);
 
-void coroutine_dump_error(n_errort *error);
+void coroutine_dump_error(coroutine_t *co,n_errort *error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

@@ -150,8 +150,8 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
 
     ((void_fn_t) co->fn)();
 
-    DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, will set status to rtcall", p->share, p->index, co,
-           co->main);
+    TDEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, err=%p, will set status to rtcall", p->share, p->index, co,
+            co->main, co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
     if (co->main) {
@@ -164,11 +164,17 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     // await 回调
     mutex_lock(&co->dead_locker);
     if (co->await_co) {
+        // 同事可以抑制 coroutine 的错误
         coroutine_t *await_co = co->await_co;
         mutex_lock(&await_co->p->co_locker);
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_push(&await_co->p->runnable_list, await_co);
         mutex_unlock(&await_co->p->co_locker);
+    } else {
+        if (co->error && co->error->has) {
+            coroutine_dump_error(co, co->error);
+            exit(EXIT_FAILURE);
+        }
     }
 
     co_set_status(p, co, CO_STATUS_DEAD);
@@ -529,16 +535,24 @@ void rt_coroutine_set_error(char *msg) {
     co->error = error;
 }
 
-void coroutine_dump_error(n_errort *error) {
-    DEBUGF("[runtime.coroutine_dump_error] errort base=%p", error);
+void coroutine_dump_error(coroutine_t *co, n_errort *error) {
+    DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, error);
+
     n_string_t *msg = error->msg;
     DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg->length, msg->data);
     assert(error->traces->length > 0);
 
     n_trace_t first_trace = {};
     rt_vec_access(error->traces, 0, &first_trace);
-    char *dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
-                              first_trace.column);
+    char *dump_msg;
+    if (co->main) {
+        dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
+                            first_trace.column);
+
+    } else {
+        dump_msg = dsprintf("coroutine %p catch error: '%s' at %s:%d:%d\n", co, (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
+                            first_trace.column);
+    }
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
@@ -921,7 +935,16 @@ void rt_coroutine_return(void *ptr) {
     coroutine_t *co = coroutine_get();
     assert(co->result);
     memmove(co->result, ptr, co->result_size);
-    co->result = ptr;
+    DEBUGF("[runtime.rt_coroutine_return] co=%p, result=%p, int_result=%ld, result_size=%ld", co, co->result, *(int64_t *) co->result, co->result_size);
+}
+
+void *rt_coroutine_result(coroutine_t *co) {
+    DEBUGF("[runtime.rt_coroutine_result] co=%p, result=%p, int_result=%ld", co, co->result, *(int64_t *) co->result);
+    return co->result;
+}
+
+void *rt_coroutine_error(coroutine_t *co) {
+    return co->error;
 }
 
 void rt_coroutine_await(coroutine_t *target_co) {
@@ -932,7 +955,14 @@ void rt_coroutine_await(coroutine_t *target_co) {
         return;
     }
     target_co->await_co = src_co;
-
+    co_set_status(src_co->p, src_co, CO_STATUS_WAITING);
     mutex_unlock(&target_co->dead_locker);
-    co_yield_waiting(src_co->p, src_co);
+
+    // 一旦 unlock 就可能会发生 runnable push 以及 status set, 但是不影响当前 yield
+    _co_yield(src_co->p, src_co);
+
+    // waiting -> syscall
+    co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
+
+    // target_co 错误处理
 }

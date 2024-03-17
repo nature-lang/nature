@@ -2411,7 +2411,7 @@ static ast_expr_t parser_expr(module_t *m) {
         return parser_go_expr(m);
     }
 
-    // fn def, 也能写到括号里面呀
+    // fn def, 也能写到括号里面呀, TODO 无法支持闭包自调用
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_expr(m);
     }

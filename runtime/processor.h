@@ -150,7 +150,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size);
 
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, int result_size);
 
-void rt_coroutine_return(void* ptr);
+void rt_coroutine_return(void *ptr);
 
 /**
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
@@ -167,9 +167,13 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
 void coroutine_sleep(int64_t ms);
 
-void rt_coroutine_await();
+void rt_coroutine_await(coroutine_t *co);
 
 void rt_coroutine_yield();
+
+void *rt_coroutine_error(coroutine_t *co);
+
+void *rt_coroutine_result(coroutine_t *co);
 
 // ------------ libuv 的一些回调 -----------------------
 static void uv_on_timer(uv_timer_t *timer);

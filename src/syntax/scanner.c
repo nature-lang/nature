@@ -167,10 +167,13 @@ token_type_t scanner_special_char(module_t *m) {
         case '>': {
             char *p = m->s_cursor.guard;
             if (p[0] == '=') {
+                scanner_guard_advance(m);
                 return TOKEN_GREATER_EQUAL;
             }
 
             if (p[0] == '>' && p[1] == '=') {
+                scanner_guard_advance(m);
+                scanner_guard_advance(m);
                 return TOKEN_RIGHT_SHIFT_EQUAL;
             }
 

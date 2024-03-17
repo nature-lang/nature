@@ -46,8 +46,8 @@ typedef enum {
     TOKEN_AND_EQUAL,        // &=
     TOKEN_OR_EQUAL,         // |=
     TOKEN_XOR_EQUAL,        // ^=
-    TOKEN_LEFT_SHIFT_EQUAL, // >>=
-    TOKEN_RIGHT_SHIFT_EQUAL,// <<=
+    TOKEN_LEFT_SHIFT_EQUAL, // <<=
+    TOKEN_RIGHT_SHIFT_EQUAL,// >>=
 
     // 位运算
     TOKEN_TILDE,      // ~

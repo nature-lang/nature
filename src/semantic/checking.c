@@ -753,13 +753,16 @@ static type_t checking_co_async(module_t *m, ast_expr_t *expr) {
     ast_stmt_t *vardef_stmt = fndef->body->take[0];
 
     ast_vardef_stmt_t *vardef = vardef_stmt->value;
-    assert(vardef->right.assert_type == AST_CALL);
+    CHECKING_ASSERTF(vardef->right.assert_type == AST_CALL, "co_async fn must call expression")
+
     type_t return_type = infer_right_expr(m, &vardef->right, type_kind_new(TYPE_UNKNOWN));
     assert(return_type.kind != TYPE_UNKNOWN);
     if (return_type.kind == TYPE_VOID) {
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         call_stmt->assert_type = AST_CALL;
         call_stmt->value = vardef->right.value;
+        call_stmt->line = vardef->right.line;
+        call_stmt->column = vardef->right.column;
 
         fndef->body = slice_new();
         slice_push(fndef->body, call_stmt);
@@ -1778,7 +1781,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     }
 
     // 左值是一个表达式，进行表达式的类型 checking
-    type_t left_type = infer_left_expr(m, &call->left);
+    type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
 
     type_fn_t *type_fn = left_type.fn;
