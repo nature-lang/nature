@@ -16,8 +16,8 @@ static void test_basic() {
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
+    //    printf("%s", raw);
+    //    return;
 
     char actual[4096] = {0};
     memmove(actual, raw, 4096);

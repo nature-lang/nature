@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 // #include "processor.h"
+#include "runtime/nutils/fn.h"
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
 
@@ -34,6 +35,10 @@ int runtime_main(int argc, char *argv[]) {
     // - heap memory init
     memory_init();
     RDEBUGF("[runtime_main] memory init success");
+
+    // - env clsoure
+    env_upvalue_table = table_new();
+    mutex_init(&env_upvalue_locker, false);
 
     // - coroutine init
     processor_init();

@@ -563,8 +563,8 @@ static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
     return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(ident, is_local));
 }
 
-static inline lir_op_t *lir_op_unique_label(module_t *m, char *ident) {
-    char *unique_ident = label_unique_ident(m, ident);
+static inline lir_op_t *lir_op_label_with_prefix(module_t *m, char *ident) {
+    char *unique_ident = label_ident_with_prefix(m, ident);
     return lir_op_label(unique_ident, true);
 }
 
@@ -820,8 +820,8 @@ static inline lir_operand_t *indexed_addr_operand(module_t *m, type_t type, lir_
     return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
 }
 
-static inline lir_operand_t *unique_var_operand_without_module(module_t *m, type_t type, char *ident) {
-    string result = make_unique_ident(m, ident);// not with module
+static inline lir_operand_t *unique_var_operand_no_module(module_t *m, type_t type, char *ident) {
+    string result = var_ident_with_index(m, ident);
 
     symbol_table_set_var(result, type);
 

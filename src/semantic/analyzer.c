@@ -254,7 +254,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
     if (current == NULL) {
         // - 当前 module 的全局 type
         // analyzer 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
-        char *global_ident = ident_with_module(m->ident, ident);
+        char *global_ident = ident_with_prefix(m->ident, ident);
         symbol_t *s = table_get(symbol_table, global_ident);
         if (s) {
             return global_ident;
@@ -276,7 +276,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
                 }
             } else if (import->module_type == MODULE_TYPE_COMMON) {
                 if (str_equal(import->as, "*")) {
-                    char *temp = ident_with_module(import->module_ident, ident);
+                    char *temp = ident_with_prefix(import->module_ident, ident);
                     if (table_exist(can_import_symbol_table, temp)) {
                         return temp;
                     }
@@ -331,7 +331,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
             ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type_alias->import_as);
 
-            char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
+            char *unique_ident = ident_with_prefix(import->module_ident, type_alias->ident);
             // 更新 ident 指向
             type_alias->ident = unique_ident;
 
@@ -1160,7 +1160,7 @@ static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
             }
         } else if (import->module_type == MODULE_TYPE_COMMON) {
             if (str_equal(import->as, "*")) {
-                char *temp = ident_with_module(import->module_ident, ident->literal);
+                char *temp = ident_with_prefix(import->module_ident, ident->literal);
                 if (table_exist(can_import_symbol_table, temp)) {
                     ident->literal = temp;
                     return true;
@@ -1196,7 +1196,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
 
     // - 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
-    char *temp = ident_with_module(m->ident, ident->literal);
+    char *temp = ident_with_prefix(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
         ident->literal = temp;// 找到了则修改为全局名称
@@ -1232,7 +1232,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
 
         ast_ident *ident = select->left.value;
 
-        char *current_module_ident = ident_with_module(m->ident, ident->literal);
+        char *current_module_ident = ident_with_prefix(m->ident, ident->literal);
         symbol_t *s = table_get(symbol_table, current_module_ident);
         if (s != NULL) {
             ident->literal = current_module_ident;// 找到了则修改为全局名称
@@ -1244,7 +1244,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
             // (不需要检测 import package 是否存在，这在 linker 中会做的)
-            char *unique_ident = ident_with_module(import->module_ident, select->key);
+            char *unique_ident = ident_with_prefix(import->module_ident, select->key);
 
             // 检测 import ident 是否存在
             if (!table_exist(can_import_symbol_table, unique_ident)) {
@@ -1561,7 +1561,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
-            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             slice_push(m->global_symbols, s);
 
@@ -1575,7 +1575,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
             ast_fndef_t *fndef = stmt->value;
             fndef->is_tpl = true;
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name);// 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
 
             slice_push(m->global_symbols, s);
@@ -1631,7 +1631,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_vardef_stmt_t *vardef = stmt->value;
             ast_var_decl_t *var_decl = &vardef->var_decl;
             analyzer_type(m, &var_decl->type);
-            var_decl->ident = ident_with_module(m->ident, var_decl->ident);
+            var_decl->ident = ident_with_prefix(m->ident, var_decl->ident);
             slice_push(m->global_vardef, vardef);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             ANALYZER_ASSERTF(s, "var '%s' redeclared", var_decl->ident);
@@ -1657,7 +1657,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
-            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             ANALYZER_ASSERTF(s, "type alias '%s' redeclared", type_alias->ident);
             slice_push(m->global_symbols, s);
@@ -1683,7 +1683,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
-            fndef->symbol_name = ident_with_module(m->ident, symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->symbol_name);
             slice_push(m->global_symbols, s);
@@ -1697,7 +1697,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     if (var_assign_list->count > 0) {
         // 添加 init fn
         ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
-        fn_init->symbol_name = ident_with_module(analyzer_force_unique_ident(m), FN_INIT_NAME);
+        fn_init->symbol_name = ident_with_prefix(analyzer_force_unique_ident(m), FN_INIT_NAME);
         fn_init->fn_name = fn_init->symbol_name;
         fn_init->return_type = type_kind_new(TYPE_VOID);
         fn_init->params = ct_list_new(sizeof(ast_var_decl_t));

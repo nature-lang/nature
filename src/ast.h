@@ -534,6 +534,8 @@ struct ast_fndef_t {
     slice_t *body;// ast_stmt* 函数体
     void *closure;// closure 数据冗余
 
+    bool is_co_async; // coroutine closure fn, default is false
+
 
     // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
     //    slice_t *generics_assigns;// value 是一个 table，保存了具体的 param 对应的 arg 参数
@@ -682,6 +684,7 @@ static inline bool can_assign(ast_type_t t) {
 
 static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
+    fndef->is_co_async = false;
     fndef->module = m;
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;

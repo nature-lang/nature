@@ -34,7 +34,7 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->reflect_hash = string_rtype->hash;
     memmove(str->data, raw_string, length);
 
-    TDEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
+    DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
     return str;
 }
 

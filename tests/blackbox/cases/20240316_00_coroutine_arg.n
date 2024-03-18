@@ -37,9 +37,9 @@ println('use time', end - start)
 
 
 // 3. macro and solo
-var fut3 = @co_async(sum(12, 13), co.SOLO)
-var result = fut3.await()
-println('co_async result is', result)
+var fut7 = @co_async(sum(12, 13), co.SOLO)
+var result7 = fut7.await()
+println('co_async result is', result7)
 
 
 println('main co done')

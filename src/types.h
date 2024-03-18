@@ -451,7 +451,7 @@ typedef struct closure_t {
     table_t *ssa_var_block_exists;// 是否已经添加过，避免 var+block_name 的重复添加
 
     table_t *closure_var_table;
-    slice_t *closure_vars;
+    slice_t *closure_vars; // 引用传递，连通了 LIR_OPCODE_ENV_CLOSURE 和 LIR_OPCODE_ENV_CAPTURE 的 first_value
 
     basic_block_t *entry;   // 基本块入口, 指向 blocks[0]
     table_t *interval_table;// key 包括 fixed register as 和 variable.ident

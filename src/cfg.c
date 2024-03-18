@@ -71,7 +71,7 @@ static void broken_critical_edges(closure_t *c) {
             basic_block_t *p = b->preds->take[i];// 从 p->b 这条边
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
-                lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
+                lir_op_t *label_op = lir_op_label_with_prefix(c->module, TEMP_LABEL);
                 lir_operand_t *label = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_label_operand(b->name, true));
 
@@ -241,7 +241,7 @@ static void cfg_build(closure_t *c) {
             // 如果下一条指令不是 LABEL，则使用主动添加  label 指令
             lir_op_t *next_op = succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
-                lir_op_t *temp_label = lir_op_unique_label(c->module, TEMP_LABEL);
+                lir_op_t *temp_label = lir_op_label_with_prefix(c->module, TEMP_LABEL);
                 linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }

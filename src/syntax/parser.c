@@ -2331,6 +2331,7 @@ static ast_expr_t parser_macro_type_eq(module_t *m) {
 
 static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+    fndef->is_co_async = true;
     fndef->symbol_name = NULL;
     fndef->fn_name = NULL;
     fndef->params = ct_list_new(sizeof(ast_var_decl_t));

@@ -1,7 +1,7 @@
 #include "linearscan.h"
-#include "interval.h"
 #include "allocate.h"
 #include "amd64.h"
+#include "interval.h"
 #include "src/debug/debug.h"
 
 /**
@@ -9,7 +9,7 @@
  * @param c
  */
 static void linear_posthandle(closure_t *c) {
-    if (c->closure_vars == NULL) {
+    if (c->closure_vars == NULL || c->closure_vars->count == 0) {
         return;
     }
 

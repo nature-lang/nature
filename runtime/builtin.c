@@ -15,16 +15,16 @@ static void print_arg(n_union_t *arg) {
     char sprint_buf[1024];
 
     assert(arg && "[runtime.print_arg] arg is null");
-    TDEBUGF("[runtime.print_arg] arg=%p, ptr_value=%p", arg, arg->value.ptr_value);
+    DEBUGF("[runtime.print_arg] arg=%p, ptr_value=%p", arg, arg->value.ptr_value);
     assert(arg->rtype && "[runtime.print_arg] arg->rtype is null");
-    TDEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
+    DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // n_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
         n_string_t *s = arg->value.ptr_value;// 字符串的内存视角
         assert(s && "[runtime.print_arg] string is null");
 
-        TDEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%p, len=%lu, cap=%lu, hash=%ld/%ld",
+        DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%p, len=%lu, cap=%lu, hash=%ld/%ld",
                 s, s->length, s->data, s->length, s->capacity, s->reflect_hash, s->ele_reflect_hash);
 
 
