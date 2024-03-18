@@ -37,7 +37,7 @@ static void cfg_pruning(closure_t *c) {
                 basic_block_t *pred = b->preds->take[j];
 
                 for (int k = 0; k < pred->succs->count; k++) {
-                    if (((basic_block_t *)pred->succs->take[k])->id == b->id) {
+                    if (((basic_block_t *) pred->succs->take[k])->id == b->id) {
                         slice_remove(pred->succs, k);
                         break;
                     }
@@ -49,7 +49,7 @@ static void cfg_pruning(closure_t *c) {
                 basic_block_t *succ = b->succs->take[j];
 
                 for (int k = 0; k < succ->preds->count; k++) {
-                    if (((basic_block_t *)succ->preds->take[k])->id == b->id) {
+                    if (((basic_block_t *) succ->preds->take[k])->id == b->id) {
                         slice_remove(succ->preds, k);
                         break;
                     }
@@ -68,7 +68,7 @@ static void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *b = SLICE_VALUE(c->blocks);
         for (int i = 0; i < b->preds->count; ++i) {
-            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
+            basic_block_t *p = b->preds->take[i];// 从 p->b 这条边
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
                 lir_op_t *label_op = lir_op_unique_label(c->module, TEMP_LABEL);
@@ -150,7 +150,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         lir_op_t *op = LINKED_VALUE();
         // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
         if (op->code == LIR_OPCODE_RETURN) {
-            return; // 找到了 return 指令返回
+            return;// 找到了 return 指令返回
         }
     }
 
@@ -170,7 +170,7 @@ static void cfg_build(closure_t *c) {
     table_t *basic_block_table = table_new();
 
     // 1.根据 label(if/else/while 等都会产生 label) 分块,仅考虑顺序块关联关系
-    basic_block_t *current_block = NULL; // 第一次 traverse 时还没有任何 block
+    basic_block_t *current_block = NULL;// 第一次 traverse 时还没有任何 block
     lir_op_t *label_op = linked_first(c->operations)->value;
     assert(label_op->code == LIR_OPCODE_LABEL && "first op must be label");
 
@@ -262,8 +262,8 @@ static void cfg_build(closure_t *c) {
             continue;
         }
 
-        char *name = ((lir_symbol_label_t *)last_op->output->value)->ident;
-        basic_block_t *target_block = (basic_block_t *)table_get(basic_block_table, name);
+        char *name = ((lir_symbol_label_t *) last_op->output->value)->ident;
+        basic_block_t *target_block = (basic_block_t *) table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);
@@ -272,8 +272,8 @@ static void cfg_build(closure_t *c) {
         if (!lir_op_branch(second_last_op)) {
             continue;
         }
-        name = ((lir_symbol_label_t *)second_last_op->output->value)->ident;
-        target_block = (basic_block_t *)table_get(basic_block_table, name);
+        name = ((lir_symbol_label_t *) second_last_op->output->value)->ident;
+        target_block = (basic_block_t *) table_get(basic_block_table, name);
         assert(target_block != NULL && "target block must exist");
         slice_push(current_block->succs, target_block);
         slice_push(target_block->preds, current_block);

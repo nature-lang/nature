@@ -141,6 +141,8 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 
     assert(ref > 0 && "ref must be a valid address");
 
+    DEBUGF("[rt_vec_push] vec=%p, ref=%p, hash=%ld, ele_hash=%ld, len=%ld, cap=%ld", vec, ref, vec->reflect_hash, vec->ele_reflect_hash, vec->length, vec->capacity);
+
     // TODO debug 验证 gc 问题
     if (span_of((addr_t) vec) == NULL || vec->ele_reflect_hash <= 0) {
         processor_t *p = processor_get();

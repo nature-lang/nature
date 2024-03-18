@@ -11,12 +11,12 @@
  */
 n_string_t *string_new(void *raw_string, int64_t length) {
     PRE_RTCALL_HOOK();
-    TRACEF("[string_new] raw_string=%s, length=%lu", (char *)raw_string, length);
+    TRACEF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
 
     // byte 数组，先手动创建一个简单类型
     rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
 
-    int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
+    int64_t capacity = length + 1;// +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rt_array_new(element_rtype, capacity);
     // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
@@ -34,7 +34,7 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->reflect_hash = string_rtype->hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
+    TDEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
     return str;
 }
 
@@ -87,7 +87,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
 
 n_int_t rt_string_length(n_string_t *a) {
     PRE_RTCALL_HOOK();
-    return (n_int_t)a->length;
+    return (n_int_t) a->length;
 }
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b) {

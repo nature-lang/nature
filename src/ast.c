@@ -4,6 +4,13 @@
 #include "types.h"
 #include "utils/helper.h"
 
+static slice_t *ast_body_copy(module_t *m, slice_t *body);
+
+static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp);
+
+static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
+
+static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp);
 
@@ -123,6 +130,7 @@ type_t type_copy(module_t *m, type_t temp) {
     type_t type = temp;
     if (temp.origin_ident) {
         type.origin_ident = strdup(temp.origin_ident);
+        type.origin_type_kind = temp.origin_type_kind;
     }
     if (temp.impl_ident) {
         type.impl_ident = strdup(temp.impl_ident);
@@ -222,15 +230,22 @@ static ast_new_expr_t *ast_new_expr_copy(module_t *m, ast_new_expr_t *temp) {
     return new_expr;
 }
 
-static ast_sizeof_expr_t *ast_sizeof_expr_copy(module_t *m, ast_sizeof_expr_t *temp) {
-    ast_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_sizeof_expr_t, temp);
+static ast_macro_sizeof_expr_t *ast_sizeof_expr_copy(module_t *m, ast_macro_sizeof_expr_t *temp) {
+    ast_macro_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_macro_sizeof_expr_t, temp);
     sizeof_expr->target_type = type_copy(m, temp->target_type);
     return sizeof_expr;
 }
 
-static ast_reflect_hash_expr_t *ast_reflect_hash_expr_copy(module_t *m, ast_reflect_hash_expr_t *temp) {
-    ast_reflect_hash_expr_t *expr = COPY_NEW(ast_reflect_hash_expr_t, temp);
+static ast_macro_reflect_hash_expr_t *ast_reflect_hash_expr_copy(module_t *m, ast_macro_reflect_hash_expr_t *temp) {
+    ast_macro_reflect_hash_expr_t *expr = COPY_NEW(ast_macro_reflect_hash_expr_t, temp);
     expr->target_type = type_copy(m, temp->target_type);
+    return expr;
+}
+
+static ast_macro_type_eq_expr_t *ast_type_eq_expr_copy(module_t *m, ast_macro_type_eq_expr_t *temp) {
+    ast_macro_type_eq_expr_t *expr = COPY_NEW(ast_macro_type_eq_expr_t, temp);
+    expr->left_type = type_copy(m, temp->left_type);
+    expr->right_type = type_copy(m, temp->right_type);
     return expr;
 }
 
@@ -376,8 +391,8 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(module_t *m, ast_tuple_destr_t *t
     return tuple_destr;
 }
 
-static ast_co_async_t *ast_co_async_copy(module_t *m, ast_co_async_t *temp) {
-    ast_co_async_t *expr = COPY_NEW(ast_co_async_t, temp);
+static ast_macro_co_async_t *ast_co_async_copy(module_t *m, ast_macro_co_async_t *temp) {
+    ast_macro_co_async_t *expr = COPY_NEW(ast_macro_co_async_t, temp);
     expr->fndef = ast_fndef_copy(m, temp->fndef);
     if (expr->flag_expr) {
         expr->flag_expr = ast_expr_copy(m, expr->flag_expr);
@@ -464,7 +479,7 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_call_copy(m, temp->value);
             break;
         }
-        case AST_CO_ASYNC: {
+        case AST_MACRO_CO_ASYNC: {
             expr->value = ast_co_async_copy(m, temp->value);
             break;
         }
@@ -492,12 +507,16 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_catch_copy(m, temp->value);
             break;
         }
-        case AST_EXPR_SIZEOF: {
+        case AST_MACRO_EXPR_SIZEOF: {
             expr->value = ast_sizeof_expr_copy(m, temp->value);
             break;
         }
-        case AST_EXPR_REFLECT_HASH: {
+        case AST_MACRO_EXPR_REFLECT_HASH: {
             expr->value = ast_reflect_hash_expr_copy(m, temp->value);
+            break;
+        }
+        case AST_MACRO_EXPR_TYPE_EQ: {
+            expr->value = ast_type_eq_expr_copy(m, temp->value);
             break;
         }
         case AST_EXPR_SELECT: {
@@ -509,6 +528,12 @@ static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
     }
 
     return expr;
+}
+
+static ast_expr_fake_stmt_t *ast_expr_fake_copy(module_t *m, ast_expr_fake_stmt_t *temp) {
+    ast_expr_fake_stmt_t *stmt = COPY_NEW(ast_expr_fake_stmt_t, temp);
+    stmt->expr = *ast_expr_copy(m, &temp->expr);
+    return stmt;
 }
 
 static ast_var_decl_t *ast_var_decl_copy(module_t *m, ast_var_decl_t *temp) {
@@ -618,6 +643,10 @@ static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp) {
 static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp) {
     ast_stmt_t *stmt = COPY_NEW(ast_stmt_t, temp);
     switch (temp->assert_type) {
+        case AST_STMT_EXPR_FAKE: {
+            stmt->value = ast_expr_fake_copy(m, temp->value);
+            break;
+        }
         case AST_VAR_DECL: {
             stmt->value = ast_var_decl_copy(m, temp->value);
             break;

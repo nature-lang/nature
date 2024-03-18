@@ -69,6 +69,7 @@ static type_kind token_to_kind[] = {
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
         [TOKEN_NULL] = TYPE_NULL,
+        [TOKEN_VOID] = TYPE_VOID,
         [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
         [TOKEN_LITERAL_INT] = TYPE_INT,
         [TOKEN_LITERAL_STRING] = TYPE_STRING,

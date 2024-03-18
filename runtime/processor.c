@@ -11,6 +11,7 @@ processor_t *share_processor_index[1024] = {0};
 processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
 processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
+int coroutine_count;              // coroutine 累计数量
 
 int solo_processor_count;// 累计数量
 rt_linked_t global_gc_worklist;
@@ -150,8 +151,8 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
 
     ((void_fn_t) co->fn)();
 
-    TDEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, err=%p, will set status to rtcall", p->share, p->index, co,
-            co->main, co->error);
+    DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, err=%p, will set status to rtcall", p->share, p->index, co,
+           co->main, co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
     if (co->main) {
@@ -484,6 +485,7 @@ void processor_init() {
     mutex_init(&solo_processor_locker, false);
     gc_stage = GC_STAGE_OFF;
     solo_processor_count = 0;
+    coroutine_count = 0;
 
     rt_linked_init(&global_gc_worklist, NULL, NULL);
     mutex_init(&global_gc_locker, false);
@@ -546,11 +548,11 @@ void coroutine_dump_error(coroutine_t *co, n_errort *error) {
     rt_vec_access(error->traces, 0, &first_trace);
     char *dump_msg;
     if (co->main) {
-        dump_msg = dsprintf("catch error: '%s' at %s:%d:%d\n", (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
+        dump_msg = dsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
                             first_trace.column);
 
     } else {
-        dump_msg = dsprintf("coroutine %p catch error: '%s' at %s:%d:%d\n", co, (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
+        dump_msg = dsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) error->msg->data, (char *) first_trace.path->data, first_trace.line,
                             first_trace.column);
     }
 
@@ -638,6 +640,7 @@ void post_rtcall_hook(char *target) {
 coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
     mutex_lock(&cp_alloc_locker);
     coroutine_t *co = fixalloc_alloc(&coroutine_alloc);
+    co->id = coroutine_count++;
     mutex_unlock(&cp_alloc_locker);
 
     co->fn = fn;

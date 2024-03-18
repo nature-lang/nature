@@ -55,14 +55,17 @@ fn sprintf(string fmt, ...[any] args):string {
              continue
         }
 
+        println('ascii =', c)
         // c 不再 format 字符中，提示异常
         if !{ascii('v'), ascii('c'), ascii('d'), ascii('s')}.contains(c) {
+            println('not contains', c)
             result.push(ascii('%'))
             result.push(ascii('?'))
             result.push(c)
             continue
         }
 
+        println('contains', c)
         any arg = args[arg_index]
         arg_index += 1
 
@@ -167,7 +170,7 @@ fn sprintf(string fmt, ...[any] args):string {
                 s = '%!v'
             }
 
-            for c in s { 
+            for c in s {
                 result.push(c)
             }
 
@@ -175,6 +178,7 @@ fn sprintf(string fmt, ...[any] args):string {
         }
     }
 
+    println('出来了？')
     return result as string
 }
 

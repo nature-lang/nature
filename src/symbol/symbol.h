@@ -22,6 +22,7 @@
 #define MACRO_SIZEOF "sizeof"
 #define MACRO_REFLECT_HASH "reflect_hash"
 #define MACRO_CO_ASYNC "co_async"
+#define MACRO_TYPE_EQ "type_eq"
 
 
 // 临时表，用来临时记录, key = ident, value is any

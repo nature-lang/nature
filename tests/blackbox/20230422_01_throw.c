@@ -6,7 +6,7 @@ static void test_basic() {
     char *raw = exec_output();
     char *str =
         "hello nature\n"
-        "catch error: 'world error' at cases/20230422_01_throw.n:3:21\n"
+        "coroutine 'main' uncaught error: 'world error' at cases/20230422_01_throw.n:3:21\n"
         "stack backtrace:\n"
         "0:\tmain.hello_0\n"
         "\t\tat cases/20230422_01_throw.n:3:21\n"

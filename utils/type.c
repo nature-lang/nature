@@ -502,6 +502,7 @@ type_t type_ptrof(type_t t) {
     result.pointer = NEW(type_pointer_t);
     result.pointer->value_type = t;
     result.origin_ident = NULL;
+    result.origin_type_kind = 0;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = kind_in_heap(t.kind);
@@ -566,7 +567,7 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_union(t.union_);
             break;
         default:
-            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_CPTR) {
+            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID || t.kind == TYPE_CPTR) {
                 rtype = rtype_base(t.kind);
             }
     }

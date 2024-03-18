@@ -622,7 +622,7 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     }
 }
 
-static void analyzer_co_async_expr(module_t *m, ast_co_async_t *go) {
+static void analyzer_co_async_expr(module_t *m, ast_macro_co_async_t *go) {
     analyzer_local_fndef(m, go->fndef);
 
     if (go->flag_expr) {
@@ -658,6 +658,10 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
     return true;
 }
 
+static void analyzer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    analyzer_expr(m, &stmt->expr);
+}
+
 /**
  * 当子作用域中重新定义了变量，产生了同名变量时，则对变量进行重命名
  * @param var_decl
@@ -678,7 +682,7 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
 
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
     analyzer_expr(m, &vardef->right);
-
+    analyzer_redeclare_check(m, vardef->var_decl.ident);
     analyzer_type(m, &vardef->var_decl.type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
@@ -783,7 +787,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
 
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
-        type_t param_type = fndef->impl_type;
+        type_t param_type = type_copy(m, fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
                 .type = param_type,
@@ -830,13 +834,18 @@ static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_expr(m, &as_expr->src);
 }
 
-static void analyzer_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
+static void analyzer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_expr) {
     analyzer_type(m, &sizeof_expr->target_type);
 }
 
 
-static void analyzer_reflect_hash_expr(module_t *m, ast_reflect_hash_expr_t *expr) {
+static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *expr) {
     analyzer_type(m, &expr->target_type);
+}
+
+static void analyzer_type_eq_expr(module_t *m, ast_macro_type_eq_expr_t *expr) {
+    analyzer_type(m, &expr->left_type);
+    analyzer_type(m, &expr->right_type);
 }
 
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
@@ -1411,11 +1420,14 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_IS: {
             return analyzer_is_expr(m, expr->value);
         }
-        case AST_EXPR_SIZEOF: {
+        case AST_MACRO_EXPR_SIZEOF: {
             return analyzer_sizeof_expr(m, expr->value);
         }
-        case AST_EXPR_REFLECT_HASH: {
+        case AST_MACRO_EXPR_REFLECT_HASH: {
             return analyzer_reflect_hash_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_TYPE_EQ: {
+            return analyzer_type_eq_expr(m, expr->value);
         }
         case AST_EXPR_TRY: {
             return analyzer_try(m, expr->value);
@@ -1460,7 +1472,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_CALL: {
             return analyzer_call(m, expr->value);
         }
-        case AST_CO_ASYNC: {
+        case AST_MACRO_CO_ASYNC: {
             return analyzer_co_async_expr(m, expr->value);
         }
         case AST_FNDEF: {
@@ -1481,6 +1493,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     m->current_column = stmt->column;
 
     switch (stmt->assert_type) {
+        case AST_STMT_EXPR_FAKE: {
+            return analyzer_expr_fake(m, stmt->value);
+        }
         case AST_VAR_DECL: {
             return analyzer_var_decl(m, stmt->value, true);
         }
@@ -1681,7 +1696,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
     if (var_assign_list->count > 0) {
         // 添加 init fn
-        ast_fndef_t *fn_init = ast_fndef_new(m->rel_path, 0, 0);
+        ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
         fn_init->symbol_name = ident_with_module(analyzer_force_unique_ident(m), FN_INIT_NAME);
         fn_init->fn_name = fn_init->symbol_name;
         fn_init->return_type = type_kind_new(TYPE_VOID);
@@ -1729,7 +1744,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
  * @param stmt_list
  */
 static void analyzer_main(module_t *m, slice_t *stmt_list) {
-    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, 0, 0);
+    ast_fndef_t *fndef = ast_fndef_new(m, 0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->fn_name = fndef->symbol_name;
     fndef->body = slice_new();

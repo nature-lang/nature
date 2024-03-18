@@ -15,22 +15,22 @@
 #define TEMP_RESULT "result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
-#define TEMP_LABEL "l"
+#define TEMP_LABEL "L"
 #define ITERATOR_CURSOR "cursor"
-#define FOR_CONTINUE_IDENT "for_continue"
-#define FOR_UPDATE_IDENT "for_update"
-#define FOR_END_IDENT "for_end"
-#define FOR_COND_IDENT "for_cond"
-#define FOR_TRADITION_IDENT "for_tradition"
-#define FOR_ITERATOR_IDENT "for_iterator"
-#define END_IF_IDENT "if_end"
-#define IF_ALTERNATE_IDENT "if_alternate"
-#define IF_CONTINUE_IDENT "if_continue"
-#define LOGICAL_OR_IDENT "logical_or_end"
-#define LOGICAL_AND_IDENT "logical_and_end"
+#define FOR_CONTINUE_IDENT "FOR_CONTINUE"
+#define FOR_UPDATE_IDENT "FOR_UPDATE"
+#define FOR_END_IDENT "FOR_END"
+#define FOR_COND_IDENT "FOR_COND"
+#define FOR_TRADITION_IDENT "FOR_TRADITION"
+#define FOR_ITERATOR_IDENT "FOR_ITERATOR"
+#define END_IF_IDENT "IF_END"
+#define IF_ALTERNATE_IDENT "IF_ALTERNATE"
+#define IF_CONTINUE_IDENT "IF_CONTINUE"
+#define LOGICAL_OR_IDENT "LOGICAL_OR_END"
+#define LOGICAL_AND_IDENT "LOGICAL_AND_END"
 
-#define CATCH_ERROR_IDENT "catch_error"
-#define CATCH_END_IDENT "catch_end"
+#define CATCH_ERROR_IDENT "CATCH_ERROR"
+#define CATCH_END_IDENT "CATCH_END"
 
 #define ERRORT_TYPE_ALIAS "error_t"
 #define ERRORT_MSG_IDENT "msg"
@@ -564,7 +564,7 @@ static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
 }
 
 static inline lir_op_t *lir_op_unique_label(module_t *m, char *ident) {
-    char *unique_ident = make_unique_ident(m, ident);
+    char *unique_ident = label_unique_ident(m, ident);
     return lir_op_label(unique_ident, true);
 }
 

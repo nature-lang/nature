@@ -30,14 +30,14 @@ println(l6[0], l6[1], b6)
 
 
 // --- slice and concat
-var l6 = ['a', 'b', 'c', 'd', 'e']
-var l7 = l6.slice(1, 4)
-for v in l7 {
+var l7 = ['a', 'b', 'c', 'd', 'e']
+var l8 = l7.slice(1, 4)
+for v in l8 {
     print(v)
 }
 println()
 
-l6 = l6.concat(['f', 'g', 'h'])
-for v in l6 {
+l7 = l7.concat(['f', 'g', 'h'])
+for v in l7 {
     print(v)
 }

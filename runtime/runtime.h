@@ -234,6 +234,7 @@ typedef enum {
 typedef struct processor_t processor_t;
 
 typedef struct coroutine_t {
+    int64_t id;
     bool main;// 是否是 main 函数
     bool solo;// 当前协程需要独享线程
     co_status_t status;
@@ -305,7 +306,7 @@ int runtime_main(int argc, char *argv[]);
 
 void rt_coroutine_set_error(char *msg);
 
-void coroutine_dump_error(coroutine_t *co,n_errort *error);
+void coroutine_dump_error(coroutine_t *co, n_errort *error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

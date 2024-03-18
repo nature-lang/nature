@@ -513,6 +513,8 @@ token_type_t scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_VAR);
                 case 'e':// vec
                     return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
+                case 'o':// void
+                    return scanner_rest(word, length, 2, 2, "id", TOKEN_VOID);
             }
         }
         case 'u': {

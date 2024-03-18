@@ -22,6 +22,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         m->package_dir = import->package_dir;
         m->package_conf = import->package_conf;
         m->ident = import->module_ident;
+        m->label_prefix = import->module_ident;
     }
 
     m->errors = slice_new();
@@ -32,6 +33,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->global_vardef = slice_new();// ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->source_path = source_path;
+    m->infer_type_args_stack = stack_new();
     m->ast_fndefs = slice_new();
     m->closures = slice_new();
     m->asm_global_symbols = slice_new();// 文件全局符号以及 operations 编译过程中产生的局部符号
@@ -41,10 +43,22 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         char *temp_dir = path_dir(m->package_dir);
         m->rel_path = str_replace(m->source_path, temp_dir, "");
         m->rel_path = ltrim(m->rel_path, "/");
+    } else if (strstr(m->source_path, NATURE_ROOT) != NULL) {
+        // builtin
+        m->rel_path = str_replace(m->source_path, NATURE_ROOT, "");
+        m->rel_path = ltrim(m->rel_path, "/");
     } else {
         m->rel_path = m->source_path;
     }
 
+    if (m->label_prefix == NULL) {
+        // 去掉 .n
+        // / -> .
+        char *temp = str_replace(m->rel_path, "/", ".");
+        m->label_prefix = str_replace(temp, ".n", "");
+    }
+
+    assert(m->label_prefix);
     assertf(file_exists(source_path), "source file=%s not found", source_path);
 
     m->source = file_read(source_path);

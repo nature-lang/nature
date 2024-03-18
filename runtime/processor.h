@@ -13,7 +13,8 @@ extern processor_t *share_processor_index[1024];
 extern processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
 extern processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 extern mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
-extern int solo_processor_count;         // 累计数量
+extern int solo_processor_count;
+extern int coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 

@@ -667,6 +667,10 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 }
 
+static void linear_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    linear_expr(m, stmt->expr, NULL);
+}
+
 /**
  * a = 1 // left_target is lir_var_operand
  * a.b = 1 // left_target is lir_memory(base_address)
@@ -805,7 +809,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_operand_t *for_end_operand = lir_label_operand(label_unique_ident(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_start->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -833,7 +837,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
     lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
     lir_op_t *for_update = lir_op_unique_label(m, FOR_UPDATE_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_operand_t *for_end_operand = lir_label_operand(label_unique_ident(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_update->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -1029,7 +1033,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     assert(expr.type.kind == TYPE_BOOL);
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
-    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_OR_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_unique_ident(m, LOGICAL_OR_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_src = linear_expr(m, logical_expr->left, NULL);
@@ -1053,7 +1057,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
-    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_AND_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_unique_ident(m, LOGICAL_AND_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_target = linear_expr(m, logical_expr->left, NULL);
@@ -1679,7 +1683,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
 }
 
 static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_sizeof_expr_t *ast = expr.value;
+    ast_macro_sizeof_expr_t *ast = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1692,7 +1696,7 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
 }
 
 static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_sizeof_expr_t *ast = expr.value;
+    ast_macro_sizeof_expr_t *ast = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1848,7 +1852,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     }
 
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    char *catch_error_label = label_unique_ident(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, catch_expr->try_expr, target);
     m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
@@ -1900,7 +1904,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
 
     if (try->expr.type.kind == TYPE_VOID) {
         // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-        char *catch_end_label = make_unique_ident(m, CATCH_END_IDENT);
+        char *catch_end_label = label_unique_ident(m, CATCH_END_IDENT);
         m->current_closure->catch_error_label = catch_end_label;
 
         linear_expr(m, try->expr, NULL);
@@ -1926,7 +1930,7 @@ static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *ta
     }
 
     // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    char *catch_error_label = label_unique_ident(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, try->expr, result_operand);
     m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
@@ -2139,6 +2143,9 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             linear_var_decl(m, stmt->value);
             return;
         }
+        case AST_STMT_EXPR_FAKE: {
+            return linear_expr_fake(m, stmt->value);
+        }
         case AST_STMT_VARDEF: {
             return linear_vardef(m, stmt->value);
         }
@@ -2236,8 +2243,8 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
-        [AST_EXPR_SIZEOF] = linear_sizeof_expr,
-        [AST_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
+        [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
+        [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
         [AST_EXPR_NEW] = linear_new_expr,
         [AST_CATCH] = linear_catch_expr,
 };
@@ -2275,9 +2282,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     // 互相关联关系
     m->current_closure = c;
     c->module = m;
-    // TODO unique label
-    c->end_label = str_connect("end_", c->symbol_name);
-    c->error_label = str_connect("error_", c->symbol_name);
+    // TODO c->symbol_name 已经唯一了
+    c->end_label = label_unique_ident(m, str_connect("end_", c->symbol_name));
+    c->error_label = label_unique_ident(m, str_connect("error_", c->symbol_name));
 
     // label name 使用 symbol_name!
     OP_PUSH(lir_op_label(fndef->symbol_name, false));
@@ -2351,7 +2358,7 @@ void linear(module_t *m) {
 
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
-        closure_t *closure = linear_fndef(m, fndef);
+        closure_t *closure = linear_fndef(fndef->module, fndef);
         slice_push(m->closures, closure);
     }
 }

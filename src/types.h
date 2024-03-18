@@ -6,12 +6,15 @@
 #include <stdlib.h>
 
 #include "binary/elf/elf.h"
-#include "package.h"
-#include "src/symbol/symbol.h"
 #include "utils/bitmap.h"
+#include "utils/ct_list.h"
 #include "utils/linked.h"
 #include "utils/slice.h"
 #include "utils/stack.h"
+#include "utils/table.h"
+#include "utils/toml.h"
+#include "utils/type.h"
+
 
 typedef uint64_t flag_t;
 
@@ -90,6 +93,11 @@ typedef struct {
     linked_node *current;
 } parser_cursor_t;
 
+// 这里包含 body, 所以属于 def
+typedef struct ast_fndef_t ast_fndef_t;// 既可以是 expression,也可以是 stmt
+typedef struct module_t module_t;
+typedef struct ast_stmt_t ast_stmt_t;
+
 /**
  * free_var 是在 parent function 作用域中被使用,但是被捕获存放在了 current function free_vars 中,
  * 所以这里的 is_local 指的是在 parent 中的位置
@@ -101,11 +109,11 @@ typedef struct {
     int env_index;// env_index
     string ident;
     uint64_t index;// free in frees index
-    symbol_type_t type;
+    uint8_t type;
 } free_ident_t;
 
 typedef struct {
-    symbol_type_t type;
+    uint8_t type;
     void *decl;         // ast_var_decl,ast_type_decl_stmt,ast_new_fn
     string ident;       // 原始名称
     string unique_ident;// 唯一名称
@@ -141,12 +149,13 @@ typedef struct {
  * path 基于 import 编译， import 能提供完整的 full_path 以及 module_name
  * Target district
  */
-typedef struct {
+struct module_t {
     char *source;     // 文件内容
     char *source_path;// 文件完整路径(外面丢进来的)
     char *source_dir; // 文件所在目录,去掉 xxx.n
     char *ident;      // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
-    char *rel_path;   // 从 root 计算出来的相对路径
+    char *label_prefix;
+    char *rel_path;// 从 root 计算出来的相对路径
 
     // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
     char *package_dir;
@@ -206,7 +215,7 @@ typedef struct {
     slice_t *global_vardef; // 用于在 checking 阶段进行类型推导
 
     slice_t *ast_fndefs;
-    linked_t *infer_worklist; // ast_fndef
+    linked_t *temp_worklist;// ast_fndef
 
     slice_t *checking_temp_fndefs;// checking 阶段，type param 可能还会产生 temp_fndefs
 
@@ -222,7 +231,7 @@ typedef struct {
     uint64_t elf_count;
     uint8_t *elf_binary;
     string object_file;
-} module_t;
+};
 
 /**
  * 遍历期间，block 第一次被访问时打上 visited 标识
@@ -560,14 +569,6 @@ typedef struct {
 ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
 
 type_t type_copy(module_t *m, type_t temp);
-
-static slice_t *ast_body_copy(module_t *m, slice_t *body);
-
-static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp);
-
-static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
-
-static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
 bool type_union_compare(type_union_t *left, type_union_t *right);
 

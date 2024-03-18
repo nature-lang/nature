@@ -31,6 +31,11 @@ static inline char *make_unique_ident(module_t *m, char *ident) {
     return result;
 }
 
+static inline char *label_unique_ident(module_t *m, char *ident) {
+    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    return ident_with_module(m->label_prefix, result);
+}
 
 static inline char *var_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);

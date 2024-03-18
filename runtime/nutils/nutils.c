@@ -318,7 +318,7 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     PRE_RTCALL_HOOK();
 
     coroutine_t *co = coroutine_get();
-    TDEBUGF("[runtime.co_throw_error] co=%p, msg=%s, path=%s, line=%ld, column=%ld", co, msg->data, path, line, column);
+    DEBUGF("[runtime.co_throw_error] co=%p, msg=%s, path=%s, line=%ld, column=%ld", co, msg->data, path, line, column);
 
     n_errort *error = n_error_new(msg, true);
 
