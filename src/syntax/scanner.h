@@ -20,11 +20,15 @@ bool scanner_is_number(module_t *m, char c);
 
 bool scanner_is_hex_number(module_t *m, char c);
 
+bool scanner_is_oct_number(module_t *m, char c);
+
 bool scanner_is_float(module_t *module, char *word);
 
 char *scanner_ident_advance(module_t *module);
 
 char *scanner_hex_number_advance(module_t *m);
+
+char *scanner_oct_number_advance(module_t *m);
 
 char *scanner_number_advance(module_t *m);
 
@@ -50,6 +54,7 @@ bool scanner_match(module_t *module, char expected);
 
 bool scanner_is_space(char c);
 
-bool scanner_at_stmt_end(module_t *m);
+bool scanner_at_stmt_end(module_t * m);
+long convert(module_t * m, char *word, int base);
 
 #endif //NATURE_SRC_SCANNER_H_
