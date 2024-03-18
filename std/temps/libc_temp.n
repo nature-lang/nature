@@ -1,5 +1,3 @@
-type t1 = gen any
-
 fn std_args():[string]
 
 fn htons(u16 host):u16
@@ -25,7 +23,7 @@ fn localtime(ptr<i64> timestamp):ptr<libc_tm_t>
 // 将 time_info_t 转换为时间戳
 fn mktime(ptr<libc_tm_t> time_info):i64
 
-// strftime(buf.ref(), buf.len, '%Y-%m-%d %H:%M:%S', &tp)
+// strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
 fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
 
 // 通过空值 options 实现阻塞和非阻塞模式
@@ -67,7 +65,7 @@ fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
 
 fn sigfillset(ptr<sigset_t> sigset):i32
 
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, cptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ptr<sigset_t> sigset, nptr<sigset_t> oldset):i32
 
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 

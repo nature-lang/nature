@@ -1,0 +1,10 @@
+import runtime_temp
+
+fn string.len():int {
+    return rt_string_length(self as cptr)
+}
+
+
+fn string.ref():cptr {
+    return rt_string_ref(self as cptr)
+}

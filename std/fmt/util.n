@@ -1,9 +1,5 @@
-type integert = gen i8|i16|i32|i64|u8|u16|u32|u64|int|uint
-type floatert = gen float|f32|f64
-type numbert = gen integert|floatert
-
 fn ascii(string c):u8 {
-    if c.len != 1 {
+    if c.len() != 1 {
         throw 'c length must equal to 1'
     }
     var list = c as [u8]
@@ -11,9 +7,9 @@ fn ascii(string c):u8 {
 }
 
 // 引用传递
-fn reverse([numbert] list) {
+fn reverse<T>([T] list) {
     int start = 0
-    int end = list.len - 1
+    int end = list.len() - 1
     for start < end {
         (list[start], list[end]) = (list[end], list[start])
         start += 1
@@ -21,11 +17,11 @@ fn reverse([numbert] list) {
     }
 }
 
-fn itos(integert i):string {
-    return itos(i, '0', 0 as u8)
+fn itos<T>(T i):string {
+    return itos_with(i, '0', 0 as u8)
 }
 
-fn itos(integert i, string fill, u8 width):string {
+fn itos_with<T>(T i, string fill, u8 width):string {
     var base = 10
     var is_neg = false
 
@@ -58,7 +54,7 @@ fn itos(integert i, string fill, u8 width):string {
         i = i / 10
     }
 
-    u8 result_width = result.len as u8
+    u8 result_width = result.len() as u8
     if is_neg {
         result_width += 1
     }
@@ -90,7 +86,7 @@ fn itos(integert i, string fill, u8 width):string {
     return result as string
 }
 
-fn ftos(floatert f):string {
+fn ftos<T>(T f):string {
     var is_neg = false
     if f < 0 {
         is_neg = true
@@ -102,7 +98,7 @@ fn ftos(floatert f):string {
     var int_str = itos(int_part)  // 将整数部分转换为字符串
 
     // 取小数部分
-    var frac_part =  f - int_part as floatert
+    var frac_part =  f - int_part as T
 
     var frac_str = ''
 
@@ -115,7 +111,7 @@ fn ftos(floatert f):string {
             var digit = (frac_part * 10) as int
             frac_str += itos(digit)
 
-            frac_part = (frac_part * 10) - digit as floatert
+            frac_part = (frac_part * 10) - digit as T
         }
     }
 

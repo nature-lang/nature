@@ -3,8 +3,10 @@ import fmt.util as *
 import syscall
 
 fn exists(string path):bool {
-   var (_, err) =  try syscall.stat(path)
-   return !err.has
+   var _ =  syscall.stat(path) catch err {
+        return false
+   }
+   return true
 }
 
 // refer golang path.base
@@ -19,12 +21,12 @@ fn base(string path):string {
         return '/'
     }
 
-    var i = strings.rfind(path, "/", path.len)
+    var i = strings.rfind(path, "/", path.len())
     if i == -1 {
         return path
     }
 
-    return strings.slice(path, i + 1, path.len)
+    return strings.slice(path, i + 1, path.len())
 }
 
 // ref golang path.dir
@@ -33,13 +35,13 @@ fn dir(string path):string {
      return '.'
   }
 
-  var last = path[path.len - 1]
+  var last = path[path.len() - 1]
 
   if last == ascii('/') {
-     return strings.slice(path, 0, path.len-1)
+     return strings.slice(path, 0, path.len()-1)
   }
 
-  var i = strings.rfind(path, '/', path.len)
+  var i = strings.rfind(path, '/', path.len())
   if i == -1 {
     return '.'
   }
@@ -60,11 +62,11 @@ fn join(string dst, ...[string] list):string {
 }
 
 fn _join(string dst, string src):string {
-    if src.len == 0 {
+    if src.len() == 0 {
         return dst
     }
 
-    if dst.len == 0 {
+    if dst.len() == 0 {
         return src
     }
 
@@ -74,7 +76,7 @@ fn _join(string dst, string src):string {
     }
 
     var dst_list = dst as [u8]
-    var len = dst_list.len
+    var len = dst_list.len()
 
     // 去掉结尾的 /
     if dst_list[len - 1] == ascii('/') {
@@ -85,7 +87,7 @@ fn _join(string dst, string src):string {
 
     // ./
     if src[0] == ascii('.') && src[1] == ascii('/') {
-        for int i = 1; i < src.len; i+=1 {
+        for int i = 1; i < src.len(); i+=1 {
             dst_list.push(src[i])
         }
 
@@ -99,8 +101,7 @@ fn _join(string dst, string src):string {
 }
 
 fn isdir(string path):bool {
-   var (s, err) =  try syscall.stat(path)
-    if err.has {
+   var s = syscall.stat(path) catch err {
          return false
     }
 

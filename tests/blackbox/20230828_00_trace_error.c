@@ -22,7 +22,7 @@ static void test_basic() {
                 "1:\t20230828_00_trace_error.foo.bar.test\n"
                 "\t\tat 20230828_00_trace_error/foo/bar.n:4:4\n"
                 "2:\tmain\n"
-                "\t\tat 20230828_00_trace_error/main.n:15:15\n";
+                "\t\tat 20230828_00_trace_error/main.n:14:14\n";
     assert_string_equal(raw, str);
 }
 

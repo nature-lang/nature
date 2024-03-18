@@ -1,7 +1,8 @@
 #include "linked.h"
+
 #include <assert.h>
 
-static uint16_t linked_count(linked_t *l) {
+ uint16_t linked_count(linked_t *l) {
     uint16_t count = 0;
     LINKED_FOR(l) {
         count++;
@@ -226,7 +227,6 @@ void linked_remove_free(linked_t *l, linked_node *node) {
     linked_remove(l, node);
     free(node);
 }
-
 
 void linked_free(linked_t *l) {
     while (l->count > 0) {

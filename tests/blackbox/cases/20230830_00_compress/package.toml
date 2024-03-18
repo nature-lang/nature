@@ -12,5 +12,5 @@ type = "bin" # lib or bin
 [links]
 
 [dependencies]
-compress = { type = "git", version = "v1.0.0", url = "github.com/weiwenhao/compress", use_links = true }
+compress = { type = "git", version = "v1.2.1", url = "github.com/weiwenhao/compress", use_links = true }
 

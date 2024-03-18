@@ -1,24 +1,25 @@
-type t0 = gen any
+// type ptr<t> = *t
 
-// type vect<t1> = struct {
-//     u64 len
-//     u64 cap
-//     fn(t1) push
-//     fn(int, int):[t1] slice
-//     fn([t1]):[t1] concat
-//     fn():cptr ref
-// }
+// type cptr = uint
 
-type tracet = struct {
+// type nptr<t> = *t|null
+
+// type any = ...|...
+
+// type all_t = cptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+
+// type fn_t = cptr // 同上
+
+type trace_t = struct {
     string path
     string ident
     int line
     int column
 }
 
-type errort = struct {
+type error_t = struct {
     string msg
-    [tracet] traces
+    [trace_t] traces
     bool has
 }
 
@@ -26,39 +27,6 @@ fn print(...[any] args)
 
 fn println(...[any] args)
 
-//fn set(...[t0] keys):{t0}
-
-// 比如 [t0] 类型的 vec 只能接收 t0 类型的 v
-fn vec_push([t0] list, ptr<t0> v)
-
-fn vec_length([t0] list):int
-
-fn vec_capacity([t0] list):int
-
-fn vec_slice(int rtype_hash, [t0] list, int start, int end):[t0]
-
-fn vec_concat(int rtype_hash, [t0] a, [t0] b):[t0]
-
-// 引用 data 部分,且对于复合没有展开操作
-fn vec_ref([t0] list):cptr
-
-fn map_delete({t0:t0} m, ptr<t0> key)
-
-fn map_length({t0:t0} m):int
-
-fn set_contains({t0} s, ptr<t0> key):bool
-
-fn set_add({t0} s, ptr<t0> key):bool
-
-fn set_delete({t0} set, ptr<t0> key)
-
-fn runtime_gc()
-
-fn runtime_set_force_gc()
+fn runtime_force_gc()
 
 fn runtime_malloc_bytes():i64
-
-// rt call 不需要注册在 builtin, 但是只要经过了编译器前端的 call 都需要注册在这里，避免符号检查异常
-fn string_length(string s):int
-
-fn string_ref(string s):cptr

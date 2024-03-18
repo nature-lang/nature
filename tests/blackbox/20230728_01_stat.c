@@ -40,8 +40,6 @@ static void test_basic() {
     expect = str_connect(expect, "No such file or directory\n");
 
     char *raw = exec_output();
-//    printf("%s", raw);
-//    return;
 
     assert_string_equal(raw, expect);
 }

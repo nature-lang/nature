@@ -1,0 +1,5 @@
+type coro<t> = struct {
+    fn_t function // 可以匹配任意 fn 类型
+    bool thread  // 单独线程运行， 而不是普通的协程方式运行
+    t result
+}

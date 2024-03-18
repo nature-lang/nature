@@ -1,23 +1,26 @@
 import syscall
 
-var (_, err) = try syscall.open('mock/notfound.txt', syscall.O_RDONLY, 0666)
-if err.has {
+var fd = syscall.open('mock/notfound.txt', syscall.O_RDONLY, 0666) catch err {
     print('open mock/notfound.txt failed: ', err.msg, '\n')
-} else {
+    continue -1
+}
+
+if fd != -1 {
     println('open mock/notfound.txt successful')
 }
 
-var (fd, err) = try syscall.open('mock/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666)
-if err.has {
-    print('open mock/open.txt failed: ', err.msg, '\n')
-} else {
+fd = syscall.open('mock/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
+    return print('open mock/open.txt failed: ', err.msg, '\n')
+    // fd default is zero
+}
+
+if fd != 0 {
     println('open mock/open.txt successful')
 }
 
 // read buf is [u8]
-var buf = vec<u8>{len=20}
-var (len, err) = try syscall.read(fd, buf)
-if err.has {
+var buf = vec_new<u8>(20, 0)
+var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
     return print(err.msg)
 }
 

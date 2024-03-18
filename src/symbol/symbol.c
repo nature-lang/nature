@@ -4,7 +4,7 @@
 // 临时表，用来临时记录, key = ident, value is any
 table_t *can_import_symbol_table;
 
-table_t *import_temp_symbol_table;
+table_t *import_tpl_symbol_table;
 
 
 /**
@@ -28,26 +28,11 @@ slice_t *symbol_var_list;
 slice_t *symbol_typedef_list;
 
 static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
-    symbol_t *s = table_get(symbol_table, ident);
-
-    // 符号重复注册
-    if (s) {
-        assertf(type == SYMBOL_FN, "symbol=%s duplicate set", ident);
-        assert(s->fndefs);
-        assert(s->fndefs->count > 0);
-        slice_push(s->fndefs, ast_value);
-        return s;
-    }
-
-    s = NEW(symbol_t);
+    symbol_t *s = NEW(symbol_t);
     s->ident = ident;
     s->type = type;
     s->ast_value = ast_value;
     s->is_local = is_local;
-    if (type == SYMBOL_FN) {
-        s->fndefs = slice_new();
-        slice_push(s->fndefs, ast_value);
-    }
 
     table_set(symbol_table, ident, s);
 
@@ -56,7 +41,7 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 
 void symbol_init() {
     can_import_symbol_table = table_new();
-    import_temp_symbol_table = table_new();
+    import_tpl_symbol_table = table_new();
 
     symbol_table = table_new();
     symbol_fn_list = slice_new();
@@ -75,6 +60,10 @@ void symbol_table_set_var(char *unique_ident, type_t type) {
 }
 
 symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
+    if (table_exist(symbol_table, ident)) {
+        return NULL;
+    }
+
     symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
     if (type == SYMBOL_FN) {
         slice_push(symbol_fn_list, s);
@@ -108,6 +97,3 @@ symbol_t *symbol_table_get(char *ident) {
 
     return s;
 }
-
-
-

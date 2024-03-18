@@ -1,32 +1,27 @@
 #include "build.h"
-#include "src/cross.h"
-#include "src/semantic/checking.h"
-#include "src/linear.h"
-#include "src/cfg.h"
-#include "src/debug/debug.h"
-#include "src/native/amd64.h"
-#include "src/binary/elf/linker.h"
-#include "src/binary/elf/amd64.h"
-#include "src/binary/elf/output.h"
-#include "src/ssa.h"
-#include "src/register/linearscan.h"
-#include "src/semantic/analyzer.h"
-#include "utils/error.h"
-#include "config.h"
-#include "utils/custom_links.h"
-#include "src/semantic/generic.h"
 
+#include <assert.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <assert.h>
-#include <dirent.h>
 
-static char *std_templates[] = {
-        "builtin.temp.n",
-        "libc.temp.n",
-        "syscall.temp.n"
-};
+#include "config.h"
+#include "src/binary/elf/amd64.h"
+#include "src/binary/elf/linker.h"
+#include "src/binary/elf/output.h"
+#include "src/cfg.h"
+#include "src/cross.h"
+#include "src/debug/debug.h"
+#include "src/linear.h"
+#include "src/native/amd64.h"
+#include "src/register/linearscan.h"
+#include "src/semantic/analyzer.h"
+#include "src/semantic/checking.h"
+#include "src/semantic/generic.h"
+#include "src/ssa.h"
+#include "utils/custom_links.h"
+#include "utils/error.h"
 
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
@@ -82,7 +77,7 @@ static void assembler_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym) {
+    sym = (Elf64_Sym){
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -96,7 +91,7 @@ static void assembler_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym) {
+    sym = (Elf64_Sym){
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -106,15 +101,14 @@ static void assembler_custom_links() {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
 
-
-    // custom_global symbol ------------------------------------------------------------------------------------------------------
+    // custom_global symbol
+    // ------------------------------------------------------------------------------------------------------
     double float_mask = -0.0;
     elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, cross_number_size());
 
-
     object_file_format(ctx);
     elf_output(ctx);
-    DEBUGF(" --> assembler: %s\n", custom_link_object_path());
+    log_debug(" --> assembler: %s\n", custom_link_object_path());
 }
 
 /**
@@ -122,8 +116,8 @@ static void assembler_custom_links() {
  * @param m
  */
 static void assembler_module(module_t *m) {
-    if (BUILD_OS == OS_LINUX) { // elf 就是 linux 独有都
-        char *object_file_name = str_connect(m->ident, ".n.o");
+    if (BUILD_OS == OS_LINUX) {// elf 就是 linux 独有都
+        char *object_file_name = analyzer_force_unique_ident(m);
         str_replace_char(object_file_name, '/', '.');
 
         char *output = path_join(TEMP_DIR, object_file_name);
@@ -140,7 +134,7 @@ static void assembler_module(module_t *m) {
         elf_output(ctx);
 
         // 完整输出路径
-        DEBUGF(" --> assembler: %s\n", output);
+        log_debug(" --> assembler: %s\n", output);
         m->object_file = output;
         return;
     }
@@ -162,14 +156,14 @@ static void build_linker(slice_t *modules) {
         module_t *m = modules->take[i];
 
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        elf_load_object_file(ctx, fd, 0); // 加载并解析目标文件
+        elf_load_object_file(ctx, fd, 0);// 加载并解析目标文件
     }
 
     // 将相关符号都加入来
     slice_push(linker_libs, custom_link_object_path());
     slice_push(linker_libs, lib_file_path(LIB_START_FILE));
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
-    slice_push(linker_libs, lib_file_path(LIBUCONTEXT_FILE));
+    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];
@@ -191,7 +185,6 @@ static void build_linker(slice_t *modules) {
     // - core
     executable_file_format(ctx);
 
-
     // - core
     elf_output(ctx);
     if (!file_exists(output)) {
@@ -200,8 +193,8 @@ static void build_linker(slice_t *modules) {
 
     remove(BUILD_OUTPUT);
     copy(BUILD_OUTPUT, output, 0755);
-    DEBUGF("linker output--> %s\n", output);
-    DEBUGF("build output--> %s\n", BUILD_OUTPUT);
+    log_debug("linker output--> %s\n", output);
+    log_debug("build output--> %s\n", BUILD_OUTPUT);
 }
 
 static void build_init(char *build_entry) {
@@ -235,17 +228,17 @@ static void build_init(char *build_entry) {
 }
 
 static void config_print() {
-    DEBUGF("NATURE_ROOT: %s", NATURE_ROOT);
-    DEBUGF("BUILD_OS: %s", os_to_string(BUILD_OS));
-    DEBUGF("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
-    DEBUGF("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
-    DEBUGF("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
-    DEBUGF("BUILD_OUTPUT: %s", BUILD_OUTPUT);
-    DEBUGF("WORK_DIR: %s", WORKDIR);
-    DEBUGF("BASE_NS: %s", BASE_NS);
-    DEBUGF("TERM_DIR: %s", TEMP_DIR);
-    DEBUGF("BUILD_ENTRY: %s", BUILD_ENTRY);
-    DEBUGF("SOURCE_PATH: %s", SOURCE_PATH);
+    log_debug("NATURE_ROOT: %s", NATURE_ROOT);
+    log_debug("BUILD_OS: %s", os_to_string(BUILD_OS));
+    log_debug("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
+    log_debug("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
+    log_debug("BUILD_OUTPUT_DIR: %s", BUILD_OUTPUT_DIR);
+    log_debug("BUILD_OUTPUT: %s", BUILD_OUTPUT);
+    log_debug("WORK_DIR: %s", WORKDIR);
+    log_debug("BASE_NS: %s", BASE_NS);
+    log_debug("TERM_DIR: %s", TEMP_DIR);
+    log_debug("BUILD_ENTRY: %s", BUILD_ENTRY);
+    log_debug("SOURCE_PATH: %s", SOURCE_PATH);
 }
 
 static void build_assembler(slice_t *modules) {
@@ -266,7 +259,7 @@ static void build_assembler(slice_t *modules) {
             slice_push(m->asm_global_symbols, symbol);
         }
 
-        DEBUGF("[build_assembler] module=%s", m->ident);
+        log_debug("[build_assembler] module=%s", m->source_path);
         // native closure，如果遇到 c_string, 需要在 symtab + data 中注册一条记录，然后在 .text 引用，
         // 所以有了这里的临时 closure var decls, 原则上， var_decl = global var，其和 module 挂钩
 
@@ -275,7 +268,7 @@ static void build_assembler(slice_t *modules) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数
             symbol_t *s = symbol_table_get_noref(c->symbol_name);
-            if (s->ref_count == 0) {
+            if (s->ref_count == 0 && !str_equal(c->symbol_name, FN_MAIN_NAME)) {
                 continue;
             }
 
@@ -293,42 +286,23 @@ static void build_assembler(slice_t *modules) {
     assembler_custom_links();
 }
 
-static void build_temps(slice_t *templates) {
-    slice_t *modules = slice_new(); // module_t*
+static void build_tpls(slice_t *templates) {
+    slice_t *modules = slice_new();// module_t*
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
         char *full_path = templates->take[i];
 
         // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/checking 逻辑)
-        module_t *temp_module = module_build(NULL, full_path, MODULE_TYPE_TEMP);
-        slice_push(modules, temp_module);
+        module_t *tpl_module = module_build(NULL, full_path, MODULE_TYPE_TPL);
+        slice_push(modules, tpl_module);
     }
 
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
         analyzer(m, m->stmt_list);
 
-        generic(m);
-
         pre_checking(m);
     }
-}
-
-/**
- * std temp 自动注册
- */
-static void import_builtin_temp() {
-    char *template_dir = path_join(NATURE_ROOT, "std/temps");
-    char *full_path = path_join(template_dir, "builtin_temp.n");
-    assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
-
-    module_t *m = module_build(NULL, full_path, MODULE_TYPE_TEMP);
-
-    analyzer(m, m->stmt_list);
-
-    generic(m);
-
-    pre_checking(m);
 }
 
 static slice_t *build_modules(toml_table_t *package_conf) {
@@ -336,14 +310,45 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
-    slice_t *temps = slice_new();
+    slice_t *tpls = slice_new();
+    slice_t *builtin_modules = slice_new();
 
-    // builtin_temp.n
+    // builtin tpl list, default import
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
     char *full_path = path_join(template_dir, "builtin_temp.n");
     assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
-    slice_push(temps, full_path);
+    slice_push(tpls, full_path);
 
+    // builtin modules
+    char *builtin_dir = path_join(NATURE_ROOT, "std/builtin");
+    // scan all builtin package, module build
+    DIR *dir = opendir(builtin_dir);
+    assertf(dir, "cannot found builtin dir %s", builtin_dir);
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // 读取该目录下的所有文件(一级目录)
+        if (entry->d_type == DT_REG) {
+            char *filename = strdup(entry->d_name);
+
+            // filename 必须以 .n 结尾
+            if (!ends_with(filename, ".n")) {
+                continue;
+            }
+
+            full_path = path_join(builtin_dir, filename);
+            slice_push(builtin_modules, full_path);
+        }
+    }
+
+    // builtin module build
+    linked_t *work_list = linked_new();
+
+    for (int i = 0; i < builtin_modules->count; ++i) {
+        char *builtin_file = builtin_modules->take[i];
+        module_t *builtin = module_build(NULL, builtin_file, MODULE_TYPE_BUILTIN);
+        slice_push(modules, builtin);
+        linked_push(work_list, builtin);
+    }
 
     // main build
     ast_import_t main_import = {
@@ -367,10 +372,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
     slice_push(modules, main);
 
-    linked_t *work_list = linked_new();
     linked_push(work_list, main);
 
-    table_t *import_temp_table = table_new();
+    table_t *import_tpl_table = table_new();
 
     while (work_list->count > 0) {
         // module_build time has perfected import
@@ -394,12 +398,12 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 table_set(links_handled, import->package_dir, import);
             }
 
-            if (import->module_type == MODULE_TYPE_TEMP) {
+            if (import->module_type == MODULE_TYPE_TPL) {
                 assertf(import->full_path, "import temp path empty");
 
-                if (!table_exist(import_temp_table, import->full_path)) {
-                    table_set(import_temp_table, import->full_path, import);
-                    slice_push(temps, import->full_path);
+                if (!table_exist(import_tpl_table, import->full_path)) {
+                    table_set(import_tpl_table, import->full_path, import);
+                    slice_push(tpls, import->full_path);
                 }
                 continue;
             }
@@ -407,24 +411,22 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             // new module dep all imports handled
             module_t *new_module = module_build(import, import->full_path, import->module_type);
 
-            // temp 预先处理
-
             linked_push(work_list, new_module);
             table_set(module_table, import->full_path, new_module);
             slice_push(modules, new_module);
         }
     }
 
-    // temps 没有依赖关系，可以进行预先构建
-    build_temps(temps);
+    // - tpl 没有依赖关系，可以进行预先构建
+    build_tpls(tpls);
 
     // modules contains
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assert(m->type != MODULE_TYPE_TEMP);
+        assert(m->type != MODULE_TYPE_TPL);
 
         // analyzer => ast_fndefs(global)
-        // analyzer 需要将符号注册完成，否则在 pre_checking 时找不到相关的符号
+        // analyzer 需要将 global symbol 注册完成，否则在 pre_checking 时找不到相关的符号
         analyzer(m, m->stmt_list);
     }
 
@@ -433,23 +435,25 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     ast_fndef_t *root_fndef = main->ast_fndefs->take[0];
 
     slice_t *new_body = slice_new();
-    for (int i = 1; i < modules->count; ++i) {
+    for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assertf(m->call_init_stmt != NULL, "module %s not found init fn stmt", m->ident);
-        slice_push(new_body, m->call_init_stmt);
+        if (m->type == MODULE_TYPE_MAIN || m->type == MODULE_TYPE_TPL) {
+            continue;
+        }
+        if (m->call_init_stmt) {
+            slice_push(new_body, m->call_init_stmt);
+        }
     }
-    slice_concat(new_body, root_fndef->body);
-    root_fndef->body = new_body;
+    if (new_body) {
+        slice_concat(new_body, root_fndef->body);
+        root_fndef->body = new_body;
+    }
 
     return modules;
 }
 
 static void build_compiler(slice_t *modules) {
-    // pre_checking 对函数头进行 reduction, 让 checking 中的 fn_match 到准确位置
     for (int i = 0; i < modules->count; ++i) {
-        // generic => ast_fndef(global+local flat)
-        generic(modules->take[i]);
-
         pre_checking(modules->take[i]);
     }
 
@@ -515,7 +519,6 @@ void build(char *build_entry) {
     }
 
     slice_t *modules = build_modules(package_conf);
-
 
     // 编译(所有的模块都编译完成后再统一进行汇编与链接)
     build_compiler(modules);

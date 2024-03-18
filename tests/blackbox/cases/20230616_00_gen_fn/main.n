@@ -1,31 +1,69 @@
 import 'mod.n'
 
-// int 再没有 ref 参考的的情况下存在默认值 int 类型
-var r1 = mod.sum(12, 13)
-println(r1)
+// 1. 一般泛型函数
+i32 a = 100
+i32 b = -1002
+var c = mod.sum(a, b)
+println(c)
 
-var r2 = mod.sum(12.5, 13.5) // 默认是 float = f64
-println(r2)
+// 2. 一般泛型函数类型异常(需要注释掉 as 部分)
+i32 a2 = 333
+i16 b2 = 666
+var c2 = mod.sum(a2 as i16, b2)
+println(c2)
 
-var r3 = mod.sum(2.5 as f32, 3.7 as f32)
-println(r3)
+// 3. 一般泛型函数指定类型
+i8 a3 = 12
+i32 b3 = 28
+var c3 = mod.sum<f32>(a3 as f32, b3 as f32)
+println(c3)
 
+// 4. 歧义场景测试
+var a4 = 12
+var b4 = 14
 
-// 由首个元素的类型决定整个 list 的类型，为 [int]
-var l = [1, 2, 3, 4, 5]
-var r4 = mod.list_sum(l)
-println(r4)
+// var c4 = a4 < b4 | a4 > (b4) // 编译时错误: 20230616_00_gen_fn/main.n:6:26: binary operator '|' only integer operand
 
-var f = [1.2 as f32, 2.3, 3.4]
-var r5 = mod.list_sum(f)
-println(r5)
+var d4 = a4 < b4 && a4 >(b4)
+println(d4) // false
 
+var e4 = [a4 < b4, a4 > b4]
+println(e4[0], e4[1]) // true false
 
-// 泛型函数作为 type_param 参数，此时会优先进行泛型函数的展开
-var b = mod.box<i8, i16> {
-    width = 5,
-    length = 8
+// var f4 = [a4 < b4, a4 > (b4)] // 编译时错误: 20230616_00_gen_fn/main.n:15:17: ident=b4 not type
+
+var g4 = [(a4 < b4), a4 > (b4)]
+println(g4[0], g4[1]) // true false
+
+// 5. 类型参数与泛型函数结合
+i16 a5 = 12
+var b5 = mod.box<i16, i32>{
+    width = a5,
+    length = 12
 }
 
-var r6 = mod.area(b)
-println(r6)
+var c5 = mod.area(b5)
+println(c5)
+
+// 6. 类型扩展
+var a6 = b5.perimeter()
+println(a6)
+
+
+// 7. 嵌套类型测试 1
+var a7 = mod.box<mod.custom_t<i32>, i16>{
+    width = 66,
+    length = 77
+}
+
+println(a7.width, a7.length, mod.area(a7))
+println(a7.perimeter())
+
+
+// 8. 嵌套类型测试 2
+i16 b8  = 12
+var a8 = mod.person_t<string>{
+    name = "hello",
+    age = b8 as i8
+}
+println(a8.name, a8.age)

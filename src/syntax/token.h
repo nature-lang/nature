@@ -2,77 +2,133 @@
 #define NATURE_SRC_SYNTAX_TOKEN_H_
 
 #include <stdlib.h>
+
 #include "utils/helper.h"
 
 typedef enum {
     // SINGLE-CHARACTER TOKENS.
-    TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN, // ()
-    TOKEN_LEFT_SQUARE, TOKEN_RIGHT_SQUARE, // []
-    TOKEN_LEFT_CURLY, TOKEN_RIGHT_CURLY, // {}
-    TOKEN_LEFT_ANGLE, TOKEN_RIGHT_ANGLE, // <>
+    TOKEN_LEFT_PAREN,
+    TOKEN_RIGHT_PAREN,// ()
+    TOKEN_LEFT_SQUARE,
+    TOKEN_RIGHT_SQUARE,// []
+    TOKEN_LEFT_CURLY,
+    TOKEN_RIGHT_CURLY,// {}
+    TOKEN_LEFT_ANGLE,
+    TOKEN_LESS_THAN,
+    TOKEN_RIGHT_ANGLE,// <>
 
-
-    TOKEN_COMMA, // ,
-    TOKEN_DOT, // .
-    TOKEN_MINUS, // -
-    TOKEN_PLUS, // +
+    TOKEN_COMMA,    // ,
+    TOKEN_DOT,      // .
+    TOKEN_MINUS,    // -
+    TOKEN_PLUS,     // +
     TOKEN_ELLIPSIS, // ...
-    TOKEN_COLON, // :
-    TOKEN_SEMICOLON, // ;
-    TOKEN_SLASH,  // /
-    TOKEN_STAR, // * STAR
-    TOKEN_PERSON, // %
-
+    TOKEN_COLON,    // :
+    TOKEN_SEMICOLON,// ;
+    TOKEN_SLASH,    // /
+    TOKEN_STAR,     // * STAR
+    TOKEN_PERSON,   // %
 
     // ONE OR TWO CHARACTER TOKENS.
-    TOKEN_NOT, // !
+    TOKEN_NOT,// !
     TOKEN_NOT_EQUAL,
-    TOKEN_EQUAL, TOKEN_EQUAL_EQUAL,
-    TOKEN_GREATER_EQUAL,
-    TOKEN_LESS_EQUAL,
-    TOKEN_AND_AND, TOKEN_OR_OR,
+    TOKEN_EQUAL,
+    TOKEN_EQUAL_EQUAL,
+    TOKEN_GREATER_EQUAL,// >=
+    TOKEN_LESS_EQUAL,   // <=
+    TOKEN_AND_AND,      // &&
+    TOKEN_OR_OR,        // ||
 
-    TOKEN_PLUS_EQUAL, // +=
-    TOKEN_MINUS_EQUAL, // -=
-    TOKEN_STAR_EQUAL, // *=
-    TOKEN_SLASH_EQUAL, // /=
-    TOKEN_PERSON_EQUAL, // %=
-    TOKEN_AND_EQUAL, // &=
-    TOKEN_OR_EQUAL, // |=
-    TOKEN_XOR_EQUAL, // ^=
+    TOKEN_PLUS_EQUAL,       // +=
+    TOKEN_MINUS_EQUAL,      // -=
+    TOKEN_STAR_EQUAL,       // *=
+    TOKEN_SLASH_EQUAL,      // /=
+    TOKEN_PERSON_EQUAL,     // %=
+    TOKEN_AND_EQUAL,        // &=
+    TOKEN_OR_EQUAL,         // |=
+    TOKEN_XOR_EQUAL,        // ^=
     TOKEN_LEFT_SHIFT_EQUAL, // >>=
-    TOKEN_RIGHT_SHIFT_EQUAL, // <<=
+    TOKEN_RIGHT_SHIFT_EQUAL,// <<=
 
     // 位运算
-    TOKEN_TILDE, // ~
-    TOKEN_AND,  // &
-    TOKEN_OR,  // |
-    TOKEN_XOR,  // ^
-    TOKEN_LEFT_SHIFT,  // <<
-    TOKEN_RIGHT_SHIFT, // >>
+    TOKEN_TILDE,      // ~
+    TOKEN_AND,        // &
+    TOKEN_OR,         // |
+    TOKEN_XOR,        // ^
+    TOKEN_LEFT_SHIFT, // <<
+    TOKEN_RIGHT_SHIFT,// >>
 
     // LITERALS.
-    TOKEN_IDENT, TOKEN_LITERAL_STRING, TOKEN_LITERAL_FLOAT, TOKEN_LITERAL_INT,
+    TOKEN_IDENT,
+    TOKEN_LITERAL_STRING,
+    TOKEN_LITERAL_FLOAT,
+    TOKEN_LITERAL_INT,
 
     // TYPE
-    TOKEN_STRING, TOKEN_BOOL, TOKEN_FLOAT, TOKEN_INT, TOKEN_UINT,
-    TOKEN_U8, TOKEN_U16, TOKEN_U32, TOKEN_U64,
-    TOKEN_I8, TOKEN_I16, TOKEN_I32, TOKEN_I64,
-    TOKEN_F32, TOKEN_F64, TOKEN_NEW,
-    TOKEN_ARR, TOKEN_VEC, TOKEN_MAP, TOKEN_TUP, TOKEN_SET,
+    TOKEN_STRING,
+    TOKEN_BOOL,
+    TOKEN_FLOAT,
+    TOKEN_INT,
+    TOKEN_UINT,
+    TOKEN_U8,
+    TOKEN_U16,
+    TOKEN_U32,
+    TOKEN_U64,
+    TOKEN_I8,
+    TOKEN_I16,
+    TOKEN_I32,
+    TOKEN_I64,
+    TOKEN_F32,
+    TOKEN_F64,
+    TOKEN_NEW,
+
+    // 内置复合类型, TODO 不占用关键字, 而是使用 type
+    TOKEN_ARR,
+    TOKEN_VEC,
+    TOKEN_MAP,
+    TOKEN_TUP,
+    TOKEN_SET,
+    //    TOKEN_CORO,
+    TOKEN_CHAN,
 
     // KEYWORDS.
-    TOKEN_POINTER, // ptr<
-    TOKEN_CPTR, // cptr
-    TOKEN_TRUE, TOKEN_FALSE, TOKEN_TYPE, TOKEN_NULL, TOKEN_ANY, TOKEN_STRUCT,
-    TOKEN_THROW, TOKEN_TRY, TOKEN_CATCH, TOKEN_SELF, TOKEN_CONTINUE, TOKEN_BREAK,
-    TOKEN_FOR, TOKEN_IN, TOKEN_IF, TOKEN_ELSE, TOKEN_ELSE_IF,
-    TOKEN_VAR, TOKEN_LET,
-    TOKEN_IS, TOKEN_SIZEOF, TOKEN_AS, TOKEN_GEN, TOKEN_BOOM,
+    TOKEN_POINTER,// ptr
+                  //    TOKEN_CPTR, // cptr
+    TOKEN_TRUE,
+    TOKEN_FALSE,
+    TOKEN_TYPE,
+    TOKEN_NULL,
+    TOKEN_ANY,
+    TOKEN_STRUCT,
+    TOKEN_THROW,
+    TOKEN_TRY,
+    TOKEN_CATCH,
+    TOKEN_CONTINUE,
+    TOKEN_BREAK,
+    TOKEN_FOR,
+    TOKEN_IN,
+    TOKEN_IF,
+    TOKEN_ELSE,
+    TOKEN_ELSE_IF,
+    TOKEN_VAR,
+    TOKEN_LET,
+    TOKEN_IS,
+    TOKEN_SIZEOF,
+    TOKEN_REFLECT_HASH,
+    TOKEN_AS,
+    TOKEN_BOOM,
     TOKEN_FN,
-    TOKEN_IMPORT, TOKEN_RETURN,
-    TOKEN_STMT_EOF, TOKEN_EOF, // TOKEN_EOF 一定要在最后一个，否则会索引溢出
+    TOKEN_IMPORT,
+    TOKEN_RETURN,
+    TOKEN_GO,
+    TOKEN_STMT_EOF,
+    TOKEN_EOF,// TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_e;
+
+typedef enum {
+    LEFT_ANGLE_TYPE_FN_ARGS,
+    LEFT_ANGLE_TYPE_TYPE_ARGS,
+    LOGIC_LT,
+} left_angle_type_e;
 
 static string token_str[] = {
         [TOKEN_LEFT_PAREN] = "(",
@@ -126,19 +182,18 @@ static string token_str[] = {
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
 
+        [TOKEN_CHAN] = "chan",
         [TOKEN_ARR] = "arr",
-        [TOKEN_VEC] = "vec",
+        //    [TOKEN_VEC] = "vec",
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
         [TOKEN_TUP] = "tup",
         [TOKEN_POINTER] = "ptr",
-        [TOKEN_CPTR] = "cptr",
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",
         [TOKEN_NULL] = "null",
         [TOKEN_ANY] = "any",
-        [TOKEN_SELF] = "self",
         [TOKEN_STRUCT] = "struct",
 
         [TOKEN_FOR] = "for",
@@ -171,42 +226,34 @@ static string token_str[] = {
         [TOKEN_THROW] = "throw",
         [TOKEN_LET] = "let",
 
-        [TOKEN_GEN] = "gen",
-
         [TOKEN_IMPORT] = "import",
 
         // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
         [TOKEN_SIZEOF] = "sizeof",
+        [TOKEN_GO] = "go",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",
 };
 
 typedef struct {
-    token_e type; // 通配类型，如 var
+    token_e token;// 通配类型，如 var
     char *literal;
     int line;
     int column;
 } token_t;
 
 static inline bool token_complex_assign(token_e t) {
-    return t == TOKEN_PERSON_EQUAL ||
-           t == TOKEN_MINUS_EQUAL ||
-           t == TOKEN_PLUS_EQUAL ||
-           t == TOKEN_SLASH_EQUAL ||
-           t == TOKEN_STAR_EQUAL ||
-           t == TOKEN_OR_EQUAL ||
-           t == TOKEN_AND_EQUAL ||
-           t == TOKEN_XOR_EQUAL ||
-           t == TOKEN_LEFT_SHIFT_EQUAL ||
+    return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL || t == TOKEN_STAR_EQUAL ||
+           t == TOKEN_OR_EQUAL || t == TOKEN_AND_EQUAL || t == TOKEN_XOR_EQUAL || t == TOKEN_LEFT_SHIFT_EQUAL ||
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }
 
-static inline token_t *token_new(uint8_t type, char *literal, int line, int column) {
+static inline token_t *token_new(uint8_t token, char *literal, int line, int column) {
     token_t *t = malloc(sizeof(token_t));
-    t->type = type;
+    t->token = token;
     t->literal = literal;
     t->line = line;
     t->column = column;
@@ -217,5 +264,4 @@ static inline token_t *token_new(uint8_t type, char *literal, int line, int colu
     return t;
 }
 
-
-#endif //NATURE_SRC_SYNTAX_TOKEN_H_
+#endif// NATURE_SRC_SYNTAX_TOKEN_H_

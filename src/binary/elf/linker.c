@@ -1,21 +1,21 @@
 #include "linker.h"
-#include "elf.h"
-#include "utils/error.h"
-#include "amd64.h"
-#include "src/lir.h"
-#include "src/cross.h"
-#include "utils/custom_links.h"
-#include "utils/bitmap.h"
 
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#include "amd64.h"
+#include "elf.h"
+#include "src/cross.h"
+#include "src/lir.h"
+#include "utils/bitmap.h"
+#include "utils/custom_links.h"
+#include "utils/error.h"
 
 static uint64_t get_be(const uint8_t *b, int n) {
     uint64_t ret = 0;
-    while (n)
-        ret = (ret << 8) | *b++, --n;
+    while (n) ret = (ret << 8) | *b++, --n;
     return ret;
 }
 
@@ -23,11 +23,9 @@ static ssize_t read_ar_header(int fd, uint64_t offset, archive_header_t *arhdr) 
     char *p, *e;
     lseek(fd, offset, SEEK_SET);
     ssize_t len = full_read(fd, arhdr, sizeof(archive_header_t));
-    if (len != sizeof(archive_header_t))
-        return len ? -1 : 0;
+    if (len != sizeof(archive_header_t)) return len ? -1 : 0;
     p = arhdr->ar_name;
-    for (e = p + sizeof arhdr->ar_name; e > p && e[-1] == ' ';)
-        --e;
+    for (e = p + sizeof arhdr->ar_name; e > p && e[-1] == ' ';) --e;
     *e = '\0';
     arhdr->ar_size[sizeof arhdr->ar_size - 1] = 0;
     return len;
@@ -50,7 +48,7 @@ static int sort_sections(elf_context *ctx) {
             } else if (s->sh_name) {
                 base_weight = 0x700;
             } else {
-                base_weight = 0x900; // 符号表 section 最终会在这里被排除掉
+                base_weight = 0x900;// 符号表 section 最终会在这里被排除掉
             }
 
             if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_DYNSYM) {
@@ -93,14 +91,14 @@ static int sort_sections(elf_context *ctx) {
         // 倒序遍历(大-> 小) 选择一个刚好能卡住 k 的位置
         // 对于每一个比 k 大的值，都将其位置后移一位
         for (n = sh_index; n > 1 && weight < (temp = SEC_TACK(n - 1)->actual_sh_weight); --n) {
-            SEC_TACK(n)->actual_sh_weight = temp;  // 前移一位，留出空位，直到遇到一个 f 小于 k 的部分，就退出循环
-            SEC_TACK(n)->actual_sh_index = SEC_TACK(n - 1)->actual_sh_index; // 位置后移一位， actual_sh_index 中存储了 sh_index
+            SEC_TACK(n)->actual_sh_weight = temp;                           // 前移一位，留出空位，直到遇到一个 f 小于 k 的部分，就退出循环
+            SEC_TACK(n)->actual_sh_index = SEC_TACK(n - 1)->actual_sh_index;// 位置后移一位， actual_sh_index 中存储了 sh_index
         }
 
         SEC_TACK(n)->actual_sh_weight = weight;
         SEC_TACK(n)->actual_sh_index = sh_index;
     }
-//    SEC_TACK(0)->actual_sh_index = 0;
+    // SEC_TACK(0)->actual_sh_index = 0;
 
     // 写入 order flags
     int phdr_count = 0;
@@ -123,19 +121,19 @@ static int sort_sections(elf_context *ctx) {
         // 0xfff0 = 1111 1111 1111 0000
         // 0x240 =  0000 0010 0100 0000
         if ((weight & 0xfff0) == 0x240) {
-            flags |= 1 << 4; // 开启标志位 SHF_MERGE,Might be merged
-        }/* RELRO (Relocation Read-Only) sections */
+            flags |= 1 << 4;// 开启标志位 SHF_MERGE,Might be merged
+        }                   /* RELRO (Relocation Read-Only) sections */
 
         // 添加标识位
         if (flags != prev_flags) {
-//            DEBUGF("new segment: %s", s->name);
+            // log_debug("new segment: %s", s->name);
             prev_flags = flags;
-            ++phdr_count; // 开启一个新的段, phdr_count 表示程序表的段的数量
-            //  把 00000001 -8-> 10000000  第 8 位是预留位，可以随便定义
+            ++phdr_count;// 开启一个新的段, phdr_count 表示程序表的段的数量
+            // 把 00000001 -8-> 10000000  第 8 位是预留位，可以随便定义
             // 此处用来标志开启了新的 segment
             flags |= 1 << 8;
         } /* start new header when flags changed or relro */
-//        DEBUGF("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
+          // log_debug("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
 
         s->phdr_flags = flags;
     }
@@ -155,7 +153,7 @@ static void layout_sections(elf_context *ctx) {
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
     addr_t s_align = cross_elf_page_size();
     addr_t addr = cross_elf_start_addr();
-    addr_t base = addr; // elf 文件的起始虚拟内存地址
+    addr_t base = addr;// elf 文件的起始虚拟内存地址
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
     Elf64_Phdr *phdr;
@@ -164,8 +162,8 @@ static void layout_sections(elf_context *ctx) {
         section_t *s = SEC_TACK(order_index);
         uint64_t flags = s->phdr_flags;
         uint64_t align = s->sh_addralign - 1;
-        if (flags == 0) { // no alloc in memory
-            file_offset = (file_offset + align) & ~align; // ~align 按位取反
+        if (flags == 0) {                                // no alloc in memory
+            file_offset = (file_offset + align) & ~align;// ~align 按位取反
             s->sh_offset = file_offset;
             if (s->sh_type != SHT_NOBITS) {
                 file_offset += s->sh_size;
@@ -182,7 +180,7 @@ static void layout_sections(elf_context *ctx) {
 
         uint64_t tmp = addr;
         addr = (addr + align) & ~align;
-        file_offset += (int) (addr - tmp); // 对齐差值，多个 section 共用一个 page 从而可以节省内存
+        file_offset += (int) (addr - tmp);// 对齐差值，多个 section 共用一个 page 从而可以节省内存
         s->sh_offset = file_offset;
         s->sh_addr = addr;
         // 位移优先级高于按位与
@@ -190,7 +188,7 @@ static void layout_sections(elf_context *ctx) {
         // f & x  = 最终判断第 8 位的值是否为 1, 为 1 表示需要创建一个新的 program header
         // pt load 段写入(可装载段)
         if (flags & 1 << 8) {
-            phdr = &ctx->phdr_list[n]; // ph fill 看起来像是预留的段空间
+            phdr = &ctx->phdr_list[n];// ph fill 看起来像是预留的段空间
             /* set new program header */
             phdr->p_type = PT_LOAD;
             phdr->p_align = s_align;
@@ -261,7 +259,7 @@ static int set_section_sizes(elf_context *ctx) {
         }
 
         if (s->sh_flags & SHF_ALLOC || s->sh_type == SHT_SYMTAB || s->sh_type == SHT_STRTAB) {
-            s->sh_size = s->data_count; // 直接使用 data_count 覆盖
+            s->sh_size = s->data_count;// 直接使用 data_count 覆盖
         }
     }
     return 0;
@@ -299,7 +297,7 @@ sym_attr_t *elf_get_sym_attr(elf_context *ctx, uint64_t sym_index, bool alloc) {
         ctx->sym_attrs_count = n;
     }
 
-    return &ctx->sym_attrs[sym_index]; // 符号始终在 ctx 中
+    return &ctx->sym_attrs[sym_index];// 符号始终在 ctx 中
 }
 
 /**
@@ -323,8 +321,7 @@ static sym_attr_t *put_got_entry(elf_context *ctx, int relocate_type, uint64_t s
 
     Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
     char *sym_name = (char *) ctx->symtab_section->link->data + sym->st_name;
-    elf_put_relocate(ctx, ctx->symtab_section, ctx->got,
-                     got_offset, relocate_type, (int) sym_index, 0);
+    elf_put_relocate(ctx, ctx->symtab_section, ctx->got, got_offset, relocate_type, (int) sym_index, 0);
 
     if (need_plt_entry) {
         // 基于 amd64 的 plt entry
@@ -356,7 +353,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
     assert(fd >= 0);
 
     lseek(fd, file_offset, SEEK_SET);
-    Elf64_Ehdr ehdr; // 清 0
+    Elf64_Ehdr ehdr;// 清 0
     Elf64_Shdr *shdr;
     ssize_t read_size = full_read(fd, &ehdr, sizeof(ehdr));
     assert(read_size == sizeof(ehdr) && "read elf header failed");
@@ -369,7 +366,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
     local_section_t *local_sections = mallocz(sizeof(local_section_t) * ehdr.e_shnum);
 
     // 加载段表字符串表 e_shstrndx = Section header string table index
-    shdr = &shdr_list[ehdr.e_shstrndx]; // 必须使用引用，否则无法修改 shdr 的值
+    shdr = &shdr_list[ehdr.e_shstrndx];// 必须使用引用，否则无法修改 shdr 的值
     char *shstrtab = elf_file_load_data(fd, file_offset + shdr->sh_offset, shdr->sh_size);
 
     // 加载符号表,单个可中定位文件中只允许存在一个符号表
@@ -389,7 +386,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         sym_count = shdr->sh_size / sizeof(*sym);
         // 加载符号数据
         symtab = elf_file_load_data(fd, file_offset + shdr->sh_offset, shdr->sh_size);
-        local_sections[sh_index].section = ctx->symtab_section; // 通过 index 进行全局关联
+        local_sections[sh_index].section = ctx->symtab_section;// 通过 index 进行全局关联
 
         // 加载符号字符串表
         shdr = &shdr_list[shdr->sh_link];
@@ -408,12 +405,8 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
             shdr = &shdr_list[shdr->sh_info];
         }
 
-        if (shdr->sh_type != SHT_PROGBITS &&
-            shdr->sh_type != SHT_NOTE &&
-            shdr->sh_type != SHT_NOBITS &&
-            shdr->sh_type != SHT_PREINIT_ARRAY &&
-            shdr->sh_type != SHT_INIT_ARRAY &&
-            shdr->sh_type != SHT_FINI_ARRAY &&
+        if (shdr->sh_type != SHT_PROGBITS && shdr->sh_type != SHT_NOTE && shdr->sh_type != SHT_NOBITS &&
+            shdr->sh_type != SHT_PREINIT_ARRAY && shdr->sh_type != SHT_INIT_ARRAY && shdr->sh_type != SHT_FINI_ARRAY &&
             !str_equal(shstrtab + shdr->sh_name, ".stabstr")) {
             continue;
         }
@@ -435,7 +428,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         global_section->sh_addralign = shdr->sh_addralign;
         global_section->sh_entsize = shdr->sh_entsize;
         local_sections[sh_index].is_new = true;
-        FOUND:
+    FOUND:
         // 在ctx 中找到了同名 section 但是段类型不相同
         assertf(shdr->sh_type == global_section->sh_type, "[elf_load_object_file] sh %s code invalid", shdr_name);
 
@@ -450,17 +443,17 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
         // 将 local section 数据写入到全局 section 中
         uint64_t sh_size = shdr->sh_size;
-        if (shdr->sh_type == SHT_NOBITS) { // 预留空间单没数据
+        if (shdr->sh_type == SHT_NOBITS) {// 预留空间单没数据
             global_section->data_count += sh_size;
         } else {
             unsigned char *ptr;
-            lseek(fd, file_offset + shdr->sh_offset, SEEK_SET); // 移动 fd 指向的文件的偏移点
+            lseek(fd, file_offset + shdr->sh_offset, SEEK_SET);// 移动 fd 指向的文件的偏移点
             ptr = elf_section_data_add_ptr(global_section, sh_size);
             full_read(fd, ptr, sh_size);
         };
     }
 
-//    section_t *debug_section = SEC_TACK(6);
+    // section_t *debug_section = SEC_TACK(6);
 
     // 完善 section 中的关联关系，比如 section.link
     for (int sh_index = 1; sh_index < ehdr.e_shnum; ++sh_index) {
@@ -471,7 +464,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
 
         shdr = &shdr_list[sh_index];
         if (shdr->sh_link > 0) {
-            section->link = local_sections[shdr->sh_link].section; // 这里的 section 为全局 section
+            section->link = local_sections[shdr->sh_link].section;// 这里的 section 为全局 section
         }
 
         // 重定位段表的 sh_link 保存对应的符号表
@@ -492,9 +485,9 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
     for (int i = 1; i < sym_count; ++i, sym++) {
         // add symbol
         char *sym_name = strtab + sym->st_name;
-//        DEBUGF("sym_name: %s\n", sym_name);
+        // log_debug("sym_name: %s\n", sym_name);
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
-            local_section_t *local = &local_sections[sym->st_shndx]; // st_shndx 定义符号的段
+            local_section_t *local = &local_sections[sym->st_shndx];// st_shndx 定义符号的段
             if (!local->section) {
                 continue;
             }
@@ -534,11 +527,10 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         Elf64_Rela *rel;
         for (rel = (Elf64_Rela *) rel_section->data + (offset / sizeof(Elf64_Rela));
              rel < (Elf64_Rela *) rel_section->data + ((offset + sh_size) / sizeof(Elf64_Rela)); rel++) {
-            uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
-            uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
+            uint64_t rel_type = ELF64_R_TYPE(rel->r_info);// 重定位类型
+            uint64_t sym_index = ELF64_R_SYM(rel->r_info);// 重定位符号在符号表中的索引
 
             assertf(sym_index < sym_count, "[elf_load_object_file] rel sym index exception");
-
 
             sym_index = symtab_index_map[sym_index];
             if (!sym_index /**&& code != R_RISCV_ALIGN && code != R_RISCV_RELAX **/) {
@@ -558,7 +550,7 @@ size_t elf_section_data_forward(section_t *section, uint64_t size, uint64_t alig
     if (section->sh_type != SHT_NOBITS && offset_end > section->data_capacity) {
         elf_section_realloc(section, offset_end);
     }
-    section->data_count = offset_end; // forward
+    section->data_count = offset_end;// forward
     if (align > section->sh_addralign) {
         section->sh_addralign = align;
     }
@@ -572,7 +564,6 @@ void *elf_section_data_add_ptr(section_t *section, uint64_t size) {
 }
 
 uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
-
     section_t *s = ctx->symtab_section;
     table_t *symbol_table = ctx->symtab_hash;
     uint64_t sym_bind = ELF64_ST_BIND(sym->st_info);
@@ -589,11 +580,8 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
         }
         exist_sym = &((Elf64_Sym *) s->data)[sym_index];
 
-        if (exist_sym->st_value == sym->st_value &&
-            exist_sym->st_size == sym->st_size &&
-            exist_sym->st_info == sym->st_info &&
-            exist_sym->st_other == sym->st_other &&
-            exist_sym->st_shndx == sym->st_shndx) {
+        if (exist_sym->st_value == sym->st_value && exist_sym->st_size == sym->st_size && exist_sym->st_info == sym->st_info &&
+            exist_sym->st_other == sym->st_other && exist_sym->st_shndx == sym->st_shndx) {
             return sym_index;
         }
 
@@ -606,7 +594,7 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
             // 计算可见性
             uint64_t exist_sym_bind = ELF64_ST_BIND(exist_sym->st_info);
             uint8_t exist_sym_visible = ELF64_ST_VISIBILITY(exist_sym->st_other);
-            /* propagate the most constraining visibility */ // 使用约束力最强的可见性等级,越往右约束性越强
+            /* propagate the most constraining visibility */// 使用约束力最强的可见性等级,越往右约束性越强
             /* STV_DEFAULT(0)<STV_PROTECTED(3)<STV_HIDDEN(2)<STV_INTERNAL(1) */
             uint8_t new_visible;
             if (sym_visible == STV_DEFAULT) {
@@ -630,9 +618,8 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
                 return sym_index;
             } else if (sym_visible == STV_HIDDEN || sym_visible == STV_INTERNAL) {
                 return sym_index;
-            } else if ((exist_sym->st_shndx == SHN_COMMON || exist_sym->st_shndx == ctx->bss_section->sh_index)
-                       && (sym->st_shndx < SHN_LORESERVE
-                           && sym->st_shndx != ctx->bss_section->sh_index)) {
+            } else if ((exist_sym->st_shndx == SHN_COMMON || exist_sym->st_shndx == ctx->bss_section->sh_index) &&
+                       (sym->st_shndx < SHN_LORESERVE && sym->st_shndx != ctx->bss_section->sh_index)) {
                 goto PATCH;
             } else if (sym->st_shndx == SHN_COMMON || sym->st_shndx == ctx->bss_section->sh_index) {
                 return sym_index;
@@ -641,7 +628,7 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
             } else if (exist_sym->st_other & ST_ASM_SET) {
                 goto PATCH;
             } else {
-                error_exit("symbol %s repeat defined", name);
+                assertf(false, "symbol '%s' repeat defined", name);
             }
         }
     } else {
@@ -649,14 +636,14 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
         goto DEF;
     }
 
-    PATCH:
+PATCH:
     exist_sym->st_info = ELF64_ST_INFO(sym_bind, sym_type);
     exist_sym->st_shndx = sym->st_shndx;
     exist_sym->st_value = sym->st_value;
     exist_sym->st_size = sym->st_size;
     return sym_index;
 
-    DEF:
+DEF:
     sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, sym, name);
     return sym_index;
 }
@@ -674,9 +661,9 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
     new_sym->st_info = sym->st_info;
     new_sym->st_other = sym->st_other;
     new_sym->st_shndx = sym->st_shndx;
-    uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data; // 终点 - 起点 = 数量
+    uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data;// 终点 - 起点 = 数量
 
-    if (name) {
+    if (name && strlen(name) > 0) {
         table_set(symtab_hash, name, (void *) sym_index);
     }
 
@@ -684,7 +671,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
 }
 
 uint64_t elf_put_str(section_t *s, char *str) {
-    size_t len = strlen(str) + 1; // 预留一个 \0
+    size_t len = strlen(str) + 1;// 预留一个 \0
     uint64_t offset = s->data_count;
 
     char *ptr = elf_section_data_add_ptr(s, len);
@@ -702,7 +689,6 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size) {
     }
     return (uint64_t) ptr - (uint64_t) s->data;
 }
-
 
 /**
  * - resolve common sym
@@ -764,7 +750,7 @@ void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index) {
 
     // 一次遍历(基于 R_JMP_SLOT 构建 plt 段)
     int pass = 0;
-    REDO:
+REDO:
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *s = ctx->sections->take[sh_index];
         // 仅需要符号表重定位表
@@ -776,7 +762,7 @@ void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index) {
         }
 
         for (rel = (Elf64_Rela *) s->data; rel < (Elf64_Rela *) (s->data + s->data_count); rel++) {
-            uint64_t type = ELF64_R_TYPE(rel->r_info); // 重定位类型
+            uint64_t type = ELF64_R_TYPE(rel->r_info);// 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
 
@@ -851,15 +837,14 @@ void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index) {
     }
 
     if (ctx->plt && ctx->plt->relocate) {
-        ctx->plt->relocate->sh_info = ctx->got->sh_index; // 重定位表的 sh_info 存储的应用重定位的段
+        ctx->plt->relocate->sh_info = ctx->got->sh_index;// 重定位表的 sh_info 存储的应用重定位的段
     }
     if (got_sym_index) {
         ((Elf64_Sym *) ctx->symtab_section->data)[got_sym_index].st_size = ctx->got->data_count;
     }
 }
 
-Elf64_Rela *
-elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
+Elf64_Rela *elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
     Elf64_Sym sym = {
             .st_shndx = 0,
             .st_size = 0,
@@ -870,14 +855,7 @@ elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset
     // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
     //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
     uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
-    return elf_put_relocate(ctx,
-                            ctx->symtab_section,
-                            apply_section,
-                            rel_offset,
-                            R_X86_64_64,
-                            (int) sym_index,
-                            0);
-
+    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, R_X86_64_64, (int) sym_index, 0);
 }
 
 /**
@@ -891,14 +869,13 @@ elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset
  * @param addend
  * @return
  */
-Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section,
-                             uint64_t offset, int type, int sym_index, int64_t addend) {
-
+Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section, uint64_t offset, int type, int sym_index,
+                             int64_t addend) {
     char buf[1024];
     section_t *rel_section = apply_section->relocate;
     if (!rel_section) {
         char *temp_name = strdup(apply_section->name);
-        assert(strlen(temp_name) < sizeof(buf) - 24); // 预留出 real. 空间
+        assert(strlen(temp_name) < sizeof(buf) - 24);// 预留出 real. 空间
         snprintf(buf, sizeof(buf), REL_SECTION_FMT, temp_name);
 
         rel_section = elf_new_section(ctx, buf, SHT_RELA, SHF_INFO_LINK);
@@ -924,8 +901,7 @@ void elf_relocate_symbols(elf_context *ctx, section_t *sym_section) {
             char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
             /* XXX: _fp_hw seems to be part of the ABI, so we ignore
                it */
-            if (!strcmp(name, "_fp_hw"))
-                goto FOUND;
+            if (!strcmp(name, "_fp_hw")) goto FOUND;
             /* only weak global_symbols are accepted to be undefined. Their
                value is zero */
             // 静态链接中只有弱符号允许未定义，他们的值固定位 0
@@ -941,9 +917,8 @@ void elf_relocate_symbols(elf_context *ctx, section_t *sym_section) {
             /* add section base */
             sym->st_value += SEC_TACK(sh_index)->sh_addr;
         }
-        FOUND:;
+    FOUND:;
     }
-
 }
 
 void elf_relocate_sections(elf_context *ctx) {
@@ -964,29 +939,37 @@ void elf_relocate_sections(elf_context *ctx) {
  * @param rel_section
  */
 void elf_relocate_section(elf_context *ctx, section_t *apply_section, section_t *rel_section) {
-//    DEBUGF("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
-//           rel_section->name,
-//           rel_section->sh_type,
-//           rel_section->sh_flags,
-//           apply_section->name);
+    // log_debug("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
+    //        rel_section->name,
+    //        rel_section->sh_type,
+    //        rel_section->sh_flags,
+    //        apply_section->name);
 
     Elf64_Sym *sym = NULL;
     Elf64_Rela *rel = NULL;
     uint8_t *ptr = NULL;
     for (rel = SEC_START(Elf64_Rela, rel_section); rel < SEC_END(Elf64_Rela, rel_section); rel++) {
+        // 异常的重定向项，暂时不处理
+        if (rel->r_offset > apply_section->data_capacity) {
+            // TODO 为什么会出现这种情况
+            // elf_section_realloc(apply_section, rel->r_offset);
+            // assert(apply_section->data_capacity >= rel->r_offset);
+            continue;
+        }
+
         // s 为目标端, s->data 为段起始指针，其实就是 0, rel->r_offset 是基于目标段的偏移
         // 但是总的来说 ptr 都是待修正的符号的位置
         ptr = apply_section->data + rel->r_offset;
 
         // rel 引用的符号在符号表的索引，在没有修正之前就是 UNDEF, 不过 load elf 的时候已经进行了不停的修正，所以这里已经不会是 undef 了
         int sym_index = ELF64_R_SYM(rel->r_info);
-        sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index]; // 符号
+        sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];// 符号
 
         char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
 
-        int type = ELF64_R_TYPE(rel->r_info); // code 就是重定位的类型
-        addr_t target = sym->st_value; // 符号定义的位置
-        target += rel->r_addend; // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
+        int type = ELF64_R_TYPE(rel->r_info);// code 就是重定位的类型
+        addr_t target = sym->st_value;       // 符号定义的位置
+        target += rel->r_addend;             // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
 
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
@@ -1058,10 +1041,10 @@ int tidy_section_headers(elf_context *ctx) {
             s = SEC_TACK(actual_sh_index);
         }
         if (sh_index == 0 || s->sh_name) {
-            back_map[actual_sh_index] = new_section_count; // count 就是 new sh_index
+            back_map[actual_sh_index] = new_section_count;// count 就是 new sh_index
             new_section_tack[new_section_count++] = s;
         } else {
-            back_map[actual_sh_index] = 0; //
+            back_map[actual_sh_index] = 0;//
             new_section_tack[--tail] = s; // 不需要输出到可执行文件的 section 放在尾部
         }
     }
@@ -1101,7 +1084,7 @@ section_t *elf_new_section(elf_context *ctx, char *name, uint64_t sh_type, uint6
 
     s->sh_type = sh_type;
     s->sh_flags = sh_flags;
-//    DEBUGF("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);
+    // log_debug("[elf_new_section] name: %s, sh_type: %lu, sh_flags: %lu", name, sh_type, sh_flags);
 
     switch (sh_type) {
         case SHT_GNU_versym:
@@ -1258,11 +1241,11 @@ void elf_load_archive(elf_context *ctx, int fd) {
             }
 
             offset += len;
-//            DEBUGF("   -> %s\n", arhdr.ar_name);
+            // log_debug("   -> %s\n", arhdr.ar_name);
             elf_load_object_file(ctx, fd, offset);
             ++bound;
 
-            CONTINUE:
+        CONTINUE:
             i++;
             sym_name += strlen(sym_name) + 1;
         }
@@ -1337,7 +1320,6 @@ Elf64_Sym *elf_find_sym(elf_context *ctx, char *name) {
     return &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
 }
 
-
 /**
  * 返回了 data 存放数据的内存地址，可以基于该地址做数据覆盖
  * @param ctx
@@ -1355,13 +1337,12 @@ uint64_t elf_put_global_symbol(elf_context *ctx, char *name, void *value, uint8_
             .st_size = value_size,
             .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
             .st_other = 0,
-            .st_shndx = ctx->data_section->sh_index, // 定义符号的段
-            .st_value = offset, // 定义符号的位置，基于段的偏移
+            .st_shndx = ctx->data_section->sh_index,// 定义符号的段
+            .st_value = offset,                     // 定义符号的位置，基于段的偏移
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
     return offset;
 }
-
 
 /**
  * 基于 symbol fn 生成基础的 fn list
@@ -1391,7 +1372,7 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         fndef_t *f = &ct_fndef_list[count++];
         f->fn_runtime_reg = c->fn_runtime_reg;
         f->fn_runtime_stack = c->fn_runtime_stack;
-        f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
+        f->stack_size = c->stack_offset;// native 的时候已经进行了 16byte 对齐了
         f->gc_bits = c->stack_gc_bits->bits;
 
         size_with_bits += sizeof(fndef_t);
@@ -1402,9 +1383,9 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         f->line = c->fndef->line;
         f->column = c->fndef->column;
 
-        f->base = 0; // 等待符号重定位
+        f->base = 0;// 等待符号重定位
         assert(c->text_count > 0);
-        f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
+        f->size = c->text_count;// 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
         // 按从 base ~ top 的入栈顺序写入
         for (int i = 0; i < c->stack_vars->count; ++i) {
@@ -1413,34 +1394,23 @@ uint64_t collect_fndef_list(elf_context *ctx) {
             assert(stack_slot < 0);
             stack_slot = var_stack_slot(c, var) * -1;
 
-            DEBUGF("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                   fn->symbol_name,
-                   var->ident,
-                   type_format(var->type),
-                   type_sizeof(var->type),
-                   type_is_ptr(var->type),
-                   (stack_slot / POINTER_SIZE) - 1,
-                   stack_slot);
-
+            log_debug("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                      fn->symbol_name, var->ident, type_format(var->type), type_sizeof(var->type), type_is_ptr(var->type),
+                      (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
-        DEBUGF("[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
-               "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-               f->name,
-               f->base,
-               f->size,
-               f->stack_size,
-               f->fn_runtime_stack,
-               f->fn_runtime_reg,
-               f->stack_size / POINTER_SIZE,
-               bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+        log_debug(
+                "[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+                "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, f->stack_size / POINTER_SIZE,
+                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
 
         rel_offset += sizeof(fndef_t);
     }
     ct_fndef_count = count;
-    DEBUGF("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
+    log_debug("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
     return size_with_bits;
 }
 
@@ -1454,7 +1424,7 @@ uint8_t *fndefs_serialize() {
     memmove(p, ct_fndef_list, size);
 
     // 将 gc_bits 移动到数据尾部
-    p = p + size; // byte 类型，所以按字节移动
+    p = p + size;// byte 类型，所以按字节移动
     for (int i = 0; i < ct_fndef_count; ++i) {
         fndef_t *f = &ct_fndef_list[i];
         uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
@@ -1479,8 +1449,8 @@ uint64_t collect_symdef_list(elf_context *ctx) {
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->need_gc = type_is_ptr(var_decl->type);
-        symdef->size = type_sizeof(var_decl->type); // 符号的大小
-        symdef->base = 0; // 这里引用了全局符号表段地址
+        symdef->size = type_sizeof(var_decl->type);// 符号的大小
+        symdef->base = 0;                          // 这里引用了全局符号表段地址
         strcpy(symdef->name, var_decl->ident);
 
         elf_put_rel_data(ctx, ctx->data_symdef_section, rel_offset, var_decl->ident, STT_OBJECT);
@@ -1490,7 +1460,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
     ct_symdef_count = count;
     size = ct_symdef_count * sizeof(symdef_t);
     ct_symdef_list = realloc(ct_symdef_list, size);
-    DEBUGF("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size)
+    log_debug("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size);
 
     return size;
 }
@@ -1511,9 +1481,9 @@ uint8_t *rtypes_serialize() {
     memmove(p, ct_rtype_vec->take, size);
 
     // 移动 gc_bits
-    p = p + size; // byte 类型，所以按字节移动
+    p = p + size;// byte 类型，所以按字节移动
     for (int i = 0; i < ct_rtype_vec->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_vec, i); // take 的类型是字节，所以这里按字节移动
+        rtype_t *r = ct_list_value(ct_rtype_vec, i);// take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
         if (gc_bits_size) {
             memmove(p, r->gc_bits, gc_bits_size);
@@ -1535,4 +1505,3 @@ uint8_t *rtypes_serialize() {
 
     return data;
 }
-

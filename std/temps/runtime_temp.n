@@ -1,0 +1,27 @@
+fn rt_vec_new(int ref_hash, int ele_ref_hash, int len, int cap):cptr
+
+fn rt_vec_push(cptr list, cptr val)
+
+fn rt_vec_slice(cptr list, int start, int end):cptr
+
+fn rt_vec_concat(cptr list1, cptr list2):cptr
+
+fn rt_vec_ref(cptr list):cptr
+
+fn rt_vec_length(cptr list):int
+
+fn rt_vec_capacity(cptr list):int
+
+fn rt_set_add(cptr s, cptr key):bool
+
+fn rt_set_contains(cptr s, cptr key):bool
+
+fn rt_set_delete(cptr s, cptr key)
+
+fn rt_map_delete(cptr m, cptr key)
+
+fn rt_map_length(cptr m):int
+
+fn rt_string_length(cptr s):int
+
+fn rt_string_ref(cptr s):cptr

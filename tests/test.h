@@ -1,13 +1,14 @@
 #ifndef NATURE_TESTS_H
 #define NATURE_TESTS_H
 
+#include <assert.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <string.h>
+
 #include "src/build/build.h"
 #include "utils/exec.h"
 
@@ -48,16 +49,16 @@ static inline void blackbox_package_sync() {
     // 环境变量下查找 package 可执行文件 npkg
     char *workdir = get_workdir();
     char *output = command_output(workdir, PACKAGE_SYNC_COMMAND);
-    DEBUGF("npkg sync:%s", output);
+    log_debug("npkg sync:%s", output);
 }
 
-#define TEST_BASIC \
-    blackbox_setup();              \
-    test_basic();\
+#define TEST_BASIC    \
+    blackbox_setup(); \
+    test_basic();
 
-#define TEST_WITH_PACKAGE \
+#define TEST_WITH_PACKAGE    \
     blackbox_package_sync(); \
-    blackbox_setup();              \
-    test_basic();\
+    blackbox_setup();        \
+    test_basic();
 
-#endif //NATURE_TEST_H
+#endif // NATURE_TEST_H

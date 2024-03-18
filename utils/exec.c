@@ -1,7 +1,9 @@
 #include "exec.h"
-#include <unistd.h>
+
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <unistd.h>
+
 #include "helper.h"
 
 void exec_process(char *work_dir, char *file, slice_t *list) {
@@ -57,7 +59,7 @@ char *exec(char *work_dir, char *file, slice_t *list) {
         // 子进程
         close(fd[0]);
         dup2(fd[1], STDOUT_FILENO);
-//        dup2(fd[1], STDERR_FILENO);
+        //        dup2(fd[1], STDERR_FILENO);
         close(fd[1]);
         if (work_dir) {
             // 修改执行的工作目录
@@ -66,24 +68,24 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误
         int result = execvp(file, argv);
-//        perror("failed message");
+        //        perror("failed message");
         exit(result);
     }
 
     close(fd[1]);
 
-    char *buf = mallocz(4096);
+    char *buf = mallocz(8192);
 
-    full_read(fd[0], buf, 4096);
+    full_read(fd[0], buf, 8192);
 
     int exec_status;
     wait(&exec_status);
 
     // 测试时需要测试异常退出的清空, 此时 status != 0
-//    if (exec_status != 0) {
-//        sprintf(buf, "exec file='%s' failed", file);
-//        return buf;
-//    }
+    //    if (exec_status != 0) {
+    //        sprintf(buf, "exec file='%s' failed", file);
+    //        return buf;
+    //    }
 
     return buf;
 }
@@ -109,7 +111,7 @@ char *command_output(const char *work_dir, const char *command) {
     char buffer[128];
     size_t size = 0;
     size_t capacity = 128;
-    result = (char *) mallocz(capacity * sizeof(char));
+    result = (char *)mallocz(capacity * sizeof(char));
     if (!result) {
         perror("malloc");
         pclose(pipe);
@@ -121,7 +123,7 @@ char *command_output(const char *work_dir, const char *command) {
         // Check if the buffer needs to be resized
         if (size + len >= capacity) {
             capacity *= 2;
-            char *temp = (char *) realloc(result, capacity * sizeof(char));
+            char *temp = (char *)realloc(result, capacity * sizeof(char));
             if (!temp) {
                 perror("realloc");
                 free(result);
@@ -140,4 +142,3 @@ char *command_output(const char *work_dir, const char *command) {
 
     return result;
 }
-

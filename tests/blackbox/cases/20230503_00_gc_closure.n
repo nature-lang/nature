@@ -1,3 +1,5 @@
+import coroutine as co
+
 fn make_atm():fn(int):int {
     var cash = 1000
     return fn(int amount):int {
@@ -21,7 +23,8 @@ fn makes() {
     println(atms[599](100))
     println(atms[999](200))
 
-    runtime_gc()
+    runtime_force_gc()
+    co.sleep(500) // wait gc finish
     println(runtime_malloc_bytes())
     println(atms[10](10))
     println(atms[599](100))
@@ -30,5 +33,6 @@ fn makes() {
 
 makes()
 
-runtime_gc()
+runtime_force_gc()
+co.sleep(500)
 println(runtime_malloc_bytes())

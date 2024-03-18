@@ -1,0 +1,171 @@
+import coroutine as co
+import libc_temp
+
+fn car() {
+    var a = vec_new<int>(10, 0)
+    a = vec_new<int>(403, 0)
+    a = vec_new<int>(1201, 0)
+    a = vec_new<int>(512, 0)
+    a = vec_new<int>(700, 0)
+
+    var c = {1:2, 2:3, 3:4}
+
+    a[0] = 1
+    a[2] = 2
+    a[4] = 4
+    a[8] = 8
+    a[16] = 16
+    a[32] = 32
+    a[128] = 128
+    a[500] = 128
+
+    //println('will usleep 20ms')
+    // usleep(10 as u32 * 1000)
+
+    var b = 'hello world nice'
+    b = 'hello world nice'
+    b = 'wwwwwwwwwwww'
+    b = 'ccccccccccccc'
+    b = 'bbbbbbbbbbbbbb'
+    b = 'hello world nice'
+    b = 'hello world nice'
+}
+
+fn foo(){
+    int a = 1
+    int b = 2
+    bool c = true
+    string d = 'hello world'
+    d = 'done done'
+    car()
+    runtime_force_gc()
+
+    co.sleep(100)
+    print('share sub_co done\n')
+}
+
+var bar = fn(){
+    var i = 2
+    for i > 0 {
+        co.sleep(100)
+        i -= 1
+    }
+
+    println('solo sub_co done', i)
+}
+
+// - 共享协程
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+co.run(bar, co.SOLO)
+
+for int i=0; i < 100; i+=1 {
+   co.run(foo, 0)
+}
+
+for int i=0; i < 100; i+=1 {
+   co.run(bar, co.SOLO)
+}
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+co.run(foo, 0)
+
+// main for sleep
+for int i=0; i<25; i+=1 {
+    co.sleep(10)
+    if i > 20 {
+        println('main_co sleep done', i)
+    }
+}
+
+println('main_co done')

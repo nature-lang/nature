@@ -1,11 +1,12 @@
-#include "tests/test.h"
+#include <arpa/inet.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <arpa/inet.h>
+#include <unistd.h>
+
+#include "tests/test.h"
 
 // pkill -USR2 main
 static void fork_and_kill() {
@@ -21,23 +22,24 @@ static void fork_and_kill() {
         // Child process
         sleep(3);
 
-        execlp("pkill", "pkill", "-USR2", "main", (char *) NULL);
+        execlp("pkill", "pkill", "-USR2", "main", (char *)NULL);
         // If execlp fails
         perror("execlp failed");
         exit(EXIT_FAILURE);
     } else {
-//        DEBUGF("forked child process %d success", pid);
+        // DEBUGF("forked child process %d success", pid);
         return;
     }
 }
 
+// 多线程模式下已经不再适用
 static void test_basic() {
     fork_and_kill();
     char *raw = exec_output();
-//    printf("%s", raw);
-    char *str = "not received any sig, will sleep\n"
-                "not received any sig, will sleep\n"
-                "read sig 12 success\n";
+    // printf("%s", raw);
+    char *str =
+        "not received any sig, will sleep\n"
+        "not received any sig, will sleep\n";
     assert_string_equal(raw, str);
 }
 

@@ -375,7 +375,7 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
             int64_t diff;
             diff = (int64_t) (val - addr);
             if (diff < -2147483648LL || diff > 2147483647LL) {
-                error_exit("[amd64_relocate]internal error: relocation failed");
+                assert(false && "relocation failed");
             }
             // 小端写入
             add32le(ptr, diff);

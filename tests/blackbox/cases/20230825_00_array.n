@@ -6,8 +6,7 @@ a1[1] = 12
 println(a1[0], a1[1])
 
 var b = a1[0]
-var (b1, err) = try a1[5]
-if err.has {
+var b1 = a1[5] catch err {
     println(err.msg)
 }
 println(b, b1, a1[0])
@@ -37,8 +36,7 @@ a3.push([11, 12, 13] as arr<i64,3>)
 // access
 println(a3[0][0], a3[0][1], a3[0][2], a3[1][0], a3[1][1], a3[1][2])
 
-var (r1, err) = try a3[0][5]
-if err.has {
+var r1 = a3[0][5] catch err {
     println(err.msg)
 }
 
@@ -61,7 +59,7 @@ type person_t = struct {
 }
 
 var p = person_t{}
-println(p.foo[0], p.foo[7], p.dog.a, p.car.a, p.egg.len, p.bar)
+println(p.foo[0], p.foo[7], p.dog.a, p.car.a, p.egg.len(), p.bar)
 
 // assign
 p.egg.push(3.1415)
@@ -70,4 +68,4 @@ p.car.b = 456
 p.foo[0] = 789
 p.foo[7] = 987
 p.bar = true
-println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len, p.bar)
+println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len(), p.bar)

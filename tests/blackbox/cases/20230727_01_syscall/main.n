@@ -4,14 +4,14 @@ var file = 'mock/write.txt'
 
 var fd = syscall.open(file, syscall.O_CREAT | syscall.O_RDWR, 0666)
 
-var write_bytes = syscall.write(fd, 'hello world' as [u8])
+var write_bytes = syscall.write(fd, 'hello world'.ref(), 11)
 
 print('write bytes: ', write_bytes, '\n')
 
 syscall.seek(fd, 0, syscall.SEEK_SET)
 
-var buf = vec<u8>{len=20}
-var len = syscall.read(fd, buf)
+var buf = vec_new<u8>(20, 0)
+var len = syscall.read(fd, buf.ref(), buf.len())
 buf = buf.slice(0, len)
 print('read len: ', len, ', data: ', buf as string, '\n')
 

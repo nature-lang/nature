@@ -2,9 +2,9 @@ import os
 import fmt.util
 import fmt
 import time
+import coroutine as co
 
-// 启用快速强制 gc
-runtime_set_force_gc()
+runtime_force_gc()
 
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
@@ -19,17 +19,19 @@ if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index
     println('进来了!')
 }
 
-var a = vec<u8>{len=102400}
+var a = vec_new<u8>(102400, 0)
 
-a = vec<u8>{len=1}
+a = vec_new<u8>(1, 0)
+
+if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
+    println('进来了!')
+}
 
 if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
     println('进来了!')
 }
 
-if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
-    println('进来了!')
-}
+co.sleep(500)
 
 logf('hello33 %v', 'world33')
 var s = 'hello44 %v' // 这里会触发 string new, 但是绝对是在 main 中。

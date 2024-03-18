@@ -1,0 +1,41 @@
+import runtime_temp
+
+// 暂时无法通过 struct 推导
+// type vec<T> = struct{
+//    cptr data
+//    int len
+//    int cap
+//    int reflect_hash
+//    int ele_reflect_hash
+// }
+
+fn vec_new<T>(int len, int cap):vec<T> {
+    int hash = reflect_hash(vec<T>)
+    int ele_hash = reflect_hash(T)
+    return rt_vec_new(hash, ele_hash, len, cap) as vec<T>
+}
+
+fn vec<T>.push(T v) {
+    ptr<T> ref = &v
+    rt_vec_push(self as cptr, ref as cptr)
+}
+
+fn vec<T>.slice(int start, int end):vec<T> {
+    return rt_vec_slice(self as cptr, start, end) as vec<T>
+}
+
+fn vec<T>.concat(vec<T> l2):vec<T> {
+    return rt_vec_concat(self as cptr, l2 as cptr) as vec<T>
+}
+
+fn vec<T>.len():int {
+    return rt_vec_length(self as cptr)
+}
+
+fn vec<T>.cap():int {
+    return rt_vec_capacity(self as cptr)
+}
+
+fn vec<T>.ref():cptr {
+    return rt_vec_ref(self as cptr)
+}

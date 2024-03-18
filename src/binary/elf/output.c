@@ -94,7 +94,7 @@ void elf_output(elf_context *ctx) {
         Elf64_Shdr shdr = {0};
         section_t *s = SEC_TACK(sh_index);
         if (s) {
-//            DEBUGF("[elf_output] shr: %s write file", s->name);
+//            log_debug("[elf_output] shr: %s write file", s->name);
             shdr.sh_name = s->sh_name;
             shdr.sh_type = s->sh_type;
             shdr.sh_flags = s->sh_flags;
