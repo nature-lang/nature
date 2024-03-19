@@ -785,7 +785,7 @@ long convert(module_t *m, char *word, int base) {
 bool scanner_is_stop_char(module_t * m, char c) {
 	if (c == '\n' || c == '+' || c == '-' || c == '*' || c == '/' || c == '&' ||
 		c == '<' || c == '>' || c == '|' || c == '=' || c == '!' || c == ' ' ||
-		c == '~') {
+		c == '~' || c == ',' || c == '}' || c == ')' || c == ']') {
 		return true;
 	}
 	return false;
