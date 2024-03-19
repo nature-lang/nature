@@ -90,7 +90,7 @@ static type_struct_t *type_struct_copy(module_t *m, type_struct_t *temp) {
         property->right = ast_expr_copy(m, property->right);
         // if (property->right && ((ast_expr_t *) property->right)->assert_type == AST_FNDEF) {
         //     ast_fndef_t *fndef = ((ast_expr_t *) property->right)->value;
-        //     // - push 添加到 ast_fndef 中，让 checking 能够处理到该函数。
+        //     // - push 添加到 ast_fndef 中，让 infer 能够处理到该函数。
         //
         //     // - 添加到符号表中, 让函数数量能够 > 2
         // }

@@ -414,7 +414,7 @@ typedef struct {
     char *ident;// ident 冗余
 
     // parser 阶段是 typedef ident
-    // checking 完成后是 typeuse_struct
+    // infer 完成后是 typeuse_struct
     type_t type;
 
     list_t *properties;// struct_property_t
@@ -536,7 +536,7 @@ struct ast_fndef_t {
     table_t *generics_hash_table; // 避免重复写入到 generics_assigns
     slice_t *generics_special_fns;// 当前模板的特化函数列表
 
-    // checking call 时具体为 generics_params 分配的 args, 不需要单独初始化
+    // infer call 时具体为 generics_params 分配的 args, 不需要单独初始化
     table_t *generics_args_table;
     char *generics_args_hash;// 基于 gen args 计算的 hash 值，可以唯一标记当前函数
 
@@ -544,7 +544,7 @@ struct ast_fndef_t {
     list_t *generics_params;
     type_t impl_type;
 
-    // 由于 checking_fndef 会延迟完成，所以还需要记录一下 type_param_table
+    // 由于 infer_fndef 会延迟完成，所以还需要记录一下 type_param_table
     table_t *type_param_table;// 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
 
     // ast_expr, 当前 fn body 中引用的外部的环境
@@ -641,7 +641,7 @@ static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) 
 }
 
 /**
- * 已经 checking 过了
+ * 已经 infer 过了
  * @param expr
  * @param target_type
  * @return

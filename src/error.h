@@ -17,9 +17,9 @@
     } \
 }
 
-#define CHECKING_ASSERTF(cond, fmt, ...) { \
+#define INFER_ASSERTF(cond, fmt, ...) { \
     if (!(cond)) { \
-        dump_errorf(m, CT_STAGE_CHECKING, m->current_line, m->current_column, fmt, ##__VA_ARGS__); \
+        dump_errorf(m, CT_STAGE_INFER, m->current_line, m->current_column, fmt, ##__VA_ARGS__); \
     } \
 }
 
