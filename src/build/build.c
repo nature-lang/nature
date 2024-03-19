@@ -17,7 +17,7 @@
 #include "src/native/amd64.h"
 #include "src/register/linearscan.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/checking.h"
+#include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"
@@ -291,7 +291,7 @@ static void build_tpls(slice_t *templates) {
     for (int i = 0; i < templates->count; ++i) {
         char *full_path = templates->take[i];
 
-        // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/checking 逻辑)
+        // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/infer 逻辑)
         module_t *tpl_module = module_build(NULL, full_path, MODULE_TYPE_TPL);
         slice_push(modules, tpl_module);
     }
@@ -300,7 +300,7 @@ static void build_tpls(slice_t *templates) {
         module_t *m = modules->take[i];
         analyzer(m, m->stmt_list);
 
-        pre_checking(m);
+        pre_infer(m);
     }
 }
 
@@ -425,7 +425,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         assert(m->type != MODULE_TYPE_TPL);
 
         // analyzer => ast_fndefs(global)
-        // analyzer 需要将 global symbol 注册完成，否则在 pre_checking 时找不到相关的符号
+        // analyzer 需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
         analyzer(m, m->stmt_list);
     }
 
@@ -453,15 +453,15 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
 static void build_compiler(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
-        pre_checking(modules->take[i]);
+        pre_infer(modules->take[i]);
     }
 
-    // checking + compiler
+    // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
         // 类型推断
-        checking(m);
+        infer(m);
 
         // 编译为 lir
         linear(m);

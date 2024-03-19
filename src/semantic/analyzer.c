@@ -351,7 +351,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             type_alias->ident = unique_alias_ident;
         }
 
-        // TODO 统一在 checking 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
+        // TODO 统一在 infer 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
         //        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
@@ -748,7 +748,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     m->analyzer_global = fndef;
     fndef->is_local = false;
 
-    // generics fn 需要在 pre_checking 后
+    // generics fn 需要在 pre_infer 后
     if (fndef->generics_params) {
         fndef->is_generics = true;
     }

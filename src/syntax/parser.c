@@ -2426,7 +2426,7 @@ static ast_expr_t parser_macro_co_async_expr(module_t *m) {
 
 
 /**
-* 宏就解析成对应的 expr 好了，然后正常走 analyzer/checking/linear
+* 宏就解析成对应的 expr 好了，然后正常走 analyzer/infer/linear
 * @param m
 * @return
 */

@@ -44,7 +44,7 @@ typedef enum {
     CT_STAGE_PARSER,
     CT_STAGE_ANALYZER,
     CT_STAGE_GENERIC,
-    CT_STAGE_CHECKING,
+    CT_STAGE_INFER,
     CT_STAGE_LINEAR,
     CT_STAGE_CFG,// return check 是基于 cfg 的
 
@@ -161,7 +161,7 @@ struct module_t {
     char *package_dir;
     toml_table_t *package_conf;
 
-    // parser/analyzer/checking/compiler 阶段的所有异常都写入到这里
+    // parser/analyzer/infer/compiler 阶段的所有异常都写入到这里
     slice_t *intercept_errors;
     slice_t *errors;
 
@@ -181,7 +181,7 @@ struct module_t {
     // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 param 还是 alias, 仅仅使用到 key
     table_t *parser_type_params_table;
 
-    // checking 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
+    // infer 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
 
@@ -194,8 +194,8 @@ struct module_t {
     int current_line;
     int current_column;
 
-    // checking
-    ast_fndef_t *current_fn;  // 当前正在 checking 都 fn, return 时需要基于改值判断 return type
+    // infer
+    ast_fndef_t *current_fn;  // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
     table_t *type_param_table;// 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
     list_t *type_param_list;
 
@@ -212,12 +212,12 @@ struct module_t {
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     slice_t *global_symbols;// symbol_t, 这里只存储全局符号
-    slice_t *global_vardef; // 用于在 checking 阶段进行类型推导
+    slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
     slice_t *ast_fndefs;
     linked_t *temp_worklist;// ast_fndef
 
-    slice_t *checking_temp_fndefs;// checking 阶段，type param 可能还会产生 temp_fndefs
+    slice_t *infer_temp_fndefs;// infer 阶段，type param 可能还会产生 temp_fndefs
 
     // closure_t
     slice_t *closures;// 包含 lir, 无论是 local 还是 global 都会在这里进行注册

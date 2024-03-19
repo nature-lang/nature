@@ -1788,7 +1788,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             return target;
         }
 
-        // 只能转换为 ptr<type>, checking 已经判断完成
+        // 只能转换为 ptr<type>, infer 已经判断完成
         assert(as_expr->target_type.kind == TYPE_PTR);
         push_rt_call(m, RT_CALL_NULL_POINTER_ASSERT, target, 1, input);
         linear_has_error(m);
