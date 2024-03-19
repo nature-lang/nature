@@ -363,12 +363,6 @@ static ast_struct_new_t *ast_struct_new_copy(module_t *m, ast_struct_new_t *temp
     return struct_new;
 }
 
-static ast_try_t *ast_try_copy(module_t *m, ast_try_t *temp) {
-    ast_try_t *try_expr = COPY_NEW(ast_try_t, temp);
-    try_expr->expr = *ast_expr_copy(m, &temp->expr);
-    return try_expr;
-}
-
 static ast_access_t *ast_access_copy(module_t *m, ast_access_t *temp) {
     ast_access_t *access = COPY_NEW(ast_access_t, temp);
     access->left = *ast_expr_copy(m, &temp->left);
@@ -485,10 +479,6 @@ ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         }
         case AST_FNDEF: {
             expr->value = ast_fndef_copy(m, temp->value);
-            break;
-        }
-        case AST_EXPR_TRY: {
-            expr->value = ast_try_copy(m, temp->value);
             break;
         }
         case AST_EXPR_AS: {

@@ -716,24 +716,6 @@ static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr
 static void analyzer_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     analyzer_expr(m, &stmt->right);
 
-    if (stmt->right.assert_type == AST_EXPR_TRY) {
-        ANALYZER_ASSERTF(stmt->tuple_destr->elements->length == 2, "tuple destr length exception");
-
-        ast_expr_t *result_expr = ct_list_value(stmt->tuple_destr->elements, 0);
-        // result expr 只能是变量声明或者一个 tuple destr 声明
-        analyzer_var_tuple_destr_item(m, result_expr);
-
-        // err expr 只能是一个 var decl, 并且不需要进行重复声明检测
-        ast_expr_t *err_expr = ct_list_value(stmt->tuple_destr->elements, 1);
-
-        ANALYZER_ASSERTF(err_expr->assert_type == AST_VAR_DECL, "tuple destr last expr type exception");
-
-        analyzer_var_decl(m, err_expr->value, false);
-
-        return;
-    }
-
-    // 第一层需要进行 try 表达式特殊处理, 所以不进入低
     analyzer_var_tuple_destr(m, stmt->tuple_destr);
 }
 
@@ -1340,10 +1322,6 @@ static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
     analyzer_type(m, &expr->type);
 }
 
-static void analyzer_try(module_t *m, ast_try_t *expr) {
-    analyzer_expr(m, &expr->expr);
-}
-
 static void analyzer_for_cond(module_t *m, ast_for_cond_stmt_t *stmt) {
     analyzer_expr(m, &stmt->condition);
 
@@ -1430,9 +1408,6 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_MACRO_EXPR_TYPE_EQ: {
             return analyzer_type_eq_expr(m, expr->value);
-        }
-        case AST_EXPR_TRY: {
-            return analyzer_try(m, expr->value);
         }
         case AST_EXPR_NEW: {
             return analyzer_new_expr(m, expr->value);

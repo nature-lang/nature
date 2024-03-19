@@ -17,7 +17,7 @@ static void test_basic() {
                 "stack backtrace:\n"
                 "0:\tmain.div_0\n"
                 "\t\tat cases/20240318_00_coroutine_error.n:6:33\n"
-                "1:\tmain.lambda_13\n"
+                "1:\tmain.lambda_17\n"
                 "\t\tat cases/20240318_00_coroutine_error.n:33:12\n";
     assert_string_equal(raw, str);
 }

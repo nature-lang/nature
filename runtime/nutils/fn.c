@@ -186,9 +186,7 @@ envs_t *env_new(uint64_t length, bool imm_close) {
 }
 
 void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t stack_addr) {
-    //    PRE_RTCALL_HOOK(); env_new 已经设置，此处不需要重复设置
-    processor_t *p = processor_get();
-    assert(p->status == P_STATUS_RTCALL);
+    PRE_RTCALL_HOOK();
 
     rtype_t *rtype = rt_find_rtype(rtype_hash);
 

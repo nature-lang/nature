@@ -1632,12 +1632,6 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
 
     type_t *first = ct_list_value(type_fn->param_types, 0);
 
-    // 按照普通 foo.bar(param) 的方式 checking 返回即可
-    if (first->kind != TYPE_SELF) {
-        checking_call_args(m, call, type_fn);
-        return type_fn->return_type;
-    }
-
     // formal 的首个参数是 self, 且 self 未经过推断
     list_t *args = call->args;
     call->args = ct_list_new(sizeof(ast_expr_t));
@@ -1807,36 +1801,6 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     return type_fn->return_type;
 }
 
-/**
- * var (foo, err) = catch foo()
- * var err = catch foo()
- * var err = catch foo['car'].car()
- * @param try
- * @return
- */
-static type_t checking_try(module_t *m, ast_try_t *try) {
-    type_t return_type = infer_right_expr(m, &try->expr, type_kind_new(TYPE_UNKNOWN));
-
-    // 当表达式没有返回值时进行特殊处理
-    type_t errort = type_new(TYPE_ALIAS, NULL);
-    errort.alias = NEW(type_alias_t);
-    errort.alias->ident = ERRORT_TYPE_ALIAS;
-    errort.origin_ident = ERRORT_TYPE_ALIAS;
-    errort.origin_type_kind = TYPE_ALIAS;
-    errort.status = REDUCTION_STATUS_UNDO;
-    errort = reduction_type(m, errort);
-    if (return_type.kind == TYPE_VOID) {
-        return errort;
-    }
-
-    type_t t = type_kind_new(TYPE_TUPLE);
-    t.tuple = NEW(type_tuple_t);
-    t.tuple->elements = ct_list_new(sizeof(type_t));
-    ct_list_push(t.tuple->elements, &return_type);
-    ct_list_push(t.tuple->elements, &errort);
-    return t;
-}
-
 void checking_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
     infer_right_expr(m, &stmt->expr, type_kind_new(TYPE_UNKNOWN));
 }
@@ -1850,7 +1814,7 @@ void checking_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
 void checking_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
-    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL || type.kind == TYPE_SELF) {
+    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL) {
         CHECKING_ASSERTF(false, "variable declaration cannot use type '%s'", type_format(type));
     }
 
@@ -2313,9 +2277,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_CALL: {
             return checking_call(m, expr->value, target_type);
-        }
-        case AST_EXPR_TRY: {
-            return checking_try(m, expr->value);
         }
         case AST_MACRO_CO_ASYNC: {
             return checking_co_async(m, expr);

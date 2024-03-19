@@ -1635,20 +1635,6 @@ static ast_expr_t parser_new_expr(module_t *m) {
     return result;
 }
 
-static ast_expr_t parser_try_expr(module_t *m) {
-    ast_expr_t result = expr_new(m);
-    parser_must(m, TOKEN_TRY);
-
-    ast_expr_t expr = parser_expr(m);
-
-    ast_try_t *try = NEW(ast_try_t);
-    try->expr = expr;
-
-    result.assert_type = AST_EXPR_TRY;
-    result.value = try;
-    return result;
-}
-
 static ast_expr_t parser_boom_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_BOOM);

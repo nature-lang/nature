@@ -25,7 +25,7 @@ void exec_process(char *work_dir, char *file, slice_t *list) {
 
         int dev_null_fd = open("/dev/null", O_WRONLY);
         if (dev_null_fd == -1) {
-            exit(1); // 打开 /dev/null 失败
+            exit(1);// 打开 /dev/null 失败
         }
         dup2(dev_null_fd, STDOUT_FILENO);
         dup2(dev_null_fd, STDERR_FILENO);
@@ -37,13 +37,13 @@ void exec_process(char *work_dir, char *file, slice_t *list) {
     } else if (fid > 0) {
         // 父进程
         int status;
-        waitpid(fid, &status, 0); // 等待子进程执行完成
+        waitpid(fid, &status, 0);// 等待子进程执行完成
     }
 }
 
 // 结尾必须是 NULL,开头必须是重复命令
 char *exec(char *work_dir, char *file, slice_t *list) {
-    int fd[2]; // write to fd[1], read by fd[0]
+    int fd[2];// write to fd[1], read by fd[0]
     VOID pipe(fd);
 
     size_t count = list->count + 2;
@@ -74,9 +74,9 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
     close(fd[1]);
 
-    char *buf = mallocz(8192);
+    char *buf = mallocz(81920);
 
-    full_read(fd[0], buf, 8192);
+    full_read(fd[0], buf, 81920);
 
     int exec_status;
     wait(&exec_status);
@@ -111,7 +111,7 @@ char *command_output(const char *work_dir, const char *command) {
     char buffer[128];
     size_t size = 0;
     size_t capacity = 128;
-    result = (char *)mallocz(capacity * sizeof(char));
+    result = (char *) mallocz(capacity * sizeof(char));
     if (!result) {
         perror("malloc");
         pclose(pipe);
@@ -123,7 +123,7 @@ char *command_output(const char *work_dir, const char *command) {
         // Check if the buffer needs to be resized
         if (size + len >= capacity) {
             capacity *= 2;
-            char *temp = (char *)realloc(result, capacity * sizeof(char));
+            char *temp = (char *) realloc(result, capacity * sizeof(char));
             if (!temp) {
                 perror("realloc");
                 free(result);

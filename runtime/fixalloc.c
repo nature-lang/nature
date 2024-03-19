@@ -20,7 +20,7 @@ void fixalloc_init(fixalloc_t *f, uintptr_t fix_size) {
     f->size = fix_size;
     f->chunk_ptr = 0;
     f->chunk_rem = 0;
-    f->chunk_size = (uint32_t)(FIXALLOC_CHUNK_LIMIT / fix_size * fix_size); // 向下取证避免尾部浪费
+    f->chunk_size = (uint32_t) (FIXALLOC_CHUNK_LIMIT / fix_size * fix_size);// 向下取证避免尾部浪费
     f->free_list = NULL;
     f->inuse = 0;
 }
@@ -41,11 +41,11 @@ void *fixalloc_alloc(fixalloc_t *f) {
 
     if (f->chunk_rem < f->size) {
         // 申请新的 chunk
-        f->chunk_ptr = (uintptr_t)sys_memory_map(NULL, f->chunk_size);
+        f->chunk_ptr = (uintptr_t) sys_memory_map(NULL, f->chunk_size);
         f->chunk_rem = f->chunk_size;
     }
 
-    void *v = (void *)f->chunk_ptr;
+    void *v = (void *) f->chunk_ptr;
     f->chunk_ptr += f->size;
     f->chunk_rem -= f->size;
     f->inuse += f->size;
@@ -60,10 +60,10 @@ void fixalloc_free(fixalloc_t *f, void *p) {
     f->inuse -= f->size;
 
     // TODO 清空 p 中的数据，避免存在错误引用而没有报错出来, 正式环境用不上
-    memset(p, 0, f->size);
+    //    memset(p, 0, f->size);
 
     // 直接改变指针结构，将 v 存放在 free_list 头部
-    fixalloc_link_t *v = p; // sizeof(fixalloc_link_t) = ptr_size
-    v->next = f->free_list; // 清空或者重新为 ptr size 赋值
+    fixalloc_link_t *v = p;// sizeof(fixalloc_link_t) = ptr_size
+    v->next = f->free_list;// 清空或者重新为 ptr size 赋值
     f->free_list = v;
 }

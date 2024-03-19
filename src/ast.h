@@ -328,16 +328,6 @@ typedef struct {
 } ast_boom_t;
 
 /**
- * var (res, error) = try call()
- * var (res, error) = try foo[1]
- * var (res, error) = try bar.car.foo()
- * var (res, error) = try bar().car().foo()
- */
-typedef struct {
-    ast_expr_t expr;
-} ast_try_t;
-
-/**
  * int a = b[1].c() catch err {}
  * a.b = d() catch err {}
  *
