@@ -15,7 +15,7 @@ static void test_basic() {
                 "\n"
                 "---------------------------------------------------------\n"
                 "\n"
-                "catch error: 'crash and burn' at 20230828_00_trace_error/foo/bar.n:12:24\n"
+                "coroutine 'main' uncaught error: 'crash and burn' at 20230828_00_trace_error/foo/bar.n:12:24\n"
                 "stack backtrace:\n"
                 "0:\t20230828_00_trace_error.foo.bar.nice\n"
                 "\t\tat 20230828_00_trace_error/foo/bar.n:12:24\n"

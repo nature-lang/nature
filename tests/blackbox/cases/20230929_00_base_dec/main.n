@@ -1,4 +1,0 @@
-var a = 0xffff
-var b = 0o777
-var c = 0b1111000
-println(a+b+c)

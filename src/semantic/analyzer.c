@@ -254,7 +254,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
     if (current == NULL) {
         // - 当前 module 的全局 type
         // analyzer 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
-        char *global_ident = ident_with_module(m->ident, ident);
+        char *global_ident = ident_with_prefix(m->ident, ident);
         symbol_t *s = table_get(symbol_table, global_ident);
         if (s) {
             return global_ident;
@@ -276,7 +276,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
                 }
             } else if (import->module_type == MODULE_TYPE_COMMON) {
                 if (str_equal(import->as, "*")) {
-                    char *temp = ident_with_module(import->module_ident, ident);
+                    char *temp = ident_with_prefix(import->module_ident, ident);
                     if (table_exist(can_import_symbol_table, temp)) {
                         return temp;
                     }
@@ -331,7 +331,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
             ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type_alias->import_as);
 
-            char *unique_ident = ident_with_module(import->module_ident, type_alias->ident);
+            char *unique_ident = ident_with_prefix(import->module_ident, type_alias->ident);
             // 更新 ident 指向
             type_alias->ident = unique_ident;
 
@@ -352,7 +352,7 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
 
         // TODO 统一在 checking 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
-//        type->impl_ident = type_alias->ident;
+        //        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -565,7 +565,7 @@ static void analyzer_end_scope(module_t *m) {
             break;
         }
 
-        if (local->is_capture) {
+        if (local->is_capture && local->type != SYMBOL_FN) {
             slice_push(m->analyzer_current->fndef->be_capture_locals, local);
         }
 
@@ -622,8 +622,14 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     }
 }
 
-static void analyzer_go(module_t *m, ast_go_t *go) {
-    analyzer_local_fndef(m, go->fndef);
+static void analyzer_co_async_expr(module_t *m, ast_macro_co_async_t *co_async) {
+    analyzer_local_fndef(m, co_async->closure_fn);
+    analyzer_local_fndef(m, co_async->closure_fn_void);
+    analyzer_call(m, co_async->origin_call);
+
+    if (co_async->flag_expr) {
+        analyzer_expr(m, co_async->flag_expr);
+    }
 }
 
 /**
@@ -654,6 +660,10 @@ static bool analyzer_redeclare_check(module_t *m, char *ident) {
     return true;
 }
 
+static void analyzer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    analyzer_expr(m, &stmt->expr);
+}
+
 /**
  * 当子作用域中重新定义了变量，产生了同名变量时，则对变量进行重命名
  * @param var_decl
@@ -674,7 +684,7 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
 
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
     analyzer_expr(m, &vardef->right);
-
+    analyzer_redeclare_check(m, vardef->var_decl.ident);
     analyzer_type(m, &vardef->var_decl.type);
 
     local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
@@ -706,24 +716,6 @@ static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr
 static void analyzer_var_tuple_destr_stmt(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
     analyzer_expr(m, &stmt->right);
 
-    if (stmt->right.assert_type == AST_EXPR_TRY) {
-        ANALYZER_ASSERTF(stmt->tuple_destr->elements->length == 2, "tuple destr length exception");
-
-        ast_expr_t *result_expr = ct_list_value(stmt->tuple_destr->elements, 0);
-        // result expr 只能是变量声明或者一个 tuple destr 声明
-        analyzer_var_tuple_destr_item(m, result_expr);
-
-        // err expr 只能是一个 var decl, 并且不需要进行重复声明检测
-        ast_expr_t *err_expr = ct_list_value(stmt->tuple_destr->elements, 1);
-
-        ANALYZER_ASSERTF(err_expr->assert_type == AST_VAR_DECL, "tuple destr last expr type exception");
-
-        analyzer_var_decl(m, err_expr->value, false);
-
-        return;
-    }
-
-    // 第一层需要进行 try 表达式特殊处理, 所以不进入低
     analyzer_var_tuple_destr(m, stmt->tuple_destr);
 }
 
@@ -779,7 +771,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
 
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
-        type_t param_type = fndef->impl_type;
+        type_t param_type = type_copy(m, fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
                 .type = param_type,
@@ -826,13 +818,18 @@ static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_expr(m, &as_expr->src);
 }
 
-static void analyzer_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
+static void analyzer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_expr) {
     analyzer_type(m, &sizeof_expr->target_type);
 }
 
 
-static void analyzer_reflect_hash_expr(module_t *m, ast_reflect_hash_expr_t *expr) {
+static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *expr) {
     analyzer_type(m, &expr->target_type);
+}
+
+static void analyzer_type_eq_expr(module_t *m, ast_macro_type_eq_expr_t *expr) {
+    analyzer_type(m, &expr->left_type);
+    analyzer_type(m, &expr->right_type);
 }
 
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
@@ -915,7 +912,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         analyzer_redeclare_check(m, fndef->symbol_name);
     }
 
-    // 在内部作用域中已 symbol fn 的形式注册该 fn_name,顺便改写名称,由于不确定符号的具体类型，所以暂时不注册到符号表中
+    // 当前 fn 内部作用域中注册当前 fn 的 symbol_name 主要用于递归调用, 由于不确定符号的具体类型，所以暂时不注册到符号表中
     string unique_ident = var_unique_ident(m, fndef->symbol_name);
     local_ident_t *fn_local = NEW(local_ident_t);
     fn_local->ident = fndef->symbol_name;
@@ -984,7 +981,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
     analyzer_end_scope(m);
 
-    // 退出当前 current
+    // - 退出当前 current
     m->analyzer_current = m->analyzer_current->parent;
 
     // 如果当前函数是定层函数，退出后 m->analyzer_current is null
@@ -1003,14 +1000,14 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         symbol_table_set(fndef->closure_name, SYMBOL_VAR, var_decl, true);
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
 
+        // 原始名称不变, 可以被 analyzer_resolve 寻找到
         local_ident_t *parent_var_local = NEW(local_ident_t);
-        parent_var_local->ident = fn_local->ident;// 原始名称不变
+        parent_var_local->ident = fn_local->ident;
         parent_var_local->unique_ident = var_decl->ident;
         parent_var_local->depth = m->analyzer_current->scope_depth;
         parent_var_local->decl = var_decl;
         parent_var_local->type = SYMBOL_VAR;
         slice_push(m->analyzer_current->locals, parent_var_local);
-
     } else {
         // 符号就是普通的 symbol fn 符号，现在可以注册到符号表中了
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
@@ -1072,18 +1069,21 @@ static int8_t analyzer_resolve_free(analyzer_fndef_t *current, char **ident, sym
 
         // 在父级作用域找到对应的 ident
         if (strcmp(*ident, local->ident) == 0) {
-            if (local->type == SYMBOL_VAR) {
-                local->is_capture = true;
-            }
+            local->is_capture = true;
             *ident = local->unique_ident;
             *type = local->type;
+
+            // fn(没有被 closure) 不需要 push 到 free index 中，可以直接在全局符号表中找到相应的 fn
+            if (local->type == SYMBOL_FN) {
+                return -1;
+            }
             return (int8_t) analyzer_push_free(current, true, i, *ident, *type);
         }
     }
 
     // 一级 parent 没有找到，则继续向上 parent 递归查询
     int8_t parent_free_index = analyzer_resolve_free(current->parent, ident, type);
-    if (parent_free_index != -1) {
+    if (parent_free_index >= 0) {
         // 在更高级的某个 parent 中找到了符号，则在 current 中添加对逃逸变量的引用处理
         return (int8_t) analyzer_push_free(current, false, parent_free_index, *ident, *type);
     }
@@ -1111,12 +1111,9 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     // - 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env[free_var_index] 进行改写
     symbol_type_t type = SYMBOL_VAR;
     int8_t free_var_index = analyzer_resolve_free(m->analyzer_current, &ident->literal, &type);
-    if (free_var_index != -1) {
-        // free 不一定是 var, 可能是 fn, 如果是 fn 只要改名了就行
-        if (type != SYMBOL_VAR) {
-            return true;
-        }
-
+    if (type == SYMBOL_FN) {
+        return true;
+    } else if (free_var_index >= 0) {
         // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
         // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
         expr->assert_type = AST_EXPR_ENV_ACCESS;
@@ -1147,7 +1144,7 @@ static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
             }
         } else if (import->module_type == MODULE_TYPE_COMMON) {
             if (str_equal(import->as, "*")) {
-                char *temp = ident_with_module(import->module_ident, ident->literal);
+                char *temp = ident_with_prefix(import->module_ident, ident->literal);
                 if (table_exist(can_import_symbol_table, temp)) {
                     ident->literal = temp;
                     return true;
@@ -1183,7 +1180,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
 
     // - 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
-    char *temp = ident_with_module(m->ident, ident->literal);
+    char *temp = ident_with_prefix(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
         ident->literal = temp;// 找到了则修改为全局名称
@@ -1219,7 +1216,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
 
         ast_ident *ident = select->left.value;
 
-        char *current_module_ident = ident_with_module(m->ident, ident->literal);
+        char *current_module_ident = ident_with_prefix(m->ident, ident->literal);
         symbol_t *s = table_get(symbol_table, current_module_ident);
         if (s != NULL) {
             ident->literal = current_module_ident;// 找到了则修改为全局名称
@@ -1231,7 +1228,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
             // (不需要检测 import package 是否存在，这在 linker 中会做的)
-            char *unique_ident = ident_with_module(import->module_ident, select->key);
+            char *unique_ident = ident_with_prefix(import->module_ident, select->key);
 
             // 检测 import ident 是否存在
             if (!table_exist(can_import_symbol_table, unique_ident)) {
@@ -1325,10 +1322,6 @@ static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
     analyzer_type(m, &expr->type);
 }
 
-static void analyzer_try(module_t *m, ast_try_t *expr) {
-    analyzer_expr(m, &expr->expr);
-}
-
 static void analyzer_for_cond(module_t *m, ast_for_cond_stmt_t *stmt) {
     analyzer_expr(m, &stmt->condition);
 
@@ -1407,14 +1400,14 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_IS: {
             return analyzer_is_expr(m, expr->value);
         }
-        case AST_EXPR_SIZEOF: {
+        case AST_MACRO_EXPR_SIZEOF: {
             return analyzer_sizeof_expr(m, expr->value);
         }
-        case AST_EXPR_REFLECT_HASH: {
+        case AST_MACRO_EXPR_REFLECT_HASH: {
             return analyzer_reflect_hash_expr(m, expr->value);
         }
-        case AST_EXPR_TRY: {
-            return analyzer_try(m, expr->value);
+        case AST_MACRO_EXPR_TYPE_EQ: {
+            return analyzer_type_eq_expr(m, expr->value);
         }
         case AST_EXPR_NEW: {
             return analyzer_new_expr(m, expr->value);
@@ -1456,8 +1449,8 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_CALL: {
             return analyzer_call(m, expr->value);
         }
-        case AST_GO: {
-            return analyzer_go(m, expr->value);
+        case AST_MACRO_CO_ASYNC: {
+            return analyzer_co_async_expr(m, expr->value);
         }
         case AST_FNDEF: {
             return analyzer_local_fndef(m, expr->value);
@@ -1477,6 +1470,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     m->current_column = stmt->column;
 
     switch (stmt->assert_type) {
+        case AST_STMT_EXPR_FAKE: {
+            return analyzer_expr_fake(m, stmt->value);
+        }
         case AST_VAR_DECL: {
             return analyzer_var_decl(m, stmt->value, true);
         }
@@ -1542,7 +1538,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
-            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             slice_push(m->global_symbols, s);
 
@@ -1556,7 +1552,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
             ast_fndef_t *fndef = stmt->value;
             fndef->is_tpl = true;
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_module(m->ident, fndef->symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name);// 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
 
             slice_push(m->global_symbols, s);
@@ -1612,7 +1608,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             ast_vardef_stmt_t *vardef = stmt->value;
             ast_var_decl_t *var_decl = &vardef->var_decl;
             analyzer_type(m, &var_decl->type);
-            var_decl->ident = ident_with_module(m->ident, var_decl->ident);
+            var_decl->ident = ident_with_prefix(m->ident, var_decl->ident);
             slice_push(m->global_vardef, vardef);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             ANALYZER_ASSERTF(s, "var '%s' redeclared", var_decl->ident);
@@ -1638,7 +1634,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
-            type_alias->ident = ident_with_module(m->ident, type_alias->ident);
+            type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             ANALYZER_ASSERTF(s, "type alias '%s' redeclared", type_alias->ident);
             slice_push(m->global_symbols, s);
@@ -1664,7 +1660,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
-            fndef->symbol_name = ident_with_module(m->ident, symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->symbol_name);
             slice_push(m->global_symbols, s);
@@ -1677,8 +1673,8 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
     if (var_assign_list->count > 0) {
         // 添加 init fn
-        ast_fndef_t *fn_init = ast_fndef_new(m->rel_path, 0, 0);
-        fn_init->symbol_name = ident_with_module(analyzer_force_unique_ident(m), FN_INIT_NAME);
+        ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
+        fn_init->symbol_name = ident_with_prefix(analyzer_force_unique_ident(m), FN_INIT_NAME);
         fn_init->fn_name = fn_init->symbol_name;
         fn_init->return_type = type_kind_new(TYPE_VOID);
         fn_init->params = ct_list_new(sizeof(ast_var_decl_t));
@@ -1725,7 +1721,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
  * @param stmt_list
  */
 static void analyzer_main(module_t *m, slice_t *stmt_list) {
-    ast_fndef_t *fndef = ast_fndef_new(m->rel_path, 0, 0);
+    ast_fndef_t *fndef = ast_fndef_new(m, 0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
     fndef->fn_name = fndef->symbol_name;
     fndef->body = slice_new();

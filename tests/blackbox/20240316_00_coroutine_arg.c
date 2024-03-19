@@ -7,11 +7,16 @@
 
 static void test_basic() {
     char *raw = exec_output();
+    //    printf("%s", raw);
+    //    return;
 
     // 字符串中包含 "main_co done"
-    char *find = strstr(raw, "main_co done");
-
-    assert_true(find);
+    char *str = "234\n"
+                "result_sum = 700\n"
+                "use time 1\n"
+                "co_async result is 25\n"
+                "main co done\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

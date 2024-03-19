@@ -7,11 +7,10 @@
 
 static void test_basic() {
     char *raw = exec_output();
-
-    // 字符串中包含 "main_co done"
-    char *find = strstr(raw, "main_co done");
-
-    assert_true(find);
+    char *str = "66166\n"
+                "725202 -74558 120 0.083333\n"
+                "291 83 21 233 292 499 6\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

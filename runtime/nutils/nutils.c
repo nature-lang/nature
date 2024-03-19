@@ -46,7 +46,7 @@ char **command_argv;
                 *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
                 return;                                                                                                                 \
             default:                                                                                                                    \
-                assert(false && "cannot convert type");                                                                                 \
+                assert(false && "cannot scanner_number_convert type");                                                                                 \
                 exit(1);                                                                                                                \
         }                                                                                                                               \
     }
@@ -317,8 +317,8 @@ void zero_fn() {
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
     PRE_RTCALL_HOOK();
 
-    DEBUGF("[runtime.processor_attach_errort] msg=%s, path=%s, line=%ld, column=%ld", msg->data, path, line, column);
     coroutine_t *co = coroutine_get();
+    DEBUGF("[runtime.co_throw_error] co=%p, msg=%s, path=%s, line=%ld, column=%ld", co, msg->data, path, line, column);
 
     n_errort *error = n_error_new(msg, true);
 
@@ -337,8 +337,9 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
 
 n_errort co_remove_error() {
     PRE_RTCALL_HOOK();
-
     coroutine_t *co = coroutine_get();
+    assert(co->error);
+
     n_errort *error = co->error;
     DEBUGF("[runtime.co_remove_error] remove error: %p, has? %d", error, error ? error->has : 0);
 
@@ -440,26 +441,23 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
+void write_barrier(void *slot, void *new_obj) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.write_barrier] rtype_hash=%lu, slot=%p, new_obj=%p", rtype_hash, slot, new_obj);
+    TDEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
 
-    rtype_t *rtype = rt_find_rtype(rtype_hash);
+    processor_t *p = processor_get();
+    // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
+    if (!p->share) {
+        mutex_lock(&p->gc_stw_locker);
+    }
+
     if (!gc_barrier_get()) {
-        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier, rtype_size=%lu, kind=%s",
-                rtype_out_size(rtype, POINTER_SIZE), type_kind_str[rtype->kind]);
-        memmove(slot, new_obj, rtype_out_size(rtype, POINTER_SIZE));
+        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
+        memmove(slot, new_obj, POINTER_SIZE);
         return;
     }
 
     RDEBUGF("[runtime.write_barrier] gc_barrier is true");
-
-    processor_t *p = processor_get();
-
-    // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
-    if (!p->share) {
-        mutex_lock(&p->gc_stw_locker);
-    }
 
     // yuasa 写屏障 shade slot
     shade_obj_grey(slot);
@@ -471,7 +469,7 @@ void write_barrier(uint64_t rtype_hash, void *slot, void *new_obj) {
         shade_obj_grey(new_obj);
     }
 
-    memmove(slot, new_obj, rtype_out_size(rtype, POINTER_SIZE));
+    memmove(slot, new_obj, POINTER_SIZE);
 
     if (!p->share) {
         mutex_unlock(&p->gc_stw_locker);

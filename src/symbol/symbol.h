@@ -15,6 +15,16 @@
 #define TYPE_PARAM_T "T"
 #define TYPE_PARAM_U "U"
 
+#define TYPE_COROUTINE_T "coroutine_t"
+#define TYPE_CHAN_T "chan_t"
+#define TYPE_FUTURE_T "future_t"
+
+#define MACRO_SIZEOF "sizeof"
+#define MACRO_REFLECT_HASH "reflect_hash"
+#define MACRO_CO_ASYNC "co_async"
+#define MACRO_TYPE_EQ "type_eq"
+
+
 // 临时表，用来临时记录, key = ident, value is any
 extern table_t *can_import_symbol_table;
 
@@ -51,7 +61,7 @@ typedef struct {
     string ident; // 符号唯一标识
     bool is_local;// 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
-    void *ast_value;// ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
+    void *ast_value;  // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
     int64_t ref_count;// 引用计数
 } symbol_t;
 

@@ -9,9 +9,11 @@ static void test_basic() {
     char *raw = exec_output();
 
     // 字符串中包含 "main_co done"
-    char *find = strstr(raw, "main_co done");
-
-    assert_true(find);
+    char *str = "1111 1111\n"
+                "1111 2222 3333\n"
+                "in third 4 44440 44441 44442\n"
+                "in third 3 44440\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

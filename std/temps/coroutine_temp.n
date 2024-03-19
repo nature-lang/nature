@@ -11,9 +11,9 @@ type rt_coroutine_t = struct{
 
 fn coroutine_create(fn() f, int flags):ptr<rt_coroutine_t>
 
-fn coroutine_run(fn() f, int flags):ptr<rt_coroutine_t>
+fn coroutine_async(fn() f, int flags):ptr<rt_coroutine_t>
 
-fn coroutine_yield()
+fn rt_coroutine_yield()
 
 fn coroutine_sleep(int ms)
 

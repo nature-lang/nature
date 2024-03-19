@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "package.h"
+#include "types.h"
 #include "utils/assertf.h"
 #include "utils/ct_list.h"
 #include "utils/slice.h"
@@ -18,8 +19,12 @@ typedef enum {
     AST_EXPR_IDENT,
     AST_EXPR_AS,
     AST_EXPR_IS,
-    AST_EXPR_SIZEOF,
-    AST_EXPR_REFLECT_HASH,
+
+    // marco
+    AST_MACRO_EXPR_SIZEOF,
+    AST_MACRO_EXPR_REFLECT_HASH,
+    AST_MACRO_EXPR_TYPE_EQ,
+    AST_MACRO_CO_ASYNC,
 
     AST_EXPR_NEW,// new person
 
@@ -52,6 +57,7 @@ typedef enum {
     AST_VAR_DECL,
 
     // stmt
+    AST_STMT_EXPR_FAKE,
     AST_STMT_BREAK,
     AST_STMT_CONTINUE,
     AST_STMT_IMPORT,
@@ -68,10 +74,11 @@ typedef enum {
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPE_ALIAS,
     AST_CALL,
-    AST_GO,
     AST_CATCH,
     AST_FNDEF,           // fn def (其包含 body)
     AST_STMT_ENV_CLOSURE,// closure def
+
+    AST_MACRO_CALL,
 } ast_type_t;
 
 typedef enum {
@@ -135,14 +142,14 @@ static string ast_expr_op_str[] = {
         [AST_OP_NEG] = "-",// unary -right
 };
 
-typedef struct {
+struct ast_stmt_t {
     int line;
     int column;
     bool error;
 
     ast_type_t assert_type;// 声明语句类型
     void *value;
-} ast_stmt_t;
+};
 
 typedef struct {
     int line;
@@ -181,12 +188,36 @@ typedef struct {
 
 typedef struct {
     type_t target_type;
-} ast_sizeof_expr_t;
+} ast_macro_sizeof_expr_t;
+
+typedef struct {
+    type_t left_type;
+    type_t right_type;
+} ast_macro_type_eq_expr_t;
 
 typedef struct {
     type_t target_type;
-} ast_reflect_hash_expr_t;
+} ast_macro_reflect_hash_expr_t;
 
+// 调用函数
+typedef struct {
+    type_t return_type;// call return type 冗余
+    ast_expr_t left;
+
+    list_t *generics_args;// type_t
+
+    list_t *args;// *ast_expr
+    bool spread;
+} ast_call_t;
+
+typedef struct {
+    ast_fndef_t *closure_fn;
+    ast_fndef_t *closure_fn_void;
+    ast_call_t *origin_call;// 未封闭之前的 call
+
+    ast_expr_t *flag_expr;
+    type_t return_type;
+} ast_macro_co_async_t;
 
 // 一元表达式
 typedef struct {
@@ -201,16 +232,25 @@ typedef struct {
     ast_expr_t left;
 } ast_binary_expr_t;
 
-// 调用函数
+typedef enum {
+    MACRO_ARG_KIND_STMT = 1,
+    MACRO_ARG_KIND_EXPR,
+    MACRO_ARG_KIND_TYPE,
+} ast_macro_arg_kind_t;
+
 typedef struct {
-    type_t return_type;// call return type 冗余
-    ast_expr_t left;
+    ast_macro_arg_kind_t kind;
+    union {
+        ast_stmt_t *stmt;
+        ast_expr_t *expr;
+        type_t *type;
+    };
+} ast_macro_arg_t;
 
-    list_t *generics_args;// type_t
-
-    list_t *args;// *ast_expr
-    bool spread;
-} ast_call_t;
+typedef struct {
+    char *ident;
+    list_t *args;// ast_macro_arg_t
+} ast_macro_call_t;
 
 // 值类型
 typedef struct {
@@ -242,6 +282,10 @@ typedef struct {
     ast_var_decl_t var_decl;// 左值
     ast_expr_t right;       // 右值
 } ast_vardef_stmt_t;
+
+typedef struct {
+    ast_expr_t expr;
+} ast_expr_fake_stmt_t;
 
 // 基于 tuple 解构语法的变量快速赋值
 // var (a, b, (c, d)) = (1, 2)
@@ -282,16 +326,6 @@ typedef struct {
 typedef struct {
     ast_expr_t expr;// expr type must union type
 } ast_boom_t;
-
-/**
- * var (res, error) = try call()
- * var (res, error) = try foo[1]
- * var (res, error) = try bar.car.foo()
- * var (res, error) = try bar().car().foo()
- */
-typedef struct {
-    ast_expr_t expr;
-} ast_try_t;
 
 /**
  * int a = b[1].c() catch err {}
@@ -481,7 +515,7 @@ typedef struct {
 } ast_type_alias_stmt_t;
 
 // 这里包含 body, 所以属于 def
-typedef struct ast_fndef_t {
+struct ast_fndef_t {
     // 可执行文件中的 label, symbol 中表现为 FN 类型，但是如果 fn 引用了外部的环境，则不能直接调用该 fn, 需要将 fn 关联的环境一起传递进来
     char *symbol_name;
     // 闭包处理中的的 var name, 可能为 null
@@ -492,6 +526,8 @@ typedef struct ast_fndef_t {
     bool rest_param;
     slice_t *body;// ast_stmt* 函数体
     void *closure;// closure 数据冗余
+
+    bool is_co_async;// coroutine closure fn, default is false
 
 
     // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
@@ -518,27 +554,10 @@ typedef struct ast_fndef_t {
     // local_ident_t* 当前函数中是否存在被 child 引用的变量
     slice_t *be_capture_locals;
 
-    // TODO 应该也用不上了
-    list_t *hash_param_types;// 用来计算 params_hash, 如果是 null 就不需要计算, 未 reduction
-
-    /**
-     * 由于 global 函数能够进行重载，以及泛型，所以在一个模块下可能会存在多个同名的 global 函数
-     * 虽然经过 analyzer 会将 local fn ident 添加唯一标识，但是在 generic 模式下所有的生成函数中的 local fn 下的所有 local ident 都会在
-     * symbol table 中冲突
-     *
-     * params_hash 是基于 global fn params 计算出的唯一标识，所有的 global fn 的唯一标识都将 with params_hash，然后将 with 后的
-     * 唯一标识添加到 symbol table 中，该唯一标识将会影响最终生成的 elf 文件的 label 的名称。这也避免了冲突
-     */
-    //    char *generics_args_hash;// TODO 不实用 params_hash 了
-
     // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
     type_t *self_struct_ptr;
 
     type_t type;// 类型冗余一份
-
-    // 泛型解析时临时使用 TODO 暂时可能用不上了。
-    slice_t *generic_params;       // ast_type_alias_stmt
-    table_t *exists_generic_params;// 避免 generic_types 重复写入
 
     // 默认为 null, 当前函数为泛型 fn 时才会有值，local fn 同样有值且和 global fn 同值
     // key is generic->ident, value is *type_t
@@ -554,6 +573,7 @@ typedef struct ast_fndef_t {
     bool is_tpl;     // 是否是 tpl 函数
     bool is_generics;// 是否是泛型
 
+    // catch err { continue 12 }
     ct_stack_t *continue_target_types;
 
     // dump error
@@ -561,13 +581,12 @@ typedef struct ast_fndef_t {
     char *rel_path;
     int column;
     int line;
-} ast_fndef_t;// 既可以是 expression,也可以是 stmt
-
-typedef struct {
-    ast_fndef_t *fndef;
-} ast_go_t;
+    module_t *module;// module 绑定
+};
 
 ast_ident *ast_new_ident(char *literal);
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);
@@ -581,9 +600,27 @@ static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
 static inline ast_expr_t *ast_int_expr(int line, int column, uint64_t number) {
     ast_expr_t *expr = NEW(ast_expr_t);
     expr->assert_type = AST_EXPR_LITERAL;
+    expr->line = line;
+    expr->column = column;
     ast_literal_t *literal = NEW(ast_literal_t);
     literal->kind = TYPE_INT;
     literal->value = itoa(number);
+    expr->value = literal;
+    return expr;
+}
+
+static inline ast_expr_t *ast_bool_expr(int line, int column, bool b) {
+    ast_expr_t *expr = NEW(ast_expr_t);
+    expr->assert_type = AST_EXPR_LITERAL;
+    expr->line = line;
+    expr->column = column;
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = TYPE_BOOL;
+    if (b) {
+        literal->value = "true";
+    } else {
+        literal->value = "false";
+    }
     expr->value = literal;
     return expr;
 }
@@ -640,9 +677,11 @@ static inline bool can_assign(ast_type_t t) {
     return false;
 }
 
-static inline ast_fndef_t *ast_fndef_new(char *rel_path, int line, int column) {
+static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
-    fndef->rel_path = rel_path;
+    fndef->is_co_async = false;
+    fndef->module = m;
+    fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;
     fndef->closure_name = NULL;
     fndef->line = line;

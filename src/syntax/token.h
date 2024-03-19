@@ -7,15 +7,15 @@
 
 typedef enum {
     // SINGLE-CHARACTER TOKENS.
-    TOKEN_LEFT_PAREN,
+    TOKEN_LEFT_PAREN = 1,
     TOKEN_RIGHT_PAREN,// ()
     TOKEN_LEFT_SQUARE,
     TOKEN_RIGHT_SQUARE,// []
     TOKEN_LEFT_CURLY,
     TOKEN_RIGHT_CURLY,// {}
-    TOKEN_LEFT_ANGLE,
-    TOKEN_LESS_THAN,
-    TOKEN_RIGHT_ANGLE,// <>
+    TOKEN_LEFT_ANGLE, // <
+    TOKEN_LESS_THAN,  // <
+    TOKEN_RIGHT_ANGLE,// >
 
     TOKEN_COMMA,    // ,
     TOKEN_DOT,      // .
@@ -46,8 +46,8 @@ typedef enum {
     TOKEN_AND_EQUAL,        // &=
     TOKEN_OR_EQUAL,         // |=
     TOKEN_XOR_EQUAL,        // ^=
-    TOKEN_LEFT_SHIFT_EQUAL, // >>=
-    TOKEN_RIGHT_SHIFT_EQUAL,// <<=
+    TOKEN_LEFT_SHIFT_EQUAL, // <<=
+    TOKEN_RIGHT_SHIFT_EQUAL,// >>=
 
     // 位运算
     TOKEN_TILDE,      // ~
@@ -59,6 +59,8 @@ typedef enum {
 
     // LITERALS.
     TOKEN_IDENT,
+    TOKEN_POUND,// #
+    TOKEN_MACRO_IDENT,
     TOKEN_LITERAL_STRING,
     TOKEN_LITERAL_FLOAT,
     TOKEN_LITERAL_INT,
@@ -97,6 +99,7 @@ typedef enum {
     TOKEN_FALSE,
     TOKEN_TYPE,
     TOKEN_NULL,
+    TOKEN_VOID,
     TOKEN_ANY,
     TOKEN_STRUCT,
     TOKEN_THROW,
@@ -122,7 +125,7 @@ typedef enum {
     TOKEN_GO,
     TOKEN_STMT_EOF,
     TOKEN_EOF,// TOKEN_EOF 一定要在最后一个，否则会索引溢出
-} token_e;
+} token_type_t;
 
 typedef enum {
     LEFT_ANGLE_TYPE_FN_ARGS,
@@ -193,6 +196,7 @@ static string token_str[] = {
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",
         [TOKEN_NULL] = "null",
+        [TOKEN_VOID] = "void",
         [TOKEN_ANY] = "any",
         [TOKEN_STRUCT] = "struct",
 
@@ -231,7 +235,7 @@ static string token_str[] = {
         // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
-        [TOKEN_SIZEOF] = "sizeof",
+        //        [TOKEN_SIZEOF] = "sizeof",
         [TOKEN_GO] = "go",
 
         [TOKEN_STMT_EOF] = ";",
@@ -239,13 +243,13 @@ static string token_str[] = {
 };
 
 typedef struct {
-    token_e token;// 通配类型，如 var
+    token_type_t type;// 通配类型，如 var
     char *literal;
     int line;
     int column;
 } token_t;
 
-static inline bool token_complex_assign(token_e t) {
+static inline bool token_complex_assign(token_type_t t) {
     return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL || t == TOKEN_STAR_EQUAL ||
            t == TOKEN_OR_EQUAL || t == TOKEN_AND_EQUAL || t == TOKEN_XOR_EQUAL || t == TOKEN_LEFT_SHIFT_EQUAL ||
            t == TOKEN_RIGHT_SHIFT_EQUAL;
@@ -253,7 +257,7 @@ static inline bool token_complex_assign(token_e t) {
 
 static inline token_t *token_new(uint8_t token, char *literal, int line, int column) {
     token_t *t = malloc(sizeof(token_t));
-    t->token = token;
+    t->type = token;
     t->literal = literal;
     t->line = line;
     t->column = column;

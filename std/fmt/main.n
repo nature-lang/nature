@@ -167,7 +167,7 @@ fn sprintf(string fmt, ...[any] args):string {
                 s = '%!v'
             }
 
-            for c in s { 
+            for c in s {
                 result.push(c)
             }
 

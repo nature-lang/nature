@@ -1,5 +1,39 @@
-type coro<t> = struct {
-    fn_t function // 可以匹配任意 fn 类型
-    bool thread  // 单独线程运行， 而不是普通的协程方式运行
-    t result
+import runtime_temp
+
+type coroutine_t<T> = cptr
+
+type future_t<T> = struct{
+    coroutine_t<T> await_co
+    T result
+}
+
+type chan_t<T> = struct{
+}
+
+fn co_async<T>(fn() function, int flag):future_t<T> {
+    int result_size = @sizeof(T)
+
+    var await_co = rt_coroutine_async(function as cptr, flag, result_size) as coroutine_t<T>
+
+    return future_t<T>{
+        await_co = await_co
+    }
+}
+
+fn co_return<T>(ptr<T> result) {
+    // println("co_return", *result)
+    rt_coroutine_return(result as cptr)
+}
+
+fn future_t<T>.await():T {
+    rt_coroutine_await(self.await_co)
+
+    var err = rt_coroutine_error(self.await_co)
+    if !(err is null) {
+        let err as ptr<error_t>
+        throw err.msg
+    }
+
+    self.result = *(rt_coroutine_result(self.await_co) as ptr<T>)
+    return self.result
 }

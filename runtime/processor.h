@@ -10,22 +10,28 @@
 
 extern int cpu_count;
 extern processor_t *share_processor_index[1024];
-extern processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
-extern processor_t *solo_processor_list;  // 独享协程列表其实就是多线程
-extern mutex_t solo_processor_locker;     // 删除 solo processor 需要先获取该锁
-extern int solo_processor_count;          // 累计数量
+extern processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
+extern processor_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
+extern int solo_processor_count;
+extern int coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
-extern rt_linked_t global_gc_worklist; // 全局 gc worklist
-extern mutex_t global_gc_locker;       // 全局 gc locker
+extern rt_linked_t global_gc_worklist;// 全局 gc worklist
+extern mutex_t global_gc_locker;      // 全局 gc locker
 
-extern bool processor_need_exit; // 全局 STW 标识
+extern bool processor_need_exit;// 全局 STW 标识
 
 extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;
 extern mutex_t cp_alloc_locker;
+
+typedef enum {
+    CO_FLAG_SOLO = 1,
+    CO_FLAG_MAIN = 2,
+} lir_flag_t;
 
 extern void async_preempt() __asm__("async_preempt");
 
@@ -138,15 +144,19 @@ void processor_free(processor_t *);
 /**
  * @param fn
  * @param args 元素的类型是 n_union_t 联合类型
- * @param solo
+ * @param flag
  * @return
  */
-coroutine_t *coroutine_new(void *fn, bool solo, bool main);
+coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size);
+
+coroutine_t *rt_coroutine_async(void *fn, int64_t flag, int result_size);
+
+void rt_coroutine_return(void *ptr);
 
 /**
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
  */
-void coroutine_dispatch(coroutine_t *co);
+void rt_coroutine_dispatch(coroutine_t *co);
 
 /**
  * 有 processor_run 调用
@@ -156,4 +166,17 @@ void coroutine_resume(processor_t *p, coroutine_t *co);
 
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
-#endif // NATURE_PROCESSOR_H
+void coroutine_sleep(int64_t ms);
+
+void rt_coroutine_await(coroutine_t *co);
+
+void rt_coroutine_yield();
+
+void *rt_coroutine_error(coroutine_t *co);
+
+void *rt_coroutine_result(coroutine_t *co);
+
+// ------------ libuv 的一些回调 -----------------------
+static void uv_on_timer(uv_timer_t *timer);
+
+#endif// NATURE_PROCESSOR_H

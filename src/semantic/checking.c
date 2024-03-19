@@ -736,14 +736,75 @@ static type_t checking_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 
 
 /**
- * TODO 未完成
- * go 的返回值类型应该是 co.ctx 类型, 该类型在 pre_checking 中已经初步确认并返回
  * @param m
  * @param pVoid
  * @return
  */
-static type_t checking_go(module_t *m, ast_go_t *go) {
-    assert(false);
+static type_t checking_co_async(module_t *m, ast_expr_t *expr) {
+    ast_macro_co_async_t *co_expr = expr->value;
+    if (co_expr->flag_expr == NULL) {
+        co_expr->flag_expr = ast_int_expr(expr->line, expr->column, 0);
+    }
+
+    infer_right_expr(m, co_expr->flag_expr, type_kind_new(TYPE_INT));
+
+    type_t fn_type = infer_right_expr(m, &co_expr->origin_call->left, type_kind_new(TYPE_UNKNOWN));
+    assert(fn_type.kind == TYPE_FN);
+    co_expr->return_type = fn_type.fn->return_type;
+
+    // -------------------------------------------- 消除 ast_co_async_t, 直接改造成 call co_async----------------------------------------------------------
+    ast_expr_t first_arg = {0};
+    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
+        first_arg = co_expr->origin_call->left;
+
+        // 清空两个 fn body
+        co_expr->closure_fn->body = slice_new();
+        co_expr->closure_fn_void->body = slice_new();
+    } else {
+        infer_fn_decl(m, co_expr->closure_fn);
+        infer_fn_decl(m, co_expr->closure_fn_void);
+
+        first_arg = (ast_expr_t){
+                .line = expr->line,
+                .column = expr->column,
+                .assert_type = AST_FNDEF,
+                .type = co_expr->closure_fn->type,
+                .target_type = co_expr->closure_fn->type,
+        };
+
+        if (co_expr->return_type.kind == TYPE_VOID) {
+            first_arg.value = co_expr->closure_fn_void;
+        } else {
+            first_arg.value = co_expr->closure_fn;
+        }
+    }
+
+    ast_call_t *call_expr = NEW(ast_call_t);
+    call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_CO_ASYNC);
+
+    call_expr->args = ct_list_new(sizeof(ast_expr_t));
+    ct_list_push(call_expr->args, &first_arg);
+    ct_list_push(call_expr->args, co_expr->flag_expr);
+
+    // 泛型参数
+    call_expr->generics_args = ct_list_new(sizeof(type_t));
+    ct_list_push(call_expr->generics_args, &co_expr->return_type);
+
+    // 生成 type alias future 然后 reduction
+    type_alias_t *alias_value = type_alias_new(TYPE_FUTURE_T, NULL);
+    alias_value->args = ct_list_new(sizeof(type_t));
+    ct_list_push(alias_value->args, &co_expr->return_type);
+    type_t future_t = type_new(TYPE_ALIAS, alias_value);
+    future_t.status = REDUCTION_STATUS_UNDO;
+    call_expr->return_type = reduction_type(m, future_t);
+
+    // expr 表达式类型改写
+    expr->assert_type = AST_CALL;
+    expr->value = call_expr;
+
+    infer_right_expr(m, expr, call_expr->return_type);
+
+    return call_expr->return_type;
 }
 
 static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
@@ -753,6 +814,7 @@ static type_t checking_catch(module_t *m, ast_catch_t *catch_expr) {
     errort.alias = NEW(type_alias_t);
     errort.alias->ident = ERRORT_TYPE_ALIAS;
     errort.origin_ident = ERRORT_TYPE_ALIAS;
+    errort.origin_type_kind = TYPE_ALIAS;
     errort.status = REDUCTION_STATUS_UNDO;
     errort = reduction_type(m, errort);
     catch_expr->catch_err.type = errort;
@@ -773,14 +835,30 @@ static type_t checking_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     return type_kind_new(TYPE_BOOL);
 }
 
-static type_t checking_sizeof_expr(module_t *m, ast_sizeof_expr_t *sizeof_expr) {
+static type_t checking_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_expr) {
     sizeof_expr->target_type = reduction_type(m, sizeof_expr->target_type);
     return type_kind_new(TYPE_INT);
 }
 
-static type_t checking_reflect_hash_expr(module_t *m, ast_reflect_hash_expr_t *reflect_expr) {
+static type_t checking_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *reflect_expr) {
     reflect_expr->target_type = reduction_type(m, reflect_expr->target_type);
     return type_kind_new(TYPE_INT);
+}
+
+static type_t checking_type_eq_expr(module_t *m, ast_expr_t *expr) {
+    ast_macro_type_eq_expr_t *type_eq = expr->value;
+
+    type_eq->left_type = reduction_type(m, type_eq->left_type);
+    type_eq->right_type = reduction_type(m, type_eq->right_type);
+
+    bool eq = type_compare(type_eq->left_type, type_eq->right_type, NULL);
+    ast_expr_t *bool_expr = ast_bool_expr(expr->line, expr->column, eq);
+
+    // 直接改写 literal 表达式
+    expr->value = bool_expr->value;
+    expr->assert_type = bool_expr->assert_type;
+
+    return type_kind_new(TYPE_BOOL);
 }
 
 /**
@@ -1075,7 +1153,7 @@ static type_t checking_struct_new(module_t *m, ast_expr_t *expr) {
  */
 static type_t checking_access(module_t *m, ast_expr_t *expr) {
     ast_access_t *access = expr->value;
-    type_t left_type = checking_left_expr(m, &access->left);
+    type_t left_type = infer_left_expr(m, &access->left);
 
     // ast_access to ast_map_access
     if (left_type.kind == TYPE_MAP) {
@@ -1175,7 +1253,7 @@ static type_t checking_vec_select(module_t *m, ast_expr_t *expr) {
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);// list operand
         call->left = *ast_ident_expr(expr->line, expr->column, RT_CALL_VEC_LENGTH);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_INT);
 
         expr->assert_type = AST_CALL;
@@ -1191,7 +1269,7 @@ static type_t checking_vec_select(module_t *m, ast_expr_t *expr) {
         ct_list_push(call->args, &s->left);// list operand
 
         call->left = *ast_ident_expr(expr->line, expr->column, RT_CALL_VEC_CAPACITY);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_INT);
 
         expr->assert_type = AST_CALL;
@@ -1212,7 +1290,7 @@ static type_t checking_map_select(module_t *m, ast_expr_t *expr) {
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);// list operand
         call->left = *ast_ident_expr(expr->line, expr->column, RT_CALL_MAP_LENGTH);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_INT);
 
         expr->assert_type = AST_CALL;
@@ -1233,7 +1311,7 @@ static type_t checking_string_select(module_t *m, ast_expr_t *expr) {
         call->args = ct_list_new(sizeof(ast_expr_t));
         ct_list_push(call->args, &s->left);// list operand
         call->left = *ast_ident_expr(expr->line, expr->column, RT_CALL_STRING_LENGTH);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_INT);
 
         expr->assert_type = AST_CALL;
@@ -1312,7 +1390,7 @@ static type_t checking_string_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, &s->left);
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_REF);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_CPTR);
         return type_kind_new(TYPE_CPTR);
     }
@@ -1347,7 +1425,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_VEC_PUSH);
-        checking_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型
+        infer_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型
         call->return_type = type_kind_new(TYPE_VOID);
 
         // list_push() 返回 void
@@ -1372,7 +1450,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, second_arg);
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_VEC_SLICE);
-        checking_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型 type_fn
+        infer_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型 type_fn
         call->return_type = s->left.type;
         return call->return_type;
     }
@@ -1389,7 +1467,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, &s->left);// list operand
         ct_list_push(call->args, first_arg);
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_VEC_CONCAT);
-        checking_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型 type_fn
+        infer_left_expr(m, &call->left);// 对 ident 进行推导计算出其类型 type_fn
         call->return_type = s->left.type;
         return call->return_type;
     }
@@ -1402,7 +1480,7 @@ static type_t checking_vec_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, &s->left);// list operand
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_VEC_REF);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_CPTR);
 
         return type_kind_new(TYPE_CPTR);
@@ -1431,7 +1509,7 @@ static type_t checking_map_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_MAP_DELETE);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_VOID);
 
         return type_kind_new(TYPE_VOID);
@@ -1454,7 +1532,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_DELETE);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_VOID);
 
         return type_kind_new(TYPE_VOID);
@@ -1471,7 +1549,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_ADD);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_BOOL);
 
         return type_kind_new(TYPE_BOOL);
@@ -1487,7 +1565,7 @@ static type_t checking_set_select_call(module_t *m, ast_call_t *call) {
         ct_list_push(call->args, ast_unary(expr, AST_OP_LA));
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_SET_CONTAINS);
-        checking_left_expr(m, &call->left);
+        infer_left_expr(m, &call->left);
         call->return_type = type_kind_new(TYPE_BOOL);
 
         return type_kind_new(TYPE_BOOL);
@@ -1554,12 +1632,6 @@ static type_t checking_struct_select_call(module_t *m, ast_call_t *call) {
 
     type_t *first = ct_list_value(type_fn->param_types, 0);
 
-    // 按照普通 foo.bar(param) 的方式 checking 返回即可
-    if (first->kind != TYPE_SELF) {
-        checking_call_args(m, call, type_fn);
-        return type_fn->return_type;
-    }
-
     // formal 的首个参数是 self, 且 self 未经过推断
     list_t *args = call->args;
     call->args = ct_list_new(sizeof(ast_expr_t));
@@ -1622,7 +1694,7 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     // 基于 args_table 进行类型特化，包含 special_fn 和 child
     stack_push(m->infer_type_args_stack, special_fn->generics_args_table);
     infer_fn_decl(m, special_fn);
-    linked_push(m->infer_worklist, special_fn);
+    linked_push(m->temp_worklist, special_fn);
 
     for (int k = 0; k < special_fn->local_children->count; ++k) {
         ast_fndef_t *child = tpl_fn->local_children->take[k];
@@ -1710,7 +1782,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
             ident->literal = special_fn->symbol_name;
 
             // checking call args
-            type_t left_type = checking_left_expr(m, &call->left);
+            type_t left_type = infer_left_expr(m, &call->left);
             assert(left_type.kind == TYPE_FN);
             checking_call_args(m, call, left_type.fn);
             call->return_type = left_type.fn->return_type;
@@ -1719,7 +1791,7 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     }
 
     // 左值是一个表达式，进行表达式的类型 checking
-    type_t left_type = checking_left_expr(m, &call->left);
+    type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
     CHECKING_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
 
     type_fn_t *type_fn = left_type.fn;
@@ -1729,33 +1801,8 @@ static type_t checking_call(module_t *m, ast_call_t *call, type_t target_type) {
     return type_fn->return_type;
 }
 
-/**
- * var (foo, err) = catch foo()
- * var err = catch foo()
- * var err = catch foo['car'].car()
- * @param try
- * @return
- */
-static type_t checking_try(module_t *m, ast_try_t *try) {
-    type_t return_type = infer_right_expr(m, &try->expr, type_kind_new(TYPE_UNKNOWN));
-
-    // 当表达式没有返回值时进行特殊处理
-    type_t errort = type_new(TYPE_ALIAS, NULL);
-    errort.alias = NEW(type_alias_t);
-    errort.alias->ident = ERRORT_TYPE_ALIAS;
-    errort.origin_ident = ERRORT_TYPE_ALIAS;
-    errort.status = REDUCTION_STATUS_UNDO;
-    errort = reduction_type(m, errort);
-    if (return_type.kind == TYPE_VOID) {
-        return errort;
-    }
-
-    type_t t = type_kind_new(TYPE_TUPLE);
-    t.tuple = NEW(type_tuple_t);
-    t.tuple->elements = ct_list_new(sizeof(type_t));
-    ct_list_push(t.tuple->elements, &return_type);
-    ct_list_push(t.tuple->elements, &errort);
-    return t;
+void checking_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    infer_right_expr(m, &stmt->expr, type_kind_new(TYPE_UNKNOWN));
 }
 
 /**
@@ -1767,7 +1814,7 @@ static type_t checking_try(module_t *m, ast_try_t *try) {
 void checking_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     var_decl->type = reduction_type(m, var_decl->type);
     type_t type = var_decl->type;
-    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL || type.kind == TYPE_SELF) {
+    if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL) {
         CHECKING_ASSERTF(false, "variable declaration cannot use type '%s'", type_format(type));
     }
 
@@ -1792,7 +1839,12 @@ static void checking_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
     rewrite_var_decl(m, &stmt->var_decl);
 
+    if (stmt->var_decl.type.origin_type_kind != TYPE_PARAM) {
+        CHECKING_ASSERTF(stmt->var_decl.type.kind != TYPE_VOID, "cannot assign to void");
+    }
+
     type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
+    CHECKING_ASSERTF(right_type.kind != TYPE_VOID, "cannot assign void to var")
 
     // 需要进行类型推断
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
@@ -1819,7 +1871,11 @@ static void checking_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
  * @param stmt
  */
 static void checking_assign(module_t *m, ast_assign_stmt_t *stmt) {
-    type_t left_type = checking_left_expr(m, &stmt->left);
+    type_t left_type = infer_left_expr(m, &stmt->left);
+    if (left_type.origin_type_kind != TYPE_PARAM) {
+        CHECKING_ASSERTF(left_type.kind != TYPE_VOID, "cannot assign to void");
+    }
+
     infer_right_expr(m, &stmt->right, left_type);
 }
 
@@ -1928,7 +1984,7 @@ static void checking_return(module_t *m, ast_return_stmt_t *stmt) {
     if (stmt->expr != NULL) {
         infer_right_expr(m, stmt->expr, expect_type);
     } else {
-        CHECKING_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s", type_format(expect_type));
+        CHECKING_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s, actual void", type_format(expect_type));
     }
 }
 
@@ -1969,7 +2025,7 @@ static type_t checking_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
     t.tuple->elements = ct_list_new(sizeof(type_t));
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *expr = ct_list_value(destr->elements, i);
-        type_t item_type = checking_left_expr(m, expr);
+        type_t item_type = infer_left_expr(m, expr);
         ct_list_push(t.tuple->elements, &item_type);
     }
 
@@ -2050,6 +2106,9 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
     SET_LINE_COLUMN(stmt);
 
     switch (stmt->assert_type) {
+        case AST_STMT_EXPR_FAKE: {
+            return checking_expr_fake(m, stmt->value);
+        }
         case AST_VAR_DECL: {
             return checking_var_decl(m, stmt->value);
         }
@@ -2066,7 +2125,6 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
             break;
         }
         case AST_CALL: {
-            // TODO 如果 checking_call 可能有返回值，但是没有接受校验
             checking_call(m, stmt->value, type_kind_new(TYPE_VOID));
             break;
         }
@@ -2113,7 +2171,7 @@ static void checking_stmt(module_t *m, ast_stmt_t *stmt) {
  * @param expr
  * @return
  */
-static type_t checking_left_expr(module_t *m, ast_expr_t *expr) {
+static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
     SET_LINE_COLUMN(expr);
 
     type_t type;
@@ -2171,11 +2229,14 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         case AST_EXPR_IS: {
             return checking_is_expr(m, expr->value);
         }
-        case AST_EXPR_SIZEOF: {
+        case AST_MACRO_EXPR_SIZEOF: {
             return checking_sizeof_expr(m, expr->value);
         }
-        case AST_EXPR_REFLECT_HASH: {
+        case AST_MACRO_EXPR_REFLECT_HASH: {
             return checking_reflect_hash_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_TYPE_EQ: {// TODO 上面的 macro 都可以此时进行表达式常量改写
+            return checking_type_eq_expr(m, expr);
         }
         case AST_EXPR_NEW: {
             return checking_new_expr(m, expr->value);
@@ -2217,11 +2278,8 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         case AST_CALL: {
             return checking_call(m, expr->value, target_type);
         }
-        case AST_EXPR_TRY: {
-            return checking_try(m, expr->value);
-        }
-        case AST_GO: {
-            return checking_go(m, expr->value);
+        case AST_MACRO_CO_ASYNC: {
+            return checking_co_async(m, expr);
         }
         case AST_FNDEF: {
             return infer_fn_decl(m, expr->value);
@@ -2567,6 +2625,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     assert(t.kind > 0);
 
     char *origin_ident = t.origin_ident;
+    type_kind origin_type_kind = t.origin_type_kind;
 
     if (t.kind == TYPE_UNKNOWN) {
         return t;
@@ -2615,7 +2674,8 @@ static type_t reduction_type(module_t *m, type_t t) {
 STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
-    t.origin_ident = origin_ident;// reduction dump error ident
+    t.origin_ident = origin_ident;
+    t.origin_type_kind = origin_type_kind;
     if (t.kind == TYPE_INT || t.kind == TYPE_UINT || t.kind == TYPE_FLOAT) {
         t.kind = cross_kind_trans(t.kind);
     }
@@ -2675,6 +2735,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
  * @param fndef
  */
 static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
+    assert(m);
     assert(fndef->type.kind == TYPE_FN && fndef->type.status == REDUCTION_STATUS_DONE);
     m->current_fn = fndef;
     m->current_line = fndef->line;
@@ -2700,7 +2761,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     // env 表达式类型还原
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *env_expr = ct_list_value(fndef->capture_exprs, i);
-        checking_left_expr(m, env_expr);
+        infer_left_expr(m, env_expr);
     }
 
     // body checking
@@ -2747,8 +2808,7 @@ void checking(module_t *m) {
     m->current_fn = NULL;
     m->current_line = 0;
     m->current_column = 0;
-    m->infer_type_args_stack = stack_new();
-    m->infer_worklist = linked_new();
+    linked_t *infer_worklist = linked_new();
 
     // checking_worklist
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
@@ -2761,31 +2821,32 @@ void checking(module_t *m) {
         // 已经进行了 pre checking 了
         assert(fn->type.kind == TYPE_FN);
 
-        linked_push(m->infer_worklist, fn);
+        linked_push(infer_worklist, fn);
     }
 
     m->ast_fndefs = slice_new();
 
-    // 开始进行 infer
-    while (m->infer_worklist->count > 0) {
-        ast_fndef_t *fn = linked_pop(m->infer_worklist);
+    // 开始进行 infer, worklist 必须是当前的 infer_worklist
+    while (infer_worklist->count > 0) {
+        ast_fndef_t *fn = linked_pop(infer_worklist);
 
         if (fn->generics_args_table) {
-            stack_push(m->infer_type_args_stack, fn->generics_args_table);
+            stack_push(fn->module->infer_type_args_stack, fn->generics_args_table);
         }
 
-        // worklist 里面只放 global fn?
-        infer_fndef(m, fn);
+        fn->module->temp_worklist = infer_worklist;
+        infer_fndef(fn->module, fn);
         slice_push(m->ast_fndefs, fn);
 
         for (int j = 0; j < fn->local_children->count; ++j) {
             ast_fndef_t *child = fn->local_children->take[j];
-            infer_fndef(m, child);
-            slice_push(m->ast_fndefs, child);
+            child->module->temp_worklist = infer_worklist;
+            infer_fndef(child->module, child);
+            slice_push(child->module->ast_fndefs, child);
         }
 
         if (fn->generics_args_table) {
-            stack_pop(m->infer_type_args_stack);
+            stack_pop(fn->module->infer_type_args_stack);
         }
     }
 }

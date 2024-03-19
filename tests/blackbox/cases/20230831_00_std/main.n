@@ -17,7 +17,7 @@ var s = libc_string_replace('/test/hello/world/sub/sub2', '/test/hello/world/', 
 println(s)
 
 // test list dir (build in fn?) parser handle?
-var size = 12 + sizeof(dirent_t) - 24
+var size = 12 + @sizeof(dirent_t) - 24
 println('dirent_t size', size)
 var list = os.listdir('mock')
 println("os.listdir of mock len", list.len())

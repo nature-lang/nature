@@ -7,7 +7,7 @@ static void test_basic() {
                              "3 33\n"
                              "3\n"
                              "2\n"
-                             "catch error: 'key 'b' not found in map' at cases/20221025_09_map.n:16:11\n");
+                             "coroutine 'main' uncaught error: 'key 'b' not found in map' at cases/20221025_09_map.n:16:11\n");
 }
 
 int main(void) {

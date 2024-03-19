@@ -69,6 +69,7 @@ static type_kind token_to_kind[] = {
         [TOKEN_TRUE] = TYPE_BOOL,
         [TOKEN_FALSE] = TYPE_BOOL,
         [TOKEN_NULL] = TYPE_NULL,
+        [TOKEN_VOID] = TYPE_VOID,
         [TOKEN_LITERAL_FLOAT] = TYPE_FLOAT,
         [TOKEN_LITERAL_INT] = TYPE_INT,
         [TOKEN_LITERAL_STRING] = TYPE_STRING,
@@ -121,7 +122,7 @@ static type_t parser_type(module_t *m);
 
 static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence);
 
-static parser_rule *find_rule(token_e token_type);
+static parser_rule *find_rule(token_type_t token_type);
 
 static ast_stmt_t *parser_if_stmt(module_t *m);
 

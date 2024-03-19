@@ -10,7 +10,7 @@
 extern int var_unique_count;
 
 // module_path + path + ident
-static inline char *ident_with_module(char *module_ident, char *ident) {
+static inline char *ident_with_prefix(char *module_ident, char *ident) {
     // template 是没有 module_ident 的
     if (!module_ident) {
         return ident;
@@ -21,16 +21,19 @@ static inline char *ident_with_module(char *module_ident, char *ident) {
     return temp;
 }
 
-static inline char *make_unique_ident(module_t *m, char *ident) {
+
+static inline char *label_ident_with_prefix(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    if (m->ident) {
-        sprintf(result, "%s_%d", ident, m->var_unique_count++);
-    } else {
-        sprintf(result, "%s_%d", ident, var_unique_count++);
-    }
-    return result;
+    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    assert(m->label_prefix);
+    return ident_with_prefix(m->label_prefix, result);
 }
 
+static inline char *var_ident_with_index(module_t *m, char *ident) {
+    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    sprintf(result, "%s_%d", ident, var_unique_count++);
+    return result;
+}
 
 static inline char *var_unique_ident(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
@@ -39,7 +42,7 @@ static inline char *var_unique_ident(module_t *m, char *ident) {
     } else {
         sprintf(result, "%s_%d", ident, var_unique_count++);
     }
-    return ident_with_module(m->ident, result);
+    return ident_with_prefix(m->ident, result);
 }
 
 module_t *module_build(ast_import_t *import, char *source_path, module_type_t type);

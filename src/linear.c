@@ -471,13 +471,6 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 }
 
-/**
- * foo.bar
- * ptr<foo>.bar
- * 在 struct_target 的编译上的返回结果都是一个指针地址，只不过一个是栈指针地址一个是堆指针地址，所以他们使用一样的 linear 处理方式
- * @param m
- * @param stmt
- */
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
     type_t type_struct;
@@ -490,7 +483,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
-    uint64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
+    int64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
     lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
 
@@ -503,22 +496,21 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // 由于 stmt->right 的 type 可能会超过 8byte, 所以通过 lea 将地址加载出来，再通过 lir_memory_mov 进行内存拷贝是正确的选择
     // 当然没 lea 的另外一个原因是，其会产生一个新的变量指向 struct instance 对应的内存区域, 在编译 stmt->right 时
     // 如果 stmt->right 是一个 arr/struct 这样的在内存中分配的区域，那么 linear 的返回值
-    lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
-    dst = lea_operand_pointer(m, dst);
+    lir_operand_t *dst_slot = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
 
-    if (is_alloc_stack(stmt->left.type)) {
-        linear_expr(m, stmt->right, dst);// 直接进行 move 避免中间的 copy
+    if (is_gc_alloc(stmt->left.type)) {
+        lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
+
+        dst_slot = lea_operand_pointer(m, dst_slot);
+        obj = lea_operand_pointer(m, obj);
+
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
     } else {
-        // ptr<foo>.bar 需要走 write_barrier
-        // 如果 src 是一个分配在 stack 中的对象则 src 已经是一个指针地址，否则其是一个具体的值
-        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
-        if (!is_alloc_stack(stmt->right.type)) {
-            src = lea_operand_pointer(m, src);
+        // lea [rax+16], rcx
+        if (is_alloc_stack(stmt->left.type)) {
+            dst_slot = lea_operand_pointer(m, dst_slot);
         }
-        // rtype_hash 用于计算 move size
-        uint64_t rtype_hash = ct_find_rtype_hash(stmt->right.type);
-
-        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, int_operand(rtype_hash), dst, src);
+        linear_expr(m, stmt->right, dst_slot);
     }
 }
 
@@ -667,6 +659,10 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 }
 
+static void linear_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    linear_expr(m, stmt->expr, NULL);
+}
+
 /**
  * a = 1 // left_target is lir_var_operand
  * a.b = 1 // left_target is lir_memory(base_address)
@@ -743,8 +739,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));// cursor 初始值 = --
 
     // make label
-    lir_op_t *for_start_label = lir_op_unique_label(m, FOR_ITERATOR_IDENT);
-    lir_op_t *for_end_label = lir_op_unique_label(m, FOR_END_IDENT);
+    lir_op_t *for_start_label = lir_op_label_with_prefix(m, FOR_ITERATOR_IDENT);
+    lir_op_t *for_end_label = lir_op_label_with_prefix(m, FOR_END_IDENT);
 
     stack_push(m->current_closure->continue_labels, for_start_label->output);
     stack_push(m->current_closure->break_labels, for_end_label->output);
@@ -776,7 +772,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1), cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
-    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
 
     // gen value
     if (ast->second) {
@@ -804,8 +800,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  * @param ast
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
-    lir_op_t *for_start = lir_op_unique_label(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_op_t *for_start = lir_op_label_with_prefix(m, FOR_COND_IDENT);
+    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_prefix(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_start->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -815,7 +811,7 @@ static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
 
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
     linear_body(m, ast->body);
 
     // bal => goto
@@ -831,9 +827,9 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     // init
     linear_stmt(m, ast->init);
 
-    lir_op_t *for_start = lir_op_unique_label(m, FOR_TRADITION_IDENT);
-    lir_op_t *for_update = lir_op_unique_label(m, FOR_UPDATE_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(make_unique_ident(m, FOR_END_IDENT), true);
+    lir_op_t *for_start = lir_op_label_with_prefix(m, FOR_TRADITION_IDENT);
+    lir_op_t *for_update = lir_op_label_with_prefix(m, FOR_UPDATE_IDENT);
+    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_prefix(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_update->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -846,7 +842,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     OP_PUSH(beq);
 
     // continue
-    OP_PUSH(lir_op_unique_label(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
 
     // block
     linear_body(m, ast->body);
@@ -903,8 +899,8 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
 
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
-    lir_operand_t *end_label_operand = lir_label_operand(make_unique_ident(m, END_IF_IDENT), true);
-    lir_operand_t *alternate_label_operand = lir_label_operand(make_unique_ident(m, IF_ALTERNATE_IDENT), true);
+    lir_operand_t *end_label_operand = lir_label_operand(label_ident_with_prefix(m, END_IF_IDENT), true);
+    lir_operand_t *alternate_label_operand = lir_label_operand(label_ident_with_prefix(m, IF_ALTERNATE_IDENT), true);
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
@@ -913,7 +909,7 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
         cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target, lir_copy_label_operand(alternate_label_operand));
     }
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_unique_label(m, IF_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label_with_prefix(m, IF_CONTINUE_IDENT));
 
     // 编译 consequent block
     linear_body(m, if_stmt->consequent);
@@ -1029,7 +1025,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     assert(expr.type.kind == TYPE_BOOL);
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
-    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_OR_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_prefix(m, LOGICAL_OR_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_src = linear_expr(m, logical_expr->left, NULL);
@@ -1053,7 +1049,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
-    lir_operand_t *logic_end_operand = lir_label_operand(make_unique_ident(m, LOGICAL_AND_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_prefix(m, LOGICAL_AND_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_target = linear_expr(m, logical_expr->left, NULL);
@@ -1195,12 +1191,31 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, src_operand);
     }
 
+    // *var
+    // int a = *b
+    // vec<2> a = *b
+    // person_t a = *b
+    // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
+    // first 是个 ptr
+    if (unary_expr->operator== AST_OP_IA) {
+        if (!target) {
+            target = temp_var_operand_with_stack(m, expr.type);
+        }
+
+        // indirect addr first, and mov
+        lir_operand_t *src = first;
+        if (!is_alloc_stack(expr.type)) {
+            src = indirect_addr_operand(m, expr.type, first, 0);
+        }
+
+        return linear_super_move(m, expr.type, target, src);
+    }
+
     // neg source -> target
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
     }
 
-    LINEAR_ASSERTF(unary_expr->operator!= AST_OP_IA, "not support '*' op")
     lir_opcode_t type = ast_op_convert[unary_expr->operator];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);
@@ -1660,7 +1675,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
 }
 
 static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_sizeof_expr_t *ast = expr.value;
+    ast_macro_sizeof_expr_t *ast = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1673,7 +1688,7 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
 }
 
 static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_sizeof_expr_t *ast = expr.value;
+    ast_macro_sizeof_expr_t *ast = expr.value;
 
     if (!target) {
         target = temp_var_operand_with_stack(m, expr.type);
@@ -1829,13 +1844,13 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     }
 
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
+    char *catch_error_label = label_ident_with_prefix(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, catch_expr->try_expr, target);
     m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
 
     // 跳过错误处理部分
-    lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
+    lir_op_t *catch_end_label = lir_op_label_with_prefix(m, CATCH_END_IDENT);
     OP_PUSH(lir_op_bal(catch_end_label->output));
 
     OP_PUSH(lir_op_label(catch_error_label, true));
@@ -1866,78 +1881,78 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
  * @param target
  * @return
  */
-static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_try_t *try = expr.value;
-
-    symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
-    assert(s);
-    ast_type_alias_stmt_t *errort_alias_stmt = s->ast_value;
-    assertf(errort_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
-
-    // 1. 直接调用 rt_call_tuple_new 创建 tuple 空间, 然后再做 mov 操作
-    if (!target) {
-        target = temp_var_operand_with_stack(m, expr.type);
-    }
-
-    if (try->expr.type.kind == TYPE_VOID) {
-        // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-        char *catch_end_label = make_unique_ident(m, CATCH_END_IDENT);
-        m->current_closure->catch_error_label = catch_end_label;
-
-        linear_expr(m, try->expr, NULL);
-
-        m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
-
-        // catch_error_label:  try expr 会跳转到这里
-        OP_PUSH(lir_op_label(catch_end_label, true));
-
-        lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
-        push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
-
-        return linear_super_move(m, errort_alias_stmt->type, target, errort_src);
-    }
-
-    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
-    push_rt_call(m, RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash));
-
-    // result handle
-    lir_operand_t *result_operand = indirect_addr_operand(m, try->expr.type, target, 0);
-    if (is_alloc_stack(try->expr.type)) {
-        result_operand = lea_operand_pointer(m, result_operand);
-    }
-
-    // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-    char *catch_error_label = make_unique_ident(m, CATCH_ERROR_IDENT);
-    m->current_closure->catch_error_label = catch_error_label;
-    linear_expr(m, try->expr, result_operand);
-    m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
-
-    // bal to catch_end
-    lir_op_t *catch_end_label = lir_op_unique_label(m, CATCH_END_IDENT);
-    OP_PUSH(lir_op_bal(catch_end_label->output));
-
-    // catch_error_label: ------------------------------------------------------------------------------------------------------
-    OP_PUSH(lir_op_label(catch_error_label, true));
-
-    // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 zero 值
-    linear_zero_operand(m, try->expr.type, result_operand);
-
-    // catch_end_label: ------------------------------------------------------------------------------------------------------
-    OP_PUSH(catch_end_label);
-
-    // remove errort 返回一个 struct errort, 其可能有值，也能是 0 值
-    // 根据 size + ali计算 offset
-    int64_t offset = type_tuple_offset(expr.type.tuple, 1);
-    lir_operand_t *temp = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
-    lir_operand_t *errort_target = lea_operand_pointer(m, temp);
-
-    lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
-    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
-
-    linear_super_move(m, errort_alias_stmt->type, errort_target, errort_src);
-
-    return target;
-}
+//static lir_operand_t *linear_try(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+//    ast_try_t *try = expr.value;
+//
+//    symbol_t *s = symbol_table_get(ERRORT_TYPE_ALIAS);
+//    assert(s);
+//    ast_type_alias_stmt_t *errort_alias_stmt = s->ast_value;
+//    assertf(errort_alias_stmt->type.status == REDUCTION_STATUS_DONE, "errort type not reduction");
+//
+//    // 1. 直接调用 rt_call_tuple_new 创建 tuple 空间, 然后再做 mov 操作
+//    if (!target) {
+//        target = temp_var_operand_with_stack(m, expr.type);
+//    }
+//
+//    if (try->expr.type.kind == TYPE_VOID) {
+//        // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
+//        char *catch_end_label = label_ident_with_prefix(m, CATCH_END_IDENT);
+//        m->current_closure->catch_error_label = catch_end_label;
+//
+//        linear_expr(m, try->expr, NULL);
+//
+//        m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
+//
+//        // catch_error_label:  try expr 会跳转到这里
+//        OP_PUSH(lir_op_label(catch_end_label, true));
+//
+//        lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
+//        push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
+//
+//        return linear_super_move(m, errort_alias_stmt->type, target, errort_src);
+//    }
+//
+//    uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
+//    push_rt_call(m, RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash));
+//
+//    // result handle
+//    lir_operand_t *result_operand = indirect_addr_operand(m, try->expr.type, target, 0);
+//    if (is_alloc_stack(try->expr.type)) {
+//        result_operand = lea_operand_pointer(m, result_operand);
+//    }
+//
+//    // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
+//    char *catch_error_label = label_ident_with_prefix(m, CATCH_ERROR_IDENT);
+//    m->current_closure->catch_error_label = catch_error_label;
+//    linear_expr(m, try->expr, result_operand);
+//    m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
+//
+//    // bal to catch_end
+//    lir_op_t *catch_end_label = lir_op_label_with_prefix(m, CATCH_END_IDENT);
+//    OP_PUSH(lir_op_bal(catch_end_label->output));
+//
+//    // catch_error_label: ------------------------------------------------------------------------------------------------------
+//    OP_PUSH(lir_op_label(catch_error_label, true));
+//
+//    // result_operand 此时是 null，但是 nature 不允许 null 值，所以需要赋予 zero 值
+//    linear_zero_operand(m, try->expr.type, result_operand);
+//
+//    // catch_end_label: ------------------------------------------------------------------------------------------------------
+//    OP_PUSH(catch_end_label);
+//
+//    // remove errort 返回一个 struct errort, 其可能有值，也能是 0 值
+//    // 根据 size + ali计算 offset
+//    int64_t offset = type_tuple_offset(expr.type.tuple, 1);
+//    lir_operand_t *temp = indirect_addr_operand(m, errort_alias_stmt->type, target, offset);
+//    lir_operand_t *errort_target = lea_operand_pointer(m, temp);
+//
+//    lir_operand_t *errort_src = temp_var_operand_without_stack(m, errort_alias_stmt->type);
+//    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, errort_src, 0);
+//
+//    linear_super_move(m, errort_alias_stmt->type, errort_target, errort_src);
+//
+//    return target;
+//}
 
 /**
  * @param c
@@ -2033,7 +2048,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
 
     if (!fndef->closure_name) {
-        if (!expr.target_type.kind) {
+        if (expr.target_type.kind == 0) {
             return NULL;// 没有表达式需要接收值
         }
 
@@ -2048,18 +2063,27 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *length = int_operand(fndef->capture_exprs->length);
     // rt_call env_new(fndef->name, length)
     lir_operand_t *env_operand = temp_var_operand_with_stack(m, type_kind_new(TYPE_GC_ENV));
-    push_rt_call(m, RT_CALL_ENV_NEW, env_operand, 1, length);
 
+    // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
+    push_rt_call_no_hook(m, RT_CALL_ENV_NEW, env_operand, 2, length, bool_operand(fndef->is_co_async));
+
+    // fn_new(env)
+    lir_operand_t *label_addr_operand = temp_var_operand_with_stack(m, fndef->type);
+    OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
+    lir_operand_t *result = lir_var_operand(m, fndef->closure_name);
+    push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
+
+    // env_assign
     slice_t *capture_vars = slice_new();
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *item = ct_list_value(fndef->capture_exprs, i);
-        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪
-        if (item->assert_type == AST_EXPR_IDENT) {
+        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪, 才能在 fn end 进行正确的 closure
+        if (item->assert_type == AST_EXPR_IDENT && !fndef->is_co_async) {
             char *ident = ((ast_ident *) item->value)->literal;
             slice_push(capture_vars, lir_var_new(m, ident));
         }
 
-        // 加载 free var 在栈上的指针
+        // 加载 free var 在栈上的指针, item 可能是嵌套的 env_access, 或者其他的调用，导致 rt_call 状态被解除。
         lir_operand_t *stack_value = linear_expr(m, *item, NULL);
         lir_operand_t *stack_addr_ref;
         if (is_alloc_stack(item->type)) {
@@ -2071,8 +2095,8 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         // rt_call env_assign(fndef->name, index_operand lir_operand)
-        push_rt_call(m, RT_CALL_ENV_ASSIGN, NULL, 4, env_operand, int_operand(ct_reflect_type(item->type).hash), int_operand(i),
-                     stack_addr_ref);
+        push_rt_call_no_hook(m, RT_CALL_ENV_ASSIGN, NULL, 4, env_operand, int_operand(ct_reflect_type(item->type).hash), int_operand(i),
+                             stack_addr_ref);
     }
 
     // 记录引用关系, ssa 将会实时调整这些地方到值，一旦 ssa 完成这些 var 就有了唯一名称
@@ -2081,10 +2105,6 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         OP_PUSH(lir_op_new(LIR_OPCODE_ENV_CAPTURE, capture_operand, NULL, NULL));
     }
 
-    lir_operand_t *label_addr_operand = temp_var_operand_with_stack(m, fndef->type);
-    OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
-    lir_operand_t *result = lir_var_operand(m, fndef->closure_name);
-    push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
 
     return linear_super_move(m, fndef->type, target, result);
 }
@@ -2120,6 +2140,9 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             linear_var_decl(m, stmt->value);
             return;
         }
+        case AST_STMT_EXPR_FAKE: {
+            return linear_expr_fake(m, stmt->value);
+        }
         case AST_STMT_VARDEF: {
             return linear_vardef(m, stmt->value);
         }
@@ -2148,8 +2171,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             return linear_for_tradition(m, stmt->value);
         }
         case AST_FNDEF: {
-            linear_fn_decl(m, (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
-                           NULL);
+            linear_fn_decl(m, (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL}, NULL);
             return;
         }
         case AST_CALL: {
@@ -2215,11 +2237,10 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_SET_NEW] = linear_set_new,
         [AST_CALL] = linear_call,
         [AST_FNDEF] = linear_fn_decl,
-        [AST_EXPR_TRY] = linear_try,
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
-        [AST_EXPR_SIZEOF] = linear_sizeof_expr,
-        [AST_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
+        [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
+        [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
         [AST_EXPR_NEW] = linear_new_expr,
         [AST_CATCH] = linear_catch_expr,
 };
@@ -2257,8 +2278,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     // 互相关联关系
     m->current_closure = c;
     c->module = m;
-    c->end_label = str_connect("end_", c->symbol_name);
-    c->error_label = str_connect("error_", c->symbol_name);
+    c->end_label = str_connect(c->symbol_name, ".end");
+    c->error_label = str_connect(c->symbol_name, ".error");
 
     // label name 使用 symbol_name!
     OP_PUSH(lir_op_label(fndef->symbol_name, false));
@@ -2268,11 +2289,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
-        if (var_decl->type.kind == TYPE_SELF) {
-            assert(fndef->self_struct_ptr->status == REDUCTION_STATUS_DONE);
-            var_decl->type = *fndef->self_struct_ptr;
-        }
-
         slice_push(params, lir_var_new(m, var_decl->ident));
     }
 
@@ -2332,7 +2348,7 @@ void linear(module_t *m) {
 
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
-        closure_t *closure = linear_fndef(m, fndef);
+        closure_t *closure = linear_fndef(fndef->module, fndef);
         slice_push(m->closures, closure);
     }
 }

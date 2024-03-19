@@ -234,6 +234,7 @@ typedef enum {
 typedef struct processor_t processor_t;
 
 typedef struct coroutine_t {
+    int64_t id;
     bool main;// 是否是 main 函数
     bool solo;// 当前协程需要独享线程
     co_status_t status;
@@ -242,6 +243,10 @@ typedef struct coroutine_t {
     processor_t *p;// 当前 coroutine 绑定的 p
                    //    n_vec_t *args;
     void *result;  // coroutine 如果存在返回值，相关的值会放在 result 中
+    int64_t result_size;
+
+    struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
+    mutex_t dead_locker;
 
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
@@ -301,7 +306,7 @@ int runtime_main(int argc, char *argv[]);
 
 void rt_coroutine_set_error(char *msg);
 
-void coroutine_dump_error(n_errort *error);
+void coroutine_dump_error(coroutine_t *co, n_errort *error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

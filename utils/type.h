@@ -93,8 +93,6 @@ typedef enum {
     TYPE_RAW_STRING,// c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_ALIAS,     // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_PARAM,     // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
-    TYPE_SELF,      // ptr<struct>
-    TYPE_GEN,
     TYPE_UNION,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
@@ -152,7 +150,6 @@ static string type_kind_str[] = {
         [TYPE_NPTR] = "nptr",// nptr<type>
         [TYPE_CPTR] = "cptr",// cptr
         [TYPE_NULL] = "null",
-        [TYPE_SELF] = "self",
 };
 
 // reflect type
@@ -239,7 +236,8 @@ typedef struct type_t {
     };
     type_kind kind;
     reduction_status_t status;
-    char *origin_ident;// 当 type.kind == ALIAS/params 时，此处缓存一下 alias/formal ident, 用于 dump error
+    char *origin_ident;// 当 type.kind == ALIAS/PARAM 时，此处缓存一下 alias/formal ident, 用于 dump error
+    type_kind origin_type_kind;
 
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
     char *impl_ident;
@@ -555,7 +553,9 @@ static inline type_t type_kind_new(type_kind kind) {
             .kind = kind,
             .value = 0,
             .origin_ident = NULL,
+            .origin_type_kind = 0,
             .impl_ident = type_kind_str[kind],
+            .impl_args = NULL,
     };
 
     result.in_heap = kind_in_heap(kind);
@@ -570,7 +570,10 @@ static inline type_t type_new(type_kind kind, void *value) {
             .in_heap = kind_in_heap(kind),
             .status = REDUCTION_STATUS_DONE,
             .origin_ident = NULL,
-            .impl_ident = NULL};
+            .origin_type_kind = 0,
+            .impl_ident = NULL,
+            .impl_args = NULL,
+    };
     return result;
 }
 
@@ -594,6 +597,19 @@ static inline bool can_type_casting(type_kind kind) {
 static inline bool is_alloc_stack(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
+static inline bool is_gc_alloc(type_t t) {
+    return t.kind == TYPE_PTR ||
+           t.kind == TYPE_NPTR ||
+           t.kind == TYPE_CPTR ||
+           t.kind == TYPE_STRUCT ||
+           t.kind == TYPE_MAP ||
+           t.kind == TYPE_SET ||
+           t.kind == TYPE_VEC ||
+           t.kind == TYPE_TUPLE ||
+           t.kind == TYPE_COROUTINE_T ||
+           t.kind == TYPE_UNION ||
+           t.kind == TYPE_FN;
+}
 
 /**
  * 可以直接使用 0 进行填充的值，通常就是简单类型
@@ -610,7 +626,7 @@ static inline bool is_zero_type(type_t t) {
  * @return
  */
 static inline bool is_origin_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_CPTR || t.kind == TYPE_VOID || t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING || t.kind == TYPE_VOID || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 

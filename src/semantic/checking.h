@@ -27,6 +27,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type);
 
 static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type);
 
-static type_t checking_left_expr(module_t *m, ast_expr_t *expr);
+static type_t infer_left_expr(module_t *m, ast_expr_t *expr);
 
 #endif //NATURE_SRC_AST_CHECKING_H_

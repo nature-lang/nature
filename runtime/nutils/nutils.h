@@ -47,7 +47,7 @@ n_vec_t *std_args();
 
 char *rtype_value_str(rtype_t *rtype, void *data_ref);
 
-void write_barrier(uint64_t rtype_hash, void *dst, void *new_obj);
+void write_barrier(void *slot, void *new_obj);
 
 rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 

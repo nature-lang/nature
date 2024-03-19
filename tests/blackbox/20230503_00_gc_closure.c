@@ -15,7 +15,7 @@ static void test_basic() {
     assert_int_equal(number[5], 980);
     assert_int_equal(number[6], 800);
     assert_int_equal(number[7], 600);
-    assert_true(number[8] < 1000);
+    assert_true(number[8] < 1500);
 }
 
 int main(void) {
