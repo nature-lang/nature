@@ -131,8 +131,11 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 #endif
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
-    PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs_base=%p", fn_addr, envs);
+    //    PRE_RTCALL_HOOK(); // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置
+    processor_t *p = processor_get();
+    assert(p->status == P_STATUS_RTCALL);
+
+    DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);
     assert(envs);
     rtype_t *fn_rtype = gc_rtype_array(TYPE_GC_FN, sizeof(runtime_fn_t) / POINTER_SIZE);
     // 手动设置 gc 区域, runtime_fn_t 一共是 12 个 pointer 区域，最后一个区域保存的是 envs 需要扫描
@@ -142,7 +145,9 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     runtime_fn_t *fn_runtime = rt_clr_malloc(sizeof(runtime_fn_t), fn_rtype);
     fn_runtime->fn_addr = fn_addr;
-    fn_runtime->envs = envs;
+
+    // fn_runtime->envs = envs;
+    write_barrier(&fn_runtime->envs, &envs);
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr);
@@ -150,7 +155,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
-    DEBUGF("[runtime.fn_new] fn find success, fn_runtime_base=%p, stack=%lu, reg=%lu, jit_code=%p, envs=%p, fn_addr=%p",
+    DEBUGF("[runtime.fn_new] fn find success, fn=%p, stack=%lu, reg=%lu, jit_code=%p, envs=%p, fn_addr=%p",
            fn_runtime, fndef->fn_runtime_stack, fndef->fn_runtime_reg, fn_runtime->closure_jit_codes, fn_runtime->envs, (void *) fn_addr);
 
     /**
@@ -181,7 +186,10 @@ envs_t *env_new(uint64_t length, bool imm_close) {
 }
 
 void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t stack_addr) {
-    PRE_RTCALL_HOOK();
+    //    PRE_RTCALL_HOOK(); env_new 已经设置，此处不需要重复设置
+    processor_t *p = processor_get();
+    assert(p->status == P_STATUS_RTCALL);
+
     rtype_t *rtype = rt_find_rtype(rtype_hash);
 
     DEBUGF("[runtime.env_assign] env_base=%p, rtype_kind=%s, rtype_size=%lu, env_index=%lu, stack_addr=%p, value=%p", envs,
@@ -295,7 +303,7 @@ void *env_element_addr(runtime_fn_t *fn, uint64_t index) {
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_element_addr] fn_base=%p, envs=%p, envs.length=%lu, index=%lu, fn_addr=%p", fn, fn->envs, fn->envs->length, index, (void *) fn->fn_addr);
     assert(fn);
-    assert(index < fn->envs->length);
+    assertf(index < fn->envs->length, "index out of range, fn=%p, envs=%p", fn, fn->envs);
 
     upvalue_t *upvalue = fn->envs->values[index];
 

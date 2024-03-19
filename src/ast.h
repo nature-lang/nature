@@ -199,8 +199,22 @@ typedef struct {
     type_t target_type;
 } ast_macro_reflect_hash_expr_t;
 
+// 调用函数
 typedef struct {
-    ast_fndef_t *fndef;
+    type_t return_type;// call return type 冗余
+    ast_expr_t left;
+
+    list_t *generics_args;// type_t
+
+    list_t *args;// *ast_expr
+    bool spread;
+} ast_call_t;
+
+typedef struct {
+    ast_fndef_t *closure_fn;
+    ast_fndef_t *closure_fn_void;
+    ast_call_t *origin_call;// 未封闭之前的 call
+
     ast_expr_t *flag_expr;
     type_t return_type;
 } ast_macro_co_async_t;
@@ -217,17 +231,6 @@ typedef struct {
     ast_expr_t right;
     ast_expr_t left;
 } ast_binary_expr_t;
-
-// 调用函数
-typedef struct {
-    type_t return_type;// call return type 冗余
-    ast_expr_t left;
-
-    list_t *generics_args;// type_t
-
-    list_t *args;// *ast_expr
-    bool spread;
-} ast_call_t;
 
 typedef enum {
     MACRO_ARG_KIND_STMT = 1,
@@ -534,7 +537,7 @@ struct ast_fndef_t {
     slice_t *body;// ast_stmt* 函数体
     void *closure;// closure 数据冗余
 
-    bool is_co_async; // coroutine closure fn, default is false
+    bool is_co_async;// coroutine closure fn, default is false
 
 
     // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
@@ -592,6 +595,8 @@ struct ast_fndef_t {
 };
 
 ast_ident *ast_new_ident(char *literal);
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);

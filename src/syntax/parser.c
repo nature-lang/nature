@@ -2345,7 +2345,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
     vardef->var_decl.type = type_kind_new(TYPE_UNKNOWN);
     vardef->var_decl.ident = FN_COROUTINE_RETURN_VAR;
-    vardef->right = *call_expr;
+    vardef->right = *ast_expr_copy(m, call_expr);
     vardef_stmt->value = vardef;
 
     // rt_coroutine_return(&result)
@@ -2371,6 +2371,26 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
 
     return fndef;
 }
+static ast_fndef_t *coroutine_fn_void_closure(module_t *m, ast_expr_t *call_expr) {
+    ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+    fndef->is_co_async = true;
+    fndef->symbol_name = NULL;
+    fndef->fn_name = NULL;
+    fndef->params = ct_list_new(sizeof(ast_var_decl_t));
+    fndef->return_type = type_kind_new(TYPE_VOID);
+
+    slice_t *stmt_list = slice_new();
+
+    // call(x, x, x)
+    ast_stmt_t *call_stmt = stmt_new(m);
+    call_stmt->assert_type = AST_CALL;
+    call_stmt->value = ast_expr_copy(m, call_expr)->value;
+    slice_push(stmt_list, call_stmt);
+
+    fndef->body = stmt_list;
+
+    return fndef;
+}
 
 static ast_expr_t parser_go_expr(module_t *m) {
     parser_must(m, TOKEN_GO);
@@ -2381,7 +2401,9 @@ static ast_expr_t parser_go_expr(module_t *m) {
     PARSER_ASSERTF(call_expr.assert_type == AST_CALL, "go expr must be call");
 
     ast_macro_co_async_t *go_expr = NEW(ast_macro_co_async_t);
-    go_expr->fndef = coroutine_fn_closure(m, &call_expr);
+    go_expr->origin_call = call_expr.value;
+    go_expr->closure_fn = coroutine_fn_closure(m, &call_expr);
+    go_expr->closure_fn_void = coroutine_fn_void_closure(m, &call_expr);
     go_expr->flag_expr = NULL;
     ast_expr_t result = expr_new(m);
     result.assert_type = AST_MACRO_CO_ASYNC;
@@ -2401,7 +2423,9 @@ static ast_expr_t parser_macro_co_async_expr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     ast_expr_t call_expr = parser_expr(m);
-    co_async->fndef = coroutine_fn_closure(m, &call_expr);
+    co_async->origin_call = call_expr.value;
+    co_async->closure_fn = coroutine_fn_closure(m, &call_expr);
+    co_async->closure_fn_void = coroutine_fn_void_closure(m, &call_expr);
 
     if (parser_consume(m, TOKEN_COMMA)) {
         co_async->flag_expr = NEW(ast_expr_t);

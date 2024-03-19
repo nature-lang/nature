@@ -503,22 +503,18 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // 由于 stmt->right 的 type 可能会超过 8byte, 所以通过 lea 将地址加载出来，再通过 lir_memory_mov 进行内存拷贝是正确的选择
     // 当然没 lea 的另外一个原因是，其会产生一个新的变量指向 struct instance 对应的内存区域, 在编译 stmt->right 时
     // 如果 stmt->right 是一个 arr/struct 这样的在内存中分配的区域，那么 linear 的返回值
-    lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
-    dst = lea_operand_pointer(m, dst);
+    lir_operand_t *slot = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
+    slot = lea_operand_pointer(m, slot);
 
-    if (is_alloc_stack(stmt->left.type)) {
-        linear_expr(m, stmt->right, dst);// 直接进行 move 避免中间的 copy
-    } else {
-        // ptr<foo>.bar 需要走 write_barrier
-        // 如果 src 是一个分配在 stack 中的对象则 src 已经是一个指针地址，否则其是一个具体的值
-        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+    if (is_gc_alloc(stmt->right.type)) {
+        lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         if (!is_alloc_stack(stmt->right.type)) {
-            src = lea_operand_pointer(m, src);
+            obj = lea_operand_pointer(m, obj);
         }
-        // rtype_hash 用于计算 move size
-        uint64_t rtype_hash = ct_find_rtype_hash(stmt->right.type);
 
-        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 3, int_operand(rtype_hash), dst, src);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, slot, obj);
+    } else {
+        linear_expr(m, stmt->right, slot);
     }
 }
 
@@ -2071,7 +2067,9 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *length = int_operand(fndef->capture_exprs->length);
     // rt_call env_new(fndef->name, length)
     lir_operand_t *env_operand = temp_var_operand_with_stack(m, type_kind_new(TYPE_GC_ENV));
-    push_rt_call(m, RT_CALL_ENV_NEW, env_operand, 2, length, bool_operand(fndef->is_co_async));
+
+    // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
+    push_rt_call_no_hook(m, RT_CALL_ENV_NEW, env_operand, 2, length, bool_operand(fndef->is_co_async));
 
     slice_t *capture_vars = slice_new();
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
@@ -2094,8 +2092,8 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         // rt_call env_assign(fndef->name, index_operand lir_operand)
-        push_rt_call(m, RT_CALL_ENV_ASSIGN, NULL, 4, env_operand, int_operand(ct_reflect_type(item->type).hash), int_operand(i),
-                     stack_addr_ref);
+        push_rt_call_no_hook(m, RT_CALL_ENV_ASSIGN, NULL, 4, env_operand, int_operand(ct_reflect_type(item->type).hash), int_operand(i),
+                             stack_addr_ref);
     }
 
     // 记录引用关系, ssa 将会实时调整这些地方到值，一旦 ssa 完成这些 var 就有了唯一名称

@@ -143,11 +143,15 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     processor_t *p = processor_get();
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, main=%d, gc_work=%d", p->share, p->index, p->status, co, co->main,
-           co->gc_work);
+    TDEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, gc_work=%d", p->share, p->index, p->status, co, co->fn, co->main,
+            co->gc_work);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
+
+    if (in_heap((addr_t) co->fn)) {
+        assertf(span_of((addr_t) co->fn), "co=%p fn=%p not found in heap, maybe swept", co, co->fn);
+    }
 
     ((void_fn_t) co->fn)();
 
@@ -412,7 +416,7 @@ EXIT:
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
-    DEBUGF("[runtime.rt_coroutine_dispatch] co=%p, solo=%d, share_processor_count=%d", co, co->solo, cpu_count);
+    DEBUGF("[runtime.rt_coroutine_dispatch] co=%p, fn=%p, solo=%d, share_processor_count=%d", co, co->fn, co->solo, cpu_count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
     if (gc_stage == GC_STAGE_MARK) {
@@ -435,7 +439,8 @@ void rt_coroutine_dispatch(coroutine_t *co) {
             assert(false && "pthread_create failed");
         }
 
-        DEBUGF("[runtime.rt_coroutine_dispatch] solo processor create, thread_id=%ld", (uint64_t) p->thread_id);
+        DEBUGF("[runtime.rt_coroutine_dispatch] solo processor create, thread_id=%ld, co=%p, fn=%p",
+               (uint64_t) p->thread_id, co, co->fn);
         return;
     }
 
@@ -643,6 +648,10 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
     co->id = coroutine_count++;
     mutex_unlock(&cp_alloc_locker);
 
+    if (in_heap((addr_t) fn)) {
+        rt_shade_obj_with_barrier(fn);
+    }
+
     co->fn = fn;
     co->solo = FLAG(CO_FLAG_SOLO) & flag;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
@@ -657,7 +666,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
     co->scan_ret_addr = 0;
     co->scan_offset = 0;
 
-    DEBUGF("[rt_coroutine_new] co=%p new success", co);
+    TDEBUGF("[rt_coroutine_new] co=%p, fn=%p new success, gc_barrier=%d", co, co->fn, gc_barrier_get());
     return co;
 }
 

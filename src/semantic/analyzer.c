@@ -622,11 +622,13 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
     }
 }
 
-static void analyzer_co_async_expr(module_t *m, ast_macro_co_async_t *go) {
-    analyzer_local_fndef(m, go->fndef);
+static void analyzer_co_async_expr(module_t *m, ast_macro_co_async_t *co_async) {
+    analyzer_local_fndef(m, co_async->closure_fn);
+    analyzer_local_fndef(m, co_async->closure_fn_void);
+    analyzer_call(m, co_async->origin_call);
 
-    if (go->flag_expr) {
-        analyzer_expr(m, go->flag_expr);
+    if (co_async->flag_expr) {
+        analyzer_expr(m, co_async->flag_expr);
     }
 }
 

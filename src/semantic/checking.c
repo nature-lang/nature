@@ -748,53 +748,52 @@ static type_t checking_co_async(module_t *m, ast_expr_t *expr) {
 
     infer_right_expr(m, co_expr->flag_expr, type_kind_new(TYPE_INT));
 
-    ast_fndef_t *fndef = co_expr->fndef;
-    assert(fndef->body->count == 2);
-    ast_stmt_t *vardef_stmt = fndef->body->take[0];
+    type_t fn_type = infer_right_expr(m, &co_expr->origin_call->left, type_kind_new(TYPE_UNKNOWN));
+    assert(fn_type.kind == TYPE_FN);
+    co_expr->return_type = fn_type.fn->return_type;
 
-    ast_vardef_stmt_t *vardef = vardef_stmt->value;
-    CHECKING_ASSERTF(vardef->right.assert_type == AST_CALL, "co_async fn must call expression")
+    // -------------------------------------------- 消除 ast_co_async_t, 直接改造成 call co_async----------------------------------------------------------
+    ast_expr_t first_arg = {0};
+    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
+        first_arg = co_expr->origin_call->left;
 
-    type_t return_type = infer_right_expr(m, &vardef->right, type_kind_new(TYPE_UNKNOWN));
-    assert(return_type.kind != TYPE_UNKNOWN);
-    if (return_type.kind == TYPE_VOID) {
-        ast_stmt_t *call_stmt = NEW(ast_stmt_t);
-        call_stmt->assert_type = AST_CALL;
-        call_stmt->value = vardef->right.value;
-        call_stmt->line = vardef->right.line;
-        call_stmt->column = vardef->right.column;
+        // 清空两个 fn body
+        co_expr->closure_fn->body = slice_new();
+        co_expr->closure_fn_void->body = slice_new();
+    } else {
+        infer_fn_decl(m, co_expr->closure_fn);
+        infer_fn_decl(m, co_expr->closure_fn_void);
 
-        fndef->body = slice_new();
-        slice_push(fndef->body, call_stmt);
+        first_arg = (ast_expr_t){
+                .line = expr->line,
+                .column = expr->column,
+                .assert_type = AST_FNDEF,
+                .type = co_expr->closure_fn->type,
+                .target_type = co_expr->closure_fn->type,
+        };
+
+        if (co_expr->return_type.kind == TYPE_VOID) {
+            first_arg.value = co_expr->closure_fn_void;
+        } else {
+            first_arg.value = co_expr->closure_fn;
+        }
     }
-    co_expr->return_type = return_type;
 
-    infer_fn_decl(m, co_expr->fndef);
-
-    // 消除 ast_co_async_t, 直接改造成 call co_async
     ast_call_t *call_expr = NEW(ast_call_t);
     call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_CO_ASYNC);
 
     call_expr->args = ct_list_new(sizeof(ast_expr_t));
-    ast_expr_t arg_fn = {
-            .line = expr->line,
-            .column = expr->column,
-            .assert_type = AST_FNDEF,
-            .type = co_expr->fndef->type,
-            .target_type = co_expr->fndef->type,
-            .value = co_expr->fndef,
-    };
-    ct_list_push(call_expr->args, &arg_fn);
+    ct_list_push(call_expr->args, &first_arg);
     ct_list_push(call_expr->args, co_expr->flag_expr);
 
     // 泛型参数
     call_expr->generics_args = ct_list_new(sizeof(type_t));
-    ct_list_push(call_expr->generics_args, &return_type);
+    ct_list_push(call_expr->generics_args, &co_expr->return_type);
 
     // 生成 type alias future 然后 reduction
     type_alias_t *alias_value = type_alias_new(TYPE_FUTURE_T, NULL);
     alias_value->args = ct_list_new(sizeof(type_t));
-    ct_list_push(alias_value->args, &return_type);
+    ct_list_push(alias_value->args, &co_expr->return_type);
     type_t future_t = type_new(TYPE_ALIAS, alias_value);
     future_t.status = REDUCTION_STATUS_UNDO;
     call_expr->return_type = reduction_type(m, future_t);

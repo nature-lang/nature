@@ -133,6 +133,10 @@ for int i=0; i < 100; i+=1 {
    @co_async(bar(), co.SOLO)
 }
 
+for int i=0; i < 300; i+=1 {
+   go bar()
+}
+
 @co_async(foo(), 0)
 @co_async(foo(), 0)
 @co_async(foo(), 0)

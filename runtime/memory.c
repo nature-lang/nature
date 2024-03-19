@@ -4,7 +4,7 @@
 
 uint64_t remove_total_bytes = 0;    // 当前回收到物理内存中的总空间
 uint64_t allocated_total_bytes = 0; // 当前分配的总空间
-uint64_t allocated_bytes = 0;       // 当前分配的内存空间
+int64_t allocated_bytes = 0;       // 当前分配的内存空间
 uint64_t next_gc_bytes = 0;         // 下一次 gc 的内存量
 bool gc_barrier;                    // gc 屏障开启标识
 uint8_t gc_stage;                   // gc 阶段

@@ -599,6 +599,19 @@ static inline bool can_type_casting(type_kind kind) {
 static inline bool is_alloc_stack(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
+static inline bool is_gc_alloc(type_t t) {
+    return t.kind == TYPE_PTR ||
+           t.kind == TYPE_NPTR ||
+           t.kind == TYPE_CPTR ||
+           t.kind == TYPE_STRUCT ||
+           t.kind == TYPE_MAP ||
+           t.kind == TYPE_SET ||
+           t.kind == TYPE_VEC ||
+           t.kind == TYPE_TUPLE ||
+           t.kind == TYPE_COROUTINE_T ||
+           t.kind == TYPE_UNION ||
+           t.kind == TYPE_FN;
+}
 
 /**
  * 可以直接使用 0 进行填充的值，通常就是简单类型

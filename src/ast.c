@@ -8,8 +8,6 @@ static slice_t *ast_body_copy(module_t *m, slice_t *body);
 
 static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp);
 
-static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
-
 static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp);
@@ -393,14 +391,16 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(module_t *m, ast_tuple_destr_t *t
 
 static ast_macro_co_async_t *ast_co_async_copy(module_t *m, ast_macro_co_async_t *temp) {
     ast_macro_co_async_t *expr = COPY_NEW(ast_macro_co_async_t, temp);
-    expr->fndef = ast_fndef_copy(m, temp->fndef);
+    expr->closure_fn = ast_fndef_copy(m, temp->closure_fn);
+    expr->closure_fn_void = ast_fndef_copy(m, temp->closure_fn_void);
+    expr->origin_call = ast_call_copy(m, temp->origin_call);
     if (expr->flag_expr) {
         expr->flag_expr = ast_expr_copy(m, expr->flag_expr);
     }
     return expr;
 }
 
-static ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
+ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
     if (temp == NULL) {
         return NULL;
     }
