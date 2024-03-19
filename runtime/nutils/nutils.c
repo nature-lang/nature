@@ -46,7 +46,7 @@ char **command_argv;
                 *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
                 return;                                                                                                                 \
             default:                                                                                                                    \
-                assert(false && "cannot convert type");                                                                                 \
+                assert(false && "cannot scanner_number_convert type");                                                                                 \
                 exit(1);                                                                                                                \
         }                                                                                                                               \
     }
