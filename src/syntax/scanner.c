@@ -292,7 +292,7 @@ bool scanner_is_hex_number(module_t *m, char c) {
       (c >= 'a' && c <= 'f')) {
     return true;
   } else {
-    if (c == '\n') {
+	if (scanner_is_stop_char(m, c)) {
       return false;
     }
     push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
@@ -305,7 +305,7 @@ bool scanner_is_oct_number(module_t *m, char c) {
   if (c >= '0' && c <= '8') {
     return true;
   } else {
-    if (c == '\n') {
+	if (scanner_is_stop_char(m, c)) {
       return false;
     }
     push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
@@ -318,7 +318,7 @@ bool scanner_is_bin_number(module_t *m, char c) {
   if (c == '0' || c == '1') {
     return true;
   } else {
-    if (c == '\n') {
+	if (scanner_is_stop_char(m, c)) {
       return false;
     }
     push_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
@@ -775,9 +775,18 @@ long convert(module_t *m, char *word, int base) {
   char *endptr;
   long decimal = strtol(word, &endptr, base);
   if (*endptr != '\0') {
-    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column - strlen(word),
                 "Invalid number `%s`", word);
   }
 
   return decimal;
+}
+
+bool scanner_is_stop_char(module_t * m, char c) {
+	if (c == '\n' || c == '+' || c == '-' || c == '*' || c == '/' || c == '&' ||
+		c == '<' || c == '>' || c == '|' || c == '=' || c == '!' || c == ' ' ||
+		c == '~') {
+		return true;
+	}
+	return false;
 }

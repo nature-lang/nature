@@ -56,5 +56,6 @@ bool scanner_is_space(char c);
 
 bool scanner_at_stmt_end(module_t * m);
 long convert(module_t * m, char *word, int base);
+bool scanner_is_stop_char(module_t * m, char c)；
 
 #endif //NATURE_SRC_SCANNER_H_
