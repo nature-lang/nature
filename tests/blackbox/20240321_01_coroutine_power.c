@@ -6,12 +6,10 @@
 #include "utils/exec.h"
 
 static void test_basic() {
-    return;
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
-    char *str = "";
-    assert_string_equal(raw, str);
+    char *find = strstr(raw, "main_co done");
+
+    assert_true(find);
 }
 
 int main(void) {

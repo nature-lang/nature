@@ -721,7 +721,7 @@ void runtime_gc() {
     int64_t before = allocated_bytes;
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    TDEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
+    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
 
     memory->gc_count += 1;
 
@@ -792,5 +792,5 @@ void runtime_gc() {
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
-    TDEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes, (before - allocated_bytes) / 1000);
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes, (before - allocated_bytes) / 1000);
 }

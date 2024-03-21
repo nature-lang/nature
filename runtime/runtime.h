@@ -49,10 +49,11 @@
 #define PAGE_SUMMARY_LEVEL 5                         // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8                   // 每个上级 summary 索引的数量
 #define PAGE_SUMMARY_COUNT_L5 (128 * 1024 * 1024 / 4)// 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
-#define PAGE_SUMMARY_COUNT_L4 (PAGE_SUMMARY_COUNT_L5 / PAGE_SUMMARY_MERGE_COUNT)
-#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)
-#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)
-#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)
+#define PAGE_SUMMARY_COUNT_L4 (PAGE_SUMMARY_COUNT_L5 / PAGE_SUMMARY_MERGE_COUNT) // 4194304, 每个 summary 管理 64M 空间
+#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT) // 524288, 每个 summary 管理 512M 空间
+#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT) // 65536, 每个 summary 管理 4G 空间
+#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT) // 8192, 每个 summary 管理 32G 空间
+#define PAGE_SUMMARY_MAX_VALUE 2LL^21 // 2097152, max=start=end 的最大值
 
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024)// 100KB
 #define NEXT_GC_FACTOR 2
@@ -119,10 +120,12 @@ typedef struct {
     uint64_t blocks[8];
 } page_chunk_t;// page_chunk 现在占用 64 * 8 = 512bit
 
+// TODO start/end/max 的正确编码值应该是 uint21_t,后续需要正确实现,能表示的最大值是 2^21=2097152
 typedef struct {
     uint16_t start;
     uint16_t end;
-    uint32_t max;
+    uint16_t max;
+    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1
 } page_summary_t;// page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
@@ -241,7 +244,7 @@ typedef struct coroutine_t {
     aco_t aco;
     void *fn;      // fn 指向
     processor_t *p;// 当前 coroutine 绑定的 p
-                   //    n_vec_t *args;
+    //    n_vec_t *args;
     void *result;  // coroutine 如果存在返回值，相关的值会放在 result 中
     int64_t result_size;
 
