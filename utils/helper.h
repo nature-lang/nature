@@ -85,8 +85,8 @@
 #define TRACEF(format, ...)
 
 #define TDEBUGF(format, ...)                                                                        \
-    // fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
-    // fflush(stderr);
+    fprintf(stderr, "[%lu] USER_CO DEBUG: " format "\n", uv_hrtime() / 1000 / 1000, ##__VA_ARGS__); \
+    fflush(stderr);
 
 #endif
 

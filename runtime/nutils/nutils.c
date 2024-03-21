@@ -443,7 +443,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
 void write_barrier(void *slot, void *new_obj) {
     PRE_RTCALL_HOOK();
-    TDEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
+    DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
 
     processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突

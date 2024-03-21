@@ -39,7 +39,8 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
     uint64_t find_max = 0;
     for (uint64_t i = *start; i < *end; ++i) {
         page_summary_t s = summaries[i];
-        find_max += s.start; // 左侧 + 新的 s 的 start
+        //        TDEBUGF("[runtime.summary_find_continuous] level=%d, i=%lu, start=%d, max=%d, end=%d, find_max=%lu, max_pages_count=%lu", level, i, s.start, s.max, s.end, find_max, max_pages_count);
+        find_max += s.start;// 左侧 + 新的 s 的 start
         if (find_max >= pages_count) {
             find = true;
             find_end = i;
@@ -64,7 +65,7 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
         // 如果非完整的空闲，则会导致连续性中断, 此时从 s.end 从新开始计算
         if (s.end != max_pages_count) {
             if (s.end > 0) {
-                find_start = i; // 已经从 i 开始记录
+                find_start = i;// 已经从 i 开始记录
                 find_max = s.end;
             } else {
                 // s.end == 0, 表示当前 chunk 完全不可用，此时充值 find_max, 并且更新 find_start 为下一个块
@@ -124,7 +125,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
     uint64_t bit_start = 0;
     uint64_t bit_end = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((uint8_t *)chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             // 重新开始计算
             bit_start = i + 1;
@@ -139,7 +140,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t start = 0;
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((uint8_t *)chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             break;
         }
@@ -148,16 +149,16 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
 
     uint16_t end = 0;
     for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_test((uint8_t *)chunk.blocks, i);
+        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
         if (used) {
             break;
         }
         end += 1;
     }
     page_summary_t summary = {
-        .start = start,
-        .max = max,
-        .end = end,
+            .start = start,
+            .max = max,
+            .end = end,
     };
 
     return summary;
@@ -169,7 +170,7 @@ static page_summary_t chunk_summarize(page_chunk_t chunk) {
  * @return
  */
 static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summaries[PAGE_SUMMARY_MERGE_COUNT]) {
-    uint64_t max_pages_count = summary_page_count[level + 1]; // level + 1 = next level
+    uint64_t max_pages_count = summary_page_count[level + 1];// level + 1 = next level
 
     // max 算法参考 find 算法
     uint32_t max = 0;
@@ -287,11 +288,11 @@ static void page_summary_update(addr_t base, uint64_t size) {
  * TODO 可能有越界问题,debug 时需要特别关注
  * @param base
  * @param size
- * @param value 1 表示 page使用中， 0 表示 page 空闲
+ * @param value 1 表示 page 使用中， 0 表示 page 空闲
  */
 static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
-    uint64_t end = base + size; // 假如 base = 0， size = 3, 那么申请的空间是 [0~1), [1~2), [2~3), 其中 3 是应该不属于当前空间
+    uint64_t end = base + size;// 假如 base = 0， size = 3, 那么申请的空间是 [0~1), [1~2), [2~3), 其中 3 是应该不属于当前空间
     for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
         // 计算 chunk
         page_chunk_t *chunk = &page_alloc->chunks[chunk_index_l1(index)][chunk_index_l2(index)];
@@ -308,14 +309,14 @@ static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
             bit_end = CHUNK_BITS_COUNT - 1;
         }
 
-        MDEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu", index, (void *)chunk->blocks,
+        MDEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu", index, (void *) chunk->blocks,
                 bit_start, bit_end);
 
         for (uint64_t i = bit_start; i <= bit_end; ++i) {
             if (value == 1) {
-                bitmap_set((uint8_t *)chunk->blocks, i);
+                bitmap_set((uint8_t *) chunk->blocks, i);
             } else {
-                bitmap_clear((uint8_t *)chunk->blocks, i);
+                bitmap_clear((uint8_t *) chunk->blocks, i);
             };
         }
     }
@@ -340,7 +341,7 @@ static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
 static addr_t page_alloc_find(uint64_t pages_count) {
     // 第一个 level 需要查找所有的元素
     uint64_t start = 0;
-    uint64_t end = PAGE_SUMMARY_COUNT_L1; // l1 有 8192 个元素
+    uint64_t end = PAGE_SUMMARY_COUNT_L1;// l1 有 8192 个元素
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
 
     for (int level = 0; level < PAGE_SUMMARY_LEVEL; ++level) {
@@ -353,11 +354,11 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         // start ~ end 是当前 level 下的 index， 其在下一级的范围的 index为当前登记的 index * 8
         if (level < (PAGE_SUMMARY_LEVEL - 1)) {
             start *= PAGE_SUMMARY_MERGE_COUNT;
-            end = (end + 1) * PAGE_SUMMARY_MERGE_COUNT; // start <= index < end
+            end = (end + 1) * PAGE_SUMMARY_MERGE_COUNT;// start <= index < end
         }
     }
 
-    MDEBUGF("[runtime.page_alloc_find] find continuous pages, l5 start: %lu, end: %lu", start, end);
+    TDEBUGF("[runtime.page_alloc_find] find continuous pages, l5 start: %lu, end: %lu", start, end);
 
     // start 和 chunk 表示 chunk 的 index,
     // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end
@@ -370,7 +371,7 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         // 一个 chunk 有 512 bit
         page_chunk_t *chunk = take_chunk(start);
         for (int i = 0; i < CHUNK_BITS_COUNT; i++) {
-            bool used = bitmap_test((uint8_t *)chunk->blocks, i);
+            bool used = bitmap_test((uint8_t *) chunk->blocks, i);
             if (used) {
                 bit_start = i + 1;
                 continue;
@@ -386,8 +387,8 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         // 计算 find_addr
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
 
-        MDEBUGF("[runtime.page_alloc_find] find addr=%p, start == end, start: %lu, chunk_base: %p, bit start: %lu, bit end: %lu",
-                (void *)find_addr, start, chunk->blocks, bit_start, bit_end);
+        TDEBUGF("[runtime.page_alloc_find] find addr=%p, start == end, start: %lu, chunk_base: %p, bit start: %lu, bit end: %lu",
+                (void *) find_addr, start, chunk->blocks, bit_start, bit_end);
 
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
@@ -397,10 +398,9 @@ static addr_t page_alloc_find(uint64_t pages_count) {
         page_summary_t start_summary = l5_summaries[start];
         // summary.end 表示 chunk 尾部可用的空间
         uint64_t bit_start = CHUNK_BITS_COUNT - start_summary.end;
-        MDEBUGF(
-            "[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
-            " end: %lu, bit start: %lu",
-            (void *)find_addr, start, start_summary.start, start_summary.max, start_summary.end, end, bit_start);
+        TDEBUGF("[runtime.page_alloc_find] find addr=%p, start != end, start chunk: %lu, chunk summary [%d, %d, %d],"
+                " end: %lu, bit start: %lu",
+                (void *) find_addr, start, start_summary.start, start_summary.max, start_summary.end, end, bit_start);
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
     }
     assert(find_addr % ALLOC_PAGE_SIZE == 0 && "find addr not align_up");
@@ -408,7 +408,7 @@ static addr_t page_alloc_find(uint64_t pages_count) {
     // 更新相关的 chunks 为使用状态
     chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
 
-    MDEBUGF("[runtime.page_alloc_find] find_addr: %p, page_count: %lu, size: %lu", (void *)find_addr, pages_count,
+    TDEBUGF("[runtime.page_alloc_find] find_addr: %p, page_count: %lu, size: %lu", (void *) find_addr, pages_count,
             pages_count * ALLOC_PAGE_SIZE);
 
     return find_addr;
@@ -457,13 +457,13 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     arena_hint_t *hint = mheap->arena_hints;
 
     // size 对齐
-    uint64_t alloc_size = align_up((int64_t)*size, ARENA_SIZE);
+    uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     void *v = NULL;
     while (true) {
         allocated_total_bytes += alloc_size;
-        v = sys_memory_map((void *)hint->addr, alloc_size);
-        if (v == (void *)hint->addr) {
+        v = sys_memory_map((void *) hint->addr, alloc_size);
+        if (v == (void *) hint->addr) {
             // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
             hint->addr += alloc_size;
             break;
@@ -478,11 +478,11 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     }
 
     // 申请成功，申请的范围是 v ~ (v+alloc_size), 可能包含多个 arena, 需要创建相关 arena meta
-    for (uint64_t i = arena_index((uint64_t)v); i <= arena_index((uint64_t)v + alloc_size - 1); ++i) {
+    for (uint64_t i = arena_index((uint64_t) v); i <= arena_index((uint64_t) v + alloc_size - 1); ++i) {
         arena_t *arena = NEW(arena_t);
         arena->base = arena_base(i);
         mheap->arenas[i] = arena;
-        slice_push(mheap->arena_indexes, (void *)i);
+        slice_push(mheap->arena_indexes, (void *) i);
     }
 
     // 虚拟内存映射并不会真的写入到内存，必须触发内存页中断才行
@@ -497,7 +497,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
  * @param span
  */
 static void mheap_set_spans(mspan_t *span) {
-    MDEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span, (void *)span->base, span->spanclass,
+    MDEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span, (void *) span->base, span->spanclass,
             span->obj_size, span->pages_count);
 
     // - 根据 span.base 定位 arena
@@ -508,8 +508,8 @@ static void mheap_set_spans(mspan_t *span) {
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
         // 判断当前 page_index 是否已经被其他 span 占用，如果占用了
-        MDEBUGF("[mheap_set_spans] arena_base=%p page_index=%lu will set span=%p, span_base=%p, cursor_addr=%p", (void *)arena->base,
-                page_index, span, (void *)span->base, (void *)(span->base + (i * ALLOC_PAGE_SIZE)))
+        TDEBUGF("[mheap_set_spans] arena_base=%p page_index=%lu will set span=%p, span_base=%p, cursor_addr=%p, page_count=%lu", (void *) arena->base,
+                page_index, span, (void *) span->base, (void *) (span->base + (i * ALLOC_PAGE_SIZE)), span->pages_count);
 
         if (arena->spans[page_index] != NULL) {
             assert(false && "span overlap");
@@ -521,7 +521,7 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
-    DEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *)span->base, span->obj_size,
+    DEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *) span->base, span->obj_size,
            span->pages_count);
 
     // - 根据 span.base 定位 arena
@@ -530,8 +530,12 @@ static void mheap_clear_spans(mspan_t *span) {
 
     uint64_t page_index = (span->base - arena->base) / ALLOC_PAGE_SIZE;
     for (int i = 0; i < span->pages_count; i++) {
-        DEBUGF("[mheap_clear_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p", (void *)arena->base, page_index, span,
-               (void *)span->base)
+        TDEBUGF("[mheap_clear_spans] arena_base: %p page_index=%lu set span=%p, span_base=%p, pages_count=%ld", (void *) arena->base, page_index, span,
+                (void *) span->base, span->pages_count)
+        if (arena->spans[page_index] == NULL) {
+            assert(false && "span not set");
+        }
+
         arena->spans[page_index] = NULL;
         page_index += 1;
     }
@@ -547,13 +551,13 @@ static void mheap_grow(uint64_t pages_count) {
 
     addr_t cursor = memory->mheap->current_arena.cursor;
     addr_t end = memory->mheap->current_arena.end;
-    assert(end >= cursor && "mheap not hold arena failed"); // 首次初始化时 end == cursor == 0
+    assert(end >= cursor && "mheap not hold arena failed");// 首次初始化时 end == cursor == 0
 
     if (end - cursor < size) {
         // cursor 没有足够的空间，需要重新申请一个新的空间
         // alloc_size 在方法内部会按 arena size 对齐
         uint64_t alloc_size = size;
-        addr_t v = (addr_t)mheap_sys_alloc(memory->mheap, &alloc_size);
+        addr_t v = (addr_t) mheap_sys_alloc(memory->mheap, &alloc_size);
         if (v == end) {
             // arena 空间连续,此时只需要更新 end
             end += alloc_size;
@@ -596,10 +600,10 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
     // - 新增的 span 需要在 arena 中建立 page -> span 的关联关系
     mspan_t *span = mspan_new(base, pages_count, spanclass);
-    mheap_set_spans(span); // 大内存申请时 span 同样放到了此处管理
+    mheap_set_spans(span);// 大内存申请时 span 同样放到了此处管理
 
     mutex_unlock(&memory->locker);
-    DEBUGF("[mheap_alloc_span] success, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base,
+    DEBUGF("[mheap_alloc_span] success, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
            span->spanclass, span->obj_count, span->alloc_count);
     return span;
 }
@@ -614,7 +618,7 @@ static void mcentral_grow(mcentral_t *mcentral) {
     mspan_t *span = mheap_alloc_span(pages_count, mcentral->spanclass);
     assert(span->obj_count > 0 && "alloc span failed");
 
-    MDEBUGF("[runtime.mcentral_grow] success, spc=%d, base=%p, alloc_count=%lu, obj_count=%lu", span->spanclass, (void *)span->base,
+    MDEBUGF("[runtime.mcentral_grow] success, spc=%d, base=%p, alloc_count=%lu, obj_count=%lu", span->spanclass, (void *) span->base,
             span->alloc_count, span->obj_count);
 
     // 新申请的 span 全都是空闲 obj, 直接插入到 mcentral 中
@@ -643,13 +647,13 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
-    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *)span->base, span->spanclass,
+    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base, span->spanclass,
             span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
     MDEBUGF("[cache_span] success, unlocked mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
-            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
+            (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
     return span;
 }
 
@@ -660,7 +664,7 @@ HAVE_SPAN:
  */
 void uncache_span(mcentral_t *mcentral, mspan_t *span) {
     MDEBUGF("[runtime.uncache_span] start, will lock mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
-            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
+            (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
     mutex_lock(&mcentral->locker);
 
     // 如果 span 还有空闲则丢到 partial 否则丢到 full
@@ -672,7 +676,7 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
 
     mutex_unlock(&mcentral->locker);
     MDEBUGF("[runtime.uncache_span] success mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", mcentral, span,
-            (void *)span->base, span->spanclass, span->obj_count, span->alloc_count);
+            (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
 }
 
 /**
@@ -699,7 +703,7 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
     mspan = cache_span(mcentral);
     mcache->alloc[spanclass] = mspan;
     MDEBUGF("[mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu", mcentral, spanclass,
-            mspan->spanclass, (void *)mspan->base, (void *)mspan->end, mspan->obj_size, mspan->alloc_count);
+            mspan->spanclass, (void *) mspan->base, (void *) mspan->end, mspan->obj_size, mspan->alloc_count);
 
     return mspan;
 }
@@ -749,7 +753,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         mspan->alloc_count += 1;
 
         mutex_unlock(&mspan->alloc_locker);
-        MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *)addr);
+        MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *) addr);
         return addr;
     }
 
@@ -767,7 +771,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  * @param rtype
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *)addr, size, obj_size);
+    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *) addr, size, obj_size);
 
     int index = 0;
     for (addr_t temp_addr = addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
@@ -777,11 +781,11 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 
         // 标记的是 ptr bit，(scan bit 暂时不做支持)
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
-        DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *)temp_addr,
-               (void *)addr, obj_size);
+        DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index, (void *) temp_addr,
+               (void *) addr, obj_size);
         int bit_value;
         if (bitmap_test(rtype->gc_bits, index)) {
-            bitmap_set(arena->bits, bit_index); // 1 表示为指针
+            bitmap_set(arena->bits, bit_index);// 1 表示为指针
             bit_value = 1;
         } else {
             bitmap_clear(arena->bits, bit_index);
@@ -794,7 +798,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
         index += 1;
     }
 
-    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *)addr, size, obj_size);
+    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *) addr, size, obj_size);
 }
 
 // 单位
@@ -812,7 +816,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     addr_t addr = mcache_alloc(spanclass, &span);
     assert(span && "std_malloc notfound span");
 
-    MDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *)addr);
+    MDEBUGF("[std_malloc] mcache_alloc addr=%p", (void *) addr);
 
     // 对 arena.bits 做标记,标记是指针还是标量, has ptr 需要借助 arena bits 进行扫描
     if (has_ptr) {
@@ -825,8 +829,8 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     if (rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
-    DEBUGF("[std_malloc] success, spc=%d,base=%p,alloc_count=%ld,size=%ld,kind=%s,addr=%p,alloc_bytes=%ld,gc_barrier=%d", span->spanclass, (void *)span->base, span->alloc_count,
-           size, debug_kind, (void *)addr, allocated_bytes, gc_barrier_get());
+    DEBUGF("[std_malloc] success, spc=%d,base=%p,alloc_count=%ld,size=%ld,kind=%s,addr=%p,alloc_bytes=%ld,gc_barrier=%d", span->spanclass, (void *) span->base, span->alloc_count,
+           size, debug_kind, (void *) addr, allocated_bytes, gc_barrier_get());
 
     assert(span_of(addr) == span && "std_malloc span not match");
 
@@ -870,10 +874,10 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
         debug_kind = type_kind_str[rtype->kind];
     }
     DEBUGF(
-        "[runtime.large_malloc] success, spc=%d, span_base=%p, obj_size=%ld, need_size=%ld, type_kind=%s, "
-        "addr=%p,alloc_count=%lu,alloc_bit=%d, allocator_bytes=%ld",
-        span->spanclass, (void *)span->base, span->obj_size, size, debug_kind, (void *)span->base, span->alloc_count,
-        bitmap_test(span->alloc_bits, 0), allocated_bytes);
+            "[runtime.large_malloc] success, spc=%d, span_base=%p, obj_size=%ld, need_size=%ld, type_kind=%s, "
+            "addr=%p,alloc_count=%lu,alloc_bit=%d, allocator_bytes=%ld",
+            span->spanclass, (void *) span->base, span->obj_size, size, debug_kind, (void *) span->base, span->alloc_count,
+            bitmap_test(span->alloc_bits, 0), allocated_bytes);
 
     return span->base;
 }
@@ -883,7 +887,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
  */
 arena_hint_t *arena_hints_init() {
     arena_hint_t *first = NEW(arena_hint_t);
-    first->addr = (uint64_t)ARENA_HINT_BASE;
+    first->addr = (uint64_t) ARENA_HINT_BASE;
     first->last = false;
     first->next = NULL;
 
@@ -908,7 +912,7 @@ arena_hint_t *arena_hints_init() {
  * @param span
  */
 void mheap_free_span(mheap_t *mheap, mspan_t *span) {
-    RDEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *)span->base, span->pages_count,
+    RDEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *) span->base, span->pages_count,
             chunk_index(span->base));
 
     // 从 page_alloc 的视角清理 span 对应的内存页
@@ -928,9 +932,9 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 
     // 将物理内存归还给操作系统
     RDEBUGF("[runtime.mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
-            remove_total_bytes / 1024 / 1024, (void *)span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
+            remove_total_bytes / 1024 / 1024, (void *) span->base, span->pages_count, span->pages_count * ALLOC_PAGE_SIZE);
 
-    sys_memory_remove((void *)span->base, span->pages_count * ALLOC_PAGE_SIZE);
+    sys_memory_remove((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
 
     RDEBUGF("[mheap_free_span] sys_memory_remove success");
 }
@@ -946,12 +950,12 @@ void memory_init() {
     next_gc_bytes = DEFAULT_NEXT_GC_BYTES;
 
     // - 初始化 mheap
-    mheap_t *mheap = mallocz_big(sizeof(mheap_t)); // 所有的结构体，数组初始化为 0, 指针初始化为 null
+    mheap_t *mheap = mallocz_big(sizeof(mheap_t));// 所有的结构体，数组初始化为 0, 指针初始化为 null
     mheap->page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
     mheap->page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
     mheap->page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
     mheap->page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
-    mheap->page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t)); // 8192
+    mheap->page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t));// 8192
 
     // - arena hint init
     mheap->arena_hints = arena_hints_init();
@@ -1004,11 +1008,11 @@ mspan_t *span_of(uint64_t addr) {
     // 根据 ptr 定位 arena, 找到具体的 page_index,
     arena_t *arena = take_arena(addr);
     if (arena == NULL) {
-        TRACEF("[span_of] arena is null by addr=%p", (void *)addr);
+        TRACEF("[span_of] arena is null by addr=%p", (void *) addr);
         return NULL;
     }
 
-    TRACEF("[span_of] addr=%p", (void *)addr);
+    TRACEF("[span_of] addr=%p", (void *) addr);
 
     // 一个 arena 有 ARENA_PAGES_COUNT(8192 个 page), 根据 addr 定位 page_index
     uint64_t page_index = (addr - arena->base) / ALLOC_PAGE_SIZE;
@@ -1020,9 +1024,9 @@ mspan_t *span_of(uint64_t addr) {
 }
 
 addr_t mstack_new(uint64_t size) {
-    void *base = sys_memory_map((void *)0x4000000000, size);
+    void *base = sys_memory_map((void *) 0x4000000000, size);
 
-    return (addr_t)base;
+    return (addr_t) base;
 }
 
 /**
@@ -1064,17 +1068,17 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
     if (size <= STD_MALLOC_LIMIT) {
         MDEBUGF("[rt_gc_malloc] std malloc");
         // 1. 标准内存分配(0~32KB)
-        ptr = (void *)std_malloc(size, rtype);
+        ptr = (void *) std_malloc(size, rtype);
     } else {
         MDEBUGF("[rt_gc_malloc] large malloc");
         // 2. 大型内存分配(大于>32KB)
-        ptr = (void *)large_malloc(size, rtype);
+        ptr = (void *) large_malloc(size, rtype);
     }
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
         DEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p", p->share, p->index,
-               (uint64_t)p->thread_id, p->status, ptr);
+               (uint64_t) p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }
 
@@ -1103,7 +1107,7 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->sweepgen = 0;
     span->spanclass = spanclass;
     uint8_t sizeclass = take_sizeclass(spanclass);
-    if (sizeclass == 0) { // 使用 spanclass = 0 来管理 large_malloc
+    if (sizeclass == 0) {// 使用 spanclass = 0 来管理 large_malloc
         span->obj_size = pages_count * ALLOC_PAGE_SIZE;
         span->obj_count = 1;
     } else {

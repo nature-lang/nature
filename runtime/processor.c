@@ -143,7 +143,7 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     processor_t *p = processor_get();
     assert(p);
 
-    TDEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, gc_work=%d", p->share, p->index, p->status, co, co->fn, co->main,
+    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, gc_work=%d", p->share, p->index, p->status, co, co->fn, co->main,
             co->gc_work);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
@@ -666,7 +666,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
     co->scan_ret_addr = 0;
     co->scan_offset = 0;
 
-    TDEBUGF("[rt_coroutine_new] co=%p, fn=%p new success, gc_barrier=%d", co, co->fn, gc_barrier_get());
+    DEBUGF("[rt_coroutine_new] co=%p, fn=%p new success, gc_barrier=%d", co, co->fn, gc_barrier_get());
     return co;
 }
 
