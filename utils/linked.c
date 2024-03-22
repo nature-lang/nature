@@ -2,7 +2,7 @@
 
 #include <assert.h>
 
- uint16_t linked_count(linked_t *l) {
+uint16_t linked_count(linked_t *l) {
     uint16_t count = 0;
     LINKED_FOR(l) {
         count++;

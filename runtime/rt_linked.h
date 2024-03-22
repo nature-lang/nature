@@ -2,6 +2,7 @@
 #define NATURE_RT_LINKED_H
 
 #include "fixalloc.h"
+#include "utils/mutex.h"
 
 #define RT_LINKED_FOR(_list) for (rt_linked_node_t *_node = _list.front; _node != _list.rear; _node = _node->succ)
 #define RT_LINKED_VALUE() (_node->value)
@@ -49,7 +50,7 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
     l->front = empty;
     l->rear = empty;
 
-    mutex_lock(&l->locker);
+    mutex_init(&l->locker);
 }
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
@@ -68,6 +69,22 @@ static inline void rt_linked_push(rt_linked_t *l, void *value) {
     l->rear->succ = empty;
 
     l->rear = empty;
+    l->count++;
+}
+
+static inline void rt_linked_push_heap(rt_linked_t *l, void *value) {
+    assert(l);
+    assert(l->nodealloc_locker);
+
+    // 创建一个新的 empty 节点
+    pthread_mutex_lock(l->nodealloc_locker);
+    rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
+    pthread_mutex_unlock(l->nodealloc_locker);
+
+    // 头部插入
+    empty->succ = l->front;
+    l->front->prev = empty;
+    l->front = empty;
     l->count++;
 }
 
