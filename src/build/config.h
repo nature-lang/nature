@@ -1,11 +1,11 @@
 #ifndef NATURE_BUILD_CONFIG_H
 #define NATURE_BUILD_CONFIG_H
 
+#include "utils/helper.h"
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <limits.h>
-#include "utils/helper.h"
 
 typedef enum {
     OS_LINUX = 1,
@@ -18,24 +18,27 @@ typedef enum {
 extern build_param_t BUILD_OS;
 extern build_param_t BUILD_ARCH;
 
-extern char *NATURE_ROOT; // linux/darwin/freebsd default root
+extern char *NATURE_ROOT;// linux/darwin/freebsd default root
 
-extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
+extern char BUILD_OUTPUT_NAME[PATH_MAX];// main
 extern char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
-extern char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+extern char BUILD_OUTPUT[PATH_MAX];     // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
 extern char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 extern char *BASE_NS; // 最后一级目录的名称，也可以自定义
-extern char *TEMP_DIR; // 链接临时目录
+extern char *TEMP_DIR;// 链接临时目录
 
-extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
-extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
+extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
+extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
-#define LINUX_BUILD_TMP_DIR  "/tmp/nature-build.XXXXXX"
+#define LINUX_BUILD_TMP_DIR "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
 #define LIB_START_FILE "crt1.o"
 #define LIB_RUNTIME_FILE "libruntime.a"
+
+// #define LIBC_FILE "libcdebug.a"
 #define LIBC_FILE "libc.a"
+
 #define LIBUV_FILE "libuv.a"
 #define LINKER_OUTPUT "a.out"
 
@@ -55,7 +58,7 @@ static inline char *temp_dir() {
     }
 
     return tmp_dir;
-    ERROR:
+ERROR:
     assertf(false, "[cross_tmp_dir] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
     exit(1);
 }
@@ -141,4 +144,4 @@ static inline void env_init() {
 }
 
 
-#endif //NATURE_ENV_H
+#endif//NATURE_ENV_H

@@ -1,0 +1,10 @@
+type mutex_t = struct {
+    u32 sema
+}
+
+
+fn mutex_t.init() {
+}
+
+// 如何初始化
+var mu = mutex_t{}

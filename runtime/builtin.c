@@ -33,7 +33,6 @@ static void print_arg(n_union_t *arg) {
             return;
         }
 
-        // TDEBUGF2("[runtime.print_arg] string=%p, length=%lu, data=%s, data_str_len=%lu", s, s->length, s->data, s->length);
         VOID write(STDOUT_FILENO, s->data, s->length);
         return;
     }
