@@ -1,6 +1,6 @@
 import compress.tgz
 
-tgz.verbose = true
+tgz.verbose = false
 
 tgz.encode('mockdir', 'mockdir.tar.gz', ['sub', 'nice.n', 'test.txt'])
 println('encode success')

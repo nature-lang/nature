@@ -159,6 +159,8 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
         assertf(span_of((addr_t) co->fn), "co=%p fn=%p not found in heap, maybe swept", co, co->fn);
     }
 
+    assert((addr_t) co->fn > 0);
+
     ((void_fn_t) co->fn)();
 
     DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, err=%p, will set status to rtcall",
@@ -356,9 +358,9 @@ static void processor_run(void *raw) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-            STW_WAIT:
-        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw, p->share,
-                p->index);
+        STW_WAIT:
+            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw, p->share,
+                    p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -381,6 +383,8 @@ static void processor_run(void *raw) {
         }
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
+        int count = 0;
+        uint64_t time_start = uv_hrtime();
         while (true) {
             mutex_lock(&p->co_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
@@ -395,6 +399,7 @@ static void processor_run(void *raw) {
                     p->index, co, co->status);
 
             coroutine_resume(p, co);
+            count++;
 
             if (p->need_stw > 0) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d",
@@ -406,6 +411,10 @@ static void processor_run(void *raw) {
             RDEBUGF("[runtime.processor_run] coroutine resume backend, p_index_%d=%d, co=%p, status=%d", p->share,
                     p->index, co,
                     co->status);
+        }
+        if (count > 100) {
+            DEBUGF("[runtime.processor_run] p_index_%d=%d,  handle coroutine completed, count=%d, used_time=%lu ms",
+                   p->share, p->index, count, (uv_hrtime() - time_start) / 1000 / 1000);
         }
 
         // solo processor exit check
@@ -427,7 +436,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-    EXIT:
+EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
