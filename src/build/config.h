@@ -58,7 +58,7 @@ static inline char *temp_dir() {
     }
 
     return tmp_dir;
-ERROR:
+    ERROR:
     assertf(false, "[cross_tmp_dir] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
     exit(1);
 }
@@ -140,6 +140,11 @@ static inline void env_init() {
     char *root = getenv("NATURE_ROOT");
     if (root != NULL) {
         NATURE_ROOT = root;
+    }
+
+    char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
+    if (build_output_dir != NULL) {
+        strcpy(BUILD_OUTPUT_DIR, build_output_dir);
     }
 }
 

@@ -1,6 +1,0 @@
-int i = 0
-for 20 > i {
-    println(i)
-    i = i + 1
-}
-print('for end, i=', i)

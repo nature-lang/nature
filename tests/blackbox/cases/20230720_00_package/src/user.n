@@ -1,6 +1,0 @@
-import package.util
-
-fn dump() {
-    var res = util.sum(1, 2)
-    println('util.sum(1, 2) =', res)
-}

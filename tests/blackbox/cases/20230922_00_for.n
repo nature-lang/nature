@@ -1,6 +1,0 @@
-import libc_temp
-import syscall
-
-for true {
-    usleep(10000)
-}

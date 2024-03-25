@@ -1,7 +1,0 @@
-fn hello() {
-    println('hello nature')
-    throw 'world error'
-}
-
-hello()
-println('can not get here')

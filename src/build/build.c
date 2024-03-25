@@ -76,7 +76,7 @@ static void assembler_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -90,7 +90,7 @@ static void assembler_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -569,7 +569,15 @@ void build_libmain(char *build_entry) {
         strcat(cmd, " ");
         strcat(cmd, obj_file);
     }
+    strcat(cmd, " ");
+    strcat(cmd, custom_link_object_path());
+
     system(cmd);
 
-    log_debug("build --> %s success", output);
+    strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, "libmain.a"));
+
+    remove(BUILD_OUTPUT);
+    copy(BUILD_OUTPUT, output, 0755);
+    log_debug("build temp output--> %s\n", output);
+    log_debug("build output--> %s\n", BUILD_OUTPUT);
 }

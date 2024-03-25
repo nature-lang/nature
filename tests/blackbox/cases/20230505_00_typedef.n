@@ -1,5 +1,0 @@
-type my_int = int
-my_int foo = 24
-int bar = foo
-
-print(foo, bar, '\n')

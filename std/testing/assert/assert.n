@@ -1,0 +1,9 @@
+import fmt
+
+fn eq<T>(T expect, T actual) {
+    if T == T {
+        return
+    }
+
+    throw fmt.sprintf('assertion failed: expect '%v' actual '%v', expect, actual)
+}
