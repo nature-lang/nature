@@ -1,0 +1,54 @@
+import time
+
+var timestamp = 1691656611
+ptr<libc_tm_t> ti = localtime(&timestamp)
+
+// 修改成 strings.new() -- 基于重载解析多种类型的 new
+string tz = libc_string_new(ti.tm_zone)
+
+var hour = ti.tm_hour
+if tz == 'CST' {
+    hour -= 8
+}
+
+// 51 36 8 10 7 123 4 221 0 0 UTC
+println(ti.tm_sec, ti.tm_min, hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst)
+
+// 受到时区不同略有不同
+if tz == 'CST' {
+    println(ti.tm_gmtoff == 28800)
+} else if tz == 'UTC' {
+    println(ti.tm_gmtoff == 0)
+} else {
+    println('unknown timezone:', tz)
+}
+
+var tp = libc_tm_t {
+    tm_year = 122,
+    tm_mon = 7,
+    tm_mday = 9,
+    tm_hour = 17,
+    tm_min = 30,
+    tm_sec = 52
+}
+
+// UTC 1660066252
+// CST 1660037452
+timestamp = mktime(&tp)
+if tz == 'CST' {
+    println(timestamp == 1660037452)
+} else if tz == 'UTC' {
+    println(timestamp == 1660066252)
+} else {
+    println('unknown timezone:', tz)
+}
+
+// format 测试(需要一个 100 空间的 buf)
+var buf = vec_new<u8>(100, 0)
+var len = strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), &tp)
+buf = buf.slice(0, len)
+println('datetime:', buf as string, '!!!')
+
+// time 库测试
+var t = time.now()
+println(t.timestamp() > 1691665760)

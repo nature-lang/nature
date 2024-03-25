@@ -1,0 +1,19 @@
+fn test() {
+    var c = 12
+    var d = 15
+    nice()
+    var e = 16
+    var e2 = 17
+}
+
+fn nice() {
+    var c = 24
+    var g = 32
+    throw 'crash and burn'
+    var d = 25
+}
+
+fn car() {
+    var list = vec_new<u8>(12, 0)
+    var c = list[24]
+}

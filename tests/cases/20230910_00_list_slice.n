@@ -1,0 +1,62 @@
+import os
+import fmt.util
+import time
+
+runtime_force_gc()
+
+var list = [1, 2, 3, 4, 4, 5, 5, 5, 6, 66, 6, 6, 14]
+
+var l2 = list.slice(3, 12)
+
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+list.push(5)
+
+for i in l2 {
+    print(i)
+}

@@ -1,0 +1,16 @@
+// neg int
+int a = 24
+var b = -a
+int c = -(24 + 3)
+int d = -24
+var e = d
+int f = -24 + -23
+i16 g = 16
+i16 h = -g
+print(a, b, c, d, e, f, g, h, '\n')
+
+// neg float
+float f1 = 3.1415926
+var f2 = -f1
+var f3 = -(3.14 + 1.28)
+print(f1, f2, f3, '\n')

@@ -1,0 +1,46 @@
+import 'helper.n'
+
+
+// 栈干扰
+i8 a = 25
+i16 a1 = 256
+
+// for 循环申请内存, 然后不停的 gc 看看会不会溢出
+for int i = 0; i < 10; i += 1 {
+    helper.list = [i as u8, (i+1) as u8, (i+2) as u8, (i+3) as u8, (i*1) as u8, (i*2) as u8, (i*3) as u8]
+}
+
+[u16] l2 = [16, 32, 64, 128]
+
+runtime_force_gc()
+print(helper.list[0], helper.list[1], helper.list[2], helper.list[3], helper.list[4], helper.list[5], helper.list[6], '\n')
+
+print(l2[0], l2[1], l2[2], l2[3], '\n')
+println(helper.haha)
+
+fn gc_in1() {
+    u8 a = 12
+    u16 b = 24
+    {int:bool} maps = {1: true, 2: false, 3: false, 4: true}
+    u32 d = 28
+    runtime_force_gc()
+    print(helper.list[0], maps[3], l2[2], '\n')
+}
+
+gc_in1()
+
+i32 b = 25
+
+fn gc_in2():[string] {
+    u8 a = 12 // 栈干扰
+    u16 b = 24
+    [string] list = ['hello', 'world', 'nature', 'haha']
+    runtime_force_gc()
+
+    return list
+}
+
+var list = gc_in2()
+runtime_force_gc() // 此时也不能清理 list
+print(list[0], list[1], list[2], list[3], '\n')
+println(l2[0])

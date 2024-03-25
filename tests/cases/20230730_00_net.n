@@ -1,0 +1,47 @@
+import syscall
+import os
+import libc_temp
+
+// 创建一个 socket
+int sockfd = syscall.socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
+
+println('create socket success')
+
+var addr = syscall.sockaddr_in {
+    sin_family = syscall.AF_INET as u16,
+    sin_addr = 0x00000000,
+    sin_port = htons(8080),
+    sin_zero = [] as arr<u8,8>
+}
+
+syscall.bind(sockfd, addr) catch err {
+    return print('bind error: ', err.msg)
+}
+println('bind :8080 success')
+
+// 监听链接
+syscall.listen(sockfd, 10) catch err {
+    return print('listen error: ', err.msg, '\n')
+}
+println('listen success')
+
+// 接受链接
+var client_addr_ptr = new syscall.sockaddr_in // 初始化一个空的地址，等待 callee 赋值
+
+var client_fd = syscall.accept(sockfd, client_addr_ptr) catch err {
+    return print('accept error: ', err.msg, '\n')
+}
+
+println('accept success')
+
+// 这里标识只接收 0 个字节即可
+var recv_buf = [] as [u8]
+syscall.recvfrom(client_fd, recv_buf, 0)
+
+var resp_str = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello, World!'
+var bytes = syscall.sendto(client_fd, resp_str as [u8], 0) catch err {
+    return print('send error: ', err.msg, '\n')
+}
+print('send success, len: ', bytes, '\n')
+
+syscall.close(client_fd)

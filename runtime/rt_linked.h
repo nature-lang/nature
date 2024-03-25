@@ -11,6 +11,9 @@
 extern fixalloc_t global_nodealloc;
 extern pthread_mutex_t global_nodealloc_locker;
 
+extern fixalloc_t mutex_global_nodealloc;
+extern pthread_mutex_t mutex_global_nodealloc_locker;
+
 // 所有的 node 都是通过 fixalloc 分配
 typedef struct rt_linked_node_t {
     void *value;
@@ -50,7 +53,7 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
     l->front = empty;
     l->rear = empty;
 
-    mutex_init(&l->locker);
+    mutex_init(&l->locker, false);
 }
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {

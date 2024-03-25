@@ -1,0 +1,43 @@
+vec<u8> l = [1, 2]
+l.push(13)
+println(l[0], l[1], l[2])
+
+[u8] l2 = [3, 4]
+l2.push(12)
+println(l2[0], l2[1], l2[2])
+
+var l3 = vec_new<u8>(0, 0)
+l3.push(12)
+println(l3.len())
+println(l3.cap())
+
+var l4 = vec_new<u16>(1024, 0)
+l4.push(12)
+println(l4.len())
+println(l4.cap())
+
+var l5 = vec_new<u16>(0, 2048)
+u16 b5 = 11
+l5.push(b5 + 1)
+println(l5.len())
+println(l5.cap())
+
+
+[int] l6 = [1, 2]
+l6[1] = 22
+var b6 = l6[1] + 3
+println(l6[0], l6[1], b6)
+
+
+// --- slice and concat
+var l7 = ['a', 'b', 'c', 'd', 'e']
+var l8 = l7.slice(1, 4)
+for v in l8 {
+    print(v)
+}
+println()
+
+l7 = l7.concat(['f', 'g', 'h'])
+for v in l7 {
+    print(v)
+}

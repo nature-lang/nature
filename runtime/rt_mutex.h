@@ -1,26 +1,29 @@
 #ifndef NATURE_RT_MUTEX_H
 #define NATURE_RT_MUTEX_H
 
+#include "rt_linked.h"
+#include "utils/mutex.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "rt_linked.h"
-#include "utils/mutex.h"
 
-#define MUTEX_LOCKED 1 // (1 << 0) // 1
-#define MUTEX_WOKEN 2 // 1 << 1 // 2
-#define MUTEX_STARVING 4 // 1 << 2 // 4
+#define MUTEX_LOCKED 1  // (1 << 0) // 1
+#define MUTEX_WOKEN 2   // 1 << 1 // 2
+#define MUTEX_STARVING 4// 1 << 2 // 4
 #define MUTEX_WAITER_SHIFT 3
 #define MUTEX_STARVING_THRESHOLD_NS 10000000
 
-#define ACTIVE_SPIN      4
-#define ACTIVE_SPIN_COUNT  30
+#define ACTIVE_SPIN 4
+#define ACTIVE_SPIN_COUNT 30
 
 typedef struct {
     int64_t state;
     int64_t sema;
     rt_linked_t waiters;
+    int64_t waiter_count;
 } rt_mutex_t;
+
+void rt_mutex_init(rt_mutex_t *m);
 
 void rt_mutex_lock(rt_mutex_t *m);
 

@@ -1,0 +1,9 @@
+fn sum(...[int] list):int {
+	var result = 0 // 这里应该是进行了重新定值，所以不应该影响原来的 sum
+	for v in list { // 迭代语法
+		result += v
+	}
+	return result
+}
+
+println(sum(1, 2, 3, 4, 5))

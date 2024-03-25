@@ -1,0 +1,76 @@
+int a = 50
+int b = 100
+
+fn test_false():bool {
+    println('entry test_false')
+    return false
+}
+
+fn test_true():bool {
+    println('entry test_true')
+    return true
+}
+
+if a > 1 || test_false() {
+    println('or_1 is true')
+} else {
+    println('or_1 is false')
+}
+
+if b > 100 || test_true() {
+    println('or_2 is true')
+} else {
+    println('or_2 is false')
+}
+
+if b > 101 || a < 49 {
+    println('or_3 is true')
+} else {
+    println('or_3 is false')
+}
+
+if b < 101 || a > 49 {
+    println('or_4 is true')
+} else {
+    println('or_4 is false')
+}
+
+
+if true || false || test_false() {
+    println('or_5 is true')
+} else {
+    println('or_5 is false')
+}
+
+println("----------------")
+
+if a > 1 && test_false() {
+    println('and_1 is true')
+} else {
+    println('and_1 is false')
+}
+
+if b > 100 && test_true() {
+    println('and_2 is true')
+} else {
+    println('and_2 is false')
+}
+
+if b > 101 && a < 49 {
+    println('and_3 is true')
+} else {
+    println('and_3 is false')
+}
+
+if b < 101 && a > 49 {
+    println('and_4 is true')
+} else {
+    println('and_4 is false')
+}
+
+
+if true && false && test_false() {
+    println('and_5 is true')
+} else {
+    println('and_5 is false')
+}

@@ -528,3 +528,48 @@ void build(char *build_entry) {
     // 链接
     build_linker(modules);
 }
+
+/**
+ * 构建成 libmain.a 文件 
+ */
+void build_libmain(char *build_entry) {
+    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
+
+    // 配置初始化
+    build_init(build_entry);
+
+    // debug
+    config_print();
+
+    // 解析 package_conf
+    toml_table_t *package_conf = NULL;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        package_conf = package_parser(package_file);
+    }
+
+    slice_t *modules = build_modules(package_conf);
+
+    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
+    build_compiler(modules);
+
+    // 汇编
+    build_assembler(modules);
+
+    char *cmd = mallocz(10240 * sizeof(char));
+    strcpy(cmd, "ar -rcs ");
+    char *output = path_join(TEMP_DIR, "libmain.a");
+    strcat(cmd, output);
+
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        char *obj_file = m->object_file;
+
+        // 将每个模块的object文件添加到命令中
+        strcat(cmd, " ");
+        strcat(cmd, obj_file);
+    }
+    system(cmd);
+
+    log_debug("build --> %s success", output);
+}

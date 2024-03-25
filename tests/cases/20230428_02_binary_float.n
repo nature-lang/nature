@@ -1,0 +1,19 @@
+f32 s1 = 100.125
+f64 s2 = -100.125
+float s3 = 3.1415926
+
+var a = 1 as f32 + s1
+var b = s2 - 1.105
+print(a, b, s1, s2, '\n')  // 101.125000-101.230000100.125000-100.125000
+
+var c = s1 as f64 * s2
+int d = 125 / (s3 as int)
+print(c, d, s1, s2, '\n') // -10025.01562541100.125000-100.125000
+
+bool b0 = 1 < s1 as int
+var b1 = s2 > 2 as f64
+bool b2 = 101 <= s1 as int
+bool b3 = s3 >= s1 as float
+bool b4 = s2 == -100.125 as f64
+bool b5 = s2 != s1 as f64
+print(b0, b1, b2, b3, b4, b5, s1, s2, s3, '\n') // truefalsefalsefalsetruetrue100.125000-100.1250003.141593

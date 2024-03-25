@@ -1,22 +1,29 @@
 #include "rt_mutex.h"
+#include "runtime/processor.h"
+#include "runtime/runtime.h"
+#include <assert.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <uv.h>
-#include <assert.h>
-#include "runtime/processor.h"
-#include "runtime/runtime.h"
 
-static bool can_semacquire(int64_t *seam) {
+static bool can_semacquire(int64_t *addr) {
     while (true) {
-        int64_t v = atomic_load(seam);
+        int64_t v = atomic_load(addr);
         if (v == 0) {
             return false;
         }
 
-        if (atomic_compare_exchange_strong(seam, &v, v - 1)) {
+        if (atomic_compare_exchange_strong(addr, &v, v - 1)) {
             return true;
         }
     }
+}
+
+void rt_mutex_init(rt_mutex_t *m) {
+    m->state = 0;
+    m->sema = 0;
+    m->waiter_count = ATOMIC_VAR_INIT(0);
+    rt_linked_init(&m->waiters, &mutex_global_nodealloc, &mutex_global_nodealloc_locker);
 }
 
 void rt_mutex_lock(rt_mutex_t *m) {
@@ -35,7 +42,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
         // can_spin 的条件非常苛刻
         if ((old & (MUTEX_LOCKED | MUTEX_STARVING)) == MUTEX_LOCKED && rt_can_spin(iter)) {
             if (!awoke && (old & MUTEX_WOKEN) == 0 &&
-                (old >> MUTEX_WAITER_SHIFT) != 0 && // 如果 waiter list 中存在被阻塞的 coroutine
+                (old >> MUTEX_WAITER_SHIFT) != 0 &&// 如果 waiter list 中存在被阻塞的 coroutine
                 atomic_compare_exchange_strong(&m->state, &old, old | MUTEX_WOKEN)) {
                 awoke = true;
             }
@@ -69,7 +76,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
         }
 
         if (awoke) {
-            assert((new & MUTEX_WOKEN) != 0 && "inconsistent mutex state");
+            assert((new &MUTEX_WOKEN) != 0 && "inconsistent mutex state");
 
             new = new & ~MUTEX_WOKEN;
         }
@@ -112,7 +119,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
             int64_t delta = MUTEX_LOCKED - (1 << MUTEX_WAITER_SHIFT);
             // 如果从当前 coroutine 开始未进入到饥饿模式，则当前 coroutine 后面等待的 coroutine 是更晚进入的，更加不会是饥饿的
             if (!starving || (old >> MUTEX_WAITER_SHIFT == 1)) {
-                delta -= MUTEX_STARVING; // 退出饥饿模式
+                delta -= MUTEX_STARVING;// 退出饥饿模式
             }
 
             // 饥饿模式下有序排队，不存在竞争
@@ -141,7 +148,7 @@ void rt_mutex_unlock(rt_mutex_t *m) {
     }
 
 
-    if ((new & MUTEX_STARVING) == 0) {
+    if ((new &MUTEX_STARVING) == 0) {
         int64_t old = new;
         if ((old >> MUTEX_WAITER_SHIFT) == 0 || (old & (MUTEX_LOCKED | MUTEX_WOKEN | MUTEX_STARVING)) != 0) {
             return;
@@ -196,16 +203,23 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
     // 未获取到信号，将当前 coroutine 加入到阻塞队列中, 并 yield 当前协程， 等待信号唤醒
     while (true) {
         mutex_lock(&m->waiters.locker);
+
+        atomic_fetch_add(&m->waiter_count, 1);
+        if (can_semacquire(&m->sema)) {
+            atomic_fetch_sub(&m->waiter_count, 1);
+            mutex_unlock(&m->waiters.locker);
+            break;
+        }
+
         if (to_head) {
             rt_linked_push_heap(&m->waiters, co);
         } else {
             rt_linked_push(&m->waiters, co);
         }
         mutex_unlock(&m->waiters.locker);
-
         co_yield_waiting(co->p, co);
 
-        // 竞争信号量, 由于可以存在多个 coroutine lock 并进入到 waiter 状态，所以可能在 m->sema 信号释放的一瞬间, 就被其他 coroutine 竞争了信号，当前 co 需要重新进入阻塞状态
+        // 再次竞争信号量
         if (can_semacquire(&m->sema)) {
             break;
         }
@@ -216,13 +230,14 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     // 添加一个释放信号, 但是没有直接激活, 而是等待 wait_co 唤醒后自己获取信号
     atomic_fetch_add(&m->sema, 1);
 
-    if (atomic_load(&m->waiters.count) == 0) {
+    if (atomic_load(&m->waiter_count) == 0) {
+        // 无锁状态下 sema 被抢占消费
         return;
     }
 
     // > 0 开始加锁进行准确判断
     mutex_lock(&m->waiters.locker);
-    if (atomic_load(&m->waiters.count) == 0) {
+    if (atomic_load(&m->waiter_count) == 0) {
         // consumed by another
         mutex_unlock(&m->waiters.locker);
         return;
@@ -232,6 +247,11 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
 
     // head pop
     coroutine_t *wait_co = rt_linked_pop(&m->waiters);
+    if (wait_co != NULL) {
+        atomic_fetch_sub(&m->waiter_count, 1);
+    }
+    assert(wait_co);
+
     mutex_unlock(&m->waiters.locker);
 
     processor_t *p = wait_co->p;
@@ -239,6 +259,7 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     mutex_lock(&p->co_locker);
     co_set_status(p, wait_co, CO_STATUS_RUNNABLE);
 
+    // handoff 下排队到最前面
     if (handoff) {
         rt_linked_push_heap(&p->runnable_list, wait_co);
     } else {

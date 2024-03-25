@@ -1,0 +1,13 @@
+#include <stdio.h>
+
+#include "tests/test.h"
+
+static void test_basic() {
+    char *raw = exec_output();
+
+    assert_string_equal(raw, "falsefalsetrue\nfalsefalse\ntruefalse\n11falsetrue\n");
+}
+
+int main(void) {
+    TEST_BASIC
+}

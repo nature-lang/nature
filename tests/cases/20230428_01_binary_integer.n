@@ -1,0 +1,24 @@
+i16 s1 = 100
+i8 s2 = -100
+i32 s3 = 24
+
+var a = 1 + s1 as int
+var b = s2 - 1
+print(a, b, '\n') // 101-101
+
+var c = s1 * s2 as i16
+int d = 125 / s3 as int
+print(c, d, '\n') // -100005
+
+var e = s3 % 124
+var f = 124 % s3 as int
+print(e, f, '\n') // 244
+
+bool b0 = 1 < s1 as int
+var b1 = s2 > 2
+bool b2 = 101 <= s1 as int
+bool b3 = s3 >= s1 as i32
+bool b4 = s2 == -100
+bool b5 = s2 != s1 as i8
+print(b0, b1, b2, b3, b4, b5, '\n') // truefalsefalsefalsetruetrue
+print(s1, s2, s3, '\n') // 100-10024

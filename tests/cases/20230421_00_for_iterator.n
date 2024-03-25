@@ -1,0 +1,17 @@
+var list = [1, 1, 2, 3, 5, 8, 13, 21, 34]
+int foo = 0
+int bar = 0
+for k, v in list {
+    foo += k
+    bar += v
+}
+println(foo)
+println(bar)
+
+var mapof = {'a': 1, 'b': 2, 'c': 3}
+var sum = 0
+for k,v in mapof {
+    sum += v
+    println(k)
+}
+println(sum)

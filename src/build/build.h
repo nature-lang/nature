@@ -5,4 +5,6 @@
 
 void build(char *build_entry);
 
+void build_libmain(char *build_entry);
+
 #endif //NATURE_ROOT_H

@@ -1,0 +1,6 @@
+var size = @sizeof(i8)
+println(size, @sizeof(i16), @sizeof(i32), @sizeof(i64), @sizeof(f32), @sizeof(f64))
+
+type double = f64
+var hash = @reflect_hash(double)
+println(hash, @reflect_hash(f64))

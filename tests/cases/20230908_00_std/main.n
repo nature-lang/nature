@@ -1,0 +1,11 @@
+import os
+import path
+import libc_temp
+import dirent_temp
+import strings
+
+os.mkdirs('./foo1/bar2/car3/dog4', 0755)
+
+os.rmdir('./foo1/bar2', true)
+
+println(path.isdir('foo1'), path.isdir('main.n'))

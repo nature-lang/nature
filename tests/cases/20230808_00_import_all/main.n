@@ -1,0 +1,14 @@
+import 'mod.n' as *
+import 'pool.n'
+
+log()
+
+assert(true)
+
+assert(false)
+
+println(foo, bar)
+
+pool.log()
+println(pool.foo, pool.bar)
+

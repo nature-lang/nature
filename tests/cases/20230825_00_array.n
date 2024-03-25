@@ -1,0 +1,71 @@
+// basic
+arr<int,5> a1 = []
+a1[0] = 11
+a1[1] = 12
+
+println(a1[0], a1[1])
+
+var b = a1[0]
+var b1 = a1[5] catch err {
+    println(err.msg)
+}
+println(b, b1, a1[0])
+
+// array copy
+arr<int,5> bar = a1
+bar[0] = 100
+println(bar[0], bar[1], bar[2], a1[0])
+
+// array param
+fn test_array(arr<int,5> a):arr<int,5> {
+    a[0] = 1111
+    a[2] = 3333
+
+    return a
+}
+
+var car = test_array(a1)
+println(a1[0], car[0], car[2])
+
+// list nest array
+[arr<i64,3>] a3 = []
+
+a3.push([1, 2, 3] as arr<i64,3>)
+a3.push([11, 12, 13] as arr<i64,3>)
+
+// access
+println(a3[0][0], a3[0][1], a3[0][2], a3[1][0], a3[1][1], a3[1][2])
+
+var r1 = a3[0][5] catch err {
+    println(err.msg)
+}
+
+// array in struct
+// 0 0 0.000000 0 0 false
+// 789 987 3.141500 456 1 true
+type sub_t = struct {
+    i32 a
+    i64 b
+}
+type person_t = struct {
+    arr<i32,8> foo
+    bool bar
+    sub_t car
+    struct {
+        f64 a
+        f64 b
+    } dog
+    [f32] egg
+}
+
+var p = person_t{}
+println(p.foo[0], p.foo[7], p.dog.a, p.car.a, p.egg.len(), p.bar)
+
+// assign
+p.egg.push(3.1415)
+p.dog.a = 3.1415
+p.car.b = 456
+p.foo[0] = 789
+p.foo[7] = 987
+p.bar = true
+println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len(), p.bar)

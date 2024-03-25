@@ -1,0 +1,16 @@
+import libc_temp
+import syscall
+
+int count = 10
+
+var str = syscall.get_env('REPEAT_COUNT')
+var temp = strtol(str.ref(), 0, 10)
+if temp > 0 {
+    println('read env count success:', temp)
+    count = temp as int
+}
+
+for int i = 0; i < count; i+= 1 {
+    println(i, 'hello world')
+    sleep(1)
+}
