@@ -359,7 +359,8 @@ addr_t page_alloc_find(uint64_t pages_count) {
 
 
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
-    DEBUGF("[runtime.page_alloc_find] will find continuous pages, l1 start=%lu, end=%lu, heap_used=%lu, pages_count=%lu", start, end,
+    DEBUGF("[runtime.page_alloc_find] will find continuous pages, l1 start=%lu, end=%lu, heap_used=%lu, pages_count=%lu",
+           start, end,
            heap_used, pages_count);
 
     if (start == end) {
@@ -683,7 +684,7 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
-HAVE_SPAN:
+    HAVE_SPAN:
     MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
             span->spanclass,
             span->obj_count, span->alloc_count);
@@ -1201,7 +1202,7 @@ void runtime_eval_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
 }
 
@@ -1221,13 +1222,13 @@ void runtime_force_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }
 
-void *runtime_malloc(uint64_t rtype_hash) {
+void *gc_malloc(uint64_t reflect_hash) {
     PRE_RTCALL_HOOK();
-    rtype_t *rtype = rt_find_rtype(rtype_hash);
+    rtype_t *rtype = rt_find_rtype(reflect_hash);
     return rt_clr_malloc(rtype->size, rtype);
 }

@@ -188,7 +188,7 @@ void runtime_eval_gc();
 
 void runtime_force_gc();
 
-void *runtime_malloc(uint64_t rtype_hash);
+void *gc_malloc(uint64_t reflect_hash);
 
 /**
  * 不会进行 gc

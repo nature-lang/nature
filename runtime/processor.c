@@ -14,8 +14,7 @@ mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
 int coroutine_count;              // coroutine 累计数量
 
 int solo_processor_count;// 累计数量
-rt_linked_t global_gc_worklist;
-mutex_t global_gc_locker;// 全局 gc locker
+rt_linked_fixalloc_t global_gc_worklist;
 
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
@@ -49,10 +48,8 @@ __attribute__((optimize(0))) void co_preempt_yield() {
 
     p->status = P_STATUS_PREEMPT;
 
-    mutex_lock(&p->co_locker);
     co->status = CO_STATUS_RUNNABLE;
-    rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->co_locker);
+    rt_linked_fixalloc_push(&p->runnable_list, co);
 
     RDEBUGF("[runtime.co_preempt_yield.thread_locker] co=%p push and update status success", co);
     _co_yield(p, co);
@@ -176,15 +173,13 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
                co);
     }
 
-    // await 回调
+    // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步
     mutex_lock(&co->dead_locker);
     if (co->await_co) {
-        // 同事可以抑制 coroutine 的错误
+        // 唤醒 await_co
         coroutine_t *await_co = co->await_co;
-        mutex_lock(&await_co->p->co_locker);
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
-        rt_linked_push(&await_co->p->runnable_list, await_co);
-        mutex_unlock(&await_co->p->co_locker);
+        rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
     } else {
         if (co->error && co->error->has) {
             coroutine_dump_error(co, co->error);
@@ -358,8 +353,9 @@ static void processor_run(void *raw) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-        STW_WAIT:
-            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw, p->share,
+            STW_WAIT:
+            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                    p->share,
                     p->index);
             p->safe_point = p->need_stw;
 
@@ -386,10 +382,7 @@ static void processor_run(void *raw) {
         int count = 0;
         uint64_t time_start = uv_hrtime();
         while (true) {
-            // TODO coroutine list 之间存在竞态关系, 确实需要一个 sudo co 结构用来管理 coroutine list
-            mutex_lock(&p->co_locker);
-            coroutine_t *co = rt_linked_pop(&p->runnable_list);
-            mutex_unlock(&p->co_locker);
+            coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
             if (!co) {
                 // runnable list 已经处理完成
                 TRACEF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
@@ -403,15 +396,14 @@ static void processor_run(void *raw) {
             count++;
 
             if (p->need_stw > 0) {
-                RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p, status=%d",
+                RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p",
                         p->share,
-                        p->index, co, co->status);
+                        p->index, co);
                 goto STW_WAIT;
             }
 
-            RDEBUGF("[runtime.processor_run] coroutine resume backend, p_index_%d=%d, co=%p, status=%d", p->share,
-                    p->index, co,
-                    co->status);
+            RDEBUGF("[runtime.processor_run] coroutine resume backend, p_index_%d=%d, co=%p", p->share,
+                    p->index, co);
         }
         if (count > 100) {
             DEBUGF("[runtime.processor_run] p_index_%d=%d,  handle coroutine completed, count=%d, used_time=%lu ms",
@@ -421,9 +413,9 @@ static void processor_run(void *raw) {
         // solo processor exit check
         if (!p->share) {
             assert(p->co_list.count == 1);
-            coroutine_t *solo_co = rt_linked_first(&p->co_list)->value;
+            coroutine_t *solo_co = rt_linked_fixalloc_first(&p->co_list)->value;
             assertf(solo_co, "solo_co is null, p_index_%d=%d, co_list linked_node=%p", p->share, p->index,
-                    rt_linked_first(&p->co_list));
+                    rt_linked_fixalloc_first(&p->co_list));
 
             if (solo_co->status == CO_STATUS_DEAD) {
                 RDEBUGF("[runtime.processor_run] solo processor co exit, will exit processor run, p_index=%d, co=%p, status=%d",
@@ -437,7 +429,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-EXIT:
+    EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -457,10 +449,8 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     // - 协程独享线程
     if (co->solo) {
         processor_t *p = processor_new(solo_processor_count++);
-        mutex_lock(&p->co_locker);
-        rt_linked_push(&p->co_list, co);
-        rt_linked_push(&p->runnable_list, co);
-        mutex_unlock(&p->co_locker);
+        rt_linked_fixalloc_push(&p->co_list, co);
+        rt_linked_fixalloc_push(&p->runnable_list, co);
 
         mutex_lock(&solo_processor_locker);
         RT_LIST_PUSH_HEAD(solo_processor_list, p);
@@ -491,10 +481,8 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     DEBUGF("[runtime.rt_coroutine_dispatch] select_p_index_%d=%d will push co=%p", select_p->share, select_p->index,
            co);
 
-    mutex_lock(&select_p->co_locker);
-    rt_linked_push(&select_p->co_list, co);
-    rt_linked_push(&select_p->runnable_list, co);
-    mutex_unlock(&select_p->co_locker);
+    rt_linked_fixalloc_push(&select_p->co_list, co);
+    rt_linked_fixalloc_push(&select_p->runnable_list, co);
 
     DEBUGF("[runtime.rt_coroutine_dispatch] co=%p to p_index_%d=%d, end", co, select_p->share, select_p->index);
 }
@@ -524,8 +512,7 @@ void processor_init() {
     solo_processor_count = 0;
     coroutine_count = 0;
 
-    rt_linked_init(&global_gc_worklist, NULL, NULL);
-    mutex_init(&global_gc_locker, false);
+    rt_linked_fixalloc_init(&global_gc_worklist);
 
     // - 初始化 processor 和 coroutine 分配器
     fixalloc_init(&coroutine_alloc, sizeof(coroutine_t));
@@ -543,7 +530,7 @@ void processor_init() {
         processor_t *p = processor_new(i);
         // 仅 share processor 需要 gc worklist
         p->share = true;
-        rt_linked_init(&p->gc_worklist, NULL, NULL);
+        rt_linked_fixalloc_init(&p->gc_worklist);
         p->gc_work_finished = memory->gc_count;
         share_processor_index[p->index] = p;
 
@@ -681,7 +668,15 @@ void post_rtcall_hook(char *target) {
     processor_set_status(p, P_STATUS_RUNNING);
 }
 
-coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
+/**
+ * 一定是开启了 gc_barrier 才会进行 scan co_list, 如果 rt_clr_malloc 在 gc_barrier 之前调用
+ * 且 co 没有赋值给 co_list, 则 new co 不能正确的被 mark, 会被错误清理, result 同理
+ * @param fn
+ * @param flag
+ * @param result_size
+ * @return
+ */
+coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu) {
     mutex_lock(&cp_alloc_locker);
     coroutine_t *co = fixalloc_alloc(&coroutine_alloc);
     co->id = coroutine_count++;
@@ -697,9 +692,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, int result_size) {
     co->gc_black = 0;
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
-    // TODO 使用 rt_clr_malloc,
-    co->result_size = result_size;
-    co->result = mallocz(result_size);
+    co->future = fu;
     co->next = NULL;
     co->aco.inited = 0;// 标记为为初始化
     co->scan_ret_addr = 0;
@@ -722,15 +715,14 @@ processor_t *processor_new(int index) {
     p->safe_point = 0;
 
     mutex_init(&p->thread_locker, false);
-    mutex_init(&p->co_locker, false);
     p->status = P_STATUS_INIT;
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
     p->co_started_at = 0;
     p->mcache.flush_gen = 0;// 线程维度缓存，避免内存分配锁
-    rt_linked_init(&p->co_list, NULL, NULL);
-    rt_linked_init(&p->runnable_list, NULL, NULL);
+    rt_linked_fixalloc_init(&p->co_list);
+    rt_linked_fixalloc_init(&p->runnable_list);
     p->index = index;
     p->next = NULL;
 
@@ -749,6 +741,16 @@ void processor_set_exit() {
     processor_need_exit = true;
 }
 
+void coroutine_free(coroutine_t *co) {
+    aco_destroy(&co->aco);
+    co->id = 0;
+    co->fn = NULL;
+
+    mutex_lock(&cp_alloc_locker);
+    fixalloc_free(&coroutine_alloc, co);
+    mutex_unlock(&cp_alloc_locker);
+}
+
 /**
  * processor_free 不受 stw 影响，所以获取一下 memory locker 避免 uncache 冲突
  * @param p
@@ -758,8 +760,12 @@ void processor_free(processor_t *p) {
            &p->uv_loop,
            &p->share_stack, p->share_stack.ptr);
 
+    coroutine_t *co = rt_linked_fixalloc_pop(&p->co_list);
+    coroutine_free(co);
+
     aco_share_stack_destroy(&p->share_stack);
-    rt_linked_destroy(&p->co_list);
+    rt_linked_fixalloc_free(&p->co_list);
+    rt_linked_fixalloc_free(&p->runnable_list);
     aco_destroy(&p->main_aco);
 
     // 归还 mcache span
@@ -880,9 +886,7 @@ void wait_all_gc_work_finished() {
 }
 
 void *global_gc_worklist_pop() {
-    mutex_lock(&global_gc_locker);
-    void *value = rt_linked_pop(&global_gc_worklist);
-    mutex_unlock(&global_gc_locker);
+    void *value = rt_linked_fixalloc_pop(&global_gc_worklist);
     return value;
 }
 
@@ -988,17 +992,14 @@ void processor_set_status(processor_t *p, p_status_t status) {
     }
 }
 
-void rt_coroutine_return(void *ptr) {
+void rt_coroutine_return(void *result_ptr) {
     coroutine_t *co = coroutine_get();
-    assert(co->result);
-    memmove(co->result, ptr, co->result_size);
-    DEBUGF("[runtime.rt_coroutine_return] co=%p, result=%p, int_result=%ld, result_size=%ld", co, co->result,
-           *(int64_t *) co->result, co->result_size);
-}
+    assert(co->future);
+    assert(co->future->size > 0);
 
-void *rt_coroutine_result(coroutine_t *co) {
-    DEBUGF("[runtime.rt_coroutine_result] co=%p, result=%p, int_result=%ld", co, co->result, *(int64_t *) co->result);
-    return co->result;
+    memmove(co->future->result, result_ptr, co->future->size);
+    DEBUGF("[runtime.rt_coroutine_return] co=%p, result=%p, int_result=%ld, result_size=%ld", co, co->result,
+           *(int64_t *) co->future->result, co->future->size);
 }
 
 void *rt_coroutine_error(coroutine_t *co) {
@@ -1010,6 +1011,7 @@ void rt_coroutine_await(coroutine_t *target_co) {
     coroutine_t *src_co = coroutine_get();
     if (target_co->status == CO_STATUS_DEAD) {
         mutex_unlock(&target_co->dead_locker);
+
         return;
     }
     target_co->await_co = src_co;
@@ -1021,6 +1023,4 @@ void rt_coroutine_await(coroutine_t *target_co) {
 
     // waiting -> syscall
     co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
-
-    // target_co 错误处理
 }

@@ -1,7 +1,7 @@
 #include "runtime/processor.h"
 
-coroutine_t *rt_coroutine_async(void *fn, int64_t flag, int result_size) {
-    coroutine_t *co = rt_coroutine_new(fn, flag, result_size);
+coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
+    coroutine_t *co = rt_coroutine_new(fn, flag, fu);
     rt_coroutine_dispatch(co);
 
     return co;
@@ -28,16 +28,16 @@ static void uv_on_timer(uv_timer_t *timer) {
     processor_t *p = co->p;
     assert(p);
 
-    TRACEF("[coroutine_sleep.uv_on_timer] will push to runnable_list, p_index_%d=%d, co=%p, status=%d", p->share, p->index, co, co->status);
+    TRACEF("[coroutine_sleep.uv_on_timer] will push to runnable_list, p_index_%d=%d, co=%p, status=%d", p->share,
+           p->index, co, co->status);
 
     // timer 到时间了, push 到尾部等待调度
-    mutex_lock(&p->co_locker);
-    co->status = CO_STATUS_RUNNABLE;
     assert(p->status != P_STATUS_EXIT);
-    rt_linked_push(&p->runnable_list, co);
-    mutex_unlock(&p->co_locker);
+    co->status = CO_STATUS_RUNNABLE;
+    rt_linked_fixalloc_push(&p->runnable_list, co);
 
-    TRACEF("[coroutine_sleep.uv_on_timer] will stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co,
+    TRACEF("[coroutine_sleep.uv_on_timer] will stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer,
+           p->share, p->index, co,
            co->status);
 
     uv_timer_stop(timer);
@@ -45,7 +45,8 @@ static void uv_on_timer(uv_timer_t *timer) {
     // 注册 close 事件而不是瞬时 close!
     uv_close((uv_handle_t *) timer, uv_timer_close_cb);
 
-    TRACEF("[coroutine_sleep.uv_on_timer] success stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer, p->share, p->index, co,
+    TRACEF("[coroutine_sleep.uv_on_timer] success stop and clear timer=%p, p_index_%d=%d, co=%p, status=%d", timer,
+           p->share, p->index, co,
            co->status);
 }
 
@@ -61,12 +62,14 @@ void coroutine_sleep(int64_t ms) {
     // 设定定时器超时时间与回调
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
-    DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co, &p->uv_loop, p->share,
-           p->index, &timer, fetch_addr_value((addr_t) &timer));
+    DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co,
+           &p->uv_loop, p->share,
+           p->index, &timer, fetch_addr_value((addr_t) & timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);
 
-    DEBUGF("[runtime.coroutine_sleep] coroutine sleep resume, co=%p, co_status=%d, uv_loop=%p, p_index_%d=%d, timer=%p", co, co->status,
+    DEBUGF("[runtime.coroutine_sleep] coroutine sleep resume, co=%p, co_status=%d, uv_loop=%p, p_index_%d=%d, timer=%p",
+           co, co->status,
            &p->uv_loop, p->share, p->index, &timer);
 }

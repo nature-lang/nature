@@ -47,8 +47,6 @@ void linked_concat(linked_t *dst, linked_t *src);// src 追加到 dst 中
 
 void linked_remove(linked_t *l, linked_node *node);
 
-void linked_remove_free(linked_t *l, linked_node *node);
-
 void linked_cleanup(linked_t *l);
 
 void linked_free(linked_t *l);

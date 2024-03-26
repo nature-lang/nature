@@ -236,6 +236,13 @@ typedef enum {
 
 typedef struct processor_t processor_t;
 
+// 必须和 nature code 保持一致
+typedef struct future_t {
+    int64_t size;
+    void *result;
+    void *co;
+} n_future_t;
+
 typedef struct coroutine_t {
     int64_t id;
     bool main;// 是否是 main 函数
@@ -246,7 +253,7 @@ typedef struct coroutine_t {
     processor_t *p;// 当前 coroutine 绑定的 p
     //    n_vec_t *args;
     void *result;// coroutine 如果存在返回值，相关的值会放在 result 中
-    int64_t result_size;
+    n_future_t *future;
 
     struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
     mutex_t dead_locker;
@@ -287,19 +294,18 @@ struct processor_t {
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
     mutex_t thread_locker;
-    mutex_t co_locker;
     p_status_t status;
 
     uv_thread_t thread_id; // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;// 当前正在调度的 coroutine
     uint64_t co_started_at;// 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
-    rt_linked_t co_list;// 当前 processor 下的 coroutine 列表
-    rt_linked_t runnable_list;
+    rt_linked_fixalloc_t co_list;// 当前 processor 下的 coroutine 列表
+    rt_linked_fixalloc_t runnable_list;
 
     bool share;// 默认都是共享处理器
 
-    rt_linked_t gc_worklist;  // gc 扫描的 ptr 节点列表
+    rt_linked_fixalloc_t gc_worklist;  // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished;// 当前处理的 GC 轮次，每完成一轮 + 1
 
     struct processor_t *next;// processor 链表支持

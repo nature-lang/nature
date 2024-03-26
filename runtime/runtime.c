@@ -6,12 +6,6 @@
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
 
-fixalloc_t global_nodealloc;
-pthread_mutex_t global_nodealloc_locker;
-
-fixalloc_t mutex_global_nodealloc;
-pthread_mutex_t mutex_global_nodealloc_locker;
-
 // 用于链接链接全局 _main
 extern void _main();
 
@@ -23,13 +17,6 @@ int runtime_main(int argc, char *argv[]) {
 #ifndef NATURE_DEBUG
     log_set_level(LOG_FATAL);
 #endif
-    // - 初始化 runtime 全局链表分配器
-    fixalloc_init(&global_nodealloc, sizeof(rt_linked_node_t));
-    pthread_mutex_init(&global_nodealloc_locker, NULL);
-
-    fixalloc_init(&mutex_global_nodealloc, sizeof(rt_linked_node_t));
-    pthread_mutex_init(&mutex_global_nodealloc_locker, NULL);
-
     // - read arg
     RDEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;
@@ -62,13 +49,6 @@ int runtime_main(int argc, char *argv[]) {
 
 int test_runtime_main(void *main_fn) {
     assert(main_fn);
-
-    // - 初始化 runtime 全局链表分配器
-    fixalloc_init(&global_nodealloc, sizeof(rt_linked_node_t));
-    pthread_mutex_init(&global_nodealloc_locker, NULL);
-
-    fixalloc_init(&mutex_global_nodealloc, sizeof(rt_linked_node_t));
-    pthread_mutex_init(&mutex_global_nodealloc_locker, NULL);
 
     // - heap memory init
     memory_init();

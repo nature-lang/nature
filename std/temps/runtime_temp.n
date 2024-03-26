@@ -26,20 +26,16 @@ fn rt_string_length(cptr s):int
 
 fn rt_string_ref(cptr s):cptr
 
+fn rt_coroutine_new(cptr function, int flag, cptr future):cptr
 
-
-fn rt_coroutine_new(cptr function, int flag, int result_size):cptr
+fn rt_coroutine_async(cptr function, int flag, cptr future):cptr
 
 fn rt_coroutine_dispatch(cptr co)
-
-fn rt_coroutine_async(cptr function, int flag, int result_size):cptr
 
 fn rt_coroutine_yield()
 
 fn rt_coroutine_return(cptr result)
 
 fn rt_coroutine_await(cptr co)
-
-fn rt_coroutine_result(cptr co):cptr
 
 fn rt_coroutine_error(cptr co):nptr<error_t>

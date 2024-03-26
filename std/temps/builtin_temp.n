@@ -30,3 +30,5 @@ fn println(...[any] args)
 fn runtime_force_gc()
 
 fn runtime_malloc_bytes():i64
+
+fn gc_malloc(int reflect_hash):cptr

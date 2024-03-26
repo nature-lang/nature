@@ -19,7 +19,7 @@
 typedef struct {
     int64_t state;
     int64_t sema;
-    rt_linked_t waiters;
+    rt_linked_fixalloc_t waiters; // TODO 没有触发 destroy 的时机, 会造成内存溢出
     int64_t waiter_count;
 } rt_mutex_t;
 
@@ -43,6 +43,6 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff);
 
 void rt_do_spin();
 
-int64_t atomic_add_int64(int64_t* state, int64_t delta) ;
+int64_t atomic_add_int64(int64_t *state, int64_t delta);
 
 #endif//NATURE_RT_MUTEX_H

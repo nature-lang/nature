@@ -26,4 +26,6 @@ void *fixalloc_alloc(fixalloc_t *f);
 
 void fixalloc_free(fixalloc_t *f, void *p);
 
+void fixalloc_destroy(fixalloc_t *f);
+
 #endif// NATURE_FIXALLOC_H

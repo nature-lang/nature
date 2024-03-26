@@ -143,7 +143,7 @@
 
 #define RT_CALL_POST_RTCALL_HOOK "post_rtcall_hook"
 
-#define RT_CALL_RUNTIME_MALLOC "runtime_malloc"
+#define RT_CALL_GC_MALLOC "gc_malloc"
 
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
 

@@ -1,23 +1,29 @@
 import runtime_temp
 
-type coroutine_t<T> = cptr
-
 type future_t<T> = struct{
-    coroutine_t<T> await_co
-    T result
+    i64 size
+    nptr<T> result
+    cptr await_co
 }
 
 type chan_t<T> = struct{
 }
 
 fn co_async<T>(fn() function, int flag):future_t<T> {
-    int result_size = @sizeof(T)
-
-    var await_co = rt_coroutine_async(function as cptr, flag, result_size) as coroutine_t<T>
-
-    return future_t<T>{
-        await_co = await_co
+    var future = future_t<T>{
+        result = null,
+        size = @sizeof(T)
     }
+
+    if future.size > 0 {
+        var hash = @reflect_hash(T)
+        future.result = gc_malloc(hash) as ptr<T>
+    }
+
+    cptr await_co = rt_coroutine_async(function as cptr, flag, future as cptr)
+
+    future.await_co = await_co
+    return future
 }
 
 fn co_return<T>(ptr<T> result) {
@@ -31,9 +37,9 @@ fn future_t<T>.await():T {
     var err = rt_coroutine_error(self.await_co)
     if !(err is null) {
         let err as ptr<error_t>
+
         throw err.msg
     }
 
-    self.result = *(rt_coroutine_result(self.await_co) as ptr<T>)
-    return self.result
+    return *self.result
 }

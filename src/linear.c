@@ -1642,7 +1642,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
     ast_new_expr_t *new_expr = expr.value;
 
     uint64_t rtype_hash = ct_find_rtype_hash(new_expr->type);
-    push_rt_call(m, RT_CALL_RUNTIME_MALLOC, target, 1, int_operand(rtype_hash));
+    push_rt_call(m, RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash));
 
     // 目前只有 struct 可以 new
     assert(new_expr->type.kind == TYPE_STRUCT);
