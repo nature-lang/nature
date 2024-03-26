@@ -82,8 +82,8 @@ void rt_mutex_lock(rt_mutex_t *m) {
         }
 
         if (atomic_compare_exchange_strong(&m->state, &old, new)) {
-            // 在非饥饿模式下尝试抢锁成功
             if ((old & (MUTEX_LOCKED | MUTEX_STARVING)) == 0) {
+                DEBUGF("[rt_mutex_lock] m=%p, state=%lu, quick lock success", m, m->state);
                 return;
             }
 
@@ -123,7 +123,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
             }
 
             // 饥饿模式下有序排队，不存在竞争
-            atomic_fetch_add(&m->state, delta);
+            atomic_add_int64(&m->state, delta);
             return;
         } else {
             // 存在竞争，重新获取并计算状态
@@ -133,7 +133,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
 }
 
 void rt_mutex_unlock(rt_mutex_t *m) {
-    int64_t new = atomic_fetch_add(&m->state, -MUTEX_LOCKED);
+    int64_t new = atomic_add_int64(&m->state, -MUTEX_LOCKED);
     if (new == 0) {
         return;
     }
@@ -193,6 +193,7 @@ void rt_do_spin() {
 }
 
 void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
+    DEBUGF("[rt_mutex_waiter_acquire] m=%p, state=%lu, waiter_count=%lu, to_heap=%d", m, m->state, m->waiter_count, to_head);
     // 直接截获了 release 释放的信号量，不需要进入等待队列，直接返回
     if (can_semacquire(&m->sema)) {
         return;
@@ -202,11 +203,11 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
 
     // 未获取到信号，将当前 coroutine 加入到阻塞队列中, 并 yield 当前协程， 等待信号唤醒
     while (true) {
-        mutex_lock(&m->waiters.locker);
 
-        atomic_fetch_add(&m->waiter_count, 1);
+        mutex_lock(&m->waiters.locker);
+        atomic_add_int64(&m->waiter_count, 1);
         if (can_semacquire(&m->sema)) {
-            atomic_fetch_sub(&m->waiter_count, 1);
+            atomic_add_int64(&m->waiter_count, -1);
             mutex_unlock(&m->waiters.locker);
             break;
         }
@@ -216,7 +217,9 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
         } else {
             rt_linked_push(&m->waiters, co);
         }
+
         mutex_unlock(&m->waiters.locker);
+
         co_yield_waiting(co->p, co);
 
         // 再次竞争信号量
@@ -228,7 +231,7 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
 
 void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     // 添加一个释放信号, 但是没有直接激活, 而是等待 wait_co 唤醒后自己获取信号
-    atomic_fetch_add(&m->sema, 1);
+    atomic_add_int64(&m->sema, 1);
 
     if (atomic_load(&m->waiter_count) == 0) {
         // 无锁状态下 sema 被抢占消费
@@ -237,20 +240,20 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
 
     // > 0 开始加锁进行准确判断
     mutex_lock(&m->waiters.locker);
+
+    // 加锁期间，waiter_count 可能被其他线程消费
     if (atomic_load(&m->waiter_count) == 0) {
         // consumed by another
         mutex_unlock(&m->waiters.locker);
         return;
     }
 
-    assert(m->waiters.count > 0);
+    assert(m->waiter_count == m->waiters.count);
 
     // head pop
     coroutine_t *wait_co = rt_linked_pop(&m->waiters);
-    if (wait_co != NULL) {
-        atomic_fetch_sub(&m->waiter_count, 1);
-    }
     assert(wait_co);
+    atomic_add_int64(&m->waiter_count, -1);
 
     mutex_unlock(&m->waiters.locker);
 
@@ -272,4 +275,21 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     if (handoff && co->p == p) {
         co_yield_runnable(co->p, co);
     }
+}
+
+/**
+ * add int64 必定会更新成功，因为其不停的更新 old 的值并进行更新，而在乎具体的顺序
+ * @param state
+ * @param delta
+ * @return
+ */
+int64_t atomic_add_int64(int64_t *state, int64_t delta) {
+    int64_t old = atomic_load(state);
+    int64_t n = old + delta;
+    while (!atomic_compare_exchange_strong(state, &old, n)) {
+        old = atomic_load(state);
+        n = old + delta;
+    }
+
+    return n;
 }

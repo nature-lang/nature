@@ -4,20 +4,19 @@
 #include "runtime/memory.h"
 #include "runtime/runtime.h"
 
+addr_t rt_fn_main_base;
 
-//addr_t rt_fn_main_base;
+uint64_t rt_symdef_count;
+symdef_t rt_symdef_data;
 
-//uint64_t rt_symdef_count;
-//symdef_t rt_symdef_data;
-//
-//uint64_t rt_fndef_count;
-//fndef_t rt_fndef_data;// 仅需要修复一下 gc_bits 数据即可
-//
-//uint64_t rt_rtype_count;
-//rtype_t rt_rtype_data;
-//
-//char *build_entry = "main.n";
+uint64_t rt_fndef_count;
+fndef_t rt_fndef_data;// 仅需要修复一下 gc_bits 数据即可
 
-//static bool rt_run;
+uint64_t rt_rtype_count;
+rtype_t rt_rtype_data;
+
+void _main() {
+    printf("hello world in _main\n");
+}
 
 #endif//NATURE_TEST_RUNTIME_H

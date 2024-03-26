@@ -75,19 +75,22 @@ static inline void rt_linked_push(rt_linked_t *l, void *value) {
     l->count++;
 }
 
+// 尾部永远指向一个空白节点
 static inline void rt_linked_push_heap(rt_linked_t *l, void *value) {
     assert(l);
     assert(l->nodealloc_locker);
 
     // 创建一个新的 empty 节点
     pthread_mutex_lock(l->nodealloc_locker);
-    rt_linked_node_t *empty = fixalloc_alloc(l->nodealloc);
+    rt_linked_node_t *new_node = fixalloc_alloc(l->nodealloc);
     pthread_mutex_unlock(l->nodealloc_locker);
 
+    new_node->value = value;
+
     // 头部插入
-    empty->succ = l->front;
-    l->front->prev = empty;
-    l->front = empty;
+    new_node->succ = l->front;
+    l->front->prev = new_node;
+    l->front = new_node;
     l->count++;
 }
 

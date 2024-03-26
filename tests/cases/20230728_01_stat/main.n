@@ -1,6 +1,6 @@
 import syscall
 
-var s = syscall.stat('./mock/stat.txt')
+var s = syscall.stat('./asserts/stat.txt')
 println(s.dev)
 println(s.ino)
 println(s.nlink)
@@ -19,7 +19,7 @@ println(s.ctim.sec)
 println(s.ctim.nsec)
 
 
-var fd = syscall.open('./mock/stat.txt', syscall.O_RDONLY, 0666)
+var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
 var s2 = syscall.fstat(fd)
 syscall.close(fd)
 
@@ -41,7 +41,7 @@ println(s2.ctim.sec)
 println(s2.ctim.nsec)
 
 // 不存在的文件
-var s3 = syscall.stat('./mock/nofound.txt') catch err {
+var s3 = syscall.stat('./asserts/nofound.txt') catch err {
     println(err.msg)
 }
 

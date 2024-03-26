@@ -1,21 +1,21 @@
 import syscall
 
-var fd = syscall.open('mock/notfound.txt', syscall.O_RDONLY, 0666) catch err {
-    print('open mock/notfound.txt failed: ', err.msg, '\n')
+var fd = syscall.open('asserts/notfound.txt', syscall.O_RDONLY, 0666) catch err {
+    print('open asserts/notfound.txt failed: ', err.msg, '\n')
     continue -1
 }
 
 if fd != -1 {
-    println('open mock/notfound.txt successful')
+    println('open asserts/notfound.txt successful')
 }
 
-fd = syscall.open('mock/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
-    return print('open mock/open.txt failed: ', err.msg, '\n')
+fd = syscall.open('asserts/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
+    return print('open asserts/open.txt failed: ', err.msg, '\n')
     // fd default is zero
 }
 
 if fd != 0 {
-    println('open mock/open.txt successful')
+    println('open asserts/open.txt successful')
 }
 
 // read buf is [u8]

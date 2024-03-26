@@ -77,7 +77,6 @@ static void test_basic() {
     assert_int_equal(addr, 0xc002000000);
 }
 
-
 int main(void) {
     setup();
     test_basic();

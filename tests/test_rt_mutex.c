@@ -1,44 +1,66 @@
 #include <stdio.h>
 
+#include "runtime/processor.h"
 #include "runtime/rt_mutex.h"
 #include "test_runtime.h"
-
-#define MAIN_NAME test_main
+#include "utils/assertf.h"
 
 rt_mutex_t m;
+int64_t sum = 0;
 
-void *print_hello(void *arg) {
+static void sub_sum_fn() {
+    coroutine_t *co = coroutine_get();
+    for (int i = 0; i < 100; i++) {
+        rt_mutex_lock(&m);
+        sum += 1;
+        rt_mutex_unlock(&m);
+        co_yield_runnable(co->p, co);
+    }
+}
+
+void test_sum() {
+    rt_mutex_init(&m);
+    TDEBUGF("[test_sum] start");
+
+    for (int i = 0; i < 1000; ++i) {
+        coroutine_t *sub_co = rt_coroutine_new((void *) sub_sum_fn, 0, 0);
+        rt_coroutine_dispatch(sub_co);
+    }
+
+    coroutine_sleep(1000);
+    TDEBUGF("[test_sum] sum=%ld", sum);
+    assert(sum == 100000);
+}
+
+
+static void sub_fn() {
+    TDEBUGF("[sub_fn] wait lock")
     rt_mutex_lock(&m);
-    DEBUGF("[print_hello] hello")
-    sleep(2);
-    DEBUGF("[print_hello] will unlock")
+    TDEBUGF("[sub_fn] get lock success, hello world")
+
+    TDEBUGF("[sub_fn] will unlock")
     rt_mutex_unlock(&m);
-    return NULL;
 }
 
-void *print_world(void *arg) {
+void test_basic() {
+    rt_mutex_init(&m);
     rt_mutex_lock(&m);
-    DEBUGF("[print_world] world")
-    sleep(2);
-    DEBUGF("[print_world] will unlock")
-    return NULL;
+
+
+    // 创建 sub_co 同样尝试获取锁获取锁获取锁获取锁
+    coroutine_t *sub_co = rt_coroutine_new((void *) sub_fn, 0, 0);
+    rt_coroutine_dispatch(sub_co);
+
+
+    TDEBUGF("[test_slow] will yield sleep")
+    coroutine_sleep(2000);
+
+    TDEBUGF("[test_slow] sleep come back")
+    rt_mutex_unlock(&m);
+    TDEBUGF("[test_slow] unlock success, and sleep while")
+    coroutine_sleep(200);
 }
-
-static void test_basic() {
-
-    //
-    //    pthread_create(&th1, NULL, print_hello, NULL);
-    //    pthread_create(&th2, NULL, print_world, NULL);
-    //
-    //    pthread_join(th1, NULL);
-    //    pthread_join(th2, NULL);
-}
-
-void user_main() {
-    DEBUGF("hello world, in main co");
-}
-
 
 int main(void) {
-    runtime_main(0, NULL);
+    test_runtime_main(test_sum);
 }

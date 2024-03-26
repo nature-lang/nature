@@ -18,46 +18,53 @@ set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PR
 message("LIBUC_STATIC: ${LIBUC_STATIC}")
 
 
-#add_executable(test_page_alloc test_page_alloc.c ${RUNTIMES} ${UTILS})
-#target_link_libraries(test_page_alloc ${LIBUV_STATIC})
-#add_test(test_page_alloc test_page_alloc)
-#
-#add_executable(test_rt_mutex test_rt_mutex.c ${RUNTIMES} ${UTILS})
-#target_link_libraries(test_rt_mutex ${LIBUV_STATIC})
-#add_test(test_rt_mutex test_rt_mutex)
+add_executable(test_page_alloc test_page_alloc.c ${RUNTIMES} ${UTILS})
+target_link_libraries(test_page_alloc ${LIBUV_STATIC})
+add_test(test_page_alloc test_page_alloc)
 
-# build cases
-# 创建测试临时目录
-#message("will make dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp")
-#file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
-#aux_source_directory(. TEST_SOURCES)
-
-# foreach (TEST_SOURCE ${TEST_SOURCES})
-#     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
-
-#     add_executable(${TEST_NAME} ${TEST_SOURCE} ${SRC} ${CMD} ${UTILS})
-
-#     # 如果 ${CMAKE_CURRENT_SOURCE_DIR}/cases + TEST_NAME 是一个文件夹, 那工作目录应该是 ${CMAKE_CURRENT_SOURCE_DIR}/cases + TEST_NAME
-#     set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases)
-#     set(ENTRY_FILE ${TEST_NAME}.n)
-
-#     # cases 是一个目录
-#     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_NAME})
-#         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_NAME})
-#         set(ENTRY_FILE main.n)
-#     endif ()
-
-#     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
-
-#     set_property(TEST ${TEST_NAME}
-#             PROPERTY
-#             ENVIRONMENT "NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
-
-#     message("register test ${TEST_NAME} file success, cases work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
-# endforeach ()
+add_executable(test_rt_mutex test_rt_mutex.c ${RUNTIMES} ${UTILS})
+target_link_libraries(test_rt_mutex ${LIBUV_STATIC})
+add_test(test_rt_mutex test_rt_mutex)
 
 
-# 多阶段构建 runtime main debug 测试
+# ---------------------------------- cases 测试 ------------------------------------------
+# cases test, 获取 cases 一级目录下的所有文件，排除 mock
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
+message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")
+
+# 读取 ${CMAKE_CURRENT_SOURCE_DIR}/cases 一级目录中的所有文件或者文件夹
+file(GLOB TEST_CASES ${CMAKE_CURRENT_SOURCE_DIR}/cases/*)
+foreach (TEST_CASE ${TEST_CASES})
+    message("[test cases] find test case ${TEST_CASE}")
+
+    # 生成 test_ident, 如果是目录则取最后一级目录，如果是文件，则取最后一次文件，去掉 .n 后缀
+    # 文件示例 /tmp/tmp.wKB2qsXqAh/tests/cases/20230913_00_env_struct.n
+    # 目录示例 /tmp/tmp.wKB2qsXqAh/tests/cases/20240321_01_coroutine_power
+    get_filename_component(TEST_NAME ${TEST_CASE} NAME_WE)
+
+    # 直接生成测试用例可执行文件，由测试用例进行编译和输出测试
+    add_executable(${TEST_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME}.c ${SRC} ${CMD} ${UTILS})
+
+    # 判断 TEST_CASE 是文件夹还是目录，从而生成合适的 WORK_DIR 和 ENTRY_FILE
+    if (IS_DIRECTORY ${TEST_CASE})
+        set(WORK_DIR ${TEST_CASE})
+        set(ENTRY_FILE main.n)
+    else ()
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases)
+        set(ENTRY_FILE ${TEST_NAME}.n)
+    endif ()
+
+    # 生成测试用例
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
+    set_property(TEST ${TEST_NAME}
+            PROPERTY
+            ENVIRONMENT "NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
+
+    message("[test cases] register test ${TEST_NAME} file success, cases work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
+endforeach ()
+
+
+# ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
 if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     set(TEST_IDENT $ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] find RUNTIME_DEBUG_CASE: ${TEST_IDENT}")

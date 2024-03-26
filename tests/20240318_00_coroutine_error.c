@@ -15,9 +15,9 @@ static void test_basic() {
                 "div result 10\n"
                 "coroutine 3 uncaught error: 'divisor cannot be 0' at cases/20240318_00_coroutine_error.n:6:33\n"
                 "stack backtrace:\n"
-                "0:\tmain.div_0\n"
+                "0:\t_main.div_0\n"
                 "\t\tat cases/20240318_00_coroutine_error.n:6:33\n"
-                "1:\tmain.lambda_17\n"
+                "1:\t_main.lambda_17\n"
                 "\t\tat cases/20240318_00_coroutine_error.n:33:12\n";
     assert_string_equal(raw, str);
 }

@@ -386,6 +386,7 @@ static void processor_run(void *raw) {
         int count = 0;
         uint64_t time_start = uv_hrtime();
         while (true) {
+            // TODO coroutine list 之间存在竞态关系, 确实需要一个 sudo co 结构用来管理 coroutine list
             mutex_lock(&p->co_locker);
             coroutine_t *co = rt_linked_pop(&p->runnable_list);
             mutex_unlock(&p->co_locker);

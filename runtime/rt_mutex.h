@@ -43,4 +43,6 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff);
 
 void rt_do_spin();
 
+int64_t atomic_add_int64(int64_t* state, int64_t delta) ;
+
 #endif//NATURE_RT_MUTEX_H

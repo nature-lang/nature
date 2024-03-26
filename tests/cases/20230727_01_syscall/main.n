@@ -1,6 +1,6 @@
 import syscall
 
-var file = 'mock/write.txt'
+var file = 'asserts/write.txt'
 
 var fd = syscall.open(file, syscall.O_CREAT | syscall.O_RDWR, 0666)
 

@@ -1,7 +1,7 @@
 import syscall
 
-string path = './mock/test_mkdir'
-string path2 = './mock/test_rename'
+string path = './asserts/test_mkdir'
+string path2 = './asserts/test_rename'
 
 syscall.mkdir(path, 0755) catch err {
     print('mkdir err: ', err.msg, '\n')
