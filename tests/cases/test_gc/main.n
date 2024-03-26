@@ -1,7 +1,0 @@
-import "test_gc/foo"
-
-int inc(int a) {
-    return a + 1
-}
-
-[int] local_list = [1, 2, 3]

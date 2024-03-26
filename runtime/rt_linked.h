@@ -2,6 +2,7 @@
 #define NATURE_RT_LINKED_H
 
 #include "fixalloc.h"
+#include "utils/mutex.h"
 
 #define RT_LINKED_FOR(_list) for (rt_linked_node_t *_node = _list.front; _node != _list.rear; _node = _node->succ)
 #define RT_LINKED_VALUE() (_node->value)
@@ -9,6 +10,9 @@
 
 extern fixalloc_t global_nodealloc;
 extern pthread_mutex_t global_nodealloc_locker;
+
+extern fixalloc_t mutex_global_nodealloc;
+extern pthread_mutex_t mutex_global_nodealloc_locker;
 
 // 所有的 node 都是通过 fixalloc 分配
 typedef struct rt_linked_node_t {
@@ -49,7 +53,7 @@ static inline void rt_linked_init(rt_linked_t *l, fixalloc_t *nodealloc, pthread
     l->front = empty;
     l->rear = empty;
 
-    mutex_lock(&l->locker);
+    mutex_init(&l->locker, false);
 }
 
 static inline void rt_linked_push(rt_linked_t *l, void *value) {
@@ -68,6 +72,25 @@ static inline void rt_linked_push(rt_linked_t *l, void *value) {
     l->rear->succ = empty;
 
     l->rear = empty;
+    l->count++;
+}
+
+// 尾部永远指向一个空白节点
+static inline void rt_linked_push_heap(rt_linked_t *l, void *value) {
+    assert(l);
+    assert(l->nodealloc_locker);
+
+    // 创建一个新的 empty 节点
+    pthread_mutex_lock(l->nodealloc_locker);
+    rt_linked_node_t *new_node = fixalloc_alloc(l->nodealloc);
+    pthread_mutex_unlock(l->nodealloc_locker);
+
+    new_node->value = value;
+
+    // 头部插入
+    new_node->succ = l->front;
+    l->front->prev = new_node;
+    l->front = new_node;
     l->count++;
 }
 

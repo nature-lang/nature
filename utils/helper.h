@@ -92,7 +92,7 @@
 
 static inline addr_t fetch_addr_value(addr_t addr) {
     // addr 中存储的依旧是 addr，现在需要取出 addr 中存储的值
-    addr_t *p = (addr_t *)addr;
+    addr_t *p = (addr_t *) addr;
     return *p;
 }
 
@@ -114,7 +114,7 @@ static inline uint32_t hash_string(char *str) {
     // if (str == NULL) {
     //     return 0;
     // }
-    return hash_data((uint8_t *)str, strlen(str));
+    return hash_data((uint8_t *) str, strlen(str));
 }
 
 static inline bool memory_empty(uint8_t *base, uint64_t size) {
@@ -127,7 +127,7 @@ static inline bool memory_empty(uint8_t *base, uint64_t size) {
 }
 
 static inline uint16_t read16le(unsigned char *p) {
-    return p[0] | (uint16_t)p[1] << 8;
+    return p[0] | (uint16_t) p[1] << 8;
 }
 
 static inline void write16le(unsigned char *p, uint16_t x) {
@@ -136,7 +136,7 @@ static inline void write16le(unsigned char *p, uint16_t x) {
 }
 
 static inline uint32_t read32le(unsigned char *p) {
-    return read16le(p) | (uint32_t)read16le(p + 2) << 16;
+    return read16le(p) | (uint32_t) read16le(p + 2) << 16;
 }
 
 static inline void write32le(unsigned char *p, uint32_t x) {
@@ -149,7 +149,7 @@ static inline void add32le(unsigned char *p, int32_t x) {
 }
 
 static inline uint64_t read64le(unsigned char *p) {
-    return read32le(p) | (uint64_t)read32le(p + 4) << 32;
+    return read32le(p) | (uint64_t) read32le(p + 4) << 32;
 }
 
 static inline void write64le(unsigned char *p, uint64_t x) {
@@ -260,7 +260,7 @@ static inline char *file_read(char *path) {
     size_t fileSize = ftell(file);
     rewind(file);
 
-    char *buffer = (char *)mallocz(fileSize + 1);
+    char *buffer = (char *) mallocz(fileSize + 1);
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
         exit(74);
@@ -521,7 +521,7 @@ static inline char *homedir() {
 }
 
 static inline char *fullpath(char *rel) {
-    char *path = (char *)mallocz(PATH_MAX * sizeof(char));
+    char *path = (char *) mallocz(PATH_MAX * sizeof(char));
     if (!realpath(rel, path)) {
         return NULL;
     }

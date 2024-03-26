@@ -1,0 +1,29 @@
+import syscall
+
+var fd = syscall.open('asserts/notfound.txt', syscall.O_RDONLY, 0666) catch err {
+    print('open asserts/notfound.txt failed: ', err.msg, '\n')
+    continue -1
+}
+
+if fd != -1 {
+    println('open asserts/notfound.txt successful')
+}
+
+fd = syscall.open('asserts/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
+    return print('open asserts/open.txt failed: ', err.msg, '\n')
+    // fd default is zero
+}
+
+if fd != 0 {
+    println('open asserts/open.txt successful')
+}
+
+// read buf is [u8]
+var buf = vec_new<u8>(20, 0)
+var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
+    return print(err.msg)
+}
+
+print('actual read len: ', len, '\n')
+var str =  buf as string
+print('buf as string: ', str, '\n')

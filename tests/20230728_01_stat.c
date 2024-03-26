@@ -3,13 +3,13 @@
 
 static struct stat *mock_stat() {
     struct stat *buf = mallocz(sizeof(struct stat));
-    int s = stat("./mock/stat.txt", buf);
+    int s = stat("./asserts/stat.txt", buf);
     assertf(s != -1, "stat failed");
     return buf;
 }
 
 static struct stat *mock_fstat() {
-    int fd = open("./mock/stat.txt", O_RDONLY, 0666);
+    int fd = open("./asserts/stat.txt", O_RDONLY, 0666);
     struct stat *buf = mallocz(sizeof(struct stat));
     int s = fstat(fd, buf);
     assertf(s != -1, "stat failed");

@@ -7,8 +7,8 @@ static void test_basic() {
     char *raw = exec_output();
 
     char *str =
-            "open mock/notfound.txt failed: No such file or directory\n"
-            "open mock/open.txt successful\n"
+            "open asserts/notfound.txt failed: No such file or directory\n"
+            "open asserts/open.txt successful\n"
             "actual read len: 20\n"
             "buf as string: hello world\n"
             "nature i\n";

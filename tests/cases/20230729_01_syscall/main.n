@@ -5,7 +5,7 @@ var raw_str = s.ref()
 int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as cptr, raw_str, s.len() as cptr, 0, 0, 0)
 
 // read
-var fd = syscall.open('./mock/stat.txt', syscall.O_RDONLY, 0666)
+var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
 
 var buf = vec_new<u8>(100, 0) // 预先申请好了空间, 便于 syscall 中将相应的值回写
 print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')

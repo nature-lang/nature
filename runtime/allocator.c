@@ -351,7 +351,7 @@ addr_t page_alloc_find(uint64_t pages_count) {
             hint_addr, ARENA_HINT_BASE);
 
     // end 基于 hint_addr 计算 max end
-//     uint64_t end = PAGE_SUMMARY_COUNT_L1;// l1 有 8192 个元素
+    //     uint64_t end = PAGE_SUMMARY_COUNT_L1;// l1 有 8192 个元素
     // 基于 used 大小计算 end 的最大值
     uint64_t end = (heap_used / (32LL * 1024 * 1024 * 1024)) + 1;
     // 第一个 level 需要查找所有的元素
@@ -359,8 +359,8 @@ addr_t page_alloc_find(uint64_t pages_count) {
 
 
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
-    DEBUGF("[runtime.page_alloc_find] will find continuous pages, l1 start=%lu, end=%lu, heap_used=%lu", start, end,
-           heap_used);
+    DEBUGF("[runtime.page_alloc_find] will find continuous pages, l1 start=%lu, end=%lu, heap_used=%lu, pages_count=%lu", start, end,
+           heap_used, pages_count);
 
     if (start == end) {
         return 0;
@@ -375,7 +375,7 @@ addr_t page_alloc_find(uint64_t pages_count) {
         }
 
         DEBUGF("[runtime.page_alloc_find] level=%d, found=%d, start=%lu, end=%lu, start_summary=[%u, %u, %u], end_summary=[%u, %u, %u]",
-                level + 1, found, start, end, summaries[start].start, summaries[start].max, summaries[start].end,
+               level + 1, found, start, end, summaries[start].start, summaries[start].max, summaries[start].end,
                summaries[end].start, summaries[end].max, summaries[end].end);
 
         assert(found && "level zero find, next level must found");
@@ -427,7 +427,7 @@ addr_t page_alloc_find(uint64_t pages_count) {
         // 在跨越多个 chunk 的情况下连续空间一定由 end 标记
         page_summary_t start_summary = l5_summaries[start];
         // summary.end 表示 chunk 尾部可用的空间
-        uint64_t bit_start = CHUNK_BITS_COUNT - start_summary.end; // 512 - start_summary.end
+        uint64_t bit_start = CHUNK_BITS_COUNT - start_summary.end;// 512 - start_summary.end
         DEBUGF("[runtime.page_alloc_find] find addr=%p, start:%lu != end:%lu, start.summary [%d, %d, %d], bit_offset: %lu",
                (void *) find_addr, start, end, start_summary.start, start_summary.max, start_summary.end, bit_start);
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
@@ -438,7 +438,7 @@ addr_t page_alloc_find(uint64_t pages_count) {
     chunks_set(find_addr, pages_count * ALLOC_PAGE_SIZE, 1);
 
     DEBUGF("[runtime.page_alloc_find] find_addr: %p, page_count: %lu, size: %lu", (void *) find_addr, pages_count,
-            pages_count * ALLOC_PAGE_SIZE);
+           pages_count * ALLOC_PAGE_SIZE);
 
     return find_addr;
 }
@@ -683,10 +683,10 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
-    HAVE_SPAN:
-MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
-        span->spanclass,
-        span->obj_count, span->alloc_count);
+HAVE_SPAN:
+    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
+            span->spanclass,
+            span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
@@ -1201,7 +1201,7 @@ void runtime_eval_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-    EXIT:
+EXIT:
     mutex_unlock(&gc_stage_locker);
 }
 
@@ -1221,7 +1221,7 @@ void runtime_force_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-    EXIT:
+EXIT:
     mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }

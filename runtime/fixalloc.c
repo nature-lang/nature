@@ -1,7 +1,3 @@
-//
-// Created by weiwenhao on 2024/1/25.
-//
-
 #include "fixalloc.h"
 
 #include <assert.h>

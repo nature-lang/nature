@@ -76,7 +76,7 @@ static void assembler_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -90,7 +90,7 @@ static void assembler_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -527,4 +527,57 @@ void build(char *build_entry) {
 
     // 链接
     build_linker(modules);
+}
+
+/**
+ * 构建成 libmain.a 文件 
+ */
+void build_libmain(char *build_entry) {
+    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
+
+    // 配置初始化
+    build_init(build_entry);
+
+    // debug
+    config_print();
+
+    // 解析 package_conf
+    toml_table_t *package_conf = NULL;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        package_conf = package_parser(package_file);
+    }
+
+    slice_t *modules = build_modules(package_conf);
+
+    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
+    build_compiler(modules);
+
+    // 汇编
+    build_assembler(modules);
+
+    char *cmd = mallocz(10240 * sizeof(char));
+    strcpy(cmd, "ar -rcs ");
+    char *output = path_join(TEMP_DIR, "libmain.a");
+    strcat(cmd, output);
+
+    for (int i = 0; i < modules->count; ++i) {
+        module_t *m = modules->take[i];
+        char *obj_file = m->object_file;
+
+        // 将每个模块的object文件添加到命令中
+        strcat(cmd, " ");
+        strcat(cmd, obj_file);
+    }
+    strcat(cmd, " ");
+    strcat(cmd, custom_link_object_path());
+
+    system(cmd);
+
+    strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, "libmain.a"));
+
+    remove(BUILD_OUTPUT);
+    copy(BUILD_OUTPUT, output, 0755);
+    log_debug("build temp output--> %s\n", output);
+    log_debug("build output--> %s\n", BUILD_OUTPUT);
 }
