@@ -46,7 +46,7 @@ char **command_argv;
                 *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
                 return;                                                                                                                 \
             default:                                                                                                                    \
-                assert(false && "cannot scanner_number_convert type");                                                                                 \
+                assert(false && "cannot scanner_number_convert type");                                                                  \
                 exit(1);                                                                                                                \
         }                                                                                                                               \
     }
@@ -91,15 +91,15 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     }
 }
 
-n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
+n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
     PRE_RTCALL_HOOK();
-    if (np == 0) {
-        DEBUGF("[null_pointer_assert] null pointer");
-        rt_coroutine_set_error("null pointer assert");
+    if (raw_ptr == 0) {
+        DEBUGF("[raw_ptr_assert] raw pointer");
+        rt_coroutine_set_error("raw_ptr is null, cannot assert");
         return 0;
     }
 
-    return np;
+    return raw_ptr;
 }
 
 /**

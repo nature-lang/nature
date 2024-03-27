@@ -1,0 +1,16 @@
+i32? nat = null
+println(nat)
+nat = 6 as i32
+println(nat)
+
+ptr<i32>? nat_p = null
+println(nat_p)
+
+i32 temp = 233
+nat_p = &temp
+println(nat_p)
+
+i32 load_nat = *(nat_p as ptr<i32>)
+println(load_nat)
+
+// cptr 可以转换成可空指针, cptr 可以转换成 uint/u64/ptr<T>/ptr<T>?/fn/bool?! 这四种类型

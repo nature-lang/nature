@@ -40,7 +40,7 @@ fn listdir(string path):[string] {
     }
 
     for true {
-        nptr<dirent_t> entry = readdir(dir)
+        raw_ptr<dirent_t> entry = readdir(dir)
         if entry is null {
             break
         }

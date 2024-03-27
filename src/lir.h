@@ -109,7 +109,7 @@
  */
 #define RT_CALL_UNION_ASSERT "union_assert"
 
-#define RT_CALL_NULL_POINTER_ASSERT "null_pointer_assert"
+#define RT_CALL_RAW_PTR_ASSERT "raw_ptr_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 

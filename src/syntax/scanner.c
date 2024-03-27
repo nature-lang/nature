@@ -163,6 +163,8 @@ static token_type_t scanner_special_char(module_t *m) {
             return TOKEN_SEMICOLON;
         case ',':
             return TOKEN_COMMA;
+        case '?':
+            return TOKEN_QUESTION;
         case '%':
             return scanner_match(m, '=') ? TOKEN_PERSON_EQUAL : TOKEN_PERSON;
         case '-':

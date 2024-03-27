@@ -163,7 +163,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
             if (is_alloc_stack(param_type)) {
-                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_CPTR));
+                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
             } else {
@@ -388,7 +388,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
         if (is_alloc_stack(arg_type)) {
             assert(arg_operand->assert_type == LIR_OPERAND_VAR);
             // lea addr to temp
-            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_CPTR));
+            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
 
             linked_t *temps = lir_memory_mov(c->module, arg_type, dst_ref, arg_operand);

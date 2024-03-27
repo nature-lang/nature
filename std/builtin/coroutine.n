@@ -2,7 +2,7 @@ import runtime_temp
 
 type future_t<T> = struct{
     i64 size
-    nptr<T> result
+    ptr<T>? result
     cptr await_co
 }
 

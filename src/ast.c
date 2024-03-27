@@ -113,8 +113,8 @@ static type_gen_t *type_gen_copy(module_t *m, type_gen_t *temp) {
     return gen;
 }
 
-static type_pointer_t *type_pointer_copy(module_t *m, type_pointer_t *temp) {
-    type_pointer_t *pointer = COPY_NEW(type_pointer_t, temp);
+static type_ptr_t *type_pointer_copy(module_t *m, type_ptr_t *temp) {
+    type_ptr_t *pointer = COPY_NEW(type_ptr_t, temp);
     pointer->value_type = type_copy(m, temp->value_type);
     return pointer;
 }
@@ -174,7 +174,7 @@ type_t type_copy(module_t *m, type_t temp) {
             type.union_ = type_union_copy(m, temp.union_);
             break;
         }
-        case TYPE_NPTR:
+        case TYPE_RAW_PTR:
         case TYPE_PTR: {
             type.pointer = type_pointer_copy(m, temp.pointer);
             break;

@@ -209,11 +209,10 @@ static slice_t *parser_body(module_t *m) {
  */
 static type_t parser_type(module_t *m) {
     type_t t = parser_single_type(m);
-    if (!parser_is(m, TOKEN_OR)) {
+    if (!parser_is(m, TOKEN_OR) && !parser_is(m, TOKEN_QUESTION)) {
         return t;
     }
 
-    parser_must(m, TOKEN_OR);
     type_t union_type = {
             .status = REDUCTION_STATUS_UNDO,
             .kind = TYPE_UNION,
@@ -222,6 +221,15 @@ static type_t parser_type(module_t *m) {
     union_type.union_->elements = ct_list_new(sizeof(type_t));
     ct_list_push(union_type.union_->elements, &t);
 
+    // T?, T? 后面不在允许直接携带 ｜
+    if (parser_consume(m, TOKEN_QUESTION)) {
+        type_t null_type = type_kind_new(TYPE_NULL);
+        ct_list_push(union_type.union_->elements, &null_type);
+        return union_type;
+    }
+
+    // T|E
+    parser_must(m, TOKEN_OR);
     do {
         t = parser_single_type(m);
         ct_list_push(union_type.union_->elements, &t);
@@ -233,7 +241,6 @@ static type_t parser_type(module_t *m) {
 /**
  * - 兼容 var
  * - 兼容 i8|i16... 这样的形式
- * - cptr/nptr/
  * @return
  */
 static type_t parser_single_type(module_t *m) {
@@ -277,7 +284,7 @@ static type_t parser_single_type(module_t *m) {
     // ptr<type>
     if (parser_consume(m, TOKEN_POINTER)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
-        type_pointer_t *type_pointer = NEW(type_pointer_t);
+        type_ptr_t *type_pointer = NEW(type_ptr_t);
         type_pointer->value_type = parser_type(m);
         parser_must(m, TOKEN_RIGHT_ANGLE);
 
@@ -633,7 +640,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator = token_to_ast_op[operator_token->type];
+    binary_expr->operator= token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -740,7 +747,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-    RET:
+RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -804,7 +811,7 @@ static ast_expr_t parser_unary(module_t *m) {
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {// !true
-        unary_expr->operator = AST_OP_NOT;
+        unary_expr->operator= AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {// -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
@@ -827,13 +834,13 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator = AST_OP_NEG;
+        unary_expr->operator= AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {// ~0b2
-        unary_expr->operator = AST_OP_BNOT;
+        unary_expr->operator= AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {// &a
-        unary_expr->operator = AST_OP_LA;
+        unary_expr->operator= AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {// *a
-        unary_expr->operator = AST_OP_IA;
+        unary_expr->operator= AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1374,7 +1381,7 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator = token_to_ast_op[t->type];
+    binary_expr->operator= token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -2346,7 +2353,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator = AST_OP_LA;
+    unary->operator= AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 

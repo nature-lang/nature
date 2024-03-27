@@ -322,7 +322,7 @@ static void analyzer_type(module_t *m, type_t *type) {
     // type foo = int
     // 'foo' is type_alias
     // alias 可能是一些特殊符号，首先检测是否已经定义，如果没有预定义，则使用特殊符号的含义
-    // 比如 cptr/nptr/ptr
+    // 比如 void_ptr/raw_ptr/ptr
     if (type->kind == TYPE_ALIAS) {
         // import 全局模式 alias 处理, 例如 type a = package.foo, 对 package.foo 必定是其他 module 的 type alias 定义的
         type_alias_t *type_alias = type->alias;
@@ -411,8 +411,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_PTR || type->kind == TYPE_NPTR) {
-        type_pointer_t *pointer = type->pointer;
+    if (type->kind == TYPE_PTR || type->kind == TYPE_RAW_PTR) {
+        type_ptr_t *pointer = type->pointer;
         analyzer_type(m, &pointer->value_type);
         return;
     }
@@ -456,15 +456,15 @@ static void analyzer_type(module_t *m, type_t *type) {
 
 /**
  * TODO 当前版本暂时用不到了
- * ptr/cptr/nptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
+ * ptr/void_ptr/raw_ptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     assert(type->kind == TYPE_ALIAS);
     type_alias_t *type_alias = type->alias;
     assert(type->alias->import_as == NULL);
 
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_CPTR])) {
-        type->kind = TYPE_CPTR;
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_VOID_PTR])) {
+        type->kind = TYPE_VOID_PTR;
         type->value = NULL;
 
         // cptr 不能有参数
@@ -489,17 +489,17 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         return true;
     }
 
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_NPTR])) {
-        type->kind = TYPE_NPTR;
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_RAW_PTR])) {
+        type->kind = TYPE_RAW_PTR;
 
-        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "nptr<...> must contains arg type");
+        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "raw_ptr<...> must contains arg type");
 
         type_t *arg_type = ct_list_value(type_alias->args, 0);
         analyzer_type(m, arg_type);
 
-        type_null_pointer_t *nptr = NEW(type_null_pointer_t);
-        nptr->value_type = *arg_type;
-        type->value = nptr;
+        type_raw_ptr_t *raw_ptr = NEW(type_raw_ptr_t);
+        raw_ptr->value_type = *arg_type;
+        type->value = raw_ptr;
 
         return true;
     }
@@ -512,9 +512,9 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type_t *arg_type = ct_list_value(type_alias->args, 0);
         analyzer_type(m, arg_type);
 
-        type_pointer_t *nptr = NEW(type_pointer_t);
-        nptr->value_type = *arg_type;
-        type->value = nptr;
+        type_ptr_t *ptr = NEW(type_ptr_t);
+        ptr->value_type = *arg_type;
+        type->value = ptr;
 
         return true;
     }

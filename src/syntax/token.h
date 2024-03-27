@@ -27,6 +27,7 @@ typedef enum {
     TOKEN_SLASH,    // /
     TOKEN_STAR,     // * STAR
     TOKEN_PERSON,   // %
+    TOKEN_QUESTION, // ?
 
     // ONE OR TWO CHARACTER TOKENS.
     TOKEN_NOT,// !
@@ -94,7 +95,6 @@ typedef enum {
 
     // KEYWORDS.
     TOKEN_POINTER,// ptr
-                  //    TOKEN_CPTR, // cptr
     TOKEN_TRUE,
     TOKEN_FALSE,
     TOKEN_TYPE,
@@ -150,6 +150,7 @@ static string token_str[] = {
         [TOKEN_SEMICOLON] = ";",
         [TOKEN_SLASH] = "/",
         [TOKEN_STAR] = "*",
+        [TOKEN_QUESTION] = "?",
         [TOKEN_NOT] = "!",
         [TOKEN_PERSON] = "%",
         [TOKEN_NOT_EQUAL] = "!=",

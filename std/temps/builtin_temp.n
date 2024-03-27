@@ -1,8 +1,6 @@
 // type ptr<t> = *t
 
-// type cptr = uint
-
-// type nptr<t> = *t|null
+// type uint_ptr = uint
 
 // type any = ...|...
 

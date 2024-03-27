@@ -48,7 +48,7 @@ static void print_arg(n_union_t *arg) {
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
-    if (arg->rtype->kind == TYPE_CPTR) {
+    if (arg->rtype->kind == TYPE_VOID_PTR) {
         int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;

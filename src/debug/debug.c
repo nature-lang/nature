@@ -48,7 +48,8 @@ string token_type_to_str[] = {[TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
                               [TOKEN_COLON] = "TOKEN_COLON",
                               [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
                               [TOKEN_SLASH] = "TOKEN_SLASH",
-                              [TOKEN_STAR] = "TOKEN_STAR",// * STAR
+                              [TOKEN_STAR] = "TOKEN_STAR",        // * STAR
+                              [TOKEN_QUESTION] = "TOKEN_QUESTION",// ?
                               [TOKEN_EOF] = "TOKEN_EOF",
                               [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
 

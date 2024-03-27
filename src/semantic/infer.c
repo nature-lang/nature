@@ -132,9 +132,8 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    // nptr<t> 可以匹配 null 和 ptr<t>
-    // nptr is ptr<...>|null so can access null and ptr
-    if (dst.kind == TYPE_NPTR) {
+    // raw_ptr<t> 可以匹配 null 和 ptr<t> 这种类型的赋值
+    if (dst.kind == TYPE_RAW_PTR) {
         if (src.kind == TYPE_NULL) {
             return true;
         }
@@ -379,14 +378,14 @@ static bool can_assign_to_union(type_t t) {
 static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
     INFER_ASSERTF(expr->assert_type == AST_EXPR_LITERAL, "integer casting only support literal");
     type_kind target_kind = target_type.kind;
-    if (target_kind == TYPE_CPTR) {
+    if (target_kind == TYPE_VOID_PTR) {
         target_kind = TYPE_UINT;
     }
 
     ast_literal_t *literal = expr->value;
 
     INFER_ASSERTF(is_integer(literal->kind), "type inconsistency, expect %s, actual: %s", type_format(target_type),
-                     type_kind_str[literal->kind]);
+                  type_kind_str[literal->kind]);
 
     int64_t i = atoll(literal->value);
 
@@ -672,17 +671,19 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
         // target_type 必须包含再 union 中
         INFER_ASSERTF(union_type_contains(as_expr->src.type, target_type), "type = %s not contains in union type",
-                         type_format(target_type));
+                      type_format(target_type));
         return target_type;
     }
 
-    if (as_expr->src.type.kind == TYPE_NPTR) {
+    if (as_expr->src.type.kind == TYPE_RAW_PTR) {
         // 只能 as 为 ptr<t>
-        INFER_ASSERTF(target_type.kind == TYPE_PTR || target_type.kind == TYPE_CPTR,
-                         "nullable pointer only support as ptr<type> or cptr");
+        INFER_ASSERTF(target_type.kind == TYPE_PTR || target_type.kind == TYPE_VOID_PTR,
+                      "%s can only as ptr<%s> or void_ptr", type_format(as_expr->src.type),
+                      type_format(as_expr->src.type.pointer->value_type));
+
         if (target_type.kind == TYPE_PTR) {
             INFER_ASSERTF(type_compare(target_type.pointer->value_type, as_expr->src.type.pointer->value_type, NULL),
-                             "pointer value not equal");
+                          "%s cannot as %s", type_format(as_expr->src.type), type_format(as_expr->target_type));
         }
 
         return target_type;
@@ -699,12 +700,11 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     }
 
     // 除了 float 以外所有类型都可以转换成 cptr
-    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_CPTR) {
+    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_VOID_PTR) {
         return target_type;
     }
 
-    // 同理 cptr 可以转换除了出了 float 以外的任意类型
-    if (as_expr->src.type.kind == TYPE_CPTR && !is_float(target_type.kind)) {
+    if (as_expr->src.type.kind == TYPE_VOID_PTR && !is_float(target_type.kind)) {
         return target_type;
     }
 
@@ -831,7 +831,8 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_NPTR, "only any/union/nptr<t> type can use 'is' keyword");
+    INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_RAW_PTR, "%s can use 'is'", type_format(t));
+
     return type_kind_new(TYPE_BOOL);
 }
 
@@ -881,13 +882,18 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     // &var
     if (expr->operator== AST_OP_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                         "cannot take the address of an literal or call");
+                      "cannot load address of an literal or call");
+
+        INFER_ASSERTF(type.kind != TYPE_UNION, "cannot load address of an union type");
+
+
         return type_ptrof(type);
     }
 
     // *var
     if (expr->operator== AST_OP_IA) {
-        INFER_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type");
+        INFER_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type '%s'", type_format(type));
+
         return type.pointer->value_type;
     }
 
@@ -1391,8 +1397,8 @@ static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_STRING_REF);
         infer_left_expr(m, &call->left);
-        call->return_type = type_kind_new(TYPE_CPTR);
-        return type_kind_new(TYPE_CPTR);
+        call->return_type = type_kind_new(TYPE_VOID_PTR);
+        return type_kind_new(TYPE_VOID_PTR);
     }
 
     INFER_ASSERTF(false, "string no fn property '%s'", s->key);
@@ -1481,9 +1487,9 @@ static type_t infer_vec_select_call(module_t *m, ast_call_t *call) {
 
         call->left = *ast_ident_expr(call->left.line, call->left.column, RT_CALL_VEC_REF);
         infer_left_expr(m, &call->left);
-        call->return_type = type_kind_new(TYPE_CPTR);
+        call->return_type = type_kind_new(TYPE_VOID_PTR);
 
-        return type_kind_new(TYPE_CPTR);
+        return type_kind_new(TYPE_VOID_PTR);
     }
 
     INFER_ASSERTF(false, "vec no fn property '%s'", s->key);
@@ -1903,7 +1909,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 infer_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = infer_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING,
-                     "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
+                  "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
 
     rewrite_var_decl(m, &stmt->first);
 
@@ -2327,7 +2333,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     // - 对一些特殊类型进行预处理再进入 type_compare
     // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
     // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
-    if ((is_integer(target_type.kind) || target_type.kind == TYPE_CPTR) && expr->assert_type == AST_EXPR_LITERAL) {
+    if ((is_integer(target_type.kind) || target_type.kind == TYPE_VOID_PTR) && expr->assert_type == AST_EXPR_LITERAL) {
         literal_integer_casting(m, expr, target_type);
     }
 
@@ -2402,8 +2408,8 @@ static type_t reduction_struct(module_t *m, type_t t) {
 }
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
-    if (t.kind == TYPE_PTR || t.kind == TYPE_NPTR) {
-        type_pointer_t *type_pointer = t.pointer;
+    if (t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR) {
+        type_ptr_t *type_pointer = t.pointer;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         t.impl_ident = type_pointer->value_type.impl_ident;
         t.impl_args = type_pointer->value_type.impl_args;
@@ -2432,7 +2438,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
 
         INFER_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING || t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
-                         "map key only support number/string");
+                      "map key only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_MAP];
         t.impl_args = ct_list_new(sizeof(type_t));
@@ -2445,7 +2451,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         INFER_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING || t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
-                         "set element only support number/string");
+                      "set element only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_SET];
         t.impl_args = ct_list_new(sizeof(type_t));

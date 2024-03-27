@@ -38,4 +38,4 @@ fn rt_coroutine_return(cptr result)
 
 fn rt_coroutine_await(cptr co)
 
-fn rt_coroutine_error(cptr co):nptr<error_t>
+fn rt_coroutine_error(cptr co):raw_ptr<error_t>
