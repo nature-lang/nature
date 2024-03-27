@@ -7,11 +7,9 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "null\n"
-                "6\n"
-                "null\n"
-                "raw_nat is not null\n"
-                "233\n";
+    char *str = "hello world 2024\n"
+                "use time 2\n";
+
     assert_string_equal(raw, str);
 }
 

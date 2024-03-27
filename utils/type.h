@@ -148,7 +148,7 @@ static string type_kind_str[] = {
         [TYPE_ALL_T] = "all_t",
         [TYPE_PTR] = "ptr",      // ptr<type>
         [TYPE_RAW_PTR] = "raw_ptr", // raw_ptr<type>
-        [TYPE_VOID_PTR] = "void_ptr",// void_ptr
+        [TYPE_VOID_PTR] = "cptr",// void_ptr // TODO 重写为 void_ptr
         [TYPE_NULL] = "null",
 };
 
@@ -158,7 +158,7 @@ typedef struct {
     uint64_t index;   // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint64_t size;    // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap;  // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
-                      // pointer 数据
+    // pointer 数据
     uint64_t hash;    // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr;// 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind;   // 类型的种类
@@ -256,7 +256,8 @@ struct type_vec_t {
     type_t element_type;
 };
 
-struct type_coroutine_t {};
+struct type_coroutine_t {
+};
 
 // ptr<value_type>
 struct type_ptr_t {
@@ -275,7 +276,8 @@ struct type_ptr_t {
  * 为什么要注释掉 data? 这仅仅是类型，不保存数据
  * 并且也不知道数据是如何如何存储在内存中
  */
-struct type_string_t {};
+struct type_string_t {
+};
 
 // type foo<formal> = fn(formal, int):formal
 struct type_param_t {
@@ -582,7 +584,8 @@ static inline bool is_float(type_kind kind) {
 }
 
 static inline bool is_integer(type_kind kind) {
-    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 || kind == TYPE_UINT ||
+    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 ||
+           kind == TYPE_UINT ||
            kind == TYPE_UINT8 || kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
 }
 
@@ -597,6 +600,7 @@ static inline bool can_type_casting(type_kind kind) {
 static inline bool is_alloc_stack(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
+
 static inline bool is_gc_alloc(type_t t) {
     return t.kind == TYPE_PTR ||
            t.kind == TYPE_RAW_PTR ||
@@ -626,12 +630,14 @@ static inline bool is_zero_type(type_t t) {
  * @return
  */
 static inline bool is_origin_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_VOID || t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_VOID ||
+           t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING || t.kind == TYPE_VOID || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 
 static inline bool is_clv_zero_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_NULL ||
+           t.kind == TYPE_BOOL ||
            t.kind == TYPE_VOID;
 }
 
@@ -640,7 +646,8 @@ static inline bool is_struct_ptr(type_t t) {
 }
 
 static inline bool is_reduction_type(type_t t) {
-    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR || t.kind == TYPE_TUPLE ||
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR ||
+           t.kind == TYPE_TUPLE ||
            t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR;
 }
 

@@ -266,8 +266,8 @@ static void build_assembler(slice_t *modules) {
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数
-            symbol_t *s = symbol_table_get_noref(c->symbol_name);
-            if (s->ref_count == 0 && !str_equal(c->symbol_name, FN_MAIN_NAME)) {
+            symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
+            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_NAME)) {
                 continue;
             }
 

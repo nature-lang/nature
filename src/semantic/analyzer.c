@@ -132,7 +132,8 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
         }
 
         // 基于 import->package_conf 和 dir 定位到具体的 temp 文件
-        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir, import->ast_package);
+        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir,
+                                                         import->ast_package);
 
         assertf(file_exists(import->full_path), "templates path '%s' notfound", import->full_path);
     }
@@ -753,7 +754,13 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         fndef->is_generics = true;
     }
 
+    if (fndef->is_tpl) {
+        assert(fndef->body == NULL);
+        ANALYZER_ASSERTF(fndef->impl_type.kind == 0, "tpl fn cannot have impl type");
+    }
+
     analyzer_type(m, &fndef->return_type);
+
     analyzer_begin_scope(m);
 
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
@@ -761,7 +768,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     if (fndef->impl_type.kind > 0) {
         // 更新 alias
         if (fndef->impl_type.kind == TYPE_ALIAS) {
-            char *unique_alias_ident = analyzer_resolve_type_alias(m, m->analyzer_current, fndef->impl_type.impl_ident);
+            char *unique_alias_ident = analyzer_resolve_type_alias(m, NULL, fndef->impl_type.impl_ident);
             ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.impl_ident);
             fndef->impl_type.impl_ident = unique_alias_ident;
             fndef->impl_type.alias->ident = unique_alias_ident;
@@ -799,9 +806,11 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         param->ident = param_local->unique_ident;
     }
 
-    analyzer_body(m, fndef->body);
+    if (fndef->body) {
+        analyzer_body(m, fndef->body);
+    }
+
     analyzer_end_scope(m);
-    m->analyzer_current = m->analyzer_current->parent;
 }
 
 static void analyzer_catch(module_t *m, ast_catch_t *catch_expr) {
@@ -886,20 +895,22 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    if (m->analyzer_global) {
-        slice_push(m->analyzer_global->local_children, fndef);
-        fndef->global_parent = m->analyzer_global;
-        fndef->is_local = true;
-    } else {
-        // TODO 定义在 struct 里面的全局函数？暂时取消了, 不然搞得太乱。
-        assert(m->analyzer_current == NULL);
-        fndef->is_local = false;
-    }
+    assert(m->analyzer_global);
+    slice_push(m->analyzer_global->local_children, fndef);
+    fndef->global_parent = m->analyzer_global;
+    fndef->is_local = true;
 
     // 闭包函数不能是类型扩展, 泛型
     if (fndef->impl_type.kind > 0 || fndef->generics_params) {
-        ANALYZER_ASSERTF(false, "closure function cannot be generics or impl type alias");
+        ANALYZER_ASSERTF(false, "closure fn cannot be generics or impl type alias");
     }
+
+    // 闭包函数不能有 macro ident
+    if (fndef->linkid) {
+        ANALYZER_ASSERTF(false, "closure fn cannot have @linkid");
+    }
+
+    ANALYZER_ASSERTF(!fndef->is_tpl, "closure fn cannot be tpl");
 
     // 更新 m->analyzer_current
     analyzer_current_init(m, fndef);
@@ -1617,7 +1628,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
+            assign->left = (ast_expr_t) {
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1688,7 +1699,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
+        call->left = (ast_expr_t) {
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident),// module.init
                 .line = 1,

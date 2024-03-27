@@ -133,7 +133,7 @@ static int sort_sections(elf_context *ctx) {
             // 此处用来标志开启了新的 segment
             flags |= 1 << 8;
         } /* start new header when flags changed or relro */
-          // log_debug("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
+        // log_debug("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
 
         s->phdr_flags = flags;
     }
@@ -428,7 +428,7 @@ void elf_load_object_file(elf_context *ctx, int fd, uint64_t file_offset) {
         global_section->sh_addralign = shdr->sh_addralign;
         global_section->sh_entsize = shdr->sh_entsize;
         local_sections[sh_index].is_new = true;
-    FOUND:
+        FOUND:
         // 在ctx 中找到了同名 section 但是段类型不相同
         assertf(shdr->sh_type == global_section->sh_type, "[elf_load_object_file] sh %s code invalid", shdr_name);
 
@@ -580,7 +580,8 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
         }
         exist_sym = &((Elf64_Sym *) s->data)[sym_index];
 
-        if (exist_sym->st_value == sym->st_value && exist_sym->st_size == sym->st_size && exist_sym->st_info == sym->st_info &&
+        if (exist_sym->st_value == sym->st_value && exist_sym->st_size == sym->st_size &&
+            exist_sym->st_info == sym->st_info &&
             exist_sym->st_other == sym->st_other && exist_sym->st_shndx == sym->st_shndx) {
             return sym_index;
         }
@@ -636,14 +637,14 @@ uint64_t elf_set_sym(elf_context *ctx, Elf64_Sym *sym, char *name) {
         goto DEF;
     }
 
-PATCH:
+    PATCH:
     exist_sym->st_info = ELF64_ST_INFO(sym_bind, sym_type);
     exist_sym->st_shndx = sym->st_shndx;
     exist_sym->st_value = sym->st_value;
     exist_sym->st_size = sym->st_size;
     return sym_index;
 
-DEF:
+    DEF:
     sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, sym, name);
     return sym_index;
 }
@@ -750,7 +751,7 @@ void elf_build_got_entries(elf_context *ctx, uint64_t got_sym_index) {
 
     // 一次遍历(基于 R_JMP_SLOT 构建 plt 段)
     int pass = 0;
-REDO:
+    REDO:
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *s = ctx->sections->take[sh_index];
         // 仅需要符号表重定位表
@@ -844,7 +845,8 @@ REDO:
     }
 }
 
-Elf64_Rela *elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
+Elf64_Rela *
+elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
     Elf64_Sym sym = {
             .st_shndx = 0,
             .st_size = 0,
@@ -869,8 +871,10 @@ Elf64_Rela *elf_put_rel_data(elf_context *ctx, section_t *apply_section, uint64_
  * @param addend
  * @return
  */
-Elf64_Rela *elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section, uint64_t offset, int type, int sym_index,
-                             int64_t addend) {
+Elf64_Rela *
+elf_put_relocate(elf_context *ctx, section_t *sym_section, section_t *apply_section, uint64_t offset, int type,
+                 int sym_index,
+                 int64_t addend) {
     char buf[1024];
     section_t *rel_section = apply_section->relocate;
     if (!rel_section) {
@@ -917,7 +921,7 @@ void elf_relocate_symbols(elf_context *ctx, section_t *sym_section) {
             /* add section base */
             sym->st_value += SEC_TACK(sh_index)->sh_addr;
         }
-    FOUND:;
+        FOUND:;
     }
 }
 
@@ -1245,7 +1249,7 @@ void elf_load_archive(elf_context *ctx, int fd) {
             elf_load_object_file(ctx, fd, offset);
             ++bound;
 
-        CONTINUE:
+            CONTINUE:
             i++;
             sym_name += strlen(sym_name) + 1;
         }
@@ -1378,7 +1382,7 @@ uint64_t collect_fndef_list(elf_context *ctx) {
         size_with_bits += sizeof(fndef_t);
         size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 
-        strcpy(f->name, c->symbol_name);
+        strcpy(f->name, c->linkident);
         strcpy(f->rel_path, c->fndef->rel_path);
         f->line = c->fndef->line;
         f->column = c->fndef->column;
@@ -1394,18 +1398,20 @@ uint64_t collect_fndef_list(elf_context *ctx) {
             assert(stack_slot < 0);
             stack_slot = var_stack_slot(c, var) * -1;
 
-            log_debug("[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                      fn->symbol_name, var->ident, type_format(var->type), type_sizeof(var->type), type_is_ptr(var->type),
-                      (stack_slot / POINTER_SIZE) - 1, stack_slot);
+            log_debug(
+                    "[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type), type_is_ptr(var->type),
+                    (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
         log_debug(
                 "[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
                 "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, f->stack_size / POINTER_SIZE,
+                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
+                f->stack_size / POINTER_SIZE,
                 bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
-        elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, fn->symbol_name, STT_FUNC);
+        elf_put_rel_data(ctx, ctx->data_fndef_section, rel_offset, c->linkident, STT_FUNC);
 
         rel_offset += sizeof(fndef_t);
     }

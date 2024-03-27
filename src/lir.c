@@ -5,8 +5,13 @@
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
     closure_t *c = NEW(closure_t);
-    c->symbol_name = fndef->symbol_name;
-    c->closure_name = fndef->closure_name;
+
+    if (fndef->linkid) {
+        c->linkident = fndef->linkid;
+    } else {
+        c->linkident = fndef->symbol_name;
+    }
+
     c->operations = linked_new();
     c->text_count = 0;
     c->asm_operations = slice_new();

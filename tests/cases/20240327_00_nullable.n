@@ -7,10 +7,15 @@ ptr<i32>? nat_p = null
 println(nat_p)
 
 i32 temp = 233
-nat_p = &temp
-println(nat_p)
+
+raw_ptr<i32> raw_nat = &temp
+if raw_nat is null {
+    println('raw_nat is null')
+} else {
+    println('raw_nat is not null')
+}
+
+nat_p = raw_nat as ptr<i32>
 
 i32 load_nat = *(nat_p as ptr<i32>)
 println(load_nat)
-
-// cptr 可以转换成可空指针, cptr 可以转换成 uint/u64/ptr<T>/ptr<T>?/fn/bool?! 这四种类型

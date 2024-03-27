@@ -251,7 +251,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
             return;
         }
     }
-    assertf(false, "closure=%s cannot find insert id=%d position", c->symbol_name, insert_id);
+    assertf(false, "closure=%s cannot find insert id=%d position", c->fndef->symbol_name, insert_id);
 }
 
 static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {

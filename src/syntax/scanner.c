@@ -8,7 +8,9 @@
 #include "utils/autobuf.h"
 
 static char *scanner_ident_advance(module_t *m);
+
 static token_type_t scanner_ident(char *word, int length);
+
 static bool scanner_skip_space(module_t *m);
 
 static char *scanner_gen_word(module_t *m) {
@@ -228,6 +230,7 @@ static token_type_t scanner_special_char(module_t *m) {
             return 0;
     }
 }
+
 static void scanner_cursor_init(module_t *m) {
     m->s_cursor.source = m->source;
     m->s_cursor.current = m->source;
@@ -285,7 +288,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
                 case '\"':
                     break;
                 default:
-                    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "unknown escape char %c", guard);
+                    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "unknown escape char %c",
+                                guard);
             }
         }
 
@@ -304,7 +308,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
     return (char *) buf->data;
 }
 
-static token_type_t scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
+static token_type_t
+scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
     if (rest_start + rest_length == word_length && memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;
     }
@@ -566,7 +571,8 @@ static bool scanner_skip_space(module_t *m) {
                 } else if (m->s_cursor.guard[1] == '*') {
                     while (!scanner_multi_comment_end(m)) {
                         if (scanner_at_eof(m)) {
-                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length, "unterminated comment");
+                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length,
+                                        "unterminated comment");
                         }
                         scanner_guard_advance(m);
                     }

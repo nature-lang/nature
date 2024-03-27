@@ -719,6 +719,7 @@ list_t *ast_fn_formals_copy(module_t *m, list_t *temp_formals) {
 ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, temp);
     fndef->symbol_name = temp->symbol_name;
+    fndef->linkid = temp->linkid;
     fndef->closure_name = temp->closure_name;
     fndef->return_type = type_copy(m, temp->return_type);
     fndef->params = ast_fn_formals_copy(m, temp->params);
@@ -728,7 +729,9 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->rel_path = temp->rel_path;
     fndef->column = temp->column;
     fndef->line = temp->line;
-    fndef->body = ast_body_copy(m, temp->body);
+    if (temp->body) {
+        fndef->body = ast_body_copy(m, temp->body);
+    }
     fndef->is_generics = false;
     fndef->global_parent = NULL;
     if (!fndef->is_local) {

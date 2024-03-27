@@ -16,7 +16,7 @@ fn vec_new<T>(int len, int cap):vec<T> {
 }
 
 fn vec<T>.push(T v) {
-    ptr<T> ref = &v
+    raw_ptr<T> ref = &v
     rt_vec_push(self as cptr, ref as cptr)
 }
 

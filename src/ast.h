@@ -527,9 +527,6 @@ struct ast_fndef_t {
     slice_t *body;// ast_stmt* 函数体
     void *closure;// closure 数据冗余
 
-    bool is_co_async;// coroutine closure fn, default is false
-
-
     // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
     //    slice_t *generics_assigns;// value 是一个 table，保存了具体的 param 对应的 arg 参数
     // 泛型 tpl 函数使用，记录当前 tpl 已经特化了的参数
@@ -571,7 +568,15 @@ struct ast_fndef_t {
     // analyzer 时赋值
     bool is_local;   // 是否是全局函数
     bool is_tpl;     // 是否是 tpl 函数
+
+    // tpl 专属, 自定义 调用当前函数实际上会被 linkto
+    // 如果是 builtin 中的 tpl, 并且没有 linkto 参数，则什么也不用做
+    char *linkid;
+
     bool is_generics;// 是否是泛型
+
+    bool is_co_async;// coroutine closure fn, default is false
+    bool is_private;
 
     // catch err { continue 12 }
     ct_stack_t *continue_target_types;
@@ -585,7 +590,9 @@ struct ast_fndef_t {
 };
 
 ast_ident *ast_new_ident(char *literal);
+
 ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+
 ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
@@ -630,7 +637,7 @@ static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) 
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator= unary_op;
+    expr->operator = unary_op;
 
     result->line = target->line;
     result->column = target->column;
@@ -665,12 +672,14 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
  * @return
  */
 static inline bool is_integer_operator(ast_expr_op_t op) {
-    return op == AST_OP_REM || op == AST_OP_LSHIFT || op == AST_OP_RSHIFT || op == AST_OP_AND || op == AST_OP_OR || op == AST_OP_XOR ||
+    return op == AST_OP_REM || op == AST_OP_LSHIFT || op == AST_OP_RSHIFT || op == AST_OP_AND || op == AST_OP_OR ||
+           op == AST_OP_XOR ||
            op == AST_OP_BNOT;
 }
 
 static inline bool can_assign(ast_type_t t) {
-    if (t == AST_EXPR_IDENT || t == AST_EXPR_ACCESS || t == AST_EXPR_SELECT || t == AST_EXPR_MAP_ACCESS || t == AST_EXPR_VEC_ACCESS ||
+    if (t == AST_EXPR_IDENT || t == AST_EXPR_ACCESS || t == AST_EXPR_SELECT || t == AST_EXPR_MAP_ACCESS ||
+        t == AST_EXPR_VEC_ACCESS ||
         t == AST_EXPR_ENV_ACCESS || t == AST_EXPR_STRUCT_SELECT) {
         return true;
     }
@@ -680,9 +689,11 @@ static inline bool can_assign(ast_type_t t) {
 static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
     fndef->is_co_async = false;
+    fndef->is_private = false;
     fndef->module = m;
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;
+    fndef->linkid = NULL;
     fndef->closure_name = NULL;
     fndef->line = line;
     fndef->column = column;

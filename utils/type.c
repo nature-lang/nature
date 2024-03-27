@@ -204,10 +204,10 @@ static rtype_t rtype_union(type_union_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_UNION));
 
     rtype_t rtype = {.size = POINTER_SIZE * 2,// element_rtype + value(并不知道 value 的类型)
-                     .hash = hash,
-                     .kind = TYPE_UNION,
-                     .last_ptr = POINTER_SIZE,
-                     .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
+            .hash = hash,
+            .kind = TYPE_UNION,
+            .last_ptr = POINTER_SIZE,
+            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
 
     bitmap_set(rtype.gc_bits, 0);
 
@@ -504,7 +504,7 @@ type_t type_ptrof(type_t t) {
     result.origin_type_kind = 0;
     result.line = t.line;
     result.column = t.column;
-    result.in_heap = kind_in_heap(t.kind);
+    result.in_heap = false;
     result.impl_ident = t.impl_ident;
     result.impl_args = t.impl_args;
     return result;
@@ -517,6 +517,13 @@ type_t type_raw_ptrof(type_t t) {
     result.kind = TYPE_RAW_PTR;
     result.pointer = NEW(type_ptr_t);
     result.pointer->value_type = t;
+    result.origin_ident = NULL;
+    result.origin_type_kind = 0;
+    result.line = t.line;
+    result.column = t.column;
+    result.in_heap = false;
+    result.impl_ident = t.impl_ident;
+    result.impl_args = t.impl_args;
     return result;
 }
 
@@ -566,7 +573,8 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_union(t.union_);
             break;
         default:
-            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID || t.kind == TYPE_VOID_PTR) {
+            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
+                t.kind == TYPE_VOID_PTR) {
                 rtype = rtype_base(t.kind);
             }
     }

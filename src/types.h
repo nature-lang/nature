@@ -85,7 +85,7 @@ typedef struct {
     int line;  // 当前所在代码行，用于代码报错提示
     int column;// 当前 scan 所在 column
 
-    char space_prev;
+    char space_prev; // 进入空行之前上一个字符
     char space_next;
 } scanner_cursor_t;
 
@@ -245,7 +245,7 @@ typedef struct {
     bool end;
     bool index_map[INT8_MAX];// 默认都是 false
     int8_t index;            // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
-                             // innermost(最深的) loop
+    // innermost(最深的) loop
     uint8_t depth;           // block 的嵌套级别,数字越高嵌套的越深
 } loop_t;
 
@@ -270,7 +270,7 @@ typedef struct basic_block_t {
     slice_t *def;
     slice_t *live_out;
     slice_t *live_in;// ssa 阶段计算的精确 live in
-                     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
+    // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
     slice_t *live;   // reg alloc 阶段计算
     // employer
     slice_t *domers;                // 当前块被哪些基本块管辖
@@ -346,7 +346,7 @@ typedef enum {
     LIR_OPERAND_PARAMS,
     LIR_OPERAND_ARGS,
     LIR_OPERAND_SYMBOL_LABEL,// 指令里面都有 label 指令了，operand 其实只需要 symbol 就行了，没必要多余的 label
-                             // 误导把？
+    // 误导把？
     LIR_OPERAND_IMM,
     LIR_OPERAND_INDIRECT_ADDR,
     LIR_OPERAND_VARS,        // 与 pyi_body, formals 一样都是 slice_t + lir_var
@@ -458,8 +458,7 @@ typedef struct closure_t {
     int interval_count;     // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
-    char *symbol_name;
-    char *closure_name;
+    char *linkident; // link symbol name
     char *end_label;  // 函数的结束地址 label
     char *error_label;// 遇到表达式错误时需要调整到的目标 label
     char *catch_error_label;

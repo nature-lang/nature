@@ -18,7 +18,7 @@ type libc_tm_t = struct {
 }
 
 // 标准库函数, 返回值是静态值，不用处理 gc 但是线程不安全
-fn localtime(ptr<i64> timestamp):ptr<libc_tm_t>
+fn localtime(raw_ptr<i64> timestamp):ptr<libc_tm_t>
 
 // 将 time_info_t 转换为时间戳
 fn mktime(ptr<libc_tm_t> time_info):i64
@@ -27,7 +27,7 @@ fn mktime(ptr<libc_tm_t> time_info):i64
 fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
 
 // 通过空值 options 实现阻塞和非阻塞模式
-fn waitpid(int pid, ptr<int> status, int options):int
+fn waitpid(int pid, raw_ptr<int> status, int options):int
 
 // --- signal 相关 <sys/signalfd.h> 和 <signal.h>
 type sigset_t = struct {
