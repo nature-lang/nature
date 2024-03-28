@@ -495,7 +495,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     // 自动解构
     if (is_struct_ptr(struct_access->instance.type)) {
-        type_struct = struct_access->instance.type.pointer->value_type;
+        type_struct = struct_access->instance.type.ptr->value_type;
     } else {
         type_struct = struct_access->instance.type;
     }
@@ -1522,7 +1522,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     lir_operand_t *struct_target = linear_expr(m, ast->instance, NULL);
     type_t type_struct = ast->instance.type;
     if (is_struct_ptr(type_struct)) {
-        type_struct = type_struct.pointer->value_type;
+        type_struct = type_struct.ptr->value_type;
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -1837,24 +1837,24 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    // anybody to cptr
+    // anybody to void_ptr
     if (as_expr->target_type.kind == TYPE_VOID_PTR) {
         // 如果类型长度匹配直接进行 mov 即可
         if (type_sizeof(as_expr->src.type) < POINTER_SIZE) {
-            push_rt_call(m, RT_CALL_CPTR_CASTING, target, 1, input);
+            push_rt_call(m, RT_CALL_void_ptr_CASTING, target, 1, input);
         } else {
             OP_PUSH(lir_op_move(target, input));
         }
         return target;
     }
 
-    // cptr to anybody without float
+    // void_ptr to anybody without float
     if (as_expr->src.type.kind == TYPE_VOID_PTR) {
-        assertf(as_expr->src.type.kind != TYPE_FLOAT64, "cptr cannot casting to float");
-        assertf(as_expr->src.type.kind != TYPE_FLOAT32, "cptr cannot casting to float");
+        assertf(as_expr->src.type.kind != TYPE_FLOAT64, "void_ptr cannot casting to float");
+        assertf(as_expr->src.type.kind != TYPE_FLOAT32, "void_ptr cannot casting to float");
 
         if (type_sizeof(as_expr->target_type) < POINTER_SIZE) {
-            push_rt_call(m, RT_CALL_CASTING_TO_CPTR, target, 1, input);
+            push_rt_call(m, RT_CALL_CASTING_TO_void_ptr, target, 1, input);
         } else {
             OP_PUSH(lir_op_move(target, input));
         }
@@ -2117,7 +2117,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         lir_operand_t *stack_value = linear_expr(m, *item, NULL);
         lir_operand_t *stack_addr_ref;
         if (is_alloc_stack(item->type)) {
-            // 直接传递 stack_value 即可(类型需要是 cptr)
+            // 直接传递 stack_value 即可(类型需要是 void_ptr)
             stack_addr_ref = temp_var_operand_without_stack(m, type_kind_new(TYPE_VOID_PTR));
             OP_PUSH(lir_op_move(stack_addr_ref, stack_value));
         } else {

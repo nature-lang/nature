@@ -204,10 +204,10 @@ static rtype_t rtype_union(type_union_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_UNION));
 
     rtype_t rtype = {.size = POINTER_SIZE * 2,// element_rtype + value(并不知道 value 的类型)
-            .hash = hash,
-            .kind = TYPE_UNION,
-            .last_ptr = POINTER_SIZE,
-            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
+                     .hash = hash,
+                     .kind = TYPE_UNION,
+                     .last_ptr = POINTER_SIZE,
+                     .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
 
     bitmap_set(rtype.gc_bits, 0);
 
@@ -412,6 +412,8 @@ uint8_t type_kind_sizeof(type_kind t) {
     assert(t > 0);
 
     switch (t) {
+        case TYPE_VOID:// 泛型可能会产生 void
+            return 0;
         case TYPE_BOOL:
         case TYPE_INT8:
         case TYPE_UINT8:
@@ -427,11 +429,6 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_UINT64:
         case TYPE_FLOAT64:
             return QWORD;
-            // case TYPE_CPTR:
-            // case TYPE_INT:
-            // case TYPE_UINT:
-            // case TYPE_FLOAT:
-            //     return POINTER_SIZE; // 固定大小
         default:
             return POINTER_SIZE;
     }
@@ -498,8 +495,8 @@ type_t type_ptrof(type_t t) {
     result.status = t.status;
 
     result.kind = TYPE_PTR;
-    result.pointer = NEW(type_ptr_t);
-    result.pointer->value_type = t;
+    result.ptr = NEW(type_ptr_t);
+    result.ptr->value_type = t;
     result.origin_ident = NULL;
     result.origin_type_kind = 0;
     result.line = t.line;
@@ -515,8 +512,8 @@ type_t type_raw_ptrof(type_t t) {
     result.status = t.status;
 
     result.kind = TYPE_RAW_PTR;
-    result.pointer = NEW(type_ptr_t);
-    result.pointer->value_type = t;
+    result.ptr = NEW(type_ptr_t);
+    result.ptr->value_type = t;
     result.origin_ident = NULL;
     result.origin_type_kind = 0;
     result.line = t.line;
@@ -543,10 +540,10 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_string();
             break;
         case TYPE_PTR:
-            rtype = rtype_pointer(t.pointer);
+            rtype = rtype_pointer(t.ptr);
             break;
         case TYPE_RAW_PTR:
-            rtype = rtype_raw_ptr(t.pointer);
+            rtype = rtype_raw_ptr(t.ptr);
             break;
         case TYPE_VEC:
             rtype = rtype_vec(t.vec);
@@ -787,11 +784,11 @@ char *_type_format(type_t t) {
     }
 
     if (t.kind == TYPE_PTR) {
-        return dsprintf("ptr<%s>", type_format(t.pointer->value_type));
+        return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
     }
 
     if (t.kind == TYPE_RAW_PTR) {
-        return dsprintf("raw_ptr<%s>", type_format(t.pointer->value_type));
+        return dsprintf("raw_ptr<%s>", type_format(t.ptr->value_type));
     }
 
     if (t.kind == TYPE_UNION && t.union_->any) {
@@ -806,9 +803,19 @@ char *_type_format(type_t t) {
  * @return
  */
 char *type_format(type_t t) {
-    if (t.origin_ident == NULL) {
+    char *ident = t.origin_ident;
+    if (ident == NULL) {
+        ident = t.impl_ident;
+    }
+
+    if (ident == NULL) {
         return _type_format(t);
     }
 
-    return dsprintf("%s(%s)", t.origin_ident, _type_format(t));
+    if (t.kind == TYPE_PARAM) {
+        return t.param->ident;
+    }
+
+
+    return dsprintf("%s(%s)", ident, _type_format(t));
 }

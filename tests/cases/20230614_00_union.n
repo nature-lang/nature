@@ -49,4 +49,4 @@ raw_ptr<int> a1 = null
 int b1 = 12
 a1 = &b1
 var d1 = a1 as ptr<int>
-println(d1 as cptr == &b1 as cptr)
+println(d1 as void_ptr == &b1 as void_ptr)

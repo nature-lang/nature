@@ -46,7 +46,7 @@ fn listdir(string path):[string] {
         }
 
         let entry as ptr<dirent_t>
-        var name = libc_string_new(entry.name as cptr)
+        var name = libc_string_new(entry.name as void_ptr)
         if name == '.' || name == '..' {
             continue
         }

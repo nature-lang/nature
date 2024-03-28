@@ -39,9 +39,9 @@ n_errort co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_cptr_t cptr_casting(value_casting v);
+n_void_ptr_t void_ptr_casting(value_casting v);
 
-value_casting casting_to_cptr(void *ptr);
+value_casting casting_to_void_ptr(void *ptr);
 
 n_vec_t *std_args();
 

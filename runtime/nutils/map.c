@@ -92,7 +92,7 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_inde
  * @param key_ref
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
-n_cptr_t rt_map_access(n_map_t *m, void *key_ref) {
+n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
     PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
@@ -126,10 +126,10 @@ n_cptr_t rt_map_access(n_map_t *m, void *key_ref) {
            value_size);
 
     void *src = m->value_data + value_size * data_index;// 单位字节
-    return (n_cptr_t) src;
+    return (n_void_ptr_t) src;
 }
 
-n_cptr_t rt_map_assign(n_map_t *m, void *key_ref) {
+n_void_ptr_t rt_map_assign(n_map_t *m, void *key_ref) {
     PRE_RTCALL_HOOK();
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
@@ -168,7 +168,7 @@ n_cptr_t rt_map_assign(n_map_t *m, void *key_ref) {
 
     // push to key list and value list
     memmove(m->key_data + key_size * data_index, key_ref, key_size);
-    return (n_cptr_t) (m->value_data + value_size * data_index);
+    return (n_void_ptr_t) (m->value_data + value_size * data_index);
 }
 
 /**

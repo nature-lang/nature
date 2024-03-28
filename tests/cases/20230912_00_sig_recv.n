@@ -25,7 +25,7 @@ if sigfd == -1 {
 var sig_info = signalfd_siginfo_t{}
 
 for int i = 0; i < 100; i+=1 {
-    var len = syscall.read(sigfd as int, sig_info as cptr, sizeof(signalfd_siginfo_t)) catch err {
+    var len = syscall.read(sigfd as int, sig_info as void_ptr, sizeof(signalfd_siginfo_t)) catch err {
        if err.msg == 'Resource temporarily unavailable' {
            fmt.printf('not received any sig, will sleep\n')
        } else {

@@ -3,6 +3,7 @@
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
     coroutine_t *co = rt_coroutine_new(fn, flag, fu);
     rt_coroutine_dispatch(co);
+    TDEBUGF("[rt_coroutine_async] co=%p, fn=%p, flag=%ld, fu=%p, size=%ld", co, fn, flag, fu, fu->size);
 
     return co;
 }
@@ -64,7 +65,7 @@ void coroutine_sleep(int64_t ms) {
 
     DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co,
            &p->uv_loop, p->share,
-           p->index, &timer, fetch_addr_value((addr_t) & timer));
+           p->index, &timer, fetch_addr_value((addr_t) &timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);

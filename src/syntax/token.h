@@ -84,17 +84,16 @@ typedef enum {
     TOKEN_F64,
     TOKEN_NEW,
 
-    // 内置复合类型, TODO 不占用关键字, 而是使用 type
+    // 内置复合类型
     TOKEN_ARR,
     TOKEN_VEC,
     TOKEN_MAP,
     TOKEN_TUP,
     TOKEN_SET,
-    //    TOKEN_CORO,
     TOKEN_CHAN,
 
     // KEYWORDS.
-    TOKEN_POINTER,// ptr
+    TOKEN_PTR,// ptr
     TOKEN_TRUE,
     TOKEN_FALSE,
     TOKEN_TYPE,
@@ -192,7 +191,7 @@ static string token_str[] = {
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
         [TOKEN_TUP] = "tup",
-        [TOKEN_POINTER] = "ptr",
+        [TOKEN_PTR] = "ptr",
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",

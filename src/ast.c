@@ -176,7 +176,7 @@ type_t type_copy(module_t *m, type_t temp) {
         }
         case TYPE_RAW_PTR:
         case TYPE_PTR: {
-            type.pointer = type_pointer_copy(m, temp.pointer);
+            type.ptr = type_pointer_copy(m, temp.ptr);
             break;
         }
         default:

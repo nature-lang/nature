@@ -139,8 +139,8 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         }
 
         if (src.kind == TYPE_PTR) {
-            type_t dst_ptr = dst.pointer->value_type;
-            type_t src_ptr = src.pointer->value_type;
+            type_t dst_ptr = dst.ptr->value_type;
+            type_t src_ptr = src.ptr->value_type;
             return type_compare(dst_ptr, src_ptr, generics_param_table);
         }
     }
@@ -282,9 +282,9 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    if (dst.kind == TYPE_PTR) {
-        type_t left_pointer = dst.pointer->value_type;
-        type_t right_pointer = src.pointer->value_type;
+    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAW_PTR) {
+        type_t left_pointer = dst.ptr->value_type;
+        type_t right_pointer = src.ptr->value_type;
         return type_compare(left_pointer, right_pointer, generics_param_table);
     }
 
@@ -330,7 +330,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             temp_type = reduction_type(m, temp_type);
 
             bool compare = type_compare(temp_type, arg_type, generics_args_table);
-            INFER_ASSERTF(compare, "cannot infer generics type")
+            INFER_ASSERTF(compare, "cannot infer generics type from %s to %s", type_format(arg_type), type_format(temp_type));
         }
 
         // 下面几个 target 类型对推导没有任何之之实质性帮助，所以直接跳过
@@ -683,10 +683,10 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         // 只能 as 为 ptr<t>
         INFER_ASSERTF(target_type.kind == TYPE_PTR || target_type.kind == TYPE_VOID_PTR,
                       "%s can only as ptr<%s> or void_ptr", type_format(as_expr->src.type),
-                      type_format(as_expr->src.type.pointer->value_type));
+                      type_format(as_expr->src.type.ptr->value_type));
 
         if (target_type.kind == TYPE_PTR) {
-            INFER_ASSERTF(type_compare(target_type.pointer->value_type, as_expr->src.type.pointer->value_type, NULL),
+            INFER_ASSERTF(type_compare(target_type.ptr->value_type, as_expr->src.type.ptr->value_type, NULL),
                           "%s cannot as %s", type_format(as_expr->src.type), type_format(as_expr->target_type));
         }
 
@@ -769,7 +769,7 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
         infer_fn_decl(m, co_expr->closure_fn);
         infer_fn_decl(m, co_expr->closure_fn_void);
 
-        first_arg = (ast_expr_t) {
+        first_arg = (ast_expr_t){
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
@@ -796,18 +796,19 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
     ct_list_push(call_expr->generics_args, &co_expr->return_type);
 
     // 生成 type alias future 然后 reduction
-    type_alias_t *alias_value = type_alias_new(TYPE_FUTURE_T, NULL);
-    alias_value->args = ct_list_new(sizeof(type_t));
-    ct_list_push(alias_value->args, &co_expr->return_type);
-    type_t future_t = type_new(TYPE_ALIAS, alias_value);
-    future_t.status = REDUCTION_STATUS_UNDO;
-    call_expr->return_type = reduction_type(m, future_t);
+    //    type_alias_t *alias_value = type_alias_new(TYPE_FUTURE_T, NULL);
+    //    alias_value->args = ct_list_new(sizeof(type_t));
+    //    ct_list_push(alias_value->args, &co_expr->return_type);
+    //    type_t future_t = type_new(TYPE_ALIAS, alias_value);
+    //    future_t.status = REDUCTION_STATUS_UNDO;
+    //
+    //    call_expr->return_type = reduction_type(m, future_t);
 
     // expr 表达式类型改写
     expr->assert_type = AST_CALL;
     expr->value = call_expr;
 
-    infer_right_expr(m, expr, call_expr->return_type);
+    type_t result_type = infer_right_expr(m, expr, type_kind_new(TYPE_UNKNOWN));
 
     return call_expr->return_type;
 }
@@ -873,19 +874,19 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
-    if (expr->operator == AST_OP_NOT) {
+    if (expr->operator== AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
     type_t type = infer_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
-    if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
+    if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
         INFER_ASSERTF(false, "neg operand must applies to int or float type");
     }
 
     // &var
-    if (expr->operator == AST_OP_LA) {
+    if (expr->operator== AST_OP_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
@@ -896,10 +897,10 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     // *var
-    if (expr->operator == AST_OP_IA) {
+    if (expr->operator== AST_OP_IA) {
         INFER_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type '%s'", type_format(type));
 
-        return type.pointer->value_type;
+        return type.ptr->value_type;
     }
 
     return type;
@@ -1354,7 +1355,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
     if (left_type.kind == TYPE_PTR) {
-        type_t value_type = select->left.type.pointer->value_type;
+        type_t value_type = select->left.type.ptr->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
         }
@@ -1389,7 +1390,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
  * 参考 infer_vec_select_call 方法， 主要是要实现
  *
  * string.len() 返回 int
- * string.c_string() 返回 type cptr = uint(未还原)
+ * string.c_string() 返回 type void_ptr = uint(未还原)
  * @return
  */
 static type_t infer_string_select_call(module_t *m, ast_call_t *call) {
@@ -1620,7 +1621,7 @@ static type_t infer_struct_select_call(module_t *m, ast_call_t *call) {
 
     type_struct_t *type_struct;
     if (is_struct_ptr(s->left.type)) {
-        type_struct = s->left.type.pointer->value_type.struct_;
+        type_struct = s->left.type.ptr->value_type.struct_;
     } else {
         type_struct = s->left.type.struct_;// 已经进行过类型推导了
     }
@@ -2420,7 +2421,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR) {
-        type_ptr_t *type_pointer = t.pointer;
+        type_ptr_t *type_pointer = t.ptr;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         t.impl_ident = type_pointer->value_type.impl_ident;
         t.impl_args = type_pointer->value_type.impl_args;
@@ -2449,7 +2450,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
 
         INFER_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING ||
-                      t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
+                              t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
                       "map key only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_MAP];
@@ -2463,7 +2464,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         INFER_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING ||
-                      t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
+                              t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
                       "set element only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_SET];
@@ -2690,7 +2691,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     INFER_ASSERTF(false, "cannot parser type %s", type_format(t));
-    STATUS_DONE:
+STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_ident;

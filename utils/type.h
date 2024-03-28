@@ -146,18 +146,18 @@ static string type_kind_str[] = {
         [TYPE_FN] = "fn",
         [TYPE_FN_T] = "fn_t",
         [TYPE_ALL_T] = "all_t",
-        [TYPE_PTR] = "ptr",      // ptr<type>
-        [TYPE_RAW_PTR] = "raw_ptr", // raw_ptr<type>
-        [TYPE_VOID_PTR] = "cptr",// void_ptr // TODO 重写为 void_ptr
+        [TYPE_PTR] = "ptr",          // ptr<type>
+        [TYPE_RAW_PTR] = "raw_ptr",  // raw_ptr<type>
+        [TYPE_VOID_PTR] = "void_ptr",// void_ptr
         [TYPE_NULL] = "null",
 };
 
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
-    uint64_t index;   // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
-    uint64_t size;    // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
-    uint8_t in_heap;  // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
+    uint64_t index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
+    uint64_t size;  // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
+    uint8_t in_heap;// 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
     // pointer 数据
     uint64_t hash;    // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr;// 类型对应的堆数据中最后一个包含指针的字节数
@@ -231,7 +231,7 @@ typedef struct type_t {
         type_fn_t *fn;
         type_alias_t *alias;// 这个其实是自定义类型的 ident
         type_param_t *param;// 类型的一种特殊形式，更准确的说法也可以是
-        type_ptr_t *pointer;
+        type_ptr_t *ptr;
         type_union_t *union_;
     };
     type_kind kind;
@@ -371,7 +371,7 @@ typedef uint8_t n_bool_t;
 
 typedef uint8_t n_array_t;// 数组在内存中的变现形式就是 byte 列表
 
-typedef addr_t n_cptr_t;
+typedef addr_t n_void_ptr_t;
 
 typedef int64_t n_int_t;
 typedef int64_t n_int64_t;
@@ -642,7 +642,7 @@ static inline bool is_clv_zero_type(type_t t) {
 }
 
 static inline bool is_struct_ptr(type_t t) {
-    return t.kind == TYPE_PTR && t.pointer->value_type.kind == TYPE_STRUCT;
+    return t.kind == TYPE_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
 }
 
 static inline bool is_reduction_type(type_t t) {

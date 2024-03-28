@@ -4,9 +4,9 @@
 
 // type any = ...|...
 
-// type all_t = cptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+// type all_t = void_ptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
 
-// type fn_t = cptr // 同上
+// type fn_t = void_ptr // 同上
 
 type trace_t = struct {
     string path
@@ -29,4 +29,4 @@ fn runtime_force_gc()
 
 fn runtime_malloc_bytes():i64
 
-fn gc_malloc(int reflect_hash):cptr
+fn gc_malloc(int reflect_hash):void_ptr

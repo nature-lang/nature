@@ -286,14 +286,14 @@ static type_t parser_single_type(module_t *m) {
     }
 
     // ptr<type>
-    if (parser_consume(m, TOKEN_POINTER)) {
+    if (parser_consume(m, TOKEN_PTR)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_ptr_t *type_pointer = NEW(type_ptr_t);
         type_pointer->value_type = parser_type(m);
         parser_must(m, TOKEN_RIGHT_ANGLE);
 
         result.kind = TYPE_PTR;
-        result.pointer = type_pointer;
+        result.ptr = type_pointer;
         return result;
     }
 
@@ -644,7 +644,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator = token_to_ast_op[operator_token->type];
+    binary_expr->operator= token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -660,7 +660,7 @@ static bool is_typical_type_arg_expr(module_t *m) {
     }
 
     // ptr v
-    if (parser_is(m, TOKEN_POINTER)) {
+    if (parser_is(m, TOKEN_PTR)) {
         return true;
     }
 
@@ -751,7 +751,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-    RET:
+RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -815,7 +815,7 @@ static ast_expr_t parser_unary(module_t *m) {
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {// !true
-        unary_expr->operator = AST_OP_NOT;
+        unary_expr->operator= AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {// -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
@@ -838,13 +838,13 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator = AST_OP_NEG;
+        unary_expr->operator= AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {// ~0b2
-        unary_expr->operator = AST_OP_BNOT;
+        unary_expr->operator= AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {// &a
-        unary_expr->operator = AST_OP_LA;
+        unary_expr->operator= AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {// *a
-        unary_expr->operator = AST_OP_IA;
+        unary_expr->operator= AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1240,7 +1240,7 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_POINTER)) {
+    if (parser_is(m, TOKEN_PTR)) {
         return true;
     }
 
@@ -1385,7 +1385,7 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator = token_to_ast_op[t->type];
+    binary_expr->operator= token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -2354,7 +2354,7 @@ static ast_expr_t parser_macro_type_eq(module_t *m) {
 }
 
 static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
-    ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+    ast_fndef_t *fndef = ast_fndef_new(m, call_expr->line, call_expr->column);
     fndef->is_co_async = true;
     fndef->symbol_name = NULL;
     fndef->fn_name = NULL;
@@ -2379,7 +2379,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator = AST_OP_LA;
+    unary->operator= AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 
@@ -2397,7 +2397,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
 }
 
 static ast_fndef_t *coroutine_fn_void_closure(module_t *m, ast_expr_t *call_expr) {
-    ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+    ast_fndef_t *fndef = ast_fndef_new(m, call_expr->line, call_expr->column);
     fndef->is_co_async = true;
     fndef->symbol_name = NULL;
     fndef->fn_name = NULL;

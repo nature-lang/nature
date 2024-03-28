@@ -234,7 +234,7 @@ n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b) {
     return merged;
 }
 
-n_cptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
+n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     PRE_RTCALL_HOOK();
 
     TRACEF("[rt_vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
@@ -250,10 +250,10 @@ n_cptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     uint64_t offset = element_size * index;// (size unit byte) * index
 
     DEBUGF("[rt_vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
-    return (n_cptr_t) l->data + offset;
+    return (n_void_ptr_t) l->data + offset;
 }
 
-n_cptr_t rt_vec_iterator(n_vec_t *l) {
+n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
     PRE_RTCALL_HOOK();
 
     if (l->length == l->capacity) {
@@ -264,7 +264,7 @@ n_cptr_t rt_vec_iterator(n_vec_t *l) {
 
     DEBUGF("[rt_vec_iterator] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_reflect_hash, index);
 
-    n_cptr_t addr = rt_vec_element_addr(l, index);
+    n_void_ptr_t addr = rt_vec_element_addr(l, index);
     DEBUGF("[rt_vec_iterator] addr=%lx", addr);
     return addr;
 }

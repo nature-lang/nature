@@ -340,9 +340,9 @@ static void analyzer_type(module_t *m, type_t *type) {
         } else {
             // local ident 或者当前 module 下的全局 ident, import as * 中的全局 ident
             char *unique_alias_ident = analyzer_resolve_type_alias(m, m->analyzer_current, type_alias->ident);
+
+            // 在没有找到类型的 alias 前提下, 判断是否是内置特殊类型, 这样可以不占用关键字
             if (!unique_alias_ident) {
-                // TODO 可以取消特殊类型了
-                // 在类型为定义的前提下， 判断是否是特殊类型，如果是的话直接进行 type 类型改写
                 if (analyzer_special_type_rewrite(m, type)) {
                     return;
                 }
@@ -351,9 +351,6 @@ static void analyzer_type(module_t *m, type_t *type) {
             }
             type_alias->ident = unique_alias_ident;
         }
-
-        // TODO 统一在 infer 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
-        //        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -413,7 +410,7 @@ static void analyzer_type(module_t *m, type_t *type) {
     }
 
     if (type->kind == TYPE_PTR || type->kind == TYPE_RAW_PTR) {
-        type_ptr_t *pointer = type->pointer;
+        type_ptr_t *pointer = type->ptr;
         analyzer_type(m, &pointer->value_type);
         return;
     }
@@ -464,12 +461,12 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     type_alias_t *type_alias = type->alias;
     assert(type->alias->import_as == NULL);
 
+    // void ptr
     if (str_equal(type_alias->ident, type_kind_str[TYPE_VOID_PTR])) {
         type->kind = TYPE_VOID_PTR;
         type->value = NULL;
 
-        // cptr 不能有参数
-        ANALYZER_ASSERTF(type_alias->args == NULL, "cptr cannot contains arg");
+        ANALYZER_ASSERTF(type_alias->args == NULL, "void_ptr cannot contains arg");
 
         return true;
     }
@@ -1628,7 +1625,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t) {
+            assign->left = (ast_expr_t){
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1699,7 +1696,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t) {
+        call->left = (ast_expr_t){
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident),// module.init
                 .line = 1,

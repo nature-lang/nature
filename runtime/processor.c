@@ -353,7 +353,7 @@ static void processor_run(void *raw) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-            STW_WAIT:
+        STW_WAIT:
             RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
                     p->share,
                     p->index);
@@ -429,7 +429,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-    EXIT:
+EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -994,6 +994,8 @@ void processor_set_status(processor_t *p, p_status_t status) {
 
 void rt_coroutine_return(void *result_ptr) {
     coroutine_t *co = coroutine_get();
+    TDEBUGF("[runtime.rt_coroutine_return] co=%p, fu=%p, size=%ld", co, co->future, co->future->size);
+
     assert(co->future);
     assert(co->future->size > 0);
 

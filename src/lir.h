@@ -91,8 +91,8 @@
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
-#define RT_CALL_CPTR_CASTING "cptr_casting"
-#define RT_CALL_CASTING_TO_CPTR "casting_to_cptr"
+#define RT_CALL_void_ptr_CASTING "void_ptr_casting"
+#define RT_CALL_CASTING_TO_void_ptr "casting_to_void_ptr"
 
 /**
  * 将 single 类型转换为 union 类型

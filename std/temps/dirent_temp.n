@@ -1,4 +1,4 @@
-type dir_t = cptr
+type dir_t = void_ptr
 
 type dirent_t = struct {
     u64 ino
@@ -8,7 +8,7 @@ type dirent_t = struct {
     arr<u8,256> name
 }
 
-fn opendir(cptr str):dir_t
+fn opendir(void_ptr str):dir_t
 
 fn readdir(dir_t d):raw_ptr<dirent_t>
 

@@ -545,28 +545,28 @@ int SOCK_RDM = 0x4
 int SOCK_SEQPACKET = 0x5
 int SOCK_STREAM = 0x1
 
-fn call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int {
+fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int {
     return syscall_call6(number, a1, a2, a3, a4, a5, a6)
 }
 
 fn open(string filename, int flags, u32 perm):int {
-    return call6(SYS_OPEN, filename.ref(), flags as cptr, perm as cptr, 0, 0, 0)
+    return call6(SYS_OPEN, filename.ref(), flags as void_ptr, perm as void_ptr, 0, 0, 0)
 }
 
-fn read(int fd, cptr buf, int len):int {
-    return call6(SYS_READ, fd as cptr, buf, len as cptr, 0, 0, 0)
+fn read(int fd, void_ptr buf, int len):int {
+    return call6(SYS_READ, fd as void_ptr, buf, len as void_ptr, 0, 0, 0)
 }
 
 fn readlink(string file, [u8] buf):int {
-    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len() as cptr, 0, 0, 0)
+    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len() as void_ptr, 0, 0, 0)
 }
 
-fn write(int fd, cptr buf, int len):int {
-    return call6(SYS_WRITE, fd as cptr, buf, len as cptr, 0, 0, 0)
+fn write(int fd, void_ptr buf, int len):int {
+    return call6(SYS_WRITE, fd as void_ptr, buf, len as void_ptr, 0, 0, 0)
 }
 
 fn close(int fd) {
-    call6(SYS_CLOSE, fd as cptr, 0, 0, 0, 0, 0)
+    call6(SYS_CLOSE, fd as void_ptr, 0, 0, 0, 0, 0)
 }
 
 fn unlink(string path) {
@@ -574,7 +574,7 @@ fn unlink(string path) {
 }
 
 fn seek(int fd, int offset, int whence):int {
-    return call6(SYS_LSEEK, fd as cptr, offset as cptr, whence as cptr, 0, 0, 0)
+    return call6(SYS_LSEEK, fd as void_ptr, offset as void_ptr, whence as void_ptr, 0, 0, 0)
 }
 
 fn fork():int {
@@ -616,8 +616,8 @@ fn stat(string filename):stat_t {
         ino = 24
     }
 
-    // as cptr 等同于 c 中的 *stat_t
-    call6(SYS_STAT, filename.ref(), st as cptr, 0, 0, 0, 0)
+    // as void_ptr 等同于 c 中的 *stat_t
+    call6(SYS_STAT, filename.ref(), st as void_ptr, 0, 0, 0, 0)
 
     return st
 }
@@ -626,13 +626,13 @@ fn fstat(int fd):stat_t {
     var st = stat_t{}
 
     // call6 的错误处理在 runtime 中已经做过了k
-    call6(SYS_FSTAT, fd as cptr, st as cptr, 0, 0, 0, 0)
+    call6(SYS_FSTAT, fd as void_ptr, st as void_ptr, 0, 0, 0, 0)
 
     return st
 }
 
 fn mkdir(string path, u32 mode) {
-    call6(SYS_MKDIR, path.ref(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_MKDIR, path.ref(), mode as void_ptr, 0, 0, 0, 0)
 }
 
 fn rmdir(string path) {
@@ -644,7 +644,7 @@ fn rename(string oldpath, string newpath) {
 }
 
 fn exit(int status) {
-    call6(SYS_EXIT, status as cptr, 0, 0, 0, 0, 0)
+    call6(SYS_EXIT, status as void_ptr, 0, 0, 0, 0, 0)
 }
 
 fn getpid():int {
@@ -657,7 +657,7 @@ fn getppid():int {
 
 fn getcwd():string {
     var buf = vec_new<u8>(1024, 0) // 1024 是 path max
-    var len = call6(SYS_GETCWD, buf.ref(), buf.len() as cptr, 0, 0, 0, 0)
+    var len = call6(SYS_GETCWD, buf.ref(), buf.len() as void_ptr, 0, 0, 0, 0)
 
     buf = buf.slice(0, len - 1) // -1 is remove '\0'
 
@@ -665,7 +665,7 @@ fn getcwd():string {
 }
 
 fn kill(int pid, int sig) {
-    call6(SYS_KILL, pid as cptr, sig as cptr, 0, 0, 0, 0)
+    call6(SYS_KILL, pid as void_ptr, sig as void_ptr, 0, 0, 0, 0)
 }
 
 fn wait(int pid, int option):(int, int) {
@@ -687,17 +687,17 @@ fn chroot(string path) {
 }
 
 fn chown(string path, u32 uid, u32 gid) {
-    call6(SYS_CHOWN, path.ref(), uid as cptr, gid as cptr, 0, 0, 0)
+    call6(SYS_CHOWN, path.ref(), uid as void_ptr, gid as void_ptr, 0, 0, 0)
 }
 
 fn chmod(string path, u32 mode) {
-    call6(SYS_CHMOD, path.ref(), mode as cptr, 0, 0, 0, 0)
+    call6(SYS_CHMOD, path.ref(), mode as void_ptr, 0, 0, 0, 0)
 }
 
 fn clock_gettime(int clock_id):timespec_t {
     var result = timespec_t{}
 
-    call6(SYS_CLOCK_GETTIME, clock_id as cptr, result as cptr, 0, 0, 0, 0)
+    call6(SYS_CLOCK_GETTIME, clock_id as void_ptr, result as void_ptr, 0, 0, 0, 0)
 
     return result
 }
@@ -728,41 +728,41 @@ type sockaddr_un = struct {
 }
 
 fn socket(int domain, int t, int protocol):int {
-    return call6(SYS_SOCKET, domain as cptr, t as cptr, protocol as cptr, 0, 0, 0)
+    return call6(SYS_SOCKET, domain as void_ptr, t as void_ptr, protocol as void_ptr, 0, 0, 0)
 }
 
 // TODO limit <T:sockaddr_in|sockaddr_un>
 fn bind<T>(int sockfd, T addr) {
     //  nature struct to c
-     var len = 16 as cptr // in 和 unix 长度为 16byte
-     call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
+     var len = 16 as void_ptr // in 和 unix 长度为 16byte
+     call6(SYS_BIND, sockfd as void_ptr, addr as void_ptr, len, 0, 0, 0)
 }
 
 fn bind6(int sockfd, sockaddr_in6 addr) {
-    var len = 28 as cptr
-    call6(SYS_BIND, sockfd as cptr, addr as cptr, len, 0, 0, 0)
+    var len = 28 as void_ptr
+    call6(SYS_BIND, sockfd as void_ptr, addr as void_ptr, len, 0, 0, 0)
 }
 
 // backlog 表示最大的监听长度
 fn listen(int sockfd, int backlog) {
-    call6(SYS_LISTEN, sockfd as cptr, backlog as cptr, 0, 0, 0, 0)
+    call6(SYS_LISTEN, sockfd as void_ptr, backlog as void_ptr, 0, 0, 0, 0)
 }
 
 // 相应 client sockfd 和 client sockaddr
 fn accept<T>(int sockfd, ptr<T> addr):int {
     var len = 16
     ptr<int> len_ptr = &len
-    int fd = call6(SYS_ACCEPT, sockfd as cptr, addr as cptr, len_ptr as cptr, 0, 0, 0)
+    int fd = call6(SYS_ACCEPT, sockfd as void_ptr, addr as void_ptr, len_ptr as void_ptr, 0, 0, 0)
 
     return fd
 }
 
 fn recvfrom(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_RECVFROM, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_RECVFROM, sockfd as void_ptr, buf.ref(), buf.len() as void_ptr, flags as void_ptr, 0, 0)
 }
 
 fn sendto(int sockfd, [u8] buf, int flags):int {
-    return call6(SYS_SENDTO, sockfd as cptr, buf.ref(), buf.len() as cptr, flags as cptr, 0, 0)
+    return call6(SYS_SENDTO, sockfd as void_ptr, buf.ref(), buf.len() as void_ptr, flags as void_ptr, 0, 0)
 }
 
 fn get_envs():[string] {
@@ -770,7 +770,7 @@ fn get_envs():[string] {
 }
 
 fn get_env(string key):string {
-    cptr ref = getenv(key.ref())
+    void_ptr ref = getenv(key.ref())
     if ref == 0 {
         return ''
     }
@@ -786,13 +786,13 @@ fn set_env(string key, string value) {
 }
 
 fn unshare(int flags) {
-    call6(SYS_UNSHARE, flags as cptr, 0, 0, 0, 0, 0)
+    call6(SYS_UNSHARE, flags as void_ptr, 0, 0, 0, 0, 0)
 }
 
 fn mount(string source, string target, string fs_type, u32 flags, string data) {
-    call6(SYS_MOUNT, source.ref(), target.ref(), fs_type.ref(), flags as cptr, data.ref(), 0)
+    call6(SYS_MOUNT, source.ref(), target.ref(), fs_type.ref(), flags as void_ptr, data.ref(), 0)
 }
 
 fn umount(string target, u32 flags) {
-    call6(SYS_UMOUNT2, target.ref(), flags as cptr, 0, 0, 0, 0)
+    call6(SYS_UMOUNT2, target.ref(), flags as void_ptr, 0, 0, 0, 0)
 }

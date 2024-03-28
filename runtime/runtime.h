@@ -237,7 +237,7 @@ typedef enum {
 typedef struct processor_t processor_t;
 
 // 必须和 nature code 保持一致
-typedef struct future_t {
+typedef struct n_future_t {
     int64_t size;
     void *result;
     void *co;

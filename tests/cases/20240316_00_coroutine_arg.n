@@ -12,34 +12,3 @@ var fut = go sum(1, second)
 var result = fut.await()
 println(result)
 
-// 2. multi
-var start = time.now().timestamp()
-var fut1 = go sum(233, -33)
-var fut2 = go sum(50, 50)
-var fut3 = go sum(50, 50)
-var fut4 = go sum(50, 50)
-var fut5 = go sum(50, 50)
-var fut6 = go sum(50, 50)
-
-var result_sum = 0
-for true {
-    result_sum += fut1.await()
-    result_sum += fut2.await()
-    result_sum += fut3.await()
-    result_sum += fut4.await()
-    result_sum += fut5.await()
-    result_sum += fut6.await()
-    break
-}
-var end = time.now().timestamp()
-println('result_sum =', result_sum)
-println('use time', end - start)
-
-
-// 3. macro and solo
-var fut7 = @co_async(sum(12, 13), co.SOLO)
-var result7 = fut7.await()
-println('co_async result is', result7)
-
-
-println('main co done')
