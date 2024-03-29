@@ -567,7 +567,7 @@ typedef struct {
     uint8_t output_type;
 } elf_context;
 
-type_t type_copy(module_t *m, type_t temp);
+type_t type_copy(type_t temp);
 
 bool type_union_compare(type_union_t *left, type_union_t *right);
 

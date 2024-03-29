@@ -224,7 +224,8 @@ static inline bool is_rtcall(string target) {
         return false;
     }
 
-    return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) || str_equal(target, RT_CALL_SET_CONTAINS) ||
+    return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
+           str_equal(target, RT_CALL_SET_CONTAINS) ||
            str_equal(target, RT_CALL_SET_NEW);
 }
 
@@ -366,15 +367,18 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         slice_t *args = operand->value;
         for (int i = 0; i < args->count; ++i) {
             lir_operand_t *o = args->take[i];
-            assert(o->assert_type == LIR_OPERAND_VAR || o->assert_type == LIR_OPERAND_SYMBOL_VAR || o->assert_type == LIR_OPERAND_IMM ||
-                   o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG || o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+            assert(o->assert_type == LIR_OPERAND_VAR || o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
+                   o->assert_type == LIR_OPERAND_IMM ||
+                   o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
+                   o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
             slice_concat(result, recursion_extract_operands(o, flag));
         }
         return result;
     }
 
-    if (flag & FLAG(LIR_OPERAND_VAR) && (operand->assert_type == LIR_OPERAND_PHI_BODY || operand->assert_type == LIR_OPERAND_VARS ||
-                                         operand->assert_type == LIR_OPERAND_PARAMS)) {
+    if (flag & FLAG(LIR_OPERAND_VAR) &&
+        (operand->assert_type == LIR_OPERAND_PHI_BODY || operand->assert_type == LIR_OPERAND_VARS ||
+         operand->assert_type == LIR_OPERAND_PARAMS)) {
         slice_t *vars = operand->value;
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
@@ -529,7 +533,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     }
 }
 
-static inline lir_op_t *lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
+static inline lir_op_t *
+lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
     op->first = lir_operand_copy(first);// 这里的 copy 并不深度，而是 copy 了指针！
@@ -666,7 +671,22 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
 
     OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result));
+
     push_rt_call_no_hook(m, RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(name));
+}
+
+static inline lir_op_t *lir_rtcall(char *name, lir_operand_t *result, int arg_count, ...) {
+    slice_t *params_operand = slice_new();
+
+    va_list args;
+    va_start(args, arg_count);// 初始化参数
+    for (int i = 0; i < arg_count; ++i) {
+        lir_operand_t *param = va_arg(args, lir_operand_t *);
+        slice_push(params_operand, param);
+    }
+    va_end(args);
+    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, params_operand);
+    return lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result);
 }
 
 static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_count, ...) {
@@ -788,7 +808,8 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
         base = temp;
     }
 
-    assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG, "indirect addr only support var operand");
+    assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
+            "indirect addr only support var operand");
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
     addr->base = base;
     addr->offset = offset;
@@ -804,7 +825,8 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
  * @param type
  * @return
  */
-static inline lir_operand_t *indexed_addr_operand(module_t *m, type_t type, lir_operand_t *base, lir_operand_t *offset) {
+static inline lir_operand_t *
+indexed_addr_operand(module_t *m, type_t type, lir_operand_t *base, lir_operand_t *offset) {
     assert(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG);
     assert(offset->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG);
     assert(type.kind > 0);
@@ -855,7 +877,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     assert(operand->assert_type != LIR_OPERAND_SYMBOL_LABEL);
 
     assertf(operand->assert_type == LIR_OPERAND_VAR || operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-                    operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+            operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
@@ -955,7 +977,8 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
 }
 
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
-    return (op->code == LIR_OPCODE_BEQ || op->code == LIR_OPCODE_SGT || op->code == LIR_OPCODE_SGE || op->code == LIR_OPCODE_SEE ||
+    return (op->code == LIR_OPCODE_BEQ || op->code == LIR_OPCODE_SGT || op->code == LIR_OPCODE_SGE ||
+            op->code == LIR_OPCODE_SEE ||
             op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE);
 }
 
@@ -1009,8 +1032,10 @@ static inline slice_t *extract_var_operands(lir_op_t *op, flag_t vr_flag) {
 }
 
 static inline bool is_ternary(lir_op_t *op) {
-    return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV ||
-           op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL || op->code == LIR_OPCODE_AND ||
+    return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
+           op->code == LIR_OPCODE_DIV ||
+           op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
+           op->code == LIR_OPCODE_AND ||
            op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
 }
 

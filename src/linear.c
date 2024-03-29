@@ -1096,16 +1096,16 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     }
 
     // 特殊 binary 处理
-    if (binary_expr->operator== AST_OP_OR_OR) {
+    if (binary_expr->operator == AST_OP_OR_OR) {
         return linear_logical_or(m, expr, target);
     }
-    if (binary_expr->operator== AST_OP_AND_AND) {
+    if (binary_expr->operator == AST_OP_AND_AND) {
         return linear_logical_and(m, expr, target);
     }
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-    lir_opcode_t operator= ast_op_convert[binary_expr->operator];
+    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
@@ -1150,6 +1150,24 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     return target;
 }
 
+static void linear_escape_to_heap(module_t *m, lir_operand_t *operand) {
+    assert(operand->assert_type == LIR_OPERAND_VAR);
+    lir_var_t *var = operand->value;
+    symbol_t *s = symbol_table_get(var->ident);
+    assertf(s, "symbol %s not found", var->ident);
+    assertf(s->type == SYMBOL_VAR, "symbol %s not found", var->ident);
+    ast_var_decl_t *var_decl = s->ast_value;
+    if (var_decl->type.kind == TYPE_STRUCT) {
+        var_decl->type.struct_->in_heap = true;
+    } else if (var_decl->type.kind == TYPE_ARR) {
+        var_decl->type.array->in_heap = true;
+    } else {
+        assertf(false, "only struct/arr can escape");
+    }
+
+    log_debug("%s@%s: escape %s to heap", m->ident, m->current_closure->linkident, var->ident);
+}
+
 /**
  * - (1 + 1)
  * NOT first_param => result_target
@@ -1165,7 +1183,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator== AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
+    if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
         assertf(is_number(imm->kind), "only number can neg operate");
         if (imm->kind == TYPE_INT) {
@@ -1177,7 +1195,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, first);
     }
 
-    if (unary_expr->operator== AST_OP_NOT) {
+    if (unary_expr->operator == AST_OP_NOT) {
         assert(unary_expr->operand.type.kind == TYPE_BOOL);
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
@@ -1194,28 +1212,21 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return target;
     }
 
+    // neg source -> target
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
     // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理
-    if (unary_expr->operator== AST_OP_LA) {
+    if (unary_expr->operator == AST_OP_LA || unary_expr->operator == AST_OP_SAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_defer_alloc_type(unary_expr->operand.type)) {
-            assert(first->assert_type == LIR_OPERAND_VAR);
-            lir_var_t *var = first->value;
-            symbol_t *s = symbol_table_get(var->ident);
-            assertf(s, "symbol %s not found", var->ident);
-            assertf(s->type == SYMBOL_VAR, "symbol %s not found", var->ident);
-            ast_var_decl_t *var_decl = s->ast_value;
-            if (var_decl->type.kind == TYPE_STRUCT) {
-                var_decl->type.struct_->in_heap = true;
-            } else if (var_decl->type.kind == TYPE_ARR) {
-                var_decl->type.array->in_heap = true;
-            } else {
-                assertf(false, "only struct/arr can escape");
+
+            if (unary_expr->operator == AST_OP_SAFE_LA) {
+                linear_escape_to_heap(m, first);
             }
 
-            if (!target) {
-                return first;
-            }
-
+            // 必须 move target，这同时也是一个类型转换的过程
             OP_PUSH(lir_op_move(target, first));
             return target;
         }
@@ -1231,7 +1242,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // person_t a = *b
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
-    if (unary_expr->operator== AST_OP_IA) {
+    if (unary_expr->operator == AST_OP_IA) {
         if (!target) {
             target = temp_var_operand_with_alloc(m, expr.type);
         }
@@ -1243,11 +1254,6 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         }
 
         return linear_super_move(m, expr.type, target, src);
-    }
-
-    // neg source -> target
-    if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
     }
 
     lir_opcode_t type = ast_op_convert[unary_expr->operator];
@@ -1749,7 +1755,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_expr->src.type.kind == TYPE_RAW_PTR) {
         // is target 只能只能判断是否为 null
         LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
-                       "raw_ptr<%s> is only support null, example: raw_ptr<%s> is null", type_format(is_expr->src.type),
+                       "%s is only support null, example: %s is null", type_format(is_expr->src.type),
                        type_format(is_expr->src.type));
 
         OP_PUSH(lir_op_new(LIR_OPCODE_SEE, operand, int_operand(0), target));
@@ -2215,7 +2221,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
+                           (ast_expr_t) {.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
                            NULL);
             return;
         }
@@ -2223,7 +2229,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -2237,7 +2243,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

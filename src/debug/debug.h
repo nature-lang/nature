@@ -34,7 +34,7 @@ void debug_parser_stmt(ast_type_t t);
 
 void debug_stmt(string type, ast_stmt_t stmt);
 
-void debug_lir(closure_t *c);
+void debug_lir(closure_t *c, char *key);
 
 void debug_block_lir(closure_t *c, char *stage_after);
 

@@ -18,64 +18,64 @@ ast_ident *ast_new_ident(char *literal) {
     return ident;
 }
 
-static list_t *ct_list_type_copy(module_t *m, list_t *temp_list) {
+static list_t *ct_list_type_copy(list_t *temp_list) {
     if (!temp_list) {
         return NULL;
     }
     list_t *list = ct_list_new(sizeof(type_t));
     for (int i = 0; i < temp_list->length; ++i) {
         type_t *temp = ct_list_value(temp_list, i);
-        type_t type = type_copy(m, *temp);
+        type_t type = type_copy(*temp);
         ct_list_push(list, &type);
     }
 
     return list;
 }
 
-static type_union_t *type_union_copy(module_t *m, type_union_t *temp) {
+static type_union_t *type_union_copy(type_union_t *temp) {
     type_union_t *union_ = COPY_NEW(type_union_t, temp);
-    union_->elements = ct_list_type_copy(m, temp->elements);
+    union_->elements = ct_list_type_copy(temp->elements);
     union_->any = temp->any;
     return union_;
 }
 
-static type_fn_t *type_fn_copy(module_t *m, type_fn_t *temp) {
+static type_fn_t *type_fn_copy(type_fn_t *temp) {
     type_fn_t *fn = COPY_NEW(type_fn_t, temp);
     if (temp->name) {
         fn->name = strdup(temp->name);
     }
 
-    fn->param_types = ct_list_type_copy(m, temp->param_types);
-    fn->return_type = type_copy(m, temp->return_type);
+    fn->param_types = ct_list_type_copy(temp->param_types);
+    fn->return_type = type_copy(temp->return_type);
     return fn;
 }
 
-static type_vec_t *type_vec_copy(module_t *m, type_vec_t *temp) {
+static type_vec_t *type_vec_copy(type_vec_t *temp) {
     type_vec_t *list = COPY_NEW(type_vec_t, temp);
-    list->element_type = type_copy(m, temp->element_type);
+    list->element_type = type_copy(temp->element_type);
     return list;
 }
 
-static type_map_t *type_map_copy(module_t *m, type_map_t *temp) {
+static type_map_t *type_map_copy(type_map_t *temp) {
     type_map_t *map = COPY_NEW(type_map_t, temp);
-    map->key_type = type_copy(m, map->key_type);
-    map->value_type = type_copy(m, map->value_type);
+    map->key_type = type_copy(map->key_type);
+    map->value_type = type_copy(map->value_type);
     return map;
 }
 
-static type_tuple_t *type_tuple_copy(module_t *m, type_tuple_t *temp) {
+static type_tuple_t *type_tuple_copy(type_tuple_t *temp) {
     type_tuple_t *tuple = COPY_NEW(type_tuple_t, temp);
-    tuple->elements = ct_list_type_copy(m, temp->elements);
+    tuple->elements = ct_list_type_copy(temp->elements);
     return tuple;
 }
 
-static type_set_t *type_set_copy(module_t *m, type_set_t *temp) {
+static type_set_t *type_set_copy(type_set_t *temp) {
     type_set_t *set = COPY_NEW(type_set_t, temp);
-    set->element_type = type_copy(m, temp->element_type);
+    set->element_type = type_copy(temp->element_type);
     return set;
 }
 
-static type_struct_t *type_struct_copy(module_t *m, type_struct_t *temp) {
+static type_struct_t *type_struct_copy(type_struct_t *temp) {
     type_struct_t *struct_ = COPY_NEW(type_struct_t, temp);
     if (temp->ident) {
         struct_->ident = strdup(temp->ident);
@@ -85,46 +85,38 @@ static type_struct_t *type_struct_copy(module_t *m, type_struct_t *temp) {
         struct_property_t *temp_property = ct_list_value(temp->properties, i);
         struct_property_t *property = COPY_NEW(struct_property_t, temp_property);
         property->key = strdup(temp_property->key);
-        property->type = type_copy(m, temp_property->type);
-
-        property->right = ast_expr_copy(m, property->right);
-        // if (property->right && ((ast_expr_t *) property->right)->assert_type == AST_FNDEF) {
-        //     ast_fndef_t *fndef = ((ast_expr_t *) property->right)->value;
-        //     // - push 添加到 ast_fndef 中，让 infer 能够处理到该函数。
-        //
-        //     // - 添加到符号表中, 让函数数量能够 > 2
-        // }
+        property->type = type_copy(temp_property->type);
 
         ct_list_push(struct_->properties, property);
     }
     return struct_;
 }
 
-static type_alias_t *type_alias_copy(module_t *m, type_alias_t *temp) {
+static type_alias_t *type_alias_copy(type_alias_t *temp) {
     type_alias_t *alias = COPY_NEW(type_alias_t, temp);
     alias->ident = strdup(temp->ident);
-    alias->args = ct_list_type_copy(m, temp->args);
+    alias->args = ct_list_type_copy(temp->args);
     return alias;
 }
 
-static type_gen_t *type_gen_copy(module_t *m, type_gen_t *temp) {
+static type_gen_t *type_gen_copy(type_gen_t *temp) {
     type_gen_t *gen = COPY_NEW(type_gen_t, temp);
-    gen->elements = ct_list_type_copy(m, temp->elements);
+    gen->elements = ct_list_type_copy(temp->elements);
     return gen;
 }
 
-static type_ptr_t *type_pointer_copy(module_t *m, type_ptr_t *temp) {
+static type_ptr_t *type_pointer_copy(type_ptr_t *temp) {
     type_ptr_t *pointer = COPY_NEW(type_ptr_t, temp);
-    pointer->value_type = type_copy(m, temp->value_type);
+    pointer->value_type = type_copy(temp->value_type);
     return pointer;
 }
 
-static type_array_t *type_array_copy(module_t *m, type_array_t *temp) {
+static type_array_t *type_array_copy(type_array_t *temp) {
     type_array_t *array = COPY_NEW(type_array_t, temp);
     return array;
 }
 
-type_t type_copy(module_t *m, type_t temp) {
+type_t type_copy(type_t temp) {
     type_t type = temp;
     if (temp.origin_ident) {
         type.origin_ident = strdup(temp.origin_ident);
@@ -134,56 +126,53 @@ type_t type_copy(module_t *m, type_t temp) {
         type.impl_ident = strdup(temp.impl_ident);
     }
     if (temp.impl_args) {
-        type.impl_args = ct_list_type_copy(m, temp.impl_args);
+        type.impl_args = ct_list_type_copy(temp.impl_args);
     }
 
     switch (temp.kind) {
         case TYPE_ALIAS: {
-            type.alias = type_alias_copy(m, temp.alias);
+            type.alias = type_alias_copy(temp.alias);
             break;
         }
         case TYPE_VEC: {
-            type.vec = type_vec_copy(m, temp.vec);
+            type.vec = type_vec_copy(temp.vec);
             break;
         }
         case TYPE_ARR: {
-            type.array = type_array_copy(m, temp.array);
+            type.array = type_array_copy(temp.array);
             break;
         }
         case TYPE_MAP: {
-            type.map = type_map_copy(m, temp.map);
+            type.map = type_map_copy(temp.map);
             break;
         }
         case TYPE_SET: {
-            type.set = type_set_copy(m, temp.set);
+            type.set = type_set_copy(temp.set);
             break;
         }
         case TYPE_TUPLE: {
-            type.tuple = type_tuple_copy(m, temp.tuple);
+            type.tuple = type_tuple_copy(temp.tuple);
             break;
         }
         case TYPE_STRUCT: {
-            type.struct_ = type_struct_copy(m, temp.struct_);
+            type.struct_ = type_struct_copy(temp.struct_);
             break;
         }
         case TYPE_FN: {
-            type.fn = type_fn_copy(m, temp.fn);
+            type.fn = type_fn_copy(temp.fn);
             break;
         }
         case TYPE_UNION: {
-            type.union_ = type_union_copy(m, temp.union_);
+            type.union_ = type_union_copy(temp.union_);
             break;
         }
         case TYPE_RAW_PTR:
         case TYPE_PTR: {
-            type.ptr = type_pointer_copy(m, temp.ptr);
+            type.ptr = type_pointer_copy(temp.ptr);
             break;
         }
         default:
             break;
-            // Optionally handle other types or error out., int/uint/...
-            // assertf(false, "not support type kind=%s", type_kind_str[temp.kind]);
-            // exit(EXIT_FAILURE);
     }
     return type;
 }
@@ -218,39 +207,39 @@ static ast_env_access_t *ast_env_access_copy(module_t *m, ast_env_access_t *temp
 static ast_as_expr_t *ast_as_expr_copy(module_t *m, ast_as_expr_t *temp) {
     ast_as_expr_t *as_expr = COPY_NEW(ast_as_expr_t, temp);
     as_expr->src = *ast_expr_copy(m, &temp->src);
-    as_expr->target_type = type_copy(m, temp->target_type);
+    as_expr->target_type = type_copy(temp->target_type);
     return as_expr;
 }
 
 static ast_new_expr_t *ast_new_expr_copy(module_t *m, ast_new_expr_t *temp) {
     ast_new_expr_t *new_expr = COPY_NEW(ast_new_expr_t, temp);
-    new_expr->type = type_copy(m, temp->type);
+    new_expr->type = type_copy(temp->type);
     return new_expr;
 }
 
 static ast_macro_sizeof_expr_t *ast_sizeof_expr_copy(module_t *m, ast_macro_sizeof_expr_t *temp) {
     ast_macro_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_macro_sizeof_expr_t, temp);
-    sizeof_expr->target_type = type_copy(m, temp->target_type);
+    sizeof_expr->target_type = type_copy(temp->target_type);
     return sizeof_expr;
 }
 
 static ast_macro_reflect_hash_expr_t *ast_reflect_hash_expr_copy(module_t *m, ast_macro_reflect_hash_expr_t *temp) {
     ast_macro_reflect_hash_expr_t *expr = COPY_NEW(ast_macro_reflect_hash_expr_t, temp);
-    expr->target_type = type_copy(m, temp->target_type);
+    expr->target_type = type_copy(temp->target_type);
     return expr;
 }
 
-static ast_macro_type_eq_expr_t *ast_type_eq_expr_copy(module_t *m, ast_macro_type_eq_expr_t *temp) {
+static ast_macro_type_eq_expr_t *ast_type_eq_expr_copy(ast_macro_type_eq_expr_t *temp) {
     ast_macro_type_eq_expr_t *expr = COPY_NEW(ast_macro_type_eq_expr_t, temp);
-    expr->left_type = type_copy(m, temp->left_type);
-    expr->right_type = type_copy(m, temp->right_type);
+    expr->left_type = type_copy(temp->left_type);
+    expr->right_type = type_copy(temp->right_type);
     return expr;
 }
 
 static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
     is_expr->src = *ast_expr_copy(m, &temp->src);
-    is_expr->target_type = type_copy(m, temp->target_type);
+    is_expr->target_type = type_copy(temp->target_type);
     return is_expr;
 }
 
@@ -347,14 +336,14 @@ static ast_tuple_new_t *ast_tuple_new_copy(module_t *m, ast_tuple_new_t *temp) {
 
 static ast_struct_new_t *ast_struct_new_copy(module_t *m, ast_struct_new_t *temp) {
     ast_struct_new_t *struct_new = COPY_NEW(ast_struct_new_t, temp);
-    struct_new->type = type_copy(m, temp->type);
+    struct_new->type = type_copy(temp->type);
 
     list_t *properties = ct_list_new(sizeof(struct_property_t));
     for (int i = 0; i < temp->properties->length; ++i) {
         struct_property_t *temp_property = ct_list_value(temp->properties, i);
 
         struct_property_t *property = NEW(struct_property_t);
-        property->type = type_copy(m, temp_property->type);
+        property->type = type_copy(temp_property->type);
         property->key = strdup(temp_property->key);
         property->right = ast_expr_copy(m, temp_property->right);
         ct_list_push(properties, property);
@@ -506,7 +495,7 @@ ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             break;
         }
         case AST_MACRO_EXPR_TYPE_EQ: {
-            expr->value = ast_type_eq_expr_copy(m, temp->value);
+            expr->value = ast_type_eq_expr_copy(temp->value);
             break;
         }
         case AST_EXPR_SELECT: {
@@ -528,7 +517,7 @@ static ast_expr_fake_stmt_t *ast_expr_fake_copy(module_t *m, ast_expr_fake_stmt_
 
 static ast_var_decl_t *ast_var_decl_copy(module_t *m, ast_var_decl_t *temp) {
     ast_var_decl_t *var_decl = COPY_NEW(ast_var_decl_t, temp);
-    var_decl->type = type_copy(m, temp->type);
+    var_decl->type = type_copy(temp->type);
     var_decl->ident = strdup(temp->ident);
     return var_decl;
 }
@@ -623,7 +612,7 @@ static slice_t *ast_body_copy(module_t *m, slice_t *temp) {
 
 static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp) {
     ast_call_t *call = COPY_NEW(ast_call_t, temp);
-    call->return_type = type_copy(m, temp->return_type);
+    call->return_type = type_copy(temp->return_type);
     call->left = *ast_expr_copy(m, &temp->left);
     call->args = ast_list_expr_copy(m, temp->args);
     call->spread = temp->spread;
@@ -721,9 +710,9 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->symbol_name = temp->symbol_name;
     fndef->linkid = temp->linkid;
     fndef->closure_name = temp->closure_name;
-    fndef->return_type = type_copy(m, temp->return_type);
+    fndef->return_type = type_copy(temp->return_type);
     fndef->params = ast_fn_formals_copy(m, temp->params);
-    fndef->type = type_copy(m, temp->type);
+    fndef->type = type_copy(temp->type);
     fndef->capture_exprs = temp->capture_exprs;
     fndef->fn_name = temp->fn_name;
     fndef->rel_path = temp->rel_path;

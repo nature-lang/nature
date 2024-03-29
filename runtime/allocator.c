@@ -685,9 +685,9 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
     HAVE_SPAN:
-    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
-            span->spanclass,
-            span->obj_count, span->alloc_count);
+MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
+        span->spanclass,
+        span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
@@ -1230,5 +1230,8 @@ void runtime_force_gc() {
 void *gc_malloc(uint64_t reflect_hash) {
     PRE_RTCALL_HOOK();
     rtype_t *rtype = rt_find_rtype(reflect_hash);
+    assertf(rtype, "notfound rtype by hash=%ld", reflect_hash);
+
+    DEBUGF("[gc_malloc] reflect_hash=%lu, malloc size is %lu", reflect_hash, rtype->size);
     return rt_clr_malloc(rtype->size, rtype);
 }

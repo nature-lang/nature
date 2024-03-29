@@ -93,7 +93,8 @@ typedef enum {
     AST_OP_NOT, // unary bool !right, right must bool
     AST_OP_NEG, // unary number -right
     AST_OP_BNOT,// unary binary ~right, right must int
-    AST_OP_LA,  // load addr &var
+    AST_OP_LA,  // &var = load addr var
+    AST_OP_SAFE_LA,  // @safe_la(var) safe load addr var
     AST_OP_IA,  // indirect addr  *解引用
 
     // 位运算
@@ -632,12 +633,12 @@ static inline ast_expr_t *ast_bool_expr(int line, int column, bool b) {
     return expr;
 }
 
-static inline ast_expr_t *ast_unary(ast_expr_t *target, ast_expr_op_t unary_op) {
+static inline ast_expr_t *ast_unary(ast_expr_t *target) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator = unary_op;
+    expr->operator = AST_OP_SAFE_LA;
 
     result->line = target->line;
     result->column = target->column;

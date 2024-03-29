@@ -453,7 +453,6 @@ static void analyzer_type(module_t *m, type_t *type) {
 }
 
 /**
- * TODO 当前版本暂时用不到了
  * ptr/void_ptr/raw_ptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
@@ -465,8 +464,43 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     if (str_equal(type_alias->ident, type_kind_str[TYPE_VOID_PTR])) {
         type->kind = TYPE_VOID_PTR;
         type->value = NULL;
+        type->origin_ident = NULL;
 
         ANALYZER_ASSERTF(type_alias->args == NULL, "void_ptr cannot contains arg");
+
+        return true;
+    }
+
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_RAW_PTR])) {
+        type->kind = TYPE_RAW_PTR;
+        type->origin_ident = NULL;
+        type->origin_type_kind = 0;
+
+        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "raw_ptr<...> must contains arg type");
+
+        type_t *arg_type = ct_list_value(type_alias->args, 0);
+        analyzer_type(m, arg_type);
+
+        type_raw_ptr_t *raw_ptr = NEW(type_raw_ptr_t);
+        raw_ptr->value_type = *arg_type;
+        type->value = raw_ptr;
+
+        return true;
+    }
+
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_PTR])) {
+        type->kind = TYPE_PTR;
+        type->origin_ident = NULL;
+        type->origin_type_kind = 0;
+
+        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "ptr<...> must contains arg type");
+
+        type_t *arg_type = ct_list_value(type_alias->args, 0);
+        analyzer_type(m, arg_type);
+
+        type_ptr_t *ptr = NEW(type_ptr_t);
+        ptr->value_type = *arg_type;
+        type->value = ptr;
 
         return true;
     }
@@ -484,36 +518,6 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->value = NULL;
 
         ANALYZER_ASSERTF(type_alias->args == NULL, "fn_t cannot contains arg");
-        return true;
-    }
-
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_RAW_PTR])) {
-        type->kind = TYPE_RAW_PTR;
-
-        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "raw_ptr<...> must contains arg type");
-
-        type_t *arg_type = ct_list_value(type_alias->args, 0);
-        analyzer_type(m, arg_type);
-
-        type_raw_ptr_t *raw_ptr = NEW(type_raw_ptr_t);
-        raw_ptr->value_type = *arg_type;
-        type->value = raw_ptr;
-
-        return true;
-    }
-
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_PTR])) {
-        type->kind = TYPE_PTR;
-
-        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "ptr<...> must contains arg type");
-
-        type_t *arg_type = ct_list_value(type_alias->args, 0);
-        analyzer_type(m, arg_type);
-
-        type_ptr_t *ptr = NEW(type_ptr_t);
-        ptr->value_type = *arg_type;
-        type->value = ptr;
-
         return true;
     }
 
@@ -775,7 +779,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
 
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
-        type_t param_type = type_copy(m, fndef->impl_type);
+        type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
                 .type = param_type,
@@ -1625,7 +1629,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
+            assign->left = (ast_expr_t) {
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1696,7 +1700,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
+        call->left = (ast_expr_t) {
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident),// module.init
                 .line = 1,

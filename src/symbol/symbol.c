@@ -52,7 +52,7 @@ void symbol_init() {
 // compiler 阶段临时生成的数据
 void symbol_table_set_var(char *unique_ident, type_t type) {
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-    var_decl->type = type;
+    var_decl->type = type_copy(type);
     var_decl->ident = unique_ident;
 
     // 添加到符号表中
