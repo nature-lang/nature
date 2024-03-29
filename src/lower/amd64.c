@@ -5,7 +5,7 @@
 #include "src/register/amd64.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
-    lir_operand_t *temp = temp_var_operand_with_stack(c->module, lir_operand_type(first));
+    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(first));
 
     linked_push(list, lir_op_move(temp, first));
     return lir_reset_operand(temp, first->pos);
@@ -75,7 +75,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
 
             if (imm->kind == TYPE_RAW_STRING) {
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand_with_stack(c->module, type_kind_new(TYPE_RAW_STRING));
+                lir_operand_t *var_operand = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 
@@ -90,7 +90,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
         } else if (is_qword_int(imm->kind)) {
             // 大数值必须通过 reg 转化
             type_kind kind = operand_type_kind(imm_operand);
-            lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
+            lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
             linked_push(list, lir_op_move(temp, imm_operand));
             temp = lir_reset_operand(temp, imm_operand->pos);
@@ -123,7 +123,7 @@ linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
         stack->size = type_kind_sizeof(var->type.kind);
         // rdi param
         lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
-        if (is_alloc_stack(var->type)) {
+        if (is_defer_alloc_type(var->type)) {
             // stack_operand 中保存的就是一个栈地址，此时不需要进行 lea, 只是直接进行 mov 取值
             linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
         } else {
@@ -152,7 +152,7 @@ static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     // 通过一个临时 var, 领 first = output = reg, 从而将三元转换成二元表达式
     type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
+    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
     linked_push(list, lir_op_move(temp, op->first));
     linked_push(list, lir_op_new(op->code, temp, op->second, temp));
@@ -169,7 +169,7 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_push(list, lir_op_move(fit_cx_operand, op->second));
 
     type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand_with_stack(c->module, type_kind_new(kind));
+    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了
@@ -272,7 +272,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // ---- change to
             // lea first -> temp_var
             // mov temp_var -> output
-            lir_operand_t *temp = temp_var_operand_with_stack(c->module, lir_operand_type(op->output));
+            lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
             linked_push(operations, lir_op_lea(temp, op->first));
             linked_push(operations, lir_op_move(op->output, temp));
 

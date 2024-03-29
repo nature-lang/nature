@@ -805,10 +805,6 @@ char *_type_format(type_t t) {
 char *type_format(type_t t) {
     char *ident = t.origin_ident;
     if (ident == NULL) {
-        ident = t.impl_ident;
-    }
-
-    if (ident == NULL) {
         return _type_format(t);
     }
 

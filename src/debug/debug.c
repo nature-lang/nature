@@ -33,86 +33,86 @@ string ast_type_to_str[] = {
 };
 
 string token_type_to_str[] = {[TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
-        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN",// ()
-        [TOKEN_LEFT_SQUARE] = "TOKEN_LEFT_SQUARE",
-        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE",// []
-        [TOKEN_LEFT_CURLY] = "TOKEN_LEFT_CURLY",
-        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY",// {}
-        [TOKEN_LEFT_ANGLE] = "TOKEN_LEFT_ANGLE",
-        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE",// <>
+                              [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN",// ()
+                              [TOKEN_LEFT_SQUARE] = "TOKEN_LEFT_SQUARE",
+                              [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE",// []
+                              [TOKEN_LEFT_CURLY] = "TOKEN_LEFT_CURLY",
+                              [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY",// {}
+                              [TOKEN_LEFT_ANGLE] = "TOKEN_LEFT_ANGLE",
+                              [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE",// <>
 
-        [TOKEN_COMMA] = "TOKEN_COMMA",
-        [TOKEN_DOT] = "TOKEN_DOT",
-        [TOKEN_MINUS] = "TOKEN_MINUS",
-        [TOKEN_PLUS] = "TOKEN_PLUS",
-        [TOKEN_COLON] = "TOKEN_COLON",
-        [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
-        [TOKEN_SLASH] = "TOKEN_SLASH",
-        [TOKEN_STAR] = "TOKEN_STAR",        // * STAR
-        [TOKEN_QUESTION] = "TOKEN_QUESTION",// ?
-        [TOKEN_EOF] = "TOKEN_EOF",
-        [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
+                              [TOKEN_COMMA] = "TOKEN_COMMA",
+                              [TOKEN_DOT] = "TOKEN_DOT",
+                              [TOKEN_MINUS] = "TOKEN_MINUS",
+                              [TOKEN_PLUS] = "TOKEN_PLUS",
+                              [TOKEN_COLON] = "TOKEN_COLON",
+                              [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
+                              [TOKEN_SLASH] = "TOKEN_SLASH",
+                              [TOKEN_STAR] = "TOKEN_STAR",        // * STAR
+                              [TOKEN_QUESTION] = "TOKEN_QUESTION",// ?
+                              [TOKEN_EOF] = "TOKEN_EOF",
+                              [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
 
-        // ONE OR TWO CHARACTER TOKENS.
-        [TOKEN_NOT] = "TOKEN_NOT",
-        [TOKEN_NOT_EQUAL] = "TOKEN_NOT_EQUAL",
-        [TOKEN_EQUAL] = "TOKEN_EQUAL",
-        [TOKEN_EQUAL_EQUAL] = "TOKEN_EQUAL_EQUAL",
-        [TOKEN_GREATER_EQUAL] = "TOKEN_GREATER_EQUAL",
-        [TOKEN_LESS_EQUAL] = "TOKEN_LESS_EQUAL",
-        [TOKEN_AND_AND] = "TOKEN_AND_AND",
-        [TOKEN_OR_OR] = "TOKEN_OR_OR",
+                              // ONE OR TWO CHARACTER TOKENS.
+                              [TOKEN_NOT] = "TOKEN_NOT",
+                              [TOKEN_NOT_EQUAL] = "TOKEN_NOT_EQUAL",
+                              [TOKEN_EQUAL] = "TOKEN_EQUAL",
+                              [TOKEN_EQUAL_EQUAL] = "TOKEN_EQUAL_EQUAL",
+                              [TOKEN_GREATER_EQUAL] = "TOKEN_GREATER_EQUAL",
+                              [TOKEN_LESS_EQUAL] = "TOKEN_LESS_EQUAL",
+                              [TOKEN_AND_AND] = "TOKEN_AND_AND",
+                              [TOKEN_OR_OR] = "TOKEN_OR_OR",
 
-        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL",              // +=
-        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL",            // -=
-        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL",              // *=
-        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL",            // /=
-        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL",          // %=
-        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL",                // &=
-        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL",                  // |=
-        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL",                // ^=
-        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL",  // >>=
-        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL",// <<=
+                              [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL",              // +=
+                              [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL",            // -=
+                              [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL",              // *=
+                              [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL",            // /=
+                              [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL",          // %=
+                              [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL",                // &=
+                              [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL",                  // |=
+                              [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL",                // ^=
+                              [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL",  // >>=
+                              [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL",// <<=
 
-        // 位运算
-        [TOKEN_TILDE] = "TOKEN_TILDE",            // ~
-        [TOKEN_AND] = "TOKEN_AND",                // &
-        [TOKEN_OR] = "TOKEN_OR",                  // |
-        [TOKEN_XOR] = "TOKEN_XOR",                // ^
-        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
-        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT",// >>
+                              // 位运算
+                              [TOKEN_TILDE] = "TOKEN_TILDE",            // ~
+                              [TOKEN_AND] = "TOKEN_AND",                // &
+                              [TOKEN_OR] = "TOKEN_OR",                  // |
+                              [TOKEN_XOR] = "TOKEN_XOR",                // ^
+                              [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
+                              [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT",// >>
 
-        // LITERALS.
-        [TOKEN_IDENT] = "TOKEN_IDENT",
-        [TOKEN_LITERAL_STRING] = "TOKEN_LITERAL_STRING",
-        [TOKEN_LITERAL_FLOAT] = "TOKEN_LITERAL_FLOAT",
-        [TOKEN_LITERAL_INT] = "TOKEN_LITERAL_INT",
+                              // LITERALS.
+                              [TOKEN_IDENT] = "TOKEN_IDENT",
+                              [TOKEN_LITERAL_STRING] = "TOKEN_LITERAL_STRING",
+                              [TOKEN_LITERAL_FLOAT] = "TOKEN_LITERAL_FLOAT",
+                              [TOKEN_LITERAL_INT] = "TOKEN_LITERAL_INT",
 
-        // KEYWORDS.
-        [TOKEN_TRUE] = "TOKEN_TRUE",
-        [TOKEN_FALSE] = "TOKEN_FALSE",
-        [TOKEN_TYPE] = "TOKEN_TYPE",
-        [TOKEN_NULL] = "TOKEN_NULL",
-        [TOKEN_VOID] = "TOKEN_VOID",
-        [TOKEN_ANY] = "TOKEN_ANY",
-        [TOKEN_STRUCT] = "TOKEN_STRUCT",
-        [TOKEN_FOR] = "TOKEN_FOR",
-        [TOKEN_IN] = "TOKEN_IN",
-        // [TOKEN_WHILE]="TOKEN_WHILE",
-        [TOKEN_IF] = "TOKEN_IF",
-        [TOKEN_ELSE] = "TOKEN_ELSE",
-        [TOKEN_ELSE_IF] = "TOKEN_ELSE_IF",
-        [TOKEN_VAR] = "TOKEN_VAR",
-        [TOKEN_STRING] = "TOKEN_STRING",
-        [TOKEN_BOOL] = "TOKEN_BOOL",
-        [TOKEN_FLOAT] = "TOKEN_FLOAT",
-        [TOKEN_INT] = "TOKEN_INT",
-        // [TOKEN_ARRAY]="TOKEN_ARRAY",
-        // [TOKEN_MAP]="TOKEN_MAP",
-        [TOKEN_FN] = "TOKEN_FN",
-        [TOKEN_IMPORT] = "TOKEN_IMPORT",
-        [TOKEN_AS] = "TOKEN_AS",
-        [TOKEN_RETURN] = "TOKEN_RETURN"};
+                              // KEYWORDS.
+                              [TOKEN_TRUE] = "TOKEN_TRUE",
+                              [TOKEN_FALSE] = "TOKEN_FALSE",
+                              [TOKEN_TYPE] = "TOKEN_TYPE",
+                              [TOKEN_NULL] = "TOKEN_NULL",
+                              [TOKEN_VOID] = "TOKEN_VOID",
+                              [TOKEN_ANY] = "TOKEN_ANY",
+                              [TOKEN_STRUCT] = "TOKEN_STRUCT",
+                              [TOKEN_FOR] = "TOKEN_FOR",
+                              [TOKEN_IN] = "TOKEN_IN",
+                              // [TOKEN_WHILE]="TOKEN_WHILE",
+                              [TOKEN_IF] = "TOKEN_IF",
+                              [TOKEN_ELSE] = "TOKEN_ELSE",
+                              [TOKEN_ELSE_IF] = "TOKEN_ELSE_IF",
+                              [TOKEN_VAR] = "TOKEN_VAR",
+                              [TOKEN_STRING] = "TOKEN_STRING",
+                              [TOKEN_BOOL] = "TOKEN_BOOL",
+                              [TOKEN_FLOAT] = "TOKEN_FLOAT",
+                              [TOKEN_INT] = "TOKEN_INT",
+                              // [TOKEN_ARRAY]="TOKEN_ARRAY",
+                              // [TOKEN_MAP]="TOKEN_MAP",
+                              [TOKEN_FN] = "TOKEN_FN",
+                              [TOKEN_IMPORT] = "TOKEN_IMPORT",
+                              [TOKEN_AS] = "TOKEN_AS",
+                              [TOKEN_RETURN] = "TOKEN_RETURN"};
 
 string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD] = "ADD  ",
@@ -147,6 +147,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_CLR] = "CLR    ",
         [LIR_OPCODE_CLV] = "CLV    ",
         [LIR_OPCODE_NOP] = "NOP    ",
+        [LIR_OPCODE_ALLOC] = "ALLOC ",
         [LIR_OPCODE_RETURN] = "RETURN ",
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",

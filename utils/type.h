@@ -300,6 +300,7 @@ struct type_alias_t {
 struct type_array_t {
     uint64_t length;
     type_t element_type;// 这个必须要有呀
+    bool in_heap;
 };
 
 /**
@@ -335,6 +336,7 @@ struct type_struct_t {
     // struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
     uint8_t align;     // struct 的最大对齐 size 缓存
     list_t *properties;// struct_property_t
+    bool in_heap;      // 默认使用栈分配，取指针操作会导致 struct 进行栈分配。
 };
 
 /**
@@ -597,7 +599,7 @@ static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
 }
 
-static inline bool is_alloc_stack(type_t t) {
+static inline bool is_defer_alloc_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 

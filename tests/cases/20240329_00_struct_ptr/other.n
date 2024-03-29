@@ -1,0 +1,10 @@
+type person_t = struct{
+    int age
+    string name
+    bool sex
+}
+
+
+fn person_t.test() {
+    var b = self // ptr<self>
+}

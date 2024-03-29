@@ -1361,6 +1361,9 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
         }
     }
 
+    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
+                  "%s cannot use select '.' operator, it has to be ptr<...>", type_format(left_type));
+
     // ast_access to ast_struct_access
     if (left_type.kind == TYPE_STRUCT) {
         // 经过上面对 infer_right_expr, 这里对 type 一定是 reduction 的

@@ -498,6 +498,11 @@ static type_t parser_single_type(module_t *m) {
             result.alias = type_alias_new(first->literal, NULL);
         }
 
+        result.origin_ident = result.alias->ident;
+        if (result.alias->import_as) {
+            result.origin_ident = str_connect_by(result.alias->import_as, result.alias->ident, ".");
+        }
+
         // alias<arg1, arg2> arg1 和 arg2 是实际类型, 而不是泛型
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             // parser actual params

@@ -85,7 +85,7 @@ typedef struct {
     int line;  // 当前所在代码行，用于代码报错提示
     int column;// 当前 scan 所在 column
 
-    char space_prev; // 进入空行之前上一个字符
+    char space_prev;// 进入空行之前上一个字符
     char space_next;
 } scanner_cursor_t;
 
@@ -246,7 +246,7 @@ typedef struct {
     bool index_map[INT8_MAX];// 默认都是 false
     int8_t index;            // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
     // innermost(最深的) loop
-    uint8_t depth;           // block 的嵌套级别,数字越高嵌套的越深
+    uint8_t depth;// block 的嵌套级别,数字越高嵌套的越深
 } loop_t;
 
 typedef struct basic_block_t {
@@ -271,7 +271,7 @@ typedef struct basic_block_t {
     slice_t *live_out;
     slice_t *live_in;// ssa 阶段计算的精确 live in
     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *live;   // reg alloc 阶段计算
+    slice_t *live;// reg alloc 阶段计算
     // employer
     slice_t *domers;                // 当前块被哪些基本块管辖
     struct basic_block_t *imm_domer;// 当前块的直接(最近)支配者
@@ -398,6 +398,8 @@ typedef enum {
 
     LIR_OPCODE_NOP,// 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
 
+    LIR_OPCODE_ALLOC,// struct/arr 不确定是在栈上还是在堆上分配时使用该指令
+
     LIR_OPCODE_ENV_CAPTURE,
     LIR_OPCODE_ENV_CLOSURE,
 } lir_opcode_t;
@@ -451,14 +453,14 @@ typedef struct closure_t {
     table_t *ssa_var_block_exists;// 是否已经添加过，避免 var+block_name 的重复添加
 
     table_t *closure_var_table;
-    slice_t *closure_vars; // 引用传递，连通了 LIR_OPCODE_ENV_CLOSURE 和 LIR_OPCODE_ENV_CAPTURE 的 first_value
+    slice_t *closure_vars;// 引用传递，连通了 LIR_OPCODE_ENV_CLOSURE 和 LIR_OPCODE_ENV_CAPTURE 的 first_value
 
     basic_block_t *entry;   // 基本块入口, 指向 blocks[0]
     table_t *interval_table;// key 包括 fixed register as 和 variable.ident
     int interval_count;     // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
 
     // 定义环境
-    char *linkident; // link symbol name
+    char *linkident;  // link symbol name
     char *end_label;  // 函数的结束地址 label
     char *error_label;// 遇到表达式错误时需要调整到的目标 label
     char *catch_error_label;

@@ -1,0 +1,15 @@
+import 'other.n'
+
+// 基础初始化
+var p = other.person_t{
+    name = 'hualaka',
+    age = 23,
+    sex = true
+}
+
+// 这是典型的逃逸呀。怎么就可以支持呢。
+var b = &p
+
+var c = b
+
+println(c)

@@ -92,7 +92,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
     amd64_class_t hi = AMD64_CLASS_NO;
     uint8_t *onstack = mallocz(param_vars->count + 1);
 
-    int64_t stack_param_slot = 16; // by rbp, rest addr 和 push rsp 占用了 16 个字节
+    int64_t stack_param_slot = 16;// by rbp, rest addr 和 push rsp 占用了 16 个字节
 
     uint8_t sse_reg_count = 0;
     uint8_t int_reg_count = 0;
@@ -162,7 +162,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type));
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
-            if (is_alloc_stack(param_type)) {
+            if (is_defer_alloc_type(param_type)) {
                 lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
@@ -172,13 +172,13 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
             // 最后一个参数是 fn_runtime_operand 参数，将其记录下来
             if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                c->fn_runtime_stack = stack_param_slot; // 最后一个参数所在的栈的起点
+                c->fn_runtime_stack = stack_param_slot;// 最后一个参数所在的栈的起点
             }
 
-            stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
+            stack_param_slot += align_up(type_sizeof(param_type), QWORD);// 参数按照 8byte 对齐
         } else {
             if (param_type.kind == TYPE_STRUCT) {
-                lir_stack_alloc(c, result, param_type, dst_param);
+                linked_push(result, lir_stack_alloc(c, param_type, dst_param));
 
                 // 从寄存器中将数据移入到低保空间
                 lir_operand_t *lo_reg_operand;
@@ -269,7 +269,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
             return_operand = lir_operand_copy(return_operand);
             lir_var_t *var = return_operand->value;
-            assertf(is_alloc_stack(var->type), "only struct can use stack pass");
+            assertf(is_defer_alloc_type(var->type), "only struct can use stack pass");
             // 这里必须使用 ptr, 如果使用 struct，lower params 就会识别异常
             var->type = type_ptrof(var->type);
             slice_insert(params, 0, var);
@@ -278,8 +278,8 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
             // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
             // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
-            if (is_alloc_stack(return_type)) {
-                lir_stack_alloc(c, result, return_type, c->return_operand);
+            if (is_defer_alloc_type(return_type)) {
+                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
             }
         }
     }
@@ -298,10 +298,10 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
  * @return
  */
 static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
-    slice_t *args = op->second->value; // exprs
+    slice_t *args = op->second->value;// exprs
 
     // 进行 op 替换(重新set flag 即可)
-    slice_t *use_regs = slice_new(); // reg_t*
+    slice_t *use_regs = slice_new();// reg_t*
 
     linked_t *result = linked_new();
 
@@ -321,8 +321,8 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lo = hi = AMD64_CLASS_NO;
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
-        if (count == 0) { // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
-            stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+        if (count == 0) {                                            // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
+            stack_arg_size += align_up(type_sizeof(arg_type), QWORD);// 参数按照 8byte 对齐
             onstack[i] = 1;
             continue;
         } else if (count == 1) {
@@ -333,7 +333,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
                 onstack[i] = 0;
                 int_reg_count++;
             } else {
-                stack_arg_size += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+                stack_arg_size += align_up(type_sizeof(arg_type), QWORD);// 参数按照 8byte 对齐
                 onstack[i] = 1;
                 continue;
             }
@@ -385,7 +385,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
 
-        if (is_alloc_stack(arg_type)) {
+        if (is_defer_alloc_type(arg_type)) {
             assert(arg_operand->assert_type == LIR_OPERAND_VAR);
             // lea addr to temp
             lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
@@ -500,7 +500,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     if (!call_result) {
         linked_concat(result, amd64_lower_args(c, op));
-        linked_push(result, op); // call op
+        linked_push(result, op);// call op
 
         return result;
     }
@@ -509,10 +509,10 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     type_t call_result_type = lir_operand_type(call_result);
 
     // 进行 call result 的栈空间申请, 用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
-    if (is_alloc_stack(call_result_type)) {
+    if (is_defer_alloc_type(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 
-        lir_stack_alloc(c, result, call_result_type, call_result);
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
     }
 
     amd64_class_t lo = AMD64_CLASS_NO;
@@ -524,7 +524,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_alloc_stack(lir_operand_type(call_result)));
+        assert(is_defer_alloc_type(lir_operand_type(call_result)));
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
@@ -563,7 +563,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     if (call_result_type.kind == TYPE_STRUCT) {
         // 无论如何，先生成 call 指令
         slice_t *output_regs = slice_new();
-        slice_push(output_regs, lo_src_reg->value); // 不能延后处理，会导致 flag 设置异常！
+        slice_push(output_regs, lo_src_reg->value);// 不能延后处理，会导致 flag 设置异常！
         lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
 
         lir_operand_t *hi_src_reg;
@@ -633,7 +633,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
     }
 
     if (t.kind == TYPE_ARR) {
-        return 0; // 总是通过栈传递
+        return 0;// 总是通过栈传递
     }
 
     if (is_float(t.kind)) {
@@ -645,7 +645,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
     } else if (t.kind == TYPE_STRUCT) {
         // 遍历 struct 的每一个属性进行分类
         type_struct_t *type_struct = t.struct_;
-        offset = align_up(offset, type_struct->align); // 开始地址对齐
+        offset = align_up(offset, type_struct->align);// 开始地址对齐
 
         for (int i = 0; i < type_struct->properties->length; i++) {
             struct_property_t *p = ct_list_value(type_struct->properties, i);

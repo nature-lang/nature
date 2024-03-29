@@ -8,7 +8,6 @@
 
 #include "config.h"
 #include "src/binary/elf/amd64.h"
-#include "src/binary/elf/linker.h"
 #include "src/binary/elf/output.h"
 #include "src/cfg.h"
 #include "src/cross.h"
@@ -19,6 +18,7 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
+#include "src/escape.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
@@ -469,6 +469,8 @@ static void build_compiler(slice_t *modules) {
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
             debug_lir(c);
+
+            escape(c);
 
             // 构造 cfg
             cfg(c);

@@ -690,16 +690,15 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
  * @param dst_operand
  * @return
  */
-static inline lir_operand_t *lir_stack_alloc(closure_t *c, linked_t *list, type_t t, lir_operand_t *dst_operand) {
+static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_alloc_stack(t));
+    assert(is_defer_alloc_type(t));
     uint16_t size = type_sizeof(t);
 
     // struct size 可能为 0， 但是为了保证 ssa 完整性，所以依旧需要进行 lir mov 指令插入(可以使用 NOP 指令代替)
     if (size == 0) {
-        linked_push(list, lir_op_nop_def(dst_operand));
-        return dst_operand;
+        return lir_op_nop_def(dst_operand);
     }
 
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
@@ -721,13 +720,10 @@ static inline lir_operand_t *lir_stack_alloc(closure_t *c, linked_t *list, type_
     }
 
     lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
-
-    linked_push(list, lir_op_lea(dst_operand, src_operand));
-
-    return src_operand;
+    return lir_op_lea(dst_operand, src_operand);
 }
 
-static inline lir_operand_t *temp_var_operand_without_stack(module_t *m, type_t type) {
+static inline lir_operand_t *temp_var_operand_without_alloc(module_t *m, type_t type) {
     assert(type.kind > 0);
 
     string result = var_unique_ident(m, TEMP_IDENT);
@@ -743,7 +739,7 @@ static inline lir_operand_t *temp_var_operand_without_stack(module_t *m, type_t 
  * @param type
  * @return
  */
-static inline lir_operand_t *temp_var_operand_with_stack(module_t *m, type_t type) {
+static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t type) {
     assert(type.kind > 0);
 
     string result = var_unique_ident(m, TEMP_IDENT);
@@ -752,8 +748,8 @@ static inline lir_operand_t *temp_var_operand_with_stack(module_t *m, type_t typ
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_alloc_stack(type)) {
-        lir_stack_alloc(m->current_closure, m->current_closure->operations, type, target);
+    if (is_defer_alloc_type(type)) {
+        OP_PUSH(lir_op_output(LIR_OPCODE_ALLOC, target));
     }
 
     return target;
@@ -768,8 +764,8 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(c->module, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_alloc_stack(type)) {
-        lir_stack_alloc(c, list, type, target);
+    if (is_defer_alloc_type(type)) {
+        linked_push(list, lir_stack_alloc(c, type, target));
     }
 
     return target;
@@ -787,7 +783,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
 
     if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
         type_t base_type = lir_operand_type(base);
-        lir_operand_t *temp = temp_var_operand_with_stack(m, base_type);
+        lir_operand_t *temp = temp_var_operand_with_alloc(m, base_type);
         OP_PUSH(lir_op_move(temp, base));
         base = temp;
     }
@@ -850,7 +846,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = operand->value;
         // 确保参数入栈
-        lir_operand_t *temp_operand = temp_var_operand_with_stack(m, type_kind_new(imm->kind));
+        lir_operand_t *temp_operand = temp_var_operand_with_alloc(m, type_kind_new(imm->kind));
         OP_PUSH(lir_op_move(temp_operand, operand));
         operand = temp_operand;
     }
@@ -865,7 +861,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     type_t t = lir_operand_type(operand);
     t = type_ptrof(t);
 
-    lir_operand_t *temp_ref = temp_var_operand_without_stack(m, t);
+    lir_operand_t *temp_ref = temp_var_operand_without_alloc(m, t);
     OP_PUSH(lir_op_lea(temp_ref, operand));
     return temp_ref;
 }
