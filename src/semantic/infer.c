@@ -671,15 +671,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     }
 
     if (as_expr->src.type.kind == TYPE_RAW_PTR) {
-        // 只能 as 为 ptr<t>
-        INFER_ASSERTF(target_type.kind == TYPE_PTR || target_type.kind == TYPE_VOID_PTR,
-                      "%s can only as ptr<%s> or void_ptr", type_format(as_expr->src.type),
-                      type_format(as_expr->src.type.ptr->value_type));
-
-        if (target_type.kind == TYPE_PTR) {
-            INFER_ASSERTF(type_compare(target_type.ptr->value_type, as_expr->src.type.ptr->value_type, NULL),
-                          "%s cannot as %s", type_format(as_expr->src.type), type_format(as_expr->target_type));
-        }
+        INFER_ASSERTF(target_type.kind == TYPE_VOID_PTR, "%s can only as void_ptr", type_format(as_expr->src.type));
 
         return target_type;
     }
