@@ -21,10 +21,10 @@ type libc_tm_t = struct {
 fn localtime(raw_ptr<i64> timestamp):ptr<libc_tm_t>
 
 // 将 time_info_t 转换为时间戳
-fn mktime(ptr<libc_tm_t> time_info):i64
+fn mktime(raw_ptr<libc_tm_t> time_info):i64
 
 // strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
-fn strftime(void_ptr s, i64 size, void_ptr format, ptr<libc_tm_t> time_info):i64
+fn strftime(void_ptr s, i64 size, void_ptr format, raw_ptr<libc_tm_t> time_info):i64
 
 // 通过空值 options 实现阻塞和非阻塞模式
 fn waitpid(int pid, raw_ptr<int> status, int options):int
@@ -82,6 +82,8 @@ fn srand(u32 seed)
 fn rand():int
 
 fn clock():int
+
+fn uv_hrtime():u64
 
 // --- 自定义在 runtime/libc 模块中的函数
 // void_ptr = char*

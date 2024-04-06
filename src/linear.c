@@ -491,17 +491,19 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_struct_select_t *struct_access = stmt->left.value;
     type_t type_struct;
 
-    // 自动解构
+    lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
+    type_struct = struct_access->instance.type;
     if (is_struct_ptr(struct_access->instance.type)) {
         type_struct = struct_access->instance.type.ptr->value_type;
-    } else {
-        type_struct = struct_access->instance.type;
+    } else if (is_struct_raw_ptr(type_struct)) {
+        type_struct = type_struct.ptr->value_type;
+        push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, struct_target);
+        linear_has_error(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
-    int64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
-    lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
+    int64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
     // indirect_addr -> [rax + 0x8], rax 存储的内容必须是一个内存地址, indirect addr 对于不同的指令来说含义不通
     // 1. mov 12 -> [rax+0x8] 表示将 12 移动到 rax 移动到 rax+0x8 对应的内存地址中, 移动的大小根据声明的尺寸
@@ -1221,7 +1223,6 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     if (unary_expr->operator == AST_OP_LA || unary_expr->operator == AST_OP_SAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_defer_alloc_type(unary_expr->operand.type)) {
-
             if (unary_expr->operator == AST_OP_SAFE_LA) {
                 linear_escape_to_heap(m, first);
             }
@@ -1243,6 +1244,12 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
     if (unary_expr->operator == AST_OP_IA) {
+        // checking
+        if (unary_expr->operand.type.kind == TYPE_RAW_PTR) {
+            push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, first);
+            linear_has_error(m);
+        }
+
         if (!target) {
             target = temp_var_operand_with_alloc(m, expr.type);
         }
@@ -1540,6 +1547,12 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     type_t type_struct = ast->instance.type;
     if (is_struct_ptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
+    } else if (is_struct_raw_ptr(type_struct)) {
+        type_struct = type_struct.ptr->value_type;
+
+        push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, struct_target);
+
+        linear_has_error(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -1548,7 +1561,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     // 先找到存放地址(可以用 indirect addr 算出来, 也可以直接用加法算出来？)
     // 总之先找到存放数据的 addr(这里直接计算出了)
     lir_operand_t *src = indirect_addr_operand(m, expr.type, struct_target, offset);
-    // 如果是结构体的话，src 中存储的应该是指向的 addr
+
     if (is_defer_alloc_type(expr.type)) {
         src = lea_operand_pointer(m, src);
     }
@@ -1721,6 +1734,12 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
+    // compiler(为了寄存器分配和 native void 被作为 size=8 处理) 和 runtime 共用了 type_sizeof 方法
+    // runtime 时，void 的 size 应该是 0
+    if (ast->target_type.kind == TYPE_VOID) {
+        return 0;
     }
 
     uint16_t size = type_sizeof(ast->target_type);

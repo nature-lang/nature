@@ -1,6 +1,6 @@
 fn bar()
 
-@linkid custom_link_foo_id
+#linkid custom_link_foo_id
 fn foo(int a) {
     println('hello world', a)
 }
@@ -11,5 +11,5 @@ fn test2() {
     println("aa")
 }
 
-@linkid sleep
+#linkid sleep
 fn test3(int second)

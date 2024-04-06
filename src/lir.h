@@ -74,6 +74,7 @@
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
+#define RT_CALL_RAW_PTR_VALID "raw_ptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
 #define RT_CALL_MAP_ACCESS "rt_map_access"

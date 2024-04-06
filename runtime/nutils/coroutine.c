@@ -3,7 +3,7 @@
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
     coroutine_t *co = rt_coroutine_new(fn, flag, fu);
     rt_coroutine_dispatch(co);
-    TDEBUGF("[rt_coroutine_async] co=%p, fn=%p, flag=%ld, fu=%p, size=%ld", co, fn, flag, fu, fu->size);
+    DEBUGF("[rt_coroutine_async] co=%p, fn=%p, flag=%ld, fu=%p, size=%ld", co, fn, flag, fu, fu->size);
 
     return co;
 }

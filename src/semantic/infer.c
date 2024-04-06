@@ -132,19 +132,19 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    // raw_ptr<t> 可以匹配 null 和 ptr<t> 这种类型的赋值
-    // TODO 可以删除，基本封死 raw_ptr 的各种操作, 在 nature 中 raw_ptr 什么都干不了
-//    if (dst.kind == TYPE_RAW_PTR) {
-//        if (src.kind == TYPE_NULL) {
-//            return true;
-//        }
-//
-//        if (src.kind == TYPE_PTR) {
-//            type_t dst_ptr = dst.ptr->value_type;
-//            type_t src_ptr = src.ptr->value_type;
-//            return type_compare(dst_ptr, src_ptr, generics_param_table);
-//        }
-//    }
+    // raw_ptr<t> 可以赋值为 null 以及 ptr<t> 两种类型的值
+    // 但是不能通过 as 转换为 ptr<T> 和 null
+    if (dst.kind == TYPE_RAW_PTR) {
+        if (src.kind == TYPE_NULL) {
+            return true;
+        }
+
+        if (src.kind == TYPE_PTR) {
+            type_t dst_ptr = dst.ptr->value_type;
+            type_t src_ptr = src.ptr->value_type;
+            return type_compare(dst_ptr, src_ptr, generics_param_table);
+        }
+    }
 
     // type param special
     if (dst.kind == TYPE_PARAM) {
@@ -655,6 +655,12 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t src_type = infer_expr(m, &as_expr->src, target_type);
     as_expr->src.type = src_type;
 
+    // type_compare 允许 ptr 赋值给 raw_ptr 所以返回了 true, 但是不允许 as, 所以需要进行 as 拦截
+    if (as_expr->src.type.kind == TYPE_RAW_PTR) {
+        INFER_ASSERTF(target_type.kind == TYPE_VOID_PTR, "%s can only as void_ptr", type_format(as_expr->src.type));
+
+        return target_type;
+    }
 
     // 如果此时 src type 和 dst type 一致，则直接跳过，不做任何报错
     if (type_compare(src_type, target_type, NULL)) {
@@ -667,12 +673,6 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         // target_type 必须包含再 union 中
         INFER_ASSERTF(union_type_contains(as_expr->src.type, target_type), "type = %s not contains in union type",
                       type_format(target_type));
-        return target_type;
-    }
-
-    if (as_expr->src.type.kind == TYPE_RAW_PTR) {
-        INFER_ASSERTF(target_type.kind == TYPE_VOID_PTR, "%s can only as void_ptr", type_format(as_expr->src.type));
-
         return target_type;
     }
 
@@ -883,7 +883,8 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
 
     // *var
     if (expr->operator == AST_OP_IA) {
-        INFER_ASSERTF(type.kind == TYPE_PTR, "cannot dereference non-pointer type '%s'", type_format(type));
+        INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAW_PTR,
+                      "cannot dereference non-pointer type '%s'", type_format(type));
 
         return type.ptr->value_type;
     }
@@ -1259,15 +1260,16 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
     // infer 自动解引用
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
-    if (left_type.kind == TYPE_PTR) {
+    if (left_type.kind == TYPE_PTR | left_type.kind == TYPE_RAW_PTR) {
         type_t value_type = select->left.type.ptr->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
         }
     }
 
-    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
-                  "%s cannot use select '.' operator", type_format(left_type));
+    // TODO 在本次版本中，尝试不进行限制 raw ptr 的 . 语法，从而达到和 c 语言一样的效果
+//    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
+//                  "%s cannot use select '.' operator", type_format(left_type));
 
     // ast_access to ast_struct_access
     if (left_type.kind == TYPE_STRUCT) {
@@ -1280,7 +1282,7 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
-        struct_select->instance = select->left;// 可能是 pointer<struct> 也可能是 struct
+        struct_select->instance = select->left;// 可能是 ptr<struct>/ raw_ptr<struct> / struct
         struct_select->key = select->key;
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
@@ -1395,13 +1397,18 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
         // 查找对应的 fn
         symbol_t *s = symbol_table_get(impl_symbol_name);
         if (s != NULL) {
+
+            // 如果 select_left_type 是 raw_ptr, 则不允许进行 impl fn 调用
+            INFER_ASSERTF(select_left_type.kind != TYPE_RAW_PTR, "%s cannot use impl call",
+                          type_format(select_left_type));
+
             call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
             list_t *args = ct_list_new(sizeof(ast_expr_t));
 
             ast_expr_t *self_arg = &select->left;
             if (self_arg->type.kind == TYPE_STRUCT) {
-                self_arg = ast_unary(self_arg);
+                self_arg = ast_safe_la(self_arg); // safe_load_addr
             }
 
             ct_list_push(args, self_arg);

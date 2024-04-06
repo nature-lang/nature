@@ -633,7 +633,7 @@ static inline ast_expr_t *ast_bool_expr(int line, int column, bool b) {
     return expr;
 }
 
-static inline ast_expr_t *ast_unary(ast_expr_t *target) {
+static inline ast_expr_t *ast_safe_la(ast_expr_t *target) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);

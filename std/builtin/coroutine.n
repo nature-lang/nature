@@ -4,6 +4,7 @@ type future_t<T> = struct{
     i64 size
     raw_ptr<T> result
     void_ptr await_co
+    raw_ptr<T> error;
 }
 
 type chan_t<T> = struct{
@@ -30,12 +31,22 @@ fn co_return<T>(raw_ptr<T> result) {
 fn future_t<T>.await():T {
     rt_coroutine_await(self.await_co)
 
-    var err = rt_coroutine_error(self.await_co)
+    raw_ptr<error_t> err = rt_coroutine_error(self.await_co)
     if !(err is null) {
-        let err as ptr<error_t>
-
         throw err.msg
     }
 
-    return *(self.result as ptr<T>)
+    return *self.result
+}
+
+
+fn future_t<T:void>.await():T {
+    rt_coroutine_await(self.await_co)
+
+    raw_ptr<error_t> err = rt_coroutine_error(self.await_co)
+    if !(err is null) {
+        throw err.msg
+    }
+
+    return
 }

@@ -31,7 +31,8 @@
 
 #define PAGE_ALLOC_CHUNK_SPLIT 8192// 每组 chunks 中的元素的数量
 
-#define ARENA_HINT_BASE 824633720832 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_MAX 0x800000000000 // 128T
 #define ARENA_HINT_SIZE 1099511627776// 1 << 40
 #define ARENA_HINT_COUNT 128         // 0.75T ~ 128T
 
@@ -241,6 +242,7 @@ typedef struct n_future_t {
     int64_t size;
     void *result;
     void *co;
+    n_errort *error; // 类似 result 一样可选的 error
 } n_future_t;
 
 typedef struct coroutine_t {
@@ -251,8 +253,7 @@ typedef struct coroutine_t {
     aco_t aco;
     void *fn;      // fn 指向
     processor_t *p;// 当前 coroutine 绑定的 p
-    //    n_vec_t *args;
-    void *result;// coroutine 如果存在返回值，相关的值会放在 result 中
+
     n_future_t *future;
 
     struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit

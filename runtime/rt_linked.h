@@ -79,12 +79,8 @@ static inline void rt_linked_fixalloc_push_heap(rt_linked_fixalloc_t *l, void *v
     mutex_unlock(&l->locker);
 }
 
-// pop and free node from front
-static inline void *rt_linked_fixalloc_pop(rt_linked_fixalloc_t *l) {
-    mutex_lock(&l->locker);
-
+static inline void *rt_linked_fixalloc_pop_no_lock(rt_linked_fixalloc_t *l) {
     if (l->count == 0) {
-        mutex_unlock(&l->locker);
         return NULL;
     }
 
@@ -101,8 +97,15 @@ static inline void *rt_linked_fixalloc_pop(rt_linked_fixalloc_t *l) {
     l->count--;
 
     fixalloc_free(&l->nodealloc, node);
-    mutex_unlock(&l->locker);
 
+    return value;
+}
+
+// pop and free node from front
+static inline void *rt_linked_fixalloc_pop(rt_linked_fixalloc_t *l) {
+    mutex_lock(&l->locker);
+    void *value = rt_linked_fixalloc_pop_no_lock(l);
+    mutex_unlock(&l->locker);
     return value;
 }
 
@@ -118,14 +121,13 @@ static inline rt_linked_node_t *rt_linked_fixalloc_first(rt_linked_fixalloc_t *l
 }
 
 static inline void rt_linked_fixalloc_remove(rt_linked_fixalloc_t *l, rt_linked_node_t *node) {
-    mutex_lock(&l->locker);
     if (node == NULL) {
-        mutex_unlock(&l->locker);
         return;
     }
 
+    mutex_lock(&l->locker);
     if (node == l->front) {
-        rt_linked_fixalloc_pop(l);
+        rt_linked_fixalloc_pop_no_lock(l);
         mutex_unlock(&l->locker);
         return;
     }

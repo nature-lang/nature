@@ -8,11 +8,6 @@ var p = other.person_t{
 
 [other.person_t] list = [p]
 
-raw_ptr<other.person_t> b = &list[0]
-
-// println(b.name) 20240329_00_struct_ptr/main.n:14:9: raw_ptr<other.person_t(struct)> cannot use select '.' operator
-
-
 println(list[0].name, list[0].age, list[0].sex)
 println(p.name, p.age, p.sex)
 
@@ -21,3 +16,17 @@ println(p.get_name())
 println(list[0].name, list[0].age, list[0].sex, p.name, p.age, p.sex)
 
 p.test_self()
+
+
+// raw_ptr struct test
+raw_ptr<other.person_t> b = &p
+b.age = 32
+println(b.name, b.age, b.sex)
+
+b = null
+var c = b.name catch err {
+    println(err.msg)
+}
+
+// 没有完整的 try catch, 所以无法 catch
+b.name = 'hello'

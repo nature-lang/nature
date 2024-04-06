@@ -285,9 +285,9 @@ void mcentral_sweep(mheap_t *mheap) {
  */
 static void scan_stack(processor_t *p, coroutine_t *co) {
     DEBUGF(
-            "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
+            "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
             "scan_ret_addr=%p",
-            p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->aco.save_stack.valid_sz,
+            p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
             co->aco.save_stack.ptr,
             co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
 
@@ -330,8 +330,8 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     assert(scan_sp % POINTER_SIZE == 0);
 
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co,
-           (void *) scan_sp, size,
-           (void *) co->scan_ret_addr);
+            (void *) scan_sp, size,
+            (void *) co->scan_ret_addr);
 
 #ifdef NATURE_DEBUG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
@@ -565,43 +565,56 @@ static void handle_gc_worklist(processor_t *p) {
 static void gc_work() {
     processor_t *share_p = processor_get();
     assert(share_p);
-    coroutine_t *co = coroutine_get();
-    assert(co);
+    coroutine_t *gc_co = coroutine_get();
+    assert(gc_co);
 
-    DEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, co=%p, co_count=%lu", share_p->share, share_p->index, co,
-           share_p->co_list.count);
+    DEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu",
+            share_p->share, share_p->index, gc_co, gc_co->id, share_p->co_list.count);
 
     // - share goroutine root and change color black
-    RT_LINKED_FOR(share_p->co_list) {
-        coroutine_t *wait_co = RT_LINKED_VALUE();
+    rt_linked_node_t *current = share_p->co_list.front;
+    while (current->value != NULL) {
+        coroutine_t *wait_co = current->value;
+        rt_linked_node_t *node = current;
+        current = current->succ;
 
-        DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_black=%lu, aco=%p",
-               share_p->share, share_p->index,
-               wait_co, wait_co->status, wait_co->gc_black, &wait_co->aco);
+        DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+                share_p->share, share_p->index,
+                wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
+                &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
-            rt_linked_fixalloc_remove(&share_p->co_list, RT_LINKED_NODE());
+            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, will remove",
+                    wait_co, wait_co->main, wait_co->gc_work);
 
-            coroutine_free(co);
+            coroutine_free(wait_co);
+
+            rt_linked_fixalloc_remove(&share_p->co_list, node);
+            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, remove completed",
+                    wait_co, wait_co->main, wait_co->gc_work);
+
             continue;
         }
 
         // add gc mark
-        if (span_of((addr_t) co->fn)) {
-            DEBUGF("[runtime_gc.scan_stack] co=%p fn=%p in heap and span, need gc mark", co, co->fn);
-            insert_gc_worklist(&share_p->gc_worklist, co->fn);
+        if (span_of((addr_t) wait_co->fn)) {
+            DEBUGF("[runtime_gc.scan_stack] co=%p fn=%p in heap and span, need gc mark", wait_co, wait_co->fn);
+            insert_gc_worklist(&share_p->gc_worklist, wait_co->fn);
         }
 
         // 只有第一次 resume 时才会初始化 co, 申请堆栈，并且绑定对应的 p
         if (!wait_co->aco.inited) {
-            DEBUGF("[runtime_gc.gc_work] co=%p, fn=%p not init, will skip", wait_co, co->fn);
+            DEBUGF("[runtime_gc.gc_work] co=%p, fn=%p not init, will skip", wait_co, wait_co->fn);
             continue;
         }
+
+        // inited 完成 ptr 不再为 null
+        assertf(wait_co->aco.save_stack.ptr, "co=%p, save_stack.ptr is null", wait_co);
 
         // gc black 标识 root 已经标记完成不需要进行处理
         if (wait_co->gc_black == memory->gc_count) {
             DEBUGF("[runtime_gc.gc_work] co=%p, gc_black=%lu, gc_count=%lu, will skip", wait_co, wait_co->gc_black,
-                   memory->gc_count);
+                    memory->gc_count);
             continue;
         }
 
@@ -614,14 +627,14 @@ static void gc_work() {
     }
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", share_p->share,
-           share_p->index);
-    co_yield_runnable(share_p, co);
+            share_p->index);
+    co_yield_runnable(share_p, gc_co);
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
     share_p->gc_work_finished = memory->gc_count;// 打上 completed 标识
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit",
-           share_p->share, share_p->index);
+            share_p->share, share_p->index);
 }
 
 /**
@@ -747,6 +760,7 @@ void runtime_gc() {
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
+    return;
 
     memory->gc_count += 1;
 
@@ -818,5 +832,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-           (before - allocated_bytes) / 1000);
+            (before - allocated_bytes) / 1000);
 }

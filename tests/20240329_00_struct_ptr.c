@@ -7,10 +7,14 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    printf("%s", raw);
-    return;
-    char *str = "hello world 2024\n"
-                "use time 2\n";
+    char *str = "hualaka 23 true\n"
+                "hualaka 23 true\n"
+                "hualaka\n"
+                "hualaka 23 true hualaka 30 true\n"
+                "in test_self hualaka 30 true\n"
+                "hualaka 32 true\n"
+                "invalid memory address or nil pointer dereference\n"
+                "coroutine 'main' uncaught error: 'invalid memory address or nil pointer dereference' at 20240329_00_struct_ptr/main.n:32:1\n";
 
     assert_string_equal(raw, str);
 }

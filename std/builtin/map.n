@@ -3,6 +3,6 @@ fn map<T,U>.len():int {
 }
 
 fn map<T,U>.del(T key) {
-    ptr<T> ref = &key
+    raw_ptr<T> ref = &key
     rt_map_delete(self as void_ptr, ref as void_ptr)
 }

@@ -160,9 +160,9 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
 
     ((void_fn_t) co->fn)();
 
-    DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, err=%p, will set status to rtcall",
+    DEBUGF("[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, gc_work=%d,err=%p, will set status to rtcall",
            p->share, p->index, co,
-           co->main, co->error);
+           co->main, co->gc_work, co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
     if (co->main) {
@@ -180,6 +180,10 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
         coroutine_t *await_co = co->await_co;
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
+
+        // error 传递
+
+        // 返回值传递
     } else {
         if (co->error && co->error->has) {
             coroutine_dump_error(co, co->error);
@@ -353,10 +357,10 @@ static void processor_run(void *raw) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-        STW_WAIT:
-            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
-                    p->share,
-                    p->index);
+            STW_WAIT:
+        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                p->share,
+                p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -429,7 +433,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-EXIT:
+    EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -742,11 +746,14 @@ void processor_set_exit() {
 }
 
 void coroutine_free(coroutine_t *co) {
+    mutex_lock(&cp_alloc_locker);
+
     aco_destroy(&co->aco);
     co->id = 0;
     co->fn = NULL;
+    co->aco.save_stack.ptr = 0;
+    co->status = CO_STATUS_DEAD;
 
-    mutex_lock(&cp_alloc_locker);
     fixalloc_free(&coroutine_alloc, co);
     mutex_unlock(&cp_alloc_locker);
 }
@@ -994,17 +1001,19 @@ void processor_set_status(processor_t *p, p_status_t status) {
 
 void rt_coroutine_return(void *result_ptr) {
     coroutine_t *co = coroutine_get();
-    TDEBUGF("[runtime.rt_coroutine_return] co=%p, fu=%p, size=%ld", co, co->future, co->future->size);
+    DEBUGF("[runtime.rt_coroutine_return] co=%p, fu=%p, size=%ld", co, co->future, co->future->size);
 
     assert(co->future);
     assert(co->future->size > 0);
 
     memmove(co->future->result, result_ptr, co->future->size);
-    DEBUGF("[runtime.rt_coroutine_return] co=%p, result=%p, int_result=%ld, result_size=%ld", co, co->result,
+    DEBUGF("[runtime.rt_coroutine_return] co=%p, result=%p, int_result=%ld, result_size=%ld", co, co->future->result,
            *(int64_t *) co->future->result, co->future->size);
 }
 
 void *rt_coroutine_error(coroutine_t *co) {
+    TDEBUGF("[runtime.rt_coroutine_error] co=%p, error=%p, msg=%s",
+            co, co->error, co->error ? (char *) co->error->msg->data : "-");
     return co->error;
 }
 
@@ -1013,7 +1022,6 @@ void rt_coroutine_await(coroutine_t *target_co) {
     coroutine_t *src_co = coroutine_get();
     if (target_co->status == CO_STATUS_DEAD) {
         mutex_unlock(&target_co->dead_locker);
-
         return;
     }
     target_co->await_co = src_co;

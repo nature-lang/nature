@@ -55,4 +55,6 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
 
 rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
 
+void raw_ptr_valid(void* raw_ptr);
+
 #endif // NATURE_BASIC_H

@@ -66,7 +66,7 @@ void fixalloc_free(fixalloc_t *f, void *p) {
     f->inuse -= f->size;
 
     // TODO 清空 p 中的数据，避免存在错误引用而没有报错出来, 正式环境用不上
-    //    memset(p, 0, f->size);
+    memset(p, 0, f->size);
 
     // 直接改变指针结构，将 v 存放在 free_list 头部
     fixalloc_link_t *v = p;// sizeof(fixalloc_link_t) = ptr_size

@@ -472,6 +472,15 @@ linked_t *scanner(module_t *m) {
             continue;
         }
 
+        if (scanner_match(m, '#')) {
+            char *word = scanner_ident_advance(m);
+            word++;
+            token_t *t = token_new(TOKEN_FN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
+            linked_push(list, t);
+            continue;
+        }
+
+
         // 首个字符是 0 ~ 9 则判定为数字
         if (scanner_is_number(m, *m->s_cursor.current)) {
             char *word = NULL;

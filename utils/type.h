@@ -647,6 +647,10 @@ static inline bool is_struct_ptr(type_t t) {
     return t.kind == TYPE_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
 }
 
+static inline bool is_struct_raw_ptr(type_t t) {
+    return t.kind == TYPE_RAW_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
+}
+
 static inline bool is_reduction_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR ||
            t.kind == TYPE_TUPLE ||

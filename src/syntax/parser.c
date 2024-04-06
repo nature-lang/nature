@@ -649,7 +649,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator= token_to_ast_op[operator_token->type];
+    binary_expr->operator = token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -756,7 +756,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-RET:
+    RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -820,7 +820,7 @@ static ast_expr_t parser_unary(module_t *m) {
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {// !true
-        unary_expr->operator= AST_OP_NOT;
+        unary_expr->operator = AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {// -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
@@ -843,13 +843,13 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator= AST_OP_NEG;
+        unary_expr->operator = AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {// ~0b2
-        unary_expr->operator= AST_OP_BNOT;
+        unary_expr->operator = AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {// &a
-        unary_expr->operator= AST_OP_LA;
+        unary_expr->operator = AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {// *a
-        unary_expr->operator= AST_OP_IA;
+        unary_expr->operator = AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1390,7 +1390,7 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator= token_to_ast_op[t->type];
+    binary_expr->operator = token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -1955,21 +1955,27 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     return result;
 }
 
-static ast_stmt_t *parser_macro_label_fn(module_t *m) {
+/**
+ * 只能是在 module 中声明
+ * @param m
+ * @return
+ */
+static ast_stmt_t *parser_fn_label(module_t *m) {
+    PARSER_ASSERTF(m->type != MODULE_TYPE_MAIN, "cannot define fn label in main module")
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
 
     do {
-        token_t *token = parser_must(m, TOKEN_MACRO_IDENT);
+        token_t *token = parser_must(m, TOKEN_FN_LABEL);
         if (str_equal(token->literal, MACRO_LINKID)) {
             token_t *linkto_value = parser_must(m, TOKEN_IDENT);
             fndef->linkid = linkto_value->literal;
         } else if (str_equal(token->literal, MACRO_LOCAL)) {
             fndef->is_private = true;
         } else {
-            PARSER_ASSERTF(false, "unknown macro label '%s'", token->literal);
+            PARSER_ASSERTF(false, "unknown fn label '%s'", token->literal);
         }
 
-    } while (parser_is(m, TOKEN_MACRO_IDENT));
+    } while (parser_is(m, TOKEN_FN_LABEL));
 
     parser_must(m, TOKEN_STMT_EOF);
 
@@ -2052,8 +2058,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return parser_throw_stmt(m);
     } else if (parser_is(m, TOKEN_LET)) {
         return parser_let_stmt(m);
-    } else if (parser_is(m, TOKEN_MACRO_IDENT)) {
-        return parser_macro_label_fn(m);
+    } else if (parser_is(m, TOKEN_FN_LABEL)) {
+        return parser_fn_label(m);
     } else if (parser_is(m, TOKEN_IDENT)) {
         return parser_ident_begin_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
@@ -2384,7 +2390,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator= AST_OP_LA;
+    unary->operator = AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 
@@ -2489,10 +2495,6 @@ static ast_expr_t parser_macro_call(module_t *m) {
     if (str_equal(token->literal, MACRO_CO_ASYNC)) {
         return parser_macro_co_async_expr(m);
     }
-
-    //    if (str_equal(token->literal, MACRO_TYPE_EQ)) {
-    //        return parser_macro_type_eq(m);
-    //    }
 
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);
 }

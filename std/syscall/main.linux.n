@@ -751,7 +751,7 @@ fn listen(int sockfd, int backlog) {
 // 相应 client sockfd 和 client sockaddr
 fn accept<T>(int sockfd, ptr<T> addr):int {
     var len = 16
-    ptr<int> len_ptr = &len
+    raw_ptr<int> len_ptr = &len
     int fd = call6(SYS_ACCEPT, sockfd as void_ptr, addr as void_ptr, len_ptr as void_ptr, 0, 0, 0)
 
     return fd

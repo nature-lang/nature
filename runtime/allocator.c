@@ -40,7 +40,7 @@ static bool summary_find_continuous(uint8_t level, page_summary_t *summaries, ui
     uint64_t find_max = 0;
     for (uint64_t i = *start; i < *end; ++i) {
         page_summary_t s = summaries[i];
-        //        TDEBUGF("[runtime.summary_find_continuous] level=%d, i=%lu, start=%d, max=%d, end=%d, find_max=%lu, max_pages_count=%lu", level, i, s.start, s.max, s.end, find_max, max_pages_count);
+        //        DEBUGF("[runtime.summary_find_continuous] level=%d, i=%lu, start=%d, max=%d, end=%d, find_max=%lu, max_pages_count=%lu", level, i, s.start, s.max, s.end, find_max, max_pages_count);
         find_max += s.start;// 左侧 + 新的 s 的 start
         if (find_max >= pages_count) {
             find = true;
