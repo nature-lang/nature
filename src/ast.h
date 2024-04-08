@@ -90,12 +90,12 @@ typedef enum {
     AST_OP_REM,// %
 
     // unary
-    AST_OP_NOT, // unary bool !right, right must bool
-    AST_OP_NEG, // unary number -right
-    AST_OP_BNOT,// unary binary ~right, right must int
-    AST_OP_LA,  // &var = load addr var
-    AST_OP_SAFE_LA,  // @safe_la(var) safe load addr var
-    AST_OP_IA,  // indirect addr  *解引用
+    AST_OP_NOT,    // unary bool !right, right must bool
+    AST_OP_NEG,    // unary number -right
+    AST_OP_BNOT,   // unary binary ~right, right must int
+    AST_OP_LA,     // &var = load addr var
+    AST_OP_SAFE_LA,// @safe_la(var) safe load addr var
+    AST_OP_IA,     // indirect addr  *解引用
 
     // 位运算
     AST_OP_AND,
@@ -528,18 +528,19 @@ struct ast_fndef_t {
     slice_t *body;// ast_stmt* 函数体
     void *closure;// closure 数据冗余
 
-    // 作为一个 generics fn, 泛型过程中需要分配具体的参数组合，直接使用 key/value type 进行分配即可
-    //    slice_t *generics_assigns;// value 是一个 table，保存了具体的 param 对应的 arg 参数
-    // 泛型 tpl 函数使用，记录当前 tpl 已经特化了的参数
-    table_t *generics_hash_table; // 避免重复写入到 generics_assigns
-    slice_t *generics_special_fns;// 当前模板的特化函数列表
+    // 记录当前 tpl fn 接受的泛型参数组合，避免重复生成 special fn
+    table_t *generics_hash_table;
 
     // infer call 时具体为 generics_params 分配的 args, 不需要单独初始化
     table_t *generics_args_table;
     char *generics_args_hash;// 基于 gen args 计算的 hash 值，可以唯一标记当前函数
 
-    // ast_ident 泛型参数, fn list_first<T, U>
+    // example:
+    // fn list_first<T,U>()
+    // fn vec<T>.first()
+    // TODO value is type_param_t
     list_t *generics_params;
+
     type_t impl_type;
 
     // 由于 infer_fndef 会延迟完成，所以还需要记录一下 type_param_table
@@ -567,8 +568,8 @@ struct ast_fndef_t {
     // 仅当前 fn 为 global fn 时才有可能存在一个或者多个 child_fndefs
     slice_t *local_children;
     // analyzer 时赋值
-    bool is_local;   // 是否是全局函数
-    bool is_tpl;     // 是否是 tpl 函数
+    bool is_local;// 是否是全局函数
+    bool is_tpl;  // 是否是 tpl 函数
 
     // tpl 专属, 自定义 调用当前函数实际上会被 linkto
     // 如果是 builtin 中的 tpl, 并且没有 linkto 参数，则什么也不用做
@@ -638,7 +639,7 @@ static inline ast_expr_t *ast_safe_la(ast_expr_t *target) {
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator = AST_OP_SAFE_LA;
+    expr->operator= AST_OP_SAFE_LA;
 
     result->line = target->line;
     result->column = target->column;

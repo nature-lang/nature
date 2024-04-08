@@ -280,8 +280,10 @@ struct type_string_t {
 };
 
 // type foo<formal> = fn(formal, int):formal
+// fn future_t<T:void|int,V:limit>.test() {}
 struct type_param_t {
     char *ident;
+    list_t *constraints;// type_t
 };
 
 struct type_alias_t {

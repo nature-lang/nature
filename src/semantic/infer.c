@@ -418,7 +418,6 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
 static char *generics_args_hash(ast_fndef_t *tpl_fn, table_t *arg_table) {
     assert(tpl_fn->is_generics);
     assert(tpl_fn->generics_params->length > 0);
-
     char *str = itoa(TYPE_FN);
     for (int i = 0; i < tpl_fn->generics_params->length; ++i) {
         ast_ident *ident = ct_list_value(tpl_fn->generics_params, i);
@@ -752,7 +751,7 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
         infer_fn_decl(m, co_expr->closure_fn);
         infer_fn_decl(m, co_expr->closure_fn_void);
 
-        first_arg = (ast_expr_t) {
+        first_arg = (ast_expr_t){
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
@@ -848,19 +847,19 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
-    if (expr->operator == AST_OP_NOT) {
+    if (expr->operator== AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
     type_t type = infer_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
-    if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
+    if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
         INFER_ASSERTF(false, "neg operand must applies to int or float type");
     }
 
     // &var
-    if (expr->operator == AST_OP_LA) {
+    if (expr->operator== AST_OP_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
@@ -871,7 +870,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     // @safe_la(var)
-    if (expr->operator == AST_OP_SAFE_LA) {
+    if (expr->operator== AST_OP_SAFE_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot safe load address of an literal or call");
 
@@ -882,7 +881,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     // *var
-    if (expr->operator == AST_OP_IA) {
+    if (expr->operator== AST_OP_IA) {
         INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAW_PTR,
                       "cannot dereference non-pointer type '%s'", type_format(type));
 
@@ -1268,8 +1267,8 @@ static type_t infer_select(module_t *m, ast_expr_t *expr) {
     }
 
     // TODO 在本次版本中，尝试不进行限制 raw ptr 的 . 语法，从而达到和 c 语言一样的效果
-//    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
-//                  "%s cannot use select '.' operator", type_format(left_type));
+    //    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
+    //                  "%s cannot use select '.' operator", type_format(left_type));
 
     // ast_access to ast_struct_access
     if (left_type.kind == TYPE_STRUCT) {
@@ -1317,20 +1316,27 @@ static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_typ
     }
 }
 
-static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t target_type, ast_fndef_t *tpl_fn) {
-    assert(!tpl_fn->is_local);
-    assert(tpl_fn->is_generics);
+static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t target_type, ast_fndef_t *temp_fn) {
+    assert(!temp_fn->is_local);
+    assert(temp_fn->is_generics);
 
-    // 首次初始化
+
+    // 一般泛型函数需要进行类型推断
+    table_t *args_table = infer_generics_args(m, temp_fn, call, target_type);
+    char *args_hash = generics_args_hash(temp_fn, args_table);
+    char *symbol_name = str_connect_by(temp_fn->symbol_name, args_hash, GEN_REWRITE_SEPARATOR);
+
+    ast_fndef_t *tpl_fn = temp_fn;
+
+    symbol_t *symbol = symbol_table_get(symbol_name);
+    if (symbol) {
+        tpl_fn = symbol->ast_value;
+    }
+
     if (tpl_fn->generics_hash_table == NULL) {
         tpl_fn->generics_hash_table = table_new();
     }
-    if (tpl_fn->generics_special_fns == NULL) {
-        tpl_fn->generics_special_fns = slice_new();
-    }
 
-    table_t *args_table = infer_generics_args(m, tpl_fn, call, target_type);
-    char *args_hash = generics_args_hash(tpl_fn, args_table);
     ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
     if (special_fn) {
         return special_fn;
@@ -1343,7 +1349,6 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
 
     // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理
     table_set(tpl_fn->generics_hash_table, args_hash, special_fn);
-    slice_push(tpl_fn->generics_special_fns, special_fn);
 
     special_fn->generics_args_hash = args_hash;
     special_fn->generics_args_table = args_table;
@@ -1393,6 +1398,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
         // 基于 left 进行拼装定位改写
         char *impl_ident = select_left_type.impl_ident;
         char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
+        // TODO impl_args 进行类型推导，以及笛卡尔积计算。
 
         // 查找对应的 fn
         symbol_t *s = symbol_table_get(impl_symbol_name);
@@ -1408,7 +1414,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
 
             ast_expr_t *self_arg = &select->left;
             if (self_arg->type.kind == TYPE_STRUCT) {
-                self_arg = ast_safe_la(self_arg); // safe_load_addr
+                self_arg = ast_safe_la(self_arg);// safe_load_addr
             }
 
             ct_list_push(args, self_arg);
@@ -1429,6 +1435,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
             ast_ident *ident = call->left.value;
             symbol_t *s = symbol_table_get(ident->literal);
             INFER_ASSERTF(s, "symbol '%s' not found", ident->literal);
+
             // 可能是 local 闭包函数，此时 type 是一个 var
             if (s->is_local) {
                 break;
@@ -1440,12 +1447,14 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
                 break;
             }
 
-            ast_fndef_t *tpl_fn = s->ast_value;
-            if (!tpl_fn->is_generics) {
+            ast_fndef_t *temp_fndef = s->ast_value;
+            if (!temp_fndef->is_generics) {
                 break;
             }
 
-            ast_fndef_t *special_fn = generic_special_fn(m, call, target_type, tpl_fn);
+            // 由于存在函数重载，所以需要进行多次匹配找到最合适的 tpl 函数
+
+            ast_fndef_t *special_fn = generic_special_fn(m, call, target_type, temp_fndef);
             assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
             // call ident 重写
@@ -2106,7 +2115,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
 
         INFER_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING ||
-                      t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
+                              t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
                       "map key only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_MAP];
@@ -2120,7 +2129,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         INFER_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING ||
-                      t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
+                              t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
                       "set element only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_SET];
@@ -2347,7 +2356,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     INFER_ASSERTF(false, "cannot parser type %s", type_format(t));
-    STATUS_DONE:
+STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_ident;
@@ -2446,38 +2455,56 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 }
 
+static list_t *generics_constraints_combination(list_t *generics_params) {
+    // TODO
+}
+
 
 /**
  * 对左右的 fn param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
  * @param m
  */
 void pre_infer(module_t *m) {
-    // - 全局变量中也包含类型信息需要进行还原处理与类型推导
+    // - Global variables also contain type information, which needs to be restored and derived
     for (int j = 0; j < m->global_vardef->count; ++j) {
         ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
 
-        // 内部已经完成了对类型的还原，并修改了 smt->vardecl 的值
-        // 这会直接影响到全局符号表中的 vardecl
         infer_global_vardef(m, vardef);
     }
 
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
-        ast_fndef_t *fn = m->ast_fndefs->take[i];
-
-        assert(!fn->is_local);
+        ast_fndef_t *fndef = m->ast_fndefs->take[i];
+        assert(!fndef->is_local);
 
         // generics fn 不能 reduction, 会导致后续 special fn copy 异常
-        if (fn->is_generics) {
+        if (fndef->is_generics) {
+            // generics 的 generic_param+limit
+            assert(fndef->generics_params);
+
+            // 1. 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中
+            //    但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成
+            //    所以仅仅是注册到符号表时的 key 有所不同
+            list_t *generics_args = generics_constraints_combination(fndef->generics_params);
+            for (int j = 0; j < generics_args->length; ++j) {
+                int64_t *arg_hash = ct_list_value(generics_args, j);
+
+                // 重新进行符号表注册, 不需要修改 fn->symbol_name, 此处只是用来协助匹配
+                char *symbol_name = fndef->symbol_name;
+                symbol_name = str_connect_by(symbol_name, itoa(*arg_hash), GEN_REWRITE_SEPARATOR);
+                symbol_t *s = symbol_table_set(symbol_name, SYMBOL_FN, fndef, false);
+                ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
+            }
+
             continue;
         }
 
         // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
-        infer_fn_decl(m, fn);
+        infer_fn_decl(m, fndef);
 
         // infer child
-        for (int j = 0; j < fn->local_children->count; ++j) {
-            infer_fn_decl(m, fn->local_children->take[j]);
+        for (int j = 0; j < fndef->local_children->count; ++j) {
+            infer_fn_decl(m, fndef->local_children->take[j]);
         }
     }
 }

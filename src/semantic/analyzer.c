@@ -765,7 +765,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_begin_scope(m);
 
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
-    // fn vec<t>.len() -> fn vec_len(vec<t> self)
+    // fn vec<T>.vec_len() -> fn vec_len(vec<T> self)
     if (fndef->impl_type.kind > 0) {
         // 更新 alias
         if (fndef->impl_type.kind == TYPE_ALIAS) {
@@ -775,9 +775,8 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
             fndef->impl_type.alias->ident = unique_alias_ident;
         }
 
-
+        // 重构关于 param 的位置
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
-
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
         type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
@@ -1629,7 +1628,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t) {
+            assign->left = (ast_expr_t){
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1666,7 +1665,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
             char *symbol_name = fndef->symbol_name;
 
-            // fn string<>.len() -> fn string_len to symbol_table
+            // fn string<T>.len() -> fn <T>.string_len to symbol_table
             if (fndef->impl_type.kind > 0) {
                 assert(fndef->impl_type.impl_ident);
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
@@ -1700,7 +1699,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t) {
+        call->left = (ast_expr_t){
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident),// module.init
                 .line = 1,
