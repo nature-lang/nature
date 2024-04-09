@@ -1871,10 +1871,22 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         // 记录泛型参数，用于 parser type 时可以正确解析
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             m->parser_type_params_table = table_new();
-            fndef->generics_params = ct_list_new(sizeof(type_param_t));// TODO 不能只是 ident， 应该是 type_param
+            fndef->generics_params = ct_list_new(sizeof(ast_generic_param_t));
             do {
                 token_t *ident = parser_advance(m);
-                ast_ident *temp = ast_new_ident(ident->literal);
+                ast_generic_param_t *temp = NEW(ast_generic_param_t);
+                temp->ident = ident->literal;
+
+
+                // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+                if (parser_consume(m, TOKEN_COLON)) {
+                    temp->constraints = ct_list_new(sizeof(type_t));
+                    do {
+                        type_t t = parser_single_type(m);
+                        ct_list_push(temp->constraints, &t);
+                    } while (parser_consume(m, TOKEN_OR));
+                }
+
                 ct_list_push(fndef->generics_params, temp);
                 table_set(m->parser_type_params_table, ident->literal, ident->literal);
             } while (parser_consume(m, TOKEN_COMMA));
@@ -1923,10 +1935,21 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
     if (!is_impl_type && parser_consume(m, TOKEN_LEFT_ANGLE)) {
         m->parser_type_params_table = table_new();
-        fndef->generics_params = ct_list_new(sizeof(ast_ident));
+        fndef->generics_params = ct_list_new(sizeof(ast_generic_param_t));
         do {
             token_t *ident = parser_advance(m);
-            ast_ident *temp = ast_new_ident(ident->literal);
+            ast_generic_param_t *temp = NEW(ast_generic_param_t);
+            temp->ident = ident->literal;
+
+            // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+            if (parser_consume(m, TOKEN_COLON)) {
+                temp->constraints = ct_list_new(sizeof(type_t));
+                do {
+                    type_t t = parser_single_type(m);
+                    ct_list_push(temp->constraints, &t);
+                } while (parser_consume(m, TOKEN_OR));
+            }
+
             ct_list_push(fndef->generics_params, temp);
             table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));

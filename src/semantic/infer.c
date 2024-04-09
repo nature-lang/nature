@@ -348,9 +348,9 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
 
         // 判断泛型参数是否全部推断完成
         for (int i = 0; i < tpl_fn->generics_params->length; i++) {
-            ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
-            INFER_ASSERTF(table_exist(generics_args_table, param->literal), "cannot infer generics param '%s'",
-                          param->literal);
+            ast_generic_param_t *param = ct_list_value(tpl_fn->generics_params, i);
+            INFER_ASSERTF(table_exist(generics_args_table, param->ident), "cannot infer generics param '%s'",
+                          param->ident);
         }
         m->infer_type_args_stack = stash_stack;
     } else {
@@ -358,8 +358,8 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
         for (int i = 0; i < call->generics_args->length; i++) {
             type_t *arg_type = ct_list_value(call->generics_args, i);
             *arg_type = reduction_type(m, *arg_type);
-            ast_ident *param = ct_list_value(tpl_fn->generics_params, i);
-            table_set(generics_args_table, param->literal, arg_type);
+            ast_generic_param_t *param = ct_list_value(tpl_fn->generics_params, i);
+            table_set(generics_args_table, param->ident, arg_type);
         }
     }
 
@@ -415,13 +415,11 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
     expr->type = target_type;
 }
 
-static char *generics_args_hash(ast_fndef_t *tpl_fn, table_t *arg_table) {
-    assert(tpl_fn->is_generics);
-    assert(tpl_fn->generics_params->length > 0);
+static char *generics_args_hash(list_t *generics_params, table_t *arg_table) {
     char *str = itoa(TYPE_FN);
-    for (int i = 0; i < tpl_fn->generics_params->length; ++i) {
-        ast_ident *ident = ct_list_value(tpl_fn->generics_params, i);
-        type_t *t = table_get(arg_table, ident->literal);
+    for (int i = 0; i < generics_params->length; ++i) {
+        ast_generic_param_t *param = ct_list_value(generics_params, i);
+        type_t *t = table_get(arg_table, param->ident);
         assert(t);
         rtype_t r = ct_reflect_type(*t);
         str = str_connect(str, itoa((int64_t) r.hash));
@@ -1323,11 +1321,16 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
 
     // 一般泛型函数需要进行类型推断
     table_t *args_table = infer_generics_args(m, temp_fn, call, target_type);
-    char *args_hash = generics_args_hash(temp_fn, args_table);
+
+    assert(temp_fn->is_generics);
+    assert(temp_fn->generics_params->length > 0);
+
+    // 根据具体参数计算 args_hash
+    char *args_hash = generics_args_hash(temp_fn->generics_params, args_table);
     char *symbol_name = str_connect_by(temp_fn->symbol_name, args_hash, GEN_REWRITE_SEPARATOR);
 
+    // 在没有基于类型约束产生重载的情况下，temp_fn 就是 tpl_fn, 否则应该基于 arg_hash 查找具体类型的 tpl_fn
     ast_fndef_t *tpl_fn = temp_fn;
-
     symbol_t *symbol = symbol_table_get(symbol_name);
     if (symbol) {
         tpl_fn = symbol->ast_value;
@@ -1386,9 +1389,8 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
  * @return
  */
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
-    // [].push()
-    // alias.push()
     // --------------------------------------------impl type handle----------------------------------------------------------
+    // fn person_t<>.test() -> fn person_tx_test()
     if (call->left.assert_type == AST_EXPR_SELECT) {
         ast_select_t *select = call->left.value;
 
@@ -1452,8 +1454,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
                 break;
             }
 
-            // 由于存在函数重载，所以需要进行多次匹配找到最合适的 tpl 函数
-
+            // 由于存在函数重载，所以需要进行多次匹配找到最合适的 tpl 函数, 如果没有重载 temp_fndef 就是 tpl_fndef
             ast_fndef_t *special_fn = generic_special_fn(m, call, target_type, temp_fndef);
             assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
@@ -2455,8 +2456,64 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 }
 
-static list_t *generics_constraints_combination(list_t *generics_params) {
-    // TODO
+void cartesian_product(list_t *generics_params, int depth, type_t **temp_product, slice_t *result) {
+    if (depth == generics_params->length) {
+        // 从新申请空间， copy 到 result 中
+        table_t *arg_table = table_new();
+        for (int i = 0; i < generics_params->length; ++i) {
+            ast_generic_param_t *param = ct_list_value(generics_params, i);
+            // 直接引用到了 constraints 中
+            table_set(arg_table, param->ident, temp_product[i]);
+        }
+
+        slice_push(result, arg_table);
+    } else {
+        ast_generic_param_t *param = ct_list_value(generics_params, depth);
+        for (int i = 0; i < param->constraints->length; ++i) {
+            type_t *type = ct_list_value(param->constraints, i);
+            temp_product[depth] = type;
+            cartesian_product(generics_params, depth + 1, temp_product, result);
+        }
+    }
+}
+
+/**
+ * 排列组合计算 hash
+ * @param generics_params
+ * @return
+ */
+static slice_t *generics_constraints_combination(module_t *m, list_t *generics_params) {
+    // check generic param constraints
+    int constraints_count = 0;
+    for (int i = 0; i < generics_params->length; ++i) {
+        ast_generic_param_t *param = ct_list_value(generics_params, i);
+        if (param->constraints) {
+            constraints_count++;
+        }
+    }
+
+    INFER_ASSERTF(constraints_count == 0 || constraints_count == generics_params->length,
+                  "all generics params must have constraints or all none");
+
+    slice_t *hash_list = slice_new();
+
+    // 没有类型约束泽不需要计算 hash_list 了
+    if (constraints_count == 0) {
+        return hash_list;
+    }
+
+    slice_t *product_list = slice_new();
+    // 对 param 的 param->constraints 进行笛卡尔积计算, 也就是全量的排列组合, 比如 fn person_t<T:int|float, U:string> 的类型排列组合有  int+string 和 float+string 种可能
+    type_t *current_product = mallocz(sizeof(void *) * generics_params->length);
+    cartesian_product(generics_params, 0, current_product, product_list);
+
+    SLICE_FOR(product_list) {
+        table_t *arg_table = SLICE_VALUE(product_list);
+        char *arg_hash = generics_args_hash(generics_params, arg_table);
+        slice_push(hash_list, arg_hash);
+    }
+
+    return hash_list;
 }
 
 
@@ -2485,13 +2542,13 @@ void pre_infer(module_t *m) {
             // 1. 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中
             //    但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成
             //    所以仅仅是注册到符号表时的 key 有所不同
-            list_t *generics_args = generics_constraints_combination(fndef->generics_params);
-            for (int j = 0; j < generics_args->length; ++j) {
-                int64_t *arg_hash = ct_list_value(generics_args, j);
+            slice_t *generics_args = generics_constraints_combination(m, fndef->generics_params);
+            SLICE_FOR(generics_args) {
+                char *arg_hash = SLICE_VALUE(generics_args);
 
                 // 重新进行符号表注册, 不需要修改 fn->symbol_name, 此处只是用来协助匹配
                 char *symbol_name = fndef->symbol_name;
-                symbol_name = str_connect_by(symbol_name, itoa(*arg_hash), GEN_REWRITE_SEPARATOR);
+                symbol_name = str_connect_by(symbol_name, arg_hash, GEN_REWRITE_SEPARATOR);
                 symbol_t *s = symbol_table_set(symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
             }

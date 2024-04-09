@@ -1,0 +1,12 @@
+// TODO 普通类型约束支持
+type foo_t<T, U> = struct {
+    T a
+    U b
+    float c
+}
+
+fn foo<T, U>.dump():T {
+    println(self.a, self.b)
+    return self.a
+}
+

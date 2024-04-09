@@ -279,11 +279,10 @@ struct type_ptr_t {
 struct type_string_t {
 };
 
-// type foo<formal> = fn(formal, int):formal
-// fn future_t<T:void|int,V:limit>.test() {}
+// T a = 12
+// [T] b = []
 struct type_param_t {
     char *ident;
-    list_t *constraints;// type_t
 };
 
 struct type_alias_t {

@@ -511,9 +511,14 @@ typedef struct {
  */
 typedef struct {
     string ident;  // my_int (自定义的类型名称)
-    list_t *params;// ast_ident*|null
+    list_t *params;// type_param*|null
     type_t type;   // int (类型)
 } ast_type_alias_stmt_t;
+
+typedef struct {
+    char *ident;
+    list_t *constraints;// type_t
+} ast_generic_param_t;
 
 // 这里包含 body, 所以属于 def
 struct ast_fndef_t {
@@ -538,15 +543,11 @@ struct ast_fndef_t {
     // example:
     // fn list_first<T,U>()
     // fn vec<T>.first()
-    // TODO value is type_param_t
-    list_t *generics_params;
+    list_t *generics_params;// ast_generic_param
 
     type_t impl_type;
 
-    // 由于 infer_fndef 会延迟完成，所以还需要记录一下 type_param_table
-    table_t *type_param_table;// 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
-
-    // ast_expr, 当前 fn body 中引用的外部的环境
+     // ast_expr, 当前 fn body 中引用的外部的环境
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
     // 则需要将当前作用域中的变量打包成 env 丢给 child fn
     list_t *capture_exprs;
