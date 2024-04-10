@@ -253,6 +253,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
     while (*m->s_cursor.guard != close_char && !scanner_at_eof(m)) {
         char guard = *m->s_cursor.guard;
 
+        SCANNER_ASSERTF(guard != '\n', "string cannot newline")
+
         if (guard == escape_char) {
             // 跳过转义字符
             m->s_cursor.guard++;
@@ -565,7 +567,7 @@ static bool scanner_skip_space(module_t *m) {
                 scanner_guard_advance(m);
                 break;
             }
-            case '\n': {// 开启新的一行
+            case '\n': {
                 scanner_guard_advance(m);
                 has_new = true;
                 break;

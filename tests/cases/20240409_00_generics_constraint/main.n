@@ -1,0 +1,14 @@
+import 'mod.n'
+
+var f = mod.foo_t<int, f32>{
+    a = 233,
+    b = 333.444
+}
+int a = f.dump()
+
+var f2 = mod.foo_t<f32, bool>{
+    a = 233.333,
+    b = true
+}
+var a2 = f2.dump()
+

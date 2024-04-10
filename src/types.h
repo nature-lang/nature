@@ -178,10 +178,11 @@ struct module_t {
 
     slice_t *stmt_list;
 
-    // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 param 还是 alias, 仅仅使用到 key
+    // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 type param 还是 alias, 仅仅使用到 key
     table_t *parser_type_params_table;
 
     // infer 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
+    // reduction 是递归的，所以需要一个全局变量存储当前 type_param 的具体值
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
 

@@ -59,16 +59,15 @@ static type_t *select_tpl_fn_param(ast_fndef_t *tpl_fn, uint8_t index, bool is_s
 }
 
 
-static bool union_type_contains(type_t union_type, type_t sub) {
-    assert(union_type.kind == TYPE_UNION);
+static bool union_type_contains(type_union_t *union_type, type_t sub) {
     assert(sub.kind != TYPE_UNION);
 
-    if (union_type.union_->any) {
+    if (union_type->any) {
         return true;
     }
 
-    for (int i = 0; i < union_type.union_->elements->length; ++i) {
-        type_t *t = ct_list_value(union_type.union_->elements, i);
+    for (int i = 0; i < union_type->elements->length; ++i) {
+        type_t *t = ct_list_value(union_type->elements, i);
         if (type_compare(*t, sub, NULL)) {
             return true;
         }
@@ -348,7 +347,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
 
         // 判断泛型参数是否全部推断完成
         for (int i = 0; i < tpl_fn->generics_params->length; i++) {
-            ast_generic_param_t *param = ct_list_value(tpl_fn->generics_params, i);
+            ast_generics_param_t *param = ct_list_value(tpl_fn->generics_params, i);
             INFER_ASSERTF(table_exist(generics_args_table, param->ident), "cannot infer generics param '%s'",
                           param->ident);
         }
@@ -358,7 +357,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
         for (int i = 0; i < call->generics_args->length; i++) {
             type_t *arg_type = ct_list_value(call->generics_args, i);
             *arg_type = reduction_type(m, *arg_type);
-            ast_generic_param_t *param = ct_list_value(tpl_fn->generics_params, i);
+            ast_generics_param_t *param = ct_list_value(tpl_fn->generics_params, i);
             table_set(generics_args_table, param->ident, arg_type);
         }
     }
@@ -418,7 +417,7 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
 static char *generics_args_hash(list_t *generics_params, table_t *arg_table) {
     char *str = itoa(TYPE_FN);
     for (int i = 0; i < generics_params->length; ++i) {
-        ast_generic_param_t *param = ct_list_value(generics_params, i);
+        ast_generics_param_t *param = ct_list_value(generics_params, i);
         type_t *t = table_get(arg_table, param->ident);
         assert(t);
         rtype_t r = ct_reflect_type(*t);
@@ -668,7 +667,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         INFER_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
         // target_type 必须包含再 union 中
-        INFER_ASSERTF(union_type_contains(as_expr->src.type, target_type), "type = %s not contains in union type",
+        INFER_ASSERTF(union_type_contains(as_expr->src.type.union_, target_type), "type = %s not contains in union type",
                       type_format(target_type));
         return target_type;
     }
@@ -1331,9 +1330,11 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
 
     // 在没有基于类型约束产生重载的情况下，temp_fn 就是 tpl_fn, 否则应该基于 arg_hash 查找具体类型的 tpl_fn
     ast_fndef_t *tpl_fn = temp_fn;
+    bool is_singleton_tpl = false;
     symbol_t *symbol = symbol_table_get(symbol_name);
     if (symbol) {
         tpl_fn = symbol->ast_value;
+        is_singleton_tpl = true;
     }
 
     if (tpl_fn->generics_hash_table == NULL) {
@@ -1347,7 +1348,11 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
 
     // local_children 关系也已经重新构建, analyzer_global 用于辅助 local_children 重建
     m->analyzer_global = NULL;
-    special_fn = ast_fndef_copy(m, tpl_fn);
+    if (is_singleton_tpl) {
+        special_fn = tpl_fn;
+    } else {
+        special_fn = ast_fndef_copy(m, tpl_fn);
+    }
     special_fn->impl_type = tpl_fn->impl_type;
 
     // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理
@@ -1357,12 +1362,12 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     special_fn->generics_args_table = args_table;
 
     // rewrite special fn
-    special_fn->symbol_name = str_connect_by(special_fn->symbol_name, special_fn->generics_args_hash,
-                                             GEN_REWRITE_SEPARATOR);
+    special_fn->symbol_name = symbol_name;
 
     // 注册到全局符号表(还未基于 args_hash infer + reduction)
     assert(!special_fn->is_local);
     symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
+    // 下面的 infer_fn_decl 会进行 special_fn->type 的类型推导
     special_fn->type.status = REDUCTION_STATUS_UNDO;
 
     // 基于 args_table 进行类型特化，包含 special_fn 和 child
@@ -1458,7 +1463,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
             ast_fndef_t *special_fn = generic_special_fn(m, call, target_type, temp_fndef);
             assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
-            // call ident 重写
+            // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
             ident->literal = special_fn->symbol_name;
 
             // infer call args
@@ -2019,7 +2024,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // single type to union type (必须保留)
     if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {
-        INFER_ASSERTF(union_type_contains(target_type, expr->type), "union type not contains '%s'",
+        INFER_ASSERTF(union_type_contains(target_type.union_, expr->type), "union type not contains '%s'",
                       type_format(expr->type));
 
         *expr = ast_type_as(*expr, target_type);
@@ -2233,11 +2238,23 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
     // 此时的 type alias 相当于重新定义了一个新的类型，所以不会存在 reduction 冲突问题
     if (type_alias_stmt->params) {
-        assert(t.alias->args);// alias 有 param, 则实例化时必须携带 args
-        assert(t.alias->args->length == type_alias_stmt->params->length);
+        INFER_ASSERTF(t.alias->args, "type alias '%s' need param", alias->ident);
+        INFER_ASSERTF(t.alias->args->length == type_alias_stmt->params->length, "type alias '%s' param not match",
+                      alias->ident);
+
+        // 对 arg 进行 reduction 并校验类型归属
+        for (int i = 0; i < t.alias->args->length; ++i) {
+            type_t *arg = ct_list_value(t.alias->args, i);
+            *arg = reduction_type(m, *arg);
+
+            ast_generics_param_t *param = ct_list_value(type_alias_stmt->params, i);
+
+
+            INFER_ASSERTF(union_type_contains(&param->constraints, *arg), "type alias '%s' param constraint not match",
+                          alias->ident);
+        }
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
-        // 实参注册
         if (m->infer_type_args_stack) {
             table_t *args_table = table_new();
             impl_args = ct_list_new(sizeof(type_t));
@@ -2362,9 +2379,7 @@ STATUS_DONE:
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_ident;
     t.origin_type_kind = origin_type_kind;
-    if (t.kind == TYPE_INT || t.kind == TYPE_UINT || t.kind == TYPE_FLOAT) {
-        t.kind = cross_kind_trans(t.kind);
-    }
+    t.kind = cross_kind_trans(t.kind);
 
     // 计算 reflect type
     ct_reflect_type(t);
@@ -2461,16 +2476,17 @@ void cartesian_product(list_t *generics_params, int depth, type_t **temp_product
         // 从新申请空间， copy 到 result 中
         table_t *arg_table = table_new();
         for (int i = 0; i < generics_params->length; ++i) {
-            ast_generic_param_t *param = ct_list_value(generics_params, i);
+            ast_generics_param_t *param = ct_list_value(generics_params, i);
             // 直接引用到了 constraints 中
             table_set(arg_table, param->ident, temp_product[i]);
         }
 
         slice_push(result, arg_table);
     } else {
-        ast_generic_param_t *param = ct_list_value(generics_params, depth);
-        for (int i = 0; i < param->constraints->length; ++i) {
-            type_t *type = ct_list_value(param->constraints, i);
+        ast_generics_param_t *param = ct_list_value(generics_params, depth);
+        for (int i = 0; i < param->constraints.elements->length; ++i) {
+            type_t *type = ct_list_value(param->constraints.elements, i);
+            assert(type->status == REDUCTION_STATUS_DONE);
             temp_product[depth] = type;
             cartesian_product(generics_params, depth + 1, temp_product, result);
         }
@@ -2482,29 +2498,34 @@ void cartesian_product(list_t *generics_params, int depth, type_t **temp_product
  * @param generics_params
  * @return
  */
-static slice_t *generics_constraints_combination(module_t *m, list_t *generics_params) {
-    // check generic param constraints
-    int constraints_count = 0;
+static slice_t *generics_constraints_product(module_t *m, list_t *generics_params) {
+    // 要么全部是 any， 要么不能全部是 any, 避免复杂的匹配情况
+    int any_count = 0;
     for (int i = 0; i < generics_params->length; ++i) {
-        ast_generic_param_t *param = ct_list_value(generics_params, i);
-        if (param->constraints) {
-            constraints_count++;
+        ast_generics_param_t *param = ct_list_value(generics_params, i);
+        if (param->constraints.any) {
+            any_count++;
+        } else {
+            for (int j = 0; j < param->constraints.elements->length; ++j) {
+                type_t *temp = ct_list_value(param->constraints.elements, j);
+                *temp = reduction_type(m, *temp);
+            }
         }
     }
 
-    INFER_ASSERTF(constraints_count == 0 || constraints_count == generics_params->length,
+    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
                   "all generics params must have constraints or all none");
 
     slice_t *hash_list = slice_new();
 
-    // 没有类型约束泽不需要计算 hash_list 了
-    if (constraints_count == 0) {
+    // 全部 any, 没有类型约束，不需要计算排列组合
+    if (any_count == generics_params->length) {
         return hash_list;
     }
 
     slice_t *product_list = slice_new();
     // 对 param 的 param->constraints 进行笛卡尔积计算, 也就是全量的排列组合, 比如 fn person_t<T:int|float, U:string> 的类型排列组合有  int+string 和 float+string 种可能
-    type_t *current_product = mallocz(sizeof(void *) * generics_params->length);
+    void *current_product = mallocz(sizeof(void *) * generics_params->length);
     cartesian_product(generics_params, 0, current_product, product_list);
 
     SLICE_FOR(product_list) {
@@ -2534,15 +2555,33 @@ void pre_infer(module_t *m) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         assert(!fndef->is_local);
 
-        // generics fn 不能 reduction, 会导致后续 special fn copy 异常
-        if (fndef->is_generics) {
-            // generics 的 generic_param+limit
-            assert(fndef->generics_params);
+        m->current_line = fndef->line;
+        m->current_column = fndef->column;
 
-            // 1. 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中
-            //    但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成
-            //    所以仅仅是注册到符号表时的 key 有所不同
-            slice_t *generics_args = generics_constraints_combination(m, fndef->generics_params);
+        if (!fndef->is_generics) {
+            // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
+            infer_fn_decl(m, fndef);
+
+            // infer child
+            for (int j = 0; j < fndef->local_children->count; ++j) {
+                infer_fn_decl(m, fndef->local_children->take[j]);
+            }
+
+            continue;
+        }
+
+        // generics 的 generic_param+limit
+        assert(fndef->generics_params);
+
+        // 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中 但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，
+        // 仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成, 所以仅仅是注册到符号表时的 key 有所不同
+        // 如果泛型类型为 any， 则返回的 generics_args 为 null
+        slice_t *generics_args = generics_constraints_product(m, fndef->generics_params);
+        if (generics_args->count == 0) {
+            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+            ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
+        } else {
+            // 基于类型约束进行泛型展开
             SLICE_FOR(generics_args) {
                 char *arg_hash = SLICE_VALUE(generics_args);
 
@@ -2552,16 +2591,6 @@ void pre_infer(module_t *m) {
                 symbol_t *s = symbol_table_set(symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
             }
-
-            continue;
-        }
-
-        // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
-        infer_fn_decl(m, fndef);
-
-        // infer child
-        for (int j = 0; j < fndef->local_children->count; ++j) {
-            infer_fn_decl(m, fndef->local_children->take[j]);
         }
     }
 }

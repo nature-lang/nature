@@ -430,24 +430,6 @@ static void analyzer_type(module_t *m, type_t *type) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
 
             analyzer_type(m, &item->type);
-
-            // 可选右值解析
-            if (item->right) {
-                analyzer_expr(m, item->right);
-
-                ast_expr_t *expr = item->right;
-
-                // TODO 暂时不再支持默认值 fndef
-                if (expr->assert_type == AST_FNDEF) {
-                    ast_fndef_t *fndef = expr->value;
-
-                    // analyzer_current 为 null 标识当前 fn 是 global type alias 中的 fn
-                    // in_type_param 标识当前 fn 是一个模版，不需要加入到 ast_fndefs 中
-                    if (m->analyzer_current == NULL && !m->analyzer_in_type_param) {
-                        slice_push(m->ast_fndefs, fndef);
-                    }
-                }
-            }
         }
     }
 }
@@ -1651,12 +1633,18 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             slice_push(m->global_symbols, s);
 
             if (type_alias->params && type_alias->params->length > 0) {
-                m->analyzer_in_type_param = true;
+                for (int j = 0; j < type_alias->params->length; ++j) {
+                    ast_generics_param_t *param = ct_list_value(type_alias->params, j);
+                    if (!param->constraints.any) {
+                        for (int k = 0; k < param->constraints.elements->length; ++k) {
+                            type_t *constraint = ct_list_value(param->constraints.elements, k);
+                            analyzer_type(m, constraint);
+                        }
+                    }
+                }
             }
-            // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module
-            // ident
+
             analyzer_type(m, &type_alias->type);
-            m->analyzer_in_type_param = false;
             continue;
         }
 
@@ -1672,10 +1660,14 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             }
 
             fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
-            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
-            ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->symbol_name);
-            slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
+
+            // 泛型允许重载，所以暂时不注册到符号表中，避免符号冲突, 在 pre_infer 对泛型进行展开后会注册到 symbol
+            if (!fndef->generics_params) {
+                symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+                ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->fn_name);
+            }
+
             continue;
         }
 
@@ -1693,6 +1685,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         // 讲 module init 函数添加到全局符号中
         symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
+        ANALYZER_ASSERTF(s, "fn '%s' redeclared", fn_init->symbol_name);
         slice_push(m->global_symbols, s);
         slice_push(fn_list, fn_init);
 
@@ -1712,7 +1705,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         call_stmt->column = 0;
         m->call_init_stmt = call_stmt;
     }
-
 
     // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef body
     // 进行符号定位与改写
@@ -1750,6 +1742,7 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
 
     // 符号表注册
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, false);
+    ANALYZER_ASSERTF(s, "fn '%s' redeclared", FN_MAIN_NAME);
     slice_push(m->global_symbols, s);
 
     // 添加到 ast_fndefs 中

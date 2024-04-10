@@ -1,12 +1,20 @@
-// TODO 普通类型约束支持
-type foo_t<T, U> = struct {
+// 类型约束一致性检查
+type foo_t<T, U> = struct{
     T a
     U b
     float c
 }
 
-fn foo<T, U>.dump():T {
-    println(self.a, self.b)
+fn foo_t<T, U>.dump():T {
+    println('any dump', self.a, self.b)
     return self.a
 }
 
+fn foo_t<T:f32, U:bool>.dump():T {
+    println('f32+bool dump', self.a, self.b)
+    return self.a
+}
+
+fn foo_t<T:f32|bool, U:bool|string>.dump(U c) {
+    println('void return, f32|bool+bool|string dump', self.a, self.b, c)
+}

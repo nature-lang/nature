@@ -503,6 +503,12 @@ typedef struct {
     char *unique_ident;
 } ast_env_access_t;
 
+
+typedef struct {
+    char *ident;
+    type_union_t constraints;
+} ast_generics_param_t;
+
 /**
  * type my_int = int
  * type my_string =  string
@@ -511,14 +517,9 @@ typedef struct {
  */
 typedef struct {
     string ident;  // my_int (自定义的类型名称)
-    list_t *params;// type_param*|null
+    list_t *params;// *ast_generics_param|null
     type_t type;   // int (类型)
 } ast_type_alias_stmt_t;
-
-typedef struct {
-    char *ident;
-    list_t *constraints;// type_t
-} ast_generic_param_t;
 
 // 这里包含 body, 所以属于 def
 struct ast_fndef_t {
@@ -547,7 +548,7 @@ struct ast_fndef_t {
 
     type_t impl_type;
 
-     // ast_expr, 当前 fn body 中引用的外部的环境
+    // ast_expr, 当前 fn body 中引用的外部的环境
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
     // 则需要将当前作用域中的变量打包成 env 丢给 child fn
     list_t *capture_exprs;
@@ -597,6 +598,14 @@ ast_ident *ast_new_ident(char *literal);
 ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
 
 ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
+
+static inline ast_generics_param_t *ast_generics_param_new(int line, int column, char *ident) {
+    ast_generics_param_t *param = NEW(ast_generics_param_t);
+    param->ident = ident;
+    param->constraints.any = true;
+    param->constraints.elements = ct_list_new(sizeof(type_t));
+    return param;
+}
 
 static inline ast_expr_t *ast_ident_expr(int line, int column, char *literal) {
     ast_expr_t *expr = NEW(ast_expr_t);

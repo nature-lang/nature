@@ -19,18 +19,6 @@ rtype_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static rtype_t rtype_int(type_kind kind) {
-    return rtype_base(kind);
-}
-
-static rtype_t rtype_float() {
-    return rtype_base(TYPE_FLOAT);
-}
-
-static rtype_t rtype_bool() {
-    return rtype_base(TYPE_BOOL);
-}
-
 static rtype_t rtype_raw_ptr(type_ptr_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
@@ -533,9 +521,6 @@ rtype_t reflect_type(type_t t) {
     rtype_t rtype = {0};
 
     switch (t.kind) {
-        case TYPE_BOOL:
-            rtype = rtype_bool();
-            break;
         case TYPE_STRING:
             rtype = rtype_string();
             break;
@@ -571,7 +556,7 @@ rtype_t reflect_type(type_t t) {
             break;
         default:
             if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
-                t.kind == TYPE_VOID_PTR) {
+                t.kind == TYPE_VOID_PTR || t.kind == TYPE_BOOL) {
                 rtype = rtype_base(t.kind);
             }
     }

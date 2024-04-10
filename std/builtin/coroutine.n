@@ -4,7 +4,7 @@ type future_t<T> = struct{
     i64 size
     raw_ptr<T> result
     void_ptr await_co
-    raw_ptr<T> error;
+    raw_ptr<T> error
 }
 
 type chan_t<T> = struct{
@@ -40,7 +40,7 @@ fn future_t<T>.await():T {
 }
 
 
-fn future_t<T:void>.await():T {
+fn future_t<T:void>.await() {
     rt_coroutine_await(self.await_co)
 
     raw_ptr<error_t> err = rt_coroutine_error(self.await_co)

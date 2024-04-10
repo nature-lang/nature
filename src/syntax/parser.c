@@ -84,7 +84,7 @@ static bool parser_consume(module_t *m, token_type_t expect) {
 static token_t *parser_must(module_t *m, token_type_t expect) {
     token_t *t = m->p_cursor.current->value;
 
-    PARSER_ASSERTF(t->type == expect, "parser error expect '%s' actual '%s'", token_str[expect], t->literal);
+    PARSER_ASSERTF(t->type == expect, "parser error expect '%s' actual '%c'", token_str[expect], t->literal[0]);
 
     parser_advance(m);
     return t;
@@ -537,16 +537,26 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
 
-        type_alias_stmt->params = ct_list_new(sizeof(ast_ident));
+        type_alias_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
 
         // 放在 module 全局表中用于辅助 parser
         m->parser_type_params_table = table_new();
 
         do {
             token_t *ident = parser_advance(m);
-            ast_ident *temp = ast_new_ident(ident->literal);
-            ct_list_push(type_alias_stmt->params, temp);
+            ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
+            // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+            if (parser_consume(m, TOKEN_COLON)) {
+                do {
+                    type_t t = parser_single_type(m);
+                    ct_list_push(temp->constraints.elements, &t);
+                } while (parser_consume(m, TOKEN_OR));
+
+                temp->constraints.any = false;
+            }
+
+            ct_list_push(type_alias_stmt->params, temp);
             table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
 
@@ -1871,20 +1881,20 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         // 记录泛型参数，用于 parser type 时可以正确解析
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             m->parser_type_params_table = table_new();
-            fndef->generics_params = ct_list_new(sizeof(ast_generic_param_t));
+            fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
             do {
                 token_t *ident = parser_advance(m);
-                ast_generic_param_t *temp = NEW(ast_generic_param_t);
-                temp->ident = ident->literal;
 
+                // 默认是 union any
+                ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
                 // 可选的泛型约束 <T:t1|t2, U:t1|t2>
                 if (parser_consume(m, TOKEN_COLON)) {
-                    temp->constraints = ct_list_new(sizeof(type_t));
                     do {
                         type_t t = parser_single_type(m);
-                        ct_list_push(temp->constraints, &t);
+                        ct_list_push(temp->constraints.elements, &t);
                     } while (parser_consume(m, TOKEN_OR));
+                    temp->constraints.any = false;
                 }
 
                 ct_list_push(fndef->generics_params, temp);
@@ -1895,7 +1905,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
         m->p_cursor.current = temp_current;
 
-        // 解析完整类型是为了让 self 类型可以验证
+        // 解析完整类型是为了让 self 类型可以验证 fn ...(foo<T, U> a, T b)...
         type_t impl_type = {0};
         if (first_token->type == TOKEN_IDENT) {
             impl_type.kind = TYPE_ALIAS;
@@ -1908,8 +1918,17 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                 do {
                     type_t param_type = parser_single_type(m);
                     assert(param_type.kind == TYPE_PARAM);
+
+                    // 排除参数约束
+                    if (parser_consume(m, TOKEN_COLON)) {
+                        do {
+                            parser_single_type(m);
+                        } while (parser_consume(m, TOKEN_OR));
+                    }
+
                     ct_list_push(impl_type.alias->args, &param_type);
                 } while (parser_consume(m, TOKEN_COMMA));
+
                 parser_must(m, TOKEN_RIGHT_ANGLE);
             }
         } else {
@@ -1935,19 +1954,18 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
     if (!is_impl_type && parser_consume(m, TOKEN_LEFT_ANGLE)) {
         m->parser_type_params_table = table_new();
-        fndef->generics_params = ct_list_new(sizeof(ast_generic_param_t));
+        fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
         do {
             token_t *ident = parser_advance(m);
-            ast_generic_param_t *temp = NEW(ast_generic_param_t);
-            temp->ident = ident->literal;
+            ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
             // 可选的泛型约束 <T:t1|t2, U:t1|t2>
             if (parser_consume(m, TOKEN_COLON)) {
-                temp->constraints = ct_list_new(sizeof(type_t));
                 do {
                     type_t t = parser_single_type(m);
-                    ct_list_push(temp->constraints, &t);
+                    ct_list_push(temp->constraints.elements, &t);
                 } while (parser_consume(m, TOKEN_OR));
+                temp->constraints.any = false;
             }
 
             ct_list_push(fndef->generics_params, temp);
