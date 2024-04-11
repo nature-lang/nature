@@ -760,7 +760,6 @@ void runtime_gc() {
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
-    return;
 
     memory->gc_count += 1;
 

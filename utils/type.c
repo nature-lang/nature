@@ -400,8 +400,8 @@ uint8_t type_kind_sizeof(type_kind t) {
     assert(t > 0);
 
     switch (t) {
-        case TYPE_VOID:// TODO 泛型可能会产生 void, 暂时按照 8byte 进行处理。避免寄存器分配和 native 异常
-            return POINTER_SIZE;
+        case TYPE_VOID:
+            return 0;
         case TYPE_BOOL:
         case TYPE_INT8:
         case TYPE_UINT8:

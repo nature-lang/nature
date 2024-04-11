@@ -423,18 +423,7 @@ static type_t parser_single_type(module_t *m) {
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item = {.type = parser_type(m), .key = parser_advance(m)->literal};
-
-            if (parser_consume(m, TOKEN_EQUAL)) {
-                ast_expr_t *temp_expr = expr_new_ptr(m);
-                *temp_expr = parser_expr(m);
-                if (temp_expr->assert_type == AST_FNDEF) {
-                    ast_fndef_t *fn = temp_expr->value;
-                    PARSER_ASSERTF(fn->symbol_name == NULL, "fn defined in struct cannot contain name");
-                }
-
-                item.right = temp_expr;
-            }
-
+            PARSER_ASSERTF(!parser_is(m, TOKEN_EQUAL), "cannot assign default value")
             ct_list_push(type_struct->properties, &item);
             parser_must_stmt_end(m);
         }
@@ -2354,6 +2343,7 @@ static ast_expr_t parser_struct_new(module_t *m, type_t t) {
 
             ct_list_push(struct_new->properties, &item);
         } while (parser_consume(m, TOKEN_COMMA));
+
         parser_consume(m, TOKEN_RIGHT_CURLY);
     }
     result.assert_type = AST_EXPR_STRUCT_NEW;

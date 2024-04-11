@@ -1127,6 +1127,7 @@ static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
 
+        // TODO tpl 即将取消 TPL 机制, 增加 linkid 自定义链接名称
         if (import->module_type == MODULE_TYPE_TPL) {
             assert(import_tpl_symbol_table);
             assert(import->full_path);
@@ -1662,9 +1663,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
             slice_push(fn_list, fndef);
 
-            // 泛型允许重载，所以暂时不注册到符号表中，避免符号冲突, 在 pre_infer 对泛型进行展开后会注册到 symbol
+            // 泛型允许重载，所以此处会有同名 symbol 被覆盖写入, 在 pre_infer 对泛型进行展开后再次覆盖注册到 symbol
+            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
             if (!fndef->generics_params) {
-                symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->fn_name);
             }
 

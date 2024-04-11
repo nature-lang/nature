@@ -1,13 +1,18 @@
 // 类型约束一致性检查
-type foo_t<T, U> = struct{
+type foo_t<T:f32|bool|int, U:bool|string|f32|[i32]> = struct{
     T a
     U b
     float c
 }
 
-fn foo_t<T, U>.dump():T {
-    println('any dump', self.a, self.b)
-    return self.a
+type bar_t<T,U> = struct{
+    T a
+    U b
+}
+
+fn bar_t<T, U>.dump():T {
+   println('bar_t any dump', self.a, self.b)
+   return self.a
 }
 
 fn foo_t<T:f32, U:bool>.dump():T {
@@ -15,6 +20,6 @@ fn foo_t<T:f32, U:bool>.dump():T {
     return self.a
 }
 
-fn foo_t<T:f32|bool, U:bool|string>.dump(U c) {
-    println('void return, f32|bool+bool|string dump', self.a, self.b, c)
+fn foo_t<T:f32|bool, U:string>.dump(U c) {
+    println('void return, f32|bool+int|string dump', self.a, self.b, c)
 }

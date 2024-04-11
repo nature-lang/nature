@@ -1,6 +1,6 @@
 import 'mod.n'
 
-var f = mod.foo_t<int, f32>{
+var f = mod.bar_t<int, f32>{
     a = 233,
     b = 333.444
 }
@@ -12,3 +12,15 @@ var f2 = mod.foo_t<f32, bool>{
 }
 var a2 = f2.dump()
 
+
+var f3 = mod.foo_t<bool, string>{
+    a = true,
+    b = 'hello'
+}
+f3.dump('world')
+
+var f4 = mod.bar_t<f32, [i32]>{
+    a = 233.333,
+    b = [1, 2, 3]
+}
+f4.dump()

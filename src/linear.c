@@ -319,20 +319,6 @@ static void linear_has_error(module_t *m) {
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
 
-static lir_operand_t *clv_temp_var_operand(module_t *m, type_t type) {
-    assert(type.kind > 0);
-    lir_operand_t *temp = temp_var_operand_with_alloc(m, type);
-    OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, temp));
-    return temp;
-}
-
-static lir_operand_t *nop_temp_var_operand(module_t *m, type_t type) {
-    assert(type.kind > 0);
-    lir_operand_t *temp = temp_var_operand_with_alloc(m, type);
-    OP_PUSH(lir_op_new(LIR_OPCODE_NOP, NULL, NULL, temp));
-    return temp;
-}
-
 /**
  * 对于小于 8byte 类型的变量，可以直接将其值存储在 虚拟寄存器中.
  * 对于大于 8byte 类型的变量 (比如 struct/array) 通常需要在栈上申请空间, 虚拟寄存器中存储的是对应的栈地址
@@ -1098,16 +1084,16 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     }
 
     // 特殊 binary 处理
-    if (binary_expr->operator == AST_OP_OR_OR) {
+    if (binary_expr->operator== AST_OP_OR_OR) {
         return linear_logical_or(m, expr, target);
     }
-    if (binary_expr->operator == AST_OP_AND_AND) {
+    if (binary_expr->operator== AST_OP_AND_AND) {
         return linear_logical_and(m, expr, target);
     }
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
+    lir_opcode_t operator= ast_op_convert[binary_expr->operator];
 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
@@ -1185,7 +1171,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
+    if (unary_expr->operator== AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
         assertf(is_number(imm->kind), "only number can neg operate");
         if (imm->kind == TYPE_INT) {
@@ -1197,7 +1183,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, first);
     }
 
-    if (unary_expr->operator == AST_OP_NOT) {
+    if (unary_expr->operator== AST_OP_NOT) {
         assert(unary_expr->operand.type.kind == TYPE_BOOL);
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
@@ -1220,10 +1206,10 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
     // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理
-    if (unary_expr->operator == AST_OP_LA || unary_expr->operator == AST_OP_SAFE_LA) {
+    if (unary_expr->operator== AST_OP_LA || unary_expr->operator== AST_OP_SAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_defer_alloc_type(unary_expr->operand.type)) {
-            if (unary_expr->operator == AST_OP_SAFE_LA) {
+            if (unary_expr->operator== AST_OP_SAFE_LA) {
                 linear_escape_to_heap(m, first);
             }
 
@@ -1243,7 +1229,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // person_t a = *b
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
-    if (unary_expr->operator == AST_OP_IA) {
+    if (unary_expr->operator== AST_OP_IA) {
         // checking
         if (unary_expr->operand.type.kind == TYPE_RAW_PTR) {
             push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, first);
@@ -1736,12 +1722,6 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // compiler(为了寄存器分配和 native void 被作为 size=8 处理) 和 runtime 共用了 type_sizeof 方法
-    // runtime 时，void 的 size 应该是 0
-    if (ast->target_type.kind == TYPE_VOID) {
-        return 0;
-    }
-
     uint16_t size = type_sizeof(ast->target_type);
 
     OP_PUSH(lir_op_move(target, int_operand(size)));
@@ -1905,7 +1885,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_catch_t *catch_expr = expr.value;
 
-    if (!target) {
+    bool has_ret = expr.target_type.kind != TYPE_VOID;
+
+    if (has_ret && !target) {
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
@@ -1922,7 +1904,9 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     OP_PUSH(lir_op_label(catch_error_label, true));
 
     // 零值处理 target
-    linear_zero_operand(m, expr.type, target);
+    if (has_ret) {
+        linear_zero_operand(m, expr.type, target);
+    }
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
@@ -2240,7 +2224,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t) {.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
+                           (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
                            NULL);
             return;
         }
@@ -2248,7 +2232,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t) {
+                        (ast_expr_t){
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -2262,7 +2246,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t) {
+                              (ast_expr_t){
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,
