@@ -3,8 +3,8 @@ import runtime_temp
 type future_t<T> = struct{
     i64 size
     raw_ptr<T> result
-    void_ptr await_co
-    raw_ptr<T> error
+    raw_ptr<error_t> error
+    void_ptr co
 }
 
 type chan_t<T> = struct{
@@ -18,9 +18,10 @@ fn co_async<T>(fn() function, int flag):ptr<future_t<T>> {
         fu.result = gc_malloc(hash) as raw_ptr<T>
     }
 
-    void_ptr await_co = rt_coroutine_async(function as void_ptr, flag, fu as void_ptr)
+    // Establish mutually binding relationships, so even if the coroutine exits,
+    // the related result/error will also be bound to the future to prevent being garbage collected.
+    fu.co = rt_coroutine_async(function as void_ptr, flag, fu as void_ptr)
 
-    fu.await_co = await_co
     return fu
 }
 
@@ -29,23 +30,20 @@ fn co_return<T>(raw_ptr<T> result) {
 }
 
 fn future_t<T>.await():T {
-    rt_coroutine_await(self.await_co)
+    rt_coroutine_await(self.co)
 
-    raw_ptr<error_t> err = rt_coroutine_error(self.await_co)
-    if !(err is null) {
-        throw err.msg
+    if self.error != null {
+        throw self.error.msg
     }
 
     return *self.result
 }
 
-
 fn future_t<T:void>.await() {
-    rt_coroutine_await(self.await_co)
+    rt_coroutine_await(self.co)
 
-    raw_ptr<error_t> err = rt_coroutine_error(self.await_co)
-    if !(err is null) {
-        throw err.msg
+    if self.error != null {
+        throw self.error.msg
     }
 
     return

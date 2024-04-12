@@ -31,8 +31,9 @@
 
 #define PAGE_ALLOC_CHUNK_SPLIT 8192// 每组 chunks 中的元素的数量
 
+#define MMAP_STACK_BASE 0xa000000000
 #define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
-#define ARENA_HINT_MAX 0x800000000000 // 128T
+#define ARENA_HINT_MAX 0x800000000000// 128T
 #define ARENA_HINT_SIZE 1099511627776// 1 << 40
 #define ARENA_HINT_COUNT 128         // 0.75T ~ 128T
 
@@ -122,11 +123,12 @@ typedef struct {
 } page_chunk_t;// page_chunk 现在占用 64 * 8 = 512bit
 
 // TODO start/end/max 的正确编码值应该是 uint21_t,后续需要正确实现,能表示的最大值是 2^21=2097152
+// 0 标识无空闲， 1 标识有空闲
 typedef struct {
     uint16_t start;
     uint16_t end;
     uint16_t max;
-    uint8_t full;// start=end=max=2^21 最大值， full 设置为 1
+    uint8_t full;// start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
 } page_summary_t;// page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
@@ -241,8 +243,8 @@ typedef struct processor_t processor_t;
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    void *co;
-    n_errort *error; // 类似 result 一样可选的 error
+    n_errort *error;// 类似 result 一样可选的 error
+    void *await_co;
 } n_future_t;
 
 typedef struct coroutine_t {
@@ -306,8 +308,8 @@ struct processor_t {
 
     bool share;// 默认都是共享处理器
 
-    rt_linked_fixalloc_t gc_worklist;  // gc 扫描的 ptr 节点列表
-    uint64_t gc_work_finished;// 当前处理的 GC 轮次，每完成一轮 + 1
+    rt_linked_fixalloc_t gc_worklist;// gc 扫描的 ptr 节点列表
+    uint64_t gc_work_finished;       // 当前处理的 GC 轮次，每完成一轮 + 1
 
     struct processor_t *next;// processor 链表支持
 };

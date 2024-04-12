@@ -829,7 +829,7 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
-    INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_RAW_PTR, "%s can use 'is'", type_format(t));
+    INFER_ASSERTF(t.kind == TYPE_UNION, "%s cannot use 'is' operator", type_format(t));
 
     return type_kind_new(TYPE_BOOL);
 }

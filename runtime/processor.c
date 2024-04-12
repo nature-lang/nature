@@ -168,22 +168,23 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     if (co->main) {
         // 通知所有协程退出
         processor_set_exit();
-        DEBUGF("[runtime.coroutine_wrapper]  p_index_%d=%d co=%p, main coroutine exit, set processor_need_exit=true",
+        DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d co=%p, main coroutine exit, set processor_need_exit=true",
                p->share, p->index,
                co);
+    }
+
+    // coroutine 即将退出，讲错误保存在 co->future 中
+    if (co->error && co->error->has && co->future) {
+        co->future->error = co->error;// 将 co error 赋值给 co->future 避免被 gc
     }
 
     // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步
     mutex_lock(&co->dead_locker);
     if (co->await_co) {
-        // 唤醒 await_co
         coroutine_t *await_co = co->await_co;
+
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
-
-        // error 传递
-
-        // 返回值传递
     } else {
         if (co->error && co->error->has) {
             coroutine_dump_error(co, co->error);
@@ -328,6 +329,7 @@ static void processor_run(void *raw) {
     // 初始化 aco 和 main_co
     aco_thread_init(NULL);
     aco_create_init(&p->main_aco, NULL, NULL, 0, NULL, NULL);
+
     aco_share_stack_init(&p->share_stack, 0);
 
     // - 初始化 libuv
@@ -357,10 +359,10 @@ static void processor_run(void *raw) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-            STW_WAIT:
-        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
-                p->share,
-                p->index);
+        STW_WAIT:
+            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                    p->share,
+                    p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -433,7 +435,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-    EXIT:
+EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -689,14 +691,15 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu) {
     if (in_heap((addr_t) fn)) {
         rt_shade_obj_with_barrier(fn);
     }
+    rt_shade_obj_with_barrier(fu);
 
+    co->future = fu;
     co->fn = fn;
     co->solo = FLAG(CO_FLAG_SOLO) & flag;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
     co->gc_black = 0;
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
-    co->future = fu;
     co->next = NULL;
     co->aco.inited = 0;// 标记为为初始化
     co->scan_ret_addr = 0;
@@ -1012,8 +1015,8 @@ void rt_coroutine_return(void *result_ptr) {
 }
 
 void *rt_coroutine_error(coroutine_t *co) {
-    TDEBUGF("[runtime.rt_coroutine_error] co=%p, error=%p, msg=%s",
-            co, co->error, co->error ? (char *) co->error->msg->data : "-");
+    DEBUGF("[runtime.rt_coroutine_error] co=%p, error=%p, msg=%s",
+           co, co->error, co->error ? (char *) co->error->msg->data : "-");
     return co->error;
 }
 

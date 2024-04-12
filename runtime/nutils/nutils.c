@@ -64,18 +64,28 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 
     switch (input_rtype->kind) {
         case TYPE_FLOAT:
-        case TYPE_FLOAT64: _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
-        case TYPE_FLOAT32: _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
+        case TYPE_FLOAT64:
+            _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
+        case TYPE_FLOAT32:
+            _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
         case TYPE_INT:
-        case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
-        case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
-        case TYPE_INT16: _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
-        case TYPE_INT8: _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
+        case TYPE_INT64:
+            _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
+        case TYPE_INT32:
+            _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
+        case TYPE_INT16:
+            _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
+        case TYPE_INT8:
+            _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
         case TYPE_UINT:
-        case TYPE_UINT64: _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
-        case TYPE_UINT32: _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
-        case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
-        case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
+        case TYPE_UINT64:
+            _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
+        case TYPE_UINT32:
+            _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
+        case TYPE_UINT16:
+            _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
+        case TYPE_UINT8:
+            _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
         default:
             assert(false && "type cannot ident");
             exit(1);
@@ -622,12 +632,12 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
 }
 
 void raw_ptr_valid(void *raw_ptr) {
-    PRE_RTCALL_HOOK(); // 修改状态避免抢占
+    PRE_RTCALL_HOOK();// 修改状态避免抢占
 
-    TDEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
+    DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
     // raw_ptr 必须处于合理的范围
     addr_t i = (addr_t) raw_ptr;
-    if (i < ARENA_HINT_BASE || i > ARENA_HINT_MAX) {
+    if (i < MMAP_STACK_BASE || i > ARENA_HINT_MAX) {
         rt_coroutine_set_error("invalid memory address or nil pointer dereference");
     }
 }

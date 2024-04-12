@@ -211,6 +211,6 @@ void rt_shade_obj_with_barrier(void *obj);
 void mark_ptr_black(void *value);
 
 void mheap_grow(uint64_t pages_count);
-addr_t page_alloc_find(uint64_t pages_count);
+uint64_t page_alloc_find(uint64_t pages_count, bool must_find);
 
 #endif // NATURE_MEMORY_H

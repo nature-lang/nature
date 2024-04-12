@@ -42,7 +42,7 @@ fn listdir(string path):[string] {
     for true {
         // raw_ptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
         raw_ptr<dirent_t> entry = readdir(dir)
-        if entry is null {
+        if entry == null {
             break
         }
 

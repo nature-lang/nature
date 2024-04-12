@@ -341,7 +341,7 @@ static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
  * @param pages_count
  * @return
  */
-addr_t page_alloc_find(uint64_t pages_count) {
+uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
 
     addr_t hint_addr = memory->mheap->arena_hints->addr;
 
@@ -364,6 +364,8 @@ addr_t page_alloc_find(uint64_t pages_count) {
            heap_used, pages_count);
 
     if (start == end) {
+        if (must_find) assert(false);
+
         return 0;
     }
 
@@ -372,6 +374,8 @@ addr_t page_alloc_find(uint64_t pages_count) {
         page_summary_t *summaries = page_alloc->summary[level];
         bool found = summary_find_continuous(level, summaries, &start, &end, pages_count);
         if (level == 0 && !found) {
+            if (must_find) assert(false);
+
             return 0;
         }
 
@@ -452,6 +456,7 @@ addr_t page_alloc_find(uint64_t pages_count) {
  * @return
  */
 static void page_alloc_grow(addr_t base, uint64_t size) {
+    TDEBUGF("[runtime.page_alloc_grow] base=%p, size=%luM", (void *) base, size / 1024 / 1024);
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
 
     // 维护 chunks 数据
@@ -485,10 +490,10 @@ static void page_alloc_grow(addr_t base, uint64_t size) {
  */
 void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     arena_hint_t *hint = mheap->arena_hints;
-    DEBUGF("[mheap_sys_alloc] hint addr=%p, size=%lu", (void *) hint->addr, *size);
-
     // size 对齐
     uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
+
+    TDEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr, *size / 1024 / 1024, alloc_size / 1024 / 1024);
 
     void *v = NULL;
     while (true) {
@@ -517,7 +522,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     }
 
     // 虚拟内存映射并不会真的写入到内存，必须触发内存页中断才行
-    DEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu, hint_addr=%p", allocated_total_bytes, (void *) hint->addr);
+    TDEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu, hint_addr=%p", allocated_total_bytes, (void *) hint->addr);
 
     *size = alloc_size;
     return v;
@@ -594,8 +599,10 @@ void mheap_grow(uint64_t pages_count) {
         // alloc_size 在方法内部会按 arena size 对齐
         uint64_t alloc_size = size;
         addr_t v = (addr_t) mheap_sys_alloc(memory->mheap, &alloc_size);
+
+        assert(v != 0);
         if (v == end) {
-            // arena 空间连续,此时只需要更新 end
+            // arena 空间连续,此时只需要更新 end 不需要更新 cursor
             end += alloc_size;
         } else {
             cursor = v;
@@ -622,16 +629,16 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
     assert(pages_count > 0);
     // - 从 page_alloc 中查看有没有连续 pages_count 空闲的页，如果有就直接分配
     // 因为有垃圾回收的存在，所以 page_alloc 中的历史上的某些部分存在空闲且连续的 pages
-    addr_t base = page_alloc_find(pages_count);
+    addr_t base = page_alloc_find(pages_count, false);
     if (base == 0) {
         DEBUGF("[mheap_alloc_span] cannot find continuous pages, will grow, pages_count=%lu", pages_count);
         // -  page_alloc_t 中没有找到可用的 pages,基于 current arena 对当前 page alloc 进行扩容(以 chunk 为单位)
         mheap_grow(pages_count);
 
         // - 经过上面的 grow 再次从 page_alloc 中拉取合适大小的 pages_count 并组成 span
-        base = page_alloc_find(pages_count);
+        base = page_alloc_find(pages_count, true);
+        assert(base > 0 && "out of memory: page alloc failed");
     }
-    assert(base > 0 && "out of memory: page alloc failed");
 
     // - 新增的 span 需要在 arena 中建立 page -> span 的关联关系
     mspan_t *span = mspan_new(base, pages_count, spanclass);
@@ -684,10 +691,10 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
-    HAVE_SPAN:
-MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
-        span->spanclass,
-        span->obj_count, span->alloc_count);
+HAVE_SPAN:
+    MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
+            span->spanclass,
+            span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
@@ -1202,7 +1209,7 @@ void runtime_eval_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-    EXIT:
+EXIT:
     mutex_unlock(&gc_stage_locker);
 }
 
@@ -1222,7 +1229,7 @@ void runtime_force_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-    EXIT:
+EXIT:
     mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }

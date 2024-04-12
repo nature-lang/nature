@@ -14,6 +14,7 @@ println(p.age)
 ptr<person_t> p2 = new person_t
 p2.name = "wanglufei"
 p2.from = "japan"
+p2.gender = 2
 p2.set_age(19)
 
 println(p2.get_name(), p2.from, p2.gender, p2.age)

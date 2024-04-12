@@ -10,6 +10,7 @@ static void test_basic() {
     char *str = "null\n"
                 "6\n"
                 "null\n"
+                "false true\n"
                 "raw_nat is not null\n"
                 "233\n";
     assert_string_equal(raw, str);

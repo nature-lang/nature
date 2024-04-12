@@ -66,7 +66,7 @@ int test_runtime_main(void *main_fn) {
 
     while (true) {
         if (processor_get_exit()) {
-            TDEBUGF("[wait_sysmon] processor need exit, will exit");
+            DEBUGF("[wait_sysmon] processor need exit, will exit");
             break;
         }
         usleep(WAIT_SHORT_TIME * 1000);// 5ms

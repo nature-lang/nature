@@ -16,4 +16,21 @@ var fut = @co_async(fn() {
     throw 'in closure err'
 }(), co.SOLO)
 
-fut.await()
+fut.await() catch err {
+    println('fut.await catch err: ' + err.msg)
+}
+
+// 2.
+var fut2 = go div(10, 0)
+var result = fut2.await() catch err {
+    println('dive catch err: ' + err.msg)
+    continue 10
+}
+println('div result', result)
+
+
+// 3.
+go div(10, 0)
+
+co.sleep(1000)
+println('main done')

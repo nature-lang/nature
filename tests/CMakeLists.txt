@@ -90,6 +90,8 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
     add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
+    set(CMAKE_EXE_LINKER_FLAGS "-static")
+
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_dependencies(test_runtime_debug build_libmain)
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})

@@ -59,26 +59,41 @@ int teardown() {
 
 static void test_basic() {
     mheap_grow(512 * 9);
-    addr_t addr = page_alloc_find(1);
+    addr_t addr = page_alloc_find(1, false);
     assert_int_equal(addr, 0xc000000000);
 
-    addr = page_alloc_find(1);
+    addr = page_alloc_find(1, false);
     assert_int_equal(addr, 0xc000002000);
 
-    addr = page_alloc_find(512);
+    addr = page_alloc_find(512, false);
     assert_int_equal(addr, 0xc000004000);
 
 
-    addr = page_alloc_find(510);
-    addr = page_alloc_find(512 * 6);
+    addr = page_alloc_find(510, false);
+    addr = page_alloc_find(512 * 6, false);
     assert_int_equal(addr, 0xc000800000);
 
-    addr = page_alloc_find(1);
+    addr = page_alloc_find(1, false);
     assert_int_equal(addr, 0xc002000000);
+}
+
+// 进行 63M 的内存申请
+static void test_arena() {
+    // 63M /
+    mheap_grow(8190);
+    addr_t addr = page_alloc_find(8190, false);
+
+    mheap_grow(1);
+    addr = page_alloc_find(8190, false);
+
+    mheap_grow(1);
+    addr = page_alloc_find(8190, false);
+    printf("%p", (void *) addr);
 }
 
 int main(void) {
     setup();
-    test_basic();
+    //    test_basic();
+    test_arena();
     teardown();
 }

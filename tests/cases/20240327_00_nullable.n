@@ -9,13 +9,17 @@ println(nat_p)
 i32 temp = 233
 
 raw_ptr<i32> raw_nat = &temp
-if raw_nat is null {
+
+println(raw_nat == null, raw_nat != null)
+
+if raw_nat == null {
     println('raw_nat is null')
 } else {
     println('raw_nat is not null')
 }
 
-nat_p = raw_nat as ptr<i32>
+// 禁止 raw_ptr 转换为 ptr<i32>
+// nat_p = raw_nat as ptr<i32>
 
-i32 load_nat = *(nat_p as ptr<i32>)
+i32 load_nat = *raw_nat
 println(load_nat)
