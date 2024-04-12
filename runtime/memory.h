@@ -59,8 +59,6 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
     CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
 };
 
-static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
-
 static inline bool gc_barrier_get() {
     return gc_barrier;
 }

@@ -759,7 +759,7 @@ void runtime_gc() {
     int64_t before = allocated_bytes;
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    TDEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
+    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
 
     memory->gc_count += 1;
 
@@ -767,12 +767,12 @@ void runtime_gc() {
     processor_all_stop_the_world();
     processor_all_wait_safe();
 
-    TDEBUGF("[runtime_gc] all processor safe");
+    DEBUGF("[runtime_gc] all processor safe");
 
     // 开启写屏障
     gc_barrier_start();
 
-    TDEBUGF("[runtime_gc] barrier start");
+    DEBUGF("[runtime_gc] barrier start");
 
     // 注入 GC 工作协程, gc_worklist 用来检测状态判断 gc work 是否全部完成
     inject_gc_work_coroutine();
@@ -784,26 +784,26 @@ void runtime_gc() {
     // 中完成
     scan_global();
 
-    TDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
+    DEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
-    TDEBUGF("[runtime_gc] gc stage: GC_MARK, the world start");
+    DEBUGF("[runtime_gc] gc stage: GC_MARK, the world start");
 
     // 等待所有的 processor 都 mark 完成
     wait_all_gc_work_finished();
 
     // STW 之后再更改 GC 阶段
-    TDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
+    DEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
     processor_all_stop_the_world();
     processor_all_wait_safe();
-    TDEBUGF("[runtime_gc] all processor safe");
+    DEBUGF("[runtime_gc] all processor safe");
     // -------------- STW start ----------------------------
 
     // - gc stage: GC_MARK_DONE
     gc_stage = GC_STAGE_MARK_DONE;
-    TDEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
+    DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
 
     // mark 完成期间还会存在新的 mutator barrier 产生的指针推送到 worklist 中
     // 所以必须等 STW 后进行最后的收尾
@@ -811,25 +811,25 @@ void runtime_gc() {
 
     // - gc stage: GC_SWEEP
     gc_stage = GC_STAGE_SWEEP;
-    TDEBUGF("[runtime_gc] gc stage: GC_SWEEP");
+    DEBUGF("[runtime_gc] gc stage: GC_SWEEP");
 
     // gc 清理 需要获取 memory_locker, 避免 wait_sysmon 中 processor_free 产生新的 uncache_span
     // 此时已经 stw 了，所以不需要使用 memory->locker
     flush_mcache();
-    TDEBUGF("[runtime_gc] gc flush mcache completed");
+    DEBUGF("[runtime_gc] gc flush mcache completed");
 
     mcentral_sweep(memory->mheap);
 
-    TDEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
+    DEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
     // 更新 gcbits
     gcbits_arenas_epoch();
-    TDEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
+    DEBUGF("[runtime_gc] gcbits_arenas_epoch completed");
 
     gc_barrier_stop();
     processor_all_start_the_world();
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
-    TDEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
             (before - allocated_bytes) / 1000);
 }

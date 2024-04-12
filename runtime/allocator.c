@@ -220,20 +220,28 @@ static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summari
     return summary;
 }
 
-/**
- * 计算 base ~ end 所涉及的索引地址范围,level 越高，通常涉及的索引范围也就越小
- * @param level
- * @param base
- * @param end
- * @param base_index
- * @param end_index
- */
-static void
-calc_page_summary_index(uint8_t level, addr_t start, addr_t end, uint64_t *start_index, uint64_t *end_index) {
-    uint64_t scale = summary_index_scale[level];
-    // 计算 chunk index
-    *start_index = chunk_index(start) / scale;
-    *end_index = chunk_index(end - 1) / scale;
+// page summary 是一个  radix tree 解构
+// level 0 ～ 4， 每一级别的都管理着一定数量的 next page
+// L4 直接管理 chunk, 没有下一级。
+// L3 每个 summary 管理 8 个 L4 summary 块
+// L2 管理 8 个 L3 块, 64 个 L4
+// L1 管理 8 个 L2 块, 64 个 L3, 512 个 L4
+// L0 管理 8 个 L1 块, 64 个 L2, 512 个 L3, 4096 个 L4
+// l4_index 是 l4 的索引, 请计算给定 level 所在的索引
+// level 会传递 0 ～ 3, 请基于 L4_index, 计算出所在 level 的 index
+uint64_t calc_page_summary_level_index(uint8_t level, uint64_t l4_index) {
+    switch (level) {
+        case 0:
+            return l4_index / 4096;
+        case 1:
+            return l4_index / 512;
+        case 2:
+            return l4_index / 64;
+        case 3:
+            return l4_index / 8;
+        default:
+            assert(false);
+    }
 }
 
 /**
@@ -243,18 +251,21 @@ calc_page_summary_index(uint8_t level, addr_t start, addr_t end, uint64_t *start
  */
 static void page_summary_update(addr_t base, uint64_t size) {
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
-    page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
-    addr_t end = base + size;
+    page_summary_t *lowest_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
+    addr_t end = base + size - 1;  // 从 0 开始计算 offset
+    uint64_t lowest_base_index = chunk_index(base);
+    uint64_t lowest_end_index = chunk_index(end);
 
     // 维护 chunks summary 数据
-    for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
+    for (uint64_t index = lowest_base_index; index <= lowest_end_index; index++) {
         // 计算 l1 可能为 null
         page_chunk_t *l1_chunks = page_alloc->chunks[chunk_index_l1(index)];
         assert(l1_chunks && "chunks is null");
 
         page_chunk_t chunk = l1_chunks[chunk_index_l2(index)];
+
         // 计算每个 chunk 的  summary
-        l5_summaries[index] = chunk_summarize(chunk);
+        lowest_summaries[index] = chunk_summarize(chunk);
     }
 
     // l5 一个 summary 对应一个 chunk 对应 4MB 的数据
@@ -263,15 +274,17 @@ static void page_summary_update(addr_t base, uint64_t size) {
     // update l4 ~ l1 summary
     for (int8_t level = PAGE_SUMMARY_LEVEL - 2; level >= 0; level--) {
         // - 计算 addr 在当前层的 index,例如在 l4 中，
-        uint64_t base_index = 0;
-        uint64_t end_index = 0;
-        calc_page_summary_index(level, base, end, &base_index, &end_index);
+        // base_index <= ~ < end_index 之间的所有索引都需要被重新计算
+        uint64_t base_index = calc_page_summary_level_index(level, lowest_base_index);
+        uint64_t end_index = calc_page_summary_level_index(level, lowest_end_index);
+
         page_summary_t *current_summaries = page_alloc->summary[level];
         page_summary_t *next_level_summaries = page_alloc->summary[level + 1];
+
         for (uint64_t i = base_index; i <= end_index; ++i) {
             // 基于下一级别的 8 个 block, merge 出新的 summary 并赋值
             uint64_t next_summary_start = i * 8;
-            uint64_t next_summary_end = next_summary_start + 8;
+            uint64_t next_summary_end = next_summary_start + 8; // 8个一组
             page_summary_t temp_summaries[PAGE_SUMMARY_MERGE_COUNT] = {0};
             uint8_t temp_index = 0;
             for (uint64_t j = next_summary_start; j < next_summary_end; j++) {
@@ -390,11 +403,11 @@ uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
             end = (end + 1) * PAGE_SUMMARY_MERGE_COUNT;// start <= index < end
         }
     }
-    page_summary_t *l5_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
+    page_summary_t *lowest_summaries = page_alloc->summary[PAGE_SUMMARY_LEVEL - 1];
     DEBUGF("[runtime.page_alloc_find] success find continuous pages(%lu), l5 start=%lu, end=%lu, start_summary=[%u, %u, %u], end_summary=[%u, %u, %u]",
            pages_count,
-           start, end, l5_summaries[start].start, l5_summaries[start].max, l5_summaries[start].end,
-           l5_summaries[end].start, l5_summaries[end].max, l5_summaries[end].end);
+           start, end, lowest_summaries[start].start, lowest_summaries[start].max, lowest_summaries[start].end,
+           lowest_summaries[end].start, lowest_summaries[end].max, lowest_summaries[end].end);
 
     // start 和 chunk 表示 chunk 的 index,
     // start ~ end 指向的一组 chunks 中包含连续的内存空间，现在需要确认起起点位置(假设 start == end, 其 可能是 start or mid or end
@@ -430,7 +443,7 @@ uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
     } else {
         // start ~ end 这一段连续的内存空间跨越多个 chunk，则 summary [start,max,end]
         // 在跨越多个 chunk 的情况下连续空间一定由 end 标记
-        page_summary_t start_summary = l5_summaries[start];
+        page_summary_t start_summary = lowest_summaries[start];
         // summary.end 表示 chunk 尾部可用的空间
         uint64_t bit_start = CHUNK_BITS_COUNT - start_summary.end;// 512 - start_summary.end
         DEBUGF("[runtime.page_alloc_find] find addr=%p, start:%lu != end:%lu, start.summary [%d, %d, %d], bit_offset: %lu",
@@ -456,12 +469,12 @@ uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
  * @return
  */
 static void page_alloc_grow(addr_t base, uint64_t size) {
-    TDEBUGF("[runtime.page_alloc_grow] base=%p, size=%luM", (void *) base, size / 1024 / 1024);
+    DEBUGF("[runtime.page_alloc_grow] base=%p, size=%luM", (void *) base, size / 1024 / 1024);
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
 
     // 维护 chunks 数据
-    uint64_t end = base + size;
-    for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
+    uint64_t end = base + size - 1;
+    for (uint64_t index = chunk_index(base); index <= chunk_index(end); index++) {
         // 计算 l1 可能为 null
         uint64_t l1 = chunk_index_l1(index);
         if (page_alloc->chunks[l1] == NULL) {
@@ -493,7 +506,8 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     // size 对齐
     uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
-    TDEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr, *size / 1024 / 1024, alloc_size / 1024 / 1024);
+    DEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr,
+            *size / 1024 / 1024, alloc_size / 1024 / 1024);
 
     void *v = NULL;
     while (true) {
@@ -522,7 +536,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     }
 
     // 虚拟内存映射并不会真的写入到内存，必须触发内存页中断才行
-    TDEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu, hint_addr=%p", allocated_total_bytes, (void *) hint->addr);
+    DEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu, hint_addr=%p", allocated_total_bytes, (void *) hint->addr);
 
     *size = alloc_size;
     return v;
@@ -590,11 +604,15 @@ void mheap_grow(uint64_t pages_count) {
     // pages_alloc 按 chunk 管理内存，所以需要按 chunk 包含的 pages_count 对齐,其大小为 512bit * 8KiB = 4MiB
     uint64_t size = align_up(pages_count, CHUNK_BITS_COUNT) * ALLOC_PAGE_SIZE;
 
+    // end 是 offset, 但是可使用的 offset 不包含 end 本身
+    // [1 <= x  < 3], 1, 2
+    // [0 <= x  < 3], 0, 1, 2
+    // end - cursor = 可用的总空间
     addr_t cursor = memory->mheap->current_arena.cursor;
     addr_t end = memory->mheap->current_arena.end;
     assert(end >= cursor && "mheap not hold arena failed");// 首次初始化时 end == cursor == 0
 
-    if (end - cursor < size) {
+    if ((end - cursor) < size) {
         // cursor 没有足够的空间，需要重新申请一个新的空间
         // alloc_size 在方法内部会按 arena size 对齐
         uint64_t alloc_size = size;
@@ -613,9 +631,11 @@ void mheap_grow(uint64_t pages_count) {
     // 基于 current_arena 进行 pages 的分配,分配的 pages 需要被 page_alloc 索引
     page_alloc_grow(cursor, size);
 
-    // 更新 current arena (cursor 需要忽略掉已经申请了 size 的部分,其在上面已经进行了 grow 咯)
+    // 更新 current arena (cursor 需要忽略掉已经申请了 size 的部分,  所以需要 size - 1 才是 0ffset)
+    // 由于 cursor 是 offset，指向可以使用的内存 offset, 加入 offset = 0, size = 3, 那么 0，1，2 这三个空间被使用掉了,
+    // 则下一个可用 offset = 3。 也就是 0 + 3 = 3，
     memory->mheap->current_arena.cursor = cursor + size;
-    memory->mheap->current_arena.end = cursor + end;
+    memory->mheap->current_arena.end = end;
 }
 
 /**
@@ -691,7 +711,7 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
-HAVE_SPAN:
+    HAVE_SPAN:
     MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
             span->spanclass,
             span->obj_count, span->alloc_count);
@@ -1007,11 +1027,11 @@ void memory_init() {
 
     // - 初始化 mheap
     mheap_t *mheap = mallocz_big(sizeof(mheap_t));// 所有的结构体，数组初始化为 0, 指针初始化为 null
-    mheap->page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L5 * sizeof(page_summary_t));
-    mheap->page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
-    mheap->page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
-    mheap->page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
-    mheap->page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t));// 8192
+    mheap->page_alloc.summary[4] = mallocz_big(PAGE_SUMMARY_COUNT_L4 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[3] = mallocz_big(PAGE_SUMMARY_COUNT_L3 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[2] = mallocz_big(PAGE_SUMMARY_COUNT_L2 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[1] = mallocz_big(PAGE_SUMMARY_COUNT_L1 * sizeof(page_summary_t));
+    mheap->page_alloc.summary[0] = mallocz_big(PAGE_SUMMARY_COUNT_L0 * sizeof(page_summary_t));// 8192
 
     // - arena hint init
     mheap->arena_hints = arena_hints_init();
@@ -1209,7 +1229,7 @@ void runtime_eval_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
 }
 
@@ -1229,7 +1249,7 @@ void runtime_force_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }

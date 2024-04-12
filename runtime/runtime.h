@@ -50,11 +50,11 @@
 
 #define PAGE_SUMMARY_LEVEL 5                                                    // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8                                              // 每个上级 summary 索引的数量
-#define PAGE_SUMMARY_COUNT_L5 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
-#define PAGE_SUMMARY_COUNT_L4 (PAGE_SUMMARY_COUNT_L5 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
-#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
-#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
-#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 8192, 每个 summary 管理 32G 空间
+#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
+#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
+#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
+#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
+#define PAGE_SUMMARY_COUNT_L0 (PAGE_SUMMARY_COUNT_L1 / PAGE_SUMMARY_MERGE_COUNT)// 8192, 每个 summary 管理 32G 空间
 #define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21                                         // 2097152, max=start=end 的最大值
 
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024)// 100KB
@@ -203,7 +203,7 @@ typedef struct {
     arena_hint_t *arena_hints;
     // cursor ~ end 可能会跨越多个连续的 arena
     struct {
-        addr_t cursor;// 指向未被使用的地址
+        addr_t cursor;// 指向未被使用的地址, 从 0 开始计算
         addr_t end;   // 指向本次申请的终点
     } current_arena;
 
