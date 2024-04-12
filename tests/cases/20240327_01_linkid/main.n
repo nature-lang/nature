@@ -1,0 +1,9 @@
+import 'mod.n'
+import time
+
+mod.foo(2024)
+
+var start = time.now().timestamp()
+mod.test3(2)
+var used = time.now().timestamp() - start
+println('use time', used)

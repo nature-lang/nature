@@ -11,7 +11,7 @@ typedef struct {
     uint8_t b[5];
 } st;
 
-n_string_t *libc_string_new(n_cptr_t raw_string) {
+n_string_t *libc_string_new(n_void_ptr_t raw_string) {
     if (!raw_string) {
         rt_coroutine_set_error("raw string is empty");
         return NULL;
@@ -25,7 +25,7 @@ n_string_t *libc_string_new(n_cptr_t raw_string) {
 n_string_t *libc_string_replace(n_string_t *str, n_string_t *old, n_string_t *new) {
     char *temp = str_replace((char *) str->data, (char *) old->data, (char *) new->data);
 
-    n_string_t *result = libc_string_new((n_cptr_t) temp);
+    n_string_t *result = libc_string_new((n_void_ptr_t) temp);
     free(temp);
     return result;
 }

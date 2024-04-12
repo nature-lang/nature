@@ -19,29 +19,17 @@ rtype_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static rtype_t rtype_int(type_kind kind) {
-    return rtype_base(kind);
-}
-
-static rtype_t rtype_float() {
-    return rtype_base(TYPE_FLOAT);
-}
-
-static rtype_t rtype_bool() {
-    return rtype_base(TYPE_BOOL);
-}
-
-static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
+static rtype_t rtype_raw_ptr(type_ptr_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = dsprintf("%d_%lu", TYPE_NPTR, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_RAW_PTR, value_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-            .size = sizeof(n_pointer_t),
+            .size = sizeof(n_ptr_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_NPTR,
+            .kind = TYPE_RAW_PTR,
     };
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
@@ -55,14 +43,14 @@ static rtype_t rtype_nullable_pointer(type_pointer_t *t) {
  * @param t
  * @return
  */
-static rtype_t rtype_pointer(type_pointer_t *t) {
+static rtype_t rtype_pointer(type_ptr_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
     char *str = dsprintf("%d_%lu", TYPE_PTR, value_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-            .size = sizeof(n_pointer_t),
+            .size = sizeof(n_ptr_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_PTR,
@@ -412,6 +400,8 @@ uint8_t type_kind_sizeof(type_kind t) {
     assert(t > 0);
 
     switch (t) {
+        case TYPE_VOID:
+            return 0;
         case TYPE_BOOL:
         case TYPE_INT8:
         case TYPE_UINT8:
@@ -427,11 +417,6 @@ uint8_t type_kind_sizeof(type_kind t) {
         case TYPE_UINT64:
         case TYPE_FLOAT64:
             return QWORD;
-            // case TYPE_CPTR:
-            // case TYPE_INT:
-            // case TYPE_UINT:
-            // case TYPE_FLOAT:
-            //     return POINTER_SIZE; // 固定大小
         default:
             return POINTER_SIZE;
     }
@@ -498,25 +483,32 @@ type_t type_ptrof(type_t t) {
     result.status = t.status;
 
     result.kind = TYPE_PTR;
-    result.pointer = NEW(type_pointer_t);
-    result.pointer->value_type = t;
+    result.ptr = NEW(type_ptr_t);
+    result.ptr->value_type = t;
     result.origin_ident = NULL;
     result.origin_type_kind = 0;
     result.line = t.line;
     result.column = t.column;
-    result.in_heap = kind_in_heap(t.kind);
+    result.in_heap = false;
     result.impl_ident = t.impl_ident;
     result.impl_args = t.impl_args;
     return result;
 }
 
-type_t type_nullable_ptrof(type_t t) {
+type_t type_raw_ptrof(type_t t) {
     type_t result;
     result.status = t.status;
 
-    result.kind = TYPE_NPTR;
-    result.pointer = NEW(type_pointer_t);
-    result.pointer->value_type = t;
+    result.kind = TYPE_RAW_PTR;
+    result.ptr = NEW(type_ptr_t);
+    result.ptr->value_type = t;
+    result.origin_ident = NULL;
+    result.origin_type_kind = 0;
+    result.line = t.line;
+    result.column = t.column;
+    result.in_heap = false;
+    result.impl_ident = t.impl_ident;
+    result.impl_args = t.impl_args;
     return result;
 }
 
@@ -529,17 +521,14 @@ rtype_t reflect_type(type_t t) {
     rtype_t rtype = {0};
 
     switch (t.kind) {
-        case TYPE_BOOL:
-            rtype = rtype_bool();
-            break;
         case TYPE_STRING:
             rtype = rtype_string();
             break;
         case TYPE_PTR:
-            rtype = rtype_pointer(t.pointer);
+            rtype = rtype_pointer(t.ptr);
             break;
-        case TYPE_NPTR:
-            rtype = rtype_nullable_pointer(t.pointer);
+        case TYPE_RAW_PTR:
+            rtype = rtype_raw_ptr(t.ptr);
             break;
         case TYPE_VEC:
             rtype = rtype_vec(t.vec);
@@ -566,7 +555,8 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_union(t.union_);
             break;
         default:
-            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID || t.kind == TYPE_CPTR) {
+            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
+                t.kind == TYPE_VOID_PTR || t.kind == TYPE_BOOL) {
                 rtype = rtype_base(t.kind);
             }
     }
@@ -779,11 +769,11 @@ char *_type_format(type_t t) {
     }
 
     if (t.kind == TYPE_PTR) {
-        return dsprintf("ptr<%s>", type_format(t.pointer->value_type));
+        return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
     }
 
-    if (t.kind == TYPE_NPTR) {
-        return dsprintf("nptr<%s>", type_format(t.pointer->value_type));
+    if (t.kind == TYPE_RAW_PTR) {
+        return dsprintf("raw_ptr<%s>", type_format(t.ptr->value_type));
     }
 
     if (t.kind == TYPE_UNION && t.union_->any) {
@@ -798,9 +788,15 @@ char *_type_format(type_t t) {
  * @return
  */
 char *type_format(type_t t) {
-    if (t.origin_ident == NULL) {
+    char *ident = t.origin_ident;
+    if (ident == NULL) {
         return _type_format(t);
     }
 
-    return dsprintf("%s(%s)", t.origin_ident, _type_format(t));
+    if (t.kind == TYPE_PARAM) {
+        return t.param->ident;
+    }
+
+
+    return dsprintf("%s(%s)", ident, _type_format(t));
 }

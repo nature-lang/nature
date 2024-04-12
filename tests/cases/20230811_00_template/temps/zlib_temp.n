@@ -1,5 +1,5 @@
-fn gzopen(cptr fname, cptr mode):cptr
+fn gzopen(void_ptr fname, void_ptr mode):void_ptr
 
-fn gzwrite(cptr outfile, cptr buf, int len):int
+fn gzwrite(void_ptr outfile, void_ptr buf, int len):int
 
-fn gzclose(cptr outfile):int
+fn gzclose(void_ptr outfile):int

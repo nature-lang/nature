@@ -2,7 +2,7 @@ import syscall
 import fmt
 
 // 基于 c 字符串创建一个 nature 字符串 
-fn from(cptr p):string {
+fn from(void_ptr p):string {
     return libc_string_new(p)
 }
 
@@ -30,8 +30,8 @@ fn find_after(string s, string sub, int after):int {
         return find_char(s, sub[0], after)
     }
 
-    cptr base = s.ref()
-    cptr temp =  strstr((base as uint + after as uint) as cptr, sub.ref())
+    void_ptr base = s.ref()
+    void_ptr temp =  strstr((base as uint + after as uint) as void_ptr, sub.ref())
     if temp == 0 {
         return -1
     }

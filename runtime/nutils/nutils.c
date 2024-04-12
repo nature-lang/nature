@@ -46,7 +46,7 @@ char **command_argv;
                 *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
                 return;                                                                                                                 \
             default:                                                                                                                    \
-                assert(false && "cannot scanner_number_convert type");                                                                                 \
+                assert(false && "cannot scanner_number_convert type");                                                                  \
                 exit(1);                                                                                                                \
         }                                                                                                                               \
     }
@@ -55,7 +55,8 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     PRE_RTCALL_HOOK();
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
-    DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p", type_kind_str[input_rtype->kind], input_ref,
+    DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p",
+           type_kind_str[input_rtype->kind], input_ref,
            type_kind_str[output_rtype->kind], output_ref);
 
     value_casting v = {0};
@@ -91,15 +92,15 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     }
 }
 
-n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
+n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
     PRE_RTCALL_HOOK();
-    if (np == 0) {
-        DEBUGF("[null_pointer_assert] null pointer");
-        rt_coroutine_set_error("null pointer assert");
+    if (raw_ptr == 0) {
+        DEBUGF("[raw_ptr_assert] raw pointer");
+        rt_coroutine_set_error("raw_ptr is null, cannot assert");
         return 0;
     }
 
-    return np;
+    return raw_ptr;
 }
 
 /**
@@ -111,7 +112,8 @@ n_pointer_t *null_pointer_assert(n_nullable_pointer_t *np) {
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     PRE_RTCALL_HOOK();
     if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld", type_kind_str[mu->rtype->kind],
+        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
+               type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
         rt_coroutine_set_error("type assert error");
@@ -149,12 +151,14 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = rt_clr_malloc(sizeof(n_union_t), union_rtype);
 
-    TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p", mu, value_ref,
+    TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+           mu, value_ref,
            &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
     memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
-    TRACEF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype, mu->value.i64_value);
+    TRACEF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+           mu->value.i64_value);
 
     return mu;
 }
@@ -167,7 +171,8 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
  */
 n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value, float_value);
+    DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value,
+           float_value);
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     if (is_float(input_rtype->kind)) {
         return float_value != 0;
@@ -194,7 +199,8 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        DEBUGF("[runtime.iterator_next_key] list=%p, kind is vec, len=%lu, cap=%lu, data_base=%p, cursor=%ld", list, list->length,
+        DEBUGF("[runtime.iterator_next_key] list=%p, kind is vec, len=%lu, cap=%lu, data_base=%p, cursor=%ld", list,
+               list->length,
                list->capacity, list->data, cursor);
 
         if (cursor >= list->length) {
@@ -202,7 +208,8 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
             return -1;
         }
 
-        DEBUGF("[runtime.iterator_next_key] list mov cursor=%ld < list.length('%ld') to key ref=%p ~ %p", cursor, list->length, key_ref,
+        DEBUGF("[runtime.iterator_next_key] list mov cursor=%ld < list.length('%ld') to key ref=%p ~ %p", cursor,
+               list->length, key_ref,
                key_ref + INT_SIZE);
 
         memmove(key_ref, &cursor, INT_SIZE);
@@ -212,7 +219,8 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
         uint64_t key_size = rt_rtype_out_size(map->key_rtype_hash);
-        DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu", map->length, map->key_data,
+        DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
+               map->length, map->key_data,
                map->key_rtype_hash, key_size);
 
         if (cursor >= map->length) {
@@ -239,7 +247,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
         n_vec_t *list = iterator;
         assert(list->ele_reflect_hash && "list element rtype hash is empty");
         uint64_t value_size = rt_rtype_out_size(list->ele_reflect_hash);
-        DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld", list->length,
+        DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld",
+               list->length,
                list->capacity, list->data, value_size, cursor);
 
         if (cursor >= list->length) {
@@ -253,7 +262,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
         uint64_t value_size = rt_rtype_out_size(map->value_rtype_hash);
-        DEBUGF("[runtime.iterator_next_value] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu", map->length, map->key_data,
+        DEBUGF("[runtime.iterator_next_value] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
+               map->length, map->key_data,
                map->key_rtype_hash, value_size);
 
         if (cursor >= map->length) {
@@ -270,7 +280,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 
 void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator, rtype_hash, cursor,
+    DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator,
+           rtype_hash, cursor,
            value_ref);
 
     assert(cursor != -1 && "cannot iterator value");
@@ -279,7 +290,8 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu", iterator,
+        DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
+               iterator,
                list->length, list->capacity, list->data, list->ele_reflect_hash);
 
         assert(list->ele_reflect_hash > 0 && "list element rtype hash is empty");
@@ -289,14 +301,16 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
         uint64_t element_size = rt_rtype_out_size(list->ele_reflect_hash);
 
         memmove(value_ref, list->data + element_size * cursor, element_size);
-        DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref, element_size);
+        DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref,
+               element_size);
         return;
     }
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
         uint64_t value_size = rt_rtype_out_size(map->value_rtype_hash);
-        DEBUGF("[runtime.iterator_take_value] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu", map->length,
+        DEBUGF("[runtime.iterator_take_value] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
+               map->length,
                map->value_data, map->value_rtype_hash, value_size);
 
         assert(cursor < map->length && "terator_take_value cursor >= map->length");
@@ -357,7 +371,8 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
 
     PRE_RTCALL_HOOK();
 
-    DEBUGF("[runtime.co_has_error] errort? %d, fn_name: %s, line: %ld, column: %ld", co->error ? co->error->has : 0, fn_name, line, column)
+    DEBUGF("[runtime.co_has_error] errort? %d, fn_name: %s, line: %ld, column: %ld", co->error ? co->error->has : 0,
+           fn_name, line, column)
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
     // 存在异常时顺便添加调用栈信息
@@ -374,12 +389,12 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     return 1;
 }
 
-n_cptr_t cptr_casting(value_casting v) {
+n_void_ptr_t void_ptr_casting(value_casting v) {
     PRE_RTCALL_HOOK();
     return v.u64_value;
 }
 
-value_casting casting_to_cptr(void *ptr) {
+value_casting casting_to_void_ptr(void *ptr) {
     value_casting v = {0};
     v.ptr_value = ptr;
     return v;
@@ -398,7 +413,8 @@ n_vec_t *std_args() {
         rt_vec_assign(list, i, &str);
     }
 
-    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data, list->length,
+    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data,
+           list->length,
            list->ele_reflect_hash);
     return list;
 }
@@ -415,7 +431,8 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     assert(data_ref && "data_ref is null");
     uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
 
-    TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref, data_size);
+    TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
+           data_size);
 
     if (is_number(rtype->kind)) {
         assert(data_size <= 8 && "not support number size > 8");
@@ -612,4 +629,15 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
 
     TRACEF("[rt_rtype_array] success");
     return rtype;
+}
+
+void raw_ptr_valid(void *raw_ptr) {
+    PRE_RTCALL_HOOK();// 修改状态避免抢占
+
+    DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
+    // raw_ptr 必须处于合理的范围
+    addr_t i = (addr_t) raw_ptr;
+    if (i < MMAP_STACK_BASE || i > ARENA_HINT_MAX) {
+        rt_coroutine_set_error("invalid memory address or nil pointer dereference");
+    }
 }

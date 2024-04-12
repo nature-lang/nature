@@ -1,7 +1,7 @@
 #include "array.h"
 #include "runtime/processor.h"
 
-n_cptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index) {
+n_void_ptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index) {
     PRE_RTCALL_HOOK();
 
     DEBUGF("[runtime.array_element_addr] array=%p, rtype_hash=%lu, index=%lu", data, rtype_hash, index);
@@ -19,7 +19,7 @@ n_cptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index
     uint64_t element_size = array_rtype->size / array_rtype->length;
     uint64_t offset = element_size * index;
 
-    n_cptr_t result = (n_cptr_t) data + offset;
+    n_void_ptr_t result = (n_void_ptr_t) data + offset;
 
     DEBUGF("[runtime.array_element_addr] result=%lx, element_size=%ld, offset=%ld, rtype_size=%lu, rtype_length=%d",
            result, element_size, offset, array_rtype->size, array_rtype->length);

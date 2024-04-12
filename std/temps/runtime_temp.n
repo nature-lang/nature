@@ -1,45 +1,41 @@
-fn rt_vec_new(int ref_hash, int ele_ref_hash, int len, int cap):cptr
+fn rt_vec_new(int ref_hash, int ele_ref_hash, int len, int cap):void_ptr
 
-fn rt_vec_push(cptr list, cptr val)
+fn rt_vec_push(void_ptr list, void_ptr val)
 
-fn rt_vec_slice(cptr list, int start, int end):cptr
+fn rt_vec_slice(void_ptr list, int start, int end):void_ptr
 
-fn rt_vec_concat(cptr list1, cptr list2):cptr
+fn rt_vec_concat(void_ptr list1, void_ptr list2):void_ptr
 
-fn rt_vec_ref(cptr list):cptr
+fn rt_vec_ref(void_ptr list):void_ptr
 
-fn rt_vec_length(cptr list):int
+fn rt_vec_length(void_ptr list):int
 
-fn rt_vec_capacity(cptr list):int
+fn rt_vec_capacity(void_ptr list):int
 
-fn rt_set_add(cptr s, cptr key):bool
+fn rt_set_add(void_ptr s, void_ptr key):bool
 
-fn rt_set_contains(cptr s, cptr key):bool
+fn rt_set_contains(void_ptr s, void_ptr key):bool
 
-fn rt_set_delete(cptr s, cptr key)
+fn rt_set_delete(void_ptr s, void_ptr key)
 
-fn rt_map_delete(cptr m, cptr key)
+fn rt_map_delete(void_ptr m, void_ptr key)
 
-fn rt_map_length(cptr m):int
+fn rt_map_length(void_ptr m):int
 
-fn rt_string_length(cptr s):int
+fn rt_string_length(void_ptr s):int
 
-fn rt_string_ref(cptr s):cptr
+fn rt_string_ref(void_ptr s):void_ptr
 
+fn rt_coroutine_new(void_ptr function, int flag, void_ptr future):void_ptr
 
+fn rt_coroutine_async(void_ptr function, int flag, void_ptr future):void_ptr
 
-fn rt_coroutine_new(cptr function, int flag, int result_size):cptr
-
-fn rt_coroutine_dispatch(cptr co)
-
-fn rt_coroutine_async(cptr function, int flag, int result_size):cptr
+fn rt_coroutine_dispatch(void_ptr co)
 
 fn rt_coroutine_yield()
 
-fn rt_coroutine_return(cptr result)
+fn rt_coroutine_return(void_ptr result)
 
-fn rt_coroutine_await(cptr co)
+fn rt_coroutine_await(void_ptr co)
 
-fn rt_coroutine_result(cptr co):cptr
-
-fn rt_coroutine_error(cptr co):nptr<error_t>
+fn rt_coroutine_error(void_ptr co):raw_ptr<error_t>

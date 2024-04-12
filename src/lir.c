@@ -5,8 +5,13 @@
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
     closure_t *c = NEW(closure_t);
-    c->symbol_name = fndef->symbol_name;
-    c->closure_name = fndef->closure_name;
+
+    if (fndef->linkid) {
+        c->linkident = fndef->linkid;
+    } else {
+        c->linkident = fndef->symbol_name;
+    }
+
     c->operations = linked_new();
     c->text_count = 0;
     c->asm_operations = slice_new();
@@ -76,7 +81,7 @@ linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_
 
         count = remind / item_size;
         for (int i = 0; i < count; ++i) {
-            lir_operand_t *temp_var = temp_var_operand_with_stack(m, type_kind_new(kind));
+            lir_operand_t *temp_var = temp_var_operand_with_alloc(m, type_kind_new(kind));
             lir_operand_t *temp_src = indirect_addr_operand(m, type_kind_new(kind), src, offset);
             lir_operand_t *temp_dst = indirect_addr_operand(m, type_kind_new(kind), dst, offset);
             linked_push(result, lir_op_move(temp_var, temp_src));

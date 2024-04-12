@@ -1,7 +1,7 @@
 type people = struct {
-    int a = 12
+    int a
     bool b
-    int c = 12
+    int c
     arr<int,5> list
     [f32] flist
 }

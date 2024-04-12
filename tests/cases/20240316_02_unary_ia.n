@@ -1,12 +1,12 @@
 // 1.
 int a = 12
-ptr<int> p = &a
+raw_ptr<int> p = &a
 int b = *p
 println(a, &a == p, b)
 
 // 2.
 [f32] a2 = [1.2, 2.3, 3.4]
-ptr<[f32]> p2 = &a2
+raw_ptr<[f32]> p2 = &a2
 [f32] b2 = *p2
 
 b2[1] = 666.6
@@ -15,7 +15,7 @@ println(a2[0], a2[1], a2[2], &a2 == p2, b2[0], b2[1], b2[2])
 
 // 3.
 arr<int,3> a3 = [1, 2, 3]
-ptr<arr<int,3>> p3 = &a3
+raw_ptr<arr<int,3>> p3 = &a3
 arr<int,3> b3 = *p3
 
 b3[1] = 666

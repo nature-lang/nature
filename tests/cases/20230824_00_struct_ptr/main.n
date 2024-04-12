@@ -14,17 +14,18 @@ println(p.age)
 ptr<person_t> p2 = new person_t
 p2.name = "wanglufei"
 p2.from = "japan"
+p2.gender = 2
 p2.set_age(19)
 
 println(p2.get_name(), p2.from, p2.gender, p2.age)
 
 // --- &person_t test
-var p3 = &p
-p3.set_age(24)
-println(p3.get_name(), p3.from, p3.gender, p3.age, p.age)
+raw_ptr<person_t> p3 = &p
+p3.age = 24
+println(p3.name, p3.from, p3.gender, p3.age, p.age)
 
 // --- ptr param
-fn test_param(ptr<person_t> p3, person_t p) {
+fn test_param(raw_ptr<person_t> p3, person_t p) {
     println('in test fn, p.name is', p.name)
     println('in test fn, p3.name is', p3.name)
 }
@@ -32,7 +33,7 @@ fn test_param(ptr<person_t> p3, person_t p) {
 test_param(p3, p)
 
 // --- refer rewrite
-fn test_refer(ptr<person_t> p3, person_t p) {
+fn test_refer(raw_ptr<person_t> p3, person_t p) {
     p3.name = 'rewrite by p3'
     p.name = 'rewrite by p' // nop
 }

@@ -31,7 +31,9 @@
 
 #define PAGE_ALLOC_CHUNK_SPLIT 8192// 每组 chunks 中的元素的数量
 
-#define ARENA_HINT_BASE 824633720832 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define MMAP_STACK_BASE 0xa000000000
+#define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#define ARENA_HINT_MAX 0x800000000000// 128T
 #define ARENA_HINT_SIZE 1099511627776// 1 << 40
 #define ARENA_HINT_COUNT 128         // 0.75T ~ 128T
 
@@ -48,11 +50,11 @@
 
 #define PAGE_SUMMARY_LEVEL 5                                                    // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8                                              // 每个上级 summary 索引的数量
-#define PAGE_SUMMARY_COUNT_L5 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
-#define PAGE_SUMMARY_COUNT_L4 (PAGE_SUMMARY_COUNT_L5 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
-#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
-#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
-#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 8192, 每个 summary 管理 32G 空间
+#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
+#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
+#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
+#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
+#define PAGE_SUMMARY_COUNT_L0 (PAGE_SUMMARY_COUNT_L1 / PAGE_SUMMARY_MERGE_COUNT)// 8192, 每个 summary 管理 32G 空间
 #define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21                                         // 2097152, max=start=end 的最大值
 
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024)// 100KB
@@ -121,11 +123,12 @@ typedef struct {
 } page_chunk_t;// page_chunk 现在占用 64 * 8 = 512bit
 
 // TODO start/end/max 的正确编码值应该是 uint21_t,后续需要正确实现,能表示的最大值是 2^21=2097152
+// 0 标识无空闲， 1 标识有空闲
 typedef struct {
     uint16_t start;
     uint16_t end;
     uint16_t max;
-    uint8_t full;// start=end=max=2^21 最大值， full 设置为 1
+    uint8_t full;// start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
 } page_summary_t;// page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
@@ -200,7 +203,7 @@ typedef struct {
     arena_hint_t *arena_hints;
     // cursor ~ end 可能会跨越多个连续的 arena
     struct {
-        addr_t cursor;// 指向未被使用的地址
+        addr_t cursor;// 指向未被使用的地址, 从 0 开始计算
         addr_t end;   // 指向本次申请的终点
     } current_arena;
 
@@ -236,6 +239,14 @@ typedef enum {
 
 typedef struct processor_t processor_t;
 
+// 必须和 nature code 保持一致
+typedef struct n_future_t {
+    int64_t size;
+    void *result;
+    n_errort *error;// 类似 result 一样可选的 error
+    void *await_co;
+} n_future_t;
+
 typedef struct coroutine_t {
     int64_t id;
     bool main;// 是否是 main 函数
@@ -244,9 +255,8 @@ typedef struct coroutine_t {
     aco_t aco;
     void *fn;      // fn 指向
     processor_t *p;// 当前 coroutine 绑定的 p
-    //    n_vec_t *args;
-    void *result;// coroutine 如果存在返回值，相关的值会放在 result 中
-    int64_t result_size;
+
+    n_future_t *future;
 
     struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
     mutex_t dead_locker;
@@ -287,20 +297,19 @@ struct processor_t {
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
     mutex_t thread_locker;
-    mutex_t co_locker;
     p_status_t status;
 
     uv_thread_t thread_id; // 当前 processor 绑定的 pthread 线程
     coroutine_t *coroutine;// 当前正在调度的 coroutine
     uint64_t co_started_at;// 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
-    rt_linked_t co_list;// 当前 processor 下的 coroutine 列表
-    rt_linked_t runnable_list;
+    rt_linked_fixalloc_t co_list;// 当前 processor 下的 coroutine 列表
+    rt_linked_fixalloc_t runnable_list;
 
     bool share;// 默认都是共享处理器
 
-    rt_linked_t gc_worklist;  // gc 扫描的 ptr 节点列表
-    uint64_t gc_work_finished;// 当前处理的 GC 轮次，每完成一轮 + 1
+    rt_linked_fixalloc_t gc_worklist;// gc 扫描的 ptr 节点列表
+    uint64_t gc_work_finished;       // 当前处理的 GC 轮次，每完成一轮 + 1
 
     struct processor_t *next;// processor 链表支持
 };

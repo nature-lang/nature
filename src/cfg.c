@@ -156,7 +156,8 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
 
     // end_label 是最后到 label 如果都不包含 opcode return, 则存在一条不包含 return 的线路
     if (str_equal(b->name, c->end_label)) {
-        dump_errorf(c->module, CT_STAGE_CFG, c->fndef->line, c->fndef->column, "fn %s missing return", c->symbol_name);
+        dump_errorf(c->module, CT_STAGE_CFG, c->fndef->line, c->fndef->column, "fn %s missing return",
+                    c->fndef->symbol_name);
     }
 
     // 当前 block 没有找到 return, 递归寻找 succ
@@ -246,7 +247,7 @@ static void cfg_build(closure_t *c) {
             }
         }
 
-    BLOCK_OP_PUSH:
+        BLOCK_OP_PUSH:
         // 值 copy
         linked_push(current_block->operations, op);
     }

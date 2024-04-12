@@ -8,7 +8,9 @@
 #include "utils/autobuf.h"
 
 static char *scanner_ident_advance(module_t *m);
+
 static token_type_t scanner_ident(char *word, int length);
+
 static bool scanner_skip_space(module_t *m);
 
 static char *scanner_gen_word(module_t *m) {
@@ -163,6 +165,8 @@ static token_type_t scanner_special_char(module_t *m) {
             return TOKEN_SEMICOLON;
         case ',':
             return TOKEN_COMMA;
+        case '?':
+            return TOKEN_QUESTION;
         case '%':
             return scanner_match(m, '=') ? TOKEN_PERSON_EQUAL : TOKEN_PERSON;
         case '-':
@@ -226,6 +230,7 @@ static token_type_t scanner_special_char(module_t *m) {
             return 0;
     }
 }
+
 static void scanner_cursor_init(module_t *m) {
     m->s_cursor.source = m->source;
     m->s_cursor.current = m->source;
@@ -247,6 +252,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
 
     while (*m->s_cursor.guard != close_char && !scanner_at_eof(m)) {
         char guard = *m->s_cursor.guard;
+
+        SCANNER_ASSERTF(guard != '\n', "string cannot newline")
 
         if (guard == escape_char) {
             // 跳过转义字符
@@ -283,7 +290,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
                 case '\"':
                     break;
                 default:
-                    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "unknown escape char %c", guard);
+                    dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, "unknown escape char %c",
+                                guard);
             }
         }
 
@@ -302,7 +310,8 @@ static char *scanner_string_advance(module_t *m, char close_char) {
     return (char *) buf->data;
 }
 
-static token_type_t scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
+static token_type_t
+scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length, char *rest, int8_t type) {
     if (rest_start + rest_length == word_length && memcmp(word + rest_start, rest, rest_length) == 0) {
         return type;
     }
@@ -465,6 +474,15 @@ linked_t *scanner(module_t *m) {
             continue;
         }
 
+        if (scanner_match(m, '#')) {
+            char *word = scanner_ident_advance(m);
+            word++;
+            token_t *t = token_new(TOKEN_FN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
+            linked_push(list, t);
+            continue;
+        }
+
+
         // 首个字符是 0 ~ 9 则判定为数字
         if (scanner_is_number(m, *m->s_cursor.current)) {
             char *word = NULL;
@@ -549,7 +567,7 @@ static bool scanner_skip_space(module_t *m) {
                 scanner_guard_advance(m);
                 break;
             }
-            case '\n': {// 开启新的一行
+            case '\n': {
                 scanner_guard_advance(m);
                 has_new = true;
                 break;
@@ -564,7 +582,8 @@ static bool scanner_skip_space(module_t *m) {
                 } else if (m->s_cursor.guard[1] == '*') {
                     while (!scanner_multi_comment_end(m)) {
                         if (scanner_at_eof(m)) {
-                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length, "unterminated comment");
+                            dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.length,
+                                        "unterminated comment");
                         }
                         scanner_guard_advance(m);
                     }
@@ -683,7 +702,7 @@ static token_type_t scanner_ident(char *word, int length) {
             }
             break;
         case 'p':
-            return scanner_rest(word, length, 1, 2, "tr", TOKEN_POINTER);
+            return scanner_rest(word, length, 1, 2, "tr", TOKEN_PTR);
         case 's': {// self,string,struct,sizeof,sett
             switch (word[1]) {
                 case 'e':

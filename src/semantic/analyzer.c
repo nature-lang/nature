@@ -132,7 +132,8 @@ void analyzer_import_temp(module_t *m, ast_import_t *import) {
         }
 
         // 基于 import->package_conf 和 dir 定位到具体的 temp 文件
-        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir, import->ast_package);
+        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir,
+                                                         import->ast_package);
 
         assertf(file_exists(import->full_path), "templates path '%s' notfound", import->full_path);
     }
@@ -322,7 +323,7 @@ static void analyzer_type(module_t *m, type_t *type) {
     // type foo = int
     // 'foo' is type_alias
     // alias 可能是一些特殊符号，首先检测是否已经定义，如果没有预定义，则使用特殊符号的含义
-    // 比如 cptr/nptr/ptr
+    // 比如 void_ptr/raw_ptr/ptr
     if (type->kind == TYPE_ALIAS) {
         // import 全局模式 alias 处理, 例如 type a = package.foo, 对 package.foo 必定是其他 module 的 type alias 定义的
         type_alias_t *type_alias = type->alias;
@@ -339,9 +340,9 @@ static void analyzer_type(module_t *m, type_t *type) {
         } else {
             // local ident 或者当前 module 下的全局 ident, import as * 中的全局 ident
             char *unique_alias_ident = analyzer_resolve_type_alias(m, m->analyzer_current, type_alias->ident);
+
+            // 在没有找到类型的 alias 前提下, 判断是否是内置特殊类型, 这样可以不占用关键字
             if (!unique_alias_ident) {
-                // TODO 可以取消特殊类型了
-                // 在类型为定义的前提下， 判断是否是特殊类型，如果是的话直接进行 type 类型改写
                 if (analyzer_special_type_rewrite(m, type)) {
                     return;
                 }
@@ -350,9 +351,6 @@ static void analyzer_type(module_t *m, type_t *type) {
             }
             type_alias->ident = unique_alias_ident;
         }
-
-        // TODO 统一在 infer 阶段完成吧 重新基于 unique ident 更新 type impl_type_alias
-        //        type->impl_ident = type_alias->ident;
 
         // foo<arg1,>
         if (type_alias->args) {
@@ -411,8 +409,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_PTR || type->kind == TYPE_NPTR) {
-        type_pointer_t *pointer = type->pointer;
+    if (type->kind == TYPE_PTR || type->kind == TYPE_RAW_PTR) {
+        type_ptr_t *pointer = type->ptr;
         analyzer_type(m, &pointer->value_type);
         return;
     }
@@ -432,43 +430,59 @@ static void analyzer_type(module_t *m, type_t *type) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
 
             analyzer_type(m, &item->type);
-
-            // 可选右值解析
-            if (item->right) {
-                analyzer_expr(m, item->right);
-
-                ast_expr_t *expr = item->right;
-
-                // TODO 暂时不再支持默认值 fndef
-                if (expr->assert_type == AST_FNDEF) {
-                    ast_fndef_t *fndef = expr->value;
-
-                    // analyzer_current 为 null 标识当前 fn 是 global type alias 中的 fn
-                    // in_type_param 标识当前 fn 是一个模版，不需要加入到 ast_fndefs 中
-                    if (m->analyzer_current == NULL && !m->analyzer_in_type_param) {
-                        slice_push(m->ast_fndefs, fndef);
-                    }
-                }
-            }
         }
     }
 }
 
 /**
- * TODO 当前版本暂时用不到了
- * ptr/cptr/nptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
+ * ptr/void_ptr/raw_ptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     assert(type->kind == TYPE_ALIAS);
     type_alias_t *type_alias = type->alias;
     assert(type->alias->import_as == NULL);
 
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_CPTR])) {
-        type->kind = TYPE_CPTR;
+    // void ptr
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_VOID_PTR])) {
+        type->kind = TYPE_VOID_PTR;
         type->value = NULL;
+        type->origin_ident = NULL;
 
-        // cptr 不能有参数
-        ANALYZER_ASSERTF(type_alias->args == NULL, "cptr cannot contains arg");
+        ANALYZER_ASSERTF(type_alias->args == NULL, "void_ptr cannot contains arg");
+
+        return true;
+    }
+
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_RAW_PTR])) {
+        type->kind = TYPE_RAW_PTR;
+        type->origin_ident = NULL;
+        type->origin_type_kind = 0;
+
+        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "raw_ptr<...> must contains arg type");
+
+        type_t *arg_type = ct_list_value(type_alias->args, 0);
+        analyzer_type(m, arg_type);
+
+        type_raw_ptr_t *raw_ptr = NEW(type_raw_ptr_t);
+        raw_ptr->value_type = *arg_type;
+        type->value = raw_ptr;
+
+        return true;
+    }
+
+    if (str_equal(type_alias->ident, type_kind_str[TYPE_PTR])) {
+        type->kind = TYPE_PTR;
+        type->origin_ident = NULL;
+        type->origin_type_kind = 0;
+
+        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "ptr<...> must contains arg type");
+
+        type_t *arg_type = ct_list_value(type_alias->args, 0);
+        analyzer_type(m, arg_type);
+
+        type_ptr_t *ptr = NEW(type_ptr_t);
+        ptr->value_type = *arg_type;
+        type->value = ptr;
 
         return true;
     }
@@ -486,36 +500,6 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->value = NULL;
 
         ANALYZER_ASSERTF(type_alias->args == NULL, "fn_t cannot contains arg");
-        return true;
-    }
-
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_NPTR])) {
-        type->kind = TYPE_NPTR;
-
-        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "nptr<...> must contains arg type");
-
-        type_t *arg_type = ct_list_value(type_alias->args, 0);
-        analyzer_type(m, arg_type);
-
-        type_null_pointer_t *nptr = NEW(type_null_pointer_t);
-        nptr->value_type = *arg_type;
-        type->value = nptr;
-
-        return true;
-    }
-
-    if (str_equal(type_alias->ident, type_kind_str[TYPE_PTR])) {
-        type->kind = TYPE_PTR;
-
-        ANALYZER_ASSERTF(type_alias->args && type_alias->args->length == 1, "ptr<...> must contains arg type");
-
-        type_t *arg_type = ct_list_value(type_alias->args, 0);
-        analyzer_type(m, arg_type);
-
-        type_pointer_t *nptr = NEW(type_pointer_t);
-        nptr->value_type = *arg_type;
-        type->value = nptr;
-
         return true;
     }
 
@@ -753,25 +737,30 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         fndef->is_generics = true;
     }
 
+    if (fndef->is_tpl) {
+        assert(fndef->body == NULL);
+        ANALYZER_ASSERTF(fndef->impl_type.kind == 0, "tpl fn cannot have impl type");
+    }
+
     analyzer_type(m, &fndef->return_type);
+
     analyzer_begin_scope(m);
 
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
-    // fn vec<t>.len() -> fn vec_len(vec<t> self)
+    // fn vec<T>.vec_len() -> fn vec_len(vec<T> self)
     if (fndef->impl_type.kind > 0) {
         // 更新 alias
         if (fndef->impl_type.kind == TYPE_ALIAS) {
-            char *unique_alias_ident = analyzer_resolve_type_alias(m, m->analyzer_current, fndef->impl_type.impl_ident);
+            char *unique_alias_ident = analyzer_resolve_type_alias(m, NULL, fndef->impl_type.impl_ident);
             ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.impl_ident);
             fndef->impl_type.impl_ident = unique_alias_ident;
             fndef->impl_type.alias->ident = unique_alias_ident;
         }
 
-
+        // 重构关于 param 的位置
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
-
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
-        type_t param_type = type_copy(m, fndef->impl_type);
+        type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
                 .type = param_type,
@@ -799,9 +788,11 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         param->ident = param_local->unique_ident;
     }
 
-    analyzer_body(m, fndef->body);
+    if (fndef->body) {
+        analyzer_body(m, fndef->body);
+    }
+
     analyzer_end_scope(m);
-    m->analyzer_current = m->analyzer_current->parent;
 }
 
 static void analyzer_catch(module_t *m, ast_catch_t *catch_expr) {
@@ -886,20 +877,22 @@ static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    if (m->analyzer_global) {
-        slice_push(m->analyzer_global->local_children, fndef);
-        fndef->global_parent = m->analyzer_global;
-        fndef->is_local = true;
-    } else {
-        // TODO 定义在 struct 里面的全局函数？暂时取消了, 不然搞得太乱。
-        assert(m->analyzer_current == NULL);
-        fndef->is_local = false;
-    }
+    assert(m->analyzer_global);
+    slice_push(m->analyzer_global->local_children, fndef);
+    fndef->global_parent = m->analyzer_global;
+    fndef->is_local = true;
 
     // 闭包函数不能是类型扩展, 泛型
     if (fndef->impl_type.kind > 0 || fndef->generics_params) {
-        ANALYZER_ASSERTF(false, "closure function cannot be generics or impl type alias");
+        ANALYZER_ASSERTF(false, "closure fn cannot be generics or impl type alias");
     }
+
+    // 闭包函数不能有 macro ident
+    if (fndef->linkid) {
+        ANALYZER_ASSERTF(false, "closure fn cannot have @linkid");
+    }
+
+    ANALYZER_ASSERTF(!fndef->is_tpl, "closure fn cannot be tpl");
 
     // 更新 m->analyzer_current
     analyzer_current_init(m, fndef);
@@ -1134,6 +1127,7 @@ static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
 
+        // TODO tpl 即将取消 TPL 机制, 增加 linkid 自定义链接名称
         if (import->module_type == MODULE_TYPE_TPL) {
             assert(import_tpl_symbol_table);
             assert(import->full_path);
@@ -1640,12 +1634,18 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             slice_push(m->global_symbols, s);
 
             if (type_alias->params && type_alias->params->length > 0) {
-                m->analyzer_in_type_param = true;
+                for (int j = 0; j < type_alias->params->length; ++j) {
+                    ast_generics_param_t *param = ct_list_value(type_alias->params, j);
+                    if (!param->constraints.any) {
+                        for (int k = 0; k < param->constraints.elements->length; ++k) {
+                            type_t *constraint = ct_list_value(param->constraints.elements, k);
+                            analyzer_type(m, constraint);
+                        }
+                    }
+                }
             }
-            // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module
-            // ident
+
             analyzer_type(m, &type_alias->type);
-            m->analyzer_in_type_param = false;
             continue;
         }
 
@@ -1654,17 +1654,21 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
             char *symbol_name = fndef->symbol_name;
 
-            // fn string<>.len() -> fn string_len to symbol_table
+            // fn string<T>.len() -> fn <T>.string_len to symbol_table
             if (fndef->impl_type.kind > 0) {
                 assert(fndef->impl_type.impl_ident);
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
             fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
-            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
-            ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->symbol_name);
-            slice_push(m->global_symbols, s);
             slice_push(fn_list, fndef);
+
+            // 泛型允许重载，所以此处会有同名 symbol 被覆盖写入, 在 pre_infer 对泛型进行展开后再次覆盖注册到 symbol
+            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+            if (!fndef->generics_params) {
+                ANALYZER_ASSERTF(s, "fn '%s' redeclared", fndef->fn_name);
+            }
+
             continue;
         }
 
@@ -1682,6 +1686,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         // 讲 module init 函数添加到全局符号中
         symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
+        ANALYZER_ASSERTF(s, "fn '%s' redeclared", fn_init->symbol_name);
         slice_push(m->global_symbols, s);
         slice_push(fn_list, fn_init);
 
@@ -1701,7 +1706,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         call_stmt->column = 0;
         m->call_init_stmt = call_stmt;
     }
-
 
     // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef body
     // 进行符号定位与改写
@@ -1739,6 +1743,7 @@ static void analyzer_main(module_t *m, slice_t *stmt_list) {
 
     // 符号表注册
     symbol_t *s = symbol_table_set(FN_MAIN_NAME, SYMBOL_FN, fndef, false);
+    ANALYZER_ASSERTF(s, "fn '%s' redeclared", FN_MAIN_NAME);
     slice_push(m->global_symbols, s);
 
     // 添加到 ast_fndefs 中

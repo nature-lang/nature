@@ -1,4 +1,4 @@
-fn strstr(cptr haystack, cptr needle):cptr
+fn strstr(void_ptr haystack, void_ptr needle):void_ptr
 
-fn strrstr(cptr haystack, cptr needle):cptr
+fn strrstr(void_ptr haystack, void_ptr needle):void_ptr
 

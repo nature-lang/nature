@@ -1,0 +1,15 @@
+fn bar()
+
+#linkid custom_link_foo_id
+fn foo(int a) {
+    println('hello world', a)
+}
+
+fn test():int
+
+fn test2() {
+    println("aa")
+}
+
+#linkid sleep
+fn test3(int second)

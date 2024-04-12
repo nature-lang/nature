@@ -1,8 +1,8 @@
 fn map<T,U>.len():int {
-    return rt_map_length(self as cptr)
+    return rt_map_length(self as void_ptr)
 }
 
 fn map<T,U>.del(T key) {
-    ptr<T> ref = &key
-    rt_map_delete(self as cptr, ref as cptr)
+    raw_ptr<T> ref = &key
+    rt_map_delete(self as void_ptr, ref as void_ptr)
 }

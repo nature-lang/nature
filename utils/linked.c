@@ -223,11 +223,6 @@ void linked_remove(linked_t *l, linked_node *node) {
     l->count--;
 }
 
-void linked_remove_free(linked_t *l, linked_node *node) {
-    linked_remove(l, node);
-    free(node);
-}
-
 void linked_free(linked_t *l) {
     while (l->count > 0) {
         linked_pop_free(l);

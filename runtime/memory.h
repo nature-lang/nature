@@ -59,8 +59,6 @@ static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
     CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
 };
 
-static uint64_t summary_index_scale[PAGE_SUMMARY_LEVEL] = {64, 32, 16, 8, 0};
-
 static inline bool gc_barrier_get() {
     return gc_barrier;
 }
@@ -188,7 +186,7 @@ void runtime_eval_gc();
 
 void runtime_force_gc();
 
-void *runtime_malloc(uint64_t rtype_hash);
+void *gc_malloc(uint64_t reflect_hash);
 
 /**
  * 不会进行 gc
@@ -211,6 +209,6 @@ void rt_shade_obj_with_barrier(void *obj);
 void mark_ptr_black(void *value);
 
 void mheap_grow(uint64_t pages_count);
-addr_t page_alloc_find(uint64_t pages_count);
+uint64_t page_alloc_find(uint64_t pages_count, bool must_find);
 
 #endif // NATURE_MEMORY_H

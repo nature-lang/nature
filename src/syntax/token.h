@@ -27,6 +27,7 @@ typedef enum {
     TOKEN_SLASH,    // /
     TOKEN_STAR,     // * STAR
     TOKEN_PERSON,   // %
+    TOKEN_QUESTION, // ?
 
     // ONE OR TWO CHARACTER TOKENS.
     TOKEN_NOT,// !
@@ -60,7 +61,8 @@ typedef enum {
     // LITERALS.
     TOKEN_IDENT,
     TOKEN_POUND,// #
-    TOKEN_MACRO_IDENT,
+    TOKEN_MACRO_IDENT, // @sizeof
+    TOKEN_FN_LABEL, // #linkid
     TOKEN_LITERAL_STRING,
     TOKEN_LITERAL_FLOAT,
     TOKEN_LITERAL_INT,
@@ -83,18 +85,16 @@ typedef enum {
     TOKEN_F64,
     TOKEN_NEW,
 
-    // 内置复合类型, TODO 不占用关键字, 而是使用 type
+    // 内置复合类型
     TOKEN_ARR,
     TOKEN_VEC,
     TOKEN_MAP,
     TOKEN_TUP,
     TOKEN_SET,
-    //    TOKEN_CORO,
     TOKEN_CHAN,
 
     // KEYWORDS.
-    TOKEN_POINTER,// ptr
-                  //    TOKEN_CPTR, // cptr
+    TOKEN_PTR,// ptr
     TOKEN_TRUE,
     TOKEN_FALSE,
     TOKEN_TYPE,
@@ -150,6 +150,7 @@ static string token_str[] = {
         [TOKEN_SEMICOLON] = ";",
         [TOKEN_SLASH] = "/",
         [TOKEN_STAR] = "*",
+        [TOKEN_QUESTION] = "?",
         [TOKEN_NOT] = "!",
         [TOKEN_PERSON] = "%",
         [TOKEN_NOT_EQUAL] = "!=",
@@ -177,10 +178,10 @@ static string token_str[] = {
         [TOKEN_LEFT_SHIFT_EQUAL] = "<<=",
         [TOKEN_RIGHT_SHIFT_EQUAL] = ">>=",
 
-        [TOKEN_IDENT] = "ident literal",
-        [TOKEN_LITERAL_STRING] = "string literal",
-        [TOKEN_LITERAL_FLOAT] = "float literal",
-        [TOKEN_LITERAL_INT] = "int literal",
+        [TOKEN_IDENT] = "ident_literal",
+        [TOKEN_LITERAL_STRING] = "string_literal",
+        [TOKEN_LITERAL_FLOAT] = "float_literal",
+        [TOKEN_LITERAL_INT] = "int_literal",
 
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
@@ -191,7 +192,7 @@ static string token_str[] = {
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
         [TOKEN_TUP] = "tup",
-        [TOKEN_POINTER] = "ptr",
+        [TOKEN_PTR] = "ptr",
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",
@@ -235,8 +236,9 @@ static string token_str[] = {
         // 类型相关
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
-        //        [TOKEN_SIZEOF] = "sizeof",
         [TOKEN_GO] = "go",
+        [TOKEN_FN_LABEL] = "fn_label",
+        [TOKEN_MACRO_IDENT] = "macro_ident",
 
         [TOKEN_STMT_EOF] = ";",
         [TOKEN_EOF] = "\0",
@@ -250,7 +252,8 @@ typedef struct {
 } token_t;
 
 static inline bool token_complex_assign(token_type_t t) {
-    return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL || t == TOKEN_STAR_EQUAL ||
+    return t == TOKEN_PERSON_EQUAL || t == TOKEN_MINUS_EQUAL || t == TOKEN_PLUS_EQUAL || t == TOKEN_SLASH_EQUAL ||
+           t == TOKEN_STAR_EQUAL ||
            t == TOKEN_OR_EQUAL || t == TOKEN_AND_EQUAL || t == TOKEN_XOR_EQUAL || t == TOKEN_LEFT_SHIFT_EQUAL ||
            t == TOKEN_RIGHT_SHIFT_EQUAL;
 }

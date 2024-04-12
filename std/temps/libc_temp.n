@@ -14,20 +14,20 @@ type libc_tm_t = struct {
     i32 tm_yday
     i32 tm_isdst
     i64 tm_gmtoff
-    cptr tm_zone
+    void_ptr tm_zone
 }
 
 // 标准库函数, 返回值是静态值，不用处理 gc 但是线程不安全
-fn localtime(ptr<i64> timestamp):ptr<libc_tm_t>
+fn localtime(raw_ptr<i64> timestamp):ptr<libc_tm_t>
 
 // 将 time_info_t 转换为时间戳
-fn mktime(ptr<libc_tm_t> time_info):i64
+fn mktime(raw_ptr<libc_tm_t> time_info):i64
 
 // strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
-fn strftime(cptr s, i64 size, cptr format, ptr<libc_tm_t> time_info):i64
+fn strftime(void_ptr s, i64 size, void_ptr format, raw_ptr<libc_tm_t> time_info):i64
 
 // 通过空值 options 实现阻塞和非阻塞模式
-fn waitpid(int pid, ptr<int> status, int options):int
+fn waitpid(int pid, raw_ptr<int> status, int options):int
 
 // --- signal 相关 <sys/signalfd.h> 和 <signal.h>
 type sigset_t = struct {
@@ -65,7 +65,7 @@ fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
 
 fn sigfillset(ptr<sigset_t> sigset):i32
 
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, nptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ptr<sigset_t> sigset, raw_ptr<sigset_t> oldset):i32
 
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 
@@ -73,7 +73,7 @@ fn sleep(int second)
 
 fn usleep(u32 usec):i32
 
-fn strtol(cptr str, cptr endptr, i32 base):i64
+fn strtol(void_ptr str, void_ptr endptr, i32 base):i64
 
 fn prctl(int option, u64 arg2, u64 arg3, u64 arg4, u64 arg5):int
 
@@ -83,9 +83,11 @@ fn rand():int
 
 fn clock():int
 
+fn uv_hrtime():u64
+
 // --- 自定义在 runtime/libc 模块中的函数
-// cptr = char*
-fn libc_string_new(cptr s):string
+// void_ptr = char*
+fn libc_string_new(void_ptr s):string
 
 fn libc_string_replace(string str, string old, string new_str):string
 

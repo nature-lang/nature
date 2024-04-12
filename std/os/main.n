@@ -40,13 +40,14 @@ fn listdir(string path):[string] {
     }
 
     for true {
-        nptr<dirent_t> entry = readdir(dir)
-        if entry is null {
+        // raw_ptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
+        raw_ptr<dirent_t> entry = readdir(dir)
+        if entry == null {
             break
         }
 
-        let entry as ptr<dirent_t>
-        var name = libc_string_new(entry.name as cptr)
+        // dirent_t dirent = *entry
+        var name = libc_string_new(entry.name as void_ptr)
         if name == '.' || name == '..' {
             continue
         }

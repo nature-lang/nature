@@ -25,7 +25,7 @@ static void print_arg(n_union_t *arg) {
         assert(s && "[runtime.print_arg] string is null");
 
         DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%p, len=%lu, cap=%lu, hash=%ld/%ld",
-                s, s->length, s->data, s->length, s->capacity, s->reflect_hash, s->ele_reflect_hash);
+               s, s->length, s->data, s->length, s->capacity, s->reflect_hash, s->ele_reflect_hash);
 
 
         if (s->length == 0) {// 什么也不需要输出
@@ -48,16 +48,8 @@ static void print_arg(n_union_t *arg) {
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
-    if (arg->rtype->kind == TYPE_CPTR) {
-        int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
-        VOID write(STDOUT_FILENO, sprint_buf, n);
-        return;
-    }
-    if (arg->rtype->kind == TYPE_PTR) {
-        int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
-        VOID write(STDOUT_FILENO, sprint_buf, n);
-        return;
-    }
+
+
     if (arg->rtype->kind == TYPE_UINT || arg->rtype->kind == TYPE_UINT64) {
         int n = sprintf(sprint_buf, "%lu", arg->value.u64_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);
@@ -112,7 +104,9 @@ static void print_arg(n_union_t *arg) {
         return;
     }
 
-    assert(false && "[print_arg] unsupported type");
+    // 其他所有类型都打印 ptr 地址
+    int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
+    VOID write(STDOUT_FILENO, sprint_buf, n);
 }
 
 void print(n_vec_t *args, bool with_space) {

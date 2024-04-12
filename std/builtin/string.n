@@ -1,10 +1,10 @@
 import runtime_temp
 
 fn string.len():int {
-    return rt_string_length(self as cptr)
+    return rt_string_length(self as void_ptr)
 }
 
 
-fn string.ref():cptr {
-    return rt_string_ref(self as cptr)
+fn string.ref():void_ptr {
+    return rt_string_ref(self as void_ptr)
 }

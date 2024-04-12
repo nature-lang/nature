@@ -52,7 +52,7 @@ void symbol_init() {
 // compiler 阶段临时生成的数据
 void symbol_table_set_var(char *unique_ident, type_t type) {
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-    var_decl->type = type;
+    var_decl->type = type_copy(type);
     var_decl->ident = unique_ident;
 
     // 添加到符号表中
@@ -60,9 +60,7 @@ void symbol_table_set_var(char *unique_ident, type_t type) {
 }
 
 symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
-    if (table_exist(symbol_table, ident)) {
-        return NULL;
-    }
+    bool overlay = table_exist(symbol_table, ident);
 
     symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
     if (type == SYMBOL_FN) {
@@ -75,6 +73,10 @@ symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bo
 
     if (type == SYMBOL_TYPE_ALIAS) {
         slice_push(symbol_typedef_list, s);
+    }
+
+    if (overlay) {
+        return NULL;
     }
 
     return s;

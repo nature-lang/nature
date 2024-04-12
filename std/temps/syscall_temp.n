@@ -1,10 +1,10 @@
 // 常用系统调用
-fn syscall_call6(int number, cptr a1, cptr a2, cptr a3, cptr a4, cptr a5, cptr a6):int
+fn syscall_call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int
 
 fn syscall_exec(string path, [string] argv, [string] envp)
 
 fn syscall_getcwd():string
 
-fn getenv(cptr key):cptr
+fn getenv(void_ptr key):void_ptr
 
-fn setenv(cptr key, cptr value, i32 overwrite):i32
+fn setenv(void_ptr key, void_ptr value, i32 overwrite):i32

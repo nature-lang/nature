@@ -23,7 +23,7 @@ void rt_mutex_init(rt_mutex_t *m) {
     m->state = 0;
     m->sema = 0;
     m->waiter_count = ATOMIC_VAR_INIT(0);
-    rt_linked_init(&m->waiters, &mutex_global_nodealloc, &mutex_global_nodealloc_locker);
+    rt_linked_fixalloc_init(&m->waiters);
 }
 
 void rt_mutex_lock(rt_mutex_t *m) {
@@ -76,7 +76,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
         }
 
         if (awoke) {
-            assert((new &MUTEX_WOKEN) != 0 && "inconsistent mutex state");
+            assert((new & MUTEX_WOKEN) != 0 && "inconsistent mutex state");
 
             new = new & ~MUTEX_WOKEN;
         }
@@ -148,7 +148,7 @@ void rt_mutex_unlock(rt_mutex_t *m) {
     }
 
 
-    if ((new &MUTEX_STARVING) == 0) {
+    if ((new & MUTEX_STARVING) == 0) {
         int64_t old = new;
         if ((old >> MUTEX_WAITER_SHIFT) == 0 || (old & (MUTEX_LOCKED | MUTEX_WOKEN | MUTEX_STARVING)) != 0) {
             return;
@@ -179,7 +179,7 @@ bool rt_can_spin(int64_t iter) {
     }
 
     processor_t *p = processor_get();
-    if (p->runnable_list.count > 0) {
+    if (!rt_linked_fixalloc_empty(&p->runnable_list)) {
         return false;
     }
 
@@ -193,7 +193,8 @@ void rt_do_spin() {
 }
 
 void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
-    DEBUGF("[rt_mutex_waiter_acquire] m=%p, state=%lu, waiter_count=%lu, to_heap=%d", m, m->state, m->waiter_count, to_head);
+    DEBUGF("[rt_mutex_waiter_acquire] m=%p, state=%lu, waiter_count=%lu, to_heap=%d", m, m->state, m->waiter_count,
+           to_head);
     // 直接截获了 release 释放的信号量，不需要进入等待队列，直接返回
     if (can_semacquire(&m->sema)) {
         return;
@@ -203,7 +204,6 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
 
     // 未获取到信号，将当前 coroutine 加入到阻塞队列中, 并 yield 当前协程， 等待信号唤醒
     while (true) {
-
         mutex_lock(&m->waiters.locker);
         atomic_add_int64(&m->waiter_count, 1);
         if (can_semacquire(&m->sema)) {
@@ -211,14 +211,14 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
             mutex_unlock(&m->waiters.locker);
             break;
         }
+        mutex_unlock(&m->waiters.locker);
 
         if (to_head) {
-            rt_linked_push_heap(&m->waiters, co);
+            rt_linked_fixalloc_push_heap(&m->waiters, co);
         } else {
-            rt_linked_push(&m->waiters, co);
+            rt_linked_fixalloc_push(&m->waiters, co);
         }
 
-        mutex_unlock(&m->waiters.locker);
 
         co_yield_waiting(co->p, co);
 
@@ -249,26 +249,23 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     }
 
     assert(m->waiter_count == m->waiters.count);
+    atomic_add_int64(&m->waiter_count, -1);
+    mutex_unlock(&m->waiters.locker);
 
     // head pop
-    coroutine_t *wait_co = rt_linked_pop(&m->waiters);
+    coroutine_t *wait_co = rt_linked_fixalloc_pop(&m->waiters);
     assert(wait_co);
-    atomic_add_int64(&m->waiter_count, -1);
-
-    mutex_unlock(&m->waiters.locker);
 
     processor_t *p = wait_co->p;
 
-    mutex_lock(&p->co_locker);
     co_set_status(p, wait_co, CO_STATUS_RUNNABLE);
 
     // handoff 下排队到最前面
     if (handoff) {
-        rt_linked_push_heap(&p->runnable_list, wait_co);
+        rt_linked_fixalloc_push_heap(&p->runnable_list, wait_co);
     } else {
-        rt_linked_push(&p->runnable_list, wait_co);
+        rt_linked_fixalloc_push(&p->runnable_list, wait_co);
     }
-    mutex_unlock(&p->co_locker);
 
     // 直接让出自己的执行权利，并将让 runnable list 立刻执行
     coroutine_t *co = coroutine_get();

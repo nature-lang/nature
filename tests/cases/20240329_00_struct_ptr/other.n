@@ -1,0 +1,19 @@
+type person_t = struct{
+    string name
+    int age
+    bool sex
+}
+
+
+fn person_t.set_age(int now) {
+    self.age = now
+}
+
+fn person_t.get_name():string {
+    return self.name
+}
+
+fn person_t.test_self() {
+    ptr<person_t> p = self
+    println('in test_self', p.name, p.age, p.sex)
+}

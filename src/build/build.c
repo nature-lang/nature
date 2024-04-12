@@ -8,7 +8,6 @@
 
 #include "config.h"
 #include "src/binary/elf/amd64.h"
-#include "src/binary/elf/linker.h"
 #include "src/binary/elf/output.h"
 #include "src/cfg.h"
 #include "src/cross.h"
@@ -19,6 +18,7 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
+#include "src/escape.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
@@ -266,8 +266,8 @@ static void build_assembler(slice_t *modules) {
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数
-            symbol_t *s = symbol_table_get_noref(c->symbol_name);
-            if (s->ref_count == 0 && !str_equal(c->symbol_name, FN_MAIN_NAME)) {
+            symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
+            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_NAME)) {
                 continue;
             }
 
@@ -468,7 +468,11 @@ static void build_compiler(slice_t *modules) {
 
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
-            debug_lir(c);
+            debug_lir(c, "linker");
+
+            escape(c);
+
+            debug_lir(c, "escape");
 
             // 构造 cfg
             cfg(c);

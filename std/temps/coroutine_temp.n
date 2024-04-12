@@ -2,11 +2,11 @@ type rt_coroutine_t = struct{
     bool main
     bool solo
     i32 status
-    cptr aco
-    cptr fn
-    cptr p
-    // cptr args
-    cptr result
+    void_ptr aco
+    void_ptr fn
+    void_ptr p
+    // void_ptr args
+    void_ptr result
 }
 
 fn coroutine_create(fn() f, int flags):ptr<rt_coroutine_t>
