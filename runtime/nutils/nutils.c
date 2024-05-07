@@ -452,7 +452,9 @@ void write_barrier(void *slot, void *new_obj) {
     DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
 
     processor_t *p = processor_get();
+
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
+    // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
     if (!p->share) {
         mutex_lock(&p->gc_stw_locker);
     }
@@ -460,8 +462,15 @@ void write_barrier(void *slot, void *new_obj) {
     if (!gc_barrier_get()) {
         RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
         memmove(slot, new_obj, POINTER_SIZE);
+
+        if (!p->share) {
+            mutex_unlock(&p->gc_stw_locker);
+        }
+
         return;
     }
+
+
 
     RDEBUGF("[runtime.write_barrier] gc_barrier is true");
 

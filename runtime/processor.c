@@ -149,8 +149,7 @@ __attribute__((optimize("O0"))) static void coroutine_wrapper() {
     assert(p);
 
     DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, gc_work=%d", p->share,
-           p->index, p->status, co, co->fn, co->main,
-           co->gc_work);
+           p->index, p->status, co, co->fn, co->main, co->gc_work);
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);

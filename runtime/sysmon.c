@@ -311,8 +311,7 @@ void wait_sysmon() {
             // gc_stw_locker 禁止 tplcall -> running
             mutex_lock(&p->gc_stw_locker);
             DEBUGF("[wait_sysmon.solo.thread_locker] success get gc_stw_locker, p_index_%d=%d(%lu), p_status=%d",
-                   p->share, p->index,
-                   (uint64_t) p->thread_id, p->status);
+                   p->share, p->index, (uint64_t) p->thread_id, p->status);
 
             assert(p->status == P_STATUS_RUNNING || p->status == P_STATUS_TPLCALL || p->status == P_STATUS_DISPATCH);
 
