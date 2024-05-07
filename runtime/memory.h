@@ -56,7 +56,7 @@ typedef enum {
 
 // radix tree 每一层级的 item 可以管理的 page 的数量
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
-    CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
+        CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
 };
 
 static inline bool gc_barrier_get() {
@@ -126,16 +126,16 @@ static inline addr_t fetch_heap_addr(addr_t addr) {
 
 static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
     if (size == QWORD) {
-        return *(uint64_t *)addr;
+        return *(uint64_t *) addr;
     }
     if (size == DWORD) {
-        return *(uint32_t *)addr;
+        return *(uint32_t *) addr;
     }
     if (size == WORD) {
-        return *(uint16_t *)addr;
+        return *(uint16_t *) addr;
     }
     if (size == BYTE) {
-        return *(uint8_t *)addr;
+        return *(uint8_t *) addr;
     }
     assert(false && "cannot fetch int value");
     exit(1);
@@ -188,13 +188,6 @@ void runtime_force_gc();
 
 void *gc_malloc(uint64_t reflect_hash);
 
-/**
- * 不会进行 gc
- * @param size
- * @param rtype
- * @return
- */
-void *rt_gc_malloc(uint64_t size, rtype_t *rtype);
 
 uint64_t runtime_malloc_bytes();
 
@@ -209,6 +202,7 @@ void rt_shade_obj_with_barrier(void *obj);
 void mark_ptr_black(void *value);
 
 void mheap_grow(uint64_t pages_count);
+
 uint64_t page_alloc_find(uint64_t pages_count, bool must_find);
 
 #endif // NATURE_MEMORY_H

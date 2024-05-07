@@ -13,6 +13,9 @@
 #include "utils/mutex.h"
 #include "utils/type.h"
 
+
+#define P_LINKCO_CACHE_MAX 128
+
 #define GC_WORKLIST_LIMIT 1024// 每处理 1024 个 ptr 就 yield
 
 #define ARENA_SIZE 67108864// arena 的大小，单位 byte, 64M
@@ -64,6 +67,8 @@
 #define WAIT_SHORT_TIME 10// ms
 #define WAIT_MID_TIME 50  // ms
 #define WAIT_LONG_TIME 100// ms
+
+rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 typedef void (*void_fn_t)(void);
 
@@ -238,6 +243,22 @@ typedef enum {
 } p_status_t;
 
 typedef struct processor_t processor_t;
+typedef struct coroutine_t coroutine_t;
+
+// 通过 gc malloc 申请
+typedef struct linkco_t {
+    coroutine_t *co;
+    struct linkco_t *succ;
+    struct linkco_t *prev;
+} linkco_t;
+
+/**
+ * 必须和 linkco_t 结构联动
+ * @return
+ */
+static inline rtype_t *rti_linkco_rtype() {
+    return gc_rtype(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN);
+}
 
 // 必须和 nature code 保持一致
 typedef struct n_future_t {
@@ -247,13 +268,17 @@ typedef struct n_future_t {
     void *await_co;
 } n_future_t;
 
-typedef struct coroutine_t {
+struct coroutine_t {
     int64_t id;
     bool main;// 是否是 main 函数
     bool solo;// 当前协程需要独享线程
+    bool ticket;
     co_status_t status;
     aco_t aco;
     void *fn;      // fn 指向
+
+    pthread_mutex_t *yield_lock; // yield 完成后进行 unlock, 并清空该 lock
+
     processor_t *p;// 当前 coroutine 绑定的 p
 
     n_future_t *future;
@@ -273,7 +298,7 @@ typedef struct coroutine_t {
     n_errort *error;
 
     struct coroutine_t *next;// coroutine list
-} coroutine_t;
+};
 
 /**
  * 位于 share_processor_t 中的协程，如果运行时间过长会被抢占式调度
@@ -303,6 +328,10 @@ struct processor_t {
     coroutine_t *coroutine;// 当前正在调度的 coroutine
     uint64_t co_started_at;// 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
+    // 存储 linkco_t 的指针，注意 gc 的时候需要遍历进行 mark
+    linkco_t *linkco_cache[P_LINKCO_CACHE_MAX];
+    uint8_t linkco_count;
+
     rt_linked_fixalloc_t co_list;// 当前 processor 下的 coroutine 列表
     rt_linked_fixalloc_t runnable_list;
 
@@ -315,6 +344,8 @@ struct processor_t {
 };
 
 int runtime_main(int argc, char *argv[]);
+
+void test_runtime_init();
 
 int test_runtime_main(void *main_fn);
 
@@ -330,8 +361,6 @@ void coroutine_dump_error(coroutine_t *co, n_errort *error);
 processor_t *processor_get();
 
 coroutine_t *coroutine_get();
-
-void *rt_clr_malloc(uint64_t size, rtype_t *rtype);
 
 void processor_set_status(processor_t *p, p_status_t status);
 
@@ -368,5 +397,7 @@ void pre_tplcall_hook(char *target);
 void post_tplcall_hook(char *target);
 
 void post_rtcall_hook(char *target);
+
+void *rti_gc_malloc(uint64_t size, rtype_t *rtype);
 
 #endif// NATURE_BASIC_H

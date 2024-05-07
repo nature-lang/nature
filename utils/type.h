@@ -159,7 +159,7 @@ typedef struct {
     uint64_t size;  // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap;// 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
     // pointer 数据
-    uint64_t hash;    // 做类型推断时能够快速判断出类型是否相等
+    int64_t hash;    // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr;// 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind;   // 类型的种类
     uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)

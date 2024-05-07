@@ -50,8 +50,8 @@ static void rt_set_grow(n_set_t *m) {
     memmove(&old_set, m, sizeof(n_set_t));
 
     m->capacity *= 2;
-    m->key_data = rt_array_new(key_rtype, m->capacity);
-    m->hash_table = rt_clr_malloc(sizeof(int64_t) * m->capacity, NULL);
+    m->key_data = rti_array_new(key_rtype, m->capacity);
+    m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
     uint64_t len = m->length;
     m->length = 0;// 下面需要重新进行 add 操作
 
@@ -77,12 +77,12 @@ n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_index) {
     rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_index);
 
-    n_set_t *set_data = rt_clr_malloc(set_rtype->size, set_rtype);
+    n_set_t *set_data = rti_gc_malloc(set_rtype->size, set_rtype);
     set_data->capacity = SET_DEFAULT_CAPACITY;
     set_data->length = 0;
     set_data->key_rtype_hash = key_index;
-    set_data->key_data = rt_array_new(key_rtype, set_data->capacity);
-    set_data->hash_table = rt_clr_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
+    set_data->key_data = rti_array_new(key_rtype, set_data->capacity);
+    set_data->hash_table = rti_gc_malloc(sizeof(uint64_t) * set_data->capacity, NULL);
 
     DEBUGF("[runtime.rt_set_new] success, base=%p,  key_index=%lu, key_data=%p", set_data, set_data->key_rtype_hash, set_data->key_data);
 

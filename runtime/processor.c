@@ -23,6 +23,9 @@ fixalloc_t coroutine_alloc;
 fixalloc_t processor_alloc;
 mutex_t cp_alloc_locker;
 
+linkco_t *global_linkco_cache;
+mutex_t global_linkco_locker;
+
 // 这里直接引用了 main 符号进行调整，ct 不需要在寻找 main 对应到函数位置了
 extern int main();
 
@@ -310,6 +313,12 @@ void coroutine_resume(processor_t *p, coroutine_t *co) {
 
     // running -> dispatch
     assert(co->status != CO_STATUS_RUNNING);
+
+    if (co->yield_lock) {
+        pthread_mutex_unlock(co->yield_lock);
+        co->yield_lock = NULL;
+    }
+
     p->co_started_at = 0;
     processor_set_status(p, P_STATUS_DISPATCH);
 
@@ -354,12 +363,14 @@ static void processor_run(void *raw) {
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&tls_processor_key, p);
 
+    int64_t run_count = 0;
+
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
         TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-        STW_WAIT:
+            STW_WAIT:
             RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
                     p->share,
                     p->index);
@@ -385,7 +396,6 @@ static void processor_run(void *raw) {
         }
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
-        int count = 0;
         uint64_t time_start = uv_hrtime();
         while (true) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
@@ -399,7 +409,7 @@ static void processor_run(void *raw) {
                     p->index, co, co->status);
 
             coroutine_resume(p, co);
-            count++;
+            run_count++;
 
             if (p->need_stw > 0) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index_%d=%d, co=%p",
@@ -410,10 +420,6 @@ static void processor_run(void *raw) {
 
             RDEBUGF("[runtime.processor_run] coroutine resume backend, p_index_%d=%d, co=%p", p->share,
                     p->index, co);
-        }
-        if (count > 100) {
-            DEBUGF("[runtime.processor_run] p_index_%d=%d,  handle coroutine completed, count=%d, used_time=%lu ms",
-                   p->share, p->index, count, (uv_hrtime() - time_start) / 1000 / 1000);
         }
 
         // solo processor exit check
@@ -435,7 +441,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_SHORT_TIME);
     }
 
-EXIT:
+    EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -496,7 +502,7 @@ void rt_coroutine_dispatch(coroutine_t *co) {
 /**
  * 各种全局变量初始化都通过该方法
  */
-void processor_init() {
+void sched_init() {
     // - 初始化 aco 需要的 tls 变量(不能再线程中 create)
     aco_init();
 
@@ -518,6 +524,10 @@ void processor_init() {
     solo_processor_count = 0;
     coroutine_count = 0;
 
+    // - 初始化 global linkco
+    mutex_init(&global_linkco_locker, false);
+    global_linkco_cache = NULL;
+
     rt_linked_fixalloc_init(&global_gc_worklist);
 
     // - 初始化 processor 和 coroutine 分配器
@@ -525,7 +535,7 @@ void processor_init() {
     fixalloc_init(&processor_alloc, sizeof(processor_t));
     mutex_init(&cp_alloc_locker, false);
 
-    DEBUGF("[runtime.processor_init] cpu_count=%d", cpu_count);
+    DEBUGF("[runtime.sched_init] cpu_count=%d", cpu_count);
 
     // - 为每一个 processor 创建对应的 thread 进行处理对应的 p
     // 初始化 share_processor_index 数组为 0
@@ -547,7 +557,7 @@ void processor_init() {
             assert(false && "pthread_create failed %s");
         }
 
-        DEBUGF("[runtime.processor_init] processor create, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
+        DEBUGF("[runtime.sched_init] processor create, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
     }
 }
 
@@ -675,7 +685,7 @@ void post_rtcall_hook(char *target) {
 }
 
 /**
- * 一定是开启了 gc_barrier 才会进行 scan co_list, 如果 rt_clr_malloc 在 gc_barrier 之前调用
+ * 一定是开启了 gc_barrier 才会进行 scan co_list, 如果 rti_gc_malloc 在 gc_barrier 之前调用
  * 且 co 没有赋值给 co_list, 则 new co 不能正确的被 mark, 会被错误清理, result 同理
  * @param fn
  * @param flag
@@ -698,6 +708,8 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu) {
     co->solo = FLAG(CO_FLAG_SOLO) & flag;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
     co->gc_black = 0;
+    co->yield_lock = NULL;
+    co->ticket = false;
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
     co->next = NULL;
@@ -732,6 +744,8 @@ processor_t *processor_new(int index) {
     rt_linked_fixalloc_init(&p->runnable_list);
     p->index = index;
     p->next = NULL;
+
+    p->linkco_count = 0;
 
     return p;
 }

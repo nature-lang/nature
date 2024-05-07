@@ -330,8 +330,8 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     assert(scan_sp % POINTER_SIZE == 0);
 
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co,
-            (void *) scan_sp, size,
-            (void *) co->scan_ret_addr);
+           (void *) scan_sp, size,
+           (void *) co->scan_ret_addr);
 
 #ifdef NATURE_DEBUG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
@@ -569,29 +569,29 @@ static void gc_work() {
     assert(gc_co);
 
     DEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu",
-            share_p->share, share_p->index, gc_co, gc_co->id, share_p->co_list.count);
+           share_p->share, share_p->index, gc_co, gc_co->id, share_p->co_list.count);
 
     // - share goroutine root and change color black
-    rt_linked_node_t *current = share_p->co_list.front;
+    rt_linked_node_t *current = share_p->co_list.head;
     while (current->value != NULL) {
         coroutine_t *wait_co = current->value;
         rt_linked_node_t *node = current;
         current = current->succ;
 
         DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
-                share_p->share, share_p->index,
-                wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
-                &wait_co->aco);
+               share_p->share, share_p->index,
+               wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
+               &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
             DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, will remove",
-                    wait_co, wait_co->main, wait_co->gc_work);
+                   wait_co, wait_co->main, wait_co->gc_work);
 
             coroutine_free(wait_co);
 
             rt_linked_fixalloc_remove(&share_p->co_list, node);
             DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, remove completed",
-                    wait_co, wait_co->main, wait_co->gc_work);
+                   wait_co, wait_co->main, wait_co->gc_work);
 
             continue;
         }
@@ -614,7 +614,7 @@ static void gc_work() {
         // gc black 标识 root 已经标记完成不需要进行处理
         if (wait_co->gc_black == memory->gc_count) {
             DEBUGF("[runtime_gc.gc_work] co=%p, gc_black=%lu, gc_count=%lu, will skip", wait_co, wait_co->gc_black,
-                    memory->gc_count);
+                   memory->gc_count);
             continue;
         }
 
@@ -627,14 +627,14 @@ static void gc_work() {
     }
 
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", share_p->share,
-            share_p->index);
+           share_p->index);
     co_yield_runnable(share_p, gc_co);
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
     share_p->gc_work_finished = memory->gc_count;// 打上 completed 标识
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit",
-            share_p->share, share_p->index);
+           share_p->share, share_p->index);
 }
 
 /**
@@ -698,6 +698,35 @@ static void inject_gc_work_coroutine() {
     RDEBUGF("[runtime_gc.inject_gc_work_coroutine] inject gc work coroutine completed");
 }
 
+static void flush_pool() {
+    mutex_lock(&global_linkco_locker);
+
+    global_linkco_cache = NULL;
+
+    mutex_unlock(&global_linkco_locker);
+}
+
+static void scan_pool() {
+    PROCESSOR_FOR(share_processor_list) {
+        for (int i = 0; i < p->linkco_count; ++i) {
+            linkco_t *linkco = p->linkco_cache[i];
+            assert(span_of((addr_t) linkco));
+
+            rt_linked_fixalloc_push(&p->gc_worklist, linkco);
+        }
+    }
+
+    mutex_lock(&solo_processor_locker);
+    PROCESSOR_FOR(solo_processor_list) {
+        for (int i = 0; i < p->linkco_count; ++i) {
+            linkco_t *linkco = p->linkco_cache[i];
+            assert(span_of((addr_t) linkco));
+            rt_linked_fixalloc_push(&p->gc_worklist, linkco);
+        }
+    }
+    mutex_unlock(&solo_processor_locker);
+}
+
 /**
  * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
  */
@@ -723,7 +752,7 @@ static void scan_global() {
 
         // 触发 gc 时全局变量可能还没有进行初始化, 所以这里使用 in_heap 进行一下地址可用对判断
         addr_t addr = fetch_addr_value(s.base);
-        if (in_heap(addr)) {
+        if (span_of(addr)) {
             // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
             // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
             rt_linked_fixalloc_push(&p->gc_worklist, (void *) addr);
@@ -784,6 +813,8 @@ void runtime_gc() {
     // 中完成
     scan_global();
 
+    scan_pool();
+
     DEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start_the_world();
 
@@ -820,6 +851,8 @@ void runtime_gc() {
 
     mcentral_sweep(memory->mheap);
 
+    flush_pool();
+
     DEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
     // 更新 gcbits
     gcbits_arenas_epoch();
@@ -831,5 +864,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-            (before - allocated_bytes) / 1000);
+           (before - allocated_bytes) / 1000);
 }

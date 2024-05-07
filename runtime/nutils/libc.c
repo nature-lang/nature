@@ -37,9 +37,8 @@ n_string_t *libc_strerror() {
 }
 
 n_vec_t *libc_get_envs() {
-    rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_vec_t *list = rt_vec_new(list_rtype->hash, element_rtype->hash, 0, 0);
+    n_vec_t *list = rti_vec_new(element_rtype, 0, 0);
 
     char **env = environ;
 

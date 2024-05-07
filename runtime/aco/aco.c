@@ -305,7 +305,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
             save_stack_sz = 64;
         }
 
-        aco->save_stack.ptr = rt_clr_malloc(save_stack_sz, NULL);
+        aco->save_stack.ptr = rti_gc_malloc(save_stack_sz, NULL);
 
         assert(aco->save_stack.ptr);
         aco->save_stack.sz = save_stack_sz;
@@ -352,7 +352,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
                     }
                 }
                 // gc malloc TODO write_barrier
-                owner_co->save_stack.ptr = rt_clr_malloc(owner_co->save_stack.sz, NULL);
+                owner_co->save_stack.ptr = rti_gc_malloc(owner_co->save_stack.sz, NULL);
                 assert(owner_co->save_stack.ptr);
             }
 
@@ -429,7 +429,7 @@ aco_attr_no_asan void aco_share_spill(aco_t *aco) {
             }
         }
 
-        aco->save_stack.ptr = rt_clr_malloc(aco->save_stack.sz, NULL);
+        aco->save_stack.ptr = rti_gc_malloc(aco->save_stack.sz, NULL);
         assert(aco->save_stack.ptr);
     }
 

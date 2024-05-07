@@ -143,7 +143,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     bitmap_set(fn_rtype->gc_bits, 11);
     fn_rtype->last_ptr = sizeof(runtime_fn_t);// 也就是最后一个内存位置包含了指针
 
-    runtime_fn_t *fn_runtime = rt_clr_malloc(sizeof(runtime_fn_t), fn_rtype);
+    runtime_fn_t *fn_runtime = rti_gc_malloc(sizeof(runtime_fn_t), fn_rtype);
     fn_runtime->fn_addr = fn_addr;
 
     // fn_runtime->envs = envs;
@@ -176,8 +176,8 @@ envs_t *env_new(uint64_t length, bool imm_close) {
     rtype_t *element_rtype = gc_rtype(TYPE_GC_ENV_VALUE, 1, TYPE_GC_SCAN);
 
     rtype_t *envs_rtype = gc_rtype(TYPE_GC_ENV, 3, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    envs_t *envs = rt_clr_malloc(sizeof(envs_t), envs_rtype);
-    envs->values = (void *) rt_array_new(element_rtype, length);
+    envs_t *envs = rti_gc_malloc(sizeof(envs_t), envs_rtype);
+    envs->values = (void *) rti_array_new(element_rtype, length);
     envs->length = length;
     envs->imm_close = imm_close;
 
@@ -195,7 +195,7 @@ void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t st
 
     if (envs->imm_close) {
         rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(rtype->kind), TYPE_GC_SCAN);
-        upvalue_t *upvalue = rt_clr_malloc(sizeof(upvalue_t), upvalue_rtype);
+        upvalue_t *upvalue = rti_gc_malloc(sizeof(upvalue_t), upvalue_rtype);
 
         if (rtype->size <= 8) {
             uint64_t value = fetch_addr_value(stack_addr);
@@ -203,7 +203,7 @@ void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t st
             upvalue->ref = &upvalue->value;
         } else {
             // 如果 rtype->size > 8, 则需要从堆中申请空间存放 struct, 避免空间不足。
-            void *new_value = rt_clr_malloc(rtype->size, rtype);
+            void *new_value = rti_gc_malloc(rtype->size, rtype);
             DEBUGF("[runtime.env_closure] size gt 8byte, malloc new_value=%p", new_value);
             memcpy(new_value, (void *) stack_addr, rtype->size);
             upvalue->ref = new_value;
@@ -220,7 +220,7 @@ void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t st
         // 所以总是将 ref 部分设置为 scan
         DEBUGF("[runtime.env_assign] not found upvalue by stack_addr=0x%lx, will create", stack_addr);
         rtype_t *upvalue_rtype = gc_rtype(TYPE_GC_UPVALUE, 2, to_gc_kind(rtype->kind), TYPE_GC_SCAN);
-        upvalue = rt_clr_malloc(sizeof(upvalue_t), upvalue_rtype);
+        upvalue = rti_gc_malloc(sizeof(upvalue_t), upvalue_rtype);
         DEBUGF("[runtime.env_assign] upvalue addr=%p, upvalue_rtype.hash=%ld", upvalue, upvalue_rtype->hash);
 
         table_set(env_upvalue_table, utoa(stack_addr), upvalue);
@@ -259,7 +259,7 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
         upvalue->ref = &upvalue->value;
     } else {
         // 如果 rtype->size > 8, 则需要从堆中申请空间存放 struct, 避免空间不足。
-        void *new_value = rt_clr_malloc(rtype->size, rtype);
+        void *new_value = rti_gc_malloc(rtype->size, rtype);
         DEBUGF("[runtime.env_closure] size gt 8byte, malloc new_value=%p", new_value);
         memcpy(new_value, (void *) stack_addr, rtype->size);
         upvalue->ref = new_value;

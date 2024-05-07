@@ -16,37 +16,39 @@ typedef struct rt_linked_node_t {
 } rt_linked_node_t;
 
 typedef struct {
-    rt_linked_node_t *front;
+    rt_linked_node_t *head;
     rt_linked_node_t *rear;
-
-    uint64_t count;
 
     fixalloc_t nodealloc;
 
-    mutex_t locker;
+    uint64_t count;
+    pthread_mutex_t locker;
 } rt_linked_fixalloc_t;
 
 static inline void rt_linked_fixalloc_init(rt_linked_fixalloc_t *l) {
     l->count = 0;
+
     fixalloc_init(&l->nodealloc, sizeof(rt_linked_node_t));
-    mutex_init(&l->locker, false);
+
+    pthread_mutex_init(&l->locker, false);
 
     rt_linked_node_t *empty = fixalloc_alloc(&l->nodealloc);
-    l->front = empty;
+    l->head = empty;
     l->rear = empty;
 }
 
 static inline bool rt_linked_fixalloc_empty(rt_linked_fixalloc_t *l) {
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
     bool result = l->count == 0;
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
     return result;
 }
 
 static inline void rt_linked_fixalloc_push(rt_linked_fixalloc_t *l, void *value) {
     assert(l);
 
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
+
     rt_linked_node_t *empty = fixalloc_alloc(&l->nodealloc);
 
     empty->prev = l->rear;
@@ -57,26 +59,26 @@ static inline void rt_linked_fixalloc_push(rt_linked_fixalloc_t *l, void *value)
     l->rear = empty;
     l->count++;
 
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
 }
 
 // 尾部永远指向一个空白节点
 static inline void rt_linked_fixalloc_push_heap(rt_linked_fixalloc_t *l, void *value) {
     assert(l);
 
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
 
     rt_linked_node_t *new_node = fixalloc_alloc(&l->nodealloc);
 
     new_node->value = value;
 
     // 头部插入
-    new_node->succ = l->front;
-    l->front->prev = new_node;
-    l->front = new_node;
+    new_node->succ = l->head;
+    l->head->prev = new_node;
+    l->head = new_node;
     l->count++;
 
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
 }
 
 static inline void *rt_linked_fixalloc_pop_no_lock(rt_linked_fixalloc_t *l) {
@@ -84,16 +86,16 @@ static inline void *rt_linked_fixalloc_pop_no_lock(rt_linked_fixalloc_t *l) {
         return NULL;
     }
 
-    assertf(l->front, "l=%p front is null", l);
-    rt_linked_node_t *node = l->front;// 推出头部节点
+    assertf(l->head, "l=%p front is null", l);
+    rt_linked_node_t *node = l->head;// 推出头部节点
     void *value = node->value;
 
     if (!node->succ) {
         assertf(node->succ, "l=%p node=%p succ cannot null", l, node);
     }
 
-    l->front = node->succ;
-    l->front->prev = NULL;
+    l->head = node->succ;
+    l->head->prev = NULL;
     l->count--;
 
     fixalloc_free(&l->nodealloc, node);
@@ -103,20 +105,20 @@ static inline void *rt_linked_fixalloc_pop_no_lock(rt_linked_fixalloc_t *l) {
 
 // pop and free node from front
 static inline void *rt_linked_fixalloc_pop(rt_linked_fixalloc_t *l) {
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
     void *value = rt_linked_fixalloc_pop_no_lock(l);
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
     return value;
 }
 
 static inline rt_linked_node_t *rt_linked_fixalloc_first(rt_linked_fixalloc_t *l) {
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
     if (l->count == 0) {
-        mutex_unlock(&l->locker);
+        pthread_mutex_unlock(&l->locker);
         return NULL;
     }
-    rt_linked_node_t *result = l->front;
-    mutex_unlock(&l->locker);
+    rt_linked_node_t *result = l->head;
+    pthread_mutex_unlock(&l->locker);
     return result;
 }
 
@@ -125,10 +127,10 @@ static inline void rt_linked_fixalloc_remove(rt_linked_fixalloc_t *l, rt_linked_
         return;
     }
 
-    mutex_lock(&l->locker);
-    if (node == l->front) {
+    pthread_mutex_lock(&l->locker);
+    if (node == l->head) {
         rt_linked_fixalloc_pop_no_lock(l);
-        mutex_unlock(&l->locker);
+        pthread_mutex_unlock(&l->locker);
         return;
     }
 
@@ -140,18 +142,18 @@ static inline void rt_linked_fixalloc_remove(rt_linked_fixalloc_t *l, rt_linked_
     l->count--;
     fixalloc_free(&l->nodealloc, node);
 
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
 }
 
 static inline rt_linked_node_t *rt_linked_fixalloc_last(rt_linked_fixalloc_t *l) {
-    mutex_lock(&l->locker);
+    pthread_mutex_lock(&l->locker);
     if (l->count == 0) {
-        mutex_unlock(&l->locker);
+        pthread_mutex_unlock(&l->locker);
         return NULL;
     }
     rt_linked_node_t *node = l->rear->prev;
 
-    mutex_unlock(&l->locker);
+    pthread_mutex_unlock(&l->locker);
     return node;
 }
 

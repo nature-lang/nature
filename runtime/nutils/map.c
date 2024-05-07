@@ -32,9 +32,9 @@ void map_grow(n_map_t *m) {
 
 
     m->capacity *= 2;
-    m->key_data = rt_array_new(key_rtype, m->capacity);
-    m->value_data = rt_array_new(value_rtype, m->capacity);
-    m->hash_table = rt_clr_malloc(sizeof(int64_t) * m->capacity, NULL);
+    m->key_data = rti_array_new(key_rtype, m->capacity);
+    m->value_data = rti_array_new(value_rtype, m->capacity);
+    m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
 
     // 对所有的 key 进行 rehash, i 就是 data_index
     for (int data_index = 0; data_index < m->length; ++data_index) {
@@ -74,14 +74,14 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_inde
            type_kind_str[value_rtype->kind],
            value_rtype->size);
 
-    n_map_t *map_data = rt_clr_malloc(map_rtype->size, map_rtype);
+    n_map_t *map_data = rti_gc_malloc(map_rtype->size, map_rtype);
     map_data->capacity = capacity;
     map_data->length = 0;
     map_data->key_rtype_hash = key_index;
     map_data->value_rtype_hash = value_index;
-    map_data->hash_table = rt_clr_malloc(sizeof(uint64_t) * capacity, NULL);
-    map_data->key_data = rt_array_new(key_rtype, capacity);
-    map_data->value_data = rt_array_new(value_rtype, capacity);
+    map_data->hash_table = rti_gc_malloc(sizeof(uint64_t) * capacity, NULL);
+    map_data->key_data = rti_array_new(key_rtype, capacity);
+    map_data->value_data = rti_array_new(value_rtype, capacity);
 
     return map_data;
 }
