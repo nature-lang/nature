@@ -6,5 +6,11 @@ type mutex_t = struct {
 fn mutex_t.init() {
 }
 
-// 如何初始化
+// 如何初始化, 没有初始化的时机？放在 init 也没有时机，调用时间不同。只能在首次 lock 的时候初始化？
 var mu = mutex_t{}
+
+
+// 像这样？通常包名和结构体名称一致？这样是真的抽，我的老天鹅，怪不得 golang 放在 sync limm.
+// 这样看着合理一些，直接调用到 init 里面。看起来只要 waiters 延后一下就行? 行个屁，这没有全局锁了?
+// 也就是 pthread_mutex_init 的流程？那怎么上锁
+var lock = co.mutex_t()

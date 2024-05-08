@@ -6,6 +6,7 @@
 
 #include "nutils/errort.h"
 #include "nutils/vec.h"
+#include "linkco.h"
 #include "runtime.h"
 
 extern int cpu_count;
@@ -135,7 +136,7 @@ int io_run(processor_t *p, uint64_t timeout_ms);
  * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
  * 每个 share_processor 可以通过 void* arg 直接找到自己的 share_processor_t 对象
  */
-void processor_init();
+void sched_init();
 
 processor_t *processor_new(int index);
 
@@ -175,6 +176,7 @@ void rt_coroutine_await(coroutine_t *co);
 void rt_coroutine_yield();
 
 void *rt_coroutine_error(coroutine_t *co);
+
 
 // ------------ libuv 的一些回调 -----------------------
 static void uv_on_timer(uv_timer_t *timer);

@@ -19,13 +19,6 @@ static bool can_semacquire(int64_t *addr) {
     }
 }
 
-void rt_mutex_init(rt_mutex_t *m) {
-    m->state = 0;
-    m->sema = 0;
-    m->waiter_count = ATOMIC_VAR_INIT(0);
-    rt_linked_fixalloc_init(&m->waiters);
-}
-
 void rt_mutex_lock(rt_mutex_t *m) {
     int64_t expected = 0;// starving = 0 and locked=0
     if (atomic_compare_exchange_strong(&m->state, &expected, MUTEX_LOCKED)) {
@@ -38,23 +31,26 @@ void rt_mutex_lock(rt_mutex_t *m) {
     bool awoke = false;
     int64_t old = atomic_load(&m->state);
     while (true) {
-
         // can_spin 的条件非常苛刻
         if ((old & (MUTEX_LOCKED | MUTEX_STARVING)) == MUTEX_LOCKED && rt_can_spin(iter)) {
+
             if (!awoke && (old & MUTEX_WOKEN) == 0 &&
-                (old >> MUTEX_WAITER_SHIFT) != 0 &&// 如果 waiter list 中存在被阻塞的 coroutine
+                (old >> MUTEX_WAITER_SHIFT) != 0 && // 如果 waiter list 中存在被阻塞的 coroutine
                 atomic_compare_exchange_strong(&m->state, &old, old | MUTEX_WOKEN)) {
+
                 awoke = true;
             }
 
             rt_do_spin();
             iter++;
+
             old = atomic_load(&m->state);
             continue;
         }
 
         int64_t new = old;
 
+        // 当前可能的情况
         // 1. old 处于饥饿模式
         // 2. old 在非饥饿模式且未上锁
         // 3. 不满足自旋条件, 可能已上锁
@@ -71,7 +67,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
 
 
         // 如果是 unlock 状态，就说明没有等待中的 coroutine, 此时不需要切换到饥饿模式
-        if (starving && (old & MUTEX_LOCKED) != 0) {
+        if (starving && ((old & MUTEX_LOCKED) != 0)) {
             new |= MUTEX_STARVING;
         }
 
@@ -96,7 +92,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
             rt_mutex_waiter_acquire(m, to_head);
 
             // 更新 starving
-            starving = starving || uv_hrtime() - wait_start_time > MUTEX_STARVING_THRESHOLD_NS;
+            starving = starving || ((uv_hrtime() - wait_start_time) > MUTEX_STARVING_THRESHOLD_NS);
 
             // 非饥饿模式下 coroutine 被唤醒, 进行竞争模式
             old = atomic_load(&m->state);
@@ -142,26 +138,32 @@ void rt_mutex_unlock(rt_mutex_t *m) {
     // 2. 存在 starving
     // 3. 存在 waiter
     // slow unlock
-
     if (((new + MUTEX_LOCKED) & MUTEX_LOCKED) == 0) {
         assert(false && "unlock of unlocked mutex");
     }
 
 
     if ((new & MUTEX_STARVING) == 0) {
+        // 非饥饿模式
         int64_t old = new;
-        if ((old >> MUTEX_WAITER_SHIFT) == 0 || (old & (MUTEX_LOCKED | MUTEX_WOKEN | MUTEX_STARVING)) != 0) {
-            return;
+
+        while (true) {
+            // waiter shift == 0 表示当前没有等待者
+            if ((old >> MUTEX_WAITER_SHIFT) == 0 || (old & (MUTEX_LOCKED | MUTEX_WOKEN | MUTEX_STARVING)) != 0) {
+                // 上面已经强制解锁，但是 new != 0, 所以需要判断当前的情况
+                return;
+            }
+
+            new = (old - (1 << MUTEX_WAITER_SHIFT)) | MUTEX_WOKEN;
+
+            if (atomic_compare_exchange_strong(&m->state, &old, new)) {
+                // 预留等待着成功，正式解锁一个等待者
+                rt_mutex_waiter_release(m, false);
+                return;
+            }
+
+            old = atomic_load(&m->state);
         }
-
-        new = (old - (1 << MUTEX_WAITER_SHIFT)) | MUTEX_WOKEN;
-
-        if (atomic_compare_exchange_strong(&m->state, &old, new)) {
-            rt_mutex_waiter_release(m, false);
-            return;
-        }
-
-        old = atomic_load(&m->state);
     } else {
         // 饥饿模式：将互斥锁的所有权交给下一个等待者，并放弃
         // 我们的时间片，以便下一个等待者可以立即开始运行。
@@ -201,73 +203,101 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
     }
 
     coroutine_t *co = coroutine_get();
+    co->ticket = false;
 
     // 未获取到信号，将当前 coroutine 加入到阻塞队列中, 并 yield 当前协程， 等待信号唤醒
     while (true) {
-        mutex_lock(&m->waiters.locker);
+        pthread_mutex_lock(&m->waiters.locker);
+
         atomic_add_int64(&m->waiter_count, 1);
         if (can_semacquire(&m->sema)) {
             atomic_add_int64(&m->waiter_count, -1);
-            mutex_unlock(&m->waiters.locker);
+
+            assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+                    m->waiters.count);
+
+            pthread_mutex_unlock(&m->waiters.locker);
             break;
         }
-        mutex_unlock(&m->waiters.locker);
 
+        // no lock
         if (to_head) {
-            rt_linked_fixalloc_push_heap(&m->waiters, co);
+            linkco_list_push_head(&m->waiters, co);
         } else {
-            rt_linked_fixalloc_push(&m->waiters, co);
+            linkco_list_push(&m->waiters, co);
         }
 
+        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+                m->waiters.count);
 
+        // bug: 此时一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
+        // 所以需要将锁延迟到 yield 到 sched 后再进行处理
+        co->yield_lock = &m->waiters.locker;
+        // pthread_mutex_unlock(&m->waiters.locker);
+
+        // 让出当前协程的执行
         co_yield_waiting(co->p, co);
 
-        // 再次竞争信号量
-        if (can_semacquire(&m->sema)) {
+        // co 返回，尝试获取信号量
+        if (co->ticket || can_semacquire(&m->sema)) {
             break;
         }
     }
 }
 
 void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
-    // 添加一个释放信号, 但是没有直接激活, 而是等待 wait_co 唤醒后自己获取信号
+    // 无锁添加一个可以释放的信号
     atomic_add_int64(&m->sema, 1);
 
     if (atomic_load(&m->waiter_count) == 0) {
+        assert(m->waiters.count == 0);
         // 无锁状态下 sema 被抢占消费
         return;
     }
 
     // > 0 开始加锁进行准确判断
-    mutex_lock(&m->waiters.locker);
+    pthread_mutex_lock(&m->waiters.locker);
 
     // 加锁期间，waiter_count 可能被其他线程消费
     if (atomic_load(&m->waiter_count) == 0) {
+        assert(m->waiters.count == 0);
         // consumed by another
-        mutex_unlock(&m->waiters.locker);
+
+        pthread_mutex_unlock(&m->waiters.locker);
         return;
     }
 
-    assert(m->waiter_count == m->waiters.count);
-    atomic_add_int64(&m->waiter_count, -1);
-    mutex_unlock(&m->waiters.locker);
+    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+            m->waiters.count);
 
     // head pop
-    coroutine_t *wait_co = rt_linked_fixalloc_pop(&m->waiters);
+    coroutine_t *wait_co = linkco_list_pop(&m->waiters);
     assert(wait_co);
+
+    atomic_add_int64(&m->waiter_count, -1);
+
+
+    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+            m->waiters.count);
+
+    pthread_mutex_unlock(&m->waiters.locker);
 
     processor_t *p = wait_co->p;
 
-    co_set_status(p, wait_co, CO_STATUS_RUNNABLE);
+    // 尝试抢占自己释放的信号, 并将抢占标记传递给 wait_co
+    bool ticket = can_semacquire(&m->sema);
+    if (ticket) {
+        wait_co->ticket = true; // 抢占信号成功标识
+    }
 
-    // handoff 下排队到最前面
+    // 先更新状态避免更新异常
+    co_set_status(p, wait_co, CO_STATUS_RUNNABLE);
     if (handoff) {
         rt_linked_fixalloc_push_heap(&p->runnable_list, wait_co);
     } else {
         rt_linked_fixalloc_push(&p->runnable_list, wait_co);
     }
-
-    // 直接让出自己的执行权利，并将让 runnable list 立刻执行
+    // 如果 wait_co->p 和当前 co 在同一个 processor 中调度，则直接让出自己的控制权
     coroutine_t *co = coroutine_get();
     if (handoff && co->p == p) {
         co_yield_runnable(co->p, co);
@@ -276,6 +306,7 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
 
 /**
  * add int64 必定会更新成功，因为其不停的更新 old 的值并进行更新，而在乎具体的顺序
+ * 和 c 语言的 atomic_fetch_add 相比，该函数返回的是更新后的值，而不是更新前的值
  * @param state
  * @param delta
  * @return

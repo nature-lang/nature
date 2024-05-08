@@ -3,6 +3,7 @@
 
 #include "rt_linked.h"
 #include "utils/mutex.h"
+#include "linkco.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,7 +12,7 @@
 #define MUTEX_WOKEN 2   // 1 << 1 // 2
 #define MUTEX_STARVING 4// 1 << 2 // 4
 #define MUTEX_WAITER_SHIFT 3
-#define MUTEX_STARVING_THRESHOLD_NS 10000000
+#define MUTEX_STARVING_THRESHOLD_NS 1000 // 10ms
 
 #define ACTIVE_SPIN 4
 #define ACTIVE_SPIN_COUNT 30
@@ -19,11 +20,9 @@
 typedef struct {
     int64_t state;
     int64_t sema;
-    rt_linked_fixalloc_t waiters; // TODO 没有触发 destroy 的时机, 会造成内存溢出
+    rt_linkco_list_t waiters; // 不需要预先初始化，值为 0 即可
     int64_t waiter_count;
 } rt_mutex_t;
-
-void rt_mutex_init(rt_mutex_t *m);
 
 void rt_mutex_lock(rt_mutex_t *m);
 

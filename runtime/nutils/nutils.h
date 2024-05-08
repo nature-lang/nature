@@ -49,12 +49,12 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref);
 
 void write_barrier(void *slot, void *new_obj);
 
-rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
+//rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
 
-rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length);
+rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length);
 
-void raw_ptr_valid(void* raw_ptr);
+void raw_ptr_valid(void *raw_ptr);
 
 #endif // NATURE_BASIC_H

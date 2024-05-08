@@ -11,11 +11,12 @@ void rt_vec_grow(n_vec_t *vec) {
     rtype_t *element_rtype = rt_find_rtype(vec->ele_reflect_hash);
     assertf(element_rtype, "cannot find element_rtype with hash");
 
-    n_array_t *new_data = rt_array_new(element_rtype, vec->capacity);
+    n_array_t *new_data = rti_array_new(element_rtype, vec->capacity);
 
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    DEBUGF("[rt_vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity, new_data,
+    DEBUGF("[rt_vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity,
+           new_data,
            element_size);
 
     memmove(new_data, vec->data, vec->length * element_size);
@@ -59,12 +60,12 @@ n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t leng
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rt_clr_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->ele_reflect_hash = ele_reflect_hash;
     vec->reflect_hash = reflect_hash;
-    vec->data = rt_array_new(element_rtype, capacity);
+    vec->data = rti_array_new(element_rtype, capacity);
 
     DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_reflect_hash);
     return vec;
@@ -141,21 +142,26 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 
     assert(ref > 0 && "ref must be a valid address");
 
-    DEBUGF("[rt_vec_push] vec=%p, ref=%p, hash=%ld, ele_hash=%ld, len=%ld, cap=%ld", vec, ref, vec->reflect_hash, vec->ele_reflect_hash, vec->length, vec->capacity);
+    DEBUGF("[rt_vec_push] vec=%p, ref=%p, hash=%ld, ele_hash=%ld, len=%ld, cap=%ld", vec, ref, vec->reflect_hash,
+           vec->ele_reflect_hash, vec->length, vec->capacity);
 
     // TODO debug 验证 gc 问题
     if (span_of((addr_t) vec) == NULL || vec->ele_reflect_hash <= 0) {
         processor_t *p = processor_get();
         coroutine_t *co = coroutine_get();
-        assertf(false, "vec_push failed, p_index_%d=%d(%lu), p_status=%d, co=%p vec=%p ele_rtype_hash=%lu must be a valid hash", p->share,
+        assertf(false,
+                "vec_push failed, p_index_%d=%d(%lu), p_status=%d, co=%p vec=%p ele_rtype_hash=%lu must be a valid hash",
+                p->share,
                 p->index, (uint64_t) p->thread_id, p->status, co, vec, vec->ele_reflect_hash);
     }
 
-    DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data, vec->length, ref,
+    DEBUGF("[vec_push] vec=%p,data=%p, current_length=%lu, value_ref=%p, value_data(uint64)=%0lx", vec, vec->data,
+           vec->length, ref,
            (uint64_t) fetch_int_value((addr_t) ref, 8));
 
     if (vec->length == vec->capacity) {
-        DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length, vec->capacity * 2);
+        DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length,
+               vec->capacity * 2);
         rt_vec_grow(vec);
     }
 
@@ -189,12 +195,13 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
         return 0;
     }
 
-    DEBUGF("[vec_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu", l->reflect_hash, l->ele_reflect_hash, start, end);
+    DEBUGF("[vec_slice] rtype_hash=%lu, element_rtype_hash=%lu, start=%lu, end=%lu", l->reflect_hash,
+           l->ele_reflect_hash, start, end);
     int64_t length = end - start;
 
     rtype_t *vec_rtype = rt_find_rtype(l->reflect_hash);
     assert(vec_rtype && "cannot find rtype with hash");
-    n_vec_t *sliced_vec = rt_clr_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *sliced_vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
     sliced_vec->ele_reflect_hash = l->ele_reflect_hash;
@@ -257,7 +264,8 @@ n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
     PRE_RTCALL_HOOK();
 
     if (l->length == l->capacity) {
-        DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length, l->capacity * 2);
+        DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length,
+               l->capacity * 2);
         rt_vec_grow(l);
     }
     uint64_t index = l->length++;
@@ -267,4 +275,31 @@ n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
     n_void_ptr_t addr = rt_vec_element_addr(l, index);
     DEBUGF("[rt_vec_iterator] addr=%lx", addr);
     return addr;
+}
+
+n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity) {
+    rtype_t *vec_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    if (capacity == 0) {
+        if (length > 0) {
+            capacity = length;
+        } else {
+            capacity = VEC_DEFAULT_CAPACITY;
+        }
+    }
+
+    assert(capacity >= length && "capacity must be greater than length");
+    assert(ele_rtype && "ele_rtype is empty");
+
+    // 申请 vec 空间
+    n_vec_t *vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
+    vec->capacity = capacity;
+    vec->length = length;
+    vec->ele_reflect_hash = ele_rtype->hash;
+    vec->reflect_hash = vec_rtype->hash;
+
+    void *data = rti_array_new(ele_rtype, capacity);
+    write_barrier(&vec->data, &data);
+
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_reflect_hash);
+    return vec;
 }

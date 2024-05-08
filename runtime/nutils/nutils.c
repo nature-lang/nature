@@ -64,28 +64,18 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 
     switch (input_rtype->kind) {
         case TYPE_FLOAT:
-        case TYPE_FLOAT64:
-            _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
-        case TYPE_FLOAT32:
-            _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
+        case TYPE_FLOAT64: _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
+        case TYPE_FLOAT32: _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
         case TYPE_INT:
-        case TYPE_INT64:
-            _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
-        case TYPE_INT32:
-            _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
-        case TYPE_INT16:
-            _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
-        case TYPE_INT8:
-            _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
+        case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
+        case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
+        case TYPE_INT16: _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
+        case TYPE_INT8: _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
         case TYPE_UINT:
-        case TYPE_UINT64:
-            _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
-        case TYPE_UINT32:
-            _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
-        case TYPE_UINT16:
-            _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
-        case TYPE_UINT8:
-            _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
+        case TYPE_UINT64: _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
+        case TYPE_UINT32: _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
+        case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
+        case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
         default:
             assert(false && "type cannot ident");
             exit(1);
@@ -149,7 +139,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_union_t *mu = rt_clr_malloc(sizeof(n_union_t), union_rtype);
+    n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), union_rtype);
 
     TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
@@ -402,9 +392,8 @@ value_casting casting_to_void_ptr(void *ptr) {
 
 n_vec_t *std_args() {
     // 初始化一个 string 类型的数组
-    rtype_t *list_rtype = gc_rtype(TYPE_VEC, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_vec_t *list = rt_vec_new(list_rtype->hash, element_rtype->hash, command_argc, command_argc);
+    n_vec_t *list = rti_vec_new(element_rtype, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
@@ -463,7 +452,9 @@ void write_barrier(void *slot, void *new_obj) {
     DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
 
     processor_t *p = processor_get();
+
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
+    // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
     if (!p->share) {
         mutex_lock(&p->gc_stw_locker);
     }
@@ -471,8 +462,15 @@ void write_barrier(void *slot, void *new_obj) {
     if (!gc_barrier_get()) {
         RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
         memmove(slot, new_obj, POINTER_SIZE);
+
+        if (!p->share) {
+            mutex_unlock(&p->gc_stw_locker);
+        }
+
         return;
     }
+
+
 
     RDEBUGF("[runtime.write_barrier] gc_barrier is true");
 
@@ -563,7 +561,7 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
 rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     // 更简单的计算一下 hash 即可 array, len + scan 计算即可
     char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_PTR);
-    uint64_t hash = hash_string(str);
+    int64_t hash = hash_string(str);
     free(str);
     str = itoa(hash);
     rtype_t *rtype = table_get(rt_rtype_table, str);
@@ -594,18 +592,18 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
  * @param length
  * @return
  */
-rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
+rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
     uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
 
-    TRACEF("[rt_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
+    TRACEF("[rti_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
 
     char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
 
     uint32_t hash = hash_string(str);
 
-    TRACEF("[rt_rtype_array] str=%s, hash=%d", str, hash);
+    TRACEF("[rti_rtype_array] str=%s, hash=%d", str, hash);
 
     assert(hash > 0);
 
@@ -627,7 +625,7 @@ rtype_t rt_rtype_array(rtype_t *element_rtype, uint64_t length) {
         }
     }
 
-    TRACEF("[rt_rtype_array] success");
+    TRACEF("[rti_rtype_array] success");
     return rtype;
 }
 

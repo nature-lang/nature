@@ -507,7 +507,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     DEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr,
-            *size / 1024 / 1024, alloc_size / 1024 / 1024);
+           *size / 1024 / 1024, alloc_size / 1024 / 1024);
 
     void *v = NULL;
     while (true) {
@@ -1076,7 +1076,7 @@ void memory_init() {
     memory->mheap = mheap;
 }
 
-mspan_t *span_of(uint64_t addr) {
+mspan_t *span_of(addr_t addr) {
     if (addr <= 0) {
         return NULL;
     }
@@ -1105,55 +1105,43 @@ addr_t mstack_new(uint64_t size) {
     return (addr_t) base;
 }
 
-/**
- * 会将分配的内存进行一个清空处理
- * @param size
- * @param rtype
- * @return
- */
-void *rt_clr_malloc(uint64_t size, rtype_t *rtype) {
-    void *ptr = rt_gc_malloc(size, rtype);
-    memset(ptr, 0, size);
-    MDEBUGF("[rt_clr_malloc] addr=%p, size=%lu", ptr, size);
-    return ptr;
-}
 
 /**
  * safe
  * @return
  */
-void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
+void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     processor_t *p = processor_get();
     assert(p);
 
     // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。
     if (!p->share) {
-        MDEBUGF("[rt_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
+        MDEBUGF("[rti_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
         mutex_lock(&p->gc_stw_locker);
     }
 
-    MDEBUGF("[rt_gc_malloc] start p_index_%d=%d", p->share, p->index);
+    MDEBUGF("[rti_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
     if (rtype) {
-        MDEBUGF("[rt_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
+        MDEBUGF("[rti_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
     } else {
-        MDEBUGF("[rt_gc_malloc] size=%ld, type is null", size);
+        MDEBUGF("[rti_gc_malloc] size=%ld, type is null", size);
     }
 
     void *ptr;
     if (size <= STD_MALLOC_LIMIT) {
-        MDEBUGF("[rt_gc_malloc] std malloc");
+        MDEBUGF("[rti_gc_malloc] std malloc");
         // 1. 标准内存分配(0~32KB)
         ptr = (void *) std_malloc(size, rtype);
     } else {
-        MDEBUGF("[rt_gc_malloc] large malloc");
+        MDEBUGF("[rti_gc_malloc] large malloc");
         // 2. 大型内存分配(大于>32KB)
         ptr = (void *) large_malloc(size, rtype);
     }
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
-        DEBUGF("[rt_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
+        DEBUGF("[rti_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
                p->share, p->index,
                (uint64_t) p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
@@ -1163,7 +1151,8 @@ void *rt_gc_malloc(uint64_t size, rtype_t *rtype) {
         mutex_unlock(&p->gc_stw_locker);
     }
 
-    MDEBUGF("[rt_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
+    MDEBUGF("[rti_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
+    memset(ptr, 0, size);
     return ptr;
 }
 
@@ -1260,5 +1249,5 @@ void *gc_malloc(uint64_t reflect_hash) {
     assertf(rtype, "notfound rtype by hash=%ld", reflect_hash);
 
     DEBUGF("[gc_malloc] reflect_hash=%lu, malloc size is %lu", reflect_hash, rtype->size);
-    return rt_clr_malloc(rtype->size, rtype);
+    return rti_gc_malloc(rtype->size, rtype);
 }
