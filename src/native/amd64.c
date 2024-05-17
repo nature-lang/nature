@@ -804,8 +804,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 
         // 伪指令，直接忽略即可
-        [LIR_OPCODE_ENV_CAPTURE] = amd64_native_skip,
-        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
+//        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
 };
 
 

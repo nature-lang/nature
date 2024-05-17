@@ -102,42 +102,42 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
     return list;
 }
 
-/**
- * env closure 特有 call 指令
- * @param c
- * @param op
- * @return
- */
-linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    assert(op->first->assert_type == LIR_OPERAND_CLOSURE_VARS);
-
-    slice_t *closure_vars = op->first->value;
-    assert(closure_vars->count > 0);
-    for (int i = 0; i < closure_vars->count; ++i) {
-        lir_var_t *var = closure_vars->take[i];
-        int64_t stack_slot = var_stack_slot(c, var);
-        assert(stack_slot < 0);
-        lir_stack_t *stack = NEW(lir_stack_t);
-        stack->slot = stack_slot;
-        stack->size = type_kind_sizeof(var->type.kind);
-        // rdi param
-        lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
-        if (is_defer_alloc_type(var->type)) {
-            // stack_operand 中保存的就是一个栈地址，此时不需要进行 lea, 只是直接进行 mov 取值
-            linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
-        } else {
-            linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
-        }
-        // rsi param
-        linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rsi), int_operand(ct_find_rtype_hash(var->type))));
-
-        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_ENV_CLOSURE, false),
-                                     operand_new(LIR_OPERAND_ARGS, slice_new()), NULL));
-    }
-
-    return list;
-}
+///**
+// * env closure 特有 call 指令
+// * @param c
+// * @param op
+// * @return
+// */
+//linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op) {
+//    linked_t *list = linked_new();
+//    assert(op->first->assert_type == LIR_OPERAND_CLOSURE_VARS);
+//
+//    slice_t *closure_vars = op->first->value;
+//    assert(closure_vars->count > 0);
+//    for (int i = 0; i < closure_vars->count; ++i) {
+//        lir_var_t *var = closure_vars->take[i];
+//        int64_t stack_slot = var_stack_slot(c, var);
+//        assert(stack_slot < 0);
+//        lir_stack_t *stack = NEW(lir_stack_t);
+//        stack->slot = stack_slot;
+//        stack->size = type_kind_sizeof(var->type.kind);
+//        // rdi param
+//        lir_operand_t *stack_operand = operand_new(LIR_OPERAND_STACK, stack);
+//        if (is_defer_alloc_type(var->type)) {
+//            // stack_operand 中保存的就是一个栈地址，此时不需要进行 lea, 只是直接进行 mov 取值
+//            linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+//        } else {
+//            linked_push(list, lir_op_lea(operand_new(LIR_OPERAND_REG, rdi), stack_operand));
+//        }
+//        // rsi param
+//        linked_push(list, lir_op_move(operand_new(LIR_OPERAND_REG, rsi), int_operand(ct_find_rtype_hash(var->type))));
+//
+//        linked_push(list, lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(RT_CALL_ENV_CLOSURE, false),
+//                                     operand_new(LIR_OPERAND_ARGS, slice_new()), NULL));
+//    }
+//
+//    return list;
+//}
 
 /**
  * 三元组中  add imm, rax -> rax 是完全合法都指令，但是需要转换成二元组时

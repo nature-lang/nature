@@ -320,6 +320,48 @@ static void linear_has_error(module_t *m) {
 }
 
 /**
+ * 原始 stmt: int a  = 12 如果 a 被闭包引用时，则需要对 a 进行改写
+ *
+ * int *t1 = gc_malloc()
+ * *t1 = a // 后续使用中将抛弃 a， 使用 t1 来进行替代
+ * @param m
+ * @param var_decl
+ */
+static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl) {
+    symbol_t *s = symbol_table_get(var_decl->ident);
+    assertf(s, "ident %s not declare");
+    assert(s->type == SYMBOL_VAR);
+    ast_var_decl_t *symbol_var = s->ast_value;
+
+    if (!symbol_var->be_capture) {
+        return;
+    }
+
+    // 原本已经在堆中分配不需要进行重复 gc_malloc, envs 中依旧保存堆地址
+    // 相关使用正常，var_ident 和 env_access 指向了同一片 heap 内存区域。
+    if (kind_in_heap(symbol_var->type.kind)) {
+        return;
+    }
+
+
+    lir_operand_t *temp_operand = temp_var_operand_without_alloc(m, type_ptrof(symbol_var->type));
+    symbol_var->heap_ident = ((lir_var_t *) temp_operand->value)->ident;
+
+    // - 基于原始类型申请堆空间,此时 temp_operand 时一个指针类型
+    uint64_t rtype_hash = ct_find_rtype_hash(symbol_var->type);
+    push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
+
+    // - mov src 则是原始数据
+    lir_operand_t *src = lir_var_operand(m, var_decl->ident);
+    lir_operand_t *dst = temp_operand;
+    if (!is_defer_alloc_type(var_decl->type)) {
+        dst = indirect_addr_operand(m, var_decl->type, temp_operand, 0);
+    }
+
+    linear_super_move(m, var_decl->type, dst, src);
+}
+
+/**
  * 对于小于 8byte 类型的变量，可以直接将其值存储在 虚拟寄存器中.
  * 对于大于 8byte 类型的变量 (比如 struct/array) 通常需要在栈上申请空间, 虚拟寄存器中存储的是对应的栈地址
  * int a;
@@ -330,12 +372,13 @@ static void linear_has_error(module_t *m) {
  * @return
  */
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
-    lir_operand_t *operand = lir_var_operand(m, var_decl->ident);
+    lir_operand_t *target = lir_var_operand(m, var_decl->ident);
+
     if (is_defer_alloc_type(var_decl->type)) {
-        OP_PUSH(lir_op_output(LIR_OPCODE_ALLOC, operand));
+        OP_PUSH(lir_op_output(LIR_OPCODE_ALLOC, target));
     }
 
-    return operand;
+    return target;
 }
 
 /**
@@ -348,6 +391,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     symbol_t *s = symbol_table_get(ident->literal);
     assertf(s, "ident %s not declare");
 
+    // checking closure name
     char *closure_name = m->current_closure->fndef->closure_name;
     if (closure_name && str_equal(s->ident, closure_name)) {
         // symbol 中的该符号已经改写成 closure var 了，该 closure var 通过 last param 丢了进来
@@ -380,7 +424,20 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     if (s->type == SYMBOL_VAR) {
         ast_var_decl_t *var = s->ast_value;
         if (s->is_local) {
-            lir_operand_t *src = operand_new(LIR_OPERAND_VAR, lir_var_new(m, ident->literal));
+            // ident 改写成 heap ident, 但是有一个 target 时怎么回事。 就 indirect 不能传递了
+            if (var->be_capture && var->heap_ident) {
+                assert(target == NULL);
+
+                lir_operand_t *src = lir_var_operand(m, var->heap_ident);
+
+                if (is_defer_alloc_type(var->type)) {
+                    return src;
+                }
+
+                return indirect_addr_operand(m, var->type, src, 0);
+            }
+
+            lir_operand_t *src = lir_var_operand(m, ident->literal);
             return linear_super_move(m, expr.type, target, src);
         } else {
             lir_symbol_var_t *symbol = NEW(lir_symbol_var_t);
@@ -444,6 +501,8 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
 }
 
 /**
+ * foo = 12
+ * *envs[1] = 12
  * @param m
  * @param stmt
  */
@@ -623,6 +682,9 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
             lir_operand_t *dst = linear_var_decl(m, var_decl);
 
             linear_super_move(m, element->type, dst, element_src_operand);
+
+            // var *t1 = 12
+            linear_escape_rewrite(m, var_decl);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             ast_tuple_destr_t *tuple_destr = element->value;
 
@@ -661,6 +723,8 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     lir_operand_t *dst = linear_var_decl(m, &stmt->var_decl);
 
     linear_expr(m, stmt->right, dst);
+
+    linear_escape_rewrite(m, &stmt->var_decl);
 }
 
 static void linear_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
@@ -1084,16 +1148,16 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     }
 
     // 特殊 binary 处理
-    if (binary_expr->operator== AST_OP_OR_OR) {
+    if (binary_expr->operator == AST_OP_OR_OR) {
         return linear_logical_or(m, expr, target);
     }
-    if (binary_expr->operator== AST_OP_AND_AND) {
+    if (binary_expr->operator == AST_OP_AND_AND) {
         return linear_logical_and(m, expr, target);
     }
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-    lir_opcode_t operator= ast_op_convert[binary_expr->operator];
+    lir_opcode_t operator = ast_op_convert[binary_expr->operator];
 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
@@ -1171,7 +1235,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator== AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
+    if (unary_expr->operator == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
         assertf(is_number(imm->kind), "only number can neg operate");
         if (imm->kind == TYPE_INT) {
@@ -1183,7 +1247,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, first);
     }
 
-    if (unary_expr->operator== AST_OP_NOT) {
+    if (unary_expr->operator == AST_OP_NOT) {
         assert(unary_expr->operand.type.kind == TYPE_BOOL);
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
@@ -1206,10 +1270,10 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
     // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理
-    if (unary_expr->operator== AST_OP_LA || unary_expr->operator== AST_OP_SAFE_LA) {
+    if (unary_expr->operator == AST_OP_LA || unary_expr->operator == AST_OP_SAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_defer_alloc_type(unary_expr->operand.type)) {
-            if (unary_expr->operator== AST_OP_SAFE_LA) {
+            if (unary_expr->operator == AST_OP_SAFE_LA) {
                 linear_escape_to_heap(m, first);
             }
 
@@ -1229,7 +1293,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // person_t a = *b
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
-    if (unary_expr->operator== AST_OP_IA) {
+    if (unary_expr->operator == AST_OP_IA) {
         // checking
         if (unary_expr->operand.type.kind == TYPE_RAW_PTR) {
             push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, first);
@@ -1420,10 +1484,10 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     uint64_t size = type_sizeof(expr.type);
 
     lir_operand_t *env_addr_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+    push_rt_call(m, RT_CALL_ENV_ELEMENT_VALUE, env_addr_ref, 2, m->current_closure->fn_runtime_operand, index);
 
-    push_rt_call(m, RT_CALL_ENV_ELEMENT_ADDR, env_addr_ref, 2, m->current_closure->fn_runtime_operand, index);
-
-    if (!is_defer_alloc_type(expr.type)) {
+    // mov [env+x] -> target
+    if (!is_defer_alloc_type(expr.type) && !kind_in_heap(expr.type.kind)) {
         env_addr_ref = indirect_addr_operand(m, expr.type, env_addr_ref, 0);
     }
 
@@ -1506,13 +1570,14 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
         ast_expr_t key_expr = element->key;
         lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, key_expr, NULL));
 
-        lir_operand_t *value_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
-        push_rt_call(m, RT_CALL_MAP_ASSIGN, value_target, 2, target, key_ref);
+        lir_operand_t *value_ptr_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+        push_rt_call(m, RT_CALL_MAP_ASSIGN, value_ptr_target, 2, target, key_ref);
+
         if (!is_defer_alloc_type(map_type.map->value_type)) {
-            value_target = indirect_addr_operand(m, map_type.map->value_type, value_target, 0);
+            value_ptr_target = indirect_addr_operand(m, map_type.map->value_type, value_ptr_target, 0);
         }
 
-        linear_expr(m, element->value, value_target);
+        linear_expr(m, element->value, value_ptr_target);
     }
 
     return target;
@@ -2075,6 +2140,37 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
     exit(1);
 }
 
+static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
+    if (expr->assert_type == AST_EXPR_ENV_ACCESS) {
+        assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
+        ast_env_access_t *env_access = expr->value;
+        lir_operand_t *env_value = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+        lir_operand_t *index = int_operand(env_access->index);
+
+        push_rt_call(m, RT_CALL_ENV_ELEMENT_VALUE, env_value,
+                     2, m->current_closure->fn_runtime_operand, index);
+
+        return env_value;
+    } else if (expr->assert_type == AST_EXPR_IDENT) {
+        // ident 绝逼已经被引用了,
+        ast_ident *ident = expr->value;
+        symbol_t *s = symbol_table_get(ident->literal);
+        assert(s);
+        assert(s->type == SYMBOL_VAR);
+        ast_var_decl_t *symbol_var_decl = s->ast_value;
+        assert(symbol_var_decl->be_capture);
+        if (symbol_var_decl->heap_ident) {
+            return lir_var_operand(m, symbol_var_decl->heap_ident);
+        }
+
+        // fn/vec/map/tup/set/string 都走这里直接访问原 var
+        return lir_var_operand(m, symbol_var_decl->ident);
+    }
+
+    assertf(false, "not support capture expr");
+    return NULL;
+}
+
 /**
  * fndef 到 body 已经编译完成并变成了 label, 此时不需要再递归到 fn body 内部,也不需要调整 m->linear_current
  * 只需要将 fndef 到 env 写入到 fndef->name 对应到 envs 中即可, 返回值则返回函数到唯一 ident 即可
@@ -2108,14 +2204,17 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
     assert(!str_equal(fndef->closure_name, ""));
 
-    // 函数引用了外部的环境变量，所以需要编译成一个闭包
+    // 函数引用了外部的环境变量，所以需要编译成一个闭包，closure_name 本质就是一个 temp var, 指向了 fn_new 的结果
+    // 即使在 for 循环中，temp var 此时依旧唯一指向 fn_new 的结果。所以 closure_new 存储的数据类型就是一个指针，指向了 heap 中
+    // 不需要担心 coroutine 下的协程逃逸问题。
+
     // make envs
     lir_operand_t *length = int_operand(fndef->capture_exprs->length);
     // rt_call env_new(fndef->name, length)
     lir_operand_t *env_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_GC_ENV));
 
     // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
-    push_rt_call_no_hook(m, RT_CALL_ENV_NEW, env_operand, 2, length, bool_operand(fndef->is_co_async));
+    push_rt_call_no_hook(m, RT_CALL_ENV_NEW, env_operand, 1, length);
 
     // fn_new(env)
     lir_operand_t *label_addr_operand = temp_var_operand_with_alloc(m, fndef->type);
@@ -2124,38 +2223,21 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
 
     // env_assign
-    slice_t *capture_vars = slice_new();
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *item = ct_list_value(fndef->capture_exprs, i);
-        // fndef 引用了当前环境的一些 ident, 需要在 ssa 中进行跟踪, 才能在 fn end 进行正确的 closure
-        if (item->assert_type == AST_EXPR_IDENT && !fndef->is_co_async) {
-            char *ident = ((ast_ident *) item->value)->literal;
-            slice_push(capture_vars, lir_var_new(m, ident));
-        }
 
-        // 加载 free var 在栈上的指针, item 可能是嵌套的 env_access, 或者其他的调用，导致 rt_call 状态被解除。
-        lir_operand_t *stack_value = linear_expr(m, *item, NULL);
-        lir_operand_t *stack_addr_ref;
-        if (is_defer_alloc_type(item->type)) {
-            // 直接传递 stack_value 即可(类型需要是 void_ptr)
-            stack_addr_ref = temp_var_operand_without_alloc(m, type_kind_new(TYPE_VOID_PTR));
-            OP_PUSH(lir_op_move(stack_addr_ref, stack_value));
-        } else {
-            stack_addr_ref = lea_operand_pointer(m, stack_value);
-        }
+        // - mov env[0] -> value_arr
+        // - mov src_ptr -> value_arr[0]
+        // env 中直接存储了堆上的地址，不需要关注 upvalue 是否 close
+        lir_operand_t *src_ptr = linear_capture_expr(m, item);
 
-        // rt_call env_assign(fndef->name, index_operand lir_operand)
-        push_rt_call_no_hook(m, RT_CALL_ENV_ASSIGN, NULL, 4, env_operand, int_operand(ct_reflect_type(item->type).hash),
-                             int_operand(i),
-                             stack_addr_ref);
+        // dst addr
+        lir_operand_t *value_addr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+        OP_PUSH(lir_op_move(value_addr, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
+
+        lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), value_addr, i * POINTER_SIZE);
+        OP_PUSH(lir_op_move(dst, src_ptr));
     }
-
-    // 记录引用关系, ssa 将会实时调整这些地方到值，一旦 ssa 完成这些 var 就有了唯一名称
-    if (capture_vars->count > 0) {
-        lir_operand_t *capture_operand = operand_new(LIR_OPERAND_VARS, capture_vars);
-        OP_PUSH(lir_op_new(LIR_OPCODE_ENV_CAPTURE, capture_operand, NULL, NULL));
-    }
-
 
     return linear_super_move(m, fndef->type, target, result);
 }
@@ -2187,11 +2269,6 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
     m->current_column = stmt->column;
 
     switch (stmt->assert_type) {
-        case AST_VAR_DECL: {
-            assertf(false, "cannot only declare, must assign value");
-            linear_var_decl(m, stmt->value);
-            return;
-        }
         case AST_STMT_EXPR_FAKE: {
             return linear_expr_fake(m, stmt->value);
         }
@@ -2224,7 +2301,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
+                           (ast_expr_t) {.line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value, .target_type = NULL},
                            NULL);
             return;
         }
@@ -2232,7 +2309,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -2246,7 +2323,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,
@@ -2343,6 +2420,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     slice_t *params = slice_new();
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
+
+        linear_escape_rewrite(m, var_decl);
+
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
         slice_push(params, lir_var_new(m, var_decl->ident));
     }
@@ -2378,13 +2458,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));// bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
-    if (fndef->be_capture_locals->count > 0) {
-        lir_operand_t *capture_operand = operand_new(LIR_OPERAND_CLOSURE_VARS, slice_new());
-        lir_op_t *op = lir_op_new(LIR_OPCODE_ENV_CLOSURE, capture_operand, NULL, NULL);
-        OP_PUSH(op);
-        c->closure_vars = op->first->value;
-        c->closure_var_table = table_new();
-    }
 
     // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)
     OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));

@@ -413,7 +413,7 @@ void interval_build(closure_t *c) {
 
             // TODO 内联优化将会提高寄存器分配的使用率
             // fixed all phy reg in call
-            if (lir_op_call(op) || op->code == LIR_OPCODE_ENV_CLOSURE) {
+            if (lir_op_call(op)) {
                 // traverse all register
                 for (int j = 1; j < cross_alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
@@ -641,7 +641,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
     result = select_first_cover;
     // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
 
-END:
+    END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点

@@ -281,7 +281,8 @@ void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     sstk->ptr = NULL;
 }
 
-void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp, void *arg) {
+void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz, aco_cofuncp_t fp,
+                     void *arg) {
     assert(aco);
     memset(aco, 0, sizeof(aco_t));
 
@@ -336,10 +337,12 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 
 #ifdef __x86_64__
             assert(((uintptr_t) (owner_co->share_stack->align_retptr) >= (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])) &&
-                   ((uintptr_t) (owner_co->share_stack->align_highptr) - (uintptr_t) (owner_co->share_stack->align_limit) <=
+                   ((uintptr_t) (owner_co->share_stack->align_highptr) -
+                    (uintptr_t) (owner_co->share_stack->align_limit) <=
                     (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])));
 
-            owner_co->save_stack.valid_sz = (uintptr_t) (owner_co->share_stack->align_retptr) - (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP]);
+            owner_co->save_stack.valid_sz =
+                    (uintptr_t) (owner_co->share_stack->align_retptr) - (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP]);
 
             // save 栈增长
             if (owner_co->save_stack.sz < owner_co->save_stack.valid_sz) {
@@ -360,7 +363,8 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
             //   for very short memory span
             if (owner_co->save_stack.valid_sz > 0) {
 #ifdef __x86_64__
-                aco_amd64_optimized_memcpy_drop_in(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->save_stack.valid_sz);
+                aco_amd64_optimized_memcpy_drop_in(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP],
+                                                   owner_co->save_stack.valid_sz);
 #else
                 memcpy(owner_co->save_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->save_stack.valid_sz);
 #endif
@@ -383,8 +387,9 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
         //   for very short memory span
         if (resume_co->save_stack.valid_sz > 0) {
             // #ifdef __x86_64__
-            aco_amd64_optimized_memcpy_drop_in((void *) ((uintptr_t) (resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
-                                               resume_co->save_stack.ptr, resume_co->save_stack.valid_sz);
+            aco_amd64_optimized_memcpy_drop_in(
+                    (void *) ((uintptr_t) (resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
+                    resume_co->save_stack.ptr, resume_co->save_stack.valid_sz);
             // #else
             //             memcpy((void *)((uintptr_t)(resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
             //             resume_co->save_stack.ptr,

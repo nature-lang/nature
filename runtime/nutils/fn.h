@@ -15,9 +15,8 @@ typedef struct {
 } upvalue_t;
 
 typedef struct {
-    upvalue_t **values;
+    void **values;
     uint64_t length;
-    int64_t imm_close;
 } envs_t;
 
 typedef struct {
@@ -28,13 +27,13 @@ typedef struct {
 
 void *fn_new(addr_t fn_addr, envs_t *envs);
 
-envs_t *env_new(uint64_t length, bool imm_close);
+envs_t *env_new(uint64_t length);
 
 void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t stack_addr);
 
 void env_closure(addr_t stack_addr, uint64_t rtype_hash);
 
-void *env_element_addr(runtime_fn_t *fn, uint64_t index);
+void *env_element_value(runtime_fn_t *fn, uint64_t index);
 
 /**
  * 访问的是 env[index] 对应的 addr 中的对应的数据并复制给 dst_ref

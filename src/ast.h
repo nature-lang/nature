@@ -276,6 +276,8 @@ typedef struct {
 typedef struct {
     char *ident;
     type_t type;// type 已经决定了 size
+    bool be_capture; // 被 coroutine closure 引用, 必须在堆中分配
+    char *heap_ident; // 指向 heap 的 ident， 后续的使用都需要替换成该 ident
 } ast_var_decl_t;
 
 // 包含了声明与赋值，所以统称为定义
@@ -289,7 +291,7 @@ typedef struct {
 } ast_expr_fake_stmt_t;
 
 // 基于 tuple 解构语法的变量快速赋值
-// var (a, b, (c, d)) = (1, 2)
+// var (a, b, (c, d)) = (1, 2, (3, 4))
 // 通过 tuple destruct 快速定义变量
 typedef struct {
     ast_tuple_destr_t *tuple_destr;
@@ -649,7 +651,7 @@ static inline ast_expr_t *ast_safe_la(ast_expr_t *target) {
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator= AST_OP_SAFE_LA;
+    expr->operator = AST_OP_SAFE_LA;
 
     result->line = target->line;
     result->column = target->column;

@@ -53,7 +53,7 @@ extern slice_t *symbol_var_list;
 extern slice_t *symbol_typedef_list;
 
 typedef enum {
-    SYMBOL_VAR,
+    SYMBOL_VAR = 1,
     SYMBOL_TYPE_ALIAS,
     SYMBOL_FN,
 } symbol_type_t;

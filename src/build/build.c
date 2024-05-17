@@ -468,7 +468,7 @@ static void build_compiler(slice_t *modules) {
 
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
-            debug_lir(c, "linker");
+            debug_lir(c, "linear");
 
             escape(c);
 

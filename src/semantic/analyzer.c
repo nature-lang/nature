@@ -550,6 +550,12 @@ static void analyzer_end_scope(module_t *m) {
         }
 
         if (local->is_capture && local->type != SYMBOL_FN) {
+            symbol_t *s = symbol_table_get(local->unique_ident);
+            assert(s);
+            assert(s->type == SYMBOL_VAR);
+            ast_var_decl_t *var_decl = s->ast_value;
+            var_decl->be_capture = true;
+
             slice_push(m->analyzer_current->fndef->be_capture_locals, local);
         }
 
@@ -983,7 +989,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         assert(m->analyzer_current);
 
         fndef->closure_name = fndef->symbol_name;
-        fndef->symbol_name = var_unique_ident(m, ANONYMOUS_FN_NAME);// 二进制中的 label name
+        fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure"));// 二进制中的 label name
 
         // 符号表内容修改为 var_decl
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
@@ -1611,7 +1617,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
+            assign->left = (ast_expr_t) {
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1693,7 +1699,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
+        call->left = (ast_expr_t) {
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident),// module.init
                 .line = 1,

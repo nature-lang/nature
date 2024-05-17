@@ -121,11 +121,9 @@
 #define RT_CALL_FN_NEW "fn_new"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_ENV_ASSIGN "env_assign"// env_new 时对 env 的赋值栈的地址。
 #define RT_CALL_ENV_CLOSURE "env_closure"
 #define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"// 实际代码位置对 env 的访问
-#define RT_CALL_ENV_ACCESS_REF "env_access_ref"
-#define RT_CALL_ENV_ELEMENT_ADDR "env_element_addr"
+#define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
 #define RT_CALL_STRING_NEW "string_new"
 
@@ -749,7 +747,9 @@ static inline lir_operand_t *temp_var_operand_without_alloc(module_t *m, type_t 
 
     string result = var_unique_ident(m, TEMP_IDENT);
 
+    // 注册到符号表
     symbol_table_set_var(result, type);
+
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
     return target;
@@ -804,7 +804,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
 
     if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
         type_t base_type = lir_operand_type(base);
-        lir_operand_t *temp = temp_var_operand_with_alloc(m, base_type);
+        lir_operand_t *temp = temp_var_operand_without_alloc(m, base_type);
         OP_PUSH(lir_op_move(temp, base));
         base = temp;
     }

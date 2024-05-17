@@ -648,7 +648,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator= token_to_ast_op[operator_token->type];
+    binary_expr->operator = token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -755,7 +755,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-RET:
+    RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -819,7 +819,7 @@ static ast_expr_t parser_unary(module_t *m) {
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {// !true
-        unary_expr->operator= AST_OP_NOT;
+        unary_expr->operator = AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {// -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
@@ -842,13 +842,13 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator= AST_OP_NEG;
+        unary_expr->operator = AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {// ~0b2
-        unary_expr->operator= AST_OP_BNOT;
+        unary_expr->operator = AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {// &a
-        unary_expr->operator= AST_OP_LA;
+        unary_expr->operator = AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {// *a
-        unary_expr->operator= AST_OP_IA;
+        unary_expr->operator = AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1383,13 +1383,13 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
 
     // complex assign
     token_t *t = parser_advance(m);
-    PARSER_ASSERTF(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
+    PARSER_ASSERTF(token_complex_assign(t->type), "assign=%s token exception", token_str[t->type]);
 
     // 转换成逻辑运算符
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator= token_to_ast_op[t->type];
+    binary_expr->operator = token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -1441,6 +1441,9 @@ static ast_stmt_t *parser_ident_begin_stmt(module_t *m) {
         stmt->value = left.value;
         return stmt;
     }
+
+    PARSER_ASSERTF(!parser_is_stmt_eof(m), "expression incompleteness, ident need used");
+
 
     // 不是 call 那接下来一定就是 assign 了
     // foo = 1 、foo.bar = 1 、foo[1] = 1、foo().as = 1;
@@ -2421,7 +2424,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator= AST_OP_LA;
+    unary->operator = AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 

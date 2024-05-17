@@ -370,9 +370,9 @@ static void processor_run(void *raw) {
         // - stw
         if (p->need_stw > 0) {
             STW_WAIT:
-            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
-                    p->share,
-                    p->index);
+        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                p->share,
+                p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -482,9 +482,13 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     // - 遍历 shared_processor_list 找到 co_list->count 最小的 processor 进行调度
     processor_t *select_p = NULL;
 
-    PROCESSOR_FOR(share_processor_list) {
-        if (!select_p || p->co_list.count < select_p->co_list.count) {
-            select_p = p;
+    if (co->main) {
+        select_p = share_processor_index[0];
+    } else {
+        PROCESSOR_FOR(share_processor_list) {
+            if (!select_p || p->co_list.count < select_p->co_list.count) {
+                select_p = p;
+            }
         }
     }
 

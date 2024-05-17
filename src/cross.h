@@ -112,15 +112,6 @@ static inline void cross_lower(closure_t *c) {
     assert(false && "not support arch");
 }
 
-linked_t *amd64_lower_env_closure(closure_t *c, lir_op_t *op);
-
-static inline linked_t *cross_lower_env_closure(closure_t *c, lir_op_t *op) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_lower_env_closure(c, op);
-    }
-
-    assert(false && "not support arch");
-}
 // -------- lower end -----------
 
 

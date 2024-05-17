@@ -152,8 +152,6 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
-        [LIR_OPCODE_ENV_CAPTURE] = "ENV_CAPTURE",
-        [LIR_OPCODE_ENV_CLOSURE] = "ENV_CLOSURE",
 };
 
 void debug_parser(int line, char *token) {

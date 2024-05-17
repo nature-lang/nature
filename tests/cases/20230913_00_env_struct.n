@@ -9,7 +9,6 @@ type atm_t = struct {
 }
 
 fn make_atm():fn(f32):atm_t {
-    // 使用 env 捕获 atm
     var atm = atm_t{
         name = 'high park',
         address = 'shenzhen',

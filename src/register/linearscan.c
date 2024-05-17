@@ -9,26 +9,7 @@
  * @param c
  */
 static void linear_posthandle(closure_t *c) {
-    if (c->closure_vars == NULL || c->closure_vars->count == 0) {
-        return;
-    }
 
-    // 在 end_fn block 中将 stack closure 都加入进去, end_main 一定是最后一个 block
-    basic_block_t *b = c->blocks->take[c->blocks->count - 1];
-    linked_t *operations = linked_new();
-    bool has = false;
-    LINKED_FOR(b->operations) {
-        lir_op_t *op = LINKED_VALUE();
-        if (op->code == LIR_OPCODE_ENV_CLOSURE) {
-            has = true;
-            linked_concat(operations, cross_lower_env_closure(c, op));
-            continue;
-        }
-
-        linked_push(operations, op);
-    }
-    b->operations = operations;
-    assertf(has, "closure op notfound in block=%s", b->name);
 }
 
 /**
@@ -68,20 +49,6 @@ static void linear_prehandle(closure_t *c) {
                 op->id = label_op->id;
                 current = current->succ;
                 continue;
-            }
-
-            // capture vars
-            if (op->code == LIR_OPCODE_ENV_CAPTURE) {
-                assert(op->first->assert_type == LIR_OPERAND_VARS);
-                slice_t *capture_vars = op->first->value;
-                for (int j = 0; j < capture_vars->count; ++j) {
-                    lir_var_t *var = capture_vars->take[j];
-                    if (table_exist(c->closure_var_table, var->ident)) {
-                        continue;
-                    }
-                    slice_push(c->closure_vars, var);
-                    table_set(c->closure_var_table, var->ident, var);
-                }
             }
 
             op->id = next_id;

@@ -72,7 +72,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
 
-END:
+    END:
     op->first = NULL;
     linked_push(result, op);
 

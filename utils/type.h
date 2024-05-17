@@ -337,7 +337,7 @@ struct type_struct_t {
     // struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
     uint8_t align;     // struct 的最大对齐 size 缓存
     list_t *properties;// struct_property_t
-    bool in_heap;      // 默认使用栈分配，取指针操作会导致 struct 进行栈分配。
+    bool in_heap;      // 默认使用栈分配，取指针操作会导致 struct 进行堆分配。
 };
 
 /**
@@ -532,9 +532,7 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC || kind == TYPE_PTR ||
-           // kind == TYPE_ARRAY ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
-           // kind == TYPE_STRUCT ||
            kind == TYPE_FN;
 }
 

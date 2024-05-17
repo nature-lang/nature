@@ -352,7 +352,6 @@ typedef enum {
     LIR_OPERAND_INDIRECT_ADDR,
     LIR_OPERAND_VARS,        // 与 pyi_body, formals 一样都是 slice_t + lir_var
     LIR_OPERAND_REGS,        // 与 pyi_body, formals 一样都是 slice_t + reg_t
-    LIR_OPERAND_CLOSURE_VARS,// 无法通过 extract 函数提取出来，也不是提取出来，仅仅是为了临时存储使用
 } lir_operand_type_t;
 
 typedef enum {
@@ -400,9 +399,6 @@ typedef enum {
     LIR_OPCODE_NOP,// 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
 
     LIR_OPCODE_ALLOC,// struct/arr 不确定是在栈上还是在堆上分配时使用该指令
-
-    LIR_OPCODE_ENV_CAPTURE,
-    LIR_OPCODE_ENV_CLOSURE,
 } lir_opcode_t;
 
 typedef struct lir_operand_t lir_operand_t;
@@ -452,9 +448,6 @@ typedef struct closure_t {
     table_t *ssa_globals_table;   // 存活周期 >= 2 个 basic block 的 var
     table_t *ssa_var_blocks;      // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
     table_t *ssa_var_block_exists;// 是否已经添加过，避免 var+block_name 的重复添加
-
-    table_t *closure_var_table;
-    slice_t *closure_vars;// 引用传递，连通了 LIR_OPCODE_ENV_CLOSURE 和 LIR_OPCODE_ENV_CAPTURE 的 first_value
 
     basic_block_t *entry;   // 基本块入口, 指向 blocks[0]
     table_t *interval_table;// key 包括 fixed register as 和 variable.ident
