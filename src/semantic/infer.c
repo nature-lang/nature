@@ -844,6 +844,11 @@ static type_t infer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_exp
     return type_kind_new(TYPE_INT);
 }
 
+static type_t infer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
+    type_t t = infer_right_expr(m, &ula_expr->src, type_kind_new(TYPE_UNKNOWN));
+    return type_ptrof(t);
+}
+
 static type_t infer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *reflect_expr) {
     reflect_expr->target_type = reduction_type(m, reflect_expr->target_type);
     return type_kind_new(TYPE_INT);
@@ -893,8 +898,8 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
         return type_raw_ptrof(type);
     }
 
-    // @safe_la(var)
-    if (expr->operator == AST_OP_SAFE_LA) {
+    // @unsafe_la(var)
+    if (expr->operator == AST_OP_UNSAFE_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot safe load address of an literal or call");
 
@@ -1414,18 +1419,28 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     return special_fn;
 }
 
+// fn person_t<>.test() -> fn person_tx_test()
 static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     ast_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-    if (select_left_type.kind == TYPE_STRUCT) {
-        struct_property_t *found = type_struct_property(select_left_type.struct_, select->key);
-        if (found) {
-            return false;
-        }
+
+    // 简单解构判断
+    type_t destr_type = select_left_type;
+    if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAW_PTR) {
+        destr_type = select_left_type.ptr->value_type;
     }
+
+    // struct key call 不需要改写，可以直接通过 struct(进行简单的解构操作) 直接定位到
+    if (destr_type.kind == TYPE_STRUCT && type_struct_property(destr_type.struct_, select->key)) {
+        return false;
+    }
+
+    // must alloc in heap
+    INFER_ASSERTF(can_use_impl(select_left_type.kind), "%s cannot use impl call, must ptr<...>/vec/map...",
+                  type_format(select_left_type), select->key);
 
     // call 继承 select_left_type 的 args
     char *impl_ident = select_left_type.impl_ident;
@@ -1448,19 +1463,12 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     }
 
 
-    // 如果 select_left_type 是 raw_ptr, 则不允许进行 impl fn 调用
-    INFER_ASSERTF(select_left_type.kind != TYPE_RAW_PTR, "%s cannot use impl call",
-                  type_format(select_left_type), select->key);
-
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
     list_t *args = ct_list_new(sizeof(ast_expr_t));
 
     ast_expr_t *self_arg = &select->left;
-    if (self_arg->type.kind == TYPE_STRUCT) {
-        // TODO select->left 对应的变量时一个 struct, 此时需要给 symbol 中增加一个标识，将 struct 分配到栈中, 而不需要在后续解析
-        self_arg = ast_safe_la(self_arg);// safe_load_addr
-    }
+
 
     ct_list_push(args, self_arg);
 
@@ -1971,6 +1979,9 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return infer_reflect_hash_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_ULA: {
+            return infer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_TYPE_EQ: {// TODO 上面的 macro 都可以此时进行表达式常量改写
             return infer_type_eq_expr(m, expr);

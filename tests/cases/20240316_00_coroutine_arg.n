@@ -13,7 +13,7 @@ var result = fut.await()
 println(result)
 
 // 2. multi
-var start = time.now().timestamp()
+var start = @unsafe_load(time.now()).timestamp()
 var fut1 = go sum(233, -33)
 var fut2 = go sum(50, 50)
 var fut3 = go sum(50, 50)
@@ -31,7 +31,7 @@ for true {
     result_sum += fut6.await()
     break
 }
-var end = time.now().timestamp()
+var end = @unsafe_load(time.now()).timestamp()
 println('result_sum =', result_sum)
 println('use time', end - start)
 

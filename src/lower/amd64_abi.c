@@ -162,7 +162,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type));
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
-            if (is_defer_alloc_type(param_type)) {
+            if (is_large_alloc_type(param_type)) {
                 lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
@@ -269,7 +269,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
             return_operand = lir_operand_copy(return_operand);
             lir_var_t *var = return_operand->value;
-            assertf(is_defer_alloc_type(var->type), "only struct can use stack pass");
+            assertf(is_large_alloc_type(var->type), "only struct can use stack pass");
             // 这里必须使用 ptr, 如果使用 struct，lower params 就会识别异常
             var->type = type_ptrof(var->type);
             slice_insert(params, 0, var);
@@ -278,7 +278,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
             // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
             // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
-            if (is_defer_alloc_type(return_type)) {
+            if (is_large_alloc_type(return_type)) {
                 linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
             }
         }
@@ -385,7 +385,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
 
-        if (is_defer_alloc_type(arg_type)) {
+        if (is_large_alloc_type(arg_type)) {
             assert(arg_operand->assert_type == LIR_OPERAND_VAR);
             // lea addr to temp
             lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
@@ -509,7 +509,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     type_t call_result_type = lir_operand_type(call_result);
 
     // 进行 call result 的栈空间申请, 用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
-    if (is_defer_alloc_type(call_result_type)) {
+    if (is_large_alloc_type(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
@@ -524,7 +524,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_defer_alloc_type(lir_operand_type(call_result)));
+        assert(is_large_alloc_type(lir_operand_type(call_result)));
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;

@@ -11,11 +11,11 @@ var p = other.person_t{
 println(list[0].name, list[0].age, list[0].sex)
 println(p.name, p.age, p.sex)
 
-p.set_age(30)
-println(p.get_name())
+@unsafe_load(p).set_age(30)
+println(@unsafe_load(p).get_name())
 println(list[0].name, list[0].age, list[0].sex, p.name, p.age, p.sex)
 
-p.test_self()
+@unsafe_load(p).test_self()
 
 
 // raw_ptr struct test

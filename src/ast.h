@@ -22,6 +22,7 @@ typedef enum {
 
     // marco
     AST_MACRO_EXPR_SIZEOF,
+    AST_MACRO_EXPR_ULA,
     AST_MACRO_EXPR_REFLECT_HASH,
     AST_MACRO_EXPR_TYPE_EQ,
     AST_MACRO_CO_ASYNC,
@@ -94,8 +95,9 @@ typedef enum {
     AST_OP_NEG,    // unary number -right
     AST_OP_BNOT,   // unary binary ~right, right must int
     AST_OP_LA,     // &var = load addr var
-    AST_OP_SAFE_LA,// @safe_la(var) safe load addr var
-    AST_OP_IA,     // indirect addr  *解引用
+    AST_OP_SAFE_LA,// @sla(var) safe load addr
+    AST_OP_UNSAFE_LA,// @ula(var) unsafe load addr
+    AST_OP_IA,     // indirect addr  *q
 
     // 位运算
     AST_OP_AND,
@@ -191,6 +193,12 @@ typedef struct {
     type_t target_type;
 } ast_macro_sizeof_expr_t;
 
+// @ula(var)
+// @ula(foo.bar)
+typedef struct {
+    ast_expr_t src;
+} ast_macro_ula_expr_t;
+
 typedef struct {
     type_t left_type;
     type_t right_type;
@@ -277,7 +285,13 @@ typedef struct {
     char *ident;
     type_t type;// type 已经决定了 size
     bool be_capture; // 被 coroutine closure 引用, 必须在堆中分配
-    char *heap_ident; // 指向 heap 的 ident， 后续的使用都需要替换成该 ident
+
+    // 当该值不为 null 时，则需要在 linear 进行堆分配以及相关的改写。@ula 操作就需要为该值赋值使变量进行栈分配
+    // 变量进行 heap 分配时，指向 heap 的 ident， 后续的使用都需要替换成该 ident, 默认为 null
+    // 当前版本只进行了粗糙的实现，将被 closure child fn 引用的所有变量默认进行了 heap_ident 赋值，让其在堆中分配，从而避免可能发生的协程
+    // 变量引用问题。
+    // @ula 则根本没有进行逃逸分析，仅仅时在 infer 阶段让类型检测可用, 在后续版本中 @ula 会进行正确的变量是否在堆分配的判断
+    char *heap_ident;
 } ast_var_decl_t;
 
 // 包含了声明与赋值，所以统称为定义
@@ -554,6 +568,7 @@ struct ast_fndef_t {
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
     // 则需要将当前作用域中的变量打包成 env 丢给 child fn
     list_t *capture_exprs;
+
     // local_ident_t* 当前函数中是否存在被 child 引用的变量
     slice_t *be_capture_locals;
 

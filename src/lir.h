@@ -712,7 +712,8 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_defer_alloc_type(t));
+    assert(is_large_alloc_type(t));
+
     uint16_t size = type_sizeof(t);
 
     // struct size 可能为 0， 但是为了保证 ssa 完整性，所以依旧需要进行 lir mov 指令插入(可以使用 NOP 指令代替)
@@ -756,7 +757,6 @@ static inline lir_operand_t *temp_var_operand_without_alloc(module_t *m, type_t 
 }
 
 /**
- * 临时变量是否影响变量入栈？
  * @param type
  * @return
  */
@@ -769,8 +769,8 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_defer_alloc_type(type)) {
-        OP_PUSH(lir_op_output(LIR_OPCODE_ALLOC, target));
+    if (is_large_alloc_type(type)) {
+        OP_PUSH(lir_stack_alloc(m->current_closure, type, target));
     }
 
     return target;
@@ -785,7 +785,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(c->module, result));
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_defer_alloc_type(type)) {
+    if (is_large_alloc_type(type)) {
         linked_push(list, lir_stack_alloc(c, type, target));
     }
 

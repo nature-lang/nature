@@ -819,6 +819,10 @@ static void analyzer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_ex
     analyzer_type(m, &sizeof_expr->target_type);
 }
 
+static void analyzer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
+    analyzer_expr(m, &ula_expr->src);
+}
+
 
 static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *expr) {
     analyzer_type(m, &expr->target_type);
@@ -1208,7 +1212,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
 
     // import select 特殊处理, 直接进行符号改写
     if (select->left.assert_type == AST_EXPR_IDENT) {
-        // 检测 ident 是否是 local ident
+        // 检测 ident 是否是 local ident, local ident 说明这是一个 local struct
         bool local_analyzer = analyzer_local_ident(m, &select->left);
         if (local_analyzer) {
             return;
@@ -1248,7 +1252,8 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
         ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ident->literal);
     }
 
-    // analyzer ident 会再次处理 left
+    // foo['car'].bar analyzer ident 会再次处理 left
+    // foo.car.bar.dog
     analyzer_expr(m, &select->left);
 }
 
@@ -1402,6 +1407,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_MACRO_EXPR_SIZEOF: {
             return analyzer_sizeof_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_ULA: {
+            return analyzer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return analyzer_reflect_hash_expr(m, expr->value);
