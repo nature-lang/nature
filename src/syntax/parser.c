@@ -7,6 +7,7 @@
 #include "src/error.h"
 #include "token.h"
 #include "utils/error.h"
+#include "runtime/rt_linked.h"
 
 static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr);
 
@@ -648,7 +649,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator= token_to_ast_op[operator_token->type];
+    binary_expr->operator = token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -755,7 +756,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-RET:
+    RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -819,7 +820,7 @@ static ast_expr_t parser_unary(module_t *m) {
 
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {// !true
-        unary_expr->operator= AST_OP_NOT;
+        unary_expr->operator = AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {// -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
         if (parser_is(m, TOKEN_LITERAL_INT)) {
@@ -842,13 +843,13 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator= AST_OP_NEG;
+        unary_expr->operator = AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {// ~0b2
-        unary_expr->operator= AST_OP_BNOT;
+        unary_expr->operator = AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {// &a
-        unary_expr->operator= AST_OP_LA;
+        unary_expr->operator = AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {// *a
-        unary_expr->operator= AST_OP_IA;
+        unary_expr->operator = AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1383,13 +1384,13 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
 
     // complex assign
     token_t *t = parser_advance(m);
-    PARSER_ASSERTF(token_complex_assign(t->type), "assign=%v token exception", token_str[t->type]);
+    PARSER_ASSERTF(token_complex_assign(t->type), "assign=%s token exception", token_str[t->type]);
 
     // 转换成逻辑运算符
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator= token_to_ast_op[t->type];
+    binary_expr->operator = token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -1420,7 +1421,7 @@ static void parser_cursor_init(module_t *module, linked_t *token_list) {
  *
  * @return
  */
-static ast_stmt_t *parser_ident_begin_stmt(module_t *m) {
+static ast_stmt_t *parser_expr_begin_stmt(module_t *m) {
     ast_expr_t left = parser_expr(m);
 
     if (left.assert_type == AST_CALL) {
@@ -1441,6 +1442,9 @@ static ast_stmt_t *parser_ident_begin_stmt(module_t *m) {
         stmt->value = left.value;
         return stmt;
     }
+
+    PARSER_ASSERTF(!parser_is_stmt_eof(m), "expression incompleteness, ident need used");
+
 
     // 不是 call 那接下来一定就是 assign 了
     // foo = 1 、foo.bar = 1 、foo[1] = 1、foo().as = 1;
@@ -1684,7 +1688,7 @@ static ast_tuple_destr_t *parser_tuple_destr(module_t *m) {
         } else {
             expr = parser_expr(m);
             // a a[0], a["b"] a.b
-            PARSER_ASSERTF(can_assign(expr.assert_type), "tuple destr src must can assign operand");
+            PARSER_ASSERTF(can_assign(expr.assert_type), "tuple destr src operand assign failed");
         }
 
         ct_list_push(result->elements, &expr);
@@ -2056,6 +2060,30 @@ static ast_stmt_t *parser_tuple_destr_stmt(module_t *m) {
     return result;
 }
 
+static ast_stmt_t *parser_left_param_begin_stmt(module_t *m) {
+    linked_node *temp = m->p_cursor.current;
+
+    // tuple dester 判断
+    parser_must(m, TOKEN_LEFT_PAREN);
+    ast_expr_t prefix_expr = parser_expr(m);
+    bool is_comma = parser_is(m, TOKEN_COMMA);
+
+    m->p_cursor.current = temp;
+
+#ifdef DEBUG_PARSER
+    printf("@@\n");
+    fflush(stdout);
+#endif
+
+    if (is_comma) {
+        return parser_tuple_destr_stmt(m);
+    }
+
+    // (a[0])[1].b.(c) = 24
+    // (&a.b).call()
+    return parser_expr_begin_stmt(m);
+}
+
 /**
  * // var decl
 
@@ -2079,11 +2107,12 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     if (parser_is(m, TOKEN_VAR)) {
         // 更快的发现类型推断上的问题
         return parser_var_begin_stmt(m);
+
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m);
+
     } else if (parser_is(m, TOKEN_LEFT_PAREN)) {
-        // 已 left param 开头的类型推断已经在 is_type_begin_stmt 中完成了，这里就是 tuple destr assign 的情况了
-        return parser_tuple_destr_stmt(m);
+        return parser_left_param_begin_stmt(m);
     } else if (parser_is(m, TOKEN_THROW)) {
         return parser_throw_stmt(m);
     } else if (parser_is(m, TOKEN_LET)) {
@@ -2091,7 +2120,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_FN_LABEL)) {
         return parser_fn_label(m);
     } else if (parser_is(m, TOKEN_IDENT)) {
-        return parser_ident_begin_stmt(m);
+        return parser_expr_begin_stmt(m);
+
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_IF)) {
@@ -2112,7 +2142,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         ast_expr_t expr = parser_go_expr(m);
         return stmt_expr_fake_new(m, expr);
     } else if (parser_is(m, TOKEN_MACRO_IDENT)) {
-        ast_expr_t expr = parser_macro_call(m);
+        ast_expr_t expr = parser_expr_with_precedence(m);
         return stmt_expr_fake_new(m, expr);
     }
 
@@ -2421,7 +2451,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator= AST_OP_LA;
+    unary->operator = AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 
@@ -2505,6 +2535,19 @@ static ast_expr_t parser_macro_co_async_expr(module_t *m) {
     return result;
 }
 
+static ast_expr_t parser_macro_ula_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    ast_macro_ula_expr_t *ula_expr = NEW(ast_macro_ula_expr_t);
+
+    parser_must(m, TOKEN_LEFT_PAREN);
+    ula_expr->src = parser_expr(m);
+    parser_must(m, TOKEN_RIGHT_PAREN);
+
+    result.assert_type = AST_MACRO_EXPR_ULA;
+    result.value = ula_expr;
+    return result;
+}
+
 
 /**
 * 宏就解析成对应的 expr 好了，然后正常走 analyzer/infer/linear
@@ -2525,6 +2568,10 @@ static ast_expr_t parser_macro_call(module_t *m) {
 
     if (str_equal(token->literal, MACRO_CO_ASYNC)) {
         return parser_macro_co_async_expr(m);
+    }
+
+    if (str_equal(token->literal, MACRO_ULA)) {
+        return parser_macro_ula_expr(m);
     }
 
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);

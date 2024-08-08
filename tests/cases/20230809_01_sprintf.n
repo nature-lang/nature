@@ -7,7 +7,7 @@ fmt.printf('hello %v, nice: %v, %%, float: %v\n', 'world', 12, 3.1415, 233)
 var s = fmt.sprintf('err msg=%v, count=%v', 'this is failed', 253)
 println(s, 'len=', s.len())
 
-string str =  time.now().datetime()
+string str =  @unsafe_load(time.now()).datetime()
 fmt.printf('err msg=%v, %v, count=%v\n', 'time in', str,253)
 
 fmt.printf('%0d\n', -12)

@@ -20,8 +20,8 @@
 typedef struct {
     int64_t state;
     int64_t sema;
-    rt_linkco_list_t waiters; // 不需要预先初始化，值为 0 即可
     int64_t waiter_count;
+    rt_linkco_list_t waiters; // 不需要预先初始化，值为 0 即可
 } rt_mutex_t;
 
 void rt_mutex_lock(rt_mutex_t *m);

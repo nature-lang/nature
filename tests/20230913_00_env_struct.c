@@ -10,8 +10,6 @@
 
 static void test_basic() {
     char *raw = exec_output();
-//    printf("%s", raw);
-//    return;
 
     char *str = "900.000000\n"
                 "800.000000\n"

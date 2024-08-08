@@ -1,0 +1,17 @@
+import coroutine as co
+
+int result_no_lock = 0
+
+// 自动改写成了 var sum_no_lock = fn(){} ?
+fn sum_no_lock() {
+    result_no_lock = 100
+}
+
+go sum_no_lock()
+go sum_no_lock()
+go sum_no_lock()
+
+// 等待 1s 让协程完成
+co.sleep(1000)
+
+println("post result_no_lock: ", &result_no_lock, result_no_lock)

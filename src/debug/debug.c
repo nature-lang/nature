@@ -147,13 +147,10 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_CLR] = "CLR    ",
         [LIR_OPCODE_CLV] = "CLV    ",
         [LIR_OPCODE_NOP] = "NOP    ",
-        [LIR_OPCODE_ALLOC] = "ALLOC ",
         [LIR_OPCODE_RETURN] = "RETURN ",
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
-        [LIR_OPCODE_ENV_CAPTURE] = "ENV_CAPTURE",
-        [LIR_OPCODE_ENV_CLOSURE] = "ENV_CLOSURE",
 };
 
 void debug_parser(int line, char *token) {

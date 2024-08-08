@@ -9,7 +9,7 @@ runtime_force_gc()
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
     var t = time.now()
-    fmt.printf('log: %v time: %v\n', msg, t.datetime())
+    fmt.printf('log: %v time: %v\n', msg, @unsafe_load(t).datetime())
 }
 
 int len = 2

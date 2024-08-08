@@ -19,11 +19,14 @@
 #define TYPE_CHAN_T "chan_t"
 #define TYPE_FUTURE_T "future_t"
 
+// #linkid
 #define MACRO_LINKID "linkid"
 #define MACRO_LOCAL "local"
+
 #define MACRO_SIZEOF "sizeof"
 #define MACRO_REFLECT_HASH "reflect_hash"
 #define MACRO_CO_ASYNC "co_async"
+#define MACRO_ULA "unsafe_load"
 
 
 // 临时表，用来临时记录, key = ident, value is any
@@ -53,7 +56,7 @@ extern slice_t *symbol_var_list;
 extern slice_t *symbol_typedef_list;
 
 typedef enum {
-    SYMBOL_VAR,
+    SYMBOL_VAR = 1,
     SYMBOL_TYPE_ALIAS,
     SYMBOL_FN,
 } symbol_type_t;

@@ -689,7 +689,8 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         INFER_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
         // target_type 必须包含再 union 中
-        INFER_ASSERTF(union_type_contains(as_expr->src.type.union_, target_type), "type = %s not contains in union type",
+        INFER_ASSERTF(union_type_contains(as_expr->src.type.union_, target_type),
+                      "type = %s not contains in union type",
                       type_format(target_type));
         return target_type;
     }
@@ -760,17 +761,18 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
 
     // -------------------------------------------- 消除 ast_co_async_t, 直接改造成 call co_async----------------------------------------------------------
     ast_expr_t first_arg = {0};
-    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
-        first_arg = co_expr->origin_call->left;
 
-        // 清空两个 fn body
+    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
+        first_arg = co_expr->origin_call->left; // 直接使用 left call fn ident, 而不是使用闭包
+
+        // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
         co_expr->closure_fn_void->body = slice_new();
     } else {
         infer_fn_decl(m, co_expr->closure_fn);
         infer_fn_decl(m, co_expr->closure_fn_void);
 
-        first_arg = (ast_expr_t){
+        first_arg = (ast_expr_t) {
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
@@ -780,6 +782,9 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
 
         if (co_expr->return_type.kind == TYPE_VOID) {
             first_arg.value = co_expr->closure_fn_void;
+
+            // 清空 closure_fn body, 避免 infer 异常, linear 才会剔除多余的 closure
+            co_expr->closure_fn->body = slice_new();
         } else {
             first_arg.value = co_expr->closure_fn;
         }
@@ -839,6 +844,11 @@ static type_t infer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_exp
     return type_kind_new(TYPE_INT);
 }
 
+static type_t infer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
+    type_t t = infer_right_expr(m, &ula_expr->src, type_kind_new(TYPE_UNKNOWN));
+    return type_ptrof(t);
+}
+
 static type_t infer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *reflect_expr) {
     reflect_expr->target_type = reduction_type(m, reflect_expr->target_type);
     return type_kind_new(TYPE_INT);
@@ -866,19 +876,19 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
-    if (expr->operator== AST_OP_NOT) {
+    if (expr->operator == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
     type_t type = infer_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
 
-    if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
+    if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
         INFER_ASSERTF(false, "neg operand must applies to int or float type");
     }
 
     // &var
-    if (expr->operator== AST_OP_LA) {
+    if (expr->operator == AST_OP_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
@@ -888,8 +898,8 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
         return type_raw_ptrof(type);
     }
 
-    // @safe_la(var)
-    if (expr->operator== AST_OP_SAFE_LA) {
+    // @unsafe_la(var)
+    if (expr->operator == AST_OP_UNSAFE_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot safe load address of an literal or call");
 
@@ -900,7 +910,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
     }
 
     // *var
-    if (expr->operator== AST_OP_IA) {
+    if (expr->operator == AST_OP_IA) {
         INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAW_PTR,
                       "cannot dereference non-pointer type '%s'", type_format(type));
 
@@ -930,7 +940,8 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
 
     if (symbol->type == SYMBOL_VAR) {
         ast_var_decl_t *var_decl = symbol->ast_value;
-        var_decl->type = reduction_type(m, var_decl->type);// 类型还原
+
+        var_decl->type = reduction_type(m, var_decl->type);// 对全局符号表中的类型进行类型还原
         return var_decl->type;
     }
 
@@ -1408,18 +1419,28 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     return special_fn;
 }
 
+// fn person_t<>.test() -> fn person_tx_test()
 static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     ast_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-    if (select_left_type.kind == TYPE_STRUCT) {
-        struct_property_t *found = type_struct_property(select_left_type.struct_, select->key);
-        if (found) {
-            return false;
-        }
+
+    // 简单解构判断
+    type_t destr_type = select_left_type;
+    if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAW_PTR) {
+        destr_type = select_left_type.ptr->value_type;
     }
+
+    // struct key call 不需要改写，可以直接通过 struct(进行简单的解构操作) 直接定位到
+    if (destr_type.kind == TYPE_STRUCT && type_struct_property(destr_type.struct_, select->key)) {
+        return false;
+    }
+
+    // must alloc in heap
+    INFER_ASSERTF(can_use_impl(select_left_type.kind), "%s cannot use impl call, must ptr<...>/vec/map...",
+                  type_format(select_left_type), select->key);
 
     // call 继承 select_left_type 的 args
     char *impl_ident = select_left_type.impl_ident;
@@ -1442,18 +1463,12 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     }
 
 
-    // 如果 select_left_type 是 raw_ptr, 则不允许进行 impl fn 调用
-    INFER_ASSERTF(select_left_type.kind != TYPE_RAW_PTR, "%s cannot use impl call",
-                  type_format(select_left_type), select->key);
-
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
     list_t *args = ct_list_new(sizeof(ast_expr_t));
 
     ast_expr_t *self_arg = &select->left;
-    if (self_arg->type.kind == TYPE_STRUCT) {
-        self_arg = ast_safe_la(self_arg);// safe_load_addr
-    }
+
 
     ct_list_push(args, self_arg);
 
@@ -1842,9 +1857,6 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_EXPR_FAKE: {
             return infer_expr_fake(m, stmt->value);
         }
-        case AST_VAR_DECL: {
-            return infer_var_decl(m, stmt->value);
-        }
         case AST_STMT_VARDEF: {
             return infer_vardef(m, stmt->value);
         }
@@ -1967,6 +1979,9 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return infer_reflect_hash_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_ULA: {
+            return infer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_TYPE_EQ: {// TODO 上面的 macro 都可以此时进行表达式常量改写
             return infer_type_eq_expr(m, expr);
@@ -2157,7 +2172,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->value_type = reduction_type(m, t.map->value_type);
 
         INFER_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING ||
-                              t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
+                      t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
                       "map key only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_MAP];
@@ -2171,7 +2186,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
         INFER_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING ||
-                              t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
+                      t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
                       "set element only support number/string");
 
         t.impl_ident = type_kind_str[TYPE_SET];
@@ -2418,7 +2433,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     INFER_ASSERTF(false, "cannot parser type %s", type_format(t));
-STATUS_DONE:
+    STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     t.origin_ident = origin_ident;

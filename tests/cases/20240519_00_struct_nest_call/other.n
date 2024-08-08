@@ -1,0 +1,24 @@
+type person_t = struct{
+    string name
+    int age
+    bool sex
+    fn() hello
+}
+
+type package_t = struct{
+    bool t
+    person_t p
+}
+
+fn person_t.set_age(int now) {
+    self.age = now
+}
+
+fn person_t.get_name():string {
+    return self.name
+}
+
+fn person_t.test_self() {
+    ptr<person_t> p = self
+    println('in test_self', p.name, p.age, p.sex)
+}

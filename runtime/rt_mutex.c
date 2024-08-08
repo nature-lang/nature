@@ -128,6 +128,19 @@ void rt_mutex_lock(rt_mutex_t *m) {
     }
 }
 
+bool rt_mutex_try_lock(rt_mutex_t *m) {
+    int64_t old = atomic_load(&m->state);
+    if ((old & (MUTEX_LOCKED | MUTEX_STARVING)) != 0) {
+        return false;
+    }
+
+    if (!atomic_compare_exchange_strong(&m->state, &old, old | MUTEX_LOCKED)) {
+        return false;
+    }
+
+    return true;
+}
+
 void rt_mutex_unlock(rt_mutex_t *m) {
     int64_t new = atomic_add_int64(&m->state, -MUTEX_LOCKED);
     if (new == 0) {

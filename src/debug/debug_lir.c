@@ -53,7 +53,6 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_ARGS: {
             return lir_arg_to_string((slice_t *) operand->value);
         }
-        case LIR_OPERAND_CLOSURE_VARS:
         case LIR_OPERAND_VARS:
         case LIR_OPERAND_PARAMS:
         case LIR_OPERAND_PHI_BODY: {

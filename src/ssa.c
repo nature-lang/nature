@@ -104,7 +104,7 @@ void ssa_domers(closure_t *c) {
         for (int k = 0; k < c->blocks->count; ++k) {
             slice_push(other, c->blocks->take[k]);
         }
-        ((basic_block_t *)c->blocks->take[i])->domers = other;
+        ((basic_block_t *) c->blocks->take[i])->domers = other;
     }
 
     // 求不动点
@@ -195,8 +195,8 @@ void ssa_live(closure_t *c) {
     for (int id = 0; id < c->blocks->count; ++id) {
         slice_t *out = slice_new();
         slice_t *in = slice_new();
-        ((basic_block_t *)c->blocks->take[id])->live_out = out;
-        ((basic_block_t *)c->blocks->take[id])->live_in = in;
+        ((basic_block_t *) c->blocks->take[id])->live_out = out;
+        ((basic_block_t *) c->blocks->take[id])->live_in = in;
     }
 
     bool changed = true;
@@ -238,7 +238,7 @@ void ssa_add_phi(closure_t *c) {
         table_t *inserted = table_new(); // key is block name
 
         linked_t *work_list = table_get(c->ssa_var_blocks, var->ident);
-        assertf(work_list, "var '%s' has use, but lack def");
+        assertf(work_list, "var '%s' has use, but lack def", var->ident);
         while (!linked_empty(work_list)) {
             basic_block_t *var_def_block = linked_pop(work_list);
             for (int j = 0; j < var_def_block->df->count; ++j) {
@@ -347,14 +347,14 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     }
     table_t *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
-        string ident = ((lir_var_t *)old->take[i])->ident;
+        string ident = ((lir_var_t *) old->take[i])->ident;
         table_set(var_count, ident, old->take[i]);
     }
 
     // double count 判断同一个变量出现的次数,因为可能出现 new.count > old.count 的情况
     uint8_t double_count = 0;
     for (int i = 0; i < new->count; ++i) {
-        string ident = ((lir_var_t *)new->take[i])->ident;
+        string ident = ((lir_var_t *) new->take[i])->ident;
         void *has = table_get(var_count, ident);
         if (has == NULL) {
             // table_free(var_count);
@@ -457,7 +457,7 @@ bool ssa_dom_changed(slice_t *old_dom, slice_t *new_dom) {
     }
 
     for (int i = 0; i < old_dom->count; ++i) {
-        if (((basic_block_t *)old_dom->take[i])->id != ((basic_block_t *)new_dom->take[i])->id) {
+        if (((basic_block_t *) old_dom->take[i])->id != ((basic_block_t *) new_dom->take[i])->id) {
             return true;
         }
     }
@@ -484,11 +484,11 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
     for (int i = 0; i < block->preds->count; ++i) {
         // 找到 pred 的支配者列表(包含自身)
-        slice_t *pred_dom = ((basic_block_t *)block->preds->take[i])->domers;
+        slice_t *pred_dom = ((basic_block_t *) block->preds->take[i])->domers;
 
         // 遍历 pred_dom 为 label 计数
         for (int k = 0; k < pred_dom->count; ++k) {
-            block_label_count[((basic_block_t *)pred_dom->take[k])->id]++;
+            block_label_count[((basic_block_t *) pred_dom->take[k])->id]++;
         }
     }
 
@@ -534,8 +534,8 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         lir_op_t *op = current->value;
         // phi body 由当前块的前驱进行编号
         if (op->code == LIR_OPCODE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_var_t *)op->output->value, var_number_table, stack_table);
-            ssa_rename_var((lir_var_t *)op->output->value, number);
+            uint8_t number = ssa_new_var_number((lir_var_t *) op->output->value, var_number_table, stack_table);
+            ssa_rename_var((lir_var_t *) op->output->value, number);
 
             current = current->succ;
             continue;
@@ -647,7 +647,7 @@ uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *s
 void ssa_rename_var(lir_var_t *var, uint8_t number) {
     // 1: '\0'
     // 2: '_12'
-    char *buf = (char *)malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
+    char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
     sprintf(buf, "%s.s%d", var->ident, number);
     var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
@@ -659,7 +659,7 @@ void ssa_rename_var(lir_var_t *var, uint8_t number) {
  */
 bool ssa_phi_defined(lir_var_t *var, basic_block_t *block) {
     linked_node *current = block->operations->front->succ;
-    while (current->value != NULL && ((lir_op_t *)current->value)->code == LIR_OPCODE_PHI) {
+    while (current->value != NULL && ((lir_op_t *) current->value)->code == LIR_OPCODE_PHI) {
         lir_op_t *op = current->value;
         lir_var_t *phi_var = op->output->value;
         if (strcmp(phi_var->ident, var->ident) == 0) {

@@ -3,7 +3,7 @@ import time
 
 mod.foo(2024)
 
-var start = time.now().timestamp()
+var start = time._new().timestamp()
 mod.test3(2)
-var used = time.now().timestamp() - start
+var used = time._new().timestamp() - start
 println('use time', used)

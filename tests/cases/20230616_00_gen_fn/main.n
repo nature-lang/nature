@@ -46,7 +46,7 @@ var c5 = mod.area(b5)
 println(c5)
 
 // 6. 类型扩展
-var a6 = b5.perimeter()
+var a6 = @unsafe_load(b5).perimeter()
 println(a6)
 
 
@@ -57,7 +57,7 @@ var a7 = mod.box<mod.custom_t<i32>, i16>{
 }
 
 println(a7.width, a7.length, mod.area(a7))
-println(a7.perimeter())
+println(@unsafe_load(a7).perimeter())
 
 
 // 8. 嵌套类型测试 2

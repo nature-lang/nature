@@ -11,8 +11,6 @@
 
 void pre_infer(module_t *m);
 
-void post_infer(module_t *m);
-
 void infer(module_t *m);
 
 void infer_var_decl(module_t *m, ast_var_decl_t *var_decl);

@@ -1,16 +1,33 @@
+type linkco_list_t = struct{
+    void_ptr head
+    void_ptr rear
+    i64 count
+    arr<u8, 40> locker // c: pthread_mutex_t
+}
+
 type mutex_t = struct {
-    u32 sema
+    i64 state
+    i64 sema
+    i64 waiter_count
 }
 
+#linkid rt_mutex_lock
+fn rt_mutex_lock(ptr<mutex_t> m)
 
-fn mutex_t.init() {
+#linkid rt_mutex_try_lock
+fn rt_mutex_try_lock(ptr<mutex_t> m):bool
+
+#linkid rt_mutex_unlock
+fn rt_mutex_unlock(ptr<mutex_t> m)
+
+fn mutex_t.lock() {
+    rt_mutex_lock(self)
 }
 
-// 如何初始化, 没有初始化的时机？放在 init 也没有时机，调用时间不同。只能在首次 lock 的时候初始化？
-var mu = mutex_t{}
+fn mutex_t.try_lock():bool {
+    return tr_mutex_try_lock(self)
+}
 
-
-// 像这样？通常包名和结构体名称一致？这样是真的抽，我的老天鹅，怪不得 golang 放在 sync limm.
-// 这样看着合理一些，直接调用到 init 里面。看起来只要 waiters 延后一下就行? 行个屁，这没有全局锁了?
-// 也就是 pthread_mutex_init 的流程？那怎么上锁
-var lock = co.mutex_t()
+fn mutex.unlock() {
+    rt_mutex_unlock(self)
+}
