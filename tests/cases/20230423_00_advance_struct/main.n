@@ -5,5 +5,5 @@ var foo = square{
     width = 5
 }
 
-var area = @unsafe_load(foo).area()
+var area = foo.area()
 print('area=', area, '\n')

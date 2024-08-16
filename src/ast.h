@@ -33,11 +33,7 @@ typedef enum {
     AST_EXPR_VEC_ACCESS,
     AST_EXPR_ARRAY_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
-
     AST_EXPR_STRUCT_SELECT,
-    AST_EXPR_VEC_SELECT,// [1, 2, 3].push(3)
-    AST_EXPR_MAP_SELECT,// [1, 2, 3].push(3)
-    AST_EXPR_SET_SELECT,// [1, 2, 3].push(3)
 
     AST_EXPR_ENV_ACCESS,
 
@@ -210,7 +206,7 @@ typedef struct {
 
 // 调用函数
 typedef struct {
-    type_t return_type;// call return type 冗余
+    type_t return_type;// call return type
     ast_expr_t left;
 
     list_t *generics_args;// type_t
@@ -284,13 +280,13 @@ typedef struct {
 typedef struct {
     char *ident;
     type_t type;// type 已经决定了 size
+
     bool be_capture; // 被 coroutine closure 引用, 必须在堆中分配
 
-    // 当该值不为 null 时，则需要在 linear 进行堆分配以及相关的改写。@ula 操作就需要为该值赋值使变量进行栈分配
+    // 当该值不为 null 时，则需要在 linear 进行堆分配以及相关的改写。
     // 变量进行 heap 分配时，指向 heap 的 ident， 后续的使用都需要替换成该 ident, 默认为 null
     // 当前版本只进行了粗糙的实现，将被 closure child fn 引用的所有变量默认进行了 heap_ident 赋值，让其在堆中分配，从而避免可能发生的协程
     // 变量引用问题。
-    // @ula 则根本没有进行逃逸分析，仅仅时在 infer 阶段让类型检测可用, 在后续版本中 @ula 会进行正确的变量是否在堆分配的判断
     char *heap_ident;
 } ast_var_decl_t;
 
@@ -661,12 +657,12 @@ static inline ast_expr_t *ast_bool_expr(int line, int column, bool b) {
     return expr;
 }
 
-static inline ast_expr_t *ast_safe_la(ast_expr_t *target) {
+static inline ast_expr_t *ast_load_addr(ast_expr_t *target) {
     ast_expr_t *result = NEW(ast_expr_t);
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator = AST_OP_SAFE_LA;
+    expr->operator = AST_OP_LA;
 
     result->line = target->line;
     result->column = target->column;

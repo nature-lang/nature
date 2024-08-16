@@ -769,7 +769,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
-                .type = param_type,
+                .type = param_type, // TODO ptrof
         };
         ct_list_push(params, &param);
 

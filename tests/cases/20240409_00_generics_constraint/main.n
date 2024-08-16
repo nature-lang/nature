@@ -17,10 +17,10 @@ var f3 = mod.foo_t<bool, string>{
     a = true,
     b = 'hello'
 }
-@unsafe_load(f3).dump('world')
+f3.dump('world')
 
 var f4 = mod.bar_t<f32, [i32]>{
     a = 233.333,
     b = [1, 2, 3]
 }
-@unsafe_load(f4).dump()
+f4.dump()

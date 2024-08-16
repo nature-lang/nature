@@ -156,9 +156,9 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
     DEBUGF("[runtime.fn_new] fn find success, fn_runtime=%p, fn_name=%s, stack=%lu, reg=%lu, jit_code=%p, envs=%p, fn_addr=%p",
-            fn_runtime, fndef->name, fndef->fn_runtime_stack, fndef->fn_runtime_reg, fn_runtime->closure_jit_codes,
-            fn_runtime->envs,
-            (void *) fn_addr);
+           fn_runtime, fndef->name, fndef->fn_runtime_stack, fndef->fn_runtime_reg, fn_runtime->closure_jit_codes,
+           fn_runtime->envs,
+           (void *) fn_addr);
 
     /**
      * closure_jit_codes 就是 fn_runtime 对首个值，所以 return fn_runtime 和 fn_runtime->closure_jit_codes 没有区别
@@ -229,14 +229,14 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
     void *heap_addr = fn->envs->values[index];
 
     DEBUGF("[runtime.env_assign_ref] pre fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
-            fn, fn->envs,
-            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
+           fn, fn->envs,
+           index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 
     memmove(heap_addr, src_ref, size);
 
     DEBUGF("[runtime.env_assign_ref] post fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
-            fn, fn->envs,
-            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
+           fn, fn->envs,
+           index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 }
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index) {

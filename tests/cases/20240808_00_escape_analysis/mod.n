@@ -1,0 +1,12 @@
+type bar_t = arr<int,5>
+
+
+fn bar_t.len():int {
+    return 5
+}
+
+type car_t = i64
+
+fn car_t.tostr() {
+    println('self is', *self)
+}

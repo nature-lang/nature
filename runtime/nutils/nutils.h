@@ -9,6 +9,8 @@
 extern int command_argc;
 extern char **command_argv;
 
+#define ASSERT_ADDR(_addr) assertf((addr_t) _addr > 0xa000 && (addr_t) _addr <= ARENA_HINT_MAX, "addr '%p' cannot valid", _addr)
+
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);

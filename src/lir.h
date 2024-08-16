@@ -228,6 +228,16 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_SET_NEW);
 }
 
+static inline lir_operand_t *int64_operand(uint64_t val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_INT64;
+    imm_operand->uint_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
 static inline lir_operand_t *int_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_INT;
@@ -743,7 +753,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     return lir_op_lea(dst_operand, src_operand);
 }
 
-static inline lir_operand_t *temp_var_operand_without_alloc(module_t *m, type_t type) {
+static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     assert(type.kind > 0);
 
     string result = var_unique_ident(m, TEMP_IDENT);
@@ -763,14 +773,24 @@ static inline lir_operand_t *temp_var_operand_without_alloc(module_t *m, type_t 
 static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t type) {
     assert(type.kind > 0);
 
-    string result = var_unique_ident(m, TEMP_IDENT);
+    string unique_ident = var_unique_ident(m, TEMP_IDENT);
 
-    symbol_table_set_var(result, type);
-    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
+    symbol_table_set_var(unique_ident, type);
+
+    lir_var_t *lir_var = lir_var_new(m, unique_ident);
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
     if (is_large_alloc_type(type)) {
-        OP_PUSH(lir_stack_alloc(m->current_closure, type, target));
+        if (type.in_heap) {
+            lir_var->type = type_kind_new(TYPE_VOID_PTR);
+
+            uint64_t rtype_hash = ct_find_rtype_hash(type);
+            OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
+            OP_PUSH(lir_rtcall(RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(RT_CALL_GC_MALLOC)));
+        } else {
+            OP_PUSH(lir_stack_alloc(m->current_closure, type, target));
+        }
     }
 
     return target;
@@ -804,7 +824,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
 
     if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
         type_t base_type = lir_operand_type(base);
-        lir_operand_t *temp = temp_var_operand_without_alloc(m, base_type);
+        lir_operand_t *temp = temp_var_operand(m, base_type);
         OP_PUSH(lir_op_move(temp, base));
         base = temp;
     }
@@ -884,7 +904,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     type_t t = lir_operand_type(operand);
     t = type_ptrof(t);
 
-    lir_operand_t *temp_ref = temp_var_operand_without_alloc(m, t);
+    lir_operand_t *temp_ref = temp_var_operand(m, t);
     OP_PUSH(lir_op_lea(temp_ref, operand));
     return temp_ref;
 }

@@ -522,16 +522,14 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
 /**
  * 一般标量类型其值默认会存储在 stack 中
  * 其他复合类型默认会在堆上创建，stack 中仅存储一个 ptr 指向堆内存。
- * 可以通过 kind 进行判断。
- * 后续会同一支持标量类型堆中存储，以及复合类型的栈中存储
  * @param type
  * @return
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC || kind == TYPE_PTR ||
+    return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
-           kind == TYPE_FN;
+           kind == TYPE_FN || kind == TYPE_COROUTINE_T;
 }
 
 static inline bool is_list_u8(type_t t) {
@@ -600,10 +598,21 @@ static inline bool is_large_alloc_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 
+static inline bool is_stack_alloc_type(type_t t) {
+    return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
+}
+
+static inline bool is_escape_rewrite_type(type_t t) {
+    return is_number(t.kind) || t.kind == TYPE_BOOL;
+}
 
 static inline bool can_use_impl(type_kind kind) {
     return kind == TYPE_PTR || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_TUPLE ||
            kind == TYPE_STRING || kind == TYPE_UNION || kind == TYPE_FN || kind == TYPE_COROUTINE_T;
+}
+
+static inline bool is_stack_impl(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
 static inline bool is_gc_alloc(type_t t) {
