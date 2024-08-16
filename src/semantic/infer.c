@@ -342,7 +342,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
         if (return_target_type.kind != TYPE_UNKNOWN &&
             return_target_type.kind != TYPE_VOID &&
             return_target_type.kind != TYPE_UNION &&
-            return_target_type.in_heap != TYPE_NULL) {
+            return_target_type.kind != TYPE_NULL) {
             type_t temp_type = type_copy(tpl_fn->return_type);
             temp_type = reduction_type(m, temp_type);
             bool compare = type_compare(temp_type, return_target_type, generics_args_table);
@@ -939,10 +939,10 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     }
 
     if (symbol->type == SYMBOL_VAR) {
-        ast_var_decl_t *var_decl = symbol->ast_value;
+        ast_var_decl_t *symbol_var = symbol->ast_value;
 
-        var_decl->type = reduction_type(m, var_decl->type);// 对全局符号表中的类型进行类型还原
-        return var_decl->type;
+        symbol_var->type = reduction_type(m, symbol_var->type);// 对全局符号表中的类型进行类型还原
+        return symbol_var->type;
     }
 
     // 比如 print 和 println 都已经注册在了符号表中
@@ -1181,7 +1181,7 @@ static type_t infer_struct_new(module_t *m, ast_expr_t *expr) {
  */
 static type_t infer_access(module_t *m, ast_expr_t *expr) {
     ast_access_t *access = expr->value;
-    type_t left_type = infer_left_expr(m, &access->left);
+    type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
 
     // ast_access to ast_map_access
     if (left_type.kind == TYPE_MAP) {
@@ -1419,13 +1419,65 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     return special_fn;
 }
 
+static bool marking_heap_alloc(ast_expr_t *expr) {
+    if (expr->assert_type == AST_EXPR_IDENT) {
+        ast_ident *ident = expr->value;
+        symbol_t *s = symbol_table_get(ident->literal);
+        assert(s->type == SYMBOL_VAR);
+        ast_var_decl_t *var = s->ast_value;
+        var->type.in_heap = true;
+        return true;
+    }
+
+    if (expr->assert_type == AST_EXPR_STRUCT_NEW) {
+        ast_struct_new_t *ast = expr->value;
+        expr->type.in_heap = true;
+        ast->type.in_heap = true;
+
+        return true;
+    }
+
+    if (expr->assert_type == AST_EXPR_ARRAY_NEW) {
+        ast_array_new_t *ast = expr->value;
+        expr->type.in_heap = true;
+
+        return true;
+    }
+
+    // int/float/bool/string
+    if (expr->assert_type == AST_EXPR_LITERAL && is_stack_alloc_type(expr->type)) {
+        ast_literal_t *literal = expr->value;
+
+        expr->type.in_heap = true;
+        return true;
+    }
+
+    if (expr->assert_type == AST_EXPR_ARRAY_ACCESS) {
+        ast_array_access_t *ast = expr->value;
+        return marking_heap_alloc(&ast->left);
+    }
+
+    if (expr->assert_type == AST_EXPR_STRUCT_SELECT) {
+        ast_struct_select_t *ast = expr->value;
+        return marking_heap_alloc(&ast->instance);
+    }
+
+    // ([1, 3, 5] as foo_t).len()
+    if (expr->assert_type == AST_EXPR_AS) {
+        ast_as_expr_t *ast = expr->value;
+        return marking_heap_alloc(&ast->src);
+    }
+
+    // 无需进行堆分配，可能是 vec_access/map_access 这种类型。
+    return false;
+}
+
 // fn person_t<>.test() -> fn person_tx_test()
 static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     ast_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
-
 
     // 简单解构判断
     type_t destr_type = select_left_type;
@@ -1439,8 +1491,9 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     }
 
     // must alloc in heap
-    INFER_ASSERTF(can_use_impl(select_left_type.kind), "%s cannot use impl call, must ptr<...>/vec/map...",
-                  type_format(select_left_type), select->key);
+//    INFER_ASSERTF(can_use_impl(select_left_type.kind), "%s cannot use impl call, must ptr<...>/vec/map...",
+//                  type_format(select_left_type), select->key);
+
 
     // call 继承 select_left_type 的 args
     char *impl_ident = select_left_type.impl_ident;
@@ -1462,13 +1515,17 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
         INFER_ASSERTF(s, "type %s no property '%s'", type_format(select_left_type), select->key);
     }
 
-
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 
     list_t *args = ct_list_new(sizeof(ast_expr_t));
 
     ast_expr_t *self_arg = &select->left;
 
+    // self arg 可能在栈上分配，在 call fn 中会导致栈变量读取异常，所以需要确保 self arg 在堆上分配
+    marking_heap_alloc(self_arg);
+    if (is_stack_impl(self_arg->type.kind)) {
+        self_arg = ast_load_addr(self_arg);// safe_load_addr
+    }
 
     ct_list_push(args, self_arg);
 
@@ -2388,6 +2445,7 @@ static type_t reduction_type(module_t *m, type_t t) {
 
     char *origin_ident = t.origin_ident;
     type_kind origin_type_kind = t.origin_type_kind;
+    bool in_heap = t.in_heap;
 
     if (t.kind == TYPE_UNKNOWN) {
         return t;
@@ -2436,6 +2494,10 @@ static type_t reduction_type(module_t *m, type_t t) {
     STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
+    if (in_heap == true) {
+        t.in_heap = true;
+    }
+
     t.origin_ident = origin_ident;
     t.origin_type_kind = origin_type_kind;
     t.kind = cross_kind_trans(t.kind);
@@ -2505,7 +2567,8 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
 
         param->type = reduction_type(m, param->type);
 
-        if (fndef->impl_type.kind > 0 && i == 0 && param->type.kind == TYPE_STRUCT) {
+        // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
+        if (fndef->impl_type.kind > 0 && i == 0 && is_stack_impl(param->type.kind)) {
             // struct to ptr
             param->type = type_ptrof(param->type);
         }
@@ -2556,6 +2619,16 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *env_expr = ct_list_value(fndef->capture_exprs, i);
         infer_left_expr(m, env_expr);
+
+        // 闭包引用变量全都在栈里面分配
+        if (env_expr->assert_type == AST_EXPR_IDENT) {
+            ast_ident *ident = env_expr->value;
+            symbol_t *s = symbol_table_get(ident->literal);
+            if (s->type == SYMBOL_VAR) {
+                ast_var_decl_t *symbol_var = s->ast_value;
+                symbol_var->type.in_heap = true;
+            }
+        }
     }
 
     // body infer

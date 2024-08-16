@@ -1767,6 +1767,7 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     // 类型解析
     type_t typedecl = parser_type(m);
+
     token_t *ident_token = parser_advance(m);
 
     // 仅 var 支持 tuple destr

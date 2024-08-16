@@ -6,7 +6,7 @@ var p = person_t {
     gender = 1
 }
 
-println(@unsafe_load(p).gender, @unsafe_load(p).from, @unsafe_load(p).get_name())
+println(p.gender, p.from, p.get_name())
 @unsafe_load(p).set_age(24)
 println(p.age)
 

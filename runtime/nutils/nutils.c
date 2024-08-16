@@ -134,6 +134,8 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
 
+    ASSERT_ADDR(value_ref);
+
     TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
     rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
@@ -469,7 +471,6 @@ void write_barrier(void *slot, void *new_obj) {
 
         return;
     }
-
 
 
     RDEBUGF("[runtime.write_barrier] gc_barrier is true");

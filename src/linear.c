@@ -324,7 +324,9 @@ static void linear_has_error(module_t *m) {
  * 避免可能的在 child fn 中产生的协程操作导致的 stack var 无法访问。当然这不是一个好的方式，并不是所有的 capture var 都会被协程
  * 引用并访问，更好的方式是分析 stack var 的使用点，判断其是否被协程引用。为了 nature 的快速完成，在当前版本中暂时不会进行此类分析。
  *
- * 原始 stmt: int a  = 12 如果 a 被闭包引用时，则 a 可能出现栈切换，需要对 a 进行改写
+ * 原始 stmt: int a  = 12 如果 a  被闭包引用或者 impl call 使用，则 a 需要在堆上分配, 一般情况只需要改写 int a = 12 表达式为 ptr<int> a = gc_malloc, 然后
+ * 赋值为 12 即可，但是 lir fn begin 指令中引用的 fn param 是 local var 其在 lower 阶段需要通过复杂的系统 ABI 改写。直接改写 fn param 为 ptr<int>
+ * 造成的了后续的复杂性，所以选择了下面的实现方式
  *
  * int *t1 = gc_malloc()
  * *t1 = a // 后续使用中将不再使用 a， 使用 t1 来进行替代
@@ -338,18 +340,12 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl) {
     assert(s->type == SYMBOL_VAR);
     ast_var_decl_t *symbol_var = s->ast_value;
 
-    if (!symbol_var->be_capture) {
+    // type 带有 in_heap 标志的简单类型需要进行 escape rewrite 改写才能分配在栈上
+    if (!is_escape_rewrite_type(symbol_var->type) || !symbol_var->type.in_heap) {
         return;
     }
 
-    // 原本已经在堆中分配不需要进行重复 gc_malloc, envs 中依旧保存堆地址
-    // 相关使用正常，var_ident 和 env_access 指向了同一片 heap 内存区域。
-    if (kind_in_heap(symbol_var->type.kind)) {
-        return;
-    }
-
-
-    lir_operand_t *temp_operand = temp_var_operand_without_alloc(m, type_ptrof(symbol_var->type));
+    lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(symbol_var->type));
     symbol_var->heap_ident = ((lir_var_t *) temp_operand->value)->ident;
 
     // - 基于原始类型申请堆空间,此时 temp_operand 时一个指针类型
@@ -379,9 +375,24 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl) {
 static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
     lir_operand_t *target = lir_var_operand(m, var_decl->ident);
 
+    // 读取符号判断在堆上分配还是在栈上分配
+    lir_var_t *var = target->value;
+    symbol_t *s = symbol_table_get(var->ident);
+    assert(s->type == SYMBOL_VAR);
+    ast_var_decl_t *symbol_var = s->ast_value;
+
     if (is_large_alloc_type(var_decl->type)) {
-        // 在没有逃逸分析之前默认直接在栈上分配
-        OP_PUSH(lir_stack_alloc(m->current_closure, var_decl->type, target));
+        if (symbol_var->type.in_heap) {
+            uint64_t rtype_hash = ct_find_rtype_hash(var->type);
+            // 更新类型避免在 lower 被识别成 struct 进行 amd64 下的特殊值传递
+            var->type = type_kind_new(TYPE_VOID_PTR);
+            push_rt_call(m, RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash));
+        } else {
+            // 在没有逃逸分析之前默认直接在栈上分配
+            OP_PUSH(lir_stack_alloc(m->current_closure, var_decl->type, target));
+        }
+
+        return target;
     }
 
     return target;
@@ -428,20 +439,15 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
     if (s->type == SYMBOL_VAR) {
-        ast_var_decl_t *var = s->ast_value;
+        ast_var_decl_t *symbol_var = s->ast_value;
         if (s->is_local) {
-            // ident 改写成 heap ident, 但是有一个 target 时怎么回事。 就 indirect 不能传递了
-            // 只有 ident 被闭包引用时才可能发生栈切换，需要通过 heap ident 访问引用
-            if (var->be_capture && var->heap_ident) {
+            // var 存在 heap_ident 表明当前 var 被弃用，后续应该使用 heap_ident。只有一些标量类型会发生这种情况。
+            if (symbol_var->heap_ident) {
                 assert(target == NULL);
+                assert(is_escape_rewrite_type(symbol_var->type));
 
-                lir_operand_t *src = lir_var_operand(m, var->heap_ident);
-
-                if (is_large_alloc_type(var->type)) {
-                    return src;
-                }
-
-                return indirect_addr_operand(m, var->type, src, 0);
+                lir_operand_t *src = lir_var_operand(m, symbol_var->heap_ident);
+                return indirect_addr_operand(m, symbol_var->type, src, 0);
             }
 
             lir_operand_t *src = lir_var_operand(m, ident->literal);
@@ -449,7 +455,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
         } else {
             lir_symbol_var_t *symbol = NEW(lir_symbol_var_t);
             symbol->ident = ident->literal;
-            symbol->kind = var->type.kind;
+            symbol->kind = symbol_var->type.kind;
             lir_operand_t *src = operand_new(LIR_OPERAND_SYMBOL_VAR, symbol);
             return linear_super_move(m, expr.type, target, src);
         }
@@ -627,7 +633,7 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
         if (can_assign(element->assert_type)) {
             // 使用一个 temp_var 接收右值(走普通 mov, struct/array 不进行临时值生成)
             // 主要是为了得到 ident, 方便模拟表达式试过
-            lir_operand_t *temp_var = temp_var_operand_without_alloc(m, element->type);
+            lir_operand_t *temp_var = temp_var_operand(m, element->type);
             OP_PUSH(lir_op_move(temp_var, element_src_operand));
 
             char *ident = ((lir_var_t *) temp_var->value)->ident;
@@ -731,6 +737,7 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
 
     linear_expr(m, stmt->right, dst);
 
+    // 将 dst 值 copy 出来进行重新分配改写
     linear_escape_rewrite(m, &stmt->var_decl);
 }
 
@@ -828,7 +835,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_operand_t *first_ref;
     if (is_large_alloc_type(ast->first.type)) {
         // first _target 中已经保存了相关的地址，
-        first_ref = temp_var_operand_without_alloc(m, type_kind_new(TYPE_VOID_PTR));
+        first_ref = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
         OP_PUSH(lir_op_move(first_ref, first_target));
     } else {
         OP_PUSH(lir_op_nop_def(first_target));// var_decl 没有进行初始化，所以需要进行一下 def 初始化
@@ -1075,7 +1082,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
     lir_operand_t *temp = NULL;
     if (call->return_type.kind != TYPE_VOID) {
-        temp = temp_var_operand_without_alloc(m, call->return_type);
+        temp = temp_var_operand(m, call->return_type);
     }
 
     // rtcall 自带 pre_hook, 所以这里不需要重复处理了
@@ -1262,10 +1269,6 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     if (unary_expr->operator == AST_OP_LA || unary_expr->operator == AST_OP_UNSAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_large_alloc_type(unary_expr->operand.type)) {
-//            if (unary_expr->operator == AST_OP_SAFE_LA) {
-//                linear_escape_to_heap(m, first);
-//            }
-
             // 必须 move target，这同时也是一个类型转换的过程
             OP_PUSH(lir_op_move(target, first));
             return target;
@@ -1273,6 +1276,16 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
         // super_move 只有 target == null, 此时直接返回 first
         lir_operand_t *src_operand = lea_operand_pointer(m, first);
+
+        if (first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+            lir_indirect_addr_t *indirect_addr = first->value;
+            if (indirect_addr->offset == 0) {
+                // indirect addr base 就是指针本身
+                src_operand = indirect_addr->base;
+            }
+        }
+
+
         return linear_super_move(m, expr.type, target, src_operand);
     }
 
@@ -1393,8 +1406,9 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     lir_operand_t *array_target = linear_expr(m, ast->left, NULL);
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
-    lir_operand_t *array_target_ref = temp_var_operand_without_alloc(m, type_ptrof(ast->left.type));
+    lir_operand_t *array_target_ref = temp_var_operand(m, type_ptrof(ast->left.type));
     OP_PUSH(lir_op_move(array_target_ref, array_target));
+
     uint64_t rtype_hash = ct_find_rtype_hash(ast->left.type);
 
     lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
@@ -1433,9 +1447,10 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
     uint64_t rtype_hash = ct_find_rtype_hash(type_array);
 
-    lir_operand_t *target_ref = temp_var_operand_without_alloc(m, type_ptrof(type_array));
+    lir_operand_t *target_ref = temp_var_operand(m, type_ptrof(type_array));
     OP_PUSH(lir_op_move(target_ref, target));
 
+    // TODO 数组不能这么初始化, 应该直接整体初始化为 0， 然后再分别赋值
     for (int i = 0; i < type_array.array->length; ++i) {
         lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
         push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, target_ref, int_operand(rtype_hash),
@@ -1635,6 +1650,9 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
 }
 
 /**
+ * struct_new 初始化时还无法判断当前 struct 是否会出现逃逸行为，所以无法判断应该在栈上还是堆上分配
+ *
+ *
  * foo.bar = 1
  *
  * person baz = person {
@@ -1650,14 +1668,14 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
  */
 static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_struct_new_t *ast = expr.value;
-    type_t t = ast->type;
+    type_t t = expr.type;
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
 
-    // struct_new 不产生新的空间，只是将值给到 target
     assert(target && target->assert_type == LIR_OPERAND_VAR);
+
 
     // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
     table_t *exists = table_new();
@@ -1731,7 +1749,7 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
     if (!target) {
-        target = temp_var_operand_without_alloc(m, expr.type);// 必定是一个指针类型
+        target = temp_var_operand(m, expr.type);// 必定是一个指针类型
     }
 
     ast_new_expr_t *new_expr = expr.value;
@@ -2101,6 +2119,20 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+    if (literal->kind == TYPE_NULL) {
+        lir_operand_t *src = int_operand(0);
+        return linear_super_move(m, expr.type, target, src);
+    }
+
+    // 创建一个堆分配的 target, expr.type 是 int/bool 等等类型
+    if (expr.type.in_heap && !target) {
+        uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
+        lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(expr.type));
+        push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
+
+        target = indirect_addr_operand(m, expr.type, temp_operand, 0);
+    }
+
     if (literal->kind == TYPE_BOOL) {
         bool bool_value = false;
         if (strcmp(literal->value, "true") == 0) {
@@ -2108,11 +2140,6 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         lir_operand_t *src = bool_operand(bool_value);
-        return linear_super_move(m, expr.type, target, src);
-    }
-
-    if (literal->kind == TYPE_NULL) {
-        lir_operand_t *src = int_operand(0);
         return linear_super_move(m, expr.type, target, src);
     }
 
@@ -2150,6 +2177,12 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
     exit(1);
 }
 
+/**
+ * 将被 child fn 引用的 local var 放入到 envs 中，并传递给 child fn
+ * @param m
+ * @param expr
+ * @return
+ */
 static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
     if (expr->assert_type == AST_EXPR_ENV_ACCESS) {
         // 被 child fn 引用的 var 是更上一级的 var, local fn 也只能通过 env[n] 的方式引用
@@ -2168,16 +2201,16 @@ static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
         symbol_t *s = symbol_table_get(ident->literal);
         assert(s);
         assert(s->type == SYMBOL_VAR);
-        ast_var_decl_t *symbol_var_decl = s->ast_value;
-        assert(symbol_var_decl->be_capture);
+        ast_var_decl_t *symbol_var = s->ast_value;
+        assert(symbol_var->be_capture);
 
-        // 如果 local var 进行了堆分配，则直接返回在堆中的 ident 引用标识
-        if (symbol_var_decl->heap_ident) {
-            return lir_var_operand(m, symbol_var_decl->heap_ident);
+        // 当前版本中所有的简单类型只要被闭包引用，就需要在堆中引用，envs 中值需要 ptr
+        if (symbol_var->heap_ident) {
+            return lir_var_operand(m, symbol_var->heap_ident);
         }
 
         // fn/vec/map/tup/set/string 都走这里直接访问原 var
-        return lir_var_operand(m, symbol_var_decl->ident);
+        return lir_var_operand(m, symbol_var->ident);
     }
 
     assertf(false, "not support capture expr");
@@ -2432,12 +2465,11 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 编译 fn param -> lir_var_t*
     slice_t *params = slice_new();
+
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
-
-        linear_escape_rewrite(m, var_decl);
-
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
+
         slice_push(params, lir_var_new(m, var_decl->ident));
     }
 
@@ -2451,7 +2483,15 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         c->fn_runtime_operand = fn_runtime_operand;
     }
 
+
     OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
+
+    // 参数 escape rewrite
+    for (int i = 0; i < fndef->params->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
+        assert(var_decl->type.status == REDUCTION_STATUS_DONE);
+        linear_escape_rewrite(m, var_decl);
+    }
 
     // 返回值 operand 也 push 到 params1 里面，方便处理
     if (fndef->return_type.kind != TYPE_VOID) {

@@ -3,6 +3,7 @@
 
 n_void_ptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index) {
     PRE_RTCALL_HOOK();
+    ASSERT_ADDR(data);
 
     DEBUGF("[runtime.array_element_addr] array=%p, rtype_hash=%lu, index=%lu", data, rtype_hash, index);
 

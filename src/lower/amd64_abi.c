@@ -253,7 +253,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
 
 linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
-    linked_push(result, op);
+    linked_push(result, op); // 将 FN_BEGIN 放在最前端，后续 native 还需要使用
 
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;

@@ -1,0 +1,64 @@
+import 'mod.n'
+
+type tmp_t = struct{
+    i8 t1
+    mod.bar_t bar // arr[int:5] 对应的 map{int:bool}, set{int}
+    i8 t2
+}
+type foo_t = struct{
+    tmp_t mid2
+}
+
+// 简单情况: v
+var bar = [1, 3, 5, 7, 9] as mod.bar_t
+var b = bar[0]
+println(b, bar[1], bar[4], bar.len())
+
+// 复杂情况: v
+var foo = foo_t{
+    mid2 = tmp_t{
+        t1 = 2,
+        t2 = 3,
+        bar = []
+    }
+}
+
+println(foo.mid2.bar.len())
+
+// 字面量简单情况: v
+println(([1, 3, 5, 7, 9] as mod.bar_t).len())
+
+// 字面量复杂情况: v
+var len = (foo_t{
+    mid2 = tmp_t{
+        t1 = 2,
+        t2 = 3,
+        bar = []
+    }
+}).mid2.bar.len()
+println(len)
+
+// 标量变量情况: v
+mod.car_t car = 1314
+car.tostr()
+
+// 标量字面量情况:
+(233 as mod.car_t).tostr()
+
+
+// fn 情况 var 测试
+(fn test(mod.car_t local_var) {
+    local_var.tostr()
+    var b = local_var + 11
+    println(local_var + 12, b)
+})(10000)
+
+// 闭包情况测试: v
+var c1 = 12
+var c2 = [1, 2, 3] as arr<int,3>
+
+fn test2() {
+    println(c1, c2[0], c2[2])
+}
+
+test2()

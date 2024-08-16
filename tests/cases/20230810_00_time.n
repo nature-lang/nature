@@ -51,4 +51,4 @@ println('datetime:', buf as string, '!!!')
 
 // time 库测试
 var t = time.now()
-println(@unsafe_load(t).timestamp() > 1691665760)
+println(t.timestamp() > 1691665760)
