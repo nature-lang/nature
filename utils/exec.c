@@ -41,6 +41,26 @@ void exec_process(char *work_dir, char *file, slice_t *list) {
     }
 }
 
+int exec_imm(char *work_dir, char *file, slice_t *list) {
+    size_t count = list->count + 2;
+    char *argv[count];
+    argv[0] = file;
+    for (int i = 0; i < list->count; ++i) {
+        argv[i + 1] = list->take[i];
+    }
+    argv[count - 1] = NULL;
+
+    // 子进程
+    if (work_dir) {
+        // 修改执行的工作目录
+        VOID chdir(work_dir);
+    }
+
+    int result = execvp(file, argv);
+    exit(result);
+}
+
+
 // 结尾必须是 NULL,开头必须是重复命令
 char *exec(char *work_dir, char *file, slice_t *list) {
     int fd[2];// write to fd[1], read by fd[0]

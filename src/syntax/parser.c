@@ -1975,6 +1975,8 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         fndef->return_type = parser_type(m);
     } else {
         fndef->return_type = type_kind_new(TYPE_VOID);
+        fndef->return_type.line = parser_peek(m)->line;
+        fndef->return_type.column = parser_peek(m)->column;
     }
 
 

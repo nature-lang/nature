@@ -26,6 +26,7 @@ linkco_t *rti_acquire_linkco() {
     }
 
     linkco_t *linkco = p->linkco_cache[--p->linkco_count];
+
     return linkco;
 }
 

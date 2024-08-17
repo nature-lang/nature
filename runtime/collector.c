@@ -162,13 +162,13 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            RDEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *) (span->base + i * span->obj_size));
+            DEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *) (span->base + i * span->obj_size));
             // TODO 直接 set 0 让 gc 问题快速暴露出来
             memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
         } else {
-            RDEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                    (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                    bitmap_test(span->gcmark_bits, i));
+            DEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                   bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -383,7 +383,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     }
 
     addr_t ret_addr = co->scan_ret_addr;
-    assert(find_fn(ret_addr) && "scan ret_addr failed");
+    assertf(find_fn(ret_addr), "scan ret_addr=%p failed", ret_addr);
 
     int scan_fn_count = 0;
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
@@ -701,11 +701,15 @@ static void inject_gc_work_coroutine() {
 static void flush_pool() {
     mutex_lock(&global_linkco_locker);
 
+    // 下一轮 gc 中相关 linkco 无法被标记，则会被清理
     global_linkco_cache = NULL;
 
     mutex_unlock(&global_linkco_locker);
 }
 
+/**
+ * 添加到 gc_worklist 中可以被标记从而避免被清理
+ */
 static void scan_pool() {
     PROCESSOR_FOR(share_processor_list) {
         for (int i = 0; i < p->linkco_count; ++i) {
@@ -864,5 +868,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-           (before - allocated_bytes) / 1000);
+            (before - allocated_bytes) / 1000);
 }

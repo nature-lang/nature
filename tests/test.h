@@ -22,6 +22,10 @@ static inline void exec_no_output(slice_t *args) {
     exec_process(WORKDIR, BUILD_OUTPUT, args);
 }
 
+static inline int exec_imm_param() {
+    return exec_imm(WORKDIR, BUILD_OUTPUT, slice_new());
+}
+
 static inline char *exec_output() {
     return exec(WORKDIR, BUILD_OUTPUT, slice_new());
 }
@@ -51,6 +55,10 @@ static inline void blackbox_package_sync() {
     char *output = command_output(workdir, PACKAGE_SYNC_COMMAND);
     log_debug("npkg sync:%s", output);
 }
+
+#define TEST_EXEC_IMM   \
+    blackbox_setup(); \
+    exec_imm_param();
 
 #define TEST_BASIC    \
     blackbox_setup(); \

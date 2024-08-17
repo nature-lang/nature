@@ -5,15 +5,6 @@
 #include "utils/assertf.h"
 #include "utils/exec.h"
 
-static void test_basic() {
-    char *raw = exec_output();
-    printf("%s", raw);
-    return;
-    char *str = "";
-
-    assert_string_equal(raw, str);
-}
-
 int main(void) {
-    TEST_BASIC
+    TEST_EXEC_IMM
 }

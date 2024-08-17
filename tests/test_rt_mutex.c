@@ -11,18 +11,18 @@ int64_t sum = 0;
 int64_t sum_no_lock = 0;
 
 static void sub_sum_fn() {
-    coroutine_t *co = coroutine_get();
+    rt_mutex_lock(&m);
     for (int i = 0; i < 100; i++) {
-        rt_mutex_lock(&m);
 //        sum = sum + 1;
         int64_t old = sum;
+        // 直接进行 race 检测， 存在 race 可以直接报出来。
         if (!atomic_compare_exchange_strong(&sum, &old, old + 1)) {
             assertf(false, "existential race, sum=%ld, old=%ld", sum, old);
         }
 
-        rt_mutex_unlock(&m);
-        co_yield_runnable(co->p, co);
+        // co_yield_runnable(co->p, co);
     }
+    rt_mutex_unlock(&m);
 }
 
 static void sub_sum_no_lock_fn() {
@@ -44,13 +44,18 @@ void test_lock_sum() {
 
 
     // 等待所有的子任务完成
-    coroutine_sleep(5000);
-
     uint64_t remain_count = 0;
-    PROCESSOR_FOR(share_processor_list) {
-        // 1 标识 main 协程自身
-        remain_count += p->runnable_list.count;
-    }
+    do {
+        remain_count = 0;
+        PROCESSOR_FOR(share_processor_list) {
+            // 1 标识 main 协程自身
+            remain_count += p->runnable_list.count;
+        }
+
+        coroutine_sleep(1000);
+        TESTDUMP("[test_lock_sum] wait coroutine calc complete...")
+    } while (remain_count > 0);
+
 
     TESTDUMP("[test_lock_sum] processor remain_count=%lu", remain_count)
 

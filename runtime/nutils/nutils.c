@@ -449,8 +449,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-void write_barrier(void *slot, void *new_obj) {
-    PRE_RTCALL_HOOK();
+void rt_write_barrier(void *slot, void *new_obj) {
     DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
 
     processor_t *p = processor_get();
@@ -490,6 +489,12 @@ void write_barrier(void *slot, void *new_obj) {
     if (!p->share) {
         mutex_unlock(&p->gc_stw_locker);
     }
+}
+
+void write_barrier(void *slot, void *new_obj) {
+    PRE_RTCALL_HOOK();
+
+    rt_write_barrier(slot, new_obj);
 }
 
 /**

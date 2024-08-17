@@ -248,8 +248,8 @@ typedef struct coroutine_t coroutine_t;
 // 通过 gc malloc 申请
 typedef struct linkco_t {
     coroutine_t *co;
-    struct linkco_t *succ;
     struct linkco_t *prev;
+    struct linkco_t *succ;
 } linkco_t;
 
 /**
@@ -328,7 +328,7 @@ struct processor_t {
     coroutine_t *coroutine;// 当前正在调度的 coroutine
     uint64_t co_started_at;// 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
-    // 存储 linkco_t 的指针，注意 gc 的时候需要遍历进行 mark
+    // 存储 linkco_t 的指针，注意 gc 的时候需要遍历进行 mark 避免被错误清理
     linkco_t *linkco_cache[P_LINKCO_CACHE_MAX];
     uint8_t linkco_count;
 
