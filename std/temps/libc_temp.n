@@ -98,3 +98,5 @@ fn libc_strerror():string
 fn libc_errno():int
 
 fn libc_get_envs():[string]
+
+fn exit(i32 status)

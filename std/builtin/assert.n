@@ -1,0 +1,9 @@
+import libc_temp
+
+fn assert(bool cond) {
+    if cond {
+        return
+    }
+
+    exit(1)
+}

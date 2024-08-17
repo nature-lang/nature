@@ -192,10 +192,10 @@ static rtype_t rtype_union(type_union_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_UNION));
 
     rtype_t rtype = {.size = POINTER_SIZE * 2,// element_rtype + value(并不知道 value 的类型)
-                     .hash = hash,
-                     .kind = TYPE_UNION,
-                     .last_ptr = POINTER_SIZE,
-                     .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
+            .hash = hash,
+            .kind = TYPE_UNION,
+            .last_ptr = POINTER_SIZE,
+            .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
 
     bitmap_set(rtype.gc_bits, 0);
 
@@ -241,7 +241,7 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, t->element_type.array);
         } else {
             uint16_t bit_index = *offset / POINTER_SIZE;
-            if (type_is_ptr(t->element_type)) {
+            if (type_is_pointer_heap(t->element_type)) {
                 bitmap_set(gc_bits, bit_index);
                 last_ptr_temp_offset = *offset;
             }
@@ -274,7 +274,7 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
         } else {
             // 这里就是存储位置
             uint16_t bit_index = *offset / POINTER_SIZE;
-            bool is_ptr = type_is_ptr(p->type);
+            bool is_ptr = type_is_pointer_heap(p->type);
             if (is_ptr) {
                 bitmap_set(gc_bits, bit_index);
                 last_ptr_temp_offset = *offset;
@@ -372,7 +372,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
         str = str_connect(str, itoa(rtype.hash));
 
         // 如果存在 heap 中就是需要 gc
-        bool need_gc = type_is_ptr(*element_type);
+        bool need_gc = type_is_pointer_heap(*element_type);
         if (need_gc) {
             need_gc_offsets[need_gc_count++] = offset;
         }
@@ -612,14 +612,22 @@ type_alias_t *type_alias_new(char *literal, char *import_module_ident) {
     return t;
 }
 
-bool type_is_ptr(type_t t) {
+/**
+ * 当前类型中存储的数据是否指向堆中, 如果是
+ * @param t
+ * @return
+ */
+bool type_is_pointer_heap(type_t t) {
     // type_array 和 type_struct 的 var 就是一个 pointer， 所以总是需要 gc
     // stack 中的数据，gc 是无法扫描的
     //    if (is_alloc_stack(t)) {
     //        return true;
     //    }
-
     if (t.in_heap) {
+        return true;
+    }
+
+    if (t.kind == TYPE_RAW_PTR || t.kind == TYPE_PTR || t.kind == TYPE_VOID_PTR) {
         return true;
     }
 

@@ -1400,7 +1400,8 @@ uint64_t collect_fndef_list(elf_context *ctx) {
 
             log_debug(
                     "[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type), type_is_ptr(var->type),
+                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
+                    type_is_pointer_heap(var->type),
                     (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
@@ -1454,7 +1455,7 @@ uint64_t collect_symdef_list(elf_context *ctx) {
 
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
-        symdef->need_gc = type_is_ptr(var_decl->type);
+        symdef->need_gc = type_is_pointer_heap(var_decl->type);
         symdef->size = type_sizeof(var_decl->type);// 符号的大小
         symdef->base = 0;                          // 这里引用了全局符号表段地址
         strcpy(symdef->name, var_decl->ident);

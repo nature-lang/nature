@@ -2,6 +2,7 @@
 #define NATURE_LINKCO_H
 
 #include "runtime.h"
+#include "nutils/nutils.h"
 
 extern linkco_t *global_linkco_cache;
 extern mutex_t global_linkco_locker;
@@ -29,18 +30,64 @@ static inline void linkco_list_push(rt_linkco_list_t *list, void *value) {
     new_linkco->co = value;
     if (list->head == NULL) {
         assert(list->rear == NULL);
-        list->head = new_linkco;
-        list->rear = new_linkco;
+
+//        list->head = new_linkco;
+//        list->rear = new_linkco;
+        rt_write_barrier(&list->head, &new_linkco);
+        rt_write_barrier(&list->rear, &new_linkco);
     } else {
         assert(list->rear);
-        list->rear->succ = new_linkco;
-        new_linkco->prev = list->rear;
 
-        list->rear = new_linkco;
+//        list->rear->succ = new_linkco;
+        rt_write_barrier(&list->rear->succ, &new_linkco);
+
+//        new_linkco->prev = list->rear;
+        rt_write_barrier(&new_linkco->prev, &list->rear);
+
+//        list->rear = new_linkco;
+        rt_write_barrier(&list->rear, &new_linkco);
     }
 
     list->count++;
 }
+
+// 默认从 header pop, 所以 pop_linkco 没有 prev
+static inline void *linkco_list_pop(rt_linkco_list_t *list) {
+    assert(list);
+    if (list->head == NULL) {
+        assert(list->rear == NULL);
+        return NULL;
+    }
+
+    assertf(list->head->co, "linkco head %p value empty", list->head);
+
+    linkco_t *pop_linkco = list->head;
+
+    linkco_t *null_co = NULL;
+
+//    list->head = list->head->succ;
+    rt_write_barrier(&list->head, &list->head->succ);
+
+
+    if (list->head == NULL) {
+        assertf(list->count == 1, "list head is null, but list count = %d", list->count);
+//        list->rear = NULL;
+        rt_write_barrier(&list->rear, &null_co);
+    } else {
+//        list->head->prev = NULL;
+        rt_write_barrier(&list->head->prev, &null_co);
+    }
+
+    list->count--;
+
+    void *value = pop_linkco->co;
+
+    pop_linkco->succ = NULL;
+    rti_release_linkco(pop_linkco);
+
+    return value;
+}
+
 
 static inline void linkco_list_lock_push(rt_linkco_list_t *list, void *value) {
     pthread_mutex_lock(&list->locker);
@@ -50,6 +97,7 @@ static inline void linkco_list_lock_push(rt_linkco_list_t *list, void *value) {
 
 static inline void linkco_list_push_head(rt_linkco_list_t *list, void *value) {
     assert(list);
+    assert(value);
 
     linkco_t *new_linkco = rti_acquire_linkco();
     new_linkco->co = value;
@@ -72,34 +120,6 @@ static inline void linkco_list_lock_push_head(rt_linkco_list_t *list, void *valu
     pthread_mutex_lock(&list->locker);
     linkco_list_push_head(list, value);
     pthread_mutex_unlock(&list->locker);
-}
-
-// 默认从 header pop, 所以 pop_linkco 没有 prev
-static inline void *linkco_list_pop(rt_linkco_list_t *list) {
-    assert(list);
-    if (list->head == NULL) {
-        assert(list->rear == NULL);
-        return NULL;
-    }
-
-    linkco_t *pop_linkco = list->head;
-    list->head = list->head->succ;
-
-    if (list->head == NULL) {
-        assert(list->count == 1);
-        list->rear = NULL;
-    } else {
-        list->head->prev = NULL;
-    }
-
-    list->count--;
-
-    void *value = pop_linkco->co;
-
-    pop_linkco->succ = NULL;
-    rti_release_linkco(pop_linkco);
-
-    return value;
 }
 
 static inline void *linkco_list_lock_pop(rt_linkco_list_t *list) {

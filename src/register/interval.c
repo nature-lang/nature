@@ -946,7 +946,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     // bitmap size
     uint16_t bit_index = (c->stack_offset - 1) / POINTER_SIZE;
-    bool is_ptr = type_is_ptr(i->var->type);
+    bool is_ptr = type_is_pointer_heap(i->var->type);
     bitmap_grow_set(c->stack_gc_bits, bit_index, is_ptr);
 
     *i->stack_slot = -c->stack_offset;// 取负数，一般栈都是高往低向下增长

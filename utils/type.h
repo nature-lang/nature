@@ -483,7 +483,7 @@ rtype_t rtype_array(type_array_t *t);
  * @param t
  * @return
  */
-bool type_is_ptr(type_t t);
+bool type_is_pointer_heap(type_t t);
 
 type_t type_ptrof(type_t t);
 

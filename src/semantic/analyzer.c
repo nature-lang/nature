@@ -737,6 +737,8 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     analyzer_current_init(m, fndef);
     m->analyzer_global = fndef;
     fndef->is_local = false;
+    m->current_line = fndef->line;
+    m->current_column = fndef->column;
 
     // generics fn 需要在 pre_infer 后
     if (fndef->generics_params) {
