@@ -65,7 +65,7 @@ void coroutine_sleep(int64_t ms) {
 
     DEBUGF("[runtime.coroutine_sleep] start, co=%p uv_loop=%p, p_index_%d=%d, timer=%p, timer_value=%lu", co,
            &p->uv_loop, p->share,
-           p->index, &timer, fetch_addr_value((addr_t) &timer));
+           p->index, &timer, fetch_addr_value((addr_t) & timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);
@@ -73,4 +73,10 @@ void coroutine_sleep(int64_t ms) {
     DEBUGF("[runtime.coroutine_sleep] coroutine sleep resume, co=%p, co_status=%d, uv_loop=%p, p_index_%d=%d, timer=%p",
            co, co->status,
            &p->uv_loop, p->share, p->index, &timer);
+}
+
+
+int64_t rt_processor_index() {
+    coroutine_t *co = coroutine_get();
+    return co->p->index;
 }

@@ -641,7 +641,7 @@ void raw_ptr_valid(void *raw_ptr) {
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
     // raw_ptr 必须处于合理的范围
     addr_t i = (addr_t) raw_ptr;
-    if (i < MMAP_STACK_BASE || i > ARENA_HINT_MAX) {
+    if (i < MMAP_SHARE_STACK_BASE || i > ARENA_HINT_MAX) {
         rt_coroutine_set_error("invalid memory address or nil pointer dereference");
     }
 }

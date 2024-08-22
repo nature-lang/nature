@@ -57,7 +57,7 @@
 #define SET_ADD_KEY "add"
 #define SET_DELETE_KEY "del"
 
-#define RT_CALL_ZERO_FN "zero_fn"
+#define RT_CALL_DEFAULT_FN "zero_fn"
 
 // RT = runtime
 // CT = compile time

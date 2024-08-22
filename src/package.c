@@ -118,46 +118,57 @@ char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, sli
     assert(ast_import_package);
     assert(ast_import_package->count > 0);
 
+    // 当 import 一个文件夹时，默认 import 其中的 main.n 文件。
     char *entry = "main";
+    // 可以自定义 entry
     toml_datum_t datum = toml_string_in(package_conf, "entry");
     if (datum.ok) {
         entry = datum.u.s;
     }
     assertf(!ends_with(entry, ".n"), "entry cannot end with .n, entry '%s'", entry);
 
-    // 判断 temp 是否是一个文件夹
-    char *temp = package_dir;
+    char *prefix = package_dir;
     for (int i = 1; i < ast_import_package->count; ++i) {
-        temp = path_join(temp, ast_import_package->take[i]);
+        prefix = path_join(prefix, ast_import_package->take[i]);
     }
 
-    if (dir_exists(temp)) {
-        // 拼接文件后缀
-        temp = path_join(temp, entry);
-    }
+    int entry_count = 0;
+    do {
+        if (entry_count == 1) {
+            if (dir_exists(prefix)) {
+                // 拼接文件后缀
+                prefix = path_join(prefix, entry);
+            }
+        }
 
-    // os + arch 文件
-    char *os = os_to_string(BUILD_OS);
-    char *arch = arch_to_string(BUILD_ARCH);
-    char *os_arch = str_connect_by(os, arch, "_");
-    char *os_arch_full_path = str_connect_by(temp, os_arch, ".");
-    os_arch_full_path = str_connect(os_arch_full_path, ".n");
-    if (file_exists(os_arch_full_path)) {
-        return os_arch_full_path;
-    }
+        entry_count += 1;
 
-    // os 文件
-    char *os_full_path = str_connect_by(temp, os, ".");
-    os_full_path = str_connect(os_full_path, ".n");
-    if (file_exists(os_full_path)) {
-        return os_full_path;
-    }
+        // os + arch 文件
+        char *os = os_to_string(BUILD_OS);
+        char *arch = arch_to_string(BUILD_ARCH);
+        char *os_arch = str_connect_by(os, arch, "_");
 
-    // 不带其他后缀
-    char *full_path = str_connect(temp, ".n");
-    //    assertf(file_exists(full_path), "cannot find file %s", full_path);
+        char *os_arch_full_path = str_connect_by(prefix, os_arch, ".");
+        os_arch_full_path = str_connect(os_arch_full_path, ".n");
+        if (file_exists(os_arch_full_path)) {
+            return os_arch_full_path;
+        }
 
-    return full_path;
+        // os 文件
+        char *os_full_path = str_connect_by(prefix, os, ".");
+        os_full_path = str_connect(os_full_path, ".n");
+        if (file_exists(os_full_path)) {
+            return os_full_path;
+        }
+
+        // 不带其他后缀的标准文件
+        char *full_path = str_connect(prefix, ".n");
+        if (file_exists(full_path)) {
+            return full_path;
+        }
+    } while (entry_count < 2);
+
+    return NULL;
 }
 
 slice_t *package_links(char *package_dir, toml_table_t *package_conf) {

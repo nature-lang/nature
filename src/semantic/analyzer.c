@@ -207,7 +207,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         } else if (is_std_package(package)) {
             analyzer_import_std(m, package, import);
         } else {
-            ANALYZER_ASSERTF(false, "import package %s not found", package);
+            ANALYZER_ASSERTF(false, "import package '%s' not found", package);
         }
     }
 
@@ -824,7 +824,6 @@ static void analyzer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_ex
 static void analyzer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
     analyzer_expr(m, &ula_expr->src);
 }
-
 
 static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *expr) {
     analyzer_type(m, &expr->target_type);

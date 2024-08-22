@@ -177,6 +177,9 @@ void rt_coroutine_yield();
 
 void *rt_coroutine_error(coroutine_t *co);
 
+int64_t rt_processor_index();
+
+void rt_processor_wake(processor_t *p);
 
 // ------------ libuv 的一些回调 -----------------------
 static void uv_on_timer(uv_timer_t *timer);

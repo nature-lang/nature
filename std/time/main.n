@@ -40,12 +40,3 @@ fn now():time_t {
 
     return t
 }
-
-fn _new():ptr<time_t> {
-    var sys_time = syscall.clock_gettime(syscall.CLOCK_REALTIME)
-    var t = new time_t
-    t.sec = sys_time.sec
-    t.nsec = sys_time.nsec
-    t.tm = localtime(&sys_time.sec)
-    return t
-}

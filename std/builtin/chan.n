@@ -1,0 +1,42 @@
+import coroutine as co
+
+type waitq_t = struct{
+    raw_ptr<co.linkco_t> head
+    raw_ptr<co.linkco_t> rear
+}
+
+type chan_t<T> = struct{
+    int buf_cap
+    int buf_len
+    void_ptr buf // TODO 直接用 arr<T,n> ? 难，size 不可定。用 vec 好了？
+
+    int msg_size
+
+    waitq_t sendq
+    waitq_t recvq
+    arr<u8,40> lock
+}
+
+// var ch = chan<T>()
+fn chan<T>():chan_t<T> {
+    return chan_t<T>{
+        msg_size = @sizeof(T)
+    }
+}
+
+fn chan_t<T>.send(T msg) {
+    rt_chan_send(self as void_ptr, &msg as void_ptr) // self = ptr<chan_t<T>>？
+}
+
+fn chan_t<T>.recv():T {
+    T msg = @default()
+    rt_chan_recv(self as void_ptr, &msg as void_ptr)
+
+    return msg
+}
+
+#linkid rt_chan_send
+fn rt_chan_send(void_ptr chan, void_ptr msg)
+
+#linkid rt_chan_recv
+fn rt_chan_recv(void_ptr chan, void_ptr msg)

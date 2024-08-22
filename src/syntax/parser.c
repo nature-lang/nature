@@ -2392,6 +2392,15 @@ static ast_expr_t parser_expr_with_precedence(module_t *m) {
     return parser_precedence_expr(m, PRECEDENCE_ASSIGN);
 }
 
+static ast_expr_t parser_macro_default_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_LEFT_PAREN);
+    parser_must(m, TOKEN_RIGHT_PAREN);
+    ast_macro_default_expr_t *default_expr = NEW(ast_macro_default_expr_t);
+    result.assert_type = AST_MACRO_EXPR_DEFAULT;
+    result.value = default_expr;
+    return result;
+}
 
 static ast_expr_t parser_macro_sizeof(module_t *m) {
     ast_expr_t result = expr_new(m);
@@ -2567,6 +2576,10 @@ static ast_expr_t parser_macro_call(module_t *m) {
 
     if (str_equal(token->literal, MACRO_REFLECT_HASH)) {
         return parser_macro_reflect_hash(m);
+    }
+
+    if (str_equal(token->literal, MACRO_DEFAULT)) {
+        return parser_macro_default_expr(m);
     }
 
     if (str_equal(token->literal, MACRO_CO_ASYNC)) {

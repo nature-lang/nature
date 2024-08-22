@@ -77,6 +77,7 @@ typedef struct {
     char guard_page_enabled;
     void *real_ptr;
     size_t real_sz;
+    pthread_spinlock_t owner_lock;
 } aco_share_stack_t;
 
 typedef void (*aco_cofuncp_t)(void);
@@ -90,7 +91,6 @@ struct aco_s {
 
     aco_cofuncp_t fp;
     aco_save_stack_t save_stack;
-    // uint64_t bp_offset; // 进入 tpl call 保存最后一个点的 bp 位置，基于 bp 位置可以进行正确的 scan stack
     aco_share_stack_t *share_stack;
     aco_context_t ctx;
     bool inited;
@@ -130,8 +130,10 @@ struct aco_s {
 extern uv_key_t aco_gtls_co;           // aco_t*
 extern uv_key_t aco_gtls_last_word_fp; // aco_cofuncp_t
 extern uv_key_t aco_gtls_fpucw_mxcsr;  // void*
+extern pthread_mutex_t share_stack_lock;
 
 static inline void aco_init() {
+    pthread_mutex_init(&share_stack_lock, NULL);
     uv_key_create(&aco_gtls_co);
     uv_key_create(&aco_gtls_last_word_fp);
     uv_key_create(&aco_gtls_fpucw_mxcsr);
@@ -154,7 +156,7 @@ extern void *aco_share_stack_init(aco_share_stack_t *p, size_t sz);
 extern void aco_share_stack_destroy(aco_share_stack_t *sstk);
 
 extern void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack, size_t save_stack_sz,
-                                                         aco_cofuncp_t fp, void *arg);
+                            aco_cofuncp_t fp, void *arg);
 
 // aco's Global Thread Local Storage variable `co`
 // extern __thread aco_t *aco_gtls_co;

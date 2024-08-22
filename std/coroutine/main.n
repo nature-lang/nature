@@ -2,6 +2,20 @@ import coroutine_temp
 
 var SOLO = 1 << 1
 
+type linkco_t = struct{
+    void_ptr co // 所有的 coroutine 都可以通过 processor 标记，所以此处使用 void_ptr 即可
+    raw_ptr<linkco_t> prev
+    raw_ptr<linkco_t> succ
+    void_ptr data // 各种需要的数据存储, 比如 chan 中的 msg_ptr
+}
+
+type linkco_list_t = struct{
+    raw_ptr<linkco_t> head
+    raw_ptr<linkco_t> rear
+    i64 count
+    arr<u8,40> lock // c: pthread_mutex_t
+}
+
 type coroutine_t = struct{
     i32 status
 }
@@ -30,43 +44,6 @@ fn yield() {
     rt_coroutine_yield()
 }
 
-type linkco_t = struct{
-    void_ptr co // 所有的 coroutine 都可以通过 processor 标记，所以此处使用 void_ptr 即可
-    raw_ptr<linkco_t> prev
-    raw_ptr<linkco_t> succ
-}
 
-type linkco_list_t = struct{
-    raw_ptr<linkco_t> head
-    raw_ptr<linkco_t> rear
-    i64 count
-    arr<u8,40> locker // c: pthread_mutex_t
-}
-
-type mutex_t = struct {
-    i64 state
-    i64 sema
-    i64 waiter_count
-    linkco_list_t waiters
-}
-
-#linkid rt_mutex_lock
-fn rt_mutex_lock(ptr<mutex_t> m)
-
-#linkid rt_mutex_try_lock
-fn rt_mutex_try_lock(ptr<mutex_t> m):bool
-
-#linkid rt_mutex_unlock
-fn rt_mutex_unlock(ptr<mutex_t> m)
-
-fn mutex_t.lock() {
-    rt_mutex_lock(self)
-}
-
-fn mutex_t.try_lock():bool {
-    return rt_mutex_try_lock(self)
-}
-
-fn mutex_t.unlock() {
-    rt_mutex_unlock(self)
-}
+#linkid rt_processor_index
+fn processor_index():int

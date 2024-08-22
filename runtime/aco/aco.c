@@ -20,6 +20,8 @@
 
 // this header including should be at the last of the `include` directives list
 
+static uint64_t share_stack_base = MMAP_SHARE_STACK_BASE;
+
 void aco_runtime_test(void) {
 #ifdef __x86_64__
     assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
@@ -172,6 +174,7 @@ uv_key_t aco_gtls_last_word_fp;
 // #error "platform no support yet"
 // #endif
 uv_key_t aco_gtls_fpucw_mxcsr;
+pthread_mutex_t share_stack_lock;
 
 void aco_thread_init(aco_cofuncp_t last_word_co_fp) {
     void *fpucw = uv_key_get(&aco_gtls_fpucw_mxcsr);
@@ -210,6 +213,7 @@ void aco_funcp_protector(void) {
 void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     assert(p);
     memset(p, 0, sizeof(aco_share_stack_t));
+    pthread_spin_init(&p->owner_lock, PTHREAD_PROCESS_SHARED);
 
     if (sz == 0) {
         sz = 1024 * 1024 * 2;
@@ -248,7 +252,13 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
         assert((sz / u_pgsz > 1) && ((sz & (u_pgsz - 1)) == 0));
     }
 
-    p->real_ptr = mmap((void *) MMAP_STACK_BASE, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    pthread_mutex_lock(&share_stack_lock);
+    p->real_ptr = mmap((void *) share_stack_base, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    DEBUGF("[aco_share_stack_init] share_stack real_ptr=%p", p->real_ptr);
+//    share_stack_base += (uint64_t) 64 * 1024 * 1024 * 1024;
+    share_stack_base += sz;
+    pthread_mutex_unlock(&share_stack_lock);
+
     assert(p->real_ptr != MAP_FAILED);
     p->guard_page_enabled = 1;
     mprotect(p->real_ptr, u_pgsz, PROT_READ);
@@ -307,6 +317,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         }
 
         aco->save_stack.ptr = rti_gc_malloc(save_stack_sz, NULL);
+        DEBUGF("[aco_create_init] save_stack.ptr=%p, size=%ld", aco->save_stack.ptr, save_stack_sz);
 
         assert(aco->save_stack.ptr);
         aco->save_stack.sz = save_stack_sz;
@@ -331,6 +342,8 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 
     // 栈切换
     if (resume_co->share_stack->owner != resume_co) {
+        pthread_spin_lock(&resume_co->share_stack->owner_lock);
+
         if (resume_co->share_stack->owner != NULL) {
             aco_t *owner_co = resume_co->share_stack->owner;
             assert(owner_co->share_stack == resume_co->share_stack);
@@ -407,6 +420,8 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 #else
 #error "platform no support yet"
 #endif
+
+        pthread_spin_unlock(&resume_co->share_stack->owner_lock);
     }
     uv_key_set(&aco_gtls_co, resume_co);
     acosw(resume_co->main_co, resume_co);
