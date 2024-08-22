@@ -1,0 +1,30 @@
+import coroutine as co
+
+// 存放在了标准库的 mutex_t 中
+type mutex_t = struct {
+    i64 state
+    i64 sema
+    i64 waiter_count
+    co.linkco_list_t waiters
+}
+
+#linkid rt_mutex_lock
+fn rt_mutex_lock(ptr<mutex_t> m)
+
+#linkid rt_mutex_try_lock
+fn rt_mutex_try_lock(ptr<mutex_t> m):bool
+
+#linkid rt_mutex_unlock
+fn rt_mutex_unlock(ptr<mutex_t> m)
+
+fn mutex_t.lock() {
+    rt_mutex_lock(self)
+}
+
+fn mutex_t.try_lock():bool {
+    return rt_mutex_try_lock(self)
+}
+
+fn mutex_t.unlock() {
+    rt_mutex_unlock(self)
+}

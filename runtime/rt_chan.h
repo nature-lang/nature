@@ -1,0 +1,4 @@
+#ifndef NATURE_RT_CHAN_H
+#define NATURE_RT_CHAN_H
+
+#endif //NATURE_RT_CHAN_H

@@ -275,6 +275,7 @@ int io_run(processor_t *p, uint64_t timeout_ms) {
     // 设置计时器超时回调，这将在超时后停止事件循环
     uv_timer_start(&p->timer, uv_stop_callback, timeout_ms, 0);// 只触发一次
 
+
     // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
     return uv_run(&p->uv_loop, UV_RUN_DEFAULT);
 }
@@ -370,9 +371,9 @@ static void processor_run(void *raw) {
         // - stw
         if (p->need_stw > 0) {
             STW_WAIT:
-        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
-                p->share,
-                p->index);
+            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                    p->share,
+                    p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -1053,4 +1054,17 @@ void rt_coroutine_await(coroutine_t *target_co) {
 
     // waiting -> syscall
     co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
+}
+
+void rt_processor_wake(processor_t *p) {
+    processor_t *current_p = processor_get();
+    if (current_p == p) {
+        return;
+    }
+
+    if (p->runnable_list.count != 1) {
+        return;
+    }
+
+    uv_stop(&p->uv_loop);
 }

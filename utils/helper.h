@@ -337,6 +337,9 @@ static inline bool dir_exists(char *dir) {
 }
 
 static inline bool file_exists(char *path) {
+    if (path == NULL) {
+        return false;
+    }
     return (access(path, R_OK) == 0);
 }
 

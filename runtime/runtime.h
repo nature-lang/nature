@@ -34,7 +34,7 @@
 
 #define PAGE_ALLOC_CHUNK_SPLIT 8192// 每组 chunks 中的元素的数量
 
-#define MMAP_STACK_BASE 0xa000000000
+#define MMAP_SHARE_STACK_BASE 0xa000000000
 #define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
 #define ARENA_HINT_MAX 0x800000000000// 128T
 #define ARENA_HINT_SIZE 1099511627776// 1 << 40
@@ -250,6 +250,7 @@ typedef struct linkco_t {
     coroutine_t *co;
     struct linkco_t *prev;
     struct linkco_t *succ;
+    void *data;
 } linkco_t;
 
 /**
@@ -257,7 +258,7 @@ typedef struct linkco_t {
  * @return
  */
 static inline rtype_t *rti_linkco_rtype() {
-    return gc_rtype(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN);
+    return gc_rtype(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 }
 
 // 必须和 nature code 保持一致

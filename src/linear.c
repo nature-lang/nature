@@ -56,13 +56,13 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
     return dst;
 }
 
-static lir_operand_t *linear_zero_string(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t *target) {
     push_rt_call(m, RT_CALL_STRING_NEW, target, 2, string_operand(""), int_operand(0));
     return target;
 }
 
 static lir_operand_t *
-linear_zero_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, lir_operand_t *target) {
+linear_default_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -83,7 +83,7 @@ linear_zero_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, l
 }
 
 // target 中保存了栈地址，开始向上清理
-static void linear_zero_stack(module_t *m, lir_operand_t *target, uint64_t size) {
+static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint64_t size) {
     uint16_t remind = size;
     uint16_t offset = 0;
     while (remind > 0) {
@@ -119,16 +119,16 @@ static void linear_zero_stack(module_t *m, lir_operand_t *target, uint64_t size)
     }
 }
 
-static lir_operand_t *linear_zero_arr(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_arr(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
 
-    linear_zero_stack(m, target, type_sizeof(t));
+    linear_default_empty_stack(m, target, type_sizeof(t));
     return target;
 }
 
-static lir_operand_t *linear_zero_map(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_map(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -144,7 +144,7 @@ static lir_operand_t *linear_zero_map(module_t *m, type_t t, lir_operand_t *targ
     return target;
 }
 
-static lir_operand_t *linear_zero_set(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_set(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -162,10 +162,10 @@ static lir_operand_t *linear_zero_set(module_t *m, type_t t, lir_operand_t *targ
  * @param t
  * @return
  */
-static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *target) {
-    lir_operand_t *zero_fn_operand = lir_label_operand(RT_CALL_ZERO_FN, false);
+static lir_operand_t *linear_default_fn(module_t *m, type_t t, lir_operand_t *target) {
+    lir_operand_t *default_fn_operand = lir_label_operand(RT_CALL_DEFAULT_FN, false);
 
-    OP_PUSH(lir_op_lea(target, zero_fn_operand));
+    OP_PUSH(lir_op_lea(target, default_fn_operand));
     return target;
 }
 
@@ -174,7 +174,7 @@ static lir_operand_t *linear_zero_fn(module_t *m, type_t t, lir_operand_t *targe
  * @param t
  * @return
  */
-static lir_operand_t *linear_struct_fill_zero(module_t *m, type_t t, lir_operand_t *target, table_t *exists) {
+static lir_operand_t *linear_struct_fill_default(module_t *m, type_t t, lir_operand_t *target, table_t *exists) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -196,7 +196,7 @@ static lir_operand_t *linear_struct_fill_zero(module_t *m, type_t t, lir_operand
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_zero_operand(m, p->type, dst);
+        linear_default_operand(m, p->type, dst);
     }
 
     return target;
@@ -207,7 +207,7 @@ static lir_operand_t *linear_struct_fill_zero(module_t *m, type_t t, lir_operand
  * @param t
  * @return
  */
-static lir_operand_t *linear_zero_tuple(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_tuple(module_t *m, type_t t, lir_operand_t *target) {
     uint64_t rtype_hash = ct_find_rtype_hash(t);
     push_rt_call(m, RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash));
 
@@ -227,52 +227,55 @@ static lir_operand_t *linear_zero_tuple(module_t *m, type_t t, lir_operand_t *ta
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_zero_operand(m, *element, dst);
+        linear_default_operand(m, *element, dst);
         offset += element_size;
     }
 
     return target;
 }
 
-static lir_operand_t *linear_zero_operand(module_t *m, type_t t, lir_operand_t *target) {
-    if (is_clv_zero_type(t)) {
+/*
+ * raw ptr 无法赋默认值
+ */
+static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_t *target) {
+    if (is_clv_default_type(t)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, target));
         return target;
     }
 
     if (t.kind == TYPE_STRING) {
-        return linear_zero_string(m, t, target);
+        return linear_default_string(m, t, target);
     }
 
     if (t.kind == TYPE_VEC) {
-        return linear_zero_vec(m, t, NULL, NULL, target);
+        return linear_default_vec(m, t, NULL, NULL, target);
     }
 
     if (t.kind == TYPE_ARR) {
-        return linear_zero_arr(m, t, target);
+        return linear_default_arr(m, t, target);
     }
 
     if (t.kind == TYPE_MAP) {
-        return linear_zero_map(m, t, target);
+        return linear_default_map(m, t, target);
     }
 
     if (t.kind == TYPE_SET) {
-        return linear_zero_set(m, t, target);
+        return linear_default_set(m, t, target);
     }
 
     if (t.kind == TYPE_FN) {
-        return linear_zero_fn(m, t, target);
+        return linear_default_fn(m, t, target);
     }
 
     if (t.kind == TYPE_STRUCT) {
-        return linear_struct_fill_zero(m, t, target, NULL);
+        return linear_struct_fill_default(m, t, target, NULL);
     }
 
     if (t.kind == TYPE_TUPLE) {
-        return linear_zero_tuple(m, t, target);
+        return linear_default_tuple(m, t, target);
     }
 
-    assertf(1, "linear_zero_operand not support type=%s", type_kind_str[t.kind]);
+    LINEAR_ASSERTF(false, "type '%s' no default value", type_format(t))
     return NULL;
 }
 
@@ -1054,7 +1057,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             }
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
-            lir_operand_t *rest_target = linear_zero_vec(m, *rest_list_type, NULL, NULL, NULL);
+            lir_operand_t *rest_target = linear_default_vec(m, *rest_list_type, NULL, NULL, NULL);
 
             for (int j = i; j < call->args->length; ++j) {
                 ast_expr_t *arg = ct_list_value(call->args, j);
@@ -1376,7 +1379,7 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
         cap_operand = linear_expr(m, *ast->cap, NULL);
     }
 
-    target = linear_zero_vec(m, t, len_operand, cap_operand, target);
+    target = linear_default_vec(m, t, len_operand, cap_operand, target);
 
     if (ast->elements) {
         for (int i = 0; i < ast->elements->length; ++i) {
@@ -1464,7 +1467,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
             linear_expr(m, *item_expr, item_target);
         } else {
             // gen zero value, to item_target
-            linear_zero_operand(m, type_array.array->element_type, item_target);
+            linear_default_operand(m, type_array.array->element_type, item_target);
         }
     }
 
@@ -1542,7 +1545,7 @@ static lir_operand_t *linear_set_new(module_t *m, ast_expr_t expr, lir_operand_t
     ast_set_new_t *ast = expr.value;
     type_t t = expr.type;
 
-    target = linear_zero_set(m, t, target);
+    target = linear_default_set(m, t, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -1566,7 +1569,7 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
     ast_map_new_t *ast = expr.value;
     type_t map_type = expr.type;
 
-    target = linear_zero_map(m, map_type, target);
+    target = linear_default_map(m, map_type, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -1699,7 +1702,7 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
         linear_expr(m, *property_expr, dst);
     }
 
-    linear_struct_fill_zero(m, t, target, exists);
+    linear_struct_fill_default(m, t, target, exists);
 
     return target;
 }
@@ -1782,9 +1785,17 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
         linear_expr(m, *property_expr, dst);
     }
 
-    linear_struct_fill_zero(m, new_expr->type, target, exists);
+    linear_struct_fill_default(m, new_expr->type, target, exists);
 
     return target;
+}
+
+static lir_operand_t *linear_default_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
+    return linear_default_operand(m, expr.type, target);
 }
 
 static lir_operand_t *linear_ula_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -1998,7 +2009,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 
     // 零值处理 target
     if (has_ret) {
-        linear_zero_operand(m, expr.type, target);
+        linear_default_operand(m, expr.type, target);
     }
 
     // 为 err 赋值
@@ -2417,6 +2428,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
         [AST_MACRO_EXPR_ULA] = linear_ula_expr,
+        [AST_MACRO_EXPR_DEFAULT] = linear_default_expr,
         [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
         [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
         [AST_EXPR_NEW] = linear_new_expr,

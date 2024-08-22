@@ -25,6 +25,7 @@ typedef enum {
     AST_MACRO_EXPR_ULA,
     AST_MACRO_EXPR_REFLECT_HASH,
     AST_MACRO_EXPR_TYPE_EQ,
+    AST_MACRO_EXPR_DEFAULT,
     AST_MACRO_CO_ASYNC,
 
     AST_EXPR_NEW,// new person
@@ -184,6 +185,9 @@ typedef struct {
     type_t target_type;
     ast_expr_t src;// 将表达式转换成 target_type
 } ast_as_expr_t, ast_is_expr_t;
+
+typedef struct {
+} ast_macro_default_expr_t;
 
 typedef struct {
     type_t target_type;

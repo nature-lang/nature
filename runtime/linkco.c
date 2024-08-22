@@ -26,6 +26,8 @@ linkco_t *rti_acquire_linkco() {
     }
 
     linkco_t *linkco = p->linkco_cache[--p->linkco_count];
+    assert(linkco->prev == NULL);
+    assert(linkco->succ == NULL);
 
     return linkco;
 }
@@ -33,6 +35,8 @@ linkco_t *rti_acquire_linkco() {
 void rti_release_linkco(linkco_t *linkco) {
     assert(linkco->prev == NULL);
     assert(linkco->succ == NULL);
+    linkco->co = NULL;
+    linkco->data = NULL;
 
     processor_t *p = processor_get();
     assert(p);
@@ -60,4 +64,5 @@ void rti_release_linkco(linkco_t *linkco) {
     }
 
     p->linkco_cache[p->linkco_count++] = linkco;
+    int a = 12;
 }

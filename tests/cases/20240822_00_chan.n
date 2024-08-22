@@ -1,0 +1,77 @@
+import coroutine as co
+
+// case 1
+var ch = chan<int>()
+
+go (fn(){
+    co.sleep(1000)
+    int v = ch.recv()
+    // assert(v == -233)
+    println('[ch] sub co recv success, value =', v)
+})()
+
+fn disturb() {
+    for true {
+        co.sleep(100)
+    }
+}
+go disturb()
+go disturb()
+
+ch.send(-233)
+println('[ch] send successful')
+
+
+// case 2
+var ch_str = chan<string>()
+go (fn(){
+    co.sleep(1000)
+    ch_str.send('hello channel')
+})()
+
+println('[ch_str] wait recv')
+var str = ch_str.recv()
+println('[ch_str] recv successful', str)
+assert(str == 'hello channel')
+
+// case 3
+var ch_queue = chan<f64>()
+f64 sum = 0
+
+fn consumer1() {
+    println('[ch_queue] consumer1 start, p_index =', co.processor_index())
+
+    for int i = 0; i < 100; i+=1 {
+	  var msg = ch_queue.recv()
+	  println('[ch_queue] consumer1 recv float msg =', i, msg)
+      co.sleep(10) // 模拟消息处理的时间
+	  sum += msg
+    }
+}
+
+fn consumer2() {
+    println('[ch_queue] consumer2 start, p_index =', co.processor_index())
+
+    for int i = 0; i < 100; i+=1 {
+   	  var msg = ch_queue.recv()
+	  println('[ch_queue] consumer2 recv float msg =', i, msg)
+	  co.sleep(10) // 模拟消息处理的时间
+	  sum -= msg
+    }
+}
+
+go consumer1()
+go consumer2()
+
+co.sleep(100) // 等待 consumer 就绪
+
+println('[ch_queue] will send, p_index=', co.processor_index())
+// 生成 10 个 send
+for int i = 0; i < 50; i+=1 {
+    ch_queue.send(i as f64)
+}
+
+co.sleep(1000)
+println('[ch_queue] send end, sum is', sum)
+assert(sum > -500 && sum < 500)
+

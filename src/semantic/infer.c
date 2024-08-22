@@ -2040,7 +2040,10 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         case AST_MACRO_EXPR_ULA: {
             return infer_ula_expr(m, expr->value);
         }
-        case AST_MACRO_EXPR_TYPE_EQ: {// TODO 上面的 macro 都可以此时进行表达式常量改写
+        case AST_MACRO_EXPR_DEFAULT: {
+            return target_type;
+        }
+        case AST_MACRO_EXPR_TYPE_EQ: {
             return infer_type_eq_expr(m, expr);
         }
         case AST_EXPR_NEW: {
