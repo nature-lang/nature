@@ -245,20 +245,23 @@ typedef enum {
 typedef struct processor_t processor_t;
 typedef struct coroutine_t coroutine_t;
 
+
 // 通过 gc malloc 申请
-typedef struct linkco_t {
+struct linkco_t {
     coroutine_t *co;
     struct linkco_t *prev;
     struct linkco_t *succ;
     void *data;
-} linkco_t;
+};
 
 /**
  * 必须和 linkco_t 结构联动
  * @return
  */
 static inline rtype_t *rti_linkco_rtype() {
-    return gc_rtype(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    rtype_t *rtype = gc_rtype(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    assert(rtype->size == sizeof(struct linkco_t));
+    return rtype;
 }
 
 // 必须和 nature code 保持一致

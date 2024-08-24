@@ -38,6 +38,24 @@ static rtype_t rtype_raw_ptr(type_ptr_t *t) {
     return rtype;
 }
 
+static rtype_t rtype_void_ptr(type_kind kind) {
+    char *str = dsprintf("%d", TYPE_VOID_PTR);
+    uint32_t hash = hash_string(str);
+    free(str);
+    rtype_t rtype = {
+            .size = sizeof(n_ptr_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_VOID_PTR,
+    };
+    // 计算 gc_bits
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
+
+    return rtype;
+}
+
+
 /**
  * hash = type_kind + element_type_hash
  * @param t
@@ -102,6 +120,30 @@ static rtype_t rtype_vec(type_vec_t *t) {
     // 计算 gc_bits
     rtype.gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.gc_bits, 0);
+
+    return rtype;
+}
+
+static rtype_t rtype_chan(type_chan_t *t) {
+    rtype_t element_rtype = reflect_type(t->element_type);
+
+    char *str = dsprintf("%d_%lu", TYPE_CHAN, element_rtype.hash);
+    uint32_t hash = hash_string(str);
+    free(str);
+    rtype_t rtype = {
+            .size = sizeof(n_chan_t), // 104
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 5,
+            .kind = TYPE_CHAN,
+    };
+
+    // 计算 gc_bits
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.gc_bits, 0);
+    bitmap_set(rtype.gc_bits, 1);
+    bitmap_set(rtype.gc_bits, 2);
+    bitmap_set(rtype.gc_bits, 3);
+    bitmap_set(rtype.gc_bits, 4);
 
     return rtype;
 }
@@ -530,8 +572,14 @@ rtype_t reflect_type(type_t t) {
         case TYPE_RAW_PTR:
             rtype = rtype_raw_ptr(t.ptr);
             break;
+        case TYPE_VOID_PTR:
+            rtype = rtype_void_ptr(t.kind);
+            break;
         case TYPE_VEC:
             rtype = rtype_vec(t.vec);
+            break;
+        case TYPE_CHAN:
+            rtype = rtype_chan(t.chan);
             break;
         case TYPE_ARR:
             rtype = rtype_array(t.array);
@@ -556,7 +604,7 @@ rtype_t reflect_type(type_t t) {
             break;
         default:
             if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
-                t.kind == TYPE_VOID_PTR || t.kind == TYPE_BOOL) {
+                t.kind == TYPE_BOOL) {
                 rtype = rtype_base(t.kind);
             }
     }
@@ -664,10 +712,11 @@ uint64_t ct_find_rtype_hash(type_t t) {
  * @param rtype
  * @return
  */
-uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size) {
+int64_t rtype_stack_size(rtype_t *rtype, uint8_t ptr_size) {
     assert(rtype && "rtype is null");
 
-    if (rtype->in_heap) {
+    // 应对 vec/map/chan/string 等存储在堆中的元素，其在 stack 上占用一个指针大小
+    if (kind_in_heap(rtype->kind)) {
         return ptr_size;
     }
 
@@ -744,6 +793,9 @@ char *_type_format(type_t t) {
     if (t.kind == TYPE_VEC) {
         // []
         return dsprintf("vec<%s>", type_format(t.vec->element_type));
+    }
+    if (t.kind == TYPE_CHAN) {
+        return dsprintf("chan<%s>", type_format(t.chan->element_type));
     }
     if (t.kind == TYPE_ARR) {
         return dsprintf("arr<%s,%d>", type_format(t.array->element_type), t.array->length);

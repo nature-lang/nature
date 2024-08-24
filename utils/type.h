@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #include "ct_list.h"
 #include "slice.h"
@@ -73,6 +74,7 @@ typedef enum {
     TYPE_ARR,
     TYPE_MAP,// value = 20
     TYPE_SET,
+    TYPE_CHAN,
     TYPE_COROUTINE_T,
     TYPE_TUPLE,
     TYPE_STRUCT,
@@ -139,6 +141,7 @@ static string type_kind_str[] = {
         [TYPE_STRUCT] = "struct",// ast_struct_decl
         [TYPE_ALIAS] = "alias",
         [TYPE_COROUTINE_T] = "coroutine_t",
+        [TYPE_CHAN] = "chan",
         [TYPE_VEC] = "vec",
         [TYPE_MAP] = "map",
         [TYPE_SET] = "set",
@@ -200,6 +203,8 @@ typedef struct type_vec_t type_vec_t;
 
 typedef struct type_coroutine_t type_coroutine_t;
 
+typedef struct type_chan_t type_chan_t;
+
 typedef struct type_ptr_t type_ptr_t, type_raw_ptr_t;
 
 typedef struct type_array_t type_array_t;
@@ -223,6 +228,7 @@ typedef struct type_t {
     union {
         void *value;
         type_vec_t *vec;
+        type_chan_t *chan;
         type_array_t *array;
         type_map_t *map;
         type_set_t *set;
@@ -257,6 +263,10 @@ struct type_vec_t {
 };
 
 struct type_coroutine_t {
+};
+
+struct type_chan_t {
+    type_t element_type;
 };
 
 // ptr<value_type>
@@ -361,9 +371,33 @@ typedef struct {
     uint8_t *data;
     int64_t length;  // 实际占用的位置的大小
     int64_t capacity;// 预先申请的容量大小
-    int64_t ele_reflect_hash;
-    int64_t reflect_hash;
+    int64_t ele_rhash;
+    int64_t rhash;
 } n_vec_t, n_string_t;
+
+// 通过 gc malloc 申请
+typedef struct linkco_t linkco_t;
+
+typedef struct {
+    linkco_t *head;
+    linkco_t *rear;
+} waitq_t;
+
+/**
+ * buf 采用环形队列设计，添加 buf_len 记录当前元素数量， buf_cap 记录队列大小
+ *
+ */
+typedef struct {
+    n_vec_t *buf;
+    waitq_t sendq;
+    waitq_t recvq;
+
+    int64_t buf_front; // 队列首元素对应的数组索引
+    int64_t buf_rear;
+
+    int64_t msg_size;
+    pthread_mutex_t lock;
+} n_chan_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
 typedef addr_t n_ptr_t, n_raw_ptr_t;
@@ -511,7 +545,7 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  */
 uint8_t *malloc_gc_bits(uint64_t size);
 
-uint64_t rtype_out_size(rtype_t *rtype, uint8_t ptr_size);
+int64_t rtype_stack_size(rtype_t *rtype, uint8_t ptr_size);
 
 uint64_t type_struct_offset(type_struct_t *s, char *key);
 
@@ -529,7 +563,7 @@ static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
-           kind == TYPE_FN || kind == TYPE_COROUTINE_T;
+           kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN;
 }
 
 static inline bool is_list_u8(type_t t) {
@@ -603,11 +637,12 @@ static inline bool is_stack_alloc_type(type_t t) {
 }
 
 static inline bool is_escape_rewrite_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_BOOL;
+    return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 
 static inline bool can_use_impl(type_kind kind) {
-    return kind == TYPE_PTR || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_TUPLE ||
+    return kind == TYPE_PTR || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+           kind == TYPE_TUPLE ||
            kind == TYPE_STRING || kind == TYPE_UNION || kind == TYPE_FN || kind == TYPE_COROUTINE_T;
 }
 
@@ -625,6 +660,7 @@ static inline bool is_gc_alloc(type_t t) {
            t.kind == TYPE_VEC ||
            t.kind == TYPE_TUPLE ||
            t.kind == TYPE_COROUTINE_T ||
+           t.kind == TYPE_CHAN ||
            t.kind == TYPE_UNION ||
            t.kind == TYPE_FN;
 }
@@ -664,7 +700,8 @@ static inline bool is_struct_raw_ptr(type_t t) {
 }
 
 static inline bool is_reduction_type(type_t t) {
-    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_ARR ||
+    return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_CHAN ||
+           t.kind == TYPE_ARR ||
            t.kind == TYPE_TUPLE ||
            t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR;
 }

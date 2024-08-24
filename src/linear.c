@@ -69,8 +69,8 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap
 
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.vec->element_type));
-    lir_operand_t *len_operand = int_operand(0);
-    lir_operand_t *cap_operand = int_operand(0);
+    lir_operand_t *len_operand = int_operand(-1);
+    lir_operand_t *cap_operand = int_operand(-1);
     if (len) {
         len_operand = len;
     }
@@ -334,17 +334,31 @@ static void linear_has_error(module_t *m) {
  * int *t1 = gc_malloc()
  * *t1 = a // 后续使用中将不再使用 a， 使用 t1 来进行替代
  *
+ * ---
+ * 一般情况下 struct/arr 采用了指针引用买，所以不需要通过 escape rewrite, 但
+ * fn param 如果是一个 struct 并且占用空间足够大的时候，param 不会直接申请空间，caller 会为 struct 申请足够的空间，callee 直接使用即可。
+ * 但如果 callee 对应的 param 需要进行 gc_malloc, amd64_abi 中并不会进行完整的 struct mov，所以这里对 param 中这种特殊情况，采取 escape rewrite 的方式
+ * 进行一次 super mov。
+ *
  * @param m
  * @param var_decl
  */
-static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl) {
+static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool force_rewrite) {
     symbol_t *s = symbol_table_get(var_decl->ident);
     assertf(s, "ident %s not declare");
     assert(s->type == SYMBOL_VAR);
     ast_var_decl_t *symbol_var = s->ast_value;
 
     // type 带有 in_heap 标志的简单类型需要进行 escape rewrite 改写才能分配在栈上
-    if (!is_escape_rewrite_type(symbol_var->type) || !symbol_var->type.in_heap) {
+    if (!is_escape_rewrite_type(symbol_var->type)) {
+        return;
+    }
+
+    if (is_large_alloc_type(symbol_var->type) && !force_rewrite) {
+        return;
+    }
+
+    if (!symbol_var->type.in_heap) {
         return;
     }
 
@@ -450,6 +464,12 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
                 assert(is_escape_rewrite_type(symbol_var->type));
 
                 lir_operand_t *src = lir_var_operand(m, symbol_var->heap_ident);
+
+                // struct 作为 param 时也需要进行 escape 处理
+                if (is_large_alloc_type(symbol_var->type)) {
+                    return src;
+                }
+
                 return indirect_addr_operand(m, symbol_var->type, src, 0);
             }
 
@@ -700,7 +720,7 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
             linear_super_move(m, element->type, dst, element_src_operand);
 
             // var *t1 = 12
-            linear_escape_rewrite(m, var_decl);
+            linear_escape_rewrite(m, var_decl, false);
         } else if (element->assert_type == AST_EXPR_TUPLE_DESTR) {
             ast_tuple_destr_t *tuple_destr = element->value;
 
@@ -741,7 +761,7 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 
     // 将 dst 值 copy 出来进行重新分配改写
-    linear_escape_rewrite(m, &stmt->var_decl);
+    linear_escape_rewrite(m, &stmt->var_decl, false);
 }
 
 static void linear_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
@@ -1490,8 +1510,12 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *index = int_operand(ast->index);
     uint64_t size = type_sizeof(expr.type);
 
-    lir_operand_t *env_addr_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+    lir_operand_t *env_addr_ref = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
     push_rt_call(m, RT_CALL_ENV_ELEMENT_VALUE, env_addr_ref, 2, m->current_closure->fn_runtime_operand, index);
+
+    // 归还类型，让后续的使用中，可以按照 struct 类型进行使用，尤其是将 env_access 作为参数传递的过程中
+    lir_var_t *temp_var = env_addr_ref->value;
+    temp_var->type = expr.type;
 
     // mov [env+x] -> target
     if (!is_large_alloc_type(expr.type) && !kind_in_heap(expr.type.kind)) {
@@ -2502,7 +2526,7 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
-        linear_escape_rewrite(m, var_decl);
+        linear_escape_rewrite(m, var_decl, true);
     }
 
     // 返回值 operand 也 push 到 params1 里面，方便处理

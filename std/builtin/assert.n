@@ -5,5 +5,6 @@ fn assert(bool cond) {
         return
     }
 
+    throw('assert false')
     exit(1)
 }

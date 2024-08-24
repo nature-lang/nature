@@ -37,9 +37,11 @@ static bool parser_is_impl_type(type_kind kind) {
            kind == TYPE_FLOAT ||
            kind == TYPE_FLOAT32 ||
            kind == TYPE_FLOAT64 ||
+           kind == TYPE_CHAN ||
            kind == TYPE_VEC ||
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
+           kind == TYPE_TUPLE ||
            kind == TYPE_ALIAS;
 }
 
@@ -359,6 +361,17 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
+    // chan_t<int>
+    if (parser_consume(m, TOKEN_CHAN)) {
+        parser_must(m, TOKEN_LEFT_ANGLE);
+        type_chan_t *type_chan = NEW(type_chan_t);
+        type_chan->element_type = parser_type(m);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
+        result.kind = TYPE_CHAN;
+        result.chan = type_chan;
+        return result;
+    }
+
     // arr<int>
     if (parser_consume(m, TOKEN_ARR)) {
         parser_must(m, TOKEN_LEFT_ANGLE);
@@ -657,28 +670,6 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
     result.value = binary_expr;
 
     return result;
-}
-
-static bool is_typical_type_arg_expr(module_t *m) {
-    if (parser_is_basic_type(m)) {
-        return true;
-    }
-
-    // ptr v
-    if (parser_is(m, TOKEN_PTR)) {
-        return true;
-    }
-
-    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
-        parser_is(m, TOKEN_SET)) {
-        return true;
-    }
-
-    if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
-        return true;
-    }
-
-    return false;
 }
 
 static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
@@ -1250,7 +1241,7 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
-        parser_is(m, TOKEN_SET)) {
+        parser_is(m, TOKEN_SET) || parser_is(m, TOKEN_CHAN)) {
         return true;
     }
 
@@ -1799,6 +1790,10 @@ static bool parser_is_impl_fn(module_t *m) {
         return true;
     }
 
+    if (parser_is(m, TOKEN_CHAN)) {
+        return true;
+    }
+
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT)) {
         return true;
     }
@@ -2333,11 +2328,6 @@ static bool parser_is_struct_new_expr(module_t *m) {
         if (is_struct_param_new_prefix(parser_next(m, 3))) {
             return true;
         }
-    }
-
-    // vec<> vec 特殊处理
-    if (parser_is(m, TOKEN_VEC)) {
-        return true;
     }
 
     return false;

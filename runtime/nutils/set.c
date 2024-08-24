@@ -44,7 +44,7 @@ static void rt_set_grow(n_set_t *m) {
     assert(m->key_rtype_hash > 0);
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     assert(key_rtype && "cannot find key_rtype by hash");
-    uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
+    uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
 
     n_set_t old_set = {0};
     memmove(&old_set, m, sizeof(n_set_t));

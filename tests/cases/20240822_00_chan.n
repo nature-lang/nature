@@ -1,7 +1,7 @@
 import coroutine as co
 
 // case 1
-var ch = chan<int>()
+var ch = chan_new<int>()
 
 go (fn(){
     co.sleep(1000)
@@ -23,7 +23,7 @@ println('[ch] send successful')
 
 
 // case 2
-var ch_str = chan<string>()
+var ch_str = chan_new<string>()
 go (fn(){
     co.sleep(1000)
     ch_str.send('hello channel')
@@ -35,7 +35,7 @@ println('[ch_str] recv successful', str)
 assert(str == 'hello channel')
 
 // case 3
-var ch_queue = chan<f64>()
+var ch_queue = chan_new<f64>()
 f64 sum = 0
 
 fn consumer1() {

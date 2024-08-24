@@ -15,9 +15,9 @@
 #define TYPE_PARAM_T "T"
 #define TYPE_PARAM_U "U"
 
-#define TYPE_COROUTINE_T "coroutine_t"
-#define TYPE_CHAN_T "chan_t"
-#define TYPE_FUTURE_T "future_t"
+//#define TYPE_COROUTINE_T "coroutine_t"
+//#define TYPE_CHAN_T "chan_t"
+//#define TYPE_FUTURE_T "future_t"
 
 // #linkid
 #define MACRO_LINKID "linkid"

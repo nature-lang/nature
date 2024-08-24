@@ -124,6 +124,7 @@ bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
 }
 
 /**
+ * union 参考 env 中的 upvalue 处理超过 8byte 的数据
  * @param input_rtype_hash
  * @param value
  * @return
@@ -138,18 +139,33 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
 
     TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
-    rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, to_gc_kind(rtype->kind), TYPE_GC_NOSCAN);
+    type_kind gc_kind = to_gc_kind(rtype->kind);
+    if (rtype->size > 8) {
+        gc_kind = TYPE_GC_SCAN;
+    }
+
+    rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, gc_kind, TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), union_rtype);
 
-    TRACEF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+    DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
-           &mu->value, rtype_out_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
+           &mu->value, rtype_stack_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
-    memmove(&mu->value, value_ref, rtype_out_size(rtype, POINTER_SIZE));
-    TRACEF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
+
+    uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
+    if (out_size <= 8) {
+        memmove(&mu->value, value_ref, out_size);
+    } else {
+        void *new_value = rti_gc_malloc(rtype->size, rtype);
+        memmove(new_value, value_ref, out_size);
+        mu->value.ptr_value = new_value;
+    }
+
+
+    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
            mu->value.i64_value);
 
     return mu;
@@ -237,8 +253,8 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        assert(list->ele_reflect_hash && "list element rtype hash is empty");
-        uint64_t value_size = rt_rtype_out_size(list->ele_reflect_hash);
+        assert(list->ele_rhash && "list element rtype hash is empty");
+        uint64_t value_size = rt_rtype_out_size(list->ele_rhash);
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld",
                list->length,
                list->capacity, list->data, value_size, cursor);
@@ -284,13 +300,13 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
         n_vec_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
                iterator,
-               list->length, list->capacity, list->data, list->ele_reflect_hash);
+               list->length, list->capacity, list->data, list->ele_rhash);
 
-        assert(list->ele_reflect_hash > 0 && "list element rtype hash is empty");
+        assert(list->ele_rhash > 0 && "list element rtype hash is empty");
 
         assert(cursor < list->length && "cursor >= list->length");
 
-        uint64_t element_size = rt_rtype_out_size(list->ele_reflect_hash);
+        uint64_t element_size = rt_rtype_out_size(list->ele_rhash);
 
         memmove(value_ref, list->data + element_size * cursor, element_size);
         DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref,
@@ -406,7 +422,7 @@ n_vec_t *std_args() {
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data,
            list->length,
-           list->ele_reflect_hash);
+           list->ele_rhash);
     return list;
 }
 
@@ -420,7 +436,7 @@ n_vec_t *std_args() {
 char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     assert(rtype && "rtype is null");
     assert(data_ref && "data_ref is null");
-    uint64_t data_size = rtype_out_size(rtype, POINTER_SIZE);
+    uint64_t data_size = rtype_stack_size(rtype, POINTER_SIZE);
 
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
@@ -601,7 +617,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
 rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
-    uint64_t element_size = rtype_out_size(element_rtype, POINTER_SIZE);
+    uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
 
     TRACEF("[rti_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
 

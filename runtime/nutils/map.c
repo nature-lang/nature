@@ -24,8 +24,8 @@ static void set_data_index(n_map_t *m, uint64_t hash_index, uint64_t data_index)
 void map_grow(n_map_t *m) {
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
-    uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
-    uint64_t value_size = rtype_out_size(value_rtype, POINTER_SIZE);
+    uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
+    uint64_t value_size = rtype_stack_size(value_rtype, POINTER_SIZE);
 
     n_map_t old_map;
     memmove(&old_map, m, sizeof(n_map_t));

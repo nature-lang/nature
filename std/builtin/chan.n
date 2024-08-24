@@ -1,42 +1,52 @@
 import coroutine as co
 
-type waitq_t = struct{
-    raw_ptr<co.linkco_t> head
-    raw_ptr<co.linkco_t> rear
-}
+// type waitq_t = struct{
+//     raw_ptr<co.linkco_t> head
+//    raw_ptr<co.linkco_t> rear
+//}
 
-type chan_t<T> = struct{
-    int buf_cap
-    int buf_len
-    void_ptr buf // TODO 直接用 arr<T,n> ? 难，size 不可定。用 vec 好了？
+// type chan<T> = struct{
+//     [T] buf
+//     waitq_t sendq
+//    waitq_t recvq
 
-    int msg_size
+//    i64 buf_front
+//    i64 buf_rear
 
-    waitq_t sendq
-    waitq_t recvq
-    arr<u8,40> lock
-}
+//    int msg_size
+
+//    arr<u8,40> lock
+//}
 
 // var ch = chan<T>()
-fn chan<T>():chan_t<T> {
-    return chan_t<T>{
-        msg_size = @sizeof(T)
+fn chan_new<T>(...[int] args):chan<T> {
+    int rhash = @reflect_hash(chan<T>)
+    int ele_rhash = @reflect_hash(T)
+
+    var buf_len = 0
+    if args.len() > 0 && args[0] > 0 {
+        buf_len = args[0] + 1 // 环形队列预留一个空间用于判断是否满载
     }
+
+    return rt_chan_new(rhash, ele_rhash, buf_len) as chan<T>
 }
 
-fn chan_t<T>.send(T msg) {
-    rt_chan_send(self as void_ptr, &msg as void_ptr) // self = ptr<chan_t<T>>？
+fn chan<T>.send(T msg) {
+    rt_chan_send(self as void_ptr, &msg as void_ptr)
 }
 
-fn chan_t<T>.recv():T {
+fn chan<T>.recv():T {
     T msg = @default()
     rt_chan_recv(self as void_ptr, &msg as void_ptr)
 
     return msg
 }
 
+#linkid rt_chan_new
+fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):void_ptr
+
 #linkid rt_chan_send
-fn rt_chan_send(void_ptr chan, void_ptr msg)
+fn rt_chan_send(void_ptr ch, void_ptr msg)
 
 #linkid rt_chan_recv
-fn rt_chan_recv(void_ptr chan, void_ptr msg)
+fn rt_chan_recv(void_ptr ch, void_ptr msg)
