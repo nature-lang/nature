@@ -30,8 +30,8 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_reflect_hash = element_rtype->hash;
-    str->reflect_hash = string_rtype->hash;
+    str->ele_rhash = element_rtype->hash;
+    str->rhash = string_rtype->hash;
     memmove(str->data, raw_string, length);
 
     DEBUGF("[string_new] success, string=%p, data=%p", str, str->data);
@@ -79,8 +79,8 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_reflect_hash = element_rtype->hash;
-    str->reflect_hash = string_rtype->hash;
+    str->ele_rhash = element_rtype->hash;
+    str->rhash = string_rtype->hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }

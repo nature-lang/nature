@@ -641,7 +641,7 @@ static token_type_t scanner_ident(char *word, int length) {
                 case 'a':
                     return scanner_rest(word, length, 2, 3, "tch", TOKEN_CATCH);
                 case 'h':
-                    return scanner_rest(word, length, 2, 3, "an", TOKEN_CHAN);
+                    return scanner_rest(word, length, 2, 2, "an", TOKEN_CHAN);
             }
             break;
         case 'e':

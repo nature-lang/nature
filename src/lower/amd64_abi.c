@@ -158,7 +158,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
         if (onstack[i]) {
             // 最右侧参数先入站，所以最右侧参数在栈顶，合理的方式是从左往右遍历读取 source 了。
             // 结构体由于 caller 已经申请了 stack 空间，所以参数中直接使用该空间的地址即可
-            // 而不需要进行重复的 copy 和 stack 空间申请
+            // 而不需要进行重复的 copy 和 stack 空间申请, 这也导致 gc_malloc 功能无法正常使用。
             lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type));
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。

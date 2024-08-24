@@ -56,6 +56,12 @@ static type_vec_t *type_vec_copy(type_vec_t *temp) {
     return list;
 }
 
+static type_chan_t *type_chan_copy(type_chan_t *temp) {
+    type_chan_t *t = COPY_NEW(type_chan_t, temp);
+    t->element_type = type_copy(temp->element_type);
+    return t;
+}
+
 static type_map_t *type_map_copy(type_map_t *temp) {
     type_map_t *map = COPY_NEW(type_map_t, temp);
     map->key_type = type_copy(map->key_type);
@@ -136,6 +142,10 @@ type_t type_copy(type_t temp) {
         }
         case TYPE_VEC: {
             type.vec = type_vec_copy(temp.vec);
+            break;
+        }
+        case TYPE_CHAN: {
+            type.chan = type_chan_copy(temp.chan);
             break;
         }
         case TYPE_ARR: {
@@ -631,6 +641,7 @@ static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp) {
     ast_call_t *call = COPY_NEW(ast_call_t, temp);
     call->return_type = type_copy(temp->return_type);
     call->left = *ast_expr_copy(m, &temp->left);
+    call->generics_args = ct_list_type_copy(call->generics_args);
     call->args = ast_list_expr_copy(m, temp->args);
     call->spread = temp->spread;
     return call;

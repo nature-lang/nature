@@ -6,7 +6,7 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
-static void infer_fndef(module_t *m, ast_fndef_t *fndef);
+static void infer_fndef(module_t *m, ast_fndef_t *fn);
 
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     assert(type_fn);
@@ -207,6 +207,12 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
+    if (dst.kind == TYPE_CHAN) {
+        type_chan_t *left_decl = dst.chan;
+        type_chan_t *right_decl = src.chan;
+        return type_compare(left_decl->element_type, right_decl->element_type, generics_param_table);
+    }
+
     if (dst.kind == TYPE_VEC) {
         type_vec_t *left_list_decl = dst.vec;
         type_vec_t *right_list_decl = src.vec;
@@ -346,7 +352,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
             type_t temp_type = type_copy(tpl_fn->return_type);
             temp_type = reduction_type(m, temp_type);
             bool compare = type_compare(temp_type, return_target_type, generics_args_table);
-            INFER_ASSERTF(compare, "cannot infer generics type")
+            INFER_ASSERTF(compare, "cannot infer generics type %s", type_format(temp_type));
         }
 
         // 判断泛型参数是否全部推断完成
@@ -2216,6 +2222,17 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return t;
     }
 
+    if (t.kind == TYPE_CHAN) {
+        type_chan_t *type_chan = t.chan;
+        type_chan->element_type = reduction_type(m, type_chan->element_type);
+
+        t.impl_ident = type_kind_str[TYPE_CHAN];
+        t.impl_args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.impl_args, &type_chan->element_type);
+
+        return t;
+    }
+
     if (t.kind == TYPE_VEC) {
         type_vec_t *type_vec = t.vec;
         type_vec->element_type = reduction_type(m, type_vec->element_type);
@@ -2313,18 +2330,6 @@ static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
     return reduction_type(m, *arg_type);
 }
 
-static type_t reduction_type_alias_vec(module_t *m, type_alias_t *alias) {
-    INFER_ASSERTF(alias->args->length == 1, "vec must have one type arg");
-
-    type_t *element_type = ct_list_value(alias->args, 0);
-    *element_type = reduction_type(m, *element_type);
-
-    type_t result = type_kind_new(TYPE_VEC);
-    result.vec = NEW(type_vec_t);
-    result.vec->element_type = *element_type;
-
-    return result;
-}
 
 /**
  * custom_type a = ...
@@ -2592,26 +2597,26 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef) {
 /**
  * 包含 body
  * @param m
- * @param fndef
+ * @param fn
  */
-static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
+static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     assert(m);
-    assert(fndef->type.kind == TYPE_FN && fndef->type.status == REDUCTION_STATUS_DONE);
-    m->current_fn = fndef;
-    m->current_line = fndef->line;
-    m->current_column = fndef->column;
+    assert(fn->type.kind == TYPE_FN && fn->type.status == REDUCTION_STATUS_DONE);
+    m->current_fn = fn;
+    m->current_line = fn->line;
+    m->current_column = fn->column;
 
-    type_t t = fndef->type;
+    type_t t = fn->type;
 
     // rewrite_formals ident
-    for (int i = 0; i < fndef->params->length; ++i) {
-        ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
+    for (int i = 0; i < fn->params->length; ++i) {
+        ast_var_decl_t *var_decl = ct_list_value(fn->params, i);
         rewrite_var_decl(m, var_decl);
     }
 
-    if (fndef->closure_name) {
-        symbol_t *symbol = symbol_table_get(fndef->closure_name);
-        INFER_ASSERTF(symbol, "fn var ident %s not found", fndef->closure_name);
+    if (fn->closure_name) {
+        symbol_t *symbol = symbol_table_get(fn->closure_name);
+        INFER_ASSERTF(symbol, "fn var ident %s not found", fn->closure_name);
         INFER_ASSERTF(symbol->type == SYMBOL_VAR, "symbol type not expected");
 
         ast_var_decl_t *var_decl = symbol->ast_value;
@@ -2619,8 +2624,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // env 表达式类型还原
-    for (int i = 0; i < fndef->capture_exprs->length; ++i) {
-        ast_expr_t *env_expr = ct_list_value(fndef->capture_exprs, i);
+    for (int i = 0; i < fn->capture_exprs->length; ++i) {
+        ast_expr_t *env_expr = ct_list_value(fn->capture_exprs, i);
         infer_left_expr(m, env_expr);
 
         // 闭包引用变量全都在栈里面分配
@@ -2635,8 +2640,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // body infer
-    if (fndef->body) {
-        infer_body(m, fndef->body);
+    if (fn->body) {
+        infer_body(m, fn->body);
     }
 }
 

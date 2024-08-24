@@ -69,7 +69,7 @@ static inline uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, u
     assert(key_rtype && "cannot find rtype by hash");
     TRACEF("[find_hash_slot] key_ref=%p,  key type_kind=%s", key_ref, type_kind_str[key_rtype->kind]);
 
-    uint64_t key_size = rtype_out_size(key_rtype, POINTER_SIZE);
+    uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
     uint64_t hash = key_hash(key_rtype, key_ref);
 
     // - 开放寻址的方式查找

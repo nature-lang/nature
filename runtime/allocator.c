@@ -876,6 +876,7 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
 // 单位
 static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     MDEBUGF("[std_malloc] start");
+    assert(size > 0);
     bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
 
     uint8_t sizeclass = calc_sizeclass(size);
@@ -1243,11 +1244,11 @@ void runtime_force_gc() {
     DEBUGF("[runtime_force_gc] end");
 }
 
-void *gc_malloc(uint64_t reflect_hash) {
+void *gc_malloc(uint64_t rhash) {
     PRE_RTCALL_HOOK();
-    rtype_t *rtype = rt_find_rtype(reflect_hash);
-    assertf(rtype, "notfound rtype by hash=%ld", reflect_hash);
+    rtype_t *rtype = rt_find_rtype(rhash);
+    assertf(rtype, "notfound rtype by hash=%ld", rhash);
 
-    DEBUGF("[gc_malloc] reflect_hash=%lu, malloc size is %lu", reflect_hash, rtype->size);
+    DEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu", rhash, rtype->size);
     return rti_gc_malloc(rtype->size, rtype);
 }

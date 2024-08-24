@@ -186,7 +186,7 @@ void runtime_eval_gc();
 
 void runtime_force_gc();
 
-void *gc_malloc(uint64_t reflect_hash);
+void *gc_malloc(uint64_t rhash);
 
 
 uint64_t runtime_malloc_bytes();

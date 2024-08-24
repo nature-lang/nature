@@ -9,14 +9,14 @@
 /**
  * rti = runtime_internal
  * rt = runtime
- * @param ele_reflect_hash
+ * @param ele_rhash
  * @param length
  * @param capacity
  * @return
  */
 n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity);
 
-n_vec_t *rt_vec_new(int64_t reflect_hash, int64_t ele_reflect_hash, int64_t length, int64_t capacity);
+n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, int64_t capacity);
 
 n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 

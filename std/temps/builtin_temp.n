@@ -29,4 +29,4 @@ fn runtime_force_gc()
 
 fn runtime_malloc_bytes():i64
 
-fn gc_malloc(int reflect_hash):void_ptr
+fn gc_malloc(int rhash):void_ptr

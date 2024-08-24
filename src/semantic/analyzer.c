@@ -394,6 +394,12 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
+    if (type->kind == TYPE_CHAN) {
+        type_chan_t *chan = type->chan;
+        analyzer_type(m, &chan->element_type);
+        return;
+    }
+
     if (type->kind == TYPE_ARR) {
         type_array_t *array = type->array;
         analyzer_type(m, &array->element_type);

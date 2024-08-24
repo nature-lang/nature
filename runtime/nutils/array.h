@@ -9,8 +9,8 @@ static inline n_array_t *rti_array_new(rtype_t *element_rtype, uint64_t length) 
     assert(element_rtype && "element_rtype is null");
     assert(element_rtype->size > 0 && "element_rtype size is zero");
 
-    TRACEF("[rti_array_new] ele_sz=%lu(rtype_out_size=%lu),ele_kind=%s(n_gc=%d),len=%lu", element_rtype->size,
-           rtype_out_size(element_rtype, POINTER_SIZE), type_kind_str[element_rtype->kind], element_rtype->last_ptr > 0,
+    TRACEF("[rti_array_new] ele_sz=%lu(rtype_stack_size=%lu),ele_kind=%s(n_gc=%d),len=%lu", element_rtype->size,
+           rtype_stack_size(element_rtype, POINTER_SIZE), type_kind_str[element_rtype->kind], element_rtype->last_ptr > 0,
            length);
 
     // - 创建一个 typeuse_array_t 结构
