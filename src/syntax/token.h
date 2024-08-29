@@ -28,6 +28,7 @@ typedef enum {
     TOKEN_STAR,     // * STAR
     TOKEN_PERSON,   // %
     TOKEN_QUESTION, // ?
+    TOKEN_RIGHT_ARROW, // ->
 
     // ONE OR TWO CHARACTER TOKENS.
     TOKEN_NOT,// !
@@ -105,6 +106,7 @@ typedef enum {
     TOKEN_THROW,
     TOKEN_TRY,
     TOKEN_CATCH,
+    TOKEN_MATCH,
     TOKEN_CONTINUE,
     TOKEN_BREAK,
     TOKEN_FOR,
@@ -166,6 +168,7 @@ static string token_str[] = {
         [TOKEN_LEFT_SHIFT] = "<<",
         [TOKEN_RIGHT_SHIFT] = ">>",
         [TOKEN_TILDE] = "~",
+        [TOKEN_RIGHT_ARROW] = "->",
 
         [TOKEN_PERSON_EQUAL] = "%=",
         [TOKEN_MINUS_EQUAL] = "-=",
@@ -227,6 +230,7 @@ static string token_str[] = {
         [TOKEN_FN] = "fn",
         [TOKEN_RETURN] = "return",
         [TOKEN_CATCH] = "catch",
+        [TOKEN_MATCH] = "match",
         [TOKEN_TRY] = "try",
         [TOKEN_THROW] = "throw",
         [TOKEN_LET] = "let",

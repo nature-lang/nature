@@ -123,6 +123,65 @@ static void broken_critical_edges(closure_t *c) {
     }
 }
 
+static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *match_end_ident) {
+    if (handled == NULL) {
+        handled = table_new();
+    }
+
+    // 重复到达节点
+    if (table_exist(handled, b->name)) {
+        return;
+    }
+
+    table_set(handled, b->name, b);
+
+    // match_end 存在表示开启了 break check 模式。
+    if (match_end_ident) {
+        LINKED_FOR(b->operations) {
+            lir_op_t *op = LINKED_VALUE();
+
+            if (op->code == LIR_OPCODE_BREAK) {
+                // break 目标确认
+                lir_operand_t *label_operand = op->output;
+                assert(label_operand);
+                lir_symbol_label_t *label = label_operand->value;
+                if (str_equal(label->ident, match_end_ident)) {
+                    return;
+                }
+            }
+        }
+    }
+
+    if (match_end_ident) {
+        if (str_equal(match_end_ident, b->name)) {
+            lir_op_t *op = OP(linked_first(b->operations));
+
+            // 到达匹配的 end label 没有找到任何的 break, 则确实 break
+            dump_errorf(c->module, CT_STAGE_CFG, op->line, op->column, "match missing break");
+        }
+    }
+
+
+    // 当前 block 没有找到 return, 递归寻找 succ
+    for (int i = 0; i < b->succs->count; ++i) {
+        char *new_match_end_ident = NULL;
+        // 需要排除 match_1.end 情况
+        if (strstr(b->name, MATCH_IDENT) && !strstr(b->name, LABEL_END_SUFFIX)) {
+            // 判断是否存在 ret
+            bool has_ret = table_get(c->match_has_ret, b->name);
+            if (has_ret) {
+                new_match_end_ident = str_connect(b->name, LABEL_END_SUFFIX);
+            }
+        }
+
+        if (new_match_end_ident) {
+            break_check(c, handled, b->succs->take[i], new_match_end_ident);
+        } else {
+            break_check(c, handled, b->succs->take[i], match_end_ident);
+        }
+    }
+}
+
 /**
  * 从 entry 到 end block 到所有线路上都需要包含 return 语句
  * 如果到达了 label_end block 则说明这一条线路上没有 return, 直接 assert 即可
@@ -145,7 +204,6 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
 
     table_set(handled, b->name, b);
 
-    // 含多个 return 指令，都清理掉
     LINKED_FOR(b->operations) {
         lir_op_t *op = LINKED_VALUE();
         // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
@@ -344,4 +402,7 @@ void cfg(closure_t *c) {
 
     // return 分析
     return_check(c, NULL, c->entry);
+
+    // match break check
+    break_check(c, NULL, c->entry, NULL);
 }

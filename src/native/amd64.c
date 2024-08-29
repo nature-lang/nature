@@ -770,7 +770,8 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_RT_CALL] = amd64_native_call,
         [LIR_OPCODE_LABEL] = amd64_native_label,
         [LIR_OPCODE_PUSH] = amd64_native_push,
-        [LIR_OPCODE_RETURN] = amd64_native_return,
+        [LIR_OPCODE_RETURN] = amd64_native_nop,
+        [LIR_OPCODE_BREAK] = amd64_native_nop,
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
 

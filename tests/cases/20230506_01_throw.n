@@ -14,7 +14,7 @@ println(result)
 
 // normal
 result = rem(10, 4) catch err {
-    // default continue
+    // default break
     println(err.msg)
 }
 println(result)
@@ -22,7 +22,7 @@ println(result)
 // error handle
 result = rem(10, 0) catch err {
     println(err.msg)
-    continue 1
+    break 1
 }
 println(result)
 

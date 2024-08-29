@@ -5,8 +5,8 @@ fn hello() {
 
 hello() catch err {
     println('catch err:', err.msg)
-    continue
-    continue
+    break
+    break
     println('hello world 1')
 }
 
@@ -19,13 +19,13 @@ fn world(bool e):int {
 
 int foo = world(true) catch err {
     println('catch err:', err.msg)
-    continue 12
+    break 12
 }
 println('foo =', foo)
 
 foo = world(false) catch err {
     println('catch err:', err.msg)
-    continue 12
+    break 12
 }
 println('foo =', foo)
 

@@ -121,7 +121,7 @@ static type_t parser_single_type(module_t *m);
 
 static type_t parser_type(module_t *m);
 
-static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence);
+static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence precedence, token_type_t exclude);
 
 static parser_rule *find_rule(token_type_t token_type);
 

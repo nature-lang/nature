@@ -17,6 +17,15 @@
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "L"
 #define ITERATOR_CURSOR "cursor"
+
+#define LABEL_END_SUFFIX ".end"
+#define LABEL_ERROR_SUFFIX ".error"
+
+#define MATCH_IDENT "@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define MATCH_END_IDENT "MATCH_END"
+#define MATCH_CASE_START "CASE_START"
+#define MATCH_CASE_HANDLE_END "CASE_HANDLE_END"
+
 #define FOR_CONTINUE_IDENT "FOR_CONTINUE"
 #define FOR_UPDATE_IDENT "FOR_UPDATE"
 #define FOR_END_IDENT "FOR_END"
@@ -160,6 +169,8 @@
 
 #define RT_CALL_PROCESSOR_SET_EXIT "processor_set_exit"
 
+#define DEFAULT_IDENT "_"
+
 #define OP(_node) ((lir_op_t *) _node->value)
 
 #define OP_PUSH(_op) linked_push(m->current_closure->operations, _op)
@@ -179,9 +190,9 @@ typedef struct {
  * t1[0] = 24 => mov 24 -> indirect_addr(t1, 0)
  */
 typedef struct {
-    lir_operand_t *base;// compiler 完成后为 var,  reg alloc 后为 reg
-    int64_t offset;     // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_t type;        // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
+    int64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
+    type_t type; // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 typedef struct {
@@ -192,30 +203,31 @@ typedef struct {
 
 typedef struct {
     char *ident;
-    bool is_local;// 是否为局部符号, 否则就是 global, 可以被链接器链接
+    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
 } lir_symbol_label_t;
 
 typedef struct {
     string ident;
     type_kind kind;
-} lir_symbol_var_t;// 外部符号引用, 外部符号引用
+} lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
     union {
-        uint64_t uint_value;// 8bit, 负数使用补码存储
-        int64_t int_value;  // 8bit, 负数使用补码存储
-        double f64_value;   // 8bit
-        float f32_value;    // 4bit
-        bool bool_value;    // 1bit
-        string string_value;// 8bit
+        uint64_t uint_value; // 8bit, 负数使用补码存储
+        int64_t int_value; // 8bit, 负数使用补码存储
+        double f64_value; // 8bit
+        float f32_value; // 4bit
+        bool bool_value; // 1bit
+        string string_value; // 8bit
     };
+
     type_kind kind;
 } lir_imm_t;
 
 struct lir_operand_t {
     lir_operand_type_t assert_type;
     void *value;
-    lir_flag_t pos;// 在 opcode 中的位置信息
+    lir_flag_t pos; // 在 opcode 中的位置信息
 };
 
 static inline bool is_rtcall(string target) {
@@ -434,7 +446,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->ident = var->ident;
         new_var->old = var->old;
         new_var->type = var->type;
-        new_var->flag = 0;// 即使是同一个 var 在不同的位置承担的 flag 也是不同的
+        new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
         new_operand->value = new_var;
         return new_operand;
     }
@@ -493,7 +505,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_VAR) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
-        var->flag |= FLAG(operand->pos);// 冗余 operand 的位置信息
+        var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
         if (operand->pos == LIR_FLAG_OUTPUT) {
             var->flag |= FLAG(LIR_FLAG_DEF);
         } else {
@@ -526,7 +538,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_PARAMS) {
         slice_t *formals = operand->value;
-        for (int i = 0; i < formals->count; ++i) {// 这里都是 def flag
+        for (int i = 0; i < formals->count; ++i) {
+            // 这里都是 def flag
             lir_var_t *var = formals->take[i];
             var->flag |= FLAG(LIR_FLAG_DEF);
         }
@@ -537,8 +550,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
-        o->pos = operand->pos;// 继承父级的 pos
-        set_operand_flag(o);  // 符合嵌入的全部定义成 USE
+        o->pos = operand->pos; // 继承父级的 pos
+        set_operand_flag(o); // 符合嵌入的全部定义成 USE
     }
 }
 
@@ -546,7 +559,7 @@ static inline lir_op_t *
 lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
-    op->first = lir_operand_copy(first);// 这里的 copy 并不深度，而是 copy 了指针！
+    op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
@@ -656,7 +669,7 @@ static inline lir_op_t *push_rt_call_no_hook(module_t *m, char *name, lir_operan
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -671,7 +684,7 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -688,7 +701,7 @@ static inline lir_op_t *lir_rtcall(char *name, lir_operand_t *result, int arg_co
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -702,7 +715,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -733,7 +746,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
 
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
-    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE);// 按照 8byte 对齐
+    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
     assert(rtype.size == size);
@@ -808,14 +821,14 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
     if (is_large_alloc_type(type)) {
-//        if (type.in_heap) {
-//            lir_var->type = type_kind_new(TYPE_VOID_PTR);
-//            uint64_t rtype_hash = ct_find_rtype_hash(type);
-//            linked_push(list, lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
-//            linked_push(list, lir_rtcall(RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(RT_CALL_GC_MALLOC)));
-//        } else {
+        //        if (type.in_heap) {
+        //            lir_var->type = type_kind_new(TYPE_VOID_PTR);
+        //            uint64_t rtype_hash = ct_find_rtype_hash(type);
+        //            linked_push(list, lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
+        //            linked_push(list, lir_rtcall(RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(RT_CALL_GC_MALLOC)));
+        //        } else {
         linked_push(list, lir_stack_alloc(c, type, target));
-//        }
+        //        }
     }
 
     return target;

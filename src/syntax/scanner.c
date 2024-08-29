@@ -170,7 +170,14 @@ static token_type_t scanner_special_char(module_t *m) {
         case '%':
             return scanner_match(m, '=') ? TOKEN_PERSON_EQUAL : TOKEN_PERSON;
         case '-':
-            return scanner_match(m, '=') ? TOKEN_MINUS_EQUAL : TOKEN_MINUS;
+            if (scanner_match(m, '=')) {
+                return TOKEN_MINUS_EQUAL;
+            }
+            if (scanner_match(m, '>')) {
+                return TOKEN_RIGHT_ARROW;
+            }
+
+            return TOKEN_MINUS;
         case '+':
             return scanner_match(m, '=') ? TOKEN_PLUS_EQUAL : TOKEN_PLUS;
         case '/':
@@ -767,7 +774,16 @@ static token_type_t scanner_ident(char *word, int length) {
             break;
         }
         case 'm': {// map
-            return scanner_rest(word, length, 1, 2, "ap", TOKEN_MAP);
+            switch (word[1]) {
+                case 'a': {
+                    switch (word[2]) {
+                        case 'p':
+                            return scanner_rest(word, length, 3, 0, "", TOKEN_MAP);
+                        case 't':
+                            return scanner_rest(word, length, 3, 2, "ch", TOKEN_MATCH);
+                    }
+                }
+            }
         }
         case 'r': {
             return scanner_rest(word, length, 1, 5, "eturn", TOKEN_RETURN);

@@ -12,6 +12,8 @@ static ast_call_t *ast_call_copy(module_t *m, ast_call_t *temp);
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp);
 
+static ast_match_t *ast_match_copy(module_t *m, ast_match_t *temp);
+
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
     ident->literal = strdup(literal);
@@ -264,6 +266,12 @@ static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
     return is_expr;
 }
 
+static ast_match_is_expr_t *ast_match_is_expr_copy(module_t *m, ast_match_is_expr_t *temp) {
+    ast_match_is_expr_t *is_expr = COPY_NEW(ast_match_is_expr_t, temp);
+    is_expr->target_type = type_copy(temp->target_type);
+    return is_expr;
+}
+
 static ast_unary_expr_t *ast_unary_copy(module_t *m, ast_unary_expr_t *temp) {
     ast_unary_expr_t *unary = COPY_NEW(ast_unary_expr_t, temp);
     unary->operand = *ast_expr_copy(m, &temp->operand);
@@ -503,8 +511,15 @@ ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
             expr->value = ast_is_expr_copy(m, temp->value);
             break;
         }
+        case AST_EXPR_MATCH_IS: {
+            expr->value = ast_match_is_expr_copy(m, temp->value);
+        }
         case AST_CATCH: {
             expr->value = ast_catch_copy(m, temp->value);
+            break;
+        }
+        case AST_MATCH: {
+            expr->value = ast_match_copy(m, temp->value);
             break;
         }
         case AST_MACRO_EXPR_SIZEOF: {
@@ -554,6 +569,31 @@ static ast_vardef_stmt_t *ast_vardef_copy(module_t *m, ast_vardef_stmt_t *temp) 
     vardef->var_decl = *ast_var_decl_copy(m, &temp->var_decl);
     vardef->right = *ast_expr_copy(m, &temp->right);
     return vardef;
+}
+
+static ast_match_t *ast_match_copy(module_t *m, ast_match_t *temp) {
+    ast_match_t *match = COPY_NEW(ast_match_t, temp);
+    if (match->subject) {
+        match->subject = ast_expr_copy(m, temp->subject);
+    }
+
+    slice_t *cases = slice_new();
+    SLICE_FOR(cases) {
+        ast_match_case_t *match_case = SLICE_VALUE(cases);
+
+        ast_match_case_t *new_match_case = NEW(ast_match_case_t);
+        new_match_case->cond_list = ast_list_expr_copy(m, match_case->cond_list);
+        if (new_match_case->handle_expr) {
+            new_match_case->handle_expr = ast_expr_copy(m, match_case->handle_expr);
+        } else {
+            new_match_case->handle_body = ast_body_copy(m, match_case->handle_body);
+        }
+        slice_push(cases, new_match_case);
+    }
+
+    match->cases = cases;
+
+    return match;
 }
 
 static ast_catch_t *ast_catch_copy(module_t *m, ast_catch_t *temp) {
@@ -625,6 +665,11 @@ static ast_return_stmt_t *ast_return_copy(module_t *m, ast_return_stmt_t *temp) 
 
 static ast_continue_t *ast_continue_copy(module_t *m, ast_continue_t *temp) {
     ast_continue_t *stmt = COPY_NEW(ast_continue_t, temp);
+    return stmt;
+}
+
+static ast_break_t *ast_break_copy(module_t *m, ast_break_t *temp) {
+    ast_break_t *stmt = COPY_NEW(ast_break_t, temp);
     stmt->expr = ast_expr_copy(m, temp->expr);
     return stmt;
 }
@@ -704,6 +749,10 @@ static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp) {
         }
         case AST_STMT_CONTINUE: {
             stmt->value = ast_continue_copy(m, temp->value);
+            break;
+        }
+        case AST_STMT_BREAK: {
+            stmt->value = ast_break_copy(m, temp->value);
             break;
         }
         case AST_CATCH: {
