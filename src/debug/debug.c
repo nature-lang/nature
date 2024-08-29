@@ -52,6 +52,7 @@ string token_type_to_str[] = {[TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
         [TOKEN_QUESTION] = "TOKEN_QUESTION",// ?
         [TOKEN_EOF] = "TOKEN_EOF",
         [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
+        [TOKEN_RIGHT_ARROW] = "TOKEN_RIGHT_ARROW",
 
         // ONE OR TWO CHARACTER TOKENS.
         [TOKEN_NOT] = "TOKEN_NOT",
@@ -148,6 +149,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_CLV] = "CLV    ",
         [LIR_OPCODE_NOP] = "NOP    ",
         [LIR_OPCODE_RETURN] = "RETURN ",
+        [LIR_OPCODE_BREAK] = "BREAK ",
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",

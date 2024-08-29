@@ -181,6 +181,12 @@ struct module_t {
     // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 type param 还是 alias, 仅仅使用到 key
     table_t *parser_type_params_table;
 
+    /**
+     * 部分表达式只有在 match cond 中可以使用，比如 is T, n if n xxx 等
+     */
+    bool parser_match_cond;
+    bool parser_match_subject; // 是否包含 subject
+
     // infer 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     // reduction 是递归的，所以需要一个全局变量存储当前 type_param 的具体值
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
@@ -391,7 +397,10 @@ typedef enum {
     LIR_OPCODE_POP, // output
     LIR_OPCODE_CALL,// 复合指令，位置在 second
     LIR_OPCODE_RT_CALL,
-    LIR_OPCODE_RETURN,// return != ret, 其主要是做了 mov res -> rax
+
+    LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
+    LIR_OPCODE_BREAK, // 主要是为了做 break 校验
+
     LIR_OPCODE_LABEL,
     LIR_OPCODE_FN_BEGIN,// output 为 formals 操作数
     LIR_OPCODE_FN_END,  // 无操作数
@@ -422,8 +431,8 @@ typedef struct lir_op_t {
     lir_operand_t *output;// 参数3
     int id;               // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
 
-    // TODO def_regs, 可以预定一些 reg
-    // TODO use_regs
+    int line;
+    int column;
 } lir_op_t;
 
 /**
@@ -449,6 +458,8 @@ typedef struct closure_t {
     table_t *ssa_var_blocks;      // linked_t* var def in blocks， 一个 var 可以在多个 block 中进行重新定值
     table_t *ssa_var_block_exists;// 是否已经添加过，避免 var+block_name 的重复添加
 
+    table_t *match_has_ret; // 记录 match 表达式是否有返回值
+
     basic_block_t *entry;   // 基本块入口, 指向 blocks[0]
     table_t *interval_table;// key 包括 fixed register as 和 variable.ident
     int interval_count;     // 虚拟寄存器的偏移量 从 40 开始算，在这之前都是物理寄存器
@@ -460,7 +471,7 @@ typedef struct closure_t {
     char *catch_error_label;
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
-    ct_stack_t *continue_targets;// default type_unknown
+    ct_stack_t *break_targets;// default type_unknown
     ct_stack_t *break_labels;    // 用于 for break lir_operand*
 
     // lir_operand_t

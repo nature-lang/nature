@@ -1,9 +1,11 @@
 #include "analyzer.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <src/lir.h>
 
 #include "src/error.h"
 #include "utils/helper.h"
@@ -49,7 +51,7 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
     ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
-    import->use_links = true;// std 默认可以加载其中的 links
+    import->use_links = true; // std 默认可以加载其中的 links
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
 }
@@ -157,7 +159,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         ANALYZER_ASSERTF(import->file[0] != '/', "cannot use absolute path=%s", import->file);
 
         // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
-        char *temp_as = strrchr(import->file, '/');// foo/bar.n -> /bar.n
+        char *temp_as = strrchr(import->file, '/'); // foo/bar.n -> /bar.n
         if (temp_as != NULL) {
             temp_as++;
         } else {
@@ -591,6 +593,50 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
     analyzer_expr(m, &throw->error);
 }
 
+static void analyzer_match(module_t *m, ast_match_t *match) {
+    if (match->subject) {
+        analyzer_expr(m, match->subject);
+    }
+
+    bool has_default = false;
+
+    analyzer_begin_scope(m);
+    SLICE_FOR(match->cases) {
+        ast_match_case_t *match_case = SLICE_VALUE(match->cases);
+
+        for (int i = 0; i < match_case->cond_list->length; ++i) {
+            ast_expr_t *expr = ct_list_value(match_case->cond_list, i);
+            if (expr->assert_type == AST_EXPR_IDENT) {
+                ast_ident *ident = expr->value;
+                if (str_equal(ident->literal, DEFAULT_IDENT)) {
+                    // 'else' entry must be the last one in a 'when' expression.
+                    // match 特殊形式处理
+                    ANALYZER_ASSERTF(match_case->cond_list->length == 1,
+                                     "default case '_' conflict in a 'match' expression");
+                    ANALYZER_ASSERTF(_i == match->cases->count - 1,
+                                     "default case '_' must be the last one in a 'match' expression");
+
+
+                    match_case->is_default = true;
+                    has_default = true;
+                    continue;
+                }
+            }
+
+            analyzer_expr(m, expr);
+        }
+
+        if (match_case->handle_expr) {
+            analyzer_expr(m, match_case->handle_expr);
+        } else {
+            analyzer_body(m, match_case->handle_body);
+        }
+    }
+    analyzer_end_scope(m);
+
+    ANALYZER_ASSERTF(has_default, "match expression lacks a default case '_'")
+}
+
 /**
  * 函数的递归自调用分为两种类型，一种是包含名称的函数递归自调用, 一种是不包含名称的函数递归自调用。
  * 对于第一种形式， global ident 一定能够找到该 fn 进行调用。
@@ -961,7 +1007,8 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         // free 中包含了当前环境引用对外部对环境变量.这是基于定义域而不是调用栈对
         // 如果想要访问到当前 fndef, 则一定已经经过了当前 fndef 的定义域
         free_ident_t *free_var = m->analyzer_current->frees->take[i];
-        if (free_var->type != SYMBOL_VAR) {// fn label 可以直接全局访问到，不需要做 env assign
+        if (free_var->type != SYMBOL_VAR) {
+            // fn label 可以直接全局访问到，不需要做 env assign
             continue;
         }
         free_var_count++;
@@ -1000,7 +1047,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         assert(m->analyzer_current);
 
         fndef->closure_name = fndef->symbol_name;
-        fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure"));// 二进制中的 label name
+        fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure")); // 二进制中的 label name
 
         // 符号表内容修改为 var_decl
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
@@ -1194,7 +1241,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     char *temp = ident_with_prefix(m->ident, ident->literal);
     symbol_t *s = table_get(symbol_table, temp);
     if (s != NULL) {
-        ident->literal = temp;// 找到了则修改为全局名称
+        ident->literal = temp; // 找到了则修改为全局名称
         return true;
     }
 
@@ -1230,7 +1277,7 @@ static void analyzer_select(module_t *m, ast_expr_t *expr) {
         char *current_module_ident = ident_with_prefix(m->ident, ident->literal);
         symbol_t *s = table_get(symbol_table, current_module_ident);
         if (s != NULL) {
-            ident->literal = current_module_ident;// 找到了则修改为全局名称
+            ident->literal = current_module_ident; // 找到了则修改为全局名称
             return;
         }
 
@@ -1355,7 +1402,7 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // iterate 是对变量的使用，所以其在 scope
     analyzer_expr(m, &stmt->iterate);
 
-    analyzer_begin_scope(m);// iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
+    analyzer_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
     analyzer_var_decl(m, &stmt->first, true);
     if (stmt->second) {
@@ -1366,7 +1413,7 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     analyzer_end_scope(m);
 }
 
-static void analyzer_continue(module_t *m, ast_continue_t *stmt) {
+static void analyzer_break(module_t *m, ast_break_t *stmt) {
     if (stmt->expr != NULL) {
         analyzer_expr(m, stmt->expr);
     }
@@ -1461,6 +1508,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             }
             return;
         }
+        case AST_MATCH: {
+            return analyzer_match(m, expr->value);
+        }
         case AST_CALL: {
             return analyzer_call(m, expr->value);
         }
@@ -1530,8 +1580,8 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_RETURN: {
             return analyzer_return(m, stmt->value);
         }
-        case AST_STMT_CONTINUE: {
-            return analyzer_continue(m, stmt->value);
+        case AST_STMT_BREAK: {
+            return analyzer_break(m, stmt->value);
         }
         case AST_STMT_TYPE_ALIAS: {
             return analyzer_type_alias_stmt(m, stmt->value);
@@ -1567,7 +1617,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
             ast_fndef_t *fndef = stmt->value;
             fndef->is_tpl = true;
             // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name); // 全局函数改名
             symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
 
             slice_push(m->global_symbols, s);
@@ -1608,7 +1658,7 @@ static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // var_decl blocks
-    slice_t *var_assign_list = slice_new();// 存放 stmt
+    slice_t *var_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
 
     // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
@@ -1681,7 +1731,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
-            fndef->symbol_name = ident_with_prefix(m->ident, symbol_name);// 全局函数改名
+            fndef->symbol_name = ident_with_prefix(m->ident, symbol_name); // 全局函数改名
             slice_push(fn_list, fndef);
 
             // 泛型允许重载，所以此处会有同名 symbol 被覆盖写入, 在 pre_infer 对泛型进行展开后再次覆盖注册到 symbol
@@ -1716,7 +1766,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         ast_call_t *call = NEW(ast_call_t);
         call->left = (ast_expr_t) {
                 .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(s->ident),// module.init
+                .value = ast_new_ident(s->ident), // module.init
                 .line = 1,
                 .column = 0,
         };

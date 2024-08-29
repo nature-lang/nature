@@ -2,7 +2,7 @@ import syscall
 
 var fd = syscall.open('asserts/notfound.txt', syscall.O_RDONLY, 0666) catch err {
     print('open asserts/notfound.txt failed: ', err.msg, '\n')
-    continue -1
+    break -1
 }
 
 if fd != -1 {

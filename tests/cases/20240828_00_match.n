@@ -1,0 +1,114 @@
+// case 1
+var a = 12
+
+match a {
+    1 -> println('cannot match')
+    12 -> println('matched')
+    20 -> println('cannot match')
+    _ -> println('in default')
+}
+
+// case2
+match a {
+    1 -> assert(false)
+    13 -> assert(false)
+    20 -> assert(false)
+    _ -> println('matched')
+}
+
+// case 3 const
+match 12 {
+    1 -> assert(false)
+    12 -> println('matched')
+    20 -> assert(false)
+    _ -> assert(false)
+}
+
+// case 4 string
+match 'hello world' {
+    'hello' -> assert(false)
+    'world' -> assert(false)
+    'hello world' -> println('matched')
+    _ -> assert(false)
+}
+
+// case 5
+fn case5_int(bool arg1):int {
+    return 16
+}
+match 3 {
+    5 -> assert(false)
+    1&3 -> assert(false)
+    1 | 2 -> assert(false)
+    15 | case5_int(2 && 1) | (1|2) -> println('matched')
+    _ -> assert(false)
+}
+
+// case 6
+match {
+    12 && 0 -> assert(false)
+    (1&3) == 2 || false -> assert(false)
+    (13|(1|2)) == 15 -> println('matched')
+    (1|2) > 3 -> assert(false)
+    _ -> assert(false)
+}
+
+// case 7 type infer and break check
+var a1 = match {
+    true -> {
+        int b = 64
+
+        if false {
+            break 12
+        } else {
+            var t = match {
+                true -> {
+                    if true {
+                        break 13
+                    } else {
+                        break 28
+                    }
+                }
+                _ -> 12
+            }
+
+            break t
+        }
+    }
+    false -> 14
+    _ -> 15
+}
+println(a1)
+assert(a1 == 13)
+
+// case 8
+string b = match {
+   12 > 13 -> {
+       assert(false)
+       break 'error'
+   }
+   12 > 11 -> {
+       var result = 'hello world'
+       break result
+   }
+   12 > 10 -> {
+       assert(false)
+       break 'error'
+   }
+   _ -> 'not default'
+}
+println(b)
+assert(b == 'hello world')
+
+// case 9
+any c = 12
+c = 2.33
+
+var d = match c {
+    is int -> 0.0
+    is float -> c as float
+    12 -> 0.0
+    _ -> 0.0
+}
+println(d)
+assert(d == 2.33)

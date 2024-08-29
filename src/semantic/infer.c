@@ -414,7 +414,7 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
 
     ast_literal_t *literal = expr->value;
 
-    INFER_ASSERTF(is_number(literal->kind), "type inconsistency");
+    INFER_ASSERTF(is_number(literal->kind), "type inconsistency, '%s' cannot casting float", type_format(expr->type));
 
     type_kind target_kind = cross_kind_trans(target_type.kind);
     double f = atof(literal->value);
@@ -816,6 +816,62 @@ static type_t infer_co_async(module_t *m, ast_expr_t *expr) {
     return call_expr->return_type;
 }
 
+static type_t infer_match(module_t *m, ast_match_t *match_expr, type_t target_type) {
+    // target 约束了 exec 的返回类型
+    // subject 约束 case 的类型
+
+    // 不存在 subject_type 时，case 的类型必须是 bool，否则和 subject_type 一致，其中 is xxx 特殊处理
+    type_t subject_type = type_kind_new(TYPE_BOOL);
+    if (match_expr->subject) {
+        subject_type = infer_right_expr(m, match_expr->subject, type_kind_new(TYPE_UNKNOWN));
+        INFER_ASSERTF(type_confirmed(subject_type), "map key type not confirm");
+    }
+
+    type_t result;
+
+
+    stack_push(m->current_fn->break_target_types, &target_type);
+
+    // 类型一致
+    SLICE_FOR(match_expr->cases) {
+        ast_match_case_t *match_case = SLICE_VALUE(match_expr->cases);
+        if (match_case->is_default) {
+            goto DEFAULT_HANDLE;
+        }
+
+        for (int i = 0; i < match_case->cond_list->length; ++i) {
+            ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
+
+            if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
+                INFER_ASSERTF(subject_type.kind == TYPE_UNION, "only type any can use is assert");
+
+                // 不寻常任何引导
+                infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+            } else {
+                infer_right_expr(m, cond_expr, subject_type);
+            }
+
+        }
+
+        DEFAULT_HANDLE:
+        if (match_case->handle_expr) {
+            type_t handle_expr_type = infer_right_expr(m, match_case->handle_expr, target_type);
+            // 类型赋值，或者一致性校验
+            if (target_type.kind == TYPE_UNKNOWN) {
+                type_t *t = stack_top(m->current_fn->break_target_types);
+                *t = handle_expr_type;
+            }
+        } else {
+            assert(match_case->handle_body);
+            infer_body(m, match_case->handle_body);
+        }
+    }
+
+    stack_pop(m->current_fn->break_target_types);
+
+    return target_type;
+}
+
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
 
@@ -830,11 +886,16 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
 
     rewrite_var_decl(m, &catch_expr->catch_err);
 
-    stack_push(m->current_fn->continue_target_types, &t);
+    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, catch_expr->catch_body);
-    stack_pop(m->current_fn->continue_target_types);
+    stack_pop(m->current_fn->break_target_types);
 
     return t;
+}
+
+static type_t infer_match_is_expr(module_t *m, ast_match_is_expr_t *is_expr) {
+    is_expr->target_type = reduction_type(m, is_expr->target_type);
+    return type_kind_new(TYPE_BOOL);
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
@@ -1699,9 +1760,9 @@ static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
     infer_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
     type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->continue_target_types, &t);
+    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->continue_target_types);
+    stack_pop(m->current_fn->break_target_types);
 }
 
 /**
@@ -1759,9 +1820,9 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     }
 
     type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->continue_target_types, &t);
+    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->continue_target_types);
+    stack_pop(m->current_fn->break_target_types);
 }
 
 static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
@@ -1770,9 +1831,9 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     infer_stmt(m, stmt->update);
 
     type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->continue_target_types, &t);
+    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->continue_target_types);
+    stack_pop(m->current_fn->break_target_types);
 }
 
 /**
@@ -1798,13 +1859,16 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     }
 }
 
-static void infer_continue(module_t *m, ast_continue_t *stmt) {
-    type_t *expect_type = stack_top(m->current_fn->continue_target_types);
+static void infer_break(module_t *m, ast_break_t *stmt) {
+    type_t *expect_type = stack_top(m->current_fn->break_target_types);
     assert(expect_type);
     if (stmt->expr != NULL) {
-        infer_right_expr(m, stmt->expr, *expect_type);
+        type_t new_handle_type = infer_right_expr(m, stmt->expr, *expect_type);
+        if (expect_type->kind == TYPE_UNKNOWN) {
+            *expect_type = new_handle_type;
+        }
     } else {
-        INFER_ASSERTF(expect_type->kind == TYPE_VOID, "continue cannot with expr");
+        INFER_ASSERTF(expect_type->kind == TYPE_VOID, "break missing value expr");
     }
 }
 
@@ -1958,8 +2022,8 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_RETURN: {
             return infer_return(m, stmt->value);
         }
-        case AST_STMT_CONTINUE: {
-            return infer_continue(m, stmt->value);
+        case AST_STMT_BREAK: {
+            return infer_break(m, stmt->value);
         }
         case AST_STMT_TYPE_ALIAS: {
             return infer_type_alias_stmt(m, stmt->value);
@@ -2033,6 +2097,12 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_CATCH: {
             return infer_catch(m, expr->value);
+        }
+        case AST_MATCH: {
+            return infer_match(m, expr->value, target_type);
+        }
+        case AST_EXPR_MATCH_IS: {
+            return infer_match_is_expr(m, expr->value);
         }
         case AST_EXPR_IS: {
             return infer_is_expr(m, expr->value);
