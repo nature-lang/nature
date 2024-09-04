@@ -24,7 +24,8 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <uv.h>
+#include <include/uv.h>
+#include <pthread.h>
 
 #include "runtime/fixalloc.h"
 
@@ -77,7 +78,11 @@ typedef struct {
     char guard_page_enabled;
     void *real_ptr;
     size_t real_sz;
+#ifdef __LINUX
     pthread_spinlock_t owner_lock;
+#else
+    pthread_mutex_t owner_lock;
+#endif
 } aco_share_stack_t;
 
 typedef void (*aco_cofuncp_t)(void);

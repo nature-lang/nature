@@ -1,7 +1,7 @@
 #ifndef NATURE_AMD64_H
 #define NATURE_AMD64_H
 
-#include "linker.h"
+#include "src/binary/linker.h"
 #include "assembler.h"
 #include "src/binary/opcode/amd64/asm.h"
 #include "src/binary/opcode/amd64/opcode.h"

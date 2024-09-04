@@ -785,7 +785,7 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
  */
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     MDEBUGF("[runtime.mcache_alloc] start, spc=%d", spanclass);
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     mcache_t *mcache = &p->mcache;
     mspan_t *mspan = mcache->alloc[spanclass];
 
@@ -917,7 +917,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
 
     // 计算需要分配的 page count(向上取整)
     uint64_t pages_count = size / ALLOC_PAGE_SIZE;
-    if ((size & PAGE_MASK) != 0) {
+    if ((size & ALLOC_PAGE_MASK) != 0) {
         pages_count += 1;
     }
 
@@ -1112,7 +1112,7 @@ addr_t mstack_new(uint64_t size) {
  * @return
  */
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     assert(p);
 
     // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。

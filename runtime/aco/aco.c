@@ -213,7 +213,12 @@ void aco_funcp_protector(void) {
 void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     assert(p);
     memset(p, 0, sizeof(aco_share_stack_t));
+
+#ifdef __LINUX
     pthread_spin_init(&p->owner_lock, PTHREAD_PROCESS_SHARED);
+#else
+    pthread_mutex_init(&p->owner_lock, NULL);
+#endif
 
     if (sz == 0) {
         sz = 1024 * 1024 * 2;
@@ -342,7 +347,11 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 
     // 栈切换
     if (resume_co->share_stack->owner != resume_co) {
+#ifdef __LINUX
         pthread_spin_lock(&resume_co->share_stack->owner_lock);
+#else
+        pthread_mutex_lock(&resume_co->share_stack->owner_lock);
+#endif
 
         if (resume_co->share_stack->owner != NULL) {
             aco_t *owner_co = resume_co->share_stack->owner;
@@ -421,7 +430,12 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 #error "platform no support yet"
 #endif
 
+#ifdef __LINUX
         pthread_spin_unlock(&resume_co->share_stack->owner_lock);
+#else
+        pthread_mutex_unlock(&resume_co->share_stack->owner_lock);
+#endif
+
     }
     uv_key_set(&aco_gtls_co, resume_co);
     acosw(resume_co->main_co, resume_co);

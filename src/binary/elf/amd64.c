@@ -1,8 +1,6 @@
 #include "amd64.h"
 #include "src/cross.h"
 #include "elf.h"
-#include "linker.h"
-#include "utils/helper.h"
 #include "utils/error.h"
 #include "string.h"
 #include <assert.h>
@@ -285,12 +283,12 @@ int amd64_gotplt_entry_type(uint64_t relocate_type) {
     return -1;
 }
 
-uint64_t amd64_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
+uint64_t amd64_create_plt_entry(linker_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
     section_t *plt = ctx->plt;
 
     int modrm = 0x25;
     if (plt->data_count == 0) {
-        uint8_t *p = elf_section_data_add_ptr(plt, 16);
+        uint8_t *p = section_ptr_add(plt, 16);
         p[0] = 0xff; // pushl got + PTR_SIZE
         p[1] = modrm + 0x10;
         write32le(p + 2, 8);
@@ -301,7 +299,7 @@ uint64_t amd64_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_
     uint64_t plt_offset = plt->data_count;
     uint8_t plt_rel_offset = plt->relocate ? plt->relocate->data_count : 0;
 
-    uint8_t *p = elf_section_data_add_ptr(plt, 16);
+    uint8_t *p = section_ptr_add(plt, 16);
     p[0] = 0xff; /* jmp *(got + x) */
     p[1] = modrm;
     write32le(p + 2, got_offset);
@@ -348,7 +346,7 @@ int8_t amd64_is_code_relocate(uint64_t relocate_type) {
     return -1;
 }
 
-void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
+void amd64_relocate(linker_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
     int sym_index = ELF64_R_SYM(rel->r_info);
     switch (type) {
         case R_X86_64_64:
@@ -509,7 +507,7 @@ void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, u
  * @param ctx
  * @param closures
  */
-void amd64_operation_encodings(elf_context *ctx, slice_t *closures) {
+void amd64_operation_encodings(linker_context *ctx, slice_t *closures) {
     if (closures->count == 0) {
         return;
     }

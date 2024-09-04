@@ -17,10 +17,18 @@ endif ()
 
 # 写入到系统变量中
 if (CMAKE_SYSTEM_NAME MATCHES darwin)
-    message("add compile def __DARWIN")
+    add_definitions(-D_XOPEN_SOURCE=700)
+    add_definitions(-D_DARWIN_C_SOURCE)
+
+    add_compile_options(-Wno-format)
+    add_compile_options(-Wno-return-type)
+
+    message("add compile def __DARWIN, D_XOPEN_SOURCE, D_DARWIN_C_SOURCE")
     add_compile_definitions(__DARWIN=1)
 else ()
-    message("add compile def __LINUX")
+    add_definitions(-D_GNU_SOURCE)
+
+    message("add compile def __LINUX, D_GNU_SOURCE, ")
     add_compile_definitions(__LINUX=1)
 endif ()
 

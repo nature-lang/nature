@@ -9,7 +9,7 @@ coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
 }
 
 void rt_coroutine_yield() {
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     co_yield_runnable(p, p->coroutine);
 }
 
@@ -26,7 +26,7 @@ static void uv_on_timer(uv_timer_t *timer) {
     coroutine_t *co = timer->data;
 
     // - 标记 coroutine 并推送到可调度队列中等待 processor handle
-    processor_t *p = co->p;
+    n_processor_t *p = co->p;
     assert(p);
 
     TRACEF("[coroutine_sleep.uv_on_timer] will push to runnable_list, p_index_%d=%d, co=%p, status=%d", p->share,
@@ -52,7 +52,7 @@ static void uv_on_timer(uv_timer_t *timer) {
 }
 
 void coroutine_sleep(int64_t ms) {
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
     // - 初始化 libuv 定时器(io_run 回调会读取 timer 的地址，所以需要在堆中分配)

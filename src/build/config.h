@@ -11,6 +11,7 @@ typedef enum {
     OS_LINUX = 1,
     OS_DARWIN,
     ARCH_AMD64,
+    ARCH_ARM64,
     ARCH_RISCV64,
     ARCH_WASM,
 } build_param_t;
@@ -31,7 +32,7 @@ extern char *TEMP_DIR;// 链接临时目录
 extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
 extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
-#define LINUX_BUILD_TMP_DIR "/tmp/nature-build.XXXXXX"
+#define BUILD_TMP_DIR "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
 #define LIB_START_FILE "crt1.o"
 #define LIB_RUNTIME_FILE "libruntime.a"
@@ -45,11 +46,11 @@ extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
 static inline char *temp_dir() {
     char *tmp_dir;
-    if (BUILD_OS == OS_LINUX) {
-        char temp[] = LINUX_BUILD_TMP_DIR;
+    if (BUILD_OS == OS_LINUX || BUILD_OS == OS_DARWIN) {
+        char temp[] = BUILD_TMP_DIR;
         VOID mkdtemp(temp);
 
-        size_t size = strlen(LINUX_BUILD_TMP_DIR) + 1;
+        size_t size = strlen(BUILD_TMP_DIR) + 1;
         tmp_dir = malloc(size);
         memset(tmp_dir, '\0', size);
         strcpy(tmp_dir, temp);
@@ -78,12 +79,19 @@ static inline char *os_to_string(uint8_t os) {
     if (os == OS_LINUX) {
         return "linux";
     }
+
+    if (os == OS_DARWIN) {
+        return "darwin";
+    }
     return NULL;
 }
 
 static inline char *arch_to_string(uint8_t arch) {
     if (arch == ARCH_AMD64) {
         return "amd64";
+    }
+    if (arch == ARCH_ARM64) {
+        return "arm64";
     }
     return NULL;
 }
@@ -92,12 +100,18 @@ static inline uint8_t os_to_uint8(char *os) {
     if (str_equal(os, "linux")) {
         return OS_LINUX;
     }
+    if (str_equal(os, "darwin")) {
+        return OS_DARWIN;
+    }
     return 0;
 }
 
 static inline uint8_t arch_to_uint8(char *arch) {
     if (str_equal(arch, "amd64")) {
         return ARCH_AMD64;
+    }
+    if (str_equal(arch, "arm64")) {
+        return ARCH_ARM64;
     }
     return 0;
 }
@@ -128,10 +142,10 @@ static inline void env_init() {
         BUILD_ARCH = arch_to_uint8(arch);
     }
 
-    if (BUILD_OS != OS_LINUX) {
-        assertf(false,
-                "only support compiles to os=linux, please with BUILD_OS build, example: BUILD_OS=linux nature build main.n");
+    if (BUILD_OS != OS_LINUX && BUILD_OS != OS_DARWIN) {
+        assertf(false, "only support compiles to os linux/darwin");
     }
+
     if (BUILD_ARCH != ARCH_AMD64) {
         assertf(false,
                 "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");

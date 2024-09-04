@@ -8,7 +8,6 @@
 
 #include "config.h"
 #include "src/binary/elf/amd64.h"
-#include "src/binary/elf/output.h"
 #include "src/cfg.h"
 #include "src/cross.h"
 #include "src/debug/debug.h"
@@ -29,7 +28,7 @@ static slice_t *linker_libs;
  * @return
  */
 static char *lib_file_path(char *file) {
-    char *_os_arch = str_connect(os_to_string(BUILD_OS), "_");
+    char *_os_arch = str_connect(os_to_string(OS_LINUX), "_");
     _os_arch = str_connect(_os_arch, arch_to_string(BUILD_ARCH));
 
     char *dir = path_join(NATURE_ROOT, "lib");
@@ -43,6 +42,7 @@ static char *custom_link_object_path() {
 }
 
 /**
+ * TODO darwin 实现
  * to custom_link.n.o
  * .data
  * .symbol
@@ -51,8 +51,8 @@ static char *custom_link_object_path() {
  * .data.symdef
  */
 static void assembler_custom_links() {
-    assertf(BUILD_OS == OS_LINUX, "only support built to linux");
-    elf_context *ctx = elf_context_new(custom_link_object_path(), OUTPUT_OBJECT);
+    assertf(BUILD_OS == OS_LINUX || BUILD_OS == OS_DARWIN, "only support build to linux/darwin");
+    linker_context *ctx = linker_context_new(custom_link_object_path(), OUTPUT_OBJ);
 
     ctx->data_rtype_section = elf_new_section(ctx, ".data.rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->data_fndef_section = elf_new_section(ctx, ".data.fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
@@ -105,30 +105,32 @@ static void assembler_custom_links() {
     elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, cross_number_size());
 
     object_file_format(ctx);
+
     elf_output(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
 }
 
 /**
- * 汇编器目前只支持 linux elf amd64
+ * 汇编器目前只支持 linux elf amd64 和 darwin macho amd64
  * @param m
  */
 static void assembler_module(module_t *m) {
-    if (BUILD_OS == OS_LINUX) {// elf 就是 linux 独有都
+    if (BUILD_OS == OS_LINUX || BUILD_OS == OS_DARWIN) {// elf 就是 linux 独有都
         char *object_file_name = analyzer_force_unique_ident(m);
         str_replace_char(object_file_name, '/', '.');
 
         char *output = path_join(TEMP_DIR, object_file_name);
-        elf_context *ctx = elf_context_new(output, OUTPUT_OBJECT);
+        linker_context *ctx = linker_context_new(output, OUTPUT_OBJ);
 
         // 将全局变量写入到数据段或者符号表 (这里应该叫 global var)
         object_load_symbols(ctx, m->asm_global_symbols);
 
         cross_opcode_encodings(ctx, m->closures);
 
+        // 可链接文件格式化
         object_file_format(ctx);
 
-        // 输出目标文件
+        // 输出 elf 目标文件 (目前不完全支持 macho 链接器，无法链接 macho 格式的 obj 文件)
         elf_output(ctx);
 
         // 完整输出路径
@@ -148,32 +150,41 @@ static void build_linker(slice_t *modules) {
     // 检测是否生成
     int fd;
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    elf_context *ctx = elf_context_new(output, OUTPUT_EXECUTABLE);
+    linker_context *ctx = linker_context_new(output, OUTPUT_EXE);
 
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        elf_load_object_file(ctx, fd, 0);// 加载并解析目标文件
+        load_object_file(ctx, fd, 0);// 加载并解析目标文件
     }
 
     // 将相关符号都加入来
     slice_push(linker_libs, custom_link_object_path());
-    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
+
+    if (BUILD_OS == OS_LINUX) {
+        slice_push(linker_libs, lib_file_path(LIB_START_FILE));
+    }
+
+    // 固定使用 elf 格式的 libruntime.a 和 libuv.a, 只在 output 时才会转换成 macho 格式的文件
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBC_FILE));
+
+    if (BUILD_OS == OS_LINUX) {
+        slice_push(linker_libs, lib_file_path(LIBC_FILE));
+    }
+
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];
         fd = check_open(path, O_RDONLY | O_BINARY);
 
         if (ends_with(path, ".o")) {
-            elf_load_object_file(ctx, fd, 0);
+            load_object_file(ctx, fd, 0);
             continue;
         }
 
         if (ends_with(path, ".a")) {
-            elf_load_archive(ctx, fd);
+            load_archive(ctx, fd);
             continue;
         }
 
@@ -181,10 +192,10 @@ static void build_linker(slice_t *modules) {
     }
 
     // - core
-    executable_file_format(ctx);
+    exe_file_format(ctx);
 
     // - core
-    elf_output(ctx);
+    exe_file_output(ctx);
     if (!file_exists(output)) {
         error_exit("[linker] linker failed");
     }

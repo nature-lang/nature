@@ -1,0 +1,1248 @@
+#include "macho.h"
+#include "utils/helper.h"
+
+#include <stdint.h>
+#include <yaml.h>
+#include <err.h>
+#include <regex.h>
+
+// 当前文件的所有代码提示请务必参考当前目录中的 mold_ref.cc 文件
+// 当前文件的所有代码提示请务必参考当前目录中的 mold_ref.cc 文件
+// 当前文件的所有代码提示请务必参考当前目录中的 mold_ref.cc 文件
+// 当前文件的所有代码提示请务必参考当前目录中的 mold_ref.cc 文件
+// 当前文件的所有代码提示请务必参考当前目录中的 mold_ref.cc 文件
+
+static string_view_t *save_string(macho_context_t *ctx, char *str, size_t len);
+
+static string_view_t *mach_section_get_segname(MachSection *msec, ObjectFile *file) {
+}
+
+static string_view_t *mach_section_get_sectname(MachSection *msec, ObjectFile *file) {
+}
+
+static OutputFile *open_output_file(char *path, size_t size, int flags) {
+    // 分配内存
+    OutputFile *output_file = mallocz(sizeof(OutputFile));
+    if (!output_file) {
+        assertf(false, "Failed to allocate memory for OutputFile");
+        return NULL;
+    }
+
+    // 使用 open 函数创建文件并设置权限
+    int fd = open(path, O_CREAT | O_RDWR, flags);
+    if (fd == -1) {
+        assertf(false, "Failed to open file");
+        free(output_file);
+        return NULL;
+    }
+
+    // 打开文件
+    FILE *file = fdopen(fd, "wb+");
+    if (!file) {
+        assertf(false, "Failed to open file");
+        free(output_file);
+        return NULL;
+    }
+
+    // 设置文件大小
+    if (fseek(file, size - 1, SEEK_SET) != 0) {
+        assertf(false, "Failed to open file");
+        fclose(file);
+        free(output_file);
+        return NULL;
+    }
+    if (fputc('\0', file) == EOF) {
+        assertf(false, "Failed to write to file");
+        return NULL;
+    }
+
+    // 分配缓冲区
+    char *buf = (char *) malloc(size);
+    if (!buf) {
+        assertf(false, "Failed to allocate buffer");
+        return NULL;
+    }
+
+    // 初始化结构体
+    output_file->file = file;
+    output_file->path = strdup(path);
+    output_file->size = size;
+    output_file->buf = (uint8_t *) buf;
+
+    return output_file;
+}
+
+// TODO
+static MappedFile *mf_open(macho_context_t *ctx, string file_path);
+
+// TODO
+static string_view_t *mf_get_contents(MappedFile *mf);
+
+// TODO
+static void missing_files_insert(macho_context_t *ctx, string file_path);
+
+static bool mach_sec_match(macho_context_t *ctx, MachSection *msc, string_view_t* segname, string_view_t* sectname) {
+    return str_equal(msc->segname, segname->data) && str_equal(msc->sectname, sectname);
+}
+
+static OutputSection *output_sec_find(macho_context_t *ctx, string_view_t *segname, string_view_t *sectname) {
+    for (int i = 0; i < ctx->chunks->count; ++i) {
+        Chunk *chunk = ctx->chunks->take[i];
+
+//        if (mach_sec_match(ctx, chunk->hdr) {
+//
+//        }
+    }
+}
+
+static OutputSection *
+output_sec_get_instance(macho_context_t *ctx, string_view_t *segname, string_view_t *sectname) {
+
+}
+
+static OutputSection *get_output_section(macho_context_t *ctx, ObjectFile *file, MachSection *hdr) {
+    string_view_t *seg = mach_section_get_segname(hdr, file);
+    string_view_t *sect = mach_section_get_sectname(hdr, file);
+    static char *data_const_set[] = {
+            "__got", "__auth_got", "__auth_ptr", "__nl_symbol_ptr", "__const",
+            "__cfstring", "__mod_init_func", "__mod_term_func", "__objc_classlist",
+            "__objc_nlclslist", "__objc_catlist", "__objc_nlcatlist", "__objc_protolist",
+            NULL // 结束标记
+    };
+    for (int i = 0; data_const_set[i] != NULL; i++) {
+        if (str_equal(sect->data, data_const_set[i])) {
+            if (str_equal(seg->data, "__DATA")) {
+                seg = string_view_create("__DATA_CONST", 12);
+            }
+            break;
+        }
+    }
+
+    if (str_equal(seg->data, "__TEXT") && str_equal(sect->data, "__StaticInit")) {
+        sect = string_view_create("__text", 6);
+    }
+
+    return output_sec_get_instance(ctx, seg, sect);
+}
+
+static string_view_t *substring(char *src, size_t offset, size_t length) {
+    return string_view_create(src + offset, length);
+}
+
+static inline InputSection *
+input_section_new(macho_context_t *ctx, ObjectFile *file, MachSection *hdr, uint32_t secidx) {
+    InputSection *s = NEW(InputSection);
+    s->file = file;
+    s->hdr = hdr;
+    s->secidx = secidx;
+    s->osec = get_output_section(ctx, hdr);
+
+    if (hdr->type != S_ZEROFILL && file != ctx->internal_obj) {
+        s->contents = substring(mf_get_contents(file->mf)->data, hdr->offset, hdr->size);
+    }
+
+    return s;
+}
+
+
+static FileType get_file_type(macho_context_t *ctx, MappedFile *mf) {
+    assertf(mf->file, "file unknown");
+
+    if (mf->size == 0) {
+        return FILETYPE_EMPTY;
+    }
+
+    string_view_t *contents = mf_get_contents(mf);
+
+    if (starts_with(contents->data, "\xcf\xfa\xed\xfe")) {
+        uint32_t file_type = *(uint32_t *) (contents->data + 12);
+        switch (file_type) {
+            case 1:// MH_OBJECT
+                return FILETYPE_MACH_OBJ;
+            case 2:// MH_EXECUTE
+                return FILETYPE_MACH_EXE;
+            case 6:// MH_DYLIB
+                return FILETYPE_MACH_DYLIB;
+            case 8:// MH_BUNDLE
+                return FILETYPE_MACH_BUNDLE;
+        }
+        return FILETYPE_UNKNOWN;
+    }
+
+    if (starts_with(contents->data, "!<arch>\n")) {
+        return FILETYPE_AR;
+    }
+    if (starts_with(contents->data, "!<thin>\n")) {
+        return FILETYPE_THIN_AR;
+    }
+
+    if (starts_with(contents->data, "--- !tapi-tbd")) {
+        return FILETYPE_TAPI;
+    }
+
+    if (starts_with(contents->data, "\xca\xfe\xba\xbe")) {
+        return FILETYPE_MACH_UNIVERSAL;
+    }
+
+
+    return FILETYPE_UNKNOWN;
+}
+
+static char *file_type_to_str(FileType type) {
+    switch (type) {
+        case FILETYPE_UNKNOWN:
+            return "UNKNOWN";
+        case FILETYPE_EMPTY:
+            return "EMPTY";
+        case FILETYPE_MACH_OBJ:
+            return "MACH_OBJ";
+        case FILETYPE_MACH_EXE:
+            return "MACH_EXE";
+        case FILETYPE_MACH_DYLIB:
+            return "MACH_DYLIB";
+        case FILETYPE_MACH_BUNDLE:
+            return "MACH_BUNDLE";
+        case FILETYPE_MACH_UNIVERSAL:
+            return "MACH_UNIVERSAL";
+        case FILETYPE_AR:
+            return "AR";
+        case FILETYPE_THIN_AR:
+            return "THIN_AR";
+        case FILETYPE_TAPI:
+            return "TAPI";
+        case FILETYPE_TEXT:
+            return "TEXT";
+        case FILETYPE_GCC_LTO_OBJ:
+            return "GCC_LTO_OBJ";
+        case FILETYPE_LLVM_BITCODE:
+            return "LLVM_BITCODE";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static DylibFile *dylib_file_create(macho_context_t *ctx, MappedFile *mf) {
+    DylibFile *file = NEW(DylibFile);
+
+    file->reexported_libs = slice_new();
+    file->rpaths = slice_new();
+    file->hoisted_libs = slice_new();
+    file->is_dylib = true;
+    file->is_weak = ctx->reader.weak;
+    file->is_reexported = ctx->reader.reexport;
+
+    file->exports = slice_new();
+    file->export_table = table_new();
+
+    if (ctx->reader.implicit) {
+        file->is_alive = false;
+    } else {
+        bool is_dead_strippable_dylib = get_file_type(ctx, mf) == FILETYPE_MACH_DYLIB &&
+                                        (((MachHeader *) mf->data)->flags & MH_DEAD_STRIPPABLE_DYLIB);
+
+        bool is_dead_strippable = ctx->dead_strip_dylibs || is_dead_strippable_dylib;
+        file->is_alive = ctx->reader.needed || !is_dead_strippable;
+    }
+
+
+    slice_push(ctx->dylib_pool, file);
+    return file;
+}
+
+// 辅助函数：检查字符串是否包含 '\r'
+static bool contains_cr(string_view_t *str) {
+    for (size_t i = 0; i < str->size; i++) {
+        if (str->data[i] == '\r') {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 主函数
+static string_view_t *replace_crlf(void *ctx, string_view_t *str) {
+    // 如果字符串不包含 '\r'，直接返回原字符串
+    if (!contains_cr(str)) {
+        return str;
+    }
+
+    // 分配新的缓冲区
+    char *buf = malloc(str->size + 1);  // +1 for null terminator
+    if (!buf) {
+        return NULL;  // 内存分配失败
+    }
+
+    // 复制字符串，跳过 '\r'
+    size_t j = 0;
+    for (size_t i = 0; i < str->size; i++) {
+        if (str->data[i] != '\r') {
+            buf[j++] = str->data[i];
+        }
+    }
+    buf[j] = '\0';  // 添加字符串结束符
+
+    // 保存并返回新字符串
+    return save_string(ctx, buf, j);
+}
+
+static bool tapi_match_arch(macho_context_t *ctx, yaml_document_t *doc, yaml_node_t *targets) {
+    if (!targets || targets->type != YAML_SEQUENCE_NODE) {
+        return false;
+    }
+    char *arch = BUILD_ARCH == ARCH_ARM64 ? "arm64" : "x86_64";
+
+    for (yaml_node_item_t *item = targets->data.sequence.items.start; item < targets->data.sequence.items.top; ++item) {
+        yaml_node_t *target = yaml_document_get_node(doc, *item);
+        if (target && target->type == YAML_SCALAR_NODE) {
+            char *value = (char *) target->data.scalar.value;
+            if (strcmp(value, arch) == 0 || starts_with(value, arch)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+
+}
+
+static yaml_node_t *tapi_get_vector(yaml_document_t *doc, yaml_node_t *node, const char *key) {
+    // 检查节点是否为映射类型
+    if (node->type != YAML_MAPPING_NODE) {
+        return NULL;
+    }
+
+    // 遍历映射节点的所有键值对
+    for (yaml_node_pair_t *pair = node->data.mapping.pairs.start;
+         pair < node->data.mapping.pairs.top; ++pair) {
+
+        yaml_node_t *key_node = yaml_document_get_node(doc, pair->key);
+        yaml_node_t *value_node = yaml_document_get_node(doc, pair->value);
+
+        // 检查键是否匹配
+        if (key_node && key_node->type == YAML_SCALAR_NODE &&
+            strcmp((char *) key_node->data.scalar.value, key) == 0) {
+
+            // 检查值是否为序列类型
+            if (value_node && value_node->type == YAML_SEQUENCE_NODE) {
+                return value_node;
+            }
+            // 如果找到键但值不是序列，返回 NULL
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
+
+static bool tapi_contains(yaml_document_t *doc, yaml_node_t *node, char *value) {
+    // 确保节点是序列类型
+    if (node->type != YAML_SEQUENCE_NODE) {
+        return false;
+    }
+
+    // 遍历序列中的所有项
+    for (yaml_node_item_t *item = node->data.sequence.items.start;
+         item < node->data.sequence.items.top; ++item) {
+
+        yaml_node_t *value_node = yaml_document_get_node(doc, *item);
+
+        // 检查节点是否为标量（字符串）类型
+        if (value_node && value_node->type == YAML_SCALAR_NODE) {
+            // 比较字符串值
+            if (strcmp((const char *) value_node->data.scalar.value, value) == 0) {
+                return true;  // 找到匹配的值
+            }
+        }
+    }
+
+    // 没有找到匹配的值
+    return false;
+}
+
+static string_view_t *tapi_get_string(yaml_document_t *doc, yaml_node_t *node, char *key) {
+    // 遍历映射中的所有键值对
+    for (yaml_node_pair_t *pair = node->data.mapping.pairs.start;
+         pair < node->data.mapping.pairs.top; ++pair) {
+
+        yaml_node_t *key_node = yaml_document_get_node(doc, pair->key);
+        yaml_node_t *value_node = yaml_document_get_node(doc, pair->value);
+
+        // 检查键是否匹配
+        if (key_node && key_node->type == YAML_SCALAR_NODE &&
+            strcmp((char *) key_node->data.scalar.value, key) == 0) {
+
+            // 检查值是否为标量（字符串）类型
+            if (value_node && value_node->type == YAML_SCALAR_NODE) {
+                return string_view_create((char *) value_node->data.scalar.value,
+                                          value_node->data.scalar.length);
+            }
+            // 如果找到键但值不是字符串，返回 NULL
+            return NULL;
+        }
+    }
+
+    // 如果没有找到键，返回 NULL
+    return NULL;
+}
+
+static slice_t *tapi_get_string_vector(yaml_document_t *doc, yaml_node_t *node, const char *key) {
+    slice_t *result = slice_new();
+
+    yaml_node_t *vector_node = tapi_get_vector(doc, node, key);
+    if (!vector_node) {
+        return result;
+    }
+
+    for (yaml_node_item_t *item = vector_node->data.sequence.items.start;
+         item < vector_node->data.sequence.items.top; ++item) {
+
+        yaml_node_t *value_node = yaml_document_get_node(doc, *item);
+
+        // 检查节点是否为标量（字符串）类型
+        if (value_node && value_node->type == YAML_SCALAR_NODE) {
+            // 复制字符串并添加到 slice
+            char *str = strdup((const char *) value_node->data.scalar.value);
+            if (str) {
+                slice_push(result, string_view_create(str, value_node->data.scalar.length));
+            }
+        }
+    }
+
+    return result;
+}
+
+static string_view_t *tapi_string_concat(macho_context_t *ctx, char *x, string_view_t *y) {
+    return save_string(ctx, str_connect(x, y->data));
+}
+
+static void tapi_merge(slice_t *dst, slice_t *src) {
+    slice_concat(dst, src);
+}
+
+static TextDylib tapi_to_tbd(macho_context_t *ctx, yaml_document_t *doc, yaml_node_t *node, char *filename) {
+    TextDylib tbd = {0};
+    if (!tapi_match_arch(ctx, doc, tapi_get_vector(doc, node, "targets"))) {
+        return tbd;
+    }
+    if (ctx->application_extension &&
+        tapi_contains(doc, tapi_get_vector(doc, node, "flags"), "not_app_extension_safe")) {
+        assertf(false, "linking against a dylib which is not safe for use in "
+                       "application extensions: %s", filename);
+    }
+
+    string_view_t *install_name = tapi_get_string(doc, node, "install-name");
+    if (install_name) {
+        tbd.install_name = install_name;
+    }
+
+
+    yaml_node_t *reexported_libs = tapi_get_vector(doc, node, "reexported-libraries");
+    for (int i = 0; i < reexported_libs->data.sequence.items.top - reexported_libs->data.sequence.items.start; i++) {
+        yaml_node_t *mem = yaml_document_get_node(doc, reexported_libs->data.sequence.items.start[i]);
+        if (tapi_match_arch(ctx, doc, tapi_get_vector(doc, mem, "targets"))) {
+            slice_t *libs = tapi_get_string_vector(doc, mem, "libraries");
+            slice_concat(tbd.reexported_libs, libs);
+        }
+    }
+
+    const char *keys[] = {"exports", "reexports"};
+    for (int k = 0; k < 2; k++) {
+        yaml_node_t *exports = tapi_get_vector(doc, node, keys[k]);
+        for (int i = 0; i < exports->data.sequence.items.top - exports->data.sequence.items.start; i++) {
+            yaml_node_t *mem = yaml_document_get_node(doc, exports->data.sequence.items.start[i]);
+            if (tapi_match_arch(ctx, doc, tapi_get_vector(doc, mem, "targets"))) {
+
+                tapi_merge(tbd.exports, tapi_get_string_vector(doc, mem, "symbols"));
+                tapi_merge(tbd.weak_exports, tapi_get_string_vector(doc, mem, "weak-symbols"));
+
+
+                slice_t *list = tapi_get_string_vector(doc, mem, "objc-classes");
+                SLICE_FOR(list) {
+                    string_view_t *s = SLICE_VALUE(list);
+                    slice_push(tbd.exports, tapi_string_concat(ctx, "_OBJC_CLASS_$_", s));
+                    slice_push(tbd.exports, tapi_string_concat(ctx, "_OBJC_METACLASS_$_", s));
+                }
+
+                list = tapi_get_string_vector(doc, mem, "objc-eh-types");
+                SLICE_FOR(list) {
+                    string_view_t *s = SLICE_VALUE(list);
+                    slice_push(tbd.exports, tapi_string_concat(ctx, "_OBJC_EHTYPE_$_", s));
+                }
+
+                list = tapi_get_string_vector(doc, mem, "objcivars");
+                SLICE_FOR(list) {
+                    string_view_t *s = SLICE_VALUE(list);
+                    slice_push(tbd.exports, tapi_string_concat(ctx, "_OBJC_IVAR_$_", s));
+                }
+            }
+        }
+    }
+
+    return tbd;
+}
+
+static void interpret_ld_symbols(macho_context_t *ctx, TextDylib *tbd, char *filename) {
+    table_t *sym_table = table_new();
+    slice_t *syms = slice_new();
+
+    for (int i = 0; i < tbd->exports->count; ++i) {
+        string_view_t *str = tbd->exports->take[i];
+        if (!starts_with(str->data, "$ld$")) {
+            if (table_exist(sym_table, str->data)) {
+                continue;
+            }
+
+            slice_push(syms, str);
+        }
+    }
+
+    tbd->exports = syms;
+}
+
+static void tbd_squash_visit(table_t *map, slice_t *remainings, TextDylib *main, TextDylib *tbd) {
+    for (int i = 0; i < tbd->reexported_libs->count; ++i) {
+        string_view_t *lib = tbd->reexported_libs->take[i];
+
+        TextDylib *child = table_get(map, lib->data);
+        if (child) {
+            slice_concat(main->exports, child->exports);
+            slice_concat(main->weak_exports, child->weak_exports);
+            tbd_squash_visit(map, remainings, main, child);
+        } else {
+            slice_push(remainings, lib);
+        }
+    }
+}
+
+static TextDylib *tbd_squash(macho_context_t *ctx, list_t *tbds) {
+    // key string_vew->data, TextDylib
+    table_t *map = table_new();
+    slice_t *remainings = slice_new();
+
+    TextDylib *main = ct_list_value(tbds, 0);
+    for (int i = 1; i < tbds->length; ++i) {
+        TextDylib *temp = ct_list_value(tbds, i);
+        table_set(map, temp->install_name->data, temp);
+    }
+
+    tbd_squash_visit(map, remainings, main, main);
+    main->reexported_libs = remainings;
+    return main;
+}
+
+static TextDylib parse_tbd(macho_context_t *ctx, MappedFile *mf) {
+    string_view_t *contents = mf_get_contents(mf);
+    contents = replace_crlf(ctx, contents);
+
+    yaml_parser_t parser;
+    yaml_document_t doc;
+    if (!yaml_parser_initialize(&parser)) {
+        assertf(false, "Failed to initialize yaml parser");
+    }
+
+    yaml_parser_set_input_string(&parser, (const unsigned char *) contents, contents->size);
+    if (!yaml_parser_load(&parser, &doc)) {
+        assertf(false, "%s:%d: YAML parse error: %s\n", mf->name, parser.problem_mark.line + 1, parser.problem);
+    }
+
+    yaml_node_t *root = yaml_document_get_root_node(&doc);
+    if (!root) {
+        assertf(false, "%s: malformed TBD file\n", mf->name);
+        exit(1);
+    }
+
+    list_t *vec = ct_list_new(sizeof(TextDylib));
+    if (root->type == YAML_SEQUENCE_NODE) {
+        yaml_node_item_t *item;
+        for (item = root->data.sequence.items.start; item < root->data.sequence.items.top; item++) {
+            yaml_node_t *node = yaml_document_get_node(&doc, *item);
+
+            TextDylib tbd = tapi_to_tbd(ctx, &doc, node, mf->name);
+            if (tbd.install_name) {  // 假设 install_name 为 NULL 表示无效的 TextDylib
+                ct_list_push(vec, &tbd);
+            }
+        }
+    }
+
+    for (int i = 0; i < vec->length; ++i) {
+        TextDylib *tbd = ct_list_value(vec, i);
+        interpret_ld_symbols(ctx, tbd, mf->name);
+    }
+
+    return *tbd_squash(ctx, vec);
+}
+
+static void dylib_add_export(macho_context_t *ctx, DylibFile *file, string_view_t *name, uint32_t flags) {
+    uint32_t mask = EXPORT_SYMBOL_FLAGS_KIND_MASK;
+    uint32_t tls = EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL;
+    uint32_t weak = EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION;
+
+    uint32_t existing = (int64_t) table_get(file->export_table, name->data);
+    if (existing == 0) {
+        table_set(file->export_table, name->data, (void *) (int64_t) flags);
+        return;
+    }
+
+    if (((existing & mask) == tls) != ((flags & mask) == tls)) {
+        assertf(false, "%s inconsistent TLS type %s", file->install_name, name);
+    }
+
+    if ((existing & weak) && !(flags & weak)) {
+        table_set(file->export_table, name->data, (void *) (int64_t) flags);
+    }
+}
+
+static void parse_tapi(macho_context_t *ctx, DylibFile *file) {
+    TextDylib tbd = parse_tbd(ctx, file->mf);
+
+    file->install_name = tbd.install_name;
+    file->reexported_libs = COPY_NEW(slice_t, tbd.reexported_libs);
+
+    SLICE_FOR(tbd.exports) {
+        string_view_t *name = SLICE_VALUE(tbd.exports);
+        dylib_add_export(ctx, file, name, 0);
+    }
+
+    SLICE_FOR(tbd.weak_exports) {
+        string_view_t *name = SLICE_VALUE(tbd.exports);
+        dylib_add_export(ctx, file, name, EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION);
+    }
+}
+
+static uint64_t read_uleb(uint8_t *buf) {
+    uint64_t val = 0;
+    uint8_t shift = 0;
+    uint8_t byte;
+    do {
+        byte = *buf++;
+        val |= (byte & 0x7f) << shift;
+        shift += 7;
+    } while (byte & 0x80);
+    return val;
+}
+
+static string_view_t *save_string(macho_context_t *ctx, char *str, size_t len) {
+    uint8_t *buf = (uint8_t *) malloc(len + 1);
+    memcpy(buf, str, len + 1);
+    buf[strlen(str)] = '\0';
+
+    slice_push(ctx->string_pool, buf);
+
+    return string_view_create(buf, len);
+}
+
+static void read_trie(macho_context_t *ctx, DylibFile *file, uint8_t *start, int64_t offset, char *prefix) {
+    uint8_t *buf = start + offset;
+
+    if (*buf) {
+        read_uleb(buf);// size
+        uint32_t flags = read_uleb(buf);
+        string_view_t *name;
+
+        if (flags & EXPORT_SYMBOL_FLAGS_REEXPORT) {
+            read_uleb(buf);
+            string_view_t *str = string_view_create((char *) buf, strlen((char *) buf));
+            buf += str->size + 1;
+            name = !string_view_empty(str) ? str : NULL;
+        } else if (flags & EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER) {
+            name = save_string(ctx, prefix);
+            read_uleb(buf);// stub offset
+            read_uleb(buf);// resolver offset
+        } else {
+            name = save_string(ctx, prefix);
+            read_uleb(buf);// addr
+        }
+
+        dylib_add_export(ctx, file, name, flags);
+    } else {
+        buf++;
+    }
+
+    int64_t nchild = *buf++;
+    for (int i = 0; i < nchild; ++i) {
+        char *suffix = (char *) buf;
+        buf += strlen(suffix) + 1;
+
+        int64_t off = read_uleb(buf);
+        assert(off != offset);
+        read_trie(ctx, file, start, off, str_connect(prefix, suffix));
+    }
+
+}
+
+static void parse_dylib(macho_context_t *ctx, DylibFile *file) {
+    MachHeader *hdr = (MachHeader *) file->mf->data;
+    uint8_t *p = file->mf->data + sizeof(MachHeader);
+
+    for (int i = 0; i < hdr->ncmds; i++) {
+        LoadCommand *lc = (LoadCommand *) p;
+
+        switch (lc->cmd) {
+            case LC_ID_DYLIB: {
+                DylibCommand *cmd = (DylibCommand *) p;
+                char *t = (char *) p + cmd->nameoff;
+                file->install_name = string_view_create(t, strlen(t));
+                break;
+            }
+            case LC_DYLD_INFO_ONLY: {
+                DyldInfoCommand *cmd = (DyldInfoCommand *) p;
+                if (cmd->export_off && cmd->export_size) {
+                    read_trie(ctx, file, (uint8_t *) file->mf->data + cmd->export_off, 0, "");
+                }
+                break;
+            }
+            case LC_DYLD_EXPORTS_TRIE: {
+                LinkEditDataCommand *cmd = (LinkEditDataCommand *) p;
+                read_trie(ctx, file, (uint8_t *) file->mf->data + cmd->dataoff, 0, "");
+                break;
+            }
+            case LC_REEXPORT_DYLIB: {
+                if (!(hdr->flags & MH_NO_REEXPORTED_DYLIBS)) {
+                    DylibCommand *cmd = (DylibCommand *) p;
+                    slice_push(file->reexported_libs, (char *) p + cmd->nameoff);
+                }
+                break;
+            }
+        }
+        p += lc->cmdsize;
+    }
+}
+
+static inline char *get_stem(char *path) {
+    size_t len = strlen(path);
+    if (len < 6) {
+        return strdup(path);
+    };
+
+    char *stem = malloc(len - 5);// 减 5 是为了去掉 .dylib 并留出空间给 '\0'
+    strncpy(stem, path, len - 6);
+    stem[len - 6] = '\0';
+    return stem;
+}
+
+static MappedFile *find_lib_by_path(macho_context_t *ctx, char *path) {
+    if (!starts_with(path, "/")) {
+        return mf_open(ctx, path);
+    }
+
+    SLICE_FOR(ctx->syslibroot) {
+        char *root = SLICE_VALUE(ctx->syslibroot);
+        MappedFile *mf;
+        if (ends_with(path, ".tbd")) {
+            mf = mf_open(ctx, str_connect(root, path));
+            if (mf) {
+                return mf;
+            }
+            continue;
+        }
+
+        if (ends_with(path, ".dylib")) {
+            char *stem = get_stem(path);
+            char *tbd_path = str_connect3(root, stem, ".tbd");
+            mf = mf_open(ctx, tbd_path);
+            if (mf) {
+                return mf;
+            }
+
+            mf = mf_open(ctx, str_connect(root, path));
+            if (mf) {
+                return mf;
+            }
+        }
+
+        char *tbd_path = str_connect3(root, path, ".tbd");
+        mf = mf_open(ctx, tbd_path);
+        if (mf) {
+            return mf;
+        }
+        char *dylib_path = str_connect3(root, path, ".dylib");
+        mf = mf_open(ctx, dylib_path);
+        if (mf) {
+            return mf;
+        }
+    }
+
+    return NULL;
+}
+
+static MappedFile *find_external_lib(macho_context_t *ctx, DylibFile *loader, char *path) {
+    if (starts_with(path, "@executable_path/") && ctx->output_type == OUTPUT_EXE) {
+        path = str_connect3(ctx->executable_path, "/../", path + 17);
+        path = path_clean(path);
+        return find_lib_by_path(ctx, path);
+    }
+
+    if (starts_with(path, "@loader_path/")) {
+        path = str_connect3(loader->mf->name, "/../", path + 13);
+        return find_lib_by_path(ctx, path);
+    }
+
+    if (starts_with(path, "@rpath/")) {
+        SLICE_FOR(loader->rpaths) {
+            char *rpath = SLICE_VALUE(loader->rpaths);
+
+            char *p = path_clean(str_connect3(rpath, "/", path + 6));
+            MappedFile *ret = find_lib_by_path(ctx, p);
+            if (ret) {
+                return ret;
+            }
+        }
+
+        return find_lib_by_path(ctx, path);
+    }
+}
+
+static bool is_system_dylib(string_view_t *path) {
+    if (!starts_with(path->data, "/usr/lib/") &&
+        !starts_with(path->data, "/System/Library/Frameworks/")) {
+        return false;
+    }
+
+    regex_t regex;
+    int reti;
+    char msgbuf[100];
+    bool result = false;
+
+    // 编译正则表达式
+    reti = regcomp(&regex, "^(/usr/lib/.+\\.dylib|/System/Library/Frameworks/([^/]+)\\.framework/.+/\\2)$",
+                   REG_EXTENDED);
+    if (reti) {
+        assertf(false, "Could not compile regex\n");
+    }
+
+    reti = regexec(&regex, path->data, 0, NULL, 0);
+    if (!reti) {
+        result = true;
+    } else if (reti != REG_NOMATCH) {
+        regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+        assertf(false, "Regex match failed: %s\n", msgbuf);
+    }
+    regfree(&regex);
+
+    return result;
+}
+
+static Symbol *macho_get_symbol(macho_context_t *ctx, string_view_t *name) {
+    Symbol *sym = table_get(ctx->symbol_table, name->data);
+    if (!sym) {
+        table_set(ctx->symbol_table, name->data, symbol_new(name));
+    }
+    return sym;
+}
+
+static void dylib_file_parser(macho_context_t *ctx, DylibFile *file, FileType filetype) {
+    if (filetype == FILETYPE_TAPI) {
+        parse_tapi(ctx, file);
+    } else if (filetype == FILETYPE_MACH_DYLIB) {
+        parse_dylib(ctx, file);
+    } else {
+        assertf(false, "%s: is not a dylib", file->install_name->data);
+    }
+
+    for (int i = 0; i < file->reexported_libs->count; ++i) {
+        string_view_t *path = file->reexported_libs->take[i];
+        MappedFile *mf = find_external_lib(ctx, file, path->data);
+        assertf(mf, "%s: cannot open reexported library %s", file->install_name->data, path->data);
+
+        DylibFile *child = dylib_file_create(ctx, mf);
+        FileType child_filetype = get_file_type(ctx, mf);
+        dylib_file_parser(ctx, child, child_filetype);
+
+        // By default, symbols defined by re-exported libraries are handled as
+        // if they were defined by the umbrella library. At runtime, the dynamic
+        // linker tries to find re-exported symbols from re-exported libraries.
+        // That incurs some run-time cost because the runtime has to do linear
+        // search.
+        //
+        // As an exception, system libraries get different treatment. Their
+        // symbols are directly linked against their original library names
+        // even if they are re-exported to reduce the cost of runtime symbol
+        // lookup. This optimization can be disable by passing `-no_implicit_dylibs`.
+        if (ctx->implicit_dylibs && is_system_dylib(child->install_name)) {
+            slice_push(file->hoisted_libs, child);
+            child->is_alive = false;
+        } else {
+            for (int j = 0; j < child->exports->count; ++j) {
+                string_view_t *name = child->exports->take[j];
+                int64_t flags = (int64_t) table_get(child->export_table, name->data);
+                dylib_add_export(ctx, file, name, flags);
+            }
+
+            slice_concat(file->hoisted_libs, child->hoisted_libs);
+        }
+    }
+
+    for (int j = 0; j < file->exports->count; ++j) {
+        string_view_t *name = file->exports->take[j];
+        slice_push(file->syms, macho_get_symbol(ctx, name));
+    }
+}
+
+static ObjectFile *object_file_create(macho_context_t *ctx, MappedFile *mf, char *archive_name) {
+    ObjectFile *obj = NEW(ObjectFile);
+    obj->archive_name = archive_name;
+    obj->is_alive = archive_name == NULL || ctx->reader.all_load;
+    obj->is_hidden = ctx->reader.hidden;
+    obj->mf = mf;
+
+    slice_push(ctx->obj_pool, obj);
+    return obj;
+}
+
+static LoadCommand *find_load_command(macho_context_t *ctx, ObjectFile *file, uint32_t type) {
+    if (!file->mf) {
+        return NULL;
+    }
+
+    MachHeader hdr = *(MachHeader *) file->mf->data;
+    uint8_t *p = file->mf->data + sizeof(MachHeader);
+
+    for (int64_t i = 0; i < hdr.ncmds; i++) {
+        LoadCommand *lc = NEW(LoadCommand);
+        *lc = *(LoadCommand *) p;
+
+        if (lc->cmd == type) {
+            return lc;
+        }
+
+        p += lc->cmdsize;
+    }
+
+    return NULL;
+}
+
+static bool mach_section_match(MachSection *msec, ObjectFile *file, char *segname, char *sectname) {
+}
+
+
+bool is_debug_section(MachSection *msec) {
+    uint32_t attr = (msec->attr[0] << 16) | (msec->attr[1] << 8) | msec->attr[2];
+    return (attr & S_ATTR_DEBUG) != 0;
+}
+
+static void parser_sections(macho_context_t *ctx, ObjectFile *file) {
+    SegmentCommand *cmd = (SegmentCommand *) find_load_command(ctx, file, LC_SEGMENT_64);
+    if (!cmd) {
+        return;
+    }
+
+    MachSection *mach_sec = (MachSection *) ((uint8_t *) cmd + sizeof(*cmd));
+    file->sections->count = cmd->nsects;
+    file->sections->capacity = cmd->nsects;
+    file->sections->take = realloc(file->sections->take, sizeof(void *) * file->sections->capacity);
+
+    for (int64_t i = 0; i < cmd->nsects; ++i) {
+        MachSection *msec = &mach_sec[i];
+        if (mach_section_match(msec, file, "__LD", "__compact_unwind")) {
+            file->unwind_sec = msec;
+            continue;
+        }
+
+        if (mach_section_match(msec, file, "__TEXT", "__eh_frame")) {
+            file->eh_frame_sec = msec;
+            continue;
+        }
+
+        if (mach_section_match(msec, file, "__DWARF", "__debug_info")) {
+            file->has_debug_info = true;
+        }
+
+        if (str_equal(mach_section_get_segname(msec, file)->data, "__LLVM") || is_debug_section(msec)) {
+            continue;
+        }
+
+        file->sections->take[i] = input_section_new(ctx, file, msec, i);
+    }
+}
+
+static void split_subsections_via_symbols(macho_context_t *ctx) {
+}
+
+static void init_subsections(macho_context_t *ctx) {
+}
+
+static void split_cstring_literals(macho_context_t *ctx) {
+}
+
+static void split_fixed_size_literals(macho_context_t *ctx) {
+}
+
+static void split_literal_pointers(macho_context_t *ctx) {
+}
+
+// 比较函数
+static int compare_subsections(const void *a, const void *b) {
+    Subsection *subsec_a = *(Subsection **) a;
+    Subsection *subsec_b = *(Subsection **) b;
+
+    if (subsec_a->input_addr < subsec_b->input_addr) return -1;
+    if (subsec_a->input_addr > subsec_b->input_addr) return 1;
+    return 0;
+}
+
+static void parser_symbols(macho_context_t *ctx) {
+}
+
+static void parser_relocations(macho_context_t *ctx, InputSection *isec) {
+}
+
+static void parser_compact_unwind(macho_context_t *ctx) {
+}
+
+static void parser_eh_frame(macho_context_t *ctx) {
+}
+
+static void associate_compact_unwind(macho_context_t *ctx) {
+}
+
+static void object_file_parser(macho_context_t *ctx, ObjectFile *file) {
+    SymtabCommand *cmd = (SymtabCommand *) find_load_command(ctx, file, LC_SYMTAB);
+    if (cmd) {
+        file->mach_syms = macho_span_new((MachSym *) (file->mf->data + cmd->symoff), cmd->nsyms);
+    }
+
+    parser_sections(ctx, file);
+
+    MachHeader hdr = *(MachHeader *) file->mf->data;
+    if (hdr.flags & MH_SUBSECTIONS_VIA_SYMBOLS) {
+        split_subsections_via_symbols(ctx);
+    } else {
+        init_subsections(ctx);
+    }
+
+    split_cstring_literals(ctx);
+    split_fixed_size_literals(ctx);
+    split_literal_pointers(ctx);
+
+    qsort(file->subsections->take, file->subsections->count, sizeof(void *), compare_subsections);
+
+    parser_symbols(ctx);
+
+    SLICE_FOR(file->sections) {
+        InputSection *isec = SLICE_VALUE(file->sections);
+        if (isec) {
+            parser_relocations(ctx, isec);
+        }
+    }
+
+    if (file->unwind_sec) {
+        parser_compact_unwind(ctx);
+    }
+
+    if (file->eh_frame_sec) {
+        parser_eh_frame(ctx);
+    }
+
+    associate_compact_unwind(ctx);
+}
+
+
+static slice_t *read_archive_membres(macho_context_t *ctx, MappedFile *mf) {
+}
+
+static void read_input_file(macho_context_t *ctx, MappedFile *mf) {
+    FileType filetype = get_file_type(ctx, mf);
+    switch (filetype) {
+        case FILETYPE_TAPI:
+        case FILETYPE_MACH_DYLIB: {
+            DylibFile *file = dylib_file_create(ctx, mf);
+            // 直接 parser, 而不是并行
+            dylib_file_parser(ctx, file, filetype);
+            slice_push(ctx->dylibs, file);
+            break;
+        }
+        case FILETYPE_MACH_OBJ: {
+            ObjectFile *file = object_file_create(ctx, mf, NULL);
+            object_file_parser(ctx, file);
+            slice_push(ctx->objs, file);
+            break;
+        }
+        case FILETYPE_AR: {
+            slice_t *list = read_archive_membres(ctx, mf);
+            SLICE_FOR(list) {
+                MappedFile *child = SLICE_VALUE(list);
+                if (get_file_type(ctx, child) == FILETYPE_MACH_OBJ) {
+                    ObjectFile *file = object_file_create(ctx, mf);
+                    object_file_parser(ctx, file);
+                    slice_push(ctx->objs, file);
+                }
+            }
+            break;
+        }
+        default:
+            assertf(false, "%s: unknown file type");
+            break;
+    }
+}
+
+static MappedFile *input_library_search(macho_context_t *ctx, slice_t *names) {
+    SLICE_FOR(ctx->library_paths) {
+        char *path = SLICE_VALUE(ctx->library_paths);
+        for (int i = 0; i < names->count; i++) {
+            char *name = names->take[i];
+            char *file_path = path_join(path, "lib");
+            file_path = path_join(file_path, name);
+            if (file_exists(file_path)) {
+                MappedFile *mf = mf_open(ctx, file_path);
+                return mf;
+            } else {
+                missing_files_insert(ctx, file_path);
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static void read_input_library(macho_context_t *ctx, table_t *lib_table, char *name) {
+    if (table_exist(lib_table, name)) {
+        return;
+    }
+
+    table_set(lib_table, name, name);
+
+    slice_t *names = slice_new();
+    slice_push(names, name);
+    MappedFile *mf = input_library_search(ctx, names);
+    if (!mf) {
+        assertf(mf, "library not found: -l%s", name);
+    }
+
+    read_input_file(ctx, mf);
+}
+
+static void read_input_files(macho_context_t *ctx) {
+    // 通用文件列表参数处理
+    assertf(ctx->input_files, "missing input files");
+    assertf(ctx->input_libs, "missing input lib");
+
+    table_t *lib_table = table_new();
+
+    SLICE_FOR(ctx->input_files) {
+        read_input_file(ctx, mf_open(ctx, SLICE_VALUE(ctx->input_files)));
+    }
+
+    ReaderContext orig = ctx->reader;
+
+    // -lm -lSystem
+    SLICE_FOR(ctx->input_libs) {
+        read_input_library(ctx, lib_table, SLICE_VALUE(ctx->input_libs));
+    }
+    ctx->reader = orig;
+
+    // 确认文件已加载
+    assertf(ctx->objs->count > 0, "no input files");
+
+    SLICE_FOR(ctx->objs) {
+        ObjectFile *file = SLICE_VALUE(ctx->objs);
+        file->priority = ctx->file_priority++;
+    }
+
+    SLICE_FOR(ctx->dylibs) {
+        DylibFile *file = SLICE_VALUE(ctx->dylibs);
+        file->priority = ctx->file_priority++;
+    }
+
+    int i = 1;
+    SLICE_FOR(ctx->dylibs) {
+        DylibFile *file = SLICE_VALUE(ctx->dylibs);
+        if (file->dylib_idx != BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE) {
+            file->dylib_idx = i++;
+        }
+    }
+}
+
+// 编译器直接使用链接器时不需要通过 read_input_files, 而是通过 macho_load_object_file
+// 或者 load_arch 进行文件的添加
+static void macho_load_object_file(macho_context_t *ctx) {
+}
+
+static void resolve_symbols(macho_context_t *ctx);
+
+static void create_internal_file(macho_context_t *ctx);
+
+static void convert_common_symbols(macho_context_t *ctx, ObjectFile *obj);
+
+static void claim_unresolved_symbols(macho_context_t *ctx);
+
+static macho_context_t *macho_context_new();
+
+static void dead_strip(macho_context_t *ctx);
+
+static void create_synthetic_chunks(macho_context_t *ctx);
+
+static void merge_mergeable_sections(macho_context_t *ctx);
+
+static void check_duplicate_symbols(macho_context_t *ctx, ObjectFile *file);
+
+static void write_fixup_chains(macho_context_t *ctx, void *chained_fixups);
+
+static void compute_import_export(macho_context_t *ctx);
+
+static void scan_relocations(macho_context_t *ctx);
+
+static int64_t assign_offsets(macho_context_t *ctx);
+
+static uint64_t get_tls_begin(macho_context_t *ctx);
+
+static void copy_sections_to_output_file(macho_context_t *ctx);
+
+static void compute_uuid(macho_context_t *ctx);
+
+static void checkpoint(macho_context_t *ctx);
+
+void macho_output_file() {
+    macho_context_t *ctx = macho_context_new();
+
+    ctx->thread_count = 1;
+
+    read_input_files(ctx);
+
+    resolve_symbols(ctx);
+
+    create_internal_file(ctx);
+
+    SLICE_FOR(ctx->objs) {
+        ObjectFile *file = SLICE_VALUE(ctx->objs);
+        convert_common_symbols(ctx, file);
+    }
+
+    // 死代码消除, ld -dead_strip 参数
+    dead_strip(ctx);
+    create_synthetic_chunks(ctx);
+    merge_mergeable_sections(ctx);
+
+    SLICE_FOR(ctx->objs) {
+        ObjectFile *file = SLICE_VALUE(ctx->objs);
+        check_duplicate_symbols(ctx, file);
+    }
+
+    bool has_pagezero_seg = ctx->pagezero_size;
+    SLICE_FOR(ctx->segments) {
+        OutputSegment *seg = SLICE_VALUE(ctx->segments);
+        seg->seg_idx = (has_pagezero_seg ? _i + 1 : _i);
+    }
+
+    compute_import_export(ctx);
+
+    scan_relocations(ctx);
+
+    int64_t output_size = assign_offsets(ctx);
+    ctx->tls_begin = get_tls_begin(ctx);
+
+
+    // output
+    ctx->output_file = open_output_file(ctx->output_name, output_size,);
+    ctx->buf = ctx->output_file->buf;
+
+    copy_sections_to_output_file(ctx);
+
+    write_fixup_chains(ctx, ctx->chained_fixups);
+
+    // default uuid hash
+    compute_uuid(ctx);
+
+    fclose(ctx->output_file->file);
+
+    checkpoint(ctx);
+}

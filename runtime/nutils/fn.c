@@ -132,7 +132,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
     //    PRE_RTCALL_HOOK(); // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     assert(p->status == P_STATUS_RTCALL);
 
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);

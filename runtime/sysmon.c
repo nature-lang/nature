@@ -163,15 +163,15 @@ void wait_sysmon() {
         mutex_lock(&solo_processor_locker);
         RDEBUGF("[wait_sysmon.solo] get solo_processor_locker, solo_p_count=%d", solo_processor_count);
 
-        processor_t *prev = NULL;
-        processor_t *p = solo_processor_list;
+        n_processor_t *prev = NULL;
+        n_processor_t *p = solo_processor_list;
         while (p) {
             if (p->status == P_STATUS_EXIT) {
                 RDEBUGF("[wait_sysmon.solo] p=%p, index=%d, exited, prev=%p,  will remove from solo_processor_list=%p",
                         p, p->index, prev,
                         solo_processor_list);
 
-                processor_t *exited = p;
+                n_processor_t *exited = p;
                 if (prev) {
                     prev->next = p->next;
                     p = p->next;

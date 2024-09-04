@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <uv.h>
 
-static bool can_semacquire(int64_t *addr) {
+static bool can_semacquire(ATOMIC int64_t *addr) {
     while (true) {
         int64_t v = atomic_load(addr);
         if (v == 0) {
@@ -193,7 +193,7 @@ bool rt_can_spin(int64_t iter) {
         return false;
     }
 
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     if (!rt_linked_fixalloc_empty(&p->runnable_list)) {
         return false;
     }
@@ -295,7 +295,7 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
 
     pthread_mutex_unlock(&m->waiters.locker);
 
-    processor_t *p = wait_co->p;
+    n_processor_t *p = wait_co->p;
 
     // 尝试抢占自己释放的信号, 并将抢占标记传递给 wait_co
     bool ticket = can_semacquire(&m->sema);
@@ -324,7 +324,7 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
  * @param delta
  * @return
  */
-int64_t atomic_add_int64(int64_t *state, int64_t delta) {
+int64_t atomic_add_int64(ATOMIC int64_t *state, int64_t delta) {
     int64_t old = atomic_load(state);
     int64_t n = old + delta;
     while (!atomic_compare_exchange_strong(state, &old, n)) {

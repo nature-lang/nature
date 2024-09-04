@@ -26,6 +26,9 @@ add_executable(test_rt_mutex test_rt_mutex.c ${RUNTIMES} ${UTILS})
 target_link_libraries(test_rt_mutex ${LIBUV_STATIC})
 add_test(test_rt_mutex test_rt_mutex)
 
+add_executable(test_yaml test_yaml.c ${UTILS})
+add_test(test_yaml test_yaml)
+set_property(TEST test_yaml PROPERTY ENVIRONMENT "YAML_PATH=${CMAKE_CURRENT_SOURCE_DIR}/assets/travis.yaml;")
 
 # ---------------------------------- cases 测试 ------------------------------------------
 # cases test, 获取 cases 一级目录下的所有文件，排除 mock
@@ -90,7 +93,9 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
     add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
-    set(CMAKE_EXE_LINKER_FLAGS "-static")
+    if (CMAKE_SYSTEM_NAME MATCHES "linux")
+        set(CMAKE_EXE_LINKER_FLAGS "-static")
+    endif ()
 
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_dependencies(test_runtime_debug build_libmain)

@@ -217,6 +217,29 @@ static int inline check_open(char *filepath, int flag) {
     return fd;
 }
 
+static char *str_connect3(const char *a, const char *b, const char *c) {
+    // 检查参数是否为 NULL，如果是则视为空字符串
+    a = a ? a : "";
+    b = b ? b : "";
+    c = c ? c : "";
+
+    // 计算总长度
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
+    size_t len_c = strlen(c);
+    size_t total_len = len_a + len_b + len_c;
+
+    // 分配内存
+    char *result = mallocz(total_len + 1);  // +1 for null terminator
+    // 拼接字符串
+    memcpy(result, a, len_a);
+    memcpy(result + len_a, b, len_b);
+    memcpy(result + len_a + len_b, c, len_c);
+    result[total_len] = '\0';  // 确保字符串以 null 结尾
+
+    return result;
+}
+
 static inline char *str_connect(char *a, char *b) {
     size_t dst_len = strlen(a);
     size_t src_len = strlen(b);
@@ -294,6 +317,8 @@ static inline int64_t align_up(int64_t n, int64_t align) {
 
     return (n + align - 1) & (~(align - 1));
 }
+
+char *path_clean(const char *path);
 
 static inline char *path_dir(char *path) {
     assert(path != NULL);
@@ -408,12 +433,32 @@ static inline void *copy(char *dst, char *src, int mode) {
     return 0;
 }
 
+static inline bool starts_with(char *str, char *prefix) {
+    if (!str || !prefix) return false;
+
+    while (*prefix) {
+        if (*prefix != *str)
+            return false;
+        prefix++;
+        str++;
+    }
+    return true;
+}
+
 static inline bool ends_with(char *str, char *suffix) {
     if (!str || !suffix) return 0;
     size_t lenstr = strlen(str);
     size_t lensuffix = strlen(suffix);
     if (lensuffix > lenstr) return 0;
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
+static inline bool remove_prefix(char **s, char *prefix) {
+    if (starts_with(*s, prefix)) {
+        *s += strlen(prefix);
+        return true;
+    }
+    return false;
 }
 
 static inline ssize_t full_read(int fd, void *buf, size_t count) {
@@ -489,7 +534,8 @@ static inline void *sys_memory_map(void *hint, uint64_t size) {
 }
 
 static inline void *mallocz_big(size_t size) {
-    int page_size = getpagesize();
+    int64_t page_size = sysconf(_SC_PAGESIZE);
+//    int page_size = getpagesize();
     size = align_up(size, page_size);
     void *ptr = sys_memory_map(NULL, size);
     return ptr;

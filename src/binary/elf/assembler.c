@@ -1,7 +1,7 @@
 #include "assembler.h"
 #include "src/cross.h"
 
-void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
+void object_load_symbols(linker_context *ctx, slice_t *asm_symbols) {
     // 将全局变量定义写入到数据段与符号表
     for (int i = 0; i < asm_symbols->count; ++i) {
         asm_global_symbol_t *symbol = asm_symbols->take[i];
@@ -20,7 +20,7 @@ void object_load_symbols(elf_context *ctx, slice_t *asm_symbols) {
     }
 }
 
-void object_file_format(elf_context *ctx) {
+void object_file_format(linker_context *ctx) {
     alloc_section_names(ctx, 1);
 
     size_t file_offset = sizeof(Elf64_Ehdr);

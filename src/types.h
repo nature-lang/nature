@@ -523,7 +523,7 @@ typedef struct section_t {
     uint64_t sh_offset;
     addr_t sh_addr;// 可重定位地址
 
-    uint64_t data_count;   // 数据位置
+    uint64_t data_count;   // 数据位置, 等同于 data_offset
     uint64_t data_capacity;// 极限容量
     uint8_t *data;         // 段二进制数据
     int sh_index;          // 段表索引
@@ -546,6 +546,9 @@ typedef struct {
     int dyn_index;
 } sym_attr_t;
 
+/**
+ * 链接器核心数据结构，通用于 elf/macho
+ */
 typedef struct {
     slice_t *sections;
     slice_t *private_sections;
@@ -556,12 +559,28 @@ typedef struct {
     section_t *bss_section;
     section_t *data_section;
     section_t *text_section;
-    // section_t *rodata_section;
+
+    bool leading_underscore;
+
+    section_t *rodata_section;
+
     section_t *got;
     section_t *plt;
     section_t *data_rtype_section;
     section_t *data_fndef_section;
     section_t *data_symdef_section;
+
+    // debug section
+    /* debug sections */
+    section_t *stab_section;
+    section_t *dwarf_info_section;
+    section_t *dwarf_abbrev_section;
+    section_t *dwarf_line_section;
+    section_t *dwarf_aranges_section;
+    section_t *dwarf_str_section;
+    section_t *dwarf_line_str_section;
+
+    uint64_t shf_RELRO; /* section flags for RELRO sections */
 
     // 可执行文件构建字段
     Elf64_Phdr *phdr_list;// 程序头表
@@ -570,7 +589,13 @@ typedef struct {
     uint64_t file_offset;
     char *output;// 完整路径名称
     uint8_t output_type;
-} elf_context;
+
+    // macho_专用
+    void *macho; // macho 结构缓存
+    char *macho_install_name;
+    uint32_t macho_compatibility_version;
+    uint32_t macho_current_version;
+} linker_context;
 
 type_t type_copy(type_t temp);
 

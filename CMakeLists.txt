@@ -30,6 +30,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     #    add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)
     #    add_compile_definitions(DEBUG_INTERVAL)
+    #    add_compile_definitions(DEBUG_MACHO)
     add_compile_definitions(ASSERT_ERROR)
     #    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
     message("cmake type is debug")
@@ -40,8 +41,10 @@ configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}
 aux_source_directory(${PROJECT_SOURCE_DIR}/cmd CMD)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/src/*.c)
 aux_source_directory(${PROJECT_SOURCE_DIR}/utils UTILS)
+aux_source_directory(${PROJECT_SOURCE_DIR}/utils/ymal UTILS)
 
 # include 搜索路径, 有了这个就不需要在 add_executable 中声明 .h 文件了
+include_directories(./include)
 include_directories(.)
 
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
