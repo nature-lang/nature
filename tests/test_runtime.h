@@ -15,7 +15,7 @@ fndef_t rt_fndef_data;// 仅需要修复一下 gc_bits 数据即可
 uint64_t rt_rtype_count;
 rtype_t rt_rtype_data;
 
-void _main() {
+void user_main() {
     printf("hello world in _main\n");
 }
 

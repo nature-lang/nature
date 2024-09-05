@@ -7,7 +7,7 @@
 #include "utils/table.h"
 #include <stdlib.h>
 
-#define FN_MAIN_NAME "_main"
+#define FN_MAIN_NAME "user_main"
 #define FN_INIT_NAME "init"
 #define ANONYMOUS_FN_NAME "lambda"
 #define FN_SELF_NAME "self"

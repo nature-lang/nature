@@ -81,8 +81,8 @@ static string_view_t *mf_get_contents(MappedFile *mf);
 // TODO
 static void missing_files_insert(macho_context_t *ctx, string file_path);
 
-static bool mach_sec_match(macho_context_t *ctx, MachSection *msc, string_view_t* segname, string_view_t* sectname) {
-    return str_equal(msc->segname, segname->data) && str_equal(msc->sectname, sectname);
+static bool mach_sec_match(macho_context_t *ctx, MachSection *msc, string_view_t *segname, string_view_t *sectname) {
+    return str_equal(msc->segname, segname->data) && str_equal(msc->sectname, sectname->data);
 }
 
 static OutputSection *output_sec_find(macho_context_t *ctx, string_view_t *segname, string_view_t *sectname) {
@@ -135,7 +135,7 @@ input_section_new(macho_context_t *ctx, ObjectFile *file, MachSection *hdr, uint
     s->file = file;
     s->hdr = hdr;
     s->secidx = secidx;
-    s->osec = get_output_section(ctx, hdr);
+    s->osec = get_output_section(ctx, file, hdr);
 
     if (hdr->type != S_ZEROFILL && file != ctx->internal_obj) {
         s->contents = substring(mf_get_contents(file->mf)->data, hdr->offset, hdr->size);
@@ -412,7 +412,8 @@ static slice_t *tapi_get_string_vector(yaml_document_t *doc, yaml_node_t *node, 
 }
 
 static string_view_t *tapi_string_concat(macho_context_t *ctx, char *x, string_view_t *y) {
-    return save_string(ctx, str_connect(x, y->data));
+    char *new_str = str_connect(x, y->data);
+    return save_string(ctx, new_str, strlen(new_str));
 }
 
 static void tapi_merge(slice_t *dst, slice_t *src) {
@@ -645,11 +646,11 @@ static void read_trie(macho_context_t *ctx, DylibFile *file, uint8_t *start, int
             buf += str->size + 1;
             name = !string_view_empty(str) ? str : NULL;
         } else if (flags & EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER) {
-            name = save_string(ctx, prefix);
+            name = save_string(ctx, prefix, strlen(prefix));
             read_uleb(buf);// stub offset
             read_uleb(buf);// resolver offset
         } else {
-            name = save_string(ctx, prefix);
+            name = save_string(ctx, prefix, strlen(prefix));
             read_uleb(buf);// addr
         }
 
@@ -1062,7 +1063,7 @@ static void read_input_file(macho_context_t *ctx, MappedFile *mf) {
             SLICE_FOR(list) {
                 MappedFile *child = SLICE_VALUE(list);
                 if (get_file_type(ctx, child) == FILETYPE_MACH_OBJ) {
-                    ObjectFile *file = object_file_create(ctx, mf);
+                    ObjectFile *file = object_file_create(ctx, mf, NULL);
                     object_file_parser(ctx, file);
                     slice_push(ctx->objs, file);
                 }
@@ -1232,7 +1233,7 @@ void macho_output_file() {
 
 
     // output
-    ctx->output_file = open_output_file(ctx->output_name, output_size,);
+    ctx->output_file = open_output_file(ctx->output_name, output_size, 0777);
     ctx->buf = ctx->output_file->buf;
 
     copy_sections_to_output_file(ctx);

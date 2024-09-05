@@ -7,11 +7,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "src/binary/elf/elf.h"
+#include "src/binary/mach/mach.h"
 #include "utils/slice.h"
 #include "utils/table.h"
 #include "src/types.h"
 #include "src/build/config.h"
-
+#include "utils/custom_links.h"
+#include "src/symbol/symbol.h"
+#include "src/lir.h"
 
 #define CONFIG_NEW_MACHO 1
 
@@ -24,9 +27,6 @@
 #define addr_t uint64_t
 
 # define REL_SECTION_FMT ".rela%s"
-
-#define OUTPUT_EXE 1 // 可执行文件
-#define OUTPUT_OBJ 2 // 目标文件(可重定位文件)
 
 
 /* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
@@ -79,12 +79,12 @@ typedef struct {
  * 加载归档文件
  * @param ctx
  */
-void load_archive(linker_context *ctx, int fd);
+void load_archive(elf_context_t *ctx, int fd);
 
 /**
  * 加载可重定位目标文件文件到全局 section 中
  */
-void load_object_file(linker_context *ctx, int fd, uint64_t file_offset);
+void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset);
 
 /**
  * 从文件中加载数据到 section data 中
@@ -93,7 +93,7 @@ void load_object_file(linker_context *ctx, int fd, uint64_t file_offset);
 void *elf_file_load_data(int fd, uint64_t offset, uint64_t size);
 
 
-section_t *elf_new_section(linker_context *ctx, char *name, uint64_t sh_type, uint64_t sh_flags);
+section_t *elf_section_new(elf_context_t *ctx, char *name, uint64_t sh_type, uint64_t sh_flags);
 
 /**
  * 全局 section data 写入点
@@ -110,7 +110,7 @@ size_t elf_section_data_forward(section_t *section, addr_t size, uint64_t align)
 
 void elf_section_realloc(section_t *section, uint64_t new_size);
 
-uint64_t elf_set_sym(linker_context *ctx, Elf64_Sym *sym, char *name);
+uint64_t elf_set_sym(elf_context_t *ctx, Elf64_Sym *sym, char *name);
 
 uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym *sym, char *name);
 
@@ -118,86 +118,188 @@ uint64_t elf_put_str(section_t *s, char *str);
 
 uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size);
 
-void elf_resolve_common_symbols(linker_context *ctx);
+void elf_resolve_common_symbols(elf_context_t *ctx);
 
-void elf_build_got_entries(linker_context *ctx, uint64_t got_sym_index);
+void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index);
 
-Elf64_Rela *elf_put_relocate(linker_context *ctx, section_t *sym_section, section_t *apply_section,
+Elf64_Rela *elf_put_relocate(elf_context_t *ctx, section_t *sym_section, section_t *apply_section,
                              uint64_t offset, int type, int sym_index, int64_t addend);
 
 Elf64_Rela *
-elf_put_rel_data(linker_context *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type);
+elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type);
 
-void elf_relocate_symbols(linker_context *ctx, section_t *sym_section);
+void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section);
 
-void elf_relocate_sections(linker_context *ctx);
+void elf_relocate_sections(elf_context_t *ctx);
 
-void elf_relocate_section(linker_context *ctx, section_t *apply_section, section_t *rel_section);
+void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_t *rel_section);
 
-sym_attr_t *elf_get_sym_attr(linker_context *ctx, uint64_t sym_index, bool alloc);
+sym_attr_t *elf_get_sym_attr(elf_context_t *ctx, uint64_t sym_index, bool alloc);
 
-uint64_t elf_get_sym_addr(linker_context *ctx, char *name, bool force);
+uint64_t elf_get_sym_addr(elf_context_t *ctx, char *name, bool force);
 
-Elf64_Sym *elf_find_sym(linker_context *ctx, char *name);
+Elf64_Sym *elf_find_sym(elf_context_t *ctx, char *name);
 
-void elf_fill_got(linker_context *ctx);
+void elf_fill_got(elf_context_t *ctx);
 
-void elf_fill_got_entry(linker_context *ctx, Elf64_Rela *rel);
+void elf_fill_got_entry(elf_context_t *ctx, Elf64_Rela *rel);
 
-int tidy_section_headers(linker_context *ctx);
+int tidy_section_headers(elf_context_t *ctx);
 
-void sort_symbols(linker_context *ctx, section_t *s);
+void sort_symbols(elf_context_t *ctx, section_t *s);
 
-linker_context *linker_context_new(char *output, uint8_t type);
+elf_context_t *elf_context_new(char *output, uint8_t type);
 
-void alloc_section_names(linker_context *ctx, bool is_obj);
+void alloc_section_names(elf_context_t *ctx, bool is_obj);
 
-uint64_t elf_put_global_symbol(linker_context *ctx, char *name, void *value, uint8_t value_size);
+uint64_t elf_put_global_symbol(elf_context_t *ctx, char *name, void *value, uint8_t value_size);
 
-uint64_t collect_fndef_list(linker_context *ctx);
+/**
+ * 基于 symbol fn 生成基础的 fn list
+ */
+static inline uint64_t collect_fndef_list(void *ctx) {
+    ct_fndef_list = mallocz(symbol_fn_list->count * sizeof(fndef_t));
 
-uint64_t collect_symdef_list(linker_context *ctx);
+    uint64_t rel_offset = 0;
 
+    uint64_t count = 0;
+    uint64_t size_with_bits = 0;
+    // - 遍历全局符号表中的所有 fn 数据就行了
+    SLICE_FOR(symbol_fn_list) {
+        symbol_t *s = SLICE_VALUE(symbol_fn_list);
 
-#ifndef O_BINARY
-# define O_BINARY 0
-#endif
+        ast_fndef_t *fn = s->ast_value;
+        closure_t *c = fn->closure;
+        // builtin continue
+        if (!c) {
+            continue;
+        }
+
+        if (c->text_count == 0) {
+            continue;
+        }
+
+        fndef_t *f = &ct_fndef_list[count++];
+        f->fn_runtime_reg = c->fn_runtime_reg;
+        f->fn_runtime_stack = c->fn_runtime_stack;
+        f->stack_size = c->stack_offset;// native 的时候已经进行了 16byte 对齐了
+        f->gc_bits = c->stack_gc_bits->bits;
+
+        size_with_bits += sizeof(fndef_t);
+        size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
+
+        strcpy(f->name, c->linkident);
+        strcpy(f->rel_path, c->fndef->rel_path);
+        f->line = c->fndef->line;
+        f->column = c->fndef->column;
+
+        f->base = 0;// 等待符号重定位
+        assert(c->text_count > 0);
+        f->size = c->text_count;// 至少要等所有等 module 都 assembly 完成才能计算出 text_count
+
+        // 按从 base ~ top 的入栈顺序写入
+        for (int i = 0; i < c->stack_vars->count; ++i) {
+            lir_var_t *var = c->stack_vars->take[i];
+            int64_t stack_slot = var_stack_slot(c, var);
+            assert(stack_slot < 0);
+            stack_slot = var_stack_slot(c, var) * -1;
+
+            log_debug(
+                    "[collect_fndef_list.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
+                    type_is_pointer_heap(var->type),
+                    (stack_slot / POINTER_SIZE) - 1, stack_slot);
+        }
+
+        log_debug(
+                "[collect_fndef_list] success, fn name=%s, base=0x%lx, size=%lu, stack=%lu,"
+                "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
+                f->stack_size / POINTER_SIZE,
+                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+
+        if (BUILD_OS == OS_LINUX) {
+            elf_context_t *elf_ctx = ctx;
+            elf_put_rel_data(ctx, elf_ctx->data_fndef_section, rel_offset, c->linkident, STT_FUNC);
+        } else if (BUILD_OS == OS_DARWIN) {
+            mach_context_t *mach_ctx = ctx;
+            mach_put_rel_data(ctx, mach_ctx->data_fndef_section, rel_offset, c->linkident, N_UNDF | N_EXT);
+        }
+
+        rel_offset += sizeof(fndef_t);
+    }
+    ct_fndef_count = count;
+    log_debug("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
+    return size_with_bits;
+}
+
+static inline uint64_t collect_symdef_list(void *ctx) {
+    uint64_t size = symbol_var_list->count * sizeof(symdef_t);
+    ct_symdef_list = mallocz(size);
+    uint64_t rel_offset = 0;
+    uint64_t count = 0;
+    SLICE_FOR(symbol_var_list) {
+        symbol_t *s = SLICE_VALUE(symbol_var_list);
+        if (s->is_local) {
+            continue;
+        }
+
+        ast_var_decl_t *var_decl = s->ast_value;
+        symdef_t *symdef = &ct_symdef_list[count++];
+        symdef->need_gc = type_is_pointer_heap(var_decl->type);
+        symdef->size = type_sizeof(var_decl->type);// 符号的大小
+        symdef->base = 0;                          // 这里引用了全局符号表段地址
+        strcpy(symdef->name, var_decl->ident);
+
+        if (BUILD_OS == OS_LINUX) {
+            elf_context_t *elf_ctx = ctx;
+            elf_put_rel_data(ctx, elf_ctx->data_symdef_section, rel_offset, var_decl->ident, STT_OBJECT);
+        } else if (BUILD_OS == OS_DARWIN) {
+            mach_context_t *mach_ctx = ctx;
+            mach_put_rel_data(ctx, mach_ctx->data_symdef_section, rel_offset, var_decl->ident, N_UNDF | N_EXT);
+        }
+
+        rel_offset += sizeof(symdef_t);
+    }
+    ct_symdef_count = count;
+    size = ct_symdef_count * sizeof(symdef_t);
+    ct_symdef_list = realloc(ct_symdef_list, size);
+    log_debug("[collect_symdef_list] count=%lu, size=%ld", ct_symdef_count, size);
+
+    return size;
+}
+
 
 #define START_LABEL "_start"
 
 /**
  * 包含可重定位文件和可执行文件的输出
  */
-void elf_output(linker_context *ctx);
+void elf_output(elf_context_t *ctx);
 
-void macho_output(linker_context *ctx);
+/**
+ * - 编译指令
+ */
+static inline void elf_file_format(elf_context_t *ctx) {
+    alloc_section_names(ctx, 1);
 
-static inline void exe_file_output(linker_context *ctx) {
-    if (BUILD_OS == OS_LINUX) {
-        return elf_output(ctx);
-    } else if (BUILD_OS == OS_DARWIN) {
-        return macho_output(ctx);
+    size_t file_offset = sizeof(Elf64_Ehdr);
+    for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
+        section_t *s = SEC_TACK(sh_index);
+        file_offset = (file_offset + 15) & -16;
+        s->sh_offset = file_offset;
+        if (s->sh_type != SHT_NOBITS) {
+            file_offset += s->sh_size;
+        }
     }
-
-    assertf(false, "not support os '%s'", os_to_string(BUILD_OS));
+    ctx->file_offset = file_offset;
 }
+
 
 /**
  * 构造 elf 可执行文件结构,依旧是段结构数据
  */
-void elf_exe_file_format(linker_context *ctx);
-
-void macho_exe_file_format(linker_context *ctx);
-
-static inline void exe_file_format(linker_context *ctx) {
-    if (BUILD_OS == OS_LINUX) {
-        return elf_exe_file_format(ctx);
-    } else if (BUILD_OS == OS_DARWIN) {
-        return macho_exe_file_format(ctx);
-    }
-
-    assertf(false, "not support os '%s'", os_to_string(BUILD_OS));
-}
+void elf_exe_file_format(elf_context_t *ctx);
 
 static void *linker_realloc(void *ptr, unsigned long size) {
     void *ptr1;

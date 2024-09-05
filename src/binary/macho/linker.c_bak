@@ -34,9 +34,6 @@ typedef struct {
     uint32_t nfat_arch;      /* number of structs that follow */
 } fat_header;
 
-typedef int cpu_type_t;
-typedef int cpu_subtype_t;
-
 typedef struct {
     cpu_type_t cputype;        /* cpu specifier (int) */
     cpu_subtype_t cpusubtype;     /* machine specifier (int) */
@@ -523,7 +520,7 @@ typedef struct {
 
 
 static int macho_symcmp(void *_a, void *_b, void *arg) {
-    linker_context *ctx = arg;
+    elf_context_t *ctx = arg;
     int ea = ((nlist_64 *) _a)->n_value;
     int eb = ((nlist_64 *) _b)->n_value;
     Elf64_Sym *sa = (Elf64_Sym *) ctx->symtab_section->data + ea;
@@ -554,15 +551,15 @@ static int macho_symcmp(void *_a, void *_b, void *arg) {
 }
 
 
-static void macho_create_symtab(linker_context *ctx, macho *mo) {
+static void macho_create_symtab(elf_context_t *ctx, macho *mo) {
     int sym_index, sym_end;
     nlist_64 *pn;
 
     /* Stub creation belongs to check_relocs, but we need to create
        the symbol now, so its included in the sorting.  */
 
-    mo->stubs = elf_new_section(ctx, "__stubs", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
-    ctx->got = elf_new_section(ctx, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    mo->stubs = elf_section_new(ctx, "__stubs", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
+    ctx->got = elf_section_new(ctx, ".got", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
 
     mo->stubsym = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &(Elf64_Sym) {
             .st_value = 0,
@@ -573,7 +570,7 @@ static void macho_create_symtab(linker_context *ctx, macho *mo) {
     }, ".__stubs");
 
 #ifdef CONFIG_NEW_MACHO
-    mo->chained_fixups = elf_new_section(ctx, "CHAINED_FIXUPS",
+    mo->chained_fixups = elf_section_new(ctx, "CHAINED_FIXUPS",
                                          SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 #else
     assert(false);
@@ -599,11 +596,11 @@ static void macho_create_symtab(linker_context *ctx, macho *mo) {
     mo->lazy_binding = new_section(ctx, "LAZY_BINDING", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 #endif
 
-    mo->exports = elf_new_section(ctx, "EXPORT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
-    mo->indirsyms = elf_new_section(ctx, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->exports = elf_section_new(ctx, "EXPORT", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->indirsyms = elf_section_new(ctx, "LEINDIR", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
 
-    mo->symtab = elf_new_section(ctx, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
-    mo->strtab = elf_new_section(ctx, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->symtab = elf_section_new(ctx, "LESYMTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
+    mo->strtab = elf_section_new(ctx, "LESTRTAB", SHT_LINKEDIT, SHF_ALLOC | SHF_WRITE);
     elf_put_str(mo->strtab, " "); /* Mach-O starts strtab with a space */
 
     sym_end = ctx->symtab_section->data_count / sizeof(Elf64_Sym);
@@ -637,7 +634,7 @@ static void macho_bind_rebase_add(macho *mo, int bind, int sh_info, Elf64_Rela *
 }
 
 
-static void macho_check_relocs(linker_context *ctx, macho *mo) {
+static void macho_check_relocs(elf_context_t *ctx, macho *mo) {
     section_t *s;
     Elf64_Rela *rel, save_rel;
     Elf64_Sym *sym;
@@ -769,7 +766,7 @@ static void macho_check_relocs(linker_context *ctx, macho *mo) {
     free(goti);
 }
 
-static int macho_check_symbols(linker_context *ctx, macho *mo) {
+static int macho_check_symbols(elf_context_t *ctx, macho *mo) {
     int sym_index, sym_end;
     int ret = 0;
 
@@ -847,7 +844,7 @@ static segment_command_64 *macho_add_segment(macho *mo, const char *name) {
     return sc;
 }
 
-static void calc_fixup_size(linker_context *ctx, macho *mo) {
+static void calc_fixup_size(elf_context_t *ctx, macho *mo) {
     uint64_t i, size;
 
     size = (sizeof(dyld_chained_fixups_header) + 7) & -8;
@@ -1066,7 +1063,7 @@ static section_64 *macho_get_section(segment_command_64 *seg, int i) {
     return (section_64 *) ((char *) seg + sizeof(*seg)) + i;
 }
 
-static void export_trie(linker_context *ctx, macho *mo) {
+static void export_trie(elf_context_t *ctx, macho *mo) {
     int i, size, offset = 0, save_offset;
     uint8_t *ptr;
     int sym_index;
@@ -1168,7 +1165,7 @@ static int exact_log2p1(int i) {
     return ret;
 }
 
-static void macho_collect_sections(linker_context *ctx, macho *mo) {
+static void macho_collect_sections(elf_context_t *ctx, macho *mo) {
     int64_t i, sk, numsec;
     int used_segment[N_SEGMENT];
     uint64_t curaddr, fileofs;
@@ -1544,7 +1541,7 @@ static void macho_collect_sections(linker_context *ctx, macho *mo) {
 #endif
 }
 
-static void macho_convert_symbol(linker_context *ctx, macho *mo, nlist_64 *pn) {
+static void macho_convert_symbol(elf_context_t *ctx, macho *mo, nlist_64 *pn) {
     nlist_64 n = *pn;
     Elf64_Sym *sym = (Elf64_Sym *) ctx->symtab_section->data + pn->n_value;
 
@@ -1588,7 +1585,7 @@ static void macho_convert_symbol(linker_context *ctx, macho *mo, nlist_64 *pn) {
 
 }
 
-static void macho_convert_symbols(linker_context *ctx, macho *mo) {
+static void macho_convert_symbols(elf_context_t *ctx, macho *mo) {
     nlist_64 *pn;
     for (pn = SEC_START(nlist_64, ctx->symtab_section); pn < SEC_END(nlist_64, ctx->symtab_section); pn++) {
         macho_convert_symbol(ctx, mo, pn);
@@ -1596,7 +1593,7 @@ static void macho_convert_symbols(linker_context *ctx, macho *mo) {
 }
 
 
-static section_t *have_section(linker_context *ctx, char *name) {
+static section_t *have_section(elf_context_t *ctx, char *name) {
     SLICE_FOR(ctx->sections) {
         if (_i == 0) {
             continue;
@@ -1613,17 +1610,17 @@ static section_t *have_section(linker_context *ctx, char *name) {
 
 /* return a reference to a section, and create it if it does not
    exists */
-static section_t *find_section(linker_context *ctx, char *name) {
+static section_t *find_section(elf_context_t *ctx, char *name) {
     section_t *sec = have_section(ctx, name);
     if (sec) {
 
         return sec;
     }
     /* sections are created as PROGBITS */
-    return elf_new_section(ctx, name, SHT_PROGBITS, SHF_ALLOC);
+    return elf_section_new(ctx, name, SHT_PROGBITS, SHF_ALLOC);
 }
 
-static void macho_add_array(linker_context *ctx, char *sec, int c) {
+static void macho_add_array(elf_context_t *ctx, char *sec, int c) {
     section_t *s;
     s = find_section(ctx, sec);
     s->sh_flags = ctx->shf_RELRO;
@@ -1632,7 +1629,7 @@ static void macho_add_array(linker_context *ctx, char *sec, int c) {
     section_ptr_add(s, POINTER_SIZE);
 }
 
-static void macho_add_destructor(linker_context *ctx) {
+static void macho_add_destructor(elf_context_t *ctx) {
     uint64_t init_sym, mh_execute_header, at_exit_sym;
     section_t *s;
     uint8_t *ptr;
@@ -1748,7 +1745,7 @@ static void macho_add_destructor(linker_context *ctx) {
 }
 
 static int bind_rebase_cmp(void *_a, void *_b, void *arg) {
-    linker_context *ctx = arg;
+    elf_context_t *ctx = arg;
     struct bind_rebase *a = (struct bind_rebase *) _a;
     struct bind_rebase *b = (struct bind_rebase *) _b;
     addr_t aa = SEC_TACK(a->section)->sh_addr + a->rel.r_offset;
@@ -1757,7 +1754,7 @@ static int bind_rebase_cmp(void *_a, void *_b, void *arg) {
     return aa > ab ? 1 : aa < ab ? -1 : 0;
 }
 
-static void bind_rebase_import(linker_context *ctx, macho *mo) {
+static void bind_rebase_import(elf_context_t *ctx, macho *mo) {
     int64_t i, j, k, bind_index, size, page_count, sym_index;
     const char *name;
     Elf64_Sym *sym;
@@ -1907,7 +1904,7 @@ static void bind_rebase_import(linker_context *ctx, macho *mo) {
     free(mo->bind_rebase);
 }
 
-void macho_exe_file_format(linker_context *ctx) {
+void macho_exe_file_format(elf_context_t *ctx) {
     // mo 初始化
     macho *mo = NEW(macho);
 
@@ -1950,7 +1947,7 @@ void macho_exe_file_format(linker_context *ctx) {
 /**
  * https://repo.or.cz/tinycc.git/commit/b86d82c8b31aa37138ac274b1fc7a82f2a8084d1 新的 apple macho 格式支持
  */
-void macho_output(linker_context *ctx) {
+void macho_output(elf_context_t *ctx) {
     assert(ctx->macho);
     macho *mo = ctx->macho;
 

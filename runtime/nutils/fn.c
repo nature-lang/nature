@@ -5,8 +5,8 @@
 
 #ifdef __AMD64
 
-table_t *env_upvalue_table;
-mutex_t env_upvalue_locker;
+table_t *env_upvalue_table = NULL;
+mutex_t env_upvalue_locker = {0};
 
 /**
  * 假设 addr = 0x40007fffb8
@@ -247,7 +247,7 @@ void *env_element_value(runtime_fn_t *fn, uint64_t index) {
     assertf(index < fn->envs->length, "index out of range, fn=%p, envs=%p", fn, fn->envs);
 
     DEBUGF("[runtime.env_element_.value] fn_base=%p, envs=%p, value=%p",
-            fn, fn->envs, fn->envs->values[index]);
+           fn, fn->envs, fn->envs->values[index]);
 
     return fn->envs->values[index];
 }

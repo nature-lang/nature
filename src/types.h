@@ -15,6 +15,8 @@
 #include "utils/toml.h"
 #include "utils/type.h"
 
+#define OUTPUT_EXE 1 // 可执行文件
+#define OUTPUT_OBJ 2 // 目标文件(可重定位文件)
 
 typedef uint64_t flag_t;
 
@@ -595,7 +597,7 @@ typedef struct {
     char *macho_install_name;
     uint32_t macho_compatibility_version;
     uint32_t macho_current_version;
-} linker_context;
+} elf_context_t;
 
 type_t type_copy(type_t temp);
 

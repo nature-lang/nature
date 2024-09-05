@@ -17,6 +17,11 @@
 #include "errno.h"
 #include "log.h"
 
+
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
+
 #define string char *
 #define STRING_EOF '\0'
 
